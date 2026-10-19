@@ -107,6 +107,8 @@ export function OwnerDoor({
   history,
   cashflow,
   cashOutlook = null,
+  openingMissing = false,
+  cashPillarStatus = null,
   market,
   signoffs,
   firmId,
@@ -151,6 +153,10 @@ export function OwnerDoor({
     floor: number;
     dipsBelowFloorWeek: number | null;
   } | null;
+  /** Blank opening. Not cash under the floor. */
+  openingMissing?: boolean;
+  /** Same cash pillar band as Health. Watch does not say below the minimum. */
+  cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   market: ResolvedMarket;
   signoffs: Signoff[];
   firmId: string | null;
@@ -511,6 +517,8 @@ export function OwnerDoor({
       receivables: parseOwnerNumber(receivables),
       cashflow,
       cashOutlook: cashOutlook ?? undefined,
+      openingMissing,
+      cashPillarStatus,
       openAction,
       actionsReady,
       signedBy: latest?.signed_off_by_name ?? null,
@@ -525,6 +533,8 @@ export function OwnerDoor({
     cogs,
     receivables,
     cashOutlook,
+    openingMissing,
+    cashPillarStatus,
     netIncome,
     periodEnd,
     history,

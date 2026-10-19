@@ -79,6 +79,26 @@ export function hotelTemplateRows(displayTemplate: BudgetTemplateId | null | und
   ];
 }
 
+/**
+ * Room-nights, ADR and occupancy are on file only when the stored kit is the
+ * hotel kit and the volume is not the statement seed (1 × monthly revenue).
+ * A labour kit relabelled as rooms is not a hotel driver.
+ */
+export function hotelDriversOnFile(
+  storedTemplate: BudgetTemplateId,
+  displayTemplate: BudgetTemplateId | null | undefined,
+  line: { months?: Record<string, { volume?: number; price?: number }> } | null | undefined,
+): boolean {
+  if (displayTemplate !== "hospitality_rooms") return true;
+  if (storedTemplate !== "hospitality_rooms") return false;
+  const cells = Object.values(line?.months ?? {});
+  if (cells.length === 0) return false;
+  return cells.some((cell) => {
+    const volume = Number(cell.volume) || 0;
+    return volume > 0 && Math.abs(volume - 1) > 0.001;
+  });
+}
+
 export function hotelLineDisplayName(
   displayTemplate: BudgetTemplateId | null | undefined,
   name: string,

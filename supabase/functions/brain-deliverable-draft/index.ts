@@ -19,6 +19,7 @@ import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
 import { partyNamesInBrain } from "../brain-propose/prompt.ts";
 import { buildDeliverableDraftPayload } from "./prompt.ts";
 import { quotedStatementFigures, ratioPromptLines, STATEMENT_FIGURE_RULES } from "../../../src/lib/statement-margin.ts";
+import { figuresPeriodLabelFrom, rewriteSavedMonthStamp } from "../../../src/lib/statement-period.ts";
 import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 
@@ -360,7 +361,7 @@ async function handleBrainDeliverableDraft(req: Request): Promise<Response> {
   const [clientRes, snapRes, factRes, stepRes, draftRes] = await Promise.all([
     userClient
       .from("clients")
-      .select("name, business_type, operating_profile, brain_summary")
+      .select("name, business_type, operating_profile, brain_summary, financials")
       .eq("id", clientId)
       .maybeSingle(),
     userClient
@@ -417,13 +418,20 @@ async function handleBrainDeliverableDraft(req: Request): Promise<Response> {
     if (blob.business_map) contextLines.push(`Business map: ${compact(blob.business_map, 600)}`);
   }
   const snap = snapRes.data;
+  const clientFinancials =
+    client && typeof client === "object" && "financials" in client && client.financials && typeof client.financials === "object"
+      ? (client.financials as object)
+      : null;
+  const periodLabel = figuresPeriodLabelFrom(clientFinancials, snap?.period_label ?? null);
   if (snap) {
-    contextLines.push(`Latest snapshot: ${snap.period_label ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`);
+    contextLines.push(
+      `Latest snapshot: ${periodLabel ?? snap.period_label ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`,
+    );
     const ratios = ratioLines(snap.ratios);
     if (ratios.length) contextLines.push(`Ratios:\n  ${ratios.join("\n  ")}`);
     const quoted = quotedStatementFigures({
       ratios: (snap.ratios ?? null) as Record<string, unknown> | null,
-      periodLabel: snap.period_label,
+      periodLabel: periodLabel ?? snap.period_label,
     });
     if (quoted.length) contextLines.push(quoted.join("\n"));
   }
@@ -500,11 +508,17 @@ async function handleBrainDeliverableDraft(req: Request): Promise<Response> {
     return respond({ draftInserted: false, skippedReason });
   }
 
+  const draftedSubject = toInsert.subject ? rewriteSavedMonthStamp(toInsert.subject) : null;
+  const draftedBody = rewriteSavedMonthStamp(toInsert.body);
+  const draftedAssumptions = toInsert.assumptions.map((item) => ({
+    ...item,
+    text: rewriteSavedMonthStamp(item.text),
+  }));
   const { error: insErr } = await userClient.from("deliverable_drafts").insert({
     client_id: clientId,
     kind: toInsert.kind,
-    body: composeDraftBody(toInsert.subject, toInsert.body),
-    assumption_checklist: toInsert.assumptions,
+    body: composeDraftBody(draftedSubject, draftedBody),
+    assumption_checklist: draftedAssumptions,
     status: "draft",
     created_by: user.id,
   });

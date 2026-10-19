@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
 import type { BudgetActuals, BudgetDocument, BudgetTemplateId } from "@/lib/budget.types";
-import { budgetPriceLabel, budgetVolumeLabel, hotelTemplateRows } from "@/lib/budget-industry";
+import { budgetPriceLabel, budgetVolumeLabel, hotelDriversOnFile, hotelTemplateRows } from "@/lib/budget-industry";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import {
   plainBudgetWindowHeading,
@@ -163,6 +163,8 @@ export function BudgetSimpleView({
   const volumeLabel = budgetVolumeLabel(doc.templateId, shownTpl.id, line?.volumeLabel);
   const priceLabel = budgetPriceLabel(doc.templateId, shownTpl.id, line?.priceLabel);
   const hotelRows = hotelTemplateRows(shownTpl.id);
+  const driversOnFile = hotelDriversOnFile(doc.templateId, shownTpl.id, line);
+  const showDriverDash = !driversOnFile && (readOnly || doc.templateId !== "hospitality_rooms");
   const cell = line?.months[focusMonth] ?? { volume: 0, price: 0 };
   const focusIdx = months.indexOf(focusMonth);
 
@@ -379,7 +381,9 @@ export function BudgetSimpleView({
             label={localizeCopy(volumeLabel, market)}
             hint={hotelRows ? "Rooms" : line?.name ? `${line.name}` : "Units they move this month"}
           >
-            {readOnly ? (
+            {showDriverDash ? (
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--ink)]" data-hotel-driver="missing">—</p>
+            ) : readOnly ? (
               <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--ink)]">{cell.volume}</p>
             ) : (
             <Input
@@ -398,6 +402,9 @@ export function BudgetSimpleView({
             label={localizeCopy(priceLabel, market)}
             hint={`Per unit, ${symbol}`}
           >
+            {showDriverDash ? (
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--ink)]" data-hotel-driver="missing">—</p>
+            ) : (
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-lg font-medium text-[#102A43] dark:text-[#F4F7FB]">{symbol}</span>
               {readOnly ? (
@@ -413,12 +420,13 @@ export function BudgetSimpleView({
               />
               )}
             </div>
+            )}
           </DriverPad>
           <EquationOp symbol="=" label="equals" />
           <DriverPad
             kicker="This month’s revenue"
             label="Computed"
-            hint="Volume × price — not typed"
+            hint={showDriverDash ? "From the statement" : "Volume × price — not typed"}
             result
           >
             <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-[#102A43] dark:text-slate-100">

@@ -121,7 +121,7 @@ import { booksCoverPeriod, booksTileLines } from "@/lib/books-answer";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { parseBudgetDocument } from "@/lib/budget-pdf";
-import { budgetSeededFromStatement, budgetVersusStatement } from "@/lib/budget.bridges";
+import { budgetSeededFromStatement, budgetVersusStatement, statementBudgetRead } from "@/lib/budget.bridges";
 import { planAnswerSentence } from "@/lib/plan-pack-copy";
 import { loadClientDisplayNames } from "@/lib/client-display-name";
 import { ProductMixPanel } from "@/components/product-mix-panel";
@@ -195,6 +195,8 @@ import {
 } from "@/lib/client-metrics";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import {
+  cashOutlookIsCritical,
+  cashSignedFiguresChanged,
   clientListStatusWord,
   forecastLowestPoint,
   forecastRunwayHeadlineShared,
@@ -272,7 +274,7 @@ import { needsPastPeriodPrompt } from "@/lib/history-coverage";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
-import { reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
+import { cashSignoffIsStale, reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { FinancialManagerBrief } from "@/components/financial-manager-brief";
@@ -1165,6 +1167,7 @@ function ClientView() {
   const financialsSignoff = reviewSignoffs.financials ?? null;
   const profitabilitySignoff = reviewSignoffs.profitability ?? null;
   const cashForecastSignoff = reviewSignoffs.cash_forecast ?? null;
+  const [cashSignedSnapshot, setCashSignedSnapshot] = useState<unknown>(null);
   const budgetSignoff = reviewSignoffs.budget ?? null;
   const actionPlanSignoff = reviewSignoffs.action_plan ?? null;
   const advisorySignoff = reviewSignoffs.advisory ?? null;
@@ -1333,6 +1336,12 @@ function ClientView() {
     openingMissing,
   });
   const bookStatusCritical = bookStatusWord.startsWith("Critical");
+  const planCashBelowFloor = cashOutlookIsCritical({
+    opening: cashOutlook.opening,
+    floor: cashOutlook.floor,
+    dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+    openingMissing,
+  });
   const plVersusBank = useMemo(
     () => plBankDisagreement({ financials, cashflow: client?.cashflow }),
     [financials, client?.cashflow],
@@ -1533,7 +1542,10 @@ function ClientView() {
   const booksPeriod = booksCoverPeriod(dataFreshness);
   const budgetDoc = parseBudgetDocument(client?.budget ?? null);
   const budgetCompared = budgetDoc
-    ? budgetVersusStatement(budgetDoc, financials as Record<string, unknown>)
+    ? budgetVersusStatement(
+        statementBudgetRead(budgetDoc, financials as Record<string, unknown>).doc,
+        financials as Record<string, unknown>,
+      )
     : null;
   const budgetMoney = (amount: number) => formatMoneyCompact(amount, clientMarket);
   let budgetFigure: string | null = null;
@@ -2086,6 +2098,39 @@ function ClientView() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, activeTab, cashForecastReloadToken]);
+
+  useEffect(() => {
+    if (!clientId) {
+      setCashSignedSnapshot(null);
+      return;
+    }
+    let cancelled = false;
+    void (supabase as unknown as {
+      from: (table: string) => {
+        select: (cols: string) => {
+          eq: (col: string, value: string) => {
+            eq: (col: string, value: string) => {
+              maybeSingle: () => Promise<{ data: { content_snapshot?: unknown } | null }>;
+            };
+          };
+        };
+      };
+    })
+      .from("client_deliverable_states")
+      .select("content_snapshot")
+      .eq("client_id", clientId)
+      .eq("scope", "cash_forecast")
+      .maybeSingle()
+      .then((res) => {
+        if (!cancelled) setCashSignedSnapshot(res.data?.content_snapshot ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setCashSignedSnapshot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, cashForecastReloadToken, cashForecastSignoff?.signed_off_at]);
 
   // ── Impersonation exit ────────────────────────────────────────────────────
 
@@ -3070,6 +3115,7 @@ function ClientView() {
         floor: cashOutlook.floor,
         dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
       },
+      cashPillarStatus: pillarStatus.cash ?? null,
       openAction: openPlanUnavailable
         ? "Open actions aren't available yet."
         : openPlanTitles == null
@@ -3097,6 +3143,7 @@ function ClientView() {
     clientMarket,
     openingMissing,
     clientProfitBridge.ebit,
+    pillarStatus.cash,
   ]);
   const homeLines = useMemo(
     () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null, openActionAgent, handedTitle),
@@ -3185,6 +3232,7 @@ function ClientView() {
         cashClosing: hasFigures ? cashOutlook.closing : null,
         market: clientMarket,
         openingMissing,
+        cashPillarStatus: pillarStatus.cash ?? null,
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
@@ -3210,6 +3258,7 @@ function ClientView() {
       cashOutlook.closing,
       cashOutlook.floor,
       openingMissing,
+      pillarStatus.cash,
       statementPosition.receivables,
       homeActivity,
       clientMarket,
@@ -4250,9 +4299,10 @@ function ClientView() {
                       canSign
                       hideReadOnlyStamp
                       hideInlineSignOff
-                      signoffStale={pageSignoffStale(
+                      signoffStale={cashSignoffIsStale(
                         cashForecastSignoff,
                         client?.last_forecast_at ?? null,
+                        cashSignedFiguresChanged(cashSignedSnapshot, client?.cashflow),
                       )}
                       signoff={cashForecastSignoff}
                       signoffKnown={signoffsKnown}
@@ -4740,6 +4790,7 @@ function ClientView() {
                           reviewSignoff={stampFromSignoff(actionPlanSignoff, false)}
                           simplified
                           isOwner
+                          cashBelowFloor={planCashBelowFloor}
                           initialFilter={
                             search.section === "overdue"
                               ? "overdue"

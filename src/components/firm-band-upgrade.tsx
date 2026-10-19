@@ -111,8 +111,7 @@ export function FirmBandUpgrade({
   }, [selected, interval]);
 
   const currentIdx = currentBand ? FIRM_BAND_IDS.indexOf(currentBand) : -1;
-  const soloLeads =
-    selected === "solo" && (currentBand == null || currentBand === "starter");
+  const soloLeads = currentBand == null && selected === "solo";
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
   const saFirm = saDiscount || zaLabels != null || priceCurrency.toLowerCase() === "zar";
 

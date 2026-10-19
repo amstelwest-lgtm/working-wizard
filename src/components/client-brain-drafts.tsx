@@ -46,6 +46,7 @@ import {
   updateAssumptionText,
 } from "@/lib/client-brain-deliverable";
 import { alignBrainFigureCopy, type StatementFigureFacts } from "@/lib/statement-margin";
+import { rewriteSavedMonthStamp } from "@/lib/statement-period";
 
 type DraftDialog =
   | { mode: "ready" | "discard" | "send"; draft: DeliverableDraft }
@@ -141,13 +142,15 @@ export function ClientBrainDrafts({
         const parsed = parseDraftSubjectBody(dialog.draft.body);
         const items = parseAssumptionChecklist(dialog.draft.assumption_checklist);
         const snapId = await latestSnapshotId(clientId);
-        const body = bodyWithAssumptionFooter(parsed.body || dialog.draft.body || "", items);
+        const body = rewriteSavedMonthStamp(
+          bodyWithAssumptionFooter(parsed.body || dialog.draft.body || "", items),
+        );
         const logged = await recordDelivery({
           clientId,
           firmId,
           channel: "copy",
           kind: kindToDelivery(dialog.draft.kind),
-          subject: parsed.subject,
+          subject: parsed.subject ? rewriteSavedMonthStamp(parsed.subject) : null,
           body,
           snapshotId: snapId,
           figuresHash: hashFigures({
@@ -279,7 +282,7 @@ export function ClientBrainDrafts({
                                 htmlFor={`${draft.id}-${item.id}`}
                                 style={{ fontSize: 13.5, cursor: editable ? "pointer" : "default", flex: 1 }}
                               >
-                                {item.text}
+                                {rewriteSavedMonthStamp(item.text)}
                               </label>
                               {editable && (
                                 <button

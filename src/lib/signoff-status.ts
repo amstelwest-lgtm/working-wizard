@@ -134,6 +134,19 @@ export function budgetSignoffIsStale(
   return figuresChanged === true;
 }
 
+/**
+ * Cash stamp only. Same rule as the budget stamp: stale when the signed
+ * figure snapshot and the forecast on file differ. No snapshot is not stale.
+ */
+export function cashSignoffIsStale(
+  signoff: { signed_off_at: string } | null | undefined,
+  _forecastUpdatedAt: string | null | undefined,
+  figuresChanged?: boolean,
+): boolean {
+  if (!signoff) return false;
+  return figuresChanged === true;
+}
+
 export function reviewFiguresChanged(input: {
   signedOffAt?: string | null;
   dataUpdatedAt?: string | null;

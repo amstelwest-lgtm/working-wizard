@@ -59,7 +59,7 @@ import {
   upgradeFirmBand,
 } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
-import { clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
+import { clientListRunwayHeadline, clientListStatusWord, statusColumnNeedsAttention } from "@/lib/cash-forecast-parity";
 import {
   assessClientMetrics,
   forecastIsCashGenerative,
@@ -1147,7 +1147,9 @@ function toClientRow(
     });
     const health = statusWord.startsWith("Critical")
       ? { ...scored, displayStatus: "critical" as const, displayLabel: statusWord }
-      : scored;
+      : statusWord.startsWith("Needs data")
+        ? { ...scored, displayStatus: "at_risk" as const, displayLabel: statusWord }
+        : scored;
     const runwayLabel = clientListRunwayHeadline({
       source: outlook.source,
       opening: outlook.opening,
@@ -1702,11 +1704,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     [attentionItems, portfolioRows],
   );
   const attention = attentionBook.summary;
+  const statusAttention = clientRows.filter((row) =>
+    statusColumnNeedsAttention(row.health.displayLabel),
+  ).length;
   const summaryLine = bookLoading
     ? "Loading your clients…"
     : portfolioSummaryLine({
         clientCount: clientRows.length,
-        needAttention: attention.needAttention,
+        needAttention: statusAttention,
         avgHealth,
       });
 
@@ -1745,7 +1750,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     () => ({
       clientCount: clientRows.length,
       avgHealth,
-      needAttention: attention.needAttention,
+      needAttention: statusAttention,
       reviewNow: attention.reviewNow,
       openQueries: openQueriesTotal,
       followUps: followUpItems.length,
@@ -1753,7 +1758,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     [
       clientRows.length,
       avgHealth,
-      attention.needAttention,
+      statusAttention,
       attention.reviewNow,
       openQueriesTotal,
       followUpItems.length,

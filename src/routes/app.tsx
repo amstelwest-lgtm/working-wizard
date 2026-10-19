@@ -114,7 +114,7 @@ import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
-import { clientListStatusWord } from "@/lib/cash-forecast-parity";
+import { cashOutlookIsCritical, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
@@ -3674,6 +3674,12 @@ function Index() {
     openingMissing: ownerOpeningMissing,
   });
   const ownerStatusCritical = ownerStatusWord.startsWith("Critical");
+  const ownerCashBelowFloor = cashOutlookIsCritical({
+    opening: ownerOutlook.opening,
+    floor: ownerOutlook.floor,
+    dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
+    openingMissing: ownerOpeningMissing,
+  });
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
   ) as Record<"profit" | "assets" | "financing" | "cash", number>;
@@ -3997,6 +4003,8 @@ function Index() {
                       }
                     : null
                 }
+                openingMissing={ownerOpeningMissing}
+                cashPillarStatus={pillarStatus.cash ?? null}
                 market={boardMarket}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
                   row
@@ -4185,6 +4193,7 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified
                             isOwner={userRole !== "client_member"}
+                            cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(
                               actionPlanSignoff,
@@ -4275,6 +4284,7 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified
                             isOwner={userRole !== "client_member"}
+                            cashBelowFloor={ownerCashBelowFloor}
                             ownerView
                             moves={nextSteps.map((s) => ({
                               key: s.key,
@@ -5926,6 +5936,7 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified={viewMode === "simplified"}
                             isOwner={userRole !== "client_member"}
+                            cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(
                               actionPlanSignoff,

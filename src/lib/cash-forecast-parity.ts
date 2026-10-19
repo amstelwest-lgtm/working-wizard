@@ -13,6 +13,8 @@ import {
 
 export const CASH_BELOW_FLOOR_STATUS = "Critical: cash below floor";
 export const OPENING_BALANCE_MISSING = "Opening balance missing";
+/** Status column when cash cannot be scored. Never "Healthy". */
+export const NEEDS_DATA_OPENING = "Needs data: opening balance missing";
 
 export { storedOpeningIsMissing };
 
@@ -199,10 +201,76 @@ export function clientListStatusWord(input: {
   totalOutflow?: number | null;
   openingMissing?: boolean;
 }): string {
+  if (input.openingMissing) return NEEDS_DATA_OPENING;
   if (input.healthOverall == null) return "—";
-  if (input.openingMissing) return input.healthLabel;
   if (forecastHasCashEvidence(input) && cashOutlookIsCritical(input)) return CASH_BELOW_FLOOR_STATUS;
   return input.healthLabel;
+}
+
+/** Clients-list status words that the practice Home attention count includes. */
+export function statusColumnNeedsAttention(label: string): boolean {
+  const text = label.trim();
+  return text.length > 0 && text !== "—" && text !== "Healthy";
+}
+
+function stableCashValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableCashValue);
+  if (value && typeof value === "object") {
+    const src = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(src).sort()) out[key] = stableCashValue(src[key]);
+    return out;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value * 100) / 100;
+  return value;
+}
+
+function cashLineSnapshot(row: unknown): unknown {
+  if (!row || typeof row !== "object") return null;
+  const line = row as Record<string, unknown>;
+  return {
+    name: typeof line.name === "string" ? line.name : "",
+    amount: line.amount ?? "",
+    frequency: line.frequency ?? "",
+    startWeek: line.startWeek ?? null,
+    splitCount: line.splitCount ?? null,
+    weekOverrides: line.weekOverrides ?? null,
+  };
+}
+
+/**
+ * Cash figures a sign-off can compare. Clocks, line ids, and the forecast
+ * start date are not figures — an autosave that only moves those is not a change.
+ */
+export function cashForecastSnapshot(cashflow: unknown): unknown {
+  if (!cashflow || typeof cashflow !== "object") return null;
+  const cf = cashflow as Record<string, unknown>;
+  const lines = (key: string) => (Array.isArray(cf[key]) ? cf[key].map(cashLineSnapshot) : []);
+  return {
+    openingBalance: cf.openingBalance ?? "",
+    openingBalanceSource: cf.openingBalanceSource ?? null,
+    forecastLinesSource: cf.forecastLinesSource ?? null,
+    revAdj: cf.revAdj ?? null,
+    expAdj: cf.expAdj ?? null,
+    collectDelay: cf.collectDelay ?? null,
+    revenue: lines("revenue"),
+    expenses: lines("expenses"),
+    other: lines("other"),
+  };
+}
+
+/**
+ * True when a signed cash snapshot and the forecast now on file differ.
+ * A missing snapshot is not a change — the clock alone cannot say the figures moved.
+ */
+export function cashSignedFiguresChanged(signedSnapshot: unknown, cashflow: unknown): boolean {
+  if (!cashflow || !signedSnapshot || typeof signedSnapshot !== "object") return false;
+  const figures = (signedSnapshot as { cashFigures?: unknown }).cashFigures;
+  if (figures == null || typeof figures !== "object") return false;
+  return (
+    JSON.stringify(stableCashValue(figures)) !==
+    JSON.stringify(stableCashValue(cashForecastSnapshot(cashflow)))
+  );
 }
 
 export function forecastFloorPosition(input: {

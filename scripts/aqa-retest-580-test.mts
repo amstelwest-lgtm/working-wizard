@@ -14,6 +14,7 @@ import {
 } from "../src/lib/budget.bridges.ts";
 import {
   CASH_BELOW_FLOOR_STATUS,
+  NEEDS_DATA_OPENING,
   OPENING_BALANCE_MISSING,
   clientListRunwayHeadline,
   clientListStatusWord,
@@ -310,7 +311,8 @@ const karooRunway = clientListRunwayHeadline({
   healthOverall: 80,
   openingMissing: true,
 });
-assert(karooStatus === "Healthy", karooStatus);
+assert(karooStatus === NEEDS_DATA_OPENING, karooStatus);
+assert(!karooStatus.includes("Healthy"), karooStatus);
 assert(karooRunway === OPENING_BALANCE_MISSING, karooRunway);
 assert(!karooRunway.includes("weeks below"), karooRunway);
 

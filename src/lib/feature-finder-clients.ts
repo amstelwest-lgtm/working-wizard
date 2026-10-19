@@ -154,12 +154,17 @@ export function searchClientSectionJumps(
 
   const perFeature = Math.max(8, Math.floor(MAX_SECTION_JUMPS / targets.length));
   const jumps: FeatureResult[] = [];
+  const seen = new Set<string>();
   for (const target of targets) {
     let shown = 0;
     for (const client of pool) {
       if (shown >= perFeature || jumps.length >= MAX_SECTION_JUMPS) break;
       const name = client.name.trim();
       if (!name) continue;
+      const label = `${target.label} for ${name}`;
+      const key = label.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
       const destination = {
         kind: "client" as const,
         clientId: client.id,
@@ -168,7 +173,7 @@ export function searchClientSectionJumps(
       const code = client.clientCode?.trim() || "";
       jumps.push({
         id: `${target.id}:${client.id}`,
-        label: `${target.label} for ${name}`,
+        label,
         hint: code || target.hint,
         group: target.label,
         destination,

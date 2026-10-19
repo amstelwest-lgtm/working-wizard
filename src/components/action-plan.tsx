@@ -46,7 +46,7 @@ import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from 
 import { practiceRoleLabel } from "@/lib/practice-access";
 import { planAutomation, type ActionAutomationRow } from "@/lib/action-plan-automation";
 import { actionDisplayTitle, planGoalIsOverdue } from "@/lib/strategic-moves";
-import { interventionStepsFromActions } from "@/lib/intervention-grounding";
+import { CASH_FLOOR_REASON, interventionPlanSteps } from "@/lib/intervention-grounding";
 import { actionPace, deriveActionHealth } from "@/lib/action-item-health";
 import { ActionPlanAutomation } from "@/components/action-plan-automation";
 import {
@@ -209,6 +209,8 @@ interface Props {
   /** Owner tab sign-off. Unsigned renders nothing. */
   ownerSignoff?: ClientReviewSignoff | null;
   ownerSignoffStale?: boolean;
+  /** 13-week cash is under the floor and the opening is on file. */
+  cashBelowFloor?: boolean;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -490,6 +492,7 @@ export default function ActionPlanPanel({
   onInviteAccountant,
   ownerSignoff = null,
   ownerSignoffStale = false,
+  cashBelowFloor = false,
 }: Props) {
   const { date } = useMarketFormat();
   const { profile, firms, firmId } = useAccountantProfile();
@@ -1290,10 +1293,11 @@ export default function ActionPlanPanel({
   }
 
   const drawerItem = drawerId ? (enriched.find((i) => i.id === drawerId) ?? null) : null;
-  const interventionSteps = interventionStepsFromActions(
+  const interventionSteps = interventionPlanSteps(
     enriched
       .filter((item) => item.status !== "done")
       .map((item) => actionDisplayTitle(stripMilonProjection(item.title))),
+    cashBelowFloor,
   );
   const automationById = new Map(automation.rows.map((row) => [row.id, row]));
 
@@ -1322,7 +1326,11 @@ export default function ActionPlanPanel({
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#102A43] dark:text-[#0B5FFF]/80">
             Intervention plan
           </p>
-          <p className="mt-1 text-xs text-slate-500">Same open actions as the list below.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {cashBelowFloor
+              ? `Critical reason: ${CASH_FLOOR_REASON}.`
+              : "Same open actions as the list below."}
+          </p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-800 dark:text-slate-200">
             {interventionSteps.map((step) => (
               <li key={step}>{step}</li>

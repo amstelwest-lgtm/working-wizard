@@ -58,6 +58,11 @@ export type OwnerBooks = {
     floor: number;
     dipsBelowFloorWeek: number | null;
   } | null;
+  /**
+   * Cash pillar band from the same health score as the ring.
+   * Watch or Healthy wins over the floor chip. Omit it and the outlook rule stays.
+   */
+  cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   openAction: string | null;
   /** False until the action-point read has finished. */
   actionsReady: boolean;
@@ -240,6 +245,7 @@ export const CASH_FLOOR_ALERT = "Below your minimum";
  * A profit decline, or overdue debtors above zero, is Attention.
  */
 export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {
+  const pillar = books.cashPillarStatus;
   const floor = cashFloorForHome({
     openingMissing: books.openingMissing,
     cashOutlook: books.cashOutlook,
@@ -247,9 +253,12 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
     market: books.market,
     money: (amount) => ownerAmount(amount, books.market),
   });
-  const cash: OwnerCardStatus | null = floor?.chip
-    ? { tone: "attention", word: floor.chip }
-    : null;
+  const cash: OwnerCardStatus | null =
+    pillar === "healthy" || pillar === "at_risk"
+      ? null
+      : pillar === "critical" || floor?.chip
+        ? { tone: "attention", word: floor?.chip ?? CASH_FLOOR_ALERT }
+        : null;
 
   const gross =
     finite(books.revenue) && finite(books.cogs)
@@ -436,6 +445,19 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
       empty: false,
     };
   }
+  const outlook = books.cashOutlook;
+  const pillarAgrees =
+    books.cashPillarStatus === "healthy" || books.cashPillarStatus === "at_risk";
+  if (pillarAgrees && outlook && finite(outlook.opening)) {
+    return {
+      ...base,
+      sentence: `Cash is ${money(outlook.opening)}.`,
+      source: `${booksSource}, 13-week forecast`,
+      step: "Ask",
+      signed: false,
+      empty: false,
+    };
+  }
   const shared = cashFloorForHome({
     openingMissing: books.openingMissing,
     cashOutlook: books.cashOutlook,
@@ -443,7 +465,7 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
     market: books.market,
     money,
   });
-  if (shared && books.cashOutlook && finite(books.cashOutlook.opening) && finite(books.cashOutlook.floor)) {
+  if (shared && outlook && finite(outlook.opening) && finite(outlook.floor)) {
     return {
       ...base,
       sentence: shared.sentence,
