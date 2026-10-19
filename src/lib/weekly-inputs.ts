@@ -153,6 +153,17 @@ export type ResolvedWaterfallFigures = {
  * statement (Xero) is the source of truth — then the statement period wins
  * so an older week grid cannot hide the synced month.
  */
+/**
+ * A statement with revenue is the waterfall. A week grid does not replace it.
+ * Weekly totals are only the chart when the statement has no revenue.
+ */
+export function waterfallPrefersStatement(
+  fallback: { revenue?: number } | null | undefined,
+  preferPeriod?: boolean,
+): boolean {
+  return Boolean(preferPeriod) || (fallback?.revenue ?? 0) > 0.5;
+}
+
 export function resolveWaterfallFigures(
   weekly: WeeklyInputs,
   fallback?: WaterfallFallback,

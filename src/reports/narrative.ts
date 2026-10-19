@@ -354,25 +354,24 @@ export function interventionNarrative(
     critical: number;
     atRisk: number;
     total: number;
+    /** 13-week cash is under the floor. The status is Critical even when no ratio is. */
+    cashBelowFloor?: boolean;
   },
   profile?: NarrativeProfile,
   market: MoneyMarket = ZA_MARKET,
 ): string {
   if (d.total === 0) {
-    return spellForMarket(
-      withCoda(
-        "No intervention steps are required at present — all tracked ratios are healthy.",
-        profile,
-        "intervention",
-        market,
-      ),
-      market,
-    );
+    const line = d.cashBelowFloor
+      ? "Cash is below the floor, so the status is Critical. The cash position is the first action."
+      : "No intervention steps are required at present — all tracked ratios are healthy.";
+    return spellForMarket(withCoda(line, profile, "intervention", market), market);
   }
   const urgency =
     d.critical > 0
       ? `${d.critical} step${d.critical > 1 ? "s" : ""} address${d.critical === 1 ? "es" : ""} critical ratios and should start immediately`
-      : "no ratio is in critical territory, so this plan is about prevention rather than rescue";
+      : d.cashBelowFloor
+        ? "cash is below the floor, so the Critical status starts this plan there"
+        : "no ratio is in critical territory, so this plan is about prevention rather than rescue";
   const base =
     `This roadmap prioritises ${d.total} action step${d.total > 1 ? "s" : ""} by severity and impact: ${urgency}` +
     `${d.atRisk > 0 ? `, with ${d.atRisk} further step${d.atRisk > 1 ? "s" : ""} targeting at-risk measures` : ""}.`;

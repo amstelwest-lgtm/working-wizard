@@ -13,6 +13,7 @@ import {
   openPracticeSettings,
 } from "@/lib/user-roles";
 import {
+  cashPillarFollowsForecast,
   scorecardHealthFromFinancials,
   scoreTier,
   type OverallHealth,
@@ -1118,14 +1119,23 @@ function toClientRow(
     const outlook = assessed.outlook;
     const fyStartMonth =
       parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
-    const scored = scorecardHealthFromFinancials({
-      financials: c.financials,
-      fyStartMonth,
-      periodMonths: periodMonthsOf(c.financials),
-      cashRunwayWeeks: runwayWeeks,
-      market: clientMarket,
-      shortfallWeek: assessed.outlook.shortfallWeek,
-    });
+    const openingMissing = storedOpeningIsMissing(c.cashflow);
+    const scored = cashPillarFollowsForecast(
+      scorecardHealthFromFinancials({
+        financials: c.financials,
+        fyStartMonth,
+        periodMonths: periodMonthsOf(c.financials),
+        cashRunwayWeeks: runwayWeeks,
+        market: clientMarket,
+        shortfallWeek: assessed.outlook.shortfallWeek,
+      }),
+      {
+        openingMissing,
+        opening: outlook.opening,
+        closings: outlook.closing,
+        floor: outlook.floor,
+      },
+    );
     const statusWord = clientListStatusWord({
       healthLabel: scored.displayLabel,
       healthOverall: scored.overall,
@@ -1135,7 +1145,7 @@ function toClientRow(
       dipsBelowFloorWeek: outlook.dipsBelowFloorWeek,
       totalInflow: outlook.totalInflow,
       totalOutflow: outlook.totalOutflow,
-      openingMissing: storedOpeningIsMissing(c.cashflow),
+      openingMissing,
     });
     const health = statusWord.startsWith("Critical")
       ? { ...scored, displayStatus: "critical" as const, displayLabel: statusWord }
@@ -1152,6 +1162,7 @@ function toClientRow(
         assessed.runway.kind === "cash_generative" &&
         forecastIsCashGenerative(outlook.totalInflow, outlook.totalOutflow),
       healthOverall: scored.overall,
+      openingMissing,
     });
     return {
       ...c,

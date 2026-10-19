@@ -2468,6 +2468,32 @@ export function CashForecastPanel({
   });
   const runwayAside =
     !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
+  const openingTilesMissing = loaded && storedOpeningIsMissing(loadedCashflowRef.current);
+  const openingTileValue = openingTilesMissing ? "—" : fmtCompact(baseCalc.opening);
+  const openingTileSub = openingTilesMissing ? "missing" : openingLabel;
+  const lowestTileValue =
+    openingTilesMissing || emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal);
+  const lowestTileSub = openingTilesMissing
+    ? "missing"
+    : emptyPresentation.lowestBlank
+      ? "Add an opening balance"
+      : lowPoint.week === 0
+        ? "Opening balance"
+        : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`;
+  const lowestPointSub = openingTilesMissing
+    ? "missing"
+    : emptyPresentation.lowestBlank
+      ? "Add an opening balance"
+      : lowPoint.week === 0
+        ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
+        : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`;
+  const weeksBelowValue = openingTilesMissing ? "—" : weeksBelow.value;
+  const weeksBelowSub = openingTilesMissing ? "missing" : weeksBelow.sub;
+  const weeksBelowTone = openingTilesMissing || forecastEmpty
+    ? "neutral"
+    : floorPos.weeksBelow > 0 || floorPos.opensBelow
+      ? "bad"
+      : "good";
 
   const kpiTiles = (
       <div
@@ -2496,23 +2522,17 @@ export function CashForecastPanel({
             />
             <Stat
               label="Lowest balance"
-              value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
+              value={lowestTileValue}
               icon={ShieldCheck}
-              tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
-              sub={
-                emptyPresentation.lowestBlank
-                  ? "Add an opening balance"
-                  : lowPoint.week === 0
-                    ? "Opening balance"
-                    : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
-              }
+              tone={openingTilesMissing || emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
+              sub={lowestTileSub}
             />
             <Stat
               label="Weeks below floor"
-              value={weeksBelow.value}
+              value={weeksBelowValue}
               icon={CalendarDays}
-              tone={forecastEmpty ? "neutral" : floorPos.weeksBelow > 0 || floorPos.opensBelow ? "bad" : "good"}
-              sub={weeksBelow.sub}
+              tone={weeksBelowTone}
+              sub={weeksBelowSub}
             />
             <Stat
               label="Net cash · next 4 weeks"
@@ -2526,24 +2546,18 @@ export function CashForecastPanel({
           </>
         ) : (
           <>
-            <Stat label="Opening bank" value={fmtCompact(baseCalc.opening)} sub={openingLabel} />
+            <Stat label="Opening bank" value={openingTileValue} sub={openingTileSub} />
             <Stat
               label="Lowest point"
-              value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
-              tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
-              sub={
-                emptyPresentation.lowestBlank
-                  ? "Add an opening balance"
-                  : lowPoint.week === 0
-                    ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
-                    : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
-              }
+              value={lowestTileValue}
+              tone={openingTilesMissing || emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
+              sub={lowestPointSub}
             />
             <Stat
               label="Weeks below floor"
-              value={weeksBelow.value}
-              tone={forecastEmpty ? "neutral" : floorPos.weeksBelow > 0 || floorPos.opensBelow ? "bad" : "good"}
-              sub={weeksBelow.sub}
+              value={weeksBelowValue}
+              tone={weeksBelowTone}
+              sub={weeksBelowSub}
             />
           </>
         )}

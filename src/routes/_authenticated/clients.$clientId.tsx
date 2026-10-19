@@ -90,6 +90,7 @@ import {
   overviewRatios,
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
+  cashPillarFollowsForecast,
   scorecardHealthFromFinancials,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -1293,16 +1294,24 @@ function ClientView() {
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
   const cashBalance = assessed.cash.amount;
   const cashKnown = cashBalance != null;
-  const overallHealth: OverallHealth = scorecardHealthFromFinancials({
-    financials,
-    fyStartMonth,
-    periodMonths: statementMonths,
-    cashRunwayWeeks: cashKnown ? effectiveRunway : null,
-    cashBalance: cashKnown ? cashBalance : null,
-    market: clientMarket,
-    shortfallWeek: cashOutlook.shortfallWeek,
-  });
   const openingMissing = storedOpeningIsMissing(client?.cashflow);
+  const overallHealth: OverallHealth = cashPillarFollowsForecast(
+    scorecardHealthFromFinancials({
+      financials,
+      fyStartMonth,
+      periodMonths: statementMonths,
+      cashRunwayWeeks: cashKnown ? effectiveRunway : null,
+      cashBalance: cashKnown ? cashBalance : null,
+      market: clientMarket,
+      shortfallWeek: cashOutlook.shortfallWeek,
+    }),
+    {
+      openingMissing,
+      opening: cashOutlook.opening,
+      closings: cashOutlook.closing,
+      floor: cashOutlook.floor,
+    },
+  );
   const bookStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -3287,6 +3296,11 @@ function ClientView() {
                   id="pane-overview"
                 >
                 <div className="owner-door" data-client-home="true">
+                  {statementSampleImplausible(financials) ? (
+                    <p className="mb-4 text-sm text-[#3D5270] dark:text-slate-300" role="status" data-sample-notice="">
+                      {IMPLAUSIBLE_SAMPLE_NOTE}
+                    </p>
+                  ) : null}
                   <FinancialManagerBrief
                     brief={homeBrief}
                     onHandToBot={() => openHomeAgent("financial_manager")}

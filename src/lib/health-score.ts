@@ -589,6 +589,54 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
   };
 }
 
+/**
+ * Cash pillar follows the 13-week series. A closing under the floor, with a
+ * real opening, cannot stay Healthy. A missing opening is not a breach.
+ * The score is capped at the critical band so the label and the number agree.
+ */
+export function cashPillarFollowsForecast(
+  health: OverallHealth,
+  input: {
+    openingMissing?: boolean;
+    opening?: number | null;
+    closings?: readonly number[] | null;
+    floor?: number | null;
+  },
+): OverallHealth {
+  if (input.openingMissing) return health;
+  const floor = input.floor;
+  if (floor == null || !Number.isFinite(floor)) return health;
+  const openingUnder =
+    input.opening != null && Number.isFinite(input.opening) && input.opening < floor;
+  const closingUnder = (input.closings ?? []).some((n) => Number.isFinite(n) && n < floor);
+  if (!openingUnder && !closingUnder) return health;
+
+  const pillars = health.pillars.map((pillar) => {
+    if (pillar.id !== "cash") return pillar;
+    const score = pillar.score == null ? 25 : Math.min(pillar.score, 25);
+    return { ...pillar, score, status: "critical" as const };
+  });
+  const scored = pillars.filter((p) => p.score != null) as Array<PillarScore & { score: number }>;
+  const overallRaw = avg(scored.map((p) => p.score));
+  const overall = overallRaw == null ? null : Math.round(overallRaw);
+  const status = scoreTier(overall);
+  const hasCriticalPillar = scored.some((p) => p.status === "critical");
+  const displayStatus: HealthTier = hasCriticalPillar && status === "healthy" ? "at_risk" : status;
+  const weakestPillar =
+    scored.length === 0
+      ? null
+      : ([...scored].sort((a, b) => a.score - b.score)[0] ?? null);
+  return {
+    overall,
+    status,
+    displayStatus,
+    displayLabel: chipLabel(displayStatus),
+    pillars,
+    weakestPillar,
+    hasCriticalPillar,
+  };
+}
+
 /** Score (0-100) from a flat financials object shaped like `clients.financials`. */
 export function scoreFromFlatFinancials(
   financials: FlatFinancials,

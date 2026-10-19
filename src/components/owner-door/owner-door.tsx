@@ -122,6 +122,7 @@ export function OwnerDoor({
   boards,
   bot = null,
   onBotChange,
+  sampleNotice = null,
 }: {
   clientId: string | null;
   businessName: string;
@@ -170,6 +171,8 @@ export function OwnerDoor({
   ) => Partial<Record<"health" | "cash" | "budget" | "tasks" | "profit" | "moves", ReactNode>>;
   bot?: AgentKey | null;
   onBotChange?: (agent: AgentKey | null, mode: "push" | "replace") => void;
+  /** Implausible sample figures. Shown on Home, same note as the client file. */
+  sampleNotice?: string | null;
 }) {
   const activity = useAgentActivity(clientId ?? "");
   const openedBot = ownerBotKey(bot);
@@ -730,6 +733,7 @@ export function OwnerDoor({
           onMoves={() => go("moves")}
           onDeliverables={() => go("deliverables")}
           inviteClientId={clientId}
+          notice={sampleNotice}
         />
       ) : null}
       {railScreen === "health" ? restored?.health : null}
