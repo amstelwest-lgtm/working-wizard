@@ -21,6 +21,8 @@ import {
   type FirmBrandRow,
 } from "@/lib/firm-brand";
 import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
+import { reportClientError } from "@/lib/monitoring";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
 import {
@@ -209,14 +211,20 @@ export function AccountantProfileProvider({
     profileFullName: "",
     authFullName: "",
   });
-  userIdRef.current = user?.id ?? null;
+  const userId = user?.id ?? null;
+  userIdRef.current = userId;
 
   useEffect(() => {
     let cancelled = false;
+    let timer = 0;
+    // `user` is the object from the render that changed the id. A later
+    // setSession with the same id must not cancel this hydrate: the billing
+    // gate waits on brandLoading, and a cancelled hydrate leaves it true.
+    const signedIn = user;
 
     async function hydrate() {
       if (authLoading) return;
-      if (!user) {
+      if (!signedIn) {
         if (!cancelled) {
           setFirm(null);
           setFirms([]);
@@ -228,13 +236,22 @@ export function AccountantProfileProvider({
         return;
       }
 
+      timer = window.setTimeout(() => {
+        if (cancelled) return;
+        console.warn("[accountant-profile] brand load timed out; continuing without the firm row");
+        reportClientError(new Error("accountant brand load timed out"), {
+          source: "accountant-profile",
+        });
+        setBrandLoading(false);
+      }, SHELL_GATE_TIMEOUT_MS);
+
       setBrandLoading(true);
       // Soft cache for this user only — never cross-account.
       // Drop unsaved firm/name edits before paint so a sample draft cannot flash.
-      const cachedRaw = loadFromStorage(user.id);
+      const cachedRaw = loadFromStorage(signedIn.id);
       const cached = dropUnsavedIdentity(cachedRaw);
       if (cachedRaw.firmName || cachedRaw.accountantName) {
-        saveToStorage(user.id, cached);
+        saveToStorage(signedIn.id, cached);
       }
       if (!cancelled && (cached.logoUrl || cached.tagline)) {
         setProfile(cached);
@@ -243,16 +260,16 @@ export function AccountantProfileProvider({
       }
 
       try {
-        const preferred = readActiveFirmId(user.id);
+        const preferred = readActiveFirmId(signedIn.id);
         let [all, row] = await Promise.all([
-          listUserFirms(user.id),
-          fetchUserFirm(user.id, preferred),
+          listUserFirms(signedIn.id),
+          fetchUserFirm(signedIn.id, preferred),
         ]);
         if (cancelled) return;
 
         if (all.length === 0) {
-          const roles = summarizeRoles(await listAppRoles(user.id));
-          const meta = user.user_metadata as Record<string, unknown> | undefined;
+          const roles = summarizeRoles(await listAppRoles(signedIn.id));
+          const meta = signedIn.user_metadata as Record<string, unknown> | undefined;
           const practiceSignup = isPracticeSignupMeta(meta);
           const customerSignup = meta?.signup_type === "customer";
           // Only mint a practice firm on positive evidence of a practice account.
@@ -267,8 +284,8 @@ export function AccountantProfileProvider({
             });
             if (!ensureErr) {
               const again = await Promise.all([
-                listUserFirms(user.id),
-                fetchUserFirm(user.id, preferred),
+                listUserFirms(signedIn.id),
+                fetchUserFirm(signedIn.id, preferred),
               ]);
               all = again[0];
               row = again[1];
@@ -277,17 +294,18 @@ export function AccountantProfileProvider({
         }
 
         if (cancelled) return;
-        const identity = await readPersistedNameChain(user);
+        const identity = await readPersistedNameChain(signedIn);
         if (cancelled) return;
         setNameChain(identity);
         setFirms(all);
         setFirm(row);
 
         if (row) {
-          writeActiveFirmId(user.id, row.id);
-          setProfile(applyFirmToProfile(row, user.id, cached, identity));
+          writeActiveFirmId(signedIn.id, row.id);
+          setProfile(applyFirmToProfile(row, signedIn.id, cached, identity));
         }
       } finally {
+        window.clearTimeout(timer);
         if (!cancelled) {
           setBrandLoading(false);
           hydratedRef.current = true;
@@ -298,8 +316,11 @@ export function AccountantProfileProvider({
     void hydrate();
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [user, authLoading]);
+    // user object identity changes on every session restore. Depend on the id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, authLoading]);
 
   const updateProfile = useCallback((partial: Partial<AccountantProfile>) => {
     setProfile((prev) => {

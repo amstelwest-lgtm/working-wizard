@@ -288,7 +288,10 @@ const list = clientListRunwayHeadline({
   cashGenerative: assessed.runway.kind === "cash_generative",
 });
 const expectedWeeks = screenBelow === 1 ? "1 week below" : `${screenBelow} weeks below`;
-if (screenBelow > 0) assert(list === expectedWeeks, `clients runway ${list}`);
+if (screenBelow > 0) {
+  const negativeNow = assessed.outlook.closing[0] != null && assessed.outlook.closing[0] < 0;
+  assert(list === (negativeNow ? "Below zero now" : expectedWeeks), `clients runway ${list}`);
+}
 
 const staged = suggestOnceOffRows({
   bankDraft: null,

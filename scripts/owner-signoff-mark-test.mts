@@ -86,7 +86,8 @@ const missing = renderToStaticMarkup(
   }),
 );
 assert.match(missing, /data-owner-budget-summary/);
-assert.equal((missing.match(/No budget yet/g) ?? []).length, 2);
+assert.equal((missing.match(/Budget not built yet/g) ?? []).length, 2);
+assert.equal((missing.match(/No budget yet/g) ?? []).length, 0);
 assert.equal(missing.includes("+$") || missing.includes("+R"), false);
 assert.match(missing, /Signed off by Theo · 1 Sep 2026/);
 assert.match(missing, new RegExp(OWNER_SIGNOFF_STALE_CHIP));
