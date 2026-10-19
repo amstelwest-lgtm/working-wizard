@@ -140,7 +140,7 @@ export function OverviewRail({
           {healthBand ? (
             <>
               Health score{" "}
-              <span className="text-emerald-600 dark:text-emerald-400">{healthBand.score}/100</span>
+              <span className="text-emerald-600 dark:text-emerald-400">{healthBand.score}</span>
               <span className="font-medium text-slate-500 dark:text-slate-400">
                 {" "}
                 — {healthBand.label}.

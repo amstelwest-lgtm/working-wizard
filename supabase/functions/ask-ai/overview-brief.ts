@@ -412,7 +412,7 @@ export function buildOverviewBrief(input: {
 export function overviewFactLines(brief: OverviewBrief): string[] {
   const lines: string[] = [];
   if (brief.health != null && brief.healthLabel) {
-    lines.push(`Health: ${brief.health}/100 (${brief.healthLabel})`);
+    lines.push(`Health: ${brief.health} (${brief.healthLabel})`);
   }
   if (brief.cash != null) lines.push(`Cash on file: ${money(brief.cash, brief.copyPack)}`);
   if (brief.totalAssets != null) {
@@ -493,10 +493,10 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   }
   for (const pillar of brief.pillars) {
     if (pillar.score == null) continue;
-    lines.push(`${pillar.label}: ${pillar.score}/100`);
+    lines.push(`${pillar.label}: ${pillar.score}`);
   }
   if (brief.weakest) {
-    lines.push(`Weakest pillar: ${brief.weakest.label} (${brief.weakest.score}/100)`);
+    lines.push(`Weakest pillar: ${brief.weakest.label} (${brief.weakest.score})`);
   }
   return lines;
 }
@@ -601,12 +601,12 @@ export function planActionsFromOverview(brief: OverviewBrief): PlannedAction[] {
   }
   if (items.length === 0 && brief.health != null) {
     const weak = brief.weakest
-      ? ` Weakest pillar is ${brief.weakest.label} (${brief.weakest.score}/100).`
+      ? ` Weakest pillar is ${brief.weakest.label} (${brief.weakest.score}).`
       : "";
     items.push({
       sourceMoveKey: "bot:health-review",
-      title: `Review health ${brief.health}/100`,
-      outcomeWhy: `Overview health is ${brief.health}/100 (${brief.healthLabel ?? "scored"}).${weak} Walk those figures with the client.`,
+      title: `Review health ${brief.health}`,
+      outcomeWhy: `Overview health is ${brief.health} (${brief.healthLabel ?? "scored"}).${weak} Walk those figures with the client.`,
     });
   }
   return items.slice(0, 4);
@@ -638,7 +638,7 @@ export function packContentFromOverview(
   const facts = overviewFactLines(brief);
   const healthLine =
     brief.health != null
-      ? `Overview health is ${brief.health}/100 (${brief.healthLabel ?? ""}).`.trim()
+      ? `Overview health is ${brief.health} (${brief.healthLabel ?? ""}).`.trim()
       : "Overview health is not scored yet.";
   return {
     schema: 1,
@@ -705,7 +705,7 @@ export function packContentFromOverview(
         key: "what_matters",
         title: "What matters",
         body: brief.weakest
-          ? `Weakest pillar is ${brief.weakest.label} at ${brief.weakest.score}/100.`
+          ? `Weakest pillar is ${brief.weakest.label} at ${brief.weakest.score}.`
           : healthLine,
       },
       {

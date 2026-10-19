@@ -3,8 +3,14 @@
  * Run: pnpm exec vite-node --config scripts/vite-test.config.ts scripts/health-score-test.mts
  */
 import { buildSpherePillars } from "../src/components/sphere-hero-adapter";
+import { cashDriverDayFigures, dayScoreDriverLabel } from "../src/lib/cash-driver-label";
 import {
+  CASH_OPENING_UNSCORED,
+  HEALTH_RATIO_COUNT,
+  PILLAR_LABELS,
+  cashPillarFollowsForecast,
   computeOverallHealth,
+  grossMarginLooksImplausible,
   profitStepBand,
   ratioScoreBand,
   scoreRatio,
@@ -318,6 +324,101 @@ const drawerBand = ratioScoreBand(equityCard.health);
 assert(drawerBand.label === criticalMultiplier.label && drawerBand.tier === criticalMultiplier.tier, "the drawer uses the card score and the same band");
 assert(drawerBand.label === "Critical", "the drawer does not relabel a critical multiplier as Watch");
 assert(ratioScoreBand(60).label === "Watch", "a financing pillar of 60 stays Watch on its own card");
+
+assert(
+  dayScoreDriverLabel("Debtor Days", 6, 93) === "Debtor Days · 6 days · score 93",
+  "a healthy day count sits next to the score",
+);
+assert(
+  dayScoreDriverLabel("Creditor Days", 63, 40.4) === "Creditor Days · 63 days · score 40",
+  "creditor days use the same label",
+);
+assert(
+  dayScoreDriverLabel("Inventory Days", 12, 63) === "Inventory Days · 12 days · score 63",
+  "stock days use the same label",
+);
+assert(
+  dayScoreDriverLabel("Debtor Days", null, 93) === "Debtor Days · score 93",
+  "unknown days keep the score, labelled score",
+);
+assert(dayScoreDriverLabel("Debtor Days", Number.NaN, 93) === "Debtor Days · score 93", "a non-number is unknown");
+assert(dayScoreDriverLabel("Working Capital Days", null, Number.NaN) === "Working Capital Days", "no days and no score stay the name");
+
+const labelled = buildSpherePillars({
+  overallHealth: 70,
+  pillarHealths: { profit: 70, assets: 70, financing: 60, cash: 70 },
+  healthMap: { debtorDays: 93, creditorDays: 40, inventoryDays: 63, grossMargin: 80 },
+  ratioMeta: {
+    debtorDays: { friendly: "Debtor Days" },
+    creditorDays: { friendly: "Creditor Days" },
+    inventoryDays: { friendly: "Inventory Days" },
+    grossMargin: { friendly: "Gross Margin" },
+  },
+  dayCounts: { debtorDays: 6, creditorDays: null, inventoryDays: 12 },
+});
+const debtorCard = labelled.find((pillar) => pillar.id === "cash")?.drivers.find((driver) => driver.key === "debtorDays");
+const creditorCard = labelled.find((pillar) => pillar.id === "cash")?.drivers.find((driver) => driver.key === "creditorDays");
+const stockCard = labelled.find((pillar) => pillar.id === "assets")?.drivers.find((driver) => driver.key === "inventoryDays");
+const marginCard = labelled.find((pillar) => pillar.id === "profit")?.drivers.find((driver) => driver.key === "grossMargin");
+assert(debtorCard?.reading === "Debtor Days · 6 days · score 93", debtorCard?.reading ?? "missing debtor label");
+assert(debtorCard?.health === 93, "the debtor score itself stays 93");
+assert(creditorCard?.reading === "Creditor Days · score 40", creditorCard?.reading ?? "missing creditor label");
+assert(stockCard?.reading === "Inventory Days · 12 days · score 63", stockCard?.reading ?? "missing stock label");
+assert(marginCard?.reading == null && marginCard?.label === "Gross Margin", "a non-day driver keeps its label");
+const noStock = buildSpherePillars({
+  overallHealth: 70,
+  pillarHealths: { profit: 70, assets: 70, financing: 60, cash: 70 },
+  healthMap: { inventoryDays: 63 },
+  ratioMeta: { inventoryDays: { friendly: "Inventory Days" } },
+  inventoryApplies: false,
+  dayCounts: { inventoryDays: 12 },
+});
+const hiddenStock = noStock.find((pillar) => pillar.id === "assets")?.drivers.find((driver) => driver.key === "inventoryDays");
+assert(hiddenStock?.na === true && hiddenStock.reading == null, "no-stock industries stay N/A");
+
+const sixDayBooks = cashDriverDayFigures({ revenue: 365000, receivables: 6000, cogs: 365000, payables: 63000, inventory: 12000 });
+assert(sixDayBooks.debtorDays === 6, `debtor days follow the statement figure, got ${sixDayBooks.debtorDays}`);
+assert(sixDayBooks.creditorDays === 63, `creditor days follow the statement figure, got ${sixDayBooks.creditorDays}`);
+assert(sixDayBooks.inventoryDays === 12, `stock days follow COGS, got ${sixDayBooks.inventoryDays}`);
+assert(sixDayBooks.workingCapitalDays === 6 + 12 - 63, `working-capital days net the three, got ${sixDayBooks.workingCapitalDays}`);
+const unknownDays = cashDriverDayFigures({ revenue: 0, receivables: 6000, cogs: 0, payables: 1000 });
+assert(unknownDays.debtorDays == null && unknownDays.creditorDays == null, "no revenue or cost leaves the days unknown");
+const blankStock = cashDriverDayFigures({ revenue: 365000, receivables: 6000, cogs: 365000, payables: 63000 });
+assert(blankStock.debtorDays === 6 && blankStock.inventoryDays == null && blankStock.workingCapitalDays == null, "blank stock does not invent 0 days");
+const zeroStock = cashDriverDayFigures({ revenue: 365000, receivables: 0, cogs: 365000, payables: 0, inventory: 0 });
+assert(zeroStock.debtorDays === 0 && zeroStock.inventoryDays === 0, "a stored zero stays zero");
+
+assert(PILLAR_LABELS.profit === "Profit" && PILLAR_LABELS.financing === "Financing", "canonical pillar names");
+assert(PILLAR_LABELS.assets === "Assets" && PILLAR_LABELS.cash === "Cash", "canonical pillar names");
+assert(HEALTH_RATIO_COUNT === 20, `catalogue is 20 ratios, got ${HEALTH_RATIO_COUNT}`);
+assert(grossMarginLooksImplausible(0.954, "Hotels & accommodation"), "a hotel margin above 85% is implausible");
+assert(!grossMarginLooksImplausible(0.954, "SaaS & software"), "software can carry a high gross margin");
+assert(!grossMarginLooksImplausible(0.9, null), "no industry label leaves the ratio scored");
+assert(grossMarginLooksImplausible(0.9, "General SME"), "a named non-software industry flags a 90% gross margin");
+
+const floored = cashPillarFollowsForecast(stillHealthy, {
+  opening: 10,
+  closings: [10, 80],
+  floor: 50,
+});
+const flooredCash = floored.pillars.find((pillar) => pillar.id === "cash");
+assert(flooredCash?.status === "critical" && (flooredCash.score ?? 100) <= 25, "cash under the floor is capped");
+assert(floored.displayStatus === "critical" && floored.displayLabel === "Critical", "the overall band matches the cash breach");
+
+const missingOpen = cashPillarFollowsForecast(stillHealthy, { openingMissing: true, opening: 0, closings: [0], floor: 50 });
+const missingCash = missingOpen.pillars.find((pillar) => pillar.id === "cash");
+assert(missingCash?.score == null && missingCash.note === CASH_OPENING_UNSCORED, "a missing opening is unscored");
+assert(missingCash?.status !== "critical", "a missing opening is not a floor breach");
+assert(
+  missingOpen.overall ===
+    Math.round(
+      missingOpen.pillars
+        .filter((pillar) => pillar.id !== "cash" && pillar.score != null)
+        .reduce((sum, pillar) => sum + (pillar.score ?? 0), 0) / 3,
+    ),
+  "unscored cash leaves the average",
+);
+assert(missingOpen.displayStatus !== "healthy", "an unscored cash pillar flags a healthy overall");
 
 console.log("health-score-test: ok");
 console.log("sample overall", fromInputs.overall, fromInputs.displayLabel, fromInputs.pillars.map((p) => `${p.id}:${p.score}`).join(" "));

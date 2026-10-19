@@ -7,7 +7,7 @@
  * a second cutoff table.
  */
 
-import { scoreRatio } from "@/lib/health-score";
+import { GROSS_MARGIN_MAPPING_NOTE, grossMarginLooksImplausible, scoreRatio } from "@/lib/health-score";
 import {
   equityMultiplierRatio,
   healthBandLabel,
@@ -446,7 +446,23 @@ export function presentScorecardRatio(input: {
   partMonth?: boolean;
   /** True only when a cash-flow statement supplied operating cash flow. */
   cashFlowKnown?: boolean;
+  /** Industry label. An implausible gross margin is not scored Healthy. */
+  industry?: string | null;
 }): ScorecardPresentation {
+  if (
+    input.name === "Gross Margin" &&
+    Number.isFinite(input.value) &&
+    grossMarginLooksImplausible(input.value, input.industry)
+  ) {
+    return {
+      include: true,
+      text: GROSS_MARGIN_MAPPING_NOTE,
+      headline: GROSS_MARGIN_MAPPING_NOTE,
+      scoredValue: null,
+      note: GROSS_MARGIN_MAPPING_NOTE,
+      unscored: true,
+    };
+  }
   if (input.name === "OCF / EBITDA") {
     const unstatedZero = input.cashFlowKnown !== true && input.value === 0;
     // No cash-flow statement: omit the row. A dash pair ("OCF / EBITDA — —")

@@ -41,6 +41,11 @@ export type SphereDriver = {
   health: number;
   /** No-inventory industries. The score reads N/A instead of a number. */
   na?: boolean;
+  /**
+   * Day-count drivers. Includes the real days and names the 0–100 figure
+   * as a score, so the row is not read as a day count.
+   */
+  reading?: string;
 };
 
 export type SpherePillar = {
@@ -54,6 +59,8 @@ export type SpherePillar = {
    * when every component ratio is Watch or Critical).
    */
   status?: HealthTier;
+  /** Shown instead of a band when the pillar has no confident score. */
+  note?: string | null;
   /** Period-over-period change in score, e.g. +8 / -5. Omit to hide. */
   delta?: number;
   /** One-line blurb shown on the pillar card at level 2. */
@@ -191,6 +198,11 @@ const PILLAR_ICON: Record<SpherePillar["id"], LucideIcon> = {
 
 function fmtScore(h: number): string {
   return isFinite(h) ? String(Math.round(h)) : "—";
+}
+
+function pillarBandLabel(pillar: SpherePillar, tier: Tier): string {
+  if (pillar.note && !isFinite(pillar.health)) return pillar.note;
+  return TIER_LABEL[tier];
 }
 
 // ── Metallic "klink" — synthesized, no asset ────────────────────────────────
@@ -621,7 +633,7 @@ export function SphereHero({
                         <TakeawayIcon direction={direction} />
                       </span>
                       <span>
-                        {p.label}: {TIER_LABEL[t]}
+                        {p.label}: {pillarBandLabel(p, t)}
                         {isFinite(p.health) ? ` (${fmtScore(p.health)})` : ""}
                       </span>
                     </li>
@@ -670,7 +682,7 @@ export function SphereHero({
                     {fmtScore(p.health)}
                   </span>
                   <span className={`health-pillar-band ${TIER_TEXT[t]}`}>
-                    {TIER_LABEL[t]}
+                    {pillarBandLabel(p, t)}
                     {typeof p.delta === "number" && p.delta !== 0 ? (
                       <span className={p.delta > 0 ? "text-emerald-600" : "text-rose-600"}>
                         {" "}
@@ -871,6 +883,7 @@ export function SphereHero({
                     score={p.health}
                     tier={t}
                     label={p.label}
+                    bandLabel={p.note && !isFinite(p.health) ? p.note : undefined}
                     delta={p.delta}
                     size={132}
                     fit
@@ -931,24 +944,41 @@ export function SphereHero({
                   : ""
               }`;
               const rowStyle = { animationDelay: `${i * 60}ms`, animationFillMode: "both" as const };
+              const title = d.reading ?? d.label;
               const body = (
                 <>
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                        {d.label}
+                      <p
+                        className={`text-sm font-medium text-slate-900 dark:text-slate-100 ${
+                          d.reading ? "leading-snug" : "truncate"
+                        }`}
+                      >
+                        {title}
                         <QueryBadge count={queryCounts?.[d.key] ?? 0} />
                       </p>
                       {d.description && (
                         <p className="truncate text-xs text-slate-500">{d.description}</p>
                       )}
                     </div>
-                    <div className="text-right">
-                      <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>
-                        {d.na ? "N/A" : fmtScore(d.health)}
-                      </p>
-                      {d.na ? null : (
-                        <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
+                    <div className="shrink-0 text-right">
+                      {d.reading ? (
+                        d.na ? (
+                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>N/A</p>
+                        ) : (
+                          <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>
+                            {isFinite(d.health) ? TIER_LABEL[t] : "—"}
+                          </p>
+                        )
+                      ) : (
+                        <>
+                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>
+                            {d.na ? "N/A" : fmtScore(d.health)}
+                          </p>
+                          {d.na ? null : (
+                            <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -971,7 +1001,7 @@ export function SphereHero({
                     key={d.key}
                     type="button"
                     onClick={() => onDriverClick?.(d.key)}
-                    aria-label={`${d.label} — open money briefing`}
+                    aria-label={`${title} — open money briefing`}
                     className={rowClass}
                     style={rowStyle}
                   >

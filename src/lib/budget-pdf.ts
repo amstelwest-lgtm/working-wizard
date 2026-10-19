@@ -7,7 +7,8 @@
  * new variance formula.
  */
 
-import type { BudgetDocument, BudgetMonthResult, BudgetOverheadLine } from "@/lib/budget.types";
+import { hotelLineDisplayName } from "@/lib/budget-industry";
+import type { BudgetDocument, BudgetMonthResult, BudgetOverheadLine, BudgetTemplateId } from "@/lib/budget.types";
 import {
   budgetWindowLabel,
   createBudgetDocument,
@@ -423,6 +424,7 @@ export function buildBudgetPdfModel(
   doc: BudgetDocument,
   actuals: BudgetPdfActual[],
   market: ResolvedMarket = ZA_MARKET,
+  displayTemplateId: BudgetTemplateId | null = null,
 ): BudgetPdfModel {
   const fy = fyMonths(doc.fyStart);
   const results = computeBudgetMonths(doc, doc.activeScenario);
@@ -500,11 +502,14 @@ export function buildBudgetPdfModel(
 
   const driverMonths = hasActuals ? budgetMonthKeys : fy;
   const pricedDrivers = doc.revenueLines
-    .map((line) => ({
-      label: scrubPlaceholderText(line.name || "") || "Revenue line",
-      budget: revenueDriverBudget(doc, driverMonths, line.id),
-    }))
-    .filter((row) => Math.abs(row.budget) >= 1);
+    .map((line, index) => {
+      const renamed = hotelLineDisplayName(displayTemplateId, line.name, index);
+      return {
+        label: renamed == null ? null : scrubPlaceholderText(renamed || "") || "Revenue line",
+        budget: revenueDriverBudget(doc, driverMonths, line.id),
+      };
+    })
+    .filter((row): row is { label: string; budget: number } => row.label != null && Math.abs(row.budget) >= 1);
   // One driver has no split to recover from the statement, so its actual is
   // the P&L revenue total. Several drivers stay blank rather than inventing a split.
   const singleDriverRevenue =

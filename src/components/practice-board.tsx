@@ -77,7 +77,7 @@ import {
   operatingProfitLabel,
   statementSampleImplausible,
 } from "@/lib/operating-profit-display";
-import { countOpenQueriesByClient } from "@/lib/open-queries";
+import { countOpenQueriesByClient, listOpenQueries, type OpenQueryRow } from "@/lib/open-queries";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsMenu } from "@/components/settings-menu";
 import { FeatureFinder } from "@/components/feature-finder";
@@ -1212,7 +1212,29 @@ function toClientRow(
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
-export type PracticeView = "home" | "clients" | "practice";
+const PRACTICE_SECTION_TITLES = {
+  "needs-attention": "Needs attention",
+  "follow-up": "Follow up",
+  insights: "Insights",
+  marketplace: "Marketplace",
+  playbooks: "Playbooks",
+} as const;
+
+type PracticeSection = keyof typeof PRACTICE_SECTION_TITLES;
+
+export type PracticeView = "home" | "clients" | "practice" | "queries" | PracticeSection;
+
+function isPracticeSection(view: PracticeView): view is PracticeSection {
+  return Object.prototype.hasOwnProperty.call(PRACTICE_SECTION_TITLES, view);
+}
+
+function practiceSectionSubtitle(view: PracticeSection): string {
+  if (view === "needs-attention") return "Health alerts and pack sign-off across the book.";
+  if (view === "follow-up") return "Clients with open Action Plan work.";
+  if (view === "insights") return "Health score against the stored 30-day trend.";
+  if (view === "marketplace") return "Inbox for the practice.";
+  return "Definitions and the highest-impact repair steps.";
+}
 
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user } = useAuth();
@@ -1349,6 +1371,12 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const routeHref = useRouterState({ select: (s) => s.location.href });
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [routeHref]);
+  const [queryRows, setQueryRows] = useState<OpenQueryRow[]>([]);
+  const [queryRowsReady, setQueryRowsReady] = useState(false);
   useEffect(() => {
     if (!mobileNavOpen) return;
     const onKey = (event: KeyboardEvent) => {
@@ -1710,6 +1738,21 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     revealPracticeHash(practiceHash);
   }, [portalReady, practiceHash, view, bookLoading, clientRows.length]);
   const countsLoading = !countsReady;
+  const clientIdKey = clientRows.map((c) => c.id).join("\n");
+  useEffect(() => {
+    if (view !== "queries" || !countsReady) return;
+    let cancelled = false;
+    setQueryRowsReady(false);
+    const ids = clientIdKey ? clientIdKey.split("\n") : [];
+    void listOpenQueries(ids).then((rows) => {
+      if (cancelled) return;
+      setQueryRows(rows);
+      setQueryRowsReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, countsReady, clientIdKey]);
   const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);
   const asOf = dataAsOfLabel();
 
@@ -1807,12 +1850,12 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const scatterClients = useMemo(
     () =>
       scoredRows
-        .filter((c) => c.score != null)
+        .filter((c) => c.score != null && c.trendDelta != null && Number.isFinite(c.trendDelta))
         .map((c) => ({
           id: c.id,
           name: c.name,
           score: c.score as number,
-          trendDelta: c.trendDelta ?? 0,
+          trendDelta: c.trendDelta as number,
           revenue: c.revenue,
           revenueLabel:
             c.revenue != null
@@ -1995,6 +2038,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             )}
           </div>
         ) : null}
+        {view === "practice" || isPracticeSection(view) ? (
+          <>
         {view === "practice" ? (
           <>
         {/* ===== GREETING ===== */}
@@ -2049,9 +2094,17 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             </>
           )}
         </div>
+          </>
+        ) : (
+          <PageHeader
+            eyebrow="Practice"
+            title={PRACTICE_SECTION_TITLES[view]}
+            subtitle={practiceSectionSubtitle(view)}
+          />
+        )}
 
         {/* One queue: health alerts and pack sign-off, not two strips. */}
-        {!bookLoading && !countsLoading ? (
+        {(view === "practice" || view === "needs-attention") && !bookLoading && !countsLoading ? (
           <PortfolioExceptions
             firmId={firmId}
             hideWhenClear
@@ -2060,7 +2113,12 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             onChase={(clientId, name) => openChase(clientId, name)}
           />
         ) : null}
+        {view === "needs-attention" && !bookLoading && !countsLoading && attentionBook.items.length === 0 ? (
+          <p className="sub">Nothing needs attention.</p>
+        ) : null}
 
+        {view === "practice" ? (
+          <>
         {showStarterTrialEndedCopy(
           trialAllowance?.upgrade?.phase,
           trialAllowance?.starterTrial?.expired,
@@ -2080,7 +2138,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         ) : null}
 
         {scoredRows.length > 0 ? <CheckoutAfterInsight /> : null}
-        <details className="home-fold" id="follow-up">
+          </>
+        ) : null}
+        {view === "practice" || view === "follow-up" ? (
+        <details
+          className="home-fold"
+          id="follow-up"
+          {...(view === "follow-up" ? { open: true } : {})}
+        >
             <summary>
               <span>Follow up</span>
               <span className="home-fold-meta">
@@ -2137,8 +2202,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               )}
             </div>
           </details>
+        ) : null}
 
-        <details className="home-fold" id="portfolio-insights">
+        {view === "practice" || view === "insights" ? (
+        <details
+          className="home-fold"
+          id="portfolio-insights"
+          {...(view === "insights" ? { open: true } : {})}
+        >
           <summary>
             <span>Portfolio insights</span>
             <span className="home-fold-meta">Health trend</span>
@@ -2183,13 +2254,21 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             ) : null}
           </div>
         </details>
+        ) : null}
 
+        {view === "practice" || view === "marketplace" ? (
         <div id="marketplace">
           <AccountantInbox firmId={firmId} quiet onChanged={() => void load(firmId, user?.id, greetingSource)} />
         </div>
+        ) : null}
 
         {/* ===== PLAYBOOK LIBRARY ===== */}
-        <details className="home-fold" id="playbooks">
+        {view === "practice" || view === "playbooks" ? (
+        <details
+          className="home-fold"
+          id="playbooks"
+          {...(view === "playbooks" ? { open: true } : {})}
+        >
           <summary>
             <span>Playbook library</span>
             <span className="home-fold-meta">{playbookCatalogue.length} ratios</span>
@@ -2226,6 +2305,52 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             </div>
           </div>
         </details>
+        ) : null}
+          </>
+        ) : null}
+        {view === "queries" ? (
+          <>
+            <PageHeader
+              eyebrow="Book"
+              title="Open queries"
+              subtitle="Unresolved notes across clients."
+            />
+            {bookLoading || !queryRowsReady ? (
+              <p className="sub">Loading open queries…</p>
+            ) : queryRows.length === 0 ? (
+              <EmptyState title="No open queries." className="!py-10" />
+            ) : (
+              <div className="followup-list">
+                {queryRows.map((row) => {
+                  const client = clientRows.find((c) => c.id === row.clientId);
+                  const when = row.createdAt
+                    ? new Date(row.createdAt).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : "";
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      className="followup-row"
+                      onClick={() =>
+                        navigate({
+                          to: "/clients/$clientId",
+                          params: { clientId: row.clientId },
+                          search: clientHomeSearch(),
+                        })
+                      }
+                    >
+                      <span className="followup-name">{client?.name ?? "Client"}</span>
+                      <span className="followup-count">{row.body || "Open note"}</span>
+                      <span className="followup-cta">{when || "Open →"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </>
         ) : null}
         {view === "clients" ? (

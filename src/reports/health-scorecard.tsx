@@ -21,6 +21,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { DuPontStrip } from "@/components/pdf/dupont";
 import {
   computeOverallHealth,
+  HEALTH_RATIO_COUNT,
   PILLAR_LABELS,
   type HealthPillarId,
   type OverallHealth,
@@ -77,7 +78,8 @@ function pillarLabel(pillar: string): string {
   return PILLAR_LABELS[pillar as HealthPillarId] ?? pillar;
 }
 
-function unscoredPillarNote(pillar: string): string {
+function unscoredPillarNote(pillar: string, note?: string | null): string {
+  if (note) return note;
   if (pillar === "financing") return "Not scored — needs balance sheet";
   return "Not scored";
 }
@@ -169,10 +171,12 @@ function PillarBox({
   pillar,
   score,
   counts,
+  note,
 }: {
   pillar: string;
   score: number | null;
   counts: { critical: number; at_risk: number; healthy: number };
+  note?: string | null;
 }) {
   const hasScore = score != null && Number.isFinite(score);
   const rounded = hasScore ? Math.round(score) : null;
@@ -181,7 +185,7 @@ function PillarBox({
     return (
       <View style={styles.pillarBox}>
         <Text style={styles.pillarName}>{pillarLabel(pillar)}</Text>
-        <Text style={styles.pillarUnscored}>{unscoredPillarNote(pillar)}</Text>
+        <Text style={styles.pillarUnscored}>{unscoredPillarNote(pillar, note)}</Text>
       </View>
     );
   }
@@ -193,7 +197,6 @@ function PillarBox({
         <Text style={[styles.pillarScore, { color: scoreColor(rounded!) }]}>
           {rounded}
         </Text>
-        <Text style={styles.pillarOutOf}>/ 100</Text>
       </View>
       <View style={styles.pillarGaugeRow}>
         <HealthScoreGauge score={rounded!} height={5} />
@@ -265,7 +268,7 @@ export function HealthScorecardPDF({
     if (pillar === "cash" && fromOverall?.status === "critical" && counts.critical === 0) {
       counts.critical = 1;
     }
-    return { pillar, score, counts, ratios };
+    return { pillar, score, counts, ratios, note: fromOverall?.note ?? null };
   });
 
   // DuPont levers pulled from the ratio set (graceful when missing).
@@ -313,7 +316,9 @@ export function HealthScorecardPDF({
   const priorAvg = scoredForHealth.some((r) => r.prior_period_score !== undefined)
     ? avg(scoredForHealth.map((r) => r.prior_period_score ?? r.health_score))
     : undefined;
-  const counts = scorecardCountCopy(scoredForHealth.length);
+  const counts = scorecardCountCopy(
+    ratioResults.length > 0 ? ratioResults.length : HEALTH_RATIO_COUNT,
+  );
   const figures: HeadlineFigure[] = [
     {
       label: "Overall Score",
@@ -327,7 +332,7 @@ export function HealthScorecardPDF({
               ? "down"
               : "flat",
       good: priorAvg == null || overallScore == null ? undefined : overallScore >= priorAvg,
-      note: "out of 100",
+      note: "",
     },
     {
       label: "Strongest Pillar",
@@ -362,6 +367,7 @@ export function HealthScorecardPDF({
     operatingProfile,
     market ?? ZA_MARKET,
     overallTier,
+    smeData.name,
   );
 
   return (
@@ -392,7 +398,7 @@ export function HealthScorecardPDF({
           <Text style={[styles.overallNumber, { color: "#0B5FFF" }]}>
             {overallScore != null ? overallScore : "—"}
           </Text>
-          <Text style={styles.outOf}>OVERALL SCORE / 100</Text>
+          <Text style={styles.outOf}>OVERALL SCORE</Text>
           <View style={[styles.tierBadge, { backgroundColor: overallColor }]}>
             <Text style={styles.tierBadgeText}>{TIER_META[overallTier].label}</Text>
           </View>
@@ -419,12 +425,12 @@ export function HealthScorecardPDF({
 
       {/* 2×2 pillar grid */}
       <View style={styles.pillarGridRow}>
-        <PillarBox pillar="profit" score={pillarData[0].score} counts={pillarData[0].counts} />
-        <PillarBox pillar="assets" score={pillarData[1].score} counts={pillarData[1].counts} />
+        <PillarBox pillar="profit" score={pillarData[0].score} counts={pillarData[0].counts} note={pillarData[0].note} />
+        <PillarBox pillar="assets" score={pillarData[1].score} counts={pillarData[1].counts} note={pillarData[1].note} />
       </View>
       <View style={styles.pillarGridRow}>
-        <PillarBox pillar="financing" score={pillarData[2].score} counts={pillarData[2].counts} />
-        <PillarBox pillar="cash" score={pillarData[3].score} counts={pillarData[3].counts} />
+        <PillarBox pillar="financing" score={pillarData[2].score} counts={pillarData[2].counts} note={pillarData[2].note} />
+        <PillarBox pillar="cash" score={pillarData[3].score} counts={pillarData[3].counts} note={pillarData[3].note} />
       </View>
 
       {/* DuPont pointer strip */}

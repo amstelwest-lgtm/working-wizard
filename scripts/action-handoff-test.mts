@@ -7,11 +7,14 @@ import {
   agentKeyFromAssignee,
   botPickupCaption,
   formatAssignmentNote,
+  HANDOFF_COST_STOP,
   handoffButtonLabel,
   handoffClock,
+  handoffCouldNotFinish,
   handoffIsSlow,
   handoffProgressCaption,
 } from "../src/lib/action-handoff.ts";
+import { agentDisplayName } from "../src/lib/milon-team.ts";
 import { deskSignoffText } from "../src/lib/milon-team-activity.ts";
 
 function assert(cond: unknown, message: string): asserts cond {
@@ -71,6 +74,34 @@ assert(
     `Handed to Analyst · by amstel.west · ${handoffClock(notedAt)}`,
   "a hand-off note names the author and the time",
 );
+const analystName = agentDisplayName("analyst");
+assert(
+  formatAssignmentNote({
+    note: `Handed to ${analystName}.`,
+    at: notedAt,
+    actorLabel: analystName,
+    actorType: "system",
+  }) === `Handed to ${analystName} · ${handoffClock(notedAt)}`,
+  "an old hand-off note does not name the bot as the author",
+);
+assert(
+  formatAssignmentNote({
+    note: `Advisor finished: ${HANDOFF_COST_STOP}`,
+    at: notedAt,
+    actorLabel: agentDisplayName("advisor"),
+    actorType: "system",
+  }) === `${handoffCouldNotFinish("advisor")} · by ${agentDisplayName("advisor")} · ${handoffClock(notedAt)}`,
+  "a cost-ceiling finish keeps the agent and hides the raw stop",
+);
+assert(
+  handoffProgressCaption("advisor", "partial", { at: finishedAt, result: HANDOFF_COST_STOP }) ===
+    handoffCouldNotFinish("advisor"),
+  "a cost stop offers the friendly line",
+);
+assert(
+  !String(handoffProgressCaption("advisor", "succeeded", { result: HANDOFF_COST_STOP })).includes("cost ceiling"),
+  "the raw cost-ceiling sentence stays off the row",
+);
 const slowStart = Date.parse("2026-10-19T18:00:00.000Z");
 assert(
   handoffIsSlow("queued", "2026-10-19T18:00:00.000Z", slowStart + 3 * 60 * 1000) === false,
@@ -101,14 +132,13 @@ assert(menu.includes("ActionHandoffButtons"), "Hand to lists the bots");
 assert(menu.includes("data-hand-to-trigger"), "the control is labelled Hand to");
 assert(menu.includes("Hand to"), "the button says Hand to");
 assert(menu.includes("data-hand-to-person"), "Hand to lists team members");
-assert(menu.includes("Assigning…"), "the button shows a pending state");
+assert(!menu.includes("Assigning…"), "the button does not stay on Assigning once Working is set");
 assert(menu.includes('aria-pressed={current}'), "the current person is marked");
 assert(menu.includes(" ✓"), "the current person gets the same check as a bot");
-const runBody = menu.slice(menu.indexOf("const run = async"));
-assert(
-  runBody.indexOf("setOpen(false)") < runBody.indexOf("await work()"),
-  "the menu closes before the hand-off returns",
-);
+const runBody = menu.slice(menu.indexOf("const run ="));
+assert(runBody.includes("setOpen(false)"), "the menu closes on the click");
+assert(runBody.includes("void work()"), "the button does not wait on the request");
+assert(!runBody.includes("await work()"), "Assigning is not held for the request");
 assert(menu.includes("MoveHandTo"), "a Next move can be handed off");
 const moves = readFileSync("src/components/strategic-moves-panel.tsx", "utf8");
 assert(moves.includes("MoveHandTo"), "accountant Next moves include Hand to");
@@ -168,7 +198,20 @@ assert(status.includes("Working"), "an open hand-off shows Working on the row");
 assert(status.includes("Taking longer than usual ·"), "a slow run names the wait");
 assert(status.includes("data-handoff-retry"), "a slow run can be retried");
 assert(status.includes("handoffIsSlow"), "the retry line waits three minutes");
+assert(status.includes("couldn't finish this one"), "a cost stop offers Retry");
+assert(status.includes("data-handoff-stopped"), "a cost stop is its own line");
 assert(clientPage.includes("steerOpenHandoffs"), "each open hand-off shows Working on its bot");
+assert(clientPage.includes("withCardHandoffRuns"), "accountant cards use the same open runs as the row");
+const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
+assert(door.includes("withCardHandoffRuns"), "owner cards use the same open runs as the row");
+assert(door.includes("cardRunsByAgent"), "a queued run beats Found something on the owner card");
+const activityHook = readFileSync("src/hooks/use-agent-activity.ts", "utf8");
+assert(activityHook.includes("ACTIVE_POLL_MS = 5000"), "home polls every 5 seconds while a run is open");
+assert(activityHook.includes("dispatchActionPlanRefresh"), "the poll reloads notes when a run is open");
+assert(
+  activityHook.includes('status === "queued"') && activityHook.includes('status === "running"'),
+  "the poll watches queued and running runs",
+);
 
 const pane = readFileSync("src/components/milon-team/milon-team-pane.tsx", "utf8");
 assert(pane.includes("<AgentStage"), "an open agent uses the stage, not only the desk");

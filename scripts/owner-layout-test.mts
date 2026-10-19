@@ -302,6 +302,59 @@ await act(async () => {
 assert(document.body.textContent?.includes("Cash drivers") === true, "the rest of the card drills");
 await ringStop();
 
+const dayStop = await mount(
+  createElement(SphereHero, {
+    variant: "ring",
+    overallHealth: 70,
+    pillars: [
+      {
+        id: "cash",
+        label: "Cash",
+        health: 70,
+        drivers: [
+          {
+            key: "debtorDays",
+            label: "Debtor Days",
+            health: 93,
+            reading: "Debtor Days · 6 days · score 93",
+          },
+          {
+            key: "ocfToEbitda",
+            label: "OCF / EBITDA",
+            health: 55,
+          },
+        ],
+      },
+    ],
+  }),
+);
+const dayCash = [...document.querySelectorAll("button")].find((button) =>
+  button.getAttribute("aria-label")?.startsWith("Cash score"),
+);
+assert(dayCash instanceof HTMLButtonElement, "the day-label cash card drills");
+await act(async () => {
+  dayCash.click();
+});
+const dayText = document.body.textContent ?? "";
+assert(dayText.includes("Debtor Days · 6 days · score 93"), dayText);
+assert(dayText.includes("Cash drivers"), "the cash driver heading stays");
+const debtorRow = [...document.querySelectorAll(".health-driver-row")].find((row) =>
+  row.textContent?.includes("Debtor Days"),
+);
+assert(debtorRow instanceof HTMLElement, "the debtor row is on the card");
+assert(
+  ![...debtorRow.querySelectorAll("p")].some((node) => node.className.includes("text-lg") && node.textContent?.trim() === "93"),
+  "the debtor score is not a bare day-sized number",
+);
+const otherRow = [...document.querySelectorAll(".health-driver-row")].find((row) =>
+  row.textContent?.includes("OCF / EBITDA"),
+);
+assert(
+  [...(otherRow?.querySelectorAll("p") ?? [])].some((node) => node.textContent?.trim() === "55"),
+  "a non-day driver still shows its score",
+);
+await dayStop();
+
 let pillarOpens = 0;
 let pillarFm = 0;
 const pillarStop = await mount(

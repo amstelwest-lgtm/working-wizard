@@ -286,12 +286,12 @@ assert(
     "Profit is the weakest pillar at 70 out of 100.",
     [{ key: "pillar:profit", value: 70 }],
     US,
-  ) === "Profit is the weakest pillar at 70 out of 100.",
+  ) === "Profit is the weakest pillar at 70.",
   "a pillar score is not currency",
 );
 assert(
   formatFindingProse("The weakest pillar is at $70 out of 100.", [], US) ===
-    "The weakest pillar is at 70 out of 100.",
+    "The weakest pillar is at 70.",
   "a stored score dollar sign is removed",
 );
 assert(

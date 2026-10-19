@@ -54,9 +54,12 @@ import { DESK_NOW, useMilonTeamFeedStub } from "./milon-team-stub";
 import {
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
+  healthMapFromRatios,
+  overviewRatios,
   scorecardHealthFromFinancials,
   type HealthPillarId,
 } from "@/lib/health-score";
+import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { planAnswerSentence, type PackAnswerStatus } from "@/lib/plan-pack-copy";
 import type { AdvisorySignoffAction } from "@/lib/advisory-signoff";
@@ -505,8 +508,13 @@ function HealthPane({ clientId }: { clientId: string }) {
     token: number;
     pillarId: "profit" | "assets" | "financing" | "cash";
   } | null>(null);
+  const healthFinancials = {
+    ...HARNESS_FINANCIALS,
+    receivables: String(HARNESS_ARAP.receivables),
+    payables: String(HARNESS_ARAP.payables),
+  };
   const overall = scorecardHealthFromFinancials({
-    financials: HARNESS_FINANCIALS,
+    financials: healthFinancials,
     cashBalance: 186000,
   });
   const pillarById = Object.fromEntries(
@@ -536,8 +544,14 @@ function HealthPane({ clientId }: { clientId: string }) {
     overallHealth: avg,
     pillarHealths: pillarById,
     pillarStatus,
-    healthMap: {},
-    ratioMeta: {},
+    healthMap: healthMapFromRatios(overviewRatios(healthFinancials)),
+    ratioMeta: {
+      debtorDays: { friendly: "Debtor Days" },
+      creditorDays: { friendly: "Creditor Days" },
+      inventoryDays: { friendly: "Inventory Days" },
+      workingCapitalDays: { friendly: "Working Capital Days" },
+    },
+    dayCounts: cashDriverDayFigures(healthFinancials),
   });
   const sections = (["profit", "assets", "financing", "cash"] as const).map((id) => ({
     id,

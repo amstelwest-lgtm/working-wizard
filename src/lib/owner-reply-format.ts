@@ -1,3 +1,5 @@
+import { canonicalScoreProse } from "@/lib/score-prose";
+
 /**
  * Safe layout for an owner-agent reply.
  * The model may send a headline, "- Label: value" lines, and a Next actions list.
@@ -323,7 +325,7 @@ function expandInlineBullets(text: string): string {
 }
 
 export function formatOwnerReply(raw: string): OwnerReplyModel {
-  const clean = formatIsoDates(stripUnsafeMarkup(raw)).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  const clean = canonicalScoreProse(formatIsoDates(stripUnsafeMarkup(raw)).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim());
   if (!clean) return emptyModel();
   const structured = tryStructured(clean);
   if (structured) return structured;

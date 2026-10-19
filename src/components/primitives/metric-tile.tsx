@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 
 /** Firm-home Open queries destination. A real href, not only an onClick. */
 export type MetricTileLink = {
-  to: "/clients";
-  hash: "clients-table";
+  to: "/clients/queries";
+  hash?: string;
 };
 
 export type MetricTileProps = {
