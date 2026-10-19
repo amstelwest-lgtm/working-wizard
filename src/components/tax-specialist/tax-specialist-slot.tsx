@@ -3,7 +3,7 @@
  * Do not static-import za-tax-specialist-sample from here.
  */
 import { useEffect, useState, type ComponentType } from "react";
-import { taxSampleEnabled } from "@/lib/tax-specialist/enabled";
+import { taxSampleCardVisible, taxSampleEnabled } from "@/lib/tax-specialist/enabled";
 
 export type TaxSampleAudience = "owner" | "accountant";
 export type TaxSampleVariant = "card" | "desk" | "stage" | "handoff" | "fm-handoff" | "host";
@@ -19,14 +19,18 @@ export function TaxSpecialistSlot({
   variant,
   audience,
   onOpen,
+  sampleClient = false,
 }: {
   country: string | null | undefined;
   variant: TaxSampleVariant;
   audience: TaxSampleAudience;
   onOpen?: () => void;
+  /** Home card only. Real clients pass false and the card stays off. */
+  sampleClient?: boolean;
 }) {
   const [Slot, setSlot] = useState<Loaded | null>(null);
-  const enabled = taxSampleEnabled(country);
+  const enabled =
+    variant === "card" ? taxSampleCardVisible(country, sampleClient) : taxSampleEnabled(country);
 
   useEffect(() => {
     if (!enabled) return;

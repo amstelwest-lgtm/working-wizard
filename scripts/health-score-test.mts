@@ -2,9 +2,11 @@
  * Quick sanity checks for unified computeOverallHealth.
  * Run: pnpm exec vite-node --config scripts/vite-test.config.ts scripts/health-score-test.mts
  */
+import { buildSpherePillars } from "../src/components/sphere-hero-adapter";
 import {
   computeOverallHealth,
   profitStepBand,
+  ratioScoreBand,
   scoreRatio,
   scoreCashRunway,
   healthFromRatioInputs,
@@ -293,6 +295,29 @@ const caption = computeOverviewCaption({
   displayStatus: "critical",
 });
 assert(caption?.startsWith("Critical") === true, caption ?? "missing caption");
+
+const watched = ratioScoreBand(scoreRatio("Equity Multiplier", 2.2));
+assert(watched.score === 60 && watched.label === "Watch", `2.2× is Watch 60, got ${watched.score} ${watched.label}`);
+const criticalMultiplier = ratioScoreBand(scoreRatio("Equity Multiplier", 3.2));
+assert(
+  criticalMultiplier.label === "Critical" && criticalMultiplier.score < 40,
+  `3.2× is Critical, got ${criticalMultiplier.score} ${criticalMultiplier.label}`,
+);
+const pillars = buildSpherePillars({
+  overallHealth: 60,
+  pillarHealths: { profit: 70, assets: 70, financing: 60, cash: 70 },
+  healthMap: { equityMultiplier: criticalMultiplier.score },
+  ratioMeta: { equityMultiplier: { friendly: "Equity Multiplier", techName: "Equity Multiplier" } },
+});
+const equityCard = pillars
+  .find((pillar) => pillar.id === "financing")
+  ?.drivers.find((driver) => driver.key === "equityMultiplier");
+assert(equityCard != null, "Equity Multiplier is a financing driver");
+assert(equityCard.health === criticalMultiplier.score, "the card keeps the ratio score, not the financing pillar");
+const drawerBand = ratioScoreBand(equityCard.health);
+assert(drawerBand.label === criticalMultiplier.label && drawerBand.tier === criticalMultiplier.tier, "the drawer uses the card score and the same band");
+assert(drawerBand.label === "Critical", "the drawer does not relabel a critical multiplier as Watch");
+assert(ratioScoreBand(60).label === "Watch", "a financing pillar of 60 stays Watch on its own card");
 
 console.log("health-score-test: ok");
 console.log("sample overall", fromInputs.overall, fromInputs.displayLabel, fromInputs.pillars.map((p) => `${p.id}:${p.score}`).join(" "));

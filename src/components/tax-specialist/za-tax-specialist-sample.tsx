@@ -477,7 +477,9 @@ export function ZaTaxSpecialistSample({
           <span className="owner-name">Milōn Tax Specialist</span>
           <span className="owner-status is-idle">SAMPLE</span>
           <span className="owner-lines">
-            <span className="owner-voice">Company tax at 27% on this sample.</span>
+            <span className="owner-voice">
+              SAMPLE demo · Harbour & Co — see how company tax at 27% will work
+            </span>
             <span className="owner-voice">Tax {money(result.taxCents)}.</span>
           </span>
         </button>

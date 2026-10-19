@@ -59,7 +59,8 @@ Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
 const { createElement } = await import("react");
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
-const { SphereHero } = await import("../src/components/sphere-hero");
+const { HEALTH_RING_CAPTION, SphereHero } = await import("../src/components/sphere-hero");
+const { HEALTH_DRILL_CUE } = await import("../src/components/health-drill-cue");
 const { ForecastMoreDetail } = await import("../src/components/cash-forecast");
 
 async function tick() {
@@ -101,7 +102,7 @@ function hero(variant: "ring" | "orb") {
     variant,
     overallHealth: 64,
     pillars,
-    caption: "Tap to see what's behind your score",
+    caption: HEALTH_RING_CAPTION,
   });
 }
 
@@ -113,6 +114,9 @@ function counts() {
 }
 
 const owner = await mount(hero("ring"));
+assert(HEALTH_RING_CAPTION === HEALTH_DRILL_CUE, "the ring caption matches the pillar cue");
+assert(document.body.textContent?.includes(HEALTH_DRILL_CUE), "the owner ring shows the shared cue");
+assert(!document.body.textContent?.includes("Click to see more"), "the owner side does not say Click");
 assert(counts().ring === 1, "the owner health ring is on the top view");
 assert(counts().orb === 0, "the owner top view does not add a second orb");
 const ring = document.querySelector(".health-ring");
@@ -123,6 +127,7 @@ await act(async () => {
 await tick();
 assert(counts().ring === 0 && counts().orb === 0, "the pillar page hides the health ring and orb");
 assert(document.body.textContent?.includes("Health by pillar"), "pillar cards stay on the drill-down");
+assert(document.body.textContent?.includes(HEALTH_DRILL_CUE), "pillar cards use the same cue");
 const profit = [...document.querySelectorAll("button")].find((button) =>
   button.getAttribute("aria-label")?.startsWith("Profit score"),
 );
@@ -132,6 +137,7 @@ await act(async () => {
 });
 await tick();
 assert(counts().ring === 0 && counts().orb === 0, "the driver page hides the health ring and orb");
+assert(!document.body.textContent?.includes(HEALTH_DRILL_CUE), "the driver page has no see-more cue");
 assert(document.querySelector(".sphere-orb") === null, "the driver page has no big sphere");
 assert(document.body.textContent?.includes("Profit drivers"), "driver rows stay");
 const back = [...document.querySelectorAll("button")].find((button) => button.textContent?.includes("Back to pillars"));
