@@ -25,7 +25,8 @@ function byAge(a: OwnedClientSeat, b: OwnedClientSeat): number {
 
 /**
  * Owned seats only. Firm-unlinked wins, then the oldest client_owner
- * membership, then the oldest owned seat. Insert only when the list is empty.
+ * membership. An owned firm client with no client_owner membership is not a
+ * seat (create_firm_client makes the accountant the owner). Insert then.
  */
 export function decideEnsureOwnClient(owned: readonly OwnedClientSeat[]): EnsureOwnClientDecision {
   const ordered = [...owned].sort(byAge);
@@ -33,7 +34,6 @@ export function decideEnsureOwnClient(owned: readonly OwnedClientSeat[]): Ensure
   if (unlinked) return { action: "return", id: unlinked.id };
   const member = ordered.find((row) => row.clientOwner);
   if (member) return { action: "return", id: member.id };
-  if (ordered[0]) return { action: "return", id: ordered[0].id };
   return { action: "insert" };
 }
 

@@ -20,17 +20,32 @@ const migration = readFileSync(
 );
 const callback = readFileSync(resolve("src/routes/auth_.callback.tsx"), "utf8");
 
-function signIn(owned: OwnedClientSeat[]): OwnedClientSeat[] {
-  const decision = decideEnsureOwnClient(owned);
+type Membership = { clientId: string; role: string };
+type RoleRow = { role: string };
+type Books = { clients: OwnedClientSeat[]; memberships: Membership[]; roles: RoleRow[] };
+
+/** Return paths copy the books. Insert adds a client row and leaves memberships and roles alone. */
+function applyEnsureOwnClient(books: Books): Books {
+  const decision = decideEnsureOwnClient(books.clients);
+  const memberships = books.memberships.map((row) => ({ ...row }));
+  const roles = books.roles.map((row) => ({ ...row }));
   if (decision.action === "return") {
-    const found = owned.some((row) => row.id === decision.id);
+    const found = books.clients.some((row) => row.id === decision.id);
     assert(found, "a return decision names a client the user already owns");
-    return owned;
+    return { clients: books.clients.map((row) => ({ ...row })), memberships, roles };
   }
-  return [
-    ...owned,
-    { id: `blank-${owned.length + 1}`, firmId: null, createdAt: "2026-10-19T21:00:00.000Z", clientOwner: true },
-  ];
+  return {
+    clients: [
+      ...books.clients,
+      { id: `blank-${books.clients.length + 1}`, firmId: null, createdAt: "2026-10-19T21:00:00.000Z", clientOwner: false },
+    ],
+    memberships,
+    roles,
+  };
+}
+
+function signIn(owned: OwnedClientSeat[]): OwnedClientSeat[] {
+  return applyEnsureOwnClient({ clients: owned, memberships: [], roles: [] }).clients;
 }
 
 const linked: OwnedClientSeat[] = [
@@ -45,12 +60,28 @@ if (decideEnsureOwnClient(linked).action === "return") {
   assert(decideEnsureOwnClient(linked).id === "linked-biz", "the returned id is the linked business");
 }
 
-const linkedWithoutMembership: OwnedClientSeat[] = [
-  { id: "linked-no-role", firmId: "firm-1", createdAt: "2026-04-01T00:00:00.000Z", clientOwner: false },
-];
+const accountantFirmClients: Books = {
+  clients: [
+    { id: "acme-books", firmId: "firm-9", createdAt: "2026-02-01T00:00:00.000Z", clientOwner: false },
+    { id: "beta-books", firmId: "firm-9", createdAt: "2026-05-01T00:00:00.000Z", clientOwner: false },
+  ],
+  memberships: [],
+  roles: [{ role: "accountant" }],
+};
+const accountantDecision = decideEnsureOwnClient(accountantFirmClients.clients);
+assert(accountantDecision.action === "insert", "an accountant's firm clients are not returned as the seat");
+const accountantAfter = applyEnsureOwnClient(accountantFirmClients);
 assert(
-  signIn(linkedWithoutMembership).length === 1,
-  "owning a linked client is enough to skip the insert",
+  JSON.stringify(accountantAfter.memberships) === JSON.stringify(accountantFirmClients.memberships),
+  "an accountant owning firm clients gets no membership change",
+);
+assert(
+  JSON.stringify(accountantAfter.roles) === JSON.stringify(accountantFirmClients.roles),
+  "an accountant owning firm clients gets no role change",
+);
+assert(
+  accountantAfter.clients.filter((row) => row.firmId != null).every((row) => row.clientOwner === false),
+  "firm clients stay without a client_owner membership",
 );
 
 const twoLinked: OwnedClientSeat[] = [
@@ -93,10 +124,27 @@ assert(
   migration.indexOf("firm_id IS NULL") < migration.indexOf("m.role = 'client_owner'"),
   "firm-unlinked is checked before the membership fallback",
 );
+const clientInsertAt = migration.indexOf("INSERT INTO public.clients");
+assert(clientInsertAt > 0, "the migration still inserts a client when both lookups miss");
 assert(
-  migration.indexOf("m.role = 'client_owner'") < migration.indexOf("INSERT INTO public.clients"),
+  migration.indexOf("m.role = 'client_owner'") < clientInsertAt,
   "membership lookup happens before any insert",
 );
+const beforeInsert = migration.slice(0, clientInsertAt);
+assert(
+  (beforeInsert.match(/RETURN v_client_id;/g) ?? []).length === 2,
+  "both lookups return the existing id before the insert",
+);
+assert(migration.includes("p_name,"), "the insert uses the live p_name argument");
+assert(!migration.includes("v_name"), "the live insert has no name fallback");
+assert(!/insert\s+into\s+public\.client_memberships/i.test(migration), "the live body does not write client_memberships");
+assert(!/insert\s+into\s+public\.user_roles/i.test(migration), "the live body does not write user_roles");
+assert(!/update\s+public\.client_memberships/i.test(migration), "memberships are not updated");
+assert(!/update\s+public\.user_roles/i.test(migration), "roles are not updated");
+const lookups = beforeInsert.match(/SELECT[\s\S]*?LIMIT 1;/g) ?? [];
+assert(lookups.length === 2, "there are two lookups and no oldest-owned fallback");
+assert(lookups[0].includes("firm_id IS NULL") && !lookups[0].includes("client_memberships"), "the first lookup is the live firm-unlinked select");
+assert(lookups[1].includes("client_memberships") && lookups[1].includes("m.role = 'client_owner'"), "the second lookup requires client_owner");
 assert(!/create\s+unique\s+index/i.test(migration), "owners may own several clients in one firm");
 assert(!/update\s+public\.clients/i.test(migration), "existing client rows are not updated");
 assert(!/delete\s+from\s+public\.clients/i.test(migration), "existing client rows are not deleted");
