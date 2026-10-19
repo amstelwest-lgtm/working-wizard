@@ -211,11 +211,23 @@ assert(
   "Hand to keeps a sample host mounted after the menu closes",
 );
 assert(menu.includes('audience="accountant"'), "accountant next moves use the accountant copy");
-assert(
-  readFileSync("src/components/owner-door/owner-home.tsx", "utf8").includes('variant="fm-handoff"'),
-  "the home shows Hand to from the Financial Manager",
-);
 const homeSrc = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
+assert(
+  homeSrc.includes('variant="fm-handoff"'),
+  "the home still names the Financial Manager hand-off",
+);
+assert(
+  homeSrc.includes("taxCardOn ? null"),
+  "the home hides the hand-off strip when the tax card is on",
+);
+assert(
+  homeSrc.includes("Your agents are watching the books — ask them anything, any time."),
+  "ZA home does not count three agents",
+);
+assert(
+  homeSrc.includes("Three agents watching the books — ask them anything, any time."),
+  "US home keeps the three-agent subtitle",
+);
 assert(homeSrc.includes("sampleClient={sampleClient}"), "the home card follows the demo flag");
 assert(
   readFileSync("src/components/owner-door/owner-door.tsx", "utf8").includes(

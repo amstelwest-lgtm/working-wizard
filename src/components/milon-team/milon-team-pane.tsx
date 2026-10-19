@@ -37,6 +37,7 @@ export function MilonTeamPane({
   onInvite?: () => void;
   /** Landing cards and the stage switcher both land here. */
   onSelectAgent?: (agent: AgentKey) => void;
+  /** Same market OwnerHome uses for the ZA subtitle and to hide the hand-off strip. */
   marketCountry?: string | null;
   audience?: "owner" | "accountant";
   /** clients.is_demo. Passed through to the team-row chip. */
