@@ -25,7 +25,6 @@ import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { handoffAssigneeName, latestHandoffResult } from "@/lib/owner-handoff";
-import { latestStoredAssignment } from "@/lib/open-plan-home";
 import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
 import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
