@@ -26,6 +26,8 @@ type Props = {
   showSaPricing?: boolean;
   /** Server-built lines. Absent unless the edge is ZA. */
   saLabels?: Partial<Record<string, { month: string; year: string }>> | null;
+  /** Rand line under the trial sentence. Absent unless the edge is ZA. */
+  trialAfter?: string | null;
 };
 
 function pricedInterval(band: FirmBand, interval: FirmInterval): FirmInterval {
@@ -46,7 +48,7 @@ function bandPriceLabel(
 }
 
 function startLabel(band: FirmBand): string {
-  return band.id === "solo" ? SOLO_TRIAL_BUTTON : `Start ${band.name}`;
+  return band.id === "starter" ? SOLO_TRIAL_BUTTON : `Start ${band.name}`;
 }
 
 /** Amount stays on one line. The per-client clause wraps under it. */
@@ -173,6 +175,7 @@ export function FirmBandPricingTable({
   compact = false,
   showSaPricing = false,
   saLabels = null,
+  trialAfter = null,
 }: Props) {
   const labels = showSaPricing ? saLabels : null;
   const bands = FIRM_BAND_TABLE;
@@ -215,7 +218,9 @@ export function FirmBandPricingTable({
     <div className={compact ? "firm-bands firm-bands-compact" : "firm-bands"}>
       <div className={labels ? "firm-trial-bar firm-trial-bar-za" : "firm-trial-bar"}>
         <p className="firm-trial-bar-lead">{FIRM_TRIAL_SENTENCE}</p>
-        <p className="firm-trial-bar-sub">{PRICING_TRIAL_AFTER}</p>
+        <p className="firm-trial-bar-sub">
+          {showSaPricing ? trialAfter || "On Starter. A card is required at signup." : PRICING_TRIAL_AFTER}
+        </p>
       </div>
       {onIntervalChange ? (
         <div className="firm-bands-toggle" role="group" aria-label="Billing interval">

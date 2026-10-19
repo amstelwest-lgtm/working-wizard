@@ -11,6 +11,7 @@ import {
   tourSeen,
 } from "@/lib/onboarding";
 import { spotlightClickBlockers, type SpotBox } from "@/lib/spotlight-hole";
+import { FIRM_TRIAL_CARD_LINE } from "@/lib/stripe-plans";
 
 export type WalkthroughVariant =
   | "owner"
@@ -219,7 +220,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     targetId: ".health-orb",
     section: "Figures",
     title: "These are the figures",
-    body: "The health score is on screen, from the statement you imported. Review it here. A card starts the 14-day free trial when you want it.",
+    body: `The health score is on screen, from the statement you imported. Review it here. ${FIRM_TRIAL_CARD_LINE}`,
   },
   {
     tab: "ask",

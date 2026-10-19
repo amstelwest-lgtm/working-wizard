@@ -118,7 +118,7 @@ assert(Math.abs((ratios["Gross Margin"] ?? 0) - 0.6) < 0.001, `analyst GM is 60%
 
 assert(firmUsageLimit("trialing", "starter", 0) === 5, "Starter trial usage limit is 5");
 assert(firmUsageLimit("active", "starter", 0) === 5, "Starter usage limit is 5");
-assert(firmUsageLimit("trialing", "solo") === 3, "Solo trial stays at 3");
+assert(firmUsageLimit("trialing", "solo") === 5, "a Solo trial uses the Starter cap of 5");
 assert(
   decideFirmClientCreate({
     stripeConfigured: true,

@@ -422,7 +422,7 @@ function LandingPage() {
   const [regPassword, setRegPassword] = useState("");
   const [regBusiness, setRegBusiness] = useState("");
   const [regFirmName, setRegFirmName] = useState("");
-  const [regPlan, setRegPlan] = useState("Solo");
+  const [regPlan, setRegPlan] = useState("Starter");
   const [firmInterval, setFirmInterval] = useState<FirmInterval>("month");
   const [regBusy, setRegBusy] = useState(false);
   const [regError, setRegError] = useState("");
@@ -1240,7 +1240,7 @@ function LandingPage() {
         await setLandingPortal("accountant");
         const promo = peekPendingCheckout()?.promo;
         const pending = {
-          plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
+          plan: paidPlanFromRegisterLabel(regPlan) ?? "starter",
           interval: firmInterval,
           market: visitorCopyPack(draftMarket),
           ...(promo ? { promo } : {}),
@@ -1404,7 +1404,7 @@ function LandingPage() {
     plan?: FirmCheckoutBand;
     scrollTo?: "register" | "pricing";
   }) => {
-    const plan = opts?.plan ?? "solo";
+    const plan = opts?.plan ?? "starter";
     const visitor = copyPack;
     const pending = user
       ? await checkoutIntentForUser(
@@ -2608,6 +2608,7 @@ function LandingPage() {
             onSelectBand={startFirmPlan}
             showSaPricing={showSaPricing}
             saLabels={saPricing?.labels}
+            trialAfter={saPricing?.trialAfter}
           />
 
           <div className="owner-spark-path">

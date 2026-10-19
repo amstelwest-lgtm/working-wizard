@@ -5,7 +5,7 @@
  */
 
 import { SMART_LANDING_PATH } from "@/lib/smart-landing";
-import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+import { FIRM_TRIAL_CARD_LINE } from "@/lib/stripe-plans";
 
 export const WELCOME_EMAIL_SUBJECT = "Welcome to Milōn";
 export const WELCOME_SIGN_OFF = "The MILŌN Team";
@@ -145,7 +145,7 @@ export function renderWelcomeEmail(input: {
 }): { subject: string; html: string; text: string } {
   const first = welcomeFirstName(input.fullName);
   const hello = first ? `Welcome, ${first}.` : "Welcome.";
-  const trial = input.audience === "firm_owner" ? FIRM_TRIAL_SENTENCE : null;
+  const trial = input.audience === "firm_owner" ? FIRM_TRIAL_CARD_LINE : null;
   const text = [
     hello,
     "",

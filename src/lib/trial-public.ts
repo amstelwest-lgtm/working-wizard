@@ -20,8 +20,8 @@ export const TRIAL_DISCLAIMER = "AI-generated from sample figures, not reviewed 
 export const TRIAL_SIGNUP_HREF = "/auth?signup=true&plan=starter&interval=month";
 
 /**
- * Starter's catalog client limit (5), not the older 3-client trial sentence.
- * The test checks this against FIRM_BAND_CATALOG.starter.clientLimit.
+ * Same words as FIRM_TRIAL_SENTENCE. Duplicated so /try does not import the
+ * Stripe catalog. trial-demo asserts the two strings stay equal.
  */
 export const TRIAL_SIGNUP_SENTENCE = "14-day free trial · up to 5 clients";
 

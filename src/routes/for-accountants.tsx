@@ -216,6 +216,7 @@ function ForAccountantsPage() {
         onSelectBand={startBand}
         showSaPricing={Boolean(saPricing)}
         saLabels={saPricing?.labels}
+        trialAfter={saPricing?.trialAfter}
       />
       <div className="mk-note">
         Where we are honest about being early: our first pilots are running now, so we are not

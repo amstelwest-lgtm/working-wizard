@@ -43,9 +43,10 @@ assert(
 assert(starterClientLimit(0) === 3, "a $0 price id keeps the legacy 3-client cap");
 assert(starterClientLimit(3_900) === 5, "the paid Starter price caps at 5");
 assert(firmUsdPublicLine("starter", "month") === "$39/mo · about $8 per client", "starter per-client line");
-assert(firmSignupCheckoutIntent().plan === "solo", "signup Checkout defaults to Solo");
+assert(firmSignupCheckoutIntent().plan === "starter", "signup Checkout defaults to Starter");
 assert(firmSignupCheckoutIntent().interval === "month", "signup Checkout is monthly");
-assert(FIRM_TRIAL_SENTENCE === "14-day free trial · up to 3 clients", "locked trial sentence");
+assert(FIRM_TRIAL_SENTENCE === "14-day free trial · up to 5 clients", "locked trial sentence");
+assert(FIRM_TRIAL_SENTENCE.includes(String(FIRM_BAND_CATALOG.starter.clientLimit)), "trial cap is Starter's cap");
 assert(!FIRM_TRIAL_SENTENCE.toLowerCase().includes("3 free"), "never say 3 free clients");
 assert(FIRM_BAND_CATALOG.solo.monthlyUsdCents === 9_900, "Solo monthly is $99");
 assert(FIRM_BAND_CATALOG.solo.yearlyUsdCents === 95_000, "Solo yearly is $950");
@@ -61,8 +62,9 @@ assert(
   "starter annual line keeps the per-client clause",
 );
 assert(
-  formatFirmPlanStatus({ phase: "trialing", band: "starter" }).detail === "Up to 5 clients",
-  "a Starter trial uses the 5-client band",
+  formatFirmPlanStatus({ phase: "trialing", band: "starter" }).detail ===
+    `Starter · ${FIRM_TRIAL_SENTENCE}`,
+  "a Starter trial uses the locked sentence",
 );
 assert(
   formatFirmPlanStatus({ phase: "active", band: "starter" }).detail === "Up to 5 active clients",
@@ -70,8 +72,8 @@ assert(
 );
 assert(
   formatFirmPlanStatus({ phase: "trialing", band: "solo" }).detail ===
-    "Up to 3 clients · Solo after the trial",
-  "other bands keep the trial cap separate from the paid limit",
+    `Starter · ${FIRM_TRIAL_SENTENCE}`,
+  "every band's trial is the Starter sentence",
 );
 assert(firmUsdListPrice("solo", "month") === "$99", "Solo monthly display");
 assert(firmUsdListPrice("scale", "year") === "$9,590", "Scale yearly display");
@@ -108,21 +110,32 @@ const trialBlock = decideFirmClientCreate({
   stripeConfigured: true,
   phase: "trialing",
   band: "solo",
-  clientCount: 3,
+  clientCount: 5,
 });
-assert(!trialBlock.allowed && trialBlock.code === "trial_client_cap", "trial blocks the 4th client");
+assert(!trialBlock.allowed && trialBlock.code === "trial_client_cap", "trial blocks the 6th client");
 assert(
-  !trialBlock.allowed && trialBlock.message.includes(FIRM_TRIAL_SENTENCE),
-  "trial block uses the locked sentence",
+  !trialBlock.allowed &&
+    trialBlock.message.includes(FIRM_TRIAL_SENTENCE) &&
+    trialBlock.message.includes("Starter"),
+  "trial block uses the locked sentence on Starter",
 );
 assert(
   decideFirmClientCreate({
     stripeConfigured: true,
     phase: "trialing",
     band: "solo",
-    clientCount: 2,
+    clientCount: 4,
   }).allowed,
-  "trial allows the 3rd client",
+  "trial allows a 5th client on every band",
+);
+assert(
+  decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "trialing",
+    band: "scale",
+    clientCount: 4,
+  }).allowed,
+  "a Scale trial still uses the Starter cap",
 );
 assert(
   decideFirmClientCreate({

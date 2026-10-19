@@ -174,7 +174,7 @@ function AuthPage() {
     const pending = peekPendingCheckout();
     if (pending) setStoredBand({ plan: pending.plan, interval: pending.interval });
   }, [geoZa]);
-  const selectedPlan = plan ?? storedBand?.plan ?? "solo";
+  const selectedPlan = plan ?? storedBand?.plan ?? "starter";
   const selectedInterval = interval ?? storedBand?.interval ?? "month";
   const practiceHint = practiceLocationHint(draftMarket);
 
@@ -224,7 +224,7 @@ function AuthPage() {
     // A bare /auth?signup=true must not wipe a band already stashed by pricing.
     if (!plan && !interval && existing) return;
     stashPendingCheckout({
-      plan: plan ?? existing?.plan ?? "solo",
+      plan: plan ?? existing?.plan ?? "starter",
       interval: interval ?? existing?.interval ?? "month",
       market: existing?.market ?? "us",
       ...(existing?.promo ? { promo: existing.promo } : {}),
