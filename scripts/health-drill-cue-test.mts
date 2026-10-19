@@ -14,6 +14,7 @@ const cue = readFileSync(resolve("src/components/health-drill-cue.tsx"), "utf8")
 const css = readFileSync(resolve("src/styles.css"), "utf8");
 const ratios = readFileSync(resolve("src/components/simplified-ratios.tsx"), "utf8");
 const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+const owner = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 const briefing = readFileSync(resolve("src/components/owner-ratio-briefing.tsx"), "utf8");
 const drawer = readFileSync(resolve("src/components/playbook-drawer.tsx"), "utf8");
 
@@ -37,15 +38,16 @@ assert(
 );
 assert(hero.includes("<DigLeaf />"), "a ratio with no briefing is the bottom line");
 
-assert(cue.includes("Click"), "desktop copy says Click");
-assert(cue.includes("Tap"), "touch copy says Tap");
-assert(cue.includes("to see more"), "the cue says see more");
+assert(cue.includes('HEALTH_DRILL_CUE = "Tap to see more"'), "the shared cue is Tap to see more");
+assert(!cue.includes(">Click<") && !cue.includes("dig-cue__verb"), "the cue does not say Click");
+assert(hero.includes("HEALTH_RING_CAPTION = HEALTH_DRILL_CUE"), "the ring uses that same cue");
+assert(!hero.includes("what's behind your score"), "the ring does not keep a longer line");
 assert(cue.includes("This is the bottom line"), "the leaf says this is the bottom line");
 assert(cue.includes("usePrefersReducedMotion"), "the one-time shimmer respects reduced motion");
 assert(cue.includes("pulsedCueIds"), "the shimmer runs once per cue");
 
-assert(css.includes(".dig-cue__verb--click"), "Click and Tap are swapped in CSS");
-assert(css.includes("@media (pointer: coarse)"), "Tap is the touch-pointer copy");
+assert(!css.includes(".dig-cue__verb--click"), "Click and Tap are not swapped");
+assert(!css.includes("pointer: coarse"), "the cue does not change words for touch");
 assert(css.includes("prefers-reduced-motion: reduce"), "reduced motion drops the shimmer");
 assert(css.includes("cursor: pointer"), "drill controls keep a pointer");
 assert(css.includes(".dig-cue--control:focus-visible"), "the cue button has a focus ring");
@@ -65,6 +67,9 @@ assert(
   "the accountant health score accepts a pillar drill",
 );
 assert(studio.includes('variant="ring"'), "the accountant score uses the same health ring");
+assert(studio.includes("HEALTH_RING_CAPTION"), "the accountant ring uses the shared caption");
+assert(owner.includes('variant="ring"'), "the owner score uses the same health ring");
+assert(owner.includes("HEALTH_RING_CAPTION"), "the owner ring uses the shared caption");
 assert(studio.includes("premium-shell"), "the accountant client shell uses the premium frame");
 assert(studio.includes("onOpenPillar"), "accountant pillar cards drill into the score");
 assert(studio.includes("onDriverClick"), "accountant ratios still open the playbook");

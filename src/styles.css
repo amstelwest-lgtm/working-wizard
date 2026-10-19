@@ -731,7 +731,8 @@ html:not(.dark) .sphere-drill-back--on-dark:hover {
 }
 
 /* Health drill cue — only on a control that opens a real next level.
-   Click on a fine pointer, Tap on touch. Ice is a shimmer, never the text. */
+   One line, "Tap to see more", on mouse and touch. Ice is a shimmer, never the text.
+   Drivers and the ratio drawer do not use this cue. */
 .dig-cue {
   display: inline-flex;
   align-items: center;
@@ -771,11 +772,6 @@ html:not(.dark) .sphere-drill-back--on-dark:hover {
   height: 12px;
   flex: none;
   color: #0b5fff;
-}
-.dig-cue__verb--tap { display: none; }
-@media (pointer: coarse) {
-  .dig-cue__verb--click { display: none; }
-  .dig-cue__verb--tap { display: inline; }
 }
 .dig-cue--compact {
   font-size: 9px;

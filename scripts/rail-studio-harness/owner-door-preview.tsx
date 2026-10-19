@@ -16,7 +16,7 @@ import {
   ProfitLead,
   priorMarginsFromFinancials,
 } from "@/components/profitability-waterfall";
-import { SphereHero, type SpherePillar } from "@/components/sphere-hero";
+import { HEALTH_RING_CAPTION, SphereHero, type SpherePillar } from "@/components/sphere-hero";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import {
   OwnerAccountant,
@@ -159,7 +159,7 @@ function HealthOrb({
         overallHealth={80}
         displayStatus="healthy"
         pillars={PILLARS}
-        caption="Tap to see what's behind your score"
+        caption={HEALTH_RING_CAPTION}
         onTopPriority={() => undefined}
         onDriverClick={onDriver}
       />
@@ -633,6 +633,7 @@ export function OwnerDoorPreview({
           status={ownerCardStatuses(BOOKS)}
           marketCountry="ZA"
           audience="owner"
+          sampleClient={new URLSearchParams(window.location.search).get("demo") === "1"}
           onOpen={openLive}
           onAsk={openLive}
           needs={HOME_NEEDS}

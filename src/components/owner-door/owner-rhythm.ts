@@ -1,4 +1,4 @@
-import type { AgentKey } from "@/lib/milon-team-feed";
+import type { AvatarFace } from "@/lib/fm-avatar-state";
 
 type Rhythm = {
   breathe: string;
@@ -17,8 +17,8 @@ type Rhythm = {
   shimmer: string;
 };
 
-/** Different clocks so the three agents never inhale together. */
-export function avatarRhythm(agent: AgentKey): Rhythm {
+/** Different clocks so the faces never inhale together. */
+export function avatarRhythm(agent: AvatarFace): Rhythm {
   if (agent === "financial_manager") {
     return {
       breathe: "4.6s",
@@ -53,6 +53,24 @@ export function avatarRhythm(agent: AgentKey): Rhythm {
       glanceDelay: "-4.4s",
       orbit: "22s",
       shimmer: "4.4s",
+    };
+  }
+  if (agent === "tax_specialist") {
+    return {
+      breathe: "5.1s",
+      breatheDelay: "-1.8s",
+      drift: "8.6s",
+      driftDelay: "-2.4s",
+      driftX: "2px",
+      driftY: "-2px",
+      micro: "12s",
+      microDelay: "-3.4s",
+      blink: "6.8s",
+      blinkDelay: "-1.5s",
+      glance: "8.8s",
+      glanceDelay: "-3.1s",
+      orbit: "20s",
+      shimmer: "5.6s",
     };
   }
   return {

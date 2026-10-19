@@ -66,17 +66,15 @@ export type BuildSphereArgs = {
 export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
   const { pillarHealths, pillarDeltas, healthMap, ratioMeta, pillarStatus } = args;
   return (Object.keys(PILLAR_DRIVER_KEYS) as SpherePillar["id"][]).map((id) => {
-    const financing =
-      id === "financing" && Number.isFinite(pillarHealths.financing) ? pillarHealths.financing : null;
     const drivers = PILLAR_DRIVER_KEYS[id].map((k) => {
       const noStock = k === "inventoryDays" && args.inventoryApplies === false;
+      // Each driver uses its own scored ratio. The financing pillar average
+      // must not replace Equity Multiplier — the ratio drawer reads that score.
       const health = noStock
         ? Number.NaN
-        : k === "equityMultiplier" && financing != null
-          ? financing
-          : k in healthMap && Number.isFinite(healthMap[k])
-            ? healthMap[k]
-            : Number.NaN;
+        : k in healthMap && Number.isFinite(healthMap[k])
+          ? healthMap[k]
+          : Number.NaN;
       return {
         key: k,
         label: ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k,

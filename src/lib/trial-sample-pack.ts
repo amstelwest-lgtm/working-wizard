@@ -23,7 +23,10 @@ function ratio(board: TrialBoard, name: string): string | null {
   return display && display.trim() ? display : null;
 }
 
-export function buildSampleAdvisoryPack(board: TrialBoard): SampleAdvisoryPack {
+export function buildSampleAdvisoryPack(
+  board: TrialBoard,
+  options?: { signed?: boolean },
+): SampleAdvisoryPack {
   const score = board.health.score == null ? "—" : String(Math.round(board.health.score));
   const label = board.health.label || "Unscored";
   const gross = ratio(board, "Gross Margin");
@@ -42,9 +45,9 @@ export function buildSampleAdvisoryPack(board: TrialBoard): SampleAdvisoryPack {
       ? `Ask for faster payment. Customers take ${debtors} on this sample.`
       : "Ask for faster payment before the next cycle.",
     gross && net
-      ? `Gross margin is ${gross} and net margin is ${net}. The gap is the cost of running the business.`
-      : "Name the gap between gross margin and what is left after the cost of running the business.",
-    "Keep the 13-week line labelled as an estimate until a real cash balance is on file.",
+      ? `Cut or reprice one operating cost this month. Gross margin is ${gross} and net margin is ${net}, so name the expense that eats the gap.`
+      : "Cut or reprice one operating cost that does not earn its keep.",
+    "Compare the sample bank balance with the runway floor each week, and plan a top-up before cash crosses that line.",
   ];
 
   return {
@@ -54,7 +57,7 @@ export function buildSampleAdvisoryPack(board: TrialBoard): SampleAdvisoryPack {
     sections: [
       {
         title: "Headline",
-        body: `${SAMPLE_BUSINESS_NAME} is a sample services business. Health is ${score}, ${label}. This pack is labelled SAMPLE. It is not a live client.`,
+        body: `${SAMPLE_BUSINESS_NAME} is a sample supply and distribution business. Health is ${score}, ${label}. This pack is labelled SAMPLE. It is not a live client.`,
       },
       {
         title: "What matters",
@@ -72,7 +75,9 @@ export function buildSampleAdvisoryPack(board: TrialBoard): SampleAdvisoryPack {
       },
       {
         title: "Disclosure",
-        body: "Prepared from sample figures. Not reviewed by an accountant. Nothing in this pack is saved to a client record.",
+        body: options?.signed
+          ? "Signed off by you · sample, not reviewed by an accountant. Nothing in this pack is saved to a client record."
+          : "Prepared from sample figures. Not reviewed by an accountant. Nothing in this pack is saved to a client record.",
       },
     ],
   };

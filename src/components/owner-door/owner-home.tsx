@@ -141,6 +141,7 @@ export function OwnerHome({
   inviteClientId,
   marketCountry = null,
   audience,
+  sampleClient = false,
   title = "Your finance team",
   lede = "Three agents watching the books — ask them anything, any time.",
   showInvite = true,
@@ -171,6 +172,8 @@ export function OwnerHome({
   /** Resolved market. The sample card loads only when this is ZA. */
   marketCountry?: string | null;
   audience?: "owner" | "accountant";
+  /** clients.is_demo. Real clients do not get the sample tax card. */
+  sampleClient?: boolean;
 }) {
   const handoff = presence.handoff;
   const sampleAudience = audience ?? (showInvite ? "owner" : "accountant");
@@ -267,7 +270,12 @@ export function OwnerHome({
               </div>
             );
           })}
-          <TaxSpecialistSlot country={marketCountry} variant="card" audience={sampleAudience} />
+          <TaxSpecialistSlot
+            country={marketCountry}
+            variant="card"
+            audience={sampleAudience}
+            sampleClient={sampleClient}
+          />
         </div>
         <TaxSpecialistSlot country={marketCountry} variant="fm-handoff" audience={sampleAudience} />
         {handoff ? (

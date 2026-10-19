@@ -6,6 +6,7 @@ import { CashForecastPanel } from "@/components/cash-forecast";
 import { ProfitabilityWaterfall, ProfitLead } from "@/components/profitability-waterfall";
 import { MarketProvider } from "@/contexts/market";
 import {
+  TRIAL_CASH_OPENING_LINE,
   trialCashPreview,
   trialMarketSelection,
   trialWaterfallFallback,
@@ -41,7 +42,16 @@ export function TrySampleBoards({
         ) : null}
         {cash && preview ? (
           <div data-try-chip="cash">
-            <CashForecastPanel simplified readOnly hideReadOnlyStamp preview={preview} />
+            <p className="try-cash-note" data-try-cash-note>
+              {TRIAL_CASH_OPENING_LINE}
+            </p>
+            <CashForecastPanel
+              simplified
+              readOnly
+              hideReadOnlyStamp
+              includeFloorInDomain
+              preview={preview}
+            />
           </div>
         ) : null}
       </div>

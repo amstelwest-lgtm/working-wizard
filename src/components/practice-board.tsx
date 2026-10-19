@@ -1932,6 +1932,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               variant="character"
               audience="accountant"
               marketCountry={practiceCountry}
+              sampleClient={false}
               presence={ownerPresence(emptyAgentActivity())}
               lines={practiceLines}
               status={practiceStatus}
