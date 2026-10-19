@@ -18,6 +18,7 @@ import { parseOperatingProfile } from "@/lib/client-profile";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
 import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
+import { actionIsOverdue } from "@/lib/action-plan-counts";
 import {
   rankPortfolio,
   summarisePortfolio,
@@ -167,7 +168,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     const ids = clients.map((c) => c.id);
     const cycleIds = clients.map((c) => c.advisory_cycle_id).filter((x): x is string => Boolean(x));
 
-    const [cycles, snaps, requests, actions, recs, packs, outcomes] = await Promise.all([
+    const [cycles, snaps, requests, actions, recs, packs, outcomes, planRows] = await Promise.all([
       cycleIds.length
         ? sb
             .from("advisory_cycles")
@@ -203,6 +204,9 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
         ids,
         "client_id, recommendation_id, metric, expected_amount, actual_amount, measured_at",
       ),
+      groupCount(sb, "action_plans", ids, "client_id, target_date", (q) =>
+        (q as { eq: (c: string, v: boolean) => unknown }).eq("is_active", true),
+      ),
     ]);
 
     const cycleUpdated = new Map<string, string>();
@@ -219,10 +223,25 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     }>) {
       if (!latestSnap.has(s.client_id)) latestSnap.set(s.client_id, s.period_date);
     }
+    const planTarget = new Map<string, string>();
+    for (const row of planRows) {
+      const id = String(row.client_id ?? "");
+      const target = typeof row.target_date === "string" ? row.target_date : "";
+      if (id && target && !planTarget.has(id)) planTarget.set(id, target);
+    }
     const openReq = tally(requests);
     const blockingReq = tally(requests, (r) => r.severity === "critical");
     const openAct = tally(actions);
-    const overdueAct = tally(actions, (r) => typeof r.due_date === "string" && r.due_date < today);
+    const overdueAct = tally(actions, (r) =>
+      actionIsOverdue(
+        {
+          status: typeof r.status === "string" ? r.status : "",
+          dueDate: typeof r.due_date === "string" ? r.due_date : null,
+          planTarget: planTarget.get(String(r.client_id ?? "")) ?? null,
+        },
+        today,
+      ),
+    );
     const blockedAct = tally(actions, (r) => r.status === "blocked");
     const proposed = tally(recs);
 

@@ -1,7 +1,10 @@
 /**
- * Action-row health. A past due date is Overdue. No due date and no progress
- * is Not started — that is not On track.
+ * Action-row health. A past due date is Overdue. An open item with no due
+ * date is Overdue when the plan target has passed. No due date and no
+ * progress, while the target is still ahead, is Not started — that is not
+ * On track.
  */
+import { actionIsOverdue } from "./action-plan-counts.ts";
 
 export type ActionItemHealth =
   | "on_track"
@@ -17,13 +20,19 @@ export function deriveActionHealth(
     due_date: string | null;
     progress_pct: number;
     created_at: string;
+    plan_target?: string | null;
   },
   now = new Date(),
 ): ActionItemHealth {
   if (it.status === "done") return "complete";
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  if (it.due_date && new Date(`${it.due_date}T00:00:00`) < today) return "overdue";
+  if (
+    actionIsOverdue(
+      { status: it.status, dueDate: it.due_date, planTarget: it.plan_target ?? null },
+      now,
+    )
+  ) {
+    return "overdue";
+  }
   if (it.status === "blocked") return "off_track";
   if (!it.due_date) return (it.progress_pct ?? 0) <= 0 ? "not_started" : "on_track";
   const pace = actionPace(it, now);

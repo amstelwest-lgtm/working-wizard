@@ -230,6 +230,7 @@ function distribute(
   side: "revenue" | "expenses" | "other",
   recurring?: ReadonlyMap<string, RecurringFrequency> | null,
   singleMonth = false,
+  weekDates?: readonly string[] | null,
 ): number[] {
   return distributeForecastLine(
     {
@@ -240,6 +241,7 @@ function distribute(
       }) as LineItem["frequency"],
     },
     WEEKS,
+    weekDates,
   );
 }
 
@@ -1411,7 +1413,7 @@ export function CashForecastPanel({
           singleMonth: singleMonthHistory,
         }),
         vals: applyWeekOverrides(
-          shiftVals(distribute(l, "revenue", recurringPayees, singleMonthHistory).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
+          shiftVals(distribute(l, "revenue", recurringPayees, singleMonthHistory, weekIsos).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
           l.weekOverrides,
         ),
       })),
@@ -1425,7 +1427,7 @@ export function CashForecastPanel({
         singleMonth: singleMonthHistory,
       }),
       vals: applyWeekOverrides(
-        distribute(l, bucket, recurringPayees, singleMonthHistory).map((v) => v * opts.eMul),
+        distribute(l, bucket, recurringPayees, singleMonthHistory, weekIsos).map((v) => v * opts.eMul),
         l.weekOverrides,
       ),
     });

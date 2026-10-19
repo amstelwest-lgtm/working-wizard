@@ -4,6 +4,7 @@
  * cards, and insight chips from already-loaded client rows.
  */
 
+import { overdueActionsLabel } from "@/lib/action-plan-counts";
 import { PILLAR_LABELS, type OverallHealth } from "@/lib/health-score";
 import type { HealthTier } from "@/lib/ratios";
 
@@ -260,7 +261,7 @@ export function buildAttentionItems(
 
     let detail: string;
     if (row.overdueActions > 0) {
-      detail = `${row.overdueActions} action${row.overdueActions === 1 ? "" : "s"} overdue`;
+      detail = overdueActionsLabel(row.overdueActions);
     } else if (row.openActions > 0) {
       detail = `${row.openActions} recommended action${row.openActions === 1 ? "" : "s"}`;
     } else if (row.openQueries > 0) {
@@ -327,6 +328,20 @@ function attentionBucket(rank: number): "review" | "watch" {
   return rank === 0 ? "review" : "watch";
 }
 
+function overdueCountMentioned(text: string): number | null {
+  const match = /(\d+)\s+overdue\s+actions?\b|(\d+)\s+actions?\s+overdue\b/i.exec(text);
+  if (!match) return null;
+  const n = Number(match[1] ?? match[2]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** The health detail repeats an overdue count already written in the reason. */
+function detailRepeatsOverdue(reason: string, detail: string): boolean {
+  const left = overdueCountMentioned(reason);
+  const right = overdueCountMentioned(detail);
+  return left != null && right != null && left === right;
+}
+
 function uniqueJoin(parts: readonly string[]): string {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -376,12 +391,13 @@ export function mergeNeedsAttention(
       ...(existing ? [existing.reason] : []),
       ...urgent.map((exception) => exception.label),
     ]);
+    const detail = detailRepeatsOverdue(reason, existing?.detail ?? "") ? "" : (existing?.detail ?? "");
     const rank = Math.min(attentionRank(top.severity), existing?.rank ?? 9);
     byId.set(row.clientId, {
       clientId: row.clientId,
       name: existing?.name || row.name,
       reason,
-      detail: existing?.detail ?? "",
+      detail,
       tab: top.tab,
       openPlan: existing?.openPlan ?? top.tab === "plan",
       openQueries: existing?.openQueries ?? false,

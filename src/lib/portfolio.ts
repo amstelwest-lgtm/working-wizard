@@ -9,6 +9,7 @@
  */
 import { ADVISORY_STATE_LABELS, type AdvisoryState } from "@/lib/advisory-state";
 import { resolveAdvisorySignoffState } from "@/lib/advisory-signoff";
+import { overdueActionsLabel } from "@/lib/action-plan-counts";
 import { PAGE_FIGURES_CHANGED_CLAUSE } from "@/lib/signoff-status";
 
 export type PortfolioClientFacts = {
@@ -135,7 +136,7 @@ export function exceptionsFor(f: PortfolioClientFacts, now: string): PortfolioEx
     out.push({
       kind: "overdue_actions",
       severity: 2,
-      label: `${f.overdueActions} overdue action${f.overdueActions === 1 ? "" : "s"}`,
+      label: overdueActionsLabel(f.overdueActions),
       tab: "plan",
     });
   }

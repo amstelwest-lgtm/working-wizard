@@ -18,6 +18,14 @@ import ActionPlan, {
   toActionItemWrite,
 } from "../src/components/action-plan";
 import { lazyPanel, TabErrorBoundary } from "../src/components/lazy-panel";
+import {
+  actionIsOverdue,
+  countActionPlan,
+  displayedPlanPeriod,
+  formatActionPlanCounts,
+  overdueActionsLabel,
+} from "../src/lib/action-plan-counts";
+import { deriveActionHealth } from "../src/lib/action-item-health";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -41,8 +49,8 @@ assert(
     overdue: 0,
     not_started: 0,
     complete: 0,
-  }) === "4 open · 2 on track · 2 off track",
-  "the leading count is open actions, and on-track keeps its own count",
+  }) === "4 actions · 4 open",
+  "open actions are one count and do not list the same rows again",
 );
 assert(
   formatActionHealthSummary({
@@ -52,9 +60,47 @@ assert(
     overdue: 1,
     not_started: 0,
     complete: 3,
-  }) === "3 open · 1 on track · 1 at risk · 1 overdue · 3 done",
-  "done stays out of the open count",
+  }) === "6 actions · 3 open, including 1 overdue · 3 done",
+  "done stays out of the open count and overdue is inside it",
 );
+const today = "2026-10-19";
+assert(
+  actionIsOverdue({ status: "not_started", dueDate: null, planTarget: "2026-09-29" }, today),
+  "an open item with no due date is overdue when the plan target has passed",
+);
+assert(
+  !actionIsOverdue({ status: "done", dueDate: "2026-09-15", planTarget: "2026-09-29" }, today),
+  "a done item stays complete",
+);
+assert(
+  deriveActionHealth(
+    {
+      status: "not_started",
+      due_date: null,
+      progress_pct: 0,
+      created_at: "2026-09-01T00:00:00.000Z",
+      plan_target: "2026-09-29",
+    },
+    new Date("2026-10-19T12:00:00"),
+  ) === "overdue",
+  "the overdue filter includes a past plan target",
+);
+const counted = countActionPlan(
+  [
+    { status: "done", dueDate: "2026-09-15", planTarget: "2026-09-29" },
+    { status: "not_started", dueDate: null, planTarget: "2026-09-29" },
+    { status: "not_started", dueDate: null, planTarget: "2026-09-29" },
+  ],
+  today,
+);
+assert(formatActionPlanCounts(counted) === "3 actions · 2 open, including 2 overdue · 1 done", formatActionPlanCounts(counted));
+assert(overdueActionsLabel(2) === "2 overdue actions", "dashboard and plan share the overdue label");
+assert(
+  displayedPlanPeriod("Q3 2026", "Set your outcome goal for this quarter", new Date("2026-10-19T12:00:00")) ===
+    "Q4 2026",
+  "a placeholder goal shows the current quarter",
+);
+assert(displayedPlanPeriod("Q3 2026", "Pay down the bond", new Date("2026-10-19T12:00:00")) === "Q3 2026", "a real goal keeps its period");
 assert(healthMeta("at_risk").label === "At risk", "known health");
 assert(healthMeta("nope").label === "On track", "unknown health falls back");
 assert(healthMeta(undefined).label === "On track", "missing health falls back");

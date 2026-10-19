@@ -99,14 +99,14 @@ for (const [name, amount] of stored) {
   assert(frequency === "recurring-monthly", `${name} projects monthly from two history hits`);
   const weeks = distributeForecastLine({ amount, frequency, startWeek: 1 }, 13);
   assert(weeks[0] === Number(amount) && weeks[4] === Number(amount), `${name} lands in week 1 and week 5`);
-  assert(weeks[8] === Number(amount) && weeks[12] === Number(amount), `${name} lands in week 9 and week 13`);
+  assert(weeks[9] === Number(amount) && weeks[12] === 0, `${name} lands a third time and not in week 13`);
   assert(weeks[1] === 0 && weeks[2] === 0, `${name} is not repeated every week`);
 }
 
 const lone = projectForecastFrequency("Greeff Properties", "once-off", null, { side: "expenses" });
 assert(lone === "recurring-monthly", "rent is assumed monthly from one month");
 const loneWeeks = distributeForecastLine({ amount: "28000", frequency: lone, startWeek: 1 }, 13);
-assert(loneWeeks[0] === 28000 && loneWeeks[4] === 28000 && loneWeeks[12] === 28000, "assumed rent lands on the monthly weeks");
+assert(loneWeeks[0] === 28000 && loneWeeks[4] === 28000 && loneWeeks[9] === 28000 && loneWeeks[12] === 0, "assumed rent lands three times");
 const stranger = projectForecastFrequency("Dis-Chem", "once-off", null, { side: "expenses" });
 assert(stranger === "once-off", "a single non-recurring purchase stays in its week");
 
@@ -176,7 +176,7 @@ const ytd = budgetYtdWithStatement(
   { budget: 1000, actual: null },
   { chip: "Statement", revenue: 48000, budgetRevenue: 50000 },
 );
-assert(ytd.actual === 48000 && ytd.budget === 50000, "YTD uses statement actuals when the month row is empty");
+assert(ytd.actual === null && ytd.budget === 1000, "a statement total does not become the YTD actual");
 const simple = read("src/components/budget/budget-simple-view.tsx");
 const workspace = read("src/components/budget/budget-workspace.tsx");
 assert(simple.includes("Budget-year") && simple.includes("not the 13-week"), "the simple view labels the budget-year trough");
