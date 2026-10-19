@@ -41,7 +41,17 @@ export type FeatureDestination =
   | { kind: "dashboard" }
   | { kind: "clients" }
   | { kind: "settings" }
-  | { kind: "section"; to: "/dashboard" | "/clients" | "/practice"; hash: string };
+  | { kind: "section"; to: "/dashboard" | "/clients" | "/practice"; hash: string }
+  | {
+      kind: "path";
+      to:
+        | "/clients/queries"
+        | "/practice/needs-attention"
+        | "/practice/follow-up"
+        | "/practice/insights"
+        | "/practice/marketplace"
+        | "/practice/playbooks";
+    };
 
 export type FeatureResult = {
   id: string;
@@ -89,7 +99,16 @@ type FeatureDef = {
     | "dashboard"
     | "clients"
     | "settings"
-    | { to: "/dashboard" | "/clients" | "/practice"; hash: string };
+    | { to: "/dashboard" | "/clients" | "/practice"; hash: string }
+    | {
+        to:
+          | "/clients/queries"
+          | "/practice/needs-attention"
+          | "/practice/follow-up"
+          | "/practice/insights"
+          | "/practice/marketplace"
+          | "/practice/playbooks";
+      };
 };
 
 function coachTarget(id: CoachStepId): StudioTarget {
@@ -335,12 +354,12 @@ const FEATURES: readonly FeatureDef[] = [
   {
     id: "open-queries",
     label: "Open queries",
-    hint: "Client list",
+    hint: "Across clients",
     order: 201,
     scope: "practice",
     synonyms: ["open queries", "unresolved notes"],
     audiences: ["accountant"],
-    practice: { to: "/clients", hash: "wizard-dash-queries" },
+    practice: { to: "/clients/queries" },
   },
   {
     id: "needs-attention",
@@ -350,7 +369,7 @@ const FEATURES: readonly FeatureDef[] = [
     scope: "practice",
     synonyms: ["needs attention", "attention"],
     audiences: ["accountant"],
-    practice: { to: "/practice", hash: "needs-attention" },
+    practice: { to: "/practice/needs-attention" },
   },
   {
     id: "follow-up",
@@ -360,7 +379,7 @@ const FEATURES: readonly FeatureDef[] = [
     scope: "practice",
     synonyms: ["follow up", "chase"],
     audiences: ["accountant"],
-    practice: { to: "/practice", hash: "follow-up" },
+    practice: { to: "/practice/follow-up" },
   },
   {
     id: "portfolio-insights",
@@ -370,7 +389,7 @@ const FEATURES: readonly FeatureDef[] = [
     scope: "practice",
     synonyms: ["insights", "portfolio insights"],
     audiences: ["accountant"],
-    practice: { to: "/practice", hash: "portfolio-insights" },
+    practice: { to: "/practice/insights" },
   },
   {
     id: "marketplace",
@@ -380,7 +399,7 @@ const FEATURES: readonly FeatureDef[] = [
     scope: "practice",
     synonyms: ["marketplace", "inbox"],
     audiences: ["accountant"],
-    practice: { to: "/practice", hash: "marketplace" },
+    practice: { to: "/practice/marketplace" },
   },
   {
     id: "playbooks",
@@ -390,7 +409,7 @@ const FEATURES: readonly FeatureDef[] = [
     scope: "practice",
     synonyms: ["playbooks", "playbook library"],
     audiences: ["accountant"],
-    practice: { to: "/practice", hash: "playbooks" },
+    practice: { to: "/practice/playbooks" },
   },
   {
     id: "billing",
@@ -463,7 +482,10 @@ function destinationFor(def: FeatureDef, ctx: FeatureFinderContext): FeatureDest
   if (def.practice === "clients") return { kind: "clients" };
   if (def.practice === "settings") return { kind: "settings" };
   if (def.practice && typeof def.practice === "object") {
-    return { kind: "section", to: def.practice.to, hash: def.practice.hash };
+    if ("hash" in def.practice) {
+      return { kind: "section", to: def.practice.to, hash: def.practice.hash };
+    }
+    return { kind: "path", to: def.practice.to };
   }
   if (ctx.audience === "owner" && def.ownerTab) return { kind: "owner", tab: def.ownerTab };
   if (ctx.audience === "accountant" && def.studio) {
@@ -482,6 +504,7 @@ export function featureHref(dest: FeatureDestination): string {
   if (dest.kind === "clients") return "/clients";
   if (dest.kind === "settings") return "/settings";
   if (dest.kind === "section") return `${dest.to}#${dest.hash}`;
+  if (dest.kind === "path") return dest.to;
   if (dest.kind === "owner") return `/app?tab=${encodeURIComponent(dest.tab)}`;
   const params = new URLSearchParams();
   params.set("tab", dest.search.tab);

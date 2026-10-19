@@ -23,11 +23,13 @@ import {
   RUNWAY_INSUFFICIENT_LABEL,
   RUNWAY_PROFITABLE_LABEL,
   runwayDisplayLabel,
+  storedOpeningIsMissing,
 } from "./client-metrics.ts";
 import {
   type HealthPillarId,
   type OverallHealth,
   type ScoreMarket,
+  cashPillarFollowsForecast,
   overviewRatios,
   pillarForRatioName,
   scorecardHealthFromFinancials,
@@ -542,6 +544,8 @@ export function livePackMetrics(input: {
   fyStartMonth?: number | null;
   timeZone?: string | null;
   now?: Date;
+  /** Industry label. An implausible gross margin stays out of Profit. */
+  industry?: string | null;
 }): LivePackMetrics {
   const assessed = assessClientMetrics({
     financials: input.financials ?? null,
@@ -566,14 +570,23 @@ export function livePackMetrics(input: {
     fyStartMonth: input.fyStartMonth,
     periodMonths,
   });
-  const health = scorecardHealthFromFinancials({
-    financials: input.financials,
-    fyStartMonth: input.fyStartMonth,
-    periodMonths,
-    cashRunwayWeeks: runwayWeeks,
-    market: input.market ?? undefined,
-    shortfallWeek: assessed.outlook.shortfallWeek,
-  });
+  const health = cashPillarFollowsForecast(
+    scorecardHealthFromFinancials({
+      financials: input.financials,
+      fyStartMonth: input.fyStartMonth,
+      periodMonths,
+      cashRunwayWeeks: runwayWeeks,
+      market: input.market ?? undefined,
+      shortfallWeek: assessed.outlook.shortfallWeek,
+      industry: input.industry,
+    }),
+    {
+      openingMissing: storedOpeningIsMissing(input.cashflow),
+      opening: assessed.outlook.opening,
+      closings: assessed.outlook.closing,
+      floor: assessed.outlook.floor,
+    },
+  );
   const opening = assessed.outlook.opening;
   const runwayLabel = runwayDisplayLabel(assessed.runway);
   return {
@@ -654,7 +667,77 @@ export type PackInputs = {
   outcomes?: OutcomeStory[];
   now: string;
   currency?: string;
+  /**
+   * Statement facts the Data and Collections surfaces already treat as missing.
+   * Aged debtors are named when receivables exist and no ageing report is on file.
+   */
+  statementGaps?: {
+    receivables?: number | null;
+    payables?: number | null;
+    hasAgedDebtors?: boolean;
+    hasAgedCreditors?: boolean;
+    openingMissing?: boolean;
+  } | null;
 };
+
+export type PackGapSeed = {
+  id: string;
+  kind: string;
+  title: string;
+  severity: string;
+};
+
+/**
+ * Open requests plus the missing-data list. An empty request table is not
+ * "nothing outstanding" when aged debtors or the opening balance are absent.
+ */
+export function mergePackDataGaps(
+  requests: readonly PackGapSeed[],
+  gaps: PackInputs["statementGaps"],
+): PackGapSeed[] {
+  const open = requests.filter((row) => row.title.trim());
+  const kinds = new Set(open.map((row) => row.kind));
+  const extra: PackGapSeed[] = [];
+  const receivables = gaps?.receivables;
+  if (
+    gaps?.hasAgedDebtors === false &&
+    receivables != null &&
+    Number.isFinite(receivables) &&
+    receivables > 0 &&
+    !kinds.has("aged_debtors")
+  ) {
+    extra.push({
+      id: "gap-aged-debtors",
+      kind: "aged_debtors",
+      title: "Aged debtors report",
+      severity: "important",
+    });
+  }
+  const payables = gaps?.payables;
+  if (
+    gaps?.hasAgedCreditors === false &&
+    payables != null &&
+    Number.isFinite(payables) &&
+    payables > 0 &&
+    !kinds.has("aged_creditors")
+  ) {
+    extra.push({
+      id: "gap-aged-creditors",
+      kind: "aged_creditors",
+      title: "Aged creditors report",
+      severity: "important",
+    });
+  }
+  if (gaps?.openingMissing && !kinds.has("bank_balance")) {
+    extra.push({
+      id: "gap-opening-balance",
+      kind: "bank_balance",
+      title: "Current bank balance",
+      severity: "critical",
+    });
+  }
+  return [...open, ...extra];
+}
 
 const MOVE_THRESHOLD = 0.05;
 const WEAK_SCORE = 40;
@@ -889,9 +972,12 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
       };
     });
 
-  const gaps: PackDataGapRef[] = input.dataRequests
-    .filter((d) => d.status === "open" || d.status === "sent")
-    .map((d) => ({ id: d.id, kind: d.kind, title: d.title, severity: d.severity }));
+  const gaps: PackDataGapRef[] = mergePackDataGaps(
+    input.dataRequests
+      .filter((d) => d.status === "open" || d.status === "sent")
+      .map((d) => ({ id: d.id, kind: d.kind, title: d.title, severity: d.severity })),
+    input.statementGaps,
+  );
 
   // ── copy ──
   const weakRatios = ratios
@@ -913,7 +999,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   const stateLines: string[] = [];
   if (health && health.overall !== null) {
     stateLines.push(
-      `${name} scores ${health.overall} out of 100 (${health.label.toLowerCase()})${
+      `${name} scores ${health.overall} (${health.label.toLowerCase()})${
         input.periodLabel ? ` on the ${input.periodLabel} figures` : ""
       }.`,
     );
@@ -981,7 +1067,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   }
   for (const r of weakRatios.slice(0, 3)) {
     mattersBullets.push(
-      `${r.name} is ${r.formatted} (scores ${r.score}/100) — ${weakRatioWhy(r.name)}`,
+      `${r.name} is ${r.formatted} (${r.score}) — ${weakRatioWhy(r.name)}`,
     );
   }
   if (forecast?.breachesZero) {
@@ -1159,7 +1245,7 @@ function buildHeadline(
 ): string {
   const parts: string[] = [];
   if (health && health.overall !== null) {
-    parts.push(`${name} is ${health.label.toLowerCase()} at ${health.overall}/100`);
+    parts.push(`${name} is ${health.label.toLowerCase()} at ${health.overall}`);
     if (health.weakest) parts.push(`${health.weakest} is the drag`);
   } else {
     parts.push(`${name} has no health score yet`);

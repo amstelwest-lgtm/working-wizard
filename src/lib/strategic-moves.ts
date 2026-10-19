@@ -4,7 +4,12 @@
  * Rank once here so Moves and Plan cannot drift.
  */
 import type { ClientOperatingProfile } from "@/lib/client-profile";
+import { PILLAR_LABELS, type HealthPillarId } from "@/lib/health-score";
+import { moveFactorLabel, strategicMovePillar } from "@/lib/move-pillars";
 import { profilePriorityWeight } from "@/lib/profile-signals";
+import { factorDisplayName } from "@/lib/score-prose";
+
+export { moveFactorLabel, strategicMovePillar };
 
 export type StrategicCynefin = "Clear" | "Complicated" | "Complex" | "Chaotic";
 export type StrategicEisenhower = "Do" | "Decide" | "Delegate" | "Delete";
@@ -348,6 +353,56 @@ export function debtorDaysAreHealthy(days: number | null | undefined): boolean {
   return typeof days === "number" && Number.isFinite(days) && days <= HEALTHY_DEBTOR_DAYS_MAX;
 }
 
+/** Pillar name and the shared pillar score, so a ratio nickname is not the pillar. */
+export function attachPillarScore<T extends { key: string }>(
+  move: T,
+  pillars: readonly { id: HealthPillarId; score: number | null }[] | null | undefined,
+): T & { pillarLabel: string | null; pillarScore: number | null } {
+  const id = strategicMovePillar(move.key);
+  const pillar = id ? pillars?.find((row) => row.id === id) : undefined;
+  return {
+    ...move,
+    pillarLabel: id ? PILLAR_LABELS[id] : null,
+    pillarScore: pillar?.score ?? null,
+  };
+}
+
+export type ActionPlanPillarTile = {
+  id: HealthPillarId;
+  label: string;
+  /** Same rounded pillar score Health shows. Null when the pillar is unscored. */
+  score: number | null;
+  note: string | null;
+  /** Top move in this pillar, without its own score. */
+  factor: string | null;
+  moveKey: string | null;
+};
+
+const PILLAR_TILE_ORDER: readonly HealthPillarId[] = ["profit", "assets", "financing", "cash"];
+
+/**
+ * Action-plan tiles. The number is the Health pillar score, never the
+ * ratio score sitting under a nickname such as Profit power.
+ */
+export function actionPlanPillarTiles(
+  pillars: readonly { id: HealthPillarId; score: number | null; note?: string | null }[] | null | undefined,
+  moves: readonly { key: string; ratioName: string }[] = [],
+): ActionPlanPillarTile[] {
+  return PILLAR_TILE_ORDER.map((id) => {
+    const pillar = pillars?.find((row) => row.id === id);
+    const move = moves.find((row) => strategicMovePillar(row.key) === id);
+    const raw = pillar?.score;
+    return {
+      id,
+      label: PILLAR_LABELS[id],
+      score: raw != null && Number.isFinite(raw) ? Math.round(raw) : null,
+      note: pillar?.note?.trim() || null,
+      factor: move ? factorDisplayName(move.ratioName) : null,
+      moveKey: move?.key ?? null,
+    };
+  });
+}
+
 const NO_STOCK_TEMPLATES = new Set([
   "hospitality_rooms",
   "services_hours",
@@ -472,6 +527,8 @@ export function rankStrategicMoves(input: {
   debtorDays?: number | null;
   /** Financing pillar score. Leverage Level uses this one figure. */
   financingHealth?: number | null;
+  /** Shared weakest pillar. Moves in that pillar rank first. */
+  weakestPillar?: HealthPillarId | null;
   limit?: number;
 }): RankedStrategicMove[] {
   const suppressed = new Set(input.suppressKeys ?? []);
@@ -494,7 +551,10 @@ export function rankStrategicMoves(input: {
       const raw = entry.key === "equityMultiplier" && financing != null ? financing : healthByKey[entry.key];
       const health = typeof raw === "number" && Number.isFinite(raw) ? raw : Number.NaN;
       const urgency = Number.isFinite(health) ? 100 - health : 50;
-      const score = urgency * entry.impact * profilePriorityWeight(input.profile, entry.ratioName);
+      const inWeakest =
+        input.weakestPillar != null && strategicMovePillar(entry.key) === input.weakestPillar ? 4 : 1;
+      const score =
+        urgency * entry.impact * profilePriorityWeight(input.profile, entry.ratioName) * inWeakest;
       const actions = debtorsAlreadyHealthy
         ? entry.actions.filter((action) => !RECEIVABLES_STEP.test(action))
         : [...entry.actions];

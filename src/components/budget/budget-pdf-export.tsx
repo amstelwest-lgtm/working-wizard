@@ -37,6 +37,7 @@ export function BudgetPdfExportButton({
   signoff,
   isStale = false,
   quiet = false,
+  displayTemplateId = null,
 }: {
   doc: BudgetDocument;
   clientId?: string;
@@ -46,6 +47,7 @@ export function BudgetPdfExportButton({
   isStale?: boolean;
   /** Icon on the answer strip. The download still says Export PDF to assistive tech. */
   quiet?: boolean;
+  displayTemplateId?: import("@/lib/budget.types").BudgetTemplateId | null;
 }) {
   const { market } = useMarket();
   const { profile, firmId } = useAccountantProfile();
@@ -71,7 +73,7 @@ export function BudgetPdfExportButton({
         }
       }
 
-      const model = buildBudgetPdfModel(doc, actuals, market);
+      const model = buildBudgetPdfModel(doc, actuals, market, displayTemplateId);
       const stale = isStale;
       let workflowStatus: "draft" | "ready_for_review" | "signed_off" | null = null;
       if (clientId) {

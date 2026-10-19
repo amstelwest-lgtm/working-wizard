@@ -22,7 +22,18 @@ import {
 } from "@/lib/accountant-nav-open";
 
 export type NavDestination = {
-  to: "/dashboard" | "/practice" | "/settings" | "/clients" | "/clients/$clientId";
+  to:
+    | "/dashboard"
+    | "/practice"
+    | "/practice/needs-attention"
+    | "/practice/follow-up"
+    | "/practice/insights"
+    | "/practice/marketplace"
+    | "/practice/playbooks"
+    | "/settings"
+    | "/clients"
+    | "/clients/queries"
+    | "/clients/$clientId";
   params?: { clientId: string };
   hash?: string;
   search?: (prev: Record<string, unknown>) => Record<string, unknown>;
@@ -143,7 +154,7 @@ export function AccountantNav({
   settingsActive?: boolean;
   back?: { label: string; to: NavDestination };
   onSettings?: () => void;
-  /** Closes the phone drawer. Headings that still have a list do not. */
+  /** Closes the phone drawer when a page is chosen. The chevron only expands. */
   onNavigate?: () => void;
 }) {
   const navRef = useRef<HTMLElement>(null);
@@ -267,8 +278,8 @@ export function AccountantNav({
     }
   }
 
-  function closeIfLeaving(heading?: NavHeading) {
-    if (!heading?.items?.length) onNavigate?.();
+  function closeIfLeaving() {
+    onNavigate?.();
   }
 
   return (
@@ -321,7 +332,7 @@ export function AccountantNav({
                     ariaCurrent={page ? "page" : collapsedCurrent ? "true" : undefined}
                     headingId={heading.id}
                     bot={heading.bot}
-                    onClick={() => closeIfLeaving(heading)}
+                    onClick={() => closeIfLeaving()}
                   >
                     <span className="nav-ic" aria-hidden="true">
                       <RailIcon id={heading.id} />

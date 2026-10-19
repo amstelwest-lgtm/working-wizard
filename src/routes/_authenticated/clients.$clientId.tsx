@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { PeriodPill } from "@/components/chrome-icons";
 import { openPracticeSettings } from "@/lib/user-roles";
@@ -89,6 +89,7 @@ import {
   ratioScoreBand,
   overviewRatioInputs,
   overviewRatios,
+  CASH_OPENING_UNSCORED,
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
   cashPillarFollowsForecast,
@@ -168,6 +169,7 @@ import { clientBackTarget } from "@/lib/client-back";
 import { useOverlayHistory } from "@/lib/overlay-history";
 import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
 import { hashIsCashDetailAnchor } from "@/lib/cash-forecast-view";
+import { shouldNavigateForHashChange } from "@/lib/content-scroll-navigation";
 import { agentDisplayName } from "@/lib/milon-team";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
@@ -187,6 +189,7 @@ import {
   rewriteDraftMonthStamp,
   statementYearLine,
 } from "@/lib/statement-period";
+import { canonicalScoreProse } from "@/lib/score-prose";
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
@@ -260,7 +263,7 @@ import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/li
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
-import { rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
+import { attachPillarScore, rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
 import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import {
@@ -305,6 +308,7 @@ import {
   type RowAssignment,
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
+import { countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
@@ -914,7 +918,17 @@ function ClientView() {
   const askHashClear = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
-    const apply = () => {
+    let scrolling = false;
+    let scrollTimer = 0;
+    const markScroll = () => {
+      scrolling = true;
+      window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => {
+        scrolling = false;
+      }, 400);
+    };
+    const apply = (phase: "load" | "hashchange") => {
+      if (!shouldNavigateForHashChange({ phase, scrolling })) return;
       const hash = window.location.hash;
       const asked = askAgentFromHash(hash);
       if (asked) {
@@ -943,9 +957,17 @@ function ClientView() {
         replace: true,
       });
     };
-    apply();
-    window.addEventListener("hashchange", apply);
-    return () => window.removeEventListener("hashchange", apply);
+    apply("load");
+    const onHash = () => apply("hashchange");
+    window.addEventListener("hashchange", onHash);
+    window.addEventListener("scroll", markScroll, { passive: true });
+    window.addEventListener("wheel", markScroll, { passive: true });
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("scroll", markScroll);
+      window.removeEventListener("wheel", markScroll);
+      window.clearTimeout(scrollTimer);
+    };
   }, [search.tab, search.section, search.agent, clientId, navigate]);
   // Landing tab: Home (Bot and the team desk). Decided once per client, after
   // load, and never over a ?tab= deep link.
@@ -1200,6 +1222,10 @@ function ClientView() {
   const [drawerActual, setDrawerActual] = useState<string | null>(null);
   const [drawerFallbackSteps, setDrawerFallbackSteps] = useState<string[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const routeHref = useRouterState({ select: (s) => s.location.href });
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [routeHref]);
   useEffect(() => {
     const next = resolveAccountantTab(search);
     if (next) setActiveTab(next);
@@ -1321,6 +1347,10 @@ function ClientView() {
   const cashBalance = assessed.cash.amount;
   const cashKnown = cashBalance != null;
   const openingMissing = storedOpeningIsMissing(client?.cashflow);
+  const healthIndustry = clientIndustryDisplay(
+    client?.name,
+    parseOperatingProfile(client?.operating_profile),
+  );
   const overallHealth: OverallHealth = cashPillarFollowsForecast(
     scorecardHealthFromFinancials({
       financials,
@@ -1330,6 +1360,7 @@ function ClientView() {
       cashBalance: cashKnown ? cashBalance : null,
       market: clientMarket,
       shortfallWeek: cashOutlook.shortfallWeek,
+      industry: healthIndustry,
     }),
     {
       openingMissing,
@@ -1439,21 +1470,25 @@ function ClientView() {
     [clientMarket],
   );
 
+  const pillarNotes = Object.fromEntries(
+    overallHealth.pillars.map((pillar) => [pillar.id, pillar.note ?? null]),
+  ) as Record<"profit" | "assets" | "financing" | "cash", string | null>;
   const spherePillars = buildSpherePillars({
     overallHealth: avgHealth,
     pillarHealths,
     pillarStatus,
+    pillarNotes,
     healthMap,
     ratioMeta: sphereRatioMeta,
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
   });
-
   const simplifiedSections = [
     {
       id: "profit",
       label: PILLAR_LABELS.profit,
       health: pillarHealths.profit,
       status: pillarStatus.profit,
+      unscoredLabel: pillarNotes.profit,
       series: [] as number[],
     },
     {
@@ -1461,6 +1496,7 @@ function ClientView() {
       label: PILLAR_LABELS.assets,
       health: pillarHealths.assets,
       status: pillarStatus.assets,
+      unscoredLabel: pillarNotes.assets,
       series: [] as number[],
     },
     {
@@ -1468,6 +1504,7 @@ function ClientView() {
       label: PILLAR_LABELS.financing,
       health: pillarHealths.financing,
       status: pillarStatus.financing,
+      unscoredLabel: pillarNotes.financing,
       series: [] as number[],
     },
     {
@@ -1475,6 +1512,7 @@ function ClientView() {
       label: PILLAR_LABELS.cash,
       health: pillarHealths.cash,
       status: pillarStatus.cash,
+      unscoredLabel: pillarNotes.cash ?? (openingMissing ? CASH_OPENING_UNSCORED : null),
       series: [] as number[],
     },
   ];
@@ -1594,6 +1632,7 @@ function ClientView() {
     suppressKeys: clientProfitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
     debtorDays: debtorDaysForMoves,
     financingHealth: pillarHealths.financing,
+    weakestPillar: overallHealth.weakestPillar?.id ?? null,
   });
   const cashRunwayHeadline = hasFigures
     ? forecastRunwayHeadlineShared({
@@ -1809,13 +1848,22 @@ function ClientView() {
     }
     setOpenPlanUnavailable(false);
     void (async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("action_items_v")
-        .select("id, title, due_date, status, owner_name")
-        .eq("client_id", clientId)
-        .neq("status", "done")
-        .order("seq");
+      const [itemsRes, planRes] = await Promise.all([
+        supabase
+          .from("action_items_v")
+          .select("id, title, due_date, status, owner_name")
+          .eq("client_id", clientId)
+          .neq("status", "done")
+          .order("seq"),
+        supabase
+          .from("action_plans")
+          .select("target_date")
+          .eq("client_id", clientId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1),
+      ]);
+      const { data, error } = itemsRes;
       if (cancelled) return;
       if (error) {
         setOpenPlanUnavailable(true);
@@ -1831,8 +1879,11 @@ function ClientView() {
         id?: string | null;
         title?: string | null;
         due_date?: string | null;
+        status?: string | null;
         owner_name?: string | null;
       }[];
+      const planTarget =
+        (planRes.data?.[0] as { target_date?: string | null } | undefined)?.target_date ?? null;
       const titles = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
         return title ? [title] : [];
@@ -1917,7 +1968,21 @@ function ClientView() {
       }
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
-      setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
+      setOpenPlanOverdue(
+        countActionPlan(
+          rows.flatMap((row) => {
+            const title = row.title?.trim() ?? "";
+            if (!title) return [];
+            return [
+              {
+                status: row.status,
+                dueDate: row.due_date,
+                planTarget,
+              },
+            ];
+          }),
+        ).overdue,
+      );
       paintAssignments(labelled, merged, paintedNotes, paintedRuns);
     })();
     return () => {
@@ -2880,6 +2945,7 @@ function ClientView() {
         periodMonths: periodMonthsOf(financials),
         partMonth,
         cashFlowKnown: cashFlowKnown(financials),
+        industry: healthIndustry,
       },
     );
     const clientFirmName =
@@ -2896,6 +2962,7 @@ function ClientView() {
         accountantProfile: profile,
         cashRunwayWeeks: effectiveRunway,
         overallHealth,
+        operatingProfile: parseOperatingProfile(client.operating_profile),
         reviewSignoff: financialsStamp,
         sample: Boolean(client.is_demo),
         market: clientMarket,
@@ -2916,6 +2983,7 @@ function ClientView() {
     firmId,
     effectiveRunway,
     overallHealth,
+    healthIndustry,
     overviewScorecardPeriodLabel,
   ]);
 
@@ -2981,7 +3049,7 @@ function ClientView() {
     const subjectText = `${client.name} — Financial Health Update`;
     const bodyText =
       `Hi,\n\nHere is a brief financial health summary for ${client.name}.\n\n` +
-      `Overall Health Score: ${score}/100 (${tierLabel})\n` +
+      `Overall Health Score: ${score} (${tierLabel})\n` +
       `Cash Runway: ${runway}` +
       weak +
       `Open Queries: ${openQueriesCount}\n\n` +
@@ -3031,7 +3099,7 @@ function ClientView() {
     const tierLabel = bookStatusWord;
     const text =
       `${client.name} Financial Health Update\n` +
-      `Health Score: ${score}/100 (${tierLabel})\n` +
+      `Health Score: ${score} (${tierLabel})\n` +
       `Cash Runway: ${cashRunwayHeadline ?? runwayDisplayLabel(metricRunway) ?? "—"}\n` +
       `Open Queries: ${openQueriesCount}\n` +
       `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`;
@@ -3399,7 +3467,7 @@ function ClientView() {
       : homeActivity.error
         ? ["Drafts aren't available yet."]
         : waiting.length
-          ? [rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting.")]
+          ? [canonicalScoreProse(rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting."))]
           : ["No draft waiting."];
     const booksLine = booksAnswerSentence({ freshness: dataFreshness });
     return {
@@ -4251,7 +4319,7 @@ function ClientView() {
                             const labels: Record<string, string> = PILLAR_LABELS;
                             return {
                               title: `Improve ${labels[worst[0]] ?? worst[0]}`,
-                              description: `This pillar scores ${Math.round(worst[1])}% — your highest-impact area right now.`,
+                              description: `This pillar scores ${Math.round(worst[1])} — your highest-impact area right now.`,
                             };
                           })()}
                         />
@@ -4282,6 +4350,9 @@ function ClientView() {
                           onOpenEvidence={(id) => {
                             const evidence = evidenceForPillar(id);
                             if (!evidence) return;
+                            if (id === "assets" || id === "financing") {
+                              setHealthDrill({ token: Date.now(), pillarId: id });
+                            }
                             openCoach(evidence);
                           }}
                         />
@@ -5009,13 +5080,19 @@ function ClientView() {
                                 ? search.filter
                                 : undefined
                           }
-                          moves={strategicMoves.map((move) => ({
-                            key: move.key,
-                            title: move.title,
-                            ratioName: move.ratioName,
-                            impactLine: move.impactLine,
-                            health: Number.isFinite(move.health) ? move.health : Number.NaN,
-                          }))}
+                          pillars={overallHealth.pillars}
+                          moves={strategicMoves.map((move) =>
+                            attachPillarScore(
+                              {
+                                key: move.key,
+                                title: move.title,
+                                ratioName: move.ratioName,
+                                impactLine: move.impactLine,
+                                health: Number.isFinite(move.health) ? move.health : Number.NaN,
+                              },
+                              overallHealth.pillars,
+                            ),
+                          )}
                           focusMoveKey={planFocusMove}
                           onFocusHandled={() => setPlanFocusMove(null)}
                           onAnswer={onPlanAnswer}
@@ -5400,14 +5477,23 @@ function ClientView() {
               const draftedFinancials = { ...financials, ...asStrings } as Record<string, unknown>;
               await recordScoreHistory(
                 clientId,
-                scorecardHealthFromFinancials({
-                  financials: draftedFinancials,
-                  fyStartMonth,
-                  periodMonths: periodMonthsOf(draftedFinancials),
-                  cashRunwayWeeks: effectiveRunway,
-                  market: clientMarket,
-                  shortfallWeek: cashOutlook.shortfallWeek,
-                }).overall,
+                cashPillarFollowsForecast(
+                  scorecardHealthFromFinancials({
+                    financials: draftedFinancials,
+                    fyStartMonth,
+                    periodMonths: periodMonthsOf(draftedFinancials),
+                    cashRunwayWeeks: effectiveRunway,
+                    market: clientMarket,
+                    shortfallWeek: cashOutlook.shortfallWeek,
+                    industry: healthIndustry,
+                  }),
+                  {
+                    openingMissing,
+                    opening: cashOutlook.opening,
+                    closings: cashOutlook.closing,
+                    floor: cashOutlook.floor,
+                  },
+                ).overall,
               );
               toast.success(
                 annualised

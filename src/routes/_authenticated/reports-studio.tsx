@@ -126,6 +126,7 @@ import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.fun
 import { ReviewSignoffButton } from "@/components/review-signoff";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { parseOperatingProfile, type ClientOperatingProfile } from "@/lib/client-profile";
+import { clientIndustryDisplay } from "@/lib/profile-signals";
 import { clientIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
 import { parseDebtSchedule, totalDebtFromSchedule } from "@/lib/debt-schedule";
 import { resolvePriorSnapshot, withPriorRatioScores } from "@/lib/prior-period";
@@ -2335,11 +2336,13 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     new Date(),
     { periodEnd: statementMeta.periodEnd, financials: rawFin as Record<string, unknown> },
   );
+  const reportIndustry = clientIndustryDisplay(clientRow.name, operatingProfile);
   let ratioResults = buildScorecardRatioResults(rawRatios, market, {
     equity: equityNow,
     periodMonths,
     partMonth,
     cashFlowKnown: cashFlowKnown(fin),
+    industry: reportIndustry,
   });
   ratioResults = withPriorRatioScores(ratioResults, priorSnap?.ratios ?? null);
 
@@ -2408,6 +2411,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       cashRunwayWeeks: healthWeeks,
       market,
       shortfallWeek: assessed.outlook.shortfallWeek,
+      industry: reportIndustry,
     }),
     {
       openingMissing: reportOpeningMissing,

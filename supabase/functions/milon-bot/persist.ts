@@ -116,7 +116,7 @@ async function ensurePlan(client: SupabaseClient, clientId: string, brief: Overv
   if (existing) return String(existing);
   const goal =
     brief.health != null
-      ? `Improve overview health from ${brief.health}/100`
+      ? `Improve overview health from ${brief.health}`
       : "Set the outcome goal for this quarter";
   const { data: created, error: insErr } = await client
     .from("action_plans")

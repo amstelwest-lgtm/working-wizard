@@ -554,7 +554,7 @@ const hiddenByLaterNote = ownerPresence(
   }),
 );
 assert(
-  hiddenByLaterNote.handoff?.sentence.includes("Profit Drivers is the weakest pillar"),
+  hiddenByLaterNote.handoff?.sentence.includes("Profit is the weakest pillar"),
   "a later non-assignment message does not drop the hand-off note",
 );
 assert(
@@ -1640,7 +1640,7 @@ const quietBook = {
 const quietLines = practiceHomeLines(quietBook);
 assert(quietLines.financial_manager[0] === "4 clients on the book.", "practice Home counts the book");
 assert(quietLines.financial_manager[1] === "No open queries.", "a clear book has no open queries");
-assert(quietLines.analyst[0] === "Average health is 72 out of 100.", "practice Home states average health");
+assert(quietLines.analyst[0] === "Average health is 72.", "practice Home states average health");
 assert(quietLines.analyst[1] === "No client needs attention.", "a clear book needs no attention");
 assert(quietLines.advisor[0] === "No follow-up waiting.", "a clear book has no follow-up");
 const quietStatus = practiceCardStatuses(quietBook);

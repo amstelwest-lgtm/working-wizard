@@ -474,12 +474,12 @@ export function AdvisoryPackPanel({
         filename,
       });
       toast.success("Advisory pack PDF downloaded");
-      if (user) {
+      if (user && signed) {
         const logged = await recordDelivery({
           clientId,
           firmId,
           channel: "pdf_download",
-          kind: signed ? "report_pdf" : "advisory_draft",
+          kind: "report_pdf",
           reportKey: "advisory_pack",
           subject: `${pack.content.clientName || "Client"} advisory pack v${pack.version}`,
           snapshotId: pack.snapshot_id,
@@ -682,7 +682,7 @@ export function AdvisoryPackPanel({
   if (!pack && audience === "owner" && !canGenerate) return null;
 
   const headerOwnsSignOff = audience === "accountant" && Boolean(onSignoffAction);
-  const packIsStale = advisoryState.status === "signed_stale";
+  const packIsStale = advisoryState.status === "signed_stale" || signOffGate.figuresChanged;
   const canRegenerate = Boolean(pack && isWriter && canGenerate);
   const sentence = pack
     ? packAnswerSentence({
@@ -816,6 +816,15 @@ export function AdvisoryPackPanel({
           {Math.round(liveStats.edit_rate * 100)}% of the draft has been rewritten (
           {liveStats.sections_changed} of {liveStats.sections_total} sections). That is the signal
           MILŌN watches — if this keeps happening, the draft is not ready to send unreviewed.
+        </p>
+      ) : null}
+
+      {pack && signOffGate.figuresChanged ? (
+        <p
+          className="mt-3 rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-[12px] font-semibold text-amber-800 dark:text-amber-200"
+          data-pack-stale
+        >
+          STALE. {ADVISORY_PACK_STALE_NOTE}.
         </p>
       ) : null}
 

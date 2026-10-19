@@ -218,13 +218,13 @@ const us = resolveMarket({ country: "US", regionCode: "NY" });
     assert(packed?.label === pillar.label, `${pillar.id} label ${packed?.label} vs ${pillar.label}`);
   }
   const byId = Object.fromEntries(scorecard.pillars.map((pillar) => [pillar.id, pillar]));
-  assert(byId.profit?.label === "Profit Drivers" && byId.profit.score === 71, JSON.stringify(byId.profit));
+  assert(byId.profit?.label === "Profit" && byId.profit.score === 71, JSON.stringify(byId.profit));
   assert(
-    byId.assets?.label === "Asset Productivity" && byId.assets.score === 10,
+    byId.assets?.label === "Assets" && byId.assets.score === 10,
     JSON.stringify(byId.assets),
   );
-  assert(byId.financing?.label === "Leverage & Finance" && byId.financing.score === null, JSON.stringify(byId.financing));
-  assert(byId.cash?.label === "Cash Flow" && byId.cash.score === 65, JSON.stringify(byId.cash));
+  assert(byId.financing?.label === "Financing" && byId.financing.score === null, JSON.stringify(byId.financing));
+  assert(byId.cash?.label === "Cash" && byId.cash.score === 65, JSON.stringify(byId.cash));
 }
 
 console.log("outreach-pdf-signoff: ok");
