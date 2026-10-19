@@ -88,6 +88,21 @@ export function groundInterventionStep(input: {
   };
 }
 
+/** Up to four open action titles. The intervention list and the action list stay the same. */
+export function interventionStepsFromActions(titles: readonly string[], limit = 4): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const title of titles) {
+    const text = title.trim();
+    const key = text.toLowerCase();
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 type PlaybookCopy = {
   ratio_key: string;
   ratio_name: string;

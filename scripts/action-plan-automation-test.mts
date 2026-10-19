@@ -87,7 +87,8 @@ assert(byId.dated?.overdue === true && byId.dated.followUp === "overdue", "a sto
 assert(byId.future?.followUp === "waiting", "an owned action that is not overdue is waiting");
 assert(byId.nudged?.followUp === "nudged", "a recorded nudge is the follow-up state");
 assert(byId.done?.followUp === "done" && byId.done.overdue === false, "a finished action is not overdue");
-assert(byId["bad-date"]?.dueDate === null && byId["bad-date"]?.dueSuggested === false, "no due date is invented");
+assert(byId["bad-date"]?.dueDate === "2026-10-29" && byId["bad-date"]?.dueSuggested === true, "a missing created date suggests today plus 14 days");
+assert(byId["bad-date"]?.overdue === false, "the suggested date is not overdue");
 
 assert(plan.duplicates.length === 1, "one duplicate group");
 assert(plan.duplicates[0]?.keepId === "dup-old", "the oldest copy is kept");

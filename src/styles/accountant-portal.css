@@ -2021,6 +2021,9 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
 .share-fab,
 .notes-fab{z-index:20 !important}
 .accountant-portal.nav-open{position:relative;z-index:40}
+@media (max-width:420px){
+  .accountant-portal{padding-bottom:calc(5.5rem + env(safe-area-inset-bottom))}
+}
 @media (max-width:767px){
   .share-fab{right:auto;left:max(1rem, env(safe-area-inset-left))}
   .notes-fab{

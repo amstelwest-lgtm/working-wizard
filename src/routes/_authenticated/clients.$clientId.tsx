@@ -248,7 +248,7 @@ import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/li
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
-import { rankStrategicMoves } from "@/lib/strategic-moves";
+import { rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
 import {
   hashFigures,
@@ -1384,6 +1384,7 @@ function ClientView() {
     pillarStatus,
     healthMap,
     ratioMeta: sphereRatioMeta,
+    inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
   });
 
   const simplifiedSections = [
@@ -1528,6 +1529,7 @@ function ClientView() {
     profile: briefingProfile,
     suppressKeys: clientProfitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
     debtorDays: Number.isFinite(debtorDaysForMoves) ? debtorDaysForMoves : null,
+    financingHealth: pillarHealths.financing,
   });
   const cashRunwayHeadline = hasFigures
     ? forecastRunwayHeadlineShared({

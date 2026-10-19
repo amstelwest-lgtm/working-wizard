@@ -51,7 +51,7 @@ const SEV_CLASS: Record<1 | 2 | 3, string> = {
 };
 
 function wantsChase(row: MergedAttention): boolean {
-  return row.tab === "plan" && (row.openPlan || row.overdue);
+  return row.tab === "plan" && row.overdue;
 }
 
 export function PortfolioExceptions({

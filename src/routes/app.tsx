@@ -182,7 +182,7 @@ import {
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
-import { rankStrategicMoves } from "@/lib/strategic-moves";
+import { rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { statementKindFromMetadata, type StatementMeta } from "@/lib/statement-parse";
 import { prefsToRemember } from "@/lib/auto-populate";
@@ -1214,6 +1214,7 @@ const RATIO_META: Record<RatioKey, RatioMeta> = {
     hint: "How much of the business is funded by creditors vs. owners?",
     icon: "🏦",
     steps: [
+      "Bring debt-to-equity under the target",
       "Target a D/E below 1× for conservative businesses, below 2× for growth",
       "Redirect free cash flow to debt repayment before paying dividends",
       "Refinance short-term debt into longer-term facilities to reduce pressure",
@@ -3667,6 +3668,7 @@ function Index() {
     pillarStatus,
     healthMap,
     ratioMeta: RATIO_META,
+    inventoryApplies: stockSittingApplies(operatingProfile),
   });
 
   // Same ranker as the accountant Moves tab and Action Plan import.
@@ -3676,6 +3678,7 @@ function Index() {
     profile: operatingProfile,
     suppressKeys: profitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
     debtorDays,
+    financingHealth: pillarHealths.financing,
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
   const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);

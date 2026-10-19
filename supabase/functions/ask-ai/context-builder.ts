@@ -24,6 +24,7 @@ import {
   resolveRatioRecord,
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./overview-brief.ts";
+import { adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 import { benchmarkBusinessType } from "../../../src/lib/benchmark-sector.ts";
 import { peerMedian } from "../../../src/lib/ratios.ts";
@@ -149,7 +150,11 @@ export async function buildContext(
         operating:
           op && typeof op === "object" && op.version === 1
             ? {
-                industry: String(op.templateId ?? ""),
+                industry: adviceIndustryLabel({
+                  clientName,
+                  templateId: typeof op.templateId === "string" ? op.templateId : "",
+                  businessType: typeof data.business_type === "string" ? data.business_type : null,
+                }),
                 volumeUnit: String(op.volumeUnit ?? ""),
                 debtorDaysDefault: Number(op.debtorDaysDefault ?? 0),
                 costShape: String(op.costShape ?? ""),

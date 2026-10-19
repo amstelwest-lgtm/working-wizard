@@ -212,6 +212,15 @@ export function clientIndustryDisplay(
     if (storedFold.includes(wanted.split(" ")[0] ?? wanted)) return stored;
     return row.label;
   }
+  const business = (businessType ?? profile?.businessTypeId ?? "").trim().toLowerCase();
+  if (
+    business === "hospitality" &&
+    /^(?:labour & staffing|professional services|project-based services|retainer services|professional practices)$/i.test(
+      stored,
+    )
+  ) {
+    return "Hospitality";
+  }
   return stored;
 }
 

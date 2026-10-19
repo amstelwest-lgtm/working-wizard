@@ -2037,22 +2037,39 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 </p>
               ) : (
               <div className="followup-list">
-                {followUpItems.map((item) => (
-                  <button
-                    key={item.clientId}
-                    type="button"
-                    className="followup-row"
-                    onClick={() => openChase(item.clientId, item.name)}
-                  >
-                    <span className="followup-name">{item.name}</span>
-                    <span className={`followup-count${item.overdueActions > 0 ? " overdue" : ""}`}>
-                      {item.overdueActions > 0
-                        ? `${item.overdueActions} overdue`
-                        : `${item.openActions} open`}
-                    </span>
-                    <span className="followup-cta">Chase →</span>
-                  </button>
-                ))}
+                {followUpItems.map((item) =>
+                  item.overdueActions > 0 ? (
+                    <button
+                      key={item.clientId}
+                      type="button"
+                      className="followup-row"
+                      onClick={() => openChase(item.clientId, item.name)}
+                    >
+                      <span className="followup-name">{item.name}</span>
+                      <span className="followup-count overdue">
+                        {item.overdueActions} overdue
+                      </span>
+                      <span className="followup-cta">Chase →</span>
+                    </button>
+                  ) : (
+                    <button
+                      key={item.clientId}
+                      type="button"
+                      className="followup-row"
+                      onClick={() =>
+                        navigate({
+                          to: "/clients/$clientId",
+                          params: { clientId: item.clientId },
+                          search: clientHomeSearch(),
+                        })
+                      }
+                    >
+                      <span className="followup-name">{item.name}</span>
+                      <span className="followup-count">{item.openActions} open</span>
+                      <span className="followup-cta">Open →</span>
+                    </button>
+                  ),
+                )}
               </div>
               )}
             </div>

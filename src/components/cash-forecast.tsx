@@ -109,11 +109,13 @@ import {
   weekDatesFrom,
   type ClientRunway,
 } from "@/lib/client-metrics";
+import { groupSmallForecastRows } from "@/lib/cash-forecast-rows";
 import {
-  displayForecastFrequency,
-  groupSmallForecastRows,
-  isDisplayOnceOff,
-} from "@/lib/cash-forecast-rows";
+  isProjectedOnceOff,
+  projectForecastFrequency,
+  recurringPayeeFrequency,
+  type RecurringFrequency,
+} from "@/lib/cash-recurring-payees";
 import {
   cashEmptyPresentation,
   forecastFloorPosition,
@@ -212,11 +214,11 @@ const EXPENSE_PRESETS = [
 const DEFAULT_EXPENSES: LineItem[] = EXPENSE_PRESETS.map((n) => makeLine(n));
 const DEFAULT_OTHER: LineItem[] = [makeLine("Other expenses")];
 
-function distribute(line: LineItem): number[] {
+function distribute(line: LineItem, recurring?: ReadonlyMap<string, RecurringFrequency> | null): number[] {
   return distributeForecastLine(
     {
       ...line,
-      frequency: displayForecastFrequency(line.name, line.frequency) as LineItem["frequency"],
+      frequency: projectForecastFrequency(line.name, line.frequency, recurring) as LineItem["frequency"],
     },
     WEEKS,
   );
@@ -697,6 +699,7 @@ export function CashForecastPanel({
   const [onceOffStatus, setOnceOffStatus] = useState<string | null>(null);
   const [onceOffSaving, setOnceOffSaving] = useState(false);
   const [bankHistory, setBankHistory] = useState<unknown>(initialBankDraft);
+  const recurringPayees = useMemo(() => recurringPayeeFrequency(bankHistory), [bankHistory]);
   const [stagedOnceOffs, setStagedOnceOffs] = useState<SuggestedOnceOffLine[]>([]);
   const [linesSourceChip, setLinesSourceChip] = useState<string | null>(null);
   const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(preview?.cycleNote ?? null);
@@ -1338,9 +1341,9 @@ export function CashForecastPanel({
         id: l.id,
         bucket: "revenue" as const,
         name: l.name,
-        onceOff: isDisplayOnceOff(l.name, l.frequency),
+        onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees),
         vals: applyWeekOverrides(
-          shiftVals(distribute(l).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
+          shiftVals(distribute(l, recurringPayees).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
           l.weekOverrides,
         ),
       })),
@@ -1349,9 +1352,9 @@ export function CashForecastPanel({
       id: l.id,
       bucket,
       name: l.name,
-      onceOff: isDisplayOnceOff(l.name, l.frequency),
+      onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees),
       vals: applyWeekOverrides(
-        distribute(l).map((v) => v * opts.eMul),
+        distribute(l, recurringPayees).map((v) => v * opts.eMul),
         l.weekOverrides,
       ),
     });

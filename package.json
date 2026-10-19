@@ -61,6 +61,7 @@
     "test:aqa-followup": "vite-node --config scripts/vite-test.config.ts scripts/aqa-followup-test.mts",
     "test:aqa-retest-573": "vite-node --config scripts/vite-test.config.ts scripts/aqa-retest-573-test.mts",
     "test:aqa-retest-574": "vite-node --config scripts/vite-test.config.ts scripts/aqa-retest-574-test.mts",
+    "test:final-walk-industry": "vite-node --config scripts/vite-test.config.ts scripts/final-walk-industry-test.mts",
     "test:weekly-inputs": "vite-node --config scripts/vite-test.config.ts scripts/weekly-inputs-test.mts",
     "test:product-mix": "vite-node --config scripts/vite-test.config.ts scripts/product-mix-test.mts",
     "test:notes-archive": "vite-node --config scripts/vite-test.config.ts scripts/notes-archive-test.mts",
