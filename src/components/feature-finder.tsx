@@ -23,9 +23,9 @@ import {
 import {
   CLIENTS_GROUP,
   includeClientGroup,
+  paletteClients,
   paletteEmptyCopy,
   searchClientSectionJumps,
-  searchClients,
 } from "@/lib/feature-finder-clients";
 import { subscribeFeatureFinderHotkey, toggleFinderOpen } from "@/lib/feature-finder-hotkey";
 import { openOwnerSettings, openPracticeSettings } from "@/lib/user-roles";
@@ -97,7 +97,7 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
     [match.results, sectionJumps],
   );
   const clientHits = useMemo(
-    () => (showClients ? searchClients(query, clients) : []),
+    () => (showClients ? paletteClients(query, clients) : []),
     [showClients, query, clients],
   );
   const shortcut = featureFinderShortcutLabel(mac);
@@ -151,6 +151,10 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
     }
     if (dest.kind === "section") {
       void navigate({ to: dest.to, hash: dest.hash });
+      return;
+    }
+    if (dest.kind === "path") {
+      void navigate({ to: dest.to });
       return;
     }
     if (audience === "owner") openOwnerSettings();

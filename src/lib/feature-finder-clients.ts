@@ -19,6 +19,9 @@ import {
 
 export const CLIENTS_GROUP = "Clients";
 
+/** Recent clients shown before a query is typed. Not a search of the whole book. */
+export const RECENT_CLIENT_LIMIT = 8;
+
 /** Same route the firm dashboard uses when a client row is clicked. */
 export function clientFileHref(clientId: string): string {
   return `/clients/${encodeURIComponent(clientId)}`;
@@ -72,6 +75,41 @@ function scoreField(query: string, text: string): number {
 
 function compactCode(value: string): string {
   return value.replace(/ /g, "");
+}
+
+/**
+ * The first clients in the loaded book, which the firm list orders by most
+ * recently created. An empty search still returns nothing.
+ */
+export function recentFinderClients(
+  clients: readonly FinderClient[],
+  limit = RECENT_CLIENT_LIMIT,
+): ClientSearchResult[] {
+  const out: ClientSearchResult[] = [];
+  for (const client of clients) {
+    if (out.length >= limit) break;
+    const name = client.name.trim();
+    if (!name) continue;
+    const code = client.clientCode?.trim() || "";
+    out.push({
+      id: client.id,
+      label: name,
+      hint: code || "Recent client",
+      group: CLIENTS_GROUP,
+      clientId: client.id,
+      href: clientFileHref(client.id),
+    });
+  }
+  return out;
+}
+
+/** Empty palette: a short recent list. A typed query uses search, which stays empty when blank. */
+export function paletteClients(
+  query: string,
+  clients: readonly FinderClient[],
+): ClientSearchResult[] {
+  if (!normalizeFeatureQuery(query)) return recentFinderClients(clients);
+  return searchClients(query, clients);
 }
 
 /** Highest name/code score for one client. Zero means it stays out of the list. */

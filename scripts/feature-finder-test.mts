@@ -25,7 +25,9 @@ import {
   CLIENTS_GROUP,
   clientFileHref,
   includeClientGroup,
+  paletteClients,
   paletteEmptyCopy,
+  recentFinderClients,
   searchClientSectionJumps,
   searchClients,
   type FinderClient,
@@ -129,9 +131,27 @@ for (const label of [
 ]) {
   assert(firmEmpty.includes(label), `empty practice search lists ${label}`);
 }
-assert(href("open queries", firm) === "/clients#wizard-dash-queries", "Open queries opens the client list");
-assert(href("marketplace", firm) === "/practice#marketplace", "Marketplace opens its practice section");
-assert(href("playbooks", firm) === "/practice#playbooks", "Playbooks opens its practice section");
+for (const [label, path] of [
+  ["open queries", "/clients/queries"],
+  ["needs attention", "/practice/needs-attention"],
+  ["follow up", "/practice/follow-up"],
+  ["insights", "/practice/insights"],
+  ["marketplace", "/practice/marketplace"],
+  ["playbooks", "/practice/playbooks"],
+] as const) {
+  const address = href(label, firm);
+  assert(address === path, `${label} opens ${path}, got ${address}`);
+  assert(!address.includes("#"), `${label} is a route, not an anchor`);
+}
+const emptyPracticeHrefs = searchFeatures("", firm).results.map((row) => row.href);
+assert(
+  emptyPracticeHrefs.includes("/practice/needs-attention"),
+  "an empty palette lists the needs-attention route",
+);
+assert(
+  !emptyPracticeHrefs.some((address) => address.includes("#")),
+  "an empty practice palette does not list anchors",
+);
 
 assert(ids("health", firm).length === 0, "Health is hidden on the firm dashboard");
 assert(searchFeatures("health", firm).needsClient, "Health without a client explains why");
@@ -258,6 +278,15 @@ assert(
 );
 assert(searchClients("zzz-no-such", BOOK).length === 0, "unknown query matches no clients");
 assert(searchClients("", BOOK).length === 0, "empty query does not dump the whole book");
+const recent = recentFinderClients(BOOK);
+assert(recent.length === BOOK.length, "recent clients follow the loaded order");
+assert(recent[0]?.id === YANKEES, "the first loaded client is the first recent row");
+assert(recentFinderClients(BOOK, 2).length === 2, "the recent list is capped");
+assert(
+  paletteClients("", BOOK).map((row) => row.id).join() === recent.map((row) => row.id).join(),
+  "an empty palette shows recent clients",
+);
+assert(paletteClients("yankees", BOOK).length === 1, "a typed query still searches");
 assert(searchClients("   ", BOOK).length === 0, "blank query matches no clients");
 
 const bothNamedNew = searchClients("new", BOOK).map((hit) => hit.clientId);
@@ -407,7 +436,7 @@ const finderSrc = readFileSync(
   "utf8",
 );
 assert(finderSrc.includes("CLIENTS_GROUP"), "palette renders a Clients group");
-assert(finderSrc.includes("searchClients"), "palette filters the loaded client list");
+assert(finderSrc.includes("paletteClients"), "palette filters the loaded client list");
 assert(
   finderSrc.includes("searchClientSectionJumps"),
   "firm dashboard turns section keywords into per-client jumps",

@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { PeriodPill } from "@/components/chrome-icons";
 import { openPracticeSettings } from "@/lib/user-roles";
@@ -168,6 +168,7 @@ import { clientBackTarget } from "@/lib/client-back";
 import { useOverlayHistory } from "@/lib/overlay-history";
 import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
 import { hashIsCashDetailAnchor } from "@/lib/cash-forecast-view";
+import { shouldNavigateForHashChange } from "@/lib/content-scroll-navigation";
 import { agentDisplayName } from "@/lib/milon-team";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
@@ -910,7 +911,17 @@ function ClientView() {
   const askHashClear = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
-    const apply = () => {
+    let scrolling = false;
+    let scrollTimer = 0;
+    const markScroll = () => {
+      scrolling = true;
+      window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => {
+        scrolling = false;
+      }, 400);
+    };
+    const apply = (phase: "load" | "hashchange") => {
+      if (!shouldNavigateForHashChange({ phase, scrolling })) return;
       const hash = window.location.hash;
       const asked = askAgentFromHash(hash);
       if (asked) {
@@ -939,9 +950,17 @@ function ClientView() {
         replace: true,
       });
     };
-    apply();
-    window.addEventListener("hashchange", apply);
-    return () => window.removeEventListener("hashchange", apply);
+    apply("load");
+    const onHash = () => apply("hashchange");
+    window.addEventListener("hashchange", onHash);
+    window.addEventListener("scroll", markScroll, { passive: true });
+    window.addEventListener("wheel", markScroll, { passive: true });
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("scroll", markScroll);
+      window.removeEventListener("wheel", markScroll);
+      window.clearTimeout(scrollTimer);
+    };
   }, [search.tab, search.section, search.agent, clientId, navigate]);
   // Landing tab: Home (Bot and the team desk). Decided once per client, after
   // load, and never over a ?tab= deep link.
@@ -1196,6 +1215,10 @@ function ClientView() {
   const [drawerActual, setDrawerActual] = useState<string | null>(null);
   const [drawerFallbackSteps, setDrawerFallbackSteps] = useState<string[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const routeHref = useRouterState({ select: (s) => s.location.href });
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [routeHref]);
   useEffect(() => {
     const next = resolveAccountantTab(search);
     if (next) setActiveTab(next);
