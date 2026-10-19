@@ -2043,8 +2043,8 @@ function GoalHeader({
     <Card id="wizard-action-goal" className={CARD_SHELL}>
       <div className={GOLD_RULE} />
       <CardContent className="pt-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
+        <div className="action-goal-head flex flex-wrap items-start justify-between gap-4">
+          <div className="action-goal-copy min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.25em] text-[#102A43] dark:text-[#0B5FFF]/80">
                 {displayedPlanPeriod(plan.period_label, stripMilonProjection(plan.outcome_goal))} · Outcome goal

@@ -565,6 +565,20 @@ html[data-theme="light"] .accountant-portal .deliverable-rail .rail-kicker{
 .accountant-portal .cf-note .dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
 .accountant-portal .cf-note b{color:var(--warn-ink)}
 
+/* Phone: the outcome goal and the confidence figure stack, so the title
+   and the period line use the full row. */
+@media (max-width: 640px) {
+  #wizard-action-goal .action-goal-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #wizard-action-goal .action-goal-copy {
+    flex: none;
+    width: 100%;
+    max-width: none;
+  }
+}
+
 /* Action Plan uses shadcn `--card`. Portal `--card` is near-transparent glass
    and must not leak in, or titles sit on cream with no fill. */
 .accountant-portal #wizard-action-plan{
