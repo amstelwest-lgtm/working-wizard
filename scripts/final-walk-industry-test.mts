@@ -240,9 +240,9 @@ assert(
   "advice uses the hotel industry, not the labour template id",
 );
 const starter = saFirmDisplayPrice("starter", "month");
-assert(starter.includes("R299") && !starter.includes("$") && !/vat/i.test(starter), `SA starter is rand: ${starter}`);
+assert(starter.includes("R 299") && !starter.includes("$") && !/vat/i.test(starter), `SA starter is rand: ${starter}`);
 const vatStripped = saFirmDisplayPrice("starter", "month", "$39/mo excl. VAT");
-assert(vatStripped.includes("R299") && !vatStripped.includes("$") && !/vat/i.test(vatStripped), "a dollar SA fallback is the published rand price");
+assert(vatStripped.includes("R 299") && !vatStripped.includes("$") && !/vat/i.test(vatStripped), "a dollar SA fallback is the published rand price");
 const css = read("src/styles/accountant-portal.css");
 assert(css.includes("max-width:420px") && css.includes("padding-bottom"), "the narrow practice page clears the share button");
 const context = read("supabase/functions/ask-ai/context-builder.ts");

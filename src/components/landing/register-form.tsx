@@ -263,6 +263,8 @@ export function LandingRegisterForm({
                     onChange={setDraftMarket}
                     variant="landing"
                     audience="practice"
+                    vatCopy={false}
+                    taxWording={draftMarket.country === "US"}
                   />
                   {practiceLocationHint(draftMarket) ? (
                     <p className="firm-signup-hint" role="status">
@@ -385,7 +387,13 @@ export function LandingRegisterForm({
             ) : (
               <>
                 <div style={{ margin: "8px 0 18px" }}>
-                  <MarketPicker value={draftMarket} onChange={setDraftMarket} variant="landing" />
+                  <MarketPicker
+                    value={draftMarket}
+                    onChange={setDraftMarket}
+                    variant="landing"
+                    vatCopy={false}
+                    taxWording={draftMarket.country === "US"}
+                  />
                 </div>
                 <GoogleSignInButton
                   intent="owner"

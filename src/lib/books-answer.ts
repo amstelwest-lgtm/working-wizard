@@ -6,8 +6,7 @@
  */
 import { isStatementCompletenessGap, statementsLookCurrent } from "@/lib/data-requests";
 
-const BOOKS_EMPTY_SENTENCE =
-  "No books on file yet. Connect Xero or QuickBooks, or upload statements.";
+const BOOKS_EMPTY_SENTENCE = "No books connected.";
 
 const BOOKS_CATCH_UP = "Upload the latest statements to bring them up to date.";
 
@@ -90,11 +89,11 @@ export function booksAnswerSentence(input: {
   const current = booksAreCurrent({ freshness, openKinds: input.openKinds ?? [] });
   if (current && parts.kind === "sync") {
     return parts.period
-      ? `Books are synced from ${parts.source} up to ${parts.period}.`
-      : `Books are synced from ${parts.source}.`;
+      ? `Connected to ${parts.source}, up to ${parts.period}.`
+      : `Connected to ${parts.source}.`;
   }
   if (current && parts.kind === "snapshot") {
-    return `Books are up to date to ${parts.period}.`;
+    return `Statements on file to ${parts.period}.`;
   }
   if (parts.period) {
     return `Books stop at ${parts.period}. ${BOOKS_CATCH_UP}`;

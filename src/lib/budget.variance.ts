@@ -5,6 +5,7 @@
 
 import type { BudgetMonthResult } from "@/lib/budget.types";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
+import { formatMoneyCompact } from "@/lib/market/format";
 
 export type ActualsSource = "pdf" | "qbo" | "xero" | "manual";
 export type ActualsStatus = "draft" | "confirmed";
@@ -224,13 +225,7 @@ export function computeMonthVariance(
 }
 
 function fmtDelta(n: number): string {
-  const abs = Math.abs(n);
-  const formatted =
-    abs >= 1_000_000
-      ? `R${(abs / 1_000_000).toFixed(1)}m`
-      : abs >= 1_000
-        ? `R${Math.round(abs / 1_000)}k`
-        : `R${Math.round(abs)}`;
+  const formatted = formatMoneyCompact(Math.abs(n));
   return n < 0 ? `−${formatted}` : formatted;
 }
 

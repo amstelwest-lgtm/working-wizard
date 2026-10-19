@@ -5,6 +5,8 @@
 
 import type Stripe from "stripe";
 import { appRedirectOrigin } from "@/lib/app-origin";
+import { formatMoney } from "@/lib/market/format";
+import { ZA_MARKET } from "@/lib/market/resolve";
 import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
 import { isSaMarketFirm } from "@/lib/firm-sa-market";
 import { resolveOwnerCheckoutMarket } from "@/lib/billing-market";
@@ -330,10 +332,11 @@ export const FIRM_SETUP_CHECKOUT_TEXT_MAX = 1200;
 function formatSetupAmount(cents: number, currency: string): string {
   if (currency === "zar") {
     const rands = cents / 100;
-    const body = Number.isInteger(rands)
-      ? rands.toLocaleString("en-US")
-      : rands.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return `R${body}`;
+    return formatMoney(
+      rands,
+      ZA_MARKET,
+      Number.isInteger(rands) ? undefined : { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+    );
   }
   return formatUsdFromCents(cents);
 }

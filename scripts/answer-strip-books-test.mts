@@ -29,11 +29,11 @@ assert.equal(syncLine, "Last sync Sep 1, 2026, 2:00 PM · Xero · September 2026
 
 assert.equal(
   booksAnswerSentence({ freshness: snapshotLine, openKinds: [] }),
-  "Books are up to date to September 2026.",
+  "Statements on file to September 2026.",
 );
 assert.equal(
   booksAnswerSentence({ freshness: syncLine, openKinds: [] }),
-  "Books are synced from Xero up to September 2026.",
+  "Connected to Xero, up to September 2026.",
 );
 assert.equal(
   booksAnswerSentence({ freshness: snapshotLine, openKinds: ["bank_statement"] }),
@@ -48,11 +48,11 @@ assert.equal(
     freshness: "No sync yet. Connect Xero or QuickBooks, or upload statements.",
     openKinds: [],
   }),
-  "No books on file yet. Connect Xero or QuickBooks, or upload statements.",
+  "No books connected.",
 );
 assert.equal(
   booksAnswerSentence({ freshness: "", openKinds: [] }),
-  "No books on file yet. Connect Xero or QuickBooks, or upload statements.",
+  "No books connected.",
 );
 assert.equal(booksDrawerHint(snapshotLine), snapshotLine);
 assert.equal(booksDrawerHint(syncLine), syncLine);
