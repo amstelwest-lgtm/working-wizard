@@ -2203,17 +2203,25 @@ export function CashForecastPanel({
     ? `Updated ${ownerSignoffDate(lastForecastAt, market.timezone)}`
     : null;
 
+  const openingMissingNow =
+    loaded &&
+    storedOpeningIsMissing(loadedCashflowRef.current) &&
+    !openingAsOf &&
+    Math.abs(baseCalc.opening) < 0.5;
   const answerSentence =
     !loaded || forecastEmpty
       ? null
-      : forecastStatusSentence({
+      : openingMissingNow
+        ? "Opening balance missing · add it"
+        : forecastStatusSentence({
           opening: baseCalc.opening,
           closings: baseCalc.closing,
           floor: minimumCash,
           floorText: fmtCompact(minimumCash),
           runwayLabel: runwayDisplayLabel(publishedDirection),
           cashGenerative: publishedGenerative,
-          openingMissing: storedOpeningIsMissing(loadedCashflowRef.current),
+          openingMissing: false,
+          formatAmount: fmtCompact,
         });
   const stripChip = !loaded ? null : shownLineSource === "Bank" ? "Bank" : statementChip?.trim() || null;
 
@@ -2567,11 +2575,7 @@ export function CashForecastPanel({
     !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
   // A balance-sheet date, or any non-zero opening on screen, is a real amount.
   // Only a stored blank with no date and no amount is missing.
-  const openingTilesMissing =
-    loaded &&
-    storedOpeningIsMissing(loadedCashflowRef.current) &&
-    !openingAsOf &&
-    Math.abs(baseCalc.opening) < 0.5;
+  const openingTilesMissing = openingMissingNow;
   const openingTileValue = openingTilesMissing ? "—" : fmtCompact(baseCalc.opening);
   const lowestTileValue =
     openingTilesMissing || emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal);
@@ -2607,9 +2611,9 @@ export function CashForecastPanel({
           <>
             <Stat
               label="Closing · Week 13"
-              value={fmtCompact(closingW13)}
+              value={openingTilesMissing ? "—" : fmtCompact(closingW13)}
               icon={LineChart}
-              tone={closingW13 < 0 ? "bad" : "neutral"}
+              tone={openingTilesMissing ? "neutral" : closingW13 < 0 ? "bad" : "neutral"}
               sub={
                 <span className="inline-flex items-center gap-1">
                   {trajectory >= 0 ? (
@@ -2671,7 +2675,11 @@ export function CashForecastPanel({
   );
   const chartBody = (
     <>
-      {emptyPresentation.showChart ? (
+      {openingTilesMissing ? (
+        <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300" data-opening-missing="">
+          Opening balance missing · add it
+        </p>
+      ) : emptyPresentation.showChart ? (
         <>
           <div className="cash-legend" data-cash-legend>
             <span className="cash-legend-item">
@@ -2740,7 +2748,7 @@ export function CashForecastPanel({
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Runway {runwayAside}</p>
             ) : null}
           </div>
-          {emptyPresentation.showChart ? (
+          {emptyPresentation.showChart && !openingTilesMissing ? (
             <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
           ) : null}
         </div>
@@ -2803,6 +2811,7 @@ export function CashForecastPanel({
             openingChip={openingChipKey}
             flowChip={flowChipKey}
             readOnly={readOnly}
+            openingMissing={openingTilesMissing}
             onCommit={commitWeekOverride}
           />
         </section>
@@ -2853,6 +2862,7 @@ export function CashForecastPanel({
         openingChip={openingChipKey}
         flowChip={flowChipKey}
         readOnly={readOnly}
+        openingMissing={openingTilesMissing}
         onCommit={commitWeekOverride}
         scrollClassName="cash-13w-scroll--sheet"
       />

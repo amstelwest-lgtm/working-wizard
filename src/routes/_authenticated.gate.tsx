@@ -21,7 +21,10 @@ import {
   isMilonItMember,
 } from "@/lib/user-roles";
 import { FirmBillingAccessProvider } from "@/contexts/firm-billing-access";
+import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
+import { reportClientError } from "@/lib/monitoring";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 
 function FirmShellLoading() {
   return <BootSkeleton />;
@@ -30,10 +33,29 @@ function FirmShellLoading() {
 export function AuthGate() {
   const { user, loading } = useAuth();
   const { firmId, brandLoading, firmMarket, hasFirm } = useAccountantProfile();
+  const { track } = useAnalytics();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   const entitledRef = useRef(false);
+  const failedOpenRef = useRef(false);
+  const gatedUserRef = useRef<string | null>(null);
+  const trackRef = useRef(track);
+  trackRef.current = track;
+  // Session restore replaces the user object (getSession and onAuthStateChange
+  // both call setSession). Reading these here keeps that identity change, and
+  // brandLoading / firmId, from cancelling the in-flight check.
+  const latest = useRef({
+    firmId,
+    firmMarket,
+    hasFirm,
+    brandLoading,
+    pathname,
+    navigate,
+    checkEntitlement,
+  });
+  latest.current = { firmId, firmMarket, hasFirm, brandLoading, pathname, navigate, checkEntitlement };
+  const userId = user?.id ?? null;
   const [firmEntitled, setFirmEntitled] = useState<boolean | null>(null);
   const [firmGate, setFirmGate] = useState<"idle" | "checking" | "allow">("idle");
 
@@ -46,83 +68,136 @@ export function AuthGate() {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (!user || loading) return;
+    if (loading || !userId) return;
+    if (gatedUserRef.current !== userId) {
+      gatedUserRef.current = userId;
+      entitledRef.current = false;
+      failedOpenRef.current = false;
+    }
     if (!isFirmProductPath(pathname)) {
       setFirmGate("allow");
       return;
     }
-    if (brandLoading) {
-      if (!entitledRef.current) setFirmGate("checking");
+    if (entitledRef.current) {
+      setFirmGate("allow");
       return;
     }
+
     let cancelled = false;
-    if (!entitledRef.current) setFirmGate("checking");
+    // Already opened after a hang: keep the app up, but still finish the check
+    // so an owner session can redirect to /app.
+    if (!failedOpenRef.current) setFirmGate("checking");
+
+    const failOpen = (reason: "timeout" | "error") => {
+      if (cancelled || failedOpenRef.current) return;
+      failedOpenRef.current = true;
+      const path = latest.current.pathname;
+      console.warn(
+        "[billing-gate] check did not finish; opening the app. Server-side billing still applies.",
+        { reason, path },
+      );
+      reportClientError(new Error(`billing gate ${reason}`), {
+        source: "billing-gate",
+        extra: { reason, pathname: path },
+      });
+      trackRef.current("billing_gate_timeout", {
+        path,
+        surface: "accountant_portal",
+        reason,
+      });
+      setFirmGate("allow");
+    };
+
+    const started = Date.now();
+    const timer = window.setTimeout(() => failOpen("timeout"), SHELL_GATE_TIMEOUT_MS);
+
     void (async () => {
-      const stay = await shouldStayOnAccountantPortal(user.id);
-      if (cancelled) return;
-      if (!stay) {
-        clearForcePortal();
-        setPortalIntent("owner");
-        navigate({ to: "/app" });
-        return;
-      }
-      if (await isMilonItMember(user.id)) {
-        if (!cancelled) {
-          entitledRef.current = true;
-          setFirmEntitled(true);
-          setFirmGate("allow");
-        }
-        return;
-      }
-      if (entitledRef.current) {
-        setFirmEntitled(true);
-        setFirmGate("allow");
-        return;
-      }
-      let entitled = false;
       try {
-        const result = await checkEntitlement({ data: {} });
+        const deadline = started + SHELL_GATE_TIMEOUT_MS;
+        while (latest.current.brandLoading && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          if (cancelled) return;
+        }
+        const stay = await shouldStayOnAccountantPortal(userId);
         if (cancelled) return;
-        entitled = result.entitled;
-        if (entitled) {
+        if (!stay) {
+          window.clearTimeout(timer);
+          clearForcePortal();
+          setPortalIntent("owner");
+          latest.current.navigate({ to: "/app" });
+          return;
+        }
+        if (await isMilonItMember(userId)) {
+          if (cancelled) return;
+          window.clearTimeout(timer);
           entitledRef.current = true;
           setFirmEntitled(true);
           setFirmGate("allow");
           return;
         }
-      } catch {
+        if (entitledRef.current) {
+          window.clearTimeout(timer);
+          setFirmEntitled(true);
+          setFirmGate("allow");
+          return;
+        }
+        let entitled = false;
+        try {
+          const result = await latest.current.checkEntitlement({ data: {} });
+          if (cancelled) return;
+          entitled = result.entitled;
+          if (entitled) {
+            window.clearTimeout(timer);
+            entitledRef.current = true;
+            setFirmEntitled(true);
+            setFirmGate("allow");
+            return;
+          }
+        } catch {
+          if (cancelled) return;
+        }
+        const clients = await loadFirmClientGateContext();
         if (cancelled) return;
+        const snap = latest.current;
+        const firmId = snap.firmId;
+        const gate = decideFirmBillingPathGate({
+          pathname: snap.pathname,
+          isAccountantFirmUser: true,
+          isMilonItMember: false,
+          entitled,
+          insightSeen: clients.firmClientCount === 0 ? false : readInsightSeen(firmId),
+          firmClientCount: clients.firmClientCount,
+          firstClientId: clients.firstClientId,
+        });
+        window.clearTimeout(timer);
+        if (gate === "allow") {
+          setFirmEntitled(false);
+          setFirmGate("allow");
+          return;
+        }
+        if (!isFirmProductPath(latest.current.pathname)) return;
+        const pending = snap.hasFirm
+          ? firmBillingResumeIntent(snap.firmMarket, peekPendingCheckout())
+          : peekPendingCheckout() ?? firmBillingResumeIntent(null, null);
+        stashPendingCheckout(pending);
+        latest.current.navigate({
+          to: "/billing/required",
+          search: billingStartSearch(pending),
+          replace: true,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        console.warn("[billing-gate] check failed", err);
+        window.clearTimeout(timer);
+        failOpen("error");
       }
-      const clients = await loadFirmClientGateContext();
-      if (cancelled) return;
-      const gate = decideFirmBillingPathGate({
-        pathname,
-        isAccountantFirmUser: true,
-        isMilonItMember: false,
-        entitled,
-        insightSeen: clients.firmClientCount === 0 ? false : readInsightSeen(firmId),
-        firmClientCount: clients.firmClientCount,
-        firstClientId: clients.firstClientId,
-      });
-      if (gate === "allow") {
-        setFirmEntitled(false);
-        setFirmGate("allow");
-        return;
-      }
-      const pending = hasFirm
-        ? firmBillingResumeIntent(firmMarket, peekPendingCheckout())
-        : peekPendingCheckout() ?? firmBillingResumeIntent(null, null);
-      stashPendingCheckout(pending);
-      navigate({
-        to: "/billing/required",
-        search: billingStartSearch(pending),
-        replace: true,
-      });
     })();
+
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [user, loading, pathname, navigate, checkEntitlement, firmId, brandLoading, firmMarket, hasFirm]);
+  }, [userId, loading, pathname]);
 
   if (loading) {
     return <FirmShellLoading />;

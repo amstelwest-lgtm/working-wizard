@@ -118,6 +118,7 @@ export function BudgetSimpleView({
   displayTemplateId = null,
   statementAligned = false,
   forecastRent = null,
+  onBuild,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -145,6 +146,7 @@ export function BudgetSimpleView({
   /** Statement has operating expenses and no rent line. */
   statementAligned?: boolean;
   forecastRent?: ForecastRent | null;
+  onBuild?: () => void;
 }) {
   const { market } = useMarket();
   const money = (n: number) => {
@@ -166,6 +168,8 @@ export function BudgetSimpleView({
   const volumeLabel = budgetVolumeLabel(doc.templateId, shownTpl.id, line?.volumeLabel);
   const priceLabel = budgetPriceLabel(doc.templateId, shownTpl.id, line?.priceLabel);
   const hotelRows = hotelTemplateRows(shownTpl.id);
+  const hotelRevenueRows = hotelRows?.filter((row) => row.section === "revenue") ?? null;
+  const hotelCostRows = hotelRows?.filter((row) => row.section === "cost") ?? null;
   const driversOnFile = hotelDriversOnFile(doc.templateId, shownTpl.id, line);
   const showDriverDash = !driversOnFile && (readOnly || doc.templateId !== "hospitality_rooms");
   const cell = line?.months[focusMonth] ?? { volume: 0, price: 0 };
@@ -256,6 +260,7 @@ export function BudgetSimpleView({
         canSign={canSign}
         onSignoffChange={onSignoffChange}
         signoffKnown={signoffKnown}
+        onBuild={onBuild}
         presentation={role === "owner" ? "owner" : "strip"}
         extraActions={
           <BudgetPdfExportButton
@@ -301,9 +306,9 @@ export function BudgetSimpleView({
       <OwnerHowBuilt
         readOnly={readOnly}
         summary={
-          hotelRows ? (
-            <ul data-hotel-template="" className="mt-3 space-y-1 text-[13px] text-[#3D5270]">
-              {hotelRows.map((row) => (
+          hotelRevenueRows ? (
+            <ul data-hotel-template="" data-hotel-section="revenue" className="mt-3 space-y-1 text-[13px] text-[#3D5270]">
+              {hotelRevenueRows.map((row) => (
                 <li key={row.name}>
                   <span className="font-semibold text-[#102A43] dark:text-slate-100">{row.name}</span>
                   {" · "}
@@ -384,7 +389,7 @@ export function BudgetSimpleView({
           <DriverPad
             kicker="How many"
             label={localizeCopy(volumeLabel, market)}
-            hint={hotelRows ? "Rooms" : line?.name ? `${line.name}` : "Units they move this month"}
+            hint={hotelRevenueRows ? "Rooms" : line?.name ? `${line.name}` : "Units they move this month"}
           >
             {showDriverDash ? (
               <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--ink)]" data-hotel-driver="missing">—</p>
@@ -439,9 +444,9 @@ export function BudgetSimpleView({
             </p>
           </DriverPad>
         </div>
-        {!readOnly && hotelRows ? (
-          <ul data-hotel-template="" className="mt-4 space-y-1 pl-3 text-[13px] text-[#3D5270] sm:pl-4">
-            {hotelRows.map((row) => (
+        {!readOnly && hotelRevenueRows ? (
+          <ul data-hotel-template="" data-hotel-section="revenue" className="mt-4 space-y-1 pl-3 text-[13px] text-[#3D5270] sm:pl-4">
+            {hotelRevenueRows.map((row) => (
               <li key={row.name}>
                 <span className="font-semibold text-[#102A43] dark:text-slate-100">{row.name}</span>
                 {" · "}
@@ -488,6 +493,19 @@ export function BudgetSimpleView({
               {money(focus?.cogs ?? 0)}
             </span>
           </CascadeRow>
+          {hotelCostRows && hotelCostRows.length > 0 ? (
+            <ul data-hotel-template="" data-hotel-section="cost" className="mb-3 space-y-1 text-[13px] text-[#3D5270]">
+              {hotelCostRows.map((row) => (
+                <li key={row.name}>
+                  <span className="font-semibold text-[#102A43] dark:text-slate-100">{row.name}</span>
+                  {" · "}
+                  {row.detail}
+                  {" · "}
+                  {row.value}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <CascadeRow
             kicker="Then pay"
             label="Fixed overheads"

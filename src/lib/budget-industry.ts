@@ -4,6 +4,7 @@
  * client-profile, and profile-signals pulls the market barrel.
  */
 
+import { hospitalityLines, type HospitalityDisplayLine } from "./hospitality-display.ts";
 import { BUDGET_TEMPLATES } from "./budget.templates.ts";
 import type { BudgetTemplateId } from "./budget.types.ts";
 import { clientIndustryDisplay } from "./profile-signals.ts";
@@ -62,21 +63,12 @@ export function serviceDriverName(name: string | null | undefined): boolean {
   return SERVICE_DRIVER.test(name ?? "");
 }
 
-export type HotelTemplateRow = {
-  name: string;
-  detail: string;
-  value: string;
-};
+export type HotelTemplateRow = HospitalityDisplayLine;
 
-/** Hotel drivers. Occupancy, food and beverage, housekeeping and rent stay blank when no figure is stored. */
+/** Hotel drivers. Rooms and food are revenue. Housekeeping and rent are costs. */
 export function hotelTemplateRows(displayTemplate: BudgetTemplateId | null | undefined): HotelTemplateRow[] | null {
   if (displayTemplate !== "hospitality_rooms") return null;
-  return [
-    { name: "Rooms", detail: "Room-nights × ADR × Occupancy", value: "Occupancy —" },
-    { name: "Food & beverage", detail: "Food & beverage", value: "—" },
-    { name: "Housekeeping and staff", detail: "Housekeeping and staff", value: "—" },
-    { name: "Rent", detail: "Rent", value: "—" },
-  ];
+  return hospitalityLines();
 }
 
 /**
