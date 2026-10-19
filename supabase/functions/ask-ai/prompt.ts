@@ -5,6 +5,7 @@ import { formatOverviewForPrompt } from "./overview-brief.ts";
 import { formatAdvisorySignoffGrounding } from "../../../src/lib/advisory-signoff.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import { chatReplyFormatRules, humanDate } from "../_shared/chat-reply.ts";
+import { productFactsBlock } from "../_shared/product-facts.ts";
 import {
   appendClientIdentity,
   applyRedaction,
@@ -15,7 +16,7 @@ import {
 } from "../_shared/redact-identifiers.ts";
 
 /** Duplicated from src/lib/market/prompt.ts — Deno edge cannot import @/lib. */
-function askAiSystemBase(copyPack: "za" | "us"): string {
+function askAiSystemBase(copyPack: "za" | "us", audience: "owner" | "accountant"): string {
   const taxWord = copyPack === "us" ? "EIN / tax IDs" : "VAT numbers";
   const currencyWord = copyPack === "us" ? "dollar/currency amounts" : "rand/currency amounts";
   const locale =
@@ -42,7 +43,9 @@ Rules:
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
 - Do not invent statement line items. Quote Net profit, Gross profit, Operating profit, Profit before tax, Inventory, and Current ratio when OVERVIEW FIGURES lists them. Do not multiply a margin by revenue in their place. Raw income-statement and balance-sheet lines other than those listed headlines are not provided — use the outputs above.
 ${locale}
-${chatReplyFormatRules(copyPack)}`;
+${chatReplyFormatRules(copyPack)}
+
+${productFactsBlock(audience)}`;
 }
 
 const CAMEL_TO_DISPLAY: Record<string, string> = {};
@@ -120,7 +123,7 @@ export function buildPrompt(
 ): { system: string; user: string } {
   const lines: string[] = [];
   const copyPack = ctx.copyPack ?? "za";
-  let system = askAiSystemBase(copyPack);
+  let system = askAiSystemBase(copyPack, audience);
   if (agent) {
     system += `\n- ${askAiAgentPersona(agent, audience)} Use only the tools and figures already in this prompt. Earlier chats with the other agents are not part of this conversation.`;
   }

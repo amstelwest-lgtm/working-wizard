@@ -6,6 +6,7 @@
  * Writes status=proposed / gap status=draft only. Never signed_off.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 import { callClaude } from "../ask-ai/anthropic.ts";
 import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
 import { buildBrainProposePayload, partyNamesInBrain } from "./prompt.ts";
@@ -135,11 +136,9 @@ async function handleBrainPropose(req: Request): Promise<Response> {
   });
   const adminClient = createClient(supabaseUrl, serviceKey);
 
-  const {
-    data: { user },
-    error: authErr,
-  } = await userClient.auth.getUser();
-  if (authErr || !user) return respond({ error: "Unauthorised" }, 401);
+  const authResult = await authenticateEdgeUser({ token, auth: userClient.auth });
+  if (!authResult.ok) return respond(authResult.body, authResult.status);
+  const user = authResult.user;
 
   let body: {
     clientId?: string;

@@ -4,6 +4,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import { parseAskAiBody } from "@/lib/ask-ai-response";
+import { authRetryPlanFromResponse } from "@/lib/edge-auth-retry";
 import { invokeMilonBot } from "@/lib/milon-bot-client";
 import { routeMilonIntent } from "@/lib/milon-bot-copy";
 import type { AgentKey } from "@/lib/milon-team-feed";
@@ -77,26 +78,37 @@ export async function askOwnerAgent(input: {
   }
 
   const { data: sess } = await supabase.auth.getSession();
-  const token = sess.session?.access_token;
+  let token = sess.session?.access_token;
   if (!token) return { ok: false, error: "Not signed in." };
   const base = import.meta.env.VITE_SUPABASE_URL;
   if (!base) return { ok: false, error: "Supabase URL is not configured." };
-  const res = await fetch(`${base}/functions/v1/ask-ai`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(
-      ownerAskPayload({
-        clientId: input.clientId,
-        agent: input.agent,
-        question,
-        history,
-        route: "ask-ai",
-      }),
-    ),
-  });
+  const payload = JSON.stringify(
+    ownerAskPayload({
+      clientId: input.clientId,
+      agent: input.agent,
+      question,
+      history,
+      route: "ask-ai",
+    }),
+  );
+  const send = (bearer: string) =>
+    fetch(`${base}/functions/v1/ask-ai`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${bearer}`,
+      },
+      body: payload,
+    });
+  let res = await send(token);
+  const plan = await authRetryPlanFromResponse(res);
+  if (plan) {
+    if (plan === "refresh") {
+      const { data } = await supabase.auth.refreshSession();
+      token = data.session?.access_token || token;
+    }
+    res = await send(token);
+  }
   const body: unknown = await res.json().catch(() => null);
   const turn = parseAskAiBody(res.status, body, res.ok);
   return turn.ok ? { ok: true, answer: turn.answer } : turn;

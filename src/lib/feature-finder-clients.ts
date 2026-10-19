@@ -31,8 +31,12 @@ export type FinderClient = {
   id: string;
   name: string;
   clientCode?: string | null;
-  /** Firm the client belongs to. Used only when several clients share a name. */
-  firmName?: string | null;
+  /** Company or business name. Shown only when it is not the person's name. */
+  businessName?: string | null;
+  /** Owner email. Used when no distinct business name is available. */
+  ownerEmail?: string | null;
+  /** ISO timestamp the client row was created. */
+  createdAt?: string | null;
 };
 
 export type ClientSearchResult = {
@@ -97,10 +101,58 @@ export function dedupeFinderClients(clients: readonly FinderClient[]): FinderCli
   return out;
 }
 
+const ADDED_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function sameName(a: string, b: string): boolean {
+  return a.localeCompare(b, undefined, { sensitivity: "accent" }) === 0;
+}
+
+/** `added 3 Mar 2026`. UTC, so the label does not depend on the browser zone. */
+export function finderAddedLabel(createdAt: string | null | undefined): string | null {
+  if (!createdAt?.trim()) return null;
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return null;
+  const month = ADDED_MONTHS[date.getUTCMonth()];
+  if (!month) return null;
+  return `added ${date.getUTCDate()} ${month} ${date.getUTCFullYear()}`;
+}
+
+/**
+ * First company or business name that is not the person's display name.
+ * Statement keys and ledger names are passed in preference order.
+ */
+export function finderBusinessName(
+  personName: string,
+  candidates: readonly (string | null | undefined)[],
+): string | null {
+  const person = personName.trim();
+  for (const raw of candidates) {
+    const name = (raw ?? "").trim().replace(/\s+/g, " ");
+    if (!name) continue;
+    if (person && sameName(name, person)) continue;
+    return name;
+  }
+  return null;
+}
+
+/**
+ * Human detail for one row in a duplicate-name group.
+ * Business name, then owner email, then the day the row was added.
+ * Null means nothing readable is stored, so the caller may use a short id.
+ */
+export function finderClientDetail(client: FinderClient): string | null {
+  const person = client.name.trim();
+  const business = client.businessName?.trim().replace(/\s+/g, " ") || "";
+  if (business && (!person || !sameName(business, person))) return business;
+  const email = client.ownerEmail?.trim() || "";
+  if (email) return email;
+  return finderAddedLabel(client.createdAt);
+}
+
 /**
  * Extra label for a display name that belongs to more than one client.
- * A firm name is used when that firm appears once in the group. Same firm,
- * a missing firm, or two clients at one firm fall back to a short id.
+ * Readable detail wins. The short id is only used when the row has no
+ * business name, owner email, or created date.
  */
 export function finderNameDisambiguators(
   clients: readonly FinderClient[],
@@ -116,14 +168,8 @@ export function finderNameDisambiguators(
   const out = new Map<string, string>();
   for (const group of groups.values()) {
     if (group.length < 2) continue;
-    const firmCounts = new Map<string, number>();
     for (const client of group) {
-      const firm = client.firmName?.trim() || "";
-      firmCounts.set(firm, (firmCounts.get(firm) ?? 0) + 1);
-    }
-    for (const client of group) {
-      const firm = client.firmName?.trim() || "";
-      out.set(client.id, firm && firmCounts.get(firm) === 1 ? firm : shortClientId(client.id));
+      out.set(client.id, finderClientDetail(client) ?? shortClientId(client.id));
     }
   }
   return out;
@@ -139,7 +185,7 @@ function clientHint(client: FinderClient, disambiguator: string | undefined, fal
 /**
  * The first clients in the loaded book, which the firm list orders by most
  * recently created. Duplicate ids collapse. Shared display names pick up a
- * firm or a short id so the rows are not identical.
+ * business name, owner email, or added date so the rows are readable.
  */
 export function recentFinderClients(
   clients: readonly FinderClient[],
