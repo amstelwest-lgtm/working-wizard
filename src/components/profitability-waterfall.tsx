@@ -17,7 +17,11 @@ import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
-import { resolveWaterfallFigures, type WaterfallFallback } from "@/lib/weekly-inputs";
+import {
+  resolveWaterfallFigures,
+  waterfallPrefersStatement,
+  type WaterfallFallback,
+} from "@/lib/weekly-inputs";
 import { DEFAULT_PROFILE, useOptionalAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketFormat } from "@/contexts/market";
@@ -811,7 +815,9 @@ export function ProfitabilityWaterfall({
     return () => cancelAnimationFrame(t);
   }, []);
 
-  const figures = resolveWaterfallFigures(weeklyInputs, fallback, { preferPeriod });
+  const figures = resolveWaterfallFigures(weeklyInputs, fallback, {
+    preferPeriod: waterfallPrefersStatement(fallback, preferPeriod),
+  });
   const periodBit = periodLabel?.trim() || null;
   const answerSentence = profitAnswerSentence({
     currency: currencySymbol(market),

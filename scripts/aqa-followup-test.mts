@@ -229,6 +229,13 @@ assert(slow.some((move) => /pay faster/i.test(move.title)), "slow debtors still 
 const signed = { signed_off_at: "2026-10-01T00:00:00.000Z" };
 assert(budgetSignoffIsStale(signed, null) === false, "no budget clock is not stale");
 assert(budgetSignoffIsStale(signed, "2026-09-01T00:00:00.000Z") === false, "an older budget is not stale");
-assert(budgetSignoffIsStale(signed, "2026-10-02T00:00:00.000Z") === true, "a newer budget clock is stale");
+assert(
+  budgetSignoffIsStale(signed, "2026-10-02T00:00:00.000Z") === false,
+  "a newer budget clock without a figure change is not stale",
+);
+assert(
+  budgetSignoffIsStale(signed, "2026-10-02T00:00:00.000Z", true) === true,
+  "changed budget figures are stale",
+);
 
 console.log("aqa-followup ok");

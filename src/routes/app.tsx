@@ -106,12 +106,13 @@ import {
 } from "@/lib/ratios";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
-import { computeOverallHealth, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
+import { cashPillarFollowsForecast, computeOverallHealth, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
 import { clientListStatusWord } from "@/lib/cash-forecast-parity";
+import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
@@ -3614,14 +3615,22 @@ function Index() {
       : null;
   const ownerOutlook = ownerMetrics.outlook;
   const cashBalance = ownerMetrics.cash.amount;
-  const overallHealth = computeOverallHealth({
-    ratios: computedRatios as Record<string, number>,
-    cashRunwayWeeks: cashBalance != null ? effectiveRunway : null,
-    cashBalance,
-    market: boardMarket,
-    shortfallWeek: ownerOutlook.shortfallWeek,
-  });
   const ownerOpeningMissing = storedOpeningIsMissing(clientMeta?.cashflow);
+  const overallHealth = cashPillarFollowsForecast(
+    computeOverallHealth({
+      ratios: computedRatios as Record<string, number>,
+      cashRunwayWeeks: cashBalance != null ? effectiveRunway : null,
+      cashBalance,
+      market: boardMarket,
+      shortfallWeek: ownerOutlook.shortfallWeek,
+    }),
+    {
+      openingMissing: ownerOpeningMissing,
+      opening: ownerOutlook.opening,
+      closings: ownerOutlook.closing,
+      floor: ownerOutlook.floor,
+    },
+  );
   const ownerStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -3942,6 +3951,11 @@ function Index() {
                 periodEnd={v.periodEnd ?? null}
                 history={history}
                 cashflow={clientMeta?.cashflow ?? null}
+                sampleNotice={
+                  statementSampleImplausible(v as unknown as Record<string, unknown>)
+                    ? IMPLAUSIBLE_SAMPLE_NOTE
+                    : null
+                }
                 cashOutlook={
                   ownerMetrics.cash.amount != null
                     ? {
@@ -4162,6 +4176,11 @@ function Index() {
                     <section className="owner-pane" data-owner-page="profit">
                       {showScoredBoard ? (
                         <>
+                          {statementSampleImplausible(v as unknown as Record<string, unknown>) ? (
+                            <p className="owner-lede" role="status" data-sample-notice="">
+                              {IMPLAUSIBLE_SAMPLE_NOTE}
+                            </p>
+                          ) : null}
                           <ProfitLead periodLabel={readStatementMeta(v).periodLabel} />
                           <ProfitabilityWaterfall
                             appearance="premium"

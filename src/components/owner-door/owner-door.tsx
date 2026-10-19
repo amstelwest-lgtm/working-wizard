@@ -124,6 +124,7 @@ export function OwnerDoor({
   boards,
   bot = null,
   onBotChange,
+  sampleNotice = null,
   planTick = 0,
 }: {
   clientId: string | null;
@@ -175,6 +176,8 @@ export function OwnerDoor({
   ) => Partial<Record<"health" | "cash" | "budget" | "tasks" | "profit" | "moves", ReactNode>>;
   bot?: AgentKey | null;
   onBotChange?: (agent: AgentKey | null, mode: "push" | "replace") => void;
+  /** Implausible sample figures. Shown on Home, same note as the client file. */
+  sampleNotice?: string | null;
   /** Bumps when an action is handed off, so Home refetches without a reload. */
   planTick?: number;
 }) {
@@ -758,6 +761,7 @@ export function OwnerDoor({
           onMoves={() => go("moves")}
           onDeliverables={() => go("deliverables")}
           inviteClientId={clientId}
+          notice={sampleNotice}
         />
       ) : null}
       {railScreen === "health" ? restored?.health : null}

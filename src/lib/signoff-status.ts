@@ -121,18 +121,17 @@ function periodKey(snap: SignoffPeriodSnapshot): string {
  * was current at sign-off with what is current now. Does not write.
  */
 /**
- * Budget stamp only. A missing budget_updated_at is not stale, and a
- * rewritten document timestamp is not the clock.
+ * Budget stamp only. The clock is not a figure: an autosave that only moves
+ * `budget_updated_at` is not stale. Stale means the signed figure snapshot
+ * and the plan on screen are different. No snapshot is not stale.
  */
 export function budgetSignoffIsStale(
   signoff: { signed_off_at: string } | null | undefined,
-  budgetUpdatedAt: string | null | undefined,
+  _budgetUpdatedAt: string | null | undefined,
+  figuresChanged?: boolean,
 ): boolean {
-  if (!signoff || !budgetUpdatedAt) return false;
-  return reviewFiguresChanged({
-    signedOffAt: signoff.signed_off_at,
-    dataUpdatedAt: budgetUpdatedAt,
-  });
+  if (!signoff) return false;
+  return figuresChanged === true;
 }
 
 export function reviewFiguresChanged(input: {

@@ -17,6 +17,8 @@ import {
   budgetVersusStatement,
   budgetWasRebuiltFromActuals,
   budgetPlanFiguresChanged,
+  budgetPlanSnapshot,
+  budgetSignedFiguresChanged,
   publishBudgetDocument,
   reseedBudgetIfScaleBroken,
   seedBudgetFromFinancials,
@@ -137,6 +139,7 @@ export function BudgetPanel({
   const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(
     signoffProp ?? null,
   );
+  const [signedBudgetSnapshot, setSignedBudgetSnapshot] = useState<unknown>(null);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const skipAutosave = useRef(false);
   const budgetDirty = useRef(false);
@@ -221,6 +224,29 @@ export function BudgetPanel({
         }
         setLoaded(true);
       });
+    void (supabase as unknown as {
+      from: (table: string) => {
+        select: (cols: string) => {
+          eq: (col: string, value: string) => {
+            eq: (col: string, value: string) => {
+              maybeSingle: () => Promise<{ data: { content_snapshot?: unknown } | null }>;
+            };
+          };
+        };
+      };
+    })
+      .from("client_deliverable_states")
+      .select("content_snapshot")
+      .eq("client_id", requestedId)
+      .eq("scope", "budget")
+      .maybeSingle()
+      .then((res) => {
+        if (cancelled) return;
+        setSignedBudgetSnapshot(res.data?.content_snapshot ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setSignedBudgetSnapshot(null);
+      });
     return () => {
       cancelled = true;
     };
@@ -232,12 +258,15 @@ export function BudgetPanel({
 
   const patchBudgetSignoff = (next: ClientReviewSignoff | null) => {
     setBudgetSignoff(next);
+    if (next && doc) setSignedBudgetSnapshot({ budgetFigures: budgetPlanSnapshot(doc) });
+    if (!next) setSignedBudgetSnapshot(null);
     onSignoffChange?.(next);
   };
+  const budgetFiguresChanged = budgetSignedFiguresChanged(signedBudgetSnapshot, doc);
 
   useEffect(() => {
-    onReviewStale?.(budgetSignoffIsStale(budgetSignoff, budgetUpdatedAt));
-  }, [onReviewStale, budgetSignoff, budgetUpdatedAt]);
+    onReviewStale?.(budgetSignoffIsStale(budgetSignoff, budgetUpdatedAt, budgetFiguresChanged));
+  }, [onReviewStale, budgetSignoff, budgetUpdatedAt, budgetFiguresChanged]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -619,7 +648,7 @@ export function BudgetPanel({
         clientId={clientId}
         clientName={clientName}
         signoff={budgetSignoff}
-        isStale={budgetSignoffIsStale(budgetSignoff, budgetUpdatedAt)}
+        isStale={budgetSignoffIsStale(budgetSignoff, budgetUpdatedAt, budgetFiguresChanged)}
         canSign={Boolean(canSign && clientId)}
         onSignoffChange={patchBudgetSignoff}
         signoffKnown={signoffKnown}

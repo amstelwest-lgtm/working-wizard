@@ -138,6 +138,7 @@ export function OwnerHome({
   onDrafts,
   onBooks,
   signoffLine,
+  notice = null,
   inviteClientId,
   marketCountry = null,
   audience,
@@ -168,6 +169,8 @@ export function OwnerHome({
   onBooks?: () => void;
   /** Advisory sign-off sentence on a client file. Owner Home leaves this off. */
   signoffLine?: string | null;
+  /** Sample figures that are too small to be this business's rands. */
+  notice?: string | null;
   inviteClientId?: string | null;
   /** Resolved market. The sample card loads only when this is ZA. */
   marketCountry?: string | null;
@@ -191,6 +194,11 @@ export function OwnerHome({
         <p className="owner-eyebrow">Home</p>
         <h1 className="owner-title">{title}</h1>
         <p className="owner-lede">{lede}</p>
+        {notice ? (
+          <p className="owner-lede" role="status" data-sample-notice="">
+            {notice}
+          </p>
+        ) : null}
       </div>
       <div className="owner-stage">
         <div className="owner-agents">

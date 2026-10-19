@@ -5,6 +5,9 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { persistedSignoffFirmName, persistedSignerName } from "@/lib/accountant-identity";
+import { budgetPlanSnapshot } from "@/lib/budget.bridges";
+import { normalizeBudgetDocument } from "@/lib/budget.compute";
+import type { BudgetDocument } from "@/lib/budget.types";
 
 export const REVIEW_SCOPES = [
   "financials",
@@ -312,6 +315,24 @@ export const signoffReview = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
+    let budgetFigures: unknown;
+    if (data.scope === "budget") {
+      const { data: budgetRow, error: budgetErr } = await sb
+        .from("clients")
+        .select("budget")
+        .eq("id", data.clientId)
+        .maybeSingle();
+      if (budgetErr) throw new Error(budgetErr.message);
+      const raw = (budgetRow as { budget?: unknown } | null)?.budget;
+      if (raw && typeof raw === "object") {
+        try {
+          budgetFigures = budgetPlanSnapshot(normalizeBudgetDocument(raw as BudgetDocument));
+        } catch {
+          budgetFigures = undefined;
+        }
+      }
+    }
+
     const { data: prior } = await (sb as unknown as LooseSb)
       .from("client_deliverable_states")
       .select("status")
@@ -357,6 +378,7 @@ export const signoffReview = createServerFn({ method: "POST" })
           signed_off_at: (row as ClientReviewSignoff).signed_off_at,
           scope: data.scope,
           note: data.note ?? null,
+          ...(budgetFigures !== undefined ? { budgetFigures } : {}),
         },
         signed_off_by: userData.user.id,
         signed_off_at: new Date().toISOString(),
