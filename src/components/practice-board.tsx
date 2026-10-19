@@ -1253,6 +1253,31 @@ function practiceSectionSubtitle(view: PracticeSection): string {
   return "Definitions and the highest-impact repair steps.";
 }
 
+/** A stay that already succeeded. Remounting All clients must not wait on it again. */
+const accountantPortalStay = new Set<string>();
+const paintedBookByKey = new Map<string, ClientRow[]>();
+const paintedBookByUser = new Map<string, { firmId: string | null; rows: ClientRow[] }>();
+
+function practiceBookCacheKey(userId: string, firmId: string | null): string {
+  return `${userId}:${firmId ?? ""}`;
+}
+
+function readPaintedBook(userId: string | undefined, firmId: string | null): ClientRow[] | null {
+  if (!userId) return null;
+  const exact = paintedBookByKey.get(practiceBookCacheKey(userId, firmId));
+  if (exact && exact.length > 0) return exact;
+  const last = paintedBookByUser.get(userId);
+  if (!last || last.rows.length === 0) return null;
+  if (firmId && last.firmId && last.firmId !== firmId) return null;
+  return last.rows;
+}
+
+function rememberPaintedBook(userId: string | undefined, firmId: string | null, rows: ClientRow[]) {
+  if (!userId || rows.length === 0) return;
+  paintedBookByKey.set(practiceBookCacheKey(userId, firmId), rows);
+  paintedBookByUser.set(userId, { firmId, rows });
+}
+
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -1263,12 +1288,18 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   // Business-client credentials must not sit on the practice portal. Wait for
   // the stay check before painting the board so we never flash firm UI or
   // trigger add-client against an owner login.
-  const [portalReady, setPortalReady] = useState(false);
   const portalUserId = user?.id ?? null;
+  const [portalReady, setPortalReady] = useState(
+    () => portalUserId != null && accountantPortalStay.has(portalUserId),
+  );
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   useEffect(() => {
     if (!portalUserId) return;
+    if (accountantPortalStay.has(portalUserId)) {
+      setPortalReady(true);
+      return;
+    }
     let cancelled = false;
     setPortalReady(false);
     const timer = window.setTimeout(() => {
@@ -1285,6 +1316,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       if (cancelled) return;
       window.clearTimeout(timer);
       if (stay) {
+        accountantPortalStay.add(portalUserId);
         setPortalIntent("accountant");
         clearForcePortal();
         setPortalReady(true);
@@ -1315,10 +1347,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       : null);
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [clientRows, setClientRows] = useState<ClientRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const warmBook = readPaintedBook(user?.id, firmId);
+  const [clientRows, setClientRows] = useState<ClientRow[]>(() => warmBook ?? []);
+  const [loading, setLoading] = useState(() => warmBook == null);
   /** Open queries and follow-ups stay on a loading state until enrichment lands. */
-  const [countsReady, setCountsReady] = useState(false);
+  const [countsReady, setCountsReady] = useState(() => warmBook != null);
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const finalizeUpgrade = useServerFn(finalizeFirmBandCheckout);
@@ -1447,8 +1480,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const load = async (activeFirmId: string | null, userId: string | undefined, viewerName?: string | null) => {
     const gen = ++loadGen.current;
-    setLoading(true);
-    setCountsReady(false);
+    if (!readPaintedBook(userId, activeFirmId)) {
+      setLoading(true);
+      setCountsReady(false);
+    }
     try {
 
     if (!userId) {
@@ -1515,7 +1550,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     );
 
     if (gen !== loadGen.current) return;
+    const lightRows = rawClients.map((c) => lightClientRow(c));
     setClientRows(rawClients.map((c) => lightClientRow(c)));
+    rememberPaintedBook(userId, activeFirmId, lightRows);
     if (rawClients.length === 0) setCountsReady(true);
     setLoading(false);
 
@@ -1636,18 +1673,18 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         cashflow: book?.cashflow ?? client.cashflow,
       };
     });
-    setClientRows(
-      rawClients.map((c) =>
-        toClientRow(
-          c,
-          historyMap[c.id] ?? [],
-          openActionsMap[c.id] ?? 0,
-          overdueActionsMap[c.id] ?? 0,
-          openQueriesMap[c.id] ?? 0,
-          chaseActionsMap[c.id] ?? [],
-        ),
+    const fullRows = rawClients.map((c) =>
+      toClientRow(
+        c,
+        historyMap[c.id] ?? [],
+        openActionsMap[c.id] ?? 0,
+        overdueActionsMap[c.id] ?? 0,
+        openQueriesMap[c.id] ?? 0,
+        chaseActionsMap[c.id] ?? [],
       ),
     );
+    setClientRows(fullRows);
+    rememberPaintedBook(userId, activeFirmId, fullRows);
     } catch (err) {
       console.error("practice book:", err);
     } finally {

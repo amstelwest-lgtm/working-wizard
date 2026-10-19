@@ -28,6 +28,7 @@ import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/bud
 import { budgetRentHint, type ForecastRent } from "@/lib/budget-forecast-rent";
 import { ownerMinus } from "@/lib/owner-money";
 import {
+  BUDGET_OPENING_MISSING_LINE,
   budgetDaysNeedReview,
   budgetDaysSourceLabel,
   budgetOpeningSourceLabel,
@@ -119,6 +120,7 @@ export function BudgetSimpleView({
   statementAligned = false,
   forecastRent = null,
   onBuild,
+  openingBalanceMissing = false,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -147,6 +149,8 @@ export function BudgetSimpleView({
   statementAligned?: boolean;
   forecastRent?: ForecastRent | null;
   onBuild?: () => void;
+  /** Forecast opening is blank and this plan did not type a start balance. */
+  openingBalanceMissing?: boolean;
 }) {
   const { market } = useMarket();
   const money = (n: number) => {
@@ -629,7 +633,11 @@ export function BudgetSimpleView({
                 </span>
               ) : null}
             </Label>
-            {readOnly ? (
+            {openingBalanceMissing ? (
+              <p className="mt-1 text-sm font-semibold text-[#102A43] dark:text-slate-100" data-budget-opening-missing="">
+                {BUDGET_OPENING_MISSING_LINE}
+              </p>
+            ) : readOnly ? (
               <p className="mt-1 text-[15px] font-semibold tabular-nums text-[var(--ink)]">
                 {money(doc.openingCash ?? 0)}
               </p>

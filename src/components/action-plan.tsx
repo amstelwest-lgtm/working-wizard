@@ -682,41 +682,60 @@ export default function ActionPlanPanel({
         }
       }
       setPlan(p);
-      const [{ data: its }, { data: emps }] = await Promise.all([
+      // Plan, items, and the assignee lists paint the board. Notes, handoffs,
+      // milestones, and mail follow in one batch so the tab is not blank
+      // while those four queries run one after another.
+      const [itsRes, empsRes, practice] = await Promise.all([
         supabase.from("action_items_v").select("*").eq("plan_id", p.id).order("seq"),
         supabase
           .from("client_employees")
           .select("id,name,email,role")
           .eq("client_id", clientId)
           .order("name"),
+        (async () => {
+          // client_employees is the SME assignee list and is empty on a new firm
+          // client. Firm members live on client_practice_access (deny-all RLS), so
+          // the owner picker reads them through list_client_practice_team.
+          try {
+            const { data: practiceData, error: practiceErr } = await supabase.rpc(
+              "list_client_practice_team" as never,
+              { _client_id: clientId } as never,
+            );
+            if (practiceErr) return [] as PracticeTeamRow[];
+            return practiceTeamRows(practiceData);
+          } catch {
+            return [] as PracticeTeamRow[];
+          }
+        })(),
       ]);
-      // client_employees is the SME assignee list and is empty on a new firm
-      // client. Firm members live on client_practice_access (deny-all RLS), so
-      // the owner picker reads them through list_client_practice_team.
-      let practice: PracticeTeamRow[] = [];
-      try {
-        const { data: practiceData, error: practiceErr } = await supabase.rpc(
-          "list_client_practice_team" as never,
-          { _client_id: clientId } as never,
-        );
-        if (!practiceErr) practice = practiceTeamRows(practiceData);
-      } catch {
-        practice = [];
-      }
-      const list = (its ?? []) as Item[];
-      let shown = list;
-      let loadedNotes: Record<string, AssignmentNoteRow[]> = {};
-      if (list.length) {
-        const { data: notes } = await supabase
-          .from("action_updates")
-          .select("action_item_id,note,created_at,actor_label,actor_type")
-          .in(
-            "action_item_id",
-            list.map((item) => item.id),
-          )
-          .order("created_at", { ascending: false });
+      const list = (itsRes.data ?? []) as Item[];
+      setItems(list);
+      setEmployees(mergeActionPlanTeam((empsRes.data ?? []) as Employee[], practice));
+      setLoading(false);
+      const ids = list.map((item) => item.id);
+      if (ids.length === 0) {
+        setItemNotes({});
+        setPickups({});
+        setMilestones([]);
+        setLastNudgeEmails({});
+        setLastFailedEmails({});
+      } else {
+        const [notesRes, runs, msRes, emailsRes] = await Promise.all([
+          supabase
+            .from("action_updates")
+            .select("action_item_id,note,created_at,actor_label,actor_type")
+            .in("action_item_id", ids)
+            .order("created_at", { ascending: false }),
+          loadActionHandoffRuns(ids),
+          supabase.from("action_milestones").select("*").in("action_item_id", ids).order("week_no"),
+          supabase
+            .from("action_emails")
+            .select("id,action_item_id,email_type,status,sent_at,created_at")
+            .in("action_item_id", ids)
+            .order("created_at", { ascending: false }),
+        ]);
         const grouped = new Map<string, AssignmentNoteRow[]>();
-        for (const row of (notes ?? []) as {
+        for (const row of (notesRes.data ?? []) as {
           action_item_id?: string;
           note?: string | null;
           created_at?: string;
@@ -734,7 +753,7 @@ export default function ActionPlanPanel({
           });
           grouped.set(id, bucket);
         }
-        shown = list.map((item) => {
+        const shown = list.map((item) => {
           const stored = latestStoredAssignment(grouped.get(item.id) ?? []);
           if (stored?.kind === "bot") {
             return { ...item, owner_id: null, owner_name: stored.name, owner_email: null };
@@ -742,39 +761,18 @@ export default function ActionPlanPanel({
           if (stored?.kind === "person") return { ...item, owner_name: stored.name };
           return item;
         });
-        const noteState: Record<string, AssignmentNoteRow[]> = {};
-        for (const [id, notes] of grouped) noteState[id] = notes;
-        loadedNotes = noteState;
-      }
-      let loadedPickups: Record<string, PlanPickup> = {};
-      if (list.length) {
-        const runs = await loadActionHandoffRuns(list.map((item) => item.id));
-        const next: Record<string, PlanPickup> = {};
-        for (const [id, run] of runs) next[id] = run;
-        loadedPickups = next;
-      }
-      const painted = applyOptimisticPlan({ items: shown, notes: loadedNotes, pickups: loadedPickups });
-      setItemNotes(painted.notes);
-      setItems(painted.items);
-      setPickups(painted.pickups);
-      setEmployees(mergeActionPlanTeam((emps ?? []) as Employee[], practice));
-      if (list.length) {
-        const ids = list.map((i) => i.id);
-        const [{ data: ms }, { data: emails }] = await Promise.all([
-          supabase.from("action_milestones").select("*").in("action_item_id", ids).order("week_no"),
-          supabase
-            .from("action_emails")
-            .select("id,action_item_id,email_type,status,sent_at,created_at")
-            .in("action_item_id", ids)
-            .order("created_at", { ascending: false }),
-        ]);
-        setMilestones((ms ?? []) as Milestone[]);
-        // Build two independent maps per item (emails are ordered newest-first)
-        // nudgeMap: newest successfully delivered nudge/overdue (status != "failed")
-        // failedMap: newest failed send of any type
+        const loadedNotes: Record<string, AssignmentNoteRow[]> = {};
+        for (const [id, notes] of grouped) loadedNotes[id] = notes;
+        const loadedPickups: Record<string, PlanPickup> = {};
+        for (const [id, run] of runs) loadedPickups[id] = run;
+        const painted = applyOptimisticPlan({ items: shown, notes: loadedNotes, pickups: loadedPickups });
+        setItemNotes(painted.notes);
+        setItems(painted.items);
+        setPickups(painted.pickups);
+        setMilestones((msRes.data ?? []) as Milestone[]);
         const nudgeMap: Record<string, EmailRecord> = {};
         const failedMap: Record<string, EmailRecord> = {};
-        for (const e of (emails ?? []) as EmailRecord[]) {
+        for (const e of (emailsRes.data ?? []) as EmailRecord[]) {
           const id = e.action_item_id;
           if (
             !nudgeMap[id] &&
@@ -789,10 +787,6 @@ export default function ActionPlanPanel({
         }
         setLastNudgeEmails(nudgeMap);
         setLastFailedEmails(failedMap);
-      } else {
-        setMilestones([]);
-        setLastNudgeEmails({});
-        setLastFailedEmails({});
       }
     } catch (err) {
       console.error("[Action Plan] load failed", err);
@@ -2645,7 +2639,7 @@ function ItemRow({
           ) : null}
           {lastNudge?.sent_at && (
             <span className="text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
-              {formatCalendarDay(lastNudge.sent_at, market, PLAN_DAY)}
+              Sent {formatCalendarDay(lastNudge.sent_at, market, PLAN_DAY)}
             </span>
           )}
         </div>

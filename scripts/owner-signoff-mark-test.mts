@@ -89,8 +89,42 @@ assert.match(missing, /data-owner-budget-summary/);
 assert.equal((missing.match(/Budget not built yet/g) ?? []).length, 2);
 assert.equal((missing.match(/No budget yet/g) ?? []).length, 0);
 assert.equal(missing.includes("+$") || missing.includes("+R"), false);
-assert.match(missing, /Signed off by Theo · 1 Sep 2026/);
-assert.match(missing, new RegExp(OWNER_SIGNOFF_STALE_CHIP));
+assert.equal(missing.includes("Signed off"), false, "an unbuilt budget hides the sign-off badge");
+assert.equal(missing.includes(OWNER_SIGNOFF_STALE_CHIP), false);
+
+const voided = renderToStaticMarkup(
+  createElement(BudgetVerdictStrip, {
+    periodLabel: "Mar 2026–Feb 2027, prorated",
+    revenueBudget: 490000,
+    revenueActual: 420000,
+    profitBudget: 269500,
+    profitActual: 120000,
+    chip: "From this month's actuals",
+    market: za,
+    signoff: signoff({ scope: "budget" }),
+    isStale: true,
+    presentation: "owner",
+  }),
+);
+assert.match(voided, /Void · figures changed since sign-off/);
+assert.equal(voided.includes("Signed off"), false, "a stale built budget is void, not signed off");
+assert.match(voided, /data-signoff-void/);
+
+const voidedStrip = renderToStaticMarkup(
+  createElement(BudgetVerdictStrip, {
+    periodLabel: "Mar 2026–Feb 2027, prorated",
+    revenueBudget: 490000,
+    revenueActual: 420000,
+    profitBudget: 269500,
+    profitActual: 120000,
+    chip: "From this month's actuals",
+    market: za,
+    signoff: signoff({ scope: "budget" }),
+    isStale: true,
+  }),
+);
+assert.match(voidedStrip, /Void · figures changed since sign-off/);
+assert.equal(voidedStrip.includes("Signed off"), false);
 
 const priced = renderToStaticMarkup(
   createElement(BudgetVerdictStrip, {

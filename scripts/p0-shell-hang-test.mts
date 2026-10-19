@@ -145,6 +145,12 @@ const board = readFileSync("src/components/practice-board.tsx", "utf8");
 const publish = board.indexOf("setClientRows(rawClients.map((c) => lightClientRow(c)))");
 const history = board.indexOf("client_score_history");
 assert(publish !== -1 && history !== -1 && publish < history, "clients are shown before score history is loaded");
+assert(board.includes("accountantPortalStay"), "a known accountant does not wait on the role check again");
+assert(board.includes("rememberPaintedBook"), "a painted book is reused when All clients remounts");
+assert(
+  clientRoute.includes("Loading the plan…"),
+  "the action plan chunk has a visible fallback",
+);
 
 const reportsRoute = readFileSync("src/routes/_authenticated/reports.index.tsx", "utf8");
 assert(reportsRoute.includes("component: ReportsIndexRedirect"), "/reports has a component so the redirect can settle");

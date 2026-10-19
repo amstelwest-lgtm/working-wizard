@@ -65,7 +65,7 @@ export function serviceDriverName(name: string | null | undefined): boolean {
 
 export type HotelTemplateRow = HospitalityDisplayLine;
 
-/** Hotel drivers. Rooms and food are revenue. Housekeeping and rent are costs. */
+/** Hotel drivers. Rooms and food are revenue. Housekeeping is a cost caption. */
 export function hotelTemplateRows(displayTemplate: BudgetTemplateId | null | undefined): HotelTemplateRow[] | null {
   if (displayTemplate !== "hospitality_rooms") return null;
   return hospitalityLines();

@@ -20,6 +20,7 @@ import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import { currentBudgetMonth, fyMonths, formatMonthLabel, plainBudgetWindowHeading } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {
+  BUDGET_OPENING_MISSING_LINE,
   budgetDaysNeedReview,
   budgetDaysSourceLabel,
   budgetOpeningSourceLabel,
@@ -86,6 +87,7 @@ export function BudgetWorkspace({
   statementAligned = false,
   forecastRent = null,
   onBuild,
+  openingBalanceMissing = false,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -117,6 +119,8 @@ export function BudgetWorkspace({
   /** Rent already in the 13-week forecast. Blank premises follows it. */
   forecastRent?: ForecastRent | null;
   onBuild?: () => void;
+  /** Forecast opening is blank and this plan did not type a start balance. */
+  openingBalanceMissing?: boolean;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -154,6 +158,7 @@ export function BudgetWorkspace({
           statementAligned={statementAligned}
           forecastRent={forecastRent}
           onBuild={onBuild}
+          openingBalanceMissing={openingBalanceMissing}
         />
       </div>
     );
@@ -184,6 +189,7 @@ export function BudgetWorkspace({
       statementAligned={statementAligned}
       forecastRent={forecastRent}
       onBuild={onBuild}
+      openingBalanceMissing={openingBalanceMissing}
     />
   );
 }
@@ -302,6 +308,7 @@ function BudgetComplexWorkspace({
   statementAligned = false,
   forecastRent = null,
   onBuild,
+  openingBalanceMissing = false,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -326,6 +333,7 @@ function BudgetComplexWorkspace({
   statementAligned?: boolean;
   forecastRent?: ForecastRent | null;
   onBuild?: () => void;
+  openingBalanceMissing?: boolean;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
@@ -451,6 +459,11 @@ function BudgetComplexWorkspace({
               </span>
             ) : null}
           </Label>
+          {openingBalanceMissing ? (
+            <p className="mt-1 text-sm font-semibold text-[#102A43] dark:text-slate-100" data-budget-opening-missing="">
+              {BUDGET_OPENING_MISSING_LINE}
+            </p>
+          ) : (
           <MoneyField
             value={doc.openingCash ?? 0}
             label="Opening cash"
@@ -465,6 +478,7 @@ function BudgetComplexWorkspace({
               })
             }
           />
+          )}
         </div>
         <div>
           <Label className="text-[10px] uppercase tracking-wider text-slate-500">

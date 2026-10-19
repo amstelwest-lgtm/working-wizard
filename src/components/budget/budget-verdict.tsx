@@ -16,6 +16,9 @@ import { formatVariancePct, varianceLine } from "@/lib/budget.variance";
 import type { ResolvedMarket } from "@/lib/market";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 
+/** A later change voids the budget stamp. Other tabs keep "Signed off by". */
+const BUDGET_SIGNOFF_VOID = "Void · figures changed since sign-off";
+
 /** Keep a currency amount on one line. Grouping spaces must not become wrap points. */
 function stickyMoney(n: number, market: ResolvedMarket): string {
   return fmtBudgetMoney(n, market).replace(/ /g, "\u00A0");
@@ -101,6 +104,7 @@ export function BudgetVerdictStrip({
 }) {
   const money = (n: number) => stickyMoney(n, market);
   const unbuilt = budgetFigureMissing(revenueBudget) && budgetFigureMissing(profitBudget);
+  const signoffVoid = !unbuilt && isStale && Boolean(signoff);
   const monthlyActuals = chip === "From this month's actuals";
   const hasActuals = monthlyActuals && revenueActual != null && !unbuilt;
   const seeded = budgetSeededFromStatement({
@@ -144,7 +148,13 @@ export function BudgetVerdictStrip({
             <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#3D5270]">
               Status
             </p>
-            <OwnerSignoffMark signoff={signoff} isStale={isStale} align="start" className="mt-1" />
+            {signoffVoid ? (
+              <p data-signoff-void className="mt-1 text-[12px] font-medium leading-snug text-[#102A43]">
+                {BUDGET_SIGNOFF_VOID}
+              </p>
+            ) : unbuilt ? null : (
+              <OwnerSignoffMark signoff={signoff} isStale={isStale} align="start" className="mt-1" />
+            )}
             {showBudgetSourceChip(chip) ? (
               <p className="mt-1 text-[12px] leading-snug text-[#3D5270]">{chip}</p>
             ) : null}
@@ -256,14 +266,25 @@ export function BudgetVerdictStrip({
             {chip}
           </span>
         ) : null}
-        <SignoffStatusChip
-          clientId={clientId}
-          scope="budget"
-          signoff={signoff}
-          isStale={isStale}
-          known={signoffKnown}
-          hideDraft={Math.abs(revenueBudget) >= 1 || Math.abs(profitBudget) >= 1}
-        />
+        {signoffVoid ? (
+          <p
+            data-signoff-void
+            data-signoff-status
+            data-signoff-scope="budget"
+            className="answer-strip__status"
+          >
+            {BUDGET_SIGNOFF_VOID}
+          </p>
+        ) : unbuilt ? null : (
+          <SignoffStatusChip
+            clientId={clientId}
+            scope="budget"
+            signoff={signoff}
+            isStale={isStale}
+            known={signoffKnown}
+            hideDraft={Math.abs(revenueBudget) >= 1 || Math.abs(profitBudget) >= 1}
+          />
+        )}
       </div>
     </section>
   );
