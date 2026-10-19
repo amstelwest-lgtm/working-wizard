@@ -4828,6 +4828,12 @@ function ClientView() {
                         setCashForecastReloadToken((n) => n + 1);
                         openHomeSection("cash", "forecast");
                       }}
+                      seededBooks={{
+                        budget: client.budget,
+                        cashflow: client.cashflow,
+                        financials: client.financials ?? null,
+                        financialsUpdatedAt: client.financials_updated_at ?? null,
+                      }}
                       lens={search.section === "months" ? "table" : "chart"}
                       onLensChange={(next) => {
                         void navigate({
@@ -5158,7 +5164,13 @@ function ClientView() {
               near-transparent cream — titles vanished in light mode. */}
                   <TabErrorBoundary label="Action Plan">
                     <div id="action-plan-work">
-                    <Suspense fallback={null}>
+                    <Suspense
+                      fallback={
+                        <div className="rounded-xl border border-[#DBEAFE] bg-white p-8 text-sm font-semibold text-[#102A43]">
+                          Loading the plan…
+                        </div>
+                      }
+                    >
                       {activeTab === "plan" && (
                         <ActionPlanPanel
                           key={`${client.id}-${search.filter ?? "all"}`}

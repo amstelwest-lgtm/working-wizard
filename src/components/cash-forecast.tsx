@@ -2783,6 +2783,13 @@ export function CashForecastPanel({
             )}
             <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
           </div>
+          {!loaded ? (
+            <div
+              data-cash-grid-loading
+              aria-busy="true"
+              className="h-64 animate-pulse rounded-xl bg-slate-200/80 dark:bg-slate-800"
+            />
+          ) : (
           <CashThirteenWeekGrid
             weeks={weeks}
             opening={baseCalc.opening}
@@ -2814,6 +2821,7 @@ export function CashForecastPanel({
             openingMissing={openingTilesMissing}
             onCommit={commitWeekOverride}
           />
+          )}
         </section>
       </CardContent>
     </Card>
@@ -2834,6 +2842,13 @@ export function CashForecastPanel({
       onOpenChange={(next) => setCashEnlarge(next ? "table" : null)}
       title="13-week cash flow"
     >
+      {!loaded ? (
+        <div
+          data-cash-grid-loading
+          aria-busy="true"
+          className="h-64 animate-pulse rounded-xl bg-slate-200/80 dark:bg-slate-800"
+        />
+      ) : (
       <CashThirteenWeekGrid
         weeks={weeks}
         opening={baseCalc.opening}
@@ -2866,6 +2881,7 @@ export function CashForecastPanel({
         onCommit={commitWeekOverride}
         scrollClassName="cash-13w-scroll--sheet"
       />
+      )}
     </EnlargeSheet>
     </>
   );

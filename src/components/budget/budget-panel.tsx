@@ -11,6 +11,7 @@ import { BudgetAdvancedPanel } from "@/components/budget/budget-advanced";
 import type { BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
 import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
 import {
+  budgetOpeningReadsMissing,
   budgetIsImplausible,
   statementBudgetRead,
   budgetScaleBreak,
@@ -53,6 +54,65 @@ import { budgetSaveErrorMessage } from "@/lib/reach-error";
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
 import type { BudgetYearMoney } from "@/lib/budget-year-compare";
 
+type StoredBudgetRow = {
+  budget?: BudgetDocument | null;
+  budget_updated_at?: string | null;
+  operating_profile?: unknown;
+  financials?: Record<string, string | number | null> | null;
+  cashflow?: unknown;
+  financials_updated_at?: string | null;
+};
+
+type BudgetSeedBooks = {
+  budget?: unknown;
+  cashflow?: unknown;
+  financials?: Record<string, string | number | null> | null;
+  financialsUpdatedAt?: string | null;
+};
+
+function budgetDocFromStoredRow(row: StoredBudgetRow | null): {
+  doc: BudgetDocument | null;
+  changed: boolean;
+} {
+  const budget = row?.budget ?? null;
+  if (!row || !budget || budget.version !== 1) return { doc: null, changed: false };
+  const financials = row.financials ?? null;
+  const normalized = normalizeBudgetDocument(budget);
+  const next = applyForecastRent(
+    publishBudgetDocument(normalized, financials, {
+      cashflow: row.cashflow,
+      financialsUpdatedAt: row.financials_updated_at ?? null,
+    }),
+    row.cashflow,
+  );
+  return { doc: next, changed: budgetPlanFiguresChanged(normalized, next) };
+}
+
+function seedToStoredRow(seed: BudgetSeedBooks | null | undefined): StoredBudgetRow | null {
+  if (!seed) return null;
+  return {
+    budget: (seed.budget ?? null) as BudgetDocument | null,
+    financials: seed.financials ?? null,
+    cashflow: seed.cashflow,
+    financials_updated_at: seed.financialsUpdatedAt ?? null,
+  };
+}
+
+/** Paint from the client row already on the page. A bad blob falls through to the select. */
+function seedPaint(
+  clientId: string | undefined,
+  seed: BudgetSeedBooks | null | undefined,
+): { doc: BudgetDocument | null; changed: boolean; skip: boolean } {
+  if (!clientId || !seed) return { doc: null, changed: false, skip: false };
+  try {
+    const applied = budgetDocFromStoredRow(seedToStoredRow(seed));
+    return { doc: applied.doc, changed: applied.changed, skip: true };
+  } catch (err) {
+    console.warn("budget seed:", err);
+    return { doc: null, changed: false, skip: false };
+  }
+}
+
 export function BudgetPanel({
   clientId,
   clientName,
@@ -81,6 +141,7 @@ export function BudgetPanel({
   priorYear = null,
   priorYearLabel = null,
   priorYearMonths = null,
+  seededBooks = null,
 }: {
   clientId?: string;
   clientName?: string;
@@ -122,11 +183,22 @@ export function BudgetPanel({
   priorYear?: BudgetYearMoney | null;
   priorYearLabel?: string | null;
   priorYearMonths?: number | null;
+  /**
+   * Books the client page already loaded. The tab paints from these and
+   * skips a second fat select until reloadToken asks for a fresh read.
+   */
+  seededBooks?: BudgetSeedBooks | null;
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
-  const [loaded, setLoaded] = useState(!clientId);
-  const [doc, setDoc] = useState<BudgetDocument | null>(null);
+  const seededBooksRef = useRef(seededBooks);
+  seededBooksRef.current = seededBooks;
+  const initialSeedRef = useRef<ReturnType<typeof seedPaint> | null>(null);
+  if (initialSeedRef.current == null) initialSeedRef.current = seedPaint(clientId, seededBooks);
+  const initialSeed = initialSeedRef.current;
+  const skipFatSelect = useRef(initialSeed.skip);
+  const [loaded, setLoaded] = useState(() => !clientId || initialSeed.skip);
+  const [doc, setDoc] = useState<BudgetDocument | null>(initialSeed.doc);
   const [profile, setProfile] = useState<ClientOperatingProfile | null>(
     operatingProfileProp ?? null,
   );
@@ -137,7 +209,9 @@ export function BudgetPanel({
   } | null>(null);
   const [lowOverlapOpen, setLowOverlapOpen] = useState(false);
   const [budgetUpdatedAt, setBudgetUpdatedAt] = useState<string | null>(null);
-  const [financialsUpdatedAt, setFinancialsUpdatedAt] = useState<string | null>(null);
+  const [financialsUpdatedAt, setFinancialsUpdatedAt] = useState<string | null>(
+    seededBooks?.financialsUpdatedAt ?? null,
+  );
   const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(
     signoffProp ?? null,
   );
@@ -149,24 +223,43 @@ export function BudgetPanel({
   const seededFromProfile = useRef(false);
   /** Client id whose budget is in `doc`. A switch clears this before the next fetch. */
   const loadedFor = useRef<string | null>(null);
-  const loadedFinancialsRef = useRef<Record<string, string | number | null> | null>(null);
-  const loadedCashflowRef = useRef<unknown>(null);
+  const loadedFinancialsRef = useRef<Record<string, string | number | null> | null>(
+    seededBooks?.financials ?? null,
+  );
+  const loadedCashflowRef = useRef<unknown>(seededBooks?.cashflow ?? null);
 
   useEffect(() => {
     setProfile(operatingProfileProp ?? null);
   }, [operatingProfileProp]);
 
   useEffect(() => {
-    loadedFor.current = null;
     loadedFinancialsRef.current = null;
     loadedCashflowRef.current = null;
     seededFromProfile.current = false;
     budgetDirty.current = false;
     skipAutosave.current = true;
     saveGeneration.current += 1;
+    const painted = seedPaint(clientId, seededBooksRef.current);
+    if (painted.skip) {
+      const seed = seedToStoredRow(seededBooksRef.current);
+      loadedFinancialsRef.current = seed?.financials ?? null;
+      loadedCashflowRef.current = seed?.cashflow ?? null;
+      setFinancialsUpdatedAt(seed?.financials_updated_at ?? null);
+      setBudgetUpdatedAt(null);
+      loadedFor.current = clientId ?? null;
+      skipAutosave.current = !painted.changed;
+      budgetDirty.current = painted.changed;
+      setDoc(painted.doc);
+      setLoaded(true);
+      skipFatSelect.current = true;
+      return;
+    }
+    loadedFor.current = null;
     setDoc(null);
     setBudgetUpdatedAt(null);
+    setFinancialsUpdatedAt(null);
     setLoaded(!clientId);
+    skipFatSelect.current = false;
   }, [clientId]);
 
   useEffect(() => {
@@ -179,58 +272,8 @@ export function BudgetPanel({
     // budget just seeded from the profile — "Budget ready" toast, empty panel.
     let cancelled = false;
     const requestedId = clientId;
-    supabase
-      .from("clients")
-      .select(
-        "budget, budget_updated_at, financial_year_start_month, operating_profile, financials, cashflow, financials_updated_at",
-      )
-      .eq("id", clientId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.warn("budget load:", error.message);
-        }
-        if (cancelled) return;
-        const row = data as {
-          budget?: BudgetDocument | null;
-          budget_updated_at?: string | null;
-          operating_profile?: unknown;
-          financials?: Record<string, string | number | null> | null;
-          cashflow?: unknown;
-          financials_updated_at?: string | null;
-        } | null;
-        const budget = row?.budget ?? null;
-        loadedFinancialsRef.current = row?.financials ?? null;
-        loadedCashflowRef.current = row?.cashflow ?? null;
-        setBudgetUpdatedAt(row?.budget_updated_at ?? null);
-        setFinancialsUpdatedAt(row?.financials_updated_at ?? null);
-        const fromDb = parseOperatingProfile(row?.operating_profile);
-        if (fromDb) setProfile(fromDb);
-        loadedFor.current = requestedId;
-        if (budget && budget.version === 1) {
-          const financials = row?.financials ?? null;
-          const normalized = normalizeBudgetDocument(budget);
-          // A 10× plan stays on screen as a suggestion. Opening cash and
-          // days still come from this client. Nothing is rebuilt on load.
-          const next = applyForecastRent(
-            publishBudgetDocument(normalized, financials, {
-              cashflow: row?.cashflow,
-              financialsUpdatedAt: row?.financials_updated_at ?? null,
-            }),
-            row?.cashflow,
-          );
-          const changed = budgetPlanFiguresChanged(normalized, next);
-          skipAutosave.current = !changed;
-          budgetDirty.current = changed;
-          setDoc(next);
-        } else {
-          budgetDirty.current = false;
-          setDoc(null);
-        }
-        setLoaded(true);
-      });
-    void (supabase as unknown as {
+    const loadSnapshot = () => {
+      void (supabase as unknown as {
       from: (table: string) => {
         select: (cols: string) => {
           eq: (col: string, value: string) => {
@@ -253,6 +296,44 @@ export function BudgetPanel({
       .catch(() => {
         if (!cancelled) setSignedBudgetSnapshot(null);
       });
+    };
+    if (skipFatSelect.current) {
+      skipFatSelect.current = false;
+      loadSnapshot();
+      return () => {
+        cancelled = true;
+      };
+    }
+    supabase
+      .from("clients")
+      .select(
+        "budget, budget_updated_at, financial_year_start_month, operating_profile, financials, cashflow, financials_updated_at",
+      )
+      .eq("id", clientId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn("budget load:", error.message);
+        }
+        if (cancelled) return;
+        const row = data as StoredBudgetRow | null;
+        loadedFinancialsRef.current = row?.financials ?? null;
+        loadedCashflowRef.current = row?.cashflow ?? null;
+        setBudgetUpdatedAt(row?.budget_updated_at ?? null);
+        setFinancialsUpdatedAt(row?.financials_updated_at ?? null);
+        const fromDb = parseOperatingProfile(row?.operating_profile);
+        if (fromDb) setProfile(fromDb);
+        loadedFor.current = requestedId;
+        // A 10× plan stays on screen as a suggestion. Opening cash and
+        // days still come from this client. Nothing is rebuilt on load.
+        const applied = budgetDocFromStoredRow(row);
+        skipAutosave.current = !applied.changed;
+        budgetDirty.current = applied.changed;
+        setDoc(applied.doc);
+        setLoaded(true);
+      });
+    loadSnapshot();
     return () => {
       cancelled = true;
     };
@@ -679,6 +760,11 @@ export function BudgetPanel({
         priorYearMonths={priorYearMonths}
         displayTemplateId={industryBudgetTemplate(clientName, profile, businessTypeId)}
         forecastRent={forecastRentPayment(loadedCashflowRef.current)}
+        openingBalanceMissing={budgetOpeningReadsMissing({
+          cashflow: loadedCashflowRef.current,
+          openingCash: shownDoc.openingCash,
+          openingCashSource: shownDoc.openingCashSource,
+        })}
       />
 
       <Dialog open={lowOverlapOpen} onOpenChange={setLowOverlapOpen}>

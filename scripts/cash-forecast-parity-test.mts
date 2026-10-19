@@ -26,6 +26,7 @@ import {
   forecastRunwayHeadlineShared,
   openingSourceLabel,
 } from "../src/lib/cash-forecast-parity";
+import { budgetOpeningReadsMissing } from "../src/lib/budget.bridges.ts";
 import { formatMoneyChartTick } from "../src/lib/market/format.ts";
 import { resolveMarket } from "../src/lib/market/resolve.ts";
 import { cashForecastNarrative } from "../src/reports/narrative.ts";
@@ -174,6 +175,22 @@ const cashTab = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8"
 const nothingPhrases = cashTab.split("Nothing is forecast yet").length - 1;
 assert(nothingPhrases === 1, `empty copy is said once, found ${nothingPhrases}`);
 assert(cashTab.includes("cashEmptyPresentation"), "the tab uses the empty-state helper");
+assert(cashTab.includes("data-cash-grid-loading"), "the week grid waits on a skeleton until the forecast loads");
+assert(
+  budgetOpeningReadsMissing({ cashflow: {}, openingCash: 0, openingCashSource: null }),
+  "a blank forecast opening is missing on the budget",
+);
+assert(
+  budgetOpeningReadsMissing({
+    cashflow: { openingBalanceSource: "bank", openingBalance: "0" },
+    openingCash: 0,
+  }) === false,
+  "a sourced zero is a real opening",
+);
+assert(
+  budgetOpeningReadsMissing({ cashflow: {}, openingCash: 0, openingCashSource: "manual" }) === false,
+  "a typed zero stays a zero",
+);
 assert(!cashTab.includes("baseResetRef"), "reset to base does not schedule a database write");
 assert(!cashTab.includes("storedCollectDelay"), "opening the tab does not restore a saved collection delay");
 assert(cashTab.includes("baseCashflow({})"), "a real base save writes base knobs, not the session scenario");

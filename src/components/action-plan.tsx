@@ -707,28 +707,36 @@ export default function ActionPlanPanel({
         }
       }
       setPlan(p);
-      const [{ data: its }, { data: emps }] = await Promise.all([
+      // Plan, items, and the assignee lists paint the board before notes,
+      // hand-off runs, milestones, and mail, so the tab is not blank while
+      // those follow. Runs stay on their own load, then pickups paint from them.
+      const [itsRes, empsRes, practice] = await Promise.all([
         supabase.from("action_items_v").select("*").eq("plan_id", p.id).order("seq"),
         supabase
           .from("client_employees")
           .select("id,name,email,role")
           .eq("client_id", clientId)
           .order("name"),
+        (async () => {
+          // client_employees is the SME assignee list and is empty on a new firm
+          // client. Firm members live on client_practice_access (deny-all RLS), so
+          // the owner picker reads them through list_client_practice_team.
+          try {
+            const { data: practiceData, error: practiceErr } = await supabase.rpc(
+              "list_client_practice_team" as never,
+              { _client_id: clientId } as never,
+            );
+            if (practiceErr) return [] as PracticeTeamRow[];
+            return practiceTeamRows(practiceData);
+          } catch {
+            return [] as PracticeTeamRow[];
+          }
+        })(),
       ]);
-      // client_employees is the SME assignee list and is empty on a new firm
-      // client. Firm members live on client_practice_access (deny-all RLS), so
-      // the owner picker reads them through list_client_practice_team.
-      let practice: PracticeTeamRow[] = [];
-      try {
-        const { data: practiceData, error: practiceErr } = await supabase.rpc(
-          "list_client_practice_team" as never,
-          { _client_id: clientId } as never,
-        );
-        if (!practiceErr) practice = practiceTeamRows(practiceData);
-      } catch {
-        practice = [];
-      }
-      const list = (its ?? []) as Item[];
+      const list = (itsRes.data ?? []) as Item[];
+      setItems(list);
+      setEmployees(mergeActionPlanTeam((empsRes.data ?? []) as Employee[], practice));
+      setLoading(false);
       let shown = list;
       let loadedNotes: Record<string, AssignmentNoteRow[]> = {};
       if (list.length) {
@@ -782,9 +790,8 @@ export default function ActionPlanPanel({
       setItemNotes(stripSuppressedNotes(painted.notes));
       setItems(painted.items);
       setPickups(painted.pickups);
-      setEmployees(mergeActionPlanTeam((emps ?? []) as Employee[], practice));
       if (list.length) {
-        const ids = list.map((i) => i.id);
+        const ids = list.map((item) => item.id);
         const [{ data: ms }, { data: emails }] = await Promise.all([
           supabase.from("action_milestones").select("*").in("action_item_id", ids).order("week_no"),
           supabase
@@ -2736,7 +2743,7 @@ function ItemRow({
           ) : null}
           {lastNudge?.sent_at && (
             <span className="text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
-              {formatCalendarDay(lastNudge.sent_at, market, PLAN_DAY)}
+              Sent {formatCalendarDay(lastNudge.sent_at, market, PLAN_DAY)}
             </span>
           )}
         </div>

@@ -18,6 +18,7 @@ import {
   serviceDriverName,
 } from "../src/lib/budget-industry.ts";
 import { budgetYtdWithStatement } from "../src/lib/budget-chart-table.ts";
+import { OVERHEAD_BUCKETS } from "../src/lib/budget.templates.ts";
 import {
   actionDisplayTitle,
   planGoalIsOverdue,
@@ -166,9 +167,14 @@ for (const file of readdirSync(resolve("scripts")).filter((name) => name.endsWit
 const hotelRows = hotelTemplateRows("hospitality_rooms");
 assert(hotelRows != null, "the hotel template has rows");
 const hotelText = hotelRows!.map((row) => `${row.name} ${row.detail} ${row.value}`).join(" | ");
-for (const phrase of ["Room-nights", "ADR", "Occupancy", "Food & beverage", "Housekeeping and staff", "Rent", "—"]) {
+for (const phrase of ["Room-nights", "ADR", "Occupancy", "Food & beverage", "Housekeeping and staff", "—"]) {
   assert(hotelText.includes(phrase), `hotel template includes ${phrase}`);
 }
+assert(!hotelRows!.some((row) => row.name === "Rent"), "hotel cost captions do not repeat rent");
+assert(
+  OVERHEAD_BUCKETS.some((bucket) => bucket.name === "Premises / rent"),
+  "premises rent stays the overhead money line",
+);
 assert(hotelRows!.some((row) => row.value === "Occupancy —"), "occupancy without a stored figure stays blank");
 assert(serviceDriverName("Day / shift labour") && serviceDriverName("Billable work") && serviceDriverName("Jobs / call-outs"), "service driver names are hidden on a hotel");
 assert(budgetPriceLabel("day_labour", "hospitality_rooms", "Day rate") === "ADR", "a hotel price reads ADR");

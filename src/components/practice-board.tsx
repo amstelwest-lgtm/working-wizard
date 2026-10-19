@@ -3,6 +3,11 @@ import { PeriodPill } from "@/components/chrome-icons";
 import { useEffect, useMemo, useState, useRef, Fragment } from "react";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import {
+  forgetPaintedBook,
+  readPaintedBook,
+  rememberPaintedBook,
+} from "@/lib/practice-book-cache";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -1258,6 +1263,9 @@ function practiceSectionSubtitle(view: PracticeSection): string {
   return "Definitions and the highest-impact repair steps.";
 }
 
+/** A stay that already succeeded. Remounting All clients must not wait on it again. */
+const accountantPortalStay = new Set<string>();
+
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -1268,12 +1276,18 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   // Business-client credentials must not sit on the practice portal. Wait for
   // the stay check before painting the board so we never flash firm UI or
   // trigger add-client against an owner login.
-  const [portalReady, setPortalReady] = useState(false);
   const portalUserId = user?.id ?? null;
+  const [portalReady, setPortalReady] = useState(
+    () => portalUserId != null && accountantPortalStay.has(portalUserId),
+  );
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   useEffect(() => {
     if (!portalUserId) return;
+    if (accountantPortalStay.has(portalUserId)) {
+      setPortalReady(true);
+      return;
+    }
     let cancelled = false;
     setPortalReady(false);
     const timer = window.setTimeout(() => {
@@ -1290,6 +1304,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       if (cancelled) return;
       window.clearTimeout(timer);
       if (stay) {
+        accountantPortalStay.add(portalUserId);
         setPortalIntent("accountant");
         clearForcePortal();
         setPortalReady(true);
@@ -1320,11 +1335,12 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       : null);
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [clientRows, setClientRows] = useState<ClientRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const warmBook = readPaintedBook<ClientRow>(user?.id, firmId);
+  const [clientRows, setClientRows] = useState<ClientRow[]>(() => warmBook ?? []);
+  const [loading, setLoading] = useState(() => warmBook == null);
   /** Open queries and follow-ups stay on a loading state until enrichment lands. */
-  const [countsReady, setCountsReady] = useState(false);
-  /** Set only after the enriched rows land. The shell timer must not set this. */
+  const [countsReady, setCountsReady] = useState(() => warmBook != null);
+  /** Set only after the enriched rows land. A warm paint and the shell timer must not set this. */
   const [bookEnriched, setBookEnriched] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -1455,8 +1471,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const load = async (activeFirmId: string | null, userId: string | undefined, viewerName?: string | null) => {
     const gen = ++loadGen.current;
     setBookEnriched(false);
-    setLoading(true);
-    setCountsReady(false);
+    const warm = readPaintedBook<ClientRow>(userId, activeFirmId);
+    if (warm) {
+      setClientRows(warm);
+      setLoading(false);
+    } else {
+      setLoading(true);
+      setCountsReady(false);
+    }
     try {
 
     if (!userId) {
@@ -1524,7 +1546,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     );
 
     if (gen !== loadGen.current) return;
+    const lightRows = rawClients.map((c) => lightClientRow(c));
     setClientRows(rawClients.map((c) => lightClientRow(c)));
+    rememberPaintedBook(userId, activeFirmId, lightRows);
     if (rawClients.length === 0) setCountsReady(true);
     setLoading(false);
 
@@ -1645,19 +1669,21 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         cashflow: book?.cashflow ?? client.cashflow,
       };
     });
-    setClientRows(
-      rawClients.map((c) =>
-        toClientRow(
-          c,
-          historyMap[c.id] ?? [],
-          openActionsMap[c.id] ?? 0,
-          overdueActionsMap[c.id] ?? 0,
-          openQueriesMap[c.id] ?? 0,
-          chaseActionsMap[c.id] ?? [],
-        ),
+    const fullRows = rawClients.map((c) =>
+      toClientRow(
+        c,
+        historyMap[c.id] ?? [],
+        openActionsMap[c.id] ?? 0,
+        overdueActionsMap[c.id] ?? 0,
+        openQueriesMap[c.id] ?? 0,
+        chaseActionsMap[c.id] ?? [],
       ),
     );
-    if (gen === loadGen.current) setBookEnriched(true);
+    if (gen === loadGen.current) {
+      setClientRows(fullRows);
+      rememberPaintedBook(userId, activeFirmId, fullRows);
+      setBookEnriched(true);
+    }
     } catch (err) {
       console.error("practice book:", err);
     } finally {
@@ -2654,6 +2680,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             const wasFirst = firstClientOpen;
             setFirstClientOpen(false);
             setAddOpen(false);
+            forgetPaintedBook(user.id, firm?.id ?? firmId);
+            forgetPaintedBook(user.id, created.firm_id ?? null);
             void (async () => {
               await refreshFirms();
               void load(created.firm_id ?? firmId, user.id, greetingSource);

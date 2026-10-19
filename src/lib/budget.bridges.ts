@@ -8,7 +8,7 @@ import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compu
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
 import { periodProfitBridge } from "@/lib/period-profit";
-import { assessClientMetrics } from "@/lib/client-metrics";
+import { assessClientMetrics, storedOpeningIsMissing } from "@/lib/client-metrics";
 import {
   DAYS_REVIEW_LIMIT,
   computedDaysAp,
@@ -710,6 +710,24 @@ export function repairUntouchedSeededBudget(
 }
 
 export type BudgetOpeningSource = "bank" | "statement" | "manual";
+
+/** Same sentence as the 13-week forecast when the stored opening is blank. */
+export const BUDGET_OPENING_MISSING_LINE = "Opening balance missing · add it";
+
+/**
+ * Budget opening of 0 is the forecast's missing opening, unless someone typed it.
+ * A manual zero stays a zero. A sourced or non-zero opening stays money.
+ */
+export function budgetOpeningReadsMissing(input: {
+  cashflow: unknown;
+  openingCash: number | null | undefined;
+  openingCashSource?: string | null;
+}): boolean {
+  if (input.openingCashSource === "manual") return false;
+  const opening = input.openingCash ?? 0;
+  if (!Number.isFinite(opening) || Math.abs(opening) >= 0.5) return false;
+  return storedOpeningIsMissing(input.cashflow);
+}
 
 export function budgetOpeningSourceLabel(
   source: BudgetOpeningSource | null | undefined,

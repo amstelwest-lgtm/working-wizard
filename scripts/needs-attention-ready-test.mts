@@ -99,7 +99,19 @@ const paintAt = board.lastIndexOf("toClientRow(");
 assert(paintAt > 0, "enriched rows still paint through toClientRow");
 const paint = board.slice(paintAt, paintAt + 500);
 assert(paint.includes("setBookEnriched(true)"), "enrichment is what marks the book enriched");
+assert(paint.includes("gen === loadGen.current"), "enrichment marks the book only for the current load");
 assert(board.includes("setBookEnriched(false)"), "a new load clears the enriched flag");
+
+const warmAt = board.indexOf("const warm = readPaintedBook");
+assert(warmAt > 0, "load paints a warm book when one is stored");
+const warmBlock = board.slice(warmAt, board.indexOf("try {", warmAt));
+assert(warmBlock.includes("setClientRows(warm)"), "the warm book shows immediately");
+assert(!warmBlock.includes("setBookEnriched(true)"), "a warm paint never flips bookEnriched true");
+
+const lightAt = board.indexOf("const lightRows = rawClients.map");
+assert(lightAt > 0, "the slim list paints before enrichment");
+const lightBlock = board.slice(lightAt, board.indexOf("const historyPromise", lightAt));
+assert(!lightBlock.includes("setBookEnriched(true)"), "the slim paint never flips bookEnriched true");
 assert(board.includes("actionIsOverdue"), "the overdue predicate stays on the board");
 
 console.log("needs-attention-ready: ok");
