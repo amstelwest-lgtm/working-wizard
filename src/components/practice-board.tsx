@@ -60,6 +60,7 @@ import {
 } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
 import { clientListRunwayCell, clientListRunwayHeadline, clientListStatusWord, statusColumnNeedsAttention } from "@/lib/cash-forecast-parity";
+import { revealPracticeHash } from "@/lib/practice-section-hash";
 import {
   assessClientMetrics,
   forecastIsCashGenerative,
@@ -1685,14 +1686,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const bookLoading = loading || brandLoading;
   useEffect(() => {
     if (!portalReady) return;
-    const id = (practiceHash ?? "").replace(/^#/, "");
-    if (!id) return;
-    const el = document.getElementById(id);
-    if (!el) return;
-    const details =
-      el instanceof HTMLDetailsElement ? el : el.querySelector("details");
-    if (details instanceof HTMLDetailsElement) details.open = true;
-    el.scrollIntoView({ block: "start" });
+    revealPracticeHash(practiceHash);
   }, [portalReady, practiceHash, view, bookLoading, clientRows.length]);
   const countsLoading = !countsReady;
   const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);

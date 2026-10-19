@@ -60,8 +60,10 @@ const story = forecastRunwayHeadlineShared({
   runwayLabel: "21 weeks",
 });
 assert(story.headline === "2 weeks below", story.headline);
-const weeksCell = clientListRunwayCell({ weeks: 13, reason: "13 weeks below" });
-assert(weeksCell.value === "13 weeks" && weeksCell.title == null, "a counted runway is weeks");
+const weeksCell = clientListRunwayCell({ weeks: null, reason: "13 weeks below" });
+assert(weeksCell.value === "13 weeks" && weeksCell.title == null, "weeks below the floor reads as weeks");
+const burnCell = clientListRunwayCell({ weeks: 6, reason: "—" });
+assert(burnCell.value === "6 weeks" && burnCell.title == null, "a counted runway is weeks");
 const missingCell = clientListRunwayCell({ weeks: 13, reason: "Opening balance missing" });
 assert(
   missingCell.value === "—" && missingCell.title === "Opening balance missing",

@@ -28,6 +28,9 @@ import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deli
 import { FirmDashboardCrumb } from "@/components/firm-dashboard-crumb";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { ProductMixPanel } from "@/components/product-mix-panel";
+import { FinancialInputsContext } from "@/contexts/financial-inputs";
+import { emptyWeeklyInputs } from "@/lib/weekly-inputs";
+import { parseProductMix } from "@/lib/product-mix";
 import {
   ProfitabilityWaterfall,
   profitAnswerSentence,
@@ -681,7 +684,7 @@ function ProfitPane({ clientId }: { clientId: string }) {
             {
               id: "lines",
               label: "Product lines",
-              detail: "Revenue and net profit by product line.",
+              detail: "Revenue and gross profit by product line.",
               search: (prev) => accountantClientTabSearch(prev, "profit", { section: "lines" }),
             },
           ]}
@@ -692,12 +695,32 @@ function ProfitPane({ clientId }: { clientId: string }) {
           id="lines"
           eyebrow="Profit"
           title="Product lines"
-          subtitle="Revenue and net profit by product line, so you can see which lines actually make the money."
+          subtitle="Revenue and gross profit by product line, so you can see which lines actually make the money."
         >
-          <ProductMixPanel
-            totalRevenue={420000}
-            incentive="Answer these to build revenue and net profit per product line."
-          />
+          <FinancialInputsContext.Provider
+            value={{
+              weeklyInputs: emptyWeeklyInputs(),
+              updateWeek: () => {},
+              saveProductMix: () => {},
+              productMix: parseProductMix({
+                version: 3,
+                confirmedAt: "2026-09-04",
+                active: true,
+                totalRevenue: 10000,
+                lines: [
+                  { id: "p1", name: "product 1", unitCost: 43.9, sellPrice: 100 },
+                  { id: "p2", name: "product 2", unitCost: 43.9, sellPrice: 100 },
+                  { id: "p3", name: "product 3", unitCost: 43.9, sellPrice: 100 },
+                  { id: "p4", name: "product 4", unitCost: 43.9, sellPrice: 100 },
+                ],
+              }),
+            }}
+          >
+            <ProductMixPanel
+              totalRevenue={420000}
+              incentive="Answer these to build revenue and gross profit per product line."
+            />
+          </FinancialInputsContext.Provider>
         </ClientSubpageFrame>
       ) : null}
       {section === "waterfall" ? (

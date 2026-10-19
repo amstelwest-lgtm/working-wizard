@@ -197,6 +197,11 @@ export function clientListRunwayCell(input: {
   if (reason === OPENING_BALANCE_MISSING) {
     return { value: "—", title: OPENING_BALANCE_MISSING };
   }
+  const below = reason.match(/^(\d+) weeks? below$/i);
+  if (below) {
+    const weeks = Number(below[1]);
+    return { value: weeks === 1 ? "1 week" : `${weeks} weeks` };
+  }
   if (input.weeks != null && Number.isFinite(input.weeks)) {
     const weeks = Number.isInteger(input.weeks) ? input.weeks : Math.round(input.weeks);
     return { value: weeks === 1 ? "1 week" : `${weeks} weeks` };

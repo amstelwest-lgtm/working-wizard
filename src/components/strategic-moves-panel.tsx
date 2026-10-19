@@ -67,7 +67,7 @@ export function StrategicMovesPanel({
         <section className="card pad">
           <span className="eyebrow">Strategic Moves</span>
           <ol className="brain-list" style={{ marginTop: 14 }}>
-            {moves.map((move) => (
+            {moves.map((move, index) => (
               <li key={move.key} className="brain-row">
                 <div>
                   <div className="brain-row-title">
