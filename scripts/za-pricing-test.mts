@@ -48,12 +48,12 @@ assert(perClientRands(7999, 500) === 16, "Scale is about R16 per client");
 
 const copy = loadSaPricingCopy();
 assert(copy.heading === "Pricing in rand", "heading");
-assert(copy.heroNote === "Plans from R299/mo after day 14.", "hero");
-assert(copy.labels.starter.month === "R299/mo · about R60 per client", "starter monthly line");
-assert(copy.labels.starter.year === "R2,837/yr · about R60 per client", "starter annual matches Stripe");
+assert(copy.heroNote === "Plans from R 299/mo after day 14.", "hero");
+assert(copy.labels.starter.month === "R 299/mo · about R 60 per client", "starter monthly line");
+assert(copy.labels.starter.year === "R 2 837/yr · about R 60 per client", "starter annual matches Stripe");
 assert(zaBandAmountCents("starter", "year") === 283_700, "starter annual rand is R2,837");
-assert(copy.ownerMonthly === "R299/mo", "owner monthly is R299");
-assert(copy.ownerHomepageCost.includes("R299/mo"), "owner homepage sentence is R299");
+assert(copy.ownerMonthly === "R 299/mo", "owner monthly is R299");
+assert(copy.ownerHomepageCost.includes("R 299/mo"), "owner homepage sentence is R299");
 
 const retiredOwnerRand = "R" + "199";
 function walkText(dir: string, out: string[] = []): string[] {
@@ -69,9 +69,9 @@ const retiredHits = ["src", "docs", "scripts"]
   .flatMap((dir) => walkText(resolve(dir)))
   .filter((path) => readFileSync(path, "utf8").includes(retiredOwnerRand));
 assert(retiredHits.length === 0, `retired owner rand remains in ${retiredHits.join(", ")}`);
-assert(copy.labels.solo.month === "R799/mo · about R53 per client", "solo monthly line");
+assert(copy.labels.solo.month === "R 799/mo · about R 53 per client", "solo monthly line");
 assert(!copy.labels.solo.month.toLowerCase().includes("vat"), "price line has no tax wording");
-assert(copy.labels.small.month === "R1,199/mo · about R48 per client", "small monthly line");
+assert(copy.labels.small.month === "R 1 199/mo · about R 48 per client", "small monthly line");
 assert(zaCatalogEntries().length === 16, "eight bands, monthly and annual");
 assert(
   zaCatalogEntries().every((row) => row.currency === "zar" && !("tax_rates" in row)),

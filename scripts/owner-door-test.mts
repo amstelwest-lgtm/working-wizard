@@ -671,7 +671,7 @@ const comfortCue = cashFloorForHome({
   money: (amount) => `$${Math.round(amount)}`,
 });
 assert(
-  comfortCue?.healthCue === "Below your $50k minimum · see FM",
+  comfortCue?.healthCue === "Below your $50k minimum · Financial Manager",
   comfortCue?.healthCue ?? "health uses the card cashflow when there is no outlook",
 );
 const belowCue = cashFloorCopy({
@@ -680,7 +680,7 @@ const belowCue = cashFloorCopy({
   money: (amount) => `$${amount}`,
   market: floorMarket,
 });
-assert(belowCue.healthCue === "Below your $50k minimum · see FM", belowCue.healthCue ?? "missing cue");
+assert(belowCue.healthCue === "Below your $50k minimum · Financial Manager", belowCue.healthCue ?? "missing cue");
 assert(belowCue.chip === "Below your minimum", "the health line uses the floor chip");
 const dipCopy = cashFloorCopy({
   opening: 44480,
@@ -695,7 +695,7 @@ assert(
   dipCopy.sentence,
 );
 assert(
-  dipCopy.healthCue?.includes("minimum · see FM") === true,
+  dipCopy.healthCue?.includes("minimum · Financial Manager") === true,
   dipCopy.healthCue ?? "a dip that the card flags also lines the cash pillar",
 );
 assert(dipCopy.chip === "Below your minimum", "a projected dip keeps the floor chip");
@@ -1173,7 +1173,7 @@ assert(
   ownerApp.includes("HEALTH_RING_CAPTION") &&
     sphere.includes("export const HEALTH_RING_CAPTION = HEALTH_DRILL_CUE") &&
     readFileSync("src/components/health-drill-cue.tsx", "utf8").includes(
-      'HEALTH_DRILL_CUE = "Tap to see more"',
+      'HEALTH_DRILL_CUE = "See more"',
     ),
   "the owner health ring uses the same Tap to see more cue as the pillar cards",
 );

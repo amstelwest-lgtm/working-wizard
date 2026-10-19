@@ -119,6 +119,7 @@ export function MarketPicker({
   locationNoun,
   vatCopy = true,
   stateDropdown = true,
+  taxWording = true,
 }: {
   value: DraftMarket;
   onChange: (next: DraftMarket) => void;
@@ -135,13 +136,18 @@ export function MarketPicker({
   vatCopy?: boolean;
   /** SA plan display does not ask for a US state. */
   stateDropdown?: boolean;
+  /** ZA signup hides sales-tax and VAT wording. US still names sales tax. */
+  taxWording?: boolean;
 }) {
-  const showVat = vatCopy !== false;
+  const showVat = taxWording && vatCopy !== false;
   const noun =
     locationNoun ?? (variant === "landing" && audience === "practice" ? "practice" : "business");
   const locationPrompt = noun === "practice" ? PRACTICE_LOCATION_PROMPT : BUSINESS_LOCATION_PROMPT;
-  const stateHelp =
-    audience === "practice"
+  const stateHelp = !taxWording
+    ? audience === "practice"
+      ? "You can set a different state per client later."
+      : "You can change this later in Settings."
+    : audience === "practice"
       ? "Required for sales tax. You can set a different state per client later."
       : "Required for sales tax. You can change this later in Settings.";
   const setCountry = (country: MarketId) => {
@@ -210,7 +216,7 @@ export function MarketPicker({
             onClick={() => setCountry("US")}
           >
             <div className="text-sm font-semibold">United States</div>
-            <div className={`mt-1 ${helpCls}`}>Dollars, sales tax by state</div>
+            <div className={`mt-1 ${helpCls}`}>{taxWording ? "Dollars, sales tax by state" : "Dollars"}</div>
           </button>
         ) : null}
       </div>

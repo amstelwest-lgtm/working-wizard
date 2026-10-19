@@ -103,7 +103,7 @@ assert(
 );
 assert(dip.cashFloorChip === "Below your minimum", "a projected dip keeps the same chip");
 assert(
-  dip.healthCue?.includes("minimum · see FM") === true,
+  dip.healthCue?.includes("minimum · Financial Manager") === true,
   dip.healthCue ?? "the brief and the health pillar share the floor line",
 );
 const watchPillar = buildFinancialManagerBrief({
@@ -121,7 +121,7 @@ const watchPillar = buildFinancialManagerBrief({
 assert(watchPillar.cashFloorLine === "Cash is $4335.", watchPillar.cashFloorLine ?? "missing watch line");
 assert(watchPillar.cashFloorChip == null, "Watch keeps the floor chip off the card");
 assert(
-  watchPillar.healthCue === "Below your $50k minimum · see FM",
+  watchPillar.healthCue === "Below your $50k minimum · Financial Manager",
   watchPillar.healthCue ?? "Watch still lines the Health cash pillar",
 );
 assert(

@@ -117,7 +117,7 @@ import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { figureSourceChipLabel, resolveFigureSource } from "@/lib/ledger-link-copy";
-import { booksCoverPeriod, booksTileLines } from "@/lib/books-answer";
+import { booksAnswerSentence, booksCoverPeriod, booksTileLines } from "@/lib/books-answer";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { parseBudgetDocument } from "@/lib/budget-pdf";
@@ -292,7 +292,7 @@ import {
 } from "@/lib/owner-handoff-client";
 import { openHandoffAgents, rowAssignment, withPendingAssignment, type RowAssignment } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
-import { booksSyncCopy, homeActionNeeds, openActionSentence, type BooksLink } from "@/lib/owner-needs";
+import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
@@ -3260,19 +3260,7 @@ function ClientView() {
         : waiting.length
           ? [rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting.")]
           : ["No draft waiting."];
-    const linkOf = (link: { lastSyncedAt?: string | null } | null, checked: boolean): BooksLink => {
-      if (!checked) return { state: "unknown" };
-      if (!link) return { state: "absent" };
-      return { state: "linked", at: link.lastSyncedAt ?? null };
-    };
-    const sync = booksSyncCopy({
-      quickBooks: linkOf(qboLink, qboChecked),
-      xero: linkOf(xeroLink, xeroChecked),
-      when: (iso) => formatDate(iso, clientMarket),
-    });
-    const booksHeading = sync.heading === "Books" ? "Books" : sync.heading;
-    const booksLine =
-      sync.lines[0] === "Books are not connected yet." ? "No books connected." : (sync.lines[0] ?? "No books connected.");
+    const booksLine = booksAnswerSentence({ freshness: dataFreshness });
     return {
       actionsHeading,
       actionLines,
@@ -3280,7 +3268,7 @@ function ClientView() {
       draftLines,
       deliverablesHeading: "Reports",
       deliverableLines: [reportsIssued > 0 ? "Ready to send." : "Nothing ready to send."],
-      syncHeading: booksHeading,
+      syncHeading: "Books",
       syncLines: [booksLine],
     };
   }, [
@@ -3288,11 +3276,7 @@ function ClientView() {
     openPlanOverdue,
     openPlanUnavailable,
     homeActivity,
-    qboLink,
-    xeroLink,
-    qboChecked,
-    xeroChecked,
-    clientMarket,
+    dataFreshness,
     reportsIssued,
   ]);
   const homeBrief = useMemo(

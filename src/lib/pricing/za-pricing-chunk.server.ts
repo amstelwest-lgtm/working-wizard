@@ -1,3 +1,5 @@
+import { formatMoney } from "@/lib/market/format";
+import { ZA_MARKET } from "@/lib/market/resolve";
 import { FIRM_BAND_CATALOG } from "@/lib/stripe-plans";
 import { perClientRands, ZA_CHECKOUT_BANDS, ZA_MONTHLY_RANDS } from "@/lib/pricing/za-ladder";
 import { zaBandAmountCents } from "@/lib/pricing/za-ladder-amounts";
@@ -25,7 +27,7 @@ export type SaPricingCopy = {
 };
 
 function rand(amount: number): string {
-  return `R${amount.toLocaleString("en-US")}`;
+  return formatMoney(amount, ZA_MARKET);
 }
 
 function priceLine(monthlyRands: number, annualCents: number, cap: number, interval: "month" | "year"): string {
@@ -49,22 +51,22 @@ export function loadSaPricingCopy(): SaPricingCopy {
   }
   return {
     heading: "Pricing in rand",
-    heroNote: "Plans from R299/mo after day 14.",
+    heroNote: `Plans from ${rand(299)}/mo after day 14.`,
     accountantsIntro:
       "Pricing in rand. One monthly price, set by how many clients you actively advise.",
     accountantsLead:
       "Management accounts, 13-week cash and advisory drafts from QuickBooks, Xero or Sage.",
     ownerHomepageCost:
-      "Business owners pay R299/mo, or nothing when their accountant is on Milōn.",
-    ownerBar: "R299/mo · free when your accountant is on Milōn",
-    ownerHeroLink: "Business owner? R299/mo, or free when your accountant is on Milōn →",
+      `Business owners pay ${rand(299)}/mo, or nothing when their accountant is on Milōn.`,
+    ownerBar: `${rand(299)}/mo · free when your accountant is on Milōn`,
+    ownerHeroLink: `Business owner? ${rand(299)}/mo, or free when your accountant is on Milōn →`,
     ownerRegisterNote:
-      "Business owners pay R299/mo, or nothing when their accountant is on Milōn.",
+      `Business owners pay ${rand(299)}/mo, or nothing when their accountant is on Milōn.`,
     ownerEarly:
-      "The owner plan is R299 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.",
-    ownerMonthly: "R299/mo",
-    faqCostLead: "Business owners: R299 a month, or free when your accountant is on Milōn.",
-    ownerPlanAnswer: "R299 a month, and free when your accountant is on Milōn.",
+      `The owner plan is ${rand(299)} a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.`,
+    ownerMonthly: `${rand(299)}/mo`,
+    faqCostLead: `Business owners: ${rand(299)} a month, or free when your accountant is on Milōn.`,
+    ownerPlanAnswer: `${rand(299)} a month, and free when your accountant is on Milōn.`,
     footerTagline: "for accounting firms and the businesses they advise.",
     footerBuilt: "An AI finance team for accounting firms",
     footerLine:

@@ -183,8 +183,8 @@ assert(
 );
 const starter = saFirmDisplayPrice("starter", "month");
 const solo = saFirmDisplayPrice("solo", "month");
-assert(starter.includes("R299") && !starter.includes("$") && !/vat/i.test(starter), starter);
-assert(solo.includes("R799") && !solo.includes("$") && !/vat/i.test(solo), solo);
+assert(starter.includes("R 299") && !starter.includes("$") && !/vat/i.test(starter), starter);
+assert(solo.includes("R 799") && !solo.includes("$") && !/vat/i.test(solo), solo);
 const hidden = saPlanRegionControls(true);
 assert(hidden.stateDropdown === false && hidden.vatCopy === false, "an SA plan has no state list and no VAT wording");
 assert(saPlanRegionControls(false).stateDropdown === true, "a US plan still asks for a state");

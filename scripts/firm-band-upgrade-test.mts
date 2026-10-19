@@ -121,7 +121,7 @@ assert(
   "complete Stripe ZAR amounts use ZAR",
 );
 assert(
-  firmBandPriceLabel("solo", "month", "zar", zarByBand) === "R1",
+  firmBandPriceLabel("solo", "month", "zar", zarByBand) === "R 1",
   "ZAR price uses the Stripe amount",
 );
 assert(
@@ -499,7 +499,7 @@ assert(
     currency: "zar",
     interval: "month",
     saMarket: true,
-  }).includes("R799/month"),
+  }).includes("R 799/month"),
   "SA setup copy shows the rand amount",
 );
 assert(setup.metadata?.milon_setup_upgrade === "1", "setup session is marked as an upgrade");
@@ -550,7 +550,7 @@ assert(
 );
 assert(
   saMonthly ===
-    "Saving this card moves you to MILŌN Solo at R799/month (15 clients). Billed in the price currency, cancel anytime.",
+    "Saving this card moves you to MILŌN Solo at R 799/month (15 clients). Billed in the price currency, cancel anytime.",
   "SA monthly setup copy shows the rand price",
 );
 assert(!saMonthly.toLowerCase().includes("vat"), "setup copy has no tax wording");

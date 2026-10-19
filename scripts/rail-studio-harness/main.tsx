@@ -42,6 +42,7 @@ import { FinalWalkPreview } from "./final-walk-preview";
 import { Retest578Preview } from "./retest-578-preview";
 import { AqaFollowupPreview } from "./aqa-followup-preview";
 import { AqaRetest573Preview } from "./aqa-retest-573-preview";
+import { WalkthroughPreview } from "./walkthrough-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -567,6 +568,18 @@ const aqaFollowupRoute = createRoute({
   },
 });
 
+const walkthroughRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/walkthrough",
+  component: function WalkthroughHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <WalkthroughPreview />
+      </MarketProvider>
+    );
+  },
+});
+
 const proofLandingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/proof-landing",
@@ -602,6 +615,7 @@ const routeTree = rootRoute.addChildren([
   settingsBrandRoute,
   settingsTeamRoute,
   proofLandingRoute,
+  walkthroughRoute,
   personaCritRoute,
   retest560Route,
   fmBriefRoute,

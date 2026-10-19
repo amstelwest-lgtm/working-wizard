@@ -731,7 +731,7 @@ html:not(.dark) .sphere-drill-back--on-dark:hover {
 }
 
 /* Health drill cue — only on a control that opens a real next level.
-   One line, "Tap to see more", on mouse and touch. Ice is a shimmer, never the text.
+   One line, "See more", on mouse and touch. Ice is a shimmer, never the text.
    Drivers and the ratio drawer do not use this cue. */
 .dig-cue {
   display: inline-flex;

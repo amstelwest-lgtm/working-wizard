@@ -382,7 +382,7 @@ function LandingPage() {
   // (ReferenceError: Cannot access 'draftMarket' before initialization)
   // and white-screens the landing page.
   const [draftMarket, setDraftMarket] = useState<DraftMarket>(
-    urlDraft ?? { country: null, regionCode: null },
+    urlDraft?.country ? urlDraft : geoZa ? { country: "ZA", regionCode: null } : (urlDraft ?? { country: null, regionCode: null }),
   );
   const marketReady = useRef(false);
   // Hero and pricing copy follow the server pack, not this draft. The draft
@@ -399,7 +399,7 @@ function LandingPage() {
     setDraftMarket((current) => {
       if (current.country) return current;
       if (allowed.country) return allowed;
-      return { country: "US", regionCode: null };
+      return geoZa ? { country: "ZA", regionCode: null } : { country: "US", regionCode: null };
     });
     marketReady.current = true;
   }, [geoZa]);
@@ -2762,7 +2762,7 @@ function LandingPage() {
             </button>
           </nav>
           <div className="copy">
-            <span>Works with QuickBooks Online and Xero, and Sage.</span>
+            <span>QuickBooks Online, Xero and Sage.</span>
             <span>
               © {new Date().getFullYear()} {MARKETING_COPYRIGHT_ENTITY}. All rights reserved.
             </span>

@@ -153,7 +153,9 @@ function AuthPage() {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const submitLock = useRef(false);
-  const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: null, regionCode: null });
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>(
+    geoZa ? { country: "ZA", regionCode: null } : { country: null, regionCode: null },
+  );
 
   /* Client-only form gate — browser password managers (LastPass etc.) inject
      DOM nodes into password forms, causing fatal SSR hydration mismatches. */
@@ -161,7 +163,14 @@ function AuthPage() {
   useEffect(() => {
     setMounted(true);
     const stored = readVisitorDraft();
-    setDraftMarket(geoZa || stored.country !== "ZA" ? stored : { country: null, regionCode: null });
+    const allowed = geoZa || stored.country !== "ZA" ? stored : { country: null, regionCode: null };
+    setDraftMarket(
+      allowed.country
+        ? allowed
+        : geoZa
+          ? { country: "ZA", regionCode: null }
+          : { country: "US", regionCode: null },
+    );
     const pending = peekPendingCheckout();
     if (pending) setStoredBand({ plan: pending.plan, interval: pending.interval });
   }, [geoZa]);
@@ -621,6 +630,8 @@ function AuthPage() {
                       onChange={setDraftMarket}
                       audience="practice"
                       locationNoun="practice"
+                      vatCopy={false}
+                      taxWording={draftMarket.country === "US"}
                     />
                     {practiceHint ? (
                       <p id="practice-missing" className="firm-signup-hint" role="status">
