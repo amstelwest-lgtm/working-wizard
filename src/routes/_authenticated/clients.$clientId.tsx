@@ -302,6 +302,7 @@ import {
   type RowAssignment,
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
+import { countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
@@ -1789,13 +1790,22 @@ function ClientView() {
     }
     setOpenPlanUnavailable(false);
     void (async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("action_items_v")
-        .select("id, title, due_date, status, owner_name")
-        .eq("client_id", clientId)
-        .neq("status", "done")
-        .order("seq");
+      const [itemsRes, planRes] = await Promise.all([
+        supabase
+          .from("action_items_v")
+          .select("id, title, due_date, status, owner_name")
+          .eq("client_id", clientId)
+          .neq("status", "done")
+          .order("seq"),
+        supabase
+          .from("action_plans")
+          .select("target_date")
+          .eq("client_id", clientId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1),
+      ]);
+      const { data, error } = itemsRes;
       if (cancelled) return;
       if (error) {
         setOpenPlanUnavailable(true);
@@ -1811,8 +1821,11 @@ function ClientView() {
         id?: string | null;
         title?: string | null;
         due_date?: string | null;
+        status?: string | null;
         owner_name?: string | null;
       }[];
+      const planTarget =
+        (planRes.data?.[0] as { target_date?: string | null } | undefined)?.target_date ?? null;
       const titles = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
         return title ? [title] : [];
@@ -1883,7 +1896,21 @@ function ClientView() {
       }
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
-      setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
+      setOpenPlanOverdue(
+        countActionPlan(
+          rows.flatMap((row) => {
+            const title = row.title?.trim() ?? "";
+            if (!title) return [];
+            return [
+              {
+                status: row.status,
+                dueDate: row.due_date,
+                planTarget,
+              },
+            ];
+          }),
+        ).overdue,
+      );
       paintAssignments(labelled, merged, noteLog, runs);
     })();
     return () => {

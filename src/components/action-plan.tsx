@@ -2134,11 +2134,16 @@ function DriversStrip({
           m.pillarLabel && m.pillarScore != null && Number.isFinite(m.pillarScore)
             ? Math.round(m.pillarScore)
             : null;
-        const score = pillarScore ?? driverHealthLabel(m.health);
+        const ratioScore = driverHealthLabel(m.health);
+        const score = pillarScore ?? ratioScore;
         const label = m.pillarLabel || m.ratioName;
         const driverName = RATIO_DRIVER_LABEL[m.ratioName] ?? m.ratioName;
         const driver =
-          m.pillarLabel && driverName && driverName !== m.pillarLabel ? driverName : null;
+          pillarScore != null && ratioScore != null && driverName && driverName !== label
+            ? ratioScore === pillarScore
+              ? driverName
+              : `${driverName} ${ratioScore}. ${label} averages its ratios.`
+            : null;
         const tone =
           score == null
             ? "#94a3b8"

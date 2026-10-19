@@ -34,6 +34,12 @@ const five = homeActionNeeds({
 });
 assert(five.heading === "Showing 3 of 5", five.heading);
 assert(five.lines.length === 3 && five.lines[0] === "One" && five.lines[2] === "Three", five.lines.join(" | "));
+const fiveOverdue = homeActionNeeds({
+  known: true,
+  titles: ["One", "Two", "Three", "Four", "Five"],
+  overdue: 2,
+});
+assert(fiveOverdue.heading === "Showing 3 of 5, 2 overdue", fiveOverdue.heading);
 assert(!needs.lines.includes("No open work."), "open rows are not no open work");
 assert(openActionSentence(titles) === "2 open actions.", openActionSentence(titles) ?? "");
 assert(openActionSentence([]) === null, "no open rows stay empty");

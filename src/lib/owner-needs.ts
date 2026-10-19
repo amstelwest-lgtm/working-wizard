@@ -43,11 +43,12 @@ export function homeActionNeeds(input: {
   const titles = input.titles.map((title) => actionDisplayTitle(title)).filter(Boolean);
   if (titles.length === 0) return { heading: "Action plan", lines: ["No open work."] };
   const lines = titles.slice(0, HOME_ACTION_PREVIEW);
+  const overdueNote = input.overdue > 0 ? `, ${input.overdue} overdue` : "";
   const heading =
     lines.length < titles.length
-      ? `Showing ${lines.length} of ${titles.length}`
+      ? `Showing ${lines.length} of ${titles.length}${overdueNote}`
       : input.overdue > 0
-        ? `${titles.length} open, ${input.overdue} overdue`
+        ? `${titles.length} open${overdueNote}`
         : `${titles.length} open`;
   return { heading, lines };
 }
