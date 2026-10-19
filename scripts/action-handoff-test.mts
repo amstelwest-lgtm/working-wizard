@@ -15,7 +15,7 @@ import {
   handoffProgressCaption,
 } from "../src/lib/action-handoff.ts";
 import { agentDisplayName } from "../src/lib/milon-team.ts";
-import { pollAfterTick } from "../src/lib/agent-activity-poll.ts";
+import { HANDOFF_RUN_WAIT_MS, pollAfterTick } from "../src/lib/agent-activity-poll.ts";
 import { deskSignoffText } from "../src/lib/milon-team-activity.ts";
 
 function assert(cond: unknown, message: string): asserts cond {
@@ -30,9 +30,19 @@ assert(
   "the poll continues after the first of two staggered runs finishes",
 );
 assert(pollAfterTick([finished, finished]) === "stop", "the poll stops after the second run finishes");
+const noted = "2026-10-19T10:00:00.000Z";
+const notedMs = Date.parse(noted);
 assert(
-  pollAfterTick([finished], true) === "continue",
-  "a hand-off still on the page keeps the poll alive until a fresh snapshot settles it",
+  pollAfterTick([], [{ openedAt: noted }], notedMs + 30_000) === "continue",
+  "a new hand-off with no matching run polls while that run may still appear",
+);
+assert(
+  pollAfterTick([], [{ openedAt: noted }], notedMs + HANDOFF_RUN_WAIT_MS + 1) === "stop",
+  "a hand-off note with no matching run stops after about two minutes",
+);
+assert(
+  pollAfterTick([finished, running], [{ openedAt: noted }], notedMs + HANDOFF_RUN_WAIT_MS + 1) === "continue",
+  "a still-running second run keeps the poll going after the wait",
 );
 
 assert(agentKeyFromAssignee("Milōn Analyst") === "analyst", "the assignee label names the analyst");
@@ -224,13 +234,16 @@ assert(activityHook.includes("ACTIVE_POLL_MS = 5000"), "home polls every 5 secon
 assert(activityHook.includes("dispatchActionPlanRefresh"), "the poll reloads notes when a run is open");
 assert(activityHook.includes("pollAfterTick"), "each tick decides from the fresh snapshot");
 assert(!activityHook.includes("wasActive"), "a finish does not clear the timer from stale render state");
-assert(clientPage.includes("useAgentActivity(clientId, pageOpen)"), "accountant Home polls while a row is open");
-assert(door.includes("useAgentActivity(clientId ?? \"\", pageOpen)"), "owner Home uses the same poll");
+assert(clientPage.includes("useAgentActivity(clientId, awaitingRun)"), "accountant Home polls from open hand-offs");
+assert(door.includes("useAgentActivity(clientId ?? \"\", awaitingRun)"), "owner Home uses the same poll");
+assert(clientPage.includes("handoffRowStillWorking"), "an old hand-off with no run is not Working");
+assert(door.includes("handoffRowStillWorking"), "owner cards drop Working when the run never appears");
 const poll = readFileSync("src/lib/agent-activity-poll.ts", "utf8");
 assert(
   poll.includes('status === "queued"') && poll.includes('status === "running"'),
   "the poll watches queued and running runs",
 );
+assert(poll.includes("HANDOFF_RUN_WAIT_MS = 2 * 60 * 1000"), "a missing run is only waited out for two minutes");
 
 const pane = readFileSync("src/components/milon-team/milon-team-pane.tsx", "utf8");
 assert(pane.includes("<AgentStage"), "an open agent uses the stage, not only the desk");

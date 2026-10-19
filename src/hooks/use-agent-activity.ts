@@ -133,7 +133,10 @@ function parseMessage(row: Record<string, unknown>): AgentMessageRow | null {
   };
 }
 
-export function useAgentActivity(clientId: string, pageOpen = false): AgentActivity {
+export function useAgentActivity(
+  clientId: string,
+  awaiting: readonly { openedAt?: string | null }[] = [],
+): AgentActivity {
   const [reload, setReload] = useState(0);
   const refresh = useCallback(() => setReload((n) => n + 1), []);
   const [state, setState] = useState<AgentActivitySnapshot & { loading: boolean; error: string | null }>({
@@ -141,8 +144,9 @@ export function useAgentActivity(clientId: string, pageOpen = false): AgentActiv
     loading: true,
     error: null,
   });
-  const pageOpenRef = useRef(pageOpen);
-  pageOpenRef.current = pageOpen;
+  const awaitingRef = useRef(awaiting);
+  awaitingRef.current = awaiting;
+  const awaitingKey = awaiting.map((row) => row.openedAt ?? "").join("\n");
   const runsRef = useRef(state.runs);
   runsRef.current = state.runs;
   const armRef = useRef<() => void>(() => {});
@@ -270,7 +274,11 @@ export function useAgentActivity(clientId: string, pageOpen = false): AgentActiv
       try {
         fresh = await fetchClientRuns(id);
       } catch {
-        if (!cancelled && gen === generation && (pageOpenRef.current || runsRef.current.some((run) => runIsOpen(run.status)))) {
+        if (
+          !cancelled &&
+          gen === generation &&
+          (runsRef.current.some((run) => runIsOpen(run.status)) || pollAfterTick([], awaitingRef.current) === "continue")
+        ) {
           arm();
         }
         return;
@@ -278,11 +286,11 @@ export function useAgentActivity(clientId: string, pageOpen = false): AgentActiv
       if (cancelled || gen !== generation || !fresh) return;
       setState((current) => ({ ...current, runs: fresh ?? current.runs, loading: false }));
       dispatchActionPlanRefresh();
-      if (pollAfterTick(fresh, pageOpenRef.current) === "continue") arm();
+      if (pollAfterTick(fresh, awaitingRef.current) === "continue") arm();
     };
 
     armRef.current = arm;
-    if (runsRef.current.some((run) => runIsOpen(run.status)) || pageOpenRef.current) arm();
+    if (runsRef.current.some((run) => runIsOpen(run.status)) || pollAfterTick([], awaitingRef.current) === "continue") arm();
 
     return () => {
       cancelled = true;
@@ -293,8 +301,10 @@ export function useAgentActivity(clientId: string, pageOpen = false): AgentActiv
   }, [clientId]);
 
   useEffect(() => {
-    if (pageOpen || state.runs.some((run) => runIsOpen(run.status))) armRef.current();
-  }, [pageOpen, state.runs]);
+    if (state.runs.some((run) => runIsOpen(run.status)) || pollAfterTick([], awaitingRef.current) === "continue") {
+      armRef.current();
+    }
+  }, [awaitingKey, state.runs]);
 
   return { ...state, refresh };
 }

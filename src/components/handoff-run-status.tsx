@@ -8,13 +8,16 @@ import { handoffIsSlow } from "@/lib/action-handoff";
 export function HandoffRunStatus({
   run,
   caption,
+  missed = false,
   onRetry,
 }: {
   run?: { status: string; at?: string | null } | null;
   caption?: string | null;
+  /** No run appeared for this hand-off. Offer Retry instead of Working. */
+  missed?: boolean;
   onRetry?: () => void;
 }) {
-  const active = run?.status === "queued" || run?.status === "running";
+  const active = !missed && (run?.status === "queued" || run?.status === "running");
   const stopped = Boolean(caption?.includes("couldn't finish this one"));
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -23,10 +26,26 @@ export function HandoffRunStatus({
     return () => window.clearInterval(timer);
   }, [active, run?.at]);
   const slow = active && handoffIsSlow(run?.status, run?.at, now);
-  if (!slow && !caption && !active && !stopped) return null;
+  if (!slow && !caption && !active && !stopped && !missed) return null;
   return (
     <>
-      {stopped && !active ? (
+      {missed ? (
+        <p className="mt-1 text-[12px] font-semibold text-[#0B5FFF]" data-handoff-slow>
+          Taking longer than usual ·{" "}
+          <button
+            type="button"
+            className="font-semibold text-[#0B5FFF] underline"
+            data-handoff-retry
+            onClick={(event) => {
+              event.stopPropagation();
+              onRetry?.();
+            }}
+          >
+            Retry
+          </button>
+        </p>
+      ) : null}
+      {stopped && !active && !missed ? (
         <p className="mt-1 text-[12px] font-semibold text-[#0B5FFF]" data-handoff-stopped>
           {caption} ·{" "}
           <button
@@ -47,7 +66,7 @@ export function HandoffRunStatus({
           Working
         </p>
       ) : null}
-      {slow ? (
+      {slow && !missed ? (
         <p className="mt-1 text-[12px] font-semibold text-[#0B5FFF]" data-handoff-slow>
           Taking longer than usual ·{" "}
           <button
@@ -62,7 +81,7 @@ export function HandoffRunStatus({
             Retry
           </button>
         </p>
-      ) : caption && !stopped ? (
+      ) : caption && !stopped && !missed ? (
         <p className="fm-brief-progress mt-1 text-[11px] font-semibold text-[#0B5FFF]" data-agent-pickup>
           {caption}
         </p>

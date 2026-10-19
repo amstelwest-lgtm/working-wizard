@@ -2132,8 +2132,8 @@ function Index() {
   // Owner Home reloads each action row from this event. Hand to flips the card
   // to Working on the click. A run that started before that click does not clear
   // it. The stored run settles it once it is newer than the click, the same read as client Home.
-  // Both Homes share one poll, keyed on this client's open runs. A tick reads a fresh
-  // snapshot and keeps going until none of those runs is queued or running, then stops.
+  // Both Homes share one poll. A tick reads a fresh snapshot and keeps going while a run
+  // is queued or running, or for about two minutes after a hand-off note if its run has not appeared.
   // A queued or running run on a card beats Found something. Same runs as the row.
   useEffect(() => {
     const bump = () => setPlanTick((n) => n + 1);

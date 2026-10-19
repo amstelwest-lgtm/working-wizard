@@ -30,6 +30,9 @@ export type HomeBriefHandoff = {
   assignee?: string | null;
   agent?: AgentKey | null;
   notes?: readonly AssignmentNoteRow[];
+  openedAt?: string;
+  /** The hand-off note is old and no queued or running run appeared. */
+  missed?: boolean;
   run?: { agent: AgentKey; status: string; at?: string | null } | null;
 };
 
@@ -47,7 +50,7 @@ function HandoffProgress({ item, onRetry }: { item: HomeBriefHandoff; onRetry?: 
         });
   return (
     <>
-      <HandoffRunStatus run={item.run} caption={caption} onRetry={onRetry} />
+      <HandoffRunStatus run={item.run} caption={item.missed ? null : caption} missed={item.missed} onRetry={onRetry} />
       <AssignmentNotes notes={item.notes ?? []} />
     </>
   );

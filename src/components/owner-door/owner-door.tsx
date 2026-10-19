@@ -33,6 +33,7 @@ import {
   type OwnerBooks,
 } from "@/lib/owner-answers";
 import { agentDisplayName } from "@/lib/milon-team";
+import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
 import { cardRunsByAgent, ownerPresence, steerOpenHandoffs, withCardHandoffRuns, type OwnerTalk } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
@@ -238,8 +239,8 @@ export function OwnerDoor({
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
   const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
-  const pageOpen = assignmentRows.some((row) => row.open);
-  const activity = useAgentActivity(clientId ?? "", pageOpen);
+  const awaitingRun = assignmentRows.filter((row) => row.open).map((row) => ({ openedAt: row.openedAt }));
+  const activity = useAgentActivity(clientId ?? "", awaitingRun);
   const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
   const assignmentRowsRef = useRef(assignmentRows);
   assignmentRowsRef.current = assignmentRows;
@@ -662,10 +663,13 @@ export function OwnerDoor({
       at: run.finished_at || run.queued_at,
     })),
   );
-  const openAgents = openHandoffAgents(settledRows);
+  const workingRows = settledRows.map((row) =>
+    handoffRowStillWorking(row, activity.runs) ? row : { ...row, open: false },
+  );
+  const openAgents = openHandoffAgents(workingRows);
   const cardRuns = withCardHandoffRuns(
     withoutPersonQueuedRuns(activity.runs, personOwnedActionIds(settledRows)),
-    settledRows,
+    workingRows,
   );
   const presence = steerOpenHandoffs(
     ownerPresence({ ...activity, runs: cardRuns }, talk),

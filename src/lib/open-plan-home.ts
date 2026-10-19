@@ -161,7 +161,13 @@ export function rowAssignment(input: {
   }
   const matched = input.run && input.run.agent === stored.agent ? input.run : null;
   const open = matched == null || ACTIVE.has(matched.status);
-  return { id: input.id, assigneeName: stored.name, agent: stored.agent, open };
+  return {
+    id: input.id,
+    assigneeName: stored.name,
+    agent: stored.agent,
+    open,
+    openedAt: open ? stored.at : undefined,
+  };
 }
 
 export type LiveHandoffRun = {
