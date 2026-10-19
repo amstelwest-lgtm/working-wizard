@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
   downgradeDropsBelowUsage,
@@ -12,6 +13,7 @@ import {
 import { FUNNEL_SOLO_FIRST } from "@/lib/funnel-timing";
 import { FIRM_VOUCHER_INVALID_MESSAGE } from "@/lib/firm-voucher";
 import {
+  FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_BAND_IDS,
   firmClientLimitLabel,
@@ -21,6 +23,7 @@ import {
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
+import { getFirmPlanDisplay } from "@/lib/stripe-checkout.functions";
 
 export type FirmVoucherCheckResult =
   | { ok: true; promotionCodeId: string; preview: string }
@@ -112,6 +115,7 @@ export function FirmBandUpgrade({
 
   const currentIdx = currentBand ? FIRM_BAND_IDS.indexOf(currentBand) : -1;
   const soloLeads = currentBand == null && selected === "solo";
+  const startHereBand = currentBand ?? (soloLeads ? "solo" : null);
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
   const saFirm = saDiscount || zaLabels != null || priceCurrency.toLowerCase() === "zar";
 
@@ -249,7 +253,7 @@ export function FirmBandUpgrade({
                     Current
                   </span>
                 ) : null}
-                {band.id === "solo" && soloLeads ? (
+                {band.id === startHereBand ? (
                   <span
                     style={{
                       marginLeft: 8,
@@ -363,4 +367,49 @@ export function FirmBandUpgrade({
       ) : null}
     </div>
   );
+}
+
+/** The plan the Start here badge names. No current plan leads with Solo. */
+export function startHerePlanId(currentBand: FirmBandId | null): FirmBandId {
+  return currentBand ?? "solo";
+}
+
+export function FirmStartHereBadge({
+  band,
+  pending = false,
+}: {
+  band: FirmBandId | null;
+  pending?: boolean;
+}) {
+  if (pending) return null;
+  const id = startHerePlanId(band);
+  return (
+    <p className="firm-start-here" data-start-here="true">
+      <span className="firm-start-here__mark">Start here</span>
+      <span>{FIRM_BAND_CATALOG[id].name}</span>
+    </p>
+  );
+}
+
+/** Loads the signed-in firm's plan and shows Start here on that band. */
+export function FirmStartHereLoader({ firmId = null }: { firmId?: string | null }) {
+  const loadPlan = useServerFn(getFirmPlanDisplay);
+  const [band, setBand] = useState<FirmBandId | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBand(undefined);
+    void loadPlan({ data: { firmId } })
+      .then((plan) => {
+        if (!cancelled) setBand(plan && plan.configured !== false ? (plan.band ?? null) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setBand(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [firmId, loadPlan]);
+
+  return <FirmStartHereBadge band={band ?? null} pending={band === undefined} />;
 }

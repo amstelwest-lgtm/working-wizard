@@ -38,6 +38,7 @@ import { useMarket } from "@/contexts/market";
 import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
+import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import { resolveAdvisorySignoffState, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
 import { packAnswerSentence, packDrawerHint, packStripStatus, type PackAnswerStatus } from "@/lib/plan-pack-copy";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
@@ -663,10 +664,10 @@ export function AdvisoryPackPanel({
                 className="rounded-xl border border-[#DBEAFE] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]"
               >
                 <h4 className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
-                  {s.title}
+                  {rewriteDraftMonthStamp(s.title)}
                 </h4>
                 <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-800 dark:text-slate-100/90">
-                  {s.body}
+                  {rewriteDraftMonthStamp(s.body)}
                 </p>
               </li>
             ))}
@@ -847,7 +848,7 @@ export function AdvisoryPackPanel({
                     ) : (
                       <FileText className="h-3 w-3" aria-hidden />
                     )}
-                    {s.title}
+                    {rewriteDraftMonthStamp(s.title)}
                     {diff?.changed ? (
                       <span className="rounded-full border border-sky-400/50 bg-sky-500/10 px-1.5 py-[1px] text-xs font-bold uppercase tracking-[0.1em] text-sky-700 dark:text-sky-300">
                         edited
@@ -916,12 +917,12 @@ export function AdvisoryPackPanel({
                 ) : (
                   <>
                     <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-800 dark:text-slate-100/90">
-                      {s.body}
+                      {rewriteDraftMonthStamp(s.body)}
                     </p>
                     {s.bullets?.length ? (
                       <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-slate-700 dark:text-slate-200/85">
                         {s.bullets.map((b, i) => (
-                          <li key={i}>{b}</li>
+                          <li key={i}>{rewriteDraftMonthStamp(b)}</li>
                         ))}
                       </ul>
                     ) : null}
@@ -930,7 +931,7 @@ export function AdvisoryPackPanel({
                         className="mt-2 whitespace-pre-wrap rounded-md border border-dashed border-slate-300/70 bg-slate-500/5 p-2 text-[11.5px] leading-relaxed text-slate-500 dark:border-white/15 dark:text-slate-400"
                         data-ai-draft
                       >
-                        {diff.before}
+                        {rewriteDraftMonthStamp(diff.before)}
                       </pre>
                     ) : null}
                   </>

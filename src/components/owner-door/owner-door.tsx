@@ -806,6 +806,7 @@ export function OwnerDoor({
           onMoves={() => go("moves")}
           onDeliverables={() => go("deliverables")}
           inviteClientId={clientId}
+          firmId={firmId}
           notice={sampleNotice}
         />
       ) : null}

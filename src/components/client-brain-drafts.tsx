@@ -46,7 +46,7 @@ import {
   updateAssumptionText,
 } from "@/lib/client-brain-deliverable";
 import { alignBrainFigureCopy, type StatementFigureFacts } from "@/lib/statement-margin";
-import { rewriteSavedMonthStamp } from "@/lib/statement-period";
+import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 
 type DraftDialog =
   | { mode: "ready" | "discard" | "send"; draft: DeliverableDraft }
@@ -142,7 +142,7 @@ export function ClientBrainDrafts({
         const parsed = parseDraftSubjectBody(dialog.draft.body);
         const items = parseAssumptionChecklist(dialog.draft.assumption_checklist);
         const snapId = await latestSnapshotId(clientId);
-        const body = rewriteSavedMonthStamp(
+        const body = rewriteDraftMonthStamp(
           bodyWithAssumptionFooter(parsed.body || dialog.draft.body || "", items),
         );
         const logged = await recordDelivery({
@@ -150,7 +150,7 @@ export function ClientBrainDrafts({
           firmId,
           channel: "copy",
           kind: kindToDelivery(dialog.draft.kind),
-          subject: parsed.subject ? rewriteSavedMonthStamp(parsed.subject) : null,
+          subject: parsed.subject ? rewriteDraftMonthStamp(parsed.subject) : null,
           body,
           snapshotId: snapId,
           figuresHash: hashFigures({
@@ -215,9 +215,11 @@ export function ClientBrainDrafts({
           {drafts.map((draft) => {
             const items = parseAssumptionChecklist(draft.assumption_checklist);
             const parsed = parseDraftSubjectBody(draft.body);
-            const body = alignBrainFigureCopy(parsed.body || draft.body || "", figureFacts ?? {});
+            const body = rewriteDraftMonthStamp(
+              alignBrainFigureCopy(parsed.body || draft.body || "", figureFacts ?? {}),
+            );
             const subject = parsed.subject
-              ? alignBrainFigureCopy(parsed.subject, figureFacts ?? {})
+              ? rewriteDraftMonthStamp(alignBrainFigureCopy(parsed.subject, figureFacts ?? {}))
               : "";
             const long = body.length > 420 && !expanded[draft.id];
             const editable = canEditAssumptions(draft.status);
@@ -282,7 +284,7 @@ export function ClientBrainDrafts({
                                 htmlFor={`${draft.id}-${item.id}`}
                                 style={{ fontSize: 13.5, cursor: editable ? "pointer" : "default", flex: 1 }}
                               >
-                                {rewriteSavedMonthStamp(item.text)}
+                                {rewriteDraftMonthStamp(item.text)}
                               </label>
                               {editable && (
                                 <button

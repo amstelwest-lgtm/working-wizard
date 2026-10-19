@@ -50,7 +50,7 @@ import { ZA_MARKET } from "../src/lib/market/index.ts";
 import { ownerAnswerTiles, ownerCardStatuses, type OwnerBooks } from "../src/lib/owner-answers.ts";
 import { cashSignoffIsStale } from "../src/lib/signoff-status.ts";
 import { alignBrainFigureCopy } from "../src/lib/statement-margin.ts";
-import { FULL_YEAR_ON_FILE } from "../src/lib/statement-period.ts";
+import { FULL_YEAR_ON_FILE, rewriteDraftMonthStamp, rewriteSavedMonthStamp } from "../src/lib/statement-period.ts";
 import { interventionNarrative } from "../src/reports/narrative.ts";
 import {
   extractWaterfallFigures,
@@ -398,7 +398,7 @@ const draft = alignBrainFigureCopy("See the full Sep 2026 statement and the Sep 
 assert(draft.includes(FULL_YEAR_ON_FILE), draft);
 assert(!/Sep 2026 (books|statement)/.test(draft), draft);
 assert(alignBrainFigureCopy("due 8 Sep 2026", {}) === "due 8 Sep 2026", "a due date stays");
-assert(src("src/lib/milon-team-feed.ts").includes("rewriteSavedMonthStamp"), "team jobs rewrite the draft");
+assert(src("src/lib/milon-team-feed.ts").includes("rewriteDraftMonthStamp"), "team jobs rewrite the draft");
 assert(src("supabase/functions/brain-deliverable-draft/index.ts").includes("rewriteSavedMonthStamp"), "generation rewrites the draft");
 
 const plan = interventionNarrative({ critical: 2, atRisk: 1, total: 3, cashBelowFloor: true });
@@ -434,7 +434,18 @@ const books = (patch: Partial<OwnerBooks>): OwnerBooks => ({
   ...patch,
 });
 const watch = ownerCardStatuses(books({ cashPillarStatus: "at_risk" }));
-assert(watch.financial_manager == null, "Watch does not say below the minimum");
+assert(watch.financial_manager?.word === "Watch", "the chip follows a Watch pillar");
+assert(watch.financial_manager?.word !== "Below your minimum", "Watch is not the floor chip");
+const missingWatch = ownerCardStatuses(
+  books({ cashPillarStatus: "at_risk", openingMissing: true }),
+);
+assert(missingWatch.financial_manager?.word === "Watch", "a missing opening still shows Watch");
+const missingCash = ownerAnswerTiles(
+  books({ cashPillarStatus: "at_risk", openingMissing: true }),
+).find((tile) => tile.id === "cash");
+assert(missingCash?.sentence === "Opening balance missing.", missingCash?.sentence ?? "");
+const critical = ownerCardStatuses(books({ cashPillarStatus: "critical" }));
+assert(critical.financial_manager?.word === "Critical", "a Critical pillar names Critical");
 const watchCash = ownerAnswerTiles(books({ cashPillarStatus: "at_risk" })).find((tile) => tile.id === "cash");
 assert(watchCash?.sentence.startsWith("Cash is "), watchCash?.sentence ?? "");
 assert(!/below your minimum/i.test(watchCash?.sentence ?? ""), watchCash?.sentence ?? "");
@@ -486,12 +497,50 @@ assert(collections.length === 1, `collections ${collections.length}`);
 assert(jumps.some((row) => row.label === "Collections") === false, "the bare label stays a different row");
 
 const picker = src("src/components/firm-band-upgrade.tsx");
-assert(picker.includes("currentBand == null && selected === \"solo\""), "Start here waits for no current plan");
+assert(picker.includes("currentBand ?? (soloLeads ? \"solo\" : null)"), "Start here sits on the current plan");
+assert(picker.includes("startHerePlanId"), "no current plan still leads with Solo");
+assert(picker.includes("FirmStartHereLoader"), "home loads the current plan for the badge");
 assert(picker.includes("Start here"), "the badge copy stays");
+assert(src("src/components/owner-door/owner-home.tsx").includes("FirmStartHereLoader"), "client home shows Start here");
+assert(src("src/components/practice-board.tsx").includes("FirmStartHereBadge"), "practice shows Start here");
+assert(src("src/routes/_authenticated/dashboard.tsx").includes("PracticeBoard"), "dashboard is the practice home");
 
 const homeCss = src("src/components/owner-door/owner-door.css");
 assert(homeCss.includes("flex: 0 1 auto"), "home sizes to its content");
 assert(!homeCss.includes("min-height: calc(100dvh - 96px)"), "the viewport gap is gone");
 assert(homeCss.includes("position: static"), "the handoff sentence stays in flow");
+const phone = src("src/styles/owner-premium.css");
+assert(phone.includes("max-width: 767px"), "the phone home has its own layout");
+assert(phone.includes("padding-inline: 0"), "the phone home has no side gutter");
+assert(phone.includes("flex: 1 1 100%"), "the company chip takes a full row");
+assert(src("src/components/owner-door/owner-home.tsx").includes('!== "done"'), "a finished run does not print Done");
+assert(src("src/components/cash-forecast.tsx").includes("data-forecast-updated"), "the forecast prints its updated stamp");
+assert(src("src/components/cash-forecast.tsx").includes("lastForecastAt"), "the stamp uses the saved forecast time");
+assert(
+  rewriteDraftMonthStamp("Sep 2026 accounts") === "Full year on file accounts",
+  "a bare month stamp is rewritten",
+);
+assert(
+  rewriteDraftMonthStamp("Based on Sep 2026 snapshot") === `Based on ${FULL_YEAR_ON_FILE}`,
+  "a snapshot phrase is the full-year stamp",
+);
+assert(rewriteDraftMonthStamp("due 8 Sep 2026") === "due 8 Sep 2026", "a dated day stays");
+assert(rewriteSavedMonthStamp("Sep 2026") === "Sep 2026", "a cited period stays on the narrow stamp");
+assert(
+  src("src/components/recommendations-panel.tsx").includes("rewriteDraftMonthStamp"),
+  "stored recommendations show the stamp",
+);
+assert(
+  src("src/components/advisory-pack-panel.tsx").includes("rewriteDraftMonthStamp"),
+  "stored packs show the stamp",
+);
+assert(
+  src("src/components/advisory-drafter.tsx").includes("rewriteDraftMonthStamp"),
+  "the drafter shows the stamp",
+);
+assert(
+  src("src/components/client-brain-drafts.tsx").includes("rewriteDraftMonthStamp"),
+  "stored brain drafts show the stamp",
+);
 
 console.log("aqa-retest-586 ok");

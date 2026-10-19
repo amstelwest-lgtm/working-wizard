@@ -61,7 +61,7 @@ export type OwnerBooks = {
   } | null;
   /**
    * Cash pillar band from the same health score as the ring.
-   * Watch or Healthy wins over the floor chip. Omit it and the outlook rule stays.
+   * The card chip follows Watch and Critical. Omit it and the floor chip stays.
    */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   openAction: string | null;
@@ -241,12 +241,27 @@ export type OwnerCardStatus = {
 export const CASH_FLOOR_ALERT = "Below your minimum";
 
 /**
+ * The Financial Manager chip follows the cash pillar.
+ * Watch and Critical use the pillar word. Healthy stays quiet.
+ * When the pillar is omitted, a floor alert keeps its own chip.
+ */
+export function ownerCashStatusChip(
+  pillar: "healthy" | "at_risk" | "critical" | null | undefined,
+  floorChip: string | null,
+): OwnerCardStatus | null {
+  if (pillar === "at_risk") return { tone: "attention", word: "Watch" };
+  if (pillar === "critical") return { tone: "critical", word: "Critical" };
+  if (pillar === "healthy") return null;
+  if (floorChip) return { tone: "attention", word: floorChip };
+  return null;
+}
+
+/**
  * A chip only when the card's figures are a problem.
- * Cash under the floor is a floor alert, not the health band word.
+ * Cash uses the pillar band, including Watch. An omitted pillar keeps the floor alert.
  * A profit decline, or overdue debtors above zero, is Attention.
  */
 export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {
-  const pillar = books.cashPillarStatus;
   const floor = cashFloorForHome({
     openingMissing: books.openingMissing,
     cashOutlook: books.cashOutlook,
@@ -254,12 +269,7 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
     market: books.market,
     money: (amount) => ownerAmount(amount, books.market),
   });
-  const cash: OwnerCardStatus | null =
-    pillar === "healthy" || pillar === "at_risk"
-      ? null
-      : pillar === "critical" || floor?.chip
-        ? { tone: "attention", word: floor?.chip ?? CASH_FLOOR_ALERT }
-        : null;
+  const cash = ownerCashStatusChip(books.cashPillarStatus, floor?.chip ?? null);
 
   const gross =
     finite(books.revenue) && finite(books.cogs)

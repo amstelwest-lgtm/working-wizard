@@ -11,6 +11,7 @@ import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
 import { storedSeriesReading } from "./client-metrics.ts";
 import { cashFloorCopy } from "./owner-answers.ts";
+import { rewriteDraftMonthStamp } from "./statement-period.ts";
 import type { SavedCashflowLike } from "./cash-runway.ts";
 import type { MoneyMarket } from "./market/format.ts";
 
@@ -70,7 +71,7 @@ export type FinancialManagerBrief = {
   chase: ChaseDraftInput | null;
   /** Opening and floor, in the same words as the owner home. Null when either amount is missing. */
   cashFloorLine: string | null;
-  /** Same chip as the owner Financial Manager card. Null when cash is not a floor alert. */
+  /** Floor alert chip. Null when the opening is missing or the pillar is Watch or Healthy. */
   cashFloorChip: string | null;
   /** Short Health cash line. Same reading as the chip, so the pillar matches this brief. */
   healthCue: string | null;
@@ -288,7 +289,7 @@ export function buildFinancialManagerBrief(input: {
   const drafts = (input.drafts ?? []).flatMap((row) => {
     const title = row.title.trim();
     if (!row.id || !title) return [];
-    return [{ id: row.id, title }];
+    return [{ id: row.id, title: rewriteDraftMonthStamp(title) }];
   });
   const chaseAction = actions.find((action) => action.button === "chase");
   const chase: ChaseDraftInput | null =

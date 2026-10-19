@@ -20,6 +20,7 @@ import { ArrowRight, Check, Loader2, RefreshCw, Sparkles, X } from "lucide-react
 import { toast } from "sonner";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import { stripMilonProjection } from "@/lib/milon-projection";
+import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import { PrecardCapCard } from "@/components/precard-cap-card";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
 import { isPrecardCapFailure } from "@/lib/precard-cap";
@@ -358,16 +359,16 @@ export function RecommendationsPanel({
                       ) : null}
                     </div>
                     <p className="mt-1 text-[14px] font-semibold leading-snug text-slate-900 dark:text-[#F4F7FB]">
-                      {stripMilonProjection(rec.title)}
+                      {rewriteDraftMonthStamp(stripMilonProjection(rec.title))}
                     </p>
                     {stripMilonProjection(rec.problem) ? (
                       <p className="mt-0.5 text-[12px] leading-relaxed text-slate-700 dark:text-slate-200/85">
-                        {stripMilonProjection(rec.problem)}
+                        {rewriteDraftMonthStamp(stripMilonProjection(rec.problem))}
                       </p>
                     ) : null}
                     {stripMilonProjection(rec.rationale) ? (
                       <p className="mt-0.5 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/75">
-                        {stripMilonProjection(rec.rationale)}
+                        {rewriteDraftMonthStamp(stripMilonProjection(rec.rationale))}
                       </p>
                     ) : null}
                     {rec.data_depth === "statement" ? (
