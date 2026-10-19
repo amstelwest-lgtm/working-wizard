@@ -367,7 +367,7 @@ function TryConversation({
         {remaining.length === 0 ? <p className="try-chat-close-line">{FM_CLOSING}</p> : null}
         <p className="try-value">{TRIAL_VALUE_PROP}</p>
         <TrialCta quiet className="try-cta-close" />
-        <p className="try-trial-terms">{TRIAL_SIGNUP_SENTENCE}</p>
+        <p className="try-trial-terms">Starter. {TRIAL_SIGNUP_SENTENCE}. A card is required at signup.</p>
       </div>
     </section>
   );
@@ -499,7 +499,7 @@ function Frame({
         <p className="try-ctabar-copy">
           <strong>Milōn</strong>
           <span>{TRIAL_VALUE_PROP_SHORT}</span>
-          <small>{TRIAL_SIGNUP_SENTENCE}</small>
+          <small>Starter. {TRIAL_SIGNUP_SENTENCE}. A card is required at signup.</small>
         </p>
         <TrialCta className="try-ctabar-btn" />
       </div>

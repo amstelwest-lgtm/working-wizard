@@ -7,6 +7,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { SAGE_CONNECTION_UNAVAILABLE, sagePublicError } from "@/lib/sage";
 import { executeSageSync } from "@/lib/sage-sync.server";
 
 const bodySchema = z.object({ clientId: z.string().uuid() });
@@ -78,10 +79,11 @@ export const Route = createFileRoute("/api/sage/sync")({
           return json({ ok: true, ...result }, 200);
         } catch (err) {
           if (err instanceof Response) return err;
-          const message = err instanceof Error ? err.message : "Sync failed";
+          const raw = err instanceof Error ? err.message : "Sync failed";
+          const message = sagePublicError(raw);
           const status = /not connected|Client not found/i.test(message)
             ? 404
-            : /SAGE_SA_(API|PASSWORD)_KEY (or SAGE_SA_PASSWORD_KEY )?is not set/i.test(message)
+            : message === SAGE_CONNECTION_UNAVAILABLE
               ? 503
               : /left unchanged|rejected the login/i.test(message)
                 ? 409

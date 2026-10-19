@@ -19,7 +19,7 @@ import {
 import { clientMarketDraftFromFirm } from "../src/lib/market";
 import { detectImportPeriod, importPeriodFromParts } from "../src/lib/import-period";
 import { firmTrialStatusLine, formatFirmPlanStatus, trialDaysRemaining } from "../src/lib/firm-client-cap";
-import { FIRM_BAND_CATALOG, FIRM_TRIAL_CLIENT_LIMIT } from "../src/lib/stripe-plans";
+import { FIRM_BAND_CATALOG, FIRM_TRIAL_CLIENT_LIMIT, FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
 import type { OverallHealth } from "../src/lib/health-score";
 
 function assert(cond: unknown, msg: string) {
@@ -186,7 +186,10 @@ const now = new Date("2026-10-05T12:00:00.000Z");
 assert(trialDaysRemaining("2026-10-14T12:00:00.000Z", now) === 9, "nine days left");
 assert(trialDaysRemaining("2026-10-04T12:00:00.000Z", now) === 0, "past trial end is zero days");
 const soloLimit = FIRM_BAND_CATALOG.solo.clientLimit;
-assert(FIRM_TRIAL_CLIENT_LIMIT === 3, "enforced trial cap is 3 clients");
+assert(
+  FIRM_TRIAL_CLIENT_LIMIT === 5 && FIRM_TRIAL_CLIENT_LIMIT === FIRM_BAND_CATALOG.starter.clientLimit,
+  "enforced trial cap is Starter's 5 clients",
+);
 assert(soloLimit === 15, "paid Solo cap is 15, not the trial cap");
 const trial = formatFirmPlanStatus({
   phase: "trialing",
@@ -195,6 +198,7 @@ const trial = formatFirmPlanStatus({
   now,
 });
 assert(trial.headline === "Trial — 9 days left", "trial headline counts days");
+assert(trial.detail === `Starter · ${FIRM_TRIAL_SENTENCE}`, "trial detail uses the Starter sentence");
 assert(
   firmTrialStatusLine({ phase: "trialing", trialEndsOn: trial.trialEndsOn }) ===
     `Free trial · ends ${trial.trialEndsOn}`,
@@ -212,7 +216,6 @@ assert(
   firmTrialStatusLine({ phase: "active", trialEndsOn: trial.trialEndsOn }) == null,
   "a paid plan does not show a free-trial line",
 );
-assert(trial.detail === "Up to 3 clients · Solo after the trial", "trial detail uses the trial cap");
 assert(!trial.detail?.includes(String(soloLimit)), "trial copy does not advertise the paid cap");
 const active = formatFirmPlanStatus({ phase: "active", band: "solo", now });
 assert(active.headline === "Solo", "active plan shows the band name");

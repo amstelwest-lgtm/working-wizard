@@ -155,10 +155,18 @@ export async function validateSageLogin(
   return { ok: true, company };
 }
 
+/** Shown when Sage cannot run. Never names an environment variable. */
+export const SAGE_CONNECTION_UNAVAILABLE = "Sage connection not available yet";
+
+/** Strip operator hints (SAGE_SA_API_KEY and the like) before a user sees the text. */
+export function sagePublicError(message: string): string {
+  return /SAGE_[A-Z0-9_]+/.test(message) ? SAGE_CONNECTION_UNAVAILABLE : message;
+}
+
 export function sageValidateError(reason: Exclude<SageValidateResult, { ok: true }>["reason"]): string {
   switch (reason) {
     case "not_configured":
-      return "Sage Accounting is not switched on for this workspace yet.";
+      return SAGE_CONNECTION_UNAVAILABLE;
     case "rejected":
       return "Sage rejected that email or password.";
     case "company_not_found":

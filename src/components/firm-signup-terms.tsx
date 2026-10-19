@@ -1,6 +1,7 @@
 import {
   FIRM_BAND_CATALOG,
   FIRM_CHECKOUT_BANDS,
+  FIRM_TRIAL_SENTENCE,
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
@@ -31,27 +32,25 @@ export function FirmSignupTerms({
   const bandId = variant === "auth" ? "auth-firm-band" : "register-firm-band";
   const intervalLabel = interval === "year" ? "annually" : "monthly";
   const reminder = firmSignupTrialReminder(registerLabelForPlan(plan));
-  const soloLimit = FIRM_BAND_CATALOG.solo.clientLimit;
   const hintClass = variant === "auth" ? "auth-entry__hint" : "firm-signup-hint";
   const trialClass = variant === "auth" ? "auth-entry__trial" : "firm-signup-hint";
 
   const bandPicker = (
     <div data-funnel={FUNNEL_SOLO_FIRST}>
       <p className={trialClass}>
-        <strong>Solo</strong>
-        {soloLimit != null ? ` · up to ${soloLimit} active clients` : ""}. This is the plan to start
-        on.
-        {plan !== "solo" ? ` You currently have ${registerLabelForPlan(plan)} selected.` : ""}
+        <strong>Starter</strong>
+        {` · ${FIRM_TRIAL_SENTENCE}`}. This is the plan to start on.
+        {plan !== "starter" ? ` You currently have ${registerLabelForPlan(plan)} selected.` : ""}
       </p>
-      {plan !== "solo" ? (
+      {plan !== "starter" ? (
         <p className={hintClass}>
-          <button type="button" className="btn btn-ghost" onClick={() => onPlanChange("solo")}>
-            Use Solo
+          <button type="button" className="btn btn-ghost" onClick={() => onPlanChange("starter")}>
+            Use Starter
           </button>
         </p>
       ) : null}
       <details>
-        <summary className={hintClass}>Larger band, when the book outgrows Solo</summary>
+        <summary className={hintClass}>Larger band, when the book outgrows Starter</summary>
         {variant === "auth" ? (
           <label className="auth-entry__field-label" htmlFor={bandId}>
             Band

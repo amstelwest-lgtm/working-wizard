@@ -35,8 +35,8 @@ Coupon `FOUNDING50` / code `FOUNDING` is **monthly only** and must not stack wit
 
 1. Open https://milonfinance.com, choose the accountant path, pick **Starter** (5 clients, $39 / R299) or another paid band. A legacy $0 Starter subscription is not migrated.
 2. Create a firm account at `/auth` if needed.
-3. Stripe Checkout should open on **Milon, Inc.** for the catalog price resolved by lookup_key, collect a card, and start `trial_period_days: 14`. An SA firm uses the rand price. Copy: “14-day free trial · up to 3 clients”.
-4. Success returns to `/billing/success`. Cancel charges nothing. A fourth client during the trial is blocked until the paid plan is active.
+3. Stripe Checkout should open on **Milon, Inc.** for the catalog price resolved by lookup_key, collect a card, and start `trial_period_days: 14`. An SA firm uses the rand price. Copy: “14-day free trial · up to 5 clients”.
+4. Success returns to `/billing/success`. Cancel charges nothing. A sixth client during the trial is blocked until the paid plan is active.
 5. Practice Settings → **Manage billing** opens the Stripe Customer Portal.
 
 ## Auth redirect

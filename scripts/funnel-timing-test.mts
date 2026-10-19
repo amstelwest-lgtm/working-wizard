@@ -80,7 +80,7 @@ assert(isPreInsightWorkspacePath("/clients/abc"), "client studio is the pre-insi
 assert(!isPreInsightWorkspacePath("/reports"), "reports is not the aha path");
 assert(isPreInsightWorkspacePath("/settings/team"), "team settings stay open with the dashboard before the insight");
 
-assert(firmSignupCheckoutIntent().plan === "solo", "stashed signup Checkout is still Solo");
+assert(firmSignupCheckoutIntent().plan === "starter", "stashed signup Checkout is Starter");
 
 const fresh = decideAccountantAuthLanding({
   flow: "signup",
@@ -371,7 +371,7 @@ const client = read("src/routes/_authenticated/clients.$clientId.tsx");
 const dash = read("src/components/practice-board.tsx");
 
 assert(signup.includes(`data-funnel={FUNNEL_SOLO_FIRST}`), "signup leads Solo");
-assert(signup.includes("<strong>Solo</strong>"), "signup names Solo as the start plan");
+assert(signup.includes("<strong>Starter</strong>"), "signup names Starter as the start plan");
 assert(signup.includes("<details>"), "larger bands are not equal first choices");
 assert(pricing.includes(`data-funnel={FUNNEL_SOLO_FIRST}`), "pricing leads Solo");
 assert(pricing.includes("See all plans"), "the full band table sits behind See all plans");
@@ -384,8 +384,8 @@ assert(picker.includes("Start here"), "plan picker says Solo is where to start")
 assert(!pricing.includes("SA_FIRM_DISCOUNT") || pricing.includes("showSaPricing"), "SA discount stays behind the geo flag");
 assert(prompt.includes(`data-funnel={FUNNEL_CHECKOUT_AFTER_INSIGHT}`), "checkout prompt is the after-insight marker");
 assert(
-  prompt.includes("Add a card to start your 14-day free trial"),
-  "one card action after the figures",
+  prompt.includes("FIRM_TRIAL_CARD_LINE"),
+  "one card action after the figures uses the locked trial line",
 );
 assert(client.includes("<CheckoutAfterInsight />"), "client studio offers Checkout after figures");
 assert(

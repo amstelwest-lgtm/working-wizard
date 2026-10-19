@@ -1,6 +1,7 @@
 import { HEALTH_RATIO_COUNT } from "./health-catalogue";
 import { COMPANY_POSTAL_ADDRESS, LEGAL_ENTITY } from "./legal";
 import { LIST_PRICES } from "./market/marketing";
+import { FIRM_TRIAL_SENTENCE } from "./stripe-plans";
 
 /**
  * Production canonical origin for public metadata, sitemap locs, and robots.
@@ -354,7 +355,7 @@ export const LLMS_TXT = `# Milōn
 - Source documents post to the books only after a named person approves
 
 ## Pricing (USD)
-- Accounting firms: flat bands by active client count, Starter $39/mo to Scale $999/mo; 14-day free trial · up to 3 clients
+- Accounting firms: flat bands by active client count, Starter $39/mo to Scale $999/mo; ${FIRM_TRIAL_SENTENCE} on Starter. A card is required at signup.
 - Business owners: $39/mo, free when their accountant is on Milōn
 
 ## Who it is for

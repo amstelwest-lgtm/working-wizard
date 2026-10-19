@@ -64,11 +64,11 @@ If the signed-in email already has an **active** Stripe subscription, Checkout c
 
 ## New firm signup — 14-day trial
 
-New firms open the practice workspace after `/auth` signup (email confirm and Google included). Checkout on a **paid** band waits until the accountant has seen an insight (figures on a client). The default band is Solo monthly (`milon_solo_monthly`). Starter is a paid Checkout band when the firm selects it. A legacy $0 Starter subscription is not a new-signup path. Dashboard and `/clients` stay open before that insight. After it, the first client's file stays open so the figures remain on screen, with an in-context card step. Reports, team and brand settings, the practice dashboard (adding another client), and a later client's file still resume at `/billing/required`.
+New firms open the practice workspace after `/auth` signup (email confirm and Google included). The default Checkout band is Starter monthly. A card is required at signup. Larger bands stay available when the firm selects them. A legacy $0 Starter subscription is not a new-signup path. The pre-card allowance still lets a firm with no subscription generate one pack, draft one email, and ask the Bot ten times before Checkout. Reports, team and brand settings, the practice dashboard (adding another client), and a later client's file still resume at `/billing/required`.
 
-- Copy: **14-day free trial · up to 3 clients**. Do not write “3 free clients” or “free forever.”
-- Card is required at Checkout, not before the first figures. The trial subscription status is `trialing`, which entitles `/dashboard` and the rest of the firm product.
-- During the trial the app blocks the 4th client until the subscription is `active` on a band that allows it. The firm owner can end the trial from Add client (“Upgrade to paid plan”), which sets `trial_end: now` and bills the card.
+- Copy: **14-day free trial · up to 5 clients**. Do not write “3 free clients”, “up to 3 clients”, or “free forever.”
+- Card is required at signup. The trial subscription status is `trialing`, which entitles `/dashboard` and the rest of the firm product.
+- During the trial the app blocks the 6th client on every band until the subscription is `active` on a band that allows it. The firm owner can end the trial from Add client (“Upgrade to paid plan”), which sets `trial_end: now` and bills the card.
 - Paid Solo+ uses the catalog client limits (Solo 15, Small 25, …).
 - FOUNDING / FOUNDING50 applies to monthly paid Solo+ invoices after the trial. It is not a free-forever coupon.
 - When the trial ends unpaid or canceled (`past_due`, `unpaid`, `canceled`, `incomplete`), the firm is not entitled and resumes at `/billing/required`.
@@ -77,7 +77,7 @@ New firms open the practice workspace after `/auth` signup (email confirm and Go
 
 Growth owns the Resend sends. Do not add day-12 or day-14 mail in the Checkout / client-cap change. Locked copy for that follow-up:
 
-- Day 12: “2 days left — subscribe to keep your 3 clients’ Health + Action Plans live.”
+- Day 12: “2 days left — subscribe to keep your 5 clients’ Health + Action Plans live.”
 - Day 14: “Trial ended — subscribe now to reopen sign-off, or access stays read-only/archived.”
 
 ## Starter price
@@ -89,7 +89,7 @@ Paid Starter is the entry band: 5 active clients, $39/mo (about $8 per client) a
 - ZAR R299/mo `price_1UQ4F2GXDN6PFbnz3tG5OQNL` — `milon_za_starter_monthly`
 - ZAR R2,837/yr `price_1UQ4F3GXDN6PFbnzSRwzs8I1` — `milon_za_starter_annual`
 
-The trial cap stays 3 clients. Paid Starter allows 5. A subscription whose price `unit_amount` is 0 keeps that existing price id and the 3-client cap. It is not migrated. New Checkout does not attach a $0 price.
+The trial cap is 5 clients on every band, the same as paid Starter. Paid Solo stays at 15. A subscription whose price `unit_amount` is 0 keeps that existing price id and the legacy 3-client cap. It is not migrated. New Checkout does not attach a $0 price.
 
 ### Stripe Live ops checklist (coordinator)
 
