@@ -314,6 +314,7 @@ import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
+import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 const ReportsStudioPanel = lazyPanel<ReportsStudioProps>(
@@ -1458,6 +1459,7 @@ function ClientView() {
     healthMap,
     ratioMeta: sphereRatioMeta,
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
+    dayCounts: cashDriverDayFigures(financials),
   });
   const simplifiedSections = [
     {

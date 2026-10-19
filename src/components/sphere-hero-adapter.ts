@@ -1,4 +1,5 @@
 import type { SpherePillar } from "@/components/sphere-hero";
+import { dayScoreDriverLabel, isDayScoreDriver } from "@/lib/cash-driver-label";
 import { PILLAR_SHORT_LABELS } from "@/lib/health-score";
 import { HEALTH_BAND_TABLE, type HealthTier } from "@/lib/ratios";
 
@@ -63,6 +64,11 @@ export type BuildSphereArgs = {
   ratioMeta: Record<string, { friendly?: string; techName?: string }>;
   /** False for hotels and services. Stock Sitting Time then reads N/A. */
   inventoryApplies?: boolean;
+  /**
+   * Real day counts for debtor, creditor, stock, and working-capital drivers.
+   * Null means the days are unknown. Omit the map to leave those labels unchanged.
+   */
+  dayCounts?: Partial<Record<string, number | null>>;
 };
 
 export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
@@ -77,12 +83,17 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
         : k in healthMap && Number.isFinite(healthMap[k])
           ? healthMap[k]
           : Number.NaN;
+      const label = ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k;
+      const tracked = isDayScoreDriver(k) && args.dayCounts != null && !noStock;
+      const days = tracked ? (args.dayCounts?.[k] ?? null) : undefined;
+      const reading = tracked ? dayScoreDriverLabel(label, days, health) : undefined;
       return {
         key: k,
-        label: ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k,
+        label,
         description: ratioMeta[k]?.techName,
         health,
         na: noStock ? true : undefined,
+        reading: reading && reading !== label ? reading : undefined,
       };
     });
     // Drivers with no score still render as "—" so the owner sees what's missing.
