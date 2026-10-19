@@ -18,6 +18,7 @@ import { suggestOnceOffRows } from "../src/lib/cash-once-off-suggest";
 import { distributeForecastLine, forecastMinimumCash } from "../src/lib/client-metrics";
 import { practiceDisplaysZarPlan, saFirmDisplayPrice, saPlanRegionControls } from "../src/lib/firm-band-upgrade";
 import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief";
+import { ownerAnswerTiles, type OwnerBooks } from "../src/lib/owner-answers";
 import { homeActionNeeds } from "../src/lib/owner-needs";
 import { planAnswerSentence } from "../src/lib/plan-pack-copy";
 
@@ -226,6 +227,22 @@ assert(!summary.includes("Target a D/E"), summary);
 const needs = homeActionNeeds({ known: true, titles: ["Collect the overdue invoices", raw], overdue: 0 });
 assert(needs.lines[1] === "Bring debt-to-equity under the target", needs.lines.join(" | "));
 assert(!needs.lines.join(" ").includes("Target a D/E"), "What needs you uses the short title");
+const ownerBooks: OwnerBooks = {
+  hasBooks: false,
+  ledger: null,
+  revenue: null,
+  priorRevenue: null,
+  cogs: null,
+  receivables: null,
+  cashflow: null,
+  openAction: raw,
+  actionsReady: true,
+  signedBy: null,
+  signedOn: null,
+  market: { currency: "ZAR", locale: "en-ZA" },
+};
+const ownerAnswer = ownerAnswerTiles(ownerBooks).find((tile) => tile.id === "answer");
+assert(ownerAnswer?.sentence === "Bring debt-to-equity under the target", ownerAnswer?.sentence ?? "");
 const brief = buildFinancialManagerBrief({
   clientName: "Chill Pepper Boutique Hotel",
   currentFinancials: null,

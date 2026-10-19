@@ -11,6 +11,7 @@ import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { OPENING_BALANCE_MISSING, cashOutlookIsCritical } from "@/lib/cash-forecast-parity";
 import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
+import { actionDisplayTitle } from "@/lib/strategic-moves";
 
 export type OwnerHomeLines = Record<AgentKey, readonly string[]>;
 
@@ -119,7 +120,7 @@ export function ownerAnswerTiles(books: OwnerBooks): OwnerTile[] {
       ? {
           id: "answer" as const,
           heading: "What needs your answer",
-          sentence: books.openAction,
+          sentence: actionDisplayTitle(books.openAction),
           source: "Open action point",
           step: "Open action points",
           ask: null,
@@ -292,7 +293,7 @@ export function ownerHomeLines(
 ): OwnerHomeLines {
   const sentence = (id: OwnerTileId) => tiles.find((tile) => tile.id === id)?.sentence ?? "";
   const cash = sentence("cash");
-  const move = topMove?.replace(/\s+/g, " ").trim() ?? "";
+  const move = actionDisplayTitle(topMove?.replace(/\s+/g, " "));
   const answer = guardOwnerLine(sentence("answer"));
   const routed =
     assignedAgent &&
