@@ -12,6 +12,7 @@ import {
   formatDateTime,
   formatMonthLabel,
   formatMonthRange,
+  formatMonthYear,
   formatReviewDateTime,
   formatWeekHeader,
 } from "../src/lib/market/format";
@@ -37,16 +38,43 @@ assert.equal(formatMonthLabel("2026-09", ZA_MARKET), "Sep 26");
 assert.equal(formatMonthRange("2026-03", "2027-02"), "Mar 2026 \u2013 Feb 2027");
 assert.equal(formatMonthRange("2026-01", "2026-09"), "Jan 2026 \u2013 Sep 2026");
 assert.equal(formatMonthRange("2026-03", "2026-03"), "Mar 2026");
+assert.equal(formatMonthYear("2026-10-19T12:00:00.000Z", "UTC"), "Oct 2026");
+assert.equal(formatMonthYear("2026-09-08T12:00:00.000Z", "UTC"), "Sep 2026");
 
 const zaClock = formatDateTime("2026-11-02T07:54:00.000Z", ZA_MARKET);
-assert.equal(zaClock, "2 Nov 2026, 09:54 UTC+2", zaClock);
-assert.doesNotMatch(zaClock, /Sept|AM|PM/);
+assert.equal(zaClock, "2 Nov 2026, 09:54 SAST", zaClock);
+assert.doesNotMatch(zaClock, /Sept|AM|PM|UTC/);
 
 const usClock = formatDateTime("2026-11-02T14:54:00.000Z", US);
-assert.equal(usClock, "Nov 2, 2026, 9:54 AM EST", usClock);
+assert.equal(usClock, "Nov 2, 2026, 9:54 AM ET", usClock);
 
 const review = formatReviewDateTime("2026-10-07T22:14:47.000Z", US);
-assert.equal(review, "Oct 7, 2026, 6:14 PM EDT");
+assert.equal(review, "Oct 7, 2026, 6:14 PM ET");
+
+assert.equal(
+  formatDateTime("2026-11-02T15:54:00.000Z", { locale: "en-US", timezone: "America/Chicago" }),
+  "Nov 2, 2026, 9:54 AM CT",
+);
+assert.equal(
+  formatDateTime("2026-11-02T16:54:00.000Z", { locale: "en-US", timezone: "America/Denver" }),
+  "Nov 2, 2026, 9:54 AM MT",
+);
+assert.equal(
+  formatDateTime("2026-11-02T16:54:00.000Z", { locale: "en-US", timezone: "America/Phoenix" }),
+  "Nov 2, 2026, 9:54 AM MT",
+);
+assert.equal(
+  formatDateTime("2026-11-02T17:54:00.000Z", { locale: "en-US", timezone: "America/Los_Angeles" }),
+  "Nov 2, 2026, 9:54 AM PT",
+);
+assert.equal(
+  formatDateTime("2026-10-07T22:14:00.000Z", { locale: "en-US", timezone: "America/Chicago" }),
+  "Oct 7, 2026, 5:14 PM CT",
+);
+assert.equal(
+  formatDateTime("2026-10-07T22:14:00.000Z", { locale: "en-US", timezone: "America/Detroit" }),
+  "Oct 7, 2026, 6:14 PM ET",
+);
 
 const root = process.cwd();
 const roots = ["src", "supabase/functions"];
@@ -100,15 +128,17 @@ function monthTable(src: string): boolean {
  * Intl.DateTimeFormat for numeric parts and zone names only.
  */
 const ALLOW_TO_LOCALE_DATE = new Set([
-  "src/components/accountant-inbox.tsx",
-  "src/components/accountant-ratios.tsx",
-  "src/components/chrome-icons.tsx",
-  "src/components/data-requests-panel.tsx",
-  "src/components/owner-practice-access.tsx",
-  "src/components/practice-board.tsx",
-  "src/components/profitability-waterfall.tsx",
+  // Day-picker data-day attribute. A machine value, not visible copy.
   "src/components/ui/calendar.tsx",
-  "src/lib/portfolio-dashboard.ts",
+]);
+
+/**
+ * Intl.DateTimeFormat( without `new`. These validate a zone or read
+ * resolvedOptions().timeZone. They do not print a date.
+ */
+const ALLOW_BARE_INTL = new Set([
+  "src/lib/trial-call-slots.ts",
+  "src/components/source-documents-panel.tsx",
 ]);
 
 const ALLOW_INTL = new Set([
@@ -139,11 +169,17 @@ for (const abs of files) {
   const rel = relative(root, abs).split("\\").join("/");
   const raw = readFileSync(abs, "utf8");
   const src = stripComments(raw);
-  if (src.includes("toLocaleDateString") && !ALLOW_TO_LOCALE_DATE.has(rel)) {
-    problems.push(`${rel} calls toLocaleDateString`);
+  const printsLocaleDate =
+    src.includes("toLocaleDateString") ||
+    /toLocale(?:String|TimeString)\s*\(\s*(?:[^,{)]+,\s*)?\{[^}]{0,500}?(?:month|day|year|hour)\s*:/.test(src);
+  if (printsLocaleDate && !ALLOW_TO_LOCALE_DATE.has(rel)) {
+    problems.push(`${rel} formats a date with toLocaleString`);
   }
   if (src.includes("new Intl.DateTimeFormat") && !ALLOW_INTL.has(rel)) {
     problems.push(`${rel} constructs Intl.DateTimeFormat`);
+  }
+  if (/(?<!new\s)(?<![\w.])Intl\.DateTimeFormat\s*\(/.test(src) && !ALLOW_BARE_INTL.has(rel)) {
+    problems.push(`${rel} calls Intl.DateTimeFormat without new`);
   }
   if (monthTable(src) && rel !== "src/lib/market/date-presets.ts" && !ALLOW_MONTH_TABLE.has(rel)) {
     problems.push(`${rel} has a private month-name array`);
@@ -178,6 +214,12 @@ for (const rel of ALLOW_INTL) {
   const src = stripComments(readFileSync(join(root, rel), "utf8"));
   if (!src.includes("new Intl.DateTimeFormat")) {
     problems.push(`${rel} is allowlisted but no longer constructs Intl.DateTimeFormat`);
+  }
+}
+for (const rel of ALLOW_BARE_INTL) {
+  const src = stripComments(readFileSync(join(root, rel), "utf8"));
+  if (!/(?<!new\s)(?<![\w.])Intl\.DateTimeFormat\s*\(/.test(src)) {
+    problems.push(`${rel} is allowlisted but no longer calls Intl.DateTimeFormat without new`);
   }
 }
 

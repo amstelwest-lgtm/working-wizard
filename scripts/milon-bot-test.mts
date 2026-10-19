@@ -8,6 +8,7 @@ import { extractionAccessGranted } from "../src/lib/extract-access.ts";
 import {
   BOT_RATE_LIMIT,
   BOT_SYSTEM,
+  botSystem,
   BOT_TOOLS,
   buildBlockers,
   buildBrainAnswer,
@@ -198,6 +199,15 @@ assert(
   BOT_SYSTEM.includes("Do not multiply a margin by revenue"),
   "bot quotes stored net profit instead of margin times revenue",
 );
+assert(botSystem("za") === BOT_SYSTEM, "the default prompt is the ZA prompt");
+assert(botSystem("za").includes("R4,200,000"), "ZA prompt uses rand");
+assert(botSystem("za").includes("8 Sep 2026"), "ZA prompt uses the ZA date");
+assert(!botSystem("za").includes("$4,200,000"), "ZA prompt does not show a dollar example");
+const usBot = botSystem("us");
+assert(usBot.includes("$4,200,000"), "US prompt uses dollars");
+assert(usBot.includes("Sep 8, 2026"), "US prompt uses the US date");
+assert(!usBot.includes("R4,200,000"), "US prompt never contains rand");
+assert(!usBot.includes("8 Sep 2026"), "US prompt does not use the ZA date");
 
 assert(summarizeToolArgs("answer_from_brain", { topic: "cash" }) === "answer_from_brain:cash", "args summary");
 assert(summarizeToolArgs("list_blockers", {}) === "list_blockers", "empty args summary");

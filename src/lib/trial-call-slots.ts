@@ -89,6 +89,7 @@ export function safeTimeZone(value: string | null | undefined): string {
   const zone = (value ?? "").trim();
   if (!zone || zone.length > 80 || !/^[A-Za-z0-9_+\-/]+$/.test(zone)) return "UTC";
   try {
+    // Zone probe only. The printed slot clock is formatSlotClock below.
     Intl.DateTimeFormat("en-US", { timeZone: zone }).format(new Date());
     return zone;
   } catch {

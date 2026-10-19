@@ -109,6 +109,13 @@ function twelveHour(hour24: number, minute: string): string {
   return `${hour}:${minute} ${suffix}`;
 }
 
+/** ZA "09:54". US "9:54 AM". */
+export function clockLabel(hour24: number, minute: number, order: DateOrder): string | null {
+  if (hour24 < 0 || hour24 > 23 || minute < 0 || minute > 59) return null;
+  const mm = String(minute).padStart(2, "0");
+  return order === "us" ? twelveHour(hour24, mm) : `${String(hour24).padStart(2, "0")}:${mm}`;
+}
+
 /** ZA "2 Nov 2026, 09:54 SAST". US "Nov 2, 2026, 9:54 AM ET". */
 export function dateTimeLabel(
   year: number,
@@ -120,9 +127,8 @@ export function dateTimeLabel(
   order: DateOrder,
 ): string | null {
   const calendar = calendarDayLabel(year, month, day, order);
-  if (!calendar || hour24 < 0 || hour24 > 23 || minute < 0 || minute > 59) return null;
-  const mm = String(minute).padStart(2, "0");
-  const clock = order === "us" ? twelveHour(hour24, mm) : `${String(hour24).padStart(2, "0")}:${mm}`;
+  const clock = clockLabel(hour24, minute, order);
+  if (!calendar || !clock) return null;
   const label = zone.trim();
   return label ? `${calendar}, ${clock} ${label}` : `${calendar}, ${clock}`;
 }

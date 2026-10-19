@@ -1,9 +1,11 @@
 import {
   calendarDayLabel,
+  clockLabel,
   dateOrder,
   dateTimeLabel,
   formatMonthRange,
   monthColumnLabel,
+  monthYearLabel,
   weekHeaderLabel,
   type DateOrder,
 } from "./date-presets.ts";
@@ -247,12 +249,28 @@ function offsetFromZone(date: Date, timeZone: string): string {
   }
 }
 
-/** Letter abbreviations (SAST, EDT) stay. Offset-only short names become UTC+2. */
+/**
+ * Printed zone. ICU short names drift (UTC+2, EST, EDT), so mapped zones
+ * always use the same letters. Anything else is a UTC offset.
+ */
+const ZONE_ABBR: Record<string, string> = {
+  "Africa/Johannesburg": "SAST",
+  "America/New_York": "ET",
+  "America/Detroit": "ET",
+  "America/Indiana/Indianapolis": "ET",
+  "America/Chicago": "CT",
+  "America/Denver": "MT",
+  "America/Boise": "MT",
+  "America/Phoenix": "MT",
+  "America/Los_Angeles": "PT",
+  "America/Anchorage": "AKT",
+};
+
 function zoneLabel(name: string, date: Date, timeZone: string): string {
-  const trimmed = name.trim();
-  const offset = offsetLabel(trimmed);
+  const mapped = ZONE_ABBR[timeZone];
+  if (mapped) return mapped;
+  const offset = offsetLabel(name.trim());
   if (offset) return offset;
-  if (/^[A-Z]{2,5}$/.test(trimmed)) return trimmed;
   return offsetFromZone(date, timeZone);
 }
 
@@ -283,7 +301,7 @@ function renderDateTime(
  * Sign-off time for every PDF footer. Always in the firm zone when one is
  * stored, otherwise the market zone, and always with a zone label. Never the
  * server's local zone and never an unlabeled clock.
- * ZA: "2 Nov 2026, 09:54 SAST". US: "Nov 2, 2026, 9:54 AM EDT".
+ * ZA: "2 Nov 2026, 09:54 SAST". US: "Nov 2, 2026, 9:54 AM ET".
  * A GMT offset short name is still written as UTC+N.
  */
 export function formatSignedOffDateTime(
@@ -313,6 +331,44 @@ export function formatReviewDateTime(
 export function formatPercentRate(rate: number, digits = 2): string {
   if (!Number.isFinite(rate)) return "—";
   return `${(rate * 100).toFixed(digits)}%`;
+}
+
+function runtimeZone(): string {
+  try {
+    return new Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+/** Month and year. Both markets: "Oct 2026". Omitting the zone uses the runtime zone. */
+export function formatMonthYear(
+  d: Date | string | number = new Date(),
+  timeZone?: string,
+): string {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return "—";
+  try {
+    const parts = readClock(date, timeZone || runtimeZone());
+    return monthYearLabel(parts.year, parts.month) ?? "—";
+  } catch {
+    return "—";
+  }
+}
+
+/** ZA "09:54". US "9:54 AM". The clock is in the market zone. */
+export function formatClock(
+  d: Date | string | number,
+  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+): string | null {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    const parts = readClock(date, market.timezone ?? "UTC");
+    return clockLabel(parts.hour, parts.minute, orderOf(market));
+  } catch {
+    return null;
+  }
 }
 
 /** Month column. Both markets: "Oct 26". */

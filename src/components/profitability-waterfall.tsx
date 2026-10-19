@@ -25,7 +25,7 @@ import {
 import { DEFAULT_PROFILE, useOptionalAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketFormat } from "@/contexts/market";
-import { currencySymbol } from "@/lib/market";
+import { currencySymbol, formatMonthYear } from "@/lib/market";
 import { yearToDateTitle } from "@/lib/statement-period";
 import {
   hashFigures,
@@ -513,12 +513,7 @@ async function exportPDF(opts: {
   ]);
 
   const now = new Date();
-  const period =
-    opts.periodLabel?.trim() ||
-    now.toLocaleDateString(opts.market?.locale ?? "en-ZA", {
-      month: "long",
-      year: "numeric",
-    });
+  const period = opts.periodLabel?.trim() || formatMonthYear(now, opts.market?.timezone);
   const name = opts.clientName?.trim() || "Your Business";
 
   const profitabilityData = {

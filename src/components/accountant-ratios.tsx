@@ -27,7 +27,9 @@ import type { MappedInputs } from "@/components/extraction-review-modal";
 import { useMarketFormat } from "@/contexts/market";
 import {
   canShowIndustryMedian,
+  formatDate,
   formatMoney,
+  formatMonthYear,
   industryBenchmarkCaption,
   isUsCopy,
   laborCostLabel,
@@ -275,7 +277,7 @@ export function AccountantRatiosPanel({
 
     // Save snapshot
     const now = new Date();
-    const periodLabel = now.toLocaleString("en-US", { month: "short", year: "numeric" });
+    const periodLabel = formatMonthYear(now, market.timezone);
     const periodDate = now.toISOString().slice(0, 10);
     const ratios = computeRatios(next);
     const { error: snapErr } = await supabase.from("client_financial_snapshots").insert({
@@ -296,7 +298,7 @@ export function AccountantRatiosPanel({
   const onSaveSnapshot = async () => {
     const label = window.prompt(
       "Label for this snapshot (e.g. 'Apr 2026')",
-      new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
+      formatMonthYear(new Date(), market.timezone),
     );
     if (!label) return;
     const dateStr = window.prompt(
@@ -390,7 +392,7 @@ export function AccountantRatiosPanel({
       }
 
       const now = new Date();
-      const periodLabel = now.toLocaleString("en-US", { month: "short", year: "numeric" });
+      const periodLabel = formatMonthYear(now, market.timezone);
       const periodDate = now.toISOString().slice(0, 10);
       const ratios = computeRatios(v);
 
@@ -813,11 +815,7 @@ Your Milōn accountant`;
       const autoTable = (await import("jspdf-autotable")).default;
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-      const date = new Date().toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+      const date = formatDate(new Date(), market);
       pdf.setFontSize(16);
       pdf.setFont("helvetica", "bold");
       pdf.text(`${clientName} — Financial Ratios`, 14, 18);

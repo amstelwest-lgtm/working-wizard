@@ -28,6 +28,7 @@ import {
   type BudgetTableCell,
 } from "@/lib/budget-chart-table";
 import type { BudgetDocument } from "@/lib/budget.types";
+import { MONTHS } from "@/lib/market/date-presets";
 import { currentBudgetMonth, formatMonthLabel, fyMonths } from "@/lib/budget.months";
 import { listBudgetMonthActuals } from "@/lib/budget-actuals.functions";
 import { formatMoneyChartTick } from "@/lib/market/format";
@@ -43,12 +44,9 @@ function tone(signal: VarianceSignal | null): string {
   return "text-slate-500";
 }
 
-function shortMonth(ym: string, locale: string): string {
-  const [y, m] = ym.split("-").map(Number);
-  return new Date(Date.UTC(y, (m ?? 1) - 1, 1)).toLocaleString(locale, {
-    month: "short",
-    timeZone: "UTC",
-  });
+function shortMonth(ym: string): string {
+  const month = Number(ym.split("-")[1]);
+  return MONTHS[month - 1] ?? ym;
 }
 
 export function BudgetChartTable({
@@ -146,7 +144,7 @@ export function BudgetChartTable({
           {sentence}
         </p>
       </div>
-      <BudgetMonthChart views={views} locale={market.locale} market={market} money={money} signed={signed} />
+      <BudgetMonthChart views={views} market={market} money={money} signed={signed} />
       <details
         className="mt-4"
         {...(onLensChange
@@ -200,13 +198,11 @@ function BudgetMonthTick({
 
 function BudgetMonthChart({
   views,
-  locale,
   market,
   money,
   signed = false,
 }: {
   views: BudgetMonthView[];
-  locale: string;
   market: Parameters<typeof formatMoneyChartTick>[1];
   money: (n: number) => string;
   signed?: boolean;
@@ -225,7 +221,7 @@ function BudgetMonthChart({
   };
   const data = views.map((row) => ({
     month: row.month,
-    label: shortMonth(row.month, locale),
+    label: shortMonth(row.month),
     budget: row.budget.revenue,
     actual: row.actual ? row.actual.revenue : null,
     hasActual: Boolean(row.actual),

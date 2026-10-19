@@ -1490,8 +1490,8 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     locale: "en-US",
     timezone: "America/New_York",
   });
-  assert(inApp === "Oct 7, 2026, 9:15 PM EDT", `in-app sign-off uses the clock preset, got ${inApp}`);
-  assert(/EDT|UTC-4/.test(inApp), `in-app sign-off names the zone, got ${inApp}`);
+  assert(inApp === "Oct 7, 2026, 9:15 PM ET", `in-app sign-off uses the clock preset, got ${inApp}`);
+  assert(/\bET\b/.test(inApp), `in-app sign-off names the zone, got ${inApp}`);
   const packPanel = readFileSync(resolve("src/components/advisory-pack-panel.tsx"), "utf8");
   assert(packPanel.includes("formatReviewDateTime"), "the pack sign-off line uses the shared formatter");
   assert(!packPanel.includes("toLocaleString"), "the pack sign-off line is not an unlabeled local clock");
@@ -1513,7 +1513,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   });
   eq(
     line,
-    "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM EDT — figures have changed since; regenerate and re-review",
+    "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM ET — figures have changed since; regenerate and re-review",
     line ?? "missing stale sign-off line",
   );
   const held = packDisplayedSignoffLine({

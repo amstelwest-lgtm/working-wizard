@@ -372,6 +372,7 @@ function LiveSourceDocuments({
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const timeZone = useMemo(
+    // Browser zone for upload grouping. Not a printed date.
     () => (typeof Intl === "undefined" ? "UTC" : Intl.DateTimeFormat().resolvedOptions().timeZone),
     [],
   );

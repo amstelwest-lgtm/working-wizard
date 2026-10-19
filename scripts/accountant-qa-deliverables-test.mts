@@ -319,7 +319,7 @@ const nyTime = formatDateTime(
   { locale: "en-US", timezone: "America/New_York" },
   { hour: "numeric", minute: "2-digit", timeZoneName: "shortGeneric" },
 );
-assert(/3:06/.test(nyTime) && /EDT|UTC-4/.test(nyTime), `New York time keeps a zone label, got ${nyTime}`);
+assert(/3:06/.test(nyTime) && /\bET\b/.test(nyTime), `New York time keeps a zone label, got ${nyTime}`);
 assert(
   read("src/components/advisory-sent-history.tsx").includes("dateTime(r.created_at)"),
   "delivery history shows the shared clock",

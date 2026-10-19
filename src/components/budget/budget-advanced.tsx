@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
 import { supabase } from "@/integrations/supabase/client";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
-import { industryBenchmarkCaption, isUsCopy } from "@/lib/market";
+import { formatDateTime, industryBenchmarkCaption, isUsCopy } from "@/lib/market";
 import { useMarket } from "@/contexts/market";
 import type { BudgetDocument } from "@/lib/budget.types";
 import { newId } from "@/lib/budget.templates";
@@ -371,10 +371,7 @@ export function BudgetAdvancedPanel({
                   <span>{n.by}</span>
                   <span>·</span>
                   <span>
-                    {new Date(n.at).toLocaleString("en-GB", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
+                    {formatDateTime(n.at, market)}
                   </span>
                 </div>
                 <div className="mt-1 text-slate-800 dark:text-slate-100">

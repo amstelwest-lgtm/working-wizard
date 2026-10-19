@@ -5,6 +5,8 @@
  */
 import type { ReactNode } from "react";
 import type { AgentKey } from "@/lib/milon-team-feed";
+import { useMarketFormat } from "@/contexts/market";
+import { formatMonthYear } from "@/lib/market/format";
 
 function Svg({ children, boxSize = 16 }: { children: ReactNode; boxSize?: number }) {
   return (
@@ -126,7 +128,8 @@ export function AgentChipIcon({ agent }: { agent: AgentKey }) {
 
 /** Current period as a quiet topbar pill. Real date, no fake affordance. */
 export function PeriodPill() {
-  const label = new Date().toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+  const { market } = useMarketFormat();
+  const label = formatMonthYear(new Date(), market.timezone);
   return (
     <span className="period-pill" title="Current period">
       <RailIcon id="calendar" />

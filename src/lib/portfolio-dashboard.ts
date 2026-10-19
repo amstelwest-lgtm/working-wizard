@@ -5,6 +5,8 @@
  */
 
 import { overdueActionsLabel } from "@/lib/action-plan-counts";
+import { formatDate } from "@/lib/market/format";
+import { ZA_MARKET } from "@/lib/market/resolve";
 import { PILLAR_LABELS, type OverallHealth } from "@/lib/health-score";
 import type { HealthTier } from "@/lib/ratios";
 
@@ -86,13 +88,12 @@ export function practiceGreeting(name: string | null | undefined, now = new Date
   return `${timeGreeting(now)}, ${firstNameOf(name)}.`;
 }
 
-/** Format "Data as of 16 Aug 2026". */
-export function dataAsOfLabel(now = new Date()): string {
-  return now.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+/** Format "Data as of 16 Aug 2026" (ZA) or "Data as of Nov 2, 2026" (US). */
+export function dataAsOfLabel(
+  now = new Date(),
+  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+): string {
+  return formatDate(now, market);
 }
 
 /**

@@ -1885,6 +1885,7 @@ export default function ActionPlanPanel({
                     run,
                     result: result?.text,
                     resultAt: result?.at,
+                    market,
                   });
                 })()}
                 pickupRun={(() => {
