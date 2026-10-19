@@ -721,6 +721,8 @@ export function OwnerDoor({
           presence={presence}
           lines={ownerHomeLines(tiles, topMove)}
           status={ownerCardStatuses(books)}
+          marketCountry={market.country}
+          audience="owner"
           onOpen={openChat}
           onAsk={openChat}
           runState={runState}

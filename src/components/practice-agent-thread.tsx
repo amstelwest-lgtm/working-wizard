@@ -19,6 +19,7 @@ export function PracticeAgentThread({
   clients,
   onBack,
   onSelectAgent,
+  marketCountry = null,
   children,
 }: {
   agent: AgentKey;
@@ -26,6 +27,7 @@ export function PracticeAgentThread({
   clients: PracticeThreadClient[];
   onBack: () => void;
   onSelectAgent: (agent: AgentKey) => void;
+  marketCountry?: string | null;
   children?: ReactNode;
 }) {
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
@@ -80,7 +82,13 @@ export function PracticeAgentThread({
       <button type="button" className={portalButtonClass("secondary")} data-agent-back="" onClick={onBack}>
         Back to the team
       </button>
-      <AgentStage agent={agent} finding={finding} onSelect={onSelectAgent}>
+      <AgentStage
+        agent={agent}
+        finding={finding}
+        onSelect={onSelectAgent}
+        marketCountry={marketCountry}
+        audience="accountant"
+      >
         {children}
         {clients.length > 1 ? (
           <label className="practice-agent-client">

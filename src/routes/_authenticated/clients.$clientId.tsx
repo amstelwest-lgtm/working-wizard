@@ -3258,6 +3258,8 @@ function ClientView() {
                     title="Your whole finance team"
                     variant="character"
                     showInvite={false}
+                    audience="accountant"
+                    marketCountry={clientMarket.country}
                     presence={homePresence}
                     lines={homeLines}
                     status={homeStatus}
@@ -3454,6 +3456,8 @@ function ClientView() {
                       key={homeAgent ?? "team"}
                       clientId={clientId}
                       agent={homeAgent}
+                      marketCountry={clientMarket.country}
+                      audience="accountant"
                       homeFinding={
                         homeAgent
                           ? homeLines[homeAgent].filter((line) => line.trim()).join(" ")

@@ -7,17 +7,22 @@ import type { ReactNode } from "react";
 import { agentDisplayName, agentJobLine, agentShortName } from "@/lib/milon-team";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
+import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import "./agent-stage.css";
 
 export function AgentStage({
   agent,
   finding,
   onSelect,
+  marketCountry = null,
+  audience = "accountant",
   children,
 }: {
   agent: AgentKey;
   finding: string | null;
   onSelect: (agent: AgentKey) => void;
+  marketCountry?: string | null;
+  audience?: "owner" | "accountant";
   children?: ReactNode;
 }) {
   return (
@@ -58,6 +63,7 @@ export function AgentStage({
             </button>
           );
         })}
+        <TaxSpecialistSlot country={marketCountry} variant="stage" audience={audience} />
       </div>
       {children}
     </section>

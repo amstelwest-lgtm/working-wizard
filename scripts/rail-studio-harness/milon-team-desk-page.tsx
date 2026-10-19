@@ -94,6 +94,8 @@ export function MilonTeamDeskPage() {
             feed={feed}
             now={live ? LIVE_NOW : DESK_NOW}
             live={empty ? EMPTY_ACTIVITY : live ? LIVE_ACTIVITY : null}
+            marketCountry="ZA"
+            audience="accountant"
           />
           <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
         </div>

@@ -1,0 +1,203 @@
+/**
+ * SAMPLE company tax. No database and no model.
+ * Run: pnpm test:tax-specialist-sample
+ */
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { taxSampleEnabled } from "../src/lib/tax-specialist/enabled.ts";
+import {
+  COMPANY_TAX_NUMERATOR,
+  companyTaxDeadlines,
+  computeCompanyTax,
+  deadlineStanding,
+  formatSampleCents,
+  sampleCompanyTax,
+  yearOfAssessmentStart,
+  SAMPLE_COMPANY,
+} from "../src/lib/tax-specialist/sample-compute.ts";
+
+function assert(cond: unknown, message: string): asserts cond {
+  if (!cond) throw new Error(message);
+}
+
+assert(COMPANY_TAX_NUMERATOR === 27, "the company rate is 27%");
+assert(taxSampleEnabled("ZA") === true, "ZA shows the sample");
+assert(taxSampleEnabled("US") === false, "US hides the sample");
+assert(taxSampleEnabled(null) === false, "a missing market hides the sample");
+assert(taxSampleEnabled("za") === false, "only the resolved ZA code turns it on");
+
+const sample = sampleCompanyTax();
+assert(sample.taxableIncomeCents === 182_850_000, "sample taxable income is R 1 828 500.00");
+assert(sample.taxCents === 49_369_500, "27% of that income is R 493 695.00");
+assert(sample.estimateTaxCents === 45_900_000, "the provisional estimate taxes at 27%");
+assert(
+  sample.period1Cents === 22_950_000 && sample.period2Cents === 22_950_000,
+  "IRP6 splits the estimate in half",
+);
+assert(
+  sample.period1Cents + sample.period2Cents === sample.estimateTaxCents,
+  "the two periods add back to the estimate",
+);
+assert(sample.balanceCents === 3_469_500, "the sample balance is the tax less both provisionals");
+assert(sample.topUpCents === sample.balanceCents, "the optional top-up is that balance");
+assert(sample.donationAllowedCents === 1_500_000, "the sample donation is inside the 10% limit");
+assert(sample.estimateClearsEightyPercent === true, "the estimate clears 80% of taxable income");
+assert(sample.aboveBasicAmountHarbour === true, "the sample is above the basic-amount harbour");
+assert(formatSampleCents(sample.taxCents) === "R 493 695.00", "amounts render as rands and cents");
+
+const capped = computeCompanyTax({
+  ...SAMPLE_COMPANY.input,
+  donationCents: 50_000_000,
+});
+assert(capped.donationLimitCents === 18_435_000, "donations stop at 10%");
+assert(capped.donationAllowedCents === 18_435_000, "the extra donation is not allowed");
+assert(capped.taxableIncomeCents === 165_915_000, "taxable income uses only the allowed donation");
+
+const loss = computeCompanyTax({
+  ...SAMPLE_COMPANY.input,
+  accountingProfitCents: -1_000,
+  depreciationAddBackCents: 0,
+  finesAddBackCents: 0,
+  wearAndTearCents: 0,
+  exemptDividendsCents: 0,
+  donationCents: 500,
+  provisionalEstimateCents: 0,
+});
+assert(loss.taxCents === 0, "a loss does not produce tax");
+assert(loss.donationAllowedCents === 0, "a loss does not allow a donation deduction");
+assert(loss.assessedLossCarriedCents === 1_000, "the loss carries forward");
+
+let threw = false;
+try {
+  computeCompanyTax({ ...SAMPLE_COMPANY.input, donationCents: 1.5 });
+} catch {
+  threw = true;
+}
+assert(threw, "cents must be whole numbers");
+
+assert(yearOfAssessmentStart("2026-02-28") === "2025-03-01", "a February year starts in March");
+const feb = companyTaxDeadlines("2026-02-28");
+assert(
+  feb.map((row) => row.due).join(",") === "2025-08-31,2026-02-28,2026-09-30,2027-02-28",
+  "February deadlines",
+);
+assert(feb[0]?.weekday === "Sun", "31 Aug 2025 is a Sunday");
+assert(feb[2]?.form === "IRP6" && feb[3]?.form === "ITR14", "the tracker has IRP6 and ITR14");
+assert(
+  deadlineStanding("2027-02-28", SAMPLE_COMPANY.asOf) === "upcoming",
+  "the return is still ahead of the sample date",
+);
+assert(
+  deadlineStanding("2026-09-30", SAMPLE_COMPANY.asOf) === "passed",
+  "the third top-up is before the sample date",
+);
+assert(
+  deadlineStanding(SAMPLE_COMPANY.asOf, SAMPLE_COMPANY.asOf) === "due",
+  "the sample date itself is due today",
+);
+
+const december = companyTaxDeadlines("2025-12-31");
+assert(
+  december.map((row) => row.due).join(",") === "2025-06-30,2025-12-31,2026-06-30,2026-12-31",
+  "a December year uses six months",
+);
+const june = companyTaxDeadlines("2026-06-30");
+assert(june[2]?.due === "2026-12-31", "a June year top-up is the end of December");
+const leap = companyTaxDeadlines("2024-02-29");
+assert(
+  leap[2]?.due === "2024-09-30" && leap[3]?.due === "2025-02-28",
+  "a leap-day year end clamps the return",
+);
+
+const forbidden =
+  /South Africa|South African|ITR14|IRP6|Tax Specialist|\bSARS\b|ZAR|rand |R799|R299|50%/;
+for (const path of [
+  "src/lib/tax-specialist/enabled.ts",
+  "src/components/tax-specialist/tax-specialist-slot.tsx",
+]) {
+  const text = readFileSync(path, "utf8");
+  assert(!forbidden.test(text), `${path} stays out of the US-reachable copy`);
+  assert(
+    !text.includes('from "./za-tax-specialist-sample"'),
+    `${path} does not static-import the sample`,
+  );
+}
+assert(
+  readFileSync("src/components/tax-specialist/tax-specialist-slot.tsx", "utf8").includes(
+    'import("./za-tax-specialist-sample")',
+  ),
+  "the sample loads with a dynamic import",
+);
+
+const sampleSrc = [
+  "src/lib/tax-specialist/sample-compute.ts",
+  "src/components/tax-specialist/za-tax-specialist-sample.tsx",
+  "src/components/tax-specialist/za-tax-specialist-sample.css",
+]
+  .map((path) => readFileSync(path, "utf8"))
+  .join("\n");
+assert(sampleSrc.includes("SAMPLE"), "the workspace is labelled SAMPLE");
+assert(sampleSrc.includes("ITR14") && sampleSrc.includes("IRP6"), "both worksheets are named");
+assert(sampleSrc.includes("Hand to Tax Specialist"), "Financial Manager can hand the pack across");
+assert(
+  !sampleSrc.includes("South Africa") && !sampleSrc.includes("ZAR") && !/rand /.test(sampleSrc),
+  "pricing needles stay out of the chunk",
+);
+assert(!sampleSrc.includes("50%"), "the 50% pricing needle stays out");
+for (const banned of ["fetch(", "supabase", "ask-ai", "openai", "XMLHttpRequest"]) {
+  assert(!sampleSrc.includes(banned), `the sample does not call ${banned}`);
+}
+
+function walk(dir: string, out: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    if (name === "node_modules" || name === "dist") continue;
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) walk(path, out);
+    else if (/\.(tsx|ts|jsx|js|mjs)$/.test(name)) out.push(path);
+  }
+  return out;
+}
+
+const staticImport = /from\s+["'][^"']*za-tax-specialist-sample["']/;
+for (const path of walk("src")) {
+  if (path.endsWith("za-tax-specialist-sample.tsx") || path.endsWith("tax-specialist-slot.tsx"))
+    continue;
+  assert(!staticImport.test(readFileSync(path, "utf8")), `${path} static-imports the sample`);
+}
+
+const owner = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
+assert(
+  owner.includes("marketCountry={market.country}") && owner.includes('audience="owner"'),
+  "the owner door passes its market",
+);
+const practice = readFileSync("src/components/practice-board.tsx", "utf8");
+assert(practice.includes("parseMarketSelection(firmMarket)"), "practice home uses the firm market");
+assert(
+  practice.includes("marketCountry={practiceCountry}") &&
+    practice.includes('audience="accountant"'),
+  "practice home renders the card",
+);
+const client = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
+assert(
+  client.includes("marketCountry={clientMarket.country}"),
+  "the client file uses that client's market",
+);
+assert(client.includes('audience="accountant"'), "the client file is the accountant side");
+for (const path of [
+  "src/components/owner-door/owner-home.tsx",
+  "src/components/milon-team/milon-team-desk.tsx",
+  "src/components/milon-team/agent-stage.tsx",
+  "src/components/hand-to-menu.tsx",
+]) {
+  assert(readFileSync(path, "utf8").includes("TaxSpecialistSlot"), `${path} can show the sample`);
+}
+const menu = readFileSync("src/components/hand-to-menu.tsx", "utf8");
+assert(menu.includes('variant="handoff"'), "Hand to can reach Tax Specialist");
+assert(menu.includes('variant="host"'), "Hand to keeps a sample host mounted after the menu closes");
+assert(menu.includes('audience="accountant"'), "accountant next moves use the accountant copy");
+assert(
+  readFileSync("src/components/owner-door/owner-home.tsx", "utf8").includes('variant="fm-handoff"'),
+  "the home shows Hand to from the Financial Manager",
+);
+
+console.log("tax-specialist-sample ok");

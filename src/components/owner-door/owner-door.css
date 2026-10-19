@@ -347,6 +347,12 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   gap: 14px;
 }
 
+@media (min-width: 1100px) {
+  .owner-door .owner-agents:has([data-agent-card="tax_specialist"]) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .owner-door .owner-pane[data-owner-home="true"] .owner-agents {
   align-items: stretch;
   gap: 22px;

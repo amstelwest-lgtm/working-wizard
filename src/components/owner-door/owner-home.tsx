@@ -6,6 +6,7 @@ import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
 import { AgentChipIcon } from "@/components/chrome-icons";
+import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 import "./owner-door.css";
@@ -138,6 +139,8 @@ export function OwnerHome({
   onBooks,
   signoffLine,
   inviteClientId,
+  marketCountry = null,
+  audience,
   title = "Your finance team",
   lede = "Three agents watching the books — ask them anything, any time.",
   showInvite = true,
@@ -165,8 +168,12 @@ export function OwnerHome({
   /** Advisory sign-off sentence on a client file. Owner Home leaves this off. */
   signoffLine?: string | null;
   inviteClientId?: string | null;
+  /** Resolved market. The sample card loads only when this is ZA. */
+  marketCountry?: string | null;
+  audience?: "owner" | "accountant";
 }) {
   const handoff = presence.handoff;
+  const sampleAudience = audience ?? (showInvite ? "owner" : "accountant");
   const [bots, setBots] = useState<OwnerBotLayout>(() =>
     ownerBotLayout(typeof window === "undefined" ? "" : window.location.search),
   );
@@ -260,7 +267,9 @@ export function OwnerHome({
               </div>
             );
           })}
+          <TaxSpecialistSlot country={marketCountry} variant="card" audience={sampleAudience} />
         </div>
+        <TaxSpecialistSlot country={marketCountry} variant="fm-handoff" audience={sampleAudience} />
         {handoff ? (
           <HandoffBeam
             sentence={handoff.sentence}

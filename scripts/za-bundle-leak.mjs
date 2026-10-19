@@ -9,7 +9,18 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const root = resolve("dist/client");
-const needles = ["R799", "R299", "rand ", "ZAR", "South Africa", "South African", "50%"];
+const needles = [
+  "R799",
+  "R299",
+  "rand ",
+  "ZAR",
+  "South Africa",
+  "South African",
+  "50%",
+  "ITR14",
+  "IRP6",
+  "Tax Specialist",
+];
 const allow = /za-pricing/;
 
 function walk(dir, out = []) {
@@ -114,16 +125,84 @@ for (const path of scanned) {
       if (needle === "50%" && cssPercent(text, at)) continue;
       if (needle === "rand " && randInsideWord(text, at)) continue;
       const line = text.slice(0, at).split("\n").length;
-      const excerpt = text.slice(Math.max(0, at - 40), at + needle.length + 40).replace(/\s+/g, " ");
+      const excerpt = text
+        .slice(Math.max(0, at - 40), at + needle.length + 40)
+        .replace(/\s+/g, " ");
       hits.push(`${path}:${line}: ${JSON.stringify(needle)} ${excerpt}`);
     }
   }
 }
 
-console.log(`za-bundle-leak: scanned ${scanned.length} assets (${reachable.size} js, ${html.length} html)`);
+console.log(
+  `za-bundle-leak: scanned ${scanned.length} assets (${reachable.size} js, ${html.length} html)`,
+);
 if (hits.length) {
   console.log(hits.join("\n"));
   console.error(`za-bundle-leak: ${hits.length} hit(s) outside /za-pricing/`);
   process.exit(1);
 }
+
+/**
+ * Minified bundles omit the space after `import`, so the pricing walk
+ * above does not follow them. Follow those imports only to prove the
+ * tax chunk is not a static dependency of a US entry. Dynamic import()
+ * is not a static dependency.
+ */
+function minifiedStaticImports(code) {
+  const specs = [];
+  const re =
+    /\b(?:import|export)(?!\()(?:[\s\S]*?\bfrom\s*)?["'](\.[^"']+)["']/g;
+  let match;
+  while ((match = re.exec(code))) {
+    if (match[1]) specs.push(match[1]);
+  }
+  return specs;
+}
+
+const taxChunks = js.filter((path) => (path.split("/").pop() ?? "").includes("za-tax-specialist"));
+const taxNames = new Set(taxChunks.map((path) => path.split("/").pop()));
+const staticReach = new Set();
+const staticQueue = [...seeds];
+while (staticQueue.length) {
+  const path = staticQueue.pop();
+  if (!path || staticReach.has(path)) continue;
+  staticReach.add(path);
+  let code = "";
+  try {
+    code = readFileSync(path, "utf8");
+  } catch {
+    continue;
+  }
+  for (const spec of minifiedStaticImports(code)) {
+    const next = resolveSpec(path, spec);
+    if (next && !staticReach.has(next)) staticQueue.push(next);
+  }
+}
+const taxReachable = taxChunks.filter(
+  (path) => reachable.has(path) || staticReach.has(path),
+);
+const htmlTax = html.filter((path) => readFileSync(path, "utf8").includes("za-tax-specialist"));
+const entryStatic = [];
+for (const path of seeds) {
+  let code = "";
+  try {
+    code = readFileSync(path, "utf8");
+  } catch {
+    continue;
+  }
+  for (const spec of minifiedStaticImports(code)) {
+    const base = spec.split("/").pop() ?? "";
+    if ([...taxNames].some((name) => name && base === name)) entryStatic.push(`${path} -> ${spec}`);
+  }
+}
+if (taxChunks.length === 0) {
+  console.error("za-bundle-leak: expected a za-tax-specialist chunk");
+  process.exit(1);
+}
+if (taxReachable.length || htmlTax.length || entryStatic.length) {
+  console.error("za-bundle-leak: tax specialist chunk is US-reachable");
+  console.error([...taxReachable, ...htmlTax, ...entryStatic].join("\n"));
+  process.exit(1);
+}
+console.log(`za-bundle-leak: tax specialist chunk isolated (${taxChunks.length} file(s))`);
 console.log("za-bundle-leak: no SA pricing strings in US-reachable assets");

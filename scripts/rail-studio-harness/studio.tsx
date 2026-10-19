@@ -293,17 +293,31 @@ function BotPane({ agent }: { agent?: string }) {
     <div className="tabpane on" id="pane-ask">
       <div className="milon-desk-host">
         {selected ? (
-          <AgentStage agent={selected} finding="Cash is on the 13-week forecast." onSelect={open}>
+          <AgentStage
+            agent={selected}
+            finding="Cash is on the 13-week forecast."
+            onSelect={open}
+            marketCountry="ZA"
+            audience="accountant"
+          >
             <AgentWork label="On this client" items={clientAgentWork(selected, CLIENT_ID)} />
             <MilonTeamDesk
               feed={feed}
               now={DESK_NOW}
               initialFilter={selected}
               presentation="agent"
+              marketCountry="ZA"
+              audience="accountant"
             />
           </AgentStage>
         ) : (
-          <MilonTeamDesk feed={feed} now={DESK_NOW} initialFilter="all" />
+          <MilonTeamDesk
+            feed={feed}
+            now={DESK_NOW}
+            initialFilter="all"
+            marketCountry="ZA"
+            audience="accountant"
+          />
         )}
         <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
       </div>
@@ -441,6 +455,8 @@ function BriefingPane() {
           title="Your whole finance team"
           variant="character"
           showInvite={false}
+          audience="accountant"
+          marketCountry="ZA"
           presence={ownerPresence(emptyAgentActivity())}
           lines={ownerHomeLines(ownerAnswerTiles(books), harnessMoves()[0]?.title ?? null)}
           status={ownerCardStatuses(books)}

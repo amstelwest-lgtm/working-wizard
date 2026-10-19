@@ -620,6 +620,9 @@ html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold:
 .owner-door .owner-agent[data-agent="advisor"] .owner-portrait {
   --pp-tint: var(--ice);
 }
+.owner-door .owner-agent[data-agent="tax_specialist"] .owner-portrait {
+  --pp-tint: var(--cobalt);
+}
 .owner-door .owner-portrait {
   position: relative;
   display: grid;
