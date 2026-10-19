@@ -437,7 +437,7 @@ export function needsAttentionToday(items: readonly MergedAttention[]): MergedAt
 export function todayAttentionAction(
   row: Pick<MergedAttention, "tab" | "openPlan" | "overdue">,
 ): "Chase →" | "Open →" {
-  if (row.tab === "plan" && (row.openPlan || row.overdue)) return "Chase →";
+  if (row.tab === "plan" && row.overdue) return "Chase →";
   return "Open →";
 }
 

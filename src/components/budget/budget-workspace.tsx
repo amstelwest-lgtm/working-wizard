@@ -14,7 +14,7 @@ import type {
   BudgetTemplateId,
   UnmappedDriver,
 } from "@/lib/budget.types";
-import { budgetVolumeLabel } from "@/lib/budget-industry";
+import { budgetPriceLabel, budgetVolumeLabel, hotelLineDisplayName, hotelTemplateRows } from "@/lib/budget-industry";
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import { currentBudgetMonth, fyMonths, formatMonthLabel, plainBudgetWindowHeading } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
@@ -414,6 +414,7 @@ function BudgetComplexWorkspace({
         lens={lens}
         onLensChange={onLensChange}
         actualMonths={actualMonths}
+        statementActuals={actuals}
       />
       {nestInDrawer(
         drawer,
@@ -722,14 +723,26 @@ function BudgetComplexWorkspace({
             </Button>
           )}
         </div>
-        {doc.revenueLines.map((line) => (
+        {hotelTemplateRows(shownTpl.id) ? (
+          <ul data-hotel-template="" className="space-y-1 text-xs text-slate-600">
+            {hotelTemplateRows(shownTpl.id)!.map((row) => (
+              <li key={row.name}>
+                {row.name} · {row.detail} · {row.value}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {doc.revenueLines.map((line, index) => {
+          const displayName = hotelLineDisplayName(shownTpl.id, line.name, index);
+          if (displayName == null) return null;
+          return (
           <ScrollableTable
             key={line.id}
             className="rounded-lg border border-[#DBEAFE] bg-white/70 dark:border-slate-800 dark:bg-slate-950/40"
           >
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
               <Input
-                value={line.name}
+                value={displayName}
                 onChange={(e) =>
                   onChange({
                     ...doc,
@@ -787,7 +800,7 @@ function BudgetComplexWorkspace({
                   ))}
                 </tr>
                 <tr>
-                  <td className="px-3 py-1 text-slate-500">{localizeCopy(line.priceLabel, market)}</td>
+                  <td className="px-3 py-1 text-slate-500">{localizeCopy(budgetPriceLabel(doc.templateId, shownTpl.id, line.priceLabel), market)}</td>
                   {focusMonths.map((m) => (
                     <td key={m} className="px-1 py-1">
                       <Input
@@ -836,7 +849,8 @@ function BudgetComplexWorkspace({
               </tbody>
             </table>
           </ScrollableTable>
-        ))}
+          );
+        })}
       </section>
 
       {/* Overheads */}
@@ -1232,8 +1246,9 @@ function BudgetComplexWorkspace({
                 : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
             }`}
           >
-            Cash trough: <strong>{monthLabel(trough.month)}</strong> at{" "}
+            Budget-year cash trough: <strong>{monthLabel(trough.month)}</strong> at{" "}
             <strong className="tabular-nums">{money(trough.closingCash)}</strong>
+            <span className="ml-2 text-slate-500">Budget year, not the 13-week forecast.</span>
             {doc.activeScenario !== "base" && baseFocus && focus && (
               <span className="ml-2 text-slate-500">
                 · vs base focus month cash {money(baseFocus.closingCash)} (

@@ -67,6 +67,8 @@ const brief = buildFinancialManagerBrief({
   openActionTitle: "Chase the March invoices",
   overdueActions: 2,
   cashDipWeek: 6,
+  cashOpening: 40000,
+  cashFloor: 55000,
   receivables: 15000,
   drafts: [{ id: "d1", title: "Advisory note" }],
   formatMoney: money,
@@ -76,6 +78,34 @@ assert(brief.actions.map((row) => row.button).join(",") === "hand,chase,open", b
 assert(brief.chase?.actions[0]?.title === "Chase the outstanding balance", "chase uses the shared draft input");
 assert(brief.chase?.actions[0]?.overdue === true, "overdue actions mark the shared chase draft");
 assert(brief.drafts[0]?.title === "Advisory note", "draft title is the stored title");
+assert(
+  brief.cashFloorLine ===
+    `Cash is ${money(40000)}, ${money(15000)} under the ${money(55000)} floor.`,
+  brief.cashFloorLine ?? "missing cash floor line",
+);
+assert(
+  brief.actions.find((row) => row.id === "cash-floor")?.reason === brief.cashFloorLine,
+  "the cash-floor action quotes the same amounts",
+);
+const missingOpening = buildFinancialManagerBrief({
+  clientName: "Karoo",
+  currentFinancials: current,
+  currentPeriodEnd: "2026-03-31",
+  snapshots,
+  cashDipWeek: 1,
+  cashOpening: 0,
+  cashFloor: 55000,
+  openingMissing: true,
+  formatMoney: money,
+});
+assert(
+  missingOpening.cashFloorLine === "Opening balance missing.",
+  missingOpening.cashFloorLine ?? "missing opening line",
+);
+assert(
+  !missingOpening.actions.some((row) => row.id === "cash-floor"),
+  "a missing opening is not a floor breach",
+);
 
 const empty = buildFinancialManagerBrief({
   clientName: "Chill Pepper",

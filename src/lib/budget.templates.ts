@@ -284,14 +284,15 @@ export const BUDGET_TEMPLATES: Record<BudgetTemplateId, TemplateDef> = {
   hospitality_rooms: tpl({
     id: "hospitality_rooms",
     label: "Hotels / accommodation",
-    description: "Room-nights × ADR",
+    description: "Room-nights × ADR × occupancy",
     driverKind: "units_price",
-    showInventoryDays: true,
+    showInventoryDays: false,
     defaultGpPct: 70,
     defaultSeasonality: "strong",
-    defaultWc: { debtorDays: 7, creditorDays: 21, inventoryDays: 10 },
+    defaultWc: { debtorDays: 7, creditorDays: 21, inventoryDays: 0 },
     revenueSeeds: [
       { driverKey: "room_nights", name: "Rooms", volumeLabel: "Room-nights", priceLabel: "ADR" },
+      { driverKey: "covers", name: "Food & beverage", volumeLabel: "Covers", priceLabel: "Avg spend" },
     ],
   }),
   hospitality_covers: tpl({

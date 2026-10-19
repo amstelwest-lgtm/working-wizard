@@ -28,7 +28,7 @@ function CueCopy() {
     <span className="dig-cue__copy">
       <span className="dig-cue__verb dig-cue__verb--click">Click</span>
       <span className="dig-cue__verb dig-cue__verb--tap">Tap</span>
-      {" to dig deeper"}
+      {" to see more"}
     </span>
   );
 }
@@ -43,7 +43,7 @@ export function DigCue({
   id,
   compact = false,
   onClick,
-  label = "Dig deeper",
+  label = "See more",
 }: {
   id: string;
   compact?: boolean;

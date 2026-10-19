@@ -110,7 +110,8 @@ import { computeOverallHealth, healthMapFromRatios, scoreRatio } from "@/lib/hea
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
-import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
+import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
+import { clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
@@ -182,7 +183,7 @@ import {
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
-import { rankStrategicMoves } from "@/lib/strategic-moves";
+import { rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { statementKindFromMetadata, type StatementMeta } from "@/lib/statement-parse";
 import { prefsToRemember } from "@/lib/auto-populate";
@@ -279,7 +280,7 @@ import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { SageConnectCard } from "@/components/sage-connect";
 import { Button } from "@/components/ui/button";
-import { SphereHero } from "@/components/sphere-hero";
+import { HEALTH_RING_CAPTION, SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
@@ -1214,6 +1215,7 @@ const RATIO_META: Record<RatioKey, RatioMeta> = {
     hint: "How much of the business is funded by creditors vs. owners?",
     icon: "🏦",
     steps: [
+      "Bring debt-to-equity under the target",
       "Target a D/E below 1× for conservative businesses, below 2× for growth",
       "Redirect free cash flow to debt repayment before paying dividends",
       "Refinance short-term debt into longer-term facilities to reduce pressure",
@@ -3610,6 +3612,19 @@ function Index() {
     market: boardMarket,
     shortfallWeek: ownerOutlook.shortfallWeek,
   });
+  const ownerOpeningMissing = storedOpeningIsMissing(clientMeta?.cashflow);
+  const ownerStatusWord = clientListStatusWord({
+    healthLabel: overallHealth.displayLabel,
+    healthOverall: overallHealth.overall,
+    source: ownerOutlook.source,
+    opening: ownerOutlook.opening,
+    floor: ownerOutlook.floor,
+    dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
+    totalInflow: ownerOutlook.totalInflow,
+    totalOutflow: ownerOutlook.totalOutflow,
+    openingMissing: ownerOpeningMissing,
+  });
+  const ownerStatusCritical = ownerStatusWord.startsWith("Critical");
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
   ) as Record<"profit" | "assets" | "financing" | "cash", number>;
@@ -3667,6 +3682,7 @@ function Index() {
     pillarStatus,
     healthMap,
     ratioMeta: RATIO_META,
+    inventoryApplies: stockSittingApplies(operatingProfile),
   });
 
   // Same ranker as the accountant Moves tab and Action Plan import.
@@ -3676,6 +3692,7 @@ function Index() {
     profile: operatingProfile,
     suppressKeys: profitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
     debtorDays,
+    financingHealth: pillarHealths.financing,
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
   const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
@@ -3698,7 +3715,7 @@ function Index() {
     hasRealFinancials: showScoredBoard,
     avgHealth,
     cashHealth: pillarHealths.cash,
-    displayStatus: overallHealth.displayStatus,
+    displayStatus: ownerStatusCritical ? "critical" : overallHealth.displayStatus,
   });
   const nextMoveImpactLabel = computeNextMoveImpactLabel({
     topKey: nextSteps[0]?.key,
@@ -4003,9 +4020,10 @@ function Index() {
                           <OwnerHealthOrb
                             variant="ring"
                             overallHealth={avgHealth}
-                            displayStatus={overallHealth.displayStatus}
+                            displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
+                            statusLabel={ownerStatusCritical ? ownerStatusWord : null}
                             pillars={spherePillars}
-                            caption="Tap to see what's behind your score"
+                            caption={HEALTH_RING_CAPTION}
                             onTopPriority={() => go("moves")}
                             onDriverClick={(key) => {
                               if (key in RATIO_META) setOpenRatio(key as RatioKey);
@@ -5138,7 +5156,8 @@ function Index() {
                                   <SphereHero
                                     compact
                                     overallHealth={avgHealth}
-                                    displayStatus={overallHealth.displayStatus}
+                                    displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
+                                    statusLabel={ownerStatusCritical ? ownerStatusWord : null}
                                     pillars={spherePillars}
                                     caption={overviewCaption}
                                     topPriority={

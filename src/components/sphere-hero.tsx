@@ -39,6 +39,8 @@ export type SphereDriver = {
   description?: string;
   /** 0–100 health score; NaN = no data */
   health: number;
+  /** No-inventory industries. The score reads N/A instead of a number. */
+  na?: boolean;
 };
 
 export type SpherePillar = {
@@ -58,6 +60,9 @@ export type SpherePillar = {
   blurb?: string;
   drivers: SphereDriver[];
 };
+
+/** Caption under the health ring on both the owner and accountant score. */
+export const HEALTH_RING_CAPTION = "Tap to see what's behind your score";
 
 export type SphereHeroProps = {
   /**
@@ -532,7 +537,7 @@ export function SphereHero({
   const overallTier = tierFromDisplayStatus(displayStatus, overallHealth);
   const overallGlow = ORB_GLOW;
 
-  const tapCaption = caption === "Tap to see what's behind your score";
+  const tapCaption = caption === HEALTH_RING_CAPTION;
 
   return (
     <div
@@ -587,7 +592,7 @@ export function SphereHero({
                   className="sphere-caption"
                   onClick={() => (onOrbOpen ? onOrbOpen() : go(2))}
                 >
-                  {caption ?? "Tap to see what's behind your score"}
+                  {caption ?? HEALTH_RING_CAPTION}
                 </button>
               ) : (
                 <p className="sphere-caption" role="note">
@@ -664,6 +669,7 @@ export function SphereHero({
                       </span>
                     ) : null}
                   </span>
+                  <DigCue id={`pillar-ring-${p.id}`} compact />
                 </button>
               );
             })}
@@ -887,8 +893,12 @@ export function SphereHero({
                       )}
                     </div>
                     <div className="text-right">
-                      <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>{fmtScore(d.health)}</p>
-                      <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
+                      <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>
+                        {d.na ? "N/A" : fmtScore(d.health)}
+                      </p>
+                      {d.na ? null : (
+                        <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
+                      )}
                     </div>
                   </div>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
@@ -901,11 +911,7 @@ export function SphereHero({
                       }}
                     />
                   </div>
-                  {clickable ? (
-                    <DigCue id={`driver-${d.key}`} compact />
-                  ) : (
-                    <DigLeaf />
-                  )}
+                  {clickable ? null : <DigLeaf />}
                 </>
               );
               if (clickable) {
@@ -914,7 +920,7 @@ export function SphereHero({
                     key={d.key}
                     type="button"
                     onClick={() => onDriverClick?.(d.key)}
-                    aria-label={`${d.label} — open money briefing. Dig deeper.`}
+                    aria-label={`${d.label} — open money briefing`}
                     className={rowClass}
                     style={rowStyle}
                   >
@@ -961,18 +967,16 @@ export function SphereHero({
             </ul>
           )}
           <div className="mt-3 space-y-3 border-t border-[#DBEAFE] dark:border-[#1e3a5f] pt-2.5">
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                Potential impact
-              </p>
-              {topPriority.impactLabel ? (
+            {topPriority.impactLabel ? (
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                  Potential impact
+                </p>
                 <p className="mt-0.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                   {topPriority.impactLabel}
                 </p>
-              ) : (
-                <p className="mt-0.5 text-xs text-slate-500">These are the first three. The full list is one tap away.</p>
-              )}
-            </div>
+              </div>
+            ) : null}
             {onTopPriority ? (
               <button
                 type="button"

@@ -293,6 +293,25 @@ export function ownerHomeLines(
   };
 }
 
+/** Same cash-floor sentence on the owner home and the accountant client brief. */
+export function cashFloorSentence(input: {
+  opening: number;
+  floor: number;
+  dipsBelowFloorWeek?: number | null;
+  money: (amount: number) => string;
+}): string {
+  const { opening, floor, money } = input;
+  const dip = input.dipsBelowFloorWeek != null && input.dipsBelowFloorWeek > 0;
+  const gap = Math.abs(floor - opening);
+  if (opening < floor) {
+    return `Cash is ${money(opening)}, ${money(gap)} under the ${money(floor)} floor.`;
+  }
+  if (dip) {
+    return `Cash is ${money(opening)}. It dips under the ${money(floor)} floor.`;
+  }
+  return `Cash is ${money(opening)}, above the ${money(floor)} floor.`;
+}
+
 function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: string): OwnerTile {
   const base = {
     id: "cash" as const,
@@ -311,13 +330,12 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
   }
   const outlook = books.cashOutlook;
   if (outlook && finite(outlook.opening) && finite(outlook.floor)) {
-    const under = outlookUnderFloor(books) === true;
-    const gap = Math.abs(outlook.floor - outlook.opening);
-    const sentence = under
-      ? outlook.opening < outlook.floor
-        ? `Cash is ${money(outlook.opening)}, ${money(gap)} under the ${money(outlook.floor)} floor.`
-        : `Cash is ${money(outlook.opening)}. It dips under the ${money(outlook.floor)} floor.`
-      : `Cash is ${money(outlook.opening)}, above the ${money(outlook.floor)} floor.`;
+    const sentence = cashFloorSentence({
+      opening: outlook.opening,
+      floor: outlook.floor,
+      dipsBelowFloorWeek: outlook.dipsBelowFloorWeek,
+      money,
+    });
     return {
       ...base,
       sentence,

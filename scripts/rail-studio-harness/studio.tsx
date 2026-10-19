@@ -37,7 +37,7 @@ import { QboConnectCard } from "@/components/qbo-connect";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { SageConnectCard } from "@/components/sage-connect";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
-import { SphereHero } from "@/components/sphere-hero";
+import { HEALTH_RING_CAPTION, SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { AgentStage } from "@/components/milon-team/agent-stage";
@@ -170,7 +170,7 @@ export function RailStudio() {
   useAccountantDrawer(menuOpen, () => setMenuOpen(false));
 
   return (
-    <div className={`accountant-portal${menuOpen ? " nav-open" : ""}`} data-rail-harness="true" data-rail-ready="true">
+    <div className={`accountant-portal premium-shell${menuOpen ? " nav-open" : ""}`} data-rail-harness="true" data-rail-ready="true">
       <div id="atmos">
         <div className="glow g1" />
         <div className="glow g2" />
@@ -598,8 +598,10 @@ function HealthPane({ clientId }: { clientId: string }) {
             }
           />
           <PaneBoundary label="Health score">
-            <div className="health-plate">
+            <div className="health-plate owner-door">
               <SphereHero
+                variant="ring"
+                caption={HEALTH_RING_CAPTION}
                 hideCaption
                 overallHealth={Number.isFinite(avg) ? avg : Number.NaN}
                 displayStatus={overall.displayStatus}

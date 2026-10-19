@@ -4,6 +4,7 @@ import {
   downgradeDropsBelowUsage,
   firmBandPriceLabel,
   nextBandUp,
+  saFirmDisplayPrice,
   upgradeButtonLabel,
   type FirmPriceCurrency,
   type ZarBandAmounts,
@@ -61,12 +62,11 @@ function rowPrice(
   if (customQuote) return "Custom";
   const pricedInterval: FirmInterval =
     interval === "year" && yearlyUsdCents == null ? "month" : interval;
-  const local = zaLabels?.[bandId]?.[pricedInterval];
-  if (local) return local;
-  if (!saFirm) {
-    const usd = firmUsdPublicLine(bandId, pricedInterval);
-    if (usd) return usd;
+  if (saFirm) {
+    return saFirmDisplayPrice(bandId, pricedInterval, zaLabels?.[bandId]?.[pricedInterval] ?? null);
   }
+  const usd = firmUsdPublicLine(bandId, pricedInterval);
+  if (usd) return usd;
   const label = firmBandPriceLabel(bandId, pricedInterval, currency, zarByBand);
   if (!label) return "—";
   return pricedInterval === "year" ? `${label}/yr` : `${label}/mo`;

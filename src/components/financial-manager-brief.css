@@ -16,6 +16,13 @@
   color: #3d5270;
 }
 
+.fm-brief-cash {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
 .fm-brief-title,
 .fm-brief h3 {
   margin: 8px 0;
