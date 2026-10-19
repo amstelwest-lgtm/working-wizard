@@ -16,6 +16,7 @@ import {
   type FeatureAudience,
   type FeatureResult,
 } from "@/lib/feature-finder";
+import { MONTHS } from "@/lib/market/date-presets";
 
 export const CLIENTS_GROUP = "Clients";
 
@@ -101,8 +102,6 @@ export function dedupeFinderClients(clients: readonly FinderClient[]): FinderCli
   return out;
 }
 
-const ADDED_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 function sameName(a: string, b: string): boolean {
   return a.localeCompare(b, undefined, { sensitivity: "accent" }) === 0;
 }
@@ -112,7 +111,7 @@ export function finderAddedLabel(createdAt: string | null | undefined): string |
   if (!createdAt?.trim()) return null;
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) return null;
-  const month = ADDED_MONTHS[date.getUTCMonth()];
+  const month = MONTHS[date.getUTCMonth()];
   if (!month) return null;
   return `added ${date.getUTCDate()} ${month} ${date.getUTCFullYear()}`;
 }
