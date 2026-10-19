@@ -167,10 +167,10 @@ export function HandToMenu({
 
   const run = async (work: () => void | Promise<void>) => {
     if (busy) return;
+    setOpen(false);
     setBusy(true);
     try {
       await work();
-      setOpen(false);
     } finally {
       setBusy(false);
     }
@@ -193,8 +193,8 @@ export function HandToMenu({
         disabled={busy}
         onClick={() => setOpen((value) => !value)}
       >
-        Hand to
-        {assignee ? <span className="hand-to-assignee">{assignee}</span> : null}
+        {busy ? "Assigning…" : "Hand to"}
+        {!busy && assignee ? <span className="hand-to-assignee">{assignee}</span> : null}
       </button>
       {open && menuBox
         ? createPortal(
@@ -228,18 +228,24 @@ export function HandToMenu({
             </p>
           ) : (
             <div className="max-h-40 overflow-auto">
-              {team.map((person) => (
-                <button
-                  key={person.id}
-                  type="button"
-                  role="menuitem"
-                  data-hand-to-person={person.id}
-                  className="block w-full rounded-md px-2 py-1.5 text-left text-[12px] font-semibold text-[#102A43] hover:bg-[#0B5FFF]/10 dark:text-slate-100"
-                  onClick={() => void run(() => onAssignPerson(person))}
-                >
-                  {person.name || "Team member"}
-                </button>
-              ))}
+              {team.map((person) => {
+                const name = person.name || "Team member";
+                const current = (assignee ?? "").trim().length > 0 && (assignee ?? "").trim() === name.trim();
+                return (
+                  <button
+                    key={person.id}
+                    type="button"
+                    role="menuitem"
+                    data-hand-to-person={person.id}
+                    aria-pressed={current}
+                    className="block w-full rounded-md px-2 py-1.5 text-left text-[12px] font-semibold text-[#102A43] hover:bg-[#0B5FFF]/10 dark:text-slate-100"
+                    onClick={() => void run(() => onAssignPerson(person))}
+                  >
+                    {name}
+                    {current ? " ✓" : ""}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>,

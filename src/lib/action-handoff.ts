@@ -31,17 +31,50 @@ export function handoffButtonLabel(agent: AgentKey, assigned: boolean): string {
   return `Hand to ${AGENT_DISPLAY_NAME[agent]}`;
 }
 
+/** Clock time for a finish line. An unreadable stamp stays off the row. */
+export function handoffClock(at: string | null | undefined): string | null {
+  if (!at) return null;
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 /**
  * Progress line once a queued run exists for this action.
  * A hand-off that has not started a run stays on the assignee label only.
+ * A finished run names the time and the result, and does not say "a pass".
  */
 export function handoffProgressCaption(
   agent: AgentKey,
   status: string | null | undefined,
+  detail?: { at?: string | null; result?: string | null },
 ): string | null {
   const short = agentShortName(agent);
   if (status === "queued") return `${short} is queued`;
   if (status === "running") return `${short} picked this up`;
-  if (status === "succeeded" || status === "partial") return `${short} finished a pass`;
+  if (status === "succeeded" || status === "partial") {
+    const time = handoffClock(detail?.at);
+    const head = time ? `${short} finished · ${time}` : `${short} finished`;
+    const result = detail?.result?.replace(/\s+/g, " ").trim();
+    return result ? `${head} — ${result}` : head;
+  }
   return null;
+}
+
+/**
+ * The queue line belongs to the bot that owns the row.
+ * A person assignee drops "Advisor is queued" even if that run is still stored.
+ */
+export function botPickupCaption(input: {
+  assignee?: string | null;
+  run?: { agent: AgentKey; status: string; at?: string | null } | null;
+  result?: string | null;
+  resultAt?: string | null;
+}): string | null {
+  const assigned = agentKeyFromAssignee(input.assignee);
+  if (!input.run || !assigned || assigned !== input.run.agent) return null;
+  return handoffProgressCaption(input.run.agent, input.run.status, {
+    at: input.resultAt ?? input.run.at,
+    result: input.result,
+  });
 }

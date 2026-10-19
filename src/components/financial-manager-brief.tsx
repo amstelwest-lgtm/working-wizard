@@ -5,12 +5,15 @@
  */
 import { useState } from "react";
 import { toast } from "sonner";
+import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
 import { HandToMenu } from "@/components/hand-to-menu";
 import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useMarketFormat } from "@/contexts/market";
+import { botPickupCaption } from "@/lib/action-handoff";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
+import { latestHandoffResult } from "@/lib/owner-handoff";
 import { assignActionToPerson, commitActionHandoff } from "@/lib/owner-handoff-client";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 import "./financial-manager-brief.css";
@@ -24,7 +27,30 @@ export type HomeBriefHandoff = {
   id: string;
   title: string;
   assignee?: string | null;
+  agent?: AgentKey | null;
+  notes?: readonly AssignmentNoteRow[];
+  run?: { agent: AgentKey; status: string; at?: string | null } | null;
 };
+
+function HandoffProgress({ item }: { item: HomeBriefHandoff }) {
+  const result = latestHandoffResult(item.notes ?? []);
+  const caption = botPickupCaption({
+    assignee: item.assignee,
+    run: item.run,
+    result: result?.text,
+    resultAt: result?.at,
+  });
+  return (
+    <>
+      {caption ? (
+        <p className="fm-brief-progress" data-agent-pickup>
+          {caption}
+        </p>
+      ) : null}
+      <AssignmentNotes notes={item.notes ?? []} />
+    </>
+  );
+}
 
 function handoffFor(actionTitle: string, handoffs: readonly HomeBriefHandoff[]): HomeBriefHandoff | null {
   return (
@@ -142,6 +168,7 @@ export function FinancialManagerBrief({
                 <div>
                   <b>{action.title}</b>
                   <span>{action.reason}</span>
+                  {handoff ? <HandoffProgress item={handoff} /> : null}
                 </div>
                 {action.button === "hand" && clientId && handoff ? (
                   <BriefHandControl clientId={clientId} item={handoff} audience={audience} />

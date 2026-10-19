@@ -33,6 +33,8 @@ export type AgentRunRow = {
   queued_at: string;
   started_at: string | null;
   finished_at: string | null;
+  /** Set when this run was started for one action. */
+  action_item_id?: string | null;
 };
 
 export type AgentFindingRow = {
