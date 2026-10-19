@@ -382,6 +382,66 @@ assert(
   "a section jump names the business, not the id",
 );
 
+const OWNER_EMAIL = "amstel.west@gmail.com";
+const SAME_DAY = "2026-09-10T08:00:00.000Z";
+const prodFour: FinderClient[] = [
+  { id: THEO_A, name: THEO, clientCode: null, ownerEmail: OWNER_EMAIL, createdAt: SAME_DAY },
+  { id: THEO_B, name: THEO, clientCode: null, ownerEmail: OWNER_EMAIL, createdAt: "2026-09-10T18:30:00.000Z" },
+  { id: THEO_C, name: THEO, clientCode: null, ownerEmail: OWNER_EMAIL, createdAt: "2026-08-02T00:00:00.000Z" },
+  { id: THEO_D, name: THEO, clientCode: null, ownerEmail: OWNER_EMAIL, createdAt: "2026-07-15T00:00:00.000Z" },
+];
+const prodFourHints = new Map(recentFinderClients(prodFour).map((row) => [row.clientId, row.hint]));
+assert(new Set(prodFourHints.values()).size === 4, "four same-email Theos get distinct labels");
+assert(
+  ![...prodFourHints.values()].some((hint) => hint === OWNER_EMAIL),
+  "an email shared by the group is never the whole label",
+);
+assert(
+  prodFourHints.get(THEO_C) === `${OWNER_EMAIL} · added 2 Aug 2026`,
+  "a different added day is email plus that date",
+);
+assert(
+  prodFourHints.get(THEO_D) === `${OWNER_EMAIL} · added 15 Jul 2026`,
+  "the other different day is email plus that date",
+);
+assert(
+  prodFourHints.get(THEO_A) === `${OWNER_EMAIL} · added 10 Sep 2026 · ${shortClientId(THEO_A)}`,
+  "the first same-day row keeps the short id",
+);
+assert(
+  prodFourHints.get(THEO_B) === `${OWNER_EMAIL} · added 10 Sep 2026 · ${shortClientId(THEO_B)}`,
+  "the other same-day row keeps its own short id",
+);
+assert(
+  [THEO_C, THEO_D].every((id) => !prodFourHints.get(id)?.includes(shortClientId(id))),
+  "only the same-day pair gets the short id",
+);
+const prodFourCash = searchClientSectionJumps("cash", prodFour);
+assert(
+  prodFourCash.some((row) => row.label === `Cash for ${THEO} · ${prodFourHints.get(THEO_A)}`),
+  "a section jump uses the same unique label",
+);
+assert(
+  new Set(searchClients("theo", prodFour).map((row) => row.hint)).size === 4,
+  "search keeps the four same-email labels distinct",
+);
+
+const prodFive: FinderClient[] = [
+  ...prodFour,
+  { id: THEO_E, name: THEO, clientCode: null, createdAt: SAME_DAY },
+];
+const prodFiveHints = new Map(recentFinderClients(prodFive).map((row) => [row.clientId, row.hint]));
+assert(prodFiveHints.size === 5, "the fifth Theo with no email stays in the list");
+assert(new Set(prodFiveHints.values()).size === 5, "five same-name rows, one without email, stay distinct");
+assert(
+  prodFiveHints.get(THEO_E) === "added 10 Sep 2026",
+  "a row with no readable email shows the added day",
+);
+assert(
+  prodFiveHints.get(THEO_E) !== prodFiveHints.get(THEO_A),
+  "10 Sep on the no-email row does not match the emailed same-day label",
+);
+
 const bothNamedNew = searchClients("new", BOOK).map((hit) => hit.clientId);
 assert(bothNamedNew.includes(YANKEES) && !bothNamedNew.includes(SOX), "new matches Yankees only");
 const cashClients = searchClients("cash", BOOK);
