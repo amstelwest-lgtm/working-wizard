@@ -8,6 +8,7 @@ import {
   signoffStatusLine,
   type SignoffStatusKind,
 } from "@/lib/signoff-status";
+import { actionDisplayTitle } from "@/lib/strategic-moves";
 
 export type PackAnswerStatus = "draft" | "in_review" | "signed" | "signed_stale";
 
@@ -111,7 +112,7 @@ export function planAnswerSentence(
   if (actions.length === 0) return PLAN_EMPTY_SENTENCE;
   const open = actions.filter((action) => planActionIsOpen(action.status));
   if (open.length === 0) return "Nothing left open.";
-  const title = open[0]?.title.trim() ?? "";
+  const title = actionDisplayTitle(open[0]?.title);
   const lead = actions.length === 1 ? "1 action in the plan" : `${actions.length} actions in the plan`;
   if (!title) return `${lead}.`;
   const shown = /^[A-Z][a-z]/.test(title)

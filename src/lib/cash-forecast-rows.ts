@@ -4,7 +4,27 @@
  * Amounts are the stored line amounts — grouping only sums them.
  */
 
-const RECURRING_NAME = /\b(rent|payroll|salar(?:y|ies)|wages)\b/i;
+/**
+ * Rent, payroll, insurance, debit orders and subscriptions are monthly even
+ * from a single stored month. A month is ~4.33 weeks; the 13-week grid's
+ * monthly step is every 4th week, so the amount lands in weeks 1, 5, 9 and 13.
+ * The stored frequency is not rewritten.
+ */
+const CATEGORY_KEYWORD =
+  /\b(rent|rental|lease|leases|propert(?:y|ies)|payroll|salar(?:y|ies)|wages|staff|insurance|debit\s*orders?|subscriptions?)\b/i;
+/** Payees whose category is not in the name. Fuji SA is the hotel subscription. Santam is the insurer. */
+const CATEGORY_PAYEE = /\b(fuji|santam)\b/i;
+const PERSON_OUTFLOW = /^[A-Za-z]\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$/;
+const ASSUMED_BUCKETS = new Set(["rent", "payroll", "insurance", "subscription", "debit_order", "debit-order"]);
+
+export const ASSUMED_MONTHLY_LABEL = "recurring (assumed monthly)";
+
+export type ForecastSide = "revenue" | "expenses" | "other" | "inflow" | "outflow";
+
+export type AssumedMonthlyContext = {
+  side?: ForecastSide | null;
+  bucket?: string | null;
+};
 
 export type ForecastGridRow = {
   id?: string;
@@ -15,25 +35,61 @@ export type ForecastGridRow = {
   bucket?: "revenue" | "expenses" | "other";
 };
 
-export function forecastNameRepeats(name: string): boolean {
-  return RECURRING_NAME.test(name);
+function outflowSide(side: ForecastSide | null | undefined): boolean {
+  return side === "expenses" || side === "other" || side === "outflow";
 }
 
-/** Once-off rent and payroll repeat monthly. Other frequencies stay as stored. */
+/** Category, bucket, or an outflow that is only an initial and a surname. Receipts stay once-off. */
+export function assumedMonthlyPayee(name: string, context?: AssumedMonthlyContext | null): boolean {
+  const text = name.trim();
+  if (!text) return false;
+  if (CATEGORY_KEYWORD.test(text) || CATEGORY_PAYEE.test(text)) return true;
+  const bucket = (context?.bucket ?? "").trim().toLowerCase();
+  if (bucket && ASSUMED_BUCKETS.has(bucket)) return true;
+  return outflowSide(context?.side) && PERSON_OUTFLOW.test(text);
+}
+
+export function forecastNameRepeats(name: string): boolean {
+  return assumedMonthlyPayee(name);
+}
+
+export function isAssumedMonthlyLine(
+  name: string,
+  frequency: string | null | undefined,
+  context?: AssumedMonthlyContext | null,
+): boolean {
+  const freq = frequency ?? "recurring-monthly";
+  if (freq !== "once-off" && freq !== "once") return false;
+  return assumedMonthlyPayee(name, context);
+}
+
+/** Once-off rent, payroll, insurance and subscriptions repeat monthly. Other frequencies stay as stored. */
 export function displayForecastFrequency(
   name: string,
   frequency: string | null | undefined,
+  context?: AssumedMonthlyContext | null,
 ): string {
   const freq = frequency ?? "recurring-monthly";
-  if ((freq === "once-off" || freq === "once") && forecastNameRepeats(name)) {
-    return "recurring-monthly";
-  }
+  if (isAssumedMonthlyLine(name, freq, context)) return "recurring-monthly";
   return freq;
 }
 
-export function isDisplayOnceOff(name: string, frequency: string | null | undefined): boolean {
+export function forecastRowLabel(
+  name: string,
+  frequency: string | null | undefined,
+  context?: AssumedMonthlyContext | null,
+): string {
+  if (!isAssumedMonthlyLine(name, frequency, context)) return name;
+  return `${name} · ${ASSUMED_MONTHLY_LABEL}`;
+}
+
+export function isDisplayOnceOff(
+  name: string,
+  frequency: string | null | undefined,
+  context?: AssumedMonthlyContext | null,
+): boolean {
   const freq = frequency ?? "recurring-monthly";
-  return (freq === "once-off" || freq === "once") && !forecastNameRepeats(name);
+  return (freq === "once-off" || freq === "once") && !assumedMonthlyPayee(name, context);
 }
 
 function magnitude(vals: number[]): number {

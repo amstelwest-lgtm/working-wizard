@@ -103,10 +103,12 @@ for (const [name, amount] of stored) {
   assert(weeks[1] === 0 && weeks[2] === 0, `${name} is not repeated every week`);
 }
 
-const lone = projectForecastFrequency("Greeff Properties", "once-off");
-assert(lone === "once-off", "one stored hit with no history stays in its week");
+const lone = projectForecastFrequency("Greeff Properties", "once-off", null, { side: "expenses" });
+assert(lone === "recurring-monthly", "rent is assumed monthly from one month");
 const loneWeeks = distributeForecastLine({ amount: "28000", frequency: lone, startWeek: 1 }, 13);
-assert(loneWeeks[0] === 28000 && loneWeeks.slice(1).every((n) => n === 0), "a single W1 hit does not invent later weeks");
+assert(loneWeeks[0] === 28000 && loneWeeks[4] === 28000 && loneWeeks[12] === 28000, "assumed rent lands on the monthly weeks");
+const stranger = projectForecastFrequency("Dis-Chem", "once-off", null, { side: "expenses" });
+assert(stranger === "once-off", "a single non-recurring purchase stays in its week");
 
 const suggested = suggestOnceOffRows({
   bankDraft,
@@ -142,9 +144,11 @@ const emptyHistory = suggestOnceOffRows({
   bankSourced: true,
   forecastLines: [
     { id: "w1", name: "Greeff Properties", amount: "28000", frequency: "once-off", startWeek: 1, side: "expenses" },
+    { id: "w2", name: "Dis-Chem", amount: "392", frequency: "once-off", startWeek: 1, side: "expenses" },
   ],
 });
-assert(emptyHistory.lines.some((line) => line.name === "Greeff Properties"), "a grid line with no bank history is still staged");
+assert(!emptyHistory.lines.some((line) => line.name === "Greeff Properties"), "assumed rent is not staged as a once-off");
+assert(emptyHistory.lines.some((line) => line.name === "Dis-Chem"), "a one-off with no monthly keyword is still staged");
 assert(!read("src/lib/cash-recurring-payees.ts").includes("last_forecast_at"), "projection does not move the forecast stamp");
 
 const seed = read("scripts/seed-chill-pepper-hotel.sql");

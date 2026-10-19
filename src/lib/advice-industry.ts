@@ -2,6 +2,7 @@
  * Industry label for advice context. Names and the stored template only.
  * Persona files stay untouched.
  */
+import { BUDGET_TEMPLATES } from "./budget.templates.ts";
 
 const INDUSTRY_LABEL: Record<string, string> = {
   hospitality_rooms: "Hotels & accommodation",
@@ -54,4 +55,55 @@ export function adviceIndustryLabel(input: {
   if (label) return label;
   if (businessType === "hospitality") return "Hospitality";
   return templateId;
+}
+
+const GENERIC_PRODUCT = /^product\s*\d+$/i;
+
+/** Same drivers the hotel budget template shows. Occupancy stays in the name. */
+const HOTEL_CHAT_LINES = [
+  "Rooms · Room-nights · ADR · Occupancy",
+  "Food & beverage",
+  "Housekeeping and staff",
+  "Rent",
+];
+
+function chatTemplateId(input: {
+  clientName?: string | null;
+  templateId?: string | null;
+  businessType?: string | null;
+}): string {
+  const label = adviceIndustryLabel(input);
+  if (label === "Hotels & accommodation") return "hospitality_rooms";
+  const stored = (input.templateId ?? "").trim();
+  return stored in BUDGET_TEMPLATES ? stored : "";
+}
+
+/**
+ * Prompt data for the Financial Manager. A hotel kept on another kit still
+ * names rooms, occupancy and ADR. Generic "product 2" lines take the template.
+ */
+export function adviceChatVolumeUnit(input: {
+  clientName?: string | null;
+  templateId?: string | null;
+  businessType?: string | null;
+  volumeUnit?: string | null;
+}): string {
+  if (chatTemplateId(input) === "hospitality_rooms") return "Room-nights × ADR × occupancy";
+  return String(input.volumeUnit ?? "");
+}
+
+export function adviceChatProductName(input: {
+  clientName?: string | null;
+  templateId?: string | null;
+  businessType?: string | null;
+  index: number;
+  name: string;
+}): string {
+  const stored = input.name.trim();
+  if (!GENERIC_PRODUCT.test(stored)) return stored;
+  const templateId = chatTemplateId(input);
+  if (templateId === "hospitality_rooms") return HOTEL_CHAT_LINES[input.index] ?? stored;
+  const seed = templateId ? BUDGET_TEMPLATES[templateId as keyof typeof BUDGET_TEMPLATES]?.revenueSeeds[input.index] : null;
+  if (!seed) return stored;
+  return [seed.name, seed.volumeLabel, seed.priceLabel].filter(Boolean).join(" · ");
 }

@@ -5,6 +5,7 @@
  */
 import { buildDraftLinesFromExtract } from "./cash-from-banks.pattern.ts";
 import type { CashBankExtract, CashBucket, CashForecastDraftLine } from "./cash-from-banks.types.ts";
+import { assumedMonthlyPayee } from "./cash-forecast-rows.ts";
 import { isRecurringPayee, projectForecastFrequency, recurringPayeeFrequency } from "./cash-recurring-payees.ts";
 import { distributeForecastLine } from "./client-metrics.ts";
 
@@ -60,10 +61,11 @@ export function onceOffsOnBankForecast(
     const name = line.name.trim();
     if (!name || !line.id) continue;
     if (isRecurringPayee(name, recurring)) continue;
+    if (assumedMonthlyPayee(name, { side: line.side })) continue;
     const vals = distributeForecastLine(
       {
         amount: line.amount,
-        frequency: projectForecastFrequency(line.name, line.frequency, recurring),
+        frequency: projectForecastFrequency(line.name, line.frequency, recurring, { side: line.side }),
         startWeek: line.startWeek,
         splitCount: line.splitCount,
         weekOverrides: line.weekOverrides ?? undefined,
@@ -218,7 +220,11 @@ export function suggestOnceOffRows(input: {
 }): OnceOffSuggestResult {
   const recurring = recurringPayeeFrequency(input.bankDraft);
   const onGrid = input.bankSourced ? onceOffsOnBankForecast(input.forecastLines ?? [], recurring) : [];
-  const history = draftLinesFromHistory(input.bankDraft).filter((row) => !isRecurringPayee(row.name, recurring));
+  const history = draftLinesFromHistory(input.bankDraft).filter((row) => {
+    if (isRecurringPayee(row.name, recurring)) return false;
+    const side = row.side === "inflow" ? "revenue" : "expenses";
+    return !assumedMonthlyPayee(row.name, { side, bucket: row.bucket });
+  });
   const names = new Set<string>();
   const used = new Set<string>();
   const lines: SuggestedOnceOffLine[] = [];

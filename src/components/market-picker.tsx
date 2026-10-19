@@ -117,6 +117,8 @@ export function MarketPicker({
   disabled,
   audience = "owner",
   locationNoun,
+  vatCopy = true,
+  stateDropdown = true,
 }: {
   value: DraftMarket;
   onChange: (next: DraftMarket) => void;
@@ -129,7 +131,12 @@ export function MarketPicker({
    * unset so the app variant still asks where the business is.
    */
   locationNoun?: "business" | "practice";
+  /** SA plan display does not mention VAT. */
+  vatCopy?: boolean;
+  /** SA plan display does not ask for a US state. */
+  stateDropdown?: boolean;
 }) {
+  const showVat = vatCopy !== false;
   const noun =
     locationNoun ?? (variant === "landing" && audience === "practice" ? "practice" : "business");
   const locationPrompt = noun === "practice" ? PRACTICE_LOCATION_PROMPT : BUSINESS_LOCATION_PROMPT;
@@ -185,27 +192,29 @@ export function MarketPicker({
   return (
     <div className="space-y-3">
       <p className={labelCls}>{locationPrompt}</p>
-      <div className="grid grid-cols-2 gap-2">
+      <div className={stateDropdown ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
         <button
           type="button"
           disabled={disabled}
-          className={`${CARD} ${value.country === "ZA" ? on : idle}`}
+          className={`${CARD} ${(stateDropdown ? value.country === "ZA" : true) ? on : idle}`}
           onClick={() => setCountry("ZA")}
         >
           <div className="text-sm font-semibold">South Africa</div>
-          <div className={`mt-1 ${helpCls}`}>Rand, VAT, March year-start</div>
+          <div className={`mt-1 ${helpCls}`}>{showVat ? "Rand, VAT, March year-start" : "Rand, March year-start"}</div>
         </button>
-        <button
-          type="button"
-          disabled={disabled}
-          className={`${CARD} ${value.country === "US" ? on : idle}`}
-          onClick={() => setCountry("US")}
-        >
-          <div className="text-sm font-semibold">United States</div>
-          <div className={`mt-1 ${helpCls}`}>Dollars, sales tax by state</div>
-        </button>
+        {stateDropdown ? (
+          <button
+            type="button"
+            disabled={disabled}
+            className={`${CARD} ${value.country === "US" ? on : idle}`}
+            onClick={() => setCountry("US")}
+          >
+            <div className="text-sm font-semibold">United States</div>
+            <div className={`mt-1 ${helpCls}`}>Dollars, sales tax by state</div>
+          </button>
+        ) : null}
       </div>
-      {value.country === "US" && (
+      {stateDropdown && value.country === "US" && (
         <div>
           <label className={labelCls} htmlFor="milon-us-state-app">
             State *

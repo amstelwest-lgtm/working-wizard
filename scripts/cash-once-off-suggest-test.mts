@@ -80,7 +80,7 @@ const fromGrid = suggestOnceOffRows({
 });
 assert(fromGrid.empty == null, "bank grid lines are a source even when the draft is empty");
 assert(fromGrid.lines.some((line) => line.name === "Andre Galvao Seminar" && line.amount === "16800"), "Suggest stages the seminar receipt");
-assert(fromGrid.lines.some((line) => line.name === "Greeff Properties" && line.amount === "28000"), "Suggest stages the property payment");
+assert(!fromGrid.lines.some((line) => line.name === "Greeff Properties"), "assumed monthly rent is not staged as a once-off");
 assert(!fromGrid.lines.some((line) => line.name === "Rent"), "a recurring bank line is not a once-off");
 const stagedIds = fromGrid.lines.map((line) => ({ id: line.id, frequency: line.frequency }));
 assert(
