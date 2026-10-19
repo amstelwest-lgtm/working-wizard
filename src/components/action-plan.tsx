@@ -39,7 +39,9 @@ import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
 import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from "@/lib/plan-confidence-display";
 import { practiceRoleLabel } from "@/lib/practice-access";
-import { planAutomation } from "@/lib/action-plan-automation";
+import { planAutomation, type ActionAutomationRow } from "@/lib/action-plan-automation";
+import { actionDisplayTitle, planGoalIsOverdue } from "@/lib/strategic-moves";
+import { interventionStepsFromActions } from "@/lib/intervention-grounding";
 import { actionPace, deriveActionHealth } from "@/lib/action-item-health";
 import { ActionPlanAutomation } from "@/components/action-plan-automation";
 import {
@@ -1282,6 +1284,12 @@ export default function ActionPlanPanel({
   }
 
   const drawerItem = drawerId ? (enriched.find((i) => i.id === drawerId) ?? null) : null;
+  const interventionSteps = interventionStepsFromActions(
+    enriched
+      .filter((item) => item.status !== "done")
+      .map((item) => actionDisplayTitle(stripMilonProjection(item.title))),
+  );
+  const automationById = new Map(automation.rows.map((row) => [row.id, row]));
 
   return (
     <div id="wizard-action-plan" className="space-y-5">
@@ -1299,6 +1307,23 @@ export default function ActionPlanPanel({
       )}
 
       {!ownerView && moves.length > 0 && <DriversStrip moves={moves.slice(0, 5)} onView={onViewAnalysis} />}
+
+      {interventionSteps.length > 0 ? (
+        <section
+          data-intervention-plan
+          className="rounded-xl border border-[#DBEAFE] bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#102A43] dark:text-[#0B5FFF]/80">
+            Intervention plan
+          </p>
+          <p className="mt-1 text-xs text-slate-500">Same open actions as the list below.</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-800 dark:text-slate-200">
+            {interventionSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
 
       {/* ── The table ── */}
       <Card id="wizard-action-list" className={CARD_SHELL}>
@@ -1552,6 +1577,7 @@ export default function ActionPlanPanel({
                   if (assigned && assigned !== run.agent) return null;
                   return handoffProgressCaption(run.agent, run.status);
                 })()}
+                suggestion={automationById.get(it.id) ?? null}
                 onHandOff={isOwner ? (agent) => void assignToAgent(it, agent) : undefined}
               />
             ))}
@@ -1767,6 +1793,11 @@ function GoalHeader({
     [plan],
   );
 
+  const goalOverdue = planGoalIsOverdue(
+    stripMilonProjection(plan.outcome_goal),
+    plan.target_date,
+    isoDay(new Date()),
+  );
   const { metric_start: s, metric_target: t, metric_current: c } = plan;
   const hasBar = s != null && t != null && t !== s;
   const pct = hasBar ? Math.max(0, Math.min(100, (((c ?? s) - s!) / (t! - s!)) * 100)) : 0;
@@ -1800,7 +1831,7 @@ function GoalHeader({
               <>
                 <h2 className="mt-2 text-2xl font-black uppercase leading-tight tracking-tight text-slate-950 dark:text-white">
                   {stripMilonProjection(plan.outcome_goal)}
-                  {planTargetIsOverdue(plan.target_date) ? (
+                  {goalOverdue ? (
                     <span
                       data-goal-overdue=""
                       className="ml-2 inline-flex align-middle rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white"
@@ -1822,7 +1853,7 @@ function GoalHeader({
                     month: "long",
                     year: "numeric",
                   })}
-                  {planTargetIsOverdue(plan.target_date) ? (
+                  {goalOverdue ? (
                     <span className="ml-2 font-semibold text-rose-600 dark:text-rose-400">Target date has passed</span>
                   ) : null}
                 </p>
@@ -2070,9 +2101,12 @@ function ItemRow({
   comingSoon,
   pickupLabel,
   focused,
+  suggestion,
 }: {
   item: Item & { health?: Health };
   focused?: boolean;
+  /** Display-only. Confirming still writes through the existing owner and date controls. */
+  suggestion?: ActionAutomationRow | null;
   employees: Employee[];
   milestones: Milestone[];
   lastNudge: EmailRecord | null;
@@ -2166,7 +2200,7 @@ function ItemRow({
                 : "Click row to open details"
             }
           >
-            {stripMilonProjection(item.title)}
+            {actionDisplayTitle(stripMilonProjection(item.title))}
           </button>
         )}
         <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
@@ -2249,28 +2283,39 @@ function ItemRow({
                 Assign
               </span>
             ) : null}
-            {item.owner_name ??
-              (isOwner ? (
-                <span className="text-slate-400 dark:text-slate-500">+ Owner</span>
-              ) : (
-                <span className="text-slate-400 dark:text-slate-500">—</span>
-              ))}
+            {item.owner_name ? (
+              item.owner_name
+            ) : suggestion?.ownerSuggested && suggestion.owner ? (
+              <span data-owner-suggested="">
+                {suggestion.owner.name} · suggested
+              </span>
+            ) : isOwner ? (
+              <span className="text-slate-400 dark:text-slate-500">+ Owner</span>
+            ) : (
+              <span className="text-slate-400 dark:text-slate-500">—</span>
+            )}
         </button>
         )}
       </div>
 
       {/* Due. w-28 fits "10/15/2026" plus the picker icon; w-24 clipped the year. */}
       <div className="w-[calc(50%-0.4rem)] shrink-0 sm:w-28">
-        <input
-          type="date"
-          value={item.due_date ?? ""}
-          onChange={
-            isOwner ? (e) => onPatch({ due_date: e.target.value || null } as any) : undefined
-          }
-          onClick={(e) => e.stopPropagation()}
-          readOnly={!isOwner}
-          className={`w-full rounded-md border-0 bg-transparent px-1 py-1 text-xs font-medium tabular-nums ${isOwner ? "cursor-pointer" : "cursor-default"} ${overdue ? "text-[#ef4444] font-bold" : "text-slate-700 dark:text-slate-300"}`}
-        />
+        {!item.due_date && suggestion?.dueSuggested && suggestion.dueDate ? (
+          <span data-due-suggested="" className="block px-1 text-[10px] font-medium text-slate-500">
+            Due {suggestion.dueDate} · suggested
+          </span>
+        ) : (
+          <input
+            type="date"
+            value={item.due_date ?? ""}
+            onChange={
+              isOwner ? (e) => onPatch({ due_date: e.target.value || null } as any) : undefined
+            }
+            onClick={(e) => e.stopPropagation()}
+            readOnly={!isOwner}
+            className={`w-full rounded-md border-0 bg-transparent px-1 py-1 text-xs font-medium tabular-nums ${isOwner ? "cursor-pointer" : "cursor-default"} ${overdue ? "text-[#ef4444] font-bold" : "text-slate-700 dark:text-slate-300"}`}
+          />
+        )}
       </div>
 
       {/* Progress + pace marker */}
@@ -3060,7 +3105,7 @@ function ItemDrawer({
               {h.label}
             </span>
             <h3 className="mt-2 text-lg font-black leading-tight text-slate-950 dark:text-white">
-              {stripMilonProjection(item.title)}
+              {actionDisplayTitle(stripMilonProjection(item.title))}
             </h3>
             {item.recommendation_id ? (
               <p
