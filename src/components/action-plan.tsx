@@ -24,8 +24,9 @@ import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
-import { handoffAssigneeName } from "@/lib/owner-handoff";
-import { agentKeyFromAssignee, handoffProgressCaption } from "@/lib/action-handoff";
+import { handoffAssigneeName, latestHandoffResult } from "@/lib/owner-handoff";
+import { botPickupCaption } from "@/lib/action-handoff";
+import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
 import { DRAFT_NEEDS_OWNER, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
@@ -521,8 +522,9 @@ export default function ActionPlanPanel({
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const [comingSoon, setComingSoon] = useState<Record<string, Partial<Record<AgentKey, true>>>>({});
-  const [pickups, setPickups] = useState<Record<string, { agent: AgentKey; status: string }>>({});
-  const draftActivity = useAgentActivity(ownerView ? clientId : "");
+  const [pickups, setPickups] = useState<Record<string, { agent: AgentKey; status: string; at: string }>>({});
+  const [itemNotes, setItemNotes] = useState<Record<string, AssignmentNoteRow[]>>({});
+  const draftActivity = useAgentActivity(clientId);
   const draftFindings = useMemo(
     () => draftActivity.findings.filter((row) => row.status === "approved" || draftFindingLabel(row) != null),
     [draftActivity.findings],
@@ -636,11 +638,16 @@ export default function ActionPlanPanel({
           if (stored?.kind === "person") return { ...item, owner_name: stored.name };
           return item;
         });
+        const noteState: Record<string, AssignmentNoteRow[]> = {};
+        for (const [id, notes] of grouped) noteState[id] = notes;
+        setItemNotes(noteState);
+      } else {
+        setItemNotes({});
       }
       setItems(shown);
       if (list.length) {
         const runs = await loadActionHandoffRuns(list.map((item) => item.id));
-        const next: Record<string, { agent: AgentKey; status: string }> = {};
+        const next: Record<string, { agent: AgentKey; status: string; at: string }> = {};
         for (const [id, run] of runs) next[id] = run;
         setPickups(next);
       } else {
@@ -754,6 +761,25 @@ export default function ActionPlanPanel({
     window.addEventListener("milon-action-plan-refresh", onRefresh);
     return () => window.removeEventListener("milon-action-plan-refresh", onRefresh);
   }, [refresh]);
+
+  const refreshedFinish = useRef(new Set<string>());
+  useEffect(() => {
+    let due = false;
+    for (const run of draftActivity.runs) {
+      const id = run.action_item_id;
+      if (!id || (run.status !== "succeeded" && run.status !== "partial")) continue;
+      const pickup = pickups[id];
+      if (!pickup || pickup.agent !== run.agent) continue;
+      if (pickup.status !== "queued" && pickup.status !== "running") continue;
+      const key = `${id}:${run.id}`;
+      if (refreshedFinish.current.has(key)) continue;
+      refreshedFinish.current.add(key);
+      due = true;
+    }
+    if (!due) return;
+    const timer = window.setTimeout(() => void refresh(), 400);
+    return () => window.clearTimeout(timer);
+  }, [draftActivity.runs, pickups, refresh]);
 
   const exportPdf = async () => {
     setExportingPdf(true);
@@ -1584,12 +1610,34 @@ export default function ActionPlanPanel({
                   setTeamOpen(true);
                 }}
                 comingSoon={comingSoon[it.id]}
+                notes={itemNotes[it.id] ?? []}
                 pickupLabel={(() => {
-                  const run = pickups[it.id];
-                  if (!run) return null;
-                  const assigned = agentKeyFromAssignee(it.owner_name);
-                  if (assigned && assigned !== run.agent) return null;
-                  return handoffProgressCaption(run.agent, run.status);
+                  const notes = itemNotes[it.id] ?? [];
+                  const stored = pickups[it.id] ?? null;
+                  let live: { agent: AgentKey; status: string; at: string; summary: string } | null = null;
+                  for (const run of draftActivity.runs) {
+                    if (run.action_item_id !== it.id) continue;
+                    const at = run.finished_at || run.queued_at;
+                    if (!live || at > live.at) {
+                      live = { agent: run.agent, status: run.status, at, summary: run.summary ?? "" };
+                    }
+                  }
+                  const run =
+                    live && stored && live.agent === stored.agent && live.at >= (stored.at || "")
+                      ? { agent: live.agent, status: live.status, at: live.at }
+                      : stored;
+                  const storedResult = latestHandoffResult(notes);
+                  const liveResult =
+                    live && (live.status === "succeeded" || live.status === "partial") && live.summary.trim()
+                      ? { text: live.summary.trim(), at: live.at }
+                      : null;
+                  const result = storedResult ?? liveResult;
+                  return botPickupCaption({
+                    assignee: it.owner_name,
+                    run,
+                    result: result?.text,
+                    resultAt: result?.at,
+                  });
                 })()}
                 suggestion={automationById.get(it.id) ?? null}
                 onHandOff={isOwner ? (agent) => void assignToAgent(it, agent) : undefined}
@@ -2130,6 +2178,7 @@ function ItemRow({
   onAssignPerson,
   comingSoon,
   pickupLabel,
+  notes = [],
   focused,
   suggestion,
 }: {
@@ -2157,6 +2206,7 @@ function ItemRow({
   comingSoon?: Partial<Record<AgentKey, true>>;
   /** Set when a queued run for this action has started or finished. */
   pickupLabel?: string | null;
+  notes?: readonly AssignmentNoteRow[];
 }) {
   const { date, market } = useMarketFormat();
   const h = healthMeta(item.health);
@@ -2423,35 +2473,38 @@ function ItemRow({
         <ChevronRight className="h-3.5 w-3.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600" />
       </div>
       </div>
-      {onHandOff ? (
-        <div className="px-3 pb-3 sm:px-4">
-          <HandToMenu
-            employees={employees}
-            assignee={item.owner_name}
-            comingSoon={comingSoon}
-            audience={isOwner ? "owner" : "accountant"}
-            onAssignAgent={onHandOff}
-            onAssignPerson={(person) => {
-              if (onAssignPerson) {
-                onAssignPerson(person);
-                return;
-              }
-              onPatch(
-                {
-                  owner_id: person.id,
-                  owner_name: person.name,
-                  owner_email: person.email,
-                  sent_at: null,
-                },
-                { note: `Assigned to ${person.name}` },
-              );
-            }}
-          />
+      {onHandOff || pickupLabel || notes.length > 0 ? (
+        <div className="px-3 pb-3 sm:px-4" onClick={(event) => event.stopPropagation()}>
+          {onHandOff ? (
+            <HandToMenu
+              employees={employees}
+              assignee={item.owner_name}
+              comingSoon={comingSoon}
+              audience={isOwner ? "owner" : "accountant"}
+              onAssignAgent={onHandOff}
+              onAssignPerson={(person) => {
+                if (onAssignPerson) {
+                  onAssignPerson(person);
+                  return;
+                }
+                onPatch(
+                  {
+                    owner_id: person.id,
+                    owner_name: person.name,
+                    owner_email: person.email,
+                    sent_at: null,
+                  },
+                  { note: `Assigned to ${person.name}` },
+                );
+              }}
+            />
+          ) : null}
           {pickupLabel ? (
             <p className="mt-1 text-[11px] font-semibold text-[#0B5FFF]" data-agent-pickup>
               {pickupLabel}
             </p>
           ) : null}
+          <AssignmentNotes notes={notes} />
         </div>
       ) : null}
     </div>

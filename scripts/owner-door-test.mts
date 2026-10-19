@@ -54,12 +54,15 @@ import {
 } from "../src/lib/fm-avatar-state.ts";
 import { ownerPresence, steerAssignedWork, steerOpenHandoffs } from "../src/lib/owner-presence.ts";
 import {
+  applyLiveRuns,
   handedHomeAction,
   latestStoredAssignment,
   openHandoffAgents,
+  personOwnedActionIds,
   preferPendingHandoff,
   rowAssignment,
   withPendingAssignment,
+  withoutPersonQueuedRuns,
 } from "../src/lib/open-plan-home.ts";
 import type { AgentKey } from "../src/lib/milon-team-feed.ts";
 
@@ -660,6 +663,44 @@ assert(
   ])?.kind === "bot",
   "a later sentence that is not an assignment does not drop the hand-off note",
 );
+assert(
+  latestStoredAssignment([
+    { note: "Financial Manager finished: Drafts are recorded.", at: "2026-10-19T18:31:22.000Z" },
+    { note: "Handed to Milōn Financial Manager.", at: "2026-10-19T18:31:12.000Z" },
+  ])?.kind === "bot",
+  "a finish note does not replace the hand-off",
+);
+const optimistic = withPendingAssignment(
+  [],
+  { id: "move", agent: "financial_manager", assigneeName: "Milōn Financial Manager" },
+  null,
+);
+assert(optimistic[0]?.open === true, "Hand to shows Working before the function returns");
+const settled = applyLiveRuns(optimistic, [
+  { actionItemId: "move", agent: "financial_manager", status: "succeeded", at: "2026-10-19T18:31:22.000Z" },
+]);
+assert(settled[0]?.open === false, "a finished run settles Working");
+const personRows = [reassignedRow];
+const masked = withoutPersonQueuedRuns(
+  [
+    {
+      id: "run-advisor",
+      agent: "advisor" as const,
+      client_id: "client",
+      status: "queued",
+      queued_at: "2026-10-19T17:01:00.000Z",
+      started_at: null,
+      finished_at: null,
+      action_item_id: "row-1",
+    },
+  ],
+  personOwnedActionIds(personRows),
+);
+const maskedCards = ownerPresence(activity({ runs: masked }));
+assert(
+  maskedCards.agents.find((agent) => agent.agent === "advisor")?.motion !== "working",
+  "a person-owned row does not leave its bot Working",
+);
 const floorMarket = { currency: "USD" as const, locale: "en-US" };
 const comfortCue = cashFloorForHome({
   cashOutlook: null,
@@ -671,7 +712,7 @@ const comfortCue = cashFloorForHome({
   money: (amount) => `$${Math.round(amount)}`,
 });
 assert(
-  comfortCue?.healthCue === "Below your $50k minimum · see FM",
+  comfortCue?.healthCue === "Below your $50k minimum · Financial Manager",
   comfortCue?.healthCue ?? "health uses the card cashflow when there is no outlook",
 );
 const belowCue = cashFloorCopy({
@@ -680,7 +721,7 @@ const belowCue = cashFloorCopy({
   money: (amount) => `$${amount}`,
   market: floorMarket,
 });
-assert(belowCue.healthCue === "Below your $50k minimum · see FM", belowCue.healthCue ?? "missing cue");
+assert(belowCue.healthCue === "Below your $50k minimum · Financial Manager", belowCue.healthCue ?? "missing cue");
 assert(belowCue.chip === "Below your minimum", "the health line uses the floor chip");
 const dipCopy = cashFloorCopy({
   opening: 44480,
@@ -695,7 +736,7 @@ assert(
   dipCopy.sentence,
 );
 assert(
-  dipCopy.healthCue?.includes("minimum · see FM") === true,
+  dipCopy.healthCue?.includes("minimum · Financial Manager") === true,
   dipCopy.healthCue ?? "a dip that the card flags also lines the cash pillar",
 );
 assert(dipCopy.chip === "Below your minimum", "a projected dip keeps the floor chip");
@@ -1173,7 +1214,7 @@ assert(
   ownerApp.includes("HEALTH_RING_CAPTION") &&
     sphere.includes("export const HEALTH_RING_CAPTION = HEALTH_DRILL_CUE") &&
     readFileSync("src/components/health-drill-cue.tsx", "utf8").includes(
-      'HEALTH_DRILL_CUE = "Tap to see more"',
+      'HEALTH_DRILL_CUE = "See more"',
     ),
   "the owner health ring uses the same Tap to see more cue as the pillar cards",
 );

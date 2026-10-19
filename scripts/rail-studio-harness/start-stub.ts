@@ -4,6 +4,8 @@
  * "harness-local" so existing harness toasts stay quiet.
  */
 
+import { formatFirmPlanStatus } from "@/lib/firm-client-cap";
+
 const FIRM_ID = "11111111-1111-4111-8111-111111111111";
 
 const TEAM_BOARD = {
@@ -158,6 +160,8 @@ const PLAN = {
 };
 
 function fixtureFor(id: string): Promise<unknown> {
+  if (id.includes("sageCredentialsConfigured")) return Promise.resolve({ configured: false });
+  if (id.includes("sage_connections")) return Promise.resolve(null);
   if (id.includes("loadPracticeAccess")) return Promise.resolve(TEAM_BOARD);
   if (id.includes('from("accountant_requests")') || id.includes("accountant_requests")) {
     return Promise.resolve(INBOX);
@@ -165,7 +169,25 @@ function fixtureFor(id: string): Promise<unknown> {
   if (id.includes('from("firm_listings")') || id.includes("firm_listings")) {
     return Promise.resolve(LISTING);
   }
-  if (id.includes("loadFirmPlanDisplay")) return Promise.resolve(PLAN);
+  if (id.includes("loadFirmPlanDisplay")) {
+    if (typeof location !== "undefined" && location.search.includes("walkthrough=trial")) {
+      const now = new Date();
+      const end = new Date(now.getTime() + 9 * 86_400_000);
+      const copy = formatFirmPlanStatus({
+        phase: "trialing",
+        band: "solo",
+        trialEndIso: end.toISOString(),
+        now,
+      });
+      return Promise.resolve({
+        ...PLAN,
+        ...copy,
+        clientLimit: 3,
+        usageLabel: "2 active clients · trial limit 3",
+      });
+    }
+    return Promise.resolve(PLAN);
+  }
   return Promise.reject(new Error("harness-local"));
 }
 

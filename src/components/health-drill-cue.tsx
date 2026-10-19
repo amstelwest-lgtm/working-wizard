@@ -23,8 +23,8 @@ function useDigPulse(id: string): boolean {
   return pulse;
 }
 
-/** Identical hint on every drillable health level, owner and accountant. */
-export const HEALTH_DRILL_CUE = "Tap to see more";
+/** Identical hint on every drillable health level, owner and accountant. Neutral on desktop. */
+export const HEALTH_DRILL_CUE = "See more";
 
 function CueCopy() {
   return <span className="dig-cue__copy">{HEALTH_DRILL_CUE}</span>;

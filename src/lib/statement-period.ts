@@ -399,15 +399,22 @@ const SAVED_MONTH =
  * statement") is the snapshot stamp, not the period. A dated day ("8 Sep 2026")
  * stays. Display only — the stored finding is not rewritten.
  */
+/** "Sep 2026 books look healthy" becomes a singular subject. Agree the verb. */
+function agreeFullYearGrammar(text: string): string {
+  return text.replace(/\bFull year on file look\b/g, "Full year on file looks");
+}
+
 export function rewriteSavedMonthStamp(text: string): string {
   const monthYear = `(?<!\\d\\s)(?:${SAVED_MONTH})\\s+\\d{4}`;
-  return text
-    .replace(new RegExp(`\\bfull\\s+${monthYear}\\s+statement\\b`, "gi"), FULL_YEAR_ON_FILE)
-    .replace(new RegExp(`\\b${monthYear}\\s+books\\s+on\\s+file\\b`, "gi"), FULL_YEAR_ON_FILE)
-    .replace(
-      new RegExp(`\\b${monthYear}\\s+(?:books|statement|snapshot)\\b`, "gi"),
-      FULL_YEAR_ON_FILE,
-    );
+  return agreeFullYearGrammar(
+    text
+      .replace(new RegExp(`\\bfull\\s+${monthYear}\\s+statement\\b`, "gi"), FULL_YEAR_ON_FILE)
+      .replace(new RegExp(`\\b${monthYear}\\s+books\\s+on\\s+file\\b`, "gi"), FULL_YEAR_ON_FILE)
+      .replace(
+        new RegExp(`\\b${monthYear}\\s+(?:books|statement|snapshot)\\b`, "gi"),
+        FULL_YEAR_ON_FILE,
+      ),
+  );
 }
 
 /**
@@ -416,7 +423,9 @@ export function rewriteSavedMonthStamp(text: string): string {
  */
 export function rewriteDraftMonthStamp(text: string): string {
   const monthYear = `(?<!\\d\\s)(?:${SAVED_MONTH})\\s+\\d{4}`;
-  return rewriteSavedMonthStamp(text).replace(new RegExp(monthYear, "gi"), FULL_YEAR_ON_FILE);
+  return agreeFullYearGrammar(
+    rewriteSavedMonthStamp(text).replace(new RegExp(monthYear, "gi"), FULL_YEAR_ON_FILE),
+  );
 }
 
 function snapshotIsMonthStamp(label: string): boolean {

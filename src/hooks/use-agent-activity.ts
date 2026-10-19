@@ -68,6 +68,7 @@ function parseRun(row: Record<string, unknown>): AgentRunRow | null {
     queued_at: row.queued_at,
     started_at: textOrNull(row.started_at),
     finished_at: textOrNull(row.finished_at),
+    action_item_id: textOrNull(row.action_item_id),
   };
 }
 
@@ -134,7 +135,7 @@ export function useAgentActivity(clientId: string): AgentActivity {
     async function load() {
       const [runsRes, findingsRes, messagesRes, clientRes] = await Promise.all([
         table("agent_runs")
-          .select("id, agent, client_id, status, summary, trigger, queued_at, started_at, finished_at")
+          .select("id, agent, client_id, status, summary, trigger, queued_at, started_at, finished_at, action_item_id")
           .eq("client_id", id)
           .order("queued_at", { ascending: false })
           .limit(ROW_LIMIT),

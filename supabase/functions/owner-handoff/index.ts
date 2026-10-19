@@ -155,6 +155,8 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (employeeError) return json({ error: "person_lookup_failed" }, 500);
     if (!employee || employee.client_id !== clientId) return json({ error: "person_not_on_file" }, 400);
+    const cleared = await cancelQueuedRuns(admin, actionItemId);
+    if (cleared) return json({ error: cleared }, 500);
     const actor = user.email?.split("@")[0]?.trim() || "Accountant";
     const name = typeof employee.name === "string" && employee.name.trim() ? employee.name.trim() : "Team member";
     const failed = await writeAssignment(admin, {
@@ -357,3 +359,18 @@ Deno.serve(async (req) => {
 
   return json({ ok: true, noted: true, runId, status: "queued", runner: decision.runner });
 });
+
+/** A person now owns the row, so a queued bot run on it is not current work. */
+async function cancelQueuedRuns(admin: AdminClient, actionItemId: string): Promise<string | null> {
+  const { error } = await admin
+    .from("agent_runs")
+    .update({
+      status: "cancelled",
+      stop_reason: "assigned_to_person",
+      finished_at: new Date().toISOString(),
+    })
+    .eq("action_item_id", actionItemId)
+    .in("status", ["queued", "running"]);
+  if (error) return "run_not_cleared";
+  return null;
+}

@@ -38,7 +38,7 @@ assert(
 );
 assert(hero.includes("<DigLeaf />"), "a ratio with no briefing is the bottom line");
 
-assert(cue.includes('HEALTH_DRILL_CUE = "Tap to see more"'), "the shared cue is Tap to see more");
+assert(cue.includes('HEALTH_DRILL_CUE = "See more"'), "the shared cue is See more");
 assert(!cue.includes(">Click<") && !cue.includes("dig-cue__verb"), "the cue does not say Click");
 assert(hero.includes("HEALTH_RING_CAPTION = HEALTH_DRILL_CUE"), "the ring uses that same cue");
 assert(!hero.includes("what's behind your score"), "the ring does not keep a longer line");

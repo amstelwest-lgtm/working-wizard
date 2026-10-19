@@ -541,6 +541,10 @@ assert(
   "a snapshot phrase is the full-year stamp",
 );
 assert(rewriteDraftMonthStamp("due 8 Sep 2026") === "due 8 Sep 2026", "a dated day stays");
+assert(
+  rewriteSavedMonthStamp("Sep 2026 books look healthy") === "Full year on file looks healthy",
+  "a full-year stamp agrees the verb",
+);
 assert(rewriteSavedMonthStamp("Sep 2026") === "Sep 2026", "a cited period stays on the narrow stamp");
 assert(
   src("src/components/recommendations-panel.tsx").includes("rewriteDraftMonthStamp"),
