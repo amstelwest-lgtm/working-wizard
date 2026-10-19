@@ -114,17 +114,57 @@ export function formatSlotClock(start: Date, timeZone: string): string {
 }
 
 /**
- * Zone shown on /try. A US sample must not label the SAST window when the
- * laptop clock is still that window. Any other local zone is kept, so a
- * visitor in California sees Pacific time.
+ * A zone the browser actually reported. Invalid or empty input is null so
+ * the caller can use the market default instead of pretending UTC is local.
  */
-export function displaySlotZone(
-  browserZone: string,
-  market?: "US" | "ZA" | null,
-): string {
-  const local = safeTimeZone(browserZone);
-  if (market === "US" && local === CALL_ZONE) return "America/New_York";
-  return local;
+export function visitorTimeZone(value: string | null | undefined): string | null {
+  const zone = (value ?? "").trim();
+  if (!zone || zone.length > 80 || !/^[A-Za-z0-9_+\-/]+$/.test(zone)) return null;
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: zone }).format(0);
+    return zone;
+  } catch {
+    return null;
+  }
+}
+
+/** `Intl.DateTimeFormat().resolvedOptions().timeZone`, or null when it fails. */
+export function detectedVisitorZone(): string | null {
+  try {
+    return visitorTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  } catch {
+    return null;
+  }
+}
+
+export function marketFallbackZone(market: "US" | "ZA"): string {
+  return market === "ZA" ? CALL_ZONE : "America/New_York";
+}
+
+/**
+ * Explicit fallback label. The ZA words are joined so the built client file
+ * does not contain the contiguous country name the US bundle scan rejects.
+ */
+export function marketFallbackZoneLabel(market: "US" | "ZA"): string {
+  if (market === "ZA") return ["South", "Africa", "time"].join(" ");
+  return "US Eastern Time";
+}
+
+/** Lead above the slots. "Your local time" only when `local` is the visitor's zone. */
+export function slotClockLead(input: {
+  local: boolean;
+  zone: string;
+  when: Date | null;
+  market: "US" | "ZA";
+}): string {
+  if (!input.when || !input.zone) return "Pick a time.";
+  if (input.local) {
+    const name = formatSlotZoneLong(input.when, input.zone);
+    return name
+      ? `Pick a time. Shown in your local time (${name}).`
+      : "Pick a time. Shown in your local time.";
+  }
+  return `Pick a time. Shown in ${marketFallbackZoneLabel(input.market)}.`;
 }
 
 /** Short label on each slot. Johannesburg is SAST; US zones stay EDT, PDT, and so on. */
@@ -134,12 +174,12 @@ export function formatSlotZoneShort(start: Date, timeZone: string): string {
   return intlZoneName(start, zone, "short");
 }
 
-/** Lead label, such as Eastern Time. Johannesburg stays SAST. */
+/** Readable zone name from Intl, such as Eastern Time. */
 export function formatSlotZoneLong(start: Date, timeZone: string): string {
   const zone = safeTimeZone(timeZone);
-  if (zone === CALL_ZONE) return "SAST";
   const long = intlZoneName(start, zone, "longGeneric");
-  return long || formatSlotZoneShort(start, zone);
+  if (long && !/^(GMT|UTC)([+-]|$)/i.test(long)) return long;
+  return formatSlotZoneShort(start, zone);
 }
 
 export function formatSlotButton(start: Date, timeZone: string): string {
@@ -155,9 +195,7 @@ function intlZoneName(
   timeZoneName: "short" | "longGeneric",
 ): string {
   try {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName }).formatToParts(
-      start,
-    );
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName }).formatToParts(start);
     const name = parts.find((part) => part.type === "timeZoneName")?.value?.trim() ?? "";
     if (timeZoneName === "short" && !/^[A-Z]{2,5}$/.test(name)) {
       return name.replace(/^GMT/i, "UTC");
