@@ -61,7 +61,7 @@ html[data-theme="light"] #atmos .glow{opacity:.3}
 .accountant-portal .serif{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600}
 .accountant-portal .gold-text{background:var(--gold-grad);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent}
 .accountant-portal .shell{position:relative;z-index:1;max-width:1360px;margin:0 auto;padding:0 28px 90px}
-/* Premium shell chrome (navy rail, white topbar) lives with the owner frame in owner-premium.css under .premium-shell. */}
+/* Premium shell chrome (navy rail, white topbar) lives with the owner frame in owner-premium.css under .premium-shell. */
 
 /* ===== top bar ===== */
 .accountant-portal .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:18px;height:66px;margin:0 -28px 34px;padding:0 28px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--line-soft)}
