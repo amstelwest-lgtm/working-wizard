@@ -13,6 +13,7 @@ import {
   ownerAnswerTiles,
   ownerCardStatuses,
   ownerHomeLines,
+  cashFloorCopy,
   practiceCardStatuses,
   practiceHomeLines,
   ownerTileLabel,
@@ -51,6 +52,7 @@ import {
   nextFmIdleLoops,
 } from "../src/lib/fm-avatar-state.ts";
 import { ownerPresence, steerAssignedWork } from "../src/lib/owner-presence.ts";
+import { handedHomeAction } from "../src/lib/open-plan-home.ts";
 import type { AgentKey } from "../src/lib/milon-team-feed.ts";
 
 function assert(cond: unknown, msg: string) {
@@ -165,6 +167,20 @@ assert(
 assert(
   handed.advisor.includes("Move fixed contracts to variable / usage-based pricing."),
   "the advisor still carries the next move",
+);
+const handedMove = ownerHomeLines(
+  filled,
+  "Move fixed contracts to variable / usage-based pricing",
+  "advisor",
+  "Audit and renegotiate your top 5 supplier contracts",
+);
+assert(
+  handedMove.advisor.includes("Audit and renegotiate your top 5 supplier contracts."),
+  "the newly handed action sits on the advisor",
+);
+assert(
+  handedMove.financial_manager.includes("Approve the payroll run."),
+  "an older open action stays on the financial manager",
 );
 for (const line of [...homeLines.financial_manager, ...homeLines.analyst, ...homeLines.advisor]) {
   assert(/^[A-Z]/.test(line) && /[.!?]$/.test(line), `a home line is a full sentence (${line})`);
@@ -424,6 +440,69 @@ assert(
   steered.agents.find((agent) => agent.agent === "financial_manager")?.motion === "idle",
   "Working leaves the financial manager when the action was handed on",
 );
+const foundAdvisor = ownerPresence(
+  activity({
+    findings: [
+      {
+        id: "find-old",
+        agent: "advisor",
+        client_id: "c",
+        title: "Move fixed contracts to variable pricing.",
+        detail: null,
+        evidence: {},
+        as_of: null,
+        created_at: "2026-10-01T00:04:00.000Z",
+      },
+    ],
+    runs: [
+      {
+        id: "run-old",
+        agent: "advisor",
+        client_id: "c",
+        status: "succeeded",
+        queued_at: "2026-10-01T00:00:00.000Z",
+        started_at: "2026-10-01T00:00:01.000Z",
+        finished_at: "2026-10-01T00:03:00.000Z",
+      },
+    ],
+  }),
+);
+const workingHand = steerAssignedWork(foundAdvisor, "advisor", { agent: "advisor", status: "queued" });
+assert(
+  workingHand.agents.find((agent) => agent.agent === "advisor")?.motion === "working",
+  "a new hand-off shows Working on the advisor even when an older finding is found",
+);
+const picked = handedHomeAction(
+  [
+    { id: "old", title: "Collect the two largest invoices" },
+    { id: "new", title: "Audit and renegotiate your top 5 supplier contracts" },
+  ],
+  new Map([["new", { agent: "advisor", at: "2026-10-04T00:00:00.000Z" }]]),
+  new Map([["new", { agent: "advisor", status: "queued", at: "2026-10-04T00:00:01.000Z" }]]),
+);
+assert(picked?.title === "Audit and renegotiate your top 5 supplier contracts", "home follows the handed action, not the first row");
+assert(picked?.agent === "advisor" && picked.run?.status === "queued", "the handed action is Working");
+const floorMarket = { currency: "USD" as const, locale: "en-US" };
+const belowCue = cashFloorCopy({
+  opening: 4335,
+  floor: 50000,
+  money: (amount) => `$${amount}`,
+  market: floorMarket,
+});
+assert(belowCue.healthCue === "Below your $50k minimum · see FM", belowCue.healthCue ?? "missing cue");
+assert(belowCue.chip === "Below your minimum", "the health line uses the floor chip");
+const dipCopy = cashFloorCopy({
+  opening: 44480,
+  floor: 32688,
+  dipsBelowFloorWeek: 4,
+  money: (amount) => `R ${amount}`,
+});
+assert(
+  dipCopy.sentence === "Cash R 44480. The forecast dips under your R 32688 minimum.",
+  dipCopy.sentence,
+);
+assert(dipCopy.healthCue === null, "a projected dip does not change the cash pillar");
+assert(dipCopy.chip === "Below your minimum", "a projected dip keeps the floor chip");
 
 const speaking = ownerPresence(emptyAgentActivity(), {
   agent: "financial_manager",
@@ -1092,7 +1171,8 @@ const emptyNeeds = ownerNeedsView({
   xero: { state: "absent" },
   when: () => "2 Oct 2026",
 });
-assert(emptyNeeds.actionLines[0] === "No open actions assigned to you.", "someone else's action is not the owner's");
+assert(emptyNeeds.actionsHeading === "1 open action", "home lists the plan's open action");
+assert(emptyNeeds.actionLines[0] === "Staff task", "home and the plan share the open action");
 assert(emptyNeeds.draftLines[0] === "No drafts need your OK.", "an empty draft list stays empty");
 assert(emptyNeeds.deliverableLines[0] === "No deliverables awaiting review.", "an empty deliverable list stays empty");
 assert(emptyNeeds.syncLines[0] === "Books are not connected yet.", "no ledger stays unconnected");

@@ -954,6 +954,14 @@ body:has(#pane-ask.on) #wizard-notes-pin {
   max-height: 100vh;
   min-height: 100vh;
   overflow: hidden;
+  padding-bottom: 0;
+}
+
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .footer-note {
+  margin-top: 0;
+  flex: 0 0 auto;
+  background: var(--pp-canvas, #f4f6fa);
+  padding: 8px 16px 12px;
 }
 
 .accountant-portal:has(#pane-ask.on):has(.agent-stage) .client-workspace {

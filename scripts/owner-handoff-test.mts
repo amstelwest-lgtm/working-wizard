@@ -7,6 +7,8 @@ import {
   callerMayHandOff,
   handoffAssigneeName,
   handoffDecision,
+  handoffDraftIsDuplicate,
+  handoffDraftTitle,
   handoffFinding,
   handoffInputs,
   handoffRequestNote,
@@ -67,6 +69,27 @@ assert(
   handoffResultNote("Milōn Analyst", "Cash is the lever.").startsWith("Handed to Milōn Analyst."),
   "the finished note starts with the bot",
 );
+
+assert(
+  handoffDraftTitle("Audit and renegotiate your top 5 supplier contracts") ===
+    "Hand-off: Audit and renegotiate your top 5 supplier contracts",
+  "a hand-off draft is labelled with the action",
+);
+assert(
+  handoffDraftIsDuplicate("Audit and renegotiate your top 5 supplier contracts", [
+    "Hand-off: Audit and renegotiate your top 5 supplier contracts",
+  ]),
+  "the same hand-off does not add a second draft",
+);
+assert(
+  !handoffDraftIsDuplicate("Audit and renegotiate your top 5 supplier contracts", [
+    "Chase the March invoices",
+  ]),
+  "a different draft is not this hand-off",
+);
+const job = readFileSync("supabase/functions/_shared/agent-core/job.ts", "utf8");
+assert(job.includes("handoffDraftTitle"), "a finished hand-off labels its draft");
+assert(job.includes("handoffDraftIsDuplicate"), "a finished hand-off skips a duplicate draft");
 
 assert(handoffFinding({ summary: "Cash", figures: {}, periodLabel: null, snapshotId: null }) === null, "empty figures are not a finding");
 const finding = handoffFinding({

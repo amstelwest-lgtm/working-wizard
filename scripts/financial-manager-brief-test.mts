@@ -83,6 +83,23 @@ assert(
     `Cash ${money(40000)}, ${money(15000)} below your ${money(55000)} minimum.`,
   brief.cashFloorLine ?? "missing cash floor line",
 );
+assert(brief.cashFloorChip === "Below your minimum", "the brief uses the owner floor chip");
+const dip = buildFinancialManagerBrief({
+  clientName: "Chill Pepper",
+  currentFinancials: { ...current, cash: 44480 },
+  currentPeriodEnd: "2026-03-31",
+  snapshots,
+  cashDipWeek: 4,
+  cashOpening: 44480,
+  cashFloor: 32688,
+  formatMoney: money,
+});
+assert(
+  dip.cashFloorLine ===
+    `Cash ${money(44480)}. The forecast dips under your ${money(32688)} minimum.`,
+  dip.cashFloorLine ?? "missing dip line",
+);
+assert(dip.cashFloorChip === "Below your minimum", "a projected dip keeps the same chip");
 assert(
   brief.actions.find((row) => row.id === "cash-floor")?.reason === brief.cashFloorLine,
   "the cash-floor action quotes the same amounts",
