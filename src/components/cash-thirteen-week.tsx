@@ -169,6 +169,7 @@ export function CashThirteenWeekGrid({
   onCommit,
   readOnly = false,
   scrollClassName,
+  openingMissing = false,
 }: {
   weeks: string[];
   opening: number;
@@ -197,17 +198,25 @@ export function CashThirteenWeekGrid({
   ) => void;
   /** Extra classes for the scroll frame. The enlarge sheet fills the viewport. */
   scrollClassName?: string;
+  /** No stored opening. Closings are not rolled forward from zero, and weeks stay uncoloured. */
+  openingMissing?: boolean;
 }) {
-  const openings = closing.map((_, index) => {
-    if (index > 0) return closing[index - 1] ?? 0;
-    if (Number.isFinite(opening) && Math.abs(opening) >= 0.005) return opening;
-    return (closing[0] ?? 0) - (net[0] ?? 0);
-  });
+  const openings = openingMissing
+    ? closing.map(() => Number.NaN)
+    : closing.map((_, index) => {
+        if (index > 0) return closing[index - 1] ?? 0;
+        if (Number.isFinite(opening) && Math.abs(opening) >= 0.005) return opening;
+        return (closing[0] ?? 0) - (net[0] ?? 0);
+      });
+  const shownNet = openingMissing ? net.map(() => Number.NaN) : net;
+  const shownClosing = openingMissing ? closing.map(() => Number.NaN) : closing;
   const series = cashBalanceSeries({ opening, closings: closing, floor });
-  const openingBelow = series[0]?.belowFloor === true;
-  const tight = series.slice(1).map((point) =>
-    point.negative ? ("negative" as const) : point.belowFloor ? ("floor" as const) : null,
-  );
+  const openingBelow = openingMissing ? false : series[0]?.belowFloor === true;
+  const tight = openingMissing
+    ? closing.map(() => null)
+    : series.slice(1).map((point) =>
+        point.negative ? ("negative" as const) : point.belowFloor ? ("floor" as const) : null,
+      );
   const visibleReceipts = receipts.filter((line) => line.vals.some((value) => value));
   const visiblePayments = payments.filter((line) => line.vals.some((value) => value));
 
@@ -236,7 +245,7 @@ export function CashThirteenWeekGrid({
           name: "Opening cash",
           chip: openingChip,
           values: openings,
-          total: forecastOpeningColumnTotal(openings, opening),
+          total: openingMissing ? Number.NaN : forecastOpeningColumnTotal(openings, opening),
           kind: "balance",
           blankZero: false,
           tone: "plain",
@@ -285,8 +294,8 @@ export function CashThirteenWeekGrid({
           key: "net",
           name: "Net cash flow",
           chip: "",
-          values: net,
-          total: sum(net),
+          values: shownNet,
+          total: openingMissing ? Number.NaN : sum(net),
           kind: "signed",
           blankZero: false,
           tone: "net",
@@ -296,8 +305,8 @@ export function CashThirteenWeekGrid({
           key: "closing",
           name: "Closing cash",
           chip: "",
-          values: closing,
-          total: closing[WEEKS - 1] ?? null,
+          values: shownClosing,
+          total: openingMissing ? Number.NaN : (closing[WEEKS - 1] ?? null),
           kind: "signed",
           blankZero: false,
           tone: "close",
@@ -407,6 +416,15 @@ export function CashThirteenWeekGrid({
           </tbody>
         </table>
       </div>
+      <p className="mt-2 text-[12px] text-slate-600 dark:text-slate-300" data-cash-horizon-totals="">
+        Opening {openingMissing || !Number.isFinite(opening) ? "—" : format(opening)}
+        {" · "}Total in {format(sum(inflow))}
+        {" · "}Total out {format(sum(outflow))}
+        {" · "}Closing{" "}
+        {openingMissing || !Number.isFinite(closing[closing.length - 1] ?? Number.NaN)
+          ? "—"
+          : format(closing[closing.length - 1] ?? 0)}
+      </p>
       {visibleReceipts.length + visiblePayments.length === 0 ? (
         <p className="mt-3 text-center text-sm text-slate-500 dark:text-slate-400">
           The weekly model fills in once a forecast line is entered.

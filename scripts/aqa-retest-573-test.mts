@@ -191,7 +191,7 @@ const realBurn = clientListRunwayHeadline({
   totalOutflow: 12_000,
   healthOverall: 67,
 });
-assert(realBurn === "13 weeks below", `a real zero-opening burn stays ${realBurn}`);
+assert(realBurn === "Below zero now", `cash already under zero is ${realBurn}`);
 
 // 4. Cash Flow pillar: chat uses the same scorecard as Where it hurts.
 const pillarFinancials = {

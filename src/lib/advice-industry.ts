@@ -2,6 +2,7 @@
  * Industry label for advice context. Names and the stored template only.
  * Persona files stay untouched.
  */
+import { hospitalityLines } from "./hospitality-display.ts";
 import { BUDGET_TEMPLATES } from "./budget.templates.ts";
 
 const INDUSTRY_LABEL: Record<string, string> = {
@@ -59,13 +60,10 @@ export function adviceIndustryLabel(input: {
 
 const GENERIC_PRODUCT = /^product\s*\d+$/i;
 
-/** Same drivers the hotel budget template shows. Occupancy stays in the name. */
-const HOTEL_CHAT_LINES = [
-  "Rooms · Room-nights · ADR · Occupancy",
-  "Food & beverage",
-  "Housekeeping and staff",
-  "Rent",
-];
+/** Revenue drivers only. Housekeeping and rent are costs, not products. */
+const HOTEL_CHAT_LINES = hospitalityLines("revenue").map((line) =>
+  line.name === "Rooms" ? "Rooms · Room-nights · ADR · Occupancy" : line.name,
+);
 
 function chatTemplateId(input: {
   clientName?: string | null;
