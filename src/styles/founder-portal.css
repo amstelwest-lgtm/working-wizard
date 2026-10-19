@@ -23,6 +23,14 @@
   }
 }
 
+/* Phone owner home sits in this shell. Its 1rem padding is the white gutter. */
+@media (max-width: 860px) {
+  #board-pack.founder-shell:has(> .owner-door[data-screen="home"]) {
+    max-width: none;
+    padding: 0;
+  }
+}
+
 @media (min-width: 1440px) {
   .founder-shell {
     max-width: min(2080px, 90vw);

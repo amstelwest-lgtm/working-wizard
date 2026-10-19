@@ -2025,9 +2025,20 @@ html.dark .owner-status.is-attention {
 }
 
 @media (max-width: 760px) {
-  .owner-door:not([data-screen="chat"]) {
+  .owner-door:not([data-screen="chat"]):not([data-screen="home"]) {
     padding-inline: var(--owner-space-2);
     padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .owner-door.accountant-portal[data-screen="home"] {
+    padding-inline: 0;
+  }
+
+  .owner-door.accountant-portal[data-screen="home"] .topbar {
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .owner-door .owner-tools > .milon-theme-toggle {

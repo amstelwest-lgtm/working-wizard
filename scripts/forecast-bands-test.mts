@@ -6,6 +6,7 @@ import { buildFinancialSnapshot } from "../src/lib/client-briefing";
 import {
   forecastAnchorDate,
   plBankDisagreement,
+  reanchoredForecastPatch,
   resolveThirteenWeekForecast,
   rollBankDraftOpening,
   scoreCreditorDays,
@@ -230,6 +231,21 @@ const pastBank = resolveThirteenWeekForecast({
 assert(pastBank.source === "stored" && pastBank.replaceStored === false, "bank lines are kept");
 assert(pastBank.startDate === "2026-10-05", `bank week 1 should be this week, got ${pastBank.startDate}`);
 assert(pastBank.reanchored === true, "past bank start is reanchored");
+const pastLines = {
+  startDate: "2026-09-23",
+  openingBalance: "-9150",
+  seededFromBanksAt: "2026-10-01T00:00:00.000Z",
+  revenue: [{ amount: "7730.77", frequency: "recurring-weekly", startWeek: 1, name: "Receipts" }],
+};
+const patched = reanchoredForecastPatch(pastLines, pastBank);
+assert(patched?.startDate === "2026-10-05", "a reanchor writes the new week start");
+assert(patched?.openingBalance === "-9150", "a reanchor keeps the opening on file");
+assert(patched?.revenue === pastLines.revenue, "a reanchor keeps the stored lines");
+assert(reanchoredForecastPatch(pastLines, { ...pastBank, reanchored: false }) == null, "a current week is not rewritten");
+assert(
+  reanchoredForecastPatch({ ...pastLines, startDate: "2026-10-05" }, pastBank) == null,
+  "a start that already matches is not rewritten",
+);
 assert(pastBank.weekDates[0] === "2026-10-05", "reanchored week label date is the week start");
 assert(pastBank.opening === -9150, `opening stays the balance on file, got ${pastBank.opening}`);
 assert(pastBank.anchorNote?.includes("12 days") === true, pastBank.anchorNote ?? "missing gap note");

@@ -654,6 +654,23 @@ function addDays(d: Date, days: number): Date {
  * First day of the forecast. The current week (Monday of today in the firm's
  * timezone), or the day after the latest statement period end when that is later.
  */
+/**
+ * A past week-1 is moved on screen by `resolveThirteenWeekForecast`.
+ * Persist that new start, and only that start, so `last_forecast_at` moves
+ * with a real forecast write. Lines and the opening stay the figures on file.
+ */
+export function reanchoredForecastPatch(
+  cashflow: Record<string, unknown> | null | undefined,
+  outlook: { reanchored: boolean; startDate: string },
+): Record<string, unknown> | null {
+  if (!cashflow || !outlook.reanchored) return null;
+  const start = outlook.startDate.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return null;
+  const current = typeof cashflow.startDate === "string" ? cashflow.startDate.slice(0, 10) : "";
+  if (current === start) return null;
+  return { ...cashflow, startDate: start };
+}
+
 export function forecastAnchorDate(input: {
   now?: Date;
   periodEnd?: string | null;
