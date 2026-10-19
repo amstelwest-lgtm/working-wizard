@@ -88,7 +88,10 @@ assert(settings.includes("firmTrialStatusLine"), "settings trial status uses the
 assert(!settings.includes('?? "Trial"'), "settings does not invent a trial headline");
 
 const css = readFileSync(resolve("src/styles/settings-portal.css"), "utf8");
-assert(css.includes(".settings-portal .topbar > .brand"), "settings hides the duplicate header wordmark");
+assert(
+  /\.settings-portal\.accountant-portal \.topbar > \.brand\s*\{[^}]*display:\s*none/.test(css),
+  "settings hides the duplicate header wordmark",
+);
 assert(
   css.includes(".settings-portal.accountant-portal:not(.owner-door) .deliverable-rail"),
   "settings pins its own sidebar",
