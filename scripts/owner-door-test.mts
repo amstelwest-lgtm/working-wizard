@@ -843,8 +843,11 @@ assert(sphere.includes("onOrbOpen"), "the orb can open Health instead of drillin
 assert(sphere.includes("owner-pillar-score"), "pillar numbers carry a status class");
 assert(
   ownerApp.includes("HEALTH_RING_CAPTION") &&
-    sphere.includes('export const HEALTH_RING_CAPTION = "Tap to see what\'s behind your score"'),
-  "the owner health ring uses the plain tap caption",
+    sphere.includes("export const HEALTH_RING_CAPTION = HEALTH_DRILL_CUE") &&
+    readFileSync("src/components/health-drill-cue.tsx", "utf8").includes(
+      'HEALTH_DRILL_CUE = "Tap to see more"',
+    ),
+  "the owner health ring uses the same Tap to see more cue as the pillar cards",
 );
 assert(sphere.includes("onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}"), "the health orb stays a button");
 assert(sphere.includes("bg-white"), "the pillar card is white");
