@@ -71,6 +71,7 @@ import {
   CASH_FORECAST_CARD_ID,
   cashBalanceSeries,
   cashGraphAxisTicks,
+  cashYDomainIncludingFloor,
   cashGraphWeekTickInterval,
   stableCashChartWidth,
   forecastChipSource,
@@ -575,6 +576,7 @@ export function CashForecastPanel({
   readOnly = false,
   onInvite,
   preview = null,
+  includeFloorInDomain = false,
 }: {
   clientId?: string;
   clientName?: string;
@@ -612,6 +614,11 @@ export function CashForecastPanel({
    * Read-only figures already on hand. Skips the client fetch and autosave
    * so a public sample can show the same chart without a Supabase read.
    */
+  /**
+   * Keep the runway floor inside the y-axis. Off on owner and accountant
+   * charts, where the auto domain is unchanged.
+   */
+  includeFloorInDomain?: boolean;
   preview?: {
     startDate: string;
     openingBalance: string;
@@ -1881,6 +1888,12 @@ export function CashForecastPanel({
             tickFormatter={(v) => sign(formatMoneyChartTick(v, market))}
             width={enlarged ? 76 : 68}
             tick={{ fill: "#94a3b8", fontSize: tickSize }}
+            domain={
+              includeFloorInDomain
+                ? ([dataMin, dataMax]: [number, number]) =>
+                    cashYDomainIncludingFloor(dataMin, dataMax, minimumCash)
+                : undefined
+            }
           />
           <Tooltip
             contentStyle={{

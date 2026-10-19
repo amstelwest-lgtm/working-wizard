@@ -34,7 +34,7 @@ function Signature() {
         pathLength="1"
         d="M16 46c10-28 18-28 20 2 2 22 12 24 18 2 8-26 18-28 22-4 3 14 10 18 18 2 12-24 20-6 30 8 6 10 12 8 20-2 6-8 14-4 22 6"
         fill="none"
-        stroke="#b8891a"
+        stroke="#102A43"
         strokeWidth="2.6"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -57,12 +57,11 @@ export function TrySignoffMark({ signed, onSign }: { signed: boolean; onSign?: (
         disabled={signed}
         onClick={() => onSign?.()}
       >
-        Sign off
+        {signed ? "Signed off" : "Sign off"}
       </button>
       {signed ? (
         <div className="try-signoff-proof">
           <Signature />
-          <p className="try-approved-stamp">Approved by you</p>
         </div>
       ) : null}
     </div>

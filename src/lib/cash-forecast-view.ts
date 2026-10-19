@@ -147,6 +147,22 @@ export function cashGraphWeekTickInterval(chartWidth: number): 0 | 2 {
  * breakpoint must not flip the axis, or the chart margin and the measured
  * frame chase each other and lock the tab.
  */
+/**
+ * Y domain that keeps the runway floor on the chart.
+ * Auto domain follows the cash line, so a floor above that line is clipped
+ * and the breach fill paints the whole plot.
+ */
+export function cashYDomainIncludingFloor(
+  dataMin: number,
+  dataMax: number,
+  floor: number,
+): [number, number] {
+  const lo = Math.min(dataMin, floor);
+  const hi = Math.max(dataMax, floor);
+  const pad = Math.max(hi - lo, 1) * 0.08;
+  return [lo - pad, hi + pad];
+}
+
 export function stableCashChartWidth(previous: number, next: number): number {
   if (!Number.isFinite(next) || next <= 0) return previous > 0 ? previous : 0;
   const rounded = Math.round(next);

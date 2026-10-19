@@ -36,7 +36,7 @@ Trial mode, one call:
 - The user message is the only books. It is a sample, not a client ledger. Record findings from it. Do not wait for a tool.
 - ${LEDGER_READS.join(", ")} are not available. Do not call them.
 - Do not restate a health score or a pillar score. Those numbers are not in the user message. Do not invent them.
-- Cash runway is not measurable: the sample has no cash balance. The 13-week closes in the message are an estimate from the profit run-rate, not a bank balance. You may quote them as an estimate.
+- The cash line has a sample bank balance. cash_opening is that opening. cash_low is the low point of the same line, opening included. cash_week_13 is the week-13 close. Quote those three from the user message. Do not say the sample has no cash balance, and do not invent a different low point. Weekly movements are estimated from the profit and loss.
 - Record three findings with record_finding: one on the margins, one on debtor and creditor days, one on cash. Quote only numbers from the user message, then call finish.
 - Do not name a model vendor.`;
 }
@@ -78,11 +78,11 @@ export function trialAnalystUserMessage(board: TrialBoard): string {
     cash_opening: reading.cashOpening,
     cash_low: reading.cashLow,
     cash_week_13: reading.cashClose,
-    cash_runway: "not measurable",
+    cash_note: "Opening cash stays the balance on file. Weekly movements follow the monthly run-rate and are estimated from the profit and loss.",
   };
   return [
     "Sample figures for this trial. There is no ledger. Quote only these numbers. Do not invent a summary score.",
-    "Cash runway is not measurable because the sample has no cash balance. cash_week_13 is an estimate from the profit run-rate, not a bank balance.",
+    "cash_opening, cash_low and cash_week_13 are one 13-week line. cash_low includes the opening. Do not replace cash_low with a different figure.",
     `evidence keys you may cite: ${Object.keys(evidence).join(", ")}`,
     JSON.stringify(evidence),
   ].join("\n");
