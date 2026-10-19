@@ -151,6 +151,11 @@ export function buildFinancialManagerBrief(input: {
   cashFloor?: number | null;
   /** A blank opening is not R0 under the floor. */
   openingMissing?: boolean;
+  /**
+   * Cash pillar band. Watch or Healthy keeps the cash sentence off the floor.
+   * Omit it and a dip under the floor still says so.
+   */
+  cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   receivables?: number | null;
   drafts?: readonly BriefDraft[];
   draftsReady?: boolean;
@@ -211,22 +216,27 @@ export function buildFinancialManagerBrief(input: {
   }
   const cashOpening = input.cashOpening;
   const cashFloor = input.cashFloor;
+  const pillarAgrees =
+    input.cashPillarStatus === "healthy" || input.cashPillarStatus === "at_risk";
   const cashFloorLine = input.openingMissing
     ? `${OPENING_BALANCE_MISSING}.`
-    : cashOpening != null &&
-        cashFloor != null &&
-        Number.isFinite(cashOpening) &&
-        Number.isFinite(cashFloor)
-      ? cashFloorSentence({
-          opening: cashOpening,
-          floor: cashFloor,
-          dipsBelowFloorWeek: input.cashDipWeek ?? null,
-          money: input.formatMoney,
-        })
-      : null;
+    : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
+      ? `Cash is ${input.formatMoney(cashOpening)}.`
+      : cashOpening != null &&
+          cashFloor != null &&
+          Number.isFinite(cashOpening) &&
+          Number.isFinite(cashFloor)
+        ? cashFloorSentence({
+            opening: cashOpening,
+            floor: cashFloor,
+            dipsBelowFloorWeek: input.cashDipWeek ?? null,
+            money: input.formatMoney,
+          })
+        : null;
   if (
     input.actionsReady !== false &&
     !input.openingMissing &&
+    !pillarAgrees &&
     input.cashDipWeek != null &&
     input.cashDipWeek > 0
   ) {

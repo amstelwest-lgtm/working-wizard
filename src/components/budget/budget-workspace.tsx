@@ -14,7 +14,7 @@ import type {
   BudgetTemplateId,
   UnmappedDriver,
 } from "@/lib/budget.types";
-import { budgetPriceLabel, budgetVolumeLabel, hotelLineDisplayName, hotelTemplateRows } from "@/lib/budget-industry";
+import { budgetPriceLabel, budgetVolumeLabel, hotelDriversOnFile, hotelLineDisplayName, hotelTemplateRows } from "@/lib/budget-industry";
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import { currentBudgetMonth, fyMonths, formatMonthLabel, plainBudgetWindowHeading } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
@@ -735,6 +735,9 @@ function BudgetComplexWorkspace({
         {doc.revenueLines.map((line, index) => {
           const displayName = hotelLineDisplayName(shownTpl.id, line.name, index);
           if (displayName == null) return null;
+          const showDriverDash =
+            !hotelDriversOnFile(doc.templateId, shownTpl.id, line) &&
+            doc.templateId !== "hospitality_rooms";
           return (
           <ScrollableTable
             key={line.id}
@@ -787,7 +790,10 @@ function BudgetComplexWorkspace({
                     {localizeCopy(budgetVolumeLabel(doc.templateId, shownTpl.id, line.volumeLabel), market)}
                   </td>
                   {focusMonths.map((m) => (
-                    <td key={m} className="px-1 py-1">
+                    <td key={m} className="px-1 py-1 text-right">
+                      {showDriverDash ? (
+                        <span data-hotel-driver="missing">—</span>
+                      ) : (
                       <Input
                         type="number"
                         className="h-7 text-right"
@@ -796,13 +802,17 @@ function BudgetComplexWorkspace({
                           patchLine(line.id, m, { volume: parseFloat(e.target.value) || 0 })
                         }
                       />
+                      )}
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <td className="px-3 py-1 text-slate-500">{localizeCopy(budgetPriceLabel(doc.templateId, shownTpl.id, line.priceLabel), market)}</td>
                   {focusMonths.map((m) => (
-                    <td key={m} className="px-1 py-1">
+                    <td key={m} className="px-1 py-1 text-right">
+                      {showDriverDash ? (
+                        <span data-hotel-driver="missing">—</span>
+                      ) : (
                       <Input
                         type="number"
                         className="h-7 text-right"
@@ -811,6 +821,7 @@ function BudgetComplexWorkspace({
                           patchLine(line.id, m, { price: parseFloat(e.target.value) || 0 })
                         }
                       />
+                      )}
                     </td>
                   ))}
                 </tr>

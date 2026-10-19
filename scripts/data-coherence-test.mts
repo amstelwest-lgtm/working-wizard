@@ -13,6 +13,7 @@ import { createBudgetDocument } from "../src/lib/budget.months.ts";
 import { statementBudgetRead } from "../src/lib/budget.bridges.ts";
 import {
   CASH_BELOW_FLOOR_STATUS,
+  NEEDS_DATA_OPENING,
   OPENING_BALANCE_MISSING,
   clientListStatusWord,
   forecastRunwayHeadlineShared,
@@ -221,8 +222,8 @@ assert(
     source: "derived",
     totalInflow: 1,
     totalOutflow: 1,
-  }) === "Healthy",
-  "a missing opening is not Critical",
+  }) === NEEDS_DATA_OPENING,
+  "a missing opening is not Healthy",
 );
 assert(
   forecastStatusSentence({

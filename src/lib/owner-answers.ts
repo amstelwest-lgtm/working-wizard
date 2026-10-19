@@ -58,6 +58,11 @@ export type OwnerBooks = {
     floor: number;
     dipsBelowFloorWeek: number | null;
   } | null;
+  /**
+   * Cash pillar band from the same health score as the ring.
+   * Watch or Healthy wins over the floor chip. Omit it and the outlook rule stays.
+   */
+  cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   openAction: string | null;
   /** False until the action-point read has finished. */
   actionsReady: boolean;
@@ -258,10 +263,13 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
   const fromOutlook = outlookUnderFloor(books);
   const low = forecastLow(books);
   const floor = cashComfortThreshold(books.market.currency);
+  const pillar = books.cashPillarStatus;
   const cash: OwnerCardStatus | null =
-    (fromOutlook != null ? fromOutlook : low != null && low < floor)
-      ? { tone: "attention", word: CASH_FLOOR_ALERT }
-      : null;
+    pillar === "healthy" || pillar === "at_risk"
+      ? null
+      : pillar === "critical" || (fromOutlook != null ? fromOutlook : low != null && low < floor)
+        ? { tone: "attention", word: CASH_FLOOR_ALERT }
+        : null;
 
   const gross =
     finite(books.revenue) && finite(books.cogs)
@@ -358,6 +366,18 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
     };
   }
   const outlook = books.cashOutlook;
+  const pillarAgrees =
+    books.cashPillarStatus === "healthy" || books.cashPillarStatus === "at_risk";
+  if (pillarAgrees && outlook && finite(outlook.opening)) {
+    return {
+      ...base,
+      sentence: `Cash is ${money(outlook.opening)}.`,
+      source: `${booksSource}, 13-week forecast`,
+      step: "Ask",
+      signed: false,
+      empty: false,
+    };
+  }
   if (outlook && finite(outlook.opening) && finite(outlook.floor)) {
     const sentence = cashFloorSentence({
       opening: outlook.opening,

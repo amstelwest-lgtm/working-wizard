@@ -360,18 +360,22 @@ export function interventionNarrative(
   profile?: NarrativeProfile,
   market: MoneyMarket = ZA_MARKET,
 ): string {
+  if (d.cashBelowFloor) {
+    const steps =
+      d.total === 0
+        ? "The Critical reason is cash below floor. Cash is below the floor, so the first action restores cash."
+        : `This roadmap prioritises ${d.total} action step${d.total > 1 ? "s" : ""} by severity and impact: the Critical reason is cash below floor, and the first action restores cash because cash is below the floor` +
+          `${d.atRisk > 0 ? `, with ${d.atRisk} further step${d.atRisk > 1 ? "s" : ""} targeting at-risk measures` : ""}.`;
+    return spellForMarket(withCoda(steps, profile, "intervention", market), market);
+  }
   if (d.total === 0) {
-    const line = d.cashBelowFloor
-      ? "Cash is below the floor, so the status is Critical. The cash position is the first action."
-      : "No intervention steps are required at present — all tracked ratios are healthy.";
+    const line = "No intervention steps are required at present — all tracked ratios are healthy.";
     return spellForMarket(withCoda(line, profile, "intervention", market), market);
   }
   const urgency =
     d.critical > 0
       ? `${d.critical} step${d.critical > 1 ? "s" : ""} address${d.critical === 1 ? "es" : ""} critical ratios and should start immediately`
-      : d.cashBelowFloor
-        ? "cash is below the floor, so the Critical status starts this plan there"
-        : "no ratio is in critical territory, so this plan is about prevention rather than rescue";
+      : "no ratio is in critical territory, so this plan is about prevention rather than rescue";
   const base =
     `This roadmap prioritises ${d.total} action step${d.total > 1 ? "s" : ""} by severity and impact: ${urgency}` +
     `${d.atRisk > 0 ? `, with ${d.atRisk} further step${d.atRisk > 1 ? "s" : ""} targeting at-risk measures` : ""}.`;

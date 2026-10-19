@@ -4,6 +4,8 @@
  * while the briefing says 60.0%.
  */
 
+import { rewriteSavedMonthStamp } from "./statement-period.ts";
+
 export type StatementFigureFacts = {
   grossMargin?: number | null;
   operatingMargin?: number | null;
@@ -140,5 +142,5 @@ export function alignBrainFigureCopy(text: string, facts: StatementFigureFacts):
   }
   const period = facts.periodLabel?.trim();
   if (period) out = out.replace(/period not dated/gi, period);
-  return out;
+  return rewriteSavedMonthStamp(out);
 }

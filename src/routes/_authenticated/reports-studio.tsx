@@ -67,12 +67,13 @@ import {
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import {
   budgetSignoffIsStale,
+  cashSignoffIsStale,
   reviewFiguresChanged,
   signedHealthFromHistory,
   type SignoffPeriodSnapshot,
 } from "@/lib/signoff-status";
 import { budgetSignedFiguresChanged } from "@/lib/budget.bridges";
-import { cashOutlookIsCritical } from "@/lib/cash-forecast-parity";
+import { cashOutlookIsCritical, cashSignedFiguresChanged } from "@/lib/cash-forecast-parity";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
@@ -118,7 +119,7 @@ import {
 } from "@/lib/budget-pdf";
 import { publishBudgetDocument } from "@/lib/budget.bridges";
 import { periodProfitBridge } from "@/lib/period-profit";
-import { groundPlaybookSteps } from "@/lib/intervention-grounding";
+import { groundPlaybookSteps, withCashFloorIntervention } from "@/lib/intervention-grounding";
 import { formatMoney as formatReportMoney } from "@/lib/market/format";
 import type { BudgetDocument } from "@/lib/budget.types";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
@@ -1176,6 +1177,10 @@ type ClientReportData = {
   cashBelowFloor: boolean;
   /** Signed budget figures from content_snapshot. Null when that sign-off stored none. */
   budgetSignedSnapshot: unknown;
+  /** Saved clients.cashflow. Compared with the cash sign-off snapshot. */
+  cashflow: unknown;
+  /** Signed cash figures from content_snapshot. Null when that sign-off stored none. */
+  cashSignedSnapshot: unknown;
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -1224,6 +1229,8 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   scoreHistory: [],
   cashBelowFloor: false,
   budgetSignedSnapshot: null,
+  cashflow: null,
+  cashSignedSnapshot: null,
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -1937,6 +1944,7 @@ async function buildInterventions(
     netProfit?: number | null;
     formatMoney?: (amount: number) => string;
   },
+  cashBelowFloor = false,
 ): Promise<Intervention[]> {
   // Map the snake_case ratio_key from ratioResults back to camelCase playbook keys
   const KEY_MAP: Record<string, string> = {
@@ -2027,7 +2035,7 @@ async function buildInterventions(
     const step = grounded.steps[0];
     result.push({ ...step, ratio_name: rr.ratio_name, health_tier: grounded.tier });
   }
-  if (result.length === 0) return [];
+  if (result.length === 0) return withCashFloorIntervention([], cashBelowFloor);
 
   const tierRank = (t: string) => (t === "critical" ? 2 : t === "at_risk" ? 1 : 0);
   const impactOf = (s: string) => {
@@ -2040,7 +2048,7 @@ async function buildInterventions(
       profilePriorityWeight(profile, iv.ratio_name);
     return score(b) - score(a);
   });
-  return result;
+  return withCashFloorIntervention(result, cashBelowFloor);
 }
 
 async function loadBudgetActualsForPdf(clientId: string): Promise<BudgetPdfActual[]> {
@@ -2087,7 +2095,7 @@ async function loadBudgetActualsForPdf(clientId: string): Promise<BudgetPdfActua
   return out;
 }
 
-async function loadBudgetWorkflow(clientId: string): Promise<{
+async function loadBudgetWorkflow(clientId: string, scope = "budget"): Promise<{
   status: BudgetReviewWorkflow | null;
   snapshot: unknown;
 }> {
@@ -2116,7 +2124,7 @@ async function loadBudgetWorkflow(clientId: string): Promise<{
       .from("client_deliverable_states")
       .select("status, content_snapshot")
       .eq("client_id", clientId)
-      .eq("scope", "budget")
+      .eq("scope", scope)
       .maybeSingle();
     if (error) return { status: null, snapshot: null };
     const status = data?.status;
@@ -2230,7 +2238,10 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     clientRow?.financials && typeof clientRow.financials === "object"
       ? (clientRow.financials as Record<string, unknown>)
       : null;
-  const budgetWorkflow = await loadBudgetWorkflow(clientId);
+  const [budgetWorkflow, cashWorkflow] = await Promise.all([
+    loadBudgetWorkflow(clientId),
+    loadBudgetWorkflow(clientId, "cash_forecast"),
+  ]);
   const budgetWorkflowStatus = budgetWorkflow.status;
   const budget = storedBudget
     ? publishBudgetDocument(
@@ -2278,6 +2289,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     budgetUpdatedAt,
     budgetWorkflowStatus,
     budgetSignedSnapshot: budgetWorkflow.snapshot,
+    cashflow: clientRow?.cashflow ?? null,
+    cashSignedSnapshot: cashWorkflow.snapshot,
     dataPeriodLabel,
     periodMonth: periodParts?.month ?? null,
     periodYear: periodParts?.year ?? null,
@@ -2448,6 +2461,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     scoreHistory,
     cashBelowFloor,
     budgetSignedSnapshot: budgetWorkflow.snapshot,
+    cashflow: clientRow.cashflow ?? null,
+    cashSignedSnapshot: cashWorkflow.snapshot,
   };
 }
 
@@ -2469,6 +2484,13 @@ function isSignoffStale(
       signoff,
       freshAt,
       budgetSignedFiguresChanged(cd?.budgetSignedSnapshot, cd?.budget),
+    );
+  }
+  if (scope === "cash_forecast") {
+    return cashSignoffIsStale(
+      signoff,
+      freshAt,
+      cashSignedFiguresChanged(cd?.cashSignedSnapshot, cd?.cashflow),
     );
   }
   return reviewFiguresChanged({
@@ -2658,11 +2680,16 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       const isDemo = !cd;
       const interventions = isDemo
         ? MOCK_INTERVENTIONS
-        : await buildInterventions(cd!.ratioResults, operatingProfile, {
-            revenue: cd!.profitability?.revenue ?? null,
-            netProfit: cd!.profitability?.net_profit ?? null,
-            formatMoney: (amount) => formatReportMoney(amount, market),
-          });
+        : await buildInterventions(
+            cd!.ratioResults,
+            operatingProfile,
+            {
+              revenue: cd!.profitability?.revenue ?? null,
+              netProfit: cd!.profitability?.net_profit ?? null,
+              formatMoney: (amount) => formatReportMoney(amount, market),
+            },
+            Boolean(cd?.cashBelowFloor),
+          );
       return renderToBlob(InterventionPriorityPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         interventions,

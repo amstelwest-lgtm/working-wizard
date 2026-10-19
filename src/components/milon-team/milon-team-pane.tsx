@@ -8,6 +8,7 @@ import {
   isVisibleAgentFinding,
 } from "@/lib/milon-team-activity";
 import { clientAgentWork } from "@/lib/agent-work";
+import { rewriteSavedMonthStamp } from "@/lib/statement-period";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { AgentStage } from "./agent-stage";
 import { AgentWork } from "./agent-work";
@@ -54,7 +55,9 @@ export function MilonTeamPane({
       market: live.market,
     });
   }, [agent, live.findings, live.market]);
-  const finding = homeFinding?.trim() || findingFallback?.trim() || filedFinding;
+  const finding = rewriteSavedMonthStamp(
+    homeFinding?.trim() || findingFallback?.trim() || filedFinding,
+  );
   const desk = (
     <MilonTeamDesk
       feed={feed}

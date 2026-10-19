@@ -807,7 +807,7 @@ export function publishBudgetDocument(
   });
 }
 
-function stablePlanValue(value: unknown): unknown {
+export function stablePlanValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stablePlanValue);
   if (value && typeof value === "object") {
     const src = value as Record<string, unknown>;
@@ -898,8 +898,11 @@ export function budgetSeededFromStatement(
 ): boolean {
   if (!actuals || actuals.chip !== "Estimated from statement pace") return false;
   if (actuals.budgetRevenue == null || actuals.ebit == null || actuals.budgetEbit == null) return false;
-  const flat = (actual: number, budget: number) => Math.abs(actual - budget) < 1;
-  return flat(actuals.revenue, actuals.budgetRevenue) && flat(actuals.ebit, actuals.budgetEbit);
+  if (Math.abs(actuals.revenue - actuals.budgetRevenue) >= 1) return false;
+  const ebitGap = Math.abs(actuals.ebit - actuals.budgetEbit);
+  // Gross margin on the display seed is rounded to 0.1 point. That gap is the seed.
+  const rounding = Math.max(1, Math.abs(actuals.revenue) * 0.002);
+  return ebitGap <= rounding;
 }
 
 function coverMonths(fy: string[], endMonth: string, periodMonths: number): string[] {

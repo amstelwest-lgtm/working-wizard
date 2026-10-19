@@ -63,6 +63,7 @@
     "test:aqa-retest-574": "vite-node --config scripts/vite-test.config.ts scripts/aqa-retest-574-test.mts",
     "test:data-coherence": "vite-node --config scripts/vite-test.config.ts scripts/data-coherence-test.mts",
     "test:aqa-retest-580": "vite-node --config scripts/vite-test.config.ts scripts/aqa-retest-580-test.mts",
+    "test:aqa-retest-586": "vite-node --config scripts/vite-test.config.ts scripts/aqa-retest-586-test.mts",
     "test:final-walk-industry": "vite-node --config scripts/vite-test.config.ts scripts/final-walk-industry-test.mts",
     "test:aqa-retest-578": "vite-node --config scripts/vite-test.config.ts scripts/aqa-retest-578-test.mts",
     "test:weekly-inputs": "vite-node --config scripts/vite-test.config.ts scripts/weekly-inputs-test.mts",

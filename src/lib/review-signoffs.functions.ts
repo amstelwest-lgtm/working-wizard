@@ -6,6 +6,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { persistedSignoffFirmName, persistedSignerName } from "@/lib/accountant-identity";
 import { budgetPlanSnapshot } from "@/lib/budget.bridges";
+import { cashForecastSnapshot } from "@/lib/cash-forecast-parity";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import type { BudgetDocument } from "@/lib/budget.types";
 
@@ -316,6 +317,7 @@ export const signoffReview = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     let budgetFigures: unknown;
+    let cashFigures: unknown;
     if (data.scope === "budget") {
       const { data: budgetRow, error: budgetErr } = await sb
         .from("clients")
@@ -331,6 +333,16 @@ export const signoffReview = createServerFn({ method: "POST" })
           budgetFigures = undefined;
         }
       }
+    }
+    if (data.scope === "cash_forecast") {
+      const { data: cashRow, error: cashErr } = await sb
+        .from("clients")
+        .select("cashflow")
+        .eq("id", data.clientId)
+        .maybeSingle();
+      if (cashErr) throw new Error(cashErr.message);
+      const raw = (cashRow as { cashflow?: unknown } | null)?.cashflow;
+      if (raw && typeof raw === "object") cashFigures = cashForecastSnapshot(raw);
     }
 
     const { data: prior } = await (sb as unknown as LooseSb)
@@ -379,6 +391,7 @@ export const signoffReview = createServerFn({ method: "POST" })
           scope: data.scope,
           note: data.note ?? null,
           ...(budgetFigures !== undefined ? { budgetFigures } : {}),
+          ...(cashFigures !== undefined ? { cashFigures } : {}),
         },
         signed_off_by: userData.user.id,
         signed_off_at: new Date().toISOString(),

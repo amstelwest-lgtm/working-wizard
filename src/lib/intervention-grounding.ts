@@ -88,6 +88,42 @@ export function groundInterventionStep(input: {
   };
 }
 
+export const CASH_FLOOR_ACTION = "Restore cash above the floor";
+export const CASH_FLOOR_REASON = "cash below floor";
+
+/** Cash leads the plan whenever the outlook is under the floor. */
+export function withCashFloorIntervention<T extends { step_title: string }>(
+  steps: T[],
+  cashBelowFloor: boolean,
+): T[] {
+  if (!cashBelowFloor) return steps;
+  const cash = {
+    ratio_key: "cash_floor",
+    ratio_name: "Cash",
+    health_tier: "critical",
+    step_number: 1,
+    step_title: CASH_FLOOR_ACTION,
+    step_description: `Critical reason: ${CASH_FLOOR_REASON}. Restore the cash balance before debt and collections.`,
+    timeframe: "immediate",
+    effort: "medium",
+    impact: "high",
+    category: "cash",
+  };
+  return [cash as unknown as T, ...steps.filter((step) => step.step_title !== CASH_FLOOR_ACTION)];
+}
+
+/** On-screen plan. The cash action is first, ahead of debt and collections. */
+export function interventionPlanSteps(
+  titles: readonly string[],
+  cashBelowFloor: boolean,
+  limit = 4,
+): string[] {
+  const room = cashBelowFloor ? Math.max(0, limit - 1) : limit;
+  const steps = interventionStepsFromActions(titles, room);
+  if (!cashBelowFloor) return steps;
+  return [CASH_FLOOR_ACTION, ...steps.filter((step) => step !== CASH_FLOOR_ACTION)].slice(0, limit);
+}
+
 /** Up to four open action titles. The intervention list and the action list stay the same. */
 export function interventionStepsFromActions(titles: readonly string[], limit = 4): string[] {
   const out: string[] = [];
