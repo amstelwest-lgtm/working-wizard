@@ -106,6 +106,24 @@ assert(
   dip.healthCue?.includes("minimum · see FM") === true,
   dip.healthCue ?? "the brief and the health pillar share the floor line",
 );
+const watchPillar = buildFinancialManagerBrief({
+  clientName: "Harbour",
+  currentFinancials: current,
+  currentPeriodEnd: "2026-03-31",
+  snapshots,
+  cashOpening: 4335,
+  cashFloor: 50000,
+  cashClosing: [4335],
+  cashPillarStatus: "at_risk",
+  market: { currency: "USD", locale: "en-US" },
+  formatMoney: (amount) => `$${amount}`,
+});
+assert(watchPillar.cashFloorLine === "Cash is $4335.", watchPillar.cashFloorLine ?? "missing watch line");
+assert(watchPillar.cashFloorChip == null, "Watch keeps the floor chip off the card");
+assert(
+  watchPillar.healthCue === "Below your $50k minimum · see FM",
+  watchPillar.healthCue ?? "Watch still lines the Health cash pillar",
+);
 assert(
   brief.actions.find((row) => row.id === "cash-floor")?.reason === brief.cashFloorLine,
   "the cash-floor action quotes the same amounts",

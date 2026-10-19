@@ -20,6 +20,10 @@ interface SimplifiedRatiosProps {
   onOpenEvidence?: (pillarId: string) => void;
   /** Open this pillar's real driver ratios in the health score drill. */
   onOpenPillar?: (pillarId: string) => void;
+  /** Same floor line as the Health ring. Cash only. */
+  cashFloorCue?: string | null;
+  /** Opens the Financial Manager. The rest of the card still drills. */
+  onCashFloor?: () => void;
 }
 
 function statusLabel(health: number, status?: HealthTier): string {
@@ -48,6 +52,8 @@ export function SimplifiedRatios({
   onAddPastPeriod,
   onOpenEvidence,
   onOpenPillar,
+  cashFloorCue = null,
+  onCashFloor,
 }: SimplifiedRatiosProps) {
   return (
     <div className="grid grid-cols-2 gap-3 p-1" id="coach-pillars">
@@ -102,6 +108,27 @@ export function SimplifiedRatios({
                 aria-label={`${card.label} score ${displayHealth}. Dig deeper.`}
               >
                 {figure}
+                {card.id === "cash" && cashFloorCue ? (
+                  <span
+                    className="health-cash-floor"
+                    data-cash-floor-cue="true"
+                    role="link"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onCashFloor?.();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onCashFloor?.();
+                    }}
+                  >
+                    {cashFloorCue}
+                  </span>
+                ) : null}
                 <DigCue id={`pillar-summary-${card.id}`} compact />
               </button>
             ) : (
