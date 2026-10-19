@@ -16,7 +16,10 @@ import {
   periodEndKey,
   periodEndsMentioned,
 } from "../src/lib/agent-bus.ts";
+import { HANDOFF_COST_STOP, handoffCouldNotFinish, handoffProgressCaption } from "../src/lib/action-handoff.ts";
 import { priorActivityIso } from "../src/lib/agent-enqueue.ts";
+import { agentDisplayName } from "../src/lib/milon-team.ts";
+import { handoffResultNote } from "../src/lib/owner-handoff.ts";
 import {
   ANALYST_MAX_ITERATIONS,
   ANALYST_TOOLS,
@@ -25,6 +28,7 @@ import {
   analystRunCostUsd,
   analystRunOutcome,
   analystRunSummary,
+  handoffFinishSummary,
   EMPTY_FINDING_RESULT,
   analystToolAllowed,
   collectStoredReads,
@@ -761,7 +765,55 @@ const DAY = 24 * 60 * 60 * 1000;
   const executeSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
   assert(executeSrc.includes("EMPTY_FINDING_RESULT"), "a finding with no title returns the empty result");
   assert(!executeSrc.includes("A finding needs a title"), "a missing title is not an error turn");
-  assert(runSrc.includes("analystRunSummary"), "the analyst run replaces the cap summary");
+  assert(runSrc.includes("handoffFinishSummary"), "the analyst run replaces the cap and ceiling summary");
+  assert(runSrc.includes('reason: "cost_ceiling"'), "a ceiling stop records cost_ceiling");
+  assert(runSrc.includes("summary: finishSummary"), "the finish note uses the replaced summary");
+  const savedSteps = [
+    { tool: "record_finding", status: "ok", args: { title: "Cash is thin" } },
+    { tool: "record_finding", status: "ok", args: { title: "Margin slipped" } },
+    { tool: "record_finding", status: "ok", args: { title: "Debt is high" } },
+  ];
+  const ceilingDone = analystRunOutcome({
+    stopReason: "cost_ceiling",
+    steps: savedSteps,
+    maxIterations: ANALYST_MAX_ITERATIONS,
+  });
+  assert(
+    ceilingDone.status === "succeeded" && ceilingDone.stopReason === "cost_ceiling",
+    "a ceiling stop after 3 findings succeeds",
+  );
+  const ceilingSummary = handoffFinishSummary({
+    stopReason: "cost_ceiling",
+    summary: HANDOFF_COST_STOP,
+    steps: savedSteps,
+  });
+  assert(ceilingSummary.startsWith("Recorded 3 findings:"), "the finish names the saved findings");
+  assert(!ceilingSummary.includes("cost ceiling"), "a saved ceiling does not keep the ceiling sentence");
+  const ceilingNote = handoffResultNote(agentDisplayName("analyst"), ceilingSummary);
+  assert(
+    ceilingNote.startsWith("Analyst finished: Recorded 3 findings:"),
+    "the finish note is the normal findings line",
+  );
+  assert(!ceilingNote.includes(HANDOFF_COST_STOP), "the finish note is not the ceiling sentence");
+  const ceilingNone = analystRunOutcome({
+    stopReason: "cost_ceiling",
+    steps: [{ tool: "get_health", status: "ok" }],
+    maxIterations: ANALYST_MAX_ITERATIONS,
+  });
+  assert(
+    ceilingNone.status === "partial" && ceilingNone.stopReason === "cost_ceiling",
+    "a ceiling stop with zero findings is partial",
+  );
+  const ceilingEmpty = handoffFinishSummary({
+    stopReason: "cost_ceiling",
+    summary: HANDOFF_COST_STOP,
+    steps: [{ tool: "get_health", status: "ok" }],
+  });
+  assert(ceilingEmpty === HANDOFF_COST_STOP, "zero saved output keeps the ceiling sentence");
+  assert(
+    handoffProgressCaption("analyst", "partial", { result: ceilingEmpty }) === handoffCouldNotFinish("analyst"),
+    "a ceiling with zero findings offers Retry",
+  );
   assert(runSrc.includes("evidence_keys_note"), "each read result lists the evidence keys");
   const loopSrc = readFileSync(resolve("supabase/functions/_shared/agent-core/loop.ts"), "utf8");
   assert(

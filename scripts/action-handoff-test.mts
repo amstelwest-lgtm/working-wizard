@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import {
   agentKeyFromAssignee,
+  assignmentNoteFace,
   botPickupCaption,
   formatAssignmentNote,
   HANDOFF_COST_STOP,
@@ -126,6 +127,24 @@ assert(
   !String(handoffProgressCaption("advisor", "succeeded", { result: HANDOFF_COST_STOP })).includes("cost ceiling"),
   "the raw cost-ceiling sentence stays off the row",
 );
+const handoffAt = "2026-10-19T22:00:00.352Z";
+const failureAt = "2026-10-19T22:00:18.856Z";
+const afterFailure = assignmentNoteFace([
+  { note: "Handed to Analyst.", at: handoffAt },
+  { note: `Analyst finished: ${HANDOFF_COST_STOP}`, at: failureAt },
+]);
+assert(
+  afterFailure.face?.note === "Handed to Analyst." && afterFailure.face.at === handoffAt,
+  "after a stored hand-off, a failure keeps the hand-off visible after reload",
+);
+assert(afterFailure.earlier.length === 0, "the failure stays off the note list and on the row status");
+const finishAt = "2026-10-19T22:00:46.000Z";
+const afterFinish = assignmentNoteFace([
+  { note: "Handed to Analyst.", at: handoffAt },
+  { note: "Analyst finished: Recorded 3 findings: Cash is thin.", at: finishAt },
+]);
+assert(afterFinish.face?.at === finishAt, "a newer finish note is the face");
+assert(afterFinish.earlier[0]?.at === handoffAt, "the stored hand-off stays when the finish note is newer");
 const slowStart = Date.parse("2026-10-19T18:00:00.000Z");
 assert(
   handoffIsSlow("queued", "2026-10-19T18:00:00.000Z", slowStart + 3 * 60 * 1000) === false,

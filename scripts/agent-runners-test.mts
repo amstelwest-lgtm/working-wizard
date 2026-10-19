@@ -618,6 +618,24 @@ function deskWritesLiveRecords(src: string): boolean {
     advisorCap.status === "succeeded" && advisorCap.stopReason === "cap_after_findings",
     "the advisor cap after a draft is the analyst finish",
   );
+  const fmCeiling = fmRunOutcome({
+    stopReason: "cost_ceiling",
+    maxIterations: FM_MAX_ITERATIONS,
+    steps: [{ tool: "record_draft", status: "ok" }],
+  });
+  assert(
+    fmCeiling.status === "succeeded" && fmCeiling.stopReason === "cost_ceiling",
+    "a financial manager ceiling after a draft succeeds",
+  );
+  const advisorCeiling = advisorRunOutcome({
+    stopReason: "cost_ceiling",
+    maxIterations: ADVISOR_MAX_ITERATIONS,
+    steps: [{ tool: "get_health", status: "ok" }],
+  });
+  assert(
+    advisorCeiling.status === "partial" && advisorCeiling.stopReason === "cost_ceiling",
+    "an advisor ceiling with no draft stays partial",
+  );
   const jobSrc = read("supabase/functions/_shared/agent-core/job.ts");
   const reasonBody = jobSrc.slice(jobSrc.indexOf("reason: async"));
   assert(
@@ -626,6 +644,8 @@ function deskWritesLiveRecords(src: string): boolean {
   );
   assert(jobSrc.includes("config.costCeilingUsd"), "the cost ceiling is the agent's own cap");
   assert(jobSrc.includes("runnerNextCallExceedsCeiling"), "the next call is priced from the last call");
+  assert(jobSrc.includes('reason: "cost_ceiling"'), "the shared runner records cost_ceiling");
+  assert(jobSrc.includes("handoffFinishSummary"), "the shared runner writes the replaced finish summary");
   const analystRunSrc = read("supabase/functions/agent-analyst/run.ts");
   const analystReason = analystRunSrc.slice(analystRunSrc.indexOf("reason: async"));
   assert(

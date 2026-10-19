@@ -14,6 +14,9 @@ import {
 import { agentDisplayNameFromKey } from "./milon-team-names.ts";
 
 export const HANDOFF_TRIGGER = "on_demand";
+
+/** Stored when a run stops so it does not spend another model call. The row does not show this raw. */
+export const HANDOFF_COST_STOP = "Stopped before another model call so the run stays within its cost ceiling.";
 export const ANALYST_RUNNER = "agent-analyst";
 
 export const AGENT_RUNNERS = {

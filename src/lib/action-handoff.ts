@@ -5,6 +5,9 @@
 import { agentShortName } from "./milon-team.ts";
 import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
 import { AGENT_KEYS, type AgentKey } from "./milon-team-feed.ts";
+import { HANDOFF_COST_STOP } from "./owner-handoff.ts";
+
+export { HANDOFF_COST_STOP };
 
 const POSTER: Record<AgentKey, string> = {
   financial_manager: "/avatars/fm/fm-poster.webp",
@@ -42,11 +45,24 @@ export function handoffClock(at: string | null | undefined): string | null {
 /** A queued or running hand-off that has not moved for this long offers Retry. */
 export const HANDOFF_SLOW_AFTER_MS = 3 * 60 * 1000;
 
-/** Stored when a run stops so it does not spend another model call. Not shown raw. */
-export const HANDOFF_COST_STOP = "Stopped before another model call so the run stays within its cost ceiling.";
-
 export function handoffCostStopped(text: string | null | undefined): boolean {
   return (text ?? "").includes(HANDOFF_COST_STOP);
+}
+
+/**
+ * The face is the newest hand-off or finish note.
+ * A cost-ceiling stop stays off the face and is the row status with Retry.
+ */
+export function assignmentNoteFace<T extends { note: string | null; at: string }>(
+  notes: readonly T[],
+): { face: T | null; earlier: T[] } {
+  const rows = notes
+    .filter((row) => {
+      const text = row.note?.trim() ?? "";
+      return text.length > 0 && !handoffCostStopped(text);
+    })
+    .sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  return { face: rows[0] ?? null, earlier: rows.slice(1) };
 }
 
 /** Friendly line for a cost-ceiling stop. Retry sits beside it on the row. */
