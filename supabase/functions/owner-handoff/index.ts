@@ -147,6 +147,8 @@ Deno.serve(async (req) => {
   if (!action) return json({ error: "action_not_found" }, 404);
   if (action.client_id !== clientId) return json({ error: "action_client_mismatch" }, 403);
 
+  const handoffActor = user.email?.split("@")[0]?.trim() || "Accountant";
+
   if (personId) {
     const { data: employee, error: employeeError } = await admin
       .from("client_employees")
@@ -157,14 +159,13 @@ Deno.serve(async (req) => {
     if (!employee || employee.client_id !== clientId) return json({ error: "person_not_on_file" }, 400);
     const cleared = await cancelQueuedRuns(admin, actionItemId);
     if (cleared) return json({ error: cleared }, 500);
-    const actor = user.email?.split("@")[0]?.trim() || "Accountant";
     const name = typeof employee.name === "string" && employee.name.trim() ? employee.name.trim() : "Team member";
     const failed = await writeAssignment(admin, {
       clientId,
       actionItemId,
       ownerId: personId,
       actorType: "owner_app",
-      actorLabel: actor,
+      actorLabel: handoffActor,
       note: personAssignmentNote(name),
     });
     if (failed) return json({ error: failed }, 500);
@@ -186,8 +187,8 @@ Deno.serve(async (req) => {
       clientId,
       actionItemId,
       ownerId: null,
-      actorType: "system",
-      actorLabel: decision.displayName,
+      actorType: "owner_app",
+      actorLabel: handoffActor,
       note: handoffRequestNote(decision.displayName),
     });
     if (failed) return json({ error: failed }, 500);
@@ -258,8 +259,8 @@ Deno.serve(async (req) => {
         clientId,
         actionItemId,
         ownerId: null,
-        actorType: "system",
-        actorLabel: decision.displayName,
+        actorType: "owner_app",
+        actorLabel: handoffActor,
         note: handoffRequestNote(decision.displayName),
       });
       if (failed) return json({ error: failed }, 500);
@@ -348,8 +349,8 @@ Deno.serve(async (req) => {
     clientId,
     actionItemId,
     ownerId: null,
-    actorType: "system",
-    actorLabel: decision.displayName,
+    actorType: "owner_app",
+    actorLabel: handoffActor,
     note: handoffRequestNote(decision.displayName),
   });
   if (failed) return json({ error: failed, runId }, 500);

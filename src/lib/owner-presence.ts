@@ -72,6 +72,78 @@ function sentenceFor(
   return text || "Nothing new from the books.";
 }
 
+/**
+ * The card uses the newest queued or running run for this agent.
+ * That run wins over a newer finished run that still has a finding.
+ */
+export function cardRunForAgent(runs: readonly AgentRunRow[], agent: AgentKey): AgentRunRow | undefined {
+  let active: AgentRunRow | undefined;
+  for (const run of runs) {
+    if (run.agent !== agent || !WORKING.has(run.status)) continue;
+    if (
+      !active ||
+      run.queued_at > active.queued_at ||
+      (run.queued_at === active.queued_at && run.id > active.id)
+    ) {
+      active = run;
+    }
+  }
+  if (active) return active;
+  return latestRunByAgent(runs)[agent];
+}
+
+export function cardRunsByAgent(runs: readonly AgentRunRow[]): Partial<Record<AgentKey, AgentRunRow>> {
+  const out: Partial<Record<AgentKey, AgentRunRow>> = {};
+  for (const agent of AGENT_KEYS) {
+    const run = cardRunForAgent(runs, agent);
+    if (run) out[agent] = run;
+  }
+  return out;
+}
+
+export type CardHandoffRow = {
+  id: string;
+  agent: AgentKey | null;
+  open: boolean;
+  openedAt?: string;
+};
+
+/**
+ * An open hand-off that is not in the live runs yet still counts as queued.
+ * A finished run that landed after the click is the row's run, so it is not painted again.
+ */
+export function withCardHandoffRuns(
+  runs: readonly AgentRunRow[],
+  rows: readonly CardHandoffRow[],
+): AgentRunRow[] {
+  const extra: AgentRunRow[] = [];
+  for (const row of rows) {
+    if (!row.open || !row.agent) continue;
+    const live = runs.filter((run) => run.action_item_id === row.id && run.agent === row.agent);
+    if (live.some((run) => WORKING.has(run.status))) continue;
+    const settled = live.some((run) => {
+      if (WORKING.has(run.status)) return false;
+      if (!DONE.has(run.status) && run.status !== "failed" && run.status !== "dead" && run.status !== "cancelled") {
+        return false;
+      }
+      const at = run.finished_at || run.queued_at;
+      return !row.openedAt || at >= row.openedAt;
+    });
+    if (settled) continue;
+    extra.push({
+      id: `open-${row.id}`,
+      agent: row.agent,
+      client_id: "",
+      status: "queued",
+      queued_at: row.openedAt || "1970-01-01T00:00:00.000Z",
+      started_at: null,
+      finished_at: null,
+      action_item_id: row.id,
+    });
+  }
+  return extra.length > 0 ? [...runs, ...extra] : [...runs];
+}
+
 function motionFor(run: AgentRunRow | undefined, finding: AgentFindingRow | null): OwnerMotion {
   if (run && WORKING.has(run.status)) return "working";
   if (run && DONE.has(run.status) && finding && stamp(finding.created_at) >= stamp(run.queued_at)) {
@@ -84,7 +156,7 @@ export function ownerPresence(
   activity: AgentActivitySnapshot,
   talk: OwnerTalk = null,
 ): OwnerPresence {
-  const runs = latestRunByAgent(activity.runs);
+  const runs = cardRunsByAgent(activity.runs);
   const newestMessage =
     [...activity.messages]
       .filter((row) => handoffLine(row, agentShortName))
