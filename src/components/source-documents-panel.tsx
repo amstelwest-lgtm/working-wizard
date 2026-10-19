@@ -11,6 +11,7 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from "react";
+import { useMarketFormat } from "@/contexts/market";
 import {
   SOURCE_DOC_ACCEPT,
   buildSourceDocumentsModel,
@@ -371,11 +372,7 @@ function LiveSourceDocuments({
   const [ledgerChoice, setLedgerChoice] = useState<Partial<Record<string, LedgerChoice>>>({});
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
-  const timeZone = useMemo(
-    // Browser zone for upload grouping. Not a printed date.
-    () => (typeof Intl === "undefined" ? "UTC" : Intl.DateTimeFormat().resolvedOptions().timeZone),
-    [],
-  );
+  const { market } = useMarketFormat();
 
   const load = useCallback(async () => {
     const api = await import("@/lib/source-documents-browser");
@@ -414,9 +411,9 @@ function LiveSourceDocuments({
       connectedLedgers: bundle.connectedLedgers,
       ledgerChoice,
       duplicate,
-      timeZone,
+      market,
     });
-  }, [bundle, surface, viewer, ledgerChoice, duplicate, timeZone]);
+  }, [bundle, surface, viewer, ledgerChoice, duplicate, market]);
 
   const upload = async (file: File, channel: "upload" | "camera") => {
     setBusyId("upload");

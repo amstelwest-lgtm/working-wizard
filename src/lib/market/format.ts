@@ -264,6 +264,7 @@ const ZONE_ABBR: Record<string, string> = {
   "America/Phoenix": "MT",
   "America/Los_Angeles": "PT",
   "America/Anchorage": "AKT",
+  "Pacific/Honolulu": "HT",
 };
 
 function zoneLabel(name: string, date: Date, timeZone: string): string {
@@ -353,6 +354,62 @@ export function formatMonthYear(
     return monthYearLabel(parts.year, parts.month) ?? "—";
   } catch {
     return "—";
+  }
+}
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+/** Month and day only. ZA "8 Sep". US "Sep 8". */
+export function formatMonthDay(
+  d: Date | string | number,
+  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  opts?: { timeZone?: string },
+): string {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return "—";
+  const timeZone = opts?.timeZone ?? market.timezone ?? "UTC";
+  try {
+    const parts = readClock(date, timeZone);
+    return weekHeaderLabel(parts.month, parts.day, orderOf(market)) ?? "—";
+  } catch {
+    return "—";
+  }
+}
+
+/** Weekday plus the calendar day. ZA "Monday, 8 Sep 2026". US "Monday, Sep 8, 2026". */
+export function formatNamedDay(
+  d: Date | string | number,
+  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  opts?: { timeZone?: string },
+): string {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return "—";
+  const timeZone = opts?.timeZone ?? market.timezone ?? "UTC";
+  try {
+    const parts = readClock(date, timeZone);
+    const calendar = calendarDayLabel(parts.year, parts.month, parts.day, orderOf(market));
+    if (!calendar) return "—";
+    const weekday = WEEKDAYS[new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay()];
+    return weekday ? `${weekday}, ${calendar}` : calendar;
+  } catch {
+    return "—";
+  }
+}
+
+/** ICU zone name. Slot buttons keep this; printed dates use the mapped letters. */
+export function icuZoneName(
+  date: Date,
+  timeZone: string,
+  style: "short" | "longGeneric",
+): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: style,
+    }).formatToParts(date);
+    return parts.find((part) => part.type === "timeZoneName")?.value?.trim() ?? "";
+  } catch {
+    return "";
   }
 }
 

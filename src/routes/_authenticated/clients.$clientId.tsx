@@ -1599,6 +1599,7 @@ function ClientView() {
         }
       : null,
     snapshotPeriod: pickCurrentSnapshot(snapshots)?.period_label ?? null,
+    market: clientMarket,
   });
   const booksPeriod = booksCoverPeriod(dataFreshness);
   const budgetDoc = parseBudgetDocument(client?.budget ?? null);

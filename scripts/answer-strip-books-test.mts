@@ -24,8 +24,9 @@ const syncLine = dataFreshnessLine({
     syncStatus: "ok",
     periodLabel: "September 2026",
   },
+  market: { locale: "en-US", timezone: "America/New_York" },
 });
-assert.equal(syncLine, "Last sync Sep 1, 2026, 2:00 PM · Xero · September 2026");
+assert.equal(syncLine, "Last sync Sep 1, 2026, 10:00 AM ET · Xero · September 2026");
 
 assert.equal(
   booksAnswerSentence({ freshness: snapshotLine, openKinds: [] }),
@@ -87,7 +88,7 @@ assert.equal(
 );
 assert.equal(
   booksPrimaryKind({
-    freshness: "Last sync Sep 1, 2026, 2:00 PM · Xero · September 2026",
+    freshness: "Last sync Sep 1, 2026, 10:00 AM ET · Xero · September 2026",
     openKinds: [],
     openQueries: 0,
   }),

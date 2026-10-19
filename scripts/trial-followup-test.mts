@@ -228,7 +228,7 @@ const zaSchedule = renderToStaticMarkup(
     market: "ZA",
   }),
 );
-assert(zaSchedule.includes("4:30 PM SAST"), "ZA slots render in local SAST");
+assert(zaSchedule.includes("16:30 SAST"), "ZA slots render in local SAST");
 
 const draft: CallDraft = {
   name: "Ada Firm",
