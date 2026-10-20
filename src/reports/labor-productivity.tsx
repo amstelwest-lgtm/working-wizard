@@ -18,6 +18,7 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ReportSection, reportTablePartStyle } from "@/lib/report-pdf-layout";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
+import { formatReportAmount } from "@/lib/market";
 import { laborNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import {
@@ -271,7 +272,7 @@ export function LaborProductivityPDF({
       note: !headcountKnown
         ? "Not scored"
         : rpeChange !== undefined
-          ? `${rpeChange >= 0 ? "+" : ""}${rpeChange.toFixed(1)}% vs prior`
+          ? `${formatReportAmount(rpeChange, m, { style: "percent", percentPoints: true, sign: "always" })} vs prior`
           : "No prior period",
     },
     {

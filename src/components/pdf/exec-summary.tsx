@@ -87,7 +87,9 @@ export function ExecSummary({ figures, narrative }: Props) {
                   <Text style={styles.figLabel}>{f.label}</Text>
                   <View style={styles.valueRow}>
                     <Text style={styles.figValue}>{f.value}</Text>
-                    {f.direction ? <Arrow dir={f.direction} color={arrowColor} size={5} /> : null}
+                    {f.direction && f.direction !== "flat" ? (
+                      <Arrow dir={f.direction} color={arrowColor} size={5} />
+                    ) : null}
                   </View>
                   {f.note ? <Text style={styles.figNote}>{f.note}</Text> : null}
                 </View>

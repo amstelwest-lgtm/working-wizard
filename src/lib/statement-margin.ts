@@ -4,6 +4,8 @@
  * while the briefing says 60.0%.
  */
 
+import { formatReportAmount } from "./market/format.ts";
+import { ZA_MARKET } from "./market/resolve.ts";
 import { rewriteSavedMonthStamp } from "./statement-period.ts";
 
 export type StatementFigureFacts = {
@@ -55,7 +57,7 @@ export function isStatementMarginName(name: string): boolean {
 export function formatStatementMargin(value: number | null | undefined): string | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   const pct = Math.abs(value) <= 1.5 ? value * 100 : value;
-  return `${pct.toFixed(1)}%`;
+  return formatReportAmount(pct, ZA_MARKET, { style: "percent", percentPoints: true });
 }
 
 export function ratioPromptLines(raw: unknown, limit = 16): string[] {

@@ -8,6 +8,7 @@
  */
 
 import { GROSS_MARGIN_MAPPING_NOTE, grossMarginLooksImplausible, scoreRatio } from "@/lib/health-score";
+import { formatReportAmount } from "@/lib/market/format";
 import {
   equityMultiplierRatio,
   healthBandLabel,
@@ -276,7 +277,7 @@ export function presentReturn(input: {
   if (!Number.isFinite(input.value)) {
     return { text: "—", headline: "—", scoredValue: null, note, unscored: true };
   }
-  const pct = `${(input.value * 100).toFixed(1)}%`;
+  const pct = formatReportAmount(input.value, undefined, { style: "percent" });
   return {
     text: note ? `${pct} · ${note}` : pct,
     headline: pct,
