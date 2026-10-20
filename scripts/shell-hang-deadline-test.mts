@@ -180,12 +180,29 @@ assert(
 );
 assert(!roles.includes("accountantStayChecks.delete"), "sign-out clears the stay map without dropping one key");
 assert(roles.includes("itMemberChecks.set(userId, Promise.resolve(member))"), "a successful IT check is cached");
+{
+  const itFn = roles.slice(
+    roles.indexOf("export function isMilonItMember"),
+    roles.indexOf("export async function shouldOpenItInbox"),
+  );
+  const errorAt = itFn.indexOf("if (error) return false");
+  const cacheAt = itFn.indexOf("itMemberChecks.set");
+  assert(errorAt !== -1 && cacheAt !== -1 && errorAt < cacheAt, "an IT RPC error is not cached as not IT");
+}
 assert(roles.includes("clearAccountantStayCache"), "sign-out can clear the stay cache");
 
 const gate = src("src/routes/_authenticated.gate.tsx");
 assert(!gate.includes("while (brandLoading)") && !gate.includes("if (brandLoading)"), "the gate does not wait on brand");
 assert(gate.includes("Couldn't check billing"), "a failed check shows the retry card");
 assert(gate.includes("pageWhileEntitlementUnknown"), "unknown entitlement uses the page decision");
+assert(
+  /setFirmEntitled\(null\);[\s\S]{0,160}\}, \[userId\]\)/.test(gate),
+  "entitlement clears when the signed-in user changes",
+);
+assert(
+  gate.includes("clientsPromise") && gate.includes(".catch("),
+  "a rejected client count is not an unhandled rejection",
+);
 assert(gate.includes("<FirmShellLoading />"), "a walled page shows a skeleton while entitlement is unknown");
 assert(gate.includes("<Outlet />"), "an allowed page still mounts the outlet");
 assert(gate.includes('to="/dashboard"'), "Back is a router link");
@@ -248,6 +265,12 @@ assert(clientsError.includes("CLIENTS_LOAD_ERROR") && clientsError.includes("Ret
 const app = src("src/routes/app.tsx");
 assert(app.includes('data-owner-boot="timeout"'), "owner boot has a deadline");
 assert(app.includes('to="/"'), "owner boot goes back through the router");
+assert(
+  app.includes(
+    "[user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId, ownerBootAttempt]",
+  ),
+  "owner Retry restarts role resolution",
+);
 assert(!app.includes("auth.getUser"), "owner boot does not call getUser");
 
 const door = src("src/components/owner-door/owner-door.tsx");

@@ -2915,7 +2915,10 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId]);
+    // ownerBootAttempt is Retry. The client-link effect also restarts, but a
+    // link that is already resolved can stay true, so a role-only hang would
+    // not run again unless this effect lists the attempt.
+  }, [user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId, ownerBootAttempt]);
 
   useEffect(() => {
     if (user) {

@@ -148,6 +148,14 @@ export function AuthGate() {
     navigate({ to: "/auth/callback", replace: true });
   }, [loading, user, firmsLoaded, firmCount, navigate]);
 
+  // The previous account's entitlement must not paint the next sign-in.
+  useEffect(() => {
+    settledRef.current = null;
+    setFirmEntitled(null);
+    setBillingUnknown(false);
+    setClientGate(null);
+  }, [userId]);
+
   // Known unpaid: correct the route the moment they open a gated client file.
   useEffect(() => {
     const settled = settledRef.current;
@@ -204,9 +212,14 @@ export function AuthGate() {
         // what lets the first client file mount before Stripe answers.
         const stayPromise = shouldStayOnAccountantPortal(userId);
         const clientsPromise = loadFirmClientGateContext();
-        void clientsPromise.then((clients) => {
-          if (!cancelled) setClientGate(clients);
-        });
+        void clientsPromise
+          .then((clients) => {
+            if (!cancelled) setClientGate(clients);
+          })
+          .catch(() => {
+            // The entitlement path below reports this rejection. Without this
+            // catch the floating then still rejects with no handler.
+          });
         const entitlementPromise = readCachedFirmEntitlement(
           userId,
           (input) => latest.current.checkEntitlement(input),
