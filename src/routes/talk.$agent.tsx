@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { ProspectTalkLive } from "@/components/prospect-talk";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { bookTrialCall } from "@/lib/trial-followup.functions";
 import tryCss from "../styles/try.css?inline";
 import talkCss from "../styles/prospect-talk.css?inline";
 
@@ -32,5 +34,13 @@ export const Route = createFileRoute("/talk/$agent")({
 function TalkRoute() {
   const { agent } = Route.useParams();
   const { copyPack } = Route.useLoaderData();
-  return <ProspectTalkLive slug={agent} copyPack={copyPack} />;
+  const bookCall = useServerFn(bookTrialCall);
+  return (
+    <ProspectTalkLive
+      key={agent}
+      slug={agent}
+      copyPack={copyPack}
+      onBookCall={(input) => bookCall({ data: input })}
+    />
+  );
 }

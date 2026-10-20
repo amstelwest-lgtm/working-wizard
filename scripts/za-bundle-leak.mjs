@@ -9,6 +9,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const root = resolve("dist/client");
+// "Tax Specialist" is a public /talk agent. IRP6 and ITR14 stay out of
+// the US client bundle; they live in the server prompt only.
 const needles = [
   "R799",
   "R299",
@@ -19,7 +21,6 @@ const needles = [
   "50%",
   "ITR14",
   "IRP6",
-  "Tax Specialist",
 ];
 const allow = /za-pricing/;
 
@@ -150,8 +151,7 @@ if (hits.length) {
  */
 function minifiedStaticImports(code) {
   const specs = [];
-  const re =
-    /\b(?:import|export)(?!\()(?:[\s\S]*?\bfrom\s*)?["'](\.[^"']+)["']/g;
+  const re = /\b(?:import|export)(?!\()(?:[\s\S]*?\bfrom\s*)?["'](\.[^"']+)["']/g;
   let match;
   while ((match = re.exec(code))) {
     if (match[1]) specs.push(match[1]);
@@ -178,9 +178,7 @@ while (staticQueue.length) {
     if (next && !staticReach.has(next)) staticQueue.push(next);
   }
 }
-const taxReachable = taxChunks.filter(
-  (path) => reachable.has(path) || staticReach.has(path),
-);
+const taxReachable = taxChunks.filter((path) => reachable.has(path) || staticReach.has(path));
 const htmlTax = html.filter((path) => readFileSync(path, "utf8").includes("za-tax-specialist"));
 const entryStatic = [];
 for (const path of seeds) {

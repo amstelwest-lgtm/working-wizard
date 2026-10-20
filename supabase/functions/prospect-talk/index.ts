@@ -138,7 +138,7 @@ function storeOf(db: Db): ProspectStore {
       const { data, error } = await db
         .from("prospect_talk_sessions")
         .select(
-          "id, token_hash, agent, ip_hash, country, ref, visitor_turns, lead_email, sample_nonce, created_at, expires_at",
+          "id, token_hash, agent, ip_hash, country, ref, visitor_turns, lead_email, pending_message, sample_nonce, created_at, expires_at",
         )
         .eq("token_hash", tokenHash)
         .gt("expires_at", nowIso)
@@ -163,6 +163,7 @@ function storeOf(db: Db): ProspectStore {
         ref: typeof data.ref === "string" ? data.ref : null,
         visitorTurns: Number(data.visitor_turns ?? 0),
         leadEmail: typeof data.lead_email === "string" ? data.lead_email : null,
+        pendingMessage: typeof data.pending_message === "string" ? data.pending_message : null,
         sampleNonce: typeof data.sample_nonce === "string" ? data.sample_nonce : null,
         createdAt: String(data.created_at),
         expiresAt: String(data.expires_at),
@@ -183,6 +184,12 @@ function storeOf(db: Db): ProspectStore {
         .select("id")
         .single();
       return !inserted.error;
+    },
+    async setPending(sessionId, message) {
+      await db
+        .from("prospect_talk_sessions")
+        .update({ pending_message: message })
+        .eq("id", sessionId);
     },
     async markLead(sessionId, email, sampleNonce) {
       await db
