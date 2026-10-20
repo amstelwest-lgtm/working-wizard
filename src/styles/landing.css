@@ -710,6 +710,8 @@ html[data-landing="1"] .firm-bands-table .firm-bands-price{font-weight:800;font-
 html[data-landing="1"] .firm-bands-table th:last-child,html[data-landing="1"] .firm-bands-table .firm-bands-cta{text-align:right}
 html[data-landing="1"] .firm-bands-table .btn{margin:0;height:34px;padding:0 14px;font-size:11px;font-weight:700;letter-spacing:.08em;white-space:nowrap}
 html[data-landing="1"] .firm-bands-table .btn-gold{color:#1b1300;-webkit-text-fill-color:#1b1300;background-color:var(--gold)}
+html[data-landing="1"] .firm-bands-table .btn-cobalt,
+html[data-landing="1"] .firm-band-card .btn-cobalt{color:#fff;-webkit-text-fill-color:#fff;background-color:var(--cobalt);border-color:var(--cobalt)}
 html[data-landing="1"] .firm-bands-table .btn-ghost{color:var(--ink);-webkit-text-fill-color:var(--ink);background-color:transparent;border:1px solid var(--line)}
 html[data-landing="1"] .firm-bands-table .btn-ghost:hover{border-color:var(--gold);color:var(--gold-ink);-webkit-text-fill-color:var(--gold-ink)}
 html[data-landing="1"] .firm-bands-compact .firm-bands-table th,html[data-landing="1"] .firm-bands-compact .firm-bands-table td{padding:10px 12px}
@@ -1518,7 +1520,7 @@ html[data-landing="1"] .reg-owner-link:hover{
 /* Rebrand: white and blue. One gold primary is the hero trial button.
    The header trial button, the wordmark, and decorative gold stay distinct:
    header trial is cobalt, the MILŌN wordmark stays gold. */
-html[data-landing="1"] a.btn-gold.nav-trial{
+html[data-landing="1"] a.btn-cobalt.nav-trial{
   background:transparent;
   background-image:none;
   border:1px solid var(--cobalt);
@@ -1526,8 +1528,8 @@ html[data-landing="1"] a.btn-gold.nav-trial{
   -webkit-text-fill-color:var(--cobalt);
   box-shadow:none;
 }
-html[data-landing="1"] a.btn-gold.nav-trial::after{content:none;display:none}
-html[data-landing="1"] a.btn-gold.nav-trial:hover{
+html[data-landing="1"] a.btn-cobalt.nav-trial::after{content:none;display:none}
+html[data-landing="1"] a.btn-cobalt.nav-trial:hover{
   background:rgba(11,95,255,.08);
   background-image:none;
   border-color:#2563eb;

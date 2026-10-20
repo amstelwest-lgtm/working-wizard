@@ -60,7 +60,13 @@ import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
-import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
+import {
+  cashFlowKnown,
+  coherentEquity,
+  effectivePeriodMonths,
+  reportInputsFromFinancials,
+} from "@/lib/equity-coherence";
+import { reportsHomeReadyLine, reportsReadyCount } from "@/lib/reports-drafter-copy";
 import { pickCurrentSnapshot } from "@/lib/financial-snapshots";
 import { defaultPeriodCoverage } from "@/lib/statement-period";
 import {
@@ -3570,6 +3576,13 @@ function ClientView() {
   // the temporal dead zone here, and the minified chunk throws
   // "Cannot access '…' before initialization" on every /clients/:id render.
   const reportsIssued = client?.reports_issued_count ?? 0;
+  const reportReadiness = reportInputsFromFinancials(financials as Record<string, unknown>);
+  const reportsReady = reportsReadyCount({
+    figuresOnFile: hasFigures,
+    leverageReady: reportReadiness.leverageReady,
+    assetReady: reportReadiness.assetReady,
+  });
+  const reportsLine = reportsHomeReadyLine(reportsReady);
   const homeNeeds = useMemo(() => {
     const planNeeds = homeActionNeeds({
       known: openPlanTitles != null,
@@ -3600,7 +3613,7 @@ function ClientView() {
       draftsHeading,
       draftLines,
       deliverablesHeading: "Reports",
-      deliverableLines: [reportsIssued > 0 ? "Ready to send." : "Nothing ready to send."],
+      deliverableLines: reportsLine ? [reportsLine] : [],
       syncHeading: "Books",
       syncLines: [booksLine],
     };
@@ -3610,7 +3623,7 @@ function ClientView() {
     openPlanUnavailable,
     homeActivity,
     dataFreshness,
-    reportsIssued,
+    reportsLine,
   ]);
   const homeBrief = useMemo(
     () =>

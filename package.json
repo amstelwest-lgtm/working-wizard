@@ -129,6 +129,7 @@
     "test:auth-reliability": "vite-node --config scripts/vite-test.config.ts scripts/auth-reliability-test.mts",
     "test:password-sign-in": "vite-node --config scripts/vite-test.config.ts scripts/password-sign-in-test.mts",
     "test:legal-notices": "vite-node --config scripts/vite-test.config.ts scripts/legal-notices-test.mts",
+    "test:home-reports-brand": "vite-node --config scripts/vite-test.config.ts scripts/home-reports-brand-test.mts",
     "test:tax-specialist-sample": "vite-node --config scripts/vite-test.config.ts scripts/tax-specialist-sample-test.mts",
     "test:theme-pref": "vite-node --config scripts/vite-test.config.ts scripts/theme-pref-test.mts",
     "test:palette-contrast": "vite-node --config scripts/vite-test.config.ts scripts/palette-contrast-test.mts",
