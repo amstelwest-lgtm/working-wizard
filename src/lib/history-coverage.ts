@@ -18,7 +18,7 @@ export const SNAPSHOT_RATIO_ALIASES: Record<string, string[]> = {
 export function periodKeyOf(row: HistorySnapshot): string {
   const date = (row.period_date ?? "").trim().slice(0, 10);
   if (date) return date;
-  return (row.period_label ?? "").trim();
+  return (row.period_label ?? "").trim(); // date-ok: snapshot identity key, not printed copy
 }
 
 export function distinctPeriodCount(snapshots: HistorySnapshot[] | null | undefined): number {

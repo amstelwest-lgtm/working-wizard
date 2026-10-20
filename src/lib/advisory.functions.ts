@@ -32,6 +32,8 @@ import { parseOperatingProfile } from "@/lib/client-profile";
 import { profileAiContext } from "@/lib/profile-signals";
 import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
 import { PILLAR_LABELS, pillarForRatioName } from "@/lib/health-score";
+import { marketForClient } from "@/lib/market/scope";
+import { figuresPeriodLabelFrom } from "@/lib/statement-period";
 
 type RatioMap = Record<string, number | string | null>;
 
@@ -137,7 +139,7 @@ export const draftAdvisory = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id, name, firm_id, business_type, cashflow, financials, operating_profile")
+      .select("id, name, firm_id, business_type, cashflow, financials, operating_profile, market")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not accessible");
@@ -163,7 +165,7 @@ export const draftAdvisory = createServerFn({ method: "POST" })
     // Last two snapshots (RLS-scoped) for the movement brief.
     const { data: snaps } = await context.supabase
       .from("client_financial_snapshots")
-      .select("period_label, period_date, ratios")
+      .select("period_label, period_date, ratios, financials")
       .eq("client_id", data.clientId)
       .order("period_date", { ascending: false })
       .limit(2);
@@ -172,7 +174,19 @@ export const draftAdvisory = createServerFn({ method: "POST" })
       period_label: string;
       period_date: string;
       ratios: RatioMap;
+      financials?: unknown;
     }>;
+    const dateMarket = marketForClient({
+      market: (client as { market?: unknown }).market,
+    });
+    const periodSpan = (row: { period_label?: string | null; financials?: unknown } | null) => {
+      if (!row) return null;
+      const fields =
+        row.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
+          ? row.financials
+          : null;
+      return figuresPeriodLabelFrom(fields, row.period_label, dateMarket);
+    };
 
     if (rows.length === 0) {
       throw new Error(
@@ -235,8 +249,8 @@ export const draftAdvisory = createServerFn({ method: "POST" })
       clientName: client.name,
       businessType: client.business_type,
       operatingContext,
-      periodLabel: current.period_label,
-      priorPeriodLabel: prior?.period_label ?? null,
+      periodLabel: periodSpan(current) ?? "",
+      priorPeriodLabel: periodSpan(prior),
       hasPrior,
       runwayLabel,
       movementLines,
@@ -304,8 +318,8 @@ export const draftAdvisory = createServerFn({ method: "POST" })
       subject,
       body,
       grounding: {
-        currentPeriod: current.period_label,
-        priorPeriod: prior?.period_label ?? null,
+        currentPeriod: periodSpan(current),
+        priorPeriod: periodSpan(prior),
         movementCount: movementLines.length,
         signoffCount: signoffLines.length,
       },

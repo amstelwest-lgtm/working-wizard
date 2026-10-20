@@ -25,6 +25,8 @@ import { rankNextSteps, summarizeCashForecast } from "../ask-ai/deliverable-summ
 import type { ClientRunway } from "../../../src/lib/client-metrics.ts";
 import type { RatioRow } from "../ask-ai/types.ts";
 import type { SavedCashflow } from "../ask-ai/deliverable-summaries.ts";
+import type { DateMarket } from "../../../src/lib/market/format.ts";
+import { statementSpanLabel } from "../../../src/lib/statement-period.ts";
 
 const CAMEL_TO_DISPLAY: Record<string, string> = {};
 for (const [display, camel] of Object.entries(DISPLAY_TO_CAMEL)) {
@@ -225,6 +227,7 @@ export function shapeCash(
 
 export function shapeHistory(
   rows: Array<{ period_label: string | null; period_date: string | null; ratios: unknown }>,
+  market: DateMarket,
 ): Record<string, unknown> {
   const periods = rows.slice(0, 6).map((row) => {
     const display = toDisplayRatios(numericRecord(row.ratios, 24));
@@ -233,7 +236,7 @@ export function shapeHistory(
       if (typeof display[name] === "number") ratios[name] = display[name];
     }
     return {
-      period_label: row.period_label,
+      period_label: statementSpanLabel({ periodLabel: row.period_label, market }),
       period_date: row.period_date,
       ratios,
     };
@@ -267,14 +270,20 @@ export function shapeRecommendations(
   return { empty: recommendations.length === 0, recommendations };
 }
 
-export function shapeOutcomes(rows: Array<Record<string, unknown>>): Record<string, unknown> {
+export function shapeOutcomes(
+  rows: Array<Record<string, unknown>>,
+  market: DateMarket,
+): Record<string, unknown> {
   const outcomes = rows.slice(0, 8).map((row) => ({
     recommendation_id: row.recommendation_id ?? null,
     metric: row.metric ?? null,
     expected_amount: row.expected_amount ?? null,
     actual_amount: row.actual_amount ?? null,
     variance_amount: row.variance_amount ?? null,
-    period_label: row.period_label ?? null,
+    period_label: statementSpanLabel({
+      periodLabel: typeof row.period_label === "string" ? row.period_label : null,
+      market,
+    }),
     measured_at: row.measured_at ?? null,
   }));
   return { empty: outcomes.length === 0, outcomes };

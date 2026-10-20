@@ -163,16 +163,16 @@ assert(
   figureSourceChipLabel(resolveFigureSource({ financials: {}, connectedLedger: "xero" })) === "Xero",
   "a connected ledger chips when the file has no source",
 );
-assert(mapped.periodLabel === "1\u201321 Sep 2026", "month label stored");
+assert(mapped.periodLabel === "2026-09-01/2026-09-21", "month label stores the dates");
 assert(mapped.periodStart === "2026-09-01" && mapped.periodEnd === "2026-09-21", "month dates stored");
 assert(mapped.periodMonths === "1", "waterfall month is not the 9-month total");
 assert(mapped.revenue === 8633.6, "primary revenue is the month");
 assert(mapped.ytdRevenue === 480000, "year revenue is the companion");
-assert(mapped.ytdPeriodLabel === "1 Jan \u2013 21 Sep 2026", "year label has both dates");
+assert(mapped.ytdPeriodLabel === "2026-01-01/2026-09-21", "year label stores the dates");
 assert(mapped.ytdPeriodMonths === "9", "year count is 9");
 assert(mapped.ytdBasis === "calendar", "calendar when that is the basis passed in");
 assert(mapped.operatingCashflow === 1500, "month cash flow stored");
-assert(!String(mapped.periodLabel).includes("Sep 2026 \u2013"), "not a bare month stamp");
+assert(!String(mapped.periodLabel).includes("Sep"), "stored label is the dates, not prose");
 
 const yearLine = statementYearLine(mapped, ZA_MARKET);
 assert(yearLine?.revenue === 480000, "waterfall reads the QuickBooks year companion");

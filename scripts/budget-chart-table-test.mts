@@ -5,15 +5,24 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
-import { createBudgetDocument } from "../src/lib/budget.months";
+import { budgetWindowLabel, createBudgetDocument, fyMonths } from "../src/lib/budget.months";
+import {
+  budgetUniformNote,
+  presentBudgetOnStatementWindow,
+  budgetVersusStatement,
+} from "../src/lib/budget.bridges";
+import { marketForClient } from "../src/lib/market/scope";
 import {
   budgetChartDomain,
   budgetLensFromSearch,
   budgetMonthViews,
+  budgetPeriodTotalCell,
   budgetPlanIsSet,
+  budgetRangeTotals,
   budgetTableRows,
   budgetYtdSentence,
   budgetYtdSignal,
+  niceBudgetAxis,
   revenueYtd,
 } from "../src/lib/budget-chart-table";
 import { formatVariancePct, varianceLine } from "../src/lib/budget.variance";
@@ -123,7 +132,8 @@ assert(complexChart !== -1 && complexDrawer > complexChart, "the full budget cha
 assert(!workspace.includes("BudgetYearOverviewChart"), "the old year chart stays unmounted");
 assert(!panel.includes("data-view-mode-toggle"), "the summary pills are gone");
 assert(!route.includes("data-view-mode-toggle"), "the summary toggle is not a second control on the page");
-assert(chart.includes("Month by month"), "month by month is a disclosure");
+assert(chart.includes("<ViewToggle"), "chart and table share one toggle");
+assert(chart.includes('label: "Chart"') && chart.includes('label: "Table"'), "the toggle names Chart and Table");
 
 for (const src of [simple, workspace]) {
   const labelAt = src.indexOf("Opening cash");
@@ -137,7 +147,7 @@ assert(chart.includes("budgetYtdSignal"), "the year-to-date colour uses the reve
 assert(!chart.includes(">Only<"), "budget-only months do not say Only");
 assert(chart.includes("Budget only"), "the legend still names budget-only months");
 assert(read("src/styles/accountant-portal.css").includes(".budget-grid__money{white-space:nowrap"), "money cells do not wrap");
-assert(!chart.includes("<ViewToggle"), "the chart and the month table are not a toggle");
+assert(chart.includes("data-budget-paint=\"ready\""), "the chart paints before monthly actuals return");
 assert(!chart.includes("data-view-mode-toggle"), "the chart toggle is not the drawer toggle");
 assert(toggle.includes('role="tablist"'), "the toggle is a tablist");
 assert(toggle.includes('role="tab"'), "each option is a tab");
@@ -157,7 +167,9 @@ const scaled = budgetChartDomain([70_000, 60_000]);
 assert(scaled?.[0] === 0 && scaled[1] === 80_000, `the axis reaches the real values, got ${scaled}`);
 assert(chart.includes("Your accountant is still setting the budget"), "a draft tells the owner the budget is not set");
 assert(chart.includes("data-budget-chart=\"draft\""), "the draft chart is marked");
-assert(chart.includes("domain={domain}"), "the axis uses the scaled domain");
+assert(chart.includes("ticks={axis?.ticks}"), "the axis uses even ticks");
+assert(chart.includes("data-budget-totals"), "the visible range has a totals header");
+assert(chart.includes("data-budget-totals-row"), "the table has a period totals row");
 assert(chart.includes("BudgetMonthTick"), "narrow months use a full label tick");
 assert(chart.includes('data-budget-axis="chart"'), "the chart keeps one month axis");
 assert(chart.includes('data-budget-axis="readout"'), "the desktop readout is marked");
@@ -200,5 +212,133 @@ assert(
   budgetSignoffIsStale({ signed_off_at: "2026-09-02T07:54:51.000Z" }, "2026-10-12T00:00:00.000Z", false) === false,
   "the budget autosave clock alone is not stale",
 );
+
+const axis = niceBudgetAxis([20_000, 40_000, 70_000]);
+assert(axis != null, "a real series has ticks");
+const gaps = axis!.ticks.slice(1).map((tick, index) => tick - axis!.ticks[index]!);
+assert(gaps.every((gap) => gap === gaps[0]), `ticks are evenly spaced, got ${axis!.ticks.join(",")}`);
+assert(axis!.ticks.includes(0) && axis!.ticks[axis!.ticks.length - 1]! >= 70_000, "ticks cover the series");
+assert(!axis!.ticks.includes(70_000) || gaps.length === 1, "the data max is not an uneven last tick");
+
+const usMarket = marketForClient({ market: { country: "US", regionCode: "NY" } });
+const zaMarket = marketForClient({ market: { country: "ZA" } });
+const usDoc = createBudgetDocument({
+  templateId: "services_hours",
+  fyStart: "2026-01",
+  fyStartMonth: 1,
+  qualification: doc.qualification,
+  market: usMarket,
+});
+const flat = {
+  ...usDoc,
+  revenueLines: usDoc.revenueLines.map((line, index) =>
+    index === 0
+      ? {
+          ...line,
+          months: Object.fromEntries(fyMonths(usDoc.fyStart).map((month) => [month, { volume: 1, price: 58_333.33 }])),
+        }
+      : line,
+  ),
+  overheads: usDoc.overheads.map((line) => ({
+    ...line,
+    months: Object.fromEntries(fyMonths(usDoc.fyStart).map((month) => [month, 0])),
+  })),
+};
+const books = {
+  revenue: "700000",
+  cogs: "280000",
+  fixedCosts: "351000",
+  periodStart: "2025-10-01",
+  periodEnd: "2026-09-30",
+  periodMonths: "12",
+};
+const presented = presentBudgetOnStatementWindow(flat, books, usMarket, true);
+assert(presented.moved, "a flat Jan–Dec seed moves onto the Oct–Sep books");
+assert(presented.doc.fyStart === "2025-10", `aligned start ${presented.doc.fyStart}`);
+assert(presented.doc.fyStartMonth === 10, "the displayed year starts in October, so a later save does not snap back to January");
+assert(fyMonths(presented.doc.fyStart)[11] === "2026-09", "aligned year ends in Sep 2026");
+assert(presented.caption === "Oct 2025 – Sep 2026", presented.caption);
+assert(
+  budgetUniformNote(presented.uniform) === "Same figure each month. Seeded from the statement.",
+  budgetUniformNote(presented.uniform) ?? "missing seed note",
+);
+const alignedViews = budgetMonthViews(presented.doc, []);
+const totals = budgetRangeTotals(alignedViews);
+assert(totals.revenue > 0 && totals.expenses >= 0, "the visible range has revenue and expenses");
+assert(Math.abs(totals.net - (totals.revenue - totals.expenses)) < 1, "net is revenue less expenses");
+const alignedRows = budgetTableRows(presented.doc, alignedViews);
+const revenueRow = alignedRows.find((row) => row.id === "revenue");
+assert(revenueRow != null, "revenue row is on the table");
+const periodCell = budgetPeriodTotalCell(revenueRow!.cells, "revenue", "Revenue", true);
+assert(periodCell.budget >= revenueRow!.cells[0]!.budget, "the table total includes every month");
+const alignedVersus = budgetVersusStatement(presented.doc, books, usMarket);
+assert(alignedVersus != null && alignedVersus.periodMonths === 12, "variance uses the whole shared year");
+const mismatched = budgetVersusStatement(flat, books, usMarket);
+assert(mismatched != null && mismatched.periodMonths === 9, "an unaligned year only scores the shared months");
+const copied = presentBudgetOnStatementWindow(
+  {
+    ...flat,
+    capex: [{ id: "kit", name: "Kit", month: "2026-03", amount: 1200, funding: "cash" }],
+    revenueLines: flat.revenueLines.map((line, index) =>
+      index === 0
+        ? {
+            ...line,
+            months: Object.fromEntries(fyMonths(flat.fyStart).map((month) => [month, { volume: 1, price: 1 }])),
+          }
+        : line,
+    ),
+  },
+  books,
+  usMarket,
+  false,
+);
+assert(copied.moved && copied.doc.fyStart === "2025-10", "a flat copy-forward still moves onto the books year");
+assert(copied.doc.capex[0]?.month === "2025-12", `capex keeps its place in the year, got ${copied.doc.capex[0]?.month}`);
+assert(
+  budgetUniformNote(copied.uniform) === "Same figure each month. Copied forward.",
+  budgetUniformNote(copied.uniform) ?? "missing copy-forward note",
+);
+const shaped = {
+  ...flat,
+  revenueLines: flat.revenueLines.map((line, index) =>
+    index === 0
+      ? {
+          ...line,
+          months: Object.fromEntries(
+            fyMonths(flat.fyStart).map((month, monthIndex) => [
+              month,
+              { volume: 1, price: monthIndex === 0 ? 10 : 58_333.33 },
+            ]),
+          ),
+        }
+      : line,
+  ),
+};
+const stayed = presentBudgetOnStatementWindow(shaped, books, usMarket, false);
+assert(!stayed.moved && stayed.doc.fyStart === "2026-01", "a year whose months differ stays on its own window");
+assert(stayed.uniform == null, "an uneven year is not flagged as a seed");
+assert(
+  stayed.caption ===
+    "Budget Jan 2026 – Dec 2026. Actuals Oct 2025 – Sep 2026. Variance compares Jan 2026 – Sep 2026.",
+  stayed.caption,
+);
+assert(
+  budgetWindowLabel(flat, usMarket) === "FY Jan–Dec · from Jan 2026",
+  budgetWindowLabel(flat, usMarket),
+);
+assert(
+  budgetWindowLabel({ fyStart: "2026-01", fyStartMonth: 1 }, zaMarket) === "FY Jan–Dec · from Jan 2026",
+  "ZA uses the same month-year, not a day",
+);
+assert(!budgetWindowLabel(flat, usMarket).includes("Jan 26"), "the caption does not read as a day");
+
+const started = performance.now();
+for (let i = 0; i < 40; i++) {
+  presentBudgetOnStatementWindow(flat, books, usMarket, true);
+  budgetMonthViews(presented.doc, []);
+  budgetRangeTotals(budgetMonthViews(presented.doc, []));
+}
+const perPass = (performance.now() - started) / 40;
+assert(perPass < 50, `budget derivation is ${perPass.toFixed(2)}ms, expected under 50ms`);
 
 console.log("budget chart table ok");

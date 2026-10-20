@@ -223,7 +223,7 @@ assert(
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
 assert(!cashSrc.includes('title="Detailed cashflow forecast"'), "the separate detailed section is gone");
 assert(!cashSrc.includes('title="Weekly Detail"'), "old Weekly Detail title is gone");
-assert(!cashSrc.includes("<ViewToggle"), "the cash graph is not behind a toggle");
+assert(cashSrc.includes("<ViewToggle"), "cash uses the same chart and table toggle");
 assert(cashSrc.includes("<CashThirteenWeekGrid"), "the weekly table sits under the graph");
 const clientsPage = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(clientsPage.includes("<h1>Clients</h1>"), "the clients page has a heading");

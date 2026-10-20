@@ -12,6 +12,9 @@ import { packStatusLabel } from "@/lib/advisory-pack";
 import { resolveAdvisorySignoffState } from "@/lib/advisory-signoff";
 import { SIGNOFF_STATUS_DRAFT, SIGNOFF_STATUS_READY } from "@/lib/signoff-status";
 import { isSamplePracticeSignoff, packDisplayedSignoffLine } from "@/lib/review-signoff-stamp";
+import { marketForClient } from "@/lib/market/scope";
+import { statementSpanLabel } from "@/lib/statement-period";
+import type { DateMarket } from "@/lib/market/format";
 
 /** Same shape as the report footer stamp. Kept local so this module does not import react-pdf. */
 export type AdvisoryPackPdfStamp = {
@@ -133,8 +136,13 @@ export function advisoryPackPdfStamp(input: {
 /** Status, version, and period under the PDF title. */
 export function advisoryPackPdfPeriodLine(
   pack: Pick<AdvisoryPack, "status" | "requires_review" | "period_label" | "version" | "content">,
+  market: DateMarket = marketForClient(null),
 ): string {
-  const period = pack.period_label?.trim() || pack.content.periodLabel?.trim() || "";
+  const period =
+    statementSpanLabel({
+      periodLabel: pack.period_label?.trim() || pack.content.periodLabel?.trim() || "",
+      market,
+    }) ?? "";
   return pdfSafeText(
     [`v${pack.version}`, packStatusLabel(pack.status, pack.requires_review), period]
       .filter(Boolean)
@@ -223,7 +231,10 @@ export async function downloadAdvisoryPackPdf(input: {
   const unsignedReady = !stamp && advisoryState.status === "in_review";
   const blob = await pdf(
     AdvisoryPackPDF({
-      smeData: { name: pdfSafeText(clientName), period: advisoryPackPdfPeriodLine(input.pack) },
+      smeData: {
+        name: pdfSafeText(clientName),
+        period: advisoryPackPdfPeriodLine(input.pack, input.market ?? marketForClient(null)),
+      },
       accountantProfile: input.profile,
       sections,
       draftDisclosure: stamp || unsignedReady ? null : ADVISORY_PACK_DRAFT_DISCLOSURE,

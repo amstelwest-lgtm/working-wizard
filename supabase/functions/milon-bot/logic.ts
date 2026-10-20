@@ -180,7 +180,7 @@ export function buildBrainAnswer(input: {
   const ratios = input.financials?.ratios ?? {};
   const hasFinancials = Boolean(
     input.financials &&
-      (input.financials.period_label ||
+      (input.financials.period_label || // date-ok: presence check, not printed copy
         input.financials.cash_runway_weeks != null ||
         Object.keys(ratios).length > 0),
   );

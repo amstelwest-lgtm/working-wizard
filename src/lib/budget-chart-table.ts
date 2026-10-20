@@ -41,6 +41,49 @@ export function budgetPlanIsSet(views: readonly { budget: { revenue: number } }[
  * Chart axis for the larger of budget and actual. A zero series stays unset
  * so a drafted plan is not drawn as $0–$4.
  */
+/** Step of 1, 2 or 5 × 10^n. Same rule as a d3 nice scale. */
+function niceStep(rough: number): number {
+  if (!Number.isFinite(rough) || rough <= 0) return 1;
+  const pow = 10 ** Math.floor(Math.log10(rough));
+  const n = rough / pow;
+  const base = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return base * pow;
+}
+
+/**
+ * Evenly spaced axis. $20k / $40k / $70k is what an auto scale prints when
+ * the top tick is the data max. These ticks share one step.
+ */
+export function niceBudgetAxis(
+  values: readonly (number | null | undefined)[],
+  count = 4,
+): { domain: [number, number]; ticks: number[] } | null {
+  const nums = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (nums.length === 0) return null;
+  const peak = Math.max(...nums.map((value) => Math.abs(value)));
+  if (peak < 1) return null;
+  const dataMin = Math.min(0, ...nums);
+  const dataMax = Math.max(0, ...nums);
+  const span = Math.max(dataMax - dataMin, peak);
+  const step = niceStep(span / Math.max(1, count));
+  const lo = Math.floor(dataMin / step + 1e-9) * step;
+  let hi = Math.ceil(dataMax / step - 1e-9) * step;
+  if (hi <= dataMax) hi += step;
+  if (hi <= lo) hi = lo + step;
+  const ticks: number[] = [];
+  const places = Math.min(6, Math.max(0, -Math.floor(Math.log10(step))));
+  const factor = 10 ** places;
+  for (let i = 0; i < 12; i++) {
+    const raw = lo + i * step;
+    const tick = Math.round(raw * factor) / factor;
+    ticks.push(tick);
+    if (raw >= hi - step * 1e-6) break;
+  }
+  const top = ticks[ticks.length - 1] ?? hi;
+  const bottom = ticks[0] ?? lo;
+  return { domain: [bottom, top], ticks };
+}
+
 export function budgetChartDomain(
   values: readonly (number | null | undefined)[],
 ): [number, number] | undefined {
@@ -146,6 +189,55 @@ export function revenueYtd(views: readonly BudgetMonthView[], throughMonth: stri
   return {
     budget: compared.reduce((sum, row) => sum + row.budget.revenue, 0),
     actual: compared.reduce((sum, row) => sum + (row.actual?.revenue ?? 0), 0),
+  };
+}
+
+export type BudgetRangeTotals = {
+  revenue: number;
+  expenses: number;
+  net: number;
+};
+
+/** Revenue, expenses (cost of sales + overheads + depreciation) and net for the months on screen. */
+export function budgetRangeTotals(views: readonly BudgetMonthView[]): BudgetRangeTotals {
+  let revenue = 0;
+  let expenses = 0;
+  let net = 0;
+  for (const row of views) {
+    revenue += row.budget.revenue;
+    expenses += row.budget.cogs + row.budget.overheads + row.budget.depreciation;
+    net += row.budget.ebit;
+  }
+  return { revenue, expenses, net };
+}
+
+/**
+ * Period column. Budget is the visible range. Variance uses only months that
+ * have an actual, so a later budget-only month is not scored as a miss.
+ */
+export function budgetPeriodTotalCell(
+  cells: readonly BudgetTableCell[],
+  key: VarianceLine["key"],
+  label: string,
+  higherIsBetter: boolean,
+): BudgetTableCell {
+  let budget = 0;
+  let actual = 0;
+  let budgetCompared = 0;
+  let hasActual = false;
+  for (const item of cells) {
+    budget += item.budget;
+    if (item.actual != null) {
+      hasActual = true;
+      actual += item.actual;
+      budgetCompared += item.budget;
+    }
+  }
+  if (!hasActual) return { budget, actual: null, variance: null };
+  return {
+    budget,
+    actual,
+    variance: varianceLine(key, label, budgetCompared, actual, higherIsBetter),
   };
 }
 

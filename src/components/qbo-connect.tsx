@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -12,11 +12,13 @@ import {
 } from "@/lib/qbo.functions";
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
-import { yearToDateTitle } from "@/lib/statement-period";
+import { statementSpanLabel, yearToDateTitle } from "@/lib/statement-period";
 import { useMarketFormat } from "@/contexts/market";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
 import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
 import type { MoneyMarket } from "@/lib/market/format";
+import { CONNECTION_NOT_CONNECTED } from "@/lib/connection-status-deadline";
+import { useConnectionProbe } from "@/lib/use-connection-probe";
 
 type Props = {
   clientId: string | null;
@@ -43,42 +45,30 @@ export function QboConnectCard({
   financials,
   market,
 }: Props) {
-  const { dateTime } = useMarketFormat();
+  const { dateTime, market: contextMarket } = useMarketFormat();
+  const dateMarket = market ?? contextMarket;
   const fetchStatus = useServerFn(getQboStatus);
   const fetchAuthUrl = useServerFn(getQboAuthUrl);
   const doSync = useServerFn(triggerQboSync);
   const doDisconnect = useServerFn(disconnectQbo);
   const checkConfig = useServerFn(getQboConfig);
 
-  const [configured, setConfigured] = useState<boolean | null>(null);
-  const [status, setStatus] = useState<QboStatus>(null);
-  const [loadingStatus, setLoadingStatus] = useState(false);
+  const { gate, configured, status, reload, clear } = useConnectionProbe<QboStatus>({
+    clientId,
+    refreshToken,
+    id: "qbo",
+    probe: async () => {
+      const [cfg, next] = await Promise.all([
+        checkConfig({ data: undefined as never }),
+        fetchStatus({ data: { clientId: clientId! } }),
+      ]);
+      return { configured: cfg.configured, status: next };
+    },
+  });
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [lastSync, setLastSync] = useState<SyncResult["summary"] | null>(null);
-
-  const load = async () => {
-    if (!clientId) return;
-    setLoadingStatus(true);
-    try {
-      const [cfg, s] = await Promise.all([
-        checkConfig({ data: undefined as never }),
-        fetchStatus({ data: { clientId } }),
-      ]);
-      setConfigured(cfg.configured);
-      setStatus(s);
-    } catch {
-      // silent
-    } finally {
-      setLoadingStatus(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, refreshToken]);
 
   const handleConnect = async () => {
     if (!clientId) return;
@@ -100,10 +90,10 @@ export function QboConnectCard({
       setLastSync(result.summary);
       onSyncComplete?.(result.fields, result.summary);
       toast.success("QuickBooks sync complete — P&L and balance sheet updated");
-      await load();
+      await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sync failed");
-      await load();
+      await reload();
     } finally {
       setSyncing(false);
     }
@@ -114,7 +104,7 @@ export function QboConnectCard({
     setDisconnecting(true);
     try {
       await doDisconnect({ data: { clientId } });
-      setStatus(null);
+      clear();
       setLastSync(null);
       toast.success("QuickBooks disconnected");
     } catch (err) {
@@ -126,9 +116,9 @@ export function QboConnectCard({
 
   if (!clientId) return null;
 
-  if (loadingStatus && configured === null) {
+  if (gate === "checking") {
     return (
-      <div className="ledger-connect ledger-connect--panel ledger-connect--row">
+      <div className="ledger-connect ledger-connect--panel ledger-connect--row" data-connection-state="checking">
         <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
         <span className="ledger-connect__hint">Checking QuickBooks…</span>
       </div>
@@ -155,10 +145,17 @@ export function QboConnectCard({
 
   if (status) {
     const isError = status.syncStatus === "error";
-    const periodLabel =
-      lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel;
-    const ytdPeriodLabel =
-      lastSync?.ytdPeriodLabel ?? status.syncFigures?.ytdPeriodLabel ?? status.ytdPeriodLabel;
+    const periodLabel = statementSpanLabel({
+      periodStart: lastSync?.periodStart ?? status.periodStart,
+      periodEnd: lastSync?.periodEnd ?? status.periodEnd,
+      periodLabel: lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel,
+      market: dateMarket,
+    });
+    const ytdPeriodLabel = statementSpanLabel({
+      periodLabel:
+        lastSync?.ytdPeriodLabel ?? status.syncFigures?.ytdPeriodLabel ?? status.ytdPeriodLabel,
+      market: dateMarket,
+    });
     const ytdBasis = lastSync?.ytdBasis ?? status.syncFigures?.ytdBasis ?? status.ytdBasis;
     const linkCopy = describeLedgerLink(
       {
@@ -168,14 +165,16 @@ export function QboConnectCard({
         figuresFromThisSync: Boolean(lastSync) || status.figuresFromThisSync,
         own: lastSync
           ? {
-              periodLabel: lastSync.periodLabel,
+              periodLabel,
               revenue: lastSync.revenue,
-              ytdPeriodLabel: lastSync.ytdPeriodLabel,
+              ytdPeriodLabel,
               ytdRevenue: lastSync.ytdRevenue,
               ytdBasis: lastSync.ytdBasis,
               cash: lastSync.cash,
             }
-          : status.syncFigures,
+          : status.syncFigures
+            ? { ...status.syncFigures, periodLabel, ytdPeriodLabel }
+            : null,
         board: status.boardFigures,
       },
       dateTime,
@@ -292,11 +291,12 @@ export function QboConnectCard({
   }
 
   return (
-    <div className="ledger-connect ledger-connect--panel ledger-connect--split">
+    <div className="ledger-connect ledger-connect--panel ledger-connect--split" data-connection-state="none">
       <div>
         <p className="ledger-connect__kicker" style={{ marginBottom: 4 }}>
           QuickBooks Online
         </p>
+        <p className="ledger-connect__meta">{CONNECTION_NOT_CONNECTED}</p>
         <p className="ledger-connect__hint">
           Connect to sync P&amp;L and balance sheet into this client&apos;s figures
         </p>

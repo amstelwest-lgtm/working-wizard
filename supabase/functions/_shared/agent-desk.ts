@@ -6,6 +6,8 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { executeAnalystTool, type AnalystExecCtx } from "../agent-analyst/execute.ts";
 import { displayAmounts, moneyMarketFromClient, type AgentKey } from "../../../src/lib/agent-bus.ts";
+import { marketForClient } from "../../../src/lib/market/scope.ts";
+import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import { booksQualityFigures, savedBudgetFigures, savedCashflowFigures } from "../../../src/lib/agent-books.ts";
 import {
   AGENT_OUTBOUND_TYPES,
@@ -132,7 +134,11 @@ export async function readBooksQuality(ctx: AgentToolCtx): Promise<unknown> {
     sage: { connected: sage.connected, last_synced_at: sage.last_synced_at, sync_status: sage.sync_status },
     latest_source: (snap?.source as string | null) ?? null,
     snapshot_id: snap ? String(snap.id) : null,
-    period_label: (snap?.period_label as string | null) ?? null,
+    period_label: figuresPeriodLabelFrom(
+      asRecord(snap?.financials),
+      typeof snap?.period_label === "string" ? snap.period_label : null,
+      marketForClient({ market: ctx.market }),
+    ),
     period_date: (snap?.period_date as string | null) ?? null,
     figures,
   };
@@ -315,7 +321,7 @@ export async function recordAgentDraft(
     candidate: {
       kind: prepared.kind,
       figures: prepared.evidence.figures,
-      periodLabel: prepared.evidence.period_label,
+      periodLabel: prepared.evidence.period_label, // date-ok: evidence period key, formatted when printed
       snapshotId: prepared.evidence.snapshot_id,
     },
     recent: ((recent ?? []) as Array<Record<string, unknown>>).map((row) => {
@@ -324,7 +330,7 @@ export async function recordAgentDraft(
         id: String(row.id),
         kind: typeof row.kind === "string" ? row.kind : "",
         figures: evidence?.figures,
-        periodLabel: typeof evidence?.period_label === "string" ? evidence.period_label : null,
+        periodLabel: typeof evidence?.period_label === "string" ? evidence.period_label : null, // date-ok: evidence period key, formatted when printed
         snapshotId: typeof evidence?.snapshot_id === "string" ? evidence.snapshot_id : null,
         severity: typeof row.severity === "string" ? row.severity : "",
         seenAtMs: Date.parse(String(row.last_seen ?? row.created_at ?? "")),
