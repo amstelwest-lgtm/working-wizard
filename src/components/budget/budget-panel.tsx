@@ -13,6 +13,7 @@ import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
 import {
   budgetOpeningReadsMissing,
   budgetIsImplausible,
+  budgetUniformNote,
   statementBudgetRead,
   budgetScaleBreak,
   budgetVersusStatement,
@@ -20,6 +21,7 @@ import {
   budgetPlanFiguresChanged,
   budgetPlanSnapshot,
   budgetSignedFiguresChanged,
+  presentBudgetOnStatementWindow,
   publishBudgetDocument,
   reseedBudgetIfScaleBroken,
   seedBudgetFromFinancials,
@@ -38,6 +40,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SkeletonBlock } from "@/components/primitives/skeleton-blocks";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
@@ -86,6 +89,25 @@ function budgetDocFromStoredRow(row: StoredBudgetRow | null): {
     row.cashflow,
   );
   return { doc: next, changed: budgetPlanFiguresChanged(normalized, next) };
+}
+
+function scheduleIdle(work: () => void): () => void {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(work, { timeout: 1500 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = setTimeout(work, 1);
+  return () => clearTimeout(id);
+}
+
+function BudgetPanelSkeleton() {
+  return (
+    <div className="space-y-4" role="status" aria-live="polite" data-budget-skeleton="">
+      <span className="sr-only">Loading budget…</span>
+      <SkeletonBlock className="h-16 w-full rounded-2xl" />
+      <SkeletonBlock className="h-[280px] w-full rounded-2xl" />
+    </div>
+  );
 }
 
 function seedToStoredRow(seed: BudgetSeedBooks | null | undefined): StoredBudgetRow | null {
@@ -297,11 +319,14 @@ export function BudgetPanel({
         if (!cancelled) setSignedBudgetSnapshot(null);
       });
     };
+    const cancelIdle = scheduleIdle(() => {
+      if (!cancelled) loadSnapshot();
+    });
     if (skipFatSelect.current) {
       skipFatSelect.current = false;
-      loadSnapshot();
       return () => {
         cancelled = true;
+        cancelIdle();
       };
     }
     supabase
@@ -333,9 +358,9 @@ export function BudgetPanel({
         setDoc(applied.doc);
         setLoaded(true);
       });
-    loadSnapshot();
     return () => {
       cancelled = true;
+      cancelIdle();
     };
   }, [clientId, reloadToken]);
 
@@ -358,7 +383,7 @@ export function BudgetPanel({
   }, [onReviewStale, budgetSignoff, budgetUpdatedAt, budgetFiguresChanged]);
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!clientId || signoffProp !== undefined) return;
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
         const row = signoffs.find((s) => s.scope === "budget") ?? null;
@@ -422,10 +447,16 @@ export function BudgetPanel({
   }, [clientId, loaded, doc]);
 
   const figureSource = loadedFinancialsRef.current ?? financials ?? null;
-  const actuals =
+  const statementView =
     doc && loadedFor.current === (clientId ?? null)
-      ? budgetVersusStatement(statementBudgetRead(doc, figureSource).doc, figureSource, market)
+      ? statementBudgetRead(doc, figureSource as Record<string, unknown> | null)
       : null;
+  const presented = statementView
+    ? presentBudgetOnStatementWindow(statementView.doc, figureSource as Record<string, unknown> | null, market, statementView.fromStatement)
+    : null;
+  const actuals = presented
+    ? budgetVersusStatement(presented.doc, figureSource as Record<string, unknown> | null, market)
+    : null;
 
   const startFresh = useCallback(
     (args: {
@@ -561,7 +592,7 @@ export function BudgetPanel({
   }, [profile, loaded, doc, applyProfileToExisting]);
 
   if (!loaded) {
-    return <div className="p-6 text-sm text-slate-400">Loading budget…</div>;
+    return <BudgetPanelSkeleton />;
   }
 
   const budgetInputConfig = (
@@ -633,11 +664,9 @@ export function BudgetPanel({
     );
   }
 
-  const statementView = statementBudgetRead(
-    doc,
-    (loadedFinancialsRef.current ?? null) as Record<string, unknown> | null,
-  );
-  const shownDoc = statementView.doc;
+  const shownDoc = presented?.doc ?? statementView?.doc ?? doc;
+  const periodCaption = presented?.caption ?? null;
+  const uniformNote = budgetUniformNote(presented?.uniform ?? null);
   const implausible = budgetIsImplausible(shownDoc, figureSource);
   const scaleBroken = budgetScaleBreak(shownDoc, figureSource) != null;
   const rebuilt = budgetWasRebuiltFromActuals(doc);
@@ -737,7 +766,9 @@ export function BudgetPanel({
           setDoc(next);
         }}
         simplified={simplified}
-        statementAligned={statementView.fromStatement}
+        statementAligned={statementView?.fromStatement ?? false}
+        periodCaption={periodCaption}
+        uniformNote={uniformNote}
         actuals={actuals}
         unmappedReview={unmapped}
         onClearUnmapped={() => setUnmapped(null)}

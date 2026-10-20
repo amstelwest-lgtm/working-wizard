@@ -15,7 +15,7 @@ import {
   plainBudgetWindowHeading,
   currentBudgetMonth,
   fyMonths,
-  formatMonthLabel as formatMonthLabelMarket,
+  formatBudgetMonthYear,
 } from "@/lib/budget.months";
 import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { BudgetChartTable } from "@/components/budget/budget-chart-table";
@@ -121,6 +121,8 @@ export function BudgetSimpleView({
   forecastRent = null,
   onBuild,
   openingBalanceMissing = false,
+  periodCaption = null,
+  uniformNote = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -151,6 +153,8 @@ export function BudgetSimpleView({
   onBuild?: () => void;
   /** Forecast opening is blank and this plan did not type a start balance. */
   openingBalanceMissing?: boolean;
+  periodCaption?: string | null;
+  uniformNote?: string | null;
 }) {
   const { market } = useMarket();
   const money = (n: number) => {
@@ -158,7 +162,7 @@ export function BudgetSimpleView({
     return role === "owner" ? ownerMinus(text) : text;
   };
   const symbol = currencySymbol(market);
-  const monthLabel = (ym: string) => formatMonthLabelMarket(ym, market);
+  const monthLabel = (ym: string) => formatBudgetMonthYear(ym, market);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const [focusMonth, setFocusMonth] = useState(() => currentBudgetMonth(months));
   const [sameEveryMonth, setSameEveryMonth] = useState(false);
@@ -288,6 +292,8 @@ export function BudgetSimpleView({
         readOnly={readOnly}
         signed={role === "owner"}
         displayTemplateId={displayTemplateId}
+        periodCaption={periodCaption}
+        uniformNote={uniformNote}
       />
       {readOnly ? null : <>{drawer}</>}
       {readOnly ? (

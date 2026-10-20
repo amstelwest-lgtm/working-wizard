@@ -17,7 +17,7 @@ import type {
 import { budgetRentHint, type ForecastRent } from "@/lib/budget-forecast-rent";
 import { budgetPriceLabel, budgetVolumeLabel, hotelDriversOnFile, hotelLineDisplayName, hotelTemplateRows } from "@/lib/budget-industry";
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
-import { currentBudgetMonth, fyMonths, formatMonthLabel, plainBudgetWindowHeading } from "@/lib/budget.months";
+import { currentBudgetMonth, fyMonths, formatBudgetMonthYear, plainBudgetWindowHeading } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {
   BUDGET_OPENING_MISSING_LINE,
@@ -88,6 +88,8 @@ export function BudgetWorkspace({
   forecastRent = null,
   onBuild,
   openingBalanceMissing = false,
+  periodCaption = null,
+  uniformNote = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -121,6 +123,8 @@ export function BudgetWorkspace({
   onBuild?: () => void;
   /** Forecast opening is blank and this plan did not type a start balance. */
   openingBalanceMissing?: boolean;
+  periodCaption?: string | null;
+  uniformNote?: string | null;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -159,6 +163,8 @@ export function BudgetWorkspace({
           forecastRent={forecastRent}
           onBuild={onBuild}
           openingBalanceMissing={openingBalanceMissing}
+          periodCaption={periodCaption}
+          uniformNote={uniformNote}
         />
       </div>
     );
@@ -190,6 +196,8 @@ export function BudgetWorkspace({
       forecastRent={forecastRent}
       onBuild={onBuild}
       openingBalanceMissing={openingBalanceMissing}
+      periodCaption={periodCaption}
+      uniformNote={uniformNote}
     />
   );
 }
@@ -309,6 +317,8 @@ function BudgetComplexWorkspace({
   forecastRent = null,
   onBuild,
   openingBalanceMissing = false,
+  periodCaption = null,
+  uniformNote = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -334,12 +344,14 @@ function BudgetComplexWorkspace({
   forecastRent?: ForecastRent | null;
   onBuild?: () => void;
   openingBalanceMissing?: boolean;
+  periodCaption?: string | null;
+  uniformNote?: string | null;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
   const rentHint = budgetRentHint(doc, forecastRent, money, statementAligned);
-  const monthLabel = (ym: string) => formatMonthLabel(ym, market);
+  const monthLabel = (ym: string) => formatBudgetMonthYear(ym, market);
   const tax = doc.tax;
   const usTax = tax?.regime === "sales_tax" || tax?.regime === "none";
   const taxCol = t("indirectTaxNet", market);
@@ -441,6 +453,8 @@ function BudgetComplexWorkspace({
         actualMonths={actualMonths}
         statementActuals={actuals}
         displayTemplateId={displayTemplateId}
+        periodCaption={periodCaption}
+        uniformNote={uniformNote}
       />
       {nestInDrawer(
         drawer,
