@@ -29,6 +29,7 @@ assert(
 
 const missing = regionFormFromSaved({ loaded: true, saved: null });
 assert(missing.status === "ready" && missing.draft.country === "ZA", "a missing saved region is South Africa");
+assert(missing.status === "ready" && missing.unset === true, "a missing saved region is marked unset");
 assert(missing.status === "ready" && missing.draft.country !== "US", "a missing saved region is not the United States");
 assert(missing.status === "ready" && missing.draft.regionCode == null, "a missing saved region has no US state");
 
@@ -40,6 +41,7 @@ assert(
   savedUs.status === "ready" && savedUs.draft.country === "US" && savedUs.draft.regionCode === "NY",
   "a saved United States region is kept after it loads",
 );
+assert(savedUs.status === "ready" && savedUs.unset === false, "a saved region is not marked unset");
 assert(
   regionSaveAllowed({
     loaded: true,

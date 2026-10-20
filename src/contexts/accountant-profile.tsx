@@ -23,8 +23,7 @@ import {
 import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
-import { parseMarketSelection } from "@/lib/market/parse";
-import { resolveMarket } from "@/lib/market/resolve";
+import { marketForFirm } from "@/lib/market/scope";
 import {
   authDisplayName,
   practiceGreetingName,
@@ -32,14 +31,8 @@ import {
   type PersistedNameChain,
 } from "@/lib/accountant-identity";
 
-function firmTimeZoneFromMarket(market: unknown): string | null {
-  const selection = parseMarketSelection(market);
-  if (!selection) return null;
-  try {
-    return resolveMarket(selection).timezone;
-  } catch {
-    return null;
-  }
+function firmTimeZoneFromMarket(market: unknown): string {
+  return marketForFirm({ market }).timezone;
 }
 
 export type AccountantProfile = {

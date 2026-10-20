@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState, useRef, Fragment } from "react";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
+  CLIENTS_LOAD_ERROR,
+  OPEN_QUERIES_LOAD_ERROR,
+  openQueriesPhase,
+  practiceClientsPhase,
+  settleWithin,
+} from "@/lib/bounded-load";
+import {
   forgetPaintedBook,
   readPaintedBook,
   rememberPaintedBook,
@@ -1325,7 +1332,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, firmMarket } =
     useAccountantProfile();
-  const practiceCountry = parseMarketSelection(firmMarket)?.country ?? null;
+  const practiceCountry = marketForFirm({ market: firmMarket }).country;
   const firm: Firm | null =
     firms.find((f) => f.id === firmId) ??
     (firms[0]
@@ -1435,6 +1442,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   }, [routeHref]);
   const [queryRows, setQueryRows] = useState<OpenQueryRow[]>([]);
   const [queryRowsReady, setQueryRowsReady] = useState(false);
+  const [bookTimedOut, setBookTimedOut] = useState(false);
+  const [queriesTimedOut, setQueriesTimedOut] = useState(false);
   useEffect(() => {
     if (!mobileNavOpen) return;
     const onKey = (event: KeyboardEvent) => {
@@ -1489,40 +1498,57 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setIsItMember(false);
       setCountsReady(true);
       setBookEnriched(true);
+      setBookTimedOut(false);
       setLoading(false);
       return;
     }
 
-    let isIt = false;
-    try {
-      const { data: itFlag } = await supabase.rpc(
-        "is_milon_it_member" as never,
-        {
-          _user_id: userId,
-        } as never,
-      );
-      isIt = Boolean(itFlag);
-    } catch {
-      isIt = false;
-    }
-    setIsItMember(isIt);
+    // The IT flag and the client select used to be bare awaits. A hung
+    // PostgREST call never reached setLoading(false), and the open-queries
+    // effect refused to arm its own deadline while `loading` stayed true.
+    const slim = await settleWithin(
+      (async () => {
+        let isIt = false;
+        try {
+          const { data: itFlag } = await supabase.rpc(
+            "is_milon_it_member" as never,
+            {
+              _user_id: userId,
+            } as never,
+          );
+          isIt = Boolean(itFlag);
+        } catch {
+          isIt = false;
+        }
 
-    // Firm-scoped list + legacy orphans (firm_id null) owned by this accountant.
-    // Strict firm_id-only filtering hid pre-G27 clients and made the dashboard look empty.
-    // IT members have master access — list every client they can read.
-    const listColumns =
-      "id, name, business_type, operating_profile, client_code, contact_email, cash_runway_weeks, last_forecast_at, last_login_at, firm_id, owner_user_id, financials_updated_at, created_at, reports_issued_count, market";
-    let query = supabase.from("clients").select(listColumns).order("created_at", { ascending: false });
-    if (!isIt) {
-      if (activeFirmId) {
-        query = query.or(
-          `firm_id.eq.${activeFirmId},and(firm_id.is.null,owner_user_id.eq.${userId})`,
-        );
-      } else {
-        query = query.eq("owner_user_id", userId);
-      }
+        // Firm-scoped list + legacy orphans (firm_id null) owned by this accountant.
+        // Strict firm_id-only filtering hid pre-G27 clients and made the dashboard look empty.
+        // IT members have master access — list every client they can read.
+        const listColumns =
+          "id, name, business_type, operating_profile, client_code, contact_email, cash_runway_weeks, last_forecast_at, last_login_at, firm_id, owner_user_id, financials_updated_at, created_at, reports_issued_count, market";
+        let query = supabase.from("clients").select(listColumns).order("created_at", { ascending: false });
+        if (!isIt) {
+          if (activeFirmId) {
+            query = query.or(
+              `firm_id.eq.${activeFirmId},and(firm_id.is.null,owner_user_id.eq.${userId})`,
+            );
+          } else {
+            query = query.eq("owner_user_id", userId);
+          }
+        }
+        const { data: cs, error } = await query;
+        return { isIt, cs, error };
+      })(),
+      SHELL_GATE_TIMEOUT_MS,
+    );
+    if (gen !== loadGen.current) return;
+    if (slim.status !== "value") {
+      setBookTimedOut(true);
+      return;
     }
-    const { data: cs, error } = await query;
+    setBookTimedOut(false);
+    const { isIt, cs, error } = slim.value;
+    setIsItMember(isIt);
     if (error) toast.error(error.message);
     let rawClients = collapseDuplicateClientShells((cs ?? []) as Client[]);
     const clientIds = rawClients.map((c) => c.id);
@@ -1686,9 +1712,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setClientRows(fullRows);
       rememberPaintedBook(userId, activeFirmId, fullRows);
       setBookEnriched(true);
+      setBookTimedOut(false);
     }
     } catch (err) {
       console.error("practice book:", err);
+      if (gen === loadGen.current) setBookTimedOut(true);
     } finally {
       if (gen === loadGen.current) {
         setLoading(false);
@@ -1698,15 +1726,25 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   };
 
   useEffect(() => {
-    if (!portalReady || brandLoading) return;
+    if (!portalReady) return;
     let cancelled = false;
+    // Armed even while the firm row is still hydrating. brandLoading used to
+    // return before this timer existed, so a firm that never arrived left the
+    // client list on a skeleton with no deadline.
     const timer = window.setTimeout(() => {
       if (cancelled) return;
       console.warn("[practice-board] client book timed out; showing what has loaded");
       reportClientError(new Error("practice book load timed out"), { source: "practice-board" });
+      setBookTimedOut(true);
       setLoading(false);
       setCountsReady(true);
     }, SHELL_GATE_TIMEOUT_MS);
+    if (brandLoading) {
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
+    }
     void load(firmId, user?.id, greetingSource).finally(() => {
       window.clearTimeout(timer);
     });
@@ -1833,6 +1871,17 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const greetName = firstNameOf(greetingSource);
   const greeting = practiceGreeting(greetingSource);
   const bookLoading = loading || brandLoading;
+  const clientsPhase = practiceClientsPhase({
+    loading: bookLoading,
+    timedOut: bookTimedOut,
+    rowCount: clientRows.length,
+  });
+  const queriesPhase = openQueriesPhase({
+    bookLoading,
+    rowsReady: queryRowsReady,
+    timedOut: queriesTimedOut,
+    rowCount: queryRows.length,
+  });
   useEffect(() => {
     if (!portalReady) return;
     revealPracticeHash(practiceHash);
@@ -1840,31 +1889,41 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const countsLoading = !countsReady;
   const clientIdKey = clientRows.map((c) => c.id).join("\n");
   useEffect(() => {
-    // Slim client ids are in clientRows once `loading` drops. This promise
-    // clears "Loading open queries…" without waiting for the rest of the book.
-    if (view !== "queries" || loading) return;
+    // Slim client ids are in clientRows once `loading` drops. The deadline is
+    // armed first: a client list that never settles must not skip this timer.
+    if (view !== "queries") return;
     let cancelled = false;
-    setQueryRowsReady(false);
+    setQueriesTimedOut(false);
     const ids = clientIdKey ? clientIdKey.split("\n") : [];
     const timer = window.setTimeout(() => {
       if (cancelled) return;
       console.warn("[practice-board] open queries timed out");
       reportClientError(new Error("open queries timed out"), { source: "practice-board" });
+      setQueriesTimedOut(true);
       setQueryRowsReady(true);
     }, SHELL_GATE_TIMEOUT_MS);
-    void listOpenQueries(ids)
-      .then((rows) => {
-        if (cancelled) return;
-        setQueryRows(rows);
-        setQueryRowsReady(true);
-      })
-      .catch((err) => {
-        console.warn("[practice-board] open queries failed", err);
-        if (!cancelled) setQueryRowsReady(true);
-      })
-      .finally(() => {
+    if (loading) {
+      return () => {
+        cancelled = true;
         window.clearTimeout(timer);
-      });
+      };
+    }
+    setQueryRowsReady(false);
+    void settleWithin(listOpenQueries(ids), SHELL_GATE_TIMEOUT_MS).then((result) => {
+      if (cancelled) return;
+      window.clearTimeout(timer);
+      if (result.status === "value") {
+        setQueryRows(result.value);
+        setQueriesTimedOut(false);
+      } else {
+        console.warn(
+          "[practice-board] open queries failed",
+          result.status === "error" ? result.error : "timeout",
+        );
+        setQueriesTimedOut(true);
+      }
+      setQueryRowsReady(true);
+    });
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -1908,9 +1967,12 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const statusAttention = clientRows.filter((row) =>
     statusColumnNeedsAttention(row.health.displayLabel),
   ).length;
-  const summaryLine = bookLoading
-    ? "Loading your clients…"
-    : portfolioSummaryLine({
+  const summaryLine =
+    clientsPhase === "error"
+      ? CLIENTS_LOAD_ERROR
+      : clientsPhase === "loading"
+        ? "Loading your clients…"
+        : portfolioSummaryLine({
         clientCount: clientRows.length,
         needAttention: statusAttention,
         avgHealth,
@@ -2455,7 +2517,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               title="Open queries"
               subtitle="Unresolved notes across clients."
             />
-            {bookLoading || !queryRowsReady ? (
+            {queriesPhase === "error" ? (
+              <p className="sub" role="alert">
+                {OPEN_QUERIES_LOAD_ERROR}
+              </p>
+            ) : queriesPhase === "loading" ? (
               <p className="sub">Loading open queries…</p>
             ) : queryRows.length === 0 ? (
               <EmptyState title="No open queries." className="!py-10" />
@@ -2525,7 +2591,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           </button>
         </div>
 
-        {bookLoading ? (
+        {clientsPhase === "error" ? (
+          <p className="sub" role="alert">
+            {CLIENTS_LOAD_ERROR}
+          </p>
+        ) : clientsPhase === "loading" ? (
           <SkeletonBlock className="h-72 w-full rounded-[20px]" aria-label="Loading clients" />
         ) : filteredRows.length === 0 ? (
           clientRows.length === 0 ? (

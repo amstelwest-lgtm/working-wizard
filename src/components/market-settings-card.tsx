@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,24 +39,28 @@ export function MarketSettingsCard({
   /** SA practice plan. Hides the US state list and VAT wording. Does not write the market. */
   zarPlan?: boolean;
 }) {
-  const [draft, setDraft] = useState<DraftMarket>(() => {
-    const next = regionFormFromSaved({ loaded, saved: initial });
-    return next.status === "ready" ? next.draft : { country: null, regionCode: null };
-  });
+  const gate = regionFormFromSaved({ loaded, saved: initial });
+  const savedKey = `${loaded ? "ready" : "loading"}:${JSON.stringify(initial ?? null)}`;
+  const [appliedKey, setAppliedKey] = useState(savedKey);
+  const [draft, setDraft] = useState<DraftMarket>(() =>
+    gate.status === "ready" ? gate.draft : { country: null, regionCode: null },
+  );
   const [zaExtras, setZaExtras] = useState<ZaMarketExtras>(() =>
     loaded ? readZaMarketExtras(initial) : { provinceCode: null, vatRegistered: false, vatMode: "exclusive" },
   );
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const next = regionFormFromSaved({ loaded, saved: initial });
-    if (next.status !== "ready") {
-      setDraft({ country: null, regionCode: null });
-      return;
-    }
-    setDraft(next.draft);
-    setZaExtras(readZaMarketExtras(initial));
-  }, [initial, loaded]);
+  // Copy the saved region during render so the first paint already has South
+  // Africa selected. A useEffect would leave both country buttons unpressed
+  // for a frame after the row arrives.
+  if (appliedKey !== savedKey) {
+    setAppliedKey(savedKey);
+    setDraft(gate.status === "ready" ? gate.draft : { country: null, regionCode: null });
+    setZaExtras(
+      loaded
+        ? readZaMarketExtras(initial)
+        : { provinceCode: null, vatRegistered: false, vatMode: "exclusive" },
+    );
+  }
 
   const sel = draftToSelection(draft);
   const resolved = sel ? resolveMarket(sel) : null;
@@ -125,6 +129,11 @@ export function MarketSettingsCard({
           South Africa
         </p>
       )}
+      {gate.status === "ready" && gate.unset ? (
+        <p className="mt-3 text-xs text-[var(--ink-dim)]" data-region-default="ZA">
+          Not set, defaulting to South Africa
+        </p>
+      ) : null}
       {draft.country === "ZA" && regionControls.vatCopy ? (
         <div className="mt-3 space-y-3">
           <div>

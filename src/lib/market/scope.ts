@@ -11,9 +11,19 @@ export function marketForClient(client: { market?: unknown } | null | undefined)
 }
 
 /**
- * Firm-scoped chrome, such as the practice header. A missing or unreadable
- * market is South Africa. Never throws.
+ * Canonical effective market for a firm. Null, missing, and unreadable
+ * `firms.market` values are South Africa (ZAR, en-ZA, Africa/Johannesburg).
+ * Never throws, including when the firm row itself is null. Callers derive
+ * currency, locale, and timezone from this instead of waiting on a stored market.
+ */
+export function effectiveFirmMarket(firm: { market?: unknown } | null | undefined): ResolvedMarket {
+  return resolveMarket(coerceMarketSelection(firm?.market));
+}
+
+/**
+ * Firm-scoped chrome, such as the practice header. Same rule as
+ * `effectiveFirmMarket`.
  */
 export function marketForFirm(firm: { market?: unknown } | null | undefined): ResolvedMarket {
-  return resolveMarket(coerceMarketSelection(firm?.market));
+  return effectiveFirmMarket(firm);
 }

@@ -76,7 +76,7 @@ export {
   parseMarketSelection,
 } from "./parse";
 export { resolveMarket, ZA_MARKET } from "./resolve";
-export { marketForClient, marketForFirm } from "./scope";
+export { effectiveFirmMarket, marketForClient, marketForFirm } from "./scope";
 export {
   readVisitorDraft,
   readVisitorMarket,

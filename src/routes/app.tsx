@@ -29,7 +29,6 @@ import { CollectionsOverdueNote } from "@/components/collections-overdue-note";
 import { PayablesOverdueNote } from "@/components/payables-overdue-note";
 import { formatVal, HealthBar, tierColor } from "@/components/owner-board-ui";
 import { MarketProvider, useMarket } from "@/contexts/market";
-import { MarketGate } from "@/components/market-gate";
 import {
   canShowIndustryMedian,
   coerceMarketSelection,
@@ -44,7 +43,6 @@ import {
   laborCostLabel,
   currencySymbol,
   localizeCopy,
-  marketToJson,
   marketForClient,
   parseMarketSelection,
   readVisitorMarket,
@@ -2647,7 +2645,6 @@ function Index() {
     () => marketForClient({ market: workspaceMarket }),
     [workspaceMarket],
   );
-  const [marketNeedsGate, setMarketNeedsGate] = useState(false);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [reviewSignoffs, setReviewSignoffs] = useState<
     Partial<Record<ReviewScope, ClientReviewSignoff>>
@@ -2692,9 +2689,7 @@ function Index() {
         .select(fullSelect)
         .eq("id", effectiveClientId)
         .maybeSingle();
-      let marketColumnMissing = false;
       if (res.error && isMissingMarketSupport(res.error)) {
-        marketColumnMissing = true;
         res = await supabase
           .from("clients")
           .select(legacySelect)
@@ -2718,13 +2713,9 @@ function Index() {
         } | null;
         const profile = parseOperatingProfile(data?.operating_profile);
         const parsedMarket = parseMarketSelection(data?.market);
-        if (!marketColumnMissing && data && data.market == null && res.error == null) {
-          setMarketNeedsGate(true);
-          setWorkspaceMarket(null);
-        } else {
-          setMarketNeedsGate(false);
-          setWorkspaceMarket(parsedMarket ?? coerceMarketSelection(data?.market ?? null));
-        }
+        // A client row with no market is South Africa, same as the firm
+        // resolver. The book renders; the owner is not held on a country gate.
+        setWorkspaceMarket(parsedMarket ?? coerceMarketSelection(data?.market ?? null));
         setClientMeta(
           data
             ? {
@@ -3914,27 +3905,6 @@ function Index() {
               <TrialEndedPlanBlock firmId={clientMeta?.firm_id ?? null} />
             </div>
           ) : null}
-          {marketNeedsGate && effectiveClientId && (
-            <MarketGate
-              onSave={async (draft) => {
-                const sel = parseMarketSelection({
-                  country: draft.country,
-                  regionCode: draft.regionCode,
-                });
-                if (!sel) throw new Error("Pick a region and, for the US, a state.");
-                const { error } = await supabase
-                  .from("clients")
-                  .update({
-                    market: marketToJson(sel),
-                    financial_year_start_month: sel.country === "US" ? 1 : 3,
-                  })
-                  .eq("id", effectiveClientId);
-                if (error) throw error;
-                setWorkspaceMarket(sel);
-                setMarketNeedsGate(false);
-              }}
-            />
-          )}
           <SplashScreen />
           {!actingClientId && !showOwnerDoor && (
             <TabErrorBoundary label="Walkthrough">

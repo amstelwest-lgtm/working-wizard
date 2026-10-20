@@ -202,6 +202,7 @@ export function MarketPicker({
         <button
           type="button"
           disabled={disabled}
+          aria-pressed={value.country === "ZA"}
           className={`${CARD} ${(stateDropdown ? value.country === "ZA" : true) ? on : idle}`}
           onClick={() => setCountry("ZA")}
         >
@@ -212,6 +213,7 @@ export function MarketPicker({
           <button
             type="button"
             disabled={disabled}
+            aria-pressed={value.country === "US"}
             className={`${CARD} ${value.country === "US" ? on : idle}`}
             onClick={() => setCountry("US")}
           >

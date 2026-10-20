@@ -184,7 +184,10 @@ assert(
   "the owner door passes its market",
 );
 const practice = readFileSync("src/components/practice-board.tsx", "utf8");
-assert(practice.includes("parseMarketSelection(firmMarket)"), "practice home uses the firm market");
+assert(
+  practice.includes("marketForFirm({ market: firmMarket }).country"),
+  "practice home uses the firm market",
+);
 assert(
   practice.includes("marketCountry={practiceCountry}") &&
     practice.includes('audience="accountant"'),
