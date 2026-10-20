@@ -164,7 +164,7 @@ const premises = shown.doc.overheads.find((row) => row.bucket === "premises");
 const premisesAmount = premises ? Object.values(premises.months)[0] : 0;
 assert(premisesAmount == null || Math.abs(Number(premisesAmount)) < 0.5, "rent is not invented");
 
-assert(figuresPeriodLabelFrom(chill, "Sep 2026") === FULL_YEAR_ON_FILE, "Sep 2026 is the save month");
+assert(figuresPeriodLabelFrom(chill, "Sep 2026", ZA_MARKET) === FULL_YEAR_ON_FILE, "Sep 2026 is the save month");
 assert(
   operatingProfitColumnHeading([{ financials: chill }]) === "Op. profit (year)",
   "the clients column is the year",

@@ -25,6 +25,7 @@ import {
   sageMonthAgeingFinancialFields,
   type SageLedgerStatement,
 } from "@/lib/sage-sync";
+import { marketForClient } from "@/lib/market/scope";
 import { calendarMonthStamp, STATEMENT_YTD_FIELD_KEYS } from "@/lib/statement-period";
 
 export type SageSyncResult = {
@@ -57,6 +58,7 @@ export type SageSyncResult = {
 
 type ClientRow = {
   financials?: unknown;
+  market?: unknown;
   financial_year_start_month?: number | null;
   financials_updated_at?: string | null;
   last_login_at?: string | null;
@@ -86,7 +88,7 @@ async function markSync(
 async function readClient(clientId: string): Promise<ClientRow> {
   const { data, error } = await supabaseAdmin
     .from("clients")
-    .select("financials, financial_year_start_month, last_login_at, created_at")
+    .select("financials, market, financial_year_start_month, last_login_at, created_at")
     .eq("id", clientId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -168,13 +170,14 @@ async function upsertSageSnapshot(
   if (error) throw new Error(`Could not save the Sage snapshot (${error.code ?? "insert"})`);
 }
 
-function fieldsFrom(ledger: SageLedgerStatement): Record<string, string> {
+function fieldsFrom(ledger: SageLedgerStatement, market: ReturnType<typeof marketForClient>): Record<string, string> {
   const mapped = mapSageToFinancialInputs(
     ledger.pnl,
     ledger.bs,
     { from: ledger.from, to: ledger.to, label: ledger.periodLabel },
     ledger.year,
     ledger.cash,
+    market,
   );
   const fields: Record<string, string> = Object.fromEntries(
     Object.entries(mapped).map(([key, value]) => [key, String(value)]),
@@ -238,15 +241,18 @@ export async function executeSageSync(input: {
     const apiKey = process.env.SAGE_SA_API_KEY?.trim() ?? "";
     // A null financial_year_start_month is resolved from FinancialYear/GetCurrent
     // inside the fetch (a March–February company must not use the calendar year).
+    const clientMarket = marketForClient(row);
     const ledger = await fetchSageLedgerStatement(
       { username, password, apiKey, companyId },
       new Date(),
       fyStartMonth(row.financial_year_start_month),
+      fetch,
+      clientMarket,
     );
     // Sage accepted the login, so a legacy (API-key) ciphertext is re-written
     // with SAGE_SA_PASSWORD_KEY. Best effort: a failure here never fails sync.
     if (decrypted.needsReencrypt) await reencryptSagePassword(input.clientId, password);
-    const fields = fieldsFrom(ledger);
+    const fields = fieldsFrom(ledger, clientMarket);
     const prev =
       row.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
         ? (row.financials as Record<string, unknown>)

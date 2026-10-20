@@ -19,6 +19,8 @@ import {
   type PayablesSnapshot,
   type PayablesSupplier,
 } from "@/lib/payables";
+import type { DateMarket } from "@/lib/market/format";
+import { marketForClient } from "@/lib/market/scope";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import {
   calendarDateInTimeZone,
@@ -200,12 +202,13 @@ function sageIsoDate(now: Date): string {
 export function sageLedgerRanges(
   now = new Date(),
   fyStartMonth: number | null = null,
+  market: DateMarket = marketForClient(null),
 ): {
   month: { from: string; to: string; label: string };
   year: { from: string; to: string; label: string; basis: YearBasis; periodMonths: number } | null;
 } {
   const month = calendarMonthBounds(now, 0, SAGE_SA_TIME_ZONE);
-  const monthLabel = formatStatementPeriodLabel(month.from, month.to);
+  const monthLabel = formatStatementPeriodLabel(month.from, month.to, market);
   let yearFrom: string;
   let basis: YearBasis;
   if (fyStartMonth != null && fyStartMonth >= 1 && fyStartMonth <= 12) {
@@ -225,7 +228,7 @@ export function sageLedgerRanges(
     year: {
       from: yearFrom,
       to: yearTo,
-      label: formatStatementPeriodLabel(yearFrom, yearTo),
+      label: formatStatementPeriodLabel(yearFrom, yearTo, market),
       basis,
       periodMonths: periodMonthsBetween(yearFrom, yearTo),
     },
@@ -913,6 +916,7 @@ export function mapSageToFinancialInputs(
   period: { from: string; to: string; label: string } | undefined,
   year: SageMappedYear | null,
   cash: number | null,
+  market: DateMarket = marketForClient(null),
 ): Record<string, number | string> {
   const out: Record<string, number | string> = {};
   const dated = Boolean(period?.from && period?.to);
@@ -943,14 +947,14 @@ export function mapSageToFinancialInputs(
     out.statementSource = SAGE_STATEMENT_SOURCE;
     out.periodStart = period.from;
     out.periodEnd = period.to;
-    out.periodLabel = period.label || formatStatementPeriodLabel(period.from, period.to);
+    out.periodLabel = period.label || formatStatementPeriodLabel(period.from, period.to, market);
   }
   if (year?.from && year.to && !(period?.from === year.from && period?.to === year.to)) {
     if (Number.isFinite(year.pnl.revenue)) out.ytdRevenue = round2(year.pnl.revenue);
     if (Number.isFinite(year.pnl.netIncome)) out.ytdNetIncome = round2(year.pnl.netIncome);
     out.ytdPeriodStart = year.from;
     out.ytdPeriodEnd = year.to;
-    out.ytdPeriodLabel = year.label || formatStatementPeriodLabel(year.from, year.to);
+    out.ytdPeriodLabel = year.label || formatStatementPeriodLabel(year.from, year.to, market);
     if (Number.isFinite(year.pnl.periodMonths) && year.pnl.periodMonths >= 1) {
       out.ytdPeriodMonths = String(year.pnl.periodMonths);
     }
@@ -1148,9 +1152,10 @@ export async function fetchSageLedgerStatement(
   now = new Date(),
   fyStartMonth: number | null = null,
   fetchImpl: typeof fetch = fetch,
+  market: DateMarket = marketForClient(null),
 ): Promise<SageLedgerStatement> {
   const resolvedFy = await resolveFyStartMonth(auth, fyStartMonth, fetchImpl);
-  const ranges = sageLedgerRanges(now, resolvedFy);
+  const ranges = sageLedgerRanges(now, resolvedFy, market);
   const monthJson = await sageCall(
     auth,
     "ProfitAndLoss/Get",

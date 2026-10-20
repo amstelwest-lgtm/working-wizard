@@ -32,6 +32,8 @@ import {
   persistedRunwayWeeks,
   runwayDisplayLabel,
 } from "../../../src/lib/client-metrics.ts";
+import { marketForClient } from "../../../src/lib/market/scope.ts";
+import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import {
   groundBrainSummaryRecord,
   ratiosForBrainProse,
@@ -464,6 +466,7 @@ export async function executeAgentTool(
         shortfallWeek: healthMetrics.outlook.shortfallWeek,
         clientName: typeof clientRes.data?.name === "string" ? clientRes.data.name : null,
         brainSummary: clientRes.data?.brain_summary ?? null,
+        dateMarket: marketForClient({ market: clientRes.data?.market }),
         periodLabel: (snap?.period_label as string | null) ?? null,
         figuresAsOf: (snap?.period_date as string | null) ?? null,
       });
@@ -484,11 +487,16 @@ export async function executeAgentTool(
         overview_lines: overviewFactLines(brief),
       };
     }
+    const snapFinancials = snap?.financials ?? clientRes.data?.financials;
     return shapeSnapshot({
-      periodLabel: (snap?.period_label as string | null) ?? null,
+      periodLabel: figuresPeriodLabelFrom(
+        snapFinancials && typeof snapFinancials === "object" ? (snapFinancials as object) : null,
+        (snap?.period_label as string | null) ?? null,
+        marketForClient({ market: clientRes.data?.market }),
+      ),
       periodDate: (snap?.period_date as string | null) ?? null,
       ratios: snap?.ratios,
-      financials: snap?.financials ?? clientRes.data?.financials,
+      financials: snapFinancials,
       cashRunwayWeeks: runway,
     });
   }
@@ -520,18 +528,31 @@ export async function executeAgentTool(
   }
 
   if (name === "get_statement_history") {
-    const { data } = await ctx.userClient
-      .from("client_financial_snapshots")
-      .select("period_label, period_date, ratios")
-      .eq("client_id", ctx.clientId)
-      .order("period_date", { ascending: false })
-      .limit(6);
+    const [snapRes, clientRes] = await Promise.all([
+      ctx.userClient
+        .from("client_financial_snapshots")
+        .select("period_label, period_date, ratios, financials")
+        .eq("client_id", ctx.clientId)
+        .order("period_date", { ascending: false })
+        .limit(6),
+      ctx.userClient.from("clients").select("market").eq("id", ctx.clientId).maybeSingle(),
+    ]);
+    const dateMarket = marketForClient({ market: clientRes.data?.market });
     return shapeHistory(
-      (data ?? []) as Array<{
+      ((snapRes.data ?? []) as Array<{
         period_label: string | null;
         period_date: string | null;
         ratios: unknown;
-      }>,
+        financials?: unknown;
+      }>).map((row) => ({
+        period_label: figuresPeriodLabelFrom(
+          row.financials && typeof row.financials === "object" ? row.financials : null,
+          row.period_label,
+          dateMarket,
+        ),
+        period_date: row.period_date,
+        ratios: row.ratios,
+      })),
     );
   }
 
@@ -650,12 +671,12 @@ export async function executeAgentTool(
         .limit(30),
       ctx.userClient
         .from("clients")
-        .select("brain_summary, financials, cashflow, financials_updated_at")
+        .select("brain_summary, financials, cashflow, financials_updated_at, market")
         .eq("id", ctx.clientId)
         .maybeSingle(),
       ctx.userClient
         .from("client_financial_snapshots")
-        .select("period_label, period_date, ratios")
+        .select("period_label, period_date, ratios, financials")
         .eq("client_id", ctx.clientId)
         .order("period_date", { ascending: false })
         .limit(1)
@@ -702,7 +723,15 @@ export async function executeAgentTool(
         financials: snap
           ? {
               period_label:
-                (snap.period_label as string | null) ?? (snap.period_date as string | null) ?? null,
+                figuresPeriodLabelFrom(
+                  snap.financials && typeof snap.financials === "object"
+                    ? (snap.financials as object)
+                    : clientRes.data?.financials && typeof clientRes.data.financials === "object"
+                      ? (clientRes.data.financials as object)
+                      : null,
+                  (snap.period_label as string | null) ?? (snap.period_date as string | null) ?? null,
+                  marketForClient({ market: clientRes.data?.market }),
+                ),
               ratios: numericRatios(snap.ratios),
               cash_runway_weeks: cash,
             }

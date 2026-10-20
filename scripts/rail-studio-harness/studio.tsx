@@ -676,7 +676,7 @@ function HealthPane({ clientId }: { clientId: string }) {
 
 function ProfitPane({ clientId }: { clientId: string }) {
   const search = useSearch({ strict: false }) as { section?: string };
-  const meta = readStatementMeta(HARNESS_FINANCIALS);
+  const meta = readStatementMeta(HARNESS_FINANCIALS, ZA_MARKET);
   const preferPeriod = preferStatementPeriod(HARNESS_FINANCIALS);
   const [profitExport, setProfitExport] = useState<WaterfallExportApi | null>(null);
   const section = search.section;
@@ -879,13 +879,17 @@ function harnessOverviewCards(snapshot: readonly { key: string; value: string }[
       periodEnd: "2026-09-30",
     },
   );
-  const compared = budgetVersusStatement(seeded.doc, {
-    ...HARNESS_FINANCIALS,
-    ebit: String(revenue - cogs - fixedCosts),
-    periodMonths: "1",
-    periodStart: "2026-09-01",
-    periodEnd: "2026-09-30",
-  });
+  const compared = budgetVersusStatement(
+    seeded.doc,
+    {
+      ...HARNESS_FINANCIALS,
+      ebit: String(revenue - cogs - fixedCosts),
+      periodMonths: "1",
+      periodStart: "2026-09-01",
+      periodEnd: "2026-09-30",
+    },
+    ZA_MARKET,
+  );
   const budget = overviewBudgetTileFigure({
     budgetRevenue: compared?.budgetRevenue,
     actualRevenue: compared?.revenue,

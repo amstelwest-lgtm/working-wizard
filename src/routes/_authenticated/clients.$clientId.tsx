@@ -182,6 +182,7 @@ import { hasStatementWorkingCapital } from "@/lib/collections";
 import { SageConnectCard } from "@/components/sage-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
+import { formatDateRange } from "@/lib/market/format";
 import {
   figuresPeriodLabelFrom,
   preferStatementPeriod,
@@ -1282,7 +1283,7 @@ function ClientView() {
   // or working-capital days than that PDF.
   const statementMonths = periodMonthsOf(financials);
   const coverageMonths = effectivePeriodMonths(financials, { fyStartMonth });
-  const partMonth = (reportDataPeriodLabel(financials) ?? "").includes("part month");
+  const partMonth = (reportDataPeriodLabel(financials, clientMarket) ?? "").includes("part month");
   const equityCheck = coherentEquity(financials);
   const parsedEquity = Number(equityCheck.equity);
   const equityAmount =
@@ -1322,7 +1323,7 @@ function ClientView() {
     periodMonths: statementMonths,
   });
   const ratioQueryCounts = useMemo(() => countOpenRatioQueries(clientNotes), [clientNotes]);
-  const statementMeta = readStatementMeta(financials);
+  const statementMeta = readStatementMeta(financials, clientMarket);
   const statementDated = Boolean(statementMeta.periodStart && statementMeta.periodEnd);
   const priorSnapshot = resolvePriorSnapshot(snapshots, new Date(), {
     periodEnd: statementMeta.periodEnd,
@@ -1579,26 +1580,48 @@ function ClientView() {
       weeklyInputs,
     ],
   );
+  const currentSnapshot = pickCurrentSnapshot(snapshots);
   const figuresPeriodLabel = figuresPeriodLabelFrom(
     financials,
     pickCurrentSnapshot(snapshots)?.period_label,
+    clientMarket,
   );
+  const ledgerSpan = (link: {
+    periodLabel: string | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+  }) => {
+    if (link.periodStart && link.periodEnd) {
+      const fresh = formatDateRange(link.periodStart, link.periodEnd, clientMarket);
+      if (fresh !== "—") return fresh;
+    }
+    return link.periodLabel;
+  };
+  const snapshotFinancials =
+    currentSnapshot?.financials && typeof currentSnapshot.financials === "object"
+      ? currentSnapshot.financials
+      : null;
+  const snapshotSpan =
+    (statementMeta.periodStart && statementMeta.periodEnd ? statementMeta.periodLabel : null) ??
+    readStatementMeta(snapshotFinancials, clientMarket).periodLabel ??
+    currentSnapshot?.period_label ??
+    null;
   const dataFreshness = dataFreshnessLine({
     xero: xeroLink
       ? {
           lastSyncedAt: xeroLink.lastSyncedAt,
           syncStatus: xeroLink.syncStatus,
-          periodLabel: xeroLink.periodLabel,
+          periodLabel: ledgerSpan(xeroLink),
         }
       : null,
     qbo: qboLink
       ? {
           lastSyncedAt: qboLink.lastSyncedAt,
           syncStatus: qboLink.syncStatus,
-          periodLabel: qboLink.periodLabel,
+          periodLabel: ledgerSpan(qboLink),
         }
       : null,
-    snapshotPeriod: pickCurrentSnapshot(snapshots)?.period_label ?? null,
+    snapshotPeriod: snapshotSpan,
     market: clientMarket,
   });
   const booksPeriod = booksCoverPeriod(dataFreshness);
@@ -1607,6 +1630,7 @@ function ClientView() {
     ? budgetVersusStatement(
         statementBudgetRead(budgetDoc, financials as Record<string, unknown>).doc,
         financials as Record<string, unknown>,
+        clientMarket,
       )
     : null;
   const budgetMoney = (amount: number) => formatMoneyCompact(amount, clientMarket);
@@ -3014,7 +3038,7 @@ function ClientView() {
 
   const overviewScorecardPeriodLabel = useCallback(() => {
     return (
-      reportDataPeriodLabel(financials) ??
+      reportDataPeriodLabel(financials, clientMarket) ??
       formatMonthYear(new Date(), clientMarket.timezone)
     );
   }, [financials, clientMarket.timezone]);
@@ -4611,7 +4635,7 @@ function ClientView() {
                       clientId={client?.id}
                       periodLabel={figuresPeriodLabel}
                       preferPeriod={statementDated}
-                      yearToDate={statementYearLine(financials)}
+                      yearToDate={statementYearLine(financials, clientMarket)}
                       statementSource={figureSource}
                       periodNote={
                         statementDated || figuresPeriodLabel
@@ -5080,7 +5104,7 @@ function ClientView() {
                         <AdvisorySentHistory
                           clientId={client.id}
                           refreshToken={deliveryRefresh}
-                          statementPeriodLabel={reportDataPeriodLabel(financials)}
+                          statementPeriodLabel={reportDataPeriodLabel(financials, clientMarket)}
                           liveScorecard={renderOverviewScorecard}
                         />
                       </section>

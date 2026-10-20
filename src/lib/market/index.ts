@@ -46,6 +46,7 @@ export {
   currencySymbol,
   formatCalendarDay,
   formatDate,
+  formatDateRange,
   formatDateTime,
   formatWeekHeader,
   formatReviewDateTime,

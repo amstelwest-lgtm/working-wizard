@@ -316,7 +316,7 @@ const resolverFn = resolver.slice(
   resolver.indexOf("export function resolveFigureSource"),
   resolver.indexOf("export type LedgerProvider"),
 );
-const statementRead = resolverFn.indexOf("readStatementMeta(input.financials ?? null).statementSource");
+const statementRead = resolverFn.indexOf("statementSourceOf(input.financials ?? null)");
 const snapshotRead = resolverFn.indexOf("input.snapshotSource");
 assert(statementRead !== -1 && snapshotRead > statementRead, "resolved figure source reads the statement source first");
 assert(

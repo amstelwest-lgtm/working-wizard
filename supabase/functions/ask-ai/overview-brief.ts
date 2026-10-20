@@ -32,6 +32,7 @@ import {
   storedYearToDateEnd,
 } from "../../../src/lib/statement-period.ts";
 import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
+import type { DateMarket } from "../../../src/lib/market/format.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 
 export type OverviewCopyPack = "za" | "us";
@@ -299,6 +300,8 @@ export function buildOverviewBrief(input: {
   /** First forecast week below zero. Week 1 cannot display Healthy. */
   shortfallWeek?: number | null;
   market?: ScoreMarket;
+  /** Client market for printed ranges. Copy-pack stand-in is only used when this is omitted. */
+  dateMarket?: DateMarket;
   clientName?: string | null;
   periodLabel?: string | null;
   figuresAsOf?: string | null;
@@ -306,6 +309,11 @@ export function buildOverviewBrief(input: {
 }): OverviewBrief {
   const copyPack = input.copyPack ?? "za";
   const market = input.market ?? marketFromCopyPack(copyPack);
+  const dateMarket =
+    input.dateMarket ??
+    marketForClient({
+      market: copyPack === "us" ? { country: "US", regionCode: "NY" } : null,
+    });
   const fyStartMonth = resolvedFyStart(copyPack, input.fyStartMonth);
   const financials =
     input.financials && typeof input.financials === "object" && !Array.isArray(input.financials)
@@ -347,7 +355,7 @@ export function buildOverviewBrief(input: {
   const healthStatus = health == null ? null : scored.displayStatus;
   const weakest = scored.weakestPillar;
 
-  const statement = financials ? readStatementMeta(financials) : null;
+  const statement = financials ? readStatementMeta(financials, dateMarket) : null;
   const operatingProfit = asNumber(financials?.ebit);
   const statedNet = asNumber(financials?.netIncome);
   const netUsable = operatingProfit == null || statedNetIsUsable(operatingProfit, statedNet);
@@ -361,7 +369,7 @@ export function buildOverviewBrief(input: {
 
   return {
     clientName: input.clientName?.trim() || null,
-    periodLabel: figuresPeriodLabelFrom(financials, input.periodLabel),
+    periodLabel: figuresPeriodLabelFrom(financials, input.periodLabel, dateMarket),
     figuresAsOf: input.figuresAsOf ?? null,
     copyPack,
     health,
@@ -391,13 +399,7 @@ export function buildOverviewBrief(input: {
     periodStart: statement?.periodStart ?? null,
     periodEnd: statement?.periodEnd ?? null,
     figuresSource: figuresSourcePhrase(statement?.statementSource),
-    yearToDateEnd: storedYearToDateEnd(
-      financials,
-      fyStartMonth,
-      marketForClient({
-        market: copyPack === "us" ? { country: "US", regionCode: "NY" } : null,
-      }),
-    ),
+    yearToDateEnd: storedYearToDateEnd(financials, fyStartMonth, dateMarket),
     grossMargin:
       statementGrossMarginFraction(financials) ??
       (Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null),

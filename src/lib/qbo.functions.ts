@@ -6,6 +6,8 @@ import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/c
 import { agedArProofLine, readCollectionsSnapshot } from "@/lib/collections";
 import { agedApProofLine, readPayablesSnapshot, skippedPayables } from "@/lib/payables";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
+import type { DateMarket } from "@/lib/market/format";
+import { marketForClient } from "@/lib/market/scope";
 import { sanitizeQboReturnPath } from "@/lib/qbo-state";
 import {
   calendarMonthStamp,
@@ -143,7 +145,7 @@ function numField(fields: Record<string, unknown>, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function qboFigureProof(financials: unknown): {
+function qboFigureProof(financials: unknown, market: DateMarket): {
   periodLabel: string | null;
   periodStart: string | null;
   periodEnd: string | null;
@@ -176,7 +178,7 @@ function qboFigureProof(financials: unknown): {
     agedApLine: "Aged payables appear after the next Sync",
   };
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return empty;
-  const meta = readStatementMeta(financials);
+  const meta = readStatementMeta(financials, market);
   if (meta.statementSource !== "qbo") return empty;
   const f = financials as Record<string, unknown>;
   return {
@@ -205,10 +207,11 @@ export const getQboStatus = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id, financials, financials_updated_at")
+      .select("id, financials, financials_updated_at, market")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
+    const clientMarket = marketForClient(client as { market?: unknown });
 
     const admin = getSupabaseAdminOrNull();
     if (!admin) return null;
@@ -221,7 +224,7 @@ export const getQboStatus = createServerFn({ method: "POST" })
 
     if (!conn) return null;
     const financials = (client as { financials?: unknown }).financials;
-    const proof = qboFigureProof(financials);
+    const proof = qboFigureProof(financials, clientMarket);
     const { data: cacheRows } = await admin
       .from("qbo_sync_data")
       .select("data_type, raw_data")
@@ -242,6 +245,7 @@ export const getQboStatus = createServerFn({ method: "POST" })
     const attribution = ledgerAttribution({
       provider: "qbo",
       lastSyncedAt: conn.last_synced_at ?? null,
+      market: clientMarket,
       financials,
       financialsUpdatedAt:
         (client as { financials_updated_at?: string | null }).financials_updated_at ?? null,
@@ -257,6 +261,7 @@ export const getQboStatus = createServerFn({ method: "POST" })
       ownFromCache: readCachedQboSync(
         (cacheRows ?? []).find((row) => row.data_type === "pl")?.raw_data,
         (cacheRows ?? []).find((row) => row.data_type === "bs")?.raw_data,
+        clientMarket,
       ),
     });
     return {
@@ -433,10 +438,11 @@ export const triggerQboSync = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id")
+      .select("id, market")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
+    const clientMarket = marketForClient(client as { market?: unknown });
 
     const { data: connRaw } = await supabaseAdmin
       .from("qbo_connections")
@@ -469,7 +475,7 @@ export const triggerQboSync = createServerFn({ method: "POST" })
       }
 
       const realmId = conn.realm_id as string;
-      const ledger = await fetchQboLedgerStatement(realmId, accessToken);
+      const ledger = await fetchQboLedgerStatement(realmId, accessToken, new Date(), clientMarket);
       const { pnl, bs } = ledger;
 
       const [accounts, transactions, agedAr, agedAp] = await Promise.all([
@@ -501,6 +507,7 @@ export const triggerQboSync = createServerFn({ method: "POST" })
             }
           : null,
         ledger.operatingCashflow,
+        clientMarket,
       );
       const mappedInputs = mappedNumbers(mapped);
       const fields: Record<string, string> = Object.fromEntries(

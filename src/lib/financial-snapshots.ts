@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatMonthYear } from "@/lib/market/format";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import { mergeStatementFinancials, type StatementKind } from "@/lib/statement-parse";
-import { readStatementMeta, resolveSnapshotPeriodLabel } from "@/lib/statement-period";
+import { resolveSnapshotPeriodLabel, statementSourceOf } from "@/lib/statement-period";
 
 export type SnapshotSource = "autosave" | "manual" | "upload" | "qbo" | "xero" | "sage" | "pdf_upload";
 
@@ -119,7 +119,7 @@ export async function upsertPeriodSnapshot(opts: {
     : (opts.ratios ?? computeRatios(opts.financials as unknown as RatioInputs));
 
   const periodLabel = resolveSnapshotPeriodLabel(existing?.period_label, requestedLabel);
-  const statementSource = readStatementMeta(opts.financials).statementSource;
+  const statementSource = statementSourceOf(opts.financials);
   const ledgerSource =
     statementSource === "qbo" || statementSource === "xero" || statementSource === "sage"
       ? statementSource

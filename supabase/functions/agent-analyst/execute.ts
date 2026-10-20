@@ -30,6 +30,7 @@ import {
   type AnalystToolName,
 } from "../../../src/lib/agent-analyst.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
+import { marketForClient } from "../../../src/lib/market/scope.ts";
 
 export type AnalystExecCtx = {
   clientId: string;
@@ -46,6 +47,15 @@ export type AnalystExecCtx = {
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function datedPeriodLabel(
+  financials: unknown,
+  stored: string | null,
+  market: unknown,
+): string | null {
+  const fields = financials && typeof financials === "object" ? financials : null;
+  return figuresPeriodLabelFrom(fields, stored, marketForClient({ market }));
 }
 
 async function latestSnapshots(db: SupabaseClient, clientId: string, limit: number) {
@@ -89,7 +99,11 @@ export async function executeAnalystTool(
     return {
       ...record,
       snapshot_id: snap ? String(snap.id) : null,
-      period_label: (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null,
+      period_label: datedPeriodLabel(
+        snap?.financials,
+        (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null,
+        ctx.market,
+      ),
     };
   }
 
@@ -119,7 +133,11 @@ export async function executeAnalystTool(
     const snapshotLabel =
       (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null;
     // Live books win. QA US is the September statement range, not the latest snapshot.
-    const periodLabel = figuresPeriodLabelFrom(asRecord(booksRes.data?.financials), snapshotLabel);
+    const periodLabel = figuresPeriodLabelFrom(
+      asRecord(booksRes.data?.financials),
+      snapshotLabel,
+      marketForClient({ market: ctx.market }),
+    );
     return {
       ...record,
       ...labeled,
@@ -137,7 +155,7 @@ export async function executeAnalystTool(
     return {
       empty: false,
       snapshot_id: String(snap.id),
-      period_label: (snap.period_label as string | null) ?? null,
+      period_label: datedPeriodLabel(snap.financials, (snap.period_label as string | null) ?? null, ctx.market),
       period_date: (snap.period_date as string | null) ?? null,
       stored_ratios: numericFigures(snap.ratios),
       statement_totals: financials,
@@ -158,9 +176,9 @@ export async function executeAnalystTool(
     return {
       empty: false,
       snapshot_id: String(current.id),
-      period_label: (current.period_label as string | null) ?? null,
+      period_label: datedPeriodLabel(current.financials, (current.period_label as string | null) ?? null, ctx.market),
       prior_snapshot_id: String(prior.id),
-      prior_period_label: (prior.period_label as string | null) ?? null,
+      prior_period_label: datedPeriodLabel(prior.financials, (prior.period_label as string | null) ?? null, ctx.market),
       figures: currentFigures,
       variance,
     };
@@ -175,7 +193,7 @@ export async function executeAnalystTool(
         .maybeSingle(),
       ctx.db
         .from("client_financial_snapshots")
-        .select("period_label, period_date, created_at")
+        .select("period_label, period_date, created_at, financials")
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -189,7 +207,11 @@ export async function executeAnalystTool(
       books_basis: "ledger_or_upload",
       note: "These times are when the books on file were saved. They are not a bank feed.",
       financials_updated_at: (clientRes.data?.financials_updated_at as string | null) ?? null,
-      latest_period_label: (snapRes.data?.period_label as string | null) ?? null,
+      latest_period_label: datedPeriodLabel(
+        snapRes.data?.financials,
+        (snapRes.data?.period_label as string | null) ?? null,
+        ctx.market,
+      ),
       latest_period_date: (snapRes.data?.period_date as string | null) ?? null,
       xero_last_synced_at: (xeroRes.data?.last_synced_at as string | null) ?? null,
       qbo_last_synced_at: (qboRes.data?.last_synced_at as string | null) ?? null,

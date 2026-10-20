@@ -11,7 +11,6 @@
  * statement period, a newer freshness timestamp, or a health score that no
  * longer matches the score on file at sign-off keeps the signer and says so.
  */
-import { reportDataPeriodLabel } from "./statement-period.ts";
 
 export const SIGNOFF_STATUS_DRAFT = "Draft";
 export const SIGNOFF_STATUS_READY = "Ready for review";
@@ -129,14 +128,14 @@ export type SignoffPeriodSnapshot = {
 };
 
 function periodKey(snap: SignoffPeriodSnapshot): string {
-  const fromFigures =
+  const fields =
     snap.financials && typeof snap.financials === "object"
-      ? reportDataPeriodLabel(snap.financials as object)
+      ? (snap.financials as Record<string, unknown>)
       : null;
-  return (fromFigures || snap.period_label || snap.period_date || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
+  const start = typeof fields?.periodStart === "string" ? fields.periodStart.slice(0, 10) : "";
+  const end = typeof fields?.periodEnd === "string" ? fields.periodEnd.slice(0, 10) : "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end)) return `${start}/${end}`;
+  return (snap.period_label || snap.period_date || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 /**

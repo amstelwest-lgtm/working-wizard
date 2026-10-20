@@ -93,7 +93,7 @@ export function booksAnswerSentence(input: {
       : `Connected to ${parts.source}.`;
   }
   if (current && parts.kind === "snapshot") {
-    return `Statements on file to ${parts.period}.`;
+    return `Statements on file: ${parts.period}.`;
   }
   if (parts.period) {
     return `Books stop at ${parts.period}. ${BOOKS_CATCH_UP}`;

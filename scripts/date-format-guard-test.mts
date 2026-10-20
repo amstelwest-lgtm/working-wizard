@@ -7,9 +7,10 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { formatAssignmentNote, handoffProgressCaption } from "../src/lib/action-handoff.ts";
-import { formatDate, formatEventTime } from "../src/lib/market/format.ts";
+import { formatDate, formatDateRange, formatEventTime } from "../src/lib/market/format.ts";
 import { marketForClient, marketForFirm } from "../src/lib/market/scope.ts";
 import { dataAsOfLabel } from "../src/lib/portfolio-dashboard.ts";
+import { reportDataPeriodLabel } from "../src/lib/statement-period.ts";
 
 const ROOT = process.cwd();
 const ROOTS = ["src", "supabase/functions", "api", "emails", "mobile"];
@@ -50,7 +51,27 @@ const FORMATTERS = [
   "storedYearToDateEnd",
   "formatClock",
   "formatDate",
+  "formatDateRange",
+  "formatStatementPeriodLabel",
+  "reportDataPeriodLabel",
+  "figuresPeriodLabelFrom",
+  "readStatementMeta",
+  "statementYearLine",
+  "budgetActualFromFinancials",
+  "budgetVersusStatement",
 ].sort((a, b) => b.length - a.length);
+
+/** Range and statement helpers take the market as a required trailing arg. */
+const MIN_ARGS: Record<string, number> = {
+  formatDateRange: 3,
+  formatStatementPeriodLabel: 3,
+  figuresPeriodLabelFrom: 3,
+  budgetVersusStatement: 3,
+};
+
+function minArgs(name: string): number {
+  return MIN_ARGS[name] ?? 2;
+}
 
 const PRESET_LITERALS = new Set([
   "calendarDayFromIso",
@@ -230,6 +251,10 @@ function scanSource(rel: string, raw: string): Finding[] {
     const lineNo = index + 1;
     const push = (message: string) => findings.push({ line: lineNo, endLine: lineNo, message: `${rel}:${lineNo} ${message}` });
     if (line.includes("toLocaleDateString")) push("formats a date with toLocaleDateString");
+    if (/toLocaleDateString\s*\(\s*['"]en-(?:ZA|GB)['"]/.test(line)) {
+      push("formats a date day-first with toLocaleDateString");
+    }
+    if (/(['"])d MMM yyyy\1/i.test(line)) push("uses a day-first date format literal");
     if (line.includes("toLocaleTimeString")) push("formats a date with toLocaleTimeString");
     if (/(?:date|Date|At|at|_at|time)\w*\.toLocaleString\(/.test(line)) {
       push("formats a date with toLocaleString");
@@ -281,6 +306,8 @@ function scanSource(rel: string, raw: string): Finding[] {
     return i;
   }
 
+  const rangeCalls: Array<{ start: number; end: number }> = [];
+
   function visit(from: number, to: number) {
     let i = from;
     while (i < to) {
@@ -320,11 +347,17 @@ function scanSource(rel: string, raw: string): Finding[] {
               });
             }
           } else {
+            rangeCalls.push({ start: nameStart, end: call.end });
             if (name === "formatClock" && rel !== SLOT_CLOCK_FILE) {
               findings.push({ line: lineNo, endLine, message: `${where} formatClock is only for slot buttons` });
             }
-            if (call.argCount < 2) {
-              findings.push({ line: lineNo, endLine, message: `${where} ${name} is called with fewer than 2 args` });
+            const need = minArgs(name);
+            if (call.argCount < need) {
+              findings.push({
+                line: lineNo,
+                endLine,
+                message: `${where} ${name} is called with fewer than ${need} args`,
+              });
             }
             if (/\bZA_MARKET\b|["']en-ZA["']|["']en-US["']|["']Africa\/Johannesburg["']/.test(call.text)) {
               findings.push({
@@ -356,6 +389,28 @@ function scanSource(rel: string, raw: string): Finding[] {
     }
   }
   visit(0, src.length);
+  const JOIN = /(?:\u2013|\u2014|\s-\s|\bto\b)/i;
+  for (let i = 0; i < rangeCalls.length; i++) {
+    const left = rangeCalls[i]!;
+    for (let j = i + 1; j < rangeCalls.length; j++) {
+      const right = rangeCalls[j]!;
+      const gapStart = left.end + 1;
+      const gapEnd = right.start;
+      if (gapEnd - gapStart > 120) break;
+      if (gapEnd <= gapStart) continue;
+      const gap = src.slice(gapStart, gapEnd);
+      if (!JOIN.test(gap)) continue;
+      if (gap.includes(";")) continue;
+      const lineNo = lineAt(src, left.start);
+      const endLine = lineAt(src, right.end);
+      findings.push({
+        line: lineNo,
+        endLine,
+        message: `${rel}:${lineNo} joins two date formatters into a range`,
+      });
+      break;
+    }
+  }
   return findings;
 }
 
@@ -437,6 +492,46 @@ assertScan("src/example.ts", "token.slice(0, 16)\n", []);
 assertScan(
   "src/example.ts",
   "formatDateTime(d, ZA_MARKET); // date-ok: internal IT board has no client or firm market\n",
+  [],
+);
+assert.ok(ROOTS.includes("supabase/functions"), "the guard scans supabase/functions");
+assert.ok(ROOTS.includes("src") && ROOTS.includes("api") && ROOTS.includes("emails") && ROOTS.includes("mobile"));
+assertScan(
+  "src/example.ts",
+  "const label = `${formatDate(a, market)} – ${formatDate(b, market)}`\n",
+  ["src/example.ts:1 joins two date formatters into a range"],
+);
+assertScan(
+  "src/example.ts",
+  "const label = formatDate(a, market) + \" – \" + formatDate(b, market)\n",
+  ["src/example.ts:1 joins two date formatters into a range"],
+);
+assertScan(
+  "supabase/functions/example.ts",
+  "const label = `${formatIsoDateUTC(a, market)} to ${formatIsoDateUTC(b, market)}`\n",
+  ["supabase/functions/example.ts:1 joins two date formatters into a range"],
+);
+assertScan("src/example.ts", "formatDateRange(a, b, market)\n", []);
+assertScan("src/example.ts", "formatDateRange(a, b)\n", [
+  "src/example.ts:1 formatDateRange is called with fewer than 3 args",
+]);
+assertScan("src/example.ts", "const fmt = \"d MMM yyyy\"\n", [
+  "src/example.ts:1 uses a day-first date format literal",
+]);
+assertScan("src/example.ts", "const fmt = 'D MMM YYYY'\n", [
+  "src/example.ts:1 uses a day-first date format literal",
+]);
+assertScan("src/example.ts", "d.toLocaleDateString('en-ZA')\n", [
+  "src/example.ts:1 formats a date with toLocaleDateString",
+  "src/example.ts:1 formats a date day-first with toLocaleDateString",
+]);
+assertScan("src/example.ts", "d.toLocaleDateString('en-GB')\n", [
+  "src/example.ts:1 formats a date with toLocaleDateString",
+  "src/example.ts:1 formats a date day-first with toLocaleDateString",
+]);
+assertScan(
+  "src/example.ts",
+  "const fmt = \"d MMM yyyy\" // date-ok: parser token, not a printed date\n",
   [],
 );
 
@@ -548,6 +643,38 @@ for (const line of outputs) {
   assert.doesNotMatch(line, /UTC\+2/, line);
   assert.doesNotMatch(line, /\bEDT\b|\bEST\b/, line);
 }
+
+const zaRange = { locale: "en-ZA", timezone: "Africa/Johannesburg" };
+const usRange = { locale: "en-US", timezone: "America/New_York" };
+assert.equal(formatDateRange("2026-09-01", "2026-09-21", usRange), "Sep 1\u201321, 2026", "US same month");
+assert.equal(formatDateRange("2026-09-01", "2026-09-21", zaRange), "1\u201321 Sep 2026", "ZA same month");
+assert.equal(formatDateRange("2026-04-01", "2026-09-21", usRange), "Apr 1 \u2013 Sep 21, 2026", "US cross month");
+assert.equal(formatDateRange("2026-04-01", "2026-09-21", zaRange), "1 Apr \u2013 21 Sep 2026", "ZA cross month");
+assert.equal(formatDateRange("2025-10-01", "2026-09-30", usRange), "Oct 1, 2025 \u2013 Sep 30, 2026", "US cross year");
+assert.equal(formatDateRange("2025-10-01", "2026-09-30", zaRange), "1 Oct 2025 \u2013 30 Sep 2026", "ZA cross year");
+assert.equal(formatDateRange("2026-09-01", "2026-09-01", usRange), "Sep 1, 2026", "US same day");
+assert.equal(formatDateRange("2026-09-01", "2026-09-01", zaRange), "1 Sep 2026", "ZA same day");
+assert.equal(
+  reportDataPeriodLabel({ periodStart: "2026-09-01", periodEnd: "2026-09-21" }, usRange),
+  "Sep 1\u201321, 2026 (part month)",
+  "US part month",
+);
+assert.equal(
+  reportDataPeriodLabel({ periodStart: "2026-09-01", periodEnd: "2026-09-21" }, zaRange),
+  "1\u201321 Sep 2026 (part month)",
+  "ZA part month",
+);
+assert.equal(
+  reportDataPeriodLabel({ periodStart: "2026-09-01", periodEnd: "2026-09-30" }, usRange),
+  "September 2026",
+  "US full month stays a month name",
+);
+assert.equal(
+  reportDataPeriodLabel({ periodStart: "2026-09-01", periodEnd: "2026-09-30" }, zaRange),
+  "September 2026",
+  "ZA full month stays a month name",
+);
+assert.equal(formatDateRange("not-a-date", "2026-09-21", usRange), "\u2014");
 
 console.log("date-format-guard ok");
 for (const line of outputs) console.log(`  ${line}`);

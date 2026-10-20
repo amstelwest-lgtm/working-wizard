@@ -15,7 +15,7 @@
  * statement back.
  */
 
-import { isDatedLedgerSource, readStatementMeta, STATEMENT_YTD_FIELD_KEYS } from "@/lib/statement-period";
+import { isDatedLedgerSource, statementSourceOf, STATEMENT_YTD_FIELD_KEYS } from "@/lib/statement-period";
 
 export type LedgerSyncProvider = "qbo" | "xero" | "sage";
 
@@ -155,9 +155,9 @@ export function autosaveKeepsLedgerSync(
 ): Record<string, unknown> {
   if (!server || typeof server !== "object" || Array.isArray(server)) return local;
   const serverBlob = server as Record<string, unknown>;
-  const serverSource = readStatementMeta(serverBlob).statementSource;
+  const serverSource = statementSourceOf(serverBlob);
   if (!isDatedLedgerSource(serverSource)) return local;
-  const localSource = readStatementMeta(local).statementSource;
+  const localSource = statementSourceOf(local);
   if (localSource === serverSource) return local;
   const kept: Record<string, unknown> = { ...serverBlob };
   if ("weeklyInputs" in local) kept.weeklyInputs = local.weeklyInputs;

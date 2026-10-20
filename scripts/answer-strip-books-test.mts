@@ -30,7 +30,7 @@ assert.equal(syncLine, "Last sync Sep 1, 2026, 10:00 AM ET · Xero · September 
 
 assert.equal(
   booksAnswerSentence({ freshness: snapshotLine, openKinds: [] }),
-  "Statements on file to September 2026.",
+  "Statements on file: September 2026.",
 );
 assert.equal(
   booksAnswerSentence({ freshness: syncLine, openKinds: [] }),

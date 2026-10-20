@@ -424,7 +424,7 @@ export function BudgetPanel({
   const figureSource = loadedFinancialsRef.current ?? financials ?? null;
   const actuals =
     doc && loadedFor.current === (clientId ?? null)
-      ? budgetVersusStatement(statementBudgetRead(doc, figureSource).doc, figureSource)
+      ? budgetVersusStatement(statementBudgetRead(doc, figureSource).doc, figureSource, market)
       : null;
 
   const startFresh = useCallback(

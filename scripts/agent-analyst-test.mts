@@ -47,6 +47,7 @@ import {
   statementVariance,
 } from "../src/lib/agent-analyst.ts";
 import { scorecardHealthFromFinancials } from "../src/lib/health-score.ts";
+import { marketForClient } from "../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../src/lib/statement-period.ts";
 import { analystToolSchemas, ANALYST_SYSTEM } from "../supabase/functions/_shared/agent-prompts/analyst.ts";
 import { classifyResult, formatAgentPrompt, runAgentLoop } from "../supabase/functions/_shared/agent-core/loop.ts";
@@ -1687,15 +1688,16 @@ const DAY = 24 * 60 * 60 * 1000;
     "get_health does not stamp the latest snapshot period",
   );
   assert(
-    figuresPeriodLabelFrom(qa, "Oct 2026") === "1 Oct 2025 – 30 Sep 2026",
+    figuresPeriodLabelFrom(qa, "Oct 2026", marketForClient({ market: { country: "US", regionCode: "NY" } })) ===
+      "Oct 1, 2025 \u2013 Sep 30, 2026",
     "QA US without a period start is twelve months ending 30 Sep 2026",
   );
   assert(
-    figuresPeriodLabelFrom({ periodEnd: "2026-09-30" }, "Oct 2026") === "Sep 2026",
+    figuresPeriodLabelFrom({ periodEnd: "2026-09-30" }, "Oct 2026", marketForClient({ market: { country: "US", regionCode: "NY" } })) === "Sep 2026",
     "a period end without a month count still beats the snapshot label",
   );
   assert(
-    figuresPeriodLabelFrom({}, "Oct 2026") === "Full year on file",
+    figuresPeriodLabelFrom({}, "Oct 2026", marketForClient({ market: { country: "US", regionCode: "NY" } })) === "Full year on file",
     "a month stamp with no dates is the full statement on file",
   );
   assert(

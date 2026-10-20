@@ -4,7 +4,7 @@
  */
 
 import { MONTHS, MONTHS_LONG as FULL_MONTHS } from "./market/date-presets.ts";
-import { formatCalendarDay } from "./market/format.ts";
+import { formatCalendarDay, formatDateRange, type DateMarket } from "./market/format.ts";
 
 export type YearBasis = "financial" | "calendar";
 
@@ -222,13 +222,14 @@ export function financialYearToDate(
   return { from: isoDateUTC(start), to: isoDateUTC(today) };
 }
 
-/** Always "1 Sep 2026 – 21 Sep 2026". Never a bare month name. */
-export function formatStatementPeriodLabel(fromIso: string, toIso: string): string {
-  const from = utcDate(fromIso);
-  const to = utcDate(toIso);
-  if (!from || !to) return "";
-  const stamp = (d: Date) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-  return `${stamp(from)} – ${stamp(to)}`;
+/** Date span for a statement. Never a bare month name. Order follows the client market. */
+export function formatStatementPeriodLabel(
+  fromIso: string,
+  toIso: string,
+  market: DateMarket,
+): string {
+  const label = formatDateRange(fromIso, toIso, market);
+  return label === "—" ? "" : label;
 }
 
 /** One calendar date from a YYYY-MM-DD prefix. Order follows the market. */
@@ -245,10 +246,14 @@ export function formatIsoDateUTC(
  * Period printed on a report and its file name. Uses the statement dates,
  * never the calendar month the PDF happens to be generated in.
  * A full calendar month is "September 2026". A shorter span in that month
- * is "1–21 Sep 2026 (part month)".
+ * is the market range plus " (part month)": US "Sep 1–21, 2026 (part month)",
+ * ZA "1–21 Sep 2026 (part month)".
  */
-export function reportDataPeriodLabel(fields: object | null | undefined): string | null {
-  const meta = readStatementMeta(fields);
+export function reportDataPeriodLabel(
+  fields: object | null | undefined,
+  market: DateMarket,
+): string | null {
+  const meta = readStatementMeta(fields, market);
   const from = meta.periodStart ? utcDate(meta.periodStart) : null;
   const to = meta.periodEnd ? utcDate(meta.periodEnd) : null;
   if (from && to) {
@@ -258,11 +263,10 @@ export function reportDataPeriodLabel(fields: object | null | undefined): string
     if (sameMonth && from.getUTCDate() === 1 && to.getUTCDate() === lastDay) {
       return `${FULL_MONTHS[to.getUTCMonth()]} ${to.getUTCFullYear()}`;
     }
-    if (sameMonth) {
-      return `${from.getUTCDate()}\u2013${to.getUTCDate()} ${MONTHS[to.getUTCMonth()]} ${to.getUTCFullYear()} (part month)`;
-    }
-    const range = formatStatementPeriodLabel(meta.periodStart!, meta.periodEnd!);
-    return range || null;
+    const range = formatDateRange(meta.periodStart!, meta.periodEnd!, market);
+    if (!range || range === "—") return null;
+    if (sameMonth) return `${range} (part month)`;
+    return range;
   }
   if (to) return `${FULL_MONTHS[to.getUTCMonth()]} ${to.getUTCFullYear()}`;
   const explicit = meta.periodLabel?.trim();
@@ -273,8 +277,8 @@ export function reportDataPeriodLabel(fields: object | null | undefined): string
 export function reportPeriodMonthYear(
   fields: object | null | undefined,
 ): { month: string; year: string } | null {
-  const meta = readStatementMeta(fields);
-  const end = meta.periodEnd ? utcDate(meta.periodEnd) : null;
+  const endIso = str((fields ?? {}) as Record<string, unknown>, "periodEnd");
+  const end = endIso ? utcDate(endIso) : null;
   if (!end) return null;
   return { month: FULL_MONTHS[end.getUTCMonth()], year: String(end.getUTCFullYear()) };
 }
@@ -303,7 +307,29 @@ function num(fields: Record<string, unknown>, key: string): number | null {
   return null;
 }
 
-export function readStatementMeta(fields: object | null | undefined): StatementMeta {
+function datedRangeLabel(
+  start: string | null,
+  end: string | null,
+  stored: string | null,
+  market: DateMarket,
+): string | null {
+  if (start && end) {
+    const fresh = formatStatementPeriodLabel(start, end, market);
+    if (fresh) return fresh;
+  }
+  return stored;
+}
+
+/** Ledger source only. Display labels go through `readStatementMeta` with the client market. */
+export function statementSourceOf(fields: object | null | undefined): string | null {
+  const f = (fields ?? {}) as Record<string, unknown>;
+  return str(f, "statementSource");
+}
+
+export function readStatementMeta(
+  fields: object | null | undefined,
+  market: DateMarket,
+): StatementMeta {
   const f = (fields ?? {}) as Record<string, unknown>;
   const periodStart = str(f, "periodStart");
   const periodEnd = str(f, "periodEnd");
@@ -320,19 +346,15 @@ export function readStatementMeta(fields: object | null | undefined): StatementM
     statementSource: str(f, "statementSource"),
     periodStart,
     periodEnd,
-    periodLabel:
-      explicit ||
-      (periodStart && periodEnd ? formatStatementPeriodLabel(periodStart, periodEnd) : null),
+    // Stored periodLabel is a baked string. Dates on the row win at read time.
+    periodLabel: datedRangeLabel(periodStart, periodEnd, explicit, market),
     ytdRevenue: sameRange ? null : num(f, "ytdRevenue"),
     ytdNetIncome: sameRange ? null : num(f, "ytdNetIncome"),
     ytdPeriodStart: sameRange ? null : ytdPeriodStart,
     ytdPeriodEnd: sameRange ? null : ytdPeriodEnd,
     ytdPeriodLabel: sameRange
       ? null
-      : str(f, "ytdPeriodLabel") ||
-        (ytdPeriodStart && ytdPeriodEnd
-          ? formatStatementPeriodLabel(ytdPeriodStart, ytdPeriodEnd)
-          : null),
+      : datedRangeLabel(ytdPeriodStart, ytdPeriodEnd, str(f, "ytdPeriodLabel"), market),
     ytdBasis: sameRange ? null : ytdBasis,
   };
 }
@@ -350,9 +372,10 @@ export function yearToDateTitle(basis: YearBasis | null): string {
  */
 export function figuresPeriodLabelFrom(
   financials: object | null | undefined,
-  snapshotPeriodLabel?: string | null,
+  snapshotPeriodLabel: string | null | undefined,
+  market: DateMarket,
 ): string | null {
-  const meta = readStatementMeta(financials);
+  const meta = readStatementMeta(financials, market);
   if (meta.periodStart && meta.periodEnd) {
     const fromStatement = meta.periodLabel?.trim() ?? "";
     if (fromStatement) return fromStatement;
@@ -363,7 +386,7 @@ export function figuresPeriodLabelFrom(
     if (end && months != null && months >= 1) {
       const span = Math.max(1, Math.round(months));
       const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - (span - 1), 1));
-      const label = formatStatementPeriodLabel(isoDateUTC(start), meta.periodEnd.slice(0, 10));
+      const label = formatStatementPeriodLabel(isoDateUTC(start), meta.periodEnd.slice(0, 10), market);
       if (label) return label;
     }
     const stamp = calendarMonthStamp(meta.periodEnd);
@@ -446,7 +469,7 @@ export function storedYearToDateEnd(
   fyStartMonth: number | null | undefined,
   market: { locale?: string | null },
 ): string | null {
-  const meta = readStatementMeta(fields);
+  const meta = readStatementMeta(fields, market);
   if (!meta.periodStart || !meta.periodEnd) return null;
   const from = utcDate(meta.periodStart);
   const to = utcDate(meta.periodEnd);
@@ -470,16 +493,19 @@ export function storedYearToDateEnd(
 
 /** True when the blob came from a dated Xero or QuickBooks sync. */
 export function preferStatementPeriod(fields: object | null | undefined): boolean {
-  return isDatedLedgerSource(readStatementMeta(fields).statementSource);
+  return isDatedLedgerSource(statementSourceOf(fields));
 }
 
 /** Year companion for the waterfall. Null until a dated Xero or QuickBooks sync stored a different range. */
-export function statementYearLine(fields: object | null | undefined): {
+export function statementYearLine(
+  fields: object | null | undefined,
+  market: DateMarket,
+): {
   basis: YearBasis | null;
   periodLabel: string;
   revenue: number;
 } | null {
-  const meta = readStatementMeta(fields);
+  const meta = readStatementMeta(fields, market);
   if (
     !isDatedLedgerSource(meta.statementSource) ||
     meta.ytdRevenue == null ||

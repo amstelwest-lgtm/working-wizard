@@ -31,6 +31,7 @@ import {
   forecastOpeningFromStored,
   seedXeroBankForecastLines,
 } from "../src/lib/xero-opening";
+import { ZA_MARKET } from "../src/lib/market/resolve";
 import {
   calendarMonthBounds,
   financialYearToDate,
@@ -352,15 +353,15 @@ assert(sepBounds.from === "2026-09-01" && sepBounds.to === "2026-09-21", "open m
 const augBounds = calendarMonthBounds(now, 1);
 assert(augBounds.from === "2026-08-01" && augBounds.to === "2026-08-31", "prior month is complete");
 assert(
-  formatStatementPeriodLabel("2026-09-01", "2026-09-30") === "1 Sep 2026 – 30 Sep 2026",
+  formatStatementPeriodLabel("2026-09-01", "2026-09-30", ZA_MARKET) === "1\u201330 Sep 2026",
   "full month keeps start and end",
 );
 assert(
-  formatStatementPeriodLabel("2026-09-01", "2026-09-21") === "1 Sep 2026 – 21 Sep 2026",
+  formatStatementPeriodLabel("2026-09-01", "2026-09-21", ZA_MARKET) === "1\u201321 Sep 2026",
   "month-to-date keeps start and end",
 );
 assert(
-  formatStatementPeriodLabel("2026-04-01", "2026-09-21") === "1 Apr 2026 – 21 Sep 2026",
+  formatStatementPeriodLabel("2026-04-01", "2026-09-21", ZA_MARKET) === "1 Apr \u2013 21 Sep 2026",
   "year range keeps both dates",
 );
 
@@ -401,7 +402,7 @@ assert(bsPath.includes("date=2026-09-21"), "balance sheet is as at the month end
 assert(bsPath.includes("standardLayout=true"), "balance sheet uses the standard layout");
 assert(!bsPath.includes("periods="), "balance sheet is a single date");
 
-const monthLabel = formatStatementPeriodLabel(sepBounds.from, sepBounds.to);
+const monthLabel = formatStatementPeriodLabel(sepBounds.from, sepBounds.to, ZA_MARKET);
 const periodMapped = mapXeroToFinancialInputs(
   { ...monthParsed, periodMonths: 1 },
   bs,
@@ -410,14 +411,14 @@ const periodMapped = mapXeroToFinancialInputs(
     pnl: { revenue: 29539.18, netIncome: 8266.73, periodMonths: 6 },
     from: fyMar.from,
     to: fyMar.to,
-    label: formatStatementPeriodLabel(fyMar.from, fyMar.to),
+    label: formatStatementPeriodLabel(fyMar.from, fyMar.to, ZA_MARKET),
     basis: "financial",
   },
 );
 assert(periodMapped.statementSource === "xero", "statement source tagged");
 assert(periodMapped.periodStart === "2026-09-01", "period start stored");
 assert(periodMapped.periodEnd === "2026-09-21", "period end stored");
-assert(periodMapped.periodLabel === "1 Sep 2026 – 21 Sep 2026", "period label stored");
+assert(periodMapped.periodLabel === "1\u201321 Sep 2026", "period label stored");
 assert(periodMapped.revenue === 8633.6, "mapped revenue is the month, not YTD");
 assert(periodMapped.periodMonths === "1", "a month is not annualised as nine months");
 assert(periodMapped.ytdRevenue === 29539.18, "year revenue is stored beside the month");
@@ -425,7 +426,7 @@ assert(periodMapped.ytdNetIncome === 8266.73, "year net income stored");
 assert(periodMapped.ytdBasis === "financial", "year basis is the financial year");
 assert(periodMapped.ytdPeriodStart === "2026-04-01", "year start stored");
 assert(periodMapped.ytdPeriodEnd === "2026-09-21", "year end stored");
-assert(periodMapped.ytdPeriodLabel === "1 Apr 2026 – 21 Sep 2026", "year label stored");
+assert(periodMapped.ytdPeriodLabel === "1 Apr \u2013 21 Sep 2026", "year label stored");
 assert(periodMapped.ytdPeriodMonths === "6", "year month count stored");
 
 const zeroMonth = mapXeroToFinancialInputs(
@@ -450,10 +451,10 @@ const sameRange = mapXeroToFinancialInputs(
 );
 assert(sameRange.ytdRevenue == null, "identical month and year ranges are not duplicated");
 
-const yearLine = statementYearLine(periodMapped);
+const yearLine = statementYearLine(periodMapped, ZA_MARKET);
 assert(yearLine?.revenue === 29539.18, "waterfall year line reads the companion");
-assert(yearLine?.periodLabel === "1 Apr 2026 – 21 Sep 2026", "waterfall year line has both dates");
-assert(statementYearLine({ revenue: "29539.18" }) === null, "undated total is not shown as a year");
+assert(yearLine?.periodLabel === "1 Apr \u2013 21 Sep 2026", "waterfall year line has both dates");
+assert(statementYearLine({ revenue: "29539.18" }, ZA_MARKET) === null, "undated total is not shown as a year");
 
 const empty = parseXeroProfitAndLoss({ Reports: [{ Rows: [] }] });
 assert(empty.revenue === 0 && empty.netIncome === 0, "empty report is zeros, not throw");

@@ -16,12 +16,14 @@ import {
   ledgerAttribution,
   readCachedQboSync,
 } from "../src/lib/ledger-link-copy";
+import { marketForClient } from "../src/lib/market/scope";
 import { buildVarianceChips, resolvePriorSnapshot } from "../src/lib/prior-period";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
+const yankeesMarket = marketForClient({ market: { country: "US", regionCode: "NY" } });
 const fmt = (iso: string) => iso.slice(0, 10);
 const read = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
 
@@ -45,6 +47,7 @@ const yankeesBoard = boardFiguresFrom({
   snapshotSource: "xero",
   snapshotCreatedAt: "2026-09-18T19:44:12.740Z",
   financialsUpdatedAt: "2026-09-21T21:27:35.406Z",
+  market: yankeesMarket,
 });
 assert(yankeesBoard?.source === "xero", "board source stays the saved Xero statement");
 assert(yankeesBoard?.revenue === 8633.6, "board revenue is the overview total");
@@ -70,10 +73,10 @@ assert(!/never/i.test(xeroText), "a missing Xero sync is not Last sync never");
 assert(!/no period dates/i.test(xeroText), "dated overview figures are not called undated");
 assert(!/not this month/i.test(xeroText), "a dated statement is not dismissed as not this month");
 assert(xeroNeverSynced.figuresLine?.includes("a saved Xero statement") === true, xeroText);
-assert(xeroNeverSynced.figuresLine?.includes("1 Sep 2026 – 21 Sep 2026") === true, xeroText);
+assert(xeroNeverSynced.figuresLine?.includes("Sep 1\u201321, 2026") === true, xeroText);
 assert(xeroNeverSynced.figuresLine?.includes("Revenue 8,633.60") === true, xeroText);
 assert(
-  xeroNeverSynced.figuresLine?.includes("Financial year to date 1 Jan 2026 – 21 Sep 2026") === true,
+  xeroNeverSynced.figuresLine?.includes("Financial year to date Jan 1 \u2013 Sep 21, 2026") === true,
   xeroText,
 );
 assert(xeroNeverSynced.figuresLine?.includes("Revenue 29,539.18") === true, xeroText);
@@ -88,6 +91,7 @@ const uploaded = boardFiguresFrom({
   financials: { revenue: 1200, cash: 80 },
   snapshotSource: "upload",
   snapshotCreatedAt: "2026-08-02T12:00:00.000Z",
+  market: yankeesMarket,
 });
 const uploadCopy = describeLedgerLink(
   {
@@ -131,8 +135,9 @@ const qboCache = readCachedQboSync(
     },
   },
   { cash: 0 },
+  yankeesMarket,
 );
-assert(qboCache?.periodLabel === "1 Sep 2026 – 21 Sep 2026", "QuickBooks cache keeps its period");
+assert(qboCache?.periodLabel === "Sep 1\u201321, 2026", "QuickBooks cache keeps its period");
 assert(qboCache?.revenue === 0, "QuickBooks cache revenue stays the synced zero");
 
 const qbo = describeLedgerLink(
@@ -149,7 +154,7 @@ const qbo = describeLedgerLink(
 const qboText = `${qbo.statusLine} ${qbo.figuresLine ?? ""}`;
 assert(qbo.statusLine.includes("Last sync 2026-09-21"), qbo.statusLine);
 assert(
-  qbo.statusLine.includes("QuickBooks month to date 1 Sep 2026 – 21 Sep 2026"),
+  qbo.statusLine.includes("QuickBooks month to date Sep 1\u201321, 2026"),
   qbo.statusLine,
 );
 assert(
@@ -174,6 +179,7 @@ const qboAttribution = ledgerAttribution({
   lastSyncedAt: "2026-09-21T21:07:20.534Z",
   financials: yankeesFinancials,
   financialsUpdatedAt: "2026-09-21T21:27:35.406Z",
+  market: yankeesMarket,
   snapshots: [{ source: "xero", created_at: "2026-09-18T19:44:12.740Z" }],
   ownFromBlob: {
     periodLabel: null,
@@ -190,7 +196,7 @@ assert(
   "Xero-tagged figures are not this QuickBooks sync",
 );
 assert(
-  qboAttribution.syncFigures?.periodLabel === "1 Sep 2026 – 21 Sep 2026",
+  qboAttribution.syncFigures?.periodLabel === "Sep 1\u201321, 2026",
   "cache period is the QuickBooks sync",
 );
 assert(qboAttribution.boardFigures?.source === "xero", "board stays the Xero statement");
@@ -200,6 +206,7 @@ const xeroAttribution = ledgerAttribution({
   lastSyncedAt: null,
   financials: yankeesFinancials,
   financialsUpdatedAt: "2026-09-21T21:27:35.406Z",
+  market: yankeesMarket,
   snapshots: [{ source: "xero", created_at: "2026-09-18T19:44:12.740Z" }],
   ownFromBlob: {
     periodLabel: "1 Sep 2026 – 21 Sep 2026",

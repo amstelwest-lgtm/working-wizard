@@ -12,9 +12,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketFormat } from "@/contexts/market";
+import { readStatementMeta } from "@/lib/statement-period";
 import { parseOperatingProfile, profileNeedsCompletion } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
-import { coerceMarketSelection, usState } from "@/lib/market";
+import { coerceMarketSelection, marketForClient, usState } from "@/lib/market";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import { portalButtonClass } from "@/lib/client-chrome";
@@ -94,7 +95,17 @@ type SnapshotLite = {
   period_date: string;
   source: string;
   created_at: string;
+  financials?: unknown;
 };
+
+function snapshotSpanLabel(
+  row: SnapshotLite,
+  market: { locale?: string | null; timezone?: string },
+): string {
+  const fields = row.financials && typeof row.financials === "object" ? row.financials : null;
+  const fresh = readStatementMeta(fields, market).periodLabel?.trim();
+  return fresh || row.period_label;
+}
 
 function marketStripLabel(raw: unknown): string {
   const sel = coerceMarketSelection(raw);
@@ -198,6 +209,7 @@ export function ClientBrainSummary({
   const trialBlock = useTrialEndedAction();
   const [precardOpen, setPrecardOpen] = useState(false);
   const { dateTime } = useMarketFormat();
+  const dateMarket = useMemo(() => marketForClient({ market: marketRaw }), [marketRaw]);
   const { productMix, weeklyInputs } = useFinancialInputs();
 
   const parsedProfile = useMemo(
@@ -246,7 +258,7 @@ export function ClientBrainSummary({
         .maybeSingle(),
       supabase
         .from("client_financial_snapshots")
-        .select("id, period_label, period_date, source, created_at")
+        .select("id, period_label, period_date, source, created_at, financials")
         .eq("client_id", clientId)
         .order("period_date", { ascending: false })
         .limit(8),
@@ -873,7 +885,7 @@ export function ClientBrainSummary({
                 <div className="mini-kicker">Latest snapshot</div>
                 {latestSnapshot ? (
                   <>
-                    <div style={{ fontWeight: 600, marginTop: 6 }}>{latestSnapshot.period_label}</div>
+                    <div style={{ fontWeight: 600, marginTop: 6 }}>{snapshotSpanLabel(latestSnapshot, dateMarket)}</div>
                     <div className="brain-row-meta">
                       {latestSnapshot.source} · {formatWhen(latestSnapshot.created_at, dateTime)}
                     </div>
@@ -929,7 +941,7 @@ export function ClientBrainSummary({
                   <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 13.5 }}>
                     {uploadSnaps.map((s) => (
                       <li key={s.id}>
-                        {s.period_label} · {formatWhen(s.created_at, dateTime)}
+                        {snapshotSpanLabel(s, dateMarket)} · {formatWhen(s.created_at, dateTime)}
                       </li>
                     ))}
                   </ul>

@@ -24,6 +24,7 @@ import {
   resolveRatioRecord,
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./overview-brief.ts";
+import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { adviceChatProductName, adviceChatVolumeUnit, adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 import { benchmarkBusinessType } from "../../../src/lib/benchmark-sector.ts";
@@ -94,6 +95,7 @@ export async function buildContext(
 ): Promise<AskAiContext> {
   // ── Profile + filled deliverable blobs (never dump raw statements) ────────
   let copyPack: "za" | "us" = "za";
+  let clientMarketRaw: unknown = null;
   let profile: ProfileRow | null = null;
   let profileQuestions: ProfileQuestionRow[] = [];
   let financials: Record<string, unknown> | null = null;
@@ -127,7 +129,8 @@ export async function buildContext(
     }
 
     if (data) {
-      copyPack = copyPackFromMarket((data as { market?: unknown }).market);
+      clientMarketRaw = (data as { market?: unknown }).market;
+      copyPack = copyPackFromMarket(clientMarketRaw);
       clientName = typeof (data as { name?: unknown }).name === "string" ? (data as { name: string }).name : null;
       brainSummary = (data as { brain_summary?: unknown }).brain_summary ?? null;
       const fin = (data.financials ?? {}) as Record<string, unknown>;
@@ -182,7 +185,8 @@ export async function buildContext(
       .select("name, market")
       .eq("id", clientId)
       .maybeSingle();
-    copyPack = copyPackFromMarket(data?.market);
+    clientMarketRaw = data?.market;
+    copyPack = copyPackFromMarket(clientMarketRaw);
     clientName = typeof data?.name === "string" ? data.name : null;
   }
 
@@ -381,6 +385,7 @@ export async function buildContext(
           fyStartMonth: overviewFyStartMonth(copyPack, operatingProfile),
           shortfallWeek: metrics?.outlook.shortfallWeek,
           clientName,
+          dateMarket: marketForClient({ market: clientMarketRaw }),
           periodLabel: snapPeriod,
           figuresAsOf: snapDate,
           brainSummary,

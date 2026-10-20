@@ -2,6 +2,7 @@
  * QuickBooks report mapper — fixtures only, no live Intuit calls.
  * Run: pnpm test:qbo-mapper
  */
+import { ZA_MARKET } from "../src/lib/market/resolve";
 import { calendarMonthBounds, formatStatementPeriodLabel, resolveSnapshotPeriodLabel, statementYearLine } from "../src/lib/statement-period";
 import {
   mapQboToFinancialInputs,
@@ -113,8 +114,8 @@ assert(bs.equity === 500000, "equity");
 const now = new Date("2026-09-21T15:00:00Z");
 const month = calendarMonthBounds(now, 0);
 assert(month.from === "2026-09-01" && month.to === "2026-09-21", "September month-to-date bounds");
-const monthLabel = formatStatementPeriodLabel(month.from, month.to);
-assert(monthLabel === "1 Sep 2026 – 21 Sep 2026", "label has both dates");
+const monthLabel = formatStatementPeriodLabel(month.from, month.to, ZA_MARKET);
+assert(monthLabel === "1\u201321 Sep 2026", "label has both dates");
 assert(monthLabel !== "Sep 2026", "label is not a bare month");
 
 const fy = qboYearRangeFromFiscalStart(now, 4);
@@ -132,7 +133,7 @@ const mapped = mapQboToFinancialInputs(
     pnl: { revenue: yearPnl.revenue, netIncome: yearPnl.netIncome, periodMonths: yearPnl.periodMonths },
     from: "2026-01-01",
     to: "2026-09-21",
-    label: formatStatementPeriodLabel("2026-01-01", "2026-09-21"),
+    label: formatStatementPeriodLabel("2026-01-01", "2026-09-21", ZA_MARKET),
     basis: "calendar",
   },
   1500,
@@ -162,20 +163,20 @@ assert(
   figureSourceChipLabel(resolveFigureSource({ financials: {}, connectedLedger: "xero" })) === "Xero",
   "a connected ledger chips when the file has no source",
 );
-assert(mapped.periodLabel === "1 Sep 2026 – 21 Sep 2026", "month label stored");
+assert(mapped.periodLabel === "1\u201321 Sep 2026", "month label stored");
 assert(mapped.periodStart === "2026-09-01" && mapped.periodEnd === "2026-09-21", "month dates stored");
 assert(mapped.periodMonths === "1", "waterfall month is not the 9-month total");
 assert(mapped.revenue === 8633.6, "primary revenue is the month");
 assert(mapped.ytdRevenue === 480000, "year revenue is the companion");
-assert(mapped.ytdPeriodLabel === "1 Jan 2026 – 21 Sep 2026", "year label has both dates");
+assert(mapped.ytdPeriodLabel === "1 Jan \u2013 21 Sep 2026", "year label has both dates");
 assert(mapped.ytdPeriodMonths === "9", "year count is 9");
 assert(mapped.ytdBasis === "calendar", "calendar when that is the basis passed in");
 assert(mapped.operatingCashflow === 1500, "month cash flow stored");
-assert(!String(mapped.periodLabel).includes("Sep 2026 –") || String(mapped.periodLabel).startsWith("1 Sep"), "not a bare month stamp");
+assert(!String(mapped.periodLabel).includes("Sep 2026 \u2013"), "not a bare month stamp");
 
-const yearLine = statementYearLine(mapped);
+const yearLine = statementYearLine(mapped, ZA_MARKET);
 assert(yearLine?.revenue === 480000, "waterfall reads the QuickBooks year companion");
-assert(yearLine?.periodLabel === "1 Jan 2026 – 21 Sep 2026", "waterfall shows both year dates");
+assert(yearLine?.periodLabel === "1 Jan \u2013 21 Sep 2026", "waterfall shows both year dates");
 
 const same = mapQboToFinancialInputs(
   monthPnl,

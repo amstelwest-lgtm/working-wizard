@@ -86,7 +86,12 @@ import type {
 import { interestOfRevenueSentence } from "@/lib/cash-interest-note";
 import { periodMonthsOf } from "@/lib/ratios";
 import { balanceSheetCashAsOf } from "@/lib/statement-parse";
-import { formatCalendarDay, formatMoneyChartTick, formatMoneyCompact, formatWeekHeader } from "@/lib/market/format";
+import {
+  formatDateRange,
+  formatMoneyChartTick,
+  formatMoneyCompact,
+  formatWeekHeader,
+} from "@/lib/market/format";
 import { openingCashToConfirm } from "@/lib/cash-from-banks.publish";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import {
@@ -1375,7 +1380,7 @@ export function CashForecastPanel({
 
   const horizonLabel =
     weekIsos.length >= WEEKS
-      ? `${formatCalendarDay(weekIsos[0]!, market)} – ${formatCalendarDay(weekIsos[WEEKS - 1]!, market)}`
+      ? formatDateRange(weekIsos[0]!, weekIsos[WEEKS - 1]!, market)
       : "";
 
   const computeScenario = (opts: {
