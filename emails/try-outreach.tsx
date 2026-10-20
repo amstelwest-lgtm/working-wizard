@@ -1,22 +1,13 @@
 /**
- * Outreach for the public sample. Render with scripts/render-try-outreach.mts.
+ * Warm demo outreach. Render with scripts/render-try-outreach.mts.
  * This file does not send mail.
+ *
+ * Outlook-safe: live text, one table button with a VML roundrect for
+ * Outlook desktop, and at most one static hero. Motion stays on /try.
+ * The scorecard and roadmap JPEGs from #355 and #381 stay off this email.
  */
-import {
-  Body,
-  Column,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Img,
-  Link,
-  Preview,
-  Row,
-  Section,
-  Text,
-} from "react-email";
+import { Fragment } from "react";
+import { Body, Head, Html } from "react-email";
 import { buildTrialBoard, trialReading } from "../src/lib/trial-demo";
 
 export const TRY_OUTREACH_SUBJECT = "Meet your AI finance team";
@@ -44,42 +35,49 @@ export const TRY_OUTREACH_UNSUBSCRIBE_URL = "https://www.milonfinance.com/unsubs
 export const TRY_OUTREACH_ADDRESS =
   "Milon, Inc., 800 N King Street, Suite 304, PMB 3836, Wilmington, DE 19801";
 export const TRY_OUTREACH_SIGN_OFF = "The MILŌN Team";
-export const TRY_OUTREACH_EXAMPLE_SRC = "https://www.milonfinance.com/email/example-result.png";
+/** Sentences that used to live only inside the example-result image. */
+export const TRY_OUTREACH_EXAMPLE_NOTE =
+  "A services sample. No books connected. Cash runway is not measured, because there is no cash balance.";
 export const TRY_OUTREACH_HEADERS = {
   "List-Unsubscribe": `<${TRY_OUTREACH_UNSUBSCRIBE_URL}>, <mailto:hello@milonfinance.com?subject=unsubscribe>`,
   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
 } as const;
 
-const EXAMPLE_BOARD = buildTrialBoard("US");
-const EXAMPLE_READING = trialReading(EXAMPLE_BOARD, new Date("2026-10-14T00:00:00Z"));
+export const WARM_DEMO_HERO_SRC = "https://www.milonfinance.com/email/warm-hero.png";
+export const WARM_DEMO_HERO_ALT = "Milōn wordmark";
+export const WARM_DEMO_HERO_WIDTH = 200;
+export const WARM_DEMO_HERO_HEIGHT = 120;
 
-export const TRY_OUTREACH_EXAMPLE_ALT = [
-  "Example result.",
-  `Health ${EXAMPLE_BOARD.health.score ?? "—"}, ${EXAMPLE_BOARD.health.label}.`,
-  `Gross margin ${EXAMPLE_READING.grossMargin}.`,
-  `Net margin ${EXAMPLE_READING.netMargin}.`,
-  `Current ratio ${EXAMPLE_READING.currentRatio}.`,
-  `Debtor days ${EXAMPLE_READING.debtorDays}.`,
-  "Cash runway is not measured.",
-].join(" ");
+export type WarmDemoAgent = "financial_manager" | "analyst" | "advisor";
+
+/** TODO(Eng1): one-agent link. Financial Manager is the default. */
+export const WARM_DEMO_AGENT: WarmDemoAgent = "financial_manager";
+
+/**
+ * TODO(Eng1): point each agent at the one-agent route Eng1 is building.
+ * Until that route exists, every agent opens the public demo this template
+ * already links to.
+ */
+export function warmDemoCtaUrl(agent: WarmDemoAgent = WARM_DEMO_AGENT): string {
+  const oneAgentHref: Record<WarmDemoAgent, string> = {
+    financial_manager: TRY_OUTREACH_TRY_URL,
+    analyst: TRY_OUTREACH_TRY_URL,
+    advisor: TRY_OUTREACH_TRY_URL,
+  };
+  return oneAgentHref[agent];
+}
 
 const AGENTS = [
   {
-    src: "https://www.milonfinance.com/email/fm.png",
-    alt: "Milōn Financial Manager",
-    role: "Financial Manager",
+    name: "Milōn Financial Manager",
     line: "Holds the 13-week cash line and the profit bridge.",
   },
   {
-    src: "https://www.milonfinance.com/email/analyst.png",
-    alt: "Milōn Analyst",
-    role: "Analyst",
+    name: "Milōn Analyst",
     line: "Reads the ratios, the margins, and what is drifting.",
   },
   {
-    src: "https://www.milonfinance.com/email/advisor.png",
-    alt: "Milōn Advisor",
-    role: "Advisor",
+    name: "Milōn Advisor",
     line: "Turns that reading into the next move.",
   },
 ] as const;
@@ -88,24 +86,44 @@ const INK = "#102A43";
 const MUTED = "#3D5270";
 const QUIET = "#5C7190";
 const BLUE = "#0B5FFF";
-const LINE = "#DBEAFE";
+const GOLD = "#d4af37";
+const GOLD_EDGE = "#8d6a16";
+const CANVAS = "#E6EEF8";
+const CARD = "#F7F9FC";
+const LINE = "#D5DEEA";
 const FONT = "Segoe UI, Arial, sans-serif";
+
+const EXAMPLE_BOARD = buildTrialBoard("US");
+const EXAMPLE_READING = trialReading(EXAMPLE_BOARD, new Date("2026-10-14T00:00:00Z"));
+
+export const TRY_OUTREACH_EXAMPLE_CLOSE = `13-week estimate closes at ${EXAMPLE_READING.cashClose}.`;
+
+const EXAMPLE_LINES = [
+  `Health ${EXAMPLE_BOARD.health.score ?? "—"}, ${EXAMPLE_BOARD.health.label}.`,
+  `Gross margin ${EXAMPLE_READING.grossMargin}.`,
+  `Net margin ${EXAMPLE_READING.netMargin}.`,
+  `Current ratio ${EXAMPLE_READING.currentRatio}.`,
+  `Debtor days ${EXAMPLE_READING.debtorDays}.`,
+  "Cash runway is not measured.",
+] as const;
+
+export const TRY_OUTREACH_EXAMPLE_ALT = ["Example result.", ...EXAMPLE_LINES].join(" ");
 
 export const TRY_OUTREACH_TEXT = [
   TRY_OUTREACH_SUBJECT,
   "",
   TRY_OUTREACH_OPENING,
   "",
-  "Financial Manager. Holds the 13-week cash line and the profit bridge.",
-  "Analyst. Reads the ratios, the margins, and what is drifting.",
-  "Advisor. Turns that reading into the next move.",
+  ...AGENTS.map((agent) => `${agent.name}. ${agent.line}`),
+  "",
+  TRY_OUTREACH_EXAMPLE_ALT,
+  TRY_OUTREACH_EXAMPLE_NOTE,
+  TRY_OUTREACH_EXAMPLE_CLOSE,
   "",
   TRY_OUTREACH_INCENTIVES_KICKER,
   ...TRY_OUTREACH_INCENTIVES,
   "",
-  TRY_OUTREACH_EXAMPLE_ALT,
-  "",
-  `${TRY_OUTREACH_CTA_LABEL}: ${TRY_OUTREACH_TRY_URL}`,
+  `${TRY_OUTREACH_CTA_LABEL}: ${warmDemoCtaUrl()}`,
   `${TRY_OUTREACH_SIGNUP_LABEL}: ${TRY_OUTREACH_SIGNUP_URL}`,
   "",
   TRY_OUTREACH_SIGN_OFF,
@@ -114,261 +132,399 @@ export const TRY_OUTREACH_TEXT = [
   TRY_OUTREACH_ADDRESS,
 ].join("\n");
 
-export default function TryOutreachEmail() {
-  return (
-    <Html lang="en">
-      <Head>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <style>{`
-          @media only screen and (max-width: 600px) {
-            .email-pad { padding-left: 18px !important; padding-right: 18px !important; }
-          }
-        `}</style>
-      </Head>
-      <Body style={{ margin: 0, backgroundColor: "#ffffff", fontFamily: FONT, color: INK }}>
-        <Preview>{TRY_OUTREACH_PREVIEW}</Preview>
-        <Container
-          className="email-pad"
-          style={{
-            width: "100%",
-            maxWidth: 600,
-            margin: "0 auto",
-            backgroundColor: "#ffffff",
-            padding: "32px 28px 28px",
-          }}
-        >
-          <Text
-            style={{
-              margin: 0,
-              fontFamily: FONT,
-              fontSize: 20,
-              lineHeight: "24px",
-              fontWeight: 700,
-              letterSpacing: "-0.03em",
-              color: INK,
-            }}
-          >
-            Milōn
-          </Text>
+function esc(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
-          <Heading
-            as="h1"
-            style={{
-              margin: "28px 0 0",
-              fontFamily: FONT,
-              fontSize: 32,
-              lineHeight: "38px",
-              fontWeight: 700,
-              letterSpacing: "-0.03em",
-              color: INK,
-            }}
-          >
-            Meet your AI finance team
-          </Heading>
-          <Text
-            style={{
-              margin: "12px 0 0",
-              fontFamily: FONT,
-              fontSize: 16,
-              lineHeight: "24px",
-              color: MUTED,
-            }}
-          >
-            {TRY_OUTREACH_OPENING}
-          </Text>
-
-          {AGENTS.map((agent) => (
-            <Section key={agent.role} style={{ marginTop: 18 }}>
-              <Row>
-                <Column style={{ width: 72, verticalAlign: "middle" }}>
-                  <Img
-                    src={agent.src}
-                    width="64"
-                    height="64"
-                    alt={agent.alt}
-                    style={{
-                      display: "block",
-                      width: 64,
-                      height: 64,
-                      borderRadius: 32,
-                      border: `1px solid ${LINE}`,
-                    }}
-                  />
-                </Column>
-                <Column style={{ verticalAlign: "middle", paddingLeft: 8 }}>
-                  <Text
-                    style={{
-                      margin: 0,
-                      fontFamily: FONT,
-                      fontSize: 11,
-                      lineHeight: "14px",
-                      fontWeight: 700,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      color: BLUE,
-                    }}
-                  >
-                    Milōn
-                  </Text>
-                  <Text
-                    style={{
-                      margin: "2px 0 0",
-                      fontFamily: FONT,
-                      fontSize: 16,
-                      lineHeight: "20px",
-                      fontWeight: 700,
-                      color: INK,
-                    }}
-                  >
-                    {agent.role}
-                  </Text>
-                  <Text
-                    style={{
-                      margin: "2px 0 0",
-                      fontFamily: FONT,
-                      fontSize: 14,
-                      lineHeight: "20px",
-                      color: MUTED,
-                    }}
-                  >
-                    {agent.line}
-                  </Text>
-                </Column>
-              </Row>
-            </Section>
-          ))}
-
-          <Section
-            style={{
-              marginTop: 28,
-              border: `1px solid ${LINE}`,
-              borderRadius: 16,
-              padding: 12,
-            }}
-          >
-            <Img
-              src={TRY_OUTREACH_EXAMPLE_SRC}
-              width="520"
-              height="350"
-              alt={TRY_OUTREACH_EXAMPLE_ALT}
-              style={{
-                display: "block",
-                width: "100%",
-                maxWidth: 520,
-                height: "auto",
-                border: 0,
-                outline: "none",
-              }}
-            />
-          </Section>
-
-          <Text
-            style={{
-              margin: "28px 0 0",
-              fontFamily: FONT,
-              fontSize: 12,
-              lineHeight: "16px",
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: BLUE,
-            }}
-          >
-            {TRY_OUTREACH_INCENTIVES_KICKER}
-          </Text>
-          {TRY_OUTREACH_INCENTIVES.map((line) => (
-            <Text
-              key={line}
-              style={{
-                margin: "8px 0 0",
-                fontFamily: FONT,
-                fontSize: 16,
-                lineHeight: "22px",
-                fontWeight: 700,
-                color: INK,
-              }}
-            >
-              {line}
-            </Text>
-          ))}
-
-          <div
-            style={{ marginTop: 28 }}
-            dangerouslySetInnerHTML={{
-              __html: `<!--[if mso]>
-<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${TRY_OUTREACH_TRY_URL}" style="height:48px;v-text-anchor:middle;width:544px;" arcsize="50%" stroke="t" strokecolor="#8d6a16" fillcolor="#d4af37">
+function bulletproofCta(href: string, label: string): string {
+  const url = esc(href);
+  const text = esc(label);
+  return `<!--[if mso]>
+<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${url}" style="height:48px;v-text-anchor:middle;width:320px;" arcsize="50%" stroke="t" strokecolor="${GOLD_EDGE}" fillcolor="${GOLD}">
 <w:anchorlock/>
-<center style="color:#1b1300;font-family:Segoe UI, Arial, sans-serif;font-size:16px;font-weight:bold;">${TRY_OUTREACH_CTA_LABEL}</center>
+<center style="color:${INK};font-family:${FONT};font-size:16px;font-weight:bold;">${text}</center>
 </v:roundrect>
 <![endif]-->
-<!--[if !mso]><!-- -->
-<a href="${TRY_OUTREACH_TRY_URL}" style="display:block;background-color:#d4af37;background-image:linear-gradient(180deg,#fdee79 0%,#f0d56a 32%,#d4af37 64%,#b8891a 100%);color:#1b1300;border:1px solid #8d6a16;border-radius:999px;font-family:Segoe UI, Arial, sans-serif;font-size:16px;font-weight:700;line-height:20px;text-align:center;text-decoration:none;padding:14px 28px;">${TRY_OUTREACH_CTA_LABEL}</a>
-<!--<![endif]-->`,
-            }}
-          />
+<!--[if !mso]><!-->
+<a href="${url}" class="cta-link" style="display:inline-block;background-color:${GOLD};color:${INK};border:1px solid ${GOLD_EDGE};border-radius:999px;font-family:${FONT};font-size:16px;font-weight:700;line-height:20px;text-align:center;text-decoration:none;padding:14px 28px;">${text}</a>
+<!--<![endif]-->`;
+}
 
-          <Text
-            style={{
-              margin: "14px 0 0",
-              fontFamily: FONT,
-              fontSize: 14,
-              lineHeight: "20px",
-              textAlign: "center" as const,
-              color: MUTED,
-            }}
-          >
-            Ready to run it on your own clients?{" "}
-            <Link
-              href={TRY_OUTREACH_SIGNUP_URL}
-              style={{ color: BLUE, fontWeight: 700, textDecoration: "underline" }}
-            >
-              {TRY_OUTREACH_SIGNUP_LABEL}
-            </Link>
-          </Text>
+const DARK_CSS = `
+  :root { color-scheme: light dark; }
+  .email-bg { background-color: ${CANVAS}; }
+  .email-card { background-color: ${CARD}; }
+  @media only screen and (max-width: 620px) {
+    .email-card { width: 100% !important; }
+    .pad { padding-left: 18px !important; padding-right: 18px !important; }
+  }
+  @media (prefers-color-scheme: dark) {
+    .email-bg { background-color: #0E1C2E !important; }
+    .email-card { background-color: #16304A !important; }
+    .ink { color: #F3F6FA !important; }
+    .muted { color: #D5DEEA !important; }
+    .quiet { color: #C5D0DE !important; }
+    .link { color: #9CC4FF !important; }
+    .rule { border-top-color: #2A4664 !important; }
+    .cta-bg, .cta-link { background-color: ${GOLD} !important; color: ${INK} !important; }
+    .hero-plate, .hero { background-color: ${CARD} !important; color: ${INK} !important; }
+  }
+  [data-ogsc] .email-bg { background-color: #0E1C2E !important; }
+  [data-ogsc] .email-card { background-color: #16304A !important; }
+  [data-ogsc] .ink { color: #F3F6FA !important; }
+  [data-ogsc] .muted { color: #D5DEEA !important; }
+  [data-ogsc] .quiet { color: #C5D0DE !important; }
+  [data-ogsc] .link { color: #9CC4FF !important; }
+  [data-ogsc] .rule { border-top-color: #2A4664 !important; }
+  [data-ogsc] .cta-bg, [data-ogsc] .cta-link { background-color: ${GOLD} !important; color: ${INK} !important; }
+  [data-ogsc] .hero-plate, [data-ogsc] .hero { background-color: ${CARD} !important; color: ${INK} !important; }
+`;
 
-          <Text
-            style={{
-              margin: "28px 0 0",
-              fontFamily: FONT,
-              fontSize: 14,
-              lineHeight: "20px",
-              color: MUTED,
-            }}
-          >
-            {TRY_OUTREACH_SIGN_OFF}
-          </Text>
+export default function TryOutreachEmail() {
+  const ctaHref = warmDemoCtaUrl();
+  return (
+    <Html lang="en" dir="ltr">
+      <Head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light dark" />
+        <meta name="supported-color-schemes" content="light dark" />
+        <title>{TRY_OUTREACH_SUBJECT}</title>
+        <style>{DARK_CSS}</style>
+      </Head>
+      <Body
+        className="email-bg"
+        style={{
+          margin: 0,
+          padding: 0,
+          color: INK,
+          fontFamily: FONT,
+        }}
+      >
+        <div
+          dangerouslySetInnerHTML={{
+            __html: `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:${INK};background-color:${CANVAS}">${esc(TRY_OUTREACH_PREVIEW)} ${"&zwnj;&nbsp;".repeat(40)}</div>`,
+          }}
+        />
+        <table
+          role="presentation"
+          width="100%"
+          cellPadding={0}
+          cellSpacing={0}
+          border={0}
+          className="email-bg"
+          bgcolor={CANVAS}
+          style={{ backgroundColor: CANVAS, width: "100%" }}
+        >
+          <tbody>
+            <tr>
+              <td align="center" style={{ padding: "24px 12px" }}>
+                <table
+                  role="presentation"
+                  width="600"
+                  cellPadding={0}
+                  cellSpacing={0}
+                  border={0}
+                  className="email-card"
+                  bgcolor={CARD}
+                  style={{
+                    width: "100%",
+                    maxWidth: 600,
+                    backgroundColor: CARD,
+                  }}
+                >
+                  <tbody>
+                    <tr>
+                      <td
+                        className="pad"
+                        lang="en"
+                        dir="ltr"
+                        style={{ padding: "32px 28px 28px", fontFamily: FONT, color: INK }}
+                      >
+                        <table role="presentation" cellPadding={0} cellSpacing={0} border={0}>
+                          <tbody>
+                            <tr>
+                              <td
+                                className="hero-plate"
+                                bgcolor={CARD}
+                                style={{ backgroundColor: CARD, padding: 0 }}
+                                dangerouslySetInnerHTML={{
+                                  __html: `<img class="hero" src="${esc(WARM_DEMO_HERO_SRC)}" alt="${esc(WARM_DEMO_HERO_ALT)}" width="${WARM_DEMO_HERO_WIDTH}" height="${WARM_DEMO_HERO_HEIGHT}" style="display:block;width:${WARM_DEMO_HERO_WIDTH}px;height:${WARM_DEMO_HERO_HEIGHT}px;border:0;outline:none;text-decoration:none;color:${INK};background-color:${CARD};font-family:${FONT};font-size:16px;font-weight:700;line-height:20px;" />`,
+                                }}
+                              />
+                            </tr>
+                          </tbody>
+                        </table>
 
-          <Hr
-            style={{
-              margin: "24px 0",
-              borderColor: LINE,
-              borderStyle: "solid",
-              borderWidth: "1px 0 0",
-            }}
-          />
+                        <h1
+                          className="ink"
+                          style={{
+                            margin: "28px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 32,
+                            lineHeight: "38px",
+                            fontWeight: 700,
+                            letterSpacing: "-0.03em",
+                            color: INK,
+                          }}
+                        >
+                          Meet your AI finance team
+                        </h1>
+                        <p
+                          className="muted"
+                          style={{
+                            margin: "12px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 16,
+                            lineHeight: "24px",
+                            color: MUTED,
+                          }}
+                        >
+                          {TRY_OUTREACH_OPENING}
+                        </p>
 
-          <Text
-            style={{ margin: 0, fontFamily: FONT, fontSize: 12, lineHeight: "18px", color: QUIET }}
-          >
-            <Link
-              href={TRY_OUTREACH_UNSUBSCRIBE_URL}
-              style={{ color: BLUE, textDecoration: "underline" }}
-            >
-              Unsubscribe
-            </Link>
-          </Text>
-          <Text
-            style={{
-              margin: "8px 0 0",
-              fontFamily: FONT,
-              fontSize: 12,
-              lineHeight: "18px",
-              color: QUIET,
-            }}
-          >
-            {TRY_OUTREACH_ADDRESS}
-          </Text>
-        </Container>
+                        {AGENTS.map((agent) => (
+                          <Fragment key={agent.name}>
+                            <h2
+                              className="ink"
+                              style={{
+                                margin: "18px 0 0",
+                                fontFamily: FONT,
+                                fontSize: 16,
+                                lineHeight: "22px",
+                                fontWeight: 700,
+                                color: INK,
+                              }}
+                            >
+                              {agent.name}
+                            </h2>
+                            <p
+                              className="muted"
+                              style={{
+                                margin: "4px 0 0",
+                                fontFamily: FONT,
+                                fontSize: 15,
+                                lineHeight: "22px",
+                                color: MUTED,
+                              }}
+                            >
+                              {agent.line}
+                            </p>
+                          </Fragment>
+                        ))}
+
+                        <h2
+                          className="ink"
+                          style={{
+                            margin: "28px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 16,
+                            lineHeight: "22px",
+                            fontWeight: 700,
+                            color: INK,
+                          }}
+                        >
+                          Example result
+                        </h2>
+                        {EXAMPLE_LINES.map((line) => (
+                          <p
+                            key={line}
+                            className="ink"
+                            style={{
+                              margin: "8px 0 0",
+                              fontFamily: FONT,
+                              fontSize: 15,
+                              lineHeight: "22px",
+                              color: INK,
+                            }}
+                          >
+                            {line}
+                          </p>
+                        ))}
+                        <p
+                          className="muted"
+                          style={{
+                            margin: "12px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 15,
+                            lineHeight: "22px",
+                            color: MUTED,
+                          }}
+                        >
+                          {TRY_OUTREACH_EXAMPLE_NOTE}
+                        </p>
+                        <p
+                          className="muted"
+                          style={{
+                            margin: "8px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 15,
+                            lineHeight: "22px",
+                            color: MUTED,
+                          }}
+                        >
+                          {TRY_OUTREACH_EXAMPLE_CLOSE}
+                        </p>
+
+                        <p
+                          className="link"
+                          style={{
+                            margin: "28px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 12,
+                            lineHeight: "16px",
+                            fontWeight: 700,
+                            letterSpacing: "0.12em",
+                            textTransform: "uppercase",
+                            color: BLUE,
+                          }}
+                        >
+                          {TRY_OUTREACH_INCENTIVES_KICKER}
+                        </p>
+                        {TRY_OUTREACH_INCENTIVES.map((line) => (
+                          <p
+                            key={line}
+                            className="ink"
+                            style={{
+                              margin: "8px 0 0",
+                              fontFamily: FONT,
+                              fontSize: 16,
+                              lineHeight: "22px",
+                              fontWeight: 700,
+                              color: INK,
+                            }}
+                          >
+                            {line}
+                          </p>
+                        ))}
+
+                        <table
+                          role="presentation"
+                          cellPadding={0}
+                          cellSpacing={0}
+                          border={0}
+                          align="center"
+                          style={{ marginTop: 28 }}
+                        >
+                          <tbody>
+                            <tr>
+                              <td
+                                align="center"
+                                bgcolor={GOLD}
+                                className="cta-bg"
+                                style={{
+                                  backgroundColor: GOLD,
+                                  borderRadius: 999,
+                                  color: INK,
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html: bulletproofCta(ctaHref, TRY_OUTREACH_CTA_LABEL),
+                                }}
+                              />
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        <p
+                          className="muted"
+                          style={{
+                            margin: "14px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 14,
+                            lineHeight: "20px",
+                            textAlign: "center",
+                            color: MUTED,
+                          }}
+                        >
+                          Ready to run it on your own clients?{" "}
+                          <a
+                            href={TRY_OUTREACH_SIGNUP_URL}
+                            className="link"
+                            style={{ color: BLUE, fontWeight: 700, textDecoration: "underline" }}
+                          >
+                            {TRY_OUTREACH_SIGNUP_LABEL}
+                          </a>
+                        </p>
+
+                        <p
+                          className="muted"
+                          style={{
+                            margin: "28px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 14,
+                            lineHeight: "20px",
+                            color: MUTED,
+                          }}
+                        >
+                          {TRY_OUTREACH_SIGN_OFF}
+                        </p>
+
+                        <table
+                          role="presentation"
+                          width="100%"
+                          cellPadding={0}
+                          cellSpacing={0}
+                          border={0}
+                          style={{ marginTop: 24 }}
+                        >
+                          <tbody>
+                            <tr>
+                              <td
+                                className="rule"
+                                style={{
+                                  borderTop: `1px solid ${LINE}`,
+                                  fontSize: 0,
+                                  lineHeight: 0,
+                                }}
+                              >
+                                &nbsp;
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        <p
+                          className="quiet"
+                          style={{
+                            margin: "16px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 12,
+                            lineHeight: "18px",
+                            color: QUIET,
+                          }}
+                        >
+                          <a
+                            href={TRY_OUTREACH_UNSUBSCRIBE_URL}
+                            className="link"
+                            style={{ color: BLUE, textDecoration: "underline" }}
+                          >
+                            Unsubscribe
+                          </a>
+                        </p>
+                        <p
+                          className="quiet"
+                          style={{
+                            margin: "8px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 12,
+                            lineHeight: "18px",
+                            color: QUIET,
+                          }}
+                        >
+                          {TRY_OUTREACH_ADDRESS}
+                        </p>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </Body>
     </Html>
   );
