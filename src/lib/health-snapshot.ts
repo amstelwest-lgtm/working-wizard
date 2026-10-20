@@ -363,11 +363,8 @@ export function healthSnapshotPromptBlock(snapshot: HealthScoreSnapshot): string
 type SnapshotQuery = {
   from: (table: string) => {
     select: (columns: string) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        maybeSingle: () => Promise<{
+      eq: (column: string, value: string) => {
+        maybeSingle: () => PromiseLike<{
           data: Record<string, unknown> | null;
           error: { message: string } | null;
         }>;
@@ -376,14 +373,19 @@ type SnapshotQuery = {
   };
 };
 
-/** Books on file, read at generation time. A miss does not block the write. */
+/**
+ * Books on file, read at generation time. A miss does not block the write.
+ * The client is the Supabase service client. It is accepted as unknown so the
+ * PostgREST generics are not expanded at every call.
+ */
 export async function loadHealthScoreSnapshot(
-  db: SnapshotQuery,
+  db: unknown,
   clientId: string,
   market?: unknown,
 ): Promise<HealthScoreSnapshot | null> {
+  const query = db as SnapshotQuery;
   try {
-    const { data, error } = await db
+    const { data, error } = await query
       .from("clients")
       .select("financials, cashflow, financials_updated_at, market")
       .eq("id", clientId)
