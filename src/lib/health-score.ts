@@ -402,6 +402,31 @@ export function scorecardHealthFromFinancials(input: {
  * the pack all quote. Industry, the cash floor, and a missing opening are
  * applied here. An empty book stays unscored: the floor must not invent one.
  */
+/**
+ * Same equity the Score tab shows. A blank total is assets − liabilities
+ * (payables when the sheet has no liability total). A typed total stays.
+ * The client list stores the blank; Health scores the plugged figure.
+ */
+function booksWithReadTimeEquity(
+  financials: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!financials) return null;
+  const resolved = coherentEquity(financials);
+  const current = financials.equity == null ? "" : String(financials.equity).trim();
+  if (
+    resolved.equity === "" ||
+    !(resolved.derived || resolved.preClose || resolved.equity !== current)
+  ) {
+    return financials;
+  }
+  return {
+    ...financials,
+    equity: resolved.equity,
+    ...(resolved.derived ? { equityDerived: "1" } : {}),
+    ...(resolved.preClose ? { periodProfitInEquity: String(resolved.profitIncluded) } : {}),
+  };
+}
+
 export function liveHealthFromBooks(input: {
   financials?: Record<string, unknown> | null;
   cashflow?: unknown;
@@ -413,21 +438,22 @@ export function liveHealthFromBooks(input: {
   timeZone?: string | null;
   now?: Date;
 }): OverallHealth {
-  const financials =
+  const stored =
     input.financials && typeof input.financials === "object" && !Array.isArray(input.financials)
       ? input.financials
       : null;
-  if (!hasFinancialEvidence({ financials, cashflow: input.cashflow })) {
+  if (!hasFinancialEvidence({ financials: stored, cashflow: input.cashflow })) {
     return healthWithoutEvidence(
       scorecardHealthFromFinancials({
-        financials,
+        financials: stored,
         fyStartMonth: input.fyStartMonth,
-        periodMonths: financials ? periodMonthsOf(financials) : null,
+        periodMonths: stored ? periodMonthsOf(stored) : null,
         market: input.market,
         industry: input.industry,
       }),
     );
   }
+  const financials = booksWithReadTimeEquity(stored);
   const assessed = assessClientMetrics({
     financials,
     cashflow: input.cashflow,

@@ -242,6 +242,7 @@
     "test:accountant-qa-retest": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-retest-test.mts",
     "test:health-score": "vite-node --config scripts/vite-test.config.ts scripts/health-score-test.mts",
     "test:live-health-single-source": "vite-node --config scripts/vite-test.config.ts scripts/live-health-single-source-test.mts",
+    "test:live-score-repeat": "vite-node --config scripts/vite-test.config.ts scripts/live-score-repeat-test.mts",
     "test:draft-live-figures": "vite-node --config scripts/vite-test.config.ts scripts/draft-live-figures-test.mts",
     "test:no-evidence": "vite-node --config scripts/vite-test.config.ts scripts/no-evidence-client-test.mts",
     "test:pl-only-cash": "vite-node --config scripts/vite-test.config.ts scripts/pl-only-cash-test.mts",

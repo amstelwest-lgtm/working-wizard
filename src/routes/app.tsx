@@ -321,6 +321,7 @@ import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { computeIsStale } from "@/components/review-signoff";
+import { healthSignoffIsStale } from "@/lib/signoff-status";
 import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import { OwnerPageHead } from "@/components/owner-ui";
 import {
@@ -2694,6 +2695,9 @@ function Index() {
     Partial<Record<ReviewScope, ClientReviewSignoff>>
   >({});
   const financialsSignoff = reviewSignoffs.financials ?? null;
+  const [ownerScoreHistory, setOwnerScoreHistory] = useState<
+    { period_date: string; score: number | string | null }[]
+  >([]);
   const profitabilitySignoff = reviewSignoffs.profitability ?? null;
   const cashForecastSignoff = reviewSignoffs.cash_forecast ?? null;
   const budgetSignoff = reviewSignoffs.budget ?? null;
@@ -2702,6 +2706,7 @@ function Index() {
   useEffect(() => {
     if (!effectiveClientId) {
       setReviewSignoffs({});
+      setOwnerScoreHistory([]);
       return;
     }
     fetchReviewSignoffs({ data: { clientId: effectiveClientId } })
@@ -2710,6 +2715,24 @@ function Index() {
       })
       .catch(() => {
         // Sign-off state is a trust-signal enhancement, never block the dashboard.
+      });
+    supabase
+      .from("client_score_history")
+      .select("period_date, score")
+      .eq("client_id", effectiveClientId)
+      .order("period_date", { ascending: false })
+      .limit(24)
+      .then(({ data, error }) => {
+        if (error) {
+          setOwnerScoreHistory([]);
+          return;
+        }
+        setOwnerScoreHistory(
+          (data ?? []).map((row) => ({
+            period_date: row.period_date,
+            score: row.score,
+          })),
+        );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveClientId]);
@@ -3745,6 +3768,12 @@ function Index() {
     timeZone: boardMarket.timezone,
   });
   const overallHealth = ownerEvidence ? scoredHealth : healthWithoutEvidence(scoredHealth);
+  const financialsSignoffStale = healthSignoffIsStale({
+    signoff: financialsSignoff,
+    dataUpdatedAt: clientMeta?.financials_updated_at ?? null,
+    liveHealth: overallHealth.overall,
+    scoreHistory: ownerScoreHistory,
+  });
   const ownerStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -4229,10 +4258,7 @@ function Index() {
                         <div className="owner-health-hero">
                           <OwnerSignoffMark
                             signoff={financialsSignoff}
-                            isStale={computeIsStale(
-                              financialsSignoff,
-                              clientMeta?.financials_updated_at ?? null,
-                            )}
+                            isStale={financialsSignoffStale}
                             className="mb-2"
                           />
                           <OwnerHealthOrb
@@ -5393,10 +5419,7 @@ function Index() {
                                 <div className="relative rounded-xl border border-[#DBEAFE] bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                                   <OwnerSignoffMark
                                     signoff={financialsSignoff}
-                                    isStale={computeIsStale(
-                                      financialsSignoff,
-                                      clientMeta?.financials_updated_at ?? null,
-                                    )}
+                                    isStale={financialsSignoffStale}
                                     className="mb-2"
                                   />
                                   <SphereHero
@@ -5475,10 +5498,7 @@ function Index() {
                           </span>
                           <OwnerSignoffMark
                             signoff={financialsSignoff}
-                            isStale={computeIsStale(
-                              financialsSignoff,
-                              clientMeta?.financials_updated_at ?? null,
-                            )}
+                            isStale={financialsSignoffStale}
                           />
                         </div>
                         {isUsCopy(boardMarket) && (

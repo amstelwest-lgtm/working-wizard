@@ -207,14 +207,44 @@ export function reviewFiguresChanged(input: {
   return dated.some((snap) => snap.ms > cutoff && snap.key !== then.key);
 }
 
+/** A numeric column can arrive as a string. Both still count as the signed score. */
+export function finiteHistoryScore(score: number | string | null | undefined): number | null {
+  if (score == null || score === "") return null;
+  const n = typeof score === "number" ? score : Number(score);
+  return Number.isFinite(n) ? n : null;
+}
+
 /** Latest score history row on or before the sign-off day. Read-side. */
 export function signedHealthFromHistory(
-  history: readonly { period_date: string; score: number }[] | null | undefined,
+  history: readonly { period_date: string; score: number | string | null }[] | null | undefined,
   signedOffAt: string,
 ): number | null {
   const day = signedOffAt.slice(0, 10);
   const prior = (history ?? [])
-    .filter((row) => row.period_date <= day && Number.isFinite(row.score))
+    .filter((row) => row.period_date <= day && finiteHistoryScore(row.score) != null)
     .sort((a, b) => b.period_date.localeCompare(a.period_date));
-  return prior[0]?.score ?? null;
+  return finiteHistoryScore(prior[0]?.score);
+}
+
+/**
+ * Health sign-off on the owner mark and the accountant Score tab.
+ * A live score that no longer matches the score on file at sign-off is stale
+ * even when the books timestamp is older than the signature.
+ */
+export function healthSignoffIsStale(input: {
+  signoff?: { signed_off_at: string } | null;
+  dataUpdatedAt?: string | null;
+  snapshots?: readonly SignoffPeriodSnapshot[] | null;
+  liveHealth?: number | null;
+  scoreHistory?: readonly { period_date: string; score: number | string | null }[] | null;
+}): boolean {
+  const signedOffAt = input.signoff?.signed_off_at;
+  if (!signedOffAt) return false;
+  return reviewFiguresChanged({
+    signedOffAt,
+    dataUpdatedAt: input.dataUpdatedAt,
+    snapshots: input.snapshots,
+    liveHealth: input.liveHealth,
+    signedHealth: signedHealthFromHistory(input.scoreHistory, signedOffAt),
+  });
 }
