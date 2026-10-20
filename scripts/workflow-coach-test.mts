@@ -201,13 +201,29 @@ assert(
   "a failed sync with no snapshot does not mark Data done",
 );
 
-const freshLine = dataFreshnessLine({ xero: synced, qbo: null, snapshotPeriod: "Aug 2026" });
+const coachMarket = { locale: "en-ZA", timezone: "Africa/Johannesburg" };
+const freshLine = dataFreshnessLine({
+  xero: synced,
+  qbo: null,
+  snapshotPeriod: "Aug 2026",
+  market: coachMarket,
+});
 assert(freshLine.includes("Xero"), "freshness names Xero");
 assert(freshLine.includes("Sep 2026"), "freshness keeps the period");
 assert(freshLine.startsWith("Last sync"), "freshness leads with the last sync");
-const snapLine = dataFreshnessLine({ xero: null, qbo: null, snapshotPeriod: "Aug 2026" });
+const snapLine = dataFreshnessLine({
+  xero: null,
+  qbo: null,
+  snapshotPeriod: "Aug 2026",
+  market: coachMarket,
+});
 assert(snapLine.includes("Aug 2026"), "a snapshot period stands in when nothing has synced");
-const emptyLine = dataFreshnessLine({ xero: null, qbo: null, snapshotPeriod: null });
+const emptyLine = dataFreshnessLine({
+  xero: null,
+  qbo: null,
+  snapshotPeriod: null,
+  market: coachMarket,
+});
 assert(emptyLine.includes("No sync yet"), "empty data says so");
 
 assert(
