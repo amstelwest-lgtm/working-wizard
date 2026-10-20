@@ -20,6 +20,7 @@ import {
   seedBudgetFromFinancials,
   STATEMENT_PERIOD_OUTSIDE_NOTE,
   STATEMENT_PERIOD_UNKNOWN_NOTE,
+  statementCoverMonthCount,
 } from "../src/lib/budget.bridges";
 import { computeBudgetMonths } from "../src/lib/budget.compute";
 import { fyMonths } from "../src/lib/budget.months";
@@ -275,6 +276,15 @@ const budgetPdf = readFileSync(resolve("src/reports/budget-variance.tsx"), "utf8
 assert(budgetPdf.includes("Budget ${fmtRand(row.budget, market)}"), "exec tiles lead with the total");
 assert(!budgetPdf.includes("value: signedMoney(row.delta, market)"), "exec tiles do not lead with the variance");
 assert(budgetPdf.includes("hideVariance"), "the PDF can leave variance columns off");
+const ownerRoute = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+assert(
+  ownerRoute.includes("statementCoverMonthCount"),
+  "the owner budget page does not treat a missing prior period as 12 months",
+);
+assert(
+  ownerRoute.includes("periodStart: v.periodStart"),
+  "the owner budget page passes the statement dates into the comparison",
+);
 
 const partialFin = {
   revenue: "700000",
@@ -307,6 +317,8 @@ assert(
 );
 assert(Math.abs((versusPartial?.revenue ?? 0) - 700000) < 1, "on-screen actual stays the statement total");
 assert(budgetComparisonNote(versusPartial) == null, "a real gap does not get the seeded note");
+assert(statementCoverMonthCount(partialFin) === 9, "owner prior-year cover follows the dated YTD");
+assert(statementCoverMonthCount(qaUs) === 12, "a stored 12-month cover stays 12 for the owner year strip");
 
 const unknownFin = {
   revenue: "700000",
@@ -328,6 +340,8 @@ const versusUnknown = budgetVersusStatement(doc, unknownFin, ZA_MARKET);
 assert(versusUnknown?.periodKnown === false, "on-screen period is unknown");
 assert(versusUnknown?.budgetRevenue == null, "on-screen does not invent a 12-month budget");
 assert(budgetComparisonNote(versusUnknown) === STATEMENT_PERIOD_UNKNOWN_NOTE, budgetComparisonNote(versusUnknown) ?? "");
+assert(statementCoverMonthCount(unknownFin) == null, "an unknown prior year is not counted as 12");
+assert(periodMonthsOf(unknownFin) === 12, "ratios still default a missing cover to 12");
 
 const outsideFin = {
   revenue: "700000",

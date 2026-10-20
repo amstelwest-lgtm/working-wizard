@@ -1105,6 +1105,16 @@ export function statementPeriodBasis(
   return { kind: "unknown" };
 }
 
+/** Month count for a comparison. Null when the period is not on file — not 12. */
+export function statementCoverMonthCount(
+  fin: Record<string, unknown> | null | undefined,
+): number | null {
+  const basis = statementPeriodBasis(fin);
+  if (basis.kind === "stored") return basis.months;
+  if (basis.kind === "dated") return basis.keys.length;
+  return null;
+}
+
 /** Months of this plan the statement is scored against. Null when the period is unknown. */
 export function varianceWindowKeys(
   basis: StatementPeriodBasis,
