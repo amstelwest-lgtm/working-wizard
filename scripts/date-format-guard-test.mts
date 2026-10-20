@@ -299,6 +299,39 @@ function scanSource(rel: string, raw: string): Finding[] {
     });
   }
 
+  for (const [start, end] of spans) {
+    let i = start + 1;
+    let staticText = "";
+    while (i < end) {
+      if (src[i] === "`") break;
+      if (src[i] === "\\") {
+        staticText += src[i + 1] ?? "";
+        i += 2;
+        continue;
+      }
+      if (src[i] === "$" && src[i + 1] === "{") {
+        const exprEnd = skipBraceOpaque(src, i + 1) - 1;
+        const expr = src.slice(i + 2, exprEnd).trim();
+        if (/as of\s*$/i.test(staticText)) {
+          const name = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(expr)?.[1];
+          if (!name || !FORMATTERS.includes(name)) {
+            const lineNo = lineAt(src, i);
+            findings.push({
+              line: lineNo,
+              endLine: lineNo,
+              message: `${rel}:${lineNo} interpolates an ISO date into as-of copy`,
+            });
+          }
+        }
+        staticText = "";
+        i = exprEnd + 1;
+        continue;
+      }
+      staticText += src[i];
+      i++;
+    }
+  }
+
   function walkTemplateExprs(i: number): number {
     i++;
     while (i < src.length) {
@@ -502,6 +535,21 @@ assertScan("src/example.ts", "const label = `${d.getHours()}:${d.getMinutes()}`\
 assertScan("src/example.ts", "return `added ${date.getUTCDate()} ${month} ${date.getUTCFullYear()}`\n", [
   "src/example.ts:1 prints a calendar day inside a template string",
 ]);
+assertScan(
+  "src/example.ts",
+  "return `Aged receivables as of ${snap.asOf} · nothing outstanding`\n",
+  ["src/example.ts:1 interpolates an ISO date into as-of copy"],
+);
+assertScan(
+  "src/example.ts",
+  "return `Aged receivables as of ${formatIsoDateUTC(snap.asOf, market)} · nothing outstanding`\n",
+  [],
+);
+assertScan(
+  "src/example.ts",
+  "return `Balance sheet as of ${formatIsoDateUTC(asOf, market)}`\n",
+  [],
+);
 assertScan("src/example.ts", "const h = now.getHours()\n", []);
 assertScan("src/example.ts", "token.slice(0, 16)\n", []);
 assertScan(

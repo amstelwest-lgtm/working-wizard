@@ -11,6 +11,7 @@ import {
   type SyncResult,
 } from "@/lib/qbo.functions";
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { LedgerCheckPending, useLedgerCheckSlow } from "@/components/ledger-connect-status";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { yearToDateTitle } from "@/lib/statement-period";
 import { useMarketFormat } from "@/contexts/market";
@@ -43,7 +44,8 @@ export function QboConnectCard({
   financials,
   market,
 }: Props) {
-  const { dateTime } = useMarketFormat();
+  const { dateTime, market: contextMarket } = useMarketFormat();
+  const dateMarket = market ?? contextMarket;
   const fetchStatus = useServerFn(getQboStatus);
   const fetchAuthUrl = useServerFn(getQboAuthUrl);
   const doSync = useServerFn(triggerQboSync);
@@ -57,6 +59,7 @@ export function QboConnectCard({
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [lastSync, setLastSync] = useState<SyncResult["summary"] | null>(null);
+  const checkSlow = useLedgerCheckSlow(loadingStatus && configured === null);
 
   const load = async () => {
     if (!clientId) return;
@@ -127,12 +130,7 @@ export function QboConnectCard({
   if (!clientId) return null;
 
   if (loadingStatus && configured === null) {
-    return (
-      <div className="ledger-connect ledger-connect--panel ledger-connect--row">
-        <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-        <span className="ledger-connect__hint">Checking QuickBooks…</span>
-      </div>
-    );
+    return <LedgerCheckPending name="QuickBooks" slow={checkSlow} />;
   }
 
   if (configured === false) {
@@ -213,7 +211,7 @@ export function QboConnectCard({
                 lastSync?.agedArLine ?? status.agedArLine,
                 "ar",
                 financials,
-                market,
+                dateMarket,
               )}
             </p>
             <p id="qbo-aged-ap-status" className="ledger-connect__meta">
@@ -221,7 +219,7 @@ export function QboConnectCard({
                 lastSync?.agedApLine ?? status.agedApLine,
                 "ap",
                 financials,
-                market,
+                dateMarket,
               )}
             </p>
             {(lastSync?.openingCashNote ?? status.openingCashNote) ? (

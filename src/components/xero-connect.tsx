@@ -11,6 +11,7 @@ import {
   type XeroSyncResult,
 } from "@/lib/xero.functions";
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { LedgerCheckPending, useLedgerCheckSlow } from "@/components/ledger-connect-status";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { formatDateRange } from "@/lib/market/format";
 import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
@@ -84,6 +85,7 @@ export function XeroConnectCard({
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [lastSync, setLastSync] = useState<XeroSyncResult["summary"] | null>(null);
+  const checkSlow = useLedgerCheckSlow(loadingStatus && configured === null);
 
   const load = async () => {
     if (!clientId) return;
@@ -168,12 +170,7 @@ export function XeroConnectCard({
   if (!clientId) return null;
 
   if (loadingStatus && configured === null) {
-    return (
-      <div className="ledger-connect ledger-connect--panel ledger-connect--row">
-        <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-        <span className="ledger-connect__hint">Checking Xero…</span>
-      </div>
-    );
+    return <LedgerCheckPending name="Xero" slow={checkSlow} />;
   }
 
   if (configured === false) {
@@ -296,7 +293,7 @@ export function XeroConnectCard({
                   lastSync?.agedArLine ?? status.agedArLine,
                   "ar",
                   financials,
-                  market,
+                  dateMarket,
                 )}
               </span>
               <br />
@@ -305,7 +302,7 @@ export function XeroConnectCard({
                   lastSync?.agedApLine ?? status.agedApLine,
                   "ap",
                   financials,
-                  market,
+                  dateMarket,
                 )}
               </span>
             </p>

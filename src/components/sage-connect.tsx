@@ -10,6 +10,7 @@ import {
   type SageStatus,
 } from "@/lib/sage.functions";
 import { Unlink, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { LedgerCheckPending, useLedgerCheckSlow } from "@/components/ledger-connect-status";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { SAGE_CONNECTION_UNAVAILABLE, sageSyncPopulatedFields } from "@/lib/sage";
 
@@ -48,6 +49,7 @@ export function SageConnectCard({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [companyId, setCompanyId] = useState("");
+  const checkSlow = useLedgerCheckSlow(loadingStatus && configured === null);
 
   const load = async () => {
     if (!clientId) return;
@@ -142,12 +144,7 @@ export function SageConnectCard({
   if (!clientId) return null;
 
   if (loadingStatus && configured === null) {
-    return (
-      <div className="ledger-connect ledger-connect--panel ledger-connect--row">
-        <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-        <span className="ledger-connect__hint">Checking Sage…</span>
-      </div>
-    );
+    return <LedgerCheckPending name="Sage" slow={checkSlow} />;
   }
 
   if (configured === false) {

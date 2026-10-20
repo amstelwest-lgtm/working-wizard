@@ -1,3 +1,5 @@
+import { formatIsoDateUTC } from "./statement-period.ts";
+
 /**
  * Aged receivables chase list — pure parsers and drafts.
  * Xero and QuickBooks sync write this shape into `*_sync_data.data_type = 'aged_ar'`.
@@ -462,7 +464,12 @@ export function sourceLabel(source: CollectionsSource): string {
   return "QuickBooks";
 }
 
-export function agedArProofLine(snap: CollectionsSnapshot | null | undefined): string {
+type AsOfMarket = { locale?: string | null } | null | undefined;
+
+export function agedArProofLine(
+  snap: CollectionsSnapshot | null | undefined,
+  market?: AsOfMarket,
+): string {
   if (!snap) return AGED_AR_PENDING;
   if (snap.source === "invoices") {
     const contacts = `${snap.contactCount} customer${snap.contactCount === 1 ? "" : "s"}`;
@@ -473,7 +480,9 @@ export function agedArProofLine(snap: CollectionsSnapshot | null | undefined): s
     return `Sales invoices on file · ${contacts}${invoices}`;
   }
   if (snap.status === "skipped") return snap.skipReason ?? "Aged receivables were not applied";
-  const when = snap.asOf ? `as of ${snap.asOf}` : "applied";
+  const when = snap.asOf
+    ? `as of ${formatIsoDateUTC(snap.asOf, market ?? { locale: null })}`
+    : "applied";
   if (snap.contactCount === 0) {
     if (Math.abs(snap.totalOutstanding) >= 0.005) {
       return `Aged receivables ${when} · ${moneyPlain(snap.totalOutstanding)} outstanding`;
@@ -1022,10 +1031,13 @@ function moneyPlain(n: number): string {
   return n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function collectionsPromptBlock(snap: CollectionsSnapshot | null): string {
+export function collectionsPromptBlock(
+  snap: CollectionsSnapshot | null,
+  market?: AsOfMarket,
+): string {
   if (!snap || snap.status !== "applied" || snap.contacts.length === 0) return "";
   const lines = [
-    `Aged receivables (${sourceLabel(snap.source)}${snap.asOf ? `, as of ${snap.asOf}` : ""}):`,
+    `Aged receivables (${sourceLabel(snap.source)}${snap.asOf ? `, as of ${formatIsoDateUTC(snap.asOf, market ?? { locale: null })}` : ""}):`,
     `Overdue total: ${moneyPlain(snap.totalOverdue)}. Outstanding total: ${moneyPlain(snap.totalOutstanding)}. Contacts: ${snap.contactCount}. Invoice lines: ${snap.invoiceCount}.`,
   ];
   if (snap.monthAgeing) {
@@ -1058,10 +1070,15 @@ export function collectionsPromptBlock(snap: CollectionsSnapshot | null): string
   return lines.join("\n");
 }
 
-export function buildCollectionsDraft(snap: CollectionsSnapshot | null): CollectionsDraft | null {
+export function buildCollectionsDraft(
+  snap: CollectionsSnapshot | null,
+  market?: AsOfMarket,
+): CollectionsDraft | null {
   if (!snap || snap.status !== "applied" || snap.totalOverdue < 0.005) return null;
   const books = sourceLabel(snap.source);
-  const asOf = snap.asOf ? ` as of ${snap.asOf}` : "";
+  const asOf = snap.asOf
+    ? ` as of ${formatIsoDateUTC(snap.asOf, market ?? { locale: null })}`
+    : "";
   const lines: string[] = [];
   snap.contacts
     .filter((contact) => contact.overdue >= 0.005)

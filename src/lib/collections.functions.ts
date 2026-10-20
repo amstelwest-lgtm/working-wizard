@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
+import { marketForClient } from "@/lib/market/scope";
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import {
   agedArProofLine,
@@ -43,10 +44,11 @@ export const getCollections = createServerFn({ method: "POST" })
     assertClientScope(context.actingAsClientId, data.clientId);
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id")
+      .select("id, market")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
+    const market = marketForClient(client as { market?: unknown });
 
     const [xero, qbo, sage] = await Promise.all([
       readAged("xero_sync_data", data.clientId),
@@ -56,11 +58,11 @@ export const getCollections = createServerFn({ method: "POST" })
     const ledger = chooseCollections([xero, qbo, sage]);
     const named =
       ledger != null && ledger.status === "applied" && ledger.contacts.some((contact) => contact.name.trim());
-    if (named) return { snapshot: ledger, line: agedArProofLine(ledger) };
+    if (named) return { snapshot: ledger, line: agedArProofLine(ledger, market) };
 
     const invoices = await salesInvoicesForClient(data.clientId);
-    if (invoices) return { snapshot: invoices, line: agedArProofLine(invoices) };
-    return { snapshot: ledger, line: agedArProofLine(ledger) };
+    if (invoices) return { snapshot: invoices, line: agedArProofLine(invoices, market) };
+    return { snapshot: ledger, line: agedArProofLine(ledger, market) };
   });
 
 type SalesExtractionRow = { fields: unknown; created_at: string | null };

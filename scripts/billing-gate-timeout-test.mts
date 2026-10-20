@@ -4,6 +4,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { ledgerCheckView } from "../src/components/ledger-connect-status.tsx";
 import { raceShellGate, shellGateRemaining, SHELL_GATE_TIMEOUT_MS } from "../src/lib/shell-gate";
 
 function assert(cond: boolean, msg: string) {
@@ -11,6 +12,9 @@ function assert(cond: boolean, msg: string) {
 }
 
 assert(SHELL_GATE_TIMEOUT_MS === 8_000, "the shell opens after about 8 seconds");
+assert(ledgerCheckView(true, 7_999) === "checking", "a ledger check still says checking before 8 seconds");
+assert(ledgerCheckView(true, 8_000) === "waiting", "a ledger check tells the truth after 8 seconds");
+assert(ledgerCheckView(false, 11_000) === "settled", "a finished ledger check leaves the waiting line");
 assert(shellGateRemaining(1_000, 1_000) === 8_000, "a fresh check has the full wait");
 assert(shellGateRemaining(1_000, 5_000) === 4_000, "elapsed time shortens the remaining wait");
 assert(shellGateRemaining(1_000, 20_000) === 0, "a check past the deadline has no wait left");

@@ -6,6 +6,7 @@
  * Writes status=proposed / gap status=draft only. Never signed_off.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 import { callClaude } from "../ask-ai/anthropic.ts";
 import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
@@ -209,7 +210,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     userClient
       .from("clients")
       .select(
-        "name, business_type, firm_id, operating_profile, brain_summary, brain_summary_updated_at, cashflow, financials, financials_updated_at",
+        "name, business_type, firm_id, operating_profile, brain_summary, brain_summary_updated_at, cashflow, financials, financials_updated_at, market",
       )
       .eq("id", clientId)
       .maybeSingle(),
@@ -396,7 +397,10 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     readCollectionsSnapshot(xeroArRes.data?.raw_data),
     readCollectionsSnapshot(qboArRes.data?.raw_data),
   ]);
-  const collectionsBlock = collectionsPromptBlock(collectionsSnap);
+  const proposeMarket = marketForClient({
+    market: clientRes.data && "market" in clientRes.data ? clientRes.data.market : null,
+  });
+  const collectionsBlock = collectionsPromptBlock(collectionsSnap, proposeMarket);
   if (collectionsBlock) contextLines.push(collectionsBlock);
   const payablesSnap = choosePayables([
     readPayablesSnapshot(xeroApRes.data?.raw_data),
@@ -415,7 +419,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
       typeof client?.financials_updated_at === "string" ? client.financials_updated_at : null,
   });
   const runwayWeeks = persistedRunwayWeeks(assessed.runway);
-  const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks);
+  const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks, proposeMarket);
   if (payablesBlock) contextLines.push(payablesBlock);
 
   let skippedReason: "ai_not_configured" | "empty_context" | undefined;
@@ -502,7 +506,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     stepsInserted = toInsert.length;
   }
 
-  const collectionsDraft = buildCollectionsDraft(collectionsSnap);
+  const collectionsDraft = buildCollectionsDraft(collectionsSnap, proposeMarket);
   let openAfterPropose =
     existingSteps.filter((step) => step.status === "proposed" || step.status === "edited").length +
     toInsert.length;
@@ -543,7 +547,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     }
   }
 
-  const payablesDraft = buildPayablesDraft(payablesSnap, runwayWeeks);
+  const payablesDraft = buildPayablesDraft(payablesSnap, runwayWeeks, proposeMarket);
   if (
     payablesDraft &&
     openAfterPropose < MAX_OPEN_PROPOSED_STEPS &&
