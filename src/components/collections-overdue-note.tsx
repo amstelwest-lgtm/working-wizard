@@ -7,6 +7,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getCollections } from "@/lib/collections.functions";
 import { sourceLabel } from "@/lib/collections";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
+import { formatIsoDateUTC } from "@/lib/statement-period";
 
 type Props = {
   clientId: string | null;
@@ -32,7 +33,9 @@ export function CollectionsOverdueNote({ clientId, market }: Props) {
           maximumFractionDigits: 0,
         });
         const who = `${snap.contactCount} customer${snap.contactCount === 1 ? "" : "s"}`;
-        const when = snap.asOf ? ` · as of ${snap.asOf}` : "";
+        const when = snap.asOf
+          ? ` · as of ${formatIsoDateUTC(snap.asOf, market ?? { locale: null })}`
+          : "";
         setLine(`Overdue to collect · ${amount} · ${who}${when} · ${sourceLabel(snap.source)}`);
       })
       .catch(() => {

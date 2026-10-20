@@ -29,6 +29,7 @@ type ListedClient = {
   ownerUserId: string | null;
   contactEmail: string | null;
   createdAt: string | null;
+  market: unknown;
   statementName: string | null;
   ledgerNames: string[];
   profileEmail: string | null;
@@ -93,6 +94,7 @@ function toFinderClient(row: ListedClient): FinderClient {
     businessName,
     ownerEmail,
     createdAt: row.createdAt,
+    market: row.market,
   };
 }
 
@@ -108,7 +110,7 @@ export async function listFirmClients(input: {
   try {
     let query = supabase
       .from("clients")
-      .select("id, name, client_code, contact_email, created_at, owner_user_id, financials")
+      .select("id, name, client_code, contact_email, created_at, owner_user_id, financials, market")
       .order("created_at", { ascending: false });
     if (firmId) {
       query = query.or(firmClientOrFilter(firmId, userId));
@@ -131,6 +133,7 @@ export async function listFirmClients(input: {
         ownerUserId: clean(row.owner_user_id),
         contactEmail: clean(row.contact_email),
         createdAt: clean(row.created_at),
+        market: row.market ?? null,
         statementName: businessNameFromFinancials(row.financials),
         ledgerNames: [],
         profileEmail: null,

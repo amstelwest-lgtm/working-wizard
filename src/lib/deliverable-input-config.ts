@@ -15,6 +15,7 @@ import type { BudgetSeasonality } from "./budget.types.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
 import type { StatementWorkingCapital } from "./collections.ts";
 import { formatMoney, type MoneyMarket } from "./market/format.ts";
+import { formatIsoDates } from "./owner-reply-format.ts";
 
 export const DELIVERABLE_INPUT_IDS = [
   "cash",
@@ -275,10 +276,11 @@ export function ratiosAgedReadLine(
   financials: DayCoverFinancials,
   market?: MoneyMarket,
 ): string {
-  if (!/nothing outstanding/i.test(agedLine)) return agedLine;
+  const dated = formatIsoDates(agedLine, market ?? { locale: null });
+  if (!/nothing outstanding/i.test(dated)) return dated;
   const position = ratiosStatementFigures(financials);
   const amount = kind === "ar" ? position.receivables : position.payables;
-  if (amount == null || Math.abs(amount) < 0.005) return agedLine;
+  if (amount == null || Math.abs(amount) < 0.005) return dated;
   const days = kind === "ar" ? position.debtorDays : position.creditorDays;
   const money = formatMoney(amount, market, {
     minimumFractionDigits: 2,
@@ -287,7 +289,7 @@ export function ratiosAgedReadLine(
   const noun = kind === "ar" ? "accounts receivable" : "accounts payable";
   const dayLabel = kind === "ar" ? "Days AR" : "Days AP";
   const dayBit = days != null ? ` · ${dayLabel} ${days}` : "";
-  return agedLine.replace(/nothing outstanding/i, `${noun} ${money} on the statements${dayBit}`);
+  return dated.replace(/nothing outstanding/i, `${noun} ${money} on the statements${dayBit}`);
 }
 
 /**

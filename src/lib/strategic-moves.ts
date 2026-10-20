@@ -3,6 +3,7 @@
  * Action Plan both import. Titles are the first playbook step for each ratio.
  * Rank once here so Moves and Plan cannot drift.
  */
+import { connectBooksHeadline } from "@/lib/client-metrics";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { PILLAR_LABELS, type HealthPillarId } from "@/lib/health-score";
 import { moveFactorLabel, strategicMovePillar } from "@/lib/move-pillars";
@@ -530,7 +531,31 @@ export function rankStrategicMoves(input: {
   /** Shared weakest pillar. Moves in that pillar rank first. */
   weakestPillar?: HealthPillarId | null;
   limit?: number;
+  /**
+   * False when the file has no synced figures and no parsed statement.
+   * The list is then the connect action only — not the generic catalogue.
+   */
+  hasEvidence?: boolean;
+  market?: { country?: string | null; copyPack?: string | null; locale?: string | null } | null;
 }): RankedStrategicMove[] {
+  if (input.hasEvidence === false) {
+    const title = connectBooksHeadline(input.market).replace(/\.$/, "");
+    return [
+      {
+        key: "connectBooks",
+        title,
+        ratioName: "Books",
+        icon: "📒",
+        actions: [title],
+        impact: 10,
+        impactLine: "Scores and moves wait until the books or a statement are on file.",
+        cynefin: "Clear",
+        eisenhower: "Do",
+        health: Number.NaN,
+        score: 0,
+      },
+    ];
+  }
   const suppressed = new Set(input.suppressKeys ?? []);
   const debtorsAlreadyHealthy = debtorDaysAreHealthy(input.debtorDays);
   const keepStock = stockSittingApplies(input.profile);

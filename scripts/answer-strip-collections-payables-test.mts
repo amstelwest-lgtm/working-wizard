@@ -128,7 +128,7 @@ assert(
   "the proof line is not the collections answer",
 );
 assert(
-  agedArProofLine(chased) === "Aged receivables as of 2026-09-30 · 1 contact · 1 invoice",
+  agedArProofLine(chased) === "Aged receivables as of 30 Sep 2026 · 1 contact · 1 invoice",
   "the proof line stays available for the drawer",
 );
 assert(
@@ -225,7 +225,7 @@ assert(
   "the proof line is not the payables answer",
 );
 assert(
-  agedApProofLine(supplied) === "Aged payables as of 2026-09-30 · 1 supplier · 1 bill",
+  agedApProofLine(supplied) === "Aged payables as of 30 Sep 2026 · 1 supplier · 1 bill",
   "the proof line stays available for the drawer",
 );
 assert(
@@ -299,8 +299,8 @@ assert(!collections.includes('figureSourceChipLabel("statement")'), "collections
 assert(payables.includes("figureSourceChipLabel(snapshot.source)"), "payables chips the snapshot source");
 assert(payables.includes("figureSourceChipLabel(statementSource)"), "payables chips the statement source");
 assert(!payables.includes('figureSourceChipLabel("statement")'), "payables does not invent a Statement chip");
-assert(collections.includes("agedArProofLine(snapshot)"), "the collections proof line is the drawer hint");
-assert(payables.includes("agedApProofLine(snapshot)"), "the payables proof line is the drawer hint");
+assert(collections.includes("agedArProofLine(snapshot, market)"), "the collections proof line is the drawer hint");
+assert(payables.includes("agedApProofLine(snapshot, market)"), "the payables proof line is the drawer hint");
 assert(collections.includes("collectionsAnswerSentence"), "collections sentence comes from the stored figures");
 assert(payables.includes("payablesAnswerSentence"), "payables sentence comes from the stored figures");
 assert(payables.includes('lead="creditors"'), "payables puts creditor cards first on the list");

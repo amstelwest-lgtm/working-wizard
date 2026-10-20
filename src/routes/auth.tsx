@@ -31,7 +31,12 @@ import {
   stashResumeFirmBilling,
   type PendingCheckout,
 } from "@/lib/pending-checkout";
-import { decideAccountantAuthLanding, safeAccountantRedirect } from "@/lib/auth-landing";
+import {
+  clearStoredCheckoutForPracticeLanding,
+  decideAccountantAuthLanding,
+  safeAccountantRedirect,
+  type AccountantAuthLanding,
+} from "@/lib/auth-landing";
 import { isSmartLandingNext, SMART_LANDING_PATH } from "@/lib/smart-landing";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import { activeFirmIdForUser, listUserFirms, readUserFirms } from "@/lib/firm-brand";
@@ -311,6 +316,10 @@ function AuthPage() {
         hadFirmBefore === false &&
         Boolean(pending || explicitBilling)
       );
+      // Set when the no-firm path runs the landing decision. A firm-row
+      // short-circuit leaves this null and the practice step derives it.
+      let workspaceDecision: AccountantAuthLanding | null = null;
+      let firmsKnownForLanding = hadFirmBefore === true;
       const outcome = await finishAccountantSignIn({
         flow,
         practiceSignup,
@@ -320,6 +329,8 @@ function AuthPage() {
         readFirms: async (): Promise<FirmReadResult> => {
           const read = await readUserFirms(userId);
           if (read.error) return { ok: false };
+          firmsKnownForLanding =
+            hadFirmBefore !== undefined ? hadFirmBefore : read.firms.length > 0;
           const parsed = parseMarketSelection(read.firms[0]?.market ?? null);
           return {
             ok: true,
@@ -354,6 +365,7 @@ function AuthPage() {
                 ? false
                 : readInsightSeen(await activeFirmIdForUser(userId)),
           });
+          workspaceDecision = decision;
           if (decision.kind === "billing") return billingStartPath(decision.pending);
           if (await shouldOpenItInbox(userId)) return "/ops";
           return resolveSignedInDestination(userId, { door: "accountant", knownMeta: meta });
@@ -386,7 +398,19 @@ function AuthPage() {
         navigate({ to: path });
         return path;
       }
-      clearPendingCheckout();
+      const practiceLanding =
+        workspaceDecision ??
+        decideAccountantAuthLanding({
+          flow,
+          hadFirmBefore: firmsKnownForLanding,
+          hasLiveEntitlement: false,
+          pending,
+          next,
+          insightSeen: flow === "signup" && !firmsKnownForLanding ? false : undefined,
+        });
+      // New-firm workspace keeps the picked plan. An existing firm (dual-role
+      // sign-in included) still drops a leftover Create-firm stash.
+      if (clearStoredCheckoutForPracticeLanding(practiceLanding)) clearPendingCheckout();
       void ensurePractice().catch(() => {
         /* non-fatal — role guard still uses firm ownership */
       });

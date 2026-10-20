@@ -9,7 +9,11 @@
 import type { ChaseDraftInput } from "./chase-draft.ts";
 import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
-import { storedSeriesReading } from "./client-metrics.ts";
+import {
+  forecastHasRealLines,
+  hasFinancialEvidence,
+  storedSeriesReading,
+} from "./client-metrics.ts";
 import { cashFloorCopy } from "./owner-answers.ts";
 import { presentHomeDraftBody, presentHomeDraftTitle } from "./owner-needs.ts";
 import type { SavedCashflowLike } from "./cash-runway.ts";
@@ -201,9 +205,7 @@ export function buildFinancialManagerBrief(input: {
     financials: input.currentFinancials,
   });
   const priorLabel = prior?.periodLabel?.trim() || null;
-  const movements = prior
-    ? topMoneyMovements(input.currentFinancials, prior.financials)
-    : [];
+  const movements = prior ? topMoneyMovements(input.currentFinancials, prior.financials) : [];
   const movementEmpty = prior
     ? movements.length
       ? null
@@ -242,7 +244,10 @@ export function buildFinancialManagerBrief(input: {
         : `${overdue} overdue on the action plan.`;
     actions.push({
       id: "chase",
-      title: receivables != null && receivables > 0 ? "Chase the outstanding balance" : "Chase overdue work",
+      title:
+        receivables != null && receivables > 0
+          ? "Chase the outstanding balance"
+          : "Chase overdue work",
       reason,
       button: "chase",
       tab: null,
@@ -250,9 +255,13 @@ export function buildFinancialManagerBrief(input: {
   }
   const passedOpening = input.cashOpening;
   const passedFloor = input.cashFloor;
-  const pillarAgrees =
-    input.cashPillarStatus === "healthy" || input.cashPillarStatus === "at_risk";
-  const series = !input.openingMissing && input.cashflow ? storedSeriesReading(input.cashflow) : null;
+  const evidenced = hasFinancialEvidence({
+    financials: input.currentFinancials,
+    cashflow: input.cashflow,
+  });
+  const pillarAgrees = input.cashPillarStatus === "healthy" || input.cashPillarStatus === "at_risk";
+  const series =
+    !input.openingMissing && input.cashflow ? storedSeriesReading(input.cashflow) : null;
   const seriesDip =
     series == null
       ? null
@@ -262,8 +271,12 @@ export function buildFinancialManagerBrief(input: {
         })();
   const cashOpening = series?.opening ?? passedOpening;
   const cashFloor = series?.floor ?? passedFloor;
-  const dipWeek = series ? seriesDip : (input.cashDipWeek ?? null);
+  // The "forecast already on file" banner needs real lines. A derived week-1
+  // dip from a $0 opening and the fallback floor is not a forecast.
+  const linesOnFile = forecastHasRealLines(input.cashflow);
+  const dipWeek = linesOnFile ? (series ? seriesDip : (input.cashDipWeek ?? null)) : null;
   const floorCopy =
+    evidenced &&
     !input.openingMissing &&
     cashOpening != null &&
     cashFloor != null &&
@@ -281,20 +294,23 @@ export function buildFinancialManagerBrief(input: {
   // Watch and Healthy keep the card sentence off the floor. The Health pillar
   // still uses this same floor reading, so its line is not cleared with the chip.
   const cashCopy = pillarAgrees ? null : floorCopy;
-  const cashFloorLine = input.openingMissing
-    ? `${OPENING_BALANCE_MISSING}.`
-    : input.cashStrainLine
-      ? input.cashStrainLine
-      : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
-        ? `Cash is ${input.formatMoney(cashOpening)}.`
-        : (cashCopy?.sentence ?? null);
+  const cashFloorLine = !evidenced
+    ? null
+    : input.openingMissing
+      ? `${OPENING_BALANCE_MISSING}.`
+      : input.cashStrainLine
+        ? input.cashStrainLine
+        : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
+          ? `Cash is ${input.formatMoney(cashOpening)}.`
+          : (cashCopy?.sentence ?? null);
   const cashFloorChip =
-    input.openingMissing || pillarAgrees
+    !evidenced || input.openingMissing || pillarAgrees
       ? null
       : input.cashStrainLine
         ? "Critical"
         : (cashCopy?.chip ?? null);
   if (
+    evidenced &&
     input.actionsReady !== false &&
     !input.openingMissing &&
     !pillarAgrees &&
@@ -354,6 +370,6 @@ export function buildFinancialManagerBrief(input: {
     chase,
     cashFloorLine,
     cashFloorChip,
-    healthCue: input.openingMissing ? null : (floorCopy?.healthCue ?? null),
+    healthCue: !evidenced || input.openingMissing ? null : (floorCopy?.healthCue ?? null),
   };
 }

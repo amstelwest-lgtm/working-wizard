@@ -416,7 +416,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     readCollectionsSnapshot(xeroArRes.data?.raw_data),
     readCollectionsSnapshot(qboArRes.data?.raw_data),
   ]);
-  const collectionsBlock = collectionsPromptBlock(collectionsSnap);
+  const collectionsBlock = collectionsPromptBlock(collectionsSnap, dateMarket);
   if (collectionsBlock) contextLines.push(collectionsBlock);
   const payablesSnap = choosePayables([
     readPayablesSnapshot(xeroApRes.data?.raw_data),
@@ -470,7 +470,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
       );
     }
   }
-  const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks);
+  const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks, dateMarket);
   if (payablesBlock) contextLines.push(payablesBlock);
 
   let skippedReason: "ai_not_configured" | "empty_context" | undefined;
@@ -578,7 +578,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     stepsInserted = toInsert.length;
   }
 
-  const collectionsDraft = buildCollectionsDraft(collectionsSnap);
+  const collectionsDraft = buildCollectionsDraft(collectionsSnap, dateMarket);
   let openAfterPropose =
     existingSteps.filter((step) => step.status === "proposed" || step.status === "edited").length +
     toInsert.length;
@@ -619,7 +619,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     }
   }
 
-  const payablesDraft = buildPayablesDraft(payablesSnap, runwayWeeks);
+  const payablesDraft = buildPayablesDraft(payablesSnap, runwayWeeks, dateMarket);
   if (
     payablesDraft &&
     openAfterPropose < MAX_OPEN_PROPOSED_STEPS &&

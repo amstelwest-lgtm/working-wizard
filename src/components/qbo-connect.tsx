@@ -212,7 +212,7 @@ export function QboConnectCard({
                 lastSync?.agedArLine ?? status.agedArLine,
                 "ar",
                 financials,
-                market,
+                dateMarket,
               )}
             </p>
             <p id="qbo-aged-ap-status" className="ledger-connect__meta">
@@ -220,7 +220,7 @@ export function QboConnectCard({
                 lastSync?.agedApLine ?? status.agedApLine,
                 "ap",
                 financials,
-                market,
+                dateMarket,
               )}
             </p>
             {(lastSync?.openingCashNote ?? status.openingCashNote) ? (
