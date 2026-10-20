@@ -67,9 +67,10 @@ import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
 import { OwnerChat } from "./owner-chat";
+import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import {
   advisoryDeliverableTitles,
-  ownerDraftTitles,
+  ownerDraftPresentations,
   ownerNeedsView,
   type BooksLink,
   type OwnerActionRow,
@@ -163,6 +164,7 @@ export function OwnerDoor({
   onBotChange,
   sampleNotice = null,
   planTick = 0,
+  financials = null,
 }: {
   clientId: string | null;
   businessName: string;
@@ -227,6 +229,8 @@ export function OwnerDoor({
   sampleNotice?: string | null;
   /** Bumps when an action is handed off, so Home refetches without a reload. */
   planTick?: number;
+  /** Live books. Home drafts quote the same ratios as the scorecard. */
+  financials?: Record<string, unknown> | null;
 }) {
   const openedBot = ownerBotKey(bot);
   const [screen, setScreen] = useState<OwnerScreen>(
@@ -718,6 +722,14 @@ export function OwnerDoor({
   ]);
 
   const tiles = useMemo(() => ownerAnswerTiles(books), [books]);
+  const canonicalRatios = useMemo(
+    () => (financials ? scorecardRatiosFromFinancials(financials, { fyStartMonth: market.fyStartMonthDefault }) : null),
+    [financials, market.fyStartMonthDefault],
+  );
+  const draftPresentations = useMemo(
+    () => ownerDraftPresentations(activity.findings, canonicalRatios),
+    [activity.findings, canonicalRatios],
+  );
   const needs = useMemo(
     () =>
       ownerNeedsView({
@@ -727,11 +739,12 @@ export function OwnerDoor({
         actions: actionRows,
         draftsReady: !activity.loading,
         draftsUnavailable: Boolean(activity.error),
-        draftTitles: ownerDraftTitles(activity.findings),
+        draftTitles: draftPresentations.map((row) => row.text),
+        draftStale: draftPresentations.map((row) => row.stale),
         deliverablesReady: actionsReady,
         deliverablesUnavailable,
         deliverableCount,
-        advisoryTitles: advisoryDeliverableTitles(activity.findings),
+        advisoryTitles: advisoryDeliverableTitles(activity.findings, canonicalRatios),
         quickBooks,
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
@@ -746,6 +759,8 @@ export function OwnerDoor({
       activity.loading,
       activity.error,
       activity.findings,
+      draftPresentations,
+      canonicalRatios,
       deliverablesUnavailable,
       deliverableCount,
       quickBooks,

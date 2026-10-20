@@ -136,9 +136,12 @@ import {
 import {
   cashEmptyPresentation,
   forecastFloorPosition,
+  forecastLineCountsAsEntered,
+  forecastLinesBlank,
   forecastLinesSourceLabel,
   forecastRunwayHeadlineShared,
   forecastStatusSentence,
+  forecastWeeksAreEntered,
   openingSourceLabel,
 } from "@/lib/cash-forecast-parity";
 import {
@@ -1029,7 +1032,14 @@ export function CashForecastPanel({
           });
       }
       setOpeningBalance(String(Math.round(outlook.opening * 100) / 100));
-      if (outlook.estimateLabel) {
+      const enteredForecast = forecastWeeksAreEntered(outlook);
+      if (!enteredForecast) {
+        plEstimateRef.current = false;
+        if (outlook.anchorNote) {
+          setXeroBankNote(outlook.anchorNote);
+          xeroBankNoteRef.current = outlook.anchorNote;
+        }
+      } else if (outlook.estimateLabel) {
         setXeroBankNote(outlook.estimateLabel);
         xeroBankNoteRef.current = outlook.estimateLabel;
         plEstimateRef.current = true;
@@ -1042,7 +1052,15 @@ export function CashForecastPanel({
         xeroBankNoteRef.current = "Estimated from the P&L";
         plEstimateRef.current = true;
       }
-      if (outlook.replaceStored) {
+      if (outlook.replaceStored && !enteredForecast) {
+        const kept = (lines?: LineItem[]) => (lines ?? []).filter((line) => forecastLineCountsAsEntered(line));
+        setStartDate(outlook.startDate);
+        setOpeningBalance(String(Math.round(outlook.opening * 100) / 100));
+        setRevenue(kept(cf?.revenue));
+        setExpenses(kept(cf?.expenses));
+        setOther(kept(cf?.other));
+        plEstimateRef.current = false;
+      } else if (outlook.replaceStored) {
         setStartDate(outlook.startDate);
         setOpeningBalance(String(Math.round(outlook.opening * 100) / 100));
         setRevenue(outlook.lines.revenue);
@@ -1073,7 +1091,7 @@ export function CashForecastPanel({
         }
       } else if (cf) {
         if (cf.revenue && !blankForecastLines(cf.revenue)) setRevenue(cf.revenue);
-        else if (!blankForecastLines(outlook.lines.revenue)) setRevenue(outlook.lines.revenue);
+        else if (enteredForecast && !blankForecastLines(outlook.lines.revenue)) setRevenue(outlook.lines.revenue);
         else setRevenue([]);
         if (cf.expenses) setExpenses(cf.expenses);
         if (cf.other) setOther(cf.other);
@@ -1395,6 +1413,11 @@ export function CashForecastPanel({
     capexAmount: number;
     capexWeek: number;
   }) => {
+    const enteredOnly = (lines: LineItem[]) =>
+      lines.filter((line) => forecastLineCountsAsEntered(line, { includeDerived: Boolean(preview) }));
+    const revenueLines = enteredOnly(revenue);
+    const expenseLines = enteredOnly(expenses);
+    const otherLines = enteredOnly(other);
     const shift = Math.max(0, Math.min(WEEKS - 1, Math.round(opts.shift)));
     const shiftVals = (vals: number[]) => {
       if (!shift) return vals;
@@ -1407,7 +1430,7 @@ export function CashForecastPanel({
     };
     const growthMul = (i: number) => Math.pow(1 + opts.revGrowthPct / 100, i);
     const revRows = groupSmallForecastRows(
-      revenue.map((l) => ({
+      revenueLines.map((l) => ({
         id: l.id,
         bucket: "revenue" as const,
         name: forecastRowLabel(l.name, l.frequency, { side: "revenue", singleMonth: singleMonthHistory }),
@@ -1435,8 +1458,8 @@ export function CashForecastPanel({
       ),
     });
     const expRows = groupSmallForecastRows([
-      ...expenses.map((l) => mapExp(l, "expenses")),
-      ...other.map((l) => mapExp(l, "other")),
+      ...expenseLines.map((l) => mapExp(l, "expenses")),
+      ...otherLines.map((l) => mapExp(l, "other")),
     ]);
     const headcountWeekly = (opts.headcountDelta * opts.avgSalary) / 4.33;
     const fixedWeekly = opts.fixedCostDelta / 4.33;
@@ -2115,10 +2138,12 @@ export function CashForecastPanel({
   const forecastStale = signoffStale ?? computeIsStale(forecastSignoff, lastForecastAt);
   // No forecast lines yet. A flat $0 trajectory must not be badged "In the black",
   // even when a hand-entered opening balance is already on the file.
-  const linesBlank = [...revenue, ...expenses, ...other].every((l) => !(parseFloat(l.amount) || 0));
+  const linesBlank = forecastLinesBlank([...revenue, ...expenses, ...other], {
+    includeDerived: Boolean(preview),
+  });
   const balanceSheetHold =
     isQboBalanceSheetHoldNote(xeroBankNote) && (parseFloat(openingBalance) || 0) !== 0;
-  const forecastEmpty = loaded && linesBlank && !plEstimateRef.current && !balanceSheetHold;
+  const forecastEmpty = loaded && linesBlank && !balanceSheetHold;
   const emptyPresentation = cashEmptyPresentation({
     opening: parseFloat(openingBalance) || 0,
     linesBlank,

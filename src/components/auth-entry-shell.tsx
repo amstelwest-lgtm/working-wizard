@@ -11,9 +11,9 @@ type ShellProps = {
 };
 
 /**
- * Firm-grade shell for public auth entry surfaces (/auth, OAuth callback, verify).
- * Matches the landing token palette (near-black, gold accent, glass card) without
- * coupling to the invite-flow components in PR #156.
+ * Public auth entry (/auth, OAuth callback, verify).
+ * Brand v1.1, same light canvas as the landing page: white page, navy type,
+ * cobalt actions, royal links, pale borders. Gold is the MILŌN wordmark only.
  */
 export function AuthEntryShell({
   children,
@@ -25,10 +25,11 @@ export function AuthEntryShell({
     const el = document.documentElement;
     const hadDark = el.classList.contains("dark");
     const hadTheme = el.getAttribute("data-theme");
-    el.classList.add("dark");
-    el.removeAttribute("data-theme");
+    el.classList.remove("dark");
+    el.setAttribute("data-theme", "light");
     return () => {
-      if (!hadDark) el.classList.remove("dark");
+      if (hadDark) el.classList.add("dark");
+      else el.classList.remove("dark");
       if (hadTheme) el.setAttribute("data-theme", hadTheme);
       else el.removeAttribute("data-theme");
     };
