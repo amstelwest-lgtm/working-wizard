@@ -39,7 +39,7 @@ import {
   handoffDraftIsDuplicate,
   handoffDraftTitle,
   handoffFinding,
-  handoffResultNote,
+  handoffFinishNote,
 } from "../../../../src/lib/owner-handoff.ts";
 import { agentDisplayNameFromKey } from "../../../../src/lib/milon-team-names.ts";
 
@@ -164,75 +164,100 @@ async function recordHandoffFinish(
   if (!displayName) return;
   const market = moneyMarketFromClient(input.market);
   const stored = input.pool.find((row) => Object.keys(row.figures).length > 0) ?? null;
+  const countFindings = async () => {
+    const { count, error: countError } = await db
+      .from("agent_findings")
+      .select("id", { count: "exact", head: true })
+      .eq("run_id", input.runId);
+    if (countError) {
+      console.warn("handoff findings", countError.message);
+      return null;
+    }
+    return count ?? 0;
+  };
+  let findingCount = await countFindings();
+  if (findingCount === 0) {
+    const finding = handoffFinding({
+      summary: input.summary,
+      figures: stored?.figures ?? null,
+      periodLabel: stored?.periodLabel ?? null,
+      snapshotId: stored?.snapshotId ?? null,
+      market,
+    });
+    const cited = finding
+      ? attachCitedEvidence({
+          title: finding.title,
+          detail: finding.detail,
+          pool: input.pool,
+          evidence: finding.evidence as FindingEvidence,
+        })
+      : null;
+    if (finding && cited?.ok) {
+      const { data: actionRow } = await db
+        .from("action_items")
+        .select("title")
+        .eq("id", actionItemId)
+        .maybeSingle();
+      const actionTitle = typeof actionRow?.title === "string" ? actionRow.title : "";
+      const labelled = actionTitle ? handoffDraftTitle(actionTitle) : finding.title;
+      const { data: priorDrafts } = await db
+        .from("agent_findings")
+        .select("title")
+        .eq("client_id", input.clientId)
+        .limit(80);
+      const existingTitles = (priorDrafts ?? []).flatMap((row) => {
+        const title = (row as { title?: unknown }).title;
+        return typeof title === "string" && title.trim() ? [title] : [];
+      });
+      const duplicate =
+        (actionTitle && handoffDraftIsDuplicate(actionTitle, existingTitles)) ||
+        (!actionTitle && existingTitles.some((title) => title.trim() === labelled.trim()));
+      if (!duplicate) {
+        const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
+        const severity = severityWithFloor("info", metrics);
+        const { error: findingError } = await db.from("agent_findings").insert({
+          agent: config.agent,
+          client_id: input.clientId,
+          run_id: input.runId,
+          kind: config.fallbackDraftKind,
+          severity,
+          title: labelled,
+          detail: finding.detail,
+          evidence: withDraftFlags({
+            ...cited.evidence,
+            metrics,
+            status: agentCopyStatus(severity),
+          }),
+          last_seen: new Date().toISOString(),
+        });
+        if (findingError) console.warn("handoff finding", findingError.message);
+      }
+    }
+    findingCount = await countFindings();
+  }
+  if (findingCount == null) return;
+  const note = handoffFinishNote({
+    displayName,
+    summary: input.summary,
+    findingCount,
+    market,
+    figures: stored?.figures,
+  });
   const { error: noteError } = await db.from("action_updates").insert({
     action_item_id: actionItemId,
     client_id: input.clientId,
     actor_type: "system",
     actor_label: displayName,
-    note: handoffResultNote(displayName, input.summary, market, stored?.figures),
+    note,
   });
   if (noteError) console.warn("handoff note", noteError.message);
-
-  const finding = handoffFinding({
-    summary: input.summary,
-    figures: stored?.figures ?? null,
-    periodLabel: stored?.periodLabel ?? null,
-    snapshotId: stored?.snapshotId ?? null,
-    market,
-  });
-  if (!finding) return;
-  const cited = attachCitedEvidence({
-    title: finding.title,
-    detail: finding.detail,
-    pool: input.pool,
-    evidence: finding.evidence as FindingEvidence,
-  });
-  if (!cited.ok) return;
-  const { count, error: countError } = await db
-    .from("agent_findings")
-    .select("id", { count: "exact", head: true })
-    .eq("run_id", input.runId);
-  if (countError) {
-    console.warn("handoff findings", countError.message);
-    return;
+  if (findingCount === 0) {
+    const { error: summaryError } = await db
+      .from("agent_runs")
+      .update({ summary: note, status: "partial", stop_reason: "no_draft" })
+      .eq("id", input.runId);
+    if (summaryError) console.warn("handoff summary", summaryError.message);
   }
-  if ((count ?? 0) > 0) return;
-  const { data: actionRow } = await db
-    .from("action_items")
-    .select("title")
-    .eq("id", actionItemId)
-    .maybeSingle();
-  const actionTitle = typeof actionRow?.title === "string" ? actionRow.title : "";
-  const labelled = actionTitle ? handoffDraftTitle(actionTitle) : finding.title;
-  const { data: priorDrafts } = await db
-    .from("agent_findings")
-    .select("title")
-    .eq("client_id", input.clientId)
-    .limit(80);
-  const existingTitles = (priorDrafts ?? []).flatMap((row) => {
-    const title = (row as { title?: unknown }).title;
-    return typeof title === "string" && title.trim() ? [title] : [];
-  });
-  if (actionTitle && handoffDraftIsDuplicate(actionTitle, existingTitles)) return;
-  if (!actionTitle && existingTitles.some((title) => title.trim() === labelled.trim())) return;
-  const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
-  const severity = severityWithFloor("info", metrics);
-  const { error: findingError } = await db.from("agent_findings").insert({
-    agent: config.agent,
-    client_id: input.clientId,
-    run_id: input.runId,
-    kind: config.fallbackDraftKind,
-    severity,
-    title: labelled,
-    detail: finding.detail,
-    evidence: withDraftFlags({
-      ...cited.evidence,
-      metrics,
-      status: agentCopyStatus(severity),
-    }),
-    last_seen: new Date().toISOString(),
-  });
-  if (findingError) console.warn("handoff finding", findingError.message);
 }
 
 export async function runQueueJob(

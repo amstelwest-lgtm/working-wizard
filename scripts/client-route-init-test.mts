@@ -22,6 +22,11 @@ assert(
   !src.includes("const reportsIssued = client.reports_issued_count"),
   "reportsIssued is not declared again after the loading return",
 );
+const shelf = readFileSync(resolve("src/components/agent-draft-shelf.tsx"), "utf8");
+assert(
+  !shelf.includes("No draft waiting."),
+  "the drafts shelf must not reuse the Home memo sentence; the production chunk orders on the first copy",
+);
 const guard = readFileSync(resolve("scripts/client-route-build-render.mjs"), "utf8");
 assert(
   guard.includes('code.indexOf("No draft waiting.")'),

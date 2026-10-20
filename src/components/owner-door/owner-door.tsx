@@ -32,7 +32,8 @@ import {
   parseOwnerNumber,
   type OwnerBooks,
 } from "@/lib/owner-answers";
-import { agentDisplayName } from "@/lib/milon-team";
+import { agentDisplayName, agentShortName } from "@/lib/milon-team";
+import { toast } from "sonner";
 import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
 import {
   cardRunsByAgent,
@@ -1051,11 +1052,14 @@ export function OwnerDoor({
           onRetryHandoff={(actionItemId) => {
             const failed = handoffErrors.find((row) => row.actionItemId === actionItemId);
             if (!failed || !clientId) return;
+            const toastId = toast.success(`Handed to ${agentShortName(failed.agent)}`);
             void commitActionHandoff({
               clientId,
               actionItemId: failed.actionItemId,
               title: failed.title,
               agent: failed.agent,
+            }).then((result) => {
+              if (!result.ok) toast.error(result.error, { id: toastId });
             });
           }}
           onMoves={() => go("moves")}

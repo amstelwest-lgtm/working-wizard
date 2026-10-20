@@ -1473,6 +1473,10 @@ const plan = readFileSync("src/components/action-plan.tsx", "utf8");
 assert(plan.includes("ownerView"), "the owner rail uses a compact action plan");
 assert(plan.includes("HandToMenu"), "each action has a Hand to control");
 assert(plan.includes("commitActionHandoff"), "handing off commits the assignment");
+assert(
+  door.includes("toast.success(`Handed to ${agentShortName(failed.agent)}`)"),
+  "owner door retry confirms the hand-off before the request",
+);
 const handoffClient = readFileSync("src/lib/owner-handoff-client.ts", "utf8");
 assert(handoffClient.includes("handoffComingOnline"), "the missing-runner check is the hand-off path");
 const handoffButtons = readFileSync("src/components/action-handoff-buttons.tsx", "utf8");

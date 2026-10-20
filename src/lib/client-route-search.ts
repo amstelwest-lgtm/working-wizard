@@ -853,6 +853,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   profile?: number;
   view?: "chart" | "table" | "13week";
   invite?: "owner";
+  draft?: string;
 } {
   const out: {
     qbo?: string;
@@ -873,6 +874,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     profile?: number;
     view?: "chart" | "table" | "13week";
     invite?: "owner";
+    draft?: string;
   } = {};
   if (typeof search.qbo === "string") out.qbo = search.qbo;
   if (typeof search.xero === "string") out.xero = search.xero;
@@ -891,6 +893,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     out.agent = search.agent;
   }
   if (search.profile === 1 || search.profile === "1") out.profile = 1;
+  if (typeof search.draft === "string" && /^[0-9a-f-]{36}$/i.test(search.draft)) out.draft = search.draft;
   if (search.view === "13week" && (out.tab === "cash" || out.section === "forecast")) {
     out.view = "13week";
   }

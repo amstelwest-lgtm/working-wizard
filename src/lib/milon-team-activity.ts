@@ -45,6 +45,8 @@ export type AgentFindingRow = {
   id: string;
   agent: AgentKey;
   client_id: string;
+  /** The run that wrote this row. Hand-off "finished" needs this on the action's run. */
+  run_id?: string | null;
   kind?: string | null;
   /** info, watch, or act. Missing on rows loaded before the column was selected. */
   severity?: string | null;
