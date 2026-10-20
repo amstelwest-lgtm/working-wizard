@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { firmBillingResumeIntent } from "@/lib/billing-market";
@@ -10,6 +11,7 @@ import {
   registerLabelForPlan,
 } from "@/lib/pending-checkout";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
+import { readCachedFirmEntitlement } from "@/lib/firm-entitlement-client";
 import { FIRM_TRIAL_CARD_LINE, firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 
 /**
@@ -17,12 +19,14 @@ import { FIRM_TRIAL_CARD_LINE, firmSignupCheckoutIntent } from "@/lib/stripe-pla
  * Unpaid firms get one Checkout action for the stashed band (Starter by default).
  */
 export function CheckoutAfterInsight() {
+  const { user } = useAuth();
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   const [unpaid, setUnpaid] = useState(false);
 
   useEffect(() => {
+    if (!user?.id) return;
     let cancelled = false;
-    void checkEntitlement({ data: {} })
+    void readCachedFirmEntitlement(user.id, (input) => checkEntitlement(input))
       .then((result) => {
         if (!cancelled) setUnpaid(!result.entitled);
       })
@@ -32,7 +36,7 @@ export function CheckoutAfterInsight() {
     return () => {
       cancelled = true;
     };
-  }, [checkEntitlement]);
+  }, [checkEntitlement, user?.id]);
 
   const profile = useOptionalAccountantProfile();
 

@@ -95,15 +95,14 @@ export async function loadSignInRoleSnapshot(
     .from("user_roles")
     .select("role")
     .eq("user_id", userId);
-  // Only hit GET /user when the caller did not already pass the grant's
-  // metadata. getUser() takes the GoTrue lock; after password sign-in that
-  // promise can stay pending even when the HTTP call returned 200, and the
-  // sign-in button never leaves "Signing in…". An empty metadata object is
-  // still "known" — customer signup has no firm_name and must not refetch.
+  // Routing only. Session metadata is not an authorization check.
+  // getUser() held the GoTrue lock across GET /auth/v1/user and left the
+  // sign-in button on "Signing in…". An empty metadata object is still
+  // "known" — customer signup has no firm_name and must not refetch.
   let meta: Record<string, unknown> | null;
   if (knownMeta === undefined) {
-    const { data } = await supabase.auth.getUser();
-    meta = (data.user?.user_metadata as Record<string, unknown> | undefined) ?? null;
+    const { data } = await supabase.auth.getSession();
+    meta = (data.session?.user?.user_metadata as Record<string, unknown> | undefined) ?? null;
   } else {
     meta = knownMeta;
   }

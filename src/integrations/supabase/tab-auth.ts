@@ -1,3 +1,6 @@
+import { processLock } from "@supabase/auth-js";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+
 /**
  * Isolate the browser Supabase session to the current tab.
  *
@@ -56,6 +59,73 @@ export function adoptSharedAuthSession(storageKey: string): void {
   } catch {
     /* private mode / blocked storage */
   }
+}
+
+/**
+ * GoTrue allows a second refresh of the same session when it lands inside
+ * `security.refresh_token_reuse_interval`. Supabase's hosted default is 10
+ * seconds. Inside that window the server returns the current refresh token
+ * and does not call LogoutSession. A gap at or past the window, with rotation
+ * on, revokes the session.
+ *
+ * auth-js 2.74 posts `/token?grant_type=refresh_token` once per caller
+ * (`_refreshAccessToken`). It does not coordinate tabs. Per-tab processLock
+ * lets two tabs refresh at once; the reuse interval is what keeps that from
+ * signing both out. This client does not change the server interval.
+ */
+export const REFRESH_TOKEN_REUSE_INTERVAL_MS = 10_000;
+
+/** True when two refreshes of one session are still inside the reuse window. */
+export function concurrentRefreshKeepsSession(
+  gapMs: number,
+  intervalMs = REFRESH_TOKEN_REUSE_INTERVAL_MS,
+): boolean {
+  return Number.isFinite(gapMs) && gapMs >= 0 && gapMs < intervalMs;
+}
+
+/**
+ * Per-tab in-memory lock. `processLock` keeps its queue in this JavaScript
+ * realm, so another tab does not wait on it. supabase-js calls the lock with
+ * acquireTimeout -1 (wait forever). Cap that wait at the shell deadline so a
+ * stuck holder cannot pin a query or a server-function auth read.
+ *
+ * The cap is outside processLock. A positive acquireTimeout inside processLock
+ * leaves the timeout promise unhandled once the lock is acquired, and a
+ * negative timeout never fires. Callers that give up still leave their
+ * critical section queued; it runs when the holder releases and does not
+ * block the caller past the deadline.
+ */
+export function tabAuthLock<R>(
+  name: string,
+  acquireTimeout: number,
+  fn: () => Promise<R>,
+): Promise<R> {
+  if (acquireTimeout === 0) return processLock(name, 0, fn);
+  const wait =
+    acquireTimeout < 0 ? SHELL_GATE_TIMEOUT_MS : Math.min(acquireTimeout, SHELL_GATE_TIMEOUT_MS);
+  let acquired = false;
+  const run = processLock(name, -1, async () => {
+    acquired = true;
+    return fn();
+  });
+  return new Promise<R>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (acquired) return;
+      const err = new Error(`Acquiring process lock with name "${name}" timed out`);
+      (err as { isAcquireTimeout?: boolean }).isAcquireTimeout = true;
+      reject(err);
+    }, wait);
+    void run.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
 
 /**

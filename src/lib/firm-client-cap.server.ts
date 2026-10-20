@@ -286,16 +286,50 @@ function entitlingFromListed(
   };
 }
 
-/** Entitling subscription plus the prior-count Checkout already uses. */
-export async function readFirmSubscriptionHistory(email: string): Promise<{
+/**
+ * One Stripe customer + subscription list per email for this Vercel isolate.
+ * A fresh isolate misses it. The entitlement check fills it; the trial mirror
+ * and the next call within 45s reuse it instead of scanning Stripe again.
+ */
+export const STRIPE_ISOLATE_CACHE_TTL_MS = 45_000;
+
+type FirmSubscriptionHistory = {
   entitling: EntitlingFirmSubscription | null;
   priorSubscriptionCount: number;
-}> {
-  const listed = await listCustomerSubscriptions(email);
-  return {
-    entitling: entitlingFromListed(listed.customerId, listed.data),
-    priorSubscriptionCount: listed.data.length,
+};
+
+const stripeHistoryCache = new Map<string, { at: number; value: FirmSubscriptionHistory }>();
+const stripeHistoryInflight = new Map<string, Promise<FirmSubscriptionHistory>>();
+
+/** Entitling subscription plus the prior-count Checkout already uses. */
+export async function readFirmSubscriptionHistory(
+  email: string,
+  opts?: { fresh?: boolean },
+): Promise<FirmSubscriptionHistory> {
+  const key = email.trim().toLowerCase();
+  if (!opts?.fresh && key) {
+    const hit = stripeHistoryCache.get(key);
+    if (hit && Date.now() - hit.at < STRIPE_ISOLATE_CACHE_TTL_MS) return hit.value;
+    const pending = stripeHistoryInflight.get(key);
+    if (pending) return pending;
+  }
+  const load = async (): Promise<FirmSubscriptionHistory> => {
+    const listed = await listCustomerSubscriptions(email);
+    return {
+      entitling: entitlingFromListed(listed.customerId, listed.data),
+      priorSubscriptionCount: listed.data.length,
+    };
   };
+  if (!key) return load();
+  const work = load();
+  stripeHistoryInflight.set(key, work);
+  try {
+    const value = await work;
+    stripeHistoryCache.set(key, { at: Date.now(), value });
+    return value;
+  } finally {
+    if (stripeHistoryInflight.get(key) === work) stripeHistoryInflight.delete(key);
+  }
 }
 
 export async function findEntitlingFirmSubscription(

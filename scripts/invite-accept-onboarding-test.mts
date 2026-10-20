@@ -536,8 +536,10 @@ assert(
   const roleEffect = appSrc.indexOf("if (!clientLinkResolved) return;");
   assert(roleEffect !== -1, "role effect waits for the client link");
   assert(
-    appSrc.includes("[user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId]"),
-    "role effect re-resolves once the client exists",
+    appSrc.includes(
+      "[user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId, ownerBootAttempt]",
+    ),
+    "role effect re-resolves once the client exists, and Retry restarts a hung resolve",
   );
 }
 

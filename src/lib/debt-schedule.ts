@@ -135,6 +135,7 @@ export function splitFinancialsBlob(
       productMix = parseProductMix(v);
       continue;
     }
+    if (k === "_writeRev") continue;
     if (v != null && typeof v === "object") continue;
     scalars[k] = v != null ? String(v) : "";
   }
