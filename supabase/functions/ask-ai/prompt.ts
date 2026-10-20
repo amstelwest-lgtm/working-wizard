@@ -342,7 +342,9 @@ export function buildPrompt(
     } else {
       lines.push("  Planned / outstanding:");
       for (const task of ctx.actionPlan.open) {
-        const due = task.dueDate ? ` · due ${humanDate(String(task.dueDate)) ?? task.dueDate}` : "";
+        const due = task.dueDate
+          ? ` · due ${humanDate(String(task.dueDate), copyPack) ?? task.dueDate}`
+          : "";
         lines.push(
           `  - ${task.title} [${task.status}, ${task.progressPct}%]${due}`,
         );

@@ -8,6 +8,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { formatMonthYear } from "@/lib/market/format";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import { mergeStatementFinancials, type StatementKind } from "@/lib/statement-parse";
 import { readStatementMeta, resolveSnapshotPeriodLabel } from "@/lib/statement-period";
@@ -46,19 +47,19 @@ export function isUploadSnapshot(source: string | null | undefined): boolean {
   return source === "upload" || source === "pdf_upload" || source === "financial_statement";
 }
 
-/** Calendar period label used across Studio / score history / autosave. */
-export function currentPeriodLabel(now = new Date()): string {
-  return now.toLocaleString("en-US", { month: "short", year: "numeric" });
+/** Calendar period label used across Studio / score history / autosave. "Oct 2026". */
+export function currentPeriodLabel(now = new Date(), timeZone?: string): string {
+  return formatMonthYear(now, timeZone);
 }
 
 export function currentPeriodDate(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
-export function periodLabelFromDate(isoOrDate: string | Date): string {
+export function periodLabelFromDate(isoOrDate: string | Date, timeZone?: string): string {
   const d = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
-  if (!Number.isFinite(d.getTime())) return currentPeriodLabel();
-  return d.toLocaleString("en-US", { month: "short", year: "numeric" });
+  if (!Number.isFinite(d.getTime())) return currentPeriodLabel(new Date(), timeZone);
+  return formatMonthYear(d, timeZone);
 }
 
 export function periodDateFromUnknown(

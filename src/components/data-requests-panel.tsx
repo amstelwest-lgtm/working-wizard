@@ -31,6 +31,7 @@ import {
 } from "@/lib/data-requests.functions";
 import { revealDataRequestsElement, subscribeDataRequestsReveal } from "@/lib/reveal-data-requests";
 import { trackedAskClass } from "@/lib/client-chrome";
+import { useMarketFormat } from "@/contexts/market";
 
 type Props = {
   clientId: string | null;
@@ -77,6 +78,7 @@ export function DataRequestsPanel({
   financials = null,
   className,
 }: Props) {
+  const { date } = useMarketFormat();
   const track = useTrack();
   const list = useServerFn(listDataRequests);
   const resolveReq = useServerFn(resolveDataRequest);
@@ -356,7 +358,7 @@ export function DataRequestsPanel({
                       </span>
                       {r.status === "sent" && r.sent_at ? (
                         <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                          · emailed {new Date(r.sent_at).toLocaleDateString()}
+                          · emailed {date(r.sent_at)}
                         </span>
                       ) : null}
                     </div>

@@ -5,6 +5,7 @@
 import { formatSnapshotRatio } from "./advisory-narrative";
 import { formatMoney, type MoneyMarket } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
+import { MONTHS } from "./market/date-presets";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
 import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
@@ -93,8 +94,6 @@ const WORKING = new Set(["queued", "running"]);
 const DONE = new Set(["succeeded", "partial"]);
 const FAILED = new Set(["failed", "dead"]);
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
-
 export function emptyAgentActivity(): AgentActivitySnapshot {
   return { runs: [], findings: [], messages: [], market: ZA_MARKET };
 }
@@ -155,14 +154,15 @@ function monthShort(value: string | null): string | null {
   return idx >= 0 ? MONTHS[idx] : null;
 }
 
-/** Period plus the day the figures were checked. "Sep figures · checked 9 Oct". */
+/** Period plus the day the figures were checked. "Sep figures · checked 9 Oct 2026". */
 export function figuresCheckedLine(
   period: string | null,
   checkedAt: string | null,
   now: Date = new Date(),
+  market: { locale?: string | null } = { locale: "en-ZA" },
 ): string | null {
   const month = monthShort(period);
-  const checked = formatAsOf(checkedAt, now);
+  const checked = formatAsOf(checkedAt, now, market);
   if (!month || !checked) return null;
   return `${month} figures · checked ${checked}`;
 }

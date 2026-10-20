@@ -13,6 +13,7 @@ import { LogoUploader } from "@/components/logo-uploader";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { supabase } from "@/integrations/supabase/client";
 import { coerceMarketSelection, resolveMarket, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatMonthYear } from "@/lib/market/format";
 import { reportDataPeriodLabel, reportPeriodMonthYear } from "@/lib/statement-period";
 
 export const Route = createFileRoute("/_authenticated/settings/brand")({
@@ -73,7 +74,7 @@ function HeaderPreview() {
 
   useEffect(() => {
     const now = new Date();
-    const fallbackPeriod = `${now.toLocaleString("en-GB", { month: "long", timeZone: "UTC" })} ${now.getUTCFullYear()}`;
+    const fallbackPeriod = formatMonthYear(now, "UTC");
     if (!firmId) {
       setPreviewName(t("entityExample", ZA_MARKET));
       setPreviewPeriod(fallbackPeriod);

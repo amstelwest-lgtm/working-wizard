@@ -2,6 +2,8 @@
  * Assignment labels for handing an action to one of the three agents.
  * Nothing here talks to the database or starts a run.
  */
+import { formatClock } from "./market/format.ts";
+import { ZA_MARKET } from "./market/resolve.ts";
 import { agentShortName } from "./milon-team.ts";
 import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
 import { AGENT_KEYS, type AgentKey } from "./milon-team-feed.ts";
@@ -34,12 +36,15 @@ export function handoffButtonLabel(agent: AgentKey, assigned: boolean): string {
   return `Hand to ${AGENT_DISPLAY_NAME[agent]}`;
 }
 
-/** Clock time for a finish line. An unreadable stamp stays off the row. */
-export function handoffClock(at: string | null | undefined): string | null {
+type HandoffMarket = { locale?: string | null; timezone?: string };
+
+/** Clock time for a finish line. ZA is 24-hour. An unreadable stamp stays off the row. */
+export function handoffClock(
+  at: string | null | undefined,
+  market: HandoffMarket = ZA_MARKET,
+): string | null {
   if (!at) return null;
-  const date = new Date(at);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return formatClock(at, market);
 }
 
 /** A queued or running hand-off that has not moved for this long offers Retry. */
@@ -94,14 +99,17 @@ export function handoffIsSlow(
 
 /**
  * One note, with who wrote it and when.
- * "Assigned to theo · by amstel.west · 8:31 PM"
+ * "Assigned to theo · by amstel.west · 20:31"
  */
-export function formatAssignmentNote(row: {
-  note: string;
-  at?: string | null;
-  actorLabel?: string | null;
-  actorType?: string | null;
-}): string {
+export function formatAssignmentNote(
+  row: {
+    note: string;
+    at?: string | null;
+    actorLabel?: string | null;
+    actorType?: string | null;
+  },
+  market: HandoffMarket = ZA_MARKET,
+): string {
   const stripped = row.note.trim().replace(/\.+$/u, "");
   const friendly = costStopLine(row.note);
   const body = friendly ?? stripped;
@@ -109,7 +117,7 @@ export function formatAssignmentNote(row: {
   const actorNamesBot = agentKeyFromAssignee(row.actorLabel) != null;
   const hideAuthor = handed && (actorNamesBot || row.actorType === "system");
   const actor = hideAuthor ? "" : (row.actorLabel?.trim() ?? "");
-  const time = handoffClock(row.at);
+  const time = handoffClock(row.at, market);
   const tail = [actor ? `by ${actor}` : "", time ?? ""].filter(Boolean).join(" · ");
   return tail ? `${body} · ${tail}` : body;
 }
@@ -122,7 +130,7 @@ export function formatAssignmentNote(row: {
 export function handoffProgressCaption(
   agent: AgentKey,
   status: string | null | undefined,
-  detail?: { at?: string | null; result?: string | null },
+  detail?: { at?: string | null; result?: string | null; market?: HandoffMarket },
 ): string | null {
   const short = agentShortName(agent);
   if (status === "queued") return `${short} is queued`;
@@ -130,7 +138,7 @@ export function handoffProgressCaption(
   if (status === "succeeded" || status === "partial") {
     const result = detail?.result?.replace(/\s+/g, " ").trim();
     if (handoffCostStopped(result)) return handoffCouldNotFinish(agent);
-    const time = handoffClock(detail?.at);
+    const time = handoffClock(detail?.at, detail?.market);
     const head = time ? `${short} finished · ${time}` : `${short} finished`;
     return result ? `${head} — ${result}` : head;
   }
@@ -146,11 +154,13 @@ export function botPickupCaption(input: {
   run?: { agent: AgentKey; status: string; at?: string | null } | null;
   result?: string | null;
   resultAt?: string | null;
+  market?: HandoffMarket;
 }): string | null {
   const assigned = agentKeyFromAssignee(input.assignee);
   if (!input.run || !assigned || assigned !== input.run.agent) return null;
   return handoffProgressCaption(input.run.agent, input.run.status, {
     at: input.resultAt ?? input.run.at,
     result: input.result,
+    market: input.market,
   });
 }

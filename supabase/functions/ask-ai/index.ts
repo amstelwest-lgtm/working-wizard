@@ -277,7 +277,10 @@ async function handleAskAi(req: Request): Promise<Response> {
     });
   }
 
-  const answer = normalizeChatReply(rehydrateForUi(claudeResult.text, sealed.session, question));
+  const answer = normalizeChatReply(
+    rehydrateForUi(claudeResult.text, sealed.session, question),
+    ctx.copyPack,
+  );
   let precardRemaining: number | null = null;
   // Charge only after a non-empty answer. An empty or failed call leaves the
   // allowance where it was. The turn id makes a client retry of this same

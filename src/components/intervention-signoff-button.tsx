@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { formatDate as formatSignoffDay } from "@/lib/market/format";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import {
   signoffInterventionStep,
@@ -30,12 +31,8 @@ interface Props {
 }
 
 function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-  } catch {
-    return iso;
-  }
+  const day = formatSignoffDay(iso, { locale: "en-ZA", timezone: "Africa/Johannesburg" });
+  return day === "—" ? iso : day;
 }
 
 export function SignoffBadgeReadonly({

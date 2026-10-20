@@ -25,7 +25,7 @@ import {
   type PackStatus,
 } from "./advisory-pack.ts";
 import { parseOperatingProfile } from "./client-profile.ts";
-import { formatReviewDateTime } from "./market/format.ts";
+import { formatMonthDay, formatReviewDateTime } from "./market/format.ts";
 import { coerceMarketSelection } from "./market/parse.ts";
 import { resolveMarket, ZA_MARKET } from "./market/resolve.ts";
 import type { ResolvedMarket } from "./market/types.ts";
@@ -165,14 +165,8 @@ export function advisorySignoffLine(
 function monthDay(iso: string, market?: Pick<ResolvedMarket, "locale" | "timezone">): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return iso;
-  return new Intl.DateTimeFormat(market?.locale ?? "en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: market?.timezone ?? "UTC",
-  })
-    .format(date)
-    .replace(/\u202f/g, " ")
-    .replace(/\u00a0/g, " ");
+  const label = formatMonthDay(date, market ?? { locale: "en-US", timezone: "UTC" });
+  return label === "—" ? iso : label;
 }
 
 /**

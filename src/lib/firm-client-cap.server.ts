@@ -34,7 +34,8 @@ import {
   type FirmUpgradeSnapshot,
 } from "@/lib/firm-band-upgrade";
 import { isOwnerCatalogPrice } from "@/lib/owner-price";
-import { parseMarketSelection } from "@/lib/market/parse";
+import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
+import { resolveMarket } from "@/lib/market/resolve";
 import { FIRM_BAND_CATALOG, isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
 import { findCustomerIdByEmail } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
@@ -594,6 +595,7 @@ export async function loadFirmPlanDisplay(input: {
       phase: sub?.phase ?? "none",
       band: sub?.band ?? null,
       trialEndIso: sub?.trialEnd ?? null,
+      market: resolveMarket(parseMarketSelection(firm.market) ?? coerceMarketSelection(firm.market)),
     }),
     clientCount: upgrade.clientCount,
     clientLimit: upgrade.clientLimit,

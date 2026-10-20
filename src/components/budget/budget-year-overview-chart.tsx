@@ -18,6 +18,7 @@ import type { BudgetDocument } from "@/lib/budget.types";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
 import { budgetWindowLabel, formatMonthLabel } from "@/lib/budget.months";
 import { useMarketFormat } from "@/contexts/market";
+import { MONTHS } from "@/lib/market/date-presets";
 import {
   COLLAPSIBLE_GOLD_RULE,
   COLLAPSIBLE_GOLD_SHELL,
@@ -33,12 +34,9 @@ type ChartRow = {
   trend: number;
 };
 
-function shortMonth(ym: string, market: ReturnType<typeof useMarketFormat>["market"]) {
-  const [y, m] = ym.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString(market.locale, {
-    month: "short",
-    timeZone: "UTC",
-  });
+function shortMonth(ym: string): string {
+  const month = Number(ym.split("-")[1]);
+  return MONTHS[month - 1] ?? ym;
 }
 
 /** Centered 3-month rolling average — cheap trend overlay for the combo chart. */
@@ -67,7 +65,7 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
     const trends = rollingTrend(revenues);
     return results.map((r, i) => ({
       month: r.month,
-      label: shortMonth(r.month, market),
+      label: shortMonth(r.month),
       revenue: r.revenue,
       trend: trends[i],
     }));

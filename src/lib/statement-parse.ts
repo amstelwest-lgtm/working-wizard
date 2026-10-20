@@ -7,6 +7,8 @@
  * a line that says so — rent, salaries and insurance are not summed.
  */
 
+import { MONTHS as MONTH_SHORT, MONTHS_LONG_LOWER as MONTHS } from "@/lib/market/date-presets";
+
 export type StatementKind = "income_statement" | "balance_sheet" | "mixed" | "unknown";
 
 export type StatementMeta = {
@@ -57,23 +59,6 @@ const BALANCE_KEYS = [
 ] as const;
 
 const SHARED_KEYS = ["employees", "founderHours", "operatingCashflow"] as const;
-
-const MONTHS = [
-  "january",
-  "february",
-  "march",
-  "april",
-  "may",
-  "june",
-  "july",
-  "august",
-  "september",
-  "october",
-  "november",
-  "december",
-] as const;
-
-const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 type Alias = { field: string; phrase: string; rank: number; exact?: boolean };
 

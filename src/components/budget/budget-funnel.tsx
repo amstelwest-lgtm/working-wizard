@@ -6,6 +6,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useMarket } from "@/contexts/market";
+import { MONTHS_LONG } from "@/lib/market/date-presets";
 import { localizeCopy } from "@/lib/market";
 import type {
   BudgetCapexMode,
@@ -401,20 +402,7 @@ export function BudgetFunnel({
               value={fyStartMonth}
               onChange={(e) => setFyStartMonth(Number(e.target.value))}
             >
-              {[
-                "January",
-                "February",
-                "March",
-                "April",
-                "May",
-                "June",
-                "July",
-                "August",
-                "September",
-                "October",
-                "November",
-                "December",
-              ].map((name, i) => (
+              {MONTHS_LONG.map((name, i) => (
                 <option key={name} value={i + 1}>
                   {name}
                 </option>

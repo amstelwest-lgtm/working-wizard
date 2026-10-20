@@ -12,6 +12,7 @@
  * sentence the next pack leads with. `deliveryByMetric` feeds calibration
  * back into the next round of recommendations.
  */
+import { monthYearLabel } from "./market/date-presets.ts";
 import {
   IMPACT_METRICS,
   LOWER_IS_BETTER,
@@ -237,21 +238,7 @@ function capitalise(s: string): string {
 function monthLabel(iso: string): string {
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return "the last cycle";
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  return `${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  return monthYearLabel(d.getUTCFullYear(), d.getUTCMonth() + 1) ?? "the last cycle";
 }
 
 /** Stories for every actionable recommendation, measured or not, latest measurement wins. */

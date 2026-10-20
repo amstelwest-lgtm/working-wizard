@@ -4,6 +4,8 @@
  * visitor's own time zone.
  */
 
+import { formatClock, formatNamedDay, formatZoneLabel, icuZoneName } from "./market/format.ts";
+
 export const CALL_ZONE = "Africa/Johannesburg";
 export const CALL_OPEN_MINUTES = 16 * 60 + 30;
 export const CALL_CLOSE_MINUTES = 22 * 60;
@@ -89,6 +91,7 @@ export function safeTimeZone(value: string | null | undefined): string {
   const zone = (value ?? "").trim();
   if (!zone || zone.length > 80 || !/^[A-Za-z0-9_+\-/]+$/.test(zone)) return "UTC";
   try {
+    // Zone probe only. The printed slot clock is formatSlotClock below.
     Intl.DateTimeFormat("en-US", { timeZone: zone }).format(new Date());
     return zone;
   } catch {
@@ -96,21 +99,19 @@ export function safeTimeZone(value: string | null | undefined): string {
   }
 }
 
-export function formatSlotDay(start: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: safeTimeZone(timeZone),
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  }).format(start);
+function slotMarket(market: "US" | "ZA", timeZone: string): { locale: string; timezone: string } {
+  return {
+    locale: market === "ZA" ? "en-ZA" : "en-US",
+    timezone: safeTimeZone(timeZone),
+  };
 }
 
-export function formatSlotClock(start: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: safeTimeZone(timeZone),
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(start);
+export function formatSlotDay(start: Date, timeZone: string, market: "US" | "ZA" = "US"): string {
+  return formatNamedDay(start, slotMarket(market, timeZone));
+}
+
+export function formatSlotClock(start: Date, timeZone: string, market: "US" | "ZA" = "US"): string {
+  return formatClock(start, slotMarket(market, timeZone)) ?? "";
 }
 
 /**
@@ -167,11 +168,9 @@ export function slotClockLead(input: {
   return `Pick a time. Shown in ${marketFallbackZoneLabel(input.market)}.`;
 }
 
-/** Short label on each slot. Johannesburg is SAST; US zones stay EDT, PDT, and so on. */
+/** Short label on each slot. Same letters as printed dates: SAST, ET, CT, MT, PT, AKT, HT. */
 export function formatSlotZoneShort(start: Date, timeZone: string): string {
-  const zone = safeTimeZone(timeZone);
-  if (zone === CALL_ZONE) return "SAST";
-  return intlZoneName(start, zone, "short");
+  return formatZoneLabel(start, safeTimeZone(timeZone));
 }
 
 /** Readable zone name from Intl, such as Eastern Time. */
@@ -182,9 +181,13 @@ export function formatSlotZoneLong(start: Date, timeZone: string): string {
   return formatSlotZoneShort(start, zone);
 }
 
-export function formatSlotButton(start: Date, timeZone: string): string {
+export function formatSlotButton(
+  start: Date,
+  timeZone: string,
+  market: "US" | "ZA" = "US",
+): string {
   const zone = safeTimeZone(timeZone);
-  const clock = formatSlotClock(start, zone);
+  const clock = formatSlotClock(start, zone, market);
   const label = formatSlotZoneShort(start, zone);
   return label ? `${clock} ${label}` : clock;
 }
@@ -194,24 +197,14 @@ function intlZoneName(
   timeZone: string,
   timeZoneName: "short" | "longGeneric",
 ): string {
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName }).formatToParts(start);
-    const name = parts.find((part) => part.type === "timeZoneName")?.value?.trim() ?? "";
-    if (timeZoneName === "short" && !/^[A-Z]{2,5}$/.test(name)) {
-      return name.replace(/^GMT/i, "UTC");
-    }
-    return name;
-  } catch {
-    return "";
+  const name = icuZoneName(start, timeZone, timeZoneName);
+  if (timeZoneName === "short" && !/^[A-Z]{2,5}$/.test(name)) {
+    return name.replace(/^GMT/i, "UTC");
   }
+  return name;
 }
 
 /** Stable 24-hour clock for tests and founder mail. */
 export function formatSlotClock24(start: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: safeTimeZone(timeZone),
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(start);
+  return formatClock(start, { locale: "en-ZA", timezone: safeTimeZone(timeZone) }) ?? "";
 }

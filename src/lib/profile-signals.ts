@@ -6,6 +6,7 @@
 import { GOAL_TO_PRESSURE } from "@/lib/client-profile";
 import type { ClientOperatingProfile, PrimaryPressure } from "@/lib/client-profile";
 import { localizeCopy, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { MONTHS_LONG } from "@/lib/market/date-presets";
 
 /** Ratio families each pressure should surface first. */
 const PRESSURE_BOOSTS: Record<PrimaryPressure, string[]> = {
@@ -331,9 +332,7 @@ export function profileDisplayRows(
     { label: "Owner goal", value: GOAL_LABEL[profile.ownerGoal] },
     {
       label: "FY starts",
-      value: new Date(2000, profile.fyStartMonth - 1, 1).toLocaleString(market.locale, {
-        month: "long",
-      }),
+      value: MONTHS_LONG[profile.fyStartMonth - 1] ?? "",
     },
   ];
 }

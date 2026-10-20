@@ -161,7 +161,7 @@ assert(
   `9 months of the plan match the cover, got ${versus!.budgetRevenue}`,
 );
 assert(versus!.chip === "Estimated from statement pace", versus!.chip);
-assert(versus!.label === "Jan–Sep 2026, prorated", versus!.label);
+assert(versus!.label === "Jan 2026 \u2013 Sep 2026, prorated", versus!.label);
 assert(versus!.periodMonths === 9, `the cover is 9 months, got ${versus!.periodMonths}`);
 assert(
   budgetSeededFromStatement(versus),

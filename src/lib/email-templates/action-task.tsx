@@ -3,6 +3,13 @@ import {
 } from '@react-email/components'
 import { stripMilonProjection } from '@/lib/milon-projection'
 import type { TemplateEntry } from './registry'
+import { formatCalendarDay } from '@/lib/market/format'
+
+function shownDue(dueDate?: string): string | null {
+  if (!dueDate) return null
+  const formatted = formatCalendarDay(dueDate)
+  return formatted === '—' ? dueDate : formatted
+}
 
 interface ActionTaskProps {
   employeeName?: string
@@ -47,7 +54,7 @@ const ActionTaskEmail = ({
   return (
     <Html lang="en" dir="ltr">
       <Head />
-      <Preview>{title ? `${title}${dueDate ? ` — due ${dueDate}` : ''}` : 'Your task'}</Preview>
+      <Preview>{title ? `${title}${shownDue(dueDate) ? ` — due ${shownDue(dueDate)}` : ''}` : 'Your task'}</Preview>
       <Body style={main}>
         <Container style={container}>
           <Heading style={h1}>{employeeName ? `Hi ${employeeName},` : 'Hello,'}</Heading>
@@ -55,7 +62,7 @@ const ActionTaskEmail = ({
 
           <Section style={card}>
             <Text style={taskTitleStyle}>{title.toUpperCase()}</Text>
-            {dueDate ? <Text style={meta}>Due {dueDate}</Text> : null}
+            {shownDue(dueDate) ? <Text style={meta}>Due {shownDue(dueDate)}</Text> : null}
             {whyText ? (
               <Text style={why}>
                 <strong>Why it matters:</strong> {whyText}
@@ -102,14 +109,14 @@ export const template = {
   component: ActionTaskEmail,
   subject: (data: Record<string, any>) =>
     data?.taskTitle
-      ? `${data.taskTitle}${data.dueDate ? ` — due ${data.dueDate}` : ''}`
+      ? `${data.taskTitle}${shownDue(data.dueDate) ? ` — due ${shownDue(data.dueDate)}` : ''}`
       : 'Your task in the action plan',
   displayName: 'Action plan task',
   previewData: {
     employeeName: 'Lindiwe',
     taskTitle: 'Reduce Debtor Days to under 30 days',
     outcomeWhy: 'Faster cash in means more liquidity and less reliance on debt.',
-    dueDate: '30 September 2026',
+    dueDate: '30 Sep 2026',
     periodLabel: 'Q3 2026',
     milestones: [
       { week_no: 1, label: 'Top 20 debtors plan' },

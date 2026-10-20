@@ -48,6 +48,7 @@ import {
   currencySymbol,
   formatDate,
   formatMoneyCompact,
+  formatMonthYear,
   isUsCopy,
   laborCostLabel,
   localizeCopy,
@@ -908,6 +909,7 @@ function ClientView() {
         headline: facts.length ? facts.join(" · ") : null,
         items: completeDeliverablePdfItems(planItems, created),
         profile,
+        market: clientMarket,
       });
     })()
       .then(() => toast.success("Action Plan PDF downloaded"))
@@ -1597,6 +1599,7 @@ function ClientView() {
         }
       : null,
     snapshotPeriod: pickCurrentSnapshot(snapshots)?.period_label ?? null,
+    market: clientMarket,
   });
   const booksPeriod = booksCoverPeriod(dataFreshness);
   const budgetDoc = parseBudgetDocument(client?.budget ?? null);
@@ -2656,7 +2659,7 @@ function ClientView() {
   const handleSaveSnapshot = useCallback(async () => {
     const now = new Date();
     const periodDate = now.toISOString().slice(0, 10);
-    const periodLabel = now.toLocaleString("en-US", { month: "short", year: "numeric" });
+    const periodLabel = formatMonthYear(now, clientMarket.timezone);
     const ratiosOut = overviewRatios(financials, {
       fyStartMonth,
       periodMonths: periodMonthsOf(financials),
@@ -2712,7 +2715,7 @@ function ClientView() {
       toast.success(`Snapshot saved for ${periodLabel}`);
       await recordScoreHistory(clientId, overallHealth.overall);
     }
-  }, [clientId, financials, debtSchedule, fyStartMonth, overallHealth.overall, mergeCurrentBlob]);
+  }, [clientId, clientMarket.timezone, financials, debtSchedule, fyStartMonth, overallHealth.overall, mergeCurrentBlob]);
 
   // ── Upload confirm ────────────────────────────────────────────────────────
 
@@ -3012,12 +3015,9 @@ function ClientView() {
   const overviewScorecardPeriodLabel = useCallback(() => {
     return (
       reportDataPeriodLabel(financials) ??
-      new Date().toLocaleString("en-US", {
-        month: "long",
-        year: "numeric",
-      })
+      formatMonthYear(new Date(), clientMarket.timezone)
     );
-  }, [financials]);
+  }, [financials, clientMarket.timezone]);
 
   /** Fresh scorecard. Never the archived blob from an earlier sign-off. */
   const renderOverviewScorecard = useCallback(async (): Promise<Blob | null> => {
@@ -3155,7 +3155,7 @@ function ClientView() {
         body: bodyText,
         snapshotId: snapId,
         figuresHash: hashFigures({ financials, ratios, score }),
-        periodLabel: new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
+        periodLabel: formatMonthYear(new Date(), clientMarket.timezone),
         createdBy: user.id,
       });
       warnIfDeliveryFailed(logged.error);
@@ -3179,6 +3179,7 @@ function ClientView() {
     financials,
     ratios,
     firmId,
+    clientMarket.timezone,
   ]);
 
   const handleWhatsApp = useCallback(async () => {
@@ -3202,7 +3203,7 @@ function ClientView() {
         body: text,
         snapshotId: snapId,
         figuresHash: hashFigures({ financials, ratios, score }),
-        periodLabel: new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
+        periodLabel: formatMonthYear(new Date(), clientMarket.timezone),
         createdBy: user.id,
       });
       warnIfDeliveryFailed(logged.error);
@@ -3224,6 +3225,7 @@ function ClientView() {
     financials,
     ratios,
     firmId,
+    clientMarket.timezone,
   ]);
 
   // ── Playbook drawer ───────────────────────────────────────────────────────

@@ -3,6 +3,8 @@
  * cash-forecast UI. Pure — safe to import from client components.
  */
 
+import { MONTHS, MONTHS_LONG as FULL_MONTHS } from "./market/date-presets.ts";
+
 export type YearBasis = "financial" | "calendar";
 
 export type StatementMeta = {
@@ -59,22 +61,6 @@ export function resolveSnapshotPeriodLabel(
   if (prev && isStatementRangeLabel(prev) && isMonthStampLabel(incoming)) return prev;
   return incoming;
 }
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const FULL_MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 
 function utcDate(iso: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}/.test(iso)) return null;

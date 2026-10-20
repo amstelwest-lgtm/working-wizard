@@ -13,6 +13,7 @@ import {
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
+import { useMarketFormat } from "@/contexts/market";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
 import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
 import type { MoneyMarket } from "@/lib/market/format";
@@ -28,16 +29,6 @@ type Props = {
   financials?: Record<string, unknown> | null;
   market?: MoneyMarket;
 };
-
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function fmtExact(n: number | null) {
   if (n == null || !isFinite(n)) return "—";
@@ -76,6 +67,7 @@ export function XeroConnectCard({
   financials,
   market,
 }: Props) {
+  const { dateTime } = useMarketFormat();
   const fetchStatus = useServerFn(getXeroStatus);
   const fetchAuthUrl = useServerFn(getXeroAuthUrl);
   const doSync = useServerFn(triggerXeroSync);
@@ -227,7 +219,7 @@ export function XeroConnectCard({
           : status.syncFigures,
         board: status.boardFigures,
       },
-      fmtDate,
+      dateTime,
     );
     const ownPeriod =
       lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel;

@@ -247,7 +247,7 @@ const approved = buildSourceDocumentsModel({
   timeZone: "UTC",
 });
 assert(
-  approved.cards[0]?.approval === approvalSentence("Ada Nkosi", "12 Oct 2026, 07:41"),
+  approved.cards[0]?.approval === approvalSentence("Ada Nkosi", "12 Oct 2026, 07:41 UTC"),
   "an approval names the person and the time",
 );
 assert(approved.cards[0]?.action.kind === "quiet", "an approved proposal has no second decision");
@@ -269,7 +269,7 @@ assert(!/sign[\s-]*off/i.test(reviewHtml), "the review markup never says sign of
 
 const approvedHtml = html(approved);
 assert(
-  approvedHtml.includes("Approved by Ada Nkosi on 12 Oct 2026, 07:41."),
+  approvedHtml.includes("Approved by Ada Nkosi on 12 Oct 2026, 07:41 UTC."),
   "the markup shows who approved and when",
 );
 

@@ -31,6 +31,7 @@ function eq(actual: string, expected: string, msg: string) {
 
 // ── Dates ────────────────────────────────────────────────────────────────
 eq(humanDate("2026-09-08") ?? "", "8 Sep 2026", "ISO date becomes D Mon YYYY");
+eq(humanDate("2026-09-08", "us") ?? "", "Sep 8, 2026", "a US pack uses month-first calendar day");
 assert(humanDate("2026-02-30") === null, "an impossible date stays null");
 eq(normalizeChatReply("Due 2026-09-08."), "Due 8 Sep 2026.", "ISO date in prose is rewritten");
 eq(

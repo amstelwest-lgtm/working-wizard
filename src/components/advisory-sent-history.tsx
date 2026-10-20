@@ -167,14 +167,7 @@ export function AdvisorySentHistory({
                   {r.subject ? ` — ${r.subject}` : ""}
                 </div>
                 <div style={{ marginTop: 2, fontSize: 12, color: "var(--ink-dim)" }}>
-                  {dateTime(r.created_at, {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                    timeZoneName: "shortGeneric",
-                  })}
+                  {dateTime(r.created_at)}
                   {statementPeriodLabel?.trim() || r.period_label
                     ? ` · figures ${statementPeriodLabel?.trim() || r.period_label}`
                     : ""}

@@ -210,7 +210,7 @@ assert(approvedPeriod === "v10 · Signed off · September 2026", approvedPeriod)
 assert(!approvedPeriod.includes("With your accountant") && !approvedPeriod.includes("Draft"), approvedPeriod);
 
 const staleLine =
-  "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM EDT — figures have changed since; regenerate and re-review";
+  "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM ET — figures have changed since; regenerate and re-review";
 const staleBuf = await renderToBuffer(
   createElement(AdvisoryPackPDF, {
     smeData: { name: "QA US", period: approvedPeriod },

@@ -40,6 +40,7 @@ export type HomeBriefHandoff = {
 };
 
 function HandoffProgress({ item, onRetry }: { item: HomeBriefHandoff; onRetry?: () => void }) {
+  const { market } = useMarketFormat();
   const result = latestHandoffResult(item.notes ?? []);
   const agent = item.run?.agent ?? item.agent ?? null;
   const caption =
@@ -50,6 +51,7 @@ function HandoffProgress({ item, onRetry }: { item: HomeBriefHandoff; onRetry?: 
           run: item.run,
           result: result?.text,
           resultAt: result?.at,
+          market,
         });
   return (
     <>

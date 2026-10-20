@@ -57,17 +57,15 @@ export type LedgerLinkProof = {
 
 export type XeroLinkProof = LedgerLinkProof;
 
-function fmtProofWhen(iso: string | null) {
+function fmtProofWhen(
+  iso: string | null,
+  dateTime: (d: Date | string | number) => string,
+) {
   if (!iso) return "not yet";
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return "not yet";
-  return d.toLocaleString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const label = dateTime(d);
+  return label === "—" ? "not yet" : label;
 }
 
 function fmtProofMoney(n: number | null) {
@@ -88,6 +86,7 @@ function LedgerProof({
   link: LedgerLinkProof;
   fallbackName: string;
 }) {
+  const { dateTime } = useMarketFormat();
   const copy =
     link.syncStatus === "error"
       ? null
@@ -113,7 +112,7 @@ function LedgerProof({
                   : null,
             board: link.boardFigures ?? null,
           },
-          (iso) => fmtProofWhen(iso),
+          (iso) => fmtProofWhen(iso, dateTime),
         );
   return (
     <p className="briefing-muted" id={id} style={{ marginTop: 10 }}>

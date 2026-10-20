@@ -10,6 +10,7 @@
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { transactionalFrom, transactionalSiteUrl } from "../_shared/transactional-mail.ts";
+import { calendarDayFromIso, dateOrder, type DateOrder } from "../../../src/lib/market/date-presets.ts";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 // How long to wait before re-nudging the same item (7 days).
@@ -260,6 +261,19 @@ Deno.serve(async (req) => {
 
   console.log(`Found ${items.length} item(s) eligible for nudge`);
 
+  const clientIds = [...new Set(items.map((item) => item.client_id).filter(Boolean))];
+  const orderByClient = new Map<string, DateOrder>();
+  if (clientIds.length > 0) {
+    const { data: clientMarkets } = await db
+      .from("clients")
+      .select("id, market")
+      .in("id", clientIds);
+    for (const row of clientMarkets ?? []) {
+      const market = row.market as { country?: string } | null;
+      orderByClient.set(row.id, dateOrder(market?.country));
+    }
+  }
+
   const results: Array<{ id: string; status: string; error?: string }> = [];
 
   for (const item of items) {
@@ -290,11 +304,7 @@ Deno.serve(async (req) => {
         item.health === "overdue" ? "overdue" : "nudge";
 
       const dueDateFormatted = item.due_date
-        ? new Date(item.due_date + "T00:00:00").toLocaleDateString("en-ZA", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })
+        ? calendarDayFromIso(item.due_date, orderByClient.get(item.client_id) ?? "za")
         : null;
 
       const { html, text, subject } = buildEmailHtml({

@@ -2,6 +2,13 @@ import {
   Body, Container, Head, Heading, Html, Preview, Section, Text,
 } from '@react-email/components'
 import type { TemplateEntry } from './registry'
+import { formatCalendarDay } from '@/lib/market/format'
+
+function shownDue(dueDate?: string): string | null {
+  if (!dueDate) return null
+  const formatted = formatCalendarDay(dueDate)
+  return formatted === '—' ? dueDate : formatted
+}
 
 const SITE_NAME = 'Milōn'
 
@@ -42,7 +49,7 @@ const TaskAssignedEmail = ({
           ) : null}
           {dueDate ? (
             <Text style={meta}>
-              <strong>Due:</strong> {dueDate}
+              <strong>Due:</strong> {shownDue(dueDate)}
             </Text>
           ) : null}
         </Section>
@@ -66,7 +73,7 @@ export const template = {
     employeeName: 'Sam',
     taskTitle: 'Reconcile bank statements',
     taskDescription: 'Match all September transactions in Xero against the bank feed.',
-    dueDate: '2026-05-20',
+    dueDate: '20 May 2026',
     assignedBy: 'Alex',
     clientName: 'Acme Bakery',
   },

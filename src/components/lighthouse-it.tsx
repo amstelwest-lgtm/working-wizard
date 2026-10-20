@@ -12,16 +12,14 @@ import {
   removeLighthouseItMember,
   type LighthouseItBoard,
 } from "@/lib/lighthouse-it.functions";
+import { formatDateTime } from "@/lib/market/format";
+import { ZA_MARKET } from "@/lib/market/resolve";
 
 function fmtTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-ZA", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const label = formatDateTime(d, ZA_MARKET);
+  return label === "—" ? iso : label;
 }
 
 export function LighthouseItPanel() {
