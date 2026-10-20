@@ -209,6 +209,44 @@ export function UploadFinancials({
   const extract = useServerFn(extractFinancialsFromPDF);
   const monthNames = importMonthNames();
 
+  function clearApplyState() {
+    setApplying(false);
+    setApplyTone(null);
+    setApplyMessage(null);
+    setChoiceLabels(null);
+  }
+
+  const seedKey = seedReview
+    ? [
+        seedReview.entity_name,
+        seedReview.current_period.period_start,
+        seedReview.current_period.period_end,
+        seedReview.current_period.figures.income_statement.revenue,
+        seedReview.current_period.figures.balance_sheet.current_assets.cash_and_cash_equivalents,
+      ].join("|")
+    : "";
+  const seenSeed = useRef<string | null>(null);
+  useEffect(() => {
+    if (!seedReview || !seedKey) return;
+    if (seenSeed.current === null) {
+      seenSeed.current = seedKey;
+      return;
+    }
+    if (seenSeed.current === seedKey) return;
+    seenSeed.current = seedKey;
+    const next = seededPeriod(seedReview.current_period.period_end);
+    setResult(seedReview);
+    setStatus("review");
+    setIssues([]);
+    setAcceptedQuality(false);
+    setPeriodMonth(next.month);
+    setPeriodYear(next.year);
+    setRangeStart("");
+    setRangeEnd("");
+    setPrefsTouched(false);
+    clearApplyState();
+  }, [seedKey, seedReview]);
+
   function seedPeriod(periodEnd: string | null | undefined) {
     const detected = detectImportPeriod(periodEnd);
     setPeriodMonth(detected ? String(detected.month) : "");
@@ -216,6 +254,7 @@ export function UploadFinancials({
   }
 
   async function handleFile(file: File) {
+    clearApplyState();
     const pdf = isPdfFile(file);
     if (!pdf && !isSpreadsheetFile(file) && !isTextFile(file)) {
       toast.error(`Please upload a ${UPLOAD_FORMATS_LABEL} file.`);
@@ -286,6 +325,7 @@ export function UploadFinancials({
     setRangeEnd("");
     setBankFile(null);
     setPrefsTouched(false);
+    clearApplyState();
     if (inputRef.current) inputRef.current.value = "";
   }
 
