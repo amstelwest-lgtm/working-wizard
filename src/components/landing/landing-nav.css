@@ -1,0 +1,306 @@
+/* Header chrome for routes that are not the landing page.
+   On `/`, landing.css (html[data-landing="1"]) is more specific and wins.
+   These rules are the same final nav: gold wordmark, cobalt trial outline. */
+
+nav#topnav.landing-nav {
+  --bg: #ffffff;
+  --ink: #102a43;
+  --ink-dim: #3d5270;
+  --gold: #d4af37;
+  --gold-ink: #7d5f0f;
+  --cobalt: #0b5fff;
+  --line: #dbeafe;
+  --ease: cubic-bezier(0.22, 0.9, 0.24, 1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  border-bottom: 1px solid transparent;
+  color: var(--ink);
+  font-family: "Noto Sans", "Noto Sans Fallback", sans-serif;
+}
+
+html.dark nav#topnav.landing-nav {
+  --bg: #0b1b2b;
+  --ink: #f4f7fb;
+  --ink-dim: #c5d4e4;
+  --gold-ink: #d4af37;
+  --line: #1e3a5f;
+}
+
+nav#topnav.landing-nav.scrolled {
+  border-bottom-color: var(--line);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+}
+
+nav#topnav.landing-nav .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 28px;
+  box-sizing: border-box;
+}
+
+nav#topnav.landing-nav.scrolled .wrap {
+  height: 62px;
+}
+
+nav#topnav.landing-nav .logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--ink);
+  min-width: 0;
+}
+
+nav#topnav.landing-nav .logo img {
+  height: 34px;
+  width: auto;
+  color-scheme: dark;
+  color-scheme: only dark;
+}
+
+nav#topnav.landing-nav .logo-word {
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  font-size: 18px;
+  color: #7d5f0f;
+  -webkit-text-fill-color: #7d5f0f;
+  background: none;
+}
+
+html.dark nav#topnav.landing-nav .logo-word {
+  color: #d4af37;
+  -webkit-text-fill-color: #d4af37;
+}
+
+nav#topnav.landing-nav .links {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  font-size: 13.5px;
+  letter-spacing: 0.06em;
+}
+
+nav#topnav.landing-nav .links a {
+  color: var(--ink-dim);
+  text-decoration: none;
+  position: relative;
+}
+
+nav#topnav.landing-nav .links a:not(.btn)::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  width: 0;
+  height: 1px;
+  background: var(--cobalt);
+  transition: width 0.3s var(--ease);
+}
+
+nav#topnav.landing-nav .links a:not(.btn):hover {
+  color: var(--cobalt);
+  -webkit-text-fill-color: var(--cobalt);
+}
+
+nav#topnav.landing-nav .links a:not(.btn):hover::after {
+  width: 100%;
+}
+
+nav#topnav.landing-nav #themeToggle {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--cobalt);
+  -webkit-text-fill-color: var(--cobalt);
+  cursor: pointer;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+}
+
+nav#topnav.landing-nav #themeToggle:hover {
+  border-color: var(--cobalt);
+}
+
+nav#topnav.landing-nav .nav-burger {
+  display: none;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  padding: 12px 10px;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+nav#topnav.landing-nav .nav-burger span {
+  display: block;
+  height: 1.5px;
+  border-radius: 99px;
+  background: var(--cobalt);
+  transition: transform 0.25s, opacity 0.2s;
+}
+
+nav#topnav.landing-nav.nav-open .nav-burger span:nth-child(1) {
+  transform: translateY(9px) rotate(45deg);
+}
+
+nav#topnav.landing-nav.nav-open .nav-burger span:nth-child(2) {
+  opacity: 0;
+}
+
+nav#topnav.landing-nav.nav-open .nav-burger span:nth-child(3) {
+  transform: translateY(-9px) rotate(-45deg);
+}
+
+nav#topnav.landing-nav .btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+nav#topnav.landing-nav .nav-signin {
+  min-height: 44px;
+  padding: 0 8px;
+  font-size: 14px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ink-dim);
+  -webkit-text-fill-color: var(--ink-dim);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+nav#topnav.landing-nav .nav-signin:hover {
+  color: var(--cobalt);
+  -webkit-text-fill-color: var(--cobalt);
+  background: none;
+  transform: none;
+}
+
+nav#topnav.landing-nav .links a.nav-trial {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--cobalt);
+  color: var(--cobalt);
+  -webkit-text-fill-color: var(--cobalt);
+  box-shadow: none;
+}
+
+nav#topnav.landing-nav .links a.nav-trial::after {
+  content: none;
+  display: none;
+}
+
+nav#topnav.landing-nav .links a.nav-trial:hover {
+  background: rgba(11, 95, 255, 0.08);
+  border-color: #2563eb;
+  color: #2563eb;
+  -webkit-text-fill-color: #2563eb;
+}
+
+@media (min-width: 1440px) {
+  nav#topnav.landing-nav > .wrap {
+    max-width: min(2080px, 84vw);
+  }
+}
+
+@media (min-width: 1024px) {
+  nav#topnav.landing-nav .links {
+    flex-wrap: nowrap;
+    gap: 16px;
+  }
+
+  nav#topnav.landing-nav .links a:not(.btn) {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 1023px) {
+  nav#topnav.landing-nav .nav-burger {
+    display: flex;
+  }
+
+  nav#topnav.landing-nav .links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 12px 20px 18px;
+    background: color-mix(in srgb, var(--bg) 94%, transparent);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  nav#topnav.landing-nav.nav-open .links {
+    display: flex;
+  }
+
+  nav#topnav.landing-nav .links a,
+  nav#topnav.landing-nav .links a:not(.btn) {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 12px 4px;
+    font-size: 14px;
+  }
+
+  nav#topnav.landing-nav .links a:not(.btn)::after {
+    display: none;
+  }
+
+  nav#topnav.landing-nav .links #themeToggle {
+    margin: 8px 0;
+  }
+
+  nav#topnav.landing-nav .links .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+  }
+
+  nav#topnav.landing-nav .wrap {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+@media print {
+  nav#topnav.landing-nav {
+    display: none !important;
+  }
+}

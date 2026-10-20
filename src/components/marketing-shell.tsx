@@ -13,6 +13,7 @@ import {
   FIRM_TRIAL_CTA_LABEL,
   MARKETING_COPYRIGHT_ENTITY,
 } from "@/lib/firm-signup-copy";
+import { LandingHeader } from "@/components/landing/landing-header";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import { PREFERRED_SOURCE_HREF, PREFERRED_SOURCE_LABEL } from "@/lib/landing-assets";
 import {
@@ -35,7 +36,13 @@ export function MarketCopy({ za, us }: { za: ReactNode; us: ReactNode }) {
  * Same Sign in control as the homepage nav. The modal chunk (and Supabase)
  * load on click, not with this shell.
  */
-function MarketingSignIn({ copyPack }: { copyPack: VisitorCopyPack }) {
+function MarketingSignIn({
+  copyPack,
+  className = "mk-top-signin",
+}: {
+  copyPack: VisitorCopyPack;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [Session, setSession] = useState<ComponentType<{
     onClose: () => void;
@@ -48,7 +55,7 @@ function MarketingSignIn({ copyPack }: { copyPack: VisitorCopyPack }) {
   return (
     <>
       <LandingSignInButton
-        className="mk-top-signin"
+        className={className}
         onClick={() => {
           setHost(document.querySelector("[data-milon-marketing]"));
           setOpen(true);
@@ -76,6 +83,8 @@ export function MarketingShell({
   ctaHref = "/#register",
   navCtaLabel = FIRM_TRIAL_CTA_LABEL,
   navCtaHref = "/#register",
+  /** Same header as `/`: gold mark, section links, theme, trial CTA. */
+  landingNav = false,
   heroCta,
   heroTone = "default",
   footerLine,
@@ -93,6 +102,8 @@ export function MarketingShell({
   /** Top-bar pill. Same trial label as the landing nav. A card is required at signup. */
   navCtaLabel?: string;
   navCtaHref?: string;
+  /** Terms and privacy use the homepage header. Other collateral keeps mk-top. */
+  landingNav?: boolean;
   /** Optional primary button under the hero lead. */
   heroCta?: { label: string; href: string };
   /** Quiet heading for legal notices that should not read as marketing. */
@@ -113,7 +124,14 @@ export function MarketingShell({
 
   return (
     <MarketingPackContext.Provider value={pack}>
-    <div className="mk" data-milon-marketing>
+    {landingNav ? (
+      <LandingHeader
+        sectionBase="/"
+        signIn={<MarketingSignIn copyPack={pack} className="btn btn-ghost nav-signin" />}
+      />
+    ) : null}
+    <div className={landingNav ? "mk mk-has-landing-nav" : "mk"} data-milon-marketing>
+      {landingNav ? null : (
       <header className="mk-top">
         <a className="mk-logo" href="/">
           MIL<span>Ō</span>N
@@ -136,6 +154,7 @@ export function MarketingShell({
           {navCtaLabel}
         </a>
       </header>
+      )}
 
       <div className="mk-wrap">
         <section className={heroTone === "plain" ? "mk-hero mk-hero-plain" : "mk-hero"}>

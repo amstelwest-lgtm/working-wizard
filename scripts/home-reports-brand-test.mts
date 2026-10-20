@@ -125,16 +125,37 @@ assert(practice.includes("bookEnriched"), "the firm line waits until the books h
 assert(practice.includes('className="owner-reports-ready"'), "firm Home adds the line beside the agent desk");
 
 const landing = read("src/routes/index.tsx");
+const header = read("src/components/landing/landing-header.tsx");
 const goldCtas = landing.match(/btn btn-gold/g) ?? [];
 assert(goldCtas.length === 2, `landing keeps two gold CTAs, found ${goldCtas.length}`);
 assert(landing.includes('className="btn btn-gold"'), "the hero trial button stays gold");
 assert(landing.includes('className={trialBarOn ? "trial-sticky is-on" : "trial-sticky"}'), "the mobile bar is the sticky trial");
 const sticky = landing.slice(landing.indexOf("trial-sticky"));
 assert(sticky.includes('className="btn btn-gold"'), "the mobile sticky trial stays gold");
-assert(landing.includes('className="btn btn-cobalt nav-trial"'), "the header trial button is cobalt");
+assert(header.includes('className="btn btn-cobalt nav-trial"'), "the header trial button is cobalt");
+assert(landing.includes("<LandingHeader"), "the homepage renders the shared landing header");
+
+const landingCss = read("src/styles/landing.css");
+const watch = landingCss.slice(landingCss.indexOf("html[data-landing=\"1\"] .watch-cta{"));
+assert(watch.startsWith("html[data-landing=\"1\"] .watch-cta{"), "watch CTA rule exists");
+assert(watch.includes("color:var(--cobalt)"), "watch trial and owner links are cobalt");
+assert(watch.includes("html[data-landing=\"1\"] .watch-cta:hover{"), "watch links have a hover rule");
+assert(watch.slice(watch.indexOf(".watch-cta:hover{")).includes("color:var(--royal)"), "watch link hover is royal");
+const play = landingCss.slice(landingCss.indexOf("html[data-landing=\"1\"] .yt-play{"));
+assert(play.includes("background:var(--cobalt)"), "video play circles are cobalt");
+assert(play.includes(".yt-facade:hover .yt-play"), "play circles change on hover");
+assert(play.slice(play.indexOf(".yt-facade:hover .yt-play")).includes("background:var(--royal)"), "play circle hover is royal");
+assert(!play.slice(0, play.indexOf(".watch-cta{")).includes("background:var(--gold)"), "play circles are not gold");
 
 const pricing = read("src/components/firm-band-pricing.tsx");
 assert(!pricing.includes("btn btn-gold"), "Start Solo is not a gold CTA");
+for (const path of [
+  "src/components/landing/register-form.tsx",
+  "src/components/landing/sign-in-modal.tsx",
+  "src/components/landing/password-reset-panel.tsx",
+]) {
+  assert(!read(path).includes("btn btn-gold"), `${path} has no gold button`);
+}
 assert(
   pricing.includes('band.id === "solo" ? "btn btn-cobalt"'),
   "the pricing table Start Solo button is cobalt",
@@ -161,6 +182,14 @@ assert(terms.includes("MarketingShell"), "terms uses the marketing nav");
 assert(privacy.includes("MarketingShell"), "privacy uses the marketing nav");
 assert(terms.includes("navCtaLabel={FIRM_TRIAL_CTA_LABEL}"), "terms uses the landing trial CTA");
 assert(privacy.includes("navCtaLabel={FIRM_TRIAL_CTA_LABEL}"), "privacy uses the landing trial CTA");
+assert(terms.includes("landingNav"), "terms mounts the landing header");
+assert(privacy.includes("landingNav"), "privacy mounts the landing header");
+assert(header.includes('sectionBase?: "" | "/"'), "section links can leave the landing page");
+assert(header.includes('href={href("method")}'), "Method link is a section anchor");
+assert(header.includes('href={href("how")}'), "How it works link is a section anchor");
+assert(header.includes('href={href("pricing")}'), "Pricing link is a section anchor");
+assert(header.includes("milon-centaur.svg"), "the landing mark is on the shared header");
+assert(read("src/components/marketing-shell.tsx").includes("<LandingHeader"), "legal routes render that header");
 assert(FIRM_TRIAL_CTA_LABEL === "Start 14-day trial", "the shared CTA is Start 14-day trial");
 const shell = read("src/components/marketing-shell.tsx");
 assert(shell.includes("navCtaLabel = FIRM_TRIAL_CTA_LABEL"), "other marketing pages default to the same CTA");
