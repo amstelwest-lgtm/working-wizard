@@ -216,12 +216,15 @@ async function resolveFirmBillingEntitlement(
         countOwnedFirms(ctx.supabase, userId),
         countFirmMemberships(ctx.supabase, userId),
       ]);
-      const result = decideFirmBillingEntitlement({
-        stripeConfigured: true,
-        hasEntitlingSubscription: history.entitling != null,
-        ownsFirm: owned > 0,
-        isFirmMember: memberships > 0,
-      });
+      const result: FirmBillingEntitlement = {
+        ...decideFirmBillingEntitlement({
+          stripeConfigured: true,
+          hasEntitlingSubscription: history.entitling != null,
+          ownsFirm: owned > 0,
+          isFirmMember: memberships > 0,
+        }),
+        introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
+      };
       rememberEntitlement(email, result);
       const mirror = syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
         console.warn(

@@ -5,6 +5,9 @@
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { assertInviteTokenUsable } from "@/lib/invite-claim";
+
+export { clientCodesMatch, normalizeClientCode } from "@/lib/invite-claim";
 
 type InviteTokenRow = {
   id: string;
@@ -49,15 +52,6 @@ async function resolveLegacyUuid(trimmed: string): Promise<{
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function normalizeClientCode(raw: string): string {
-  return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-export function clientCodesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
-  if (!a || !b) return false;
-  return normalizeClientCode(a) === normalizeClientCode(b);
-}
-
 /** Resolve an invite token (or legacy client UUID) to a client id. */
 export async function resolveInviteToClientId(
   invite: string,
@@ -101,24 +95,11 @@ export async function resolveInviteToClientId(
 
   if (data) {
     const row = data as InviteTokenRow;
-    if (row.redeemed_at) {
-      if (opts?.redeemedByUserId && row.redeemed_by === opts.redeemedByUserId) {
-        return {
-          clientId: row.client_id,
-          tokenId: row.id,
-          alreadyRedeemedByCaller: true,
-          purpose: row.purpose ?? null,
-          invitedEmail: row.invited_email ?? null,
-        };
-      }
-      throw new Error("This invite has already been used.");
-    }
-    if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
-      throw new Error("This invite has expired. Ask your accountant for a new link.");
-    }
+    const usable = assertInviteTokenUsable(row, { redeemedByUserId: opts?.redeemedByUserId });
     return {
       clientId: row.client_id,
       tokenId: row.id,
+      alreadyRedeemedByCaller: usable.alreadyRedeemedByCaller,
       purpose: row.purpose ?? null,
       invitedEmail: row.invited_email ?? null,
     };

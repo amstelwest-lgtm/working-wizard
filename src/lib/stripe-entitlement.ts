@@ -30,6 +30,11 @@ export type FirmBillingReason =
 export type FirmBillingEntitlement = {
   entitled: boolean;
   reason: FirmBillingReason;
+  /**
+   * False when Stripe history already has a subscription, so a second
+   * intro trial does not apply. Omitted when that history was not read.
+   */
+  introTrialEligible?: boolean;
 };
 
 export type FirmBillingPathDecision = "allow" | "require_billing";

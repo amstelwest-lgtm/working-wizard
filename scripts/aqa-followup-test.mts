@@ -314,25 +314,22 @@ const gaps = mergePackDataGaps([], {
 });
 assert(gaps.some((gap) => gap.title === "Aged debtors report"), "missing aged debtors stay on the list");
 assert(gaps.some((gap) => gap.title === "Aged creditors report"), "missing aged creditors stay on the list");
-const shown = packSectionsForPdf(
-  [
-    {
-      key: "data_gaps",
-      title: "What MILŌN still needs",
-      body: "Nothing outstanding. The figures in this pack are as complete as MILŌN can make them from what has been provided.",
-    },
-    {
-      key: "state_of_business",
-      title: "Where the business stands",
-      body: "Chill Pepper scores 74/100. Strongest pillar: Cash Flow (93). Weakest: Profit Drivers (60).",
-    },
-  ],
-  { liveGaps: gaps },
-);
+const shown = packSectionsForPdf([
+  {
+    key: "data_gaps",
+    title: "What MILŌN still needs",
+    body: "Nothing outstanding. The figures in this pack are as complete as MILŌN can make them from what has been provided.",
+  },
+  {
+    key: "state_of_business",
+    title: "Where the business stands",
+    body: "Chill Pepper scores 74/100. Strongest pillar: Cash Flow (93). Weakest: Profit Drivers (60).",
+  },
+]);
 const gapSection = shown.find((section) => section.key === "data_gaps");
-assert(gapSection?.body.includes("open request"), gapSection?.body ?? "");
-assert(!/Nothing outstanding/i.test(gapSection?.body ?? ""), gapSection?.body ?? "");
-assert(gapSection?.bullets?.some((line) => line.includes("Aged debtors report")), gapSection?.bullets?.join(" | ") ?? "");
+assert(/Nothing outstanding/i.test(gapSection?.body ?? ""), gapSection?.body ?? "");
+assert(!gapSection?.body.includes("open request"), gapSection?.body ?? "");
+assert(!(gapSection?.bullets ?? []).some((line) => line.includes("Aged debtors report")), "stored gaps stay stored");
 const state = shown.find((section) => section.key === "state_of_business");
 assert(state?.body.includes("scores 74"), state?.body ?? "");
 assert(!state?.body.includes("/100"), state?.body ?? "");

@@ -206,7 +206,9 @@ assert(
 const reportsSrc = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
 assert(reportsSrc.includes('scenario: "base"'), "the reports studio exports the base forecast");
 const signoffSrc = readFileSync(resolve("src/components/review-signoff.tsx"), "utf8");
-assert(signoffSrc.includes('"Draft"'), "an unsigned deliverable says Draft");
+const signoffWords = readFileSync(resolve("src/lib/signoff-status.ts"), "utf8");
+assert(signoffSrc.includes("presentPageSignoff"), "an unsigned deliverable uses the shared status line");
+assert(signoffWords.includes('SIGNOFF_STATUS_DRAFT = "Draft"'), "an unsigned deliverable says Draft");
 assert(!signoffSrc.includes("Not signed off"), "unsigned copy does not add a second phrase");
 
 const us = resolveMarket({ country: "US", regionCode: "NY" });

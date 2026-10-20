@@ -17,10 +17,10 @@
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { assertOwnerHandoffPurpose } from "@/lib/accountant-invite";
+import { evaluateOwnerInviteClaim } from "@/lib/invite-claim";
 import {
   attachInviteRedeemer,
   claimInviteToken,
-  clientCodesMatch,
   releaseInviteToken,
   resolveInviteToClientId,
 } from "@/lib/invite-tokens.resolve";
@@ -31,7 +31,10 @@ export type InviteMemberInput = {
   fullName?: string;
   /** Opaque invite token or legacy client UUID. */
   inviteClientId: string;
-  /** Required when the client has a client_code (MLN-XXXXXX). */
+  /**
+   * Legacy client-UUID claims still require this when the client has a code.
+   * A live opaque token identifies the client; the submitted code is ignored.
+   */
   inviteClientCode?: string | null;
 };
 
@@ -137,17 +140,6 @@ async function loadInviteClient(clientId: string): Promise<InviteClientRow> {
   return first.data;
 }
 
-function assertClientCode(client: InviteClientRow, inviteClientCode?: string | null) {
-  const storedCode = client.client_code ?? null;
-  if (!storedCode) return;
-  if (!inviteClientCode?.trim()) {
-    throw new Error("Enter the client code from your accountant (MLN-XXXXXX).");
-  }
-  if (!clientCodesMatch(storedCode, inviteClientCode)) {
-    throw new Error("That client code does not match this invite. Check the email and try again.");
-  }
-}
-
 async function prepareInvite(
   inviteClientId: string,
   inviteClientCode?: string | null,
@@ -156,7 +148,13 @@ async function prepareInvite(
   const resolved = await resolveInviteToClientId(inviteClientId, { redeemedByUserId });
   assertOwnerHandoffPurpose(resolved.purpose);
   const client = await loadInviteClient(resolved.clientId);
-  assertClientCode(client, inviteClientCode);
+  // The token row is the credential. Do not trust a client-supplied "no code needed" flag.
+  evaluateOwnerInviteClaim({
+    legacy: resolved.legacy,
+    tokenId: resolved.tokenId,
+    clientCode: client.client_code,
+    submittedCode: inviteClientCode,
+  });
   const shouldTransfer = await isPracticePlaceholderOwner(client.owner_user_id, client.firm_id);
   const role = shouldTransfer ? "client_owner" : "client_member";
   return {
