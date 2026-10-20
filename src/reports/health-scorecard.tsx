@@ -30,7 +30,7 @@ import {
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { diagnoseDuPont, healthNarrative } from "./narrative";
 import { spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
-import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
+import { PDF_CARD_MIN_PRESENCE, ReportSection } from "@/lib/report-pdf-layout";
 import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -449,32 +449,39 @@ export function HealthScorecardPDF({
         </View>
       )}
 
-      {pillarData.map(({ pillar, score, ratios }) => (
-        <View key={pillar} style={styles.pillarSection}>
-          <SectionHeader title={pillarLabel(pillar)} score={score ?? undefined} />
-          {ratios.map((r, i) => {
-            const spelled = spellLabor(r.ratio_name, market ?? ZA_MARKET);
-            const percent = r.formatted_value.split(" · ")[0] ?? r.formatted_value;
-            const ratioName = r.unscored
-              ? `${spelled} — ${r.formatted_value}`
-              : r.annotation
-                ? `${spelled} · ${r.annotation}`
-                : spelled;
-            return (
-              <RatioRow
-                key={r.ratio_key}
-                ratioName={ratioName}
-                formattedValue={r.unscored && r.formatted_value.startsWith("n/a") ? "n/a" : percent}
-                healthScore={r.health_score}
-                healthTier={r.health_tier}
-                unscored={r.unscored}
-                priorScore={r.prior_period_score}
-                isAlternate={i % 2 === 1}
-              />
-            );
-          })}
-        </View>
-      ))}
+      {pillarData.filter((pillar) => pillar.ratios.length > 0).map(({ pillar, score, ratios }) => {
+        const rendered = ratios.map((r, i) => {
+          const spelled = spellLabor(r.ratio_name, market ?? ZA_MARKET);
+          const percent = r.formatted_value.split(" · ")[0] ?? r.formatted_value;
+          const ratioName = r.unscored
+            ? `${spelled} — ${r.formatted_value}`
+            : r.annotation
+              ? `${spelled} · ${r.annotation}`
+              : spelled;
+          return (
+            <RatioRow
+              key={r.ratio_key}
+              ratioName={ratioName}
+              formattedValue={r.unscored && r.formatted_value.startsWith("n/a") ? "n/a" : percent}
+              healthScore={r.health_score}
+              healthTier={r.health_tier}
+              unscored={r.unscored}
+              priorScore={r.prior_period_score}
+              isAlternate={i % 2 === 1}
+            />
+          );
+        });
+        return (
+          <ReportSection
+            key={pillar}
+            style={styles.pillarSection}
+            heading={<SectionHeader title={pillarLabel(pillar)} score={score ?? undefined} />}
+            lead={rendered.slice(0, 2)}
+          >
+            {rendered.slice(2)}
+          </ReportSection>
+        );
+      })}
     </PDFDocument>
   );
 }

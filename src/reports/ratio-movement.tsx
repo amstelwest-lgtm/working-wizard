@@ -6,6 +6,7 @@
  * SSR safety: Only import via dynamic import().
  */
 
+import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -19,6 +20,7 @@ import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { PILLAR_LABELS } from "@/lib/health-score";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
+import { ReportSection } from "@/lib/report-pdf-layout";
 import {
   movementVerdict,
   MOVEMENT_VERDICT_LABEL,
@@ -216,26 +218,7 @@ export function RatioMovementPDF({
 
       {pillars.map((pillar) => {
         const rows = withVerdicts.filter((x) => x.row.pillar === pillar);
-        return (
-          <View key={pillar}>
-            <SectionHeader title={PILLAR_LABELS[pillar]} color={theme.accent} />
-            {/* column headers */}
-            <View style={S.headerRow}>
-              <Text style={[S.headerCell, { flex: 2.2 }]}>Ratio</Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>
-                {labels.twelve_months}
-              </Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>
-                {labels.six_months}
-              </Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>
-                {labels.three_months}
-              </Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>{labels.current}</Text>
-              <View style={{ width: 52 + 8 }} />
-              <View style={{ width: 52 }} />
-            </View>
-            {rows.map(({ row, verdict }, i) => {
+        const rendered = rows.map(({ row, verdict }, i) => {
               const meta = VERDICT_META[verdict];
               const highlight = verdict === "declining_all";
               // Sparkline scale: invert lower_is_better so "up" always reads good?
@@ -280,8 +263,34 @@ export function RatioMovementPDF({
                   </View>
                 </View>
               );
-            })}
-          </View>
+        });
+        return (
+          <ReportSection
+            key={pillar}
+            heading={<SectionHeader title={PILLAR_LABELS[pillar]} color={theme.accent} />}
+            lead={
+              <Fragment>
+                <View style={S.headerRow}>
+                  <Text style={[S.headerCell, { flex: 2.2 }]}>Ratio</Text>
+                  <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>
+                    {labels.twelve_months}
+                  </Text>
+                  <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>
+                    {labels.six_months}
+                  </Text>
+                  <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>
+                    {labels.three_months}
+                  </Text>
+                  <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>{labels.current}</Text>
+                  <View style={{ width: 52 + 8 }} />
+                  <View style={{ width: 52 }} />
+                </View>
+                {rendered.slice(0, 1)}
+              </Fragment>
+            }
+          >
+            {rendered.slice(1)}
+          </ReportSection>
         );
       })}
 

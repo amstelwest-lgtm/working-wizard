@@ -1,12 +1,13 @@
 /**
  * SectionHeader — refined typographic section divider: accent tick, small-caps
  * title, hairline rule, optional score chip. Replaces the old full-fill bar.
+ * Keep-with-next lives on ReportSection, which wraps this title with the
+ * first rows. The title on its own must not reserve a private slice of the page.
  *
  * SSR safety: react-pdf primitives — only import via dynamic import().
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
-import { SECTION_KEEP_WITH_NEXT } from "@/lib/report-pdf-layout";
 import { C, scoreColor } from "./theme";
 
 type Props = {
@@ -51,7 +52,7 @@ const styles = StyleSheet.create({
 
 export function SectionHeader({ title, score, color = C.blueDeep }: Props) {
   return (
-    <View style={styles.wrapper} wrap={false} minPresenceAhead={SECTION_KEEP_WITH_NEXT}>
+    <View style={styles.wrapper} wrap={false}>
       <View style={styles.row}>
         <View style={styles.left}>
           <View style={[styles.tick, { backgroundColor: color }]} />

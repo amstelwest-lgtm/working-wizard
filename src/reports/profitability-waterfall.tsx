@@ -21,6 +21,7 @@ import { currencySymbol, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market"
 import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
+import { ReportSection } from "@/lib/report-pdf-layout";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { profitabilityNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
@@ -621,36 +622,59 @@ export function ProfitabilityWaterfallPDF({
 
       <ExecSummary figures={figures} narrative={narrative} />
 
-      <SectionHeader title="Revenue-to-Profit Bridge" color={theme.accent} />
-      <BridgeChart d={d} accent={theme.accent} />
+      <ReportSection
+        heading={<SectionHeader title="Revenue-to-Profit Bridge" color={theme.accent} />}
+        lead={<BridgeChart d={d} accent={theme.accent} />}
+      />
 
-      <SectionHeader title="Margin Ladder" color={theme.accent} />
-      <MarginLadder d={d} accent={theme.accent} />
+      <ReportSection
+        heading={<SectionHeader title="Margin Ladder" color={theme.accent} />}
+        lead={<MarginLadder d={d} accent={theme.accent} />}
+      />
 
       {/* ── PAGE 2: Comparison + ratios ── */}
       <View break>
-        <SectionHeader title="Current vs Prior Period" color={theme.accent} />
-        {prior ? (
-          <ComparisonTable rows={compRows} accent={theme.accent} />
-        ) : (
-          <Text style={{ fontSize: 8, fontFamily: "Helvetica", color: C.muted, marginBottom: 10 }}>
-            {NO_PRIOR_PERIOD}. Comparative claims are left off until a different period is on file.
-          </Text>
-        )}
+        <ReportSection
+          heading={<SectionHeader title="Current vs Prior Period" color={theme.accent} />}
+          lead={
+            prior ? (
+              <ComparisonTable rows={compRows} accent={theme.accent} />
+            ) : (
+              <Text style={{ fontSize: 8, fontFamily: "Helvetica", color: C.muted, marginBottom: 10 }}>
+                {NO_PRIOR_PERIOD}. Comparative claims are left off until a different period is on file.
+              </Text>
+            )
+          }
+        />
 
-        <SectionHeader title="Profit Pillar Ratio Analysis" color={theme.accent} />
-        {profitRatioRows.map((r, i) => (
-          <RatioRow
-            key={r.name}
-            ratioName={r.name}
-            formattedValue={r.value}
-            healthScore={r.score ?? 0}
-            healthTier={scoreTier(r.score)}
-            unscored={"unscored" in r && Boolean(r.unscored)}
-            priorScore={r.prior}
-            isAlternate={i % 2 === 1}
-          />
-        ))}
+        <ReportSection
+          heading={<SectionHeader title="Profit Pillar Ratio Analysis" color={theme.accent} />}
+          lead={profitRatioRows.slice(0, 2).map((r, i) => (
+            <RatioRow
+              key={r.name}
+              ratioName={r.name}
+              formattedValue={r.value}
+              healthScore={r.score ?? 0}
+              healthTier={scoreTier(r.score)}
+              unscored={"unscored" in r && Boolean(r.unscored)}
+              priorScore={r.prior}
+              isAlternate={i % 2 === 1}
+            />
+          ))}
+        >
+          {profitRatioRows.slice(2).map((r, i) => (
+            <RatioRow
+              key={r.name}
+              ratioName={r.name}
+              formattedValue={r.value}
+              healthScore={r.score ?? 0}
+              healthTier={scoreTier(r.score)}
+              unscored={"unscored" in r && Boolean(r.unscored)}
+              priorScore={r.prior}
+              isAlternate={(i + 2) % 2 === 1}
+            />
+          ))}
+        </ReportSection>
       </View>
     </PDFDocument>
   );

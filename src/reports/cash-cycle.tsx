@@ -17,7 +17,7 @@ import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
-import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
+import { PDF_CARD_MIN_PRESENCE, ReportSection } from "@/lib/report-pdf-layout";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { cashCycleNarrative } from "./narrative";
@@ -449,9 +449,10 @@ export function CashCyclePDF({
 
       <ExecSummary figures={figures} narrative={narrative} />
 
-      <SectionHeader title="Conversion Cycle Timeline" color={theme.accent} />
-      <CycleTimeline d={d} accent={theme.accent} />
-
+      <ReportSection
+        heading={<SectionHeader title="Conversion Cycle Timeline" color={theme.accent} />}
+        lead={<CycleTimeline d={d} accent={theme.accent} />}
+      >
       <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
         <MetricBox
           label="Inventory Days"
@@ -497,10 +498,13 @@ export function CashCyclePDF({
           accentColor={d.cash_conversion_cycle > 60 ? C.red : C.green}
         />
       </View>
+      </ReportSection>
 
       {/* ── PAGE 2 ── */}
       <View break>
-        <SectionHeader title="Cash Trapped in the Cycle" color={theme.accent} />
+        <ReportSection
+          heading={<SectionHeader title="Cash Trapped in the Cycle" color={theme.accent} />}
+          lead={
         <View
           wrap={false}
           minPresenceAhead={PDF_CARD_MIN_PRESENCE}
@@ -531,18 +535,33 @@ export function CashCyclePDF({
               : `is locked up funding the ${Math.round(d.cash_conversion_cycle)}-day gap. Shortening the cycle by one day releases ${fmtRand(story.dayRelease ?? 0, m)}.`}
           </Text>
         </View>
+        }
+        />
 
-        <SectionHeader title="Working Capital Ratio Analysis" color={theme.accent} />
-        {ratioRows.map((r, i) => (
-          <RatioRow
-            key={r.name}
-            ratioName={r.name}
-            formattedValue={r.value}
-            healthScore={r.score}
-            healthTier={scoreTier(r.score)}
-            isAlternate={i % 2 === 1}
-          />
-        ))}
+        <ReportSection
+          heading={<SectionHeader title="Working Capital Ratio Analysis" color={theme.accent} />}
+          lead={ratioRows.slice(0, 2).map((r, i) => (
+            <RatioRow
+              key={r.name}
+              ratioName={r.name}
+              formattedValue={r.value}
+              healthScore={r.score}
+              healthTier={scoreTier(r.score)}
+              isAlternate={i % 2 === 1}
+            />
+          ))}
+        >
+          {ratioRows.slice(2).map((r, i) => (
+            <RatioRow
+              key={r.name}
+              ratioName={r.name}
+              formattedValue={r.value}
+              healthScore={r.score}
+              healthTier={scoreTier(r.score)}
+              isAlternate={(i + 2) % 2 === 1}
+            />
+          ))}
+        </ReportSection>
       </View>
     </PDFDocument>
   );

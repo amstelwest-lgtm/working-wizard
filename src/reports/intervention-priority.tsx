@@ -11,6 +11,7 @@ import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components
 import { InsightBox } from "@/components/pdf/insight-box";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
+import { ReportSection } from "@/lib/report-pdf-layout";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { interventionNarrative } from "./narrative";
@@ -179,37 +180,61 @@ export function InterventionPriorityPDF({
         </View>
       )}
 
-      {critical.length > 0 && (
-        <View>
-          <SectionHeader title="Wave 1 — Act Now" color={C.red} />
-          <Text style={S.waveDesc}>
-            These steps address ratios in critical territory. Begin within the next two weeks — each
-            carries outsized impact on business survival and stability.
-          </Text>
-          {renderCards(critical)}
-        </View>
-      )}
+      {critical.length > 0 &&
+        (() => {
+          const cards = renderCards(critical);
+          return (
+            <ReportSection
+              heading={<SectionHeader title="Wave 1 — Act Now" color={C.red} />}
+              intro={
+                <Text style={S.waveDesc}>
+                  These steps address ratios in critical territory. Begin within the next two weeks — each
+                  carries outsized impact on business survival and stability.
+                </Text>
+              }
+              lead={cards.slice(0, 1)}
+            >
+              {cards.slice(1)}
+            </ReportSection>
+          );
+        })()}
 
-      {atRisk.length > 0 && (
-        <View>
-          <SectionHeader title={spell("Wave 2 — Stabilise")} color={C.amber} />
-          <Text style={S.waveDesc}>
-            These steps target ratios under pressure. Schedule them over the next 30–60 days, once
-            Wave 1 is underway.
-          </Text>
-          {renderCards(atRisk)}
-        </View>
-      )}
+      {atRisk.length > 0 &&
+        (() => {
+          const cards = renderCards(atRisk);
+          return (
+            <ReportSection
+              heading={<SectionHeader title={spell("Wave 2 — Stabilise")} color={C.amber} />}
+              intro={
+                <Text style={S.waveDesc}>
+                  These steps target ratios under pressure. Schedule them over the next 30–60 days, once
+                  Wave 1 is underway.
+                </Text>
+              }
+              lead={cards.slice(0, 1)}
+            >
+              {cards.slice(1)}
+            </ReportSection>
+          );
+        })()}
 
-      {rest.length > 0 && (
-        <View>
-          <SectionHeader title="Wave 3 — Strengthen" color={C.green} />
-          <Text style={S.waveDesc}>
-            Ratios here are healthy — these steps protect and extend the advantage.
-          </Text>
-          {renderCards(rest)}
-        </View>
-      )}
+      {rest.length > 0 &&
+        (() => {
+          const cards = renderCards(rest);
+          return (
+            <ReportSection
+              heading={<SectionHeader title="Wave 3 — Strengthen" color={C.green} />}
+              intro={
+                <Text style={S.waveDesc}>
+                  Ratios here are healthy — these steps protect and extend the advantage.
+                </Text>
+              }
+              lead={cards.slice(0, 1)}
+            >
+              {cards.slice(1)}
+            </ReportSection>
+          );
+        })()}
     </PDFDocument>
   );
 }

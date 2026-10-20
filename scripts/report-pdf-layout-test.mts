@@ -64,8 +64,15 @@ const left = finishReportDownload(both.pending, "forecast");
 assert(!left.has("forecast") && left.has("benchmark"), "finishing one report leaves the other running");
 
 const header = readFileSync(resolve("src/components/pdf/section-header.tsx"), "utf8");
-assert(header.includes("minPresenceAhead={SECTION_KEEP_WITH_NEXT}"), "section headers use keep-with-next");
+assert(!header.includes("minPresenceAhead"), "a section header does not keep a private slice of the page");
+assert(header.includes('wrap={false}'), "a section header does not split its own title");
 assert(header.includes('breakInside: "avoid"'), "a section header does not split");
+
+const layoutSrc = readFileSync(resolve("src/lib/report-pdf-layout.ts"), "utf8");
+assert(layoutSrc.includes("export function ReportSection"), "reports share one section primitive");
+assert(layoutSrc.includes("wrap: false"), "the section lead does not split");
+assert(layoutSrc.includes("sectionMinPresenceAhead(2)"), "the lead asks for the heading plus two rows");
+assert(SECTION_KEEP_WITH_NEXT === 52 + 56 * 2, "keep-with-next is the heading plus two rows");
 
 const watermark = readFileSync(resolve("src/components/pdf/watermark.tsx"), "utf8");
 const draftAt = watermark.indexOf("export function DraftWatermark");
@@ -89,12 +96,14 @@ assert(!studio.includes("if (loadingKey) return"), "a shared lock no longer swal
 assert(studio.includes('toast.error("This report is already downloading")'), "a refused download still toasts");
 
 const budget = readFileSync(resolve("src/reports/budget-variance.tsx"), "utf8");
-assert(budget.includes("wrap={false}"), "the budget table header stays with its first row");
+assert(budget.includes("ReportSection"), "budget sections use the shared keep-with-next");
 assert(budget.includes("variancePctCell"), "the budget percent cell uses the short label");
+assert(budget.includes("varianceIsZeroPair"), "a zero pair does not print an amount under the dash");
 assert(budget.includes('overflow: "hidden"'), "the percent cell cannot paint over the variance amount");
 assert(!budget.includes("hideHeader"), "each budget section is one table");
-assert(budget.includes("budget === 0 && actual === 0"), "a zero budget and zero actual is not In line");
-assert(budget.includes('return "—"'), "that zero row prints an em dash");
+assert(budget.includes('? "—"'), "a zero pair prints an em dash in the percent cell");
+const varianceSrc = readFileSync(resolve("src/lib/budget.variance.ts"), "utf8");
+assert(varianceSrc.includes("budget === 0 && actual === 0"), "a zero budget and zero actual is its own case");
 
 const dupont = readFileSync(resolve("src/components/pdf/dupont.tsx"), "utf8");
 assert(dupont.includes("wrap={false}") && dupont.includes("minPresenceAhead={PDF_CARD_MIN_PRESENCE}"), "DuPont cards do not split the header from the body");
