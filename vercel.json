@@ -52,11 +52,6 @@
   ],
   "redirects": [
     {
-      "source": "/practice/clients",
-      "destination": "/clients",
-      "permanent": false
-    },
-    {
       "source": "/:path*",
       "has": [{ "type": "host", "value": { "eq": "milon.co.za" } }],
       "destination": "https://www.milonfinance.com/:path*",

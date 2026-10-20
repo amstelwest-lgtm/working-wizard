@@ -149,7 +149,10 @@ assert(
   paint !== -1 && publish > paint && history > publish,
   "clients are shown before score history is loaded",
 );
-assert(board.includes("accountantPortalStay"), "a known accountant does not wait on the role check again");
+assert(
+  board.includes("isAccountantPortalOpen"),
+  "a known accountant does not wait on the role check again",
+);
 assert(board.includes("rememberPaintedBook"), "a painted book is reused when All clients remounts");
 assert(
   clientRoute.includes("Loading the plan…"),
