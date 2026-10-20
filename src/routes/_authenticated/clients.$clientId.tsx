@@ -122,7 +122,7 @@ import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { figureSourceChipLabel, resolveFigureSource } from "@/lib/ledger-link-copy";
-import { booksAnswerSentence, booksCoverPeriod, booksTileLines } from "@/lib/books-answer";
+import { booksAnswerSentence, booksCoverPeriod, booksTileLines, homeStatementsLine } from "@/lib/books-answer";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { parseBudgetDocument } from "@/lib/budget-pdf";
@@ -192,6 +192,7 @@ import {
   readStatementMeta,
   reportDataPeriodLabel,
   rewriteDraftMonthStamp,
+  statementSpanLabel,
   statementYearLine,
 } from "@/lib/statement-period";
 import { canonicalScoreProse } from "@/lib/score-prose";
@@ -882,7 +883,7 @@ function ClientView() {
           outcome_goal?: string | null;
         } | null;
         if (plan) {
-          periodLabel = plan.period_label ?? null;
+          periodLabel = plan.period_label ?? null; // date-ok: action plan quarter stamp, not a day range
           outcomeGoal = plan.outcome_goal ?? null;
           const { data: rows } = await supabase
             .from("action_items_v")
@@ -1601,22 +1602,31 @@ function ClientView() {
     periodLabel: string | null;
     periodStart: string | null;
     periodEnd: string | null;
-  }) => {
-    if (link.periodStart && link.periodEnd) {
-      const fresh = formatDateRange(link.periodStart, link.periodEnd, clientMarket);
-      if (fresh !== "—") return fresh;
-    }
-    return link.periodLabel;
-  };
+  }) =>
+    statementSpanLabel({
+      periodStart: link.periodStart,
+      periodEnd: link.periodEnd,
+      periodLabel: link.periodLabel,
+      market: clientMarket,
+    });
   const snapshotFinancials =
     currentSnapshot?.financials && typeof currentSnapshot.financials === "object"
       ? currentSnapshot.financials
       : null;
-  const snapshotSpan =
-    (statementMeta.periodStart && statementMeta.periodEnd ? statementMeta.periodLabel : null) ??
-    readStatementMeta(snapshotFinancials, clientMarket).periodLabel ??
-    currentSnapshot?.period_label ??
-    null;
+  const snapshotMeta = readStatementMeta(snapshotFinancials, clientMarket);
+  const liveDates = Boolean(statementMeta.periodStart && statementMeta.periodEnd);
+  // Dates already on the client. Do not wait for the ledger status request:
+  // that request can return a successful sync with the period stripped, and
+  // the books sentence would drop the span.
+  const statementSpan = statementSpanLabel({
+    periodStart: liveDates ? statementMeta.periodStart : snapshotMeta.periodStart,
+    periodEnd: liveDates ? statementMeta.periodEnd : snapshotMeta.periodEnd,
+    periodLabel: liveDates
+      ? statementMeta.periodLabel
+      : snapshotMeta.periodLabel || currentSnapshot?.period_label,
+    market: clientMarket,
+  });
+  const snapshotSpan = statementSpan;
   const dataFreshness = dataFreshnessLine({
     xero: xeroLink
       ? {
@@ -1698,7 +1708,14 @@ function ClientView() {
     runwayLabel: cashRunwayHeadline,
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
-    priorLabel: priorSnapshot?.period_label ?? null,
+    priorLabel: priorSnapshot
+      ? statementSpanLabel({
+          periodStart: readStatementMeta(priorSnapshot.financials, clientMarket).periodStart,
+          periodEnd: readStatementMeta(priorSnapshot.financials, clientMarket).periodEnd,
+          periodLabel: priorSnapshot.period_label,
+          market: clientMarket,
+        })
+      : null,
     periodLabel: figuresPeriodLabel,
     datedPeriod: statementDated,
     market: gateMarket,
@@ -2394,7 +2411,7 @@ function ClientView() {
         setSnapshots(
           (data ?? []).map((s) => ({
             id: s.id as string,
-            period_label: s.period_label as string,
+            period_label: s.period_label as string, // date-ok: snapshot row kept; display formats at read time
             period_date: s.period_date as string,
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,
@@ -2846,7 +2863,7 @@ function ClientView() {
         setSnapshots(
           (data ?? []).map((s) => ({
             id: s.id as string,
-            period_label: s.period_label as string,
+            period_label: s.period_label as string, // date-ok: snapshot row kept; display formats at read time
             period_date: s.period_date as string,
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,
@@ -3604,7 +3621,8 @@ function ClientView() {
         : waiting.length
           ? [canonicalScoreProse(rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting."))]
           : ["No draft waiting."];
-    const booksLine = booksAnswerSentence({ freshness: dataFreshness });
+    const booksLine =
+      homeStatementsLine(statementSpan) ?? booksAnswerSentence({ freshness: dataFreshness });
     return {
       actionsHeading,
       actionLines,
@@ -3622,6 +3640,7 @@ function ClientView() {
     homeActivity,
     dataFreshness,
     reportsIssued,
+    statementSpan,
   ]);
   const homeBrief = useMemo(
     () =>
@@ -3629,11 +3648,19 @@ function ClientView() {
         clientName: client?.name ?? "",
         currentFinancials: financials,
         currentPeriodEnd: statementMeta.periodEnd,
-        snapshots: snapshots.map((row) => ({
-          periodDate: row.period_date,
-          periodLabel: row.period_label,
-          financials: row.financials,
-        })),
+        snapshots: snapshots.map((row) => {
+          const meta = readStatementMeta(row.financials, clientMarket);
+          return {
+            periodDate: row.period_date,
+            periodLabel: statementSpanLabel({
+              periodStart: meta.periodStart,
+              periodEnd: meta.periodEnd,
+              periodLabel: row.period_label,
+              market: clientMarket,
+            }),
+            financials: row.financials,
+          };
+        }),
         openActionTitles: openPlanTitles ?? [],
         overdueActions: openPlanOverdue,
         cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,

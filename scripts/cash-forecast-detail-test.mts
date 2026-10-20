@@ -156,7 +156,15 @@ const paymentsRow = gridSrc.slice(gridSrc.indexOf('key: "total-payments"'), grid
 assert(paymentsRow.includes("blankZero: true"), "a zero payment week shows a dash");
 assert(paymentsRow.includes('tone: "plain"') && paymentsRow.includes("rule: true"), "total payments stays neutral");
 assert(!paymentsRow.includes('tone: "out"'), "total payments is not a red band");
-assert(!cashSrc.includes("<ViewToggle"), "the graph and the 13-week table are not a toggle");
+assert(cashSrc.includes("<ViewToggle"), "cash uses the same Chart | 13-week toggle");
+const cashToggleAt = cashSrc.indexOf('ariaLabel="Cash forecast"');
+const cashToggleHeader = cashSrc.slice(Math.max(0, cashToggleAt - 500), cashToggleAt);
+assert(
+  cashToggleHeader.includes('label="cash flow graph"') &&
+    cashToggleHeader.includes('label="cash flow table"'),
+  "both enlarge controls sit in the toggle header on first paint",
+);
+assert(cashSrc.includes('label: "13-week"'), "the cash toggle names the 13-week table");
 assert(cashSrc.includes('id="detailed-forecast"'), "the weekly table keeps the old anchor");
 assert(cashSrc.includes("<CashThirteenWeekGrid"), "the weekly table sits on the cash page");
 assert(cashSrc.includes("detailed-forecast"), "old detailed-forecast anchor still resolves");

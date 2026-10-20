@@ -409,7 +409,7 @@ export function AccountantRatiosPanel({
           .update({ financials: v as never, ratios: ratios as never })
           .eq("id", existing.id);
         setHistory((h) => {
-          const idx = h.findIndex((s) => s.period_label === periodLabel);
+          const idx = h.findIndex((s) => s.period_label === periodLabel); // date-ok: snapshot match key, not printed copy
           if (idx >= 0) {
             const next = [...h];
             next[idx] = { period_label: periodLabel, period_date: periodDate, ratios };

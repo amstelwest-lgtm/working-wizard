@@ -887,6 +887,176 @@ export function budgetSignedFiguresChanged(
   );
 }
 
+/** Inclusive YYYY-MM keys from a statement start through its end. */
+export function statementMonthKeys(
+  periodStart: string | null | undefined,
+  periodEnd: string | null | undefined,
+): string[] | null {
+  if (!periodStart || !periodEnd) return null;
+  const start = periodStart.slice(0, 7);
+  const end = periodEnd.slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(start) || !/^\d{4}-\d{2}$/.test(end) || start > end) return null;
+  const out: string[] = [];
+  let year = Number(start.slice(0, 4));
+  let month = Number(start.slice(5, 7));
+  const endYear = Number(end.slice(0, 4));
+  const endMonth = Number(end.slice(5, 7));
+  for (let guard = 0; guard < 36; guard++) {
+    out.push(`${year}-${String(month).padStart(2, "0")}`);
+    if (year === endYear && month === endMonth) return out;
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return null;
+}
+
+/** Every revenue cell and every overhead is the same amount in every month. */
+export function budgetMonthsAreUniform(doc: BudgetDocument): boolean {
+  const months = fyMonths(doc.fyStart);
+  const first = months[0];
+  if (!first) return false;
+  for (const line of doc.revenueLines) {
+    const seed = line.months[first] ?? { volume: 0, price: 0 };
+    for (const month of months) {
+      const cell = line.months[month] ?? { volume: 0, price: 0 };
+      if (cell.volume !== seed.volume || cell.price !== seed.price) return false;
+    }
+  }
+  for (const line of doc.overheads) {
+    const seed = line.months[first] ?? 0;
+    for (const month of months) {
+      if ((line.months[month] ?? 0) !== seed) return false;
+    }
+  }
+  return true;
+}
+
+function shiftUniformBudget(doc: BudgetDocument, targetStart: string): BudgetDocument {
+  const oldMonths = fyMonths(doc.fyStart);
+  const nextMonths = fyMonths(targetStart);
+  const source = oldMonths[0];
+  const startMonth = Number(targetStart.slice(5, 7));
+  return {
+    ...doc,
+    fyStart: targetStart,
+    fyStartMonth: startMonth >= 1 && startMonth <= 12 ? startMonth : doc.fyStartMonth,
+    revenueLines: doc.revenueLines.map((line) => {
+      const cell = (source ? line.months[source] : null) ?? { volume: 0, price: 0 };
+      return {
+        ...line,
+        months: Object.fromEntries(
+          nextMonths.map((month) => [month, { volume: cell.volume, price: cell.price }]),
+        ),
+      };
+    }),
+    overheads: doc.overheads.map((line) => {
+      const amount = source ? (line.months[source] ?? 0) : 0;
+      return {
+        ...line,
+        months: Object.fromEntries(nextMonths.map((month) => [month, amount])),
+      };
+    }),
+    capex: (doc.capex ?? []).map((line) => {
+      const index = oldMonths.indexOf(line.month);
+      const month = index >= 0 ? nextMonths[index] : undefined;
+      return month ? { ...line, month } : line;
+    }),
+  };
+}
+
+function uniformMatchesStatement(
+  doc: BudgetDocument,
+  financials: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!financials) return false;
+  const bridge = periodProfitBridge(
+    withCostAliases(financials as Record<string, string | number | null | undefined>),
+  );
+  if (!(bridge.revenue > 0)) return false;
+  const month = fyMonths(doc.fyStart)[0];
+  if (!month) return false;
+  let revenue = 0;
+  for (const line of doc.revenueLines) {
+    const cell = line.months[month] ?? { volume: 0, price: 0 };
+    revenue += (cell.volume || 0) * (cell.price || 0);
+  }
+  const cover = Math.max(1, periodMonthsOf(financials));
+  const annualPace = bridge.revenue * (12 / cover);
+  return Math.abs(revenue * 12 - annualPace) <= Math.max(1, annualPace * 0.02);
+}
+
+function windowRangeLabel(months: readonly string[]): string {
+  const first = months[0];
+  const last = months[months.length - 1];
+  if (!first || !last) return "the statement";
+  return formatMonthRange(first, last) ?? first;
+}
+
+export type BudgetUniformKind = "statement-seed" | "copy-forward";
+
+export type BudgetPresentation = {
+  doc: BudgetDocument;
+  /** A flat year was placed on the statement's 12-month window. */
+  moved: boolean;
+  uniform: BudgetUniformKind | null;
+  /** Period line for the chart. Full years, and both windows when they differ. */
+  caption: string;
+};
+
+export function budgetUniformNote(kind: BudgetUniformKind | null): string | null {
+  if (kind === "statement-seed") return "Same figure each month. Seeded from the statement.";
+  if (kind === "copy-forward") return "Same figure each month. Copied forward.";
+  return null;
+}
+
+/**
+ * A flat Jan–Dec seed against an Oct–Sep set of books is the same figure
+ * pasted onto the wrong year. Move that paste onto the statement window.
+ * A year whose months differ stays put; the caption names both periods.
+ */
+export function presentBudgetOnStatementWindow(
+  doc: BudgetDocument,
+  financials: Record<string, unknown> | null | undefined,
+  market: DateMarket,
+  fromStatement = false,
+): BudgetPresentation {
+  const meta = financials ? readStatementMeta(financials, market) : null;
+  const statementMonths = meta ? statementMonthKeys(meta.periodStart, meta.periodEnd) : null;
+  const uniform = budgetMonthsAreUniform(doc);
+  const storedMonths = fyMonths(doc.fyStart);
+  let next = doc;
+  let moved = false;
+  if (
+    uniform &&
+    statementMonths &&
+    statementMonths.length === 12 &&
+    statementMonths[0] !== doc.fyStart
+  ) {
+    next = shiftUniformBudget(doc, statementMonths[0]!);
+    moved = true;
+  }
+  const shown = fyMonths(next.fyStart);
+  const overlap = statementMonths ? statementMonths.filter((month) => shown.includes(month)) : shown;
+  const windowsMatch =
+    !statementMonths ||
+    (statementMonths.length === shown.length &&
+      statementMonths.every((month, index) => month === shown[index]));
+  const caption = windowsMatch
+    ? windowRangeLabel(shown)
+    : `Budget ${windowRangeLabel(storedMonths)}. Actuals ${windowRangeLabel(statementMonths ?? [])}. Variance compares ${
+        overlap.length ? windowRangeLabel(overlap) : "no shared months"
+      }.`;
+  const kind: BudgetUniformKind | null = uniform
+    ? fromStatement || uniformMatchesStatement(doc, financials)
+      ? "statement-seed"
+      : "copy-forward"
+    : null;
+  return { doc: next, moved, uniform: kind, caption };
+}
+
 /** "Jan 2026 – Sep 2026" for the months a statement comparison actually covers. */
 export function budgetCoverWindowLabel(months: string[]): string {
   const first = months[0];
@@ -973,7 +1143,10 @@ export function budgetVersusStatement(
       : `${endInFy ? budgetCoverWindowLabel([endMonth]) : "Statement"}, prorated`;
     periodMonths = 1;
   } else {
-    const keys = coverMonths(fy, endInFy ? endMonth : "", months);
+    const statementKeys = statementMonthKeys(meta.periodStart, meta.periodEnd);
+    const keys = statementKeys
+      ? statementKeys.filter((month) => fy.includes(month))
+      : coverMonths(fy, endInFy ? endMonth : "", months);
     for (const row of rows) {
       if (!keys.includes(row.month)) continue;
       budgetRevenue += row.revenue;

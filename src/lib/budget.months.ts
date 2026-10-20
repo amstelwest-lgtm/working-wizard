@@ -4,7 +4,11 @@
 
 import type { ResolvedMarket } from "@/lib/market";
 import { MONTHS, formatMonthRange } from "@/lib/market/date-presets";
-import { ZA_MARKET, formatMonthLabel as formatMonthLabelMarket } from "@/lib/market";
+import {
+  ZA_MARKET,
+  formatMonthLabel as formatMonthLabelMarket,
+  formatMonthYear,
+} from "@/lib/market";
 import type {
   BudgetDocument,
   BudgetMonthCell,
@@ -138,7 +142,23 @@ export function alignBudgetToFirmFy(doc: BudgetDocument): BudgetDocument {
   };
 }
 
-/** "FY Jan–Dec · from Sep 2026" style caption for a budget document. */
+/**
+ * Month and full year for a budget caption. Both markets: "Jan 2026".
+ * "Jan 26" reads as the 26th. The date is noon UTC on the 15th so a US zone
+ * cannot shift it into the neighbouring month.
+ */
+export function formatBudgetMonthYear(
+  ym: string,
+  market: Pick<ResolvedMarket, "timezone">,
+): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(ym.trim());
+  if (!match) return ym;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return ym;
+  return formatMonthYear(new Date(Date.UTC(year, month - 1, 15, 12, 0, 0)), market.timezone);
+}
+
 /** Plain window for the budget page, e.g. "Billable-hours budget · Mar 2026 – Feb 2027". */
 export function plainBudgetWindowHeading(
   templateLabel: string,
@@ -153,18 +173,18 @@ export function plainBudgetWindowHeading(
   return `${kind} budget · ${window ?? ""}`;
 }
 
+/** "FY Jan–Dec · from Jan 2026". The year is four digits so it is not read as a day. */
 export function budgetWindowLabel(
   doc: { fyStartMonth: number; fyStart: string },
-  market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
+  market: Pick<ResolvedMarket, "timezone"> = ZA_MARKET,
 ): string {
   const fyEndMonth = ((doc.fyStartMonth + 10) % 12) + 1;
   const short = (m: number) => MONTHS[m - 1] ?? "";
   const fyLabel = `FY ${short(doc.fyStartMonth)}–${short(fyEndMonth)}`;
   const [fyY, fyM] = doc.fyStart.split("-").map(Number);
   const atFyStart = fyM === doc.fyStartMonth && Number.isFinite(fyY);
-  return atFyStart
-    ? `${fyLabel} · from ${formatMonthLabelMarket(doc.fyStart, market)}`
-    : `${fyLabel} · budget from ${formatMonthLabelMarket(doc.fyStart, market)}`;
+  const from = formatBudgetMonthYear(doc.fyStart, market);
+  return atFyStart ? `${fyLabel} · from ${from}` : `${fyLabel} · budget from ${from}`;
 }
 
 export function emptyMonthMap(months: string[], cell: BudgetMonthCell = { volume: 0, price: 0 }) {

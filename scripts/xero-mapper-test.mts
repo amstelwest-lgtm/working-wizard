@@ -418,7 +418,7 @@ const periodMapped = mapXeroToFinancialInputs(
 assert(periodMapped.statementSource === "xero", "statement source tagged");
 assert(periodMapped.periodStart === "2026-09-01", "period start stored");
 assert(periodMapped.periodEnd === "2026-09-21", "period end stored");
-assert(periodMapped.periodLabel === "1\u201321 Sep 2026", "period label stored");
+assert(periodMapped.periodLabel === "2026-09-01/2026-09-21", "period label stores the dates");
 assert(periodMapped.revenue === 8633.6, "mapped revenue is the month, not YTD");
 assert(periodMapped.periodMonths === "1", "a month is not annualised as nine months");
 assert(periodMapped.ytdRevenue === 29539.18, "year revenue is stored beside the month");
@@ -426,7 +426,7 @@ assert(periodMapped.ytdNetIncome === 8266.73, "year net income stored");
 assert(periodMapped.ytdBasis === "financial", "year basis is the financial year");
 assert(periodMapped.ytdPeriodStart === "2026-04-01", "year start stored");
 assert(periodMapped.ytdPeriodEnd === "2026-09-21", "year end stored");
-assert(periodMapped.ytdPeriodLabel === "1 Apr \u2013 21 Sep 2026", "year label stored");
+assert(periodMapped.ytdPeriodLabel === "2026-04-01/2026-09-21", "year label stores the dates");
 assert(periodMapped.ytdPeriodMonths === "6", "year month count stored");
 
 const zeroMonth = mapXeroToFinancialInputs(

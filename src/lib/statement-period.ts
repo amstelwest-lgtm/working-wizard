@@ -3,7 +3,7 @@
  * cash-forecast UI. Pure — safe to import from client components.
  */
 
-import { MONTHS, MONTHS_LONG as FULL_MONTHS } from "./market/date-presets.ts";
+import { dateOrder, MONTHS, MONTHS_LONG as FULL_MONTHS } from "./market/date-presets.ts";
 import { formatCalendarDay, formatDateRange, type DateMarket } from "./market/format.ts";
 
 export type YearBasis = "financial" | "calendar";
@@ -46,8 +46,75 @@ export function isMonthStampLabel(label: string): boolean {
   return MONTH_STAMP.test(label.trim());
 }
 
+const STORED_SPAN = /^(\d{4}-\d{2}-\d{2})\/(\d{4}-\d{2}-\d{2})$/;
+
+/** Persisted sync label. The two dates, not a market's prose. */
+export function storedPeriodSpan(start: string, end: string): string {
+  const from = start.trim().slice(0, 10);
+  const to = end.trim().slice(0, 10);
+  if (!STORED_SPAN.test(`${from}/${to}`)) return "";
+  return `${from}/${to}`;
+}
+
+export function parseStoredPeriodSpan(
+  label: string | null | undefined,
+): { start: string; end: string } | null {
+  const match = STORED_SPAN.exec(label?.trim() ?? "");
+  if (!match) return null;
+  return { start: match[1]!, end: match[2]! };
+}
+
 export function isStatementRangeLabel(label: string): boolean {
+  if (parseStoredPeriodSpan(label)) return true;
   return label.includes("–") && /\d{4}/.test(label);
+}
+
+/**
+ * A stored day span such as "1 Sep 2026 – 21 Sep 2026".
+ * Month stamps ("Sep 2026") and the neutral `YYYY-MM-DD/YYYY-MM-DD` form are not.
+ */
+export function isBakedDayRangeLabel(label: string): boolean {
+  const text = label.trim();
+  if (!text || isMonthStampLabel(text) || parseStoredPeriodSpan(text)) return false;
+  if (!/[–—-]/.test(text)) return false;
+  return /\d/.test(text) && /[A-Za-z]{3}/.test(text);
+}
+
+function storedLabelOrder(label: string): "day" | "month" | "other" {
+  const text = label.trim();
+  if (/^\d{1,2}\b/.test(text)) return "day";
+  if (/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/.test(text)) return "month";
+  return "other";
+}
+
+/**
+ * Display a statement span. Dates win. A neutral stored span is formatted.
+ * A baked day-range is shown only when it already matches the market order.
+ */
+export function statementSpanLabel(input: {
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  periodLabel?: string | null;
+  market: DateMarket;
+}): string | null {
+  const start = input.periodStart?.trim() || "";
+  const end = input.periodEnd?.trim() || "";
+  if (start && end) {
+    const fresh = formatStatementPeriodLabel(start, end, input.market);
+    if (fresh) return fresh;
+  }
+  const stored = input.periodLabel?.trim() ?? "";
+  const parsed = parseStoredPeriodSpan(stored);
+  if (parsed) {
+    const fresh = formatStatementPeriodLabel(parsed.start, parsed.end, input.market);
+    if (fresh) return fresh;
+  }
+  if (!stored) return null;
+  if (!isBakedDayRangeLabel(stored)) return stored;
+  const order = storedLabelOrder(stored);
+  const want = dateOrder(input.market.locale) === "us" ? "month" : "day";
+  if (order !== "other" && order !== want) return null;
+  return stored;
 }
 
 /**
@@ -317,6 +384,11 @@ function datedRangeLabel(
     const fresh = formatStatementPeriodLabel(start, end, market);
     if (fresh) return fresh;
   }
+  const parsed = parseStoredPeriodSpan(stored);
+  if (parsed) {
+    const fresh = formatStatementPeriodLabel(parsed.start, parsed.end, market);
+    if (fresh) return fresh;
+  }
   return stored;
 }
 
@@ -397,6 +469,17 @@ export function figuresPeriodLabelFrom(
   // no start or end are the full statement on file, not that month.
   if (!meta.periodStart && !meta.periodEnd && snapshotIsMonthStamp(snap)) {
     return FULL_YEAR_ON_FILE;
+  }
+  const parsed = parseStoredPeriodSpan(snap);
+  if (parsed) {
+    const label = formatStatementPeriodLabel(parsed.start, parsed.end, market);
+    if (label) return label;
+  }
+  const storedOnFigures = str((financials ?? {}) as Record<string, unknown>, "periodLabel");
+  const fromFigures = !snap ? parseStoredPeriodSpan(storedOnFigures) : null;
+  if (fromFigures) {
+    const label = formatStatementPeriodLabel(fromFigures.start, fromFigures.end, market);
+    if (label) return label;
   }
   return snap || null;
 }

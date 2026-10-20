@@ -27,7 +27,9 @@ import {
   type ScoreMarket,
 } from "./health-score";
 import { formatMoneyCompact, type MoneyMarket } from "./market/format";
+import { marketForClient } from "./market/scope";
 import { ZA_MARKET } from "./market/resolve";
+import { statementSpanLabel } from "./statement-period";
 import {
   PRECARD_CAP_CODE,
   PRECARD_CAP_MESSAGE,
@@ -364,7 +366,16 @@ export type TeamFeedDraft = {
 };
 
 export type TeamActivityRecords = {
-  snapshots: Array<{ id: string; source: string | null; periodLabel: string | null; at: string | null }>;
+  snapshots: Array<{
+    id: string;
+    source: string | null;
+    periodLabel: string | null;
+    periodStart?: string | null;
+    periodEnd?: string | null;
+    at: string | null;
+  }>;
+  /** Client market. Activity spans are formatted from dates, not the stored label. */
+  market?: { locale?: string | null; timezone?: string } | null;
   uploads: Array<{ id: string; label: string | null; at: string | null }>;
   diagnosisEvents: Array<{ id: string; at: string | null }>;
   proposals: TeamFeedProposal[];
@@ -705,12 +716,24 @@ function providerLabel(source: string): string {
 export function buildTeamActivity(records: TeamActivityRecords): TeamActivityEvent[] {
   const out: TeamActivityEvent[] = [];
   const href = records.href;
+  const market = records.market ?? marketForClient(null);
+  const periodFor = (row: {
+    periodLabel: string | null;
+    periodStart?: string | null;
+    periodEnd?: string | null;
+  }) =>
+    statementSpanLabel({
+      periodStart: row.periodStart,
+      periodEnd: row.periodEnd,
+      periodLabel: row.periodLabel,
+      market,
+    });
 
   for (const row of records.snapshots) {
     const source = norm(row.source);
     if (!row.at) continue;
     if (SYNC_SOURCES.has(source)) {
-      const period = row.periodLabel?.trim();
+      const period = periodFor(row);
       pushEvent(out, {
         id: `sync:${row.id}`,
         agent: agentFor("event", "sync"),
@@ -720,7 +743,7 @@ export function buildTeamActivity(records: TeamActivityRecords): TeamActivityEve
         href,
       });
     } else if (UPLOAD_SOURCES.has(source)) {
-      const period = row.periodLabel?.trim();
+      const period = periodFor(row);
       pushEvent(out, {
         id: `upload:${row.id}`,
         agent: agentFor("event", "upload"),
@@ -734,7 +757,7 @@ export function buildTeamActivity(records: TeamActivityRecords): TeamActivityEve
 
   for (const row of records.uploads) {
     if (!row.at) continue;
-    const label = row.label?.trim();
+    const label = statementSpanLabel({ periodLabel: row.label, market });
     pushEvent(out, {
       id: `artifact:${row.id}`,
       agent: agentFor("event", "upload"),

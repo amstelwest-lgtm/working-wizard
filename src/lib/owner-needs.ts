@@ -3,6 +3,7 @@
  * Counts come from the caller. Empty stays empty. Nothing here is invented.
  */
 import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
+import { homeStatementsLine } from "@/lib/books-answer";
 import { canonicalScoreProse } from "@/lib/score-prose";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
@@ -91,7 +92,11 @@ export function booksSyncCopy(input: {
   quickBooks: BooksLink;
   xero: BooksLink;
   when: (iso: string) => string;
+  /** Statement dates already on the client. Same sentence as the accountant Home. */
+  statementSpan?: string | null;
 }): { heading: string; lines: string[] } {
+  const statements = homeStatementsLine(input.statementSpan);
+  if (statements) return { heading: "Books", lines: [statements] };
   const linked = (
     [
       ["QuickBooks", input.quickBooks],
@@ -133,6 +138,7 @@ export function ownerNeedsView(input: {
   quickBooks: BooksLink;
   xero: BooksLink;
   when: (iso: string) => string;
+  statementSpan?: string | null;
 }): OwnerNeedsView {
   const assigned = openPlanTitles(input.actions);
   const shownActions = assigned.slice(0, HOME_ACTION_PREVIEW);
@@ -187,7 +193,12 @@ export function ownerNeedsView(input: {
           : ["Waiting on your accountant."]
         : ["No deliverables awaiting review."];
 
-  const sync = booksSyncCopy(input);
+  const sync = booksSyncCopy({
+    quickBooks: input.quickBooks,
+    xero: input.xero,
+    when: input.when,
+    statementSpan: input.statementSpan,
+  });
   return {
     actionsHeading,
     actionLines,

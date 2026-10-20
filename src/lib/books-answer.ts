@@ -79,6 +79,17 @@ export function booksAreCurrent(input: {
   return statementsLookCurrent(input.freshness) && !input.openKinds.some(isStatementCompletenessGap);
 }
 
+/**
+ * Home books cell. The span is taken from statement dates already on the
+ * client. A ledger status that arrives later, with no period dates, must
+ * not replace this sentence.
+ */
+export function homeStatementsLine(statementSpan: string | null | undefined): string | null {
+  const span = statementSpan?.trim() ?? "";
+  if (!span) return null;
+  return `Statements on file: ${span}.`;
+}
+
 export function booksAnswerSentence(input: {
   freshness: string | null | undefined;
   openKinds?: readonly string[];
