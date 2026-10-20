@@ -34,6 +34,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
+import { ViewToggle } from "@/components/ui/view-toggle";
 import { cashExplainerCopy, humanizeIsoDates } from "@/lib/cash-explainer";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -2522,6 +2523,7 @@ export function CashForecastPanel({
   const inlineChart = useStableChartWidth();
   const enlargeChart = useStableChartWidth();
   const [cashEnlarge, setCashEnlarge] = useState<null | "chart" | "table">(null);
+  const [cashLens, setCashLens] = useState<"chart" | "table">("chart");
 
   useEffect(() => {
     const revealWeeklyTable = () => {
@@ -2530,6 +2532,7 @@ export function CashForecastPanel({
         hashIsCashDetailAnchor(hash) ||
         new URL(window.location.href).searchParams.get("view") === "13week";
       if (!wantsTable) return;
+      setCashLens("table");
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.requestAnimationFrame(() => {
         document.getElementById("detailed-forecast")?.scrollIntoView({
@@ -2728,7 +2731,7 @@ export function CashForecastPanel({
     <Card
       id={CASH_FORECAST_CARD_ID}
       className={`${CARD_SHELL} w-full min-w-0 max-md:pb-6 max-md:pr-3`}
-      data-cash-view="both"
+      data-cash-view={cashLens}
     >
       <div className={GOLD_RULE} />
       <CardContent className="pt-5">
@@ -2778,7 +2781,19 @@ export function CashForecastPanel({
             </Button>
           </div>
         ) : null}
-        <div aria-label="Graph">{graphPane}</div>
+        <div className="mb-3 flex justify-end">
+          <ViewToggle
+            ariaLabel="Cash forecast"
+            value={cashLens}
+            onChange={(next) => setCashLens(next === "table" ? "table" : "chart")}
+            options={[
+              { value: "chart", label: "Chart" },
+              { value: "table", label: "13-week" },
+            ]}
+          />
+        </div>
+        {cashLens === "chart" ? <div aria-label="Graph">{graphPane}</div> : null}
+        {cashLens === "table" ? (
         <section id="detailed-forecast" className="mt-6" aria-label="13-week">
           <div className={`mb-3 flex items-start gap-3 ${simplified ? "justify-end" : "justify-between"}`}>
             {simplified ? null : (
@@ -2826,6 +2841,7 @@ export function CashForecastPanel({
           />
           )}
         </section>
+        ) : null}
       </CardContent>
     </Card>
     <EnlargeSheet
