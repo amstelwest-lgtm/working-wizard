@@ -139,7 +139,13 @@ import {
   reportDownloadGate,
   scoredReturnHealth,
 } from "@/lib/report-coherence";
-import { reportCardNoFiguresState } from "@/lib/report-card-state";
+import {
+  FIGURES_READ_DEADLINE_MS,
+  financialsHaveRevenue,
+  reportCardNoFiguresState,
+  reportReadShowsFigures,
+  type FiguresReadStatus,
+} from "@/lib/report-card-state";
 import {
   coerceMarketSelection,
   laborCostLabel,
@@ -2129,14 +2135,25 @@ async function loadBudgetWorkflow(clientId: string, scope = "budget"): Promise<{
 }
 
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
-  const [clientRes, snapshotRes, signoffRes, historyRes] = await Promise.all([
-    supabase
-      .from("clients")
-      .select(
-        "id, name, firm_id, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at, is_demo",
-      )
-      .eq("id", clientId)
-      .maybeSingle(),
+  const clientRes = await supabase
+    .from("clients")
+    .select(
+      "id, name, firm_id, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at, is_demo",
+    )
+    .eq("id", clientId)
+    .maybeSingle();
+  const earlyRow = clientRes.data as { name?: string; market?: unknown; is_demo?: boolean | null; financials?: unknown } | null;
+  if (!financialsHaveRevenue(earlyRow?.financials)) {
+    return {
+      ...EMPTY_CLIENT_DATA,
+      clientName: earlyRow?.name ?? "",
+      market: resolveMarket(
+        parseMarketSelection(earlyRow?.market) ?? coerceMarketSelection(earlyRow?.market ?? null),
+      ),
+      isSample: Boolean(earlyRow?.is_demo),
+    };
+  }
+  const [snapshotRes, signoffRes, historyRes] = await Promise.all([
     supabase
       .from("client_financial_snapshots")
       .select("id, period_label, period_date, ratios, financials, created_at")
@@ -3654,6 +3671,9 @@ export function ReportsStudio({
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [clientData, setClientData] = useState<ClientReportData | null>(null);
   const [dataLoading, setDataLoading] = useState(Boolean(clientId));
+  const [figuresStatus, setFiguresStatus] = useState<FiguresReadStatus>(
+    clientId ? "pending" : "settled",
+  );
   const deepLinkHandled = useRef<string | null>(null);
   const deepLinkReport =
     reportParam && REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number])
@@ -3709,15 +3729,24 @@ export function ReportsStudio({
     );
   }, [showIllustrativeDemo, firmMarket]);
 
-  /** Client-linked studio never ships mock figures — upload first. */
-  const blockedForClient = Boolean(clientId) && !dataLoading && !clientData?.hasData;
+  /** Client-linked studio never ships mock figures — upload first.
+   * Pending, errored, and timed-out reads are empty. Only a settled read
+   * with figures (or a parent that already confirmed figures) shows the chrome.
+   */
+  const showFiguresChrome = reportReadShowsFigures({
+    clientLinked: Boolean(clientId),
+    status: figuresStatus,
+    hasData: Boolean(clientData?.hasData),
+    figuresOnFile,
+  });
+  const blockedForClient = Boolean(clientId) && !showFiguresChrome;
   const unavailableFor = (key: string): string | null => {
     if (!clientData?.hasData) return null;
     if (key === "leverage" && !clientData.leverage) return LEVERAGE_REPORT_NEEDS;
     if (key === "assets" && !clientData.assets) return ASSET_REPORT_NEEDS;
     return null;
   };
-  const studioBusy = dataLoading || resolvingClient;
+  const studioBusy = (dataLoading || resolvingClient) && showFiguresChrome;
   const zipGate = reportDownloadGate({
     ready: isClient,
     loading: studioBusy,
@@ -3786,16 +3815,24 @@ export function ReportsStudio({
     if (!clientId) {
       setClientData(null);
       setDataLoading(false);
+      setFiguresStatus("settled");
       return;
     }
     let cancelled = false;
     setClientData(null); // clear before async starts
     setDataLoading(true);
+    setFiguresStatus("pending");
     deepLinkHandled.current = null;
+    const deadline = window.setTimeout(() => {
+      if (!cancelled) {
+        setFiguresStatus((current) => (current === "pending" ? "timeout" : current));
+      }
+    }, FIGURES_READ_DEADLINE_MS);
     loadClientReportData(clientId)
       .then((data) => {
         if (cancelled) return;
         setClientData(data);
+        setFiguresStatus("settled");
         // Keep smeName in sync with the client's real name if it differs
         if (data.clientName || data.periodMonth || data.dataPeriodLabel) {
           setSettings((prev) => ({
@@ -3809,12 +3846,17 @@ export function ReportsStudio({
       })
       .catch((err) => {
         console.error("Failed to load client report data:", err);
+        if (!cancelled) {
+          setClientData(null);
+          setFiguresStatus("error");
+        }
       })
       .finally(() => {
         if (!cancelled) setDataLoading(false);
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(deadline);
     };
   }, [clientId]);
 

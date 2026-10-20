@@ -5,6 +5,15 @@ export const CONNECTION_NOT_CONNECTED = "Not connected";
 
 export type ConnectionPhase = "checking" | "live" | "stored" | "none" | "coming_soon";
 
+/**
+ * First paint when this client has no stored connection row.
+ * QuickBooks and Xero read "Not connected". Sage stays coming soon.
+ * The probe may upgrade a real row later. It must not pass through "Checking…".
+ */
+export function connectionRestingPhase(comingSoon?: boolean): ConnectionPhase {
+  return comingSoon ? "coming_soon" : "none";
+}
+
 export type ConnectionStatusView<T> = {
   phase: ConnectionPhase;
   value: T | null;

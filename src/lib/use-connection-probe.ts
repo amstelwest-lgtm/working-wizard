@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  connectionRestingPhase,
   enqueueConnectionCheck,
   type ConnectionPhase,
   type ConnectionStatusView,
@@ -11,8 +12,10 @@ export type LedgerProbe<T> = {
 };
 
 /**
- * One ledger card's status read. Mounted cards share a queue, so sibling
- * checks start together and each leaves "Checking…" at the deadline.
+ * One ledger card's status read. With no stored row the card paints
+ * "Not connected" (or Sage coming soon) on the first render. Sibling probes
+ * still start together. A slow or failed auth claim must not put "Checking…"
+ * back on screen.
  */
 export function useConnectionProbe<T>(input: {
   clientId: string | null;
@@ -27,7 +30,8 @@ export function useConnectionProbe<T>(input: {
   reload: () => Promise<void>;
   clear: () => void;
 } {
-  const [gate, setGate] = useState<ConnectionPhase>("checking");
+  const resting = connectionRestingPhase(input.comingSoon);
+  const [gate, setGate] = useState<ConnectionPhase>(resting);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [status, setStatus] = useState<T | null>(null);
   const held = useRef<LedgerProbe<T> | null>(null);
@@ -36,22 +40,31 @@ export function useConnectionProbe<T>(input: {
   const run = useRef(0);
 
   const apply = (next: ConnectionStatusView<LedgerProbe<T>>) => {
-    setGate(next.phase);
-    if ((next.phase === "live" || next.phase === "stored") && next.value) {
+    if (next.phase === "checking") return;
+    if ((next.phase === "live" || next.phase === "stored") && next.value?.status) {
+      setGate(next.phase);
       setConfigured(next.value.configured);
       setStatus(next.value.status);
-      if (next.value.status) held.current = next.value;
+      held.current = next.value;
       return;
     }
-    if (next.phase === "none" || next.phase === "coming_soon") {
+    if ((next.phase === "live" || next.phase === "stored") && next.value) {
+      setConfigured(next.value.configured);
       setStatus(null);
+      if (input.comingSoon && next.value.configured !== true) {
+        setGate("coming_soon");
+        return;
+      }
+      setGate("none");
+      return;
     }
+    setStatus(null);
+    setGate(input.comingSoon ? "coming_soon" : "none");
   };
 
   const reload = () => {
     if (!input.clientId) return Promise.resolve();
     const token = ++run.current;
-    setGate("checking");
     return enqueueConnectionCheck<LedgerProbe<T>>(
       {
         id: `${input.id}:${input.clientId}:${token}`,
@@ -69,7 +82,6 @@ export function useConnectionProbe<T>(input: {
   useEffect(() => {
     if (!input.clientId) return;
     const token = ++run.current;
-    setGate("checking");
     let cancelled = false;
     void enqueueConnectionCheck<LedgerProbe<T>>(
       {
