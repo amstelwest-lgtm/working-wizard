@@ -18,6 +18,8 @@ import {
   SET_PERIOD_DATES,
   confirmUploadedStatement,
   passStatementChoice,
+  snapshotCoveringSpan,
+  statementSpan,
   type ConfirmedStatement,
   type PeriodChoice,
 } from "../src/lib/statement-import-plan";
@@ -461,16 +463,23 @@ async function mount(node: ReturnType<typeof createElement>) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
-  await act(async () => {
-    root.render(node);
-  });
-  await tick();
-  return async () => {
+  const render = async (next: ReturnType<typeof createElement>) => {
     await act(async () => {
-      root.unmount();
+      root.render(next);
     });
-    host.remove();
+    await tick();
   };
+  await render(node);
+  const unmount = Object.assign(
+    async () => {
+      await act(async () => {
+        root.unmount();
+      });
+      host.remove();
+    },
+    { rerender: render },
+  );
+  return unmount;
 }
 
 function buttonNamed(text: string) {
@@ -496,6 +505,16 @@ async function setDate(id: string, value: string) {
     el.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await tick();
+}
+
+function matchQuarterSnapshot(fileSpan: { periodStart: string; periodEnd: string } | null) {
+  assert(typeof snapshotCoveringSpan === "function", "snapshotCoveringSpan is not a function");
+  const rows = [
+    { financials: { periodStart: "2026-01-01", periodEnd: "2026-09-30", revenue: "900" } },
+    { financials: { periodStart: "2026-07-01", periodEnd: "2026-09-30", revenue: "182000" } },
+  ];
+  const match = snapshotCoveringSpan(rows, fileSpan);
+  assert(match?.financials.revenue === "182000", "Add as Q3 did not match the quarter snapshot");
 }
 
 function pageConfirm(existing: Record<string, unknown>) {
@@ -539,6 +558,7 @@ function pageConfirm(existing: Record<string, unknown>) {
       if (planned.action === "block") {
         return { ok: false as const, message: planned.message };
       }
+      if (planned.action === "history") matchQuarterSnapshot(planned.span);
       return { ok: true as const, message: planned.message };
     },
   );
@@ -656,6 +676,8 @@ await click(addQ3);
 assert(q3Page.calls[1]?.choice === "add_period", `second call choice ${q3Page.calls[1]?.choice}`);
 const added = q3Page.last();
 assert(added?.action === "history", added?.action ?? "looped");
+assert(!document.body.textContent?.includes("is not a function"), document.body.textContent ?? "add failed");
+assert(!document.body.textContent?.includes("Import failed"), document.body.textContent ?? "add failed");
 assert(added?.live == null, "add as Q3 does not replace the year-to-date books");
 assert(added?.history?.revenue === "182000", `history revenue ${added?.history?.revenue}`);
 assert(booksWithSheet.periodStart === "2026-01-01" && booksWithSheet.periodEnd === "2026-09-30", "live span unchanged");
@@ -764,6 +786,7 @@ function ownerConfirm(existing: Record<string, unknown>, review: MergedExtractio
       };
     }
     if (planned.action === "block") return { ok: false as const, message: planned.message };
+    if (planned.action === "history") matchQuarterSnapshot(planned.span);
     return { ok: true as const, message: planned.message };
   };
   return { onConfirm, calls, last: () => planned };
@@ -849,6 +872,8 @@ await click(ownerAdd);
 assert(ownerQ3.calls[1]?.choice === "add_period", `owner second choice ${ownerQ3.calls[1]?.choice}`);
 const ownerAdded = ownerQ3.last();
 assert(ownerAdded?.action === "history", ownerAdded?.action ?? "owner Add as Q3 looped");
+assert(!document.body.textContent?.includes("is not a function"), document.body.textContent ?? "owner add failed");
+assert(!document.body.textContent?.includes("Import failed"), document.body.textContent ?? "owner add failed");
 assert(ownerAdded?.live == null, "owner Add as Q3 rewrote the live books");
 assert(ownerAdded?.history?.revenue === "182000", `owner history revenue ${ownerAdded?.history?.revenue}`);
 await unmountOwnerQ3();
@@ -921,5 +946,295 @@ assert(ownerPage.includes("periodChoice"), "owner still passes the choice");
 assert(ownerPage.includes("periodOverride"), "owner keeps a typed range");
 assert(ratiosPage.includes("booksHaveSpan"), "ratios review knows when the books have a span");
 assert(ratiosPage.includes("period?.periodStart"), "ratios confirm keeps a typed range");
+
+const nextFile = extraction({
+  periodStart: "2026-07-01",
+  periodEnd: "2026-09-30",
+  periodMonths: 3,
+  income: { revenue: 5000, cost_of_sales: 1000, gross_profit: 4000 },
+});
+
+const failedUpload = await mount(
+  createElement(UploadFinancials, {
+    seedReview: q3Review,
+    booksHaveSpan: true,
+    onConfirm: async () => {
+      throw new Error("sn is not a function");
+    },
+  }),
+);
+const failedCheck = document.getElementById("confirm-import-figures");
+assert(failedCheck instanceof HTMLInputElement, "failed upload checkbox");
+await click(failedCheck);
+const failedConfirm = buttonNamed("Confirm & import");
+assert(failedConfirm, "failed upload confirm");
+await click(failedConfirm);
+assert(
+  document.body.textContent?.includes("Import failed. sn is not a function"),
+  document.body.textContent ?? "no failure",
+);
+assert(buttonNamed("Retry import"), "a failed import offers Retry");
+const differentFile = buttonNamed("Upload different file");
+assert(differentFile, "upload a different file");
+await click(differentFile);
+assert(!document.body.textContent?.includes("Import failed"), "leaving the file clears the error");
+assert(!buttonNamed("Retry import"), "the idle upload is not Retry");
+await failedUpload.rerender(
+  createElement(UploadFinancials, {
+    seedReview: nextFile,
+    booksHaveSpan: true,
+    onConfirm: async () => {
+      throw new Error("sn is not a function");
+    },
+  }),
+);
+assert(!document.body.textContent?.includes("Import failed"), "the next file does not keep the error");
+assert(!buttonNamed("Retry import"), "the next file is not Retry import");
+const nextConfirm = buttonNamed("Confirm & import");
+assert(nextConfirm && !nextConfirm.textContent?.includes("Retry"), nextConfirm?.textContent ?? "no confirm");
+await failedUpload();
+
+const failedOwnerReview = ownerReview(q3Review, "income_statement");
+const failedOwner = await mount(
+  createElement(ExtractionReviewModal, {
+    result: failedOwnerReview,
+    open: true,
+    booksHaveSpan: true,
+    onClose: () => {},
+    onConfirm: async () => {
+      throw new Error("sn is not a function");
+    },
+  }),
+);
+await click(await acceptOwner());
+assert(
+  document.body.textContent?.includes("Import failed. sn is not a function"),
+  document.body.textContent ?? "owner failure missing",
+);
+assert(buttonNamed("Retry import"), "owner failed import offers Retry");
+const nextOwnerReview = ownerReview(nextFile, "income_statement");
+await failedOwner.rerender(
+  createElement(ExtractionReviewModal, {
+    result: nextOwnerReview,
+    open: true,
+    booksHaveSpan: true,
+    onClose: () => {},
+    onConfirm: async () => {
+      throw new Error("sn is not a function");
+    },
+  }),
+);
+assert(!document.body.textContent?.includes("Import failed"), "owner next file keeps the error");
+assert(buttonNamed("Confirm & import figures"), "owner next file confirms");
+assert(!buttonNamed("Retry import"), "owner next file is not Retry");
+const ownerBox = document.getElementById("upload-quality-confirm");
+assert(ownerBox instanceof HTMLInputElement, "owner quality checkbox after a new file");
+if (!ownerBox.checked) await click(ownerBox);
+const ownerFailAgain = buttonNamed("Confirm & import figures");
+assert(ownerFailAgain && !ownerFailAgain.disabled, "owner can confirm the new file");
+await click(ownerFailAgain);
+assert(buttonNamed("Retry import"), "owner failure can return");
+await failedOwner.rerender(
+  createElement(ExtractionReviewModal, {
+    result: nextOwnerReview,
+    open: false,
+    booksHaveSpan: true,
+    onClose: () => {},
+    onConfirm: async () => {
+      throw new Error("sn is not a function");
+    },
+  }),
+);
+await failedOwner.rerender(
+  createElement(ExtractionReviewModal, {
+    result: nextOwnerReview,
+    open: true,
+    booksHaveSpan: true,
+    onClose: () => {},
+    onConfirm: async () => {
+      throw new Error("sn is not a function");
+    },
+  }),
+);
+assert(!document.body.textContent?.includes("Import failed"), "reopening the owner dialog keeps the error");
+assert(buttonNamed("Confirm & import figures"), "reopened owner dialog confirms");
+assert(!buttonNamed("Retry import"), "reopened owner dialog is not Retry");
+await failedOwner();
+
+const ts = await import("typescript");
+const calledSpan = statementSpan("2026-07-01", "2026-09-30");
+assert(calledSpan?.periodStart === "2026-07-01" && calledSpan.periodEnd === "2026-09-30", "statementSpan reads Q3");
+assert(calledSpan?.months === 3, `statementSpan months ${calledSpan?.months}`);
+const covered = snapshotCoveringSpan(
+  [
+    { financials: { periodStart: "2026-01-01", periodEnd: "2026-09-30", revenue: "900" } },
+    { financials: { periodStart: "2026-07-01", periodEnd: "2026-09-30", revenue: "182000" } },
+  ],
+  calledSpan,
+);
+assert(covered?.financials.revenue === "182000", "snapshotCoveringSpan missed Q3");
+
+function statementSpanCalls(file: string): ts.Identifier[] {
+  const text = readFileSync(file, "utf8");
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const calls: ts.Identifier[] = [];
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "statementSpan"
+    ) {
+      calls.push(node.expression);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return calls;
+}
+
+function localNamed(file: string, name: string): string | null {
+  const text = readFileSync(file, "utf8");
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let detail: string | null = null;
+  const visit = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) {
+      detail = node.initializer ? node.initializer.getText(sf).slice(0, 80) : name;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return detail;
+}
+
+function resolveBinding(sf: ts.SourceFile, ident: ts.Identifier): { kind: string; detail: string } {
+  let current: ts.Node | undefined = ident.parent;
+  while (current) {
+    const found = declaredIn(sf, current, ident.text);
+    if (found) return found;
+    current = current.parent;
+  }
+  return { kind: "missing", detail: ident.text };
+}
+
+function declaredIn(
+  sf: ts.SourceFile,
+  node: ts.Node,
+  name: string,
+): { kind: string; detail: string } | null {
+  if (ts.isSourceFile(node)) {
+    for (const stmt of node.statements) {
+      if (ts.isFunctionDeclaration(stmt) && stmt.name?.text === name) return { kind: "function", detail: name };
+      if (!ts.isImportDeclaration(stmt) || !stmt.importClause?.namedBindings) continue;
+      if (!ts.isNamedImports(stmt.importClause.namedBindings)) continue;
+      for (const spec of stmt.importClause.namedBindings.elements) {
+        if (spec.name.text === name) {
+          const from = ts.isStringLiteral(stmt.moduleSpecifier) ? stmt.moduleSpecifier.text : "";
+          return { kind: "import", detail: from };
+        }
+      }
+    }
+  }
+  const params =
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isMethodDeclaration(node)
+      ? node.parameters
+      : undefined;
+  if (params) {
+    for (const param of params) {
+      if (ts.isIdentifier(param.name) && param.name.text === name) return { kind: "param", detail: name };
+    }
+  }
+  if (
+    (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) &&
+    node.name &&
+    ts.isIdentifier(node.name) &&
+    node.name.text === name
+  ) {
+    return { kind: "function", detail: name };
+  }
+  const body = ts.isBlock(node)
+    ? node
+    : (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) &&
+        node.body &&
+        ts.isBlock(node.body)
+      ? node.body
+      : null;
+  if (!body) return null;
+  for (const stmt of body.statements) {
+    if (!ts.isVariableStatement(stmt)) continue;
+    for (const decl of stmt.declarationList.declarations) {
+      if (ts.isIdentifier(decl.name) && decl.name.text === name) {
+        return { kind: "local", detail: decl.initializer ? decl.initializer.getText(sf).slice(0, 120) : name };
+      }
+    }
+  }
+  return null;
+}
+
+for (const file of ["src/routes/_authenticated/clients.$clientId.tsx", "src/routes/app.tsx"]) {
+  const full = resolve(file);
+  const shadow = localNamed(full, "statementSpan");
+  assert(shadow == null, `${file} hides statementSpan with ${shadow}`);
+  assert(readFileSync(full, "utf8").includes("snapshotCoveringSpan("), `${file} skips the shared snapshot lookup`);
+  assert(statementSpanCalls(full).length === 0, `${file} still calls statementSpan from the page`);
+}
+const planFile = resolve("src/lib/statement-import-plan.ts");
+const planCalls = statementSpanCalls(planFile);
+assert(planCalls.length > 0, "the snapshot lookup does not call statementSpan");
+const planSource = ts.createSourceFile(planFile, readFileSync(planFile, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const planBinding = resolveBinding(planSource, planCalls[0]!);
+assert(planBinding.kind === "function", `statementSpan in the plan is ${planBinding.kind} (${planBinding.detail})`);
+
+const { build } = await import("esbuild");
+const { mkdtempSync, writeFileSync: writeOut } = await import("node:fs");
+const { tmpdir } = await import("node:os");
+const { join } = await import("node:path");
+const { pathToFileURL } = await import("node:url");
+const outDir = mkdtempSync(join(tmpdir(), "j2-add-period-"));
+const outfile = join(outDir, "statement-import-plan.mjs");
+await build({
+  entryPoints: [resolve("src/lib/statement-import-plan.ts")],
+  bundle: true,
+  minify: true,
+  format: "esm",
+  platform: "node",
+  outfile,
+});
+const minified = (await import(pathToFileURL(outfile).href)) as {
+  statementSpan: (start: string, end: string) => { periodStart: string; periodEnd: string; months: number } | null;
+  snapshotCoveringSpan: <T extends { financials?: { revenue?: string } }>(
+    rows: readonly T[] | null | undefined,
+    fileSpan: { periodStart: string; periodEnd: string } | null,
+  ) => T | undefined;
+};
+assert(typeof minified.statementSpan === "function", "minified statementSpan is not a function");
+assert(typeof minified.snapshotCoveringSpan === "function", "minified snapshotCoveringSpan is not a function");
+const minifiedSpan = minified.statementSpan("2026-07-01", "2026-09-30");
+assert(minifiedSpan?.periodStart === "2026-07-01" && minifiedSpan.periodEnd === "2026-09-30", "minified Q3 span");
+const minifiedMatch = minified.snapshotCoveringSpan(
+  [
+    { financials: { periodStart: "2026-01-01", periodEnd: "2026-09-30", revenue: "900" } },
+    { financials: { periodStart: "2026-07-01", periodEnd: "2026-09-30", revenue: "182000" } },
+  ],
+  minifiedSpan,
+);
+assert(minifiedMatch?.financials?.revenue === "182000", "minified add-period lookup missed Q3");
+const probe = join(outDir, "add-period-probe.mjs");
+writeOut(
+  probe,
+  `import { snapshotCoveringSpan } from ${JSON.stringify(pathToFileURL(outfile).href)};
+const match = snapshotCoveringSpan(
+  [
+    { financials: { periodStart: "2026-01-01", periodEnd: "2026-09-30", revenue: "900" } },
+    { financials: { periodStart: "2026-07-01", periodEnd: "2026-09-30", revenue: "182000" } },
+  ],
+  { periodStart: "2026-07-01", periodEnd: "2026-09-30" },
+);
+if (match?.financials.revenue !== "182000") throw new Error("minified add-period lookup missed Q3");
+`,
+);
+await import(pathToFileURL(probe).href);
 
 console.log("j2 period import ok");

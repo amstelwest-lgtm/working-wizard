@@ -88,7 +88,7 @@ import {
   withFinancialsWriteRev,
   statementImportWhat,
 } from "@/lib/statement-import-apply";
-import { confirmUploadedStatement, earlierStatementNote, liveStatementSpan, passStatementChoice, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, earlierStatementNote, liveStatementSpan, passStatementChoice, snapshotCoveringSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -1723,7 +1723,7 @@ function ClientView() {
   // Dates already on the client. Do not wait for the ledger status request:
   // that request can return a successful sync with the period stripped, and
   // the books sentence would drop the span.
-  const statementSpan = statementSpanLabel({
+  const booksSpanLabel = statementSpanLabel({
     periodStart: liveDates ? statementMeta.periodStart : snapshotMeta.periodStart,
     periodEnd: liveDates ? statementMeta.periodEnd : snapshotMeta.periodEnd,
     periodLabel: liveDates
@@ -1731,7 +1731,7 @@ function ClientView() {
       : snapshotMeta.periodLabel || currentSnapshot?.period_label,
     market: clientMarket,
   });
-  const snapshotSpan = statementSpan;
+  const snapshotSpan = booksSpanLabel;
   const dataFreshness = dataFreshnessLine({
     xero: xeroLink
       ? {
@@ -2992,13 +2992,7 @@ function ClientView() {
           .eq("client_id", clientId)
           .order("period_date", { ascending: false })
           .limit(24);
-        const match = (rows ?? []).find((row) => {
-          const stored = statementSpan(
-            (row.financials as { periodStart?: string } | null)?.periodStart,
-            (row.financials as { periodEnd?: string } | null)?.periodEnd,
-          );
-          return Boolean(fileSpan && stored && stored.periodStart === fileSpan.periodStart && stored.periodEnd === fileSpan.periodEnd);
-        });
+        const match = snapshotCoveringSpan(rows, fileSpan);
         const ratiosOut = overviewRatios(planned.history, { fyStartMonth });
         const periodDate = fileSpan?.periodEnd ?? period?.periodEnd ?? "";
         const periodLabel = planned.periodLabel || period?.periodLabel || periodDate;
@@ -3913,7 +3907,7 @@ function ClientView() {
           : ["No draft waiting."];
     const draftStale = presented ? [presented.stale || presented.refresh || Boolean(bodyPresented?.refresh)] : undefined;
     const booksLine =
-      homeStatementsLine(statementSpan) ?? booksAnswerSentence({ freshness: dataFreshness });
+      homeStatementsLine(booksSpanLabel) ?? booksAnswerSentence({ freshness: dataFreshness });
     return {
       actionsHeading,
       actionLines,
@@ -3937,7 +3931,7 @@ function ClientView() {
     liveScoreSnapshot,
     dataFreshness,
     reportsLine,
-    statementSpan,
+    booksSpanLabel,
   ]);
   const homeBrief = useMemo(
     () =>

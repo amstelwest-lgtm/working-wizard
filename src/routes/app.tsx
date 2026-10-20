@@ -144,7 +144,7 @@ import {
   statementImportWhat,
   withFinancialsWriteRev,
 } from "@/lib/statement-import-apply";
-import { confirmUploadedStatement, liveStatementSpan, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, liveStatementSpan, snapshotCoveringSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -6946,18 +6946,7 @@ function Index() {
                     .eq("client_id", effectiveClientId)
                     .order("period_date", { ascending: false })
                     .limit(24);
-                  const match = (rows ?? []).find((row) => {
-                    const stored = statementSpan(
-                      (row.financials as { periodStart?: string } | null)?.periodStart,
-                      (row.financials as { periodEnd?: string } | null)?.periodEnd,
-                    );
-                    return Boolean(
-                      fileSpan &&
-                        stored &&
-                        stored.periodStart === fileSpan.periodStart &&
-                        stored.periodEnd === fileSpan.periodEnd,
-                    );
-                  });
+                  const match = snapshotCoveringSpan(rows, fileSpan);
                   const ratiosOut = computeRatios(planned.history as never);
                   const write = match?.id
                     ? supabase
