@@ -436,8 +436,12 @@ function amountOrNull(value: string | undefined): number | null {
  * keep a balance sheet the model filled in, and a day range on the header
  * replaces a period end alone.
  */
-export function overlayParsedStatement(result: ExtractionResult, text: string): ExtractionResult {
-  const parsed = parseStatementText(text);
+export function overlayParsedStatement(
+  result: ExtractionResult,
+  text: string,
+  market?: { locale?: string | null } | null,
+): ExtractionResult {
+  const parsed = parseStatementText(text, market);
   const fields = parsed.fields;
   if (parsed.kind === "unknown" && !parsed.periodStart && !parsed.periodEnd) return result;
   const income = { ...result.current_period.figures.income_statement };

@@ -6814,6 +6814,9 @@ function Index() {
                   pillarsBefore: healthBefore.pillars,
                   market: boardMarket,
                 });
+                if (planned.action === "block") {
+                  return { ok: false as const, message: planned.message };
+                }
                 if (planned.action === "choose") {
                   return {
                     ok: false as const,

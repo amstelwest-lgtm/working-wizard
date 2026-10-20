@@ -21,7 +21,8 @@ The file’s covered dates never reach the write, so a 3-month P&L is stored on 
 
 One gate, both upload sides.
 
-- Read a day-bounded range from the file. The parser wins over the model for CSV text, including the span.
+- Read a day-bounded range from the file, including a market numeric range (`01/07/2026-30/09/2026` in ZA, `07/01/2026-09/30/2026` in the US, with spaces, an en-dash, or `.` / `-` separators) and `Q1`–`Q4 YYYY` (including `Q3 FY2026`). The parser wins over the model for CSV text, including the span.
+- A file whose period cannot be read never writes the live books when those books already have a span. The confirm asks for the start and end instead of expanding a month-end into the financial year. That expansion stays only for a first import.
 - A different span never writes the live P&L by itself. The panel asks: replace the year-to-date figures, or add this quarter as its own period (Q3 when the span is a calendar quarter).
 - Replace stores the file’s own dates, so the label matches the figures, and keeps the previous balance-sheet position. Cash, Assets, and Financing stay on the scores from before that P&L. The note is `as at <market date>, from earlier statement`.
 - Add-as-period writes a snapshot only. Live books, the score, and sign-off do not move.

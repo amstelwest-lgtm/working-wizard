@@ -252,7 +252,7 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
 
     if (trustText && sourceText) {
       extracted = reconcileExtractionResult(extracted, sourceText);
-      extracted = overlayParsedStatement(extracted, sourceText);
+      extracted = overlayParsedStatement(extracted, sourceText, market);
     }
     extracted = applyBalanceSheetTotals(extracted);
     const issues = validateFigures(extracted.current_period.figures);

@@ -70,7 +70,6 @@ import {
   reportsHomeReadyLine,
 } from "@/lib/reports-drafter-copy";
 import { pickCurrentSnapshot } from "@/lib/financial-snapshots";
-import { defaultPeriodCoverage } from "@/lib/statement-period";
 import {
   DERIVED_EQUITY_LABEL,
   EQUITY_DERIVED_KEY,
@@ -89,7 +88,7 @@ import {
   withFinancialsWriteRev,
   statementImportWhat,
 } from "@/lib/statement-import-apply";
-import { earlierStatementNote, planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { earlierStatementNote, liveCoverageForImport, planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -2894,27 +2893,24 @@ function ClientView() {
         ...extracted,
         ...keptEquity,
       };
-      const fileSpan = statementSpan(
-        period?.periodStart,
-        period?.periodEnd,
-        period?.periodMonths,
-      );
-      const coverage = fileSpan
-        ? { months: fileSpan.months, periodStart: fileSpan.periodStart }
-        : defaultPeriodCoverage({
-            periodEnd: period?.periodEnd,
-            fyStartMonth,
-            preClose:
-              drafted.periodProfitInEquity != null &&
-              String(drafted.periodProfitInEquity).trim() !== "" &&
-              String(drafted.periodProfitInEquity) !== "0",
-          });
+      const covered = liveCoverageForImport({
+        existing: financialsRef.current,
+        periodStart: period?.periodStart,
+        periodEnd: period?.periodEnd,
+        periodMonths: period?.periodMonths,
+        fyStartMonth,
+        preClose:
+          drafted.periodProfitInEquity != null &&
+          String(drafted.periodProfitInEquity).trim() !== "" &&
+          String(drafted.periodProfitInEquity) !== "0",
+      });
+      const fileSpan = covered.span;
       const inputs = {
         ...drafted,
-        periodMonths: String(coverage.months),
+        ...(covered.months != null ? { periodMonths: String(covered.months) } : {}),
         [PERIOD_MONTHS_CHOSEN_KEY]: "",
-        periodEnd: fileSpan?.periodEnd ?? period?.periodEnd ?? "",
-        ...(coverage.periodStart ? { periodStart: coverage.periodStart } : {}),
+        ...(covered.periodEnd ? { periodEnd: covered.periodEnd } : {}),
+        ...(covered.periodStart ? { periodStart: covered.periodStart } : {}),
       };
       const periodDate = period?.periodEnd?.trim() ?? "";
       const periodLabel = period?.periodLabel?.trim() ?? "";
@@ -2940,6 +2936,9 @@ function ClientView() {
         pillarsBefore: healthBefore.pillars,
         market: clientMarket,
       });
+      if (planned.action === "block") {
+        return { ok: false as const, message: planned.message };
+      }
       if (planned.action === "choose") {
         return {
           ok: false as const,

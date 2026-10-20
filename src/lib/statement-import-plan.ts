@@ -212,7 +212,7 @@ export function earlierStatementNote(
 }
 
 export type ImportPlan = {
-  action: "choose" | "live" | "history";
+  action: "choose" | "live" | "history" | "block";
   message: string;
   replaceLabel: string;
   addLabel: string;
@@ -222,6 +222,46 @@ export type ImportPlan = {
   history: Record<string, unknown> | null;
   periodLabel: string | null;
 };
+
+/**
+ * Dates the confirm may stamp onto the books.
+ * A file with no readable span does not borrow a financial-year expansion
+ * once the books already have their own span. That expansion is only for a
+ * first import.
+ */
+export function liveCoverageForImport(input: {
+  existing: object | null | undefined;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  periodMonths?: number | null;
+  fyStartMonth?: number | null;
+  preClose?: boolean;
+}): {
+  span: StatementSpan | null;
+  months: number | null;
+  periodStart: string | null;
+  periodEnd: string;
+} {
+  const span = statementSpan(input.periodStart, input.periodEnd, input.periodMonths);
+  const periodEnd = span?.periodEnd ?? (input.periodEnd?.trim() || "");
+  if (span) {
+    return { span, months: span.months, periodStart: span.periodStart, periodEnd: span.periodEnd };
+  }
+  if (liveStatementSpan(input.existing)) {
+    return { span: null, months: null, periodStart: null, periodEnd };
+  }
+  const coverage = defaultPeriodCoverage({
+    periodEnd: input.periodEnd,
+    fyStartMonth: input.fyStartMonth,
+    preClose: input.preClose,
+  });
+  return {
+    span: null,
+    months: coverage.months,
+    periodStart: coverage.periodStart,
+    periodEnd,
+  };
+}
 
 function choiceCopy(
   live: StatementSpan,
@@ -290,6 +330,20 @@ export function planStatementImport(input: {
   const addLabel = quarter ? `Add as ${quarter}` : "Add as its own period";
   const periodLabel = fileSpan ? spanLabel(fileSpan, input.market) : null;
   const mismatch = Boolean(liveSpan && fileSpan && !spansMatch(liveSpan, fileSpan));
+
+  // An unreadable file must not land on the books' span, and a chosen
+  // replace does not invent that span from the financial year.
+  if (!fileSpan && liveSpan) {
+    return {
+      action: "block",
+      message: `Couldn't read the period in this file. The books show ${spanLabel(liveSpan, input.market)}. Set the start and end dates before importing.`,
+      replaceLabel,
+      addLabel,
+      live: null,
+      history: null,
+      periodLabel: null,
+    };
+  }
 
   if (mismatch && fileSpan && liveSpan && !input.choice) {
     const copy = choiceCopy(liveSpan, fileSpan, input.market);

@@ -7,7 +7,12 @@
  * a line that says so — rent, salaries and insurance are not summed.
  */
 
-import { MONTHS as MONTH_SHORT, MONTHS_LONG_LOWER as MONTHS } from "@/lib/market/date-presets";
+import {
+  dateOrder,
+  MONTHS as MONTH_SHORT,
+  MONTHS_LONG_LOWER as MONTHS,
+  type DateOrder,
+} from "@/lib/market/date-presets";
 
 export type StatementKind = "income_statement" | "balance_sheet" | "mixed" | "unknown";
 
@@ -324,7 +329,45 @@ function spanResult(start: string, end: string): {
 
 const RANGE_SEP = "(?:-|–|—|to)";
 
-function parsePeriod(text: string): {
+function numericSpan(
+  text: string,
+  order: DateOrder,
+): { label: string; start: string; end: string; months: number } | null {
+  const match = text.match(
+    /(\d{1,2})\s*([/.\-])\s*(\d{1,2})\s*\2\s*(\d{4})\s*(?:-|–|—|to)\s*(\d{1,2})\s*([/.\-])\s*(\d{1,2})\s*\6\s*(\d{4})/,
+  );
+  if (!match) return null;
+  const first = Number(match[1]);
+  const second = Number(match[3]);
+  const startYear = Number(match[4]);
+  const third = Number(match[5]);
+  const fourth = Number(match[7]);
+  const endYear = Number(match[8]);
+  const start =
+    order === "us" ? ymd(startYear, first - 1, second) : ymd(startYear, second - 1, first);
+  const end = order === "us" ? ymd(endYear, third - 1, fourth) : ymd(endYear, fourth - 1, third);
+  if (!start || !end || end < start) return null;
+  return spanResult(start, end);
+}
+
+/** Q1–Q4 of a calendar year, including "Q3 FY2026". */
+function quarterSpan(
+  text: string,
+): { label: string; start: string; end: string; months: number } | null {
+  const match = text.match(/\bQ([1-4])\s*(?:FY\s*)?(\d{4})\b/i);
+  if (!match) return null;
+  const quarter = Number(match[1]);
+  const year = Number(match[2]);
+  const startMonth = (quarter - 1) * 3;
+  const start = ymd(year, startMonth, 1);
+  if (!start) return null;
+  return spanResult(start, endOfMonth(year, startMonth + 2));
+}
+
+function parsePeriod(
+  text: string,
+  order: DateOrder = "za",
+): {
   label: string | null;
   start: string | null;
   end: string | null;
@@ -384,6 +427,10 @@ function parsePeriod(text: string): {
       };
     }
   }
+  const numeric = numericSpan(text, order);
+  if (numeric) return numeric;
+  const quarter = quarterSpan(text);
+  if (quarter) return quarter;
   const asOf = text.match(
     /\b(?:as of\s+)?([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})\b/i,
   );
@@ -450,7 +497,11 @@ function lineLabel(line: string): string {
   return line.replace(/[-−(]?\d[\d ,]*(?:\.\d+)?[)]?/g, " ");
 }
 
-export function parseStatementText(text: string): ParsedStatement {
+export function parseStatementText(
+  text: string,
+  market?: { locale?: string | null } | null,
+): ParsedStatement {
+  const order = dateOrder(market?.locale);
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -458,7 +509,7 @@ export function parseStatementText(text: string): ParsedStatement {
 
   let kind: StatementKind = "unknown";
   let companyName: string | null = null;
-  let period = parsePeriod(lines.slice(0, 4).join(" "));
+  let period = parsePeriod(lines.slice(0, 4).join(" "), order);
   let currency = currencyOf(lines.slice(0, 6).join(" "));
 
   if (lines[0]) {
@@ -469,7 +520,7 @@ export function parseStatementText(text: string): ParsedStatement {
       const nameParts: string[] = [];
       let fromCells: ReturnType<typeof parsePeriod> | null = null;
       for (const cell of cells.slice(1)) {
-        const parsed = parsePeriod(cell);
+        const parsed = parsePeriod(cell, order);
         if (parsed.start || parsed.end || parsed.label) {
           fromCells = parsed;
           continue;
@@ -477,14 +528,14 @@ export function parseStatementText(text: string): ParsedStatement {
         if (!parseAmount(cell) && !titleKind(cell)) nameParts.push(cell);
       }
       if (nameParts.length) companyName = nameParts.join(" ");
-      const parsed = fromCells ?? parsePeriod(lines[0]);
+      const parsed = fromCells ?? parsePeriod(lines[0], order);
       if (parsed.start || parsed.end || parsed.label) period = parsed;
     }
   }
   if (!companyName) {
     for (const line of lines.slice(0, 3)) {
       const cells = splitCsvLine(line);
-      const headerPeriod = parsePeriod(cells[1] ?? "");
+      const headerPeriod = parsePeriod(cells[1] ?? "", order);
       if (headerPeriod.start || headerPeriod.end || headerPeriod.label) continue;
       if (cells.length >= 2 && titleKind(cells[0]) && !parseAmount(cells[1])) {
         companyName = cells[1];

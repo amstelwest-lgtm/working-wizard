@@ -30,6 +30,7 @@ import { statementNoteSections } from "../src/lib/statement-notes";
 import { overlayParsedStatement, periodFinancialsFromExtraction } from "../src/lib/statement-financials";
 import {
   earlierStatementNote,
+  liveCoverageForImport,
   planStatementImport,
   statementSpan,
 } from "../src/lib/statement-import-plan";
@@ -87,6 +88,29 @@ assert(quarter.fields.netIncome == null, "net profit before tax is not net incom
 assert(quarter.fields.cash == null, "a P&L does not invent cash");
 assert(quarter.fields.fixedCosts == null, "the quarter has no fixed-cost total");
 
+function periodHeader(label: string, market: typeof US | typeof ZA_MARKET) {
+  return parseStatementText(`Profit and Loss,${label}\nAccount,Amount\nSales revenue,100000\n`, market);
+}
+function assertQuarter(
+  parsed: ReturnType<typeof parseStatementText>,
+  label: string,
+) {
+  assert(parsed.periodStart === "2026-07-01", `${label} start ${parsed.periodStart}`);
+  assert(parsed.periodEnd === "2026-09-30", `${label} end ${parsed.periodEnd}`);
+  assert(parsed.periodMonths === 3, `${label} months ${parsed.periodMonths}`);
+  assert(parsed.periodLabel != null, `${label} has a label`);
+}
+assertQuarter(periodHeader("1 Jul 2026 – 30 Sep 2026", ZA_MARKET), "ZA month names");
+assertQuarter(periodHeader("Jul 1, 2026 - Sep 30, 2026", US), "US month names");
+assertQuarter(periodHeader("01/07/2026-30/09/2026", ZA_MARKET), "ZA numeric");
+assertQuarter(periodHeader("01/07/2026 – 30/09/2026", ZA_MARKET), "ZA numeric en-dash");
+assertQuarter(periodHeader("01.07.2026-30.09.2026", ZA_MARKET), "ZA dots");
+assertQuarter(periodHeader("01-07-2026 - 30-09-2026", ZA_MARKET), "ZA dashes");
+assertQuarter(periodHeader("07/01/2026-09/30/2026", US), "US numeric");
+assertQuarter(periodHeader("07/01/2026 - 09/30/2026", US), "US numeric spaces");
+assertQuarter(periodHeader("Q3 2026", US), "Q3");
+assertQuarter(periodHeader("Q3 FY2026", ZA_MARKET), "Q3 FY");
+
 const fileSpan = statementSpan(quarter.periodStart, quarter.periodEnd, quarter.periodMonths);
 assert(fileSpan?.months === 3, "file span is the quarter");
 
@@ -115,6 +139,47 @@ const zaAsk = planStatementImport({
 });
 assert(zaAsk.message.includes("1 Jul – 30 Sep 2026"), zaAsk.message);
 assert(zaAsk.message.includes("1 Jan – 30 Sep 2026"), zaAsk.message);
+
+const garbage = periodHeader("garbage", US);
+assert(garbage.periodStart == null && garbage.periodEnd == null && garbage.periodMonths == null, "garbage has no span");
+const garbageIncoming = { ...garbage.fields, revenue: "100000", periodStart: "2026-01-01", periodEnd: "2026-09-30", periodMonths: "9" };
+const accountantCover = liveCoverageForImport({
+  existing,
+  periodStart: garbage.periodStart,
+  periodEnd: garbage.periodEnd,
+  periodMonths: garbage.periodMonths,
+  fyStartMonth: 1,
+});
+assert(accountantCover.span == null && accountantCover.periodStart == null, "accountant does not expand garbage over Jan–Sep");
+const accountantPlan = planStatementImport({
+  existing,
+  incoming: garbageIncoming,
+  kind: "income_statement",
+  span: accountantCover.span,
+  choice: "replace_ytd",
+  market: US,
+  pillarsBefore: before.pillars,
+});
+assert(accountantPlan.action === "choose" || accountantPlan.action === "block", accountantPlan.action);
+assert(accountantPlan.live == null, "accountant garbage does not write live");
+assert(accountantPlan.live?.periodStart !== "2026-01-01" && accountantPlan.live?.revenue !== "100000", "quarter revenue stays off the year-to-date");
+const ownerSpan = statementSpan(garbage.periodStart, garbage.periodEnd, garbage.periodMonths);
+const ownerPlan = planStatementImport({
+  existing,
+  incoming: garbageIncoming,
+  kind: "income_statement",
+  span: ownerSpan,
+  market: US,
+  pillarsBefore: before.pillars,
+});
+assert(ownerPlan.action === "choose" || ownerPlan.action === "block", ownerPlan.action);
+assert(ownerPlan.live == null, "owner garbage does not write live");
+const firstImport = liveCoverageForImport({
+  existing: {},
+  periodEnd: "2026-09-30",
+  fyStartMonth: 1,
+});
+assert(firstImport.periodStart === "2026-01-01" && firstImport.months === 9, "a first import still counts from the financial year");
 
 const replaced = planStatementImport({
   existing,
