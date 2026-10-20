@@ -106,7 +106,6 @@ import {
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_CHOSEN_KEY,
   PERIOD_MONTHS_KEY,
-  periodMonthsOf,
   scoreTier,
 } from "@/lib/ratios";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
@@ -147,6 +146,7 @@ import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operati
 import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
+import { statementCoverMonthCount } from "@/lib/budget.bridges";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
@@ -4350,7 +4350,9 @@ function Index() {
                           }
                           priorYearMonths={
                             ownerPrior?.financials
-                              ? periodMonthsOf(ownerPrior.financials as Record<string, unknown>)
+                              ? statementCoverMonthCount(
+                                  ownerPrior.financials as Record<string, unknown>,
+                                )
                               : null
                           }
                           businessTypeId={businessTypeId}
@@ -4375,6 +4377,8 @@ function Index() {
                             inventory: v.inventory,
                             operatingCashflow: v.operatingCashflow,
                             [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
+                            ...(v.periodStart ? { periodStart: v.periodStart } : {}),
+                            ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
                           }}
                           reloadToken={budgetReloadToken}
                         />
@@ -6150,6 +6154,8 @@ function Index() {
                             operatingCashflow: v.operatingCashflow,
                             // Months the P&L covers — without it a quarter seeds as a year.
                             [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
+                            ...(v.periodStart ? { periodStart: v.periodStart } : {}),
+                            ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
                           }}
                           onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
                           reloadToken={budgetReloadToken}

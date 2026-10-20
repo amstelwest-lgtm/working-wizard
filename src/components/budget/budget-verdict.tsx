@@ -9,6 +9,7 @@ import { SignoffStatusChip } from "@/components/signoff-status-chip";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
 import {
   budgetSeededFromStatement,
+  SEEDED_VARIANCE_NOTE,
   showBudgetSourceChip,
   type BudgetActualsChip,
 } from "@/lib/budget.bridges";
@@ -80,6 +81,7 @@ export function BudgetVerdictStrip({
   signoffKnown = true,
   presentation = "strip",
   onBuild,
+  comparisonNote = null,
 }: {
   periodLabel: string;
   revenueBudget: number;
@@ -101,6 +103,8 @@ export function BudgetVerdictStrip({
   presentation?: "owner" | "strip";
   /** Builds an empty plan from the saved statement. */
   onBuild?: () => void;
+  /** Seeded plan or an unknown statement period. Replaces the variance sentence. */
+  comparisonNote?: string | null;
 }) {
   const money = (n: number) => stickyMoney(n, market);
   const unbuilt = budgetFigureMissing(revenueBudget) && budgetFigureMissing(profitBudget);
@@ -114,19 +118,21 @@ export function BudgetVerdictStrip({
     ebit: profitActual ?? undefined,
     budgetEbit: profitBudget,
   });
+  const note = comparisonNote ?? (seeded ? SEEDED_VARIANCE_NOTE : null);
   if (presentation === "owner") {
     return (
       <section
-        className="grid w-full grid-cols-2 items-start gap-x-4 gap-y-3 border-b border-[#DBEAFE] pb-3 tabular-nums sm:grid-cols-4"
+        className="border-b border-[#DBEAFE] pb-3"
         data-answer-strip
         data-budget-verdict
         data-owner-budget-summary
       >
+        <div className="grid w-full grid-cols-2 items-start gap-x-4 gap-y-3 tabular-nums sm:grid-cols-4">
         <OwnerBudgetStat label="Period" value={periodLabel} />
         <OwnerBudgetCompare
           label="Revenue vs budget"
           budget={revenueBudget}
-          actual={hasActuals ? revenueActual : null}
+          actual={note || !hasActuals ? null : revenueActual}
           higherIsBetter
           market={market}
           money={money}
@@ -136,7 +142,7 @@ export function BudgetVerdictStrip({
         <OwnerBudgetCompare
           label="Profit vs budget"
           budget={profitBudget}
-          actual={hasActuals && profitActual != null ? profitActual : null}
+          actual={note || !(hasActuals && profitActual != null) ? null : profitActual}
           higherIsBetter
           market={market}
           money={money}
@@ -161,6 +167,12 @@ export function BudgetVerdictStrip({
           </div>
           {extraActions}
         </div>
+        </div>
+        {note ? (
+          <p className="mt-3 text-[13px] font-medium leading-snug text-[#102A43]" data-budget-comparison-note="">
+            {note}
+          </p>
+        ) : null}
       </section>
     );
   }
@@ -187,8 +199,8 @@ export function BudgetVerdictStrip({
               </>
             ) : null}
           </span>
-        ) : seeded ? (
-          "Budget seeded from these figures — variance starts with the first uploaded month"
+        ) : note ? (
+          <span data-budget-comparison-note="">{note}</span>
         ) : (
           <span className="flex flex-col gap-1 sm:block">
             <span>

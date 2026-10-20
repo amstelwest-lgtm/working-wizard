@@ -694,7 +694,7 @@ export function OwnerDoor({
   const books = useMemo<OwnerBooks>(() => {
     const prior = resolvePriorSnapshot(history, new Date(), {
       periodEnd,
-      financials: { revenue, netIncome, cogs },
+      financials: financials ?? { revenue, netIncome, cogs },
     });
     const priorFin = prior?.financials ?? null;
     const latest =
@@ -741,6 +741,7 @@ export function OwnerDoor({
     cashBurnScore,
     netIncome,
     periodEnd,
+    financials,
     history,
     cashflow,
     openAction,

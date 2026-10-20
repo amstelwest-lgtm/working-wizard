@@ -21,6 +21,7 @@ import { currentBudgetMonth, fyMonths, formatBudgetMonthYear, plainBudgetWindowH
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {
   BUDGET_OPENING_MISSING_LINE,
+  budgetComparisonNote,
   budgetDaysNeedReview,
   budgetDaysSourceLabel,
   budgetOpeningSourceLabel,
@@ -132,6 +133,7 @@ export function BudgetWorkspace({
       doc={doc}
       role={role}
       statementPace={Boolean(actuals && (actuals.revenue || actuals.cogs || actuals.fixedCosts))}
+      comparisonNote={budgetComparisonNote(actuals)}
     />
   );
 
@@ -433,6 +435,7 @@ function BudgetComplexWorkspace({
         onSignoffChange={onSignoffChange}
         signoffKnown={signoffKnown}
         onBuild={onBuild}
+        comparisonNote={budgetComparisonNote(compared)}
         extraActions={
           <BudgetPdfExportButton
             quiet
