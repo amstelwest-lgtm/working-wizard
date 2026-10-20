@@ -34,7 +34,7 @@ export function AgentDraftShelf({
       <h3 className="mb-2 text-sm font-semibold text-slate-950">Waiting for a person</h3>
       {rows.length === 0 ? (
         <p className="text-sm text-slate-600" data-agent-drafts-empty>
-          No draft waiting.
+          Nothing is waiting for a person.
         </p>
       ) : (
         <ul className="space-y-2">
