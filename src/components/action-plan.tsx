@@ -24,8 +24,8 @@ import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
-import { handoffAssigneeName, latestHandoffResult } from "@/lib/owner-handoff";
-import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
+import { handoffAssigneeName } from "@/lib/owner-handoff";
+import { describeActionHandoff } from "@/lib/action-handoff";
 import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
@@ -307,6 +307,10 @@ interface Props {
   ownerSignoffStale?: boolean;
   /** 13-week cash is under the floor and the opening is on file. */
   cashBelowFloor?: boolean;
+  /** Open this finding on Drafts. Owner Next moves scrolls to the card when omitted. */
+  onOpenDraft?: (draftId: string) => void;
+  /** Finding to scroll into view. Set from `?draft=`. */
+  focusDraftId?: string | null;
   /** Live scorecard ratios. Draft cards quote these, not a stored snapshot. */
   canonicalRatios?: Record<string, number> | null;
 }
@@ -609,6 +613,8 @@ export default function ActionPlanPanel({
   ownerSignoffStale = false,
   cashBelowFloor = false,
   canonicalRatios = null,
+  onOpenDraft,
+  focusDraftId = null,
 }: Props) {
   const { market } = useMarketFormat();
   const { profile, firms, firmId } = useAccountantProfile();
@@ -647,6 +653,32 @@ export default function ActionPlanPanel({
     () => draftActivity.findings.filter((row) => row.status === "approved" || draftFindingLabel(row) != null),
     [draftActivity.findings],
   );
+  const handoffByItem = useMemo(() => {
+    const out = new Map<string, ReturnType<typeof describeActionHandoff>>();
+    for (const it of items) {
+      out.set(
+        it.id,
+        describeActionHandoff({
+          actionItemId: it.id,
+          assignee: it.owner_name,
+          sentAt: it.sent_at,
+          notes: itemNotes[it.id] ?? [],
+          storedRun: pickups[it.id] ?? null,
+          runs: draftActivity.runs,
+          findings: draftActivity.findings,
+          findingsReady: !draftActivity.loading,
+          market,
+        }),
+      );
+    }
+    return out;
+  }, [items, itemNotes, pickups, draftActivity.runs, draftActivity.findings, draftActivity.loading, market]);
+  useEffect(() => {
+    const id = focusDraftId?.trim();
+    if (!id) return;
+    const node = document.querySelector(`[data-draft="${CSS.escape(id)}"]`);
+    if (node instanceof HTMLElement) node.scrollIntoView({ block: "center" });
+  }, [focusDraftId, draftFindings]);
   const quickAddRef = useRef<HTMLInputElement>(null);
   const focusQuickAdd = useCallback(() => {
     quickAddRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -844,6 +876,7 @@ export default function ActionPlanPanel({
           row.id === item.id ? { ...row, owner_id: null, owner_name: name, owner_email: null } : row,
         ),
       );
+      const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
       const result = await commitActionHandoff({
         clientId,
         actionItemId: item.id,
@@ -860,10 +893,9 @@ export default function ActionPlanPanel({
             [item.id]: { ...current[item.id], [agent]: true },
           }));
         }
-        toast.error(result.error);
+        toast.error(result.error, { id: toastId });
         return;
       }
-      toast.success(`Assigned to ${agentShortName(agent)}`);
       void refresh();
     },
     [clientId, refresh],
@@ -1860,55 +1892,15 @@ export default function ActionPlanPanel({
                   setTeamOpen(true);
                 }}
                 comingSoon={comingSoon[it.id]}
-                notes={itemNotes[it.id] ?? []}
-                pickupLabel={(() => {
-                  const notes = itemNotes[it.id] ?? [];
-                  const stored = pickups[it.id] ?? null;
-                  let live: { id: string; agent: AgentKey; status: string; at: string; summary: string } | null = null;
-                  for (const run of draftActivity.runs) {
-                    if (run.action_item_id !== it.id) continue;
-                    if (stored?.id && run.id !== stored.id) continue;
-                    const at = run.finished_at || run.queued_at;
-                    if (!live || at > live.at) {
-                      live = { id: run.id, agent: run.agent, status: run.status, at, summary: run.summary ?? "" };
-                    }
-                  }
-                  const run =
-                    live && stored && live.agent === stored.agent && (stored.id ? live.id === stored.id : live.at >= (stored.at || ""))
-                      ? { agent: live.agent, status: live.status, at: live.at }
-                      : stored;
-                  const storedResult = latestHandoffResult(notes);
-                  const liveResult =
-                    live && (live.status === "succeeded" || live.status === "partial") && live.summary.trim()
-                      ? { text: live.summary.trim(), at: live.at }
-                      : null;
-                  const result = storedResult ?? liveResult;
-                  if (handoffCostStopped(result?.text) && run?.agent) return handoffCouldNotFinish(run.agent);
-                  return botPickupCaption({
-                    assignee: it.owner_name,
-                    run,
-                    result: result?.text,
-                    resultAt: result?.at,
-                    market,
-                  });
-                })()}
-                pickupRun={(() => {
-                  const stored = pickups[it.id] ?? null;
-                  let live: { id: string; agent: AgentKey; status: string; at: string } | null = null;
-                  for (const run of draftActivity.runs) {
-                    if (run.action_item_id !== it.id) continue;
-                    if (stored?.id && run.id !== stored.id) continue;
-                    const at = run.finished_at || run.queued_at;
-                    if (!live || at > live.at) live = { id: run.id, agent: run.agent, status: run.status, at };
-                  }
-                  if (live && stored && live.agent === stored.agent && (stored.id ? live.id === stored.id : live.at >= (stored.at || ""))) {
-                    return { status: live.status, at: live.at };
-                  }
-                  return stored ? { status: stored.status, at: stored.at } : null;
-                })()}
+                notes={handoffByItem.get(it.id)?.notes ?? itemNotes[it.id] ?? []}
+                phaseLabel={handoffByItem.get(it.id)?.phaseLabel ?? null}
+                draftId={handoffByItem.get(it.id)?.draftId ?? null}
+                onOpenDraft={onOpenDraft}
+                pickupLabel={handoffByItem.get(it.id)?.caption ?? null}
+                pickupRun={handoffByItem.get(it.id)?.run ?? null}
                 handoffError={handoffErrors[it.id]?.message ?? null}
                 onRetry={(() => {
-                  const agent = handoffErrors[it.id]?.agent ?? pickups[it.id]?.agent;
+                  const agent = handoffErrors[it.id]?.agent ?? pickups[it.id]?.agent ?? handoffByItem.get(it.id)?.run?.agent;
                   if (!agent) return undefined;
                   return () => {
                     void commitActionHandoff({
@@ -2465,6 +2457,9 @@ function ItemRow({
   handoffError = null,
   onRetry,
   notes = [],
+  phaseLabel = null,
+  draftId = null,
+  onOpenDraft,
   focused,
   suggestion,
 }: {
@@ -2496,6 +2491,10 @@ function ItemRow({
   handoffError?: string | null;
   onRetry?: () => void;
   notes?: readonly AssignmentNoteRow[];
+  /** Working, Draft ready, Approved, Sent, or Couldn't draft. Replaces Not started / Not sent. */
+  phaseLabel?: string | null;
+  draftId?: string | null;
+  onOpenDraft?: (draftId: string) => void;
 }) {
   const { market } = useMarketFormat();
   const h = healthMeta(item.health);
@@ -2733,9 +2732,13 @@ function ItemRow({
               <Mail className="h-3 w-3" />
               {lastNudge.email_type === "nudge" ? "Nudged" : "Overdue"}
             </span>
-          ) : item.sent_at ? (
+          ) : item.sent_at || phaseLabel === "Sent" ? (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
               <Mail className="h-3 w-3" /> Sent
+            </span>
+          ) : phaseLabel ? (
+            <span className="text-[10px] font-semibold text-[#0B5FFF]" data-handoff-phase={phaseLabel}>
+              {phaseLabel}
             </span>
           ) : !lastFailed ? (
             <span className="text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500">
@@ -2754,9 +2757,10 @@ function ItemRow({
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0">
         <span
           className="rounded-md px-2.5 py-1 text-[11px] font-bold"
-          style={{ color: h.color, background: h.bg }}
+          style={{ color: phaseLabel ? "#0B5FFF" : h.color, background: phaseLabel ? "rgba(11,95,255,0.12)" : h.bg }}
+          data-handoff-phase={phaseLabel ?? undefined}
         >
-          {h.label}
+          {phaseLabel ?? h.label}
         </span>
         <ChevronRight className="h-3.5 w-3.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600" />
       </div>
@@ -2790,6 +2794,8 @@ function ItemRow({
           <HandoffRunStatus
             run={pickupRun}
             caption={pickupLabel}
+            draftId={draftId}
+            onOpenDraft={onOpenDraft}
             error={handoffError}
             missed={(() => {
               if (pickupRun && (pickupRun.status === "queued" || pickupRun.status === "running")) return false;

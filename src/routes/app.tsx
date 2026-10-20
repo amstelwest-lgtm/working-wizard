@@ -360,6 +360,7 @@ export const Route = createFileRoute("/app")({
     screen?: "settings" | "accountant" | "plan";
     section?: "signed";
     checkout?: "success" | "cancel";
+    draft?: string;
   } => {
     const out: {
       tab?: string;
@@ -372,6 +373,7 @@ export const Route = createFileRoute("/app")({
       screen?: "settings" | "accountant" | "plan";
       section?: "signed";
       checkout?: "success" | "cancel";
+      draft?: string;
     } = {};
     if (
       typeof search.tab === "string" &&
@@ -420,6 +422,9 @@ export const Route = createFileRoute("/app")({
     }
     if (search.checkout === "success" || search.checkout === "cancel") {
       out.checkout = search.checkout;
+    }
+    if (typeof search.draft === "string" && /^[0-9a-f-]{36}$/i.test(search.draft)) {
+      out.draft = search.draft;
     }
     return out;
   },
@@ -4419,6 +4424,11 @@ function Index() {
                                 return;
                               }
                               go("moves");
+                            }}
+                            focusDraftId={oauthReturn.draft ?? null}
+                            onOpenDraft={(id) => {
+                              const node = document.querySelector(`[data-draft="${CSS.escape(id)}"]`);
+                              if (node instanceof HTMLElement) node.scrollIntoView({ block: "center" });
                             }}
                           />
                         ) : (
