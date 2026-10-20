@@ -298,7 +298,7 @@ import { needsPastPeriodPrompt } from "@/lib/history-coverage";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
-import { cashSignoffIsStale, reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
+import { cashSignoffIsStale, healthSignoffIsStale, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
 import { ClientAgentStandby } from "@/components/client-agent-standby";
 import { OwnerHome } from "@/components/owner-door/owner-home";
@@ -1444,16 +1444,13 @@ function ClientView() {
     signoff: ClientReviewSignoff | null,
     updatedAt: string | null | undefined,
   ) =>
-    Boolean(
-      signoff &&
-        reviewFiguresChanged({
-          signedOffAt: signoff.signed_off_at,
-          dataUpdatedAt: updatedAt,
-          snapshots,
-          liveHealth: overallHealth.overall,
-          signedHealth: signedHealthFromHistory(scoreHistory, signoff.signed_off_at),
-        }),
-    );
+    healthSignoffIsStale({
+      signoff,
+      dataUpdatedAt: updatedAt,
+      snapshots,
+      liveHealth: overallHealth.overall,
+      scoreHistory,
+    });
 
   // ── Health orb & pillar computation (same source as header / score history) ──
   const healthMap = healthMapFromRatios(ratios as Record<string, number>, clientMarket);
