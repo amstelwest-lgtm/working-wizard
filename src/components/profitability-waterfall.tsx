@@ -1193,7 +1193,7 @@ export function ProfitabilityWaterfall({
               aria-expanded={detailsOpen}
               onClick={() => setDetailsOpen((open) => !open)}
             >
-              <span className="pw-cell-ic" data-gold="true">
+              <span className="pw-cell-ic">
                 <Sparkles aria-hidden />
               </span>
               <span className="min-w-0">

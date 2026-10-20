@@ -382,7 +382,7 @@ function Sphere({
 
 const RING_STROKE: Record<Tier, string> = {
   healthy: "var(--ok, #16845b)",
-  watch: "var(--warn, #b7791f)",
+  watch: "var(--status-warn, #b7791f)",
   critical: "var(--risk, #c43d4b)",
   nodata: "#94a3b8",
 };
@@ -428,6 +428,7 @@ function RingDial({
           cy="100"
           r={radius}
           className="health-ring-arc"
+          data-status-warn={tier === "watch" ? "" : undefined}
           stroke={RING_STROKE[tier]}
           strokeWidth="13"
           strokeLinecap="round"

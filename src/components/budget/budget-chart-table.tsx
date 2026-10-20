@@ -186,7 +186,7 @@ export function BudgetChartTable({
             {sentence}
           </p>
           {uniformNote ? (
-            <p className="mt-1 text-[13px] leading-snug text-[#8A5A12] dark:text-[#F0D59A]" data-budget-uniform>
+            <p className="mt-1 text-[13px] leading-snug text-[#102A43] dark:text-[#93c5fd]" data-budget-uniform>
               {uniformNote}
             </p>
           ) : null}

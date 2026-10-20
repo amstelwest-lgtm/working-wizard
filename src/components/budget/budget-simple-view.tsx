@@ -353,7 +353,7 @@ export function BudgetSimpleView({
       {/* Month engine — volume × price, then margin and overheads */}
       <section
         id="wizard-budget-month-engine"
-        className="budget-month-engine relative overflow-hidden rounded-2xl border border-[#DBEAFE] bg-gradient-to-b from-white to-white p-5 shadow-[0_18px_40px_rgba(16,42,67,0.06)] dark:from-slate-950 dark:to-slate-950 dark:border-slate-800 sm:p-6"
+        className="budget-month-engine relative overflow-x-auto rounded-2xl border border-[#DBEAFE] bg-gradient-to-b from-white to-white p-5 shadow-[0_18px_40px_rgba(16,42,67,0.06)] dark:from-slate-950 dark:to-slate-950 dark:border-slate-800 sm:p-6"
       >
         <div className="pointer-events-none absolute inset-y-5 left-0 w-0.5 rounded-full bg-gradient-to-b from-[#2563EB] via-[#0B5FFF] to-[#38BDF8]" />
         <div className="flex flex-wrap items-start justify-between gap-3 pl-3 sm:pl-4">
@@ -487,7 +487,7 @@ export function BudgetSimpleView({
           </ul>
         ) : null}
 
-        <div className="mt-4 space-y-0 overflow-hidden rounded-xl border border-[#DBEAFE] bg-white/70 pl-3 dark:bg-slate-950/40 sm:pl-4">
+        <div className="mt-4 space-y-0 overflow-x-auto rounded-xl border border-[#DBEAFE] bg-white/70 pl-3 dark:bg-slate-950/40 sm:pl-4">
           <CascadeRow
             kicker="Keep as gross profit"
             label="Gross profit %"
@@ -855,7 +855,7 @@ function CascadeRow({
         emphasis ? "bg-[rgba(219,234,254,0.65)] pr-3" : ""
       } ${muted ? "opacity-90" : ""}`}
     >
-      <div className="min-w-[12rem] pr-2">
+      <div className="min-w-0 max-w-full flex-1 basis-full pr-2 sm:min-w-[12rem] sm:basis-auto">
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#102A43] dark:text-[#F4F7FB]">{kicker}</p>
         <p
           className={`text-[13.5px] font-semibold ${
@@ -866,7 +866,7 @@ function CascadeRow({
         </p>
         <p className="max-w-md text-[11px] leading-snug text-[#3D5270] dark:text-slate-500">{hint}</p>
       </div>
-      <div className="ml-auto">{children}</div>
+      <div className="ml-auto min-w-0 max-w-full overflow-x-auto">{children}</div>
     </div>
   );
 }
