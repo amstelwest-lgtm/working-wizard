@@ -18,7 +18,12 @@ import {
 } from "../src/lib/portfolio-dashboard";
 import { clientMarketDraftFromFirm } from "../src/lib/market";
 import { detectImportPeriod, importPeriodFromParts } from "../src/lib/import-period";
-import { firmTrialStatusLine, formatFirmPlanStatus, trialDaysRemaining } from "../src/lib/firm-client-cap";
+import {
+  firmRenewalStatusLine,
+  firmTrialStatusLine,
+  formatFirmPlanStatus,
+  trialDaysRemaining,
+} from "../src/lib/firm-client-cap";
 import { FIRM_BAND_CATALOG, FIRM_TRIAL_CLIENT_LIMIT, FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
 import type { OverallHealth } from "../src/lib/health-score";
 
@@ -220,6 +225,32 @@ assert(!trial.detail?.includes(String(soloLimit)), "trial copy does not advertis
 const active = formatFirmPlanStatus({ phase: "active", band: "solo", now });
 assert(active.headline === "Solo", "active plan shows the band name");
 assert(active.detail === "Up to 15 active clients", "active plan shows the paid client limit");
+assert(active.renewsOn == null, "an active plan with no period end does not invent a date");
+assert(firmRenewalStatusLine({ phase: "active", renewsOn: null }) == null, "a missing renewal date stays blank");
+const renewing = formatFirmPlanStatus({
+  phase: "active",
+  band: "solo",
+  periodEndIso: "2026-11-14T00:00:00.000Z",
+  now,
+  market: { locale: "en-ZA", timezone: "Africa/Johannesburg" },
+});
+assert(renewing.headline === "Solo", "a renewal date does not replace the band name");
+assert(renewing.detail === "Up to 15 active clients", "a renewal date keeps the paid client limit");
+assert(renewing.trialEndsOn == null, "an active plan does not show a trial end");
+assert(renewing.renewsOn != null && renewing.renewsOn !== "—", "an active plan reads the period end");
+assert(
+  firmRenewalStatusLine({ phase: "active", renewsOn: renewing.renewsOn }) === `Renews ${renewing.renewsOn}`,
+  "settings shows Renews and the period-end date",
+);
+assert(
+  firmRenewalStatusLine({ phase: "trialing", renewsOn: renewing.renewsOn }) == null,
+  "a trial does not show a renewal line",
+);
+assert(
+  firmTrialStatusLine({ phase: "trialing", trialEndsOn: trial.trialEndsOn }) ===
+    `Free trial · ends ${trial.trialEndsOn}`,
+  "the trial end line is unchanged when a period end exists",
+);
 const ended = formatFirmPlanStatus({
   phase: "trialing",
   band: "solo",

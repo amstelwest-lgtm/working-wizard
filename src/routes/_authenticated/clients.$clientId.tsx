@@ -63,13 +63,12 @@ import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
+import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
 import {
-  cashFlowKnown,
-  coherentEquity,
-  effectivePeriodMonths,
-  reportInputsFromFinancials,
-} from "@/lib/equity-coherence";
-import { reportsHomeReadyLine, reportsReadyCount } from "@/lib/reports-drafter-copy";
+  clientReportsReadyCount,
+  financialsHaveStatementFigures,
+  reportsHomeReadyLine,
+} from "@/lib/reports-drafter-copy";
 import { pickCurrentSnapshot } from "@/lib/financial-snapshots";
 import { defaultPeriodCoverage } from "@/lib/statement-period";
 import {
@@ -1336,10 +1335,7 @@ function ClientView() {
   });
   const periodMonths = coverageMonths;
   /** True once any P&L / balance-sheet figure exists — gates the empty-state card and Ask AI note. */
-  const hasFigures = useMemo(
-    () => FIELD_LABELS.some(({ key }) => (financials[key] ?? "").toString().trim() !== ""),
-    [financials],
-  );
+  const hasFigures = useMemo(() => financialsHaveStatementFigures(financials), [financials]);
   useEffect(() => {
     // Mark only once Overview is showing the score. A bot tab or an import
     // in flight must not count as "figures seen" and pull the card wall.
@@ -3649,12 +3645,7 @@ function ClientView() {
   // the temporal dead zone here, and the minified chunk throws
   // "Cannot access '…' before initialization" on every /clients/:id render.
   const reportsIssued = client?.reports_issued_count ?? 0;
-  const reportReadiness = reportInputsFromFinancials(financials as Record<string, unknown>);
-  const reportsReady = reportsReadyCount({
-    figuresOnFile: hasFigures,
-    leverageReady: reportReadiness.leverageReady,
-    assetReady: reportReadiness.assetReady,
-  });
+  const reportsReady = clientReportsReadyCount(financials);
   const reportsLine = reportsHomeReadyLine(reportsReady);
   const canonicalRatios = useMemo(
     () => scorecardRatiosFromFinancials(financials, { fyStartMonth }),
