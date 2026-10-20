@@ -2214,9 +2214,8 @@ function GoalHeader({
           <div className="action-goal-copy min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.25em] text-[#102A43] dark:text-[#0B5FFF]/80">
-                {/* date-ok: action plan quarter stamp, not a day range */}
                 {displayedPlanPeriod(
-                  plan.period_label,
+                  plan.period_label, // date-ok: action plan quarter stamp, not a day range
                   stripMilonProjection(plan.outcome_goal),
                 )} · Outcome goal
               </span>

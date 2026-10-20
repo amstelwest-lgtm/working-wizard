@@ -156,7 +156,7 @@ export function healthSnapshotFromTool(
   const period =
     (typeof periodLabel === "string" && periodLabel.trim()) ||
     (typeof record.periodLabel === "string" ? record.periodLabel.trim() : "") ||
-    (typeof record.period_label === "string" ? record.period_label.trim() : "") ||
+    (typeof record.period_label === "string" ? record.period_label.trim() : "") || // date-ok: stored snapshot period, compared not printed
     null;
   return { overall, pillars, weakestLabel, weakestScore, periodLabel: period };
 }
