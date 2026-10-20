@@ -64,6 +64,10 @@ for (const variant of [
   assert(html.includes("Back to clients"), `${variant.market} Back label is the client list`);
   assert(!html.includes("Back to pricing"), `${variant.market} wall has no pricing link`);
   assert(html.includes("Start trial"), `${variant.market} primary action is Start trial`);
+  assert(html.includes("bg-[#0B5FFF]") && html.includes("text-white"), `${variant.market} Start trial is solid cobalt`);
+  assert(html.includes("border-[#0B5FFF]") && html.includes("text-[#0B5FFF]"), `${variant.market} Back is a cobalt outline`);
+  assert(html.includes("bg-white") && html.includes("text-[#102A43]") && html.includes("border-[#DBEAFE]"), `${variant.market} canvas is the light shell`);
+  assert(!html.includes("amber") && !html.includes("#0b1220"), `${variant.market} wall has no gold or near-black canvas`);
   assert(html.includes(firmWallWhyLine("New York Test company")), `${variant.market} explains the open client`);
   assert(!html.includes(FIRM_WALL_TRIAL_ENDED_LINE), `${variant.market} does not mention an ended trial by default`);
 }

@@ -86,46 +86,46 @@ export function BillingRequiredCard({
   trialEnded?: boolean;
   quoteError?: string;
 }) {
-  const trialClass =
-    "inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]";
-  const secondaryClass =
-    "inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400";
+  const primaryClass =
+    "inline-flex h-10 items-center rounded-full bg-[#0B5FFF] px-4 text-xs font-bold uppercase tracking-wider text-white";
+  const ghostClass =
+    "inline-flex h-10 items-center rounded-full border border-[#0B5FFF] bg-transparent px-4 text-xs font-bold uppercase tracking-wider text-[#0B5FFF]";
   const price = priceLabel?.trim() ?? "";
   return (
-    <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200" data-billing-wall="card">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
-        <h1 className="mt-2 text-xl font-semibold">Continue on {planName} to keep this practice</h1>
-        <p className="mt-2 text-sm text-slate-400" data-billing-why>
+    <div className="grid min-h-screen place-items-center bg-white px-4 text-[#102A43]" data-billing-wall="card">
+      <div className="w-full max-w-md rounded-2xl border border-[#DBEAFE] bg-white p-6 shadow-[0_8px_24px_rgba(16,42,67,0.06)]">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#0B5FFF]">Billing</p>
+        <h1 className="mt-2 text-xl font-semibold text-[#102A43]">Continue on {planName} to keep this practice</h1>
+        <p className="mt-2 text-sm text-[#102A43]" data-billing-why>
           {firmWallWhyLine(clientName)}
         </p>
-        <p className="mt-2 text-sm text-slate-400" data-billing-trial>
+        <p className="mt-2 text-sm text-[#102A43]" data-billing-trial>
           {FIRM_WALL_TRIAL_LINE}
         </p>
         {price ? (
-          <p className="mt-2 text-sm text-slate-200" data-billing-price>
+          <p className="mt-2 text-sm font-semibold text-[#102A43]" data-billing-price>
             {price}
           </p>
         ) : null}
         {trialEnded ? (
-          <p className="mt-2 text-sm text-slate-400" data-billing-trial-ended>
+          <p className="mt-2 text-sm text-[#102A43]" data-billing-trial-ended>
             {FIRM_WALL_TRIAL_ENDED_LINE}
           </p>
         ) : null}
-        {quoteError ? <p className="mt-2 text-sm text-slate-400">{quoteError}</p> : null}
+        {quoteError ? <p className="mt-2 text-sm text-[#102A43]">{quoteError}</p> : null}
         <div className="mt-5 flex flex-wrap gap-2">
-          <a href={billingStartPath(checkout)} className={trialClass} data-billing-action="trial">
+          <a href={billingStartPath(checkout)} className={primaryClass} data-billing-action="trial">
             {FIRM_WALL_START_LABEL}
           </a>
-          <a href={backHref} className={secondaryClass} data-billing-back="clients">
+          <a href={backHref} className={ghostClass} data-billing-back="clients">
             {FIRM_WALL_BACK_LABEL}
           </a>
           {onRetry ? (
-            <button type="button" onClick={onRetry} className={secondaryClass}>
+            <button type="button" onClick={onRetry} className={ghostClass}>
               Retry
             </button>
           ) : null}
-          <BillingSignOutButton />
+          <BillingSignOutButton className={ghostClass} />
         </div>
       </div>
     </div>
@@ -240,10 +240,10 @@ function BillingRequiredPage() {
 
   if (loading || checking || !user || returnClient === undefined) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200" data-billing-wall="checking">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
-          <h1 className="mt-2 text-xl font-semibold">Checking firm billing…</h1>
+      <div className="grid min-h-screen place-items-center bg-white px-4 text-[#102A43]" data-billing-wall="checking">
+        <div className="w-full max-w-md rounded-2xl border border-[#DBEAFE] bg-white p-6 shadow-[0_8px_24px_rgba(16,42,67,0.06)]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#0B5FFF]">Billing</p>
+          <h1 className="mt-2 text-xl font-semibold text-[#102A43]">Checking firm billing…</h1>
         </div>
       </div>
     );
