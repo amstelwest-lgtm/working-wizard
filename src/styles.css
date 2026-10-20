@@ -1655,6 +1655,7 @@ html[data-theme="light"] .firm-band-upgrade .firm-voucher-input:focus {
 }
 .precard-cap-reason { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
 .precard-cap-title { margin: 0; font-size: 15px; line-height: 1.45; font-weight: 650; }
+.precard-cap-price { margin: 8px 0 0; font-size: 15px; line-height: 1.45; font-weight: 650; }
 .precard-cap-button {
   display: inline-flex;
   margin-top: 12px;

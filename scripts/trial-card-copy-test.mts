@@ -7,6 +7,13 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { PrecardCapCard } from "../src/components/precard-cap-card.tsx";
+import { TrialCardSentence } from "../src/components/trial-card-sentence.tsx";
+import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap.ts";
+import { FIRM_TRIAL_CARD_LINE } from "../src/lib/starter-trial-constants.ts";
+import { starterMonthlyFromQuote } from "../src/lib/trial-card-price.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -46,6 +53,43 @@ function walk(dir: string, hits: string[]) {
 const hits: string[] = [];
 walk(root, hits);
 assert(hits.length === 0, `banned trial copy came back:\n${hits.join("\n")}`);
+
+assert(PRECARD_CAP_MESSAGE === FIRM_TRIAL_CARD_LINE, "the cap card uses the trial sentence");
+assert(starterMonthlyFromQuote({ market: "us", priceLabel: null }) === "$39/mo", "a US quote is $39/mo");
+assert(
+  starterMonthlyFromQuote({ market: "za", priceLabel: "R 299/mo · about R 60 per client" }) === "R 299/mo",
+  "a ZA quote keeps the server's monthly rand label",
+);
+assert(starterMonthlyFromQuote(null) === "$39/mo", "an unknown quote stays on the USD catalog");
+
+const capSrc = readFileSync(join(root, "src/components/precard-cap-card.tsx"), "utf8");
+const healthSrc = readFileSync(join(root, "src/components/checkout-after-insight.tsx"), "utf8");
+const widgetSrc = readFileSync(join(root, "src/lib/ask-ai.js"), "utf8");
+for (const [path, text] of [
+  ["src/components/precard-cap-card.tsx", capSrc],
+  ["src/components/checkout-after-insight.tsx", healthSrc],
+  ["src/lib/ask-ai.js", widgetSrc],
+] as const) {
+  assert(text.includes("TrialCardSentence") || text.includes("PRECARD_CAP_MESSAGE"), `${path} uses the trial sentence`);
+  assert(!text.toLowerCase().includes("card is required at signup"), `${path} still promises a card at signup`);
+  assert(!text.includes("R299") && !text.includes("R 299") && !text.includes("R\u00a0299"), `${path} hardcodes a rand price`);
+}
+assert(capSrc.includes("TrialCardSentence"), "the cap card renders the shared sentence");
+assert(healthSrc.includes("TrialCardSentence"), "Health renders the shared sentence");
+assert(widgetSrc.includes("oneCapCard"), "the Bot keeps one cap card in the thread");
+assert(widgetSrc.includes("loadStarterMonthlyLabel"), "the Bot price comes from the firm quote");
+
+function priceCount(html: string, price: string): number {
+  return html.split(price).length - 1;
+}
+const usCard = renderToStaticMarkup(createElement(PrecardCapCard, { priceLabel: "$39/mo" }));
+assert(usCard.includes(FIRM_TRIAL_CARD_LINE), "the cap card shows the trial sentence");
+assert(priceCount(usCard, "$39/mo") === 1, "the cap card shows the US price once");
+assert(!usCard.includes("R 299") && !usCard.includes("R299"), "the US cap card has no rand price");
+const zaSentence = renderToStaticMarkup(createElement(TrialCardSentence, { priceLabel: "R 299/mo" }));
+assert(zaSentence.includes(FIRM_TRIAL_CARD_LINE), "Health and the cap card share the trial sentence");
+assert(priceCount(zaSentence, "R 299/mo") === 1, "the ZA price is shown once");
+assert(!zaSentence.includes("$39"), "the ZA sentence does not also show the dollar price");
 
 /** Spaced, tight, and no-break-space spellings of the Starter rand price. */
 const RAND_SPELLINGS = ["R 299", "R299", "R\u00a0299"] as const;

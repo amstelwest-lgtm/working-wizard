@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { loadStarterMonthlyLabel } from "@/lib/trial-card-price";
 
 /**
  * Mount the unified Milōn Bot widget into any #ask-ai-* containers present.
@@ -98,6 +99,7 @@ export function useAskAiMount(deps: {
               note: hasRealFinancials
                 ? null
                 : "Answers get more relevant once your figures are in — for now Milōn Bot can explain how the board works, what's outstanding, and what to bring in first.",
+              getStarterMonthly: () => loadStarterMonthlyLabel(),
             });
           }
         })
