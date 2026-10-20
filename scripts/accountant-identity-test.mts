@@ -8,6 +8,7 @@ import {
   persistedSignoffFirmName,
   persistedSignerName,
   practiceGreetingName,
+  practiceHeaderName,
   recordedActorIdentity,
   resolvePersistedAccountantIdentity,
 } from "../src/lib/accountant-identity";
@@ -60,6 +61,14 @@ const emailFallback = practiceGreetingName({
   email: "james@ben.example",
 });
 assert(emailFallback === "james", "email local-part is only after the name chain");
+assert(
+  practiceHeaderName({
+    accountantName: "",
+    profileFullName: "",
+    authFullName: "",
+  }) === "",
+  "the header name stays blank when the only identity is an email",
+);
 
 const signer = persistedSignerName({
   profileFullName: "James Fleming",
@@ -87,7 +96,8 @@ assert(!profileSrc.includes("cached.firmName ||"), "cached firm name cannot win"
 assert(profileSrc.includes("greetingSource"), "provider exposes the greeting chain");
 
 const dashSrc = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
-assert(dashSrc.includes("practiceGreeting(greetingSource)"), "dashboard greets from the name chain");
+assert(dashSrc.includes("practiceGreeting(headerName)"), "dashboard greets from the loaded name, not the email");
+assert(!dashSrc.includes("user?.email"), "the practice header does not paint the raw email");
 assert(
   !dashSrc.includes('profile.accountantName || user?.email?.split("@")[0]'),
   "dashboard does not greet from the email before the name chain",
@@ -207,8 +217,8 @@ assert(
 );
 
 assert(
-  dashSrc.includes("title={greetingSource || user?.email || \"\"}"),
-  "chip tooltip uses the same name as the greeting",
+  dashSrc.includes("title={headerName || profile.firmName || \"\"}"),
+  "chip tooltip uses the loaded name, not the email",
 );
 const panelSrc = readFileSync(resolve("src/components/advisory-pack-panel.tsx"), "utf8");
 assert(panelSrc.includes("packDisplayedSignoffLine"), "pack line names the sign-off row");

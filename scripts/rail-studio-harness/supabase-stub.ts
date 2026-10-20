@@ -39,6 +39,17 @@ const FIRM_ROW = {
   created_at: "2026-01-15T00:00:00.000Z",
 };
 
+function firstRunBook(): boolean {
+  if (typeof location === "undefined") return false;
+  return /(?:^|[?&])firstRun=1(?:&|$)/.test(location.search);
+}
+
+/** Hold the profile read so the header's loading paint is visible in screenshots. */
+function headerPaintDelay(): boolean {
+  if (typeof location === "undefined") return false;
+  return /(?:^|[?&])headerDelay=1(?:&|$)/.test(location.search);
+}
+
 function onPracticeRoute(): boolean {
   if (typeof location === "undefined") return false;
   const path = location.pathname;
@@ -518,6 +529,7 @@ function materialize(table: string, mode: Mode): { data: unknown; error: null } 
     return { data: mode === "list" ? roles : roles[0], error: null };
   }
   if (table === "clients" && mode === "list" && onPracticeRoute()) {
+    if (firstRunBook()) return { data: [], error: null };
     return { data: [clientRow(), SECOND_CLIENT], error: null };
   }
   const row = table === "clients" ? clientRow() : TABLES[table];
@@ -590,12 +602,13 @@ function builder(table: string) {
       return api;
     },
     then(resolve: (value: { data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
-      const delay =
+      let delay =
         typeof location !== "undefined" &&
         /(?:^|[?&])regionDelay=1(?:&|$)/.test(location.search) &&
         (table === "firms" || table === "clients")
           ? 900
           : 0;
+      if (headerPaintDelay() && table === "profiles") delay = 1200;
       const finish = () => {
         try {
           resolve(materialize(table, mode));

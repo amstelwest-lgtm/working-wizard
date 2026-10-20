@@ -1,9 +1,11 @@
 /**
- * Computed-style scan of `/`, `/terms`, `/privacy`, and `/join/:token`.
- * Brand gold may remain only on the MILŌN wordmark (header, footer, hero
- * mockup mark, invite shell), the hero trial button, and the 390 sticky
- * trial button. The amber "74" status colour is not brand gold. Legal hero
- * sublines must not render "Inc..". The invite page has no gold button.
+ * Computed-style scan of `/`, `/terms`, `/privacy`, and `/join/:token`, plus
+ * the accountant practice first-run (`/practice?firstRun=1` and the empty
+ * clients list). Brand gold may remain only on the MILŌN wordmark (header,
+ * footer, hero mockup mark, invite shell), the hero trial button, and the
+ * 390 sticky trial button. On the practice first-run the wordmark stays gold.
+ * The amber "74" status colour is not brand gold. Legal hero sublines must
+ * not render "Inc..". The invite page has no gold button.
  *
  *   pnpm test:landing-gold-scan
  *   LANDING_URL=http://127.0.0.1:5173 pnpm test:landing-gold-scan
@@ -15,8 +17,12 @@ import { chromium, type Browser, type Page } from "playwright";
 const PORT = 5198;
 const OWNED = !process.env.LANDING_URL;
 const BASE = process.env.LANDING_URL ?? `http://127.0.0.1:${PORT}`;
+const HARNESS_PORT = 5199;
+const HARNESS_OWNED = !process.env.HARNESS_URL;
+const HARNESS = process.env.HARNESS_URL ?? `http://127.0.0.1:${HARNESS_PORT}`;
 
 let server: ReturnType<typeof spawn> | null = null;
+let harness: ReturnType<typeof spawn> | null = null;
 
 function stopServer() {
   if (!server?.pid) return;
@@ -30,6 +36,20 @@ function stopServer() {
     }
   }
   server = null;
+}
+
+function stopHarness() {
+  if (!harness?.pid) return;
+  try {
+    process.kill(-harness.pid, "SIGTERM");
+  } catch {
+    try {
+      harness.kill("SIGTERM");
+    } catch {
+      /* already gone */
+    }
+  }
+  harness = null;
 }
 
 async function waitForHome() {
@@ -69,6 +89,43 @@ function startServer() {
   process.on("exit", stopServer);
 }
 
+function startHarness() {
+  const fd = openSync("/tmp/practice-gold-scan-vite.log", "w");
+  harness = spawn(
+    "pnpm",
+    [
+      "exec",
+      "vite",
+      "dev",
+      "--config",
+      "scripts/rail-studio-harness/vite.config.ts",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(HARNESS_PORT),
+      "--strictPort",
+    ],
+    { detached: true, stdio: ["ignore", fd, fd] },
+  );
+  process.on("exit", stopHarness);
+}
+
+async function waitForHarness() {
+  const deadline = Date.now() + 90_000;
+  let last = "";
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${HARNESS}/practice?firstRun=1`);
+      if (res.status === 200) return;
+      last = String(res.status);
+    } catch (err) {
+      last = err instanceof Error ? err.message : String(err);
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  throw new Error(`practice harness did not come up at ${HARNESS} (${last})`);
+}
+
 async function launch(): Promise<Browser> {
   try {
     return await chromium.launch({ channel: "chrome", headless: true });
@@ -87,8 +144,12 @@ async function launch(): Promise<Browser> {
 
 type Hit = { path: string; prop: string; sample: string };
 
-async function scan(page: Page, label: string): Promise<{ hits: Hit[]; wordmark: boolean; heroCta: boolean; amber74: boolean }> {
-  return page.evaluate((labelIn) => {
+async function scan(
+  page: Page,
+  label: string,
+  opts?: { practice?: boolean },
+): Promise<{ hits: Hit[]; wordmark: boolean; heroCta: boolean; amber74: boolean }> {
+  return page.evaluate(({ labelIn, practice }) => {
     const GOLD: Array<[number, number, number]> = [
       [212, 175, 55],
       [125, 95, 15],
@@ -136,6 +197,7 @@ async function scan(page: Page, label: string): Promise<{ hits: Hit[]; wordmark:
     };
     const allowed = (el: Element) => {
       if (el.closest("[data-stale-bundle]")) return true;
+      if (practice) return Boolean(el.closest(".gold-text"));
       return Boolean(
         el.closest(".logo-word") ||
           el.closest(".dash-top .brand") ||
@@ -228,12 +290,14 @@ async function scan(page: Page, label: string): Promise<{ hits: Hit[]; wordmark:
       ? colorsIn(getComputedStyle(amber).color).some((c) => Math.min(...AMBER.map((a) => dist(c.rgb, a))) < 12)
       : false;
     return { hits, wordmark, heroCta, amber74 };
-  }, label);
+  }, { labelIn: label, practice: Boolean(opts?.practice) });
 }
 
 async function main() {
   if (OWNED) startServer();
+  if (HARNESS_OWNED) startHarness();
   await waitForHome();
+  await waitForHarness();
   const browser = await launch();
   const failures: string[] = [];
   try {
@@ -331,9 +395,33 @@ async function main() {
         await page.close();
       }
     }
+    const practicePaths = ["/practice?firstRun=1", "/clients?firstRun=1"];
+    for (const path of practicePaths) {
+      for (const width of [1280, 390]) {
+        for (const theme of ["light", "dark"] as const) {
+          const page = await browser.newPage({ viewport: { width, height: 900 } });
+          await page.goto(`${HARNESS}${path}`, { waitUntil: "domcontentloaded" });
+          const logo = page.locator(".gold-text:visible").first();
+          await logo.waitFor({ timeout: 60000 });
+          await page.waitForTimeout(500);
+          await page.evaluate((next) => {
+            document.documentElement.dataset.theme = next;
+            document.documentElement.classList.toggle("dark", next === "dark");
+          }, theme);
+          const bg = await logo.evaluate((el) => getComputedStyle(el).backgroundImage);
+          if (!bg.includes("212, 175, 55") && !bg.includes("172, 132, 0")) {
+            failures.push(`${path} ${width} ${theme}: practice wordmark is not gold`);
+          }
+          const painted = await scan(page, `practice ${path} ${width} ${theme}`, { practice: true });
+          for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
+          await page.close();
+        }
+      }
+    }
   } finally {
     await browser.close();
     stopServer();
+    stopHarness();
   }
   if (failures.length) {
     console.error(failures.slice(0, 50).join("\n"));
@@ -345,5 +433,6 @@ async function main() {
 main().catch((err) => {
   console.error(err instanceof Error ? err.message : err);
   stopServer();
+  stopHarness();
   process.exit(1);
 });

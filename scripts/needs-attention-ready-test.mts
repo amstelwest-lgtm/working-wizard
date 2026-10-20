@@ -90,7 +90,7 @@ assert(
   depLine != null && !depLine.includes("greetingSource") && !depLine.includes("brandLoading"),
   "brand loading does not hold or restart the book",
 );
-assert(board.includes("practiceGreeting(greetingSource)"), "the greeting still renders from greetingSource");
+assert(board.includes("practiceGreeting(headerName)"), "the greeting still renders from the loaded name");
 
 const timerAt = board.indexOf("[practice-board] client book timed out");
 assert(timerAt > 0, "the book timeout is still there");
