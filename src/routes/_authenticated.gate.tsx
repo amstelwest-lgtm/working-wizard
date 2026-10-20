@@ -2,6 +2,7 @@ import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
+import { shouldRedirectToAuth } from "@/lib/auth-session-guard";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { firmBillingResumeIntent } from "@/lib/billing-market";
 import {
@@ -100,7 +101,7 @@ function resumeUnpaidFirm(snap: GateSnap, clients: FirmClientGateContext) {
 }
 
 export function AuthGate() {
-  const { user, loading } = useAuth();
+  const { user, loading, restoreFailed } = useAuth();
   const { firmId, firmMarket, hasFirm, firms, firmsLoaded } = useAccountantProfile();
   const { track } = useAnalytics();
   const navigate = useNavigate();
@@ -152,8 +153,9 @@ export function AuthGate() {
   }, []);
 
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/auth", search: {} });
-  }, [user, loading, navigate]);
+    if (!shouldRedirectToAuth({ loading, hasUser: !!user, restoreFailed })) return;
+    navigate({ to: "/auth", search: {} });
+  }, [user, loading, restoreFailed, navigate]);
 
   // Practice metadata with no firm is the abandoned location picker. Stay on
   // the callback until a market is chosen. Do not leave them on an empty practice.

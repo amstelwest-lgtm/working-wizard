@@ -71,7 +71,7 @@ function num(raw: unknown): number {
 export function computeRatiosFromFinancials(
   financials: Record<string, unknown> | null | undefined,
   opts?: { fyStartMonth?: number | null; periodMonths?: number | null },
-): Record<string, number> {
+): Record<string, number | null> {
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return {};
   const explicit = opts?.periodMonths;
   const periodMonths =
@@ -89,8 +89,8 @@ function clamp(n: number): number {
 }
 
 /** Slim 0–100 score — enough for pillar drag, not a second health engine. */
-export function scoreDisplayRatio(name: string, val: number): number {
-  if (!Number.isFinite(val)) return NaN;
+export function scoreDisplayRatio(name: string, val: number | null): number {
+  if (val == null || !Number.isFinite(val)) return NaN;
   if (name === "Net Margin") return clamp((val / 0.15) * 100);
   if (name === "Operating Margin") return clamp((val / 0.2) * 100);
   if (name === "Gross Margin") return clamp((val / 0.4) * 100);
@@ -125,7 +125,7 @@ export type PillarBreakdownRow = {
 };
 
 export function pillarBreakdownFromRatios(
-  ratios: Record<string, number>,
+  ratios: Record<string, number | null>,
 ): PillarBreakdownRow[] {
   return Object.entries(PILLAR_NAMES).map(([id, names]) => {
     const scores = names
@@ -152,19 +152,22 @@ export function resolveRatioRecord(
   snapshotRatios: Record<string, unknown> | null | undefined,
   financials: Record<string, unknown> | null | undefined,
   opts?: { fyStartMonth?: number | null; periodMonths?: number | null },
-): Record<string, number> {
+): Record<string, number | null> {
   const derived = computeRatiosFromFinancials(financials, opts);
-  const live: Record<string, number> = {};
+  const live: Record<string, number | null> = {};
   for (const [k, v] of Object.entries(derived)) {
-    if (Number.isFinite(v)) live[k] = v;
+    if (typeof v === "number" && Number.isFinite(v)) live[k] = v;
   }
   if (Object.keys(live).length > 0) {
     // A tiny cost of sales makes these days NaN. Keep that, so a saved
-    // snapshot cannot put the old 248-day figure back.
+    // snapshot cannot put the old 248-day figure back. A blank stock is
+    // null, and a snapshot must not fill that either.
     for (const key of NON_FINITE_DAY_KEYS) {
       const value = derived[key];
       if (typeof value === "number" && Number.isNaN(value)) live[key] = value;
+      else if (value == null) live[key] = null;
     }
+    if (derived["Debtor Days"] == null) live["Debtor Days"] = null;
     return live;
   }
 
