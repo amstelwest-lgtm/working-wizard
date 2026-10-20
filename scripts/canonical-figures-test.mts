@@ -121,6 +121,10 @@ assert(derivedWeeks == null, "the 13-week PDF does not print the sketch");
 const derivedLines = [...derived.lines.revenue, ...derived.lines.expenses];
 assert(forecastLinesBlank(derivedLines), "derived line ids do not open the chart");
 assert(
+  !forecastLinesBlank(derivedLines, { includeDerived: true }),
+  "the public sample preview still counts its labelled P&L lines",
+);
+assert(
   cashEmptyPresentation({ opening: derived.opening, linesBlank: forecastLinesBlank(derivedLines) }).showChart === false,
   "the tab chart stays empty when the only lines are derived",
 );

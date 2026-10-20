@@ -1413,7 +1413,8 @@ export function CashForecastPanel({
     capexAmount: number;
     capexWeek: number;
   }) => {
-    const enteredOnly = (lines: LineItem[]) => lines.filter((line) => forecastLineCountsAsEntered(line));
+    const enteredOnly = (lines: LineItem[]) =>
+      lines.filter((line) => forecastLineCountsAsEntered(line, { includeDerived: Boolean(preview) }));
     const revenueLines = enteredOnly(revenue);
     const expenseLines = enteredOnly(expenses);
     const otherLines = enteredOnly(other);
@@ -2137,7 +2138,9 @@ export function CashForecastPanel({
   const forecastStale = signoffStale ?? computeIsStale(forecastSignoff, lastForecastAt);
   // No forecast lines yet. A flat $0 trajectory must not be badged "In the black",
   // even when a hand-entered opening balance is already on the file.
-  const linesBlank = forecastLinesBlank([...revenue, ...expenses, ...other]);
+  const linesBlank = forecastLinesBlank([...revenue, ...expenses, ...other], {
+    includeDerived: Boolean(preview),
+  });
   const balanceSheetHold =
     isQboBalanceSheetHoldNote(xeroBankNote) && (parseFloat(openingBalance) || 0) !== 0;
   const forecastEmpty = loaded && linesBlank && !balanceSheetHold;

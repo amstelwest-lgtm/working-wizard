@@ -59,20 +59,24 @@ export function forecastLineIsDerived(line: { id?: string | null; name?: string 
 }
 
 /** True when this line is an amount the owner or accountant entered. */
-export function forecastLineCountsAsEntered(line: {
-  id?: string | null;
-  name?: string | null;
-  amount?: string | number | null;
-}): boolean {
-  if (forecastLineIsDerived(line)) return false;
+export function forecastLineCountsAsEntered(
+  line: {
+    id?: string | null;
+    name?: string | null;
+    amount?: string | number | null;
+  },
+  opts?: { includeDerived?: boolean },
+): boolean {
+  if (!opts?.includeDerived && forecastLineIsDerived(line)) return false;
   const amount = typeof line.amount === "number" ? line.amount : parseFloat(String(line.amount ?? ""));
   return Number.isFinite(amount) && Math.abs(amount) >= 0.5;
 }
 
 export function forecastLinesBlank(
   lines: readonly { id?: string | null; name?: string | null; amount?: string | number | null }[],
+  opts?: { includeDerived?: boolean },
 ): boolean {
-  return lines.every((line) => !forecastLineCountsAsEntered(line));
+  return lines.every((line) => !forecastLineCountsAsEntered(line, opts));
 }
 
 export type EnteredForecastWeek = {
