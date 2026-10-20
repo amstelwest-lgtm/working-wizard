@@ -94,7 +94,8 @@ export type TeamActivityKind =
   | "dismissed"
   | "signoff"
   | "data_request"
-  | "query";
+  | "query"
+  | "handoff";
 
 export interface TeamActivityEvent {
   id: string;
@@ -125,6 +126,8 @@ export interface MilonTeamFeed {
   signoffLine: string | null;
   /** Live floor-applied score. Stored findings are checked against this. */
   healthQuote: HealthScoreSnapshot | null;
+  /** Latest upload or ledger sync. Draft sentences use this against created_at. */
+  figuresUpdatedAt?: string | null;
   precard: PrecardState;
   loading: boolean;
   error: string | null;
@@ -390,6 +393,8 @@ export type TeamActivityRecords = {
   signoffText: string | null;
   dataRequests: Array<{ id: string; title: string; at: string | null }>;
   queries: Array<{ id: string; text: string; at: string | null }>;
+  /** Stored Handed-to notes. The activity list reads these; it does not insert a new message. */
+  handoffs?: Array<{ id: string; agent: AgentKey; title: string; at: string | null }>;
   href?: string;
 };
 
@@ -878,6 +883,20 @@ export function buildTeamActivity(records: TeamActivityRecords): TeamActivityEve
     });
   }
 
+  for (const row of records.handoffs ?? []) {
+    if (!row.at) continue;
+    const label = row.title.replace(/^hand-off:\s*/i, "").replace(/\s+/g, " ").trim();
+    if (!label) continue;
+    pushEvent(out, {
+      id: `handoff:${row.id}`,
+      agent: row.agent,
+      kind: "handoff",
+      text: clip(`Hand-off: ${label}`, 200),
+      at: row.at,
+      href,
+    });
+  }
+
   return out.sort((a, b) => {
     const delta = Date.parse(b.at) - Date.parse(a.at);
     if (delta !== 0) return delta;
@@ -977,6 +996,7 @@ export function emptyMilonTeamFeed(): MilonTeamFeed {
     agents: emptyAgentStatuses(),
     signoffLine: null,
     healthQuote: null,
+    figuresUpdatedAt: null,
     precard: { capped: false, remaining: null, limit: null },
     loading: false,
     error: null,
@@ -992,6 +1012,7 @@ export function buildMilonTeamFeed(input: {
   signoff: AdvisorySignoffState | null;
   signoffMarket?: Parameters<typeof advisorySignoffGrounding>[1];
   precard: PrecardState;
+  figuresUpdatedAt?: string | null;
   loading?: boolean;
   error?: string | null;
 }): MilonTeamFeed {
@@ -1025,6 +1046,7 @@ export function buildMilonTeamFeed(input: {
     agents: agentStatusesFromActivity(activity),
     signoffLine,
     healthQuote: input.diagnosis.snapshot,
+    figuresUpdatedAt: input.figuresUpdatedAt ?? null,
     precard: input.precard,
     loading: input.loading === true,
     error: input.error ?? null,

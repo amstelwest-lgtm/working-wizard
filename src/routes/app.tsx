@@ -202,6 +202,7 @@ import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { healthSnapshotFromBooks } from "@/lib/health-snapshot";
+import { latestFiguresStamp } from "@/lib/draft-figures";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { FindAccountantPanel } from "@/components/find-accountant-panel";
 import {
@@ -2345,6 +2346,7 @@ function Index() {
       ratios: Record<string, number>;
       source?: string | null;
       financials?: Record<string, unknown> | null;
+      created_at?: string | null;
     }>
   >([]);
 
@@ -2633,7 +2635,7 @@ function Index() {
     }
     supabase
       .from("client_financial_snapshots")
-      .select("period_label, period_date, ratios, source, financials")
+      .select("period_label, period_date, ratios, source, financials, created_at")
       .eq("client_id", effectiveClientId)
       .order("period_date", { ascending: true })
       .limit(24)
@@ -3798,6 +3800,7 @@ function Index() {
     health: overallHealth,
     periodLabel: figuresPeriodLabelFrom(v as unknown as object, null, boardMarket),
   });
+  const figuresUpdatedAt = latestFiguresStamp(history.map((row) => ({ at: row.created_at, source: row.source })));
   const financialsSignoffStale = healthSignoffIsStale({
     signoff: financialsSignoff,
     dataUpdatedAt: clientMeta?.financials_updated_at ?? null,
@@ -4480,6 +4483,7 @@ function Index() {
                             isOwner={userRole !== "client_member"}
                             canonicalRatios={ownerCanonicalRatios}
                             healthSnapshot={liveScoreSnapshot}
+                            figuresUpdatedAt={figuresUpdatedAt}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(
@@ -4579,6 +4583,7 @@ function Index() {
                             isOwner={userRole !== "client_member"}
                             canonicalRatios={ownerCanonicalRatios}
                             healthSnapshot={liveScoreSnapshot}
+                            figuresUpdatedAt={figuresUpdatedAt}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerView
                             pillars={overallHealth.pillars}
@@ -6272,6 +6277,7 @@ function Index() {
                             isOwner={userRole !== "client_member"}
                             canonicalRatios={ownerCanonicalRatios}
                             healthSnapshot={liveScoreSnapshot}
+                            figuresUpdatedAt={figuresUpdatedAt}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(
@@ -6862,7 +6868,7 @@ function Index() {
                   }
                   const { data } = await supabase
                     .from("client_financial_snapshots")
-                    .select("period_label, period_date, ratios, source, financials")
+                    .select("period_label, period_date, ratios, source, financials, created_at")
                     .eq("client_id", effectiveClientId)
                     .order("period_date", { ascending: true })
                     .limit(24);
@@ -6970,7 +6976,7 @@ function Index() {
                   }
                   const { data } = await supabase
                     .from("client_financial_snapshots")
-                    .select("period_label, period_date, ratios, source, financials")
+                    .select("period_label, period_date, ratios, source, financials, created_at")
                     .eq("client_id", effectiveClientId)
                     .order("period_date", { ascending: true })
                     .limit(24);

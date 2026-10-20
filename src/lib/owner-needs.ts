@@ -94,6 +94,10 @@ export type HomeDraftLive = {
   storedHash?: string | null;
   health?: HealthScoreSnapshot | null;
   storedHealth?: HealthScoreSnapshot | null;
+  /** When this draft was saved. */
+  writtenAt?: string | null;
+  /** Latest upload or ledger sync. */
+  figuresUpdatedAt?: string | null;
 };
 
 /**
@@ -134,6 +138,8 @@ function presentStoredDraft(
     storedHash: live?.storedHash,
     health: live?.health,
     storedHealth: live?.storedHealth,
+    writtenAt: live?.writtenAt,
+    figuresUpdatedAt: live?.figuresUpdatedAt,
   };
   const presented = presentLiveDraft(base, figures);
   return {
@@ -190,6 +196,8 @@ function presentFindingDraft(
     storedHash: draftStoredFiguresHash(row.evidence),
     health: live?.health,
     storedHealth: draftStoredHealth(row.evidence),
+    writtenAt: row.created_at,
+    figuresUpdatedAt: live?.figuresUpdatedAt,
   };
   const title = presentHomeDraftTitle(row.title, canonicalRatios, quote);
   const body = row.detail?.trim() ? presentHomeDraftBody(row.detail, canonicalRatios, quote) : null;
