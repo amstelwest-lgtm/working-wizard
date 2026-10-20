@@ -112,6 +112,14 @@ function randInsideWord(text, at) {
   return /[A-Za-z]/.test(text[at - 1]);
 }
 
+/** "R299" inside a content hash (DR299tJa) is not the Starter price. */
+function randPriceToken(text, at, needle) {
+  if (needle !== "R299") return true;
+  const before = at > 0 ? text[at - 1] : "";
+  const after = text[at + needle.length] ?? "";
+  return !/[A-Za-z0-9]/.test(before) && !/[A-Za-z0-9]/.test(after);
+}
+
 const hits = [];
 for (const path of scanned) {
   if (allow.test(path)) continue;
@@ -124,6 +132,7 @@ for (const path of scanned) {
       from = at + needle.length;
       if (needle === "50%" && cssPercent(text, at)) continue;
       if (needle === "rand " && randInsideWord(text, at)) continue;
+      if (!randPriceToken(text, at, needle)) continue;
       const line = text.slice(0, at).split("\n").length;
       const excerpt = text
         .slice(Math.max(0, at - 40), at + needle.length + 40)

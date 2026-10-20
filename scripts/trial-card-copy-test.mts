@@ -110,9 +110,27 @@ function filesUnder(dir: string, wanted: Set<string>): string[] {
   return out;
 }
 
-function spellingHits(text: string): string[] {
-  return RAND_SPELLINGS.filter((spelling) => text.includes(spelling));
+/** "R299" inside a content hash (DR299tJa) is not the Starter price. */
+function hasPriceSpelling(text: string, spelling: string): boolean {
+  let from = 0;
+  while (from < text.length) {
+    const at = text.indexOf(spelling, from);
+    if (at === -1) return false;
+    from = at + spelling.length;
+    if (spelling !== "R299") return true;
+    const before = at > 0 ? text[at - 1] : "";
+    const after = text[at + spelling.length] ?? "";
+    if (!/[A-Za-z0-9]/.test(before) && !/[A-Za-z0-9]/.test(after)) return true;
+  }
+  return false;
 }
+
+function spellingHits(text: string): string[] {
+  return RAND_SPELLINGS.filter((spelling) => hasPriceSpelling(text, spelling));
+}
+assert(!hasPriceSpelling("assets/ratio-queries-DR299tJa.js", "R299"), "a chunk hash is not the rand price");
+assert(hasPriceSpelling("Then R299/mo.", "R299"), "a tight rand price is still a hit");
+assert(hasPriceSpelling("Then R 299/mo.", "R 299"), "the spaced rand price is still a hit");
 
 const build = spawnSync("pnpm", ["run", "build:vercel"], {
   cwd: root,
@@ -152,6 +170,19 @@ const rendered = spawnSync(
 import handler from "./dist/server/server.js";
 const routes = ${JSON.stringify(usRoutes)};
 const needles = ${JSON.stringify([...RAND_SPELLINGS])};
+function hasPrice(text, spelling) {
+  let from = 0;
+  while (from < text.length) {
+    const at = text.indexOf(spelling, from);
+    if (at === -1) return false;
+    from = at + spelling.length;
+    if (spelling !== "R299") return true;
+    const before = at > 0 ? text[at - 1] : "";
+    const after = text[at + spelling.length] ?? "";
+    if (!/[A-Za-z0-9]/.test(before) && !/[A-Za-z0-9]/.test(after)) return true;
+  }
+  return false;
+}
 const report = [];
 for (const path of routes) {
   const res = await handler.fetch(new Request("https://milonfinance.com" + path, {
@@ -161,7 +192,7 @@ for (const path of routes) {
   report.push({
     path,
     status: res.status,
-    hits: needles.filter((needle) => html.includes(needle)),
+    hits: needles.filter((needle) => hasPrice(html, needle)),
     hasUsd: html.includes("$39"),
   });
 }
