@@ -14,7 +14,7 @@ import {
   hasFinancialEvidence,
   storedSeriesReading,
 } from "./client-metrics.ts";
-import { cashFloorCopy } from "./owner-answers.ts";
+import { CASH_NOT_ON_FILE, cashFloorCopy } from "./owner-answers.ts";
 import { presentHomeDraftBody, presentHomeDraftTitle } from "./owner-needs.ts";
 import type { SavedCashflowLike } from "./cash-runway.ts";
 import type { MoneyMarket } from "./market/format.ts";
@@ -180,6 +180,8 @@ export function buildFinancialManagerBrief(input: {
   market?: MoneyMarket;
   /** A blank opening is not R0 under the floor. */
   openingMissing?: boolean;
+  /** False when the cash balance was not read. The line asks for a balance sheet. */
+  cashOnFile?: boolean;
   /**
    * Cash pillar band. Watch or Healthy keeps the cash sentence off the floor.
    * Omit it and a dip under the floor still says so.
@@ -293,18 +295,21 @@ export function buildFinancialManagerBrief(input: {
       : null;
   // Watch and Healthy keep the card sentence off the floor. The Health pillar
   // still uses this same floor reading, so its line is not cleared with the chip.
-  const cashCopy = pillarAgrees ? null : floorCopy;
+  const cashMissing = input.cashOnFile === false && !input.openingMissing;
+  const cashCopy = pillarAgrees || cashMissing ? null : floorCopy;
   const cashFloorLine = !evidenced
     ? null
     : input.openingMissing
       ? `${OPENING_BALANCE_MISSING}.`
-      : input.cashStrainLine
-        ? input.cashStrainLine
-        : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
-          ? `Cash is ${input.formatMoney(cashOpening)}.`
-          : (cashCopy?.sentence ?? null);
+      : cashMissing
+        ? CASH_NOT_ON_FILE
+        : input.cashStrainLine
+          ? input.cashStrainLine
+          : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
+            ? `Cash is ${input.formatMoney(cashOpening)}.`
+            : (cashCopy?.sentence ?? null);
   const cashFloorChip =
-    !evidenced || input.openingMissing || pillarAgrees
+    !evidenced || input.openingMissing || cashMissing || pillarAgrees
       ? null
       : input.cashStrainLine
         ? "Critical"
@@ -313,6 +318,7 @@ export function buildFinancialManagerBrief(input: {
     evidenced &&
     input.actionsReady !== false &&
     !input.openingMissing &&
+    !cashMissing &&
     !pillarAgrees &&
     dipWeek != null &&
     dipWeek > 0
@@ -370,6 +376,7 @@ export function buildFinancialManagerBrief(input: {
     chase,
     cashFloorLine,
     cashFloorChip,
-    healthCue: !evidenced || input.openingMissing ? null : (floorCopy?.healthCue ?? null),
+    healthCue:
+      !evidenced || input.openingMissing || cashMissing ? null : (floorCopy?.healthCue ?? null),
   };
 }

@@ -76,6 +76,11 @@ export type OwnerBooks = {
    */
   hasEvidence?: boolean;
   /**
+   * False when the cash balance was not read. Home asks for a balance sheet
+   * and does not quote $0 or a minimum. Omit it when cash is known.
+   */
+  cashOnFile?: boolean;
+  /**
    * Weeks scored into the cash pillar. A short runway can make the pillar
    * Critical while cash is still above the floor.
    */
@@ -269,6 +274,9 @@ export type OwnerCardStatus = {
  */
 export const CASH_FLOOR_ALERT = "Below your minimum";
 
+/** P&L is on file and the cash line is not. Same shape as the debtor empty line. */
+export const CASH_NOT_ON_FILE = "Cash not on file yet, upload a balance sheet.";
+
 /**
  * The Financial Manager chip follows the cash pillar.
  * Watch and Critical use the pillar word. Healthy stays quiet.
@@ -297,6 +305,7 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
   const floor = cashFloorForHome({
     openingMissing: books.openingMissing,
     hasEvidence: books.hasEvidence,
+    cashOnFile: books.cashOnFile,
     cashOutlook: books.cashOutlook,
     cashflow: books.cashflow,
     market: books.market,
@@ -462,6 +471,8 @@ export function cashFloorForHome(input: {
   openingMissing?: boolean;
   /** False hides the floor line. A $0 default is not cash under the minimum. */
   hasEvidence?: boolean;
+  /** False when the cash balance was not read. No minimum line. */
+  cashOnFile?: boolean;
   cashOutlook?: {
     opening: number;
     closing: readonly number[];
@@ -472,7 +483,7 @@ export function cashFloorForHome(input: {
   market: MoneyMarket;
   money: (amount: number) => string;
 }): CashFloorCopy | null {
-  if (input.hasEvidence === false || input.openingMissing) return null;
+  if (input.hasEvidence === false || input.openingMissing || input.cashOnFile === false) return null;
   const outlook = input.cashOutlook;
   if (
     input.hasEvidence !== true &&
@@ -561,6 +572,7 @@ export function spokenCashStrain(books: OwnerBooks): string | null {
   if (books.cashPillarStatus !== "critical") return null;
   const floor = cashFloorForHome({
     openingMissing: books.openingMissing,
+    cashOnFile: books.cashOnFile,
     cashOutlook: books.cashOutlook,
     cashflow: books.cashflow,
     market: books.market,
@@ -616,6 +628,16 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
       empty: false,
     };
   }
+  if (books.cashOnFile === false) {
+    return {
+      ...base,
+      sentence: CASH_NOT_ON_FILE,
+      source: "No balance sheet on file",
+      step: "Upload a balance sheet",
+      signed: false,
+      empty: true,
+    };
+  }
   const outlook = books.cashOutlook;
   const series = storedSeriesReading(books.cashflow);
   const quotedOpening = series?.opening ?? outlook?.opening;
@@ -645,6 +667,7 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
   const shared = cashFloorForHome({
     openingMissing: books.openingMissing,
     hasEvidence: books.hasEvidence,
+    cashOnFile: books.cashOnFile,
     cashOutlook: books.cashOutlook,
     cashflow: books.cashflow,
     market: books.market,

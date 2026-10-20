@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import type { MergedExtractionResult, MergeConflict } from "@/lib/extraction-types";
 import {
   Dialog,
@@ -19,7 +20,13 @@ import {
   AlertTriangle,
   Info,
 } from "lucide-react";
+import { ImportApplyNotice } from "@/components/import-apply-notice";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
+import {
+  importFailureMessage,
+  importedUpdateMessage,
+  type ImportApplyResult,
+} from "@/lib/statement-import-apply";
 import { AutoPopulateOptions } from "@/components/auto-populate-options";
 import type { AutoPopulateDialogState } from "@/components/bank-statement-drafter";
 import {
@@ -62,7 +69,10 @@ interface Props {
   result: MergedExtractionResult;
   open: boolean;
   onClose: () => void;
-  onConfirm: (inputs: MappedInputs, autoPopulate: AutoPopulatePrefs) => void;
+  onConfirm: (
+    inputs: MappedInputs,
+    autoPopulate: AutoPopulatePrefs,
+  ) => void | ImportApplyResult | Promise<void | ImportApplyResult>;
   /** Per-client auto-populate state; undefined while loading → first upload. */
   autoPopulate?: AutoPopulateDialogState | null;
 }
@@ -245,6 +255,9 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
   const [conflictSelections, setConflictSelections] = useState<Record<string, "1" | "2">>({});
   const [acceptedQuality, setAcceptedQuality] = useState(false);
   const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(defaultAutoPopulatePrefs());
+  const [applying, setApplying] = useState(false);
+  const [applyTone, setApplyTone] = useState<"success" | "error" | null>(null);
+  const [applyMessage, setApplyMessage] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
     const stored = autoPopulate?.prefs ?? defaultAutoPopulatePrefs();
@@ -357,8 +370,32 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
       },
     });
 
-    onConfirm(mapped, autoPrefs);
-    onClose();
+    setApplying(true);
+    setApplyTone(null);
+    setApplyMessage(null);
+    void Promise.resolve(onConfirm(mapped, autoPrefs))
+      .then((outcome) => {
+        if (outcome && outcome.ok === false) {
+          setApplyTone("error");
+          setApplyMessage(outcome.message);
+          toast.error(outcome.message);
+          return;
+        }
+        const message = outcome?.message ?? importedUpdateMessage("statement");
+        setApplyTone("success");
+        setApplyMessage(message);
+        toast.success(message);
+        window.setTimeout(() => onClose(), 900);
+      })
+      .catch((error: unknown) => {
+        const message = importFailureMessage(
+          error instanceof Error ? error.message : "The import did not save.",
+        );
+        setApplyTone("error");
+        setApplyMessage(message);
+        toast.error(message);
+      })
+      .finally(() => setApplying(false));
   };
 
   const endLabel = meta?.period_end_date ? formatCalendarDay(meta.period_end_date, market) : "";
@@ -726,16 +763,25 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
             onChange={setAcceptedQuality}
             className="text-slate-400"
           />
+          <ImportApplyNotice
+            message={applyMessage}
+            tone={applyTone}
+            onRetry={applyTone === "error" ? handleConfirm : undefined}
+          />
           <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-800">
             <Button
               onClick={handleConfirm}
-              disabled={unresolvedConflicts.length > 0 || !acceptedQuality}
+              disabled={unresolvedConflicts.length > 0 || !acceptedQuality || applying}
               className="flex-1 bg-[#0B5FFF] hover:bg-[#2563EB] text-white font-semibold"
             >
               <CheckCircle2 className="h-4 w-4 mr-1.5" />
-              {unresolvedConflicts.length > 0
-                ? `Resolve ${unresolvedConflicts.length} conflict${unresolvedConflicts.length > 1 ? "s" : ""} first`
-                : "Confirm & import figures"}
+              {applying
+                ? "Importing…"
+                : unresolvedConflicts.length > 0
+                  ? `Resolve ${unresolvedConflicts.length} conflict${unresolvedConflicts.length > 1 ? "s" : ""} first`
+                  : applyTone === "error"
+                    ? "Retry import"
+                    : "Confirm & import figures"}
             </Button>
             <Button
               variant="outline"

@@ -83,7 +83,10 @@ const app = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(app.includes('grossMargin: "Gross Margin"'), "owner series reads the stored gross margin key");
 assert(app.includes("PastPeriodUploadDialog"), "owner board has the past-period box");
 assert(app.includes("buildRatioSeries"), "owner trends use shared series helper");
-assert(app.includes("Saved ${saved.periodLabel} as history"), "history-only confirm does not replace live");
+assert(
+  app.includes("importedUpdateMessage(`${saved.periodLabel} history`)"),
+  "history-only confirm does not replace live",
+);
 
 const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(studio.includes("historyOnlyUploadRef"), "accountant can save history without touching live");

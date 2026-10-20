@@ -127,10 +127,20 @@ import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
+  forecastOpeningIsKnown,
   hasFinancialEvidence,
   runwayDisplayLabel,
   storedOpeningIsMissing,
 } from "@/lib/client-metrics";
+import {
+  financialsWriteRev,
+  financialsWriteSuperseded,
+  guardFinancialsWrite,
+  importFailureMessage,
+  importedUpdateMessage,
+  statementImportWhat,
+  withFinancialsWriteRev,
+} from "@/lib/statement-import-apply";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -311,6 +321,7 @@ import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { computeIsStale } from "@/components/review-signoff";
+import { healthSignoffIsStale } from "@/lib/signoff-status";
 import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import { OwnerPageHead } from "@/components/owner-ui";
 import {
@@ -2684,6 +2695,9 @@ function Index() {
     Partial<Record<ReviewScope, ClientReviewSignoff>>
   >({});
   const financialsSignoff = reviewSignoffs.financials ?? null;
+  const [ownerScoreHistory, setOwnerScoreHistory] = useState<
+    { period_date: string; score: number | string | null }[]
+  >([]);
   const profitabilitySignoff = reviewSignoffs.profitability ?? null;
   const cashForecastSignoff = reviewSignoffs.cash_forecast ?? null;
   const budgetSignoff = reviewSignoffs.budget ?? null;
@@ -2692,6 +2706,7 @@ function Index() {
   useEffect(() => {
     if (!effectiveClientId) {
       setReviewSignoffs({});
+      setOwnerScoreHistory([]);
       return;
     }
     fetchReviewSignoffs({ data: { clientId: effectiveClientId } })
@@ -2700,6 +2715,24 @@ function Index() {
       })
       .catch(() => {
         // Sign-off state is a trust-signal enhancement, never block the dashboard.
+      });
+    supabase
+      .from("client_score_history")
+      .select("period_date, score")
+      .eq("client_id", effectiveClientId)
+      .order("period_date", { ascending: false })
+      .limit(24)
+      .then(({ data, error }) => {
+        if (error) {
+          setOwnerScoreHistory([]);
+          return;
+        }
+        setOwnerScoreHistory(
+          (data ?? []).map((row) => ({
+            period_date: row.period_date,
+            score: row.score,
+          })),
+        );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveClientId]);
@@ -2950,6 +2983,7 @@ function Index() {
   // otherwise merely opening the dashboard bumps financials_updated_at and
   // falsely invalidates an accountant's sign-off with no real data change.
   const skipNextFinancialsAutosave = useRef(false);
+  const ownerWriteGen = useRef(0);
 
   // Load financials for whoever is the effective client (owner or impersonation)
   useEffect(() => {
@@ -3022,14 +3056,18 @@ function Index() {
     if (!hasRealFinancials && !hasWeeklyActivity(weeklyInputs) && !hasProductMixAnswer(productMix))
       return;
     setSaveStatus("saving");
+    const gen = ownerWriteGen.current;
     const t = setTimeout(async () => {
+      if (gen !== ownerWriteGen.current) return;
       const financialsUpdatedAt = new Date().toISOString();
       const { data: row } = await supabase
         .from("clients")
         .select("financials")
         .eq("id", effectiveClientId)
         .maybeSingle();
+      if (gen !== ownerWriteGen.current) return;
       const serverFinancials = (row?.financials as Record<string, unknown> | null) ?? null;
+      const seenRev = financialsWriteRev(serverFinancials);
       let blob: Record<string, unknown>;
       if (hasRealFinancials) {
         blob = autosaveKeepsLedgerSync(serverFinancials, { ...v, weeklyInputs, productMix });
@@ -3039,23 +3077,36 @@ function Index() {
           productMix,
         );
       }
-      const { data: updated, error } = await supabase
-        .from("clients")
-        .update({
-          financials: blob as never,
-          financials_updated_at: financialsUpdatedAt,
-        })
-        .eq("id", effectiveClientId)
-        .select("id");
-      if (error) {
+      if (gen !== ownerWriteGen.current) return;
+      const pending = guardFinancialsWrite(
+        supabase
+          .from("clients")
+          .update({
+            financials: blob as never,
+            financials_updated_at: financialsUpdatedAt,
+          })
+          .eq("id", effectiveClientId),
+        seenRev,
+      );
+      const { data: updated, error } = await pending.select("id");
+      if (gen !== ownerWriteGen.current) {
+        setSaveStatus("idle");
+      } else if (error) {
         toast.error(`Save failed: ${error.message}`);
         setSaveStatus("idle");
       } else if (!updated?.length) {
-        // RLS silently rejects writes that fail the policy — 0 rows returned means
-        // the update was blocked (no owner_user_id match or missing client record).
-        toast.error(
-          "Save failed: your changes were not written to the database. Please refresh and try again.",
-        );
+        const { data: again } = await supabase
+          .from("clients")
+          .select("financials")
+          .eq("id", effectiveClientId)
+          .maybeSingle();
+        if (!financialsWriteSuperseded(seenRev, again?.financials)) {
+          // RLS silently rejects writes that fail the policy — 0 rows returned means
+          // the update was blocked (no owner_user_id match or missing client record).
+          toast.error(
+            "Save failed: your changes were not written to the database. Please refresh and try again.",
+          );
+        }
         setSaveStatus("idle");
       } else {
         setClientMeta((m) => (m ? { ...m, financials_updated_at: financialsUpdatedAt } : m));
@@ -3680,6 +3731,7 @@ function Index() {
     });
   };
   const cashBalance = ownerMetrics.cash.amount;
+  const ownerCashOnFile = cashBalance != null || forecastOpeningIsKnown(clientMeta?.cashflow);
   const ownerEvidence = hasFinancialEvidence({
     financials: v as unknown as Record<string, unknown>,
     cashflow: clientMeta?.cashflow ?? null,
@@ -3690,7 +3742,7 @@ function Index() {
   // drop the line the card already shows. A missing opening is not cash under
   // the floor, so this line stays off.
   const ownerDoorOutlook =
-    ownerEvidence && cashBalance != null
+    ownerEvidence && ownerCashOnFile && cashBalance != null
       ? {
           opening: ownerOutlook.opening,
           closing: ownerOutlook.closing,
@@ -3701,6 +3753,7 @@ function Index() {
   const ownerCashFloorCue =
     cashFloorForHome({
       openingMissing: ownerOpeningMissing,
+      cashOnFile: ownerCashOnFile,
       cashOutlook: ownerDoorOutlook,
       cashflow: clientMeta?.cashflow ?? null,
       market: boardMarket,
@@ -3718,6 +3771,12 @@ function Index() {
     timeZone: boardMarket.timezone,
   });
   const overallHealth = ownerEvidence ? scoredHealth : healthWithoutEvidence(scoredHealth);
+  const financialsSignoffStale = healthSignoffIsStale({
+    signoff: financialsSignoff,
+    dataUpdatedAt: clientMeta?.financials_updated_at ?? null,
+    liveHealth: overallHealth.overall,
+    scoreHistory: ownerScoreHistory,
+  });
   const ownerStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -3728,6 +3787,7 @@ function Index() {
     totalInflow: ownerOutlook.totalInflow,
     totalOutflow: ownerOutlook.totalOutflow,
     openingMissing: ownerOpeningMissing,
+    cashOnFile: ownerCashOnFile,
   });
   const ownerStatusCritical = ownerStatusWord.startsWith("Critical");
   const ownerCashBelowFloor = cashOutlookIsCritical({
@@ -3735,6 +3795,7 @@ function Index() {
     floor: ownerOutlook.floor,
     dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
     openingMissing: ownerOpeningMissing,
+    cashOnFile: ownerCashOnFile,
   });
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
@@ -4111,7 +4172,8 @@ function Index() {
                 cashOutlook={ownerDoorOutlook}
                 openingMissing={ownerOpeningMissing}
                 hasEvidence={ownerEvidence}
-                cashPillarStatus={ownerEvidence ? (pillarStatus.cash ?? null) : null}
+                cashOnFile={ownerCashOnFile}
+                cashPillarStatus={ownerEvidence && ownerCashOnFile ? (pillarStatus.cash ?? null) : null}
                 cashRunwayWeeks={ownerEvidence && cashBalance != null ? effectiveRunway : null}
                 cashDebtorScore={
                   ownerEvidence && Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null
@@ -4199,10 +4261,7 @@ function Index() {
                         <div className="owner-health-hero">
                           <OwnerSignoffMark
                             signoff={financialsSignoff}
-                            isStale={computeIsStale(
-                              financialsSignoff,
-                              clientMeta?.financials_updated_at ?? null,
-                            )}
+                            isStale={financialsSignoffStale}
                             className="mb-2"
                           />
                           <OwnerHealthOrb
@@ -5363,10 +5422,7 @@ function Index() {
                                 <div className="relative rounded-xl border border-[#DBEAFE] bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                                   <OwnerSignoffMark
                                     signoff={financialsSignoff}
-                                    isStale={computeIsStale(
-                                      financialsSignoff,
-                                      clientMeta?.financials_updated_at ?? null,
-                                    )}
+                                    isStale={financialsSignoffStale}
                                     className="mb-2"
                                   />
                                   <SphereHero
@@ -5445,10 +5501,7 @@ function Index() {
                           </span>
                           <OwnerSignoffMark
                             signoff={financialsSignoff}
-                            isStale={computeIsStale(
-                              financialsSignoff,
-                              clientMeta?.financials_updated_at ?? null,
-                            )}
+                            isStale={financialsSignoffStale}
                           />
                         </div>
                         {isUsCopy(boardMarket) && (
@@ -6654,7 +6707,7 @@ function Index() {
                 setReplaceLiveOnHistory(false);
               }}
               autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
-              onConfirm={(mapped, autoPopulate) => {
+              onConfirm={async (mapped, autoPopulate) => {
                 const entries = Object.entries(mapped).filter(
                   ([k, val]) => val !== undefined && k in defaults,
                 );
@@ -6682,105 +6735,125 @@ function Index() {
                 ) {
                   const fields = Object.fromEntries(allEntries) as Record<string, string>;
                   const periodEnd = extractionForReview?.document_metadata?.period_end_date ?? null;
-                  void upsertPeriodSnapshot({
+                  const saved = await upsertPeriodSnapshot({
                     clientId: effectiveClientId,
                     financials: fields,
                     periodDate: periodEnd,
                     source: "upload",
                     statementKind: statementKindFromMetadata(reviewMeta),
-                  }).then((saved) => {
-                    if (saved.error) {
-                      toast.error(`Could not save the past period: ${saved.error}`);
-                      return;
-                    }
-                    toast.success(
-                      `Saved ${saved.periodLabel} as history — the live board is unchanged.`,
-                    );
-                    void supabase
-                      .from("client_financial_snapshots")
-                      .select("period_label, period_date, ratios, source, financials")
-                      .eq("client_id", effectiveClientId)
-                      .order("period_date", { ascending: true })
-                      .limit(24)
-                      .then(({ data }) => {
-                        if (data) setHistory(data as never);
-                      });
                   });
+                  if (saved.error) {
+                    return {
+                      ok: false as const,
+                      message: importFailureMessage(`Could not save the past period: ${saved.error}`),
+                    };
+                  }
+                  const { data } = await supabase
+                    .from("client_financial_snapshots")
+                    .select("period_label, period_date, ratios, source, financials")
+                    .eq("client_id", effectiveClientId)
+                    .order("period_date", { ascending: true })
+                    .limit(24);
+                  if (data) setHistory(data as never);
                   setHistoryUpload(false);
                   setReplaceLiveOnHistory(false);
                   setPendingCsvExtras(null);
-                  setReviewOpen(false);
-                  setExtractionForReview(null);
-                  return;
+                  return {
+                    ok: true as const,
+                    message: importedUpdateMessage(`${saved.periodLabel} history`),
+                  };
                 }
                 setHistoryUpload(false);
                 setReplaceLiveOnHistory(false);
-                if (allEntries.length > 0) {
-                  const periodEndForCash =
-                    extractionForReview?.document_metadata?.period_end_date ?? null;
-                  const uploadKindForCash = statementKindFromMetadata(reviewMeta);
-                  const importedCash = allEntries.some(
-                    ([key, val]) => key === "cash" && String(val ?? "").trim() !== "",
-                  );
-                  setV(
-                    (prev) =>
-                      ({
-                        ...prev,
-                        ...Object.fromEntries(allEntries),
-                        ...(uploadKindForCash === "balance_sheet" &&
-                        importedCash &&
-                        periodEndForCash &&
-                        /^\d{4}-\d{2}-\d{2}$/.test(periodEndForCash)
-                          ? { cashAsOf: periodEndForCash.slice(0, 10) }
-                          : {}),
-                      }) as Inputs,
-                  );
-                  setHasRealFinancials(true);
-                  void handleOwnerFirstRealFinancialsUpload();
-                  track("financials_uploaded", {
-                    surface: "owner_app",
-                    clientId: effectiveClientId,
-                    fields: allEntries.length,
-                  });
-                  toast.success(
-                    `${entries.length} field${entries.length === 1 ? "" : "s"} imported from your statement — figures saved automatically.`,
-                  );
-                  if (effectiveClientId) {
-                    const fields = Object.fromEntries(allEntries) as Record<string, string>;
-                    const periodEnd =
-                      extractionForReview?.document_metadata?.period_end_date ?? null;
-                    const uploadKind = statementKindFromMetadata(reviewMeta);
-                    void runAutoPopulate({
-                      clientId: effectiveClientId,
-                      fields,
-                      chosen: autoPopulate,
-                      prefsToRemember: prefsToRemember(
-                        autoPopulate,
-                        uploadKind,
-                        autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
-                      ),
-                      firstUpload: autoPopulateState?.firstUpload,
-                      statementKind: uploadKind,
-                      cashOpeningDate: uploadKind === "balance_sheet" ? periodEnd : null,
-                      firstActualsMonth: periodEnd ? periodEnd.slice(0, 7) : null,
-                      fallbackMarket: workspaceMarket,
-                      surface: "owner_app",
-                      source: "financial_statement",
-                    })
-                      .then(applyAutoPopulateResult)
-                      .catch((e) => {
-                        console.warn("auto-populate after statement upload:", e);
-                        toast.error(
-                          `Figures saved, but drafting the board failed: ${(e as Error).message}`,
-                        );
-                      });
-                  }
-                } else {
-                  toast.warning("No matching fields found in the extraction result.");
+                if (allEntries.length === 0) {
+                  return {
+                    ok: false as const,
+                    message: importFailureMessage("No matching fields found in the extraction result."),
+                  };
                 }
+                if (!effectiveClientId) {
+                  return {
+                    ok: false as const,
+                    message: importFailureMessage("No client is open for this upload."),
+                  };
+                }
+                const periodEndForCash =
+                  extractionForReview?.document_metadata?.period_end_date ?? null;
+                const uploadKind = statementKindFromMetadata(reviewMeta);
+                const importedCash = allEntries.some(
+                  ([key, val]) => key === "cash" && String(val ?? "").trim() !== "",
+                );
+                const next = {
+                  ...v,
+                  ...Object.fromEntries(allEntries),
+                  ...(uploadKind === "balance_sheet" &&
+                  importedCash &&
+                  periodEndForCash &&
+                  /^\d{4}-\d{2}-\d{2}$/.test(periodEndForCash)
+                    ? { cashAsOf: periodEndForCash.slice(0, 10) }
+                    : {}),
+                } as Inputs;
+                ownerWriteGen.current += 1;
+                setV(next);
+                setHasRealFinancials(true);
+                const financialsUpdatedAt = new Date().toISOString();
+                const { data: savedLive, error: liveError } = await supabase
+                  .from("clients")
+                  .update({
+                    financials: withFinancialsWriteRev({
+                      ...next,
+                      weeklyInputs,
+                      productMix,
+                    }) as never,
+                    financials_updated_at: financialsUpdatedAt,
+                  })
+                  .eq("id", effectiveClientId)
+                  .select("id");
+                if (liveError || !savedLive?.length) {
+                  return {
+                    ok: false as const,
+                    message: importFailureMessage(
+                      liveError?.message ?? "The figures were not written to this client.",
+                    ),
+                  };
+                }
+                setClientMeta((m) => (m ? { ...m, financials_updated_at: financialsUpdatedAt } : m));
+                void handleOwnerFirstRealFinancialsUpload();
+                track("financials_uploaded", {
+                  surface: "owner_app",
+                  clientId: effectiveClientId,
+                  fields: allEntries.length,
+                });
+                const fields = Object.fromEntries(allEntries) as Record<string, string>;
+                void runAutoPopulate({
+                  clientId: effectiveClientId,
+                  fields,
+                  chosen: autoPopulate,
+                  prefsToRemember: prefsToRemember(
+                    autoPopulate,
+                    uploadKind,
+                    autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
+                  ),
+                  firstUpload: autoPopulateState?.firstUpload,
+                  statementKind: uploadKind,
+                  cashOpeningDate: uploadKind === "balance_sheet" ? periodEndForCash : null,
+                  firstActualsMonth: periodEndForCash ? periodEndForCash.slice(0, 7) : null,
+                  fallbackMarket: workspaceMarket,
+                  surface: "owner_app",
+                  source: "financial_statement",
+                })
+                  .then(applyAutoPopulateResult)
+                  .catch((e) => {
+                    console.warn("auto-populate after statement upload:", e);
+                    toast.error(
+                      `Figures saved, but drafting the board failed: ${(e as Error).message}`,
+                    );
+                  });
                 setPendingCsvExtras(null);
-                setReviewOpen(false);
-                setExtractionForReview(null);
+                return {
+                  ok: true as const,
+                  message: importedUpdateMessage(statementImportWhat(uploadKind)),
+                };
               }}
             />
           )}
