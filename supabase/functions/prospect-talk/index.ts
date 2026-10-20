@@ -6,6 +6,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
 import {
+  closedTaxTalk,
   handleProspectRequest,
   type ProspectLeadRow,
   type ProspectSession,
@@ -284,6 +285,9 @@ async function handle(req: Request): Promise<Response> {
   } catch {
     return json({ ok: false, error: "Send a message." }, 400, headers);
   }
+
+  const closed = closedTaxTalk(body, req.headers.get("x-vercel-ip-country"));
+  if (closed) return json({ ok: false, error: closed.error }, closed.status, headers);
 
   const db = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },

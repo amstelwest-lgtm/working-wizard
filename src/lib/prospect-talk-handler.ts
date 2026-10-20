@@ -109,11 +109,33 @@ function countryOf(geo: string | null, requested: unknown): ProspectCountry {
   return marketingPackForGeo((geo ?? "").trim().toUpperCase(), asked) === "za" ? "ZA" : "US";
 }
 
+/** Shown when a non-ZA visit asks for the Tax Specialist. No SARS form names. */
+export const PROSPECT_TAX_CLOSED_ERROR = "The Tax Specialist covers South African tax.";
+
+/**
+ * Non-ZA geo, a missing country, or a ZA visitor who opted into the US
+ * pack cannot open the tax agent. Returns before any store or model work.
+ */
+export function closedTaxTalk(
+  body: unknown,
+  geoCountry: string | null,
+): { status: 404; error: string } | null {
+  const raw = asRecord(body);
+  const slug = typeof raw.agent === "string" ? raw.agent.trim().toLowerCase() : "";
+  if (slug !== PROSPECT_TAX_SLUG) return null;
+  if (countryOf(geoCountry, raw.market) === "ZA") return null;
+  return { status: 404, error: PROSPECT_TAX_CLOSED_ERROR };
+}
+
 async function agentOf(
   raw: unknown,
-  _country: ProspectCountry,
+  country: ProspectCountry,
 ): Promise<{ ok: true; agent: ProspectAgentCopy } | { ok: false; status: number; error: string }> {
   const slug = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (slug === PROSPECT_TAX_SLUG) {
+    if (country !== "ZA") return { ok: false, status: 404, error: PROSPECT_TAX_CLOSED_ERROR };
+    return { ok: true, agent: TAX_TALK };
+  }
   const agent = publicProspectAgent(slug);
   if (agent) return { ok: true, agent };
   return { ok: false, status: 404, error: "That link doesn't match an agent." };
@@ -147,6 +169,9 @@ export async function handleProspectRequest(
   body: unknown,
   ctx: ProspectHandlerCtx,
 ): Promise<ProspectHttp> {
+  const closed = closedTaxTalk(body, ctx.geoCountry);
+  if (closed) return { status: closed.status, body: { ok: false, error: closed.error } };
+
   const raw = asRecord(body);
   const action = raw.action === "lead" ? "lead" : raw.action === "turn" ? "turn" : "";
   if (!action) return { status: 400, body: { ok: false, error: "Send a message." } };
