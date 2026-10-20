@@ -144,6 +144,7 @@
     "test:agent-analyst": "vite-node --config scripts/vite-test.config.ts scripts/agent-analyst-test.mts",
     "test:agent-runners": "vite-node --config scripts/vite-test.config.ts scripts/agent-runners-test.mts",
     "test:agent-copy": "vite-node --config scripts/vite-test.config.ts scripts/agent-copy-test.mts",
+    "test:canonical-figures": "vite-node --config scripts/vite-test.config.ts scripts/canonical-figures-test.mts",
     "test:agent-draft-decision": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-test.mts",
     "test:agent-draft-decision-client": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-client-test.mts",
     "test:claude-model": "vite-node --config scripts/vite-test.config.ts scripts/claude-model-default-test.mts",

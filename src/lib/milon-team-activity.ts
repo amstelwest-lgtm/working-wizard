@@ -2,7 +2,8 @@
  * Desk presentation for live agent runs, findings, and hand-offs.
  * Numbers are formatted here. Raw decimals never reach the screen.
  */
-import { formatSnapshotRatio } from "./advisory-narrative";
+import { formatSnapshotRatio, groundAdvisoryNarrative } from "./advisory-narrative";
+import { draftMetricUnit, repairDraftMetricUnits } from "./agent-bus";
 import { formatMoney, type MoneyMarket } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
 import { MONTHS } from "./market/date-presets";
@@ -255,37 +256,75 @@ function correctQuotedFigures(entries: { key: string; value: number }[]): { key:
 
 function formatFigure(key: string, value: number, market: MoneyMarket): string {
   if (skipFigureKey(key)) return String(Math.round(value));
+  const unit = draftMetricUnit(key, value);
+  if (unit === "count") return String(Math.round(value));
   const compact = key.toLowerCase().replace(/[\s_-]+/g, "");
   const spec = metricDirection(key) ?? metricDirection(compact);
   if (spec) return formatSnapshotRatio(spec.name, value);
   const label = key.toLowerCase();
-  if (/margin|percent|growth|rate|burden/.test(label)) {
+  if (unit === "percent" || /margin|percent|growth|rate|burden/.test(label)) {
     const pct = Math.abs(value) <= 1.5 ? value * 100 : value;
     return `${pct.toFixed(1)}%`;
   }
-  if (/day/.test(label)) return `${Math.round(value)} days`;
+  if (unit === "days" || /day/.test(label)) return `${Math.round(value)} days`;
   if (
+    unit === "currency" ||
     Math.abs(value) >= 100 ||
     /revenue|cash|cost|expense|asset|liabilit|balance|amount|sales|profit|wage/.test(label)
   ) {
     return formatMoney(value, market);
   }
+  if (unit === "ratio") return `${value.toFixed(2)}×`;
   return value.toFixed(2);
 }
 
+function withCanonicalRatioFigures(
+  entries: { key: string; value: number }[],
+  canonical?: Record<string, number> | null,
+): { key: string; value: number }[] {
+  if (!canonical) return entries;
+  return entries.map((entry) => {
+    const next = canonical[entry.key];
+    if (typeof next === "number" && Number.isFinite(next)) return { key: entry.key, value: next };
+    return entry;
+  });
+}
+
 /** One pass, longest spelling first, so a formatted amount is not formatted again. */
-function applyReplacements(text: string, replacements: { raw: string; formatted: string }[]): string {
-  const chosen = new Map<string, string>();
+function applyReplacements(
+  text: string,
+  replacements: { raw: string; formatted: string; unit: ReturnType<typeof draftMetricUnit> }[],
+): string {
+  const byRaw = new Map<string, { formatted: string; unit: ReturnType<typeof draftMetricUnit> }[]>();
   for (const item of replacements) {
-    if (item.raw && item.raw !== item.formatted && !chosen.has(item.raw)) chosen.set(item.raw, item.formatted);
+    if (!item.raw || item.raw === item.formatted) continue;
+    const list = byRaw.get(item.raw) ?? [];
+    if (!list.some((row) => row.formatted === item.formatted && row.unit === item.unit)) list.push(item);
+    byRaw.set(item.raw, list);
   }
-  const list = [...chosen.entries()].sort((a, b) => b[0].length - a[0].length);
-  if (!list.length) return text;
-  const pattern = list.map(([raw]) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const raws = [...byRaw.keys()].sort((a, b) => b.length - a.length);
+  if (!raws.length) return text;
+  const pattern = raws.map((raw) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
   return text.replace(new RegExp(`(?<![R$£€][ \\u00a0\\u202f]?)(?<![\\d.])(?:${pattern})(?!\\d)(?!\\.\\d)`, "g"), (match, offset: number) => {
     const after = text.slice(offset + match.length, offset + match.length + 20);
     if (/^\s+out of\s+100\b/i.test(after) || /^\s*\/\s*100\b/.test(after)) return match;
-    return chosen.get(match) ?? match;
+    const window = text.slice(Math.max(0, offset - 80), offset).toLowerCase();
+    const score = /\b(?:health|overall|pillar)\b[^.\n]*$/.test(window) || /\bscore\b[^.\n]{0,24}$/.test(window);
+    const days = /\b(?:debtor|creditor|inventory|working\s+capital|wip)\s+days\b[^.\n]*$/.test(window);
+    const margin = /\b(?:gross|operating|net)\s+margin\b[^.\n]*$/.test(window);
+    if (score && !days) return match;
+    const options = byRaw.get(match) ?? [];
+    const preferred = days
+      ? options.find((row) => row.unit === "days")
+      : margin
+        ? options.find((row) => row.unit === "percent")
+        : options.length === 1
+          ? options[0]
+          : undefined;
+    if (!preferred) return match;
+    if (preferred.unit === "days" && /^\s*days\b/i.test(after)) return match;
+    if (preferred.unit === "percent" && /^\s*%/.test(after)) return match;
+    return preferred.formatted;
   });
 }
 
@@ -337,11 +376,12 @@ function scrubRawDecimals(
   market: MoneyMarket,
 ): string {
   let next = text;
-  const replacements: { raw: string; formatted: string }[] = [];
+  const replacements: { raw: string; formatted: string; unit: ReturnType<typeof draftMetricUnit> }[] = [];
   for (const { key, value } of figureEntries(figures)) {
     const formatted = formatFigure(key, value, market);
+    const unit = draftMetricUnit(key, value);
     for (const raw of rawSpellings(value)) {
-      if (worthReplacing(raw, formatted, value)) replacements.push({ raw, formatted });
+      if (worthReplacing(raw, formatted, value)) replacements.push({ raw, formatted, unit });
     }
   }
   next = applyReplacements(next, replacements);
@@ -370,15 +410,19 @@ export function formatFindingProse(
   text: string,
   figures?: Record<string, number> | readonly { key: string; value: number }[] | null,
   market: MoneyMarket = ZA_MARKET,
+  canonicalRatios?: Record<string, number> | null,
 ): string {
-  const corrected = correctQuotedFigures(figureEntries(figures));
-  return canonicalScoreProse(
+  const corrected = correctQuotedFigures(withCanonicalRatioFigures(figureEntries(figures), canonicalRatios));
+  const formatted = canonicalScoreProse(
     rewriteDraftMonthStamp(
       stripDoubleCurrency(stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(text, corrected, market))))
         .replace(/\s+/g, " ")
         .trim(),
     ),
   );
+  const repaired = repairDraftMetricUnits(formatted);
+  if (!canonicalRatios) return repaired;
+  return repairDraftMetricUnits(groundAdvisoryNarrative(repaired, canonicalRatios));
 }
 
 const METRIC_WORD =
@@ -458,9 +502,15 @@ const MARGIN_RANK: Record<string, number> = {
 };
 
 /** Structured figures as one muted line. Days round; a margin is a percent. */
-export function findingMetricContext(evidence: unknown, market: MoneyMarket = ZA_MARKET): string | null {
+export function findingMetricContext(
+  evidence: unknown,
+  market: MoneyMarket = ZA_MARKET,
+  canonicalRatios?: Record<string, number> | null,
+): string | null {
   const clauses: { kind: number; rank: number; label: string; amount: string; days: boolean }[] = [];
-  for (const { key, value } of correctQuotedFigures(findingDisplayFigures(evidence))) {
+  for (const { key, value } of correctQuotedFigures(
+    withCanonicalRatioFigures(findingDisplayFigures(evidence), canonicalRatios),
+  )) {
     if (skipFigureKey(key)) continue;
     const formatted = tidyRatioPercent(formatFigure(key, value, market));
     if (/^-?\d+\.\d+$/.test(formatted)) continue;
@@ -521,19 +571,20 @@ export type FindingCardCopy = { lead: string; context: string | null };
 export function findingCardCopy(
   row: Pick<AgentFindingRow, "kind" | "title" | "detail" | "evidence">,
   market: MoneyMarket = ZA_MARKET,
+  canonicalRatios?: Record<string, number> | null,
 ): FindingCardCopy {
   const figures = findingFigureEntries(row.evidence);
-  const title = formatFindingProse(row.title, figures, market);
-  const detail = formatFindingProse(row.detail ?? "", figures, market);
+  const title = formatFindingProse(row.title, figures, market, canonicalRatios);
+  const detail = formatFindingProse(row.detail ?? "", figures, market, canonicalRatios);
   if (row.kind !== "data_request_draft") return { lead: title, context: null };
   const asked = requestAsk(row.evidence);
-  const fromEvidence = asked ? formatFindingProse(asked, figures, market) : "";
+  const fromEvidence = asked ? formatFindingProse(asked, figures, market, canonicalRatios) : "";
   let lead = "";
   if (fromEvidence && !isMetricDump(fromEvidence)) lead = fromEvidence;
   else if (title && !isMetricDump(row.title)) lead = title;
   else if (detail && !isMetricDump(row.detail ?? "")) lead = detail;
   else lead = title || detail;
-  const context = findingMetricContext(row.evidence, market);
+  const context = findingMetricContext(row.evidence, market, canonicalRatios);
   return { lead, context: context && !isMetricDump(lead) ? context : null };
 }
 
@@ -543,6 +594,7 @@ export function findingSentence(input: {
   detail?: string | null;
   figures?: Record<string, number> | readonly { key: string; value: number }[] | null;
   market?: MoneyMarket;
+  canonicalRatios?: Record<string, number> | null;
 }): string {
   const market = input.market ?? ZA_MARKET;
   const title = input.title.replace(/\s+/g, " ").trim();
@@ -551,7 +603,7 @@ export function findingSentence(input: {
   if (detail && detail !== title && !title.includes(detail)) {
     text = `${title.replace(/[.!?]$/, "")}. ${detail}`;
   }
-  text = formatFindingProse(text, input.figures ?? {}, market);
+  text = formatFindingProse(text, input.figures ?? {}, market, input.canonicalRatios);
   if (!text) return "";
   if (!/[.!?]$/.test(text)) text = `${text}.`;
   return text;

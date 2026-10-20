@@ -191,7 +191,6 @@ import {
   rewriteDraftMonthStamp,
   statementYearLine,
 } from "@/lib/statement-period";
-import { canonicalScoreProse } from "@/lib/score-prose";
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
@@ -267,7 +266,7 @@ import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { attachPillarScore, rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
-import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
+import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
 import {
   hashFigures,
   latestSnapshotId,
@@ -316,7 +315,7 @@ import {
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
-import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
+import { homeActionNeeds, openActionSentence, presentHomeDraftTitle } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
@@ -3570,6 +3569,10 @@ function ClientView() {
   // the temporal dead zone here, and the minified chunk throws
   // "Cannot access '…' before initialization" on every /clients/:id render.
   const reportsIssued = client?.reports_issued_count ?? 0;
+  const canonicalRatios = useMemo(
+    () => scorecardRatiosFromFinancials(financials, { fyStartMonth }),
+    [financials, fyStartMonth],
+  );
   const homeNeeds = useMemo(() => {
     const planNeeds = homeActionNeeds({
       known: openPlanTitles != null,
@@ -3586,19 +3589,24 @@ function ClientView() {
         draftFindingLabel(row) === DRAFT_NEEDS_ACCOUNTANT,
     );
     const draftsHeading = homeActivity.loading ? "Drafts" : waiting.length ? "Drafts" : "Drafts";
+    const presented = waiting[0]
+      ? presentHomeDraftTitle(rewriteDraftMonthStamp(waiting[0].title), canonicalRatios)
+      : null;
     const draftLines = homeActivity.loading
       ? ["Checking drafts."]
       : homeActivity.error
         ? ["Drafts aren't available yet."]
-        : waiting.length
-          ? [canonicalScoreProse(rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting."))]
+        : presented
+          ? [presented.text]
           : ["No draft waiting."];
+    const draftStale = presented ? [presented.stale] : undefined;
     const booksLine = booksAnswerSentence({ freshness: dataFreshness });
     return {
       actionsHeading,
       actionLines,
       draftsHeading,
       draftLines,
+      draftStale,
       deliverablesHeading: "Reports",
       deliverableLines: [reportsIssued > 0 ? "Ready to send." : "Nothing ready to send."],
       syncHeading: "Books",
@@ -3609,6 +3617,7 @@ function ClientView() {
     openPlanOverdue,
     openPlanUnavailable,
     homeActivity,
+    canonicalRatios,
     dataFreshness,
     reportsIssued,
   ]);
@@ -3826,7 +3835,7 @@ function ClientView() {
                 <div className="owner-door" data-client-home="true">
                   {statementSampleImplausible(financials) ? (
                     <p className="mb-4 text-sm text-[#3D5270] dark:text-slate-300" role="status" data-sample-notice="">
-                      {IMPLAUSIBLE_SAMPLE_NOTE}
+                      {implausibleSampleNote(clientMarket)}
                     </p>
                   ) : null}
                   <FinancialManagerBrief
@@ -4046,6 +4055,7 @@ function ClientView() {
                       marketCountry={clientMarket.country}
                       audience="accountant"
                       sampleClient={Boolean(client.is_demo)}
+                      canonicalRatios={canonicalRatios}
                       homeFinding={
                         homeAgent
                           ? homeLines[homeAgent].filter((line) => line.trim()).join(" ")
@@ -4164,7 +4174,7 @@ function ClientView() {
                 {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
                 {statementSampleImplausible(financials) ? (
                   <p className="mb-4 text-sm text-[#3D5270] dark:text-slate-300" role="status">
-                    {IMPLAUSIBLE_SAMPLE_NOTE}
+                    {implausibleSampleNote(clientMarket)}
                   </p>
                 ) : null}
                 {plVersusBank ? (
@@ -5202,6 +5212,7 @@ function ClientView() {
                           key={`${client.id}-${search.filter ?? "all"}`}
                           clientId={client.id}
                           clientName={client.name}
+                          canonicalRatios={canonicalRatios}
                           reviewSignoff={stampFromSignoff(actionPlanSignoff, false)}
                           simplified
                           isOwner

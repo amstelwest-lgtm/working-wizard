@@ -173,11 +173,13 @@ export function collectStoredFigures(
 ): StoredFigures | null {
   if (!payload || typeof payload !== "object") return null;
   const row = payload as Record<string, unknown>;
+  // Live scorecard `ratios` win over a snapshot `stored_ratios`. QA US stored
+  // an operating margin of 0.16 while the scorecard prints 8.6%.
   const figures = {
     ...numericFigures(row.statement_totals),
     ...numericFigures(row.figures),
-    ...numericFigures(row.ratios),
     ...numericFigures(row.stored_ratios),
+    ...numericFigures(row.ratios),
   };
   for (const key of [
     "overall",

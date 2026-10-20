@@ -55,7 +55,10 @@ export function advisorToolSchemas() {
       "get_financial_snapshot",
       "Latest statement period and its stored totals. Does not return the raw upload.",
     ),
-    readToolSchema("get_ratios", "Stored statement ratios and totals for the latest period on file."),
+    readToolSchema(
+      "get_ratios",
+      "Scorecard ratios for the live books. Quote ratios (quote_basis scorecard). stored_ratios is the last snapshot and is not the quote.",
+    ),
     readToolSchema(
       "get_health",
       "Health pillars and the overall score already stored for this client. Do not recompute them.",

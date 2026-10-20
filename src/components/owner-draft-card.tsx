@@ -44,6 +44,7 @@ export function OwnerDraftCard({
   sentence,
   meta,
   market: marketProp,
+  canonicalRatios = null,
   onOpen,
   onInvite,
   onRefresh,
@@ -54,6 +55,8 @@ export function OwnerDraftCard({
   sentence?: string;
   meta?: ReactNode;
   market?: MoneyMarket;
+  /** Live scorecard ratios. A stored operating margin is rewritten to this figure. */
+  canonicalRatios?: Record<string, number> | null;
   onOpen?: (target: ApprovedDraftTarget) => void;
   onInvite?: () => void;
   onRefresh?: () => void;
@@ -66,9 +69,9 @@ export function OwnerDraftCard({
   const contextMarket = useMarket().market;
   const market = marketProp ?? contextMarket;
   const figures = findingFigureEntries(row.evidence);
-  const copy = findingCardCopy(row, market);
-  const formattedTitle = formatFindingProse(row.title, figures, market);
-  const formattedDetail = formatFindingProse(row.detail ?? "", figures, market);
+  const copy = findingCardCopy(row, market, canonicalRatios);
+  const formattedTitle = formatFindingProse(row.title, figures, market, canonicalRatios);
+  const formattedDetail = formatFindingProse(row.detail ?? "", figures, market, canonicalRatios);
   const seedTitle = copy.lead || formattedTitle;
   const seedDetail = copy.lead === formattedTitle || formattedDetail !== copy.lead ? formattedDetail : "";
   const [editing, setEditing] = useState(false);

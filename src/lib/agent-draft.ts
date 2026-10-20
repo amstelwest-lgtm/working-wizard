@@ -14,6 +14,7 @@ import {
   evidenceMetrics,
   groundFindingEvidence,
   severityWithFloor,
+  canonicalQuoteRatios,
   shapeRecordedCopy,
   storedFigureValues,
   type FindingEvidence,
@@ -209,6 +210,7 @@ export function prepareDraftRecord(input: {
     figures: grounded.evidence.figures,
     periodLabel: grounded.evidence.period_label,
     market: input.market,
+    canonicalRatios: canonicalQuoteRatios(input.pool),
     storedNumbers: storedFigureValues(input.pool),
   });
   if (!shaped.ok) return { ok: false, error: shaped.error };

@@ -25,6 +25,7 @@ export function MilonTeamPane({
   marketCountry = null,
   audience = "accountant",
   sampleClient = false,
+  canonicalRatios = null,
 }: {
   clientId: string;
   /** Home Ask opens this agent's thread. The feed stays off the card stage. */
@@ -42,6 +43,8 @@ export function MilonTeamPane({
   audience?: "owner" | "accountant";
   /** clients.is_demo. Passed through to the team-row chip. */
   sampleClient?: boolean;
+  /** Live scorecard ratios. Draft sentences quote these. */
+  canonicalRatios?: Record<string, number> | null;
 }) {
   const feed = useMilonTeamFeed(clientId);
   const live = useAgentActivity(clientId);
@@ -57,8 +60,9 @@ export function MilonTeamPane({
       detail: newest.detail,
       figures: findingFigureEntries(newest.evidence),
       market: live.market,
+      canonicalRatios,
     });
-  }, [agent, live.findings, live.market]);
+  }, [agent, live.findings, live.market, canonicalRatios]);
   const finding = rewriteDraftMonthStamp(
     homeFinding?.trim() || findingFallback?.trim() || filedFinding,
   );
@@ -75,6 +79,7 @@ export function MilonTeamPane({
       marketCountry={marketCountry}
       audience={audience}
       sampleClient={sampleClient}
+      canonicalRatios={canonicalRatios}
     />
   );
   if (!agent) return desk;

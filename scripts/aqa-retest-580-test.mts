@@ -339,7 +339,7 @@ assert(statementSampleImplausible(woodwork), "Woodwork is an implausible sample"
 assert(!statementSampleImplausible(chill), "Chill Pepper is not a sample");
 const home = src("src/routes/_authenticated/clients.$clientId.tsx");
 const homeAt = home.indexOf('data-client-home="true"');
-assert(homeAt >= 0 && home.slice(homeAt, homeAt + 700).includes("IMPLAUSIBLE_SAMPLE_NOTE"), "the note is on client Home");
+assert(homeAt >= 0 && home.slice(homeAt, homeAt + 700).includes("implausibleSampleNote"), "the note is on client Home");
 const profit = src("src/routes/app.tsx");
 const profitAt = profit.indexOf('data-owner-page="profit"');
 assert(

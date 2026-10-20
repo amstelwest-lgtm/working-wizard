@@ -7,6 +7,7 @@ import { executeAgentTool } from "../milon-bot/execute.ts";
 import {
   agentCopyStatus,
   attachCitedEvidence,
+  canonicalQuoteRatios,
   evidenceMetrics,
   groundFindingEvidence,
   moneyMarketFromClient,
@@ -31,6 +32,8 @@ import {
 } from "../../../src/lib/agent-analyst.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
+import { overviewRatios } from "../../../src/lib/health-score.ts";
+import { periodMonthsOf } from "../../../src/lib/ratios.ts";
 
 export type AnalystExecCtx = {
   clientId: string;
@@ -150,14 +153,22 @@ export async function executeAnalystTool(
     const snaps = await latestSnapshots(ctx.db, ctx.clientId, 1);
     if (snaps.error) return { error: snaps.error };
     const snap = snaps.rows[0];
-    if (!snap) return { empty: true, stored_ratios: {}, statement_totals: {} };
-    const financials = numericFigures(snap.financials);
+    const booksRes = await ctx.db.from("clients").select("financials").eq("id", ctx.clientId).maybeSingle();
+    if (booksRes.error) return { error: booksRes.error.message };
+    const liveBooks = asRecord(booksRes.data?.financials);
+    const snapBooks = asRecord(snap?.financials);
+    const books = liveBooks && Object.keys(numericFigures(liveBooks)).length > 0 ? liveBooks : snapBooks;
+    if (!snap && !books) return { empty: true, ratios: {}, stored_ratios: {}, statement_totals: {}, quote_basis: "scorecard" };
+    const ratios = books ? numericFigures(overviewRatios(books, { periodMonths: periodMonthsOf(books) })) : {};
+    const financials = numericFigures(books);
     return {
       empty: false,
-      snapshot_id: String(snap.id),
-      period_label: datedPeriodLabel(snap.financials, (snap.period_label as string | null) ?? null, ctx.market),
-      period_date: (snap.period_date as string | null) ?? null,
-      stored_ratios: numericFigures(snap.ratios),
+      snapshot_id: snap ? String(snap.id) : null,
+      period_label: datedPeriodLabel(books ?? snap?.financials, (snap?.period_label as string | null) ?? null, ctx.market),
+      period_date: (snap?.period_date as string | null) ?? null,
+      ratios,
+      quote_basis: "scorecard",
+      stored_ratios: snap ? numericFigures(snap.ratios) : {},
       statement_totals: financials,
       figures: financials,
     };
@@ -274,6 +285,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     figures: grounded.evidence.figures,
     periodLabel: grounded.evidence.period_label,
     market,
+    canonicalRatios: canonicalQuoteRatios(ctx.pool),
     storedNumbers: storedFigureValues(ctx.pool),
   });
   if (!shaped.ok) return { error: shaped.error };
