@@ -190,8 +190,7 @@ export function MarketPicker({
   }
 
   const idle = "border-[var(--line,#DBEAFE)] bg-transparent text-[var(--ink,#102A43)]";
-  const on =
-    "border-[#0B5FFF] bg-[#DBEAFE] text-[#102A43]";
+  const on = "border-[#0B5FFF] bg-[#DBEAFE] text-[#102A43]";
   const labelCls = "text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]";
   const helpCls = "text-xs text-[var(--ink-dim,#9b958a)]";
 
@@ -207,7 +206,9 @@ export function MarketPicker({
           onClick={() => setCountry("ZA")}
         >
           <div className="text-sm font-semibold">South Africa</div>
-          <div className={`mt-1 ${helpCls}`}>{showVat ? "Rand, VAT, March year-start" : "Rand, March year-start"}</div>
+          <div className={`mt-1 ${helpCls}`}>
+            {showVat ? "Rand, VAT, March year-start" : "Rand, March year-start"}
+          </div>
         </button>
         {stateDropdown ? (
           <button
@@ -218,7 +219,9 @@ export function MarketPicker({
             onClick={() => setCountry("US")}
           >
             <div className="text-sm font-semibold">United States</div>
-            <div className={`mt-1 ${helpCls}`}>{taxWording ? "Dollars, sales tax by state" : "Dollars"}</div>
+            <div className={`mt-1 ${helpCls}`}>
+              {taxWording ? "Dollars, sales tax by state" : "Dollars"}
+            </div>
           </button>
         ) : null}
       </div>

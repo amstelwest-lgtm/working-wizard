@@ -13,7 +13,10 @@ const board = readFileSync(resolve("src/components/practice-board.tsx"), "utf8")
 
 const effectStart = board.indexOf('const clientIdKey = clientRows.map((c) => c.id).join("\\n");');
 const effectEnd = board.indexOf("const portfolioRows", effectStart);
-assert(effectStart > 0 && effectEnd > effectStart, "the queries effect is still next to the client id list");
+assert(
+  effectStart > 0 && effectEnd > effectStart,
+  "the queries effect is still next to the client id list",
+);
 const effect = board.slice(effectStart, effectEnd);
 
 assert(effect.includes("listOpenQueries(ids)"), "listOpenQueries runs with the slim client ids");
@@ -29,7 +32,10 @@ assert(
   effect.includes(".then((result) => {") && effect.includes("setQueryRowsReady(true)"),
   "the notes promise clears the loading flag",
 );
-assert(effect.includes("}, [view, loading, clientIdKey]);"), "enrichment finishing does not refetch notes");
+assert(
+  effect.includes("}, [view, loading, clientIdKey]);"),
+  "enrichment finishing does not refetch notes",
+);
 
 const lineAt = board.indexOf('<p className="sub">Loading open queries…</p>');
 assert(lineAt > 0, "the queries page still has its loading line");
@@ -41,11 +47,13 @@ assert(!line.includes("countsReady"), "the line can clear while countsReady is f
 const { openQueriesPhase } = await import("../src/lib/bounded-load.ts");
 
 assert(
-  openQueriesPhase({ bookLoading: false, rowsReady: true, timedOut: false, rowCount: 0 }) === "empty",
+  openQueriesPhase({ bookLoading: false, rowsReady: true, timedOut: false, rowCount: 0 }) ===
+    "empty",
   "the line clears while countsReady is false",
 );
 assert(
-  openQueriesPhase({ bookLoading: true, rowsReady: false, timedOut: false, rowCount: 0 }) === "loading",
+  openQueriesPhase({ bookLoading: true, rowsReady: false, timedOut: false, rowCount: 0 }) ===
+    "loading",
   "the line stays while the deadline has not fired",
 );
 assert(

@@ -1550,7 +1550,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     const { isIt, cs, error } = slim.value;
     setIsItMember(isIt);
     if (error) toast.error(error.message);
-    let rawClients = collapseDuplicateClientShells((cs ?? []) as Client[]);
+    let rawClients = collapseDuplicateClientShells((cs ?? []) as unknown as Client[]);
     const clientIds = rawClients.map((c) => c.id);
 
     // Names, books, and orphan attaches used to run before the first paint,

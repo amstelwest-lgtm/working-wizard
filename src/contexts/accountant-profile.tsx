@@ -97,8 +97,7 @@ type AccountantProfileContextValue = {
   greetingSource: string;
 };
 
-const AccountantProfileContext =
-  createContext<AccountantProfileContextValue | null>(null);
+const AccountantProfileContext = createContext<AccountantProfileContextValue | null>(null);
 
 function coerceStoredBrand(profile: AccountantProfile): AccountantProfile {
   return { ...profile, primaryColor: brandPrimaryColor(profile.primaryColor) };
@@ -179,18 +178,18 @@ async function readPersistedNameChain(user: {
   const authFullName = authDisplayName(
     user.user_metadata as { full_name?: unknown; name?: unknown } | null | undefined,
   );
-  const { data } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+  const { data } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
   return {
     profileFullName: data?.full_name?.trim() ?? "",
     authFullName,
   };
 }
 
-export function AccountantProfileProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function AccountantProfileProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   // Stay on DEFAULT until the signed-in user is known — never paint another
   // browser tab's / previous user's brand (N8).
@@ -453,9 +452,7 @@ export function AccountantProfileProvider({
 export function useAccountantProfile(): AccountantProfileContextValue {
   const ctx = useContext(AccountantProfileContext);
   if (!ctx) {
-    throw new Error(
-      "useAccountantProfile must be used inside <AccountantProfileProvider>",
-    );
+    throw new Error("useAccountantProfile must be used inside <AccountantProfileProvider>");
   }
   return ctx;
 }
