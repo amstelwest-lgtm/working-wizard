@@ -17,6 +17,7 @@ import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
+import { ReportSection } from "@/lib/report-pdf-layout";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { DuPontDiagram } from "@/components/pdf/dupont";
 import { assetNarrative, diagnoseDuPont } from "./narrative";
@@ -340,31 +341,51 @@ export function AssetProductivityPDF({
         })}
       />
 
-      <SectionHeader title="DuPont Decomposition — ROE Driver Analysis" color={theme.accent} />
-      <DuPontDiagram
-        levers={levers}
-        diagnosis={dupont}
-        roeHeadline={data.roe_headline}
-        roeNote={roeUnscored ? data.roe_text : data.roe_note}
+      <ReportSection
+        heading={<SectionHeader title="DuPont Decomposition — ROE Driver Analysis" color={theme.accent} />}
+        lead={
+          <DuPontDiagram
+            levers={levers}
+            diagnosis={dupont}
+            roeHeadline={data.roe_headline}
+            roeNote={roeUnscored ? data.roe_text : data.roe_note}
+          />
+        }
       />
 
-      <SectionHeader title="Asset Ratio Analysis" color={theme.accent} />
-      {ratioRows.map((r, i) => (
-        <RatioRow
-          key={r.name}
-          ratioName={r.name}
-          formattedValue={r.value}
-          healthScore={r.score ?? 0}
-          healthTier={scoreTier(r.score)}
-          unscored={r.unscored}
-          isAlternate={i % 2 === 1}
-        />
-      ))}
+      <ReportSection
+        heading={<SectionHeader title="Asset Ratio Analysis" color={theme.accent} />}
+        lead={ratioRows.slice(0, 2).map((r, i) => (
+          <RatioRow
+            key={r.name}
+            ratioName={r.name}
+            formattedValue={r.value}
+            healthScore={r.score ?? 0}
+            healthTier={scoreTier(r.score)}
+            unscored={r.unscored}
+            isAlternate={i % 2 === 1}
+          />
+        ))}
+      >
+        {ratioRows.slice(2).map((r, i) => (
+          <RatioRow
+            key={r.name}
+            ratioName={r.name}
+            formattedValue={r.value}
+            healthScore={r.score ?? 0}
+            healthTier={scoreTier(r.score)}
+            unscored={r.unscored}
+            isAlternate={(i + 2) % 2 === 1}
+          />
+        ))}
+      </ReportSection>
 
       {/* ── PAGE 2 ── */}
       <View break>
-        <SectionHeader title="Capex vs Depreciation Trend" color={theme.accent} />
-        <CapexChart periods={data.capex_periods} accent={theme.accent} />
+        <ReportSection
+          heading={<SectionHeader title="Capex vs Depreciation Trend" color={theme.accent} />}
+          lead={<CapexChart periods={data.capex_periods} accent={theme.accent} />}
+        />
       </View>
     </PDFDocument>
   );

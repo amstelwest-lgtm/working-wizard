@@ -5,6 +5,7 @@
  * SSR-rendered module.
  */
 
+import type { ReactNode } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -12,10 +13,11 @@ import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, resolveTheme } from "@/components/pdf/theme";
-import { variancePctCell } from "@/lib/budget.variance";
+import { varianceIsZeroPair, variancePctCell } from "@/lib/budget.variance";
 import type { BudgetPdfModel, BudgetPdfRow } from "@/lib/budget-pdf";
 import { formatDate, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
+import { ReportSection, reportTablePartStyle } from "@/lib/report-pdf-layout";
 
 export type BudgetVariancePDFProps = {
   smeData: SmeData;
@@ -108,10 +110,14 @@ function VarianceTable({
   rows,
   accent,
   market,
+  heading,
+  intro,
 }: {
   rows: BudgetPdfRow[];
   accent: string;
   market: ResolvedMarket;
+  heading: ReactNode;
+  intro?: ReactNode;
 }) {
   const cols = [
     { label: "Line", flex: 2.1, align: "left" as const },
@@ -152,7 +158,7 @@ function VarianceTable({
               {row.actual == null ? "—" : fmtRand(row.actual, market)}
             </Text>
             <View style={{ flex: 1.45, alignItems: "flex-end" }}>
-              {row.delta == null ? (
+              {row.delta == null || varianceIsZeroPair(row.budget, row.actual) ? (
                 <Text style={styles.cell}>—</Text>
               ) : (
                 <>
@@ -165,21 +171,32 @@ function VarianceTable({
             </View>
             <View style={{ flex: 0.7, overflow: "hidden" }}>
               <Text style={[styles.cell, { textAlign: "right", color }]}>
-                {variancePctCell(row.deltaPct, row.deltaPctNote)}
+                {varianceIsZeroPair(row.budget, row.actual)
+                  ? "—"
+                  : variancePctCell(row.deltaPct, row.deltaPctNote)}
               </Text>
             </View>
         </View>
       );
   };
-  const first = rows[0];
+  const body = rows.map((row, index) => renderRow(row, index));
+  const leadRows = body.slice(0, 1);
+  const restRows = body.slice(1);
   return (
-    <View style={styles.table}>
-      <View wrap={false}>
-        {header}
-        {first ? renderRow(first, 0) : null}
-      </View>
-      {rows.slice(1).map((row, index) => renderRow(row, index + 1))}
-    </View>
+    <ReportSection
+      heading={heading}
+      intro={intro}
+      lead={
+        <View style={reportTablePartStyle(restRows.length ? "lead" : "only", C.line)}>
+          {header}
+          {leadRows}
+        </View>
+      }
+    >
+      {restRows.length ? (
+        <View style={reportTablePartStyle("rest", C.line)}>{restRows}</View>
+      ) : null}
+    </ReportSection>
   );
 }
 
@@ -254,15 +271,19 @@ export function BudgetVariancePDF({
       </Text>
 
       {model.sections.map((section) => (
-        <View key={section.title}>
-          <SectionHeader title={section.title} color={theme.accent} />
-          {section.note ? <Text style={styles.note}>{section.note}</Text> : null}
-          <VarianceTable rows={section.rows} accent={theme.accent} market={market} />
-        </View>
+        <VarianceTable
+          key={section.title}
+          rows={section.rows}
+          accent={theme.accent}
+          market={market}
+          heading={<SectionHeader title={section.title} color={theme.accent} />}
+          intro={section.note ? <Text style={styles.note}>{section.note}</Text> : null}
+        />
       ))}
 
-      <View wrap={false}>
-      <SectionHeader title="Partner notes" color={theme.accent} />
+      <ReportSection
+        heading={<SectionHeader title="Partner notes" color={theme.accent} />}
+        lead={
       <View style={styles.notesBox}>
         {model.notes.length === 0 ? (
           <Text style={styles.emptyNotes}>
@@ -283,7 +304,8 @@ export function BudgetVariancePDF({
           ))
         )}
       </View>
-      </View>
+        }
+      />
     </PDFDocument>
   );
 }

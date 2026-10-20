@@ -15,6 +15,7 @@ import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
+import { ReportSection, reportTablePartStyle } from "@/lib/report-pdf-layout";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { laborNarrative } from "./narrative";
@@ -369,21 +370,17 @@ export function LaborProductivityPDF({
         />
       </View>
 
-      <SectionHeader title={`Revenue vs ${wageLabel}`} color={theme.accent} />
-      <LaborTrend periods={d.periods} accent={theme.accent} wageLabel={wageLabel} />
+      <ReportSection
+        heading={<SectionHeader title={`Revenue vs ${wageLabel}`} color={theme.accent} />}
+        lead={<LaborTrend periods={d.periods} accent={theme.accent} wageLabel={wageLabel} />}
+      />
 
       {/* ── PAGE 2 ── */}
       <View break>
-        <SectionHeader title="Period Detail" color={theme.accent} />
-        <View
-          style={{
-            borderRadius: 5,
-            overflow: "hidden",
-            borderWidth: 0.75,
-            borderColor: C.line,
-            marginBottom: 10,
-          }}
-        >
+        <ReportSection
+          heading={<SectionHeader title="Period Detail" color={theme.accent} />}
+          lead={
+        <View style={reportTablePartStyle(d.periods.length > 1 ? "lead" : "only", C.line)}>
           <View
             style={{
               flexDirection: "row",
@@ -409,7 +406,7 @@ export function LaborProductivityPDF({
               </Text>
             ))}
           </View>
-          {d.periods.map((p, i) => (
+          {d.periods.slice(0, 1).map((p, i) => (
             <View
               key={i}
               style={{
@@ -471,19 +468,69 @@ export function LaborProductivityPDF({
             </View>
           ))}
         </View>
+          }
+        >
+          {d.periods.length > 1 ? (
+            <View style={reportTablePartStyle("rest", C.line)}>
+              {d.periods.slice(1).map((p, i) => (
+                <View
+                  key={p.label}
+                  style={{
+                    flexDirection: "row",
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderTopWidth: 0.5,
+                    borderTopColor: C.hairline,
+                    backgroundColor: (i + 1) % 2 === 1 ? C.soft : C.white,
+                  }}
+                >
+                  <Text style={{ flex: 1.4, fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink }}>
+                    {p.label}
+                  </Text>
+                  <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>
+                    {fmtRand(p.revenue, m)}
+                  </Text>
+                  <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>
+                    {p.employees}
+                  </Text>
+                  <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>
+                    {fmtRand(p.labor_cost, m)}
+                  </Text>
+                  <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>
+                    {p.employees > 0 ? fmtRandCompact(p.revenue / p.employees, m) : "—"}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </ReportSection>
 
-        <SectionHeader title={`${laborProductivityTitle(m)} ratios`} color={theme.accent} />
-        {ratioRows.map((r, i) => (
-          <RatioRow
-            key={r.name}
-            ratioName={r.name}
-            formattedValue={r.value}
-            healthScore={r.score ?? 0}
-            healthTier={scoreTier(r.score)}
-            unscored={r.score == null}
-            isAlternate={i % 2 === 1}
-          />
-        ))}
+        <ReportSection
+          heading={<SectionHeader title={`${laborProductivityTitle(m)} ratios`} color={theme.accent} />}
+          lead={ratioRows.slice(0, 2).map((r, i) => (
+            <RatioRow
+              key={r.name}
+              ratioName={r.name}
+              formattedValue={r.value}
+              healthScore={r.score ?? 0}
+              healthTier={scoreTier(r.score)}
+              unscored={r.score == null}
+              isAlternate={i % 2 === 1}
+            />
+          ))}
+        >
+          {ratioRows.slice(2).map((r, i) => (
+            <RatioRow
+              key={r.name}
+              ratioName={r.name}
+              formattedValue={r.value}
+              healthScore={r.score ?? 0}
+              healthTier={scoreTier(r.score)}
+              unscored={r.score == null}
+              isAlternate={(i + 2) % 2 === 1}
+            />
+          ))}
+        </ReportSection>
       </View>
     </PDFDocument>
   );

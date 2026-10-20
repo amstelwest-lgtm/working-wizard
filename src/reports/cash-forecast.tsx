@@ -7,13 +7,14 @@
  * SSR-rendered module.
  */
 
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
+import { ReportSection, reportTablePartStyle } from "@/lib/report-pdf-layout";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, resolveTheme } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
@@ -255,10 +256,12 @@ function WeekTable({
   weeks,
   threshold,
   accent,
+  heading,
 }: {
   weeks: CashForecastWeek[];
   threshold: number;
   accent: string;
+  heading: ReactNode;
 }) {
   const market = usePdfMarket();
   const cols = [
@@ -269,8 +272,7 @@ function WeekTable({
     { label: "Net", flex: 1.3, right: true },
     { label: "Closing", flex: 1.4, right: true },
   ];
-  return (
-    <View style={tbl.wrapper}>
+  const header = (
       <View style={[tbl.headerRow, { backgroundColor: accent }]}>
         {cols.map((c, i) => (
           <Text
@@ -281,7 +283,8 @@ function WeekTable({
           </Text>
         ))}
       </View>
-      {weeks.map((w, i) => {
+  );
+  const rowNodes = weeks.map((w, i) => {
         const danger = w.closing_balance < threshold;
         return (
           <View
@@ -330,8 +333,20 @@ function WeekTable({
             </Text>
           </View>
         );
-      })}
-    </View>
+  });
+  const rest = rowNodes.slice(1);
+  return (
+    <ReportSection
+      heading={heading}
+      lead={
+        <View style={reportTablePartStyle(rest.length ? "lead" : "only", C.line)}>
+          {header}
+          {rowNodes[0] ?? null}
+        </View>
+      }
+    >
+      {rest.length ? <View style={reportTablePartStyle("rest", C.line)}>{rest}</View> : null}
+    </ReportSection>
   );
 }
 
@@ -449,9 +464,10 @@ export function CashForecastPDF({
 
       <ExecSummary figures={figures} narrative={narrative} />
 
-      <SectionHeader title="Projected Closing Balance by Week" color={theme.accent} />
-      <RunwayChart weeks={weeks} threshold={minimumThreshold} accent={theme.accent} />
-
+      <ReportSection
+        heading={<SectionHeader title="Projected Closing Balance by Week" color={theme.accent} />}
+        lead={<RunwayChart weeks={weeks} threshold={minimumThreshold} accent={theme.accent} />}
+      >
       <View style={{ flexDirection: "row", gap: 10 }}>
         <MetricBox
           label="Total Receipts"
@@ -472,13 +488,21 @@ export function CashForecastPDF({
           note={weeksReadout.note}
         />
       </View>
+      </ReportSection>
 
       {/* ── PAGE 2 ── */}
       <View break>
-        <SectionHeader title="Weekly Cash Movement Detail" color={theme.accent} />
-        <WeekTable weeks={weeks} threshold={minimumThreshold} accent={theme.accent} />
+        <WeekTable
+          heading={<SectionHeader title="Weekly Cash Movement Detail" color={theme.accent} />}
+          weeks={weeks}
+          threshold={minimumThreshold}
+          accent={theme.accent}
+        />
 
-        <SectionHeader title="Forecast Assumptions" color={theme.accent} />
+        {resolvedAssumptions.length > 0 ? (
+        <ReportSection
+          heading={<SectionHeader title="Forecast Assumptions" color={theme.accent} />}
+          lead={
         <View
           style={{
             backgroundColor: C.soft,
@@ -511,6 +535,9 @@ export function CashForecastPDF({
             </View>
           ))}
         </View>
+          }
+        />
+        ) : null}
       </View>
     </PDFDocument>
   );
