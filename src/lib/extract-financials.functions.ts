@@ -37,6 +37,7 @@ import {
   textExtractionSystem,
   ZA_MARKET,
 } from "@/lib/market";
+import { stampPrintedFields } from "@/lib/statement-currency";
 
 // ─── Claude extraction prompt ──────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ async function callClaudePDF(
   base64: string,
   fileName: string,
   prompt: string,
+  describedCurrency: string,
 ): Promise<RawExtraction> {
   const prepared = await prepareStatementContent({
     base64,
@@ -61,26 +63,47 @@ async function callClaudePDF(
     prepared.session,
   );
   const parsed = parseClaudeJson<RawExtraction>(raw);
-  if (!prepared.usedTextLayer) return parsed;
-  const sheet = parsed.current_period?.balance_sheet;
-  if (!sheet) return parsed;
-  const totals = reconcileModelTotals({
-    text: prepared.extractedText,
-    totalAssets: sheet.total_assets,
-    equity: sheet.equity,
-    ppe: sheet.fixed_assets,
+  let next = parsed;
+  if (prepared.usedTextLayer) {
+    const sheet = parsed.current_period?.balance_sheet;
+    if (sheet) {
+      const totals = reconcileModelTotals({
+        text: prepared.extractedText,
+        totalAssets: sheet.total_assets,
+        equity: sheet.equity,
+        ppe: sheet.fixed_assets,
+      });
+      if (totals.adjusted) {
+        next = {
+          ...parsed,
+          current_period: {
+            ...parsed.current_period,
+            balance_sheet: {
+              ...sheet,
+              total_assets: totals.totalAssets ?? sheet.total_assets,
+              equity: totals.equity ?? sheet.equity,
+              fixed_assets: totals.netPpe ?? sheet.fixed_assets,
+            },
+          },
+        };
+      }
+    }
+  }
+  const stamped = stampPrintedFields({
+    currency: next.document_metadata?.functional_currency,
+    notes: next.data_quality?.extraction_notes,
+    text: prepared.usedTextLayer ? prepared.extractedText : null,
+    describedCurrency,
   });
-  if (!totals.adjusted) return parsed;
   return {
-    ...parsed,
-    current_period: {
-      ...parsed.current_period,
-      balance_sheet: {
-        ...sheet,
-        total_assets: totals.totalAssets ?? sheet.total_assets,
-        equity: totals.equity ?? sheet.equity,
-        fixed_assets: totals.netPpe ?? sheet.fixed_assets,
-      },
+    ...next,
+    document_metadata: {
+      ...next.document_metadata,
+      functional_currency: stamped.currency ?? next.document_metadata?.functional_currency,
+    },
+    data_quality: {
+      ...next.data_quality,
+      extraction_notes: stamped.notes ?? next.data_quality?.extraction_notes ?? "",
     },
   };
 }
@@ -264,7 +287,8 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const prompt = financialExtractionPrompt(resolvePromptMarket(data.market));
+    const promptMarket = resolvePromptMarket(data.market);
+    const prompt = financialExtractionPrompt(promptMarket);
     const files = await Promise.all(
       data.files.map(async (f) => ({
         fileName: f.fileName,
@@ -290,7 +314,9 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
     // Call Claude for each PDF in parallel
     const extractions = await Promise.all(
       files.map(async (f) => ({
-        raw: blankDisallowedSections(await callClaudePDF(f.base64, f.fileName, prompt)),
+        raw: blankDisallowedSections(
+          await callClaudePDF(f.base64, f.fileName, prompt, promptMarket.currency),
+        ),
         fileName: f.fileName,
       })),
     );

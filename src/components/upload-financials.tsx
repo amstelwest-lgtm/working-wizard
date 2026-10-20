@@ -34,6 +34,7 @@ import {
   statementAutoPopulatePrefs,
   type AutoPopulatePrefs,
 } from "@/lib/auto-populate";
+import { StatementCurrencyNotice } from "@/components/statement-currency-notice";
 import { useMarketFormat } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 import {
@@ -56,6 +57,12 @@ import { formatDateRange } from "@/lib/market/format";
 import { SET_PERIOD_DATES, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { balanceSheetCheck } from "@/lib/statement-balance";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
+import {
+  currencyChoiceAllowsImport,
+  currencyLabelConfirmFromGate,
+  statementCurrencyGate,
+  type CurrencyChoice,
+} from "@/lib/statement-currency";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -160,6 +167,8 @@ export type UploadFinancialsProps = {
   booksHaveSpan?: boolean;
   /** Opens the review step. Tests use this so the panel does not call extract. */
   seedReview?: ExtractionResult | null;
+  /** Stored client market. Null is not a reporting currency. */
+  storedMarket?: unknown;
 };
 
 function seededPeriod(periodEnd: string | null | undefined) {
@@ -178,6 +187,7 @@ export function UploadFinancials({
   clientName,
   booksHaveSpan = false,
   seedReview = null,
+  storedMarket = null,
 }: UploadFinancialsProps) {
   const { number, selection, market } = useMarketFormat();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -205,6 +215,7 @@ export function UploadFinancials({
     null,
   );
   const confirmImportRef = useRef<((choice?: PeriodChoice | null) => void) | null>(null);
+  const [currencyChoice, setCurrencyChoice] = useState<CurrencyChoice | null>(null);
 
   const extract = useServerFn(extractFinancialsFromPDF);
   const monthNames = importMonthNames();
@@ -253,6 +264,7 @@ export function UploadFinancials({
         res = await extract({ data: { text, fileName: file.name, market } });
       }
       setResult(res.data);
+      setCurrencyChoice(null);
       setIssues(res.issues);
       setAutoSafe(res.autoImportSafe);
       seedPeriod(res.data.current_period.period_end);
@@ -277,6 +289,7 @@ export function UploadFinancials({
   function reset() {
     setStatus("idle");
     setResult(null);
+    setCurrencyChoice(null);
     setIssues([]);
     setAutoSafe(false);
     setAcceptedQuality(false);
@@ -442,6 +455,8 @@ export function UploadFinancials({
         }
       : null;
   const periodDetected = detectImportPeriod(result.current_period.period_end) != null;
+  const currencyGate = statementCurrencyGate({ storedMarket, extraction: result });
+  const currencyAllowsImport = currencyChoiceAllowsImport(currencyGate, currencyChoice);
   const confirmLabel = chosenPeriod
     ? `I have reviewed these figures and confirm they should be imported for ${chosenPeriod.periodLabel}. ${UPLOAD_QUALITY_DISCLAIMER}`
     : `I have reviewed these figures and confirm they should be imported for the period I select. ${UPLOAD_QUALITY_DISCLAIMER}`;
@@ -455,8 +470,15 @@ export function UploadFinancials({
       toast.error(message);
       return;
     }
+    if (!currencyChoiceAllowsImport(currencyGate, currencyChoice)) return;
+    const labelConfirm =
+      currencyGate.blocked && currencyChoice === "label_wrong"
+        ? currencyLabelConfirmFromGate(currencyGate)
+        : null;
+    if (currencyGate.blocked && !labelConfirm) return;
     const stamped: ExtractionResult = {
       ...result,
+      currency_label_confirm: labelConfirm,
       current_period: {
         ...result.current_period,
         period_start: chosenPeriod.periodStart ?? result.current_period.period_start ?? null,
@@ -905,6 +927,11 @@ export function UploadFinancials({
         )}
       </div>
 
+      <StatementCurrencyNotice
+        gate={currencyGate}
+        choice={currencyChoice}
+        onChoice={setCurrencyChoice}
+      />
       <AutoPopulateOptions
         firstUpload={(autoPopulate?.firstUpload ?? true) && !isSingleStatementKind(statementKind)}
         value={autoPrefs}
@@ -932,7 +959,8 @@ export function UploadFinancials({
       <div className="flex items-center gap-3 pt-2">
         <Button
           onClick={() => confirmImportRef.current?.()}
-          disabled={!acceptedQuality || !chosenPeriod || applying}
+          data-currency-block={currencyAllowsImport ? "0" : "1"}
+          disabled={!acceptedQuality || !chosenPeriod || applying || !currencyAllowsImport}
           className="bg-amber-500 hover:bg-amber-400 text-black font-semibold disabled:opacity-50"
         >
           <CheckCircle2 className="h-4 w-4 mr-1.5" />

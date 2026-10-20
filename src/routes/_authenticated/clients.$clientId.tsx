@@ -89,6 +89,12 @@ import {
   statementImportWhat,
 } from "@/lib/statement-import-apply";
 import { confirmUploadedStatement, earlierStatementNote, liveStatementSpan, passStatementChoice, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import {
+  CURRENCY_LABEL_CONFIRM_KEY,
+  currencyImportRefusal,
+  statementCurrencyGate,
+  withCurrencyLabelConfirm,
+} from "@/lib/statement-currency";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -2931,6 +2937,17 @@ function ClientView() {
       },
       choice?: PeriodChoice | null,
     ) => {
+      const currencyGate = statementCurrencyGate({
+        storedMarket: client?.market ?? null,
+        extraction: result,
+      });
+      const labelConfirm = result.currency_label_confirm ?? null;
+      const currencyRefusal = currencyImportRefusal(currencyGate, labelConfirm);
+      if (currencyRefusal) {
+        return { ok: false as const, message: importFailureMessage(currencyRefusal) };
+      }
+      const withLabel = <T extends Record<string, unknown>>(blob: T) =>
+        withCurrencyLabelConfirm(blob, labelConfirm);
       const extracted = extractionToRatioInputs(result);
       const keptEquity = preserveHandEnteredEquity(financialsRef.current, extracted);
       const drafted = {
@@ -3000,11 +3017,12 @@ function ClientView() {
         const ratiosOut = overviewRatios(planned.history, { fyStartMonth });
         const periodDate = fileSpan?.periodEnd ?? period?.periodEnd ?? "";
         const periodLabel = planned.periodLabel || period?.periodLabel || periodDate;
+        const historyBody = withLabel(planned.history as Record<string, unknown>);
         const write = match?.id
           ? supabase
               .from("client_financial_snapshots")
               .update({
-                financials: planned.history as never,
+                financials: historyBody as never,
                 ratios: ratiosOut as never,
                 period_label: periodLabel,
                 period_date: periodDate,
@@ -3014,7 +3032,7 @@ function ClientView() {
               client_id: clientId,
               period_label: periodLabel,
               period_date: periodDate,
-              financials: planned.history as never,
+              financials: historyBody as never,
               ratios: ratiosOut as never,
               source: "pdf_upload",
             });
@@ -3041,7 +3059,9 @@ function ClientView() {
         existing = byLabel as { id?: string; financials?: unknown } | null;
       }
 
-      const snapshotMerged = mergeStatementFinancials(existing?.financials ?? null, inputs, statementKind);
+      const snapshotMerged = withLabel(
+        mergeStatementFinancials(existing?.financials ?? null, inputs, statementKind) as Record<string, unknown>,
+      );
       const ratiosOut = overviewRatios(snapshotMerged, { fyStartMonth });
 
       let saveError: { message: string } | null = null;
@@ -3104,7 +3124,8 @@ function ClientView() {
           value == null || typeof value === "object" ? [] : [[key, String(value)]],
         ),
       ) as Record<string, string>;
-      const blob = withFinancialsWriteRev(mergeCurrentBlob(nextScalars));
+      if (labelConfirm) nextScalars[CURRENCY_LABEL_CONFIRM_KEY] = JSON.stringify(labelConfirm);
+      const blob = withFinancialsWriteRev(withLabel(mergeCurrentBlob(nextScalars)));
       const { data: savedLive, error: liveError } = await supabase
         .from("clients")
         .update({ financials: blob as never, financials_updated_at: financialsUpdatedAt })
@@ -5841,6 +5862,7 @@ function ClientView() {
                 <UploadFinancials
                   clientName={client?.name}
                   booksHaveSpan={Boolean(liveStatementSpan(financials))}
+                  storedMarket={client?.market ?? null}
                   onConfirm={passStatementChoice(handleConfirmFinancials)}
                   onApplied={() => {
                     setActiveTab("overview");
