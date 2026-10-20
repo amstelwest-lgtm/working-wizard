@@ -6,6 +6,7 @@
  * STRIPE_WEBHOOK_SECRET verifies POST /api/stripe/webhook, which syncs milon_plan.
  */
 
+import { waitUntil } from "@vercel/functions";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
@@ -125,7 +126,8 @@ async function customerHasActiveSubscription(customerId: string): Promise<boolea
 }
 
 const ENTITLEMENT_CACHE_TTL_MS = 60_000;
-const entitlementCache = new Map<string, { value: FirmBillingEntitlement; at: number }>();
+const NEGATIVE_ENTITLEMENT_TTL_MS = 5_000;
+const entitlementCache = new Map<string, { value: FirmBillingEntitlement; at: number; ttl: number }>();
 const entitlementInflight = new Map<string, Promise<FirmBillingEntitlement>>();
 const PLAN_DISPLAY_CACHE_TTL_MS = 60_000;
 const planDisplayCache = new Map<
@@ -142,7 +144,7 @@ function cachedEntitlement(email: string): FirmBillingEntitlement | undefined {
   if (!key) return undefined;
   const hit = entitlementCache.get(key);
   if (!hit) return undefined;
-  if (Date.now() - hit.at > ENTITLEMENT_CACHE_TTL_MS) {
+  if (Date.now() - hit.at > hit.ttl) {
     entitlementCache.delete(key);
     return undefined;
   }
@@ -161,9 +163,10 @@ function forgetPlanDisplayCache(): void {
 function rememberEntitlement(email: string, value: FirmBillingEntitlement): void {
   const key = email.trim().toLowerCase();
   if (!key) return;
-  // A no-plan result is the common case. Caching only "yes" made every
-  // navigation hit Stripe again.
-  entitlementCache.set(key, { value, at: Date.now() });
+  // A paid result can sit for a minute. An unpaid result must not: a firm
+  // that just added a card was bounced until the old 60s entry expired.
+  const ttl = value.entitled ? ENTITLEMENT_CACHE_TTL_MS : NEGATIVE_ENTITLEMENT_TTL_MS;
+  entitlementCache.set(key, { value, at: Date.now(), ttl });
 }
 
 async function countOwnedFirms(
@@ -220,12 +223,29 @@ async function resolveFirmBillingEntitlement(
         isFirmMember: memberships > 0,
       });
       rememberEntitlement(email, result);
-      void syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
+      const mirror = syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
         console.warn(
           "[stripe-entitlement] trial mirror sync failed",
           err instanceof Error ? err.message : err,
         );
       });
+      // waitUntil keeps the mirror alive after the response. The 3s race
+      // stops a hung Stripe scan from holding the isolate open.
+      const bounded = Promise.race([
+        mirror,
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 3_000);
+        }),
+      ]);
+      try {
+        waitUntil(bounded);
+      } catch (err) {
+        console.warn(
+          "[stripe-entitlement] waitUntil unavailable",
+          err instanceof Error ? err.message : err,
+        );
+        void bounded;
+      }
       return result;
     } catch (err) {
       console.warn(

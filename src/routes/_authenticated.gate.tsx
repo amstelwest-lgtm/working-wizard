@@ -1,4 +1,4 @@
-import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,7 +13,7 @@ import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import { loadFirmClientGateContext, type FirmClientGateContext } from "@/lib/firm-client-gate";
 import { decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entitlement";
-import { accessWhileEntitlementUnknown } from "@/lib/firm-gate-access";
+import { pageWhileEntitlementUnknown } from "@/lib/firm-gate-access";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import {
   shouldStayOnAccountantPortal,
@@ -119,6 +119,7 @@ export function AuthGate() {
   const userId = user?.id ?? null;
   const [firmEntitled, setFirmEntitled] = useState<boolean | null>(null);
   const [billingUnknown, setBillingUnknown] = useState(false);
+  const [clientGate, setClientGate] = useState<FirmClientGateContext | null>(null);
   const [gateAttempt, setGateAttempt] = useState(0);
 
   useLayoutEffect(() => {
@@ -158,6 +159,7 @@ export function AuthGate() {
     if (loading || !userId) return;
     let cancelled = false;
     settledRef.current = null;
+    setClientGate(null);
 
     const noteUnknown = (reason: "timeout" | "error") => {
       if (cancelled || settledRef.current) return;
@@ -198,11 +200,15 @@ export function AuthGate() {
           latest.current.navigate({ to: "/auth/callback", replace: true });
           return;
         }
-        // Stay, the client count, and Stripe start together. None of them
-        // hold the outlet: the client select mounts with the session.
+        // Stay, the client count, and Stripe start together. The count is
+        // what lets the first client file mount before Stripe answers.
         const stayPromise = shouldStayOnAccountantPortal(userId);
         const clientsPromise = loadFirmClientGateContext();
+        void clientsPromise.then((clients) => {
+          if (!cancelled) setClientGate(clients);
+        });
         const entitlementPromise = readCachedFirmEntitlement(
+          userId,
           (input) => latest.current.checkEntitlement(input),
           gateAttempt > 0,
         );
@@ -267,7 +273,17 @@ export function AuthGate() {
     return <FirmShellLoading />;
   }
   if (!user) return null;
-  if (billingUnknown && accessWhileEntitlementUnknown(pathname) === "wall") {
+  // Unknown entitlement does not mount a gated client file. Home, the client
+  // list, settings, and billing stay open. The first client file may mount
+  // once the count is known. A later file stays on the skeleton until Stripe
+  // confirms a redirect, or until the check times out onto the Retry card.
+  const unknownPage = pageWhileEntitlementUnknown({
+    pathname,
+    firmClientCount: clientGate?.firmClientCount ?? null,
+    firstClientId: clientGate?.firstClientId ?? null,
+  });
+  const holdGatedPage = firmEntitled !== true && unknownPage === "wall";
+  if (holdGatedPage && billingUnknown) {
     return (
       <div
         className="bg-background px-6 py-8 text-foreground"
@@ -292,12 +308,15 @@ export function AuthGate() {
           >
             Retry
           </button>
-          <a href="/dashboard" className="inline-flex h-10 items-center px-4 text-sm underline">
+          <Link to="/dashboard" className="inline-flex h-10 items-center px-4 text-sm underline">
             Back
-          </a>
+          </Link>
         </div>
       </div>
     );
+  }
+  if (holdGatedPage) {
+    return <FirmShellLoading />;
   }
   return (
     <FirmBillingAccessProvider entitled={firmEntitled}>

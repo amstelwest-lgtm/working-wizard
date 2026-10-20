@@ -2915,7 +2915,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId, ownerBootAttempt]);
+  }, [user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId]);
 
   useEffect(() => {
     if (user) {
@@ -3959,9 +3959,9 @@ function Index() {
             >
               Retry
             </button>
-            <a href="/" className="inline-flex h-10 items-center px-4 text-sm underline">
+            <Link to="/" className="inline-flex h-10 items-center px-4 text-sm underline">
               Back
-            </a>
+            </Link>
           </div>
         </div>
       </div>

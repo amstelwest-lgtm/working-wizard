@@ -132,6 +132,14 @@ assert(
   }) === "allow",
   "the first client with a known count may mount before Stripe returns",
 );
+assert(
+  pageWhileEntitlementUnknown({
+    pathname: "/clients/22222222-2222-4222-8222-222222222222",
+    firmClientCount: 2,
+    firstClientId: "11111111-1111-4111-8111-111111111111",
+  }) === "wall",
+  "a later client stays on the skeleton while entitlement is unknown",
+);
 
 clearCachedFirmEntitlement();
 let entitlementCalls = 0;
@@ -140,12 +148,14 @@ const loadEntitlement = async () => {
   return { entitled: false, reason: "no_active_subscription" as const };
 };
 await Promise.all([
-  readCachedFirmEntitlement(loadEntitlement),
-  readCachedFirmEntitlement(loadEntitlement),
+  readCachedFirmEntitlement("user-a", loadEntitlement),
+  readCachedFirmEntitlement("user-a", loadEntitlement),
 ]);
 assert(entitlementCalls === 1, "two callers share one entitlement read");
-await readCachedFirmEntitlement(loadEntitlement);
+await readCachedFirmEntitlement("user-a", loadEntitlement);
 assert(entitlementCalls === 1, "the next navigation reuses the cached entitlement");
+await readCachedFirmEntitlement("user-b", loadEntitlement);
+assert(entitlementCalls === 2, "the tab cache is keyed by user");
 clearCachedFirmEntitlement();
 
 assert(REFRESH_TOKEN_REUSE_INTERVAL_MS === 10_000, "hosted refresh reuse default is 10 seconds");
@@ -164,15 +174,23 @@ const signupAt = roles.indexOf("async function readPracticeSignup");
 const signup = roles.slice(signupAt, roles.indexOf("export function isSmeOnly", signupAt));
 assert(signup.includes("getSession"), "practice signup reads the session");
 assert(!signup.includes("getUser"), "practice signup does not call getUser");
-assert(roles.includes("accountantStayChecks.set(userId, pending)"), "the stay result is cached");
-assert(!roles.includes("accountantStayChecks.delete"), "a finished stay check is not dropped");
+assert(
+  roles.includes("accountantStayChecks.set(userId, Promise.resolve(stay))"),
+  "a successful stay check is cached",
+);
+assert(!roles.includes("accountantStayChecks.delete"), "sign-out clears the stay map without dropping one key");
+assert(roles.includes("itMemberChecks.set(userId, Promise.resolve(member))"), "a successful IT check is cached");
 assert(roles.includes("clearAccountantStayCache"), "sign-out can clear the stay cache");
 
 const gate = src("src/routes/_authenticated.gate.tsx");
 assert(!gate.includes("while (brandLoading)") && !gate.includes("if (brandLoading)"), "the gate does not wait on brand");
 assert(gate.includes("Couldn't check billing"), "a failed check shows the retry card");
-assert(gate.includes("<Outlet />"), "the outlet mounts before entitlement returns");
-assert(!gate.includes("firmGate"), "entitlement does not hold the outlet");
+assert(gate.includes("pageWhileEntitlementUnknown"), "unknown entitlement uses the page decision");
+assert(gate.includes("<FirmShellLoading />"), "a walled page shows a skeleton while entitlement is unknown");
+assert(gate.includes("<Outlet />"), "an allowed page still mounts the outlet");
+assert(gate.includes('to="/dashboard"'), "Back is a router link");
+assert(!gate.includes('href="/dashboard"'), "Back is not a full page navigation");
+assert(!gate.includes("firmGate"), "entitlement does not use the old gate flag");
 assert(
   gate.includes("Gated client pages show Retry"),
   "a timeout keeps Home open and asks to retry on a client file",
@@ -185,10 +203,13 @@ const stripe = src("src/lib/stripe.server.ts");
 assert(stripe.includes("timeout: 8000") && stripe.includes("maxNetworkRetries: 1"), "Stripe calls time out");
 
 const checkout = src("src/lib/stripe-checkout.functions.ts");
-assert(checkout.includes("void syncStarterTrialMirrorForActor"), "checkout does not wait on the trial mirror");
+assert(checkout.includes("waitUntil(bounded)"), "checkout does not await the trial mirror");
+assert(!checkout.includes("await syncStarterTrialMirrorForActor"), "checkout does not await the trial mirror");
 assert(checkout.includes("readFirmSubscriptionHistory"), "entitlement reuses the isolate subscription cache");
 assert(!checkout.includes("rememberEntitlement(email, failed)"), "a Stripe error is not cached as unpaid");
-assert(checkout.includes("ENTITLEMENT_CACHE_TTL_MS = 60_000"), "entitlement stays cached for 60 seconds");
+assert(checkout.includes("ENTITLEMENT_CACHE_TTL_MS = 60_000"), "a paid entitlement stays cached for 60 seconds");
+assert(checkout.includes("NEGATIVE_ENTITLEMENT_TTL_MS = 5_000"), "an unpaid entitlement is not cached for a minute");
+assert(checkout.includes("waitUntil"), "the trial mirror uses waitUntil so the isolate is not frozen");
 assert(checkout.includes("entitlementInflight"), "overlapping entitlement calls share one Stripe read");
 const cap = src("src/lib/firm-client-cap.server.ts");
 assert(cap.includes("STRIPE_ISOLATE_CACHE_TTL_MS = 45_000"), "stripe lists stay in the isolate for 45 seconds");
@@ -217,12 +238,16 @@ assert(!board.slice(board.indexOf("function toClientRow"), board.indexOf("export
 const homeAt = board.indexOf("loading && !bookTimedOut");
 assert(homeAt > 0 && homeAt < board.indexOf("cardPhase=\"ready\""), "Home paints when the book deadline fires");
 assert(board.includes("readWithOneRetry"), "a timed-out client read retries once before the error");
+assert(board.includes("const bookLoading = loading;"), "the list skeleton does not wait on the brand");
+assert(board.includes("firm book reload timed out"), "the reload after a firm id has its own deadline");
+assert(src("src/routes/billing.required.tsx").includes("noteFirmEntitlement"), "the billing wall updates the tab cache");
+assert(src("src/routes/billing.success.tsx").includes("noteFirmEntitlement"), "checkout success updates the tab cache");
 const clientsError = board.slice(board.indexOf('data-clients-load="error"'), board.indexOf('data-clients-load="error"') + 500);
 assert(clientsError.includes("CLIENTS_LOAD_ERROR") && clientsError.includes("Retry"), "the clients error card can retry without a refresh");
 
 const app = src("src/routes/app.tsx");
 assert(app.includes('data-owner-boot="timeout"'), "owner boot has a deadline");
-assert(app.includes('href="/"'), "owner boot can go back");
+assert(app.includes('to="/"'), "owner boot goes back through the router");
 assert(!app.includes("auth.getUser"), "owner boot does not call getUser");
 
 const door = src("src/components/owner-door/owner-door.tsx");

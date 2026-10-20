@@ -10,6 +10,7 @@ import { billingIntentForResolvedMarket } from "@/lib/billing-market";
 import { loadFirstFirmClient, type FirstFirmClient } from "@/lib/firm-client-gate";
 import { firmWallBackLabel } from "@/lib/smart-landing";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
+import { noteFirmEntitlement } from "@/lib/firm-entitlement-client";
 import { readFirmBillingQuote, type FirmBillingQuote } from "@/lib/pricing/za-pricing.functions";
 import {
   billingStartPath,
@@ -198,7 +199,10 @@ function BillingRequiredPage() {
     const interval = pending.interval;
     void resolveBillingWall({
       client: loadFirstFirmClient(),
-      entitlement: checkEntitlement({ data: { refresh: true } }),
+      entitlement: checkEntitlement({ data: { refresh: true } }).then((result) => {
+        if (user?.id) noteFirmEntitlement(user.id, result);
+        return result;
+      }),
       quote: fetchQuote({ data: { plan, interval } }),
       plan,
       interval,

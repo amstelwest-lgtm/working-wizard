@@ -1753,7 +1753,27 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     // greetingSource is read for the name chain inside load, and the greeting
     // itself renders from practiceGreeting. A name update must not restart the book.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, brandLoading, user?.id]);
+  }, [firmId, user?.id]);
+
+  // The first load can finish before the firm id arrives and clear the
+  // user-level clock. This deadline covers the reload that firm id starts.
+  useEffect(() => {
+    if (!user?.id || !firmId) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      console.warn("[practice-board] firm book reload timed out; showing what has loaded");
+      reportClientError(new Error("practice book reload timed out"), { source: "practice-board" });
+      setBookTimedOut(true);
+      setLoading(false);
+      setCountsReady(true);
+      setClientsOutcome((outcome) => (outcome === "ready" ? outcome : "error"));
+    }, SHELL_GATE_TIMEOUT_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [user?.id, firmId]);
 
   // Load playbook catalogue
   useEffect(() => {
@@ -1868,7 +1888,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const queriesDestination = firmOpenQueriesDestination(clientRows);
   const greetName = firstNameOf(greetingSource);
   const greeting = practiceGreeting(greetingSource);
-  const bookLoading = loading || brandLoading;
+  const bookLoading = loading;
   const clientsPhase = practiceClientsPhase({
     loading: bookLoading || clientsOutcome === "pending",
     timedOut: clientsOutcome === "error",
