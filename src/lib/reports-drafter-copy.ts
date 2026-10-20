@@ -4,6 +4,7 @@
  */
 
 import { reportInputsFromFinancials } from "@/lib/equity-coherence";
+import { balanceSheetDayInputsMissing } from "@/lib/missing-metrics";
 
 /**
  * Fields that mean a client has figures on file. Same keys as the Books
@@ -74,10 +75,11 @@ export const REPORT_CATALOGUE_KEYS = [
 
 export function reportReady(
   key: string,
-  input: { leverageReady: boolean; assetReady: boolean },
+  input: { leverageReady: boolean; assetReady: boolean; cycleReady?: boolean },
 ): boolean {
   if (key === "leverage") return input.leverageReady;
   if (key === "assets") return input.assetReady;
+  if (key === "cycle") return input.cycleReady !== false;
   return true;
 }
 
@@ -89,6 +91,7 @@ export function reportsReadyCount(input: {
   figuresOnFile: boolean;
   leverageReady: boolean;
   assetReady: boolean;
+  cycleReady?: boolean;
 }): number {
   if (!input.figuresOnFile) return 0;
   return REPORT_CATALOGUE_KEYS.filter((key) => reportReady(key, input)).length;
@@ -106,6 +109,7 @@ export function clientReportsReadyCount(financials: object | null | undefined): 
     figuresOnFile: financialsHaveStatementFigures(financials),
     leverageReady: readiness.leverageReady,
     assetReady: readiness.assetReady,
+    cycleReady: !balanceSheetDayInputsMissing(financials),
   });
 }
 

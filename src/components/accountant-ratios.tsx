@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
+import { NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 import { computeRatios, formatQuotedDays, healthBandLabel, scoreTier } from "@/lib/ratios";
 import { liveHealthFromBooks } from "@/lib/health-score";
 import { statementKindFromMetadata } from "@/lib/statement-parse";
@@ -136,8 +137,15 @@ type RatioRow = {
   nextSteps: string[];
 };
 
-function fmt(v: number, f: RatioRow["format"], market: MoneyMarket = ZA_MARKET, ratioName?: string) {
-  if (!isFinite(v)) return "Not enough data";
+function fmt(
+  v: number,
+  f: RatioRow["format"],
+  market: MoneyMarket = ZA_MARKET,
+  ratioName?: string,
+  financials?: object | null,
+) {
+  if (renderedMetricMissing({ value: v, name: ratioName, financials })) return "—";
+  if (!isFinite(v)) return "—";
   switch (f) {
     case "pct":
       return `${(v * 100).toFixed(1)}%`;
@@ -151,15 +159,15 @@ function fmt(v: number, f: RatioRow["format"], market: MoneyMarket = ZA_MARKET, 
   }
 }
 
-function healthCls(h: number) {
-  if (!isFinite(h)) return "bg-slate-500 text-white";
+function healthCls(h: number, missing = false) {
+  if (missing || !isFinite(h)) return "bg-slate-500 text-white";
   const tier = scoreTier(h);
   if (tier === "healthy") return "bg-emerald-600 text-white";
   if (tier === "at_risk") return "bg-amber-500 text-white";
   return "bg-rose-600 text-white";
 }
-function healthLabel(h: number) {
-  if (!isFinite(h)) return "No data";
+function healthLabel(h: number, missing = false) {
+  if (missing || !isFinite(h)) return NOT_ENOUGH_DATA;
   return healthBandLabel(scoreTier(h));
 }
 
@@ -802,7 +810,12 @@ export function AccountantRatiosPanel({
     ];
   }, [v, market]);
 
-  const sorted = useMemo(() => [...rows].sort((a, b) => a.health - b.health), [rows]);
+  const rowMissing = (r: RatioRow) =>
+    renderedMetricMissing({ value: r.value, name: r.technical, financials: v });
+  const sorted = useMemo(
+    () => [...rows].filter((r) => !renderedMetricMissing({ value: r.value, name: r.technical, financials: v })).sort((a, b) => a.health - b.health),
+    [rows, v],
+  );
   const worst3 = sorted.slice(0, 3);
   const best1 = sorted[sorted.length - 1];
 
@@ -826,11 +839,11 @@ export function AccountantRatiosPanel({
     const lows = worst3
       .map(
         (r, i) =>
-          `${i + 1}. ${r.friendly} (${localizeCopy(r.technical, market)}): ${fmt(r.value, r.format, market, r.technical)} — benchmark ${r.benchmark}\n   Suggested next step: ${localizeCopy(r.nextSteps[0], market)}`,
+          `${i + 1}. ${r.friendly} (${localizeCopy(r.technical, market)}): ${fmt(r.value, r.format, market, r.technical, v)} — benchmark ${r.benchmark}\n   Suggested next step: ${localizeCopy(r.nextSteps[0], market)}`,
       )
       .join("\n\n");
     const high = best1
-      ? `${best1.friendly}: ${fmt(best1.value, best1.format, market, best1.technical)} (benchmark ${best1.benchmark})`
+      ? `${best1.friendly}: ${fmt(best1.value, best1.format, market, best1.technical, v)} (benchmark ${best1.benchmark})`
       : "—";
     const subject = `${clientName} — financial health update & 3 priority actions`;
     const body = `Hi ${clientName},
@@ -853,10 +866,10 @@ Your Milōn accountant`;
   const buildWhatsapp = () => {
     const w = worst3[0];
     const wTxt = w
-      ? `${w.friendly} is at ${fmt(w.value, w.format, market, w.technical)} (benchmark ${w.benchmark}) — worth a closer look.`
+      ? `${w.friendly} is at ${fmt(w.value, w.format, market, w.technical, v)} (benchmark ${w.benchmark}) — worth a closer look.`
       : "";
     const bTxt = best1
-      ? `Good news: ${best1.friendly} is healthy at ${fmt(best1.value, best1.format, market, best1.technical)}.`
+      ? `Good news: ${best1.friendly} is healthy at ${fmt(best1.value, best1.format, market, best1.technical, v)}.`
       : "";
     return `Hi ${clientName}, quick Milōn update.\n\n${bTxt}\n${wTxt}\n\nWant to set up a short call to discuss ${w?.friendly ?? "your numbers"}?`;
   };
@@ -889,15 +902,14 @@ Your Milōn accountant`;
       pdf.text(`Generated: ${date}`, 14, 25);
 
       const tableRows = rows.map((r) => {
-        const health = !isFinite(r.health)
-          ? "—"
-          : healthLabel(r.health);
+        const missing = rowMissing(r);
+        const health = healthLabel(r.health, missing);
         return [
           r.friendly,
           localizeCopy(r.technical, market),
-          fmt(r.value, r.format, market, r.technical),
+          fmt(r.value, r.format, market, r.technical, v),
           r.benchmark,
-          isFinite(r.health) ? `${Math.round(r.health)}%` : "—",
+          missing || !isFinite(r.health) ? "—" : `${Math.round(r.health)}%`,
           health,
         ];
       });
@@ -1039,7 +1051,7 @@ Your Milōn accountant`;
                         {localizeCopy(r.formula, market)}
                       </td>
                       <td className="p-3 text-right font-semibold tabular-nums r">
-                        {fmt(r.value, r.format, market, r.technical)}
+                        {fmt(r.value, r.format, market, r.technical, v)}
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">
@@ -1084,7 +1096,9 @@ Your Milōn accountant`;
                         })()}
                       </td>
                       <td className="p-3">
-                        <Badge className={healthCls(r.health)}>{healthLabel(r.health)}</Badge>
+                        <Badge className={healthCls(r.health, rowMissing(r))}>
+                          {healthLabel(r.health, rowMissing(r))}
+                        </Badge>
                       </td>
                     </tr>
                   );
@@ -1101,7 +1115,7 @@ Your Milōn accountant`;
             <DialogTitle>{openRow?.friendly}</DialogTitle>
             <DialogDescription>
               {openRow ? localizeCopy(openRow.technical, market) : ""} ·{" "}
-              {openRow ? fmt(openRow.value, openRow.format, market, openRow.technical) : ""} · benchmark{" "}
+              {openRow ? fmt(openRow.value, openRow.format, market, openRow.technical, v) : ""} · benchmark{" "}
               {openRow?.benchmark}
             </DialogDescription>
           </DialogHeader>

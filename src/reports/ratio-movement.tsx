@@ -19,6 +19,7 @@ import { movementNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { PILLAR_LABELS } from "@/lib/health-score";
 import { formatReportAmount, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { renderedMetricMissing } from "@/lib/missing-metrics";
 import { reportKicker } from "@/lib/report-catalog";
 import { ReportSection } from "@/lib/report-pdf-layout";
 import {
@@ -59,11 +60,19 @@ export type RatioMovementPDFProps = {
   sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
+  /** Source books. A current day count of 0 is missing when these have no balance sheet. */
+  financials?: object | null;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function fmt(value: number | null, unit: string): string {
+function fmt(
+  value: number | null,
+  unit: string,
+  name?: string,
+  financials?: object | null,
+): string {
+  if (renderedMetricMissing({ value, name, financials })) return "—";
   if (value === null || !Number.isFinite(value)) return "—";
   if (unit === "%") return formatReportAmount(value, ZA_MARKET, { style: "percent" });
   if (unit === "×") return `${value.toFixed(2)}×`;
@@ -139,6 +148,7 @@ export function RatioMovementPDF({
   reviewSignoff,
   operatingProfile,
   market,
+  financials,
 }: RatioMovementPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const labels = periodLabels ?? {
@@ -240,10 +250,10 @@ export function RatioMovementPDF({
                   >
                     {row.ratio_name}
                   </Text>
-                  <Text style={[S.val, { flex: 1 }]}>{fmt(row.twelve_months, row.unit)}</Text>
-                  <Text style={[S.val, { flex: 1 }]}>{fmt(row.six_months, row.unit)}</Text>
-                  <Text style={[S.val, { flex: 1 }]}>{fmt(row.three_months, row.unit)}</Text>
-                  <Text style={[S.cur, { flex: 1 }]}>{fmt(row.current, row.unit)}</Text>
+                  <Text style={[S.val, { flex: 1 }]}>{fmt(row.twelve_months, row.unit, row.ratio_name, financials)}</Text>
+                  <Text style={[S.val, { flex: 1 }]}>{fmt(row.six_months, row.unit, row.ratio_name, financials)}</Text>
+                  <Text style={[S.val, { flex: 1 }]}>{fmt(row.three_months, row.unit, row.ratio_name, financials)}</Text>
+                  <Text style={[S.cur, { flex: 1 }]}>{fmt(row.current, row.unit, row.ratio_name, financials)}</Text>
                   <View style={[S.sparkCell, { marginLeft: 8 }]}>
                     <Sparkline
                       values={series}

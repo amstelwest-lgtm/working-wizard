@@ -233,7 +233,11 @@ assert(!Number.isFinite(ratios["Debtor Days"]), `debtor days ${ratios["Debtor Da
 assert(Number.isFinite(ratios["Gross Margin"]), "gross margin still uses this statement");
 for (const name of ["Fixed Cost Ratio", "Tax Burden", "Debtor Days"] as const) {
   const shown = presentScorecardRatio({ name, value: ratios[name], periodMonths: 3 });
-  assert(shown.text === "Not enough data", `${name} shows ${shown.text}`);
+  if (name === "Debtor Days") {
+    assert(shown.text === "—" && shown.note === "Not enough data" && shown.unscored, `${name} shows ${shown.text}`);
+  } else {
+    assert(shown.text === "Not enough data", `${name} shows ${shown.text}`);
+  }
 }
 
 const added = planStatementImport({

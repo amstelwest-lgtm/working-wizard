@@ -19,6 +19,8 @@ type Props = {
   healthTier: Tier;
   /** Missing inputs — no gauge, no fake Critical score. */
   unscored?: boolean;
+  /** Chip when unscored. Missing figures say "Not enough data". */
+  statusLabel?: string;
   priorScore?: number;
   /** Optional historical values (oldest → newest) for a trend sparkline. */
   trend?: (number | null | undefined)[];
@@ -62,6 +64,7 @@ export function RatioRow({
   healthScore,
   healthTier,
   unscored,
+  statusLabel,
   priorScore,
   trend,
   isAlternate = false,
@@ -104,7 +107,7 @@ export function RatioRow({
 
       <View style={[styles.tierChip, { backgroundColor: unscored ? C.soft : tier.soft }]}>
         <Text style={[styles.tierText, { color: unscored ? C.muted : tier.deep }]}>
-          {unscored ? NOT_SCORED : tier.label}
+          {unscored ? (statusLabel ?? NOT_SCORED) : tier.label}
         </Text>
       </View>
 

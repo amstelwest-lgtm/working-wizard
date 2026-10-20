@@ -35,12 +35,13 @@ import { reportKicker } from "@/lib/report-catalog";
 export type LaborPeriod = {
   label: string;
   revenue: number;
-  employees: number;
+  /** Null when headcount was not on the file. A stored 0 stays 0. */
+  employees: number | null;
   labor_cost: number;
 };
 
 export type LaborProductivityData = {
-  employee_count: number;
+  employee_count: number | null;
   total_labor_cost: number;
   total_revenue: number;
   total_gp: number;
@@ -185,7 +186,7 @@ function LaborTrend({
                   { left: i * slot, width: slot, bottom: CH_LABEL_H + revH + 3 },
                 ]}
               >
-                {p.employees} staff
+                {p.employees == null ? "—" : p.employees} staff
               </Text>
               <Text style={[ch.label, { left: i * slot, width: slot }]}>{p.label}</Text>
             </Fragment>
@@ -251,7 +252,9 @@ export function LaborProductivityPDF({
     );
   }
   const hs = d.health_scores;
-  const headcountKnown = d.employee_count > 0 && Number.isFinite(d.revenue_per_employee);
+  const employees = d.employee_count;
+  const headcountKnown =
+    employees != null && employees > 0 && Number.isFinite(d.revenue_per_employee);
   const realGrowth =
     d.revenue_growth != null && d.inflation_rate != null
       ? d.revenue_growth - d.inflation_rate
@@ -283,7 +286,7 @@ export function LaborProductivityPDF({
     },
     {
       label: "Headcount",
-      value: headcountKnown ? `${d.employee_count}` : "—",
+      value: headcountKnown ? `${employees}` : "—",
       note: !headcountKnown
         ? "Not scored"
         : Number.isFinite(laborShare)
@@ -442,7 +445,7 @@ export function LaborProductivityPDF({
                   textAlign: "right",
                 }}
               >
-                {p.employees}
+                {p.employees == null ? "—" : p.employees}
               </Text>
               <Text
                 style={{
@@ -464,7 +467,7 @@ export function LaborProductivityPDF({
                   textAlign: "right",
                 }}
               >
-                {p.employees > 0 ? fmtRandCompact(p.revenue / p.employees, m) : "—"}
+                {p.employees != null && p.employees > 0 ? fmtRandCompact(p.revenue / p.employees, m) : "—"}
               </Text>
             </View>
           ))}
@@ -492,13 +495,13 @@ export function LaborProductivityPDF({
                     {fmtRand(p.revenue, m)}
                   </Text>
                   <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>
-                    {p.employees}
+                    {p.employees == null ? "—" : p.employees}
                   </Text>
                   <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>
                     {fmtRand(p.labor_cost, m)}
                   </Text>
                   <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>
-                    {p.employees > 0 ? fmtRandCompact(p.revenue / p.employees, m) : "—"}
+                    {p.employees != null && p.employees > 0 ? fmtRandCompact(p.revenue / p.employees, m) : "—"}
                   </Text>
                 </View>
               ))}

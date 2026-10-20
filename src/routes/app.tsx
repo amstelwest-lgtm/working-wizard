@@ -112,6 +112,7 @@ import {
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { ratiosStatementFigures, withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { cashDriverDayFigures } from "@/lib/cash-driver-label";
+import { NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
@@ -3886,6 +3887,7 @@ function Index() {
     ratioMeta: RATIO_META,
     inventoryApplies: stockSittingApplies(operatingProfile),
     dayCounts: cashDriverDayFigures(v as unknown as Record<string, unknown>),
+    financials: v,
     driverNotes: grossImplausible ? { grossMargin: GROSS_MARGIN_MAPPING_NOTE } : undefined,
   });
 
@@ -5873,7 +5875,14 @@ function Index() {
                                     const series = seriesFor(k, rawVal);
                                     const delta = pctDelta(series);
                                     const bm = benchmarkFor(k);
-                                    const fmtd = !isFinite(rawVal)
+                                    const rowMissing = renderedMetricMissing({
+                                      value: rawVal,
+                                      name: meta.techName,
+                                      financials: v,
+                                    });
+                                    const fmtd = rowMissing
+                                      ? "—"
+                                      : !isFinite(rawVal)
                                       ? "Not enough data"
                                       : fmt === "pct"
                                         ? `${(rawVal * 100).toFixed(1)}%`
@@ -5883,14 +5892,14 @@ function Index() {
                                             ? `${Math.round(rawVal)} d`
                                             : formatNumber(rawVal, boardMarket);
                                     const healthTier = scoreTier(health);
-                                    const hCls = !isFinite(health)
+                                    const hCls = rowMissing || !isFinite(health)
                                       ? "text-slate-400"
                                       : healthTier === "healthy"
                                         ? "text-emerald-400"
                                         : healthTier === "at_risk"
                                           ? "text-amber-400"
                                           : "text-rose-400";
-                                    const hLabelCls = !isFinite(health)
+                                    const hLabelCls = rowMissing || !isFinite(health)
                                       ? "text-slate-500/70"
                                       : healthTier === "healthy"
                                         ? "text-emerald-500/70"
@@ -5980,14 +5989,16 @@ function Index() {
                                         </td>
                                         <td className="px-4 py-3 text-right">
                                           <div className={`text-sm font-bold tabular-nums ${hCls}`}>
-                                            {k === "grossMargin" && grossImplausible
+                                            {rowMissing || (k === "grossMargin" && grossImplausible)
                                               ? "—"
                                               : isFinite(health)
                                                 ? `${Math.round(health)}`
                                                 : "—"}
                                           </div>
                                           <div className={`text-[10px] ${hLabelCls}`}>
-                                            {k === "grossMargin" && grossImplausible
+                                            {rowMissing
+                                              ? NOT_ENOUGH_DATA
+                                              : k === "grossMargin" && grossImplausible
                                               ? GROSS_MARGIN_MAPPING_NOTE
                                               : isFinite(health)
                                                 ? healthBandLabel(healthTier)

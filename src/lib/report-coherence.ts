@@ -10,6 +10,12 @@
 import { GROSS_MARGIN_MAPPING_NOTE, grossMarginLooksImplausible, scoreRatio } from "@/lib/health-score";
 import { formatReportAmount } from "@/lib/market/format";
 import {
+  balanceSheetDayInputsMissing,
+  isDayMetricName,
+  NOT_ENOUGH_DATA,
+  renderedMetricMissing,
+} from "@/lib/missing-metrics";
+import {
   equityMultiplierRatio,
   healthBandLabel,
   interestBurdenRatio,
@@ -441,6 +447,10 @@ export type ScorecardPresentation = {
   unscored: boolean;
 };
 
+function balanceSheetMakesDayMissing(input: { financials?: object | null }): boolean {
+  return balanceSheetDayInputsMissing(input.financials);
+}
+
 /** One presentation for the scorecard row, the DuPont strip, and the asset report. */
 export function presentScorecardRatio(input: {
   name: string;
@@ -453,7 +463,27 @@ export function presentScorecardRatio(input: {
   cashFlowKnown?: boolean;
   /** Industry label. An implausible gross margin is not scored Healthy. */
   industry?: string | null;
+  /** Source books. A day count of 0 is missing when these have no AR, inventory, or payables. */
+  financials?: object | null;
 }): ScorecardPresentation {
+  if (
+    isDayMetricName(input.name) &&
+    renderedMetricMissing({
+      value: input.value,
+      name: input.name,
+      financials: input.financials,
+    }) &&
+    (balanceSheetMakesDayMissing(input) || !DAYS_NOT_MEANINGFUL_ROWS.has(input.name))
+  ) {
+    return {
+      include: true,
+      text: "—",
+      headline: "—",
+      scoredValue: null,
+      note: NOT_ENOUGH_DATA,
+      unscored: true,
+    };
+  }
   if (
     input.name === "Gross Margin" &&
     Number.isFinite(input.value) &&

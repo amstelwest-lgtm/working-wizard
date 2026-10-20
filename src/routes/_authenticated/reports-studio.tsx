@@ -59,6 +59,11 @@ import {
   taxBurdenRatio,
 } from "@/lib/ratios";
 import { benchmarkEmptyCopy } from "@/lib/benchmark-empty";
+import {
+  balanceSheetDayInputsMissing,
+  benchmarkCardNote,
+  CYCLE_REPORT_NEEDS,
+} from "@/lib/missing-metrics";
 import { benchmarkSectorForClient } from "@/lib/benchmark-sector";
 import {
   ASSET_REPORT_NEEDS,
@@ -1799,7 +1804,8 @@ export function buildLaborData(
   const employees = getNum(fin, "employees");
   const cogs = getNum(fin, "cogs");
   const hasRevenue = Number.isFinite(revenue) && revenue > 0;
-  const hasEmployees = Number.isFinite(employees) && employees > 0;
+  const employeesKnown = Number.isFinite(employees);
+  const hasEmployees = employeesKnown && employees > 0;
   const hasLabor = Number.isFinite(laborCost) && laborCost > 0;
   if (!hasRevenue && !hasEmployees && !hasLabor) return null;
   const gpKnown = hasRevenue && Number.isFinite(cogs);
@@ -1817,7 +1823,7 @@ export function buildLaborData(
     Number.isFinite(priorRev) && priorRev > 0 ? (revenue - priorRev) / priorRev : null;
 
   return {
-    employee_count: hasEmployees ? Math.round(employees) : 0,
+    employee_count: employeesKnown ? Math.round(employees) : null,
     total_labor_cost: hasLabor ? laborCost : 0,
     total_revenue: hasRevenue ? revenue : 0,
     total_gp: gp,
@@ -1831,7 +1837,7 @@ export function buildLaborData(
       {
         label: "Current Period",
         revenue: hasRevenue ? revenue : 0,
-        employees: hasEmployees ? Math.round(employees) : 0,
+        employees: employeesKnown ? Math.round(employees) : null,
         labor_cost: hasLabor ? laborCost : 0,
       },
     ],
@@ -2325,6 +2331,7 @@ async function loadClientReportData(
     partMonth,
     cashFlowKnown: cashFlowKnown(fin),
     industry: reportIndustry,
+    financials: fin,
   });
   ratioResults = withPriorRatioScores(ratioResults, priorSnap?.ratios ?? null);
 
@@ -2734,6 +2741,7 @@ function buildGEN(
         reviewSignoff: null,
         operatingProfile,
         market,
+        financials: isDemo ? null : cd?.financials,
       });
     },
     waterfall: async (s, p) => {
@@ -2845,6 +2853,7 @@ function buildGEN(
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
+        financials: isDemo ? null : cd?.financials,
       });
     },
     benchmark: async (s, p) => {
@@ -2856,19 +2865,13 @@ function buildGEN(
         : (INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0]);
       if (cd && cd.benchmark.length === 0) {
         const studio = INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0];
-        const empty = benchmarkEmptyCopy({
+        const note = benchmarkCardNote({
+          rows: cd.benchmark,
           profileSectorName: cd.benchmarkSector?.name ?? null,
           studioSectorName: studio.name,
         });
-        const error = new Error(empty.message) as Error & {
-          offerSetBusinessType?: boolean;
-          emptyCta?: string;
-        };
-        // A named sector with no rows still links to the profile so the
-        // accountant can review the type. The helper does not invent rows.
-        error.offerSetBusinessType = empty.offerSetBusinessType;
-        error.emptyCta = empty.cta;
-        throw error;
+        // The card is already disabled with this note. Do not toast Generation failed.
+        return new Blob([note ?? ""], { type: "text/plain" });
       }
       if (sample && !cd) {
         throw new Error(
@@ -3731,10 +3734,20 @@ export function ReportsStudio({
     const ready = reportReady(key, {
       leverageReady: Boolean(clientData.leverage),
       assetReady: Boolean(clientData.assets),
+      cycleReady: !balanceSheetDayInputsMissing(clientData.financials),
     });
+    if (ready && key === "benchmark" && clientData.benchmark.length === 0) {
+      const studio = INDUSTRIES.find((i) => i.code === settings.industryCode) ?? INDUSTRIES[0];
+      return benchmarkCardNote({
+        rows: clientData.benchmark,
+        profileSectorName: clientData.benchmarkSector?.name ?? null,
+        studioSectorName: studio.name,
+      });
+    }
     if (ready) return null;
     if (key === "leverage") return LEVERAGE_REPORT_NEEDS;
     if (key === "assets") return ASSET_REPORT_NEEDS;
+    if (key === "cycle") return CYCLE_REPORT_NEEDS;
     return null;
   };
   const studioBusy = dataLoading || resolvingClient;
@@ -3933,6 +3946,8 @@ export function ReportsStudio({
         }
         return;
       }
+      const unavailable = unavailableFor(report.key);
+      if (unavailable) return;
       const blob = await GEN[report.key](settings, profile);
       const copy = reportCopy(report, clientData?.market ?? ZA_MARKET);
       triggerDownload(blob, makeSafeFilename(settings, copy.filename, clientData?.dataPeriodLabel));
@@ -3957,6 +3972,28 @@ export function ReportsStudio({
 
   async function handlePreview(report: ReportMeta): Promise<boolean> {
     if (!assertCanGenerate()) return false;
+    const unavailable = unavailableFor(report.key);
+    if (unavailable) {
+      const studioIndustry = INDUSTRIES.find((i) => i.code === settings.industryCode) ?? INDUSTRIES[0];
+      const empty =
+        report.key === "benchmark"
+          ? benchmarkEmptyCopy({
+              profileSectorName: clientData?.benchmarkSector?.name ?? null,
+              studioSectorName: studioIndustry.name,
+            })
+          : null;
+      setPreviewKey(report.key);
+      setPreviewState({
+        key: report.key,
+        name: reportCopy(report, clientData?.market ?? ZA_MARKET).name,
+        blobUrl: null,
+        loading: false,
+        emptyMessage: unavailable,
+        offerSetBusinessType: empty?.offerSetBusinessType === true,
+        emptyCta: empty?.cta,
+      });
+      return true;
+    }
     if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
     setPreviewKey(report.key);
     setPreviewState({

@@ -1595,6 +1595,7 @@ function ClientView() {
     ratioMeta: sphereRatioMeta,
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
     dayCounts: cashDriverDayFigures(financials),
+    financials,
     driverNotes: grossMarginLooksImplausible(
       statementGrossMarginFraction(financials) ?? ratios["Gross Margin"] ?? Number.NaN,
       healthIndustry,

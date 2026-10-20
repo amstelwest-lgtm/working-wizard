@@ -115,8 +115,12 @@ function dayLeaks(text: string): string[] {
   if (/\b0d\b/.test(text)) leaks.push("0d");
   if (/\b0 days\b/i.test(text)) leaks.push("0 days");
   const flat = text.replace(/\s+/g, " ");
-  const band = flat.match(/((?:debtor|creditor|inventory|working capital) days|days sales outstanding|days payable outstanding).{0,80}?(HEALTHY|WATCH)/i);
-  if (band) leaks.push(`${band[1]} ${band[2]}`);
+  for (const line of text.split("\n")) {
+    const band = line.match(
+      /((?:debtor|creditor|inventory|working capital) days|days sales outstanding|days payable outstanding|days inventory outstanding|cash conversion|funding gap|accounts payable).{0,80}?(HEALTHY|WATCH|CRITICAL)/i,
+    );
+    if (band) leaks.push(`${band[1]} ${band[2]}`);
+  }
   if (/It takes 0 days/i.test(flat)) leaks.push("It takes 0 days");
   if (/is 0d/i.test(flat)) leaks.push("is 0d");
   if (/Generation failed/i.test(text)) leaks.push("Generation failed");
@@ -163,6 +167,7 @@ async function main() {
         equity: Number(fin.equity),
         periodMonths: 12,
         cashFlowKnown: true,
+        financials: fin,
       });
       const readiness = reportInputsFromFinancials(fin);
       const cycleReady = reportReady("cycle", {

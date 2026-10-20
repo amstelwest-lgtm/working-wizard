@@ -939,6 +939,7 @@ export function SphereHero({
             {activePillar.drivers.map((d, i) => {
               const t = tierOf(d.health);
               const pct = isFinite(d.health) ? Math.max(2, Math.min(100, d.health)) : 0;
+              const missingDriver = Boolean(d.note) && !isFinite(d.health);
               const clickable = Boolean(onDriverClick);
               const rowClass = `health-driver-row w-full min-w-0 animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-[#DBEAFE] bg-white p-3 text-left shadow-[0_8px_24px_rgba(16,42,67,0.06)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none ${
                 clickable
@@ -967,6 +968,8 @@ export function SphereHero({
                       {d.reading ? (
                         d.na ? (
                           <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>N/A</p>
+                        ) : missingDriver ? (
+                          <p className="text-xs font-semibold text-slate-500">{d.note}</p>
                         ) : (
                           <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>
                             {isFinite(d.health) ? TIER_LABEL[t] : "—"}
@@ -988,6 +991,7 @@ export function SphereHero({
                       )}
                     </div>
                   </div>
+                  {missingDriver ? null : (
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                     <div
                       className="h-full rounded-full transition-all duration-700"
@@ -998,6 +1002,7 @@ export function SphereHero({
                       }}
                     />
                   </div>
+                  )}
                   {clickable ? null : <DigLeaf />}
                 </>
               );

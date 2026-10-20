@@ -2,6 +2,7 @@ import {
   computedDaysInventory,
   ratiosStatementFigures,
 } from "@/lib/deliverable-input-config";
+import { NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 
 /** Drivers whose row currently prints a 0–100 score under a days name. */
 export const DAY_SCORE_DRIVER_KEYS = [
@@ -27,8 +28,12 @@ export function dayScoreDriverLabel(
   name: string,
   days: number | null | undefined,
   score: number,
+  financials?: object | null,
 ): string {
   const title = name.trim();
+  if (renderedMetricMissing({ value: days, name: title, financials })) {
+    return `${title} · — · ${NOT_ENOUGH_DATA}`;
+  }
   const knownDays = typeof days === "number" && Number.isFinite(days);
   const knownScore = Number.isFinite(score);
   const dayPart = knownDays ? `${Math.round(days)} days` : null;

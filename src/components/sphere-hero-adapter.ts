@@ -1,6 +1,7 @@
 import type { SpherePillar } from "@/components/sphere-hero";
 import { dayScoreDriverLabel, isDayScoreDriver } from "@/lib/cash-driver-label";
 import { PILLAR_SHORT_LABELS } from "@/lib/health-score";
+import { balanceSheetDayInputsMissing, NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 import { HEALTH_BAND_TABLE, type HealthTier } from "@/lib/ratios";
 
 /**
@@ -71,6 +72,8 @@ export type BuildSphereArgs = {
   dayCounts?: Partial<Record<string, number | null>>;
   /** Per-driver note, keyed by ratio key. Replaces the band word on that row. */
   driverNotes?: Partial<Record<string, string>>;
+  /** Source books. Day drivers with no balance sheet are not scored. */
+  financials?: object | null;
 };
 
 export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
@@ -88,13 +91,22 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
       const label = ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k;
       const tracked = isDayScoreDriver(k) && args.dayCounts != null && !noStock;
       const days = tracked ? (args.dayCounts?.[k] ?? null) : undefined;
-      const reading = tracked ? dayScoreDriverLabel(label, days, health) : undefined;
-      const note = args.driverNotes?.[k]?.trim() || undefined;
+      const dayMissing =
+        isDayScoreDriver(k) &&
+        !noStock &&
+        ((tracked &&
+          renderedMetricMissing({ value: days, name: label, financials: args.financials })) ||
+          balanceSheetDayInputsMissing(args.financials));
+      const reading =
+        tracked && !dayMissing ? dayScoreDriverLabel(label, days, health, args.financials) : undefined;
+      const note = dayMissing
+        ? NOT_ENOUGH_DATA
+        : args.driverNotes?.[k]?.trim() || undefined;
       return {
         key: k,
         label,
         description: ratioMeta[k]?.techName,
-        health,
+        health: dayMissing ? Number.NaN : health,
         na: noStock ? true : undefined,
         reading: reading && reading !== label ? reading : undefined,
         note,

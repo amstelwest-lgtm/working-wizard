@@ -44,6 +44,9 @@ const fullBook = {
   netIncome: "10",
   equity: "50",
   totalAssets: "80",
+  receivables: "20",
+  inventory: "10",
+  payables: "8",
 };
 const partialBook = { revenue: "20", cogs: "5" };
 const clients = [
@@ -56,8 +59,8 @@ assert(
   firmReportsReadyTotal(clients) === perClient.reduce((sum, count) => sum + count, 0),
   "the firm total equals the sum of the per-client counts",
 );
-assert(perClient[0] === 11 && perClient[1] === 9 && perClient[2] === 0, "each client uses the shared ready count");
-assert(firmReportsHomeLine(perClient.reduce((sum, count) => sum + count, 0)) === "Reports: 20 ready to send", "firm Home names the summed count");
+assert(perClient[0] === 11 && perClient[1] === 8 && perClient[2] === 0, "each client uses the shared ready count");
+assert(firmReportsHomeLine(perClient.reduce((sum, count) => sum + count, 0)) === "Reports: 19 ready to send", "firm Home names the summed count");
 assert(firmReportsHomeLine(1) === "Reports: 1 ready to send", "a single ready report stays singular");
 assert(firmReportsHomeLine(0) === null, "a zero firm total hides the line");
 assert(firmReportsHomeClient(clients) === "alpha", "the reports list opens on the client with the most ready reports");
