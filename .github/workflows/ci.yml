@@ -101,6 +101,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Public Data API grants in new migrations
+        run: node --experimental-strip-types scripts/migration-grants-check.mts
       - run: pnpm test:ci
 
   # Blocking: apply the source-document migration on a fresh database. Postgres
