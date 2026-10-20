@@ -340,8 +340,8 @@ export function labelHealthScore(input: {
 } {
   const storedNote =
     input.storedScore != null
-      ? "Live score from the current books, with the cash floor applied. stored_score is the older snapshot and is not the score to quote."
-      : "Live score from the current books, with the cash floor applied. No stored score is on file.";
+      ? "Live score from the current books, with the cash floor applied. stored_score is the older snapshot and is not the score to quote. Do not write a stored-versus-live comparison."
+      : "Live score from the current books, with the cash floor applied. No stored score is on file. Quote only the live score.";
   return {
     overall: input.liveOverall,
     overall_as_of: null,

@@ -6,6 +6,7 @@ import { agentCardLines, type AgentCardPhase } from "@/lib/agent-card-phase";
 import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
+import { DRAFT_OUT_OF_DATE } from "@/lib/draft-figures";
 import { AgentChipIcon } from "@/components/chrome-icons";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import { taxSampleCardVisible } from "@/lib/tax-specialist/enabled";
@@ -107,15 +108,21 @@ export function OwnerNeedsStrip({
         </button>
         <button type="button" className="owner-needs-item" onClick={openDrafts}>
           <b>{needs.draftsHeading}</b>
-          {needs.draftLines.map((line, index) => (
-            <span
-              key={line}
-              data-draft-stale={needs.draftStale?.[index] ? "true" : undefined}
-              title={needs.draftStale?.[index] ? "Stored draft refreshed from the scorecard." : undefined}
-            >
-              {line}
-            </span>
-          ))}
+          {needs.draftLines.map((line, index) => {
+            const stale = Boolean(needs.draftStale?.[index]);
+            return (
+              <span
+                key={`${line}-${index}`}
+                data-draft-stale={stale ? "true" : undefined}
+                title={stale ? DRAFT_OUT_OF_DATE : undefined}
+              >
+                {line}
+                {stale && line !== DRAFT_OUT_OF_DATE ? (
+                  <span className="owner-needs-refresh"> {DRAFT_OUT_OF_DATE}</span>
+                ) : null}
+              </span>
+            );
+          })}
         </button>
         <button type="button" className="owner-needs-item" onClick={onDeliverables}>
           <b>{needs.deliverablesHeading}</b>

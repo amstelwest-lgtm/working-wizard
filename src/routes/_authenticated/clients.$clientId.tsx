@@ -332,7 +332,8 @@ import {
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
-import { homeActionNeeds, openActionSentence, presentHomeDraftTitle } from "@/lib/owner-needs";
+import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
+import { draftStoredFiguresHash } from "@/lib/draft-figures";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState } from "@/components/primitives";
@@ -3684,20 +3685,25 @@ function ClientView() {
         draftFindingLabel(row) === DRAFT_NEEDS_ACCOUNTANT,
     );
     const draftsHeading = homeActivity.loading ? "Drafts" : waiting.length ? "Drafts" : "Drafts";
-    const presented = waiting[0]
-      ? presentHomeDraftTitle(
-          canonicalScoreProse(rewriteDraftMonthStamp(waiting[0].title)),
-          canonicalRatios,
-        )
+    const liveDraft = {
+      overall: overallHealth.overall,
+      storedHash: waiting[0] ? draftStoredFiguresHash(waiting[0].evidence) : null,
+    };
+    const titlePresented = waiting[0]
+      ? presentHomeDraftTitle(waiting[0].title, canonicalRatios, liveDraft)
       : null;
+    const bodyPresented = waiting[0]?.detail?.trim()
+      ? presentHomeDraftBody(waiting[0].detail, canonicalRatios, liveDraft)
+      : null;
+    const presented = titlePresented?.text ? titlePresented : bodyPresented;
     const draftLines = homeActivity.loading
       ? ["Checking drafts."]
       : homeActivity.error
         ? ["Drafts aren't available yet."]
-        : presented
+        : presented?.text
           ? [presented.text]
           : ["No draft waiting."];
-    const draftStale = presented ? [presented.stale] : undefined;
+    const draftStale = presented ? [presented.stale || presented.refresh || Boolean(bodyPresented?.refresh)] : undefined;
     const booksLine =
       homeStatementsLine(statementSpan) ?? booksAnswerSentence({ freshness: dataFreshness });
     return {
@@ -3717,6 +3723,7 @@ function ClientView() {
     openPlanUnavailable,
     homeActivity,
     canonicalRatios,
+    overallHealth.overall,
     dataFreshness,
     reportsLine,
     statementSpan,
@@ -3758,8 +3765,16 @@ function ClientView() {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
           if (draftFindingLabel(row) !== DRAFT_NEEDS_ACCOUNTANT) return [];
           const title = row.title?.trim() ?? "";
-          return title ? [{ id: row.id, title }] : [];
+          if (!title) return [];
+          return [{
+            id: row.id,
+            title,
+            detail: row.detail,
+            figuresHash: draftStoredFiguresHash(row.evidence),
+          }];
         }),
+        canonicalRatios,
+        healthOverall: overallHealth.overall,
         draftsReady: !homeActivity.loading && !homeActivity.error,
         actionsReady: openPlanTitles != null && !openPlanUnavailable,
         formatMoney: (amount) => formatMoney(amount, gateMarket),
@@ -3783,6 +3798,8 @@ function ClientView() {
       homeBooks,
       statementPosition.receivables,
       homeActivity,
+      canonicalRatios,
+      overallHealth.overall,
       gateMarket,
     ],
   );

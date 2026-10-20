@@ -3,8 +3,8 @@
  * Counts come from the caller. Empty stays empty. Nothing here is invented.
  */
 import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
-import { groundAdvisoryNarrative } from "@/lib/advisory-narrative";
 import { repairDraftMetricUnits } from "@/lib/agent-bus";
+import { draftStoredFiguresHash, presentLiveDraft, type DraftLiveFigures } from "@/lib/draft-figures";
 import { homeStatementsLine } from "@/lib/books-answer";
 import { canonicalScoreProse } from "@/lib/score-prose";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
@@ -74,20 +74,52 @@ function countPhrase(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
 
+export type HomeDraftLive = {
+  overall?: number | null;
+  storedHash?: string | null;
+};
+
 /**
- * Home draft title. Stored sentences are rewritten to the scorecard ratios.
- * `stale` means the stored text quoted a different figure. The screen shows
- * the scorecard number. The stored row is left for the next agent run.
+ * Home draft title. Stored sentences are re-read from the live ratios and
+ * the live health score. `stale` / `refresh` means the stored text or its
+ * figures hash no longer matches. The screen shows the live number, or
+ * "Out of date, refresh" when it cannot. The stored row is left as written.
  */
 export function presentHomeDraftTitle(
   title: string,
   canonicalRatios?: Record<string, number> | null,
-): { text: string; stale: boolean } {
-  const base = repairDraftMetricUnits(canonicalScoreProse(rewriteDraftMonthStamp(title.trim())));
-  if (!base) return { text: "", stale: false };
-  if (!canonicalRatios) return { text: base, stale: false };
-  const grounded = repairDraftMetricUnits(groundAdvisoryNarrative(base, canonicalRatios));
-  return { text: grounded, stale: grounded !== base };
+  live?: HomeDraftLive | null,
+): { text: string; stale: boolean; refresh: boolean } {
+  return presentStoredDraft(title, canonicalRatios, live);
+}
+
+/** Same re-read as the title, for the draft body. */
+export function presentHomeDraftBody(
+  body: string,
+  canonicalRatios?: Record<string, number> | null,
+  live?: HomeDraftLive | null,
+): { text: string; stale: boolean; refresh: boolean } {
+  return presentStoredDraft(body, canonicalRatios, live);
+}
+
+function presentStoredDraft(
+  raw: string,
+  canonicalRatios?: Record<string, number> | null,
+  live?: HomeDraftLive | null,
+): { text: string; stale: boolean; refresh: boolean } {
+  const base = repairDraftMetricUnits(canonicalScoreProse(rewriteDraftMonthStamp(raw.trim())));
+  if (!base) return { text: "", stale: false, refresh: false };
+  const figures: DraftLiveFigures = {
+    ratios: canonicalRatios,
+    overall: live?.overall,
+    storedHash: live?.storedHash,
+  };
+  const presented = presentLiveDraft(base, figures);
+  return {
+    text: presented.text ? repairDraftMetricUnits(presented.text) : "",
+    stale: presented.stale,
+    refresh: presented.refresh,
+  };
 }
 
 export function ownerDraftTitles(
@@ -100,30 +132,42 @@ export function ownerDraftTitles(
 export function ownerDraftPresentations(
   findings: readonly AgentFindingRow[],
   canonicalRatios?: Record<string, number> | null,
-): { text: string; stale: boolean }[] {
+  live?: { overall?: number | null } | null,
+): { text: string; stale: boolean; refresh: boolean }[] {
   return findings.flatMap((row) => {
     if (row.status === "approved") return [];
     if (!isVisibleAgentFinding(row)) return [];
     if (draftFindingLabel(row) !== DRAFT_NEEDS_OWNER) return [];
-    const title = row.title.trim();
-    if (!title) return [];
-    const presented = presentHomeDraftTitle(title, canonicalRatios);
-    return presented.text ? [presented] : [];
+    const shown = presentFindingDraft(row, canonicalRatios, live);
+    return shown.text ? [shown] : [];
   });
 }
 
 export function advisoryDeliverableTitles(
   findings: readonly AgentFindingRow[],
   canonicalRatios?: Record<string, number> | null,
+  live?: { overall?: number | null } | null,
 ): string[] {
   return findings.flatMap((row) => {
     if (row.status === "approved") return [];
     if (!isVisibleAgentFinding(row)) return [];
     if (draftFindingKindLabel(row) !== "Advisory") return [];
     if (draftFindingLabel(row) !== DRAFT_NEEDS_ACCOUNTANT) return [];
-    const title = row.title.trim();
-    return title ? [presentHomeDraftTitle(title, canonicalRatios).text] : [];
+    const shown = presentFindingDraft(row, canonicalRatios, live);
+    return shown.text ? [shown.text] : [];
   });
+}
+
+function presentFindingDraft(
+  row: AgentFindingRow,
+  canonicalRatios?: Record<string, number> | null,
+  live?: { overall?: number | null } | null,
+): { text: string; stale: boolean; refresh: boolean } {
+  const quote = { overall: live?.overall, storedHash: draftStoredFiguresHash(row.evidence) };
+  const title = presentHomeDraftTitle(row.title, canonicalRatios, quote);
+  const body = row.detail?.trim() ? presentHomeDraftBody(row.detail, canonicalRatios, quote) : null;
+  const refresh = title.refresh || title.stale || Boolean(body?.refresh || body?.stale);
+  return { text: title.text || body?.text || "", stale: refresh, refresh };
 }
 
 export function booksSyncCopy(input: {

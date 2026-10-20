@@ -699,8 +699,8 @@ export function OwnerDoor({
     [financials, market.fyStartMonthDefault],
   );
   const draftPresentations = useMemo(
-    () => ownerDraftPresentations(activity.findings, canonicalRatios),
-    [activity.findings, canonicalRatios],
+    () => ownerDraftPresentations(activity.findings, canonicalRatios, { overall: liveHealth?.overall ?? null }),
+    [activity.findings, canonicalRatios, liveHealth?.overall],
   );
   const needs = useMemo(
     () =>
@@ -716,7 +716,9 @@ export function OwnerDoor({
         deliverablesReady: actionsReady,
         deliverablesUnavailable,
         deliverableCount,
-        advisoryTitles: advisoryDeliverableTitles(activity.findings, canonicalRatios),
+        advisoryTitles: advisoryDeliverableTitles(activity.findings, canonicalRatios, {
+          overall: liveHealth?.overall ?? null,
+        }),
         quickBooks,
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
@@ -731,6 +733,7 @@ export function OwnerDoor({
       activity.error,
       activity.findings,
       draftPresentations,
+      liveHealth?.overall,
       canonicalRatios,
       deliverablesUnavailable,
       deliverableCount,

@@ -11,6 +11,7 @@ import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team"
 import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
 import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
 import { canonicalScoreProse, preferLiveHealthProse, type LiveHealthQuote } from "./score-prose";
+import { quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
 import { rewriteDraftMonthStamp } from "./statement-period";
 
 export const TODAY_RATIO_CAP = 3;
@@ -421,8 +422,12 @@ export function formatFindingProse(
     ),
   );
   const repaired = repairDraftMetricUnits(formatted);
-  if (!canonicalRatios) return repaired;
-  return repairDraftMetricUnits(groundAdvisoryNarrative(repaired, canonicalRatios));
+  const grounded = canonicalRatios
+    ? repairDraftMetricUnits(groundAdvisoryNarrative(repaired, canonicalRatios))
+    : repaired;
+  const bag: Record<string, number> = {};
+  for (const entry of figureEntries(figures)) bag[entry.key] = entry.value;
+  return repairDraftMetricUnits(quoteLiveScoreOnly(grounded, liveOverallFromRecord(bag)));
 }
 
 const METRIC_WORD =
@@ -605,9 +610,12 @@ export function findingSentence(input: {
   if (detail && detail !== title && !title.includes(detail)) {
     text = `${title.replace(/[.!?]$/, "")}. ${detail}`;
   }
-  text = preferLiveHealthProse(
-    formatFindingProse(text, input.figures ?? {}, market, input.canonicalRatios),
-    input.liveHealth,
+  text = quoteLiveScoreOnly(
+    preferLiveHealthProse(
+      formatFindingProse(text, input.figures ?? {}, market, input.canonicalRatios),
+      input.liveHealth,
+    ),
+    input.liveHealth?.overall,
   );
   if (!text) return "";
   if (!/[.!?]$/.test(text)) text = `${text}.`;
