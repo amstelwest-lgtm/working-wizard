@@ -3663,6 +3663,10 @@ function Index() {
     timeZone: boardMarket.timezone,
     fyStartMonth,
   });
+  const effectiveRunway =
+    ownerMetrics.runway.kind === "weeks" || ownerMetrics.runway.kind === "zero"
+      ? ownerMetrics.runway.weeks
+      : null;
   const ownerOutlook = ownerMetrics.outlook;
   const openOwnerFm = () => {
     void navigate({
