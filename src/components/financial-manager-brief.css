@@ -74,6 +74,13 @@
   background: #f4f7fb;
 }
 
+.fm-brief-refresh {
+  flex: 1 0 100%;
+  color: #3d5270;
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .fm-brief-moves li {
   display: grid;
   grid-template-columns: 1fr auto;

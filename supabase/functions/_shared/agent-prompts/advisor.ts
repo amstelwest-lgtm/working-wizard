@@ -61,7 +61,7 @@ export function advisorToolSchemas() {
     ),
     readToolSchema(
       "get_health",
-      "Health pillars and the overall score already stored for this client. Do not recompute them.",
+      "Health pillars and the overall score from the current books, with the cash floor applied. Quote these numbers. Do not recompute them. stored_score, when present, is an older snapshot and is not the score to quote. Never write stored N vs live N. Quote only the live score.",
     ),
     readToolSchema("get_statement_history", "Recent statement periods and a few stored ratios each."),
     readToolSchema(

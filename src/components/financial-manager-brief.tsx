@@ -10,6 +10,8 @@ import { HandoffRunStatus } from "@/components/handoff-run-status";
 import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
 import { HandToMenu } from "@/components/hand-to-menu";
 import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
+import { DRAFT_OUT_OF_DATE } from "@/lib/draft-figures";
+import { actionPreviewLine } from "@/lib/owner-needs";
 import { useMarketFormat } from "@/contexts/market";
 import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
 import { agentShortName } from "@/lib/milon-team";
@@ -139,6 +141,7 @@ export function FinancialManagerBrief({
   const { money } = useMarketFormat();
   const [chaseOpen, setChaseOpen] = useState(false);
   const since = brief.priorLabel ? `since ${brief.priorLabel}` : "since last month";
+  const showing = actionPreviewLine(brief.actions.length, brief.actionCount);
 
   return (
     <section className="fm-brief" aria-label="Financial Manager brief" data-fm-brief="true">
@@ -174,6 +177,11 @@ export function FinancialManagerBrief({
       )}
 
       <h3>Act on these</h3>
+      {showing ? (
+        <p className="fm-brief-showing" data-showing-actions="">
+          {showing}
+        </p>
+      ) : null}
       {brief.actions.length > 0 ? (
         <ul className="fm-brief-actions">
           {brief.actions.map((action) => {
@@ -230,8 +238,11 @@ export function FinancialManagerBrief({
       {brief.drafts.length > 0 ? (
         <ul className="fm-brief-drafts">
           {brief.drafts.map((draft) => (
-            <li key={draft.id}>
+            <li key={draft.id} data-draft-stale={draft.refresh ? "true" : undefined}>
               <span>{draft.title}</span>
+              {draft.refresh && draft.title !== DRAFT_OUT_OF_DATE ? (
+                <span className="fm-brief-refresh">{DRAFT_OUT_OF_DATE}</span>
+              ) : null}
               <button type="button" className="btn ghost mini" onClick={() => onOpen("reports")}>
                 Open
               </button>
