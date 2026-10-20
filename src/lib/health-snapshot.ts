@@ -256,6 +256,113 @@ function isHistoricalScoreNote(text: string): boolean {
   return /\b(?:dropped|fell|rose|climbed|declined|improved)\b/i.test(text) && /\d/.test(text);
 }
 
+const CONNECTORS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "so",
+  "but",
+  "with",
+  "against",
+  "of",
+  "at",
+  "to",
+  "for",
+  "from",
+  "in",
+  "on",
+  "by",
+  "is",
+  "are",
+  "was",
+  "be",
+  "its",
+  "that",
+  "this",
+  "these",
+  "those",
+  "current",
+  "reading",
+  "overall",
+  "score",
+  "scores",
+  "scored",
+  "pillar",
+  "pillars",
+  "weakest",
+  "strongest",
+  "health",
+  "figures",
+  "period",
+  "tied",
+  "while",
+  "than",
+  "then",
+  "also",
+  "still",
+  "now",
+]);
+
+/** Known score sentences. Longer clauses first so a weakest-pillar phrase is not split. */
+function templateClausePatterns(): RegExp[] {
+  const pillar = PILLAR_ALT;
+  return [
+    new RegExp(`\\b(?:${pillar})\\b,?\\s+(?:is\\s+)?the weakest pillar at\\s+\\d{1,3}\\b`, "gi"),
+    new RegExp(`\\bwith\\s+(?:${pillar})\\s+weakest at\\s+\\d{1,3}\\b`, "gi"),
+    new RegExp(`\\b(?:${pillar})\\s+pulls\\s+the\\s+(?:overall\\s+)?score\\s+down\\b`, "gi"),
+    /\boverall(?:\s+health)?\s+score\s+of\s+\d{1,3}\b/gi,
+    /\bHealth is\s+\d{1,3}\b/gi,
+    /\bscores\s+\d{1,3}\s*\((?:critical|watch|healthy)\)/gi,
+    new RegExp(`\\b(?:Weakest:\\s*|Strongest pillar:\\s*)?(?:${pillar})\\s*\\(\\d{1,3}\\)`, "gi"),
+    new RegExp(`\\b(?:${pillar})\\s+at\\s+\\d{1,3}\\b`, "gi"),
+    new RegExp(`\\b(?:${pillar})\\s+(?:scores?\\s+)?\\d{1,3}\\b`, "gi"),
+    new RegExp(`\\b\\d{1,2}\\s+(?:${MONTH_WORD})\\s+\\d{4}\\b`, "gi"),
+    new RegExp(`\\b(?:${MONTH_WORD})(?:\\s+\\d{4})?\\b`, "gi"),
+    /\b\d{4}-\d{2}(?:-\d{2})?\b/g,
+  ];
+}
+
+function withoutTemplateClauses(text: string): string {
+  let next = text;
+  for (const pattern of templateClausePatterns()) next = next.replace(pattern, " ");
+  return next;
+}
+
+function residueWords(text: string): string[] {
+  return withoutTemplateClauses(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 0 && !CONNECTORS.has(word) && !/^\d+$/.test(word));
+}
+
+/** True when every word is a known score or period template. */
+export function isTemplateHealthSentence(text: string): boolean {
+  if (residueWords(text).length > 0) return false;
+  return templateClausePatterns().some((pattern) => pattern.test(text));
+}
+
+/**
+ * A score number that sits outside the known templates. Percentages, day
+ * counts, and years are not scores.
+ */
+function freeFormStaleScore(text: string, live: HealthScoreSnapshot): boolean {
+  if (!/\b(?:health|score|pillar|profit|assets|financing|cash)\b/i.test(text)) return false;
+  const liveScores = new Set<number>([live.overall, live.weakestScore, ...live.pillars.map((pillar) => pillar.score)]);
+  const outside = withoutTemplateClauses(text);
+  for (const match of outside.matchAll(/\b(\d{1,3})\b/g)) {
+    const raw = match[0];
+    const at = match.index ?? 0;
+    const around = outside.slice(Math.max(0, at - 8), at + raw.length + 8);
+    if (/%/.test(around) || /\bdays?\b/i.test(around)) continue;
+    const score = Number(raw);
+    if (!liveScores.has(score)) return true;
+  }
+  return false;
+}
+
 /** True when a current-state claim names a pillar, overall, or weakest the snapshot does not. */
 export function healthClaimsDisagree(text: string, live: HealthScoreSnapshot): boolean {
   const weakestAt = new RegExp(
@@ -315,9 +422,9 @@ export type PresentedHealthNarrative = {
 };
 
 /**
- * Stored prose stays when it does not argue with the snapshot.
- * A disagreement replaces the whole narrative. Numbers are not rewritten in place.
- * A two-period note with no current-state claim stays as it was written.
+ * A sentence made of the known score templates is replaced with the live
+ * snapshot sentence. Free-form prose that still quotes a score we cannot
+ * rewrite becomes the regenerate marker. A two-period note stays stored.
  */
 export function presentHealthNarrative(
   text: string,
@@ -327,13 +434,15 @@ export function presentHealthNarrative(
   const trimmed = text.replace(/\s+/g, " ").trim();
   if (!trimmed) return { text: "", stale: false, regenerate: false };
   if (!live) return { text: trimmed, stale: false, regenerate: false };
-  if (stored && healthSnapshotsDiffer(stored, live)) {
-    return { text: FIGURES_CHANGED_REGENERATE, stale: true, regenerate: true };
-  }
   if (isHistoricalScoreNote(trimmed) && !healthClaimsDisagree(trimmed, live)) {
     return { text: trimmed, stale: false, regenerate: false };
   }
-  if (healthClaimsDisagree(trimmed, live)) {
+  const disagrees = healthClaimsDisagree(trimmed, live);
+  const storedDiffers = Boolean(stored && healthSnapshotsDiffer(stored, live));
+  if (isTemplateHealthSentence(trimmed) && (disagrees || storedDiffers)) {
+    return { text: renderHealthNarrative(live), stale: false, regenerate: false };
+  }
+  if (disagrees || freeFormStaleScore(trimmed, live)) {
     return { text: FIGURES_CHANGED_REGENERATE, stale: true, regenerate: true };
   }
   return { text: trimmed, stale: false, regenerate: false };

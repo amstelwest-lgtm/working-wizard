@@ -171,6 +171,9 @@ export function presentLiveDraft(base: string, live?: DraftLiveFigures | null): 
   if (health.regenerate) {
     return { text: health.text, stale: true, refresh: true, regenerate: true };
   }
+  if (health.text !== grounded) {
+    return { text: health.text, stale: false, refresh: false, regenerate: false };
+  }
   const changed = grounded !== trimmed;
   const drifted = draftFiguresDrift(live?.storedHash, { ratios, overall });
   const refresh = changed || drifted;

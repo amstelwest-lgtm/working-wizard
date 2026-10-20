@@ -115,12 +115,14 @@ for (const text of rendered) {
   assert(!/profit pulls the (?:overall )?score down/i.test(text), text);
 }
 
-assert(analystShown.includes(FIGURES_CHANGED_REGENERATE), analystShown);
+assert(analystShown === rebuilt, analystShown);
+assert(!analystShown.includes(FIGURES_CHANGED_REGENERATE), analystShown);
+assert(analystCard === `${rebuilt}`, analystCard);
+assert(!analystCard.includes(FIGURES_CHANGED_REGENERATE), analystCard);
+assert(packBody === rebuilt, packBody);
 assert(homeShown === FIGURES_CHANGED_REGENERATE, homeShown);
-assert(analystCard.includes(FIGURES_CHANGED_REGENERATE), analystCard);
 assert(briefTitle === FIGURES_CHANGED_REGENERATE, briefTitle);
 assert(brief.drafts[0]?.liveSentence === rebuilt, brief.drafts[0]?.liveSentence ?? "");
-assert(packBody === rebuilt, packBody);
 
 assert(rebuilt.includes("Cash is the weakest pillar at 34"), rebuilt);
 assert(rebuilt.includes("overall health score of 63"), rebuilt);
@@ -146,8 +148,16 @@ const stored: HealthScoreSnapshot = {
   ),
 };
 const quiet = presentHealthNarrative("Look at pricing on the top lines.", live, stored);
-assert(quiet.text === FIGURES_CHANGED_REGENERATE, quiet.text);
-assert(quiet.regenerate === true, "a stored snapshot that differs asks to regenerate");
+assert(quiet.text === "Look at pricing on the top lines.", quiet.text);
+assert(quiet.regenerate === false, "prose with no score stays, even when the stored snapshot differs");
+
+const freeform = presentHealthNarrative(
+  "I would still tell the owner the score is 80 until they reload the books.",
+  live,
+);
+assert(freeform.text === FIGURES_CHANGED_REGENERATE, freeform.text);
+assert(freeform.regenerate === true, "free-form prose with a stale score asks to regenerate");
+assert(!freeform.text.includes("80"), freeform.text);
 
 const same = presentHealthNarrative("Look at pricing on the top lines.", live, live);
 assert(same.text === "Look at pricing on the top lines.", same.text);

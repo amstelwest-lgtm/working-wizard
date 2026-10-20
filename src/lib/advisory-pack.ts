@@ -46,11 +46,7 @@ import { cashComfortThreshold } from "./cash-runway.ts";
 import { humanizeInternalFieldNames } from "./client-brain-questions.ts";
 import { formatMoney, formatMoneyCompact } from "./market/format.ts";
 import { canonicalScoreProse } from "./score-prose.ts";
-import {
-  presentHealthNarrative,
-  renderHealthNarrative,
-  type HealthScoreSnapshot,
-} from "./health-snapshot.ts";
+import { presentHealthNarrative, type HealthScoreSnapshot } from "./health-snapshot.ts";
 import {
   STATEMENT_DEPTH_DISCLOSURE,
   expectedImpactLabel,
@@ -874,8 +870,7 @@ export function packScoreProse(text: string): string {
 
 function scoreBodyForSnapshot(text: string, live: HealthScoreSnapshot | null | undefined): string {
   if (!live) return text;
-  const presented = presentHealthNarrative(text, live);
-  return presented.regenerate ? renderHealthNarrative(live) : presented.text;
+  return presentHealthNarrative(text, live).text;
 }
 
 /** Same compact form as the cash-tab floor and lowest-point tiles. */

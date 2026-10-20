@@ -167,17 +167,17 @@ assert(brief.weakest?.id === weakest?.id && brief.weakest?.score === weakest?.sc
 assert(pack.health.weakestPillar?.id === weakest?.id && pack.health.weakestPillar?.score === weakest?.score, "pack metrics weakest");
 assert(labeled.overall_basis === "live" && labeled.stored_score === 74 && labeled.overall !== 74, "stored 74 does not replace the run");
 
-assert(note.includes(FIGURES_CHANGED_REGENERATE), note);
+const rebuilt = renderHealthNarrative(snapshot);
+assert(note === rebuilt, note);
+assert(!note.includes(FIGURES_CHANGED_REGENERATE), note);
 assert(!note.includes("74") && !note.includes("60"), note);
 assert(!/tied with/i.test(note), note);
-assert(!/profit/i.test(note), note);
-const rebuilt = renderHealthNarrative(snapshot);
 assert(rebuilt.includes(`${weakest?.label} is the weakest pillar at ${weakest?.score}`), rebuilt);
 assert(rebuilt.includes(`overall health score of ${overall}`), rebuilt);
 assert(!rebuilt.includes("74") && !/tied with/i.test(rebuilt), rebuilt);
 
 const analystCard = presence.agents.find((agent) => agent.agent === "analyst");
-assert(analystCard?.sentence.includes(FIGURES_CHANGED_REGENERATE), analystCard?.sentence ?? "no analyst card");
+assert(analystCard?.sentence === rebuilt, analystCard?.sentence ?? "no analyst card");
 assert(!analystCard?.sentence.includes("74"), analystCard?.sentence ?? "");
 
 assert(packBody.includes("scores 74 (watch)"), packBody);
