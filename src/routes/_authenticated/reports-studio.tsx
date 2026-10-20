@@ -1437,7 +1437,7 @@ function closestSnapshot(
   return best;
 }
 
-function buildMovementRows(
+export function buildMovementRows(
   rawRatios: Record<string, number>,
   snapshots: DatedSnapshot[],
   refDate: Date,
@@ -1483,7 +1483,7 @@ function buildMovementRows(
   return { rows, labels };
 }
 
-function buildWorkingCapitalData(
+export function buildWorkingCapitalData(
   fin: Record<string, string>,
   rawRatios: Record<string, number>,
 ): WorkingCapitalData | null {
@@ -1526,7 +1526,7 @@ function buildWorkingCapitalData(
   };
 }
 
-function buildProfitabilityData(
+export function buildProfitabilityData(
   fin: Record<string, string>,
   priorFin?: Record<string, string> | null,
 ): ProfitabilityData | null {
@@ -1637,7 +1637,7 @@ function buildProfitabilityData(
   return { ...current, prior_period };
 }
 
-function buildLeverageData(
+export function buildLeverageData(
   fin: Record<string, string>,
   rawRatios: Record<string, number>,
   priorEquityFromSnapshot?: number | null,
@@ -1724,7 +1724,7 @@ function buildLeverageData(
   };
 }
 
-function buildAssetData(
+export function buildAssetData(
   rawRatios: Record<string, number>,
   context?: {
     equity?: number | null;
@@ -1788,7 +1788,7 @@ function buildAssetData(
   };
 }
 
-function buildLaborData(
+export function buildLaborData(
   fin: Record<string, string>,
   _rawRatios: Record<string, number>,
   priorFin?: Record<string, string> | null,
@@ -1910,7 +1910,7 @@ function buildCashForecastFromSavedCashflow(
 
 // Build real interventions from the playbook-data.json filtered by the
 // client's actual at-risk/critical ratios (camelCase ratio_key format).
-async function buildInterventions(
+export async function buildInterventions(
   ratioResults: RatioResult[],
   profile?: ClientOperatingProfile | null,
   figures?: {

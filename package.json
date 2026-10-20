@@ -20,6 +20,7 @@
     "test:report-pdf-layout": "vite-node --config scripts/vite-test.config.ts scripts/report-pdf-layout-test.mts",
     "test:report-section-keep": "vite-node --config scripts/vite-test.config.ts scripts/report-section-keep-test.mts",
     "test:report-zero-format": "vite-node --config scripts/vite-test.config.ts scripts/report-zero-format-test.mts",
+    "test:report-missing-metrics": "vite-node --config scripts/vite-test.config.ts scripts/report-missing-metrics-test.mts",
     "test:budget-pdf": "vite-node --config scripts/vite-test.config.ts scripts/budget-pdf-test.mts",
     "test:budget-figures-parity": "vite-node --config scripts/vite-test.config.ts scripts/budget-figures-parity-test.mts",
     "test:budget-redesign": "vite-node --config scripts/vite-test.config.ts scripts/budget-redesign-test.mts",
