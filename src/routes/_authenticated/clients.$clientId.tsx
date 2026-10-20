@@ -208,12 +208,10 @@ import {
   preferStatementPeriod,
   readStatementMeta,
   reportDataPeriodLabel,
-  rewriteDraftMonthStamp,
   statementSpanLabel,
   statementYearLine,
 } from "@/lib/statement-period";
 import { clientHomePhase } from "@/lib/client-home-phase";
-import { canonicalScoreProse } from "@/lib/score-prose";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   assessClientMetrics,
@@ -313,11 +311,13 @@ import { cashSignoffIsStale, healthSignoffIsStale, signoffStatusKind, signoffSta
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
 import { ClientAgentStandby } from "@/components/client-agent-standby";
 import { OwnerHome } from "@/components/owner-door/owner-home";
+import { AgentDraftShelf } from "@/components/agent-draft-shelf";
 import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/financial-manager-brief";
 import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
+import { findingForAction } from "@/lib/action-handoff";
 import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
 import { ownerPresence, steerOpenHandoffs, withCardHandoffRuns } from "@/lib/owner-presence";
 import {
@@ -3565,15 +3565,24 @@ function ClientView() {
         }
         const settled = settledRows.find((item) => item.id === row.id);
         const missed = Boolean(!row.error && settled?.open && !handoffRowStillWorking(settled, homeActivity.runs));
-        if (!live || !row.agent || live.agent !== row.agent) return { ...row, missed };
+        const finding = findingForAction({
+          actionItemId: row.id,
+          runs: homeActivity.runs,
+          findings: homeActivity.findings,
+        });
+        const draft = {
+          draftId: finding?.id ?? null,
+          findingsReady: !homeActivity.loading,
+        };
+        if (!live || !row.agent || live.agent !== row.agent) return { ...row, missed, ...draft };
         const current = row.run;
         const currentOpen = current?.status === "queued" || current?.status === "running";
         if (currentOpen && live.at < (current.at ?? "") && live.status !== "queued" && live.status !== "running") {
-          return { ...row, missed };
+          return { ...row, missed, ...draft };
         }
-        return { ...row, run: live, runId: row.runId ?? live.id, missed: false };
+        return { ...row, run: live, runId: row.runId ?? live.id, missed: false, ...draft };
       }),
-    [openPlanHandoffs, homeActivity.runs, settledRows],
+    [openPlanHandoffs, homeActivity.runs, homeActivity.findings, homeActivity.loading, settledRows],
   );
   const notedFinish = useRef(new Set<string>());
   useEffect(() => {
@@ -3626,6 +3635,22 @@ function ClientView() {
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => accountantClientTabSearch(prev, tab, section ? { section } : undefined),
+      });
+    },
+    [clientId, navigate],
+  );
+  const openDraft = useCallback(
+    (draftId?: string | null) => {
+      setActiveTab("reports");
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => {
+          const next = accountantClientTabSearch(prev, "reports", { section: "drafts" }) as Record<string, unknown>;
+          if (draftId) next.draft = draftId;
+          else delete next.draft;
+          return next;
+        },
       });
     },
     [clientId, navigate],
@@ -3746,22 +3771,21 @@ function ClientView() {
     });
     const actionsHeading = planNeeds.heading;
     const actionLines = planNeeds.lines;
-    const waiting = homeActivity.findings.filter(
-      (row) =>
-        row.status !== "approved" &&
-        isVisibleAgentFinding(row) &&
-        draftFindingLabel(row) === DRAFT_NEEDS_ACCOUNTANT,
+    const drafts = homeActivity.findings.filter(
+      (row) => row.status !== "approved" && isVisibleAgentFinding(row) && draftFindingLabel(row) != null,
     );
-    const draftsHeading = homeActivity.loading ? "Drafts" : waiting.length ? "Drafts" : "Drafts";
+    const waiting = drafts.filter((row) => draftFindingLabel(row) === DRAFT_NEEDS_ACCOUNTANT);
+    const shownDraft = waiting[0] ?? drafts[0] ?? null;
+    const draftsHeading = "Drafts";
     const liveDraft = {
       overall: overallHealth.overall,
-      storedHash: waiting[0] ? draftStoredFiguresHash(waiting[0].evidence) : null,
+      storedHash: shownDraft ? draftStoredFiguresHash(shownDraft.evidence) : null,
     };
-    const titlePresented = waiting[0]
-      ? presentHomeDraftTitle(waiting[0].title, canonicalRatios, liveDraft)
+    const titlePresented = shownDraft
+      ? presentHomeDraftTitle(shownDraft.title, canonicalRatios, liveDraft)
       : null;
-    const bodyPresented = waiting[0]?.detail?.trim()
-      ? presentHomeDraftBody(waiting[0].detail, canonicalRatios, liveDraft)
+    const bodyPresented = shownDraft?.detail?.trim()
+      ? presentHomeDraftBody(shownDraft.detail, canonicalRatios, liveDraft)
       : null;
     const presented = titlePresented?.text ? titlePresented : bodyPresented;
     const draftLines = homeActivity.loading
@@ -3779,6 +3803,7 @@ function ClientView() {
       actionLines,
       draftsHeading,
       draftLines,
+      draftId: shownDraft?.id ?? null,
       draftStale,
       deliverablesHeading: "Reports",
       deliverableLines: reportsLine ? [reportsLine] : [],
@@ -4085,6 +4110,7 @@ function ClientView() {
                     handoffs={shownHandoffs}
                     audience="accountant"
                     onOpen={(tab) => openHomeSection(tab)}
+                    onOpenDraft={(id) => openDraft(id)}
                   />
                   <OwnerHome
                     title="Your whole finance team"
@@ -4103,7 +4129,7 @@ function ClientView() {
                     needs={homeNeeds}
                     onMoves={() => openHomeSection("plan")}
                     onActions={() => openHomeSection("plan")}
-                    onDrafts={() => openHomeSection("reports", "drafts")}
+                    onDrafts={() => openDraft(homeNeeds.draftId)}
                     onDeliverables={() => openHomeSection("reports")}
                     onBooks={() => openHomeSection("portal")}
                     signoffLine={homeSignoffLine}
@@ -5223,6 +5249,12 @@ function ClientView() {
                       subtitle="Packs, recommendations, and the drafter. Sign off from this page."
                     >
                       <section id="reports-drafts">
+                        <AgentDraftShelf
+                          findings={homeActivity.findings}
+                          focusId={typeof search.draft === "string" ? search.draft : null}
+                          canonicalRatios={canonicalRatios}
+                          onRefresh={homeActivity.refresh}
+                        />
                         <AdvisoryPackPanel
                           className="mb-5"
                           clientId={client.id}
@@ -5523,6 +5555,7 @@ function ClientView() {
                           onAnswer={onPlanAnswer}
                           onRegisterAdd={registerPlanAdd}
                           onInviteOwner={() => setOwnerInviteOpen(true)}
+                          onOpenDraft={(id) => openDraft(id)}
                         />
                       )}
                     </Suspense>

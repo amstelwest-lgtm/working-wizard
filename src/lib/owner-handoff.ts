@@ -164,6 +164,39 @@ function finishedRole(displayName: string): string {
   return short || displayName.trim() || "Milōn";
 }
 
+/** A success sentence that does not name a saved draft. It is not proof a row exists. */
+export function handoffClaimsDraftsRecorded(text: string | null | undefined): boolean {
+  return /drafts are recorded/i.test(text ?? "");
+}
+
+/**
+ * The row says this when a hand-off ended without a finding for that action.
+ * A reason that is only "drafts are recorded" is replaced: that sentence is not a draft.
+ */
+export function handoffCouldNotDraftSentence(displayName: string, reason?: string | null): string {
+  const short = finishedRole(displayName);
+  const raw = (reason ?? "").replace(/\s+/g, " ").trim();
+  const already = raw.toLowerCase().startsWith(`${short.toLowerCase()} couldn't draft this`);
+  if (already) return raw.replace(/\.+$/u, "").slice(0, 500);
+  const generic = !raw || handoffClaimsDraftsRecorded(raw);
+  const why = generic ? "no draft was saved for this action" : raw.replace(/\.+$/u, "");
+  return `${short} couldn't draft this, ${why}`.slice(0, 500);
+}
+
+/** Finish note. A run with no finding does not say finished. */
+export function handoffFinishNote(input: {
+  displayName: string;
+  summary: string;
+  findingCount: number;
+  market?: MoneyMarket;
+  figures?: Record<string, number>;
+}): string {
+  if (input.findingCount > 0) {
+    return handoffResultNote(input.displayName, input.summary, input.market, input.figures);
+  }
+  return handoffCouldNotDraftSentence(input.displayName, input.summary);
+}
+
 /**
  * The note a finished run leaves. It does not repeat "Handed to …".
  * The result is the sentence after the colon.

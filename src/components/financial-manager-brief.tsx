@@ -13,7 +13,7 @@ import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { DRAFT_OUT_OF_DATE } from "@/lib/draft-figures";
 import { actionPreviewLine } from "@/lib/owner-needs";
 import { useMarketFormat } from "@/contexts/market";
-import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
+import { assignmentNotesForDraft, botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { latestHandoffResult } from "@/lib/owner-handoff";
@@ -39,9 +39,21 @@ export type HomeBriefHandoff = {
   runId?: string;
   error?: string | null;
   run?: { id?: string; agent: AgentKey; status: string; at?: string | null } | null;
+  /** Finding saved for this action. Finished and Open draft need this id. */
+  draftId?: string | null;
+  /** False while findings are still loading. */
+  findingsReady?: boolean;
 };
 
-function HandoffProgress({ item, onRetry }: { item: HomeBriefHandoff; onRetry?: () => void }) {
+function HandoffProgress({
+  item,
+  onRetry,
+  onOpenDraft,
+}: {
+  item: HomeBriefHandoff;
+  onRetry?: () => void;
+  onOpenDraft?: (draftId: string) => void;
+}) {
   const { market } = useMarketFormat();
   const result = latestHandoffResult(item.notes ?? []);
   const agent = item.run?.agent ?? item.agent ?? null;
@@ -54,6 +66,8 @@ function HandoffProgress({ item, onRetry }: { item: HomeBriefHandoff; onRetry?: 
           result: result?.text,
           resultAt: result?.at,
           market,
+          draftId: item.draftId,
+          findingsReady: item.findingsReady,
         });
   return (
     <>
@@ -62,9 +76,11 @@ function HandoffProgress({ item, onRetry }: { item: HomeBriefHandoff; onRetry?: 
         caption={item.missed || item.error ? null : caption}
         missed={item.missed}
         error={item.error}
+        draftId={item.draftId}
+        onOpenDraft={onOpenDraft}
         onRetry={onRetry}
       />
-      <AssignmentNotes notes={item.notes ?? []} />
+      <AssignmentNotes notes={assignmentNotesForDraft(item.notes ?? [], item.draftId)} />
     </>
   );
 }
@@ -94,6 +110,7 @@ function BriefHandControl({
       comingSoon={comingSoon}
       audience={audience}
       onAssignAgent={async (agent) => {
+        const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
         const result = await commitActionHandoff({
           clientId,
           actionItemId: item.id,
@@ -102,10 +119,9 @@ function BriefHandControl({
         });
         if (!result.ok) {
           if (result.comingSoon) setComingSoon((current) => ({ ...current, [agent]: true }));
-          toast.error(result.error);
+          toast.error(result.error, { id: toastId });
           return;
         }
-        toast.success(`Assigned to ${agentShortName(agent)}`);
       }}
       onAssignPerson={async (person) => {
         const result = await assignActionToPerson({
@@ -131,12 +147,14 @@ export function FinancialManagerBrief({
   handoffs = [],
   audience = "accountant",
   onOpen,
+  onOpenDraft,
 }: {
   brief: FinancialManagerBrief;
   clientId?: string | null;
   handoffs?: readonly HomeBriefHandoff[];
   audience?: "owner" | "accountant";
   onOpen: (tab: "plan" | "cash" | "health" | "profit" | "budget" | "reports") => void;
+  onOpenDraft?: (draftId: string) => void;
 }) {
   const { money } = useMarketFormat();
   const [chaseOpen, setChaseOpen] = useState(false);
@@ -194,14 +212,19 @@ export function FinancialManagerBrief({
                   {handoff ? (
                     <HandoffProgress
                       item={handoff}
+                      onOpenDraft={onOpenDraft}
                       onRetry={
                         clientId && handoff.agent
                           ? () => {
+                              const agent = handoff.agent as AgentKey;
+                              const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
                               void commitActionHandoff({
                                 clientId,
                                 actionItemId: handoff.id,
                                 title: handoff.title,
-                                agent: handoff.agent as AgentKey,
+                                agent,
+                              }).then((result) => {
+                                if (!result.ok) toast.error(result.error, { id: toastId });
                               });
                             }
                           : undefined
