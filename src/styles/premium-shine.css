@@ -412,6 +412,14 @@ html:not(.dark) .accountant-portal [class*="border-[#DBEAFE]"],
 html:not(.dark) .accountant-portal [class*="border-[#dbeafe]"] {
   border-color: var(--pp-gold-line);
 }
+/* Email the owner is a quiet outline. The pale-blue rewrite above must not
+   paint it gold. Cobalt in the light theme, royal blue on the dark canvas. */
+html:not(.dark) .accountant-portal [data-email-owner] {
+  border-color: #0b5fff;
+}
+html.dark .accountant-portal [data-email-owner] {
+  border-color: #60a5fa;
+}
 /* Inner stat tiles stay neutral (quieter than the card edge). */
 html:not(.dark) .accountant-portal [class*="border-amber"] {
   border-color: #e3e8ef !important;

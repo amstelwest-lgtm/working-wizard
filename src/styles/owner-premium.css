@@ -1254,3 +1254,17 @@ html:not(.dark) .owner-door[data-screen="home"] {
     padding-bottom: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 40px + 8px + 40px);
   }
 }
+
+/* Under 480px the pencil, and the archive button stacked on it, are fixed
+   to the right corner. Inset the scroll pane so a row in that band ends
+   before the buttons: one 40px button plus a 12px gap on the right, and the
+   two-button stack (40 + 8 + 40) plus a 12px gap at the bottom, each on top
+   of the button's own safe-area inset. */
+@media (max-width: 480px) {
+  html[data-milon-fab="1"]:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
+  html[data-milon-fab="1"]:not(.dark) .owner-door.accountant-portal:not([data-screen="chat"]) .deliverable-main,
+  html[data-milon-fab="1"].dark .accountant-portal .deliverable-main {
+    padding-right: calc(40px + 12px + max(12px, env(safe-area-inset-right, 0px)));
+    padding-bottom: calc(40px + 8px + 40px + 12px + max(12px, env(safe-area-inset-bottom, 0px)));
+  }
+}

@@ -21,6 +21,7 @@ import { finalizeCollections } from "@/lib/collections";
 import { finalizePayables } from "@/lib/payables";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { BudgetActualMonth } from "@/lib/budget-chart-table";
+import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { DataUpToDate } from "@/components/data-up-to-date";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
@@ -584,6 +585,12 @@ function HealthPane({ clientId }: { clientId: string }) {
                 search: (prev) => accountantClientTabSearch(prev, "health", { section: "pillars" }),
               },
             ]}
+          />
+          <DataRequestsPanel
+            className="mb-4"
+            clientId={clientId}
+            audience="accountant"
+            financials={healthFinancials}
           />
           <ReviewInputsDrawer hint={deliverableDrawerHint("ratios", { financials: HARNESS_FINANCIALS })}>
             <DeliverableInputConfig
