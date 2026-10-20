@@ -1,5 +1,5 @@
 /**
- * One trial sentence: Starter, 14 days, up to 5 clients, card at signup.
+ * One trial sentence: Starter, 14 days, up to 5 clients, card after the first result.
  * Run: pnpm test:firm-trial-copy
  */
 import { readFileSync } from "node:fs";
@@ -13,6 +13,7 @@ import { SAGE_CONNECTION_UNAVAILABLE, sagePublicError } from "../src/lib/sage";
 import {
   FIRM_BAND_CATALOG,
   FIRM_TRIAL_CARD_LINE,
+  FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_CLIENT_LIMIT,
   FIRM_TRIAL_DAYS,
   FIRM_TRIAL_SENTENCE,
@@ -34,7 +35,14 @@ assert(
 assert(FIRM_BAND_CATALOG.solo.clientLimit === 15, "paid Solo stays at 15");
 assert(FIRM_TRIAL_SENTENCE === CANONICAL, "the locked sentence is the only trial wording");
 assert(TRIAL_SIGNUP_SENTENCE === FIRM_TRIAL_SENTENCE, "the public trial sentence cannot drift");
-assert(FIRM_TRIAL_CARD_LINE === `A card is required at signup. ${FIRM_TRIAL_SENTENCE} on Starter.`, "card line");
+assert(
+  FIRM_TRIAL_CARD_LINE === `${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE}`,
+  "card line",
+);
+assert(
+  FIRM_TRIAL_CARD_NOTE === "You add a card once you have seen your first result.",
+  "the card is asked for after the first result",
+);
 assert(FIRM_CARD_TIMING === FIRM_TRIAL_CARD_LINE, "signup timing uses the card line");
 assert(PRECARD_CAP_MESSAGE === FIRM_TRIAL_CARD_LINE, "the pre-card wall uses the card line");
 assert(

@@ -1,5 +1,5 @@
 import { LIST_PRICES } from "./market/marketing";
-import { FIRM_BAND_CATALOG, FIRM_TRIAL_SENTENCE } from "./stripe-plans";
+import { FIRM_BAND_CATALOG, FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "./stripe-plans";
 import type { FaqItem } from "./seo";
 
 /** Visible /faq answer and FAQPage schema for this question must stay identical. */
@@ -40,7 +40,7 @@ export const FAQ_NOT_A_BOOKKEEPER_ANSWER =
 export const HOMEPAGE_OWNER_COST_US =
   "Business owners pay $39/mo, or nothing when their accountant is on Milōn.";
 
-const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Starter at ${LIST_PRICES.us.firmStarter}/mo for up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. ${FIRM_TRIAL_SENTENCE} on Starter. A card is required at signup. Annual billing is about 20% off, and Enterprise is a custom quote. ${HOMEPAGE_OWNER_COST_US}`;
+const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Starter at ${LIST_PRICES.us.firmStarter}/mo for up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. ${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then ${LIST_PRICES.us.firmStarter}/mo. Annual billing is about 20% off, and Enterprise is a custom quote. ${HOMEPAGE_OWNER_COST_US}`;
 
 /**
  * Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep.
@@ -72,6 +72,6 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "What happens when the trial ends?",
     answer:
-      `The trial is Starter: ${FIRM_TRIAL_SENTENCE}, with a card on file at signup. After day 14 the band you chose starts billing. You keep the same workspace, the same clients, and the packs your accountant has already approved.`,
+      `The trial is Starter: ${FIRM_TRIAL_SENTENCE}. ${FIRM_TRIAL_CARD_NOTE} Then ${LIST_PRICES.us.firmStarter}/mo. You keep the same workspace, the same clients, and the packs your accountant has already approved.`,
   },
 ];

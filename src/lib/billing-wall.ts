@@ -8,7 +8,7 @@
 import type { FirstFirmClient } from "@/lib/firm-client-gate";
 import { settleWithin, type Settled } from "@/lib/bounded-load";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
-import { FIRM_TRIAL_CLIENT_LIMIT, FIRM_TRIAL_DAYS } from "@/lib/starter-trial-constants";
+import { FIRM_TRIAL_CARD_LINE } from "@/lib/starter-trial-constants";
 import { FIRM_BAND_CATALOG, firmUsdListPrice, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 
 export const BILLING_WALL_TRIAL_ACTION = "Start your 14-day free trial · add a card";
@@ -20,8 +20,8 @@ export const FIRM_WALL_BACK_LABEL = "Back to clients";
 
 export const FIRM_WALL_BACK_HREF = "/clients";
 
-/** One trial sentence. The price is not repeated here. */
-export const FIRM_WALL_TRIAL_LINE = `Starter · ${FIRM_TRIAL_DAYS}-day free trial · up to ${FIRM_TRIAL_CLIENT_LIMIT} clients · card at signup`;
+/** Same trial sentence as landing, signup, the tour, and Settings. The price is separate. */
+export const FIRM_WALL_TRIAL_LINE = FIRM_TRIAL_CARD_LINE;
 
 export const FIRM_WALL_TRIAL_ENDED_LINE =
   "If a trial already ended, billing resumes on the paid band without another trial.";

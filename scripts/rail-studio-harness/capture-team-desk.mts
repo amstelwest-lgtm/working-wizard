@@ -131,7 +131,7 @@ await shot("desk-desktop-1280-approved", 1280, 1200, "/milon-team-desk?fixture=p
   await page.getByRole("link", { name: "Open" }).waitFor();
   await page
     .getByRole("region", {
-      name: "A card is required at signup. 14-day free trial · up to 5 clients on Starter.",
+      name: "14-day free trial · up to 5 clients on Starter. You add a card once you have seen your first result.",
     })
     .waitFor();
   await page.locator("[data-desk-jobs='true']").evaluate((el) => {
