@@ -13,8 +13,10 @@ import { guardedOwnerInvite } from "@/lib/client-owner-invite";
 import {
   assertClientOwnerInvite,
   listClientOwnerInvites,
+  removeClientOwner,
   resendClientOwnerInvite,
   revokeClientOwnerInvite,
+  type ClientOwnerOnFile,
   type PendingOwnerInvite,
 } from "@/lib/client-owner-invites.functions";
 import { formatDate, t, type ResolvedMarket } from "@/lib/market";
@@ -27,6 +29,8 @@ export function ClientOwnerInviteDialog({
   market,
   email,
   onEmailChange,
+  ownerName,
+  onOwnerNameChange,
   pending,
   pendingLoading,
   ownerOnFile,
@@ -45,6 +49,8 @@ export function ClientOwnerInviteDialog({
   market: ResolvedMarket;
   email: string;
   onEmailChange: (email: string) => void;
+  ownerName: string;
+  onOwnerNameChange: (name: string) => void;
   pending: readonly PendingOwnerInvite[];
   pendingLoading: boolean;
   ownerOnFile: boolean;
@@ -96,6 +102,22 @@ export function ClientOwnerInviteDialog({
             someone else.
           </p>
         ) : null}
+        <label
+          className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.14em]"
+          htmlFor="owner-invite-name"
+        >
+          Owner name <span className="normal-case tracking-normal">(optional)</span>
+        </label>
+        <input
+          id="owner-invite-name"
+          type="text"
+          value={ownerName}
+          placeholder={t("nameExample", market)}
+          autoComplete="off"
+          maxLength={80}
+          onChange={(event) => onOwnerNameChange(event.target.value)}
+          className="mt-1 w-full rounded-xl border border-[#DBEAFE] bg-white px-3 py-2 text-sm dark:border-[#1e3a5f] dark:bg-[#0B1B2B]"
+        />
         <label
           className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.14em]"
           htmlFor="owner-invite-email"
@@ -156,9 +178,10 @@ export function ClientOwnerInviteDialog({
                 className="rounded-xl border border-[#DBEAFE] p-3 text-sm dark:border-[#1e3a5f]"
                 data-pending-invite={row.id}
               >
+                {row.ownerName ? <p className="font-semibold">{row.ownerName}</p> : null}
                 <p>{row.email || "No email on this invite"}</p>
-                <p className="text-xs text-[#3D5270] dark:text-[#C5D4E4]">
-                  Expires {formatDate(row.expiresAt, market)}
+                <p className="text-xs text-[#3D5270] dark:text-[#C5D4E4]" data-pending-invite-status="">
+                  Invite sent {formatDate(row.createdAt, market)}, not joined yet
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
@@ -227,8 +250,11 @@ export function ClientOwnerInviteHost({
   const loadInvites = useServerFn(listClientOwnerInvites);
   const resendInvite = useServerFn(resendClientOwnerInvite);
   const revokeInvite = useServerFn(revokeClientOwnerInvite);
+  const removeOwner = useServerFn(removeClientOwner);
   const [email, setEmail] = useState("");
+  const [ownerName, setOwnerName] = useState("");
   const [pending, setPending] = useState<PendingOwnerInvite[]>([]);
+  const [owners, setOwners] = useState<ClientOwnerOnFile[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [ownerOnFile, setOwnerOnFile] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -236,7 +262,7 @@ export function ClientOwnerInviteHost({
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !showEntry) return;
     let cancelled = false;
     setPendingLoading(true);
     setError(null);
@@ -244,6 +270,7 @@ export function ClientOwnerInviteHost({
       .then((row) => {
         if (cancelled) return;
         setPending(row.pending);
+        setOwners(row.owners);
         setOwnerOnFile(row.ownerOnFile);
         setEmail((current) => current || row.contactEmail || "");
       })
@@ -256,11 +283,12 @@ export function ClientOwnerInviteHost({
     return () => {
       cancelled = true;
     };
-  }, [open, clientId, loadInvites]);
+  }, [open, showEntry, clientId, loadInvites]);
 
   const refresh = async () => {
     const row = await loadInvites({ data: { clientId } });
     setPending(row.pending);
+    setOwners(row.owners);
     setOwnerOnFile(row.ownerOnFile);
     setEmail((current) => current || row.contactEmail || "");
   };
@@ -276,9 +304,10 @@ export function ClientOwnerInviteHost({
       const result = await guardedOwnerInvite(
         () => assertAccess({ data: { clientId } }),
         (req) => invite({ data: req }),
-        { clientId, toEmail: email, mode: "link" },
+        { clientId, toEmail: email, ownerName, mode: "link" },
       );
       setLinkUrl(result.url);
+      setBusy(false);
       try {
         await copyText(result.url);
         toast.success("Invite link copied");
@@ -300,7 +329,7 @@ export function ClientOwnerInviteHost({
       const result = await guardedOwnerInvite(
         () => assertAccess({ data: { clientId } }),
         (req) => invite({ data: req }),
-        { clientId, toEmail: email, mode: "email" },
+        { clientId, toEmail: email, ownerName, mode: "email" },
       );
       setLinkUrl(result.url);
       if (result.emailed) toast.success(`Invite emailed to ${result.email ?? email}`);
@@ -349,6 +378,20 @@ export function ClientOwnerInviteHost({
     }
   };
 
+  const onRemoveOwner = async (owner: ClientOwnerOnFile) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await removeOwner({ data: { clientId, membershipId: owner.membershipId } });
+      toast.success("Owner removed from this client");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove the owner");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onRevoke = async (row: PendingOwnerInvite) => {
     setBusy(true);
     setError(null);
@@ -368,11 +411,17 @@ export function ClientOwnerInviteHost({
       {showEntry ? (
         <ClientFileSettings
           clientName={clientName}
+          market={market}
+          owners={owners}
+          pending={pending}
           onInvite={() => onOpenChange(true)}
           onPracticeSettings={() => {
             openPracticeSettings();
             void navigate({ to: "/settings" });
           }}
+          onCopyPending={(row) => void onCopyPending(row)}
+          onRevokePending={(row) => void onRevoke(row)}
+          onRemoveOwner={(owner) => void onRemoveOwner(owner)}
         />
       ) : null}
       <ClientOwnerInviteDialog
@@ -381,6 +430,8 @@ export function ClientOwnerInviteHost({
         market={market}
         email={email}
         onEmailChange={setEmail}
+        ownerName={ownerName}
+        onOwnerNameChange={setOwnerName}
         pending={pending}
         pendingLoading={pendingLoading}
         ownerOnFile={ownerOnFile}

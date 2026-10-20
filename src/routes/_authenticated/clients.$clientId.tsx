@@ -6029,8 +6029,12 @@ function ClientView() {
             }}
           />
 
-          <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-            <DialogContent className="flex h-[min(90vh,calc(100dvh-1rem))] max-h-[min(90vh,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-[#DBEAFE] bg-white p-4 text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] sm:p-6">
+          <Dialog open={profileOpen} modal={false} onOpenChange={setProfileOpen}>
+            <DialogContent
+              overlayClassName="profile-funnel-overlay"
+              data-profile-funnel=""
+              className="flex h-[min(80vh,calc(100dvh-6rem))] max-h-[min(80vh,calc(100dvh-6rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-[#DBEAFE] bg-white p-4 text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] sm:p-6"
+            >
               <DialogHeader className="sr-only">
                 <DialogTitle>Business profile</DialogTitle>
                 <DialogDescription>Ten questions that tune Milōn to this client</DialogDescription>

@@ -14,7 +14,11 @@ import {
   inviteSiteUrl,
   sendInviteViaResend,
 } from "@/lib/client-invite-email";
-import { practiceMemberMayInviteOwner } from "@/lib/client-owner-invite";
+import {
+  activeClientOwnerOnFile,
+  clientOwnerLabel,
+  practiceMemberMayInviteOwner,
+} from "@/lib/client-owner-invite";
 import { isMissingMarketSupport } from "@/lib/market";
 
 type LooseSb = {
@@ -40,14 +44,24 @@ type LooseSb = {
 export type PendingOwnerInvite = {
   id: string;
   email: string | null;
+  ownerName: string | null;
   createdAt: string;
   expiresAt: string;
   url: string;
 };
 
+export type ClientOwnerOnFile = {
+  membershipId: string;
+  userId: string;
+  name: string;
+  email: string | null;
+  joinedAt: string;
+};
+
 export type ClientOwnerInviteList = {
   contactEmail: string | null;
   ownerOnFile: boolean;
+  owners: ClientOwnerOnFile[];
   pending: PendingOwnerInvite[];
 };
 
@@ -62,7 +76,7 @@ function claimsEmailOf(claims: unknown): string | null {
 async function loadVisibleClient(sb: LooseSb, clientId: string) {
   const { data, error } = await sb
     .from("clients")
-    .select("id, name, firm_id, contact_email, owner_user_id")
+    .select("id, name, firm_id, contact_email")
     .eq("id", clientId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -84,7 +98,7 @@ async function practiceAssignment(sb: LooseSb, userId: string, clientId: string)
   return data === true;
 }
 
-async function assertFirmMemberCanInvite(sb: LooseSb, userId: string, clientId: string) {
+export async function assertCanInviteClientOwner(sb: LooseSb, userId: string, clientId: string) {
   const client = await loadVisibleClient(sb, clientId);
   const assigned = client ? await practiceAssignment(sb, userId, clientId) : false;
   if (
@@ -160,7 +174,7 @@ export const assertClientOwnerInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    await assertFirmMemberCanInvite(
+    await assertCanInviteClientOwner(
       context.supabase as unknown as LooseSb,
       context.userId,
       data.clientId,
@@ -168,11 +182,51 @@ export const assertClientOwnerInvite = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+type MembershipRow = {
+  id: string;
+  user_id: string;
+  role: string;
+  created_at: string;
+};
+
+/** This client's client_owner rows. Service role only after the access check above. */
+async function loadClientOwnerMemberships(clientId: string): Promise<MembershipRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from("client_memberships")
+    .select("id, user_id, role, created_at")
+    .eq("client_id", clientId)
+    .eq("role", "client_owner")
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as MembershipRow[];
+}
+
+async function ownerProfile(userId: string): Promise<{ fullName: string | null; email: string | null }> {
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select("email, full_name")
+    .eq("id", userId)
+    .maybeSingle();
+  let email = String(data?.email ?? "").trim() || null;
+  let fullName = String(data?.full_name ?? "").trim() || null;
+  if (!email || !fullName) {
+    try {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+      email = email || (authUser.user?.email ?? "").trim() || null;
+      const meta = authUser.user?.user_metadata?.full_name;
+      if (!fullName && typeof meta === "string") fullName = meta.trim() || null;
+    } catch {
+      /* the profile row is enough when auth admin is unavailable */
+    }
+  }
+  return { fullName, email };
+}
+
 export const listClientOwnerInvites = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }): Promise<ClientOwnerInviteList> => {
-    const client = await assertFirmMemberCanInvite(
+    const client = await assertCanInviteClientOwner(
       context.supabase as unknown as LooseSb,
       context.userId,
       data.clientId,
@@ -181,18 +235,63 @@ export const listClientOwnerInvites = createServerFn({ method: "POST" })
       String(client.contact_email ?? "")
         .trim()
         .toLowerCase() || null;
+    const memberships = await loadClientOwnerMemberships(data.clientId);
+    const owners: ClientOwnerOnFile[] = [];
+    for (const row of memberships) {
+      if (row.role !== "client_owner" || !row.user_id) continue;
+      const profile = await ownerProfile(row.user_id);
+      const label = clientOwnerLabel(profile);
+      owners.push({
+        membershipId: row.id,
+        userId: row.user_id,
+        name: label.name,
+        email: label.email,
+        joinedAt: row.created_at,
+      });
+    }
     const now = new Date().toISOString();
     const withEmail = await supabaseAdmin
       .from("invite_tokens")
-      .select("id, invited_email, created_at, expires_at, token")
+      .select("id, invited_email, invited_name, created_at, expires_at, token")
       .eq("client_id", data.clientId)
       .eq("purpose", "owner_handoff")
       .is("redeemed_at", null)
+      .is("revoked_at", null)
       .gt("expires_at", now)
       .order("created_at", { ascending: false })
       .limit(20);
     let raw: Array<Record<string, unknown>> = [];
-    if (withEmail.error && (withEmail.error.message ?? "").includes("invited_email")) {
+    if (
+      withEmail.error &&
+      /invited_name|revoked_at/.test(withEmail.error.message ?? "")
+    ) {
+      const retryNamed = await supabaseAdmin
+        .from("invite_tokens")
+        .select("id, invited_email, created_at, expires_at, token")
+        .eq("client_id", data.clientId)
+        .eq("purpose", "owner_handoff")
+        .is("redeemed_at", null)
+        .gt("expires_at", now)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (retryNamed.error && (retryNamed.error.message ?? "").includes("invited_email")) {
+        const retry = await supabaseAdmin
+          .from("invite_tokens")
+          .select("id, created_at, expires_at, token")
+          .eq("client_id", data.clientId)
+          .eq("purpose", "owner_handoff")
+          .is("redeemed_at", null)
+          .gt("expires_at", now)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        if (retry.error) throw new Error(retry.error.message);
+        raw = (retry.data ?? []) as Array<Record<string, unknown>>;
+      } else if (retryNamed.error) {
+        throw new Error(retryNamed.error.message);
+      } else {
+        raw = (retryNamed.data ?? []) as Array<Record<string, unknown>>;
+      }
+    } else if (withEmail.error && (withEmail.error.message ?? "").includes("invited_email")) {
       const retry = await supabaseAdmin
         .from("invite_tokens")
         .select("id, created_at, expires_at, token")
@@ -216,9 +315,11 @@ export const listClientOwnerInvites = createServerFn({ method: "POST" })
         const invited = String(row.invited_email ?? "")
           .trim()
           .toLowerCase();
+        const ownerName = String(row.invited_name ?? "").trim();
         return {
           id: String(row.id),
           email: invited || contactEmail,
+          ownerName: ownerName || null,
           createdAt: String(row.created_at ?? ""),
           expiresAt: String(row.expires_at ?? ""),
           url: ownerInviteUrl(token),
@@ -227,7 +328,11 @@ export const listClientOwnerInvites = createServerFn({ method: "POST" })
       .filter((row): row is PendingOwnerInvite => Boolean(row));
     return {
       contactEmail,
-      ownerOnFile: Boolean(client.owner_user_id),
+      ownerOnFile: activeClientOwnerOnFile({
+        clientId: data.clientId,
+        memberships: memberships.map((row) => ({ clientId: data.clientId, role: row.role })),
+      }),
+      owners,
       pending,
     };
   });
@@ -238,22 +343,67 @@ export const revokeClientOwnerInvite = createServerFn({ method: "POST" })
     z.object({ clientId: z.string().uuid(), inviteId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    await assertFirmMemberCanInvite(
+    await assertCanInviteClientOwner(
       context.supabase as unknown as LooseSb,
       context.userId,
       data.clientId,
     );
-    const revokedAt = new Date(Date.now() - 1000).toISOString();
-    const { data: rows, error } = await supabaseAdmin
+    const revokedAt = new Date().toISOString();
+    const expired = new Date(Date.now() - 1000).toISOString();
+    const stamped = await supabaseAdmin
       .from("invite_tokens")
-      .update({ expires_at: revokedAt })
+      .update({ revoked_at: revokedAt, expires_at: expired })
       .eq("id", data.inviteId)
       .eq("client_id", data.clientId)
       .eq("purpose", "owner_handoff")
       .is("redeemed_at", null)
       .select("id");
+    let rows = stamped.data;
+    let error = stamped.error;
+    if (error && (error.message ?? "").includes("revoked_at")) {
+      const tombstone = await supabaseAdmin
+        .from("invite_tokens")
+        .update({ expires_at: "1970-01-01T00:00:00.000Z" })
+        .eq("id", data.inviteId)
+        .eq("client_id", data.clientId)
+        .eq("purpose", "owner_handoff")
+        .is("redeemed_at", null)
+        .select("id");
+      rows = tombstone.data;
+      error = tombstone.error;
+    }
     if (error) throw new Error(error.message);
     if (!rows?.length) throw new Error("Invite not found");
+    return { ok: true as const };
+  });
+
+export const removeClientOwner = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ clientId: z.string().uuid(), membershipId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertCanInviteClientOwner(
+      context.supabase as unknown as LooseSb,
+      context.userId,
+      data.clientId,
+    );
+    const { data: row, error: readErr } = await supabaseAdmin
+      .from("client_memberships")
+      .select("id, client_id, user_id, role")
+      .eq("id", data.membershipId)
+      .eq("client_id", data.clientId)
+      .eq("role", "client_owner")
+      .maybeSingle();
+    if (readErr) throw new Error(readErr.message);
+    if (!row) throw new Error("Owner membership not found");
+    const { error } = await supabaseAdmin
+      .from("client_memberships")
+      .delete()
+      .eq("id", row.id)
+      .eq("client_id", data.clientId)
+      .eq("role", "client_owner");
+    if (error) throw new Error(error.message);
     return { ok: true as const };
   });
 
@@ -263,7 +413,7 @@ export const resendClientOwnerInvite = createServerFn({ method: "POST" })
     z.object({ clientId: z.string().uuid(), inviteId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const visible = await assertFirmMemberCanInvite(
+    const visible = await assertCanInviteClientOwner(
       context.supabase as unknown as LooseSb,
       context.userId,
       data.clientId,
@@ -271,7 +421,7 @@ export const resendClientOwnerInvite = createServerFn({ method: "POST" })
     const now = new Date().toISOString();
     const tokenQuery = await supabaseAdmin
       .from("invite_tokens")
-      .select("id, token, invited_email, expires_at, redeemed_at, purpose")
+      .select("id, token, invited_email, expires_at, redeemed_at, purpose, revoked_at")
       .eq("id", data.inviteId)
       .eq("client_id", data.clientId)
       .eq("purpose", "owner_handoff")
@@ -281,8 +431,32 @@ export const resendClientOwnerInvite = createServerFn({ method: "POST" })
       invited_email?: string | null;
       expires_at?: string | null;
       redeemed_at?: string | null;
+      revoked_at?: string | null;
     } | null = null;
-    if (tokenQuery.error && (tokenQuery.error.message ?? "").includes("invited_email")) {
+    if (tokenQuery.error && (tokenQuery.error.message ?? "").includes("revoked_at")) {
+      const retry = await supabaseAdmin
+        .from("invite_tokens")
+        .select("id, token, invited_email, expires_at, redeemed_at, purpose")
+        .eq("id", data.inviteId)
+        .eq("client_id", data.clientId)
+        .eq("purpose", "owner_handoff")
+        .maybeSingle();
+      if (retry.error && (retry.error.message ?? "").includes("invited_email")) {
+        const again = await supabaseAdmin
+          .from("invite_tokens")
+          .select("id, token, expires_at, redeemed_at, purpose")
+          .eq("id", data.inviteId)
+          .eq("client_id", data.clientId)
+          .eq("purpose", "owner_handoff")
+          .maybeSingle();
+        if (again.error) throw new Error(again.error.message);
+        tokenRow = again.data;
+      } else if (retry.error) {
+        throw new Error(retry.error.message);
+      } else {
+        tokenRow = retry.data;
+      }
+    } else if (tokenQuery.error && (tokenQuery.error.message ?? "").includes("invited_email")) {
       const retry = await supabaseAdmin
         .from("invite_tokens")
         .select("id, token, expires_at, redeemed_at, purpose")
@@ -300,6 +474,7 @@ export const resendClientOwnerInvite = createServerFn({ method: "POST" })
     const row = tokenRow;
     if (!row?.token) throw new Error("Invite not found");
     if (row.redeemed_at) throw new Error("This invite was already used");
+    if (row.revoked_at) throw new Error("This invite was revoked");
     if (row.expires_at && row.expires_at <= now) throw new Error("This invite has expired");
 
     const email =
