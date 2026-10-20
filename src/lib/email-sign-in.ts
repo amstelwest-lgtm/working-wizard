@@ -11,6 +11,12 @@ import { wakeAuth } from "@/hooks/use-auth";
 
 export const EMAIL_SIGN_IN_SENT = "If an account exists for that email, we've sent a sign-in link.";
 
+/** Primary instruction after a send. The live template may not include a code yet. */
+export const EMAIL_SIGN_IN_TAP_LINK = "Check your email and tap the link.";
+
+/** Collapsed until the person asks. The prod template has no code until it is pasted. */
+export const EMAIL_SIGN_IN_CODE_INSTEAD = "Have a 6-digit code instead?";
+
 export const EMAIL_SIGN_IN_RATE_LIMIT = "Too many sign-in emails. Wait a minute and try again.";
 
 export const EMAIL_SIGN_IN_FAILED = "Could not send the sign-in email. Try again.";
