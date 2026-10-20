@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import {
   adoptSharedAuthSession,
+  coordinatedAuthFetch,
   supabaseAuthStorageKey,
   tabAuthLock,
   tabAuthStorage,
@@ -30,6 +31,9 @@ function createSupabaseClient() {
 
   return withoutAuthBroadcast(() =>
     createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      global: {
+        fetch: coordinatedAuthFetch,
+      },
       auth: {
         storageKey,
         storage: tabAuthStorage(),
