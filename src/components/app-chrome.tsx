@@ -10,6 +10,19 @@ import { NotesProvider } from "@/contexts/notes";
 import { FloatingNoteButton } from "@/components/floating-note-button";
 import { NoteArchiveSheet } from "@/components/note-archive";
 
+/** Sign-in, reset, and invite links. The share bubble and notes pencil sit on top of these forms. */
+function isPreLoginAuthPath(pathname: string): boolean {
+  let path = pathname || "/";
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  return (
+    path === "/auth" ||
+    path.startsWith("/auth/") ||
+    path === "/reset-password" ||
+    path.startsWith("/join/") ||
+    path.startsWith("/access/")
+  );
+}
+
 function LandingFloatGate() {
   const { user } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -25,6 +38,10 @@ function LandingFloatGate() {
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, []);
+
+  // Practice sign-in, password reset, and invite links are pre-login.
+  // Leave the launchers out of the DOM so they cannot cover the form.
+  if (isPreLoginAuthPath(pathname)) return null;
 
   // Logged-out `/` below 1024px: no pencil or share button in the DOM.
   // Until the viewport is measured, render neither so a phone never hydrates them.
