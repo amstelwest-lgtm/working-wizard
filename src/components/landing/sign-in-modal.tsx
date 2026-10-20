@@ -268,7 +268,7 @@ export function LandingSignInModal({
               </div>
               <button
                 type="submit"
-                className="btn btn-gold"
+                className="btn btn-cobalt"
                 disabled={siBusy}
                 aria-busy={siBusy}
                 style={{ width: "100%", justifyContent: "center", marginTop: 18 }}
