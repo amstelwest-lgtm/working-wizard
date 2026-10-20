@@ -1235,6 +1235,7 @@ export function budgetVersusStatement(
   periodKnown: boolean;
   seededFromActuals: boolean;
   outsidePlan?: boolean;
+  windowMonths: string[];
 }) | null {
   if (!periodFinancials) return null;
   const aliased = withCostAliases(
@@ -1266,6 +1267,7 @@ export function budgetVersusStatement(
       periodKnown: true,
       seededFromActuals: false,
       outsidePlan: true,
+      windowMonths: [],
     };
   }
   if (!window) {
@@ -1283,6 +1285,7 @@ export function budgetVersusStatement(
       budgetEbit: seeded ? bridge.ebit : undefined,
       periodKnown: false,
       seededFromActuals: seeded,
+      windowMonths: [],
     };
   }
   let budgetRevenue = 0;
@@ -1314,5 +1317,6 @@ export function budgetVersusStatement(
     periodMonths: window.keys.length,
     periodKnown: true,
     seededFromActuals: seeded,
+    windowMonths: window.keys,
   };
 }

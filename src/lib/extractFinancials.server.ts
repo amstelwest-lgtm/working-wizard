@@ -9,7 +9,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { type ExtractionResult } from "@/lib/financialSchema";
 import { validateFigures, isClean } from "@/lib/validateFinancials";
-import { applyBalanceSheetTotals } from "@/lib/statement-financials";
+import { applyBalanceSheetTotals, overlayParsedStatement } from "@/lib/statement-financials";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 import { redactForModel, rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { prepareStatementContent } from "@/lib/statement-text-layer.server";
@@ -52,7 +52,9 @@ Return ONLY valid JSON matching this shape (no markdown, no prose):
   "units": "actual"|"thousands"|"millions"|null,
   "statement_basis": "audited"|"independently_reviewed"|"compiled"|"management_accounts"|"unknown"|null,
   "current_period": {
+    "period_start": "YYYY-MM-DD"|null,
     "period_end": "YYYY-MM-DD"|null,
+    "period_months": number|null,
     "figures": {
       "income_statement": {
         "revenue": number|null,
@@ -248,7 +250,10 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
       );
     }
 
-    if (trustText && sourceText) extracted = reconcileExtractionResult(extracted, sourceText);
+    if (trustText && sourceText) {
+      extracted = reconcileExtractionResult(extracted, sourceText);
+      extracted = overlayParsedStatement(extracted, sourceText, market);
+    }
     extracted = applyBalanceSheetTotals(extracted);
     const issues = validateFigures(extracted.current_period.figures);
     assertUsable(assessPortalFigures(extracted.current_period.figures));

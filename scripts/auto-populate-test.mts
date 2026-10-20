@@ -224,11 +224,14 @@ const drafter = read("src/components/bank-statement-drafter.tsx");
 assert(drafter.includes("<AutoPopulateOptions"), "bank drafter shows options");
 assert(drafter.includes("autoPopulate: autoPrefs"), "bank drafter returns chosen prefs");
 const review = read("src/components/extraction-review-modal.tsx");
-assert(review.includes("<AutoPopulateOptions") && review.includes("onConfirm(mapped, autoPrefs)"), "owner statement modal wired");
+assert(
+  review.includes("<AutoPopulateOptions") && review.includes("onConfirm(mapped, autoPrefs, choice ?? null)"),
+  "owner statement modal wired",
+);
 const upload = read("src/components/upload-financials.tsx");
 assert(
   upload.includes("<AutoPopulateOptions") &&
-    upload.includes("onConfirm?.(stamped, autoPrefs, chosenPeriod)"),
+    upload.includes("onConfirm?.(stamped, autoPrefs, chosenPeriod, choice ?? null)"),
   "accountant statement upload wired",
 );
 const owner = read("src/routes/app.tsx");
