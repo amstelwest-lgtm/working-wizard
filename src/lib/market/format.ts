@@ -102,6 +102,76 @@ export function formatMoneyChartTick(n: number, market: MoneyMarket = ZA_MARKET)
   return formatMoneyCompact(n, market).replace(/ /g, "");
 }
 
+export type ReportAmountOptions = {
+  /** money: rounded currency. compact: formatMoneyCompact. percent: a rate. */
+  style?: "money" | "compact" | "percent";
+  /** auto keeps the market minus. always adds + or -. parens wrap a non-zero absolute amount. */
+  sign?: "auto" | "always" | "parens";
+  dp?: number;
+  /** Printed when the value is missing or not finite. Default is an em dash. */
+  missing?: string;
+  /** The percent is already in points (12.5 means 12.5%), not a 0–1 fraction. */
+  percentPoints?: boolean;
+  /** Money printed to this many decimal places. Zero at that precision is "—". */
+  fractionDigits?: number;
+};
+
+/**
+ * Report money, variance, and percent.
+ * A value that rounds to 0 prints "—". Never $0, ($0), -$0, +$0, R 0, or 0.0%.
+ * Sign and parentheses apply only when that rounded value is not 0.
+ * Currency and grouping stay on formatMoney / formatMoneyCompact, which fall back to ZA.
+ */
+export function formatReportAmount(
+  value: number | null | undefined,
+  market: MoneyMarket = ZA_MARKET,
+  opts?: ReportAmountOptions,
+): string {
+  const missing = opts?.missing ?? "—";
+  if (value == null || !Number.isFinite(value)) return missing;
+  const style = opts?.style ?? "money";
+  const sign = opts?.sign ?? "auto";
+
+  if (style === "percent") {
+    const dp = opts?.dp ?? 1;
+    const points = opts?.percentPoints ? value : value * 100;
+    const shown = points.toFixed(dp);
+    if (Number(shown) === 0) return "—";
+    const negative = shown.startsWith("-");
+    const body = `${negative ? shown.slice(1) : shown}%`;
+    if (sign === "parens") return `(${body})`;
+    if (negative) return `-${body}`;
+    if (sign === "always") return `+${body}`;
+    return body;
+  }
+
+  const digits = opts?.fractionDigits;
+  if (digits != null && digits > 0 && style === "money") {
+    const scale = 10 ** digits;
+    const scaled = Math.round(value * scale) / scale;
+    if (scaled === 0) return "—";
+    const body = formatMoney(Math.abs(scaled), market, {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: digits,
+    });
+    if (sign === "parens") return `(${body})`;
+    if (scaled < 0) return `-${body}`;
+    if (sign === "always") return `+${body}`;
+    return body;
+  }
+
+  if (Math.round(value) === 0) return "—";
+  if (style === "compact" && sign === "auto") return formatMoneyCompact(value, market);
+  if (style === "money" && sign === "auto") return formatMoney(Math.round(value), market);
+
+  const abs = Math.abs(Math.round(value));
+  const body = style === "compact" ? formatMoneyCompact(abs, market) : formatMoney(abs, market);
+  if (sign === "parens") return `(${body})`;
+  if (Math.round(value) < 0) return `-${body}`;
+  if (sign === "always") return `+${body}`;
+  return body;
+}
+
 type ClockParts = {
   year: number;
   month: number;

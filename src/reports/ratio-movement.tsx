@@ -18,7 +18,7 @@ import { C, resolveTheme } from "@/components/pdf/theme";
 import { movementNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { PILLAR_LABELS } from "@/lib/health-score";
-import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatReportAmount, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 import { ReportSection } from "@/lib/report-pdf-layout";
 import {
@@ -65,7 +65,7 @@ export type RatioMovementPDFProps = {
 
 function fmt(value: number | null, unit: string): string {
   if (value === null || !Number.isFinite(value)) return "—";
-  if (unit === "%") return `${(value * 100).toFixed(1)}%`;
+  if (unit === "%") return formatReportAmount(value, ZA_MARKET, { style: "percent" });
   if (unit === "×") return `${value.toFixed(2)}×`;
   if (unit === "d") return `${Math.round(value)}d`;
   return value.toFixed(2);

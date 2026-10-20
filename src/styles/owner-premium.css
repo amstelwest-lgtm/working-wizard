@@ -70,6 +70,12 @@ html:not(.dark) .owner-door.accountant-portal {
 html:not(.dark) body:has(.owner-door) {
   background: #0e2238 !important;
 }
+/* The page-enter fade is its own stacking context. Lift it above the pencil
+   while the drawer is open, or the dim overlay paints underneath the button. */
+html.nav-drawer-open .milon-page-enter {
+  position: relative;
+  z-index: 30;
+}
 
 /* ===== type scale ===== */
 html:not(.dark) .owner-door .owner-title {
@@ -216,7 +222,7 @@ html:not(.dark) .owner-door .topbar .profile-caret {
   }
 }
 html:not(.dark) .owner-door .deliverable-rail .tab {
-  color: var(--pp-frame-dim);
+  color: var(--pp-frame-ink);
   font-weight: 500;
   border-radius: 10px;
 }
@@ -233,7 +239,8 @@ html:not(.dark) .owner-door .deliverable-rail .tab.on {
   font-weight: 600;
 }
 html:not(.dark) .owner-door .deliverable-rail .tab-ic {
-  color: var(--pp-frame-faint);
+  color: var(--pp-frame-ink);
+  opacity: 1;
 }
 html:not(.dark) .owner-door .deliverable-rail .tab.on .tab-ic {
   color: #dbeafe;

@@ -1977,7 +1977,7 @@ export default function ActionPlanPanel({
                 key={move.key}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-900/10 bg-white/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/50"
               >
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{actionDisplayTitle(move.title)}</span>
+                <span className="line-clamp-2 min-w-0 flex-1 basis-full text-sm font-semibold text-slate-900 dark:text-slate-100 sm:basis-auto">{actionDisplayTitle(move.title)}</span>
                 <span className="flex flex-wrap items-center gap-2">
                   <MoveHandTo
                     clientId={clientId}
@@ -2564,7 +2564,7 @@ function ItemRow({
           />
         ) : (
           <button
-            className={`block w-full truncate text-left text-sm font-semibold ${item.status === "done" ? "text-slate-400 line-through dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}
+            className={`line-clamp-2 w-full whitespace-normal text-left text-sm font-semibold ${item.status === "done" ? "text-slate-400 line-through dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}
             onDoubleClick={
               isOwner
                 ? (e) => {

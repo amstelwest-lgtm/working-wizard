@@ -162,12 +162,12 @@ assert(ids("clients", firm)[0] === "clients", "Practice clients still listed wit
 assert(!ids("ar", studio).includes("action-plan"), "AR does not open Action Plan");
 assert(ids("ca", studio)[0] === "cash", "ca prefers Cash over Collections");
 
-assert(href("health", owner) === "/app?tab=today", "owner Health");
-assert(href("pillars", owner) === "/app?tab=today", "owner pillars land on Health");
-assert(href("profit", owner) === "/app?tab=waterfall", "owner Profitability");
+assert(href("health", owner) === "/app?tab=health", "owner Health");
+assert(href("pillars", owner) === "/app?tab=health", "owner pillars land on Health");
+assert(href("profit", owner) === "/app?tab=profit", "owner Profitability");
 assert(href("cash", owner) === "/app?tab=cash", "owner Cash");
 assert(href("budget", owner) === "/app?tab=budget", "owner Budget");
-assert(href("sign off", owner) === "/app?tab=tasks", "owner Action Plan");
+assert(href("sign off", owner) === "/app?tab=moves", "owner Action Plan");
 assert(ids("collections", owner).length === 0, "owner has no Collections route");
 assert(ids("xero", owner).length === 0, "owner has no connect route");
 assert(ids("billing", owner).length === 0, "billing stays on the practice side");

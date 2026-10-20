@@ -1956,6 +1956,9 @@ html.dark .owner-status.is-attention {
 @media (max-width: 860px) {
   .owner-door.accountant-portal .topbar-menu-btn {
     display: grid;
+    position: relative;
+    z-index: 2;
+    touch-action: manipulation;
   }
 
   .owner-door.accountant-portal:not(.nav-open) .deliverable-rail {
@@ -2062,7 +2065,7 @@ html.dark .owner-status.is-attention {
 
 @media (max-width: 760px) {
   .owner-door:not([data-screen="chat"]):not([data-screen="home"]) {
-    padding-inline: var(--owner-space-2);
+    padding-inline: 0;
     padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px));
   }
 

@@ -15,7 +15,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { C, fmtRand, resolveTheme } from "@/components/pdf/theme";
 import { varianceIsZeroPair, variancePctCell } from "@/lib/budget.variance";
 import type { BudgetPdfModel, BudgetPdfRow } from "@/lib/budget-pdf";
-import { formatDate, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatDate, formatReportAmount, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 import { ReportSection, reportTablePartStyle } from "@/lib/report-pdf-layout";
 
@@ -90,14 +90,15 @@ const styles = StyleSheet.create({
 });
 
 function signedMoney(n: number, market: ResolvedMarket): string {
-  if (n > 0) return `+${fmtRand(n, market)}`;
-  return fmtRand(n, market);
+  return formatReportAmount(n, market, { sign: "always" });
 }
 
-function overUnder(delta: number, budget: number, actual: number | null): string {
-  if (budget === 0 && actual === 0) return "—";
-  if (Math.abs(delta) < 1) return "In line";
+function overUnder(delta: number): string {
   return delta > 0 ? "Over" : "Under";
+}
+
+function variancePrintsZero(row: BudgetPdfRow): boolean {
+  return row.delta == null || varianceIsZeroPair(row.budget, row.actual) || Math.round(row.delta) === 0;
 }
 
 function signalColor(signal: BudgetPdfRow["signal"]): string {
@@ -168,14 +169,14 @@ function VarianceTable({
             </Text>
             {hideVariance ? null : (
               <View style={{ flex: 1.45, alignItems: "flex-end" }}>
-                {row.delta == null || varianceIsZeroPair(row.budget, row.actual) ? (
+                {variancePrintsZero(row) ? (
                   <Text style={styles.cell}>—</Text>
                 ) : (
                   <>
                     <Text style={[styles.varTag, { color }]}>
-                      {overUnder(row.delta, row.budget, row.actual)}
+                      {overUnder(row.delta ?? 0)}
                     </Text>
-                    <Text style={[styles.varAmt, { color }]}>{signedMoney(row.delta, market)}</Text>
+                    <Text style={[styles.varAmt, { color }]}>{signedMoney(row.delta ?? 0, market)}</Text>
                   </>
                 )}
               </View>
@@ -183,9 +184,7 @@ function VarianceTable({
             {hideVariance ? null : (
               <View style={{ flex: 0.7, overflow: "hidden" }}>
                 <Text style={[styles.cell, { textAlign: "right", color }]}>
-                  {varianceIsZeroPair(row.budget, row.actual)
-                    ? "—"
-                    : variancePctCell(row.deltaPct, row.deltaPctNote)}
+                  {variancePrintsZero(row) ? "—" : variancePctCell(row.deltaPct, row.deltaPctNote)}
                 </Text>
               </View>
             )}
@@ -221,9 +220,9 @@ function summaryFigure(row: BudgetPdfRow, market: ResolvedMarket): HeadlineFigur
       note: "Budget",
     };
   }
-  const good = row.signal === "favourable" ? true : row.signal === "adverse" ? false : undefined;
-  const direction =
-    row.signal === "inline" || Math.abs(row.delta) < 1 ? "flat" : row.delta > 0 ? "up" : "down";
+  const zero = Math.round(row.delta) === 0;
+  const good = zero ? undefined : row.signal === "favourable" ? true : row.signal === "adverse" ? false : undefined;
+  const direction = zero ? undefined : row.delta > 0 ? "up" : "down";
   return {
     label: row.label,
     value: fmtRand(row.actual, market),

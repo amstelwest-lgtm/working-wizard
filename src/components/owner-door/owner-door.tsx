@@ -170,6 +170,8 @@ export function OwnerDoor({
   boards,
   bot = null,
   onBotChange,
+  routeScreen,
+  onOpenScreen,
   sampleNotice = null,
   planTick = 0,
   financials = null,
@@ -250,6 +252,10 @@ export function OwnerDoor({
   ) => Partial<Record<"health" | "cash" | "budget" | "tasks" | "profit" | "moves", ReactNode>>;
   bot?: AgentKey | null;
   onBotChange?: (agent: AgentKey | null, mode: "push" | "replace") => void;
+  /** URL screen. Back and forward change this, and the door follows. */
+  routeScreen?: OwnerScreen;
+  /** Push `/app?tab=` (or the settings/plan screen) so the tab can be shared. */
+  onOpenScreen?: (screen: OwnerScreen) => void;
   /** Implausible sample figures. Shown on Home, same note as the client file. */
   sampleNotice?: string | null;
   /** Bumps when an action is handed off, so Home refetches without a reload. */
@@ -259,15 +265,16 @@ export function OwnerDoor({
 }) {
   const openedBot = ownerBotKey(bot);
   const [screen, setScreen] = useState<OwnerScreen>(
-    openedBot
-      ? "chat"
-      : settingsOpen
-        ? "settings"
-        : openPlan
-          ? "plan"
-          : openAccountant
-            ? "accountant"
-            : "home",
+    routeScreen ??
+      (openedBot
+        ? "chat"
+        : settingsOpen
+          ? "settings"
+          : openPlan
+            ? "plan"
+            : openAccountant
+              ? "accountant"
+              : "home"),
   );
   const beforeSettings = useRef<OwnerScreen>("home");
   const leavingSettings = useRef(false);
@@ -358,6 +365,11 @@ export function OwnerDoor({
     }
     setScreen((current) => (current === "settings" ? beforeSettings.current : current));
   }, [settingsOpen, openPlan]);
+
+  useEffect(() => {
+    if (!routeScreen) return;
+    setScreen(routeScreen);
+  }, [routeScreen]);
 
   useEffect(() => {
     if (signedFocused.current || !focusSigned || screen !== "accountant") return;
@@ -894,9 +906,10 @@ export function OwnerDoor({
   function go(next: OwnerScreen) {
     const target = canonicalOwnerScreen(next);
     if (target === "chat") return;
+    if (target === screenRef.current && next !== "deliverables") return;
+    const open = next === "deliverables" ? "deliverables" : target;
     if (screenRef.current === "settings" && target !== "settings") {
       leavingSettings.current = true;
-      onLeaveSettings?.();
     }
     if (screenRef.current === "chat") {
       if (target === "home") {
@@ -905,12 +918,13 @@ export function OwnerDoor({
       }
       pushedRef.current = false;
       void runBotTransition(() => setScreen(target)).then(() => {
-        onBotChange?.(null, "replace");
+        onOpenScreen?.(open);
         if (next === "deliverables") focusSignedDeliverables();
       });
       return;
     }
     setScreen(target);
+    onOpenScreen?.(open);
     if (next === "deliverables") focusSignedDeliverables();
   }
 
@@ -1027,7 +1041,7 @@ export function OwnerDoor({
 
   const shown = canonicalOwnerScreen(screen);
   const railScreen = shown === "tasks" || shown === "actions" ? "moves" : shown;
-  const restored = boards?.(setScreen);
+  const restored = boards?.(go);
 
   return (
     <OwnerShell
