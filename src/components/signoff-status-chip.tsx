@@ -12,7 +12,7 @@ import {
   type ReviewScope,
 } from "@/lib/review-signoffs.functions";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
-import { signoffScopeLabel, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
+import { presentPageSignoff, signoffStatusKind } from "@/lib/signoff-status";
 
 export function SignoffStatusChip({
   clientId,
@@ -67,18 +67,16 @@ export function SignoffStatusChip({
   });
   if (hideDraft && kind === "draft") return null;
   const when = shown?.signed_off_at ? formatReviewDateTime(shown.signed_off_at, market) : "";
-  const budgetStale = scope === "budget" && kind === "stale";
-  const dated = when && when !== "—" ? when : null;
 
   return (
     <p data-signoff-status data-signoff-scope={scope} className="answer-strip__status">
-      {signoffStatusLine({
-        kind,
+      {presentPageSignoff({
+        scope,
+        hasSignoff: Boolean(shown),
+        isStale,
+        readyForReview,
         name: shown?.signed_off_by_name,
-        date: kind === "signed" || budgetStale ? dated : null,
-        variant: "short",
-        scopeLabel: signoffScopeLabel(scope),
-        staleClause: budgetStale ? "figures changed since sign-off" : null,
+        date: when,
       })}
     </p>
   );

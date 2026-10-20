@@ -263,6 +263,15 @@ export type BudgetActuals = {
   periodMonths?: number;
   /** YYYY-MM keys of that window. Chart totals use these, not the whole year. */
   windowMonths?: string[];
+  /**
+   * False when the statement does not say how long it is.
+   * A missing length is not treated as 12 months.
+   */
+  periodKnown?: boolean;
+  /** The plan is the statement spread flat. The match is not a result. */
+  seededFromActuals?: boolean;
+  /** The statement's months are not in this budget year. */
+  outsidePlan?: boolean;
 };
 
 export type UnmappedDriver = {

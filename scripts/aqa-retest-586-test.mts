@@ -376,8 +376,14 @@ const storedBudget = {
 const raw = budgetVersusStatement(storedBudget, chill, ZA_MARKET);
 const shown = statementBudgetRead(storedBudget, chill);
 const seededCompare = budgetVersusStatement(shown.doc, chill, ZA_MARKET);
-assert(raw != null && raw.budgetEbit < 0, `unseeded budget ebit ${raw?.budgetEbit}`);
-assert(seededCompare != null && seededCompare.budgetEbit > 0, `seeded budget ebit ${seededCompare?.budgetEbit}`);
+assert(raw != null && raw.periodKnown === false, "chill has no statement period, so it is not scored as a year");
+assert(raw.seededFromActuals === false, "the stored plan is not the statement seed");
+assert(raw.budgetEbit == null, `an unknown period is not scored, got ${raw.budgetEbit}`);
+assert(seededCompare != null && seededCompare.seededFromActuals === true, "the reseed is the statement itself");
+assert(
+  seededCompare.budgetEbit != null && seededCompare.budgetEbit > 0,
+  `seeded budget ebit ${seededCompare?.budgetEbit}`,
+);
 assert(budgetSeededFromStatement(seededCompare) === true, "headline uses the seeded budget");
 assert(
   hotelDriversOnFile("day_labour", "hospitality_rooms", storedBudget.revenueLines[0]) === false,

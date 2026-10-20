@@ -49,12 +49,7 @@ import {
 import { buildSampleAdvisoryPack } from "../src/lib/trial-sample-pack";
 import { buildTrialBoard } from "../src/lib/trial-demo";
 import { TrySignoffMark } from "../src/components/try-signoff";
-import {
-  TRY_OUTREACH_INCENTIVES,
-  TRY_OUTREACH_INCENTIVES_KICKER,
-  TRY_OUTREACH_SIGNUP_URL,
-  TRY_OUTREACH_TEXT,
-} from "../emails/try-outreach";
+import { TRY_OUTREACH_SIGNUP_URL, TRY_OUTREACH_TEXT } from "../emails/try-outreach";
 
 function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
@@ -559,10 +554,9 @@ assert(
   TRY_OUTREACH_SIGNUP_URL.includes("plan=starter"),
   "the outreach trial link sets plan=starter",
 );
-assert(TRY_OUTREACH_TEXT.includes(TRY_OUTREACH_INCENTIVES_KICKER), "the text attributes the tests");
-for (const line of TRY_OUTREACH_INCENTIVES) {
-  assert(TRY_OUTREACH_TEXT.includes(line), `the text includes ${line}`);
-}
+assert(!TRY_OUTREACH_TEXT.includes("In our tests"), "unsourced test kicker is cut");
+assert(!TRY_OUTREACH_TEXT.includes("80% time saved"), "unsourced time-saved claim is cut");
+assert(!TRY_OUTREACH_TEXT.includes("70% lower cost"), "unsourced cost claim is cut");
 
 const authScript = readFileSync(join(root, "scripts/google-calendar-auth.mts"), "utf8");
 assert(authScript.includes("googleConsentUrl"), "the auth script prints the consent URL");

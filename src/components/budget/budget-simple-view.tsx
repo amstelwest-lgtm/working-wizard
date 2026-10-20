@@ -34,6 +34,7 @@ import { budgetRentHint, type ForecastRent } from "@/lib/budget-forecast-rent";
 import { ownerMinus } from "@/lib/owner-money";
 import {
   BUDGET_OPENING_MISSING_LINE,
+  budgetComparisonNote,
   budgetDaysNeedReview,
   budgetDaysSourceLabel,
   budgetOpeningSourceLabel,
@@ -285,6 +286,7 @@ export function BudgetSimpleView({
         signoffKnown={signoffKnown}
         onBuild={onBuild}
         presentation={role === "owner" ? "owner" : "strip"}
+        comparisonNote={budgetComparisonNote(compared)}
         extraActions={
           <BudgetPdfExportButton
             quiet

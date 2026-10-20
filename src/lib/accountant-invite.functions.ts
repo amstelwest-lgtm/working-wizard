@@ -15,6 +15,7 @@ import {
   templateAccountantInviteDraft,
 } from "@/lib/accountant-invite";
 import { invitePasteText, inviteSiteUrl, sendInviteViaResend } from "@/lib/client-invite-email";
+import { accountantInvitePreviewPayload } from "@/lib/invite-claim";
 import { resolveInviteToClientId } from "@/lib/invite-tokens.resolve";
 import { withDeadline } from "@/lib/with-deadline";
 
@@ -240,15 +241,27 @@ export const previewAccountantInvite = createServerFn({ method: "POST" })
     if (resolved.legacy) throw new Error("This accountant invite link is invalid.");
     const { data: client, error } = await supabaseAdmin
       .from("clients")
-      .select("name")
+      .select("name, owner_user_id")
       .eq("id", resolved.clientId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!client) throw new Error("Invite link is invalid — client not found.");
-    return {
+    let ownerName: string | null = null;
+    if (client.owner_user_id) {
+      const profile = await supabaseAdmin
+        .from("profiles")
+        .select("full_name")
+        .eq("id", client.owner_user_id)
+        .maybeSingle();
+      if (!profile.error) {
+        ownerName = (profile.data as { full_name?: string | null } | null)?.full_name ?? null;
+      }
+    }
+    return accountantInvitePreviewPayload({
       clientName: client.name as string,
-      invitedEmail: resolved.invitedEmail ?? null,
-    };
+      invitedEmail: resolved.invitedEmail,
+      ownerName,
+    });
   });
 
 export const acceptAccountantInvite = createServerFn({ method: "POST" })

@@ -280,6 +280,21 @@ const liveNote = preferLiveHealthProse(
 );
 assert(liveNote.includes("Cash is the weakest pillar at 25"), liveNote);
 assert(liveNote.includes("overall score of 54"), liveNote);
+const healthPhrase = preferLiveHealthProse("The overall health score of 64 is the current reading.", {
+  overall: 71,
+  weakestLabel: null,
+  weakestScore: null,
+});
+assert(healthPhrase.includes("overall health score of 71"), healthPhrase);
+assert(!healthPhrase.includes("64"), healthPhrase);
+assert(
+  preferLiveHealthProse("The overall health score fell from 80 to 64.", {
+    overall: 71,
+    weakestLabel: null,
+    weakestScore: null,
+  }) === "The overall health score fell from 80 to 64.",
+  "a score that moved stays as it was written",
+);
 assert(!/tied with/i.test(liveNote), liveNote);
 assert(
   preferLiveHealthProse("Health is 74, with profit drivers weakest at 60.", {
@@ -314,25 +329,22 @@ const gaps = mergePackDataGaps([], {
 });
 assert(gaps.some((gap) => gap.title === "Aged debtors report"), "missing aged debtors stay on the list");
 assert(gaps.some((gap) => gap.title === "Aged creditors report"), "missing aged creditors stay on the list");
-const shown = packSectionsForPdf(
-  [
-    {
-      key: "data_gaps",
-      title: "What MILŌN still needs",
-      body: "Nothing outstanding. The figures in this pack are as complete as MILŌN can make them from what has been provided.",
-    },
-    {
-      key: "state_of_business",
-      title: "Where the business stands",
-      body: "Chill Pepper scores 74/100. Strongest pillar: Cash Flow (93). Weakest: Profit Drivers (60).",
-    },
-  ],
-  { liveGaps: gaps },
-);
+const shown = packSectionsForPdf([
+  {
+    key: "data_gaps",
+    title: "What MILŌN still needs",
+    body: "Nothing outstanding. The figures in this pack are as complete as MILŌN can make them from what has been provided.",
+  },
+  {
+    key: "state_of_business",
+    title: "Where the business stands",
+    body: "Chill Pepper scores 74/100. Strongest pillar: Cash Flow (93). Weakest: Profit Drivers (60).",
+  },
+]);
 const gapSection = shown.find((section) => section.key === "data_gaps");
-assert(gapSection?.body.includes("open request"), gapSection?.body ?? "");
-assert(!/Nothing outstanding/i.test(gapSection?.body ?? ""), gapSection?.body ?? "");
-assert(gapSection?.bullets?.some((line) => line.includes("Aged debtors report")), gapSection?.bullets?.join(" | ") ?? "");
+assert(/Nothing outstanding/i.test(gapSection?.body ?? ""), gapSection?.body ?? "");
+assert(!gapSection?.body.includes("open request"), gapSection?.body ?? "");
+assert(!(gapSection?.bullets ?? []).some((line) => line.includes("Aged debtors report")), "stored gaps stay stored");
 const state = shown.find((section) => section.key === "state_of_business");
 assert(state?.body.includes("scores 74"), state?.body ?? "");
 assert(!state?.body.includes("/100"), state?.body ?? "");

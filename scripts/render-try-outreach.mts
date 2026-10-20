@@ -1,22 +1,21 @@
 /**
- * Render the /try outreach email to /tmp. Does not send mail.
- * Also writes public/email/example-result.png from the US sample figures.
+ * Render the warm demo outreach email.
+ * Writes docs/outreach/warm-demo-email.html and /tmp/try-outreach.*.
+ * Does not send mail.
  * Run: pnpm render:try-outreach
  */
-import { existsSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { createElement } from "react";
 import { render } from "@react-email/render";
-import { chromium } from "@playwright/test";
 import { firmSignupHref } from "../src/lib/firm-signup-copy";
 import { buildTrialBoard, trialReading } from "../src/lib/trial-demo";
 import TryOutreachEmail, {
   TRY_OUTREACH_ADDRESS,
   TRY_OUTREACH_CTA_LABEL,
   TRY_OUTREACH_EXAMPLE_ALT,
-  TRY_OUTREACH_EXAMPLE_SRC,
+  TRY_OUTREACH_EXAMPLE_CLOSE,
+  TRY_OUTREACH_EXAMPLE_NOTE,
   TRY_OUTREACH_HEADERS,
-  TRY_OUTREACH_INCENTIVES,
-  TRY_OUTREACH_INCENTIVES_KICKER,
   TRY_OUTREACH_PREVIEW,
   TRY_OUTREACH_SIGN_OFF,
   TRY_OUTREACH_SIGNUP_LABEL,
@@ -25,141 +24,114 @@ import TryOutreachEmail, {
   TRY_OUTREACH_TEXT,
   TRY_OUTREACH_TRY_URL,
   TRY_OUTREACH_UNSUBSCRIBE_URL,
+  WARM_DEMO_AGENT,
+  WARM_DEMO_WORDMARK,
+  warmDemoCtaUrl,
 } from "../emails/try-outreach";
 
 const board = buildTrialBoard("US");
 const reading = trialReading(board, new Date("2026-10-14T00:00:00Z"));
-const pngPath = "public/email/example-result.png";
+const OUT_HTML = "docs/outreach/warm-demo-email.html";
 
-function resultCardHtml(): string {
-  const score = board.health.score ?? "—";
-  const label = board.health.label;
-  const size = 148;
-  const stroke = 12;
-  const radius = (size - stroke) / 2;
-  const circ = 2 * Math.PI * radius;
-  const shown = typeof score === "number" ? Math.max(0, Math.min(100, score)) : 0;
-  const offset = circ * (1 - shown / 100);
-  const center = size / 2;
-  const arc =
-    typeof score === "number"
-      ? `<circle cx="${center}" cy="${center}" r="${radius}" fill="none" stroke="#c4841d" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${circ.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}" transform="rotate(-90 ${center} ${center})" />`
-      : "";
-  const tiles = [
-    ["Gross margin", reading.grossMargin],
-    ["Net margin", reading.netMargin],
-    ["Current ratio", reading.currentRatio],
-    ["Debtor days", reading.debtorDays],
-  ]
-    .map(
-      ([name, value]) => `<td style="width:50%;padding:6px;">
-        <div style="background:#f4f8ff;border-radius:14px;padding:14px 16px;">
-          <div style="font-size:11px;line-height:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3d5270;">${name}</div>
-          <div style="margin-top:4px;font-size:22px;line-height:26px;font-weight:700;letter-spacing:-0.03em;color:#102a43;">${value}</div>
-        </div>
-      </td>`,
-    )
-    .reduce<string[]>((rows, cell, index) => {
-      if (index % 2 === 0) rows.push(`<tr>${cell}`);
-      else rows[rows.length - 1] += `${cell}</tr>`;
-      return rows;
-    }, [])
-    .join("");
-
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<style>
-  @font-face {
-    font-family: "Plus Jakarta Sans";
-    src: url("file:///workspace/node_modules/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2");
-    font-weight: 100 900;
-    font-display: block;
-  }
-  html, body { margin: 0; background: #ffffff; }
-  #card {
-    width: 544px;
-    box-sizing: border-box;
-    background: #ffffff;
-    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
-    color: #102a43;
-    padding: 8px 4px 4px;
-  }
-</style>
-</head>
-<body>
-  <div id="card">
-    <div style="font-size:11px;line-height:14px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#0b5fff;">Example result</div>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:16px;">
-      <tr>
-        <td style="width:168px;vertical-align:middle;">
-          <div style="position:relative;width:${size}px;height:${size}px;">
-            <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
-              <circle cx="${center}" cy="${center}" r="${radius}" fill="none" stroke="#dbeafe" stroke-width="${stroke}" />
-              ${arc}
-            </svg>
-            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-              <div style="font-size:44px;line-height:44px;font-weight:700;letter-spacing:-0.04em;">${score}</div>
-              <div style="margin-top:2px;font-size:12px;line-height:16px;font-weight:700;color:#8a5a12;">${label}</div>
-            </div>
-          </div>
-        </td>
-        <td style="vertical-align:middle;padding-left:8px;">
-          <div style="font-size:15px;line-height:22px;color:#3d5270;">A services sample. No books connected. Cash runway is not measured, because there is no cash balance.</div>
-          <div style="margin-top:8px;font-size:13px;line-height:18px;color:#5c7190;">13-week estimate closes at ${reading.cashClose}.</div>
-        </td>
-      </tr>
-    </table>
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top:8px;border-collapse:separate;">
-      ${tiles}
-    </table>
-  </div>
-</body>
-</html>`;
+function fail(message: string): never {
+  throw new Error(message);
 }
 
-async function writeExamplePng() {
-  const htmlPath = "/tmp/example-result.html";
-  writeFileSync(htmlPath, resultCardHtml());
-  const browser = await chromium.launch({
-    executablePath: "/usr/bin/google-chrome",
-    headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  });
-  try {
-    const page = await browser.newPage({
-      deviceScaleFactor: 2,
-      viewport: { width: 600, height: 800 },
-    });
-    await page.goto(`file://${htmlPath}`, { waitUntil: "networkidle" });
-    await page.locator("#card").screenshot({ path: pngPath, type: "png" });
-  } finally {
-    await browser.close();
+function assertImages(html: string) {
+  const imgs = html.match(/<img\b[^>]*>/gi) ?? [];
+  if (imgs.length !== 0) fail(`expected no images, found ${imgs.length}`);
+}
+
+function assertNoImageOnlyLinks(html: string) {
+  const anchors = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/gi) ?? [];
+  for (const anchor of anchors) {
+    const text = anchor
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;|&#160;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (/<img\b/i.test(anchor) && text.length === 0) {
+      fail(`image-only link: ${anchor.slice(0, 200)}`);
+    }
   }
 }
 
-try {
-  await writeExamplePng();
-} catch (error) {
-  if (!existsSync(pngPath)) throw error;
-  console.warn("kept existing example-result.png");
+function assertLayoutTables(html: string) {
+  const tables = html.match(/<table\b[^>]*>/gi) ?? [];
+  if (tables.length === 0) fail("email is not a table layout");
+  for (const table of tables) {
+    if (!/role\s*=\s*"presentation"/i.test(table)) {
+      fail(`layout table missing role=presentation: ${table}`);
+    }
+  }
 }
 
-const pngSize = statSync(pngPath).size;
-if (pngSize < 8 * 1024 || pngSize > 180 * 1024) {
-  throw new Error(`${pngPath} is ${pngSize} bytes`);
+function assertOutlookSafe(html: string, text: string) {
+  const bytes = Buffer.byteLength(html, "utf8");
+  if (bytes >= 102 * 1024) fail(`html is ${bytes} bytes; Gmail clips at 102KB`);
+  if (/\.gif\b/i.test(html) || /image\/gif/i.test(html)) fail("html contains a gif");
+  if (/<link\b/i.test(html) || /@import\b/i.test(html)) {
+    fail("html uses external CSS or a link tag");
+  }
+  if (/color\s*:\s*(#fff\b|#ffffff\b|white)\b/i.test(html)) fail("pure-white text color");
+  if (/color\s*=\s*["']#fff(?:fff)?["']/i.test(html)) fail("pure-white text attribute");
+  if (!/<!--\[if mso\]>[\s\S]*?<v:roundrect\b[\s\S]*?<!\[endif\]-->/i.test(html)) {
+    fail("missing an mso VML roundrect button");
+  }
+  const buttons = html.match(/<v:roundrect\b/gi) ?? [];
+  if (buttons.length !== 1) fail(`expected one VML button, found ${buttons.length}`);
+  if (!/fillcolor="#d4af37"/i.test(html)) fail("the button is not brand gold");
+  if (!/color:#102A43/i.test(html)) fail("the button text is not dark navy");
+  if (!html.includes('name="color-scheme"') || !html.includes('name="supported-color-schemes"')) {
+    fail("missing color-scheme meta tags");
+  }
+  if (!html.includes("[data-ogsc]") || !/prefers-color-scheme:\s*dark/.test(html)) {
+    fail("missing dark-mode selectors");
+  }
+  if (!/width="600"/.test(html)) fail("missing the 600px layout table");
+  assertImages(html);
+  assertNoImageOnlyLinks(html);
+  assertLayoutTables(html);
+
+  for (const name of ["Milōn Financial Manager", "Milōn Analyst", "Milōn Advisor"]) {
+    if (!html.includes(name) || !text.includes(name)) fail(`missing agent name ${name}`);
+  }
+  if (/whatsapp/i.test(html) || /whatsapp/i.test(text)) fail("outreach mentions WhatsApp");
+  if (/\bvat\b/i.test(html) || /\bvat\b/i.test(text)) fail("outreach mentions VAT");
+  if (/\bDana\b/.test(html) || /\bDana\b/.test(text)) fail("outreach names Dana");
+  if (html.includes("/outreach/sample-scorecard") || html.includes("/outreach/sample-roadmap")) {
+    fail("the #355/#381 outreach images are still in the email");
+  }
+  const runway = "Cash runway is not measured";
+  const runwayCount = (value: string) => value.replace(/\s+/g, " ").split(runway).length - 1;
+  if (runwayCount(html) !== 1) fail(`html says "${runway}" ${runwayCount(html)} times`);
+  if (runwayCount(text) !== 1) fail(`text says "${runway}" ${runwayCount(text)} times`);
+  for (const claim of ["80% time saved", "70% lower cost", "In our tests"]) {
+    if (html.includes(claim) || text.includes(claim))
+      fail(`unsourced claim still present: ${claim}`);
+  }
+  if (!html.includes(WARM_DEMO_WORDMARK) || !html.includes("#d4af37")) {
+    fail("the wordmark is not live gold text");
+  }
+  if (/<img\b/i.test(html)) fail("the wordmark is still an image");
 }
 
-const html = await render(createElement(TryOutreachEmail));
+const rendered = await render(createElement(TryOutreachEmail), { pretty: true });
+const html = rendered.replace(/<link\b[^>]*rel="preload"[^>]*>\s*/g, "");
 const text = TRY_OUTREACH_TEXT;
 const headers = Object.entries(TRY_OUTREACH_HEADERS)
   .map(([name, value]) => `${name}: ${value}`)
   .join("\n");
 
+mkdirSync("docs/outreach", { recursive: true });
+writeFileSync(OUT_HTML, html);
 writeFileSync("/tmp/try-outreach.html", html);
 writeFileSync("/tmp/try-outreach.txt", `${text}\n`);
 writeFileSync("/tmp/try-outreach.headers", `${headers}\n`);
+
+const cta = warmDemoCtaUrl();
+if (WARM_DEMO_AGENT !== "financial_manager") fail("the default agent is not Financial Manager");
+if (cta !== TRY_OUTREACH_TRY_URL) fail(`cta is not the current demo page: ${cta}`);
 
 const required = [
   TRY_OUTREACH_SUBJECT,
@@ -170,65 +142,55 @@ const required = [
   TRY_OUTREACH_UNSUBSCRIBE_URL,
   TRY_OUTREACH_ADDRESS,
   TRY_OUTREACH_SIGN_OFF,
-  TRY_OUTREACH_EXAMPLE_SRC,
   "Example result",
+  TRY_OUTREACH_EXAMPLE_NOTE,
+  TRY_OUTREACH_EXAMPLE_CLOSE,
   reading.grossMargin,
   reading.netMargin,
   reading.currentRatio,
   reading.debtorDays,
-  "https://www.milonfinance.com/email/fm.png",
-  "https://www.milonfinance.com/email/analyst.png",
-  "https://www.milonfinance.com/email/advisor.png",
   "Holds the 13-week cash line and the profit bridge.",
   "Reads the ratios, the margins, and what is drifting.",
   "Turns that reading into the next move.",
-  TRY_OUTREACH_INCENTIVES_KICKER,
-  ...TRY_OUTREACH_INCENTIVES,
+  WARM_DEMO_WORDMARK,
+  "Georgia",
 ];
+const flatHtml = html.replace(/\s+/g, " ");
 for (const needle of required) {
-  if (!html.includes(needle)) throw new Error(`html missing ${needle}`);
+  if (!flatHtml.includes(needle.replace(/\s+/g, " "))) fail(`html missing ${needle}`);
 }
-if (!html.includes("v:roundrect") || !html.includes('fillcolor="#d4af37"')) {
-  throw new Error("the button is not a bulletproof gold button");
-}
-if (!/<table/i.test(html)) throw new Error("email is not a table layout");
 if (/>\s*Sample\s*</i.test(html) || html.includes("SAMPLE")) {
-  throw new Error("the SAMPLE tag is still in the email");
+  fail("the SAMPLE tag is still in the email");
 }
 if (html.includes("R299") || html.includes("R2,837") || /\bR\s\d/.test(html)) {
-  throw new Error("email shows a rand amount");
+  fail("email shows a rand amount");
 }
 if (
   !html.includes(TRY_OUTREACH_SIGNUP_URL.replace(/&/g, "&amp;")) &&
   !html.includes(TRY_OUTREACH_SIGNUP_URL)
 ) {
-  throw new Error("html missing the signup link");
+  fail("html missing the signup link");
 }
 const starterSignup = `https://www.milonfinance.com${firmSignupHref("starter")}&utm_source=email`;
 if (TRY_OUTREACH_SIGNUP_URL !== starterSignup) {
-  throw new Error(`signup link is not the accountant Starter plan: ${TRY_OUTREACH_SIGNUP_URL}`);
+  fail(`signup link is not the accountant Starter plan: ${TRY_OUTREACH_SIGNUP_URL}`);
 }
 if (html.includes("plan=solo") || text.includes("plan=solo")) {
-  throw new Error("Start free trial still links to plan=solo");
+  fail("Start free trial still links to plan=solo");
 }
-if (!text.includes(TRY_OUTREACH_SUBJECT)) throw new Error("text missing the subject");
-if (!text.includes(TRY_OUTREACH_CTA_LABEL)) throw new Error("text missing the button label");
+if (!text.includes(TRY_OUTREACH_SUBJECT)) fail("text missing the subject");
+if (!text.includes(TRY_OUTREACH_CTA_LABEL)) fail("text missing the button label");
 if (!text.includes(`${TRY_OUTREACH_SIGNUP_LABEL}: ${TRY_OUTREACH_SIGNUP_URL}`)) {
-  throw new Error("text missing the signup link");
+  fail("text missing the signup link");
 }
-if (!text.includes(TRY_OUTREACH_EXAMPLE_ALT)) throw new Error("text missing the example result");
-if (!headers.includes("List-Unsubscribe:")) throw new Error("missing List-Unsubscribe header");
-if (!headers.includes("List-Unsubscribe-Post:"))
-  throw new Error("missing List-Unsubscribe-Post header");
-if (/whatsapp/i.test(html) || /whatsapp/i.test(text)) throw new Error("outreach mentions WhatsApp");
+if (!text.includes(TRY_OUTREACH_EXAMPLE_ALT)) fail("text missing the example result");
+if (!text.includes(`${TRY_OUTREACH_CTA_LABEL}: ${cta}`)) fail("text missing the demo link");
+if (!headers.includes("List-Unsubscribe:")) fail("missing List-Unsubscribe header");
+if (!headers.includes("List-Unsubscribe-Post:")) fail("missing List-Unsubscribe-Post header");
 
-for (const face of ["fm", "analyst", "advisor"]) {
-  const file = `public/email/${face}.png`;
-  const size = statSync(file).size;
-  if (size <= 0 || size >= 60 * 1024) throw new Error(`${file} is ${size} bytes`);
-}
+assertOutlookSafe(html, text);
 
+console.log(`rendered ${OUT_HTML} (${Buffer.byteLength(html, "utf8")} bytes)`);
 console.log("rendered /tmp/try-outreach.html");
 console.log("rendered /tmp/try-outreach.txt");
 console.log("rendered /tmp/try-outreach.headers");
-console.log(`rendered ${pngPath} (${pngSize} bytes)`);

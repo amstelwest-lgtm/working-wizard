@@ -138,8 +138,11 @@ export function BudgetChartTable({
 
   const views = useMemo(() => budgetMonthViews(doc, loaded), [doc, loaded]);
   const scopedViews = useMemo(() => {
-    const wanted = windowMonths?.filter(Boolean) ?? [];
-    if (!wanted.length) return views;
+    // No window means the whole plan. An empty window is a statement that
+    // is not scored, so the chart does not total the year in its place.
+    if (windowMonths == null) return views;
+    const wanted = windowMonths.filter(Boolean);
+    if (!wanted.length) return [];
     const scoped = views.filter((row) => wanted.includes(row.month));
     return scoped.length ? scoped : views;
   }, [views, windowMonths]);

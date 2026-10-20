@@ -70,10 +70,10 @@ import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import {
   budgetSignoffIsStale,
   cashSignoffIsStale,
-  reviewFiguresChanged,
-  signedHealthFromHistory,
+  healthSignoffIsStale,
   type SignoffPeriodSnapshot,
 } from "@/lib/signoff-status";
+import { reportFetchPlan, studioSignoffState, type ReportFetchPlan } from "@/lib/report-load";
 import { budgetSignedFiguresChanged } from "@/lib/budget.bridges";
 import { cashForecastWeeksFromOutlook, cashOutlookIsCritical, cashSignedFiguresChanged } from "@/lib/cash-forecast-parity";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
@@ -2108,7 +2108,10 @@ async function loadBudgetWorkflow(clientId: string, scope = "budget"): Promise<{
   }
 }
 
-async function loadClientReportData(clientId: string): Promise<ClientReportData> {
+async function loadClientReportData(
+  clientId: string,
+  plan: ReportFetchPlan = reportFetchPlan(undefined),
+): Promise<ClientReportData> {
   const [clientRes, snapshotRes, signoffRes, historyRes] = await Promise.all([
     supabase
       .from("clients")
@@ -2170,19 +2173,30 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const market = resolveMarket(
     parseMarketSelection(clientRow?.market) ?? coerceMarketSelection(clientRow?.market ?? null),
   );
-  let clientFirmName: string | null = null;
-  if (clientRow?.firm_id) {
-    const firmRes = await supabase
-      .from("firms")
-      .select("name")
-      .eq("id", clientRow.firm_id)
-      .maybeSingle();
-    const name = firmRes.data?.name?.trim();
-    clientFirmName = name || null;
-  }
   const operatingProfile = parseOperatingProfile(clientRow?.operating_profile);
   const businessTypeId = clientRow?.business_type ?? operatingProfile?.businessTypeId ?? null;
-  const sectorBench = await loadSectorBenchmarks(businessTypeId, operatingProfile);
+  const [clientFirmName, sectorBench, uploadedBudgetActuals, budgetWorkflow, cashWorkflow] =
+    await Promise.all([
+      (async () => {
+        if (!clientRow?.firm_id) return null;
+        const firmRes = await supabase
+          .from("firms")
+          .select("name")
+          .eq("id", clientRow.firm_id)
+          .maybeSingle();
+        return firmRes.data?.name?.trim() || null;
+      })(),
+      plan.benchmarks
+        ? loadSectorBenchmarks(businessTypeId, operatingProfile)
+        : Promise.resolve({} as Record<string, SectorBenchProps>),
+      plan.budget ? loadBudgetActualsForPdf(clientId) : Promise.resolve([] as BudgetPdfActual[]),
+      plan.budget
+        ? loadBudgetWorkflow(clientId)
+        : Promise.resolve({ status: null, snapshot: null }),
+      plan.cashWorkflow
+        ? loadBudgetWorkflow(clientId, "cash_forecast")
+        : Promise.resolve({ status: null, snapshot: null }),
+    ]);
   const benchmarkSector = resolveBenchmarkSector(businessTypeId, operatingProfile);
   const preliminary = assessClientMetrics({
     financials:
@@ -2205,15 +2219,10 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   };
   const storedBudget = parseBudgetDocument(clientRow?.budget);
   const budgetUpdatedAt = clientRow?.budget_updated_at ?? null;
-  const uploadedBudgetActuals = await loadBudgetActualsForPdf(clientId);
   const rawFinancials =
     clientRow?.financials && typeof clientRow.financials === "object"
       ? (clientRow.financials as Record<string, unknown>)
       : null;
-  const [budgetWorkflow, cashWorkflow] = await Promise.all([
-    loadBudgetWorkflow(clientId),
-    loadBudgetWorkflow(clientId, "cash_forecast"),
-  ]);
   const budgetWorkflowStatus = budgetWorkflow.status;
   const budget = storedBudget
     ? publishBudgetDocument(
@@ -2446,7 +2455,7 @@ function isSignoffStale(
   cd?: ClientReportData | null,
   scope?: ReviewScope,
 ): boolean {
-  if (!signoff) return true;
+  if (!signoff) return false;
   if (scope === "budget") {
     return budgetSignoffIsStale(
       signoff,
@@ -2461,14 +2470,20 @@ function isSignoffStale(
       cashSignedFiguresChanged(cd?.cashSignedSnapshot, cd?.cashflow),
     );
   }
-  return reviewFiguresChanged({
-    signedOffAt: signoff.signed_off_at,
+  return healthSignoffIsStale({
+    signoff,
     dataUpdatedAt: freshAt,
     snapshots: cd?.signoffSnapshots,
     liveHealth: cd?.overallHealth?.overall ?? null,
-    signedHealth: signedHealthFromHistory(cd?.scoreHistory, signoff.signed_off_at),
+    scoreHistory: cd?.scoreHistory,
   });
 }
+
+type StudioSignoffView = {
+  signoffsKnown?: boolean;
+  knownSignoffs?: Partial<Record<ReviewScope, ClientReviewSignoff | null>>;
+  knownSignoffStale?: Partial<Record<ReviewScope, boolean>>;
+};
 
 function signoffFreshAt(scope: ReviewScope, cd: ClientReportData | null): string | null {
   if (!cd) return null;
@@ -2481,13 +2496,21 @@ function signoffFreshAt(scope: ReviewScope, cd: ClientReportData | null): string
 function signoffStampFor(
   scope: "financials" | "cash_forecast" | "profitability" | "budget",
   cd: ClientReportData | null,
+  view: StudioSignoffView = {},
 ): ReportSignoffStamp | null {
-  if (!cd) return null;
-  const signoff = cd.reviewSignoffs[scope];
+  const loaded = cd?.reviewSignoffs[scope] ?? null;
   const freshAt = signoffFreshAt(scope, cd);
-  return stampFromSignoff(signoff, isSignoffStale(signoff, freshAt, cd, scope), {
-    clientFirmName: cd.clientFirmName,
+  const displayed = view.signoffsKnown ? (view.knownSignoffs?.[scope] ?? null) : loaded;
+  const { signoff, isStale } = studioSignoffState({
+    signoffsKnown: Boolean(view.signoffsKnown),
+    known: view.knownSignoffs,
+    knownStale: view.knownSignoffStale,
+    scope,
+    loaded,
+    computedStale: isSignoffStale(displayed, freshAt, cd, scope),
   });
+  if (!signoff) return null;
+  return stampFromSignoff(signoff, isStale, { clientFirmName: cd?.clientFirmName });
 }
 
 /** G19 — drop prior columns when the Studio toggle is off. */
@@ -2577,14 +2600,17 @@ function makeSmeWithNote(
   };
 }
 
-function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
+function buildGEN(
+  clientData: ClientReportData | null,
+  signoffView: StudioSignoffView = {},
+): Record<string, GenFn> {
   const cd = clientData?.hasData ? clientData : null;
   const sample = Boolean(clientData?.isSample);
   const operatingProfile = clientData?.operatingProfile ?? null;
   const market = clientData?.market ?? ZA_MARKET;
-  const financialsStamp = signoffStampFor("financials", clientData);
-  const forecastStamp = signoffStampFor("cash_forecast", clientData);
-  const profitabilityStamp = signoffStampFor("profitability", clientData);
+  const financialsStamp = signoffStampFor("financials", clientData, signoffView);
+  const forecastStamp = signoffStampFor("cash_forecast", clientData, signoffView);
+  const profitabilityStamp = signoffStampFor("profitability", clientData, signoffView);
 
   /** Live client with hasData must never fall through to MOCK_* for a missing slice. */
   function liveOrDemo<T>(
@@ -2895,7 +2921,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         workflowStatus: cd?.budgetWorkflowStatus ?? null,
         market,
       });
-      const budgetStamp = isDemo || review.unsigned ? null : signoffStampFor("budget", clientData);
+      const budgetStamp = isDemo || review.unsigned ? null : signoffStampFor("budget", clientData, signoffView);
       return renderToBlob(BudgetVariancePDF, {
         smeData: {
           name: isDemo ? s.smeName || "Demo Client" : cd!.clientName,
@@ -3573,6 +3599,15 @@ export type ReportsStudioProps = {
   onlyKeys?: readonly string[];
   /** Parent already has figures, so a remount does not say "No reports yet". */
   figuresOnFile?: boolean;
+  /**
+   * Sign-off rows the client page already loaded. When `signoffsKnown`,
+   * these win over the studio's own query, including a null (unsigned) scope.
+   */
+  knownSignoffs?: Partial<Record<ReviewScope, ClientReviewSignoff | null>>;
+  signoffsKnown?: boolean;
+  /** Stale bits from the same helpers the Health, Profit, and Cash tabs use. */
+  knownSignoffStale?: Partial<Record<ReviewScope, boolean>>;
+  onSignoffChange?: (scope: ReviewScope, next: ClientReviewSignoff | null) => void;
 };
 
 /** Opening a report page keeps the catalogue. Preview and download are explicit. */
@@ -3594,6 +3629,10 @@ export function ReportsStudio({
   inputs = null,
   onlyKeys,
   figuresOnFile = false,
+  knownSignoffs,
+  signoffsKnown = false,
+  knownSignoffStale,
+  onSignoffChange,
 }: ReportsStudioProps) {
   const navigate = useNavigate();
   const { profile, firmId, brandLoading } = useAccountantProfile();
@@ -3715,17 +3754,36 @@ export function ReportsStudio({
     );
   };
 
+  const signoffView: StudioSignoffView = {
+    signoffsKnown,
+    knownSignoffs,
+    knownSignoffStale,
+  };
+
   function reportCardSignoff(r: ReportMeta) {
     const scope = REPORT_SIGNOFF_SCOPE[r.key];
     if (!clientId || !scope) return {};
-    const signoff = clientData?.reviewSignoffs[scope as keyof typeof clientData.reviewSignoffs] ?? null;
+    const loaded =
+      clientData?.reviewSignoffs[scope as keyof typeof clientData.reviewSignoffs] ?? null;
     const freshAt = signoffFreshAt(scope, clientData);
+    const displayed = signoffsKnown ? (knownSignoffs?.[scope] ?? null) : loaded;
+    const { signoff, isStale } = studioSignoffState({
+      signoffsKnown,
+      known: knownSignoffs,
+      knownStale: knownSignoffStale,
+      scope,
+      loaded,
+      computedStale: isSignoffStale(displayed, freshAt, clientData, scope),
+    });
     return {
       clientId,
       clientName: clientData?.clientName ?? clientParam,
       signoff,
-      signoffStale: isSignoffStale(signoff, freshAt, clientData, scope),
-      onSignoffChange: patchStudioSignoff(scope),
+      signoffStale: isStale,
+      onSignoffChange: (next: ClientReviewSignoff | null) => {
+        patchStudioSignoff(scope)(next);
+        onSignoffChange?.(scope, next);
+      },
     };
   }
 
@@ -3758,6 +3816,8 @@ export function ReportsStudio({
   // Load real client financials whenever clientId changes.
   // Clear stale data *immediately* so exports cannot use the previous client's
   // figures while the new request is in flight.
+  // onlyKeys is a fresh array each parent render; the token keeps the fetch stable.
+  const onlyKeyToken = (onlyKeys ?? []).join("\0");
   useEffect(() => {
     if (!clientId) {
       setClientData(null);
@@ -3768,7 +3828,8 @@ export function ReportsStudio({
     setClientData(null); // clear before async starts
     setDataLoading(true);
     deepLinkHandled.current = null;
-    loadClientReportData(clientId)
+    const fetchPlan = reportFetchPlan(onlyKeyToken ? onlyKeyToken.split("\0") : undefined);
+    loadClientReportData(clientId, fetchPlan)
       .then((data) => {
         if (cancelled) return;
         setClientData(data);
@@ -3792,10 +3853,13 @@ export function ReportsStudio({
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, onlyKeyToken]);
 
   // Build the GEN map from real client data (or null = demo data)
-  const GEN = useMemo(() => buildGEN(clientData), [clientData]);
+  const GEN = useMemo(
+    () => buildGEN(clientData, signoffView),
+    [clientData, signoffsKnown, knownSignoffs, knownSignoffStale],
+  );
 
   // Clean up blob URL on close
   const closePreview = useCallback(() => {

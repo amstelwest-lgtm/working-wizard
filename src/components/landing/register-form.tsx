@@ -23,6 +23,7 @@ import {
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { setPortalIntent } from "@/lib/user-roles";
 import { PasswordWithShow } from "@/components/show-password";
+import { ownerInviteLead } from "@/lib/invite-claim";
 import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 
 type SignedIn = { email?: string | null } | null;
@@ -30,6 +31,7 @@ type SignedIn = { email?: string | null } | null;
 export function LandingRegisterForm({
   inviteClientId,
   inviteBusiness,
+  inviteFirmName,
   inviteNeedsCode,
   inviteIsLegacyUuid,
   user,
@@ -63,6 +65,7 @@ export function LandingRegisterForm({
 }: {
   inviteClientId: string | null;
   inviteBusiness: string | null;
+  inviteFirmName?: string | null;
   inviteNeedsCode: boolean;
   inviteIsLegacyUuid: boolean;
   user: SignedIn;
@@ -114,9 +117,8 @@ export function LandingRegisterForm({
                 fontWeight: 600,
               }}
             >
-              You&apos;ve been invited to your business workspace on MILŌN. Create your account or
-              sign in to take ownership and see your numbers.
-              {inviteBusiness ? ` This link is for ${inviteBusiness}.` : ""}
+              {ownerInviteLead(inviteFirmName, inviteBusiness)}. Create your account or sign in to
+              take ownership and see your numbers.
               {inviteNeedsCode ? " You'll need the client code from the email (MLN-XXXXXX)." : ""}
             </p>
             {user ? (

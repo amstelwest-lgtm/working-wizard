@@ -6,7 +6,7 @@ import { groundAdvisoryNarrative } from "./advisory-narrative.ts";
 import { liveOverallFromRecord, quoteLiveScoreOnly } from "./draft-figures.ts";
 import { cashComfortThreshold } from "./cash-runway.ts";
 import { formatMoney, type MoneyMarket } from "./market/format.ts";
-import { statementSpanLabel } from "./statement-period.ts";
+import { offsetInsideCalendarSpan, repairCalendarFigureLeaks, statementSpanLabel } from "./statement-period.ts";
 export type { MoneyMarket };
 import { coerceMarketSelection } from "./market/parse.ts";
 
@@ -1380,6 +1380,7 @@ function applyCopyReplacements(text: string, replacements: DraftAmountReplacemen
   return text.replace(
     new RegExp(`(?<![R$£€][ \\u00a0\\u202f]?)(?<![\\d.])(?:${pattern})(?![\\d×%])`, "g"),
     (match, offset: number) => {
+      if (offsetInsideCalendarSpan(text, offset, match.length)) return match;
       const options = byRaw.get(match) ?? [];
       const after = text.slice(offset + match.length, offset + match.length + 20);
       if (/^\s+out of\s+100\b/i.test(after) || /^\s*\/\s*100\b/.test(after)) return match;
@@ -1430,6 +1431,8 @@ export function storedFigureValues(rows: readonly StoredFigures[]): number[] {
 }
 
 function formatCopyAmounts(text: string, figures: EvidenceFigures | undefined, market: MoneyMarket): string {
+  const dateMarket = { locale: market.locale };
+  const source = repairCalendarFigureLeaks(text, dateMarket);
   const replacements: DraftAmountReplacement[] = [];
   for (const leaf of figureLeaves(figures)) {
     const unit = metricUnit(leaf.key, leaf.value);
@@ -1440,7 +1443,9 @@ function formatCopyAmounts(text: string, figures: EvidenceFigures | undefined, m
       for (const raw of loosePercentSpellings(leaf.value)) replacements.push({ raw, formatted, unit });
     }
   }
-  return repairDraftMetricUnits(applyCopyReplacements(text, replacements))
+  return repairDraftMetricUnits(
+    repairCalendarFigureLeaks(applyCopyReplacements(source, replacements), dateMarket),
+  )
     .replace(/\$\s*\$/g, "$")
     .replace(/R(?:[\u00a0 ]+)R(?:[\u00a0 ])/g, "R ")
     .replace(/\s+/g, " ")
