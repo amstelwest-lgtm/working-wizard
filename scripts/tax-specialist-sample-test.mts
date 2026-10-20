@@ -180,8 +180,12 @@ for (const path of walk("src")) {
 
 const owner = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
 assert(
-  owner.includes("marketCountry={market.country}") && owner.includes('audience="owner"'),
-  "the owner door passes its market",
+  owner.includes("marketCountry={marketCountry}") && owner.includes('audience="owner"'),
+  "the owner door passes the stored country into the tax card",
+);
+assert(
+  !owner.includes("marketCountry={market.country}"),
+  "the owner door does not pass a coerced market country into the tax card",
 );
 const practice = readFileSync("src/components/practice-board.tsx", "utf8");
 assert(

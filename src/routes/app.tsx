@@ -29,6 +29,7 @@ import { CollectionsOverdueNote } from "@/components/collections-overdue-note";
 import { PayablesOverdueNote } from "@/components/payables-overdue-note";
 import { formatVal, HealthBar, tierColor } from "@/components/owner-board-ui";
 import { MarketProvider, useMarket } from "@/contexts/market";
+import { MarketGate } from "@/components/market-gate";
 import {
   canShowIndustryMedian,
   coerceMarketSelection,
@@ -43,6 +44,7 @@ import {
   laborCostLabel,
   currencySymbol,
   localizeCopy,
+  marketToJson,
   marketForClient,
   parseMarketSelection,
   readVisitorMarket,
@@ -2049,6 +2051,7 @@ function Index() {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
+  const [marketNeedsGate, setMarketNeedsGate] = useState(false);
 
   // Redirect unauthenticated users to the landing page. After invite accept,
   // React auth state can lag the real Supabase session — don't bounce yet.
@@ -2689,7 +2692,9 @@ function Index() {
         .select(fullSelect)
         .eq("id", effectiveClientId)
         .maybeSingle();
+      let marketColumnMissing = false;
       if (res.error && isMissingMarketSupport(res.error)) {
+        marketColumnMissing = true;
         res = await supabase
           .from("clients")
           .select(legacySelect)
@@ -2713,9 +2718,13 @@ function Index() {
         } | null;
         const profile = parseOperatingProfile(data?.operating_profile);
         const parsedMarket = parseMarketSelection(data?.market);
-        // Stored market only. Null stays null so ZA-only cards and prices stay
-        // off. The book still renders; dates use marketForClient separately.
-        setWorkspaceMarket(parsedMarket);
+        if (!marketColumnMissing && data && data.market == null && res.error == null) {
+          setMarketNeedsGate(true);
+          setWorkspaceMarket(null);
+        } else {
+          setMarketNeedsGate(false);
+          setWorkspaceMarket(parsedMarket ?? coerceMarketSelection(data?.market ?? null));
+        }
         setClientMeta(
           data
             ? {
@@ -3893,6 +3902,30 @@ function Index() {
     return <AppBootSpinner />;
   }
 
+  if (marketNeedsGate && effectiveClientId) {
+    return (
+      <MarketGate
+        onSave={async (draft) => {
+          const sel = parseMarketSelection({
+            country: draft.country,
+            regionCode: draft.regionCode,
+          });
+          if (!sel) throw new Error("Pick a region and, for the US, a state.");
+          const { error } = await supabase
+            .from("clients")
+            .update({
+              market: marketToJson(sel),
+              financial_year_start_month: sel.country === "US" ? 1 : 3,
+            })
+            .eq("id", effectiveClientId);
+          if (error) throw error;
+          setWorkspaceMarket(sel);
+          setMarketNeedsGate(false);
+        }}
+      />
+    );
+  }
+
   const showOwnerDoor = !searchTab && !sampleMode;
   const OwnerHealthOrb = SphereHero;
 
@@ -4000,6 +4033,7 @@ function Index() {
                 openingMissing={ownerOpeningMissing}
                 cashPillarStatus={pillarStatus.cash ?? null}
                 market={boardMarket}
+                marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
                   row
                     ? [

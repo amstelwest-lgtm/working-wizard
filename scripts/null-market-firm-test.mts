@@ -116,12 +116,21 @@ assert(
 );
 
 const owner = readFileSync(resolve("src/routes/app.tsx"), "utf8");
-assert(!owner.includes("MarketGate"), "a null client market does not open the country gate");
+assert(owner.includes("setMarketNeedsGate(true)"), "a null client market opens the country gate");
+assert(owner.includes("setWorkspaceMarket(null)"), "a null client market does not become a ZA selection");
+const gateReturn = owner.indexOf("if (marketNeedsGate && effectiveClientId)");
+const afterGate = owner.indexOf("const showOwnerDoor", gateReturn);
+const bookAt = owner.indexOf("<OwnerDoor");
+assert(gateReturn > 0 && afterGate > gateReturn && bookAt > afterGate, "the country gate returns before the book");
+const gateBlock = owner.slice(gateReturn, afterGate);
+assert(gateBlock.includes("<MarketGate"), "a null client market renders MarketGate");
+assert(!gateBlock.includes("OwnerDoor"), "the gate does not render the owner book");
+assert(!gateBlock.includes("currencySymbol"), "the gate does not render a currency symbol");
+assert(!gateBlock.includes("See a sample"), "the gate does not render the tax sample");
 assert(
-  !owner.includes("coerceMarketSelection(data?.market ?? null)"),
-  "a null client market is not coerced into the workspace",
+  owner.includes("marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}"),
+  "OwnerDoor gets the stored country, not the coerced market",
 );
-assert(owner.includes("setWorkspaceMarket(parsedMarket);"), "the workspace keeps the stored market");
 
 const gate = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
 assert(
@@ -159,6 +168,17 @@ assert(
   "South Africa is the selected region",
 );
 assert(card.includes("South Africa"), "the selected country is South Africa");
+
+const { MarketGate } = await import("../src/components/market-gate.tsx");
+const gateHtml = renderToStaticMarkup(
+  createElement(MarketGate, {
+    onSave: async () => undefined,
+  }),
+);
+assert(gateHtml.includes("Where does this business operate?"), "the gate asks where the business operates");
+assert(!gateHtml.includes("See a sample"), "the gate does not render the tax sample");
+assert(!gateHtml.includes("ITR14") && !gateHtml.includes("IRP6"), "the gate does not render the worksheet");
+assert(!/\bR[\u00a0 ]\d/.test(gateHtml), "the gate does not render a rand amount");
 
 const { OwnerHome } = await import("../src/components/owner-door/owner-home.tsx");
 const { ownerPresence } = await import("../src/lib/owner-presence.ts");
