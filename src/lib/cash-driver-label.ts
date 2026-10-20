@@ -21,8 +21,7 @@ export function isDayScoreDriver(key: string): key is DayScoreDriverKey {
 /**
  * Health > Cash (and stock) driver label.
  * Known days: "Debtor Days · 6 days · score 93".
- * Unknown days: "Debtor Days · score 93".
- * The score stays the rounded 0–100 figure. It is named so it is not read as days.
+ * Missing days: "Debtor Days · — · Not enough data", with no score.
  */
 export function dayScoreDriverLabel(
   name: string,
