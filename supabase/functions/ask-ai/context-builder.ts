@@ -389,6 +389,7 @@ export async function buildContext(
           periodLabel: snapPeriod,
           figuresAsOf: snapDate,
           brainSummary,
+          cashflow,
         });
   let advisorySignoff = null;
   if (tier !== "none") {

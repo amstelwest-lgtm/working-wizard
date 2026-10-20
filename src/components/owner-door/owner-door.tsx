@@ -11,6 +11,7 @@ import { SourceDocumentsPanel } from "@/components/source-documents-panel";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { ownerRunPhase, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { supabase } from "@/integrations/supabase/client";
+import { connectBooksHeadline } from "@/lib/client-metrics";
 import { formatDate } from "@/lib/market/format";
 import { visitorCopyPack } from "@/lib/market/marketing";
 import { readVisitorDraft } from "@/lib/market/storage";
@@ -34,7 +35,13 @@ import {
 } from "@/lib/owner-answers";
 import { agentDisplayName } from "@/lib/milon-team";
 import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
-import { cardRunsByAgent, ownerPresence, steerOpenHandoffs, withCardHandoffRuns, type OwnerTalk } from "@/lib/owner-presence";
+import {
+  cardRunsByAgent,
+  ownerPresence,
+  steerOpenHandoffs,
+  withCardHandoffRuns,
+  type OwnerTalk,
+} from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
   clearOptimisticHandoff,
@@ -69,7 +76,11 @@ import {
 } from "@/lib/owner-needs";
 import { OwnerHome } from "./owner-home";
 import { canonicalOwnerScreen, OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
-import { ownerCheckoutHref, ownerSubscribeView, type OwnerSubscribeView } from "@/lib/owner-subscribe";
+import {
+  ownerCheckoutHref,
+  ownerSubscribeView,
+  type OwnerSubscribeView,
+} from "@/lib/owner-subscribe";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { getOwnerEntitlement, startOwnerCheckout } from "@/lib/stripe-checkout.functions";
 import { OwnerAccountant, OwnerFirst, OwnerPlan, OwnerSettings } from "./owner-pages";
@@ -124,6 +135,7 @@ export function OwnerDoor({
   cashOutlook = null,
   openingMissing = false,
   cashPillarStatus = null,
+  hasEvidence,
   market,
   marketCountry = null,
   signoffs,
@@ -173,6 +185,8 @@ export function OwnerDoor({
   openingMissing?: boolean;
   /** Same cash pillar band as Health. Watch does not say below the minimum. */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
+  /** False when nothing is synced or parsed. Home shows one connect line. */
+  hasEvidence?: boolean;
   market: ResolvedMarket;
   /** Stored country. Null stays off the ZA tax card even if `market` was coerced for dates. */
   marketCountry?: string | null;
@@ -245,7 +259,9 @@ export function OwnerDoor({
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
   const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
-  const awaitingRun = assignmentRows.filter((row) => row.open).map((row) => ({ openedAt: row.openedAt }));
+  const awaitingRun = assignmentRows
+    .filter((row) => row.open)
+    .map((row) => ({ openedAt: row.openedAt }));
   const activity = useAgentActivity(clientId ?? "", awaitingRun);
   const pendingHandoffs = useRef(new Map<string, ActionPlanRefreshDetail>());
   const [handoffErrors, setHandoffErrors] = useState<
@@ -385,25 +401,43 @@ export function OwnerDoor({
         if (prior) {
           setAssignmentRows((current) =>
             prior.row
-              ? current.map((row) => (row.id === id ? { ...prior.row!, open: false, runId: undefined } : row))
+              ? current.map((row) =>
+                  row.id === id ? { ...prior.row!, open: false, runId: undefined } : row,
+                )
               : current.filter((row) => row.id !== id),
           );
         }
         if (detail.error && detail.agent && detail.title) {
           setHandoffErrors((current) => [
             ...current.filter((row) => row.actionItemId !== id),
-            { actionItemId: id, title: detail.title, agent: detail.agent as AgentKey, message: detail.error ?? HANDOFF_FAILED_COPY },
+            {
+              actionItemId: id,
+              title: detail.title,
+              agent: detail.agent as AgentKey,
+              message: detail.error ?? HANDOFF_FAILED_COPY,
+            },
           ]);
         }
         return;
       }
       if (detail.reused) {
-        pendingHandoffs.current.set(detail.actionItemId, { ...detail, note: undefined, reused: true });
-        setHandoffErrors((current) => current.filter((row) => row.actionItemId !== detail.actionItemId));
+        pendingHandoffs.current.set(detail.actionItemId, {
+          ...detail,
+          note: undefined,
+          reused: true,
+        });
+        setHandoffErrors((current) =>
+          current.filter((row) => row.actionItemId !== detail.actionItemId),
+        );
         setAssignmentRows((current) =>
           current.map((row) =>
             row.id === detail.actionItemId
-              ? { ...row, open: row.agent != null, openedAt: row.openedAt ?? detail.since, runId: detail.runId ?? row.runId }
+              ? {
+                  ...row,
+                  open: row.agent != null,
+                  openedAt: row.openedAt ?? detail.since,
+                  runId: detail.runId ?? row.runId,
+                }
               : row,
           ),
         );
@@ -420,10 +454,16 @@ export function OwnerDoor({
         });
       }
       pendingHandoffs.current.set(detail.actionItemId, { ...detail, agent, assigneeName: name });
-      setHandoffErrors((current) => current.filter((row) => row.actionItemId !== detail.actionItemId));
+      setHandoffErrors((current) =>
+        current.filter((row) => row.actionItemId !== detail.actionItemId),
+      );
       setAssignmentRows((current) => {
         const existing = current.find((row) => row.id === detail.actionItemId);
-        const sameWorking = !detail.runId && existing?.open === true && existing.agent === agent && Boolean(existing.runId);
+        const sameWorking =
+          !detail.runId &&
+          existing?.open === true &&
+          existing.agent === agent &&
+          Boolean(existing.runId);
         const next: RowAssignment = {
           id: detail.actionItemId,
           assigneeName: name,
@@ -531,7 +571,9 @@ export function OwnerDoor({
       const openRows = (actions.data ?? []).flatMap((row) => {
         const title = row.title?.trim() ?? "";
         if (!title || !row.id) return [];
-        return [{ id: row.id, title, email: row.owner_email, ownerName: row.owner_name?.trim() || null }];
+        return [
+          { id: row.id, title, email: row.owner_email, ownerName: row.owner_name?.trim() || null },
+        ];
       });
       const ids = openRows.map((row) => row.id);
       const earlyTitles = openPlanTitles(openRows);
@@ -543,7 +585,8 @@ export function OwnerDoor({
         : [new Map(), new Map()];
       if (cancelled) return;
       const pendings = [...pendingHandoffs.current.values()].filter(
-        (pending) => pending.assigneeName && !handoffPaintBlocked(pending.actionItemId, pending.since),
+        (pending) =>
+          pending.assigneeName && !handoffPaintBlocked(pending.actionItemId, pending.since),
       );
       const assigned = openRows.map((row) => {
         const stored = assignments.get(row.id) ?? null;
@@ -576,8 +619,11 @@ export function OwnerDoor({
           runId: pending.runId,
         };
         const serverRun = runs.get(pending.actionItemId) ?? null;
-        const reusedLanded = Boolean(pending.reused && pending.runId && serverRun?.id === pending.runId);
-        const pendingLanded = reusedLanded || (!pending.reused && pendingAssignmentLanded(pendingStored, pendingView));
+        const reusedLanded = Boolean(
+          pending.reused && pending.runId && serverRun?.id === pending.runId,
+        );
+        const pendingLanded =
+          reusedLanded || (!pending.reused && pendingAssignmentLanded(pendingStored, pendingView));
         if (pendingLanded) {
           pendingHandoffs.current.delete(pending.actionItemId);
           clearOptimisticHandoff(pending.actionItemId);
@@ -589,7 +635,9 @@ export function OwnerDoor({
       const firstOpen = merged.find((row) => row.open);
       setActionRows(titles.map((title) => ({ title, email: null })));
       setOpenAction(openRows[0]?.title ?? null);
-      setHandedTitle(firstOpen ? (openRows.find((row) => row.id === firstOpen.id)?.title ?? null) : null);
+      setHandedTitle(
+        firstOpen ? (openRows.find((row) => row.id === firstOpen.id)?.title ?? null) : null,
+      );
       setAssignedAgent(firstOpen?.agent ?? null);
       setAssignmentRows(merged);
       setActionsReady(true);
@@ -638,6 +686,7 @@ export function OwnerDoor({
       cashOutlook: cashOutlook ?? undefined,
       openingMissing,
       cashPillarStatus,
+      hasEvidence,
       openAction,
       actionsReady,
       signedBy: latest?.signed_off_by_name ?? null,
@@ -654,6 +703,7 @@ export function OwnerDoor({
     cashOutlook,
     openingMissing,
     cashPillarStatus,
+    hasEvidence,
     netIncome,
     periodEnd,
     history,
@@ -682,6 +732,7 @@ export function OwnerDoor({
         quickBooks,
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
+        nextAction: hasEvidence === false ? connectBooksHeadline(market) : null,
       }),
     [
       ownerEmail,
@@ -696,6 +747,7 @@ export function OwnerDoor({
       quickBooks,
       xeroLink,
       market,
+      hasEvidence,
     ],
   );
   const settledRows = applyLiveRuns(
@@ -864,7 +916,9 @@ export function OwnerDoor({
     });
     setBusyAgent((current) => (current === asked ? null : current));
     if (!result.ok) {
-      setTalk((current) => (current?.agent === asked && current.mode === "working" ? null : current));
+      setTalk((current) =>
+        current?.agent === asked && current.mode === "working" ? null : current,
+      );
       setAgentError(asked, result.error);
       return;
     }

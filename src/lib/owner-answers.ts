@@ -10,7 +10,11 @@ import {
 import { formatMoney, formatMoneyCompact, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { OPENING_BALANCE_MISSING, forecastLowestPoint } from "@/lib/cash-forecast-parity";
-import { storedSeriesReading } from "@/lib/client-metrics";
+import {
+  connectBooksHeadline,
+  forecastHasRealLines,
+  storedSeriesReading,
+} from "@/lib/client-metrics";
 import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 
@@ -64,6 +68,11 @@ export type OwnerBooks = {
    * The card chip follows Watch and Critical. Omit it and the floor chip stays.
    */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
+  /**
+   * False when nothing has been synced or parsed. Home then shows one connect
+   * line and does not quote a $0 cash default.
+   */
+  hasEvidence?: boolean;
   openAction: string | null;
   /** False until the action-point read has finished. */
   actionsReady: boolean;
@@ -80,7 +89,14 @@ function finite(n: number | null | undefined): n is number {
   return n != null && Number.isFinite(n);
 }
 
-const CONNECT = "Connect QuickBooks or Xero.";
+function connectLine(market: MoneyMarket): string {
+  return connectBooksHeadline(market);
+}
+
+function isConnectLine(line: string): boolean {
+  return line.startsWith("Connect QuickBooks");
+}
+
 const CONNECT_STEP = "Connect your books";
 
 export function ownerAnswerTiles(books: OwnerBooks): OwnerTile[] {
@@ -102,7 +118,9 @@ export function ownerAnswerTiles(books: OwnerBooks): OwnerTile[] {
     : {
         id: "owes" as const,
         heading: "Who owes you",
-        sentence: books.hasBooks ? "Debtor balances are not on file yet." : CONNECT,
+        sentence: books.hasBooks
+          ? "Debtor balances are not on file yet."
+          : connectLine(books.market),
         source: books.hasBooks ? booksSource : "No books connected",
         step: books.hasBooks ? "Ask" : CONNECT_STEP,
         ask: books.hasBooks ? ("analyst" as const) : null,
@@ -188,7 +206,8 @@ export function guardOwnerLine(line: string): string {
 
 /** Home cash copy. The tile sentence stays long for the hold screen. */
 function cashHomeLine(sentence: string): string {
-  if (sentence === CONNECT || sentence === "The 13-week line is not on file yet.") return sentence;
+  if (isConnectLine(sentence) || sentence === "The 13-week line is not on file yet.")
+    return sentence;
   if (sentence.startsWith("Cash is ")) return guardOwnerLine(sentence);
   const amounts = amountsIn(sentence);
   if (sentence.includes("stays above") && amounts.length >= 2) {
@@ -204,24 +223,23 @@ function cashHomeLine(sentence: string): string {
 
 /** Home profit copy. Labels stay Gross profit and Net profit, the same words as the waterfall. */
 function profitHomeLine(sentence: string): string {
-  if (sentence === CONNECT || sentence === "Profit is not on file yet.") return sentence;
+  if (isConnectLine(sentence) || sentence === "Profit is not on file yet.") return sentence;
   const amounts = amountsIn(sentence);
   const [gross, net] = amounts;
   if (!gross) return guardOwnerLine(sentence);
   const netBit = sentence.includes("Net profit") && net ? ` Net profit is ${net}.` : "";
   let head = `Gross profit is ${gross}.`;
-  if (sentence.includes("more than the prior")) head = `Gross profit is ${gross}, up on last period.`;
-  else if (sentence.includes("less than the prior")) head = `Gross profit is ${gross}, down on last period.`;
-  else if (sentence.includes("the same as the prior")) head = `Gross profit is ${gross}, the same as last period.`;
+  if (sentence.includes("more than the prior"))
+    head = `Gross profit is ${gross}, up on last period.`;
+  else if (sentence.includes("less than the prior"))
+    head = `Gross profit is ${gross}, down on last period.`;
+  else if (sentence.includes("the same as the prior"))
+    head = `Gross profit is ${gross}, the same as last period.`;
   return `${head}${netBit}`;
 }
 
 /** Gross profit the waterfall prints: stated gross profit when it is in range, otherwise revenue minus the cost. */
-function waterfallGross(
-  revenue: number,
-  cogs: number,
-  stated: number | null | undefined,
-): number {
+function waterfallGross(revenue: number, cogs: number, stated: number | null | undefined): number {
   const fields: Record<string, unknown> = { revenue, cogs };
   if (stated != null && Number.isFinite(stated)) fields.grossProfit = stated;
   return periodProfitBridge(fields).grossProfit;
@@ -262,8 +280,12 @@ export function ownerCashStatusChip(
  * A profit decline, or overdue debtors above zero, is Attention.
  */
 export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {
+  if (books.hasEvidence === false) {
+    return { financial_manager: null, analyst: null, advisor: null };
+  }
   const floor = cashFloorForHome({
     openingMissing: books.openingMissing,
+    hasEvidence: books.hasEvidence,
     cashOutlook: books.cashOutlook,
     cashflow: books.cashflow,
     market: books.market,
@@ -293,6 +315,25 @@ const HOME_ANSWER_ON_MANAGER = new Set([
   "Open actions aren't available yet.",
 ]);
 
+function uniqueLines(lines: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of lines) {
+    if (!line || seen.has(line)) continue;
+    seen.add(line);
+    out.push(line);
+  }
+  return out;
+}
+
+function outlookIsDefaultZero(
+  outlook: { opening: number; closing: readonly number[] } | null | undefined,
+): boolean {
+  if (!outlook || !finite(outlook.opening)) return false;
+  if (Math.abs(outlook.opening) >= 0.5) return false;
+  return outlook.closing.every((n) => !Number.isFinite(n) || Math.abs(n) < 0.5);
+}
+
 /** One or two short lines under each bot. Sign-off stays off this page. */
 export function ownerHomeLines(
   tiles: readonly OwnerTile[],
@@ -312,12 +353,22 @@ export function ownerHomeLines(
       ? assignedAgent
       : null;
   const financialManager = [cashHomeLine(cash)].filter((line) => line.length > 0);
-  const analyst = [profitHomeLine(sentence("profit")), guardOwnerLine(sentence("owes"))].filter(
-    (line) => line.length > 0,
+  // No books: one headline on the Financial Manager. Analyst must not repeat it.
+  if (isConnectLine(cash)) {
+    return {
+      financial_manager: financialManager.slice(0, 1),
+      analyst: [],
+      advisor: [],
+    };
+  }
+  const analyst = uniqueLines(
+    [profitHomeLine(sentence("profit")), guardOwnerLine(sentence("owes"))].filter(
+      (line) => line.length > 0,
+    ),
   );
-  const advisor = [guardOwnerLine(move || (cash === CONNECT ? CONNECT : "No next move yet."))].filter(
-    (line) => line.length > 0,
-  );
+  const advisor = [
+    guardOwnerLine(move || (isConnectLine(cash) ? cash : "No next move yet.")),
+  ].filter((line) => line.length > 0);
   if (handed && routed === "analyst" && !analyst.includes(handed)) analyst.push(handed);
   else if (handed && routed === "advisor" && !advisor.includes(handed)) advisor.push(handed);
   if (answer && answer !== handed) {
@@ -364,9 +415,7 @@ export function cashFloorCopy(input: {
   market?: MoneyMarket;
 }): CashFloorCopy {
   const { opening, floor, money } = input;
-  const low = input.closing?.length
-    ? forecastLowestPoint(opening, input.closing).amount
-    : null;
+  const low = input.closing?.length ? forecastLowestPoint(opening, input.closing).amount : null;
   const lowUnder = low != null && Number.isFinite(low) && low < floor;
   const dip = (input.dipsBelowFloorWeek != null && input.dipsBelowFloorWeek > 0) || lowUnder;
   const belowNow = opening < floor;
@@ -394,6 +443,8 @@ export function cashFloorCopy(input: {
  */
 export function cashFloorForHome(input: {
   openingMissing?: boolean;
+  /** False hides the floor line. A $0 default is not cash under the minimum. */
+  hasEvidence?: boolean;
   cashOutlook?: {
     opening: number;
     closing: readonly number[];
@@ -404,9 +455,19 @@ export function cashFloorForHome(input: {
   market: MoneyMarket;
   money: (amount: number) => string;
 }): CashFloorCopy | null {
-  if (input.openingMissing) return null;
+  if (input.hasEvidence === false || input.openingMissing) return null;
   const outlook = input.cashOutlook;
-  const series = outlook && finite(outlook.opening) && finite(outlook.floor) ? storedSeriesReading(input.cashflow) : null;
+  if (
+    input.hasEvidence !== true &&
+    outlookIsDefaultZero(outlook) &&
+    !forecastHasRealLines(input.cashflow)
+  ) {
+    return null;
+  }
+  const series =
+    outlook && finite(outlook.opening) && finite(outlook.floor)
+      ? storedSeriesReading(input.cashflow)
+      : null;
   if (series) {
     const dipAt = series.closing.findIndex((balance) => balance < series.floor);
     return cashFloorCopy({
@@ -458,6 +519,24 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
     heading: "Cash over the next 13 weeks",
     ask: "financial_manager" as const,
   };
+  // A zero series with no books is the $0 default. A connected file with a
+  // missing opening keeps that sentence — it is not "connect your books".
+  const phantomOutlook =
+    books.hasEvidence !== true &&
+    !books.hasBooks &&
+    !books.openingMissing &&
+    outlookIsDefaultZero(books.cashOutlook) &&
+    !forecastHasRealLines(books.cashflow);
+  if (books.hasEvidence === false || phantomOutlook) {
+    return {
+      ...base,
+      sentence: connectLine(books.market),
+      source: "No books connected",
+      step: CONNECT_STEP,
+      signed: false,
+      empty: true,
+    };
+  }
   if (books.openingMissing) {
     return {
       ...base,
@@ -471,8 +550,7 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
   const outlook = books.cashOutlook;
   const series = storedSeriesReading(books.cashflow);
   const quotedOpening = series?.opening ?? outlook?.opening;
-  const pillarAgrees =
-    books.cashPillarStatus === "healthy" || books.cashPillarStatus === "at_risk";
+  const pillarAgrees = books.cashPillarStatus === "healthy" || books.cashPillarStatus === "at_risk";
   if (pillarAgrees && quotedOpening != null && finite(quotedOpening)) {
     return {
       ...base,
@@ -485,6 +563,7 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
   }
   const shared = cashFloorForHome({
     openingMissing: books.openingMissing,
+    hasEvidence: books.hasEvidence,
     cashOutlook: books.cashOutlook,
     cashflow: books.cashflow,
     market: books.market,
@@ -504,9 +583,7 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
   if (!balances || balances.length === 0) {
     return {
       ...base,
-      sentence: books.hasBooks
-        ? "The 13-week line is not on file yet."
-        : "Connect QuickBooks or Xero.",
+      sentence: books.hasBooks ? "The 13-week line is not on file yet." : connectLine(books.market),
       source: books.hasBooks ? "13-week forecast" : "No books connected",
       step: books.hasBooks ? "Ask" : "Connect your books",
       signed: false,
@@ -545,7 +622,7 @@ function profitTile(
   if (!finite(books.revenue) || !finite(books.cogs)) {
     return {
       ...base,
-      sentence: books.hasBooks ? "Profit is not on file yet." : "Connect QuickBooks or Xero.",
+      sentence: books.hasBooks ? "Profit is not on file yet." : connectLine(books.market),
       source: books.hasBooks ? booksSource : "No books connected",
       step: books.hasBooks ? "Ask" : "Connect your books",
       empty: true,
@@ -555,11 +632,12 @@ function profitTile(
   const operating = finite(books.operatingProfit) ? books.operatingProfit : null;
   const netIncome = finite(books.netIncome) ? books.netIncome : null;
   const netOk = netIncome != null && (operating == null || statedNetIsUsable(operating, netIncome));
-  const profitBit = netOk && netIncome != null
-    ? ` Net profit is ${money(netIncome)}.`
-    : operating != null
-      ? ` Operating profit is ${money(operating)}.`
-      : "";
+  const profitBit =
+    netOk && netIncome != null
+      ? ` Net profit is ${money(netIncome)}.`
+      : operating != null
+        ? ` Operating profit is ${money(operating)}.`
+        : "";
   let sentence = `Gross profit is ${money(gross)}.${profitBit}`;
   if (finite(books.priorRevenue) && finite(books.priorCogs)) {
     const prior = waterfallGross(books.priorRevenue, books.priorCogs, books.priorGrossProfit);

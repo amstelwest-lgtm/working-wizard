@@ -469,6 +469,7 @@ export async function executeAgentTool(
         dateMarket: marketForClient({ market: clientRes.data?.market }),
         periodLabel: (snap?.period_label as string | null) ?? null,
         figuresAsOf: (snap?.period_date as string | null) ?? null,
+        cashflow: clientRes.data?.cashflow,
       });
       const shaped = shapeHealth(resolved, runway, copyPack);
       return {

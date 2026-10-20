@@ -110,7 +110,8 @@ assert(
   "unsigned tiles do not say signed off",
 );
 assert(
-  empty.find((tile) => tile.id === "cash")?.sentence === "Connect QuickBooks or Xero.",
+  empty.find((tile) => tile.id === "cash")?.sentence ===
+    "Connect QuickBooks / Xero or upload statements.",
   "cash asks to connect",
 );
 
@@ -316,9 +317,13 @@ assert(
   "home amounts keep a non-breaking space",
 );
 const emptyLines = ownerHomeLines(empty, null);
-assert(emptyLines.financial_manager[0] === "Connect QuickBooks or Xero.", "an empty cash line stays honest");
-assert(emptyLines.financial_manager[1] === "Nothing is waiting on you.", "an empty answer line stays honest");
-assert(emptyLines.advisor[0] === "Connect QuickBooks or Xero.", "no books does not invent a next move");
+assert(
+  emptyLines.financial_manager.length === 1 &&
+    emptyLines.financial_manager[0] === "Connect QuickBooks / Xero or upload statements.",
+  "an empty file has one connect headline",
+);
+assert(emptyLines.analyst.length === 0, "the analyst card does not repeat the connect line");
+assert(emptyLines.advisor.length === 0, "no books does not invent a next move");
 assert(
   ownerHomeLines(ownerAnswerTiles(books({ hasBooks: true, actionsReady: true })), null).advisor[0] ===
     "No next move yet.",

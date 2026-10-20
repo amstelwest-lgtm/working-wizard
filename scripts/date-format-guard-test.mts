@@ -287,6 +287,18 @@ function scanSource(rel: string, raw: string): Finding[] {
     });
   }
 
+  const printedDay = /getUTCDate\s*\(/g;
+  for (const match of src.matchAll(printedDay)) {
+    const index = match.index ?? 0;
+    if (!inTemplate(spans, index)) continue;
+    const lineNo = lineAt(src, index);
+    findings.push({
+      line: lineNo,
+      endLine: lineNo,
+      message: `${rel}:${lineNo} prints a calendar day inside a template string`,
+    });
+  }
+
   function walkTemplateExprs(i: number): number {
     i++;
     while (i < src.length) {
@@ -486,6 +498,9 @@ assertScan("src/example.ts", "iso.slice(0, 16)\n", ["src/example.ts:1 slices an 
 assertScan("src/example.ts", "const label = `${d.getHours()}:${d.getMinutes()}`\n", [
   "src/example.ts:1 builds a clock inside a template string",
   "src/example.ts:1 builds a clock inside a template string",
+]);
+assertScan("src/example.ts", "return `added ${date.getUTCDate()} ${month} ${date.getUTCFullYear()}`\n", [
+  "src/example.ts:1 prints a calendar day inside a template string",
 ]);
 assertScan("src/example.ts", "const h = now.getHours()\n", []);
 assertScan("src/example.ts", "token.slice(0, 16)\n", []);
