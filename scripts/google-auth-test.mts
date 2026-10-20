@@ -478,21 +478,48 @@ assert(
 );
 
 const nullMarketSql = readFileSync(
-  resolve("supabase/migrations/20261020120000_ensure_own_client_null_market.sql"),
+  resolve("supabase/migrations/20261020130500_ensure_own_client_null_market.sql"),
   "utf8",
 );
 assert(
   !nullMarketSql.includes('{"country":"ZA","regionCode":null}'),
   "ensure_own_client no longer rewrites a null market to South Africa",
 );
+assert(
+  nullMarketSql.includes(
+    "CREATE OR REPLACE FUNCTION public.ensure_own_client(p_name text, p_market jsonb DEFAULT NULL)",
+  ),
+  "ensure_own_client keeps the (text, jsonb) signature",
+);
+assert(
+  nullMarketSql.includes(
+    "REVOKE EXECUTE ON FUNCTION public.ensure_own_client(text, jsonb) FROM PUBLIC;",
+  ) &&
+    nullMarketSql.includes(
+      "GRANT EXECUTE ON FUNCTION public.ensure_own_client(text, jsonb) TO authenticated;",
+    ),
+  "ensure_own_client keeps the public revoke and authenticated grant",
+);
+assert(nullMarketSql.includes("pg_advisory_xact_lock"), "ensure_own_client keeps the advisory lock");
 assert(nullMarketSql.includes("INSERT INTO public.clients"), "a missing owner market still inserts a client");
 assert(nullMarketSql.includes("v_market"), "the insert stores the passed market, including null");
-assert(nullMarketSql.includes("firm_id IS NULL"), "the null-market function keeps the firm-unlinked lookup");
+const nullMarketInsertAt = nullMarketSql.indexOf("INSERT INTO public.clients");
 assert(
-  nullMarketSql.includes("m.role = 'client_owner'"),
-  "the null-market function keeps the client_owner lookup",
+  nullMarketSql.indexOf("firm_id IS NULL") < nullMarketSql.indexOf("m.role = 'client_owner'") &&
+    nullMarketSql.indexOf("m.role = 'client_owner'") < nullMarketInsertAt,
+  "firm-unlinked lookup, then client_owner, then insert",
+);
+assert(
+  (nullMarketSql.slice(0, nullMarketInsertAt).match(/RETURN v_client_id;/g) ?? []).length === 2,
+  "both lookups return before any insert",
+);
+assert(
+  !/insert\s+into\s+public\.client_memberships/i.test(nullMarketSql) &&
+    !/insert\s+into\s+public\.user_roles/i.test(nullMarketSql),
+  "return and insert still write no membership or role",
 );
 assert(!/update\s+public\.clients/i.test(nullMarketSql), "existing owner clients are not rewritten");
+assert(!/delete\s+from\s+public\.clients/i.test(nullMarketSql), "existing owner clients are not deleted");
 
 const authPage = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
 assert(authPage.includes("Continue with Google"), "Create firm offers Google sign-up");
