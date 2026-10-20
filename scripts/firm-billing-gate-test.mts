@@ -12,6 +12,7 @@ import {
   decideFirmBillingPathGate,
   decidePostLoginBillingResume,
   isFirstClientFiguresPath,
+  customerIdFromMetadataCustomers,
   customerIdFromMetadataSubscriptions,
   emailHasEntitlingSubscription,
   findFirmCustomerId,
@@ -633,6 +634,106 @@ assert(
   })) === "cus_old",
   "a newer customer on the new email does not hide the firm's subscription",
 );
+
+let storedListCalls = 0;
+let storedSearchCalls = 0;
+let storedUpdateCalls = 0;
+const storedIdStripe: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => {
+      storedListCalls += 1;
+      return { data: [] };
+    },
+    retrieve: async () => ({
+      id: "cus_stored",
+      email: "team@trymilon.co.za",
+      metadata: { milon_user_id: BEN_OWNER, firm_id: BEN_FIRM },
+    }),
+    update: async () => {
+      storedUpdateCalls += 1;
+      return {};
+    },
+  } as StripeCustomerSubscriptionReader["customers"],
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: async () => {
+      storedSearchCalls += 1;
+      return { data: [] };
+    },
+  },
+};
+const emailDiffWarnings: string[] = [];
+const warnBefore = console.warn;
+console.warn = (...args: unknown[]) => {
+  emailDiffWarnings.push(args.map((part) => String(part)).join(" "));
+};
+let storedHit = "";
+try {
+  storedHit =
+    (await findFirmCustomerId(storedIdStripe, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+      storedCustomerId: "cus_stored",
+    })) ?? "";
+} finally {
+  console.warn = warnBefore;
+}
+assert(storedHit === "cus_stored", "a stored customer id beats an email miss");
+assert(storedListCalls === 0, "an id hit does not list customers by the new email");
+assert(storedSearchCalls === 0, "an id hit does not search when the stored customer is present");
+assert(storedUpdateCalls === 0, "an email mismatch does not update Stripe");
+assert(
+  emailDiffWarnings.some((line) => line.includes("leaving Stripe unchanged")),
+  "an email mismatch is logged and Stripe is left unchanged",
+);
+
+const customerOnly: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [{ id: "cus_new_empty" }] }),
+    search: async () => ({
+      data: [
+        {
+          id: "cus_meta",
+          email: "team@trymilon.co.za",
+          metadata: { milon_user_id: BEN_OWNER, firm_id: BEN_FIRM },
+        },
+      ],
+    }),
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: async () => ({ data: [] }),
+  },
+};
+assert(
+  (await findFirmCustomerId(customerOnly, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+  })) === "cus_meta",
+  "customer metadata finds the firm when the subscription search is empty",
+);
+assert(
+  customerIdFromMetadataCustomers(
+    [{ id: "cus_meta", metadata: { firm_id: BEN_FIRM, milon_user_id: BEN_OWNER } }],
+    { userId: BEN_OWNER, firmId: BEN_FIRM },
+  ) === "cus_meta",
+  "customer metadata yields its customer id",
+);
+const ownerSub = {
+  id: "sub_owner",
+  status: "active",
+  customer: "cus_owner",
+  metadata: { milon_plan: "owner", milon_user_id: BEN_OWNER },
+};
+assert(
+  customerIdFromMetadataSubscriptions([starterSub, ownerSub], {
+    userId: BEN_OWNER,
+    preferOwnerPlan: true,
+  }) === "cus_owner",
+  "owner Checkout prefers the Spark subscription on the same user id",
+);
 assert(
   (await customerHasEntitlingSubscription(
     mockStripe({ customerId: "cus_1", statuses: ["trialing"] }),
@@ -1186,5 +1287,32 @@ const ownerServer = readFileSync(resolve("src/lib/owner-billing.server.ts"), "ut
 assert(ownerServer.includes("firmLinkCoversOwner"), "coverage requires an accepted firm link");
 assert(ownerServer.includes('rpc("user_id_by_email"'), "webhook email fallback uses the exact match");
 assert(!ownerServer.includes('.ilike("email"'), "webhook email fallback does not use ilike");
+assert(
+  !ownerServer.includes("findCustomerIdByEmail"),
+  "owner billing does not look the customer up by email only",
+);
+assert(ownerServer.includes("findFirmCustomerId"), "owner billing uses the stable customer lookup");
+const entitlement = readFileSync(resolve("src/lib/stripe-entitlement.ts"), "utf8");
+assert(!entitlement.includes("customers.update"), "entitlement lookup does not write Stripe");
+const migration = readFileSync(
+  resolve("supabase/migrations/20261020223000_firm_stripe_customer_id.sql"),
+  "utf8",
+);
+assert(
+  migration.includes("ADD COLUMN IF NOT EXISTS stripe_customer_id"),
+  "migration adds firms.stripe_customer_id",
+);
+assert(!/UPDATE\s+public\.firms/i.test(migration), "migration does not backfill firm rows");
+assert(migration.includes("authenticated"), "signed-in owners cannot set the customer id");
+const billingSync = readFileSync(resolve("src/lib/stripe-billing-sync.server.ts"), "utf8");
+assert(
+  billingSync.includes("writeFirmStripeCustomerId"),
+  "webhook success stores the firm customer id",
+);
+assert(
+  fns.includes("writeFirmStripeCustomerId"),
+  "checkout stores the firm customer id",
+);
+assert(fns.includes("firmStartTrialCheckout"), "Start trial reuses the resolved customer");
 
 console.log("firm-billing-gate ok");

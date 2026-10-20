@@ -38,6 +38,7 @@ import { isOwnerCatalogPrice } from "@/lib/owner-price";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
 import { FIRM_BAND_CATALOG, isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
+import { readFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
 import { findFirmCustomerId, type FirmCustomerLookup } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
@@ -175,12 +176,14 @@ async function listCustomerSubscriptions(
   const trimmed = email.trim();
   const userId = ids?.userId?.trim() ?? "";
   const firmId = ids?.firmId?.trim() ?? "";
-  if (!trimmed && !userId && !firmId) return { customerId: null, data: [] };
+  const storedCustomerId = ids?.storedCustomerId?.trim() ?? "";
+  if (!trimmed && !userId && !firmId && !storedCustomerId) return { customerId: null, data: [] };
   const stripe = getStripe();
   const customerId = await findFirmCustomerId(stripe, {
     email: trimmed,
     userId,
     firmId,
+    storedCustomerId,
   });
   if (!customerId) return { customerId: null, data: [] };
   let listed: { data: ListedSubscription[] };
@@ -312,16 +315,25 @@ const stripeHistoryInflight = new Map<string, Promise<FirmSubscriptionHistory>>(
 
 /** Entitling subscription plus the prior-count Checkout already uses. */
 function subscriptionHistoryKey(email: string, ids?: FirmCustomerLookup): string {
-  return [ids?.userId?.trim() ?? "", ids?.firmId?.trim() ?? "", email.trim().toLowerCase()].join(
-    "\n",
-  );
+  return [
+    ids?.userId?.trim() ?? "",
+    ids?.firmId?.trim() ?? "",
+    ids?.storedCustomerId?.trim() ?? "",
+    email.trim().toLowerCase(),
+  ].join("\n");
 }
 
 export async function readFirmSubscriptionHistory(
   email: string,
   opts?: { fresh?: boolean } & FirmCustomerLookup,
 ): Promise<FirmSubscriptionHistory> {
-  const ids = { userId: opts?.userId, firmId: opts?.firmId };
+  const storedCustomerId =
+    opts?.storedCustomerId !== undefined
+      ? opts.storedCustomerId
+      : opts?.firmId
+        ? await readFirmStripeCustomerId(opts.firmId)
+        : null;
+  const ids = { userId: opts?.userId, firmId: opts?.firmId, storedCustomerId };
   const key = subscriptionHistoryKey(email, ids);
   if (!opts?.fresh && key.trim()) {
     const hit = stripeHistoryCache.get(key);

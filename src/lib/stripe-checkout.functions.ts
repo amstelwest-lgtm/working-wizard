@@ -46,12 +46,14 @@ import {
   type FirmInterval,
   type StripePlanMarket,
 } from "@/lib/stripe-plans";
+import { readFirmStripeCustomerId, writeFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
 import {
   assertNoManagedPaymentsOverride,
   firmCheckoutCharge,
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
   firmSetupCheckoutSessionParams,
+  firmStartTrialCheckout,
   firmUpgradeCheckoutSessionParams,
   readFirmSetupUpgrade,
   resolveFirmCatalogPrice,
@@ -127,7 +129,8 @@ async function findBillingCustomerId(input: {
   userId?: string | null;
   firmId?: string | null;
 }): Promise<string | undefined> {
-  return findFirmCustomerId(getStripe(), input);
+  const storedCustomerId = input.firmId ? await readFirmStripeCustomerId(input.firmId) : null;
+  return findFirmCustomerId(getStripe(), { ...input, storedCustomerId });
 }
 
 async function customerHasActiveSubscription(customerId: string): Promise<boolean> {
@@ -289,8 +292,10 @@ async function resolveFirmBillingEntitlement(
     try {
       // One isolate-cached Stripe list. The mirror below reads that same
       // entry. It must not be awaited: a second scan used to sit on the response.
+      const resolvedFirmId =
+        (firmId && firmId.trim()) || (await callerOwnedFirmId(ctx.supabase, userId)) || null;
       const [history, owned, memberships] = await Promise.all([
-        readFirmSubscriptionHistory(email, { fresh: refresh, userId, firmId }),
+        readFirmSubscriptionHistory(email, { fresh: refresh, userId, firmId: resolvedFirmId }),
         countOwnedFirms(ctx.supabase, userId),
         countFirmMemberships(ctx.supabase, userId),
       ]);
@@ -409,29 +414,39 @@ async function createPaidCheckoutSession(input: {
     userId: input.userId,
     firmId: input.firmId,
   });
-
-  if (customerId && (await customerHasActiveSubscription(customerId))) {
-    return { url: await createPortalUrl(customerId, origin), kind: "portal" };
+  if (input.firmId && customerId) {
+    await writeFirmStripeCustomerId(input.firmId, customerId);
   }
 
-  let includeTrial = true;
+  let priorSubscriptionCount = 0;
+  let needsPaymentOnExisting = false;
+  let hasEntitlingSubscription = false;
   if (customerId) {
-    const prior = await stripe.subscriptions.list({
-      customer: customerId,
-      status: "all",
-      limit: 20,
-    });
-    const needsPaymentOnExisting = prior.data.some(
-      (sub) =>
-        sub.status === "past_due" ||
-        sub.status === "unpaid" ||
-        sub.status === "incomplete" ||
-        sub.status === "paused",
-    );
-    if (needsPaymentOnExisting) {
-      return { url: await createPortalUrl(customerId, origin), kind: "portal" };
+    hasEntitlingSubscription = await customerHasActiveSubscription(customerId);
+    if (!hasEntitlingSubscription) {
+      const prior = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 20,
+      });
+      priorSubscriptionCount = prior.data.length;
+      needsPaymentOnExisting = prior.data.some(
+        (sub) =>
+          sub.status === "past_due" ||
+          sub.status === "unpaid" ||
+          sub.status === "incomplete" ||
+          sub.status === "paused",
+      );
     }
-    includeTrial = eligibleForIntroTrial(prior.data.length);
+  }
+  const action = firmStartTrialCheckout({
+    customerId,
+    priorSubscriptionCount,
+    hasEntitlingSubscription,
+    needsPaymentOnExisting,
+  });
+  if (action.kind === "portal") {
+    return { url: await createPortalUrl(action.customerId, origin), kind: "portal" };
   }
 
   const billingCountry = await readStripeCustomerCountry(stripe, customerId);
@@ -470,12 +485,12 @@ async function createPaidCheckoutSession(input: {
     userId: input.userId,
     firmId: input.firmId,
     email: input.email,
-    customerId,
+    customerId: action.customerId,
     market: charge.firmMarket,
     promotionCodeId,
     billingFallback: charge.billingFallback,
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
-    includeTrial,
+    includeTrial: action.includeTrial,
   });
   assertNoManagedPaymentsOverride(params);
 
@@ -891,6 +906,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       userId,
       firmId: data.firmId,
     });
+    if (customerId) await writeFirmStripeCustomerId(data.firmId, customerId);
     let replacesSubscriptionId: string | undefined;
     if (customerId) {
       try {

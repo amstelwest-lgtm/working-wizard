@@ -18,6 +18,7 @@ import {
   normalizeVoucherCode,
 } from "@/lib/firm-voucher";
 import { isZaOwnerLookup, OWNER_LOOKUP_KEYS, isOwnerLookupKey } from "@/lib/owner-price";
+import { eligibleForIntroTrial } from "@/lib/firm-client-cap";
 import {
   assertFoundingMonthlyOnly,
   FIRM_BAND_CATALOG,
@@ -195,6 +196,33 @@ export function firmCheckoutCharge(input: {
     priceMarket,
     lookupKey,
     billingFallback: firmMarket === "za" && priceMarket === "us",
+  };
+}
+
+export type FirmStartTrialCheckout =
+  | { kind: "portal"; customerId: string }
+  | { kind: "checkout"; customerId?: string; includeTrial: boolean };
+
+/**
+ * Start trial on the billing wall. A customer already found by the stable
+ * key is attached to Checkout, so Stripe does not create a second customer.
+ * Any prior subscription on that customer skips the intro trial. A live
+ * firm subscription, or one that needs a card, opens the portal instead.
+ */
+export function firmStartTrialCheckout(input: {
+  customerId?: string | null;
+  priorSubscriptionCount: number;
+  hasEntitlingSubscription: boolean;
+  needsPaymentOnExisting: boolean;
+}): FirmStartTrialCheckout {
+  const customerId = input.customerId?.trim() || undefined;
+  if (customerId && (input.hasEntitlingSubscription || input.needsPaymentOnExisting)) {
+    return { kind: "portal", customerId };
+  }
+  return {
+    kind: "checkout",
+    customerId,
+    includeTrial: customerId ? eligibleForIntroTrial(input.priorSubscriptionCount) : true,
   };
 }
 
