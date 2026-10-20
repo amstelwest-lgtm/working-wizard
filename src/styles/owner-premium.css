@@ -207,7 +207,7 @@ html:not(.dark) .owner-door .topbar .profile-caret {
   }
 }
 html:not(.dark) .owner-door .deliverable-rail .tab {
-  color: var(--pp-frame-dim);
+  color: var(--pp-frame-ink);
   font-weight: 500;
   border-radius: 10px;
 }
@@ -224,7 +224,8 @@ html:not(.dark) .owner-door .deliverable-rail .tab.on {
   font-weight: 600;
 }
 html:not(.dark) .owner-door .deliverable-rail .tab-ic {
-  color: var(--pp-frame-faint);
+  color: var(--pp-frame-ink);
+  opacity: 1;
 }
 html:not(.dark) .owner-door .deliverable-rail .tab.on .tab-ic {
   color: #dbeafe;

@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate, ClientOnly } from "@tanstack/react-router";
 import { founderPortalLinks } from "@/styles/app-route-styles";
 import { OwnerDoor } from "@/components/owner-door/owner-door";
+import { OwnerShell } from "@/components/owner-door/owner-shell";
 import { cashFloorForHome } from "@/lib/owner-answers";
 import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
@@ -9,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BackLink } from "@/components/back-link";
-import { EmptyState, OwnerBootSkeleton, PageHeader, StatusPill } from "@/components/primitives";
+import { EmptyState, OwnerBootSkeleton, PageHeader, PanelSkeleton, StatusPill } from "@/components/primitives";
 import {
   Upload,
   Loader2,
@@ -206,6 +207,13 @@ import {
   type NextStep,
   type NextStepTarget,
 } from "@/lib/next-step";
+import {
+  isLegacyOwnerBoardTab,
+  isOwnerAppTab,
+  ownerDoorScreen,
+  ownerDoorSearch,
+} from "@/lib/owner-app-tab";
+import { signoffScopeLabel } from "@/lib/signoff-status";
 import { SampleBoardBanner } from "@/components/sample-board-banner";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
@@ -388,7 +396,8 @@ export const Route = createFileRoute("/app")({
     } = {};
     if (
       typeof search.tab === "string" &&
-      (OWNER_BOARD_TABS as readonly string[]).includes(search.tab)
+      ((OWNER_BOARD_TABS as readonly string[]).includes(search.tab) ||
+        isOwnerAppTab(search.tab))
     ) {
       out.tab = search.tab;
     }
@@ -4036,7 +4045,59 @@ function Index() {
       </div>
     );
   }
-  if (authLoading || !user || !boardReady) {
+  if (authLoading || !user) {
+    return <AppBootSpinner />;
+  }
+
+  // The rail is real navigation, not a loading state. While the books are
+  // still resolving, only the content pane is a skeleton.
+  if (!boardReady && !sampleMode && !isLegacyOwnerBoardTab(oauthReturn.tab)) {
+    const bootScreen = ownerDoorScreen(oauthReturn);
+    const shellScreen = bootScreen === "chat" ? "home" : bootScreen;
+    const bootName =
+      ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ?? "Your business";
+    const bootInitials =
+      bootName
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0] ?? "")
+        .join("")
+        .toUpperCase() || "OW";
+    return (
+      <OwnerShell
+        screen={shellScreen}
+        businessName={bootName}
+        initials={bootInitials}
+        workspaces={ownerWorkspaces}
+        activeClientId={effectiveClientId}
+        onSwitch={switchOwnerWorkspace}
+        onNavigate={(screen) => {
+          void navigate({
+            to: "/app",
+            search: (prev) => ownerDoorSearch(prev, screen) as typeof oauthReturn,
+          });
+        }}
+        onSignOut={() => {
+          void signOut().then(() => {
+            window.location.href = "/";
+          });
+        }}
+        onSettings={() => {
+          openOwnerSettings();
+          void navigate({
+            to: "/app",
+            search: (prev) => ownerDoorSearch(prev, "settings") as typeof oauthReturn,
+          });
+        }}
+        onProfile={() => openProfileDialog("retake")}
+      >
+        <PanelSkeleton rows={4} />
+      </OwnerShell>
+    );
+  }
+  if (!boardReady) {
     return <AppBootSpinner />;
   }
 
@@ -4064,13 +4125,13 @@ function Index() {
     );
   }
 
-  const showOwnerDoor = !searchTab && !sampleMode;
+  const showOwnerDoor = !sampleMode && !isLegacyOwnerBoardTab(searchTab);
   const OwnerHealthOrb = SphereHero;
 
   return (
     <MarketProvider selection={workspaceMarket}>
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
-        <main className="milon-page-enter min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+        <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
           {generationTrialOpen ? (
             <div className="mx-auto max-w-3xl px-4 pt-4">
               <TrialEndedPlanBlock firmId={clientMeta?.firm_id ?? null} />
@@ -4133,6 +4194,13 @@ function Index() {
               // Demo clients keep the sample card. Real clients get the preview card.
               // A reused hand-off stays Working on the run already open. The Handed-to line waits until noted.
               <OwnerDoor
+                routeScreen={ownerDoorScreen(oauthReturn)}
+                onOpenScreen={(screen) => {
+                  void navigate({
+                    to: "/app",
+                    search: (prev) => ownerDoorSearch(prev, screen) as typeof oauthReturn,
+                  });
+                }}
                 bot={oauthReturn.bot ?? null}
                 planTick={planTick}
                 onBotChange={(next, mode) => {
@@ -4225,7 +4293,7 @@ function Index() {
                   openOwnerSettings();
                   void navigate({
                     to: "/app",
-                    search: (prev) => ({ ...prev, screen: "settings" as const }),
+                    search: (prev) => ownerDoorSearch(prev, "settings") as typeof oauthReturn,
                     replace: oauthReturn.screen === "settings",
                   });
                 }}
@@ -4267,6 +4335,7 @@ function Index() {
                           <OwnerSignoffMark
                             signoff={financialsSignoff}
                             isStale={financialsSignoffStale}
+                            scopeLabel={signoffScopeLabel("financials")}
                             className="mb-2"
                           />
                           <OwnerHealthOrb
@@ -5433,6 +5502,7 @@ function Index() {
                                   <OwnerSignoffMark
                                     signoff={financialsSignoff}
                                     isStale={financialsSignoffStale}
+                                    scopeLabel={signoffScopeLabel("financials")}
                                     className="mb-2"
                                   />
                                   <SphereHero
@@ -5512,6 +5582,7 @@ function Index() {
                           <OwnerSignoffMark
                             signoff={financialsSignoff}
                             isStale={financialsSignoffStale}
+                            scopeLabel={signoffScopeLabel("financials")}
                           />
                         </div>
                         {isUsCopy(boardMarket) && (

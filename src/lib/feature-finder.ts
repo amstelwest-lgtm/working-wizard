@@ -3,8 +3,7 @@
  *
  * Accountant destinations reuse the reading-path tabs in `workflow-coach`
  * (`COACH_STEPS`): rail `tab` plus `section`. Owner destinations reuse
- * `OWNER_BOARD_TABS`,
- * the same pairs as `notes-tabs.ts` (today/ratios, waterfall/profit, tasks/plan).
+ * `OWNER_DOOR_TABS` (`/app?tab=health`, cash, profit, budget, moves).
  *
  * Upload uses the studio's existing `?onboard=1` deep link, which opens the
  * bring-in-figures dialog, on the Client Brain tab where the upload control
@@ -13,7 +12,7 @@
  * Settings, and only for the practice view.
  */
 import type { ClientRailTab } from "@/lib/client-route-search";
-import { OWNER_BOARD_TABS } from "@/lib/next-step";
+import { OWNER_DOOR_TABS } from "@/lib/owner-app-tab";
 import { COACH_STEPS, type CoachStepId } from "@/lib/workflow-coach";
 
 export type FeatureAudience = "accountant" | "owner";
@@ -24,7 +23,7 @@ export type FeatureFinderContext = {
   clientId?: string | null;
 };
 
-type OwnerTab = (typeof OWNER_BOARD_TABS)[number];
+type OwnerTab = (typeof OWNER_DOOR_TABS)[number];
 
 export type FeatureDestination =
   | {
@@ -158,7 +157,7 @@ const FEATURES: readonly FeatureDef[] = [
     audiences: ["accountant", "owner"],
     requiresClient: true,
     studio: HEALTH,
-    ownerTab: "today",
+    ownerTab: "health",
   },
   {
     id: "pillars",
@@ -181,7 +180,7 @@ const FEATURES: readonly FeatureDef[] = [
     audiences: ["accountant", "owner"],
     requiresClient: true,
     studio: PROFIT,
-    ownerTab: "waterfall",
+    ownerTab: "profit",
   },
   {
     id: "cash",
@@ -262,7 +261,7 @@ const FEATURES: readonly FeatureDef[] = [
     audiences: ["accountant", "owner"],
     requiresClient: true,
     studio: { tab: "plan", section: "open" },
-    ownerTab: "tasks",
+    ownerTab: "moves",
   },
   {
     id: "reports",
