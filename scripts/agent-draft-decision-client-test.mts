@@ -15,8 +15,9 @@ import {
   interpretDraftDecisionResponse,
   resetDraftDecisionButtonsForTests,
 } from "../src/lib/agent-draft-decision-client.ts";
-import { findingCardCopy, formatFindingProse, type AgentFindingRow } from "../src/lib/milon-team-activity.ts";
-import { ZA_MARKET } from "../src/lib/market/resolve.ts";
+import { draftWhenLabel, findingCardCopy, formatFindingProse, type AgentFindingRow } from "../src/lib/milon-team-activity.ts";
+import { formatDate } from "../src/lib/market/format.ts";
+import { resolveMarket, ZA_MARKET } from "../src/lib/market/resolve.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -221,6 +222,59 @@ assert(
 const realCard = renderToStaticMarkup(
   createElement(OwnerDraftCard, { layout: "moves", row: realRequest, market: US }),
 );
+const createdAt = "2026-10-05T03:30:00.000Z";
+const updatedAt = "2026-10-06T03:30:00.000Z";
+const usMarket = resolveMarket({ country: "US", regionCode: "NY" });
+assert(
+  draftWhenLabel(createdAt, createdAt, ZA_MARKET) === `Created ${formatDate(createdAt, ZA_MARKET)}`,
+  "a draft stamp uses the ZA market day",
+);
+assert(
+  draftWhenLabel(createdAt, createdAt, usMarket) === `Created ${formatDate(createdAt, usMarket)}`,
+  "a draft stamp uses the US market day",
+);
+assert(formatDate(createdAt, ZA_MARKET) !== formatDate(createdAt, usMarket), "ZA and US days differ for the same instant");
+assert(
+  draftWhenLabel(createdAt, updatedAt, usMarket) ===
+    `Created ${formatDate(createdAt, usMarket)} · Updated ${formatDate(updatedAt, usMarket)}`,
+  "an updated draft shows both market days",
+);
+const stamped = renderToStaticMarkup(
+  createElement(OwnerDraftCard, {
+    layout: "moves",
+    row: { ...realRequest, created_at: createdAt, last_seen: updatedAt },
+    market: usMarket,
+  }),
+);
+assert(
+  stamped.includes(`data-draft-when="Created ${formatDate(createdAt, usMarket)} · Updated ${formatDate(updatedAt, usMarket)}"`),
+  "the Next moves card shows the market stamp",
+);
+const dumped = findingCardCopy(
+  {
+    kind: "data_request_draft",
+    title: "Send the September debtors age analysis.\ngrossMargin: 0.42\nevidence keys you may cite: grossMargin",
+    detail: "currentRatio: 1.4\nRatios:\nstored_ratios: {\"grossMargin\":0.42}",
+    evidence: { draft: true, figures: { "Gross Margin": 0.6, "Debtor Days": 43.8 } },
+  },
+  ZA_MARKET,
+);
+assert(dumped.lead.includes("Send the September debtors age analysis"), dumped.lead);
+assert(!/grossMargin\s*:/.test(dumped.lead), dumped.lead);
+assert(!/evidence keys you may cite/i.test(`${dumped.lead} ${dumped.context ?? ""}`), dumped.lead);
+const ratioCard = findingCardCopy(
+  {
+    kind: "cost_ratio",
+    title: "Current ratio is thin.\ngrossMargin: 0.42\ncurrentRatio: 1.4\nevidence keys you may cite: currentRatio",
+    detail: "Debtor days are 44 days.",
+    evidence: { figures: { "Current Ratio": 1.4 } },
+  },
+  ZA_MARKET,
+);
+assert(ratioCard.lead.includes("Current ratio is thin"), ratioCard.lead);
+assert(!/grossMargin\s*:/.test(ratioCard.lead), ratioCard.lead);
+assert(!/currentRatio\s*:/.test(ratioCard.lead), ratioCard.lead);
+assert(!/evidence keys you may cite/i.test(ratioCard.lead), ratioCard.lead);
 assert(realCard.includes("QuickBooks sync is in error"), "the card shows the ask");
 assert(realCard.includes('data-draft-context="Debtor days are 44, creditor days 73, gross margin 60%, operating margin 16%"'), "the card shows the muted ratios");
 assert(!realCard.includes("0.6") && !realCard.includes("43.8"), "the card does not dump raw ratios");

@@ -7,6 +7,7 @@ import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-sl
 import { useBoundMarketCountry } from "@/contexts/market";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
+import { handoffTriggerLabel } from "@/lib/action-handoff";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { assignActionToPerson, commitActionHandoff } from "@/lib/owner-handoff-client";
@@ -169,6 +170,9 @@ export function HandToMenu({
     void work();
   };
 
+  const fullLabel = handoffTriggerLabel(assignee);
+  const shortLabel = handoffTriggerLabel(assignee, true);
+
   return (
     <div
       ref={rootRef}
@@ -180,19 +184,20 @@ export function HandToMenu({
       <TaxSpecialistSlot country={country} variant="host" audience={audience} />
       <button
         type="button"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B5FFF] bg-[#0B5FFF] px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-[#2563EB] disabled:opacity-70"
+        className="inline-flex h-auto max-w-full items-center gap-1.5 whitespace-normal rounded-lg border border-[#0B5FFF] bg-[#0B5FFF] px-2.5 py-1.5 text-left text-[12px] font-semibold leading-tight text-white hover:bg-[#2563EB] disabled:opacity-70"
         data-hand-to-trigger
         aria-expanded={open}
+        aria-label={fullLabel}
         onClick={() => setOpen((value) => !value)}
       >
-        Hand to
-        {assignee ? <span className="hand-to-assignee">{assignee}</span> : null}
+        <span className="hand-to-full">{fullLabel}</span>
+        <span className="hand-to-short">{shortLabel}</span>
       </button>
       {open && menuBox
         ? createPortal(
         <div
           ref={menuRef}
-          className="w-64 rounded-lg border border-[#DBEAFE] bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+          className="w-64 max-w-[calc(100vw-16px)] rounded-lg border border-[#DBEAFE] bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
           style={{ position: "fixed", top: menuBox.top, left: menuBox.left, zIndex: 80 }}
           data-hand-to-menu
           role="menu"
