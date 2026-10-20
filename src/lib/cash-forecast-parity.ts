@@ -42,6 +42,91 @@ export function cashEmptyPresentation(input: {
 }
 
 /**
+ * A P&L sketch is not a forecast the owner entered. The cash tab and the
+ * 13-week PDF both use this gate. Derived weeks stay off both surfaces.
+ */
+export function forecastWeeksAreEntered(outlook: {
+  source: string;
+  estimateLabel?: string | null;
+}): boolean {
+  return outlook.source === "stored" && !outlook.estimateLabel;
+}
+
+export function forecastLineIsDerived(line: { id?: string | null; name?: string | null }): boolean {
+  const id = typeof line.id === "string" ? line.id : "";
+  const name = typeof line.name === "string" ? line.name : "";
+  return id.startsWith("derived-") || /collections \(monthly/i.test(name) || /operating payments \(monthly/i.test(name);
+}
+
+/** True when this line is an amount the owner or accountant entered. */
+export function forecastLineCountsAsEntered(
+  line: {
+    id?: string | null;
+    name?: string | null;
+    amount?: string | number | null;
+  },
+  opts?: { includeDerived?: boolean },
+): boolean {
+  if (!opts?.includeDerived && forecastLineIsDerived(line)) return false;
+  const amount = typeof line.amount === "number" ? line.amount : parseFloat(String(line.amount ?? ""));
+  return Number.isFinite(amount) && Math.abs(amount) >= 0.5;
+}
+
+export function forecastLinesBlank(
+  lines: readonly { id?: string | null; name?: string | null; amount?: string | number | null }[],
+  opts?: { includeDerived?: boolean },
+): boolean {
+  return lines.every((line) => !forecastLineCountsAsEntered(line, opts));
+}
+
+export type EnteredForecastWeek = {
+  period_label: string;
+  opening_balance: number;
+  total_receipts: number;
+  total_payments: number;
+  net_movement: number;
+  closing_balance: number;
+  scenario: "moderate";
+  runway_weeks: number;
+};
+
+/**
+ * Week rows for the 13-week PDF. Null when the cash tab has no entered line,
+ * including a P&L run-rate sketch (weeks 1, 5 and 9).
+ */
+export function cashForecastWeeksFromOutlook(outlook: {
+  source: string;
+  estimateLabel?: string | null;
+  opening: number;
+  inflow: readonly number[];
+  outflow: readonly number[];
+  closing: readonly number[];
+}): EnteredForecastWeek[] | null {
+  if (!forecastWeeksAreEntered(outlook)) return null;
+  const empty =
+    outlook.opening === 0 &&
+    outlook.inflow.every((n) => n === 0) &&
+    outlook.outflow.every((n) => n === 0);
+  if (empty) return null;
+  return outlook.inflow.map((inflow, i) => {
+    const receipts = Math.round(inflow);
+    const payments = Math.round(outlook.outflow[i] ?? 0);
+    const opening = i === 0 ? outlook.opening : outlook.closing[i - 1] ?? outlook.opening;
+    const closing = outlook.closing[i] ?? opening;
+    return {
+      period_label: `Week ${i + 1}`,
+      opening_balance: Math.round(opening),
+      total_receipts: receipts,
+      total_payments: payments,
+      net_movement: receipts - payments,
+      closing_balance: Math.round(closing),
+      scenario: "moderate" as const,
+      runway_weeks: 0,
+    };
+  });
+}
+
+/**
  * Chat quotes the same closings as the cash screen.
  * A P&L that looks cash generative does not hide a negative week or a week under the floor.
  */

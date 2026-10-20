@@ -307,6 +307,8 @@ interface Props {
   ownerSignoffStale?: boolean;
   /** 13-week cash is under the floor and the opening is on file. */
   cashBelowFloor?: boolean;
+  /** Live scorecard ratios. Draft cards quote these, not a stored snapshot. */
+  canonicalRatios?: Record<string, number> | null;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -606,6 +608,7 @@ export default function ActionPlanPanel({
   ownerSignoff = null,
   ownerSignoffStale = false,
   cashBelowFloor = false,
+  canonicalRatios = null,
 }: Props) {
   const { market } = useMarketFormat();
   const { profile, firms, firmId } = useAccountantProfile();
@@ -1953,6 +1956,7 @@ export default function ActionPlanPanel({
                 key={row.id}
                 layout="moves"
                 row={row}
+                canonicalRatios={canonicalRatios}
                 primary={index === 0}
                 onOpen={onOpenApproved}
                 onInvite={onInviteAccountant}

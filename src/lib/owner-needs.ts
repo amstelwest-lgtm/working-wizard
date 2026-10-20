@@ -3,8 +3,11 @@
  * Counts come from the caller. Empty stays empty. Nothing here is invented.
  */
 import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
+import { groundAdvisoryNarrative } from "@/lib/advisory-narrative";
+import { repairDraftMetricUnits } from "@/lib/agent-bus";
 import { homeStatementsLine } from "@/lib/books-answer";
 import { canonicalScoreProse } from "@/lib/score-prose";
+import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
 import { openPlanTitles } from "@/lib/open-plan-home";
@@ -21,6 +24,8 @@ export type OwnerNeedsView = {
   actionLines: string[];
   draftsHeading: string;
   draftLines: string[];
+  /** True when a stored draft quoted a figure the scorecard has since replaced. */
+  draftStale?: boolean[];
   deliverablesHeading: string;
   deliverableLines: string[];
   syncHeading: string;
@@ -67,24 +72,55 @@ function countPhrase(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-export function ownerDraftTitles(findings: readonly AgentFindingRow[]): string[] {
+/**
+ * Home draft title. Stored sentences are rewritten to the scorecard ratios.
+ * `stale` means the stored text quoted a different figure. The screen shows
+ * the scorecard number. The stored row is left for the next agent run.
+ */
+export function presentHomeDraftTitle(
+  title: string,
+  canonicalRatios?: Record<string, number> | null,
+): { text: string; stale: boolean } {
+  const base = repairDraftMetricUnits(canonicalScoreProse(rewriteDraftMonthStamp(title.trim())));
+  if (!base) return { text: "", stale: false };
+  if (!canonicalRatios) return { text: base, stale: false };
+  const grounded = repairDraftMetricUnits(groundAdvisoryNarrative(base, canonicalRatios));
+  return { text: grounded, stale: grounded !== base };
+}
+
+export function ownerDraftTitles(
+  findings: readonly AgentFindingRow[],
+  canonicalRatios?: Record<string, number> | null,
+): string[] {
+  return ownerDraftPresentations(findings, canonicalRatios).map((row) => row.text);
+}
+
+export function ownerDraftPresentations(
+  findings: readonly AgentFindingRow[],
+  canonicalRatios?: Record<string, number> | null,
+): { text: string; stale: boolean }[] {
   return findings.flatMap((row) => {
     if (row.status === "approved") return [];
     if (!isVisibleAgentFinding(row)) return [];
     if (draftFindingLabel(row) !== DRAFT_NEEDS_OWNER) return [];
     const title = row.title.trim();
-    return title ? [canonicalScoreProse(title)] : [];
+    if (!title) return [];
+    const presented = presentHomeDraftTitle(title, canonicalRatios);
+    return presented.text ? [presented] : [];
   });
 }
 
-export function advisoryDeliverableTitles(findings: readonly AgentFindingRow[]): string[] {
+export function advisoryDeliverableTitles(
+  findings: readonly AgentFindingRow[],
+  canonicalRatios?: Record<string, number> | null,
+): string[] {
   return findings.flatMap((row) => {
     if (row.status === "approved") return [];
     if (!isVisibleAgentFinding(row)) return [];
     if (draftFindingKindLabel(row) !== "Advisory") return [];
     if (draftFindingLabel(row) !== DRAFT_NEEDS_ACCOUNTANT) return [];
     const title = row.title.trim();
-    return title ? [canonicalScoreProse(title)] : [];
+    return title ? [presentHomeDraftTitle(title, canonicalRatios).text] : [];
   });
 }
 
@@ -131,6 +167,7 @@ export function ownerNeedsView(input: {
   draftsReady: boolean;
   draftsUnavailable: boolean;
   draftTitles: readonly string[];
+  draftStale?: readonly boolean[];
   deliverablesReady: boolean;
   deliverablesUnavailable: boolean;
   deliverableCount: number;
@@ -173,6 +210,9 @@ export function ownerNeedsView(input: {
       : input.draftTitles.length
         ? input.draftTitles.slice(0, 1)
         : ["No drafts need your OK."];
+  const draftStale = !input.draftsReady || input.draftsUnavailable || input.draftTitles.length === 0
+    ? undefined
+    : input.draftStale?.slice(0, 1);
 
   const deliverableTotal =
     input.deliverableCount + (input.deliverablesUnavailable ? 0 : input.advisoryTitles.length);
@@ -204,6 +244,7 @@ export function ownerNeedsView(input: {
     actionLines,
     draftsHeading,
     draftLines,
+    draftStale,
     deliverablesHeading,
     deliverableLines,
     syncHeading: sync.heading,

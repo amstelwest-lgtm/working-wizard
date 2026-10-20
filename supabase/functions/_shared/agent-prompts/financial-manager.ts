@@ -60,7 +60,10 @@ export function financialManagerToolSchemas() {
       "get_financial_snapshot",
       "Latest statement period and its stored totals. Does not return the raw upload.",
     ),
-    readToolSchema("get_ratios", "Stored statement ratios and totals for the latest period on file."),
+    readToolSchema(
+      "get_ratios",
+      "Scorecard ratios for the live books. Quote ratios (quote_basis scorecard). stored_ratios is the last snapshot and is not the quote.",
+    ),
     readToolSchema(
       "get_cash_13_week",
       "Saved cashflow closings. Not a bank balance. display formats each cash amount ($46,300 or R 46 300). Copy display into the title and detail. figures stays the raw numbers.",

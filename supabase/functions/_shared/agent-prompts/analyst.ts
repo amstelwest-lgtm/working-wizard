@@ -60,7 +60,8 @@ export function analystToolSchemas(): AnalystToolSchema[] {
     },
     {
       name: "get_ratios",
-      description: "Stored statement ratios and totals for the latest period on file.",
+      description:
+        "Scorecard ratios for the live books. Quote ratios (quote_basis scorecard). stored_ratios is the last snapshot and is not the quote.",
       input_schema: EMPTY,
     },
     {
