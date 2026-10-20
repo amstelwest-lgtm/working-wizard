@@ -6,9 +6,16 @@
 import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
 import { intentCookieDomain } from "@/lib/google-auth";
 import { supabaseAuthStorageKey } from "@/integrations/supabase/tab-auth";
+import { stashEmailReturn } from "@/lib/auth-url-return";
 import { wakeAuth } from "@/hooks/use-auth";
 
 export const EMAIL_SIGN_IN_SENT = "If an account exists for that email, we've sent a sign-in link.";
+
+/** Primary instruction after a send. The live template may not include a code yet. */
+export const EMAIL_SIGN_IN_TAP_LINK = "Check your email and tap the link.";
+
+/** Collapsed until the person asks. The prod template has no code until it is pasted. */
+export const EMAIL_SIGN_IN_CODE_INSTEAD = "Have a 6-digit code instead?";
 
 export const EMAIL_SIGN_IN_RATE_LIMIT = "Too many sign-in emails. Wait a minute and try again.";
 
@@ -260,7 +267,10 @@ export async function requestEmailSignInLink(input: {
   const { supabase } = await import("@/integrations/supabase/client");
   const { error } = await supabase.auth.signInWithOtp(args);
   const notice = emailSignInNotice(error);
-  if (notice.kind === "sent") stashEmailCodeVerifier();
+  if (notice.kind === "sent") {
+    stashEmailCodeVerifier();
+    stashEmailReturn(input.door, input.next);
+  }
   return notice;
 }
 
