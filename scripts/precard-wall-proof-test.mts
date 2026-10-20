@@ -4,8 +4,11 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { restoreLastFirmSuccess } from "../src/lib/billing-check-failure.ts";
 import { decideFirmClientCreate } from "../src/lib/firm-client-cap.ts";
+import { decideFirmUpgradeRoute, upgradeButtonLabel } from "../src/lib/firm-band-upgrade.ts";
 import { surfaceAfterEntitlementFailure } from "../src/lib/firm-gate-access.ts";
 import { TRIAL_CLOCK_CUTOVER, noPlanTrialClock } from "../src/lib/firm-starter-trial.ts";
 import {
@@ -17,6 +20,11 @@ import {
   precardCapApplies,
 } from "../src/lib/precard-cap.ts";
 import { GENERATION_ENTRIES, starterTrialBlocksGeneration } from "../src/lib/starter-trial-generation.ts";
+import { TrialEndedPlanCard } from "../src/components/trial-ended-plan-block.tsx";
+import { BillingRequiredCard } from "../src/routes/billing.required.tsx";
+import { FIRM_WALL_START_LABEL } from "../src/lib/billing-wall.ts";
+import { billingStartPath } from "../src/lib/pending-checkout.ts";
+import { firmSignupCheckoutIntent } from "../src/lib/stripe-plans.ts";
 import {
   decideFirmBillingEntitlement,
   decideFirmBillingPathGate,
@@ -248,6 +256,78 @@ for (const entry of paidAgents) {
 assert(!starterTrialBlocksGeneration("ask_ai", true), "Ask AI is not on the paid-generation list");
 assert(!starterTrialBlocksGeneration("milon_bot_qa", true), "Bot Q&A is not on the paid-generation list");
 
+const pastDay14 = noPlanTrialClock({
+  enforced: true,
+  noPlan: true,
+  startedAt: new Date(cutoverMs + 2 * day).toISOString(),
+  now: new Date(cutoverMs + 17 * day),
+});
+assert(pastDay14.expired, "a cardless firm is past day 14");
+const refusedCreate = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "none",
+  band: null,
+  clientCount: 1,
+  starterTrialExpired: pastDay14.expired,
+});
+assert(
+  !refusedCreate.allowed && refusedCreate.code === "starter_trial_ended",
+  "adding a new client is refused after day 14",
+);
+for (const entry of paidAgents) {
+  assert(
+    starterTrialBlocksGeneration(entry.id, pastDay14.expired),
+    `${entry.id} is refused for a cardless firm past day 14`,
+  );
+}
+const refusedAi = await cardlessTrialAiBlock({
+  db: fakeDb({
+    clients: { data: { firm_id: "firm-cardless" }, error: null },
+    firms: {
+      data: { precard_cap_applies: true, starter_trial_generation_blocked: true },
+      error: null,
+    },
+  }),
+  clientId: "client-1",
+});
+assert(
+  refusedAi?.code === "starter_trial_ended",
+  "Ask AI and Milōn Bot are refused for a cardless firm past day 14",
+);
+assert(
+  decideFirmUpgradeRoute({ hasEntitlingSubscription: false, hasPaymentMethod: false }) === "checkout",
+  "a cardless firm past day 14 is sent to Checkout",
+);
+const checkout = firmSignupCheckoutIntent("us");
+const wallHtml = renderToStaticMarkup(
+  createElement(BillingRequiredCard, {
+    planName: "Starter",
+    priceLabel: "$39/mo",
+    checkout,
+    trialEnded: true,
+  }),
+);
+assert(wallHtml.includes(FIRM_WALL_START_LABEL), "the billing wall shows the Checkout action");
+const checkoutHref = billingStartPath(checkout).replaceAll("&", "&amp;");
+assert(
+  wallHtml.includes(`href="${checkoutHref}"`) && wallHtml.includes('data-billing-action="trial"'),
+  "the Checkout action opens Checkout",
+);
+const endedHtml = renderToStaticMarkup(
+  createElement(TrialEndedPlanCard, {
+    upgrade: {
+      band: null,
+      interval: "month",
+      priceCurrency: "USD",
+      canUpgrade: true,
+      clientCount: 1,
+      phase: "none",
+    },
+    onUpgrade: () => undefined,
+  }),
+);
+assert(endedHtml.includes(upgradeButtonLabel("starter")), "adding a client shows the Checkout button");
+
 const restored = restoreLastFirmSuccess({
   requestedFirmId: "firm-cardless",
   storedFirmId: "firm-cardless",
@@ -340,6 +420,10 @@ const practice = read("src/components/practice-board.tsx");
 assert(
   practice.includes("scoredRows.length > 0") && practice.includes("CheckoutAfterInsight"),
   "Health on the practice board asks for a card once a client is scored",
+);
+assert(
+  practice.includes('cap.code === "starter_trial_ended"') && practice.includes("TrialEndedPlanBlock"),
+  "refusing a new client shows the plan card that opens Checkout",
 );
 assert(read("supabase/functions/ask-ai/index.ts").includes("cardlessTrialAiBlock"), "Ask AI calls the cardless trial gate");
 assert(
