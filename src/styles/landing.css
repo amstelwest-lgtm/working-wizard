@@ -1837,7 +1837,7 @@ html[data-landing="1"] .alert-chip .attention-chip{
 html[data-landing="1"] .alert-chip .attention-chip svg{display:block}
 
 /* ── Hero rework: the finance report stays and the three agents stand,
-   display-only, on its lower band. ── */
+   display-only, across its top band so they are seen before the figures. ── */
 html[data-landing="1"] .hero-agents{
   list-style:none;
   margin:0;
@@ -1896,17 +1896,18 @@ html[data-landing="1"] .hero-agent-name{
     display:flex;
     flex-direction:column;
   }
-  /* Extra bottom padding keeps the cash-dip strip clear of the agent row. */
+  /* Extra top padding keeps the report header clear of the agent row,
+     which overlaps the report's top edge. */
   html[data-landing="1"] .dash{
     height:auto;
     overflow:visible;
-    margin-top:12px;
-    padding-bottom:76px;
+    padding-top:76px;
   }
   html[data-landing="1"] .hero-agents{
     position:relative;
     z-index:5;
-    margin-top:-58px;
+    margin-top:12px;
+    margin-bottom:-58px;
   }
   /* The agent trio and the accountant card tell this story now. */
   html[data-landing="1"] .fc-1,
@@ -1931,8 +1932,8 @@ html[data-landing="1"] .hero-agent-name{
 }
 @media (max-width:1023px){
   html[data-landing="1"] .dash-stage{display:flex;flex-direction:column}
-  html[data-landing="1"] .dash{order:1}
-  html[data-landing="1"] .hero-agents{order:2;margin-top:18px}
+  html[data-landing="1"] .hero-agents{order:1;margin-bottom:18px}
+  html[data-landing="1"] .dash{order:2}
   html[data-landing="1"] .fc-1{order:3}
   html[data-landing="1"] .fc-2{order:4}
 }
