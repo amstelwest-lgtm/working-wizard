@@ -880,7 +880,7 @@ function ClientView() {
           outcome_goal?: string | null;
         } | null;
         if (plan) {
-          periodLabel = plan.period_label ?? null;
+          periodLabel = plan.period_label ?? null; // date-ok: action plan quarter stamp, not a day range
           outcomeGoal = plan.outcome_goal ?? null;
           const { data: rows } = await supabase
             .from("action_items_v")
@@ -1591,13 +1591,13 @@ function ClientView() {
     periodLabel: string | null;
     periodStart: string | null;
     periodEnd: string | null;
-  }) => {
-    if (link.periodStart && link.periodEnd) {
-      const fresh = formatDateRange(link.periodStart, link.periodEnd, clientMarket);
-      if (fresh !== "—") return fresh;
-    }
-    return link.periodLabel;
-  };
+  }) =>
+    statementSpanLabel({
+      periodStart: link.periodStart,
+      periodEnd: link.periodEnd,
+      periodLabel: link.periodLabel,
+      market: clientMarket,
+    });
   const snapshotFinancials =
     currentSnapshot?.financials && typeof currentSnapshot.financials === "object"
       ? currentSnapshot.financials
@@ -2400,7 +2400,7 @@ function ClientView() {
         setSnapshots(
           (data ?? []).map((s) => ({
             id: s.id as string,
-            period_label: s.period_label as string,
+            period_label: s.period_label as string, // date-ok: snapshot row kept; display formats at read time
             period_date: s.period_date as string,
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,
@@ -2852,7 +2852,7 @@ function ClientView() {
         setSnapshots(
           (data ?? []).map((s) => ({
             id: s.id as string,
-            period_label: s.period_label as string,
+            period_label: s.period_label as string, // date-ok: snapshot row kept; display formats at read time
             period_date: s.period_date as string,
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,

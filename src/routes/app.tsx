@@ -3039,7 +3039,7 @@ function Index() {
             setHistory((h) => {
               const next = { period_label: periodLabel, period_date: periodDate, ratios };
               const idx = h.findIndex(
-                (s) => s.period_label === periodLabel || s.period_date === periodDate,
+                (s) => s.period_label === periodLabel || s.period_date === periodDate, // date-ok: snapshot identity match, not printed copy
               );
               if (idx >= 0) {
                 const copy = h.slice();

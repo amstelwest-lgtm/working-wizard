@@ -275,7 +275,7 @@ export async function getAdvisorySignoffState(
   const prior = resolvePriorSnapshot(
     snaps.map((snap) => ({
       id: typeof snap.id === "string" ? snap.id : undefined,
-      period_label: typeof snap.period_label === "string" ? snap.period_label : "",
+      period_label: typeof snap.period_label === "string" ? snap.period_label : "", // date-ok: prior-period match key, not printed copy
       period_date: typeof snap.period_date === "string" ? snap.period_date : "",
       financials:
         snap.financials && typeof snap.financials === "object" && !Array.isArray(snap.financials)

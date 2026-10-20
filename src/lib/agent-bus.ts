@@ -4,6 +4,7 @@
  */
 import { cashComfortThreshold } from "./cash-runway.ts";
 import { formatMoney, type MoneyMarket } from "./market/format.ts";
+import { statementSpanLabel } from "./statement-period.ts";
 export type { MoneyMarket };
 import { coerceMarketSelection } from "./market/parse.ts";
 
@@ -460,7 +461,7 @@ function snapshotOf(rows: StoredFigures[]): string | null {
 
 function applyEvidenceHint(evidence: FindingEvidence, hint: MetaHint, reads: StoredFigures[]): FindingEvidence {
   let snapshotId = evidence.snapshot_id;
-  let periodLabel = evidence.period_label;
+  let periodLabel = evidence.period_label; // date-ok: evidence period key, formatted when printed
   if (!snapshotId && hint.snapshotId && reads.some((row) => row.snapshotId === hint.snapshotId)) {
     snapshotId = hint.snapshotId;
   }
@@ -1220,7 +1221,10 @@ export function evidenceMetrics(
       metric: leaf.key,
       value: scaled.value,
       unit,
-      period: leaf.period ?? periodLabel,
+      period: statementSpanLabel({
+        periodLabel: leaf.period ?? periodLabel,
+        market,
+      }),
     };
     if (scaled.value_raw != null) metric.value_raw = scaled.value_raw;
     if (floor != null) metric.floor = floor;

@@ -10,7 +10,12 @@ import { formatAssignmentNote, handoffProgressCaption } from "../src/lib/action-
 import { formatDate, formatDateRange, formatEventTime } from "../src/lib/market/format.ts";
 import { marketForClient, marketForFirm } from "../src/lib/market/scope.ts";
 import { dataAsOfLabel } from "../src/lib/portfolio-dashboard.ts";
-import { reportDataPeriodLabel } from "../src/lib/statement-period.ts";
+import {
+  figuresPeriodLabelFrom,
+  readStatementMeta,
+  reportDataPeriodLabel,
+  statementSpanLabel,
+} from "../src/lib/statement-period.ts";
 
 const ROOT = process.cwd();
 const ROOTS = ["src", "supabase/functions", "api", "emails", "mobile"];
@@ -418,7 +423,90 @@ function scanSource(rel: string, raw: string): Finding[] {
       break;
     }
   }
+  scanStoredPeriodReads(rel, src, findings);
   return findings;
+}
+
+const PERIOD_FORMATTERS =
+  /^(?:statementSpanLabel|figuresPeriodLabelFrom|readStatementMeta|formatStatementPeriodLabel|reportDataPeriodLabel|datedPeriodLabel|parseStoredPeriodSpan|formatDateRange|homeStatementsLine|resolveSnapshotPeriodLabel|storedPeriodSpan|evidenceMetrics)$/;
+
+function insidePeriodFormatter(src: string, index: number): boolean {
+  let depth = 0;
+  for (let i = index - 1; i >= 0; i--) {
+    const c = src[i]!;
+    if (c === ")" || c === "}" || c === "]") {
+      depth++;
+      continue;
+    }
+    if (c === "(" || c === "{" || c === "[") {
+      if (depth === 0 && c === "(") {
+        let j = i - 1;
+        while (j >= 0 && /\s/.test(src[j]!)) j--;
+        const end = j + 1;
+        while (j >= 0 && /[\w$]/.test(src[j]!)) j--;
+        if (PERIOD_FORMATTERS.test(src.slice(j + 1, end))) return true;
+      } else if (depth > 0) {
+        depth--;
+      }
+      continue;
+    }
+    if (depth === 0 && c === ";") return false;
+  }
+  return false;
+}
+
+function scanStoredPeriodReads(rel: string, src: string, findings: Finding[]) {
+  if (/(?:^|\/)statement-period\.ts$/.test(rel)) return;
+  const note = (index: number) => {
+    if (insidePeriodFormatter(src, index)) return;
+    const lineNo = lineAt(src, index);
+    findings.push({
+      line: lineNo,
+      endLine: lineNo,
+      message: `${rel}:${lineNo} reads a stored period_label`,
+    });
+  };
+  const visit = (from: number, to: number) => {
+    let i = from;
+    while (i < to) {
+      const c = src[i]!;
+      if (c === "'" || c === '"') {
+        i = Math.min(readQuoted(src, i), to);
+        continue;
+      }
+      if (c === "`") {
+        i = visitTemplate(i, to);
+        continue;
+      }
+      if (c === "." && src.startsWith(".period_label", i)) {
+        const next = src[i + ".period_label".length];
+        if (next == null || /\W/.test(next)) note(i);
+        i += ".period_label".length;
+        continue;
+      }
+      if (c === "[" && /^\[\s*["']period_label["']\s*\]/.test(src.slice(i, i + 24))) note(i);
+      i++;
+    }
+  };
+  const visitTemplate = (i: number, limit: number) => {
+    i++;
+    while (i < src.length && i < limit) {
+      if (src[i] === "\\") {
+        i += 2;
+        continue;
+      }
+      if (src[i] === "`") return i + 1;
+      if (src[i] === "$" && src[i + 1] === "{") {
+        const close = skipBraceOpaque(src, i + 1);
+        visit(i + 2, close - 1);
+        i = close;
+        continue;
+      }
+      i++;
+    }
+    return i;
+  };
+  visit(0, src.length);
 }
 
 function fresh(rawLines: string[], finding: Finding): boolean {
@@ -543,6 +631,7 @@ assertScan(
 );
 assertScan("src/example.ts", "const text = `Xero sync · ${row.period_label}`\n", [
   "src/example.ts:1 prints a stored period label",
+  "src/example.ts:1 reads a stored period_label",
 ]);
 assertScan(
   "src/example.ts",
@@ -554,6 +643,50 @@ assertScan(
   "const text = `Xero sync · ${row.period_label}` // date-ok: month stamp, not a day range\n",
   [],
 );
+assertScan(
+  "src/example.ts",
+  "const payload = { periodLabel: row.period_label };\nconst text = `CURRENT PERIOD: ${payload.periodLabel}`;\n",
+  [
+    "src/example.ts:1 prints a stored period label",
+    "src/example.ts:1 reads a stored period_label",
+  ],
+);
+assertScan(
+  "src/example.ts",
+  "const payload = {\n  periodLabel: row.period_label,\n};\nconst text = `CURRENT PERIOD: ${payload.periodLabel}`;\n",
+  ["src/example.ts:2 reads a stored period_label"],
+);
+assertScan(
+  "src/example.ts",
+  "const payload = { periodLabel: statementSpanLabel({ periodLabel: row.period_label, market }) };\nconst text = `CURRENT PERIOD: ${payload.periodLabel}`;\n",
+  [],
+);
+
+const ISO_SPAN = "2026-09-01/2026-09-21";
+const US_SPAN = "Sep 1\u201321, 2026";
+const ZA_SPAN = "1\u201321 Sep 2026";
+const usMarket = marketForClient({ market: { country: "US", regionCode: "NY" } });
+const zaMarket = marketForClient(null);
+assert.equal(figuresPeriodLabelFrom(null, ISO_SPAN, usMarket), US_SPAN);
+assert.equal(figuresPeriodLabelFrom(null, ISO_SPAN, zaMarket), ZA_SPAN);
+assert.equal(figuresPeriodLabelFrom({ periodLabel: ISO_SPAN }, null, usMarket), US_SPAN);
+assert.equal(figuresPeriodLabelFrom({ periodLabel: ISO_SPAN }, null, zaMarket), ZA_SPAN);
+assert.equal(statementSpanLabel({ periodLabel: ISO_SPAN, market: usMarket }), US_SPAN);
+assert.equal(statementSpanLabel({ periodLabel: ISO_SPAN, market: zaMarket }), ZA_SPAN);
+assert.equal(readStatementMeta({ periodLabel: ISO_SPAN }, usMarket).periodLabel, US_SPAN);
+assert.equal(readStatementMeta({ periodLabel: ISO_SPAN }, zaMarket).periodLabel, ZA_SPAN);
+assert.equal(
+  readStatementMeta({ periodStart: "2026-01-01", periodEnd: "2026-01-31", ytdPeriodLabel: ISO_SPAN }, usMarket)
+    .ytdPeriodLabel,
+  US_SPAN,
+);
+assert.equal(
+  readStatementMeta({ periodStart: "2026-01-01", periodEnd: "2026-01-31", ytdPeriodLabel: ISO_SPAN }, zaMarket)
+    .ytdPeriodLabel,
+  ZA_SPAN,
+);
+assert.equal(reportDataPeriodLabel({ periodLabel: ISO_SPAN }, usMarket), US_SPAN);
+assert.equal(reportDataPeriodLabel({ periodLabel: ISO_SPAN }, zaMarket), ZA_SPAN);
 
 function walk(dir: string, out: string[]) {
   for (const name of readdirSync(dir)) {

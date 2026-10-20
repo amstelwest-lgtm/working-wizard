@@ -13,7 +13,7 @@ import {
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { formatDateRange } from "@/lib/market/format";
-import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
+import { formatIsoDateUTC, statementSpanLabel, yearToDateTitle } from "@/lib/statement-period";
 import { useMarketFormat } from "@/contexts/market";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
 import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
@@ -205,6 +205,16 @@ export function XeroConnectCard({
       linesNote: lastSync?.forecastLinesNote ?? status.forecastLinesNote,
       market: dateMarket,
     });
+    const mtdLabel = statementSpanLabel({
+      periodStart: lastSync?.periodStart ?? status.periodStart,
+      periodEnd: lastSync?.periodEnd ?? status.periodEnd,
+      periodLabel: lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel,
+      market: dateMarket,
+    });
+    const ytdLabel = statementSpanLabel({
+      periodLabel: lastSync?.ytdPeriodLabel ?? status.syncFigures?.ytdPeriodLabel ?? status.ytdPeriodLabel,
+      market: dateMarket,
+    });
     const linkCopy = describeLedgerLink(
       {
         provider: "xero",
@@ -213,20 +223,21 @@ export function XeroConnectCard({
         figuresFromThisSync: Boolean(lastSync) || status.figuresFromThisSync,
         own: lastSync
           ? {
-              periodLabel: lastSync.periodLabel,
+              periodLabel: mtdLabel,
               revenue: lastSync.revenue,
-              ytdPeriodLabel: lastSync.ytdPeriodLabel,
+              ytdPeriodLabel: ytdLabel,
               ytdRevenue: lastSync.ytdRevenue,
               ytdBasis: lastSync.ytdBasis,
               cash: lastSync.cash,
             }
-          : status.syncFigures,
+          : status.syncFigures
+            ? { ...status.syncFigures, periodLabel: mtdLabel, ytdPeriodLabel: ytdLabel }
+            : null,
         board: status.boardFigures,
       },
       dateTime,
     );
-    const ownPeriod =
-      lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel;
+    const ownPeriod = mtdLabel;
     return (
       <div
         className={`ledger-connect ${isError ? "ledger-connect--error" : "ledger-connect--xero"}`}
@@ -261,10 +272,8 @@ export function XeroConnectCard({
               {linkCopy.showOwnStats && ownPeriod ? (
                 <>
                   {`P&L month to date ${ownPeriod}`}
-                  {(lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel)
-                    ? ` · ${yearToDateTitle(lastSync?.ytdBasis ?? status.ytdBasis)} ${
-                        lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel
-                      }`
+                  {ytdLabel
+                    ? ` · ${yearToDateTitle(lastSync?.ytdBasis ?? status.ytdBasis)} ${ytdLabel}`
                     : ""}
                   <br />
                 </>
@@ -341,7 +350,7 @@ export function XeroConnectCard({
             {[
               {
                 label: "Month to date",
-                value: lastSync?.periodLabel ?? status.periodLabel ?? "—",
+                value: mtdLabel ?? "—",
               },
               {
                 label: "Revenue",
@@ -353,7 +362,7 @@ export function XeroConnectCard({
               },
               {
                 label: yearToDateTitle(lastSync?.ytdBasis ?? status.ytdBasis),
-                value: lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel ?? "—",
+                value: ytdLabel ?? "—",
               },
               {
                 label: "Year revenue",

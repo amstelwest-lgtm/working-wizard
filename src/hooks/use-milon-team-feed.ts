@@ -13,7 +13,7 @@ import { parseRecommendationRow } from "@/lib/recommendations";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { resolveMarket, ZA_MARKET } from "@/lib/market/resolve";
 import { marketForClient } from "@/lib/market/scope";
-import { readStatementMeta } from "@/lib/statement-period";
+import { readStatementMeta, statementSpanLabel } from "@/lib/statement-period";
 import { isPrecardCapFailure, PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "@/lib/precard-cap";
 import {
   buildMilonTeamFeed,
@@ -247,11 +247,17 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
               row.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
                 ? (row.financials as object)
                 : null;
-            const meta = readStatementMeta(fields, marketForClient({ market: client?.market }));
+            const feedMarket = marketForClient({ market: client?.market });
+            const meta = readStatementMeta(fields, feedMarket);
             return {
               id: row.id,
               source: row.source,
-              periodLabel: row.period_label,
+              periodLabel: statementSpanLabel({
+                periodStart: meta.periodStart,
+                periodEnd: meta.periodEnd,
+                periodLabel: row.period_label,
+                market: feedMarket,
+              }),
               periodStart: meta.periodStart,
               periodEnd: meta.periodEnd,
               at: row.created_at,
@@ -259,7 +265,10 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
           }),
           uploads: (artifactRes.data ?? []).map((row) => ({
             id: row.id,
-            label: row.period_label,
+            label: statementSpanLabel({
+              periodLabel: row.period_label,
+              market: marketForClient({ market: client?.market }),
+            }),
             at: row.created_at,
           })),
           diagnosisEvents: (diagnosisRes.data ?? []).map((row) => ({

@@ -1026,7 +1026,7 @@ export default function ActionPlanPanel({
     try {
       await downloadActionPlanPdf({
         clientName: clientName ?? "Client",
-        periodLabel: plan?.period_label,
+        periodLabel: plan?.period_label, // date-ok: action plan quarter stamp, not a day range
         outcomeGoal: plan?.outcome_goal,
         items: items.map((item) => ({
           title: item.title,
@@ -1277,7 +1277,7 @@ export default function ActionPlanPanel({
           outcomeWhy: stripMilonProjection(it.outcome_why) || undefined,
           dueDate: it.due_date ?? undefined,
           market: { locale: market.locale, timezone: market.timezone },
-          periodLabel: plan?.period_label,
+          periodLabel: plan?.period_label, // date-ok: action plan quarter stamp, not a day range
           milestones: ms.map((m) => ({ week_no: m.week_no, label: m.label })),
           taskUrl: url,
           assignedBy: u.user?.email?.split("@")[0],

@@ -470,6 +470,17 @@ export function figuresPeriodLabelFrom(
   if (!meta.periodStart && !meta.periodEnd && snapshotIsMonthStamp(snap)) {
     return FULL_YEAR_ON_FILE;
   }
+  const parsed = parseStoredPeriodSpan(snap);
+  if (parsed) {
+    const label = formatStatementPeriodLabel(parsed.start, parsed.end, market);
+    if (label) return label;
+  }
+  const storedOnFigures = str((financials ?? {}) as Record<string, unknown>, "periodLabel");
+  const fromFigures = !snap ? parseStoredPeriodSpan(storedOnFigures) : null;
+  if (fromFigures) {
+    const label = formatStatementPeriodLabel(fromFigures.start, fromFigures.end, market);
+    if (label) return label;
+  }
   return snap || null;
 }
 

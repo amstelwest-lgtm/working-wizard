@@ -143,7 +143,7 @@ export function measureOutcomes(input: {
       method: "snapshot_diff",
       baseline_snapshot_id: baseline.id,
       measured_snapshot_id: newest.id,
-      period_label: newest.period_label,
+      period_label: newest.period_label, // date-ok: outcome period key stored with the measurement
       measured_at: input.now,
       notes: `${impactMetricLabel(metric)}: ${fmtValue(b, reader.unit)} (${baseline.period_label ?? baseline.period_date}) → ${fmtValue( // date-ok: stored measurement note, month stamp or ISO span
         m,
