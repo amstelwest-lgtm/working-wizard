@@ -8,6 +8,7 @@
  */
 
 import { GROSS_MARGIN_MAPPING_NOTE, grossMarginLooksImplausible, scoreRatio } from "@/lib/health-score";
+import { formatReportAmount } from "@/lib/market/format";
 import {
   equityMultiplierRatio,
   healthBandLabel,
@@ -276,7 +277,7 @@ export function presentReturn(input: {
   if (!Number.isFinite(input.value)) {
     return { text: "—", headline: "—", scoredValue: null, note, unscored: true };
   }
-  const pct = `${(input.value * 100).toFixed(1)}%`;
+  const pct = formatReportAmount(input.value, undefined, { style: "percent" });
   return {
     text: note ? `${pct} · ${note}` : pct,
     headline: pct,
@@ -422,9 +423,13 @@ const LIST_WHEN_MISSING = new Set([
   "OCF / EBITDA",
   "Interest Burden",
   "Tax Burden",
+  "Fixed Cost Ratio",
   "Equity Multiplier",
   "Return on Equity",
   "Return on Assets",
+  "Debtor Days",
+  "Asset Turnover",
+  "Debt-to-Equity",
 ]);
 
 export type ScorecardPresentation = {
@@ -503,7 +508,14 @@ export function presentScorecardRatio(input: {
     if (!LIST_WHEN_MISSING.has(input.name)) {
       return { include: false, text: null, headline: null, scoredValue: null, note: null, unscored: true };
     }
-    return { include: true, text: "—", headline: "—", scoredValue: null, note: null, unscored: true };
+    return {
+      include: true,
+      text: "Not enough data",
+      headline: "Not enough data",
+      scoredValue: null,
+      note: null,
+      unscored: true,
+    };
   }
   return {
     include: true,

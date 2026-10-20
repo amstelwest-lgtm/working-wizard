@@ -48,6 +48,7 @@ import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe
 import { Route as JoinTokenRouteImport } from './routes/join.$token'
 import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
 import { Route as TTokenRouteImport } from './routes/t.$token'
+import { Route as TalkAgentRouteImport } from './routes/talk.$agent'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as AuthenticatedClientsClientIdRouteImport } from './routes/_authenticated/clients.$clientId'
 import { Route as AuthenticatedClientsQueriesRouteImport } from './routes/_authenticated/clients_.queries'
@@ -266,6 +267,11 @@ const TTokenRoute = TTokenRouteImport.update({
   path: '/t/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TalkAgentRoute = TalkAgentRouteImport.update({
+  id: '/talk/$agent',
+  path: '/talk/$agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedClientsIndexRoute =
   AuthenticatedClientsIndexRouteImport.update({
     id: '/clients/',
@@ -438,6 +444,7 @@ export interface FileRoutesByFullPath {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
+  '/talk/$agent': typeof TalkAgentRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
@@ -501,6 +508,7 @@ export interface FileRoutesByTo {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
+  '/talk/$agent': typeof TalkAgentRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
@@ -566,6 +574,7 @@ export interface FileRoutesById {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
+  '/talk/$agent': typeof TalkAgentRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/_authenticated/clients_/queries': typeof AuthenticatedClientsQueriesRoute
   '/_authenticated/founder/metrics': typeof AuthenticatedFounderMetricsRoute
@@ -631,6 +640,7 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
+    | '/talk/$agent'
     | '/clients/$clientId'
     | '/clients/queries'
     | '/founder/metrics'
@@ -694,6 +704,7 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
+    | '/talk/$agent'
     | '/clients/$clientId'
     | '/clients/queries'
     | '/founder/metrics'
@@ -758,6 +769,7 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
+    | '/talk/$agent'
     | '/_authenticated/clients/$clientId'
     | '/_authenticated/clients_/queries'
     | '/_authenticated/founder/metrics'
@@ -819,6 +831,7 @@ export interface RootRouteChildren {
   JoinTokenRoute: typeof JoinTokenRoute
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
+  TalkAgentRoute: typeof TalkAgentRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
   ApiResendWebhookRoute: typeof ApiResendWebhookRoute
   ApiSageSyncRoute: typeof ApiSageSyncRoute
@@ -1105,6 +1118,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/talk/$agent': {
+      id: '/talk/$agent'
+      path: '/talk/$agent'
+      fullPath: '/talk/$agent'
+      preLoaderRoute: typeof TalkAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/clients/': {
       id: '/_authenticated/clients/'
       path: '/clients'
@@ -1352,6 +1372,7 @@ const rootRouteChildren: RootRouteChildren = {
   JoinTokenRoute: JoinTokenRoute,
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
+  TalkAgentRoute: TalkAgentRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
   ApiResendWebhookRoute: ApiResendWebhookRoute,
   ApiSageSyncRoute: ApiSageSyncRoute,

@@ -5,7 +5,7 @@
 
 import { fmtPct, fmtRandCompact } from "@/components/pdf/theme";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { formatMoney, formatMoneyUnit, spellForMarket, spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatMoney, formatMoneyUnit, formatReportAmount, spellForMarket, spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportProfileCoda, type ReportNarrativeKind } from "@/lib/profile-signals";
 import { scoreRatio } from "@/lib/health-score";
 import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
@@ -162,10 +162,7 @@ export function profitabilityNarrative(
   const marginBand = healthBandLabel(marginTier);
   const verdict = `net margin in the ${marginBand} band`;
   const unit100 = formatMoney(100, market);
-  const keptUnit = formatMoney(kept, market, {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
-  });
+  const keptUnit = formatReportAmount(kept, market, { fractionDigits: 2 });
   const base =
     `Of every ${unit100} earned, ${keptUnit} reaches the bottom line — ${verdict}. ` +
     `Gross margin stands at ${fmtPct(d.gross_margin_pct)} on revenue of ${fmtRandCompact(d.revenue, market)}.` +

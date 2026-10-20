@@ -13,3 +13,4 @@
 - [Hydration re-fires autosave](hydration-autosave-refire.md) — debounced autosave keyed on a hydration `loaded` flag fires on load with no edits; guard with a one-shot ref
 - [RLS access vs UI authorization](rls-access-vs-ui-authorization.md) — a route/RLS policy readable by multiple roles doesn't mean every role should see every control on it
 - [Impersonation scope check](impersonation-audit-scope-check.md) — "active session" existence checks must use limit(1)+length, not .maybeSingle(), or duplicates cause false 403s
+- [J2 P&L-only import](rootcause-j2-pl-only-import.md) — a quarter must not replace year-to-date books or rescore Cash; #656 only stopped missing cash becoming $0

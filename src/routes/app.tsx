@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate, ClientOnly } from "@tanstack/react-router";
 import { founderPortalLinks } from "@/styles/app-route-styles";
 import { OwnerDoor } from "@/components/owner-door/owner-door";
+import { OwnerShell } from "@/components/owner-door/owner-shell";
 import { cashFloorForHome } from "@/lib/owner-answers";
 import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
@@ -9,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BackLink } from "@/components/back-link";
-import { EmptyState, OwnerBootSkeleton, PageHeader, StatusPill } from "@/components/primitives";
+import { EmptyState, OwnerBootSkeleton, PageHeader, PanelSkeleton, StatusPill } from "@/components/primitives";
 import {
   Upload,
   Loader2,
@@ -140,6 +141,7 @@ import {
   statementImportWhat,
   withFinancialsWriteRev,
 } from "@/lib/statement-import-apply";
+import { planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -206,6 +208,13 @@ import {
   type NextStep,
   type NextStepTarget,
 } from "@/lib/next-step";
+import {
+  isLegacyOwnerBoardTab,
+  isOwnerAppTab,
+  ownerDoorScreen,
+  ownerDoorSearch,
+} from "@/lib/owner-app-tab";
+import { signoffScopeLabel } from "@/lib/signoff-status";
 import { SampleBoardBanner } from "@/components/sample-board-banner";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
@@ -222,10 +231,14 @@ import { periodProfitBridge } from "@/lib/period-profit";
 import { statementKindFromMetadata, type StatementMeta } from "@/lib/statement-parse";
 import { prefsToRemember } from "@/lib/auto-populate";
 import {
+  clearOwnerProfileDefer,
+  deferOwnerProfile,
   hasOwnerFirstUploadHandled,
   isInvitedOwnerWithFigures,
   markOwnerFirstUploadHandled,
   ownerBoardReady,
+  ownerProfileDeferred,
+  ownerProfileResumeVisible,
   ownerWalkthroughReady,
   shouldAutoProposeAfterFirstUpload,
   shouldClearFirstRunAfterFirstUpload,
@@ -388,7 +401,8 @@ export const Route = createFileRoute("/app")({
     } = {};
     if (
       typeof search.tab === "string" &&
-      (OWNER_BOARD_TABS as readonly string[]).includes(search.tab)
+      ((OWNER_BOARD_TABS as readonly string[]).includes(search.tab) ||
+        isOwnerAppTab(search.tab))
     ) {
       out.tab = search.tab;
     }
@@ -503,6 +517,8 @@ type Inputs = {
   periodEnd?: string;
   /** Date of the balance-sheet cash line. The Cash tab labels the opening with this. */
   cashAsOf?: string;
+  /** JSON scores for Cash, Assets, and Financing held across a P&L-only import. */
+  sheetPillarsHeld?: string;
 };
 
 // All fields start empty — no demo/placeholder data pre-filled.
@@ -2827,7 +2843,7 @@ function Index() {
         ) {
           if (data?.business_type) setBusinessTypeId(data.business_type as string);
           setFirstRunStep("pick-type");
-          setShowOnboarding(true);
+          setShowOnboarding(!ownerProfileDeferred(effectiveClientId));
         } else if (data?.business_type) {
           setBusinessTypeId(data.business_type as string);
         }
@@ -4036,7 +4052,59 @@ function Index() {
       </div>
     );
   }
-  if (authLoading || !user || !boardReady) {
+  if (authLoading || !user) {
+    return <AppBootSpinner />;
+  }
+
+  // The rail is real navigation, not a loading state. While the books are
+  // still resolving, only the content pane is a skeleton.
+  if (!boardReady && !sampleMode && !isLegacyOwnerBoardTab(oauthReturn.tab)) {
+    const bootScreen = ownerDoorScreen(oauthReturn);
+    const shellScreen = bootScreen === "chat" ? "home" : bootScreen;
+    const bootName =
+      ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ?? "Your business";
+    const bootInitials =
+      bootName
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0] ?? "")
+        .join("")
+        .toUpperCase() || "OW";
+    return (
+      <OwnerShell
+        screen={shellScreen}
+        businessName={bootName}
+        initials={bootInitials}
+        workspaces={ownerWorkspaces}
+        activeClientId={effectiveClientId}
+        onSwitch={switchOwnerWorkspace}
+        onNavigate={(screen) => {
+          void navigate({
+            to: "/app",
+            search: (prev) => ownerDoorSearch(prev, screen) as typeof oauthReturn,
+          });
+        }}
+        onSignOut={() => {
+          void signOut().then(() => {
+            window.location.href = "/";
+          });
+        }}
+        onSettings={() => {
+          openOwnerSettings();
+          void navigate({
+            to: "/app",
+            search: (prev) => ownerDoorSearch(prev, "settings") as typeof oauthReturn,
+          });
+        }}
+        onProfile={() => openProfileDialog("retake")}
+      >
+        <PanelSkeleton rows={4} />
+      </OwnerShell>
+    );
+  }
+  if (!boardReady) {
     return <AppBootSpinner />;
   }
 
@@ -4064,13 +4132,13 @@ function Index() {
     );
   }
 
-  const showOwnerDoor = !searchTab && !sampleMode;
+  const showOwnerDoor = !sampleMode && !isLegacyOwnerBoardTab(searchTab);
   const OwnerHealthOrb = SphereHero;
 
   return (
     <MarketProvider selection={workspaceMarket}>
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
-        <main className="milon-page-enter min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+        <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
           {generationTrialOpen ? (
             <div className="mx-auto max-w-3xl px-4 pt-4">
               <TrialEndedPlanBlock firmId={clientMeta?.firm_id ?? null} />
@@ -4133,6 +4201,13 @@ function Index() {
               // Demo clients keep the sample card. Real clients get the preview card.
               // A reused hand-off stays Working on the run already open. The Handed-to line waits until noted.
               <OwnerDoor
+                routeScreen={ownerDoorScreen(oauthReturn)}
+                onOpenScreen={(screen) => {
+                  void navigate({
+                    to: "/app",
+                    search: (prev) => ownerDoorSearch(prev, screen) as typeof oauthReturn,
+                  });
+                }}
                 bot={oauthReturn.bot ?? null}
                 planTick={planTick}
                 onBotChange={(next, mode) => {
@@ -4213,6 +4288,11 @@ function Index() {
                 onConnect={() => setShowFinData(true)}
                 onQuickBooks={() => setShowQboDialog(true)}
                 onXero={() => setShowXeroDialog(true)}
+                profileResume={ownerProfileResumeVisible({
+                  unfinished: firstRunStep === "pick-type",
+                  open: showOnboarding,
+                })}
+                onResumeProfile={() => setShowOnboarding(true)}
                 onProfile={() => openProfileDialog("retake")}
                 settingsOpen={oauthReturn.screen === "settings"}
                 openAccountant={oauthReturn.screen === "accountant"}
@@ -4225,7 +4305,7 @@ function Index() {
                   openOwnerSettings();
                   void navigate({
                     to: "/app",
-                    search: (prev) => ({ ...prev, screen: "settings" as const }),
+                    search: (prev) => ownerDoorSearch(prev, "settings") as typeof oauthReturn,
                     replace: oauthReturn.screen === "settings",
                   });
                 }}
@@ -4267,6 +4347,7 @@ function Index() {
                           <OwnerSignoffMark
                             signoff={financialsSignoff}
                             isStale={financialsSignoffStale}
+                            scopeLabel={signoffScopeLabel("financials")}
                             className="mb-2"
                           />
                           <OwnerHealthOrb
@@ -4817,19 +4898,18 @@ function Index() {
             {/* Business profile funnel — required on first run, retakeable thereafter */}
             <Dialog
               open={showOnboarding}
+              modal={false}
               onOpenChange={(open) => {
-                if (!open && firstRunStep === "pick-type") return;
+                if (!open && firstRunStep === "pick-type" && effectiveClientId) {
+                  deferOwnerProfile(effectiveClientId);
+                }
                 setShowOnboarding(open);
               }}
             >
               <DialogContent
-                onInteractOutside={
-                  firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined
-                }
-                onEscapeKeyDown={
-                  firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined
-                }
-                className={`flex h-[min(90vh,calc(100dvh-1rem))] max-h-[min(90vh,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:p-6 ${firstRunStep === "pick-type" ? "[&>button:first-of-type]:hidden" : ""}`}
+                overlayClassName="profile-funnel-overlay"
+                data-profile-funnel=""
+                className="profile-funnel-sheet flex h-[min(80vh,calc(100dvh-6rem))] max-h-[min(80vh,calc(100dvh-6rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:p-6"
               >
                 <DialogHeader className="sr-only">
                   <DialogTitle>Business profile</DialogTitle>
@@ -4848,9 +4928,12 @@ function Index() {
                     operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault
                   }
                   figuresReady={hasRealFinancials}
-                  onCancel={
-                    firstRunStep === "pick-type" ? undefined : () => setShowOnboarding(false)
-                  }
+                  onCancel={() => {
+                    if (firstRunStep === "pick-type" && effectiveClientId) {
+                      deferOwnerProfile(effectiveClientId);
+                    }
+                    setShowOnboarding(false);
+                  }}
                   onComplete={async (profile) => {
                     setBtSaveError(null);
                     const stamped = stampProfileProvenance(profile, "owner", undefined);
@@ -4873,6 +4956,7 @@ function Index() {
                       }
                     }
                     setShowOnboarding(false);
+                    if (effectiveClientId) clearOwnerProfileDefer(effectiveClientId);
                     if (firstRunStep === "pick-type") {
                       // Invited owner whose accountant already loaded figures:
                       // nothing to bring in — land on the scored board.
@@ -5437,6 +5521,7 @@ function Index() {
                                   <OwnerSignoffMark
                                     signoff={financialsSignoff}
                                     isStale={financialsSignoffStale}
+                                    scopeLabel={signoffScopeLabel("financials")}
                                     className="mb-2"
                                   />
                                   <SphereHero
@@ -5516,6 +5601,7 @@ function Index() {
                           <OwnerSignoffMark
                             signoff={financialsSignoff}
                             isStale={financialsSignoffStale}
+                            scopeLabel={signoffScopeLabel("financials")}
                           />
                         </div>
                         {isUsCopy(boardMarket) && (
@@ -5784,7 +5870,7 @@ function Index() {
                                     const delta = pctDelta(series);
                                     const bm = benchmarkFor(k);
                                     const fmtd = !isFinite(rawVal)
-                                      ? "—"
+                                      ? "Not enough data"
                                       : fmt === "pct"
                                         ? `${(rawVal * 100).toFixed(1)}%`
                                         : fmt === "x"
@@ -6723,7 +6809,7 @@ function Index() {
                 setReplaceLiveOnHistory(false);
               }}
               autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
-              onConfirm={async (mapped, autoPopulate) => {
+              onConfirm={async (mapped, autoPopulate, periodChoice) => {
                 const entries = Object.entries(mapped).filter(
                   ([k, val]) => val !== undefined && k in defaults,
                 );
@@ -6796,18 +6882,102 @@ function Index() {
                 const periodEndForCash =
                   extractionForReview?.document_metadata?.period_end_date ?? null;
                 const uploadKind = statementKindFromMetadata(reviewMeta);
-                const importedCash = allEntries.some(
-                  ([key, val]) => key === "cash" && String(val ?? "").trim() !== "",
+                const fileSpan = statementSpan(
+                  reviewMeta?.period_start_date,
+                  reviewMeta?.period_end_date,
+                  reviewMeta?.period_months,
                 );
+                const healthBefore = liveHealthFromBooks({
+                  financials: v as unknown as Record<string, unknown>,
+                  cashflow: clientMeta?.cashflow ?? null,
+                  fyStartMonth,
+                  market: boardMarket,
+                  timeZone: boardMarket.timezone,
+                });
+                const planned = planStatementImport({
+                  existing: v,
+                  incoming: Object.fromEntries(allEntries),
+                  kind: uploadKind,
+                  span: fileSpan,
+                  choice: periodChoice ?? null,
+                  pillarsBefore: healthBefore.pillars,
+                  market: boardMarket,
+                });
+                if (planned.action === "block") {
+                  return { ok: false as const, message: planned.message };
+                }
+                if (planned.action === "choose") {
+                  return {
+                    ok: false as const,
+                    message: planned.message,
+                    choice: { replaceLabel: planned.replaceLabel, addLabel: planned.addLabel },
+                  };
+                }
+                if (planned.action === "history" && planned.history) {
+                  const periodDate = fileSpan?.periodEnd ?? periodEndForCash ?? "";
+                  const periodLabel = planned.periodLabel || periodDate;
+                  const { data: rows } = await supabase
+                    .from("client_financial_snapshots")
+                    .select("id, financials")
+                    .eq("client_id", effectiveClientId)
+                    .order("period_date", { ascending: false })
+                    .limit(24);
+                  const match = (rows ?? []).find((row) => {
+                    const stored = statementSpan(
+                      (row.financials as { periodStart?: string } | null)?.periodStart,
+                      (row.financials as { periodEnd?: string } | null)?.periodEnd,
+                    );
+                    return Boolean(
+                      fileSpan &&
+                        stored &&
+                        stored.periodStart === fileSpan.periodStart &&
+                        stored.periodEnd === fileSpan.periodEnd,
+                    );
+                  });
+                  const ratiosOut = computeRatios(planned.history as never);
+                  const write = match?.id
+                    ? supabase
+                        .from("client_financial_snapshots")
+                        .update({
+                          financials: planned.history as never,
+                          ratios: ratiosOut as never,
+                          period_label: periodLabel,
+                          period_date: periodDate,
+                        })
+                        .eq("id", match.id)
+                    : supabase.from("client_financial_snapshots").insert({
+                        client_id: effectiveClientId,
+                        period_label: periodLabel,
+                        period_date: periodDate,
+                        financials: planned.history as never,
+                        ratios: ratiosOut as never,
+                        source: "upload",
+                      });
+                  const { error: historyError } = await write;
+                  if (historyError) {
+                    return {
+                      ok: false as const,
+                      message: importFailureMessage(historyError.message),
+                    };
+                  }
+                  const { data } = await supabase
+                    .from("client_financial_snapshots")
+                    .select("period_label, period_date, ratios, source, financials")
+                    .eq("client_id", effectiveClientId)
+                    .order("period_date", { ascending: true })
+                    .limit(24);
+                  if (data) setHistory(data as never);
+                  setPendingCsvExtras(null);
+                  return { ok: true as const, message: planned.message };
+                }
+                const liveFields = planned.live ?? {};
                 const next = {
                   ...v,
-                  ...Object.fromEntries(allEntries),
-                  ...(uploadKind === "balance_sheet" &&
-                  importedCash &&
-                  periodEndForCash &&
-                  /^\d{4}-\d{2}-\d{2}$/.test(periodEndForCash)
-                    ? { cashAsOf: periodEndForCash.slice(0, 10) }
-                    : {}),
+                  ...Object.fromEntries(
+                    Object.entries(liveFields).flatMap(([key, value]) =>
+                      value == null || typeof value === "object" ? [] : [[key, String(value)]],
+                    ),
+                  ),
                 } as Inputs;
                 ownerWriteGen.current += 1;
                 setV(next);
@@ -6868,7 +7038,7 @@ function Index() {
                 setPendingCsvExtras(null);
                 return {
                   ok: true as const,
-                  message: importedUpdateMessage(statementImportWhat(uploadKind)),
+                  message: planned.message || importedUpdateMessage(statementImportWhat(uploadKind)),
                 };
               }}
             />

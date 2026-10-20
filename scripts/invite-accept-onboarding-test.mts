@@ -11,7 +11,9 @@ import {
   ownerBoardReady,
   ownerFirstUploadHandledKey,
   ownerHasPreloadedFigures,
+  ownerProfileResumeVisible,
   ownerWalkthroughReady,
+  profileFunnelCloseAllowed,
   shouldAutoProposeAfterFirstUpload,
   shouldClearFirstRunAfterFirstUpload,
   shouldShowOwnerProfileFunnel,
@@ -451,6 +453,32 @@ assert(appSrc.includes("hasInviteHandoffFlag"), "founder board does not bounce a
 assert(appSrc.includes("ownerBoardRole"), "founder board uses the owner seat on the owner door, not firm_admin");
 assert(appSrc.includes("openInvitedClient"), "founder board prefers the invited workspace for existing accounts");
 assert(appSrc.includes("shouldShowOwnerProfileFunnel"), "founder board uses shared funnel gate");
+assert(profileFunnelCloseAllowed("pick-type"), "the first-run profile can close on question 1");
+assert(
+  ownerProfileResumeVisible({ unfinished: true, open: false }),
+  "a dismissed profile can resume from Home",
+);
+assert(
+  !ownerProfileResumeVisible({ unfinished: true, open: true }),
+  "an open profile is not also a Home resume",
+);
+assert(!appSrc.includes("[&>button:first-of-type]:hidden"), "the profile close control stays visible");
+assert(!appSrc.includes("onEscapeKeyDown"), "Escape is not cancelled on the profile dialog");
+assert(appSrc.includes("deferOwnerProfile"), "Later defers the profile for this client");
+assert(appSrc.includes('modal={false}'), "the profile dialog does not inert the header");
+assert(appSrc.includes("profile-funnel-overlay"), "the profile overlay starts below the header");
+assert(appSrc.includes('data-profile-funnel=""'), "the profile dialog is marked");
+const ownerHomeSrc = readFileSync(resolve("src/components/owner-door/owner-home.tsx"), "utf8");
+assert(ownerHomeSrc.includes('data-profile-resume=""'), "Home can resume the business profile");
+assert(ownerHomeSrc.includes("Continue business profile"), "Home names the resume action");
+const profileSrc = readFileSync(resolve("src/components/profile/profile-funnel.tsx"), "utf8");
+assert(profileSrc.includes('data-profile-later=""'), "the profile footer offers Later");
+const accountantClient = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+assert(accountantClient.includes('modal={false}'), "the accountant profile dialog does not inert the header");
+assert(
+  accountantClient.includes("profile-funnel-overlay"),
+  "the accountant profile overlay starts below the header",
+);
 assert(appSrc.includes("ownerWalkthroughReady({"), "tour ready helper is wired");
 assert(appSrc.includes("skipInvitedSetupChrome"), "invited owner with figures skips the board tour");
 assert(appSrc.includes("clearFirstRunAfterUpload"), "first upload clears the bring-in-your-numbers chrome");

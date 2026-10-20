@@ -27,6 +27,7 @@ import {
   importedUpdateMessage,
   type ImportApplyResult,
 } from "@/lib/statement-import-apply";
+import type { PeriodChoice } from "@/lib/statement-import-plan";
 import { AutoPopulateOptions } from "@/components/auto-populate-options";
 import type { AutoPopulateDialogState } from "@/components/bank-statement-drafter";
 import {
@@ -72,6 +73,7 @@ interface Props {
   onConfirm: (
     inputs: MappedInputs,
     autoPopulate: AutoPopulatePrefs,
+    choice?: PeriodChoice | null,
   ) => void | ImportApplyResult | Promise<void | ImportApplyResult>;
   /** Per-client auto-populate state; undefined while loading → first upload. */
   autoPopulate?: AutoPopulateDialogState | null;
@@ -256,7 +258,10 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
   const [acceptedQuality, setAcceptedQuality] = useState(false);
   const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(defaultAutoPopulatePrefs());
   const [applying, setApplying] = useState(false);
-  const [applyTone, setApplyTone] = useState<"success" | "error" | null>(null);
+  const [applyTone, setApplyTone] = useState<"success" | "error" | "choice" | null>(null);
+  const [choiceLabels, setChoiceLabels] = useState<{ replaceLabel: string; addLabel: string } | null>(
+    null,
+  );
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
@@ -346,7 +351,7 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
   const hasNulls = nullCount > 0;
   const unresolvedConflicts = conflicts.filter((c) => !conflictSelections[c.field]);
 
-  const handleConfirm = () => {
+  const handleConfirm = (choice?: PeriodChoice | null) => {
     // Build final extraction with edits + conflict resolutions applied
     const finalIS = { ...is };
     const finalBS = { ...bs };
@@ -373,8 +378,15 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
     setApplying(true);
     setApplyTone(null);
     setApplyMessage(null);
-    void Promise.resolve(onConfirm(mapped, autoPrefs))
+    void Promise.resolve(onConfirm(mapped, autoPrefs, choice ?? null))
       .then((outcome) => {
+        if (outcome && outcome.choice) {
+          setChoiceLabels(outcome.choice);
+          setApplyTone("choice");
+          setApplyMessage(outcome.message);
+          toast.message(outcome.message);
+          return;
+        }
         if (outcome && outcome.ok === false) {
           setApplyTone("error");
           setApplyMessage(outcome.message);
@@ -766,11 +778,14 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
           <ImportApplyNotice
             message={applyMessage}
             tone={applyTone}
-            onRetry={applyTone === "error" ? handleConfirm : undefined}
+            replaceLabel={choiceLabels?.replaceLabel}
+            addLabel={choiceLabels?.addLabel}
+            onChoose={(next) => handleConfirm(next)}
+            onRetry={applyTone === "error" ? () => handleConfirm() : undefined}
           />
           <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-800">
             <Button
-              onClick={handleConfirm}
+              onClick={() => handleConfirm()}
               disabled={unresolvedConflicts.length > 0 || !acceptedQuality || applying}
               className="flex-1 bg-[#0B5FFF] hover:bg-[#2563EB] text-white font-semibold"
             >
