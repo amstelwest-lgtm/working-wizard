@@ -151,7 +151,7 @@ function ResetPasswordPage() {
         )}
 
         <p className="auth-entry__footnote mt-6">
-          <BackLink href="/" variant="inline" className="mt-0 !text-[var(--brand-gold-ui)] !no-underline">
+          <BackLink href="/" variant="inline" className="mt-0 !text-[#2563EB] !no-underline">
             Back to Milōn
           </BackLink>
         </p>
