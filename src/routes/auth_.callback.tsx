@@ -23,6 +23,8 @@ import {
   welcomeWithoutBlockingSignup,
 } from "@/lib/welcome-email";
 import { sendSignupWelcome } from "@/lib/welcome-email.functions";
+import { settleWithin } from "@/lib/bounded-load";
+import { POST_AUTH_DEADLINE_MS, POST_AUTH_TIMEOUT_MESSAGE } from "@/lib/post-auth-landing";
 import {
   consumePendingOwnerInvite,
   ownerInviteFromCallbackSearch,
@@ -120,6 +122,8 @@ function AuthCallbackPage() {
   const [error, setError] = useState("");
   const [inviteContinue, setInviteContinue] = useState<string | null>(null);
   const [working, setWorking] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  const [canRetry, setCanRetry] = useState(false);
   const [isInviteFlow, setIsInviteFlow] = useState(detectInviteFlow);
   const [practiceGate, setPracticeGate] = useState<{
     user: User;
@@ -143,7 +147,7 @@ function AuthCallbackPage() {
     if (practiceGateArmed.current) return;
     let cancelled = false;
     cancelledRef.current = false;
-    void (async () => {
+    const work = (async () => {
       const established = await establishSessionFromOAuthCallback();
       if (cancelled) return;
       if (established.error) {
@@ -152,8 +156,11 @@ function AuthCallbackPage() {
         return;
       }
 
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
+      let user = established.user ?? null;
+      if (!user) {
+        const { data } = await supabase.auth.getUser();
+        user = data.user;
+      }
       if (!user) {
         setWorking(false);
         setError("Google sign-in did not complete. Please try again.");
@@ -447,6 +454,12 @@ function AuthCallbackPage() {
         marketCountry: practiceMarketCountry,
       });
     })();
+    void settleWithin(work, POST_AUTH_DEADLINE_MS).then((settled) => {
+      if (cancelled || settled.status === "value") return;
+      setWorking(false);
+      setCanRetry(true);
+      setError(POST_AUTH_TIMEOUT_MESSAGE);
+    });
     return () => {
       cancelled = true;
       cancelledRef.current = true;
@@ -455,7 +468,7 @@ function AuthCallbackPage() {
     // tests still see the join hop before landing. Listing them here would
     // re-run this effect every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doAcceptOwnerInvite, doSendWelcome, ensurePractice, navigate, readGeoCountry]);
+  }, [attempt, doAcceptOwnerInvite, doSendWelcome, ensurePractice, navigate, readGeoCountry]);
 
   async function openPracticeLocation(input: {
     user: User;
@@ -693,6 +706,20 @@ function AuthCallbackPage() {
           <OwnerInviteCard className="mt-6 text-center">
             <p className="text-sm leading-relaxed text-[#8a938c]">{error}</p>
             <div className="mt-6 flex flex-col gap-3">
+              {canRetry ? (
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-5 text-xs font-bold uppercase tracking-[0.14em] text-white"
+                  onClick={() => {
+                    setCanRetry(false);
+                    setError("");
+                    setWorking(true);
+                    setAttempt((n) => n + 1);
+                  }}
+                >
+                  Retry
+                </button>
+              ) : null}
               {inviteContinue ? (
                 <a
                   href={inviteContinue}
@@ -721,6 +748,20 @@ function AuthCallbackPage() {
         <AuthEntryCard className="mt-6 text-center">
           <p className="text-sm leading-relaxed text-[#3D5270]">{error}</p>
           <div className="mt-6 flex flex-col gap-3">
+            {canRetry ? (
+              <button
+                type="button"
+                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-5 text-xs font-bold uppercase tracking-[0.14em] text-white"
+                onClick={() => {
+                  setCanRetry(false);
+                  setError("");
+                  setWorking(true);
+                  setAttempt((n) => n + 1);
+                }}
+              >
+                Retry
+              </button>
+            ) : null}
             <Link
               to="/"
               className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-5 text-xs font-bold uppercase tracking-[0.14em] text-white"

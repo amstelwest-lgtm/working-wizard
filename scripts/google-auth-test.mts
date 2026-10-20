@@ -521,8 +521,9 @@ assert(
   "a brand timeout does not mark the firm list loaded",
 );
 assert(
-  profileSrc.includes("if (!again.ok)") &&
-    profileSrc.indexOf("if (listed.ok)") < profileSrc.indexOf("setFirmsLoaded(true)"),
+  profileSrc.includes("if (again.error)") &&
+    profileSrc.includes("listed.error == null") &&
+    profileSrc.indexOf("listed.error == null") < profileSrc.indexOf("setFirmsLoaded(true)"),
   "a failed firm read does not mark the firm list loaded",
 );
 

@@ -2,6 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth, wakeAuth } from "@/hooks/use-auth";
+import { settleWithin } from "@/lib/bounded-load";
+import {
+  finishOwnerSignIn,
+  POST_AUTH_DEADLINE_MS,
+  POST_AUTH_TIMEOUT_MESSAGE,
+} from "@/lib/post-auth-landing";
 import { toast } from "sonner";
 import { notifySignup } from "@/lib/signup-notify";
 import { welcomeWithoutBlockingSignup } from "@/lib/welcome-email";
@@ -553,7 +559,8 @@ function LandingPage() {
       if (hash === "register") {
         try {
           const { listUserFirms } = await import("@/lib/firm-brand");
-          const firms = await listUserFirms(user.id);
+          const firmRead = await settleWithin(listUserFirms(user.id), POST_AUTH_DEADLINE_MS);
+          const firms = firmRead.status === "value" ? firmRead.value : [];
           if (firms.some((f) => f.owner_user_id === user.id)) {
             if (!cancelled) {
               await setLandingPortal("accountant");
@@ -567,11 +574,19 @@ function LandingPage() {
       }
       try {
         const { resolveSignedInDestination } = await import("@/lib/landing-sign-in-destination");
-        const path = await resolveSignedInDestination(user.id, {
-          door: "landing",
-          knownMeta: user.user_metadata as Record<string, unknown> | undefined,
+        const settled = await finishOwnerSignIn({
+          readDestination: () =>
+            resolveSignedInDestination(user.id, {
+              door: "landing",
+              knownMeta: (user.user_metadata as Record<string, unknown> | undefined) ?? {},
+            }),
         });
-        if (!cancelled) navigate({ to: path, replace: true });
+        if (cancelled) return;
+        if (settled.status === "retry") {
+          setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+          return;
+        }
+        navigate({ to: settled.path, replace: true });
       } catch (err) {
         console.warn("[landing] post-login redirect failed:", err);
         const { isPracticeSignupMeta } = await import("@/lib/user-roles");
@@ -949,7 +964,11 @@ function LandingPage() {
         consumeResumeFirmBilling();
         stashPendingCheckout(pendingCheckout);
         await setLandingPortal("accountant");
-        const insightFirmId = await landingFirmId(granted.data.user?.id);
+        const insightFirm = await settleWithin(
+          landingFirmId(granted.data.user?.id),
+          POST_AUTH_DEADLINE_MS,
+        );
+        const insightFirmId = insightFirm.status === "value" ? insightFirm.value : null;
         if (readInsightSeen(insightFirmId)) {
           void navigate({
             to: "/billing/start",
@@ -991,14 +1010,18 @@ function LandingPage() {
         }
         return;
       }
-      const { data: auth } = await (await landingSupabase()).auth.getUser();
-      const uid = auth.user?.id;
+      const uid = granted.data.user?.id;
       if (uid) {
         try {
           const resumeFirmBilling = consumeResumeFirmBilling();
           if (resumeFirmBilling) {
             const { listUserFirms, readActiveFirmId } = await import("@/lib/firm-brand");
-            const firms = await listUserFirms(uid);
+            const firmRead = await settleWithin(listUserFirms(uid), POST_AUTH_DEADLINE_MS);
+            if (firmRead.status !== "value") {
+              setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+              return;
+            }
+            const firms = firmRead.value;
             const ownsFirm = firms.some((f) => f.owner_user_id === uid);
             const preferred = readActiveFirmId(uid);
             const insightFirmId =
@@ -1017,11 +1040,15 @@ function LandingPage() {
               return;
             }
             if (resume) {
-              const pending = await checkoutIntentForUser(
-                uid,
-                peekPendingCheckout(),
-                copyPack,
+              const pendingRead = await settleWithin(
+                checkoutIntentForUser(uid, peekPendingCheckout(), copyPack),
+                POST_AUTH_DEADLINE_MS,
               );
+              if (pendingRead.status !== "value") {
+                setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+                return;
+              }
+              const pending = pendingRead.value;
               stashPendingCheckout(pending);
               await setLandingPortal("accountant");
               void navigate({
@@ -1032,17 +1059,24 @@ function LandingPage() {
               return;
             }
           }
-          // Same resolver as /auth. Practice accounts, including a profile
-          // that has not loaded yet, open /dashboard. Owners and dual-role
-          // accounts open /app.
+          // Same resolver as /auth. A firm row opens /practice even when
+          // metadata says customer. A pure owner opens /app.
           const { resolveSignedInDestination } = await import(
             "@/lib/landing-sign-in-destination"
           );
-          const path = await resolveSignedInDestination(uid, {
-            door: "landing",
-            knownMeta: granted.data.user?.user_metadata as Record<string, unknown> | undefined,
+          const settled = await finishOwnerSignIn({
+            readDestination: () =>
+              resolveSignedInDestination(uid, {
+                door: "landing",
+                knownMeta:
+                  (granted.data.user?.user_metadata as Record<string, unknown> | undefined) ?? {},
+              }),
           });
-          void navigate({ to: path, replace: true });
+          if (settled.status === "retry") {
+            setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+            return;
+          }
+          void navigate({ to: settled.path, replace: true });
         } catch (err) {
           console.warn("[landing] post-login path failed:", err);
           void navigate({ to: "/app", replace: true });
@@ -1275,12 +1309,20 @@ function LandingPage() {
           return;
         }
         if (data.user) {
-          const { error: firmErr } = await (await landingSupabase()).rpc("ensure_practice_firm", {
-            p_name: regFirmName.trim() || null,
-            p_market: marketToJson(market),
-          });
-          if (firmErr) console.error("[signup] ensure_practice_firm failed:", firmErr.message);
-          await welcomeWithoutBlockingSignup(() => doSendWelcome());
+          const provisioned = await settleWithin(
+            (async () => {
+              const { error: firmErr } = await (await landingSupabase()).rpc("ensure_practice_firm", {
+                p_name: regFirmName.trim() || null,
+                p_market: marketToJson(market),
+              });
+              if (firmErr) console.error("[signup] ensure_practice_firm failed:", firmErr.message);
+              await welcomeWithoutBlockingSignup(() => doSendWelcome());
+            })(),
+            POST_AUTH_DEADLINE_MS,
+          );
+          if (provisioned.status !== "value") {
+            console.warn("[signup] practice provision passed the deadline; opening the practice");
+          }
           const { forcePortal } = await import("@/lib/user-roles");
           forcePortal("accountant");
           // This firm was just created. It has not shown figures, so Checkout
@@ -1341,19 +1383,27 @@ function LandingPage() {
         // a PostgREST WITH CHECK quirk in this project, so the SECURITY DEFINER
         // RPC is the reliable path for both auto-confirm and email-confirm signups.
         const clientName = regBusiness.trim() || regName.trim() || regEmail;
-        const { error: rpcErr } = await withMarketRpcFallback(
-          async () =>
-            (await landingSupabase()).rpc("ensure_own_client", {
-              p_name: clientName,
-              p_market: { country: market.country, regionCode: market.regionCode },
-            }),
-          async () => (await landingSupabase()).rpc("ensure_own_client", { p_name: clientName }),
+        const provisioned = await settleWithin(
+          (async () => {
+            const { error: rpcErr } = await withMarketRpcFallback(
+              async () =>
+                (await landingSupabase()).rpc("ensure_own_client", {
+                  p_name: clientName,
+                  p_market: { country: market.country, regionCode: market.regionCode },
+                }),
+              async () => (await landingSupabase()).rpc("ensure_own_client", { p_name: clientName }),
+            );
+            if (rpcErr) {
+              // Don't block navigation — the /app effectiveClientId flow will retry.
+              console.error("[signup] ensure_own_client failed:", rpcErr.message);
+            }
+            await welcomeWithoutBlockingSignup(() => doSendWelcome());
+          })(),
+          POST_AUTH_DEADLINE_MS,
         );
-        if (rpcErr) {
-          // Don't block navigation — the /app effectiveClientId flow will retry.
-          console.error("[signup] ensure_own_client failed:", rpcErr.message);
+        if (provisioned.status !== "value") {
+          console.warn("[signup] owner provision passed the deadline; opening the board");
         }
-        await welcomeWithoutBlockingSignup(() => doSendWelcome());
         const pendingCheckout = peekPendingCheckout();
         if (pendingCheckout) {
           navigate({

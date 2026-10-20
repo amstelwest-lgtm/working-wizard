@@ -10,6 +10,12 @@ import { wakeAuth } from "@/hooks/use-auth";
 import { browserAppUrl } from "@/lib/app-origin";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import { resolveSignedInDestination } from "@/lib/landing-sign-in-destination";
+import { settleWithin } from "@/lib/bounded-load";
+import {
+  finishOwnerSignIn,
+  POST_AUTH_DEADLINE_MS,
+  POST_AUTH_TIMEOUT_MESSAGE,
+} from "@/lib/post-auth-landing";
 import type { VisitorCopyPack } from "@/lib/market";
 import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
 import {
@@ -113,16 +119,26 @@ export function LandingSignInSession({
 
       const storedPending =
         peekPendingCheckout() ?? parsePendingCheckoutFromSearch(window.location.search);
-      const pendingCheckout = storedPending
-        ? await checkoutIntentForUser(userId, storedPending, copyPack)
-        : null;
+      let pendingCheckout: Awaited<ReturnType<typeof checkoutIntentForUser>> | null = null;
+      if (storedPending) {
+        const intent = await settleWithin(
+          checkoutIntentForUser(userId, storedPending, copyPack),
+          POST_AUTH_DEADLINE_MS,
+        );
+        if (intent.status !== "value") {
+          setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+          return;
+        }
+        pendingCheckout = intent.value;
+      }
       if (pendingCheckout) {
         consumeResumeFirmBilling();
         stashPendingCheckout(pendingCheckout);
         const { setPortalIntent } = await import("@/lib/user-roles");
         setPortalIntent("accountant");
         const { activeFirmIdForUser } = await import("@/lib/firm-brand");
-        const insightFirmId = await activeFirmIdForUser(userId);
+        const insightFirm = await settleWithin(activeFirmIdForUser(userId), POST_AUTH_DEADLINE_MS);
+        const insightFirmId = insightFirm.status === "value" ? insightFirm.value : null;
         if (readInsightSeen(insightFirmId)) {
           void navigate({
             to: "/billing/start",
@@ -138,7 +154,12 @@ export function LandingSignInSession({
       const resumeFirmBilling = consumeResumeFirmBilling();
       if (resumeFirmBilling) {
         const { listUserFirms, readActiveFirmId } = await import("@/lib/firm-brand");
-        const firms = await listUserFirms(userId);
+        const firmRead = await settleWithin(listUserFirms(userId), POST_AUTH_DEADLINE_MS);
+        if (firmRead.status !== "value") {
+          setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+          return;
+        }
+        const firms = firmRead.value;
         const ownsFirm = firms.some((f) => f.owner_user_id === userId);
         const preferred = readActiveFirmId(userId);
         const insightFirmId =
@@ -175,11 +196,19 @@ export function LandingSignInSession({
         }
       }
 
-      const path = await resolveSignedInDestination(userId, {
-        door: "landing",
-        knownMeta: granted.data.user?.user_metadata as Record<string, unknown> | undefined,
+      const settled = await finishOwnerSignIn({
+        readDestination: () =>
+          resolveSignedInDestination(userId, {
+            door: "landing",
+            knownMeta:
+              (granted.data.user?.user_metadata as Record<string, unknown> | undefined) ?? {},
+          }),
       });
-      void navigate({ to: path, replace: true });
+      if (settled.status === "retry") {
+        setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+        return;
+      }
+      void navigate({ to: settled.path, replace: true });
     } catch (err: unknown) {
       const failure = explainPasswordSignInFailure(err);
       setSiUnconfirmed(failure.kind === "email_not_confirmed");
