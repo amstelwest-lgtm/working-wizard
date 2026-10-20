@@ -184,6 +184,7 @@ export async function downloadAdvisoryPackPdf(input: {
    * Page 1 keeps the signer and says the figures moved. The draft watermark stays off.
    */
   figuresChanged?: boolean;
+  liveHealth?: import("@/lib/health-snapshot").HealthScoreSnapshot | null;
 }): Promise<{ blob: Blob; filename: string; signed: boolean }> {
   const [{ pdf }, { AdvisoryPackPDF }] = await Promise.all([
     import("@react-pdf/renderer"),
@@ -207,6 +208,7 @@ export async function downloadAdvisoryPackPdf(input: {
   const sections: AdvisoryPackPdfSection[] = packSectionsForPdf(input.pack.content.sections, {
     signed: Boolean(stamp),
     firmName: stamp?.firmName ?? input.profile.firmName,
+    liveHealth: input.liveHealth,
   }).map((s) => ({
     title: s.title,
     body: s.body,

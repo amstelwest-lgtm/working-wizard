@@ -24,6 +24,9 @@ import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
+import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
+import { settleWithin } from "@/lib/bounded-load";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { handoffAssigneeName } from "@/lib/owner-handoff";
 import { describeActionHandoff } from "@/lib/action-handoff";
 import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
@@ -315,6 +318,8 @@ interface Props {
   focusDraftId?: string | null;
   /** Live scorecard ratios. Draft cards quote these, not a stored snapshot. */
   canonicalRatios?: Record<string, number> | null;
+  /** Live pillars, overall, weakest, and statement period. */
+  healthSnapshot?: HealthScoreSnapshot | null;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -616,6 +621,7 @@ export default function ActionPlanPanel({
   ownerSignoffStale = false,
   cashBelowFloor = false,
   canonicalRatios = null,
+  healthSnapshot = null,
   onOpenDraft,
   focusDraftId = null,
 }: Props) {
@@ -623,6 +629,7 @@ export default function ActionPlanPanel({
   const { profile, firms, firmId } = useAccountantProfile();
   const firmOwnerUserId = firms.find((firm) => firm.id === firmId)?.owner_user_id ?? null;
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -696,15 +703,28 @@ export default function ActionPlanPanel({
   }, [initialFilter]);
 
   // ── Load ───────────────────────────────────────────────────────────────────
+  const planErrorLine = initialFilter === "overdue" ? "Couldn't load overdue actions." : "Couldn't load the plan.";
   const refresh = useCallback(async () => {
     try {
-      const { data: plans } = await supabase
-        .from("action_plans")
-        .select("*")
-        .eq("client_id", clientId)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1);
+      const plansSettled = await settleWithin(
+        supabase
+          .from("action_plans")
+          .select("*")
+          .eq("client_id", clientId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1),
+        SHELL_GATE_TIMEOUT_MS,
+      );
+      if (plansSettled.status !== "value") {
+        setLoadError(planErrorLine);
+        return;
+      }
+      const { data: plans, error: plansError } = plansSettled.value;
+      if (plansError) {
+        setLoadError(planErrorLine);
+        return;
+      }
       let p = (plans?.[0] as Plan) ?? null;
       if (!p) {
         // Members cannot create plans — show empty read-only state instead.
@@ -742,8 +762,11 @@ export default function ActionPlanPanel({
       // Plan, items, and the assignee lists paint the board before notes,
       // hand-off runs, milestones, and mail, so the tab is not blank while
       // those follow. Runs stay on their own load, then pickups paint from them.
-      const [itsRes, empsRes, practice] = await Promise.all([
-        supabase.from("action_items_v").select("*").eq("plan_id", p.id).order("seq"),
+      const [itemsSettled, empsRes, practice] = await Promise.all([
+        settleWithin(
+          supabase.from("action_items_v").select("*").eq("plan_id", p.id).order("seq"),
+          SHELL_GATE_TIMEOUT_MS,
+        ),
         supabase
           .from("client_employees")
           .select("id,name,email,role")
@@ -765,7 +788,14 @@ export default function ActionPlanPanel({
           }
         })(),
       ]);
+      if (itemsSettled.status !== "value" || itemsSettled.value.error) {
+        setPlan(null);
+        setLoadError(planErrorLine);
+        return;
+      }
+      const itsRes = itemsSettled.value;
       const list = (itsRes.data ?? []) as Item[];
+      setLoadError(null);
       setItems(list);
       setEmployees(mergeActionPlanTeam((empsRes.data ?? []) as Employee[], practice));
       setLoading(false);
@@ -864,7 +894,7 @@ export default function ActionPlanPanel({
     } finally {
       setLoading(false);
     }
-  }, [clientId, isOwner, ownerView]);
+  }, [clientId, isOwner, ownerView, planErrorLine]);
 
   const assignToAgent = useCallback(
     async (item: Item, agent: AgentKey) => {
@@ -916,7 +946,6 @@ export default function ActionPlanPanel({
     void refresh().finally(() => {
       if (!live) return;
       window.clearTimeout(timer);
-      setLoadTimedOut(false);
     });
     return () => {
       live = false;
@@ -1575,10 +1604,10 @@ export default function ActionPlanPanel({
       </div>
     );
   }
-  if (loadTimedOut && !plan) {
+  if ((loadTimedOut || loadError) && !plan) {
     return (
-      <div className="rounded-xl border border-[#DBEAFE] bg-white p-6 text-sm text-[#102A43]">
-        Couldn't load the plan.
+      <div className="rounded-xl border border-[#DBEAFE] bg-white p-6 text-sm text-[#102A43]" role="alert">
+        {loadError ?? planErrorLine}
       </div>
     );
   }
@@ -1847,7 +1876,9 @@ export default function ActionPlanPanel({
                         pendingRecs.length === 1 ? "recommendation is" : "recommendations are"
                       } waiting to become dated, owned work.`
                     : "No actions yet. Start from an approved recommendation, add one manually, or import from Strategic Moves."
-                  : "Nothing matches this filter."}
+                  : filter === "overdue"
+                    ? "Nothing is overdue."
+                    : "Nothing matches this filter."}
               </p>
               {isOwner && items.length === 0 && (
                 <Button
@@ -1956,6 +1987,7 @@ export default function ActionPlanPanel({
                 layout="moves"
                 row={row}
                 canonicalRatios={canonicalRatios}
+                health={healthSnapshot}
                 primary={index === 0}
                 onOpen={onOpenApproved}
                 onInvite={onInviteAccountant}

@@ -7,7 +7,8 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
-import { readStatementMeta, statementSpanLabel } from "../../../src/lib/statement-period.ts";
+import { figuresPeriodLabelFrom, readStatementMeta, statementSpanLabel } from "../../../src/lib/statement-period.ts";
+import { healthSnapshotFromBooks, healthSnapshotPromptBlock } from "../../../src/lib/health-snapshot.ts";
 import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 import { callClaude } from "../ask-ai/anthropic.ts";
 import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
@@ -469,6 +470,9 @@ async function handleBrainPropose(req: Request): Promise<Response> {
         `${weakest.label} is the weakest pillar at ${weakest.score}. The first next step must target ${weakest.label}.`,
       );
     }
+    const periodLabel = figuresPeriodLabelFrom(liveFinancials, null, dateMarket);
+    const snapshot = healthSnapshotFromBooks({ health: liveHealth, periodLabel });
+    if (snapshot) contextLines.push(healthSnapshotPromptBlock(snapshot));
   }
   const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks, dateMarket);
   if (payablesBlock) contextLines.push(payablesBlock);

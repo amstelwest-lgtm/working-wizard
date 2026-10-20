@@ -6,11 +6,11 @@
 import { labelHealthScore } from "../src/lib/agent-analyst.ts";
 import { livePackMetrics, packSectionsForPdf } from "../src/lib/advisory-pack.ts";
 import { liveHealthFromBooks } from "../src/lib/health-score.ts";
+import { FIGURES_CHANGED_REGENERATE, healthSnapshotFromBooks, renderHealthNarrative } from "../src/lib/health-snapshot.ts";
 import { diagnosisFromWorkspace } from "../src/lib/milon-team-feed.ts";
 import { findingSentence } from "../src/lib/milon-team-activity.ts";
 import { ownerPresence } from "../src/lib/owner-presence.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
-import type { LiveHealthQuote } from "../src/lib/score-prose.ts";
 import { buildOverviewBrief } from "../supabase/functions/ask-ai/overview-brief.ts";
 
 function assert(cond: unknown, msg: string) {
@@ -106,18 +106,16 @@ const labeled = labelHealthScore({
   storedAsOf: "2026-10-19",
 });
 
-const quote: LiveHealthQuote = {
-  overall,
-  weakestLabel: weakest?.label ?? null,
-  weakestScore: weakest?.score ?? null,
-  label: live.displayLabel,
-  pillars: live.pillars.map((pillar) => ({ label: pillar.label, score: pillar.score })),
-};
+const snapshot = healthSnapshotFromBooks({
+  health: live,
+  periodLabel: "1 Oct 2025 – 30 Sep 2026",
+});
+assert(snapshot != null, "the fixture produces a snapshot");
 
 const note = findingSentence({
   title: "Health is 74, with Profit weakest at 60",
   detail: "Profit is the weakest pillar at 60 against an overall score of 74, tied with Financing at 60",
-  liveHealth: quote,
+  liveHealth: snapshot,
 });
 
 const presence = ownerPresence(
@@ -139,7 +137,7 @@ const presence = ownerPresence(
     market: ZA_MARKET,
   },
   null,
-  quote,
+  snapshot,
 );
 
 const shown = packSectionsForPdf([
@@ -169,15 +167,18 @@ assert(brief.weakest?.id === weakest?.id && brief.weakest?.score === weakest?.sc
 assert(pack.health.weakestPillar?.id === weakest?.id && pack.health.weakestPillar?.score === weakest?.score, "pack metrics weakest");
 assert(labeled.overall_basis === "live" && labeled.stored_score === 74 && labeled.overall !== 74, "stored 74 does not replace the run");
 
-assert(note.includes(`Health is ${overall}`), note);
-assert(note.includes(`with ${weakest?.label} weakest at ${weakest?.score}`), note);
-assert(note.includes(`overall score of ${overall}`), note);
-assert(note.includes(`${weakest?.label} is the weakest pillar at ${weakest?.score}`), note);
+assert(note.includes(FIGURES_CHANGED_REGENERATE), note);
+assert(!note.includes("74") && !note.includes("60"), note);
 assert(!/tied with/i.test(note), note);
+assert(!/profit/i.test(note), note);
+const rebuilt = renderHealthNarrative(snapshot);
+assert(rebuilt.includes(`${weakest?.label} is the weakest pillar at ${weakest?.score}`), rebuilt);
+assert(rebuilt.includes(`overall health score of ${overall}`), rebuilt);
+assert(!rebuilt.includes("74") && !/tied with/i.test(rebuilt), rebuilt);
 
 const analystCard = presence.agents.find((agent) => agent.agent === "analyst");
-assert(analystCard?.sentence.includes(`Health is ${overall}`), analystCard?.sentence ?? "no analyst card");
-assert(analystCard?.sentence.includes(`with ${weakest?.label} weakest at ${weakest?.score}`), analystCard?.sentence ?? "");
+assert(analystCard?.sentence.includes(FIGURES_CHANGED_REGENERATE), analystCard?.sentence ?? "no analyst card");
+assert(!analystCard?.sentence.includes("74"), analystCard?.sentence ?? "");
 
 assert(packBody.includes("scores 74 (watch)"), packBody);
 assert(packBody.includes("Cash (93)"), packBody);

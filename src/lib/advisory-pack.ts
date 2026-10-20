@@ -47,6 +47,11 @@ import { humanizeInternalFieldNames } from "./client-brain-questions.ts";
 import { formatMoney, formatMoneyCompact } from "./market/format.ts";
 import { canonicalScoreProse } from "./score-prose.ts";
 import {
+  presentHealthNarrative,
+  renderHealthNarrative,
+  type HealthScoreSnapshot,
+} from "./health-snapshot.ts";
+import {
   STATEMENT_DEPTH_DISCLOSURE,
   expectedImpactLabel,
   priorityLabel,
@@ -867,6 +872,12 @@ export function packScoreProse(text: string): string {
   return next;
 }
 
+function scoreBodyForSnapshot(text: string, live: HealthScoreSnapshot | null | undefined): string {
+  if (!live) return text;
+  const presented = presentHealthNarrative(text, live);
+  return presented.regenerate ? renderHealthNarrative(live) : presented.text;
+}
+
 /** Same compact form as the cash-tab floor and lowest-point tiles. */
 function packCompact(n: number, currency: string | null | undefined): string {
   return formatMoneyCompact(
@@ -887,9 +898,9 @@ export function signedPackNextStep(firmName: string | null | undefined): string 
  * here. A signed pack rewrites "reviews this pack first" at display time,
  * because the body was frozen before sign-off.
  *
- * The body is the stored snapshot. Live health, the cash-tab floor, and
- * current data gaps are not painted over it — a stale banner says the books
- * moved, and `packAsGeneratedLabel` says when this text was written.
+ * The body is the stored snapshot. Cash-floor copy and data gaps stay stored.
+ * When `liveHealth` is passed, a body whose pillar, overall, weakest, or
+ * period claims disagree is replaced by one sentence from that snapshot.
  * `packScoreProse` only renames legacy pillars and strips "/100".
  */
 export function packSectionsForPdf<T extends { key?: string; title: string; body: string; bullets?: string[] }>(
@@ -897,6 +908,8 @@ export function packSectionsForPdf<T extends { key?: string; title: string; body
   opts?: {
     signed?: boolean;
     firmName?: string | null;
+    /** When set, a section whose scores disagree with the live snapshot is replaced. */
+    liveHealth?: HealthScoreSnapshot | null;
   },
 ): T[] {
   return sections
@@ -907,14 +920,15 @@ export function packSectionsForPdf<T extends { key?: string; title: string; body
     })
     .map((section) => {
       const nextStep = section.key === "next_step" || section.title === "What happens now";
-      const body =
+      const storedBody =
         opts?.signed && nextStep && /reviews this pack first/i.test(section.body)
           ? signedPackNextStep(opts.firmName)
           : packScoreProse(section.body);
+      const body = scoreBodyForSnapshot(storedBody, opts?.liveHealth);
       return {
         ...section,
         body,
-        bullets: section.bullets?.map(packScoreProse),
+        bullets: section.bullets?.map((line) => scoreBodyForSnapshot(packScoreProse(line), opts?.liveHealth)),
       };
     });
 }

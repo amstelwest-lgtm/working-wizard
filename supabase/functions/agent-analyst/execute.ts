@@ -31,6 +31,11 @@ import {
   type AnalystToolName,
 } from "../../../src/lib/agent-analyst.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
+import {
+  healthSnapshotFromTool,
+  loadHealthScoreSnapshot,
+  snapshotEvidenceFields,
+} from "../../../src/lib/health-snapshot.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { overviewRatios } from "../../../src/lib/health-score.ts";
 import { periodMonthsOf } from "../../../src/lib/ratios.ts";
@@ -139,11 +144,13 @@ export async function executeAnalystTool(
       (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null,
       marketForClient({ market: ctx.market }),
     );
+    const scoreSnapshot = healthSnapshotFromTool({ ...record, ...labeled, period_label: periodLabel }, periodLabel);
     return {
       ...record,
       ...labeled,
       snapshot_id: snap ? String(snap.id) : null,
       period_label: periodLabel,
+      ...(scoreSnapshot ? snapshotEvidenceFields(scoreSnapshot) : {}),
     };
   }
 
@@ -296,10 +303,12 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   if (!cited.ok) return { error: cited.error, tool_blocked: true };
   const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
   const storedSeverity = severityWithFloor(severity, metrics);
+  const liveSnapshot = await loadHealthScoreSnapshot(ctx.db, ctx.clientId, ctx.market);
   const evidence = {
     ...cited.evidence,
     metrics,
     status: agentCopyStatus(storedSeverity),
+    ...(liveSnapshot ? snapshotEvidenceFields(liveSnapshot) : {}),
   };
   const warning = cited.warning;
   const recordKeys = [

@@ -7,6 +7,7 @@ import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
 import { DRAFT_OUT_OF_DATE, quoteLiveScoreOnly } from "@/lib/draft-figures";
+import { FIGURES_CHANGED_REGENERATE } from "@/lib/health-snapshot";
 import { AgentChipIcon } from "@/components/chrome-icons";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import { taxSampleCardVisible } from "@/lib/tax-specialist/enabled";
@@ -14,6 +15,67 @@ import { FirmStartHereLoader } from "@/components/firm-band-upgrade";
 import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 import "./owner-door.css";
+
+function narrativeMarker(line: string): boolean {
+  return line.trim().replace(/[.!?]$/, "") === FIGURES_CHANGED_REGENERATE;
+}
+
+function DraftNeedsCell({
+  needs,
+  onOpen,
+}: {
+  needs: OwnerNeedsView;
+  onOpen: () => void;
+}) {
+  const [lines, setLines] = useState(needs.draftLines);
+  useEffect(() => {
+    setLines(needs.draftLines);
+  }, [needs.draftLines]);
+  const live = needs.draftLiveSentence?.trim() || null;
+  const staleNarrative = lines.some(narrativeMarker) && Boolean(live);
+  const body = lines.map((line, index) => {
+    const stale = Boolean(needs.draftStale?.[index]);
+    const marker = narrativeMarker(line);
+    return (
+      <span
+        key={`${line}-${index}`}
+        data-draft-stale={stale ? "true" : undefined}
+        data-health-narrative={marker ? "stale" : undefined}
+        title={stale && !marker ? DRAFT_OUT_OF_DATE : undefined}
+      >
+        {line}
+        {stale && !marker && line !== DRAFT_OUT_OF_DATE ? (
+          <span className="owner-needs-refresh"> {DRAFT_OUT_OF_DATE}</span>
+        ) : null}
+      </span>
+    );
+  });
+  if (!staleNarrative) {
+    return (
+      <button type="button" className="owner-needs-item" onClick={onOpen}>
+        <b>{needs.draftsHeading}</b>
+        {body}
+      </button>
+    );
+  }
+  return (
+    <div className="owner-needs-item" data-health-narrative="stale">
+      <button type="button" onClick={onOpen}>
+        <b>{needs.draftsHeading}</b>
+        {body}
+      </button>
+      <button
+        type="button"
+        data-health-regenerate
+        onClick={() => {
+          if (live) setLines([live]);
+        }}
+      >
+        Regenerate
+      </button>
+    </div>
+  );
+}
 
 const MONEY_TOKEN =
   /(\$(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|R[\u00a0 ](?:\d{1,3}(?:[,\u00a0 ]\d{3})+|\d+)(?:\.\d+)?)/g;
@@ -106,24 +168,7 @@ export function OwnerNeedsStrip({
             <span key={line}>{line}</span>
           ))}
         </button>
-        <button type="button" className="owner-needs-item" onClick={openDrafts}>
-          <b>{needs.draftsHeading}</b>
-          {needs.draftLines.map((line, index) => {
-            const stale = Boolean(needs.draftStale?.[index]);
-            return (
-              <span
-                key={`${line}-${index}`}
-                data-draft-stale={stale ? "true" : undefined}
-                title={stale ? DRAFT_OUT_OF_DATE : undefined}
-              >
-                {line}
-                {stale && line !== DRAFT_OUT_OF_DATE ? (
-                  <span className="owner-needs-refresh"> {DRAFT_OUT_OF_DATE}</span>
-                ) : null}
-              </span>
-            );
-          })}
-        </button>
+        <DraftNeedsCell needs={needs} onOpen={openDrafts} />
         <button type="button" className="owner-needs-item" onClick={onDeliverables}>
           <b>{needs.deliverablesHeading}</b>
           {needs.deliverableLines.map((line) => (

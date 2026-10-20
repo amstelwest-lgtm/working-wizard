@@ -34,6 +34,8 @@ import {
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard, type ApprovedDraftTarget } from "@/components/owner-draft-card";
+import { HealthNarrativeLine } from "@/components/health-narrative-line";
+import { renderHealthNarrative } from "@/lib/health-snapshot";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
 import { marketForClient } from "@/lib/market";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
@@ -166,10 +168,12 @@ export function MilonTeamDesk({
   const emptyFeed =
     todayCount === 0 && jobs.length === 0 && activity.length === 0 && !signoffText;
 
+  const liveSentence = feed.healthQuote ? renderHealthNarrative(feed.healthQuote) : null;
   function checkedLine(item: TeamBriefingItem): string | null {
     const stamp = checkedStamp(latest[item.agent], feed.agents[item.agent]?.lastRunAt ?? null);
+    const period = item.id === "health" && feed.healthQuote?.periodLabel ? feed.healthQuote.periodLabel : item.source.asOf;
     return figuresCheckedLine(
-      item.source.asOf,
+      period,
       stamp ?? item.source.asOf,
       clock,
       live?.market ?? marketForClient(null),
@@ -306,10 +310,11 @@ export function MilonTeamDesk({
                       market: live?.market,
                       canonicalRatios,
                       liveHealth: feed.healthQuote,
+                      evidence: row.evidence,
                     });
                     const draft = draftFindingLabel(row);
                     const checked = figuresCheckedLine(
-                      findingPeriod(row),
+                      feed.healthQuote?.periodLabel ?? findingPeriod(row),
                       row.created_at,
                       clock,
                       live?.market ?? marketForClient(null),
@@ -331,6 +336,7 @@ export function MilonTeamDesk({
                           layout="desk"
                           row={row}
                           sentence={sentence}
+                          liveSentence={liveSentence}
                           canonicalRatios={canonicalRatios}
                           market={live?.market}
                           meta={meta}
@@ -344,7 +350,7 @@ export function MilonTeamDesk({
                       <li key={row.id} className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent}>
                         <div className="milon-desk-job-copy">
                           <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
-                          <p className="milon-desk-figure">{sentence}</p>
+                          <HealthNarrativeLine text={sentence} liveSentence={liveSentence} className="milon-desk-figure" />
                           {meta}
                         </div>
                       </li>

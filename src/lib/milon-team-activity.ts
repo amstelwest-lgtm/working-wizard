@@ -6,11 +6,17 @@ import { formatSnapshotRatio, groundAdvisoryNarrative } from "./advisory-narrati
 import { draftMetricUnit, repairDraftMetricUnits } from "./agent-bus";
 import { formatMoney, type MoneyMarket } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
-import { MONTHS } from "./market/date-presets";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
 import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
-import { canonicalScoreProse, preferLiveHealthProse, type LiveHealthQuote } from "./score-prose";
+import { canonicalScoreProse, type LiveHealthQuote } from "./score-prose";
+import {
+  badgeMonthFromPeriod,
+  presentHealthNarrative,
+  readStoredHealthSnapshot,
+  snapshotFromLiveQuote,
+  type HealthScoreSnapshot,
+} from "./health-snapshot";
 import { quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
 import { offsetInsideCalendarSpan, repairCalendarFigureLeaks, rewriteDraftMonthStamp } from "./statement-period";
 
@@ -150,12 +156,7 @@ export function checkedStamp(run: AgentRunRow | undefined, fallback: string | nu
 }
 
 function monthShort(value: string | null): string | null {
-  if (!value) return null;
-  const iso = /^(\d{4})-(\d{2})/.exec(value.trim());
-  if (iso) return MONTHS[Number(iso[2]) - 1] ?? null;
-  const head = value.trim().slice(0, 3).toLowerCase();
-  const idx = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(head);
-  return idx >= 0 ? MONTHS[idx] : null;
+  return badgeMonthFromPeriod(value);
 }
 
 /** Period plus the day the figures were checked. "Sep figures · checked 9 Oct 2026". */
@@ -604,8 +605,9 @@ export function findingSentence(input: {
   figures?: Record<string, number> | readonly { key: string; value: number }[] | null;
   market?: MoneyMarket;
   canonicalRatios?: Record<string, number> | null;
-  /** When set, a current-state health sentence quotes these numbers. */
-  liveHealth?: LiveHealthQuote | null;
+  /** When set, a current-state health sentence is checked against this snapshot. */
+  liveHealth?: LiveHealthQuote | HealthScoreSnapshot | null;
+  evidence?: unknown;
 }): string {
   const market = input.market ?? ZA_MARKET;
   const title = input.title.replace(/\s+/g, " ").trim();
@@ -614,13 +616,10 @@ export function findingSentence(input: {
   if (detail && detail !== title && !title.includes(detail)) {
     text = `${title.replace(/[.!?]$/, "")}. ${detail}`;
   }
-  text = quoteLiveScoreOnly(
-    preferLiveHealthProse(
-      formatFindingProse(text, input.figures ?? {}, market, input.canonicalRatios),
-      input.liveHealth,
-    ),
-    input.liveHealth?.overall,
-  );
+  const formatted = formatFindingProse(text, input.figures ?? {}, market, input.canonicalRatios);
+  const scored = quoteLiveScoreOnly(formatted, input.liveHealth?.overall);
+  const live = narrativeSnapshot(input.liveHealth);
+  text = presentHealthNarrative(scored, live, readStoredHealthSnapshot(input.evidence)).text;
   if (!text) return "";
   if (!/[.!?]$/.test(text)) text = `${text}.`;
   return text;
@@ -709,17 +708,28 @@ export function handoffParts(
 export function handoffLine(
   row: Pick<AgentMessageRow, "type" | "from_agent" | "to_agent" | "payload">,
   shortName: (agent: AgentKey) => string,
-  live?: LiveHealthQuote | null,
+  live?: LiveHealthQuote | HealthScoreSnapshot | null,
 ): string | null {
   const parts = handoffParts(row);
   if (!parts) return null;
   const named = canonicalScoreProse(parts.text);
   const quoted = quoteLiveScoreOnly(named, live?.overall ?? null);
-  const prose =
-    live && live.overall != null && Number.isFinite(live.overall)
-      ? preferLiveHealthProse(quoted, live)
-      : quoted;
+  const prose = presentHealthNarrative(
+    quoted,
+    narrativeSnapshot(live),
+    readStoredHealthSnapshot(row.payload),
+  ).text;
   return `${shortName(parts.from)} → ${shortName(parts.to)}: ${prose}`;
+}
+
+function narrativeSnapshot(
+  live: LiveHealthQuote | HealthScoreSnapshot | null | undefined,
+): HealthScoreSnapshot | null {
+  if (!live) return null;
+  if ("periodLabel" in live && Array.isArray(live.pillars) && live.pillars.some((pillar) => "id" in pillar)) {
+    return live as HealthScoreSnapshot;
+  }
+  return snapshotFromLiveQuote(live);
 }
 
 /** Owner review is never a sign-off. Only an accountant approval uses the check. */

@@ -38,7 +38,7 @@ export async function readWithOneRetry<T>(
 }
 
 /** Resolves when `work` settles, or with status "timeout" after `timeoutMs`. `work` is not cancelled. */
-export function settleWithin<T>(work: Promise<T>, timeoutMs: number): Promise<Settled<T>> {
+export function settleWithin<T>(work: PromiseLike<T>, timeoutMs: number): Promise<Settled<T>> {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (result: Settled<T>) => {

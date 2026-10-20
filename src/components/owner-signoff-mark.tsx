@@ -3,6 +3,7 @@
  * The date is the calendar day of the stored sign-off, without the clock.
  */
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
+import { staleSignoffLine } from "@/lib/signoff-status";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { formatDate } from "@/lib/market/format";
 import { useMarketFormat } from "@/contexts/market";
@@ -52,7 +53,9 @@ export function OwnerSignoffMark({
   const date = signoff.signed_off_at
     ? ownerSignoffDate(signoff.signed_off_at, market.timezone, market)
     : "";
-  const line = ownerSignoffLine(signoff.signed_off_by_name, date);
+  const line = isStale
+    ? staleSignoffLine(signoff.signed_off_by_name)
+    : ownerSignoffLine(signoff.signed_off_by_name, date);
   return (
     <div
       data-owner-signoff
@@ -68,17 +71,12 @@ export function OwnerSignoffMark({
           className="h-5 w-auto max-w-[4.5rem] object-contain object-left"
         />
       ) : null}
-      <p className="min-w-0 whitespace-normal text-[12px] font-medium leading-snug text-[#102A43] [overflow-wrap:break-word]">
+      <p
+        className="min-w-0 whitespace-normal text-[12px] font-medium leading-snug text-[#102A43] [overflow-wrap:break-word]"
+        data-signoff-stale-chip={isStale ? "true" : undefined}
+      >
         {line}
       </p>
-      {isStale ? (
-        <span
-          data-signoff-stale-chip
-          className="inline-flex items-center rounded-full bg-[#B7791F]/12 px-2 py-0.5 text-[11px] font-semibold leading-none text-[#B7791F]"
-        >
-          {OWNER_SIGNOFF_STALE_CHIP}
-        </span>
-      ) : null}
     </div>
   );
 }

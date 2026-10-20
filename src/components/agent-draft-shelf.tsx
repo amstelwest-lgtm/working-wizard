@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
+import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 
 /**
  * Drafts page list. These are agent_findings, not advisory packs.
@@ -11,11 +12,13 @@ export function AgentDraftShelf({
   findings,
   focusId,
   canonicalRatios = null,
+  health = null,
   onRefresh,
 }: {
   findings: readonly AgentFindingRow[];
   focusId?: string | null;
   canonicalRatios?: Record<string, number> | null;
+  health?: HealthScoreSnapshot | null;
   onRefresh?: () => void;
 }) {
   const rows = findings.filter((row) => {
@@ -44,6 +47,7 @@ export function AgentDraftShelf({
               layout="moves"
               row={row}
               canonicalRatios={canonicalRatios}
+              health={health}
               primary={index === 0}
               onRefresh={onRefresh}
             />

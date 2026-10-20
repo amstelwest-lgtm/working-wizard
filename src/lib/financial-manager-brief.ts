@@ -16,6 +16,7 @@ import {
 } from "./client-metrics.ts";
 import { CASH_NOT_ON_FILE, cashFloorCopy } from "./owner-answers.ts";
 import { presentHomeDraftBody, presentHomeDraftTitle } from "./owner-needs.ts";
+import { renderHealthNarrative, type HealthScoreSnapshot } from "./health-snapshot.ts";
 import type { SavedCashflowLike } from "./cash-runway.ts";
 import type { MoneyMarket } from "./market/format.ts";
 
@@ -65,8 +66,12 @@ export type BriefDraft = {
   detail?: string | null;
   /** Hash written with the draft. A mismatch with the live books is out of date. */
   figuresHash?: string | null;
+  /** Score snapshot stored with the draft. A mismatch suppresses the sentence. */
+  storedHealth?: HealthScoreSnapshot | null;
   /** True when the stored sentence or its hash no longer matches the live books. */
   refresh?: boolean;
+  /** Snapshot sentence. Shown only after Regenerate. */
+  liveSentence?: string | null;
 };
 
 export type FinancialManagerBrief = {
@@ -198,6 +203,8 @@ export function buildFinancialManagerBrief(input: {
   canonicalRatios?: Record<string, number> | null;
   /** Live floor-applied health score. Drafts quote this, never a stored comparison. */
   healthOverall?: number | null;
+  /** Pillars, weakest, and statement period. A draft that disagrees is not shown as current. */
+  healthSnapshot?: HealthScoreSnapshot | null;
   draftsReady?: boolean;
   actionsReady?: boolean;
   formatMoney: (amount: number) => string;
@@ -335,7 +342,12 @@ export function buildFinancialManagerBrief(input: {
   const drafts = (input.drafts ?? []).flatMap((row) => {
     const title = row.title.trim();
     if (!row.id || !title) return [];
-    const live = { overall: input.healthOverall, storedHash: row.figuresHash };
+    const live = {
+      overall: input.healthSnapshot?.overall ?? input.healthOverall,
+      storedHash: row.figuresHash,
+      health: input.healthSnapshot,
+      storedHealth: row.storedHealth ?? null,
+    };
     const presented = presentHomeDraftTitle(title, input.canonicalRatios, live);
     const body = row.detail?.trim()
       ? presentHomeDraftBody(row.detail, input.canonicalRatios, live)
@@ -343,7 +355,12 @@ export function buildFinancialManagerBrief(input: {
     const text = presented.text || body?.text || "";
     if (!text) return [];
     const refresh = presented.refresh || presented.stale || Boolean(body?.refresh || body?.stale);
-    return [{ id: row.id, title: text, refresh }];
+    return [{
+      id: row.id,
+      title: text,
+      refresh,
+      liveSentence: presented.regenerate && input.healthSnapshot ? renderHealthNarrative(input.healthSnapshot) : null,
+    }];
   });
   const chaseAction = actions.find((action) => action.button === "chase");
   const chase: ChaseDraftInput | null =

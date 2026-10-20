@@ -36,6 +36,7 @@ import {
 } from "../../../src/lib/client-metrics.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
+import { healthSnapshotFromTool, snapshotEvidenceFields } from "../../../src/lib/health-snapshot.ts";
 import {
   groundBrainSummaryRecord,
   ratiosForBrainProse,
@@ -463,6 +464,13 @@ export async function executeAgentTool(
         operating && typeof operating === "object" && !Array.isArray(operating)
           ? (operating as { templateId?: unknown }).templateId
           : null;
+      const periodLabel = figuresPeriodLabelFrom(
+        (snap?.financials && typeof snap.financials === "object"
+          ? snap.financials
+          : liveFinancials) as object | null,
+        (snap?.period_label as string | null) ?? null,
+        marketForClient({ market: clientRes.data?.market }),
+      );
       const brief = buildOverviewBrief({
         financials: liveFinancials,
         ratios: resolved,
@@ -475,13 +483,7 @@ export async function executeAgentTool(
         clientName,
         brainSummary: clientRes.data?.brain_summary ?? null,
         dateMarket: marketForClient({ market: clientRes.data?.market }),
-        periodLabel: figuresPeriodLabelFrom(
-          (snap?.financials && typeof snap.financials === "object"
-            ? snap.financials
-            : liveFinancials) as object | null,
-          (snap?.period_label as string | null) ?? null,
-          marketForClient({ market: clientRes.data?.market }),
-        ),
+        periodLabel,
         figuresAsOf: (snap?.period_date as string | null) ?? null,
         industry: adviceIndustryLabel({
           clientName,
@@ -495,12 +497,23 @@ export async function executeAgentTool(
         cashFloor: healthMetrics.outlook.floor,
       });
       const shaped = shapeHealth(resolved, runway, copyPack, brief.weakest?.id ?? null);
+      const scoreSnapshot = healthSnapshotFromTool(
+        {
+          overall: brief.health,
+          pillars: brief.pillars,
+          weakest: brief.weakest,
+          period_label: periodLabel,
+        },
+        periodLabel,
+      );
       return {
         ...shaped,
         overall: brief.health,
         health_label: brief.healthLabel,
         pillars: brief.pillars.map((p) => ({ id: p.id, label: p.label, score: p.score })),
         weakest: brief.weakest,
+        period_label: periodLabel,
+        ...(scoreSnapshot ? snapshotEvidenceFields(scoreSnapshot) : {}),
         cash_on_file: brief.cash,
         revenue: brief.revenue,
         creditor_days: brief.creditorDays,
