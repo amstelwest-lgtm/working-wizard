@@ -242,7 +242,7 @@ export function DataRequestsPanel({
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#102A43] dark:text-[#F4F7FB]">
-            {audience === "owner" ? "MILŌN needs" : "Data requests"}
+            {audience === "owner" ? "What your accountant needs" : "Data requests"}
           </span>
           <h3
             id="data-requests-heading"
@@ -259,6 +259,11 @@ export function DataRequestsPanel({
               ? "Without these, the diagnosis and forecast are weaker than they look. Each one says exactly what to send."
               : "Tracked asks. System rules open and close these on their own; anything you add by hand stays until you close it."}
           </p>
+          {audience === "owner" ? (
+            <p className="mt-2 text-[12px] leading-snug text-slate-500 dark:text-slate-400" data-request-hint>
+              Upload sends the file. I've sent this closes the request. Not applicable means it does not apply.
+            </p>
+          ) : null}
         </div>
         {audience === "accountant" ? (
           <div className="flex items-center gap-2">
@@ -374,12 +379,12 @@ export function DataRequestsPanel({
                       What to send: {kind.whatToSend}
                     </p>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  <div className="flex w-full basis-full flex-wrap items-center gap-1.5 max-[479px]:flex-col max-[479px]:items-stretch min-[480px]:w-auto min-[480px]:basis-auto min-[480px]:shrink-0">
                     {r.kind === "bank_balance" && onOpenForecast ? (
                       <button
                         type="button"
                         onClick={onOpenForecast}
-                        className={trackedAskClass(audience)}
+                        className={`${trackedAskClass(audience)} whitespace-nowrap max-[479px]:justify-center`}
                         data-open-forecast
                       >
                         Enter balance
@@ -388,7 +393,11 @@ export function DataRequestsPanel({
                       <button
                         type="button"
                         onClick={onUpload}
-                        className={trackedAskClass(audience)}
+                        className={`${
+                          audience === "owner"
+                            ? "inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#0B5FFF] bg-transparent px-2.5 py-1.5 text-[12px] font-semibold text-[#0B5FFF] hover:bg-[#DBEAFE] disabled:opacity-50 dark:border-[#60A5FA] dark:text-[#60A5FA]"
+                            : trackedAskClass(audience)
+                        } whitespace-nowrap max-[479px]:justify-center`}
                         data-upload
                       >
                         <FileUp className="h-3.5 w-3.5" aria-hidden /> Upload
@@ -398,7 +407,7 @@ export function DataRequestsPanel({
                       type="button"
                       disabled={busy}
                       onClick={() => void resolve(r, "fulfilled")}
-                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/40 px-2.5 py-1.5 text-[12px] font-semibold text-emerald-700 disabled:opacity-50 dark:text-emerald-300"
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-400/40 px-2.5 py-1.5 text-[12px] font-semibold text-emerald-700 disabled:opacity-50 max-[479px]:justify-center dark:text-emerald-300"
                       data-resolve="fulfilled"
                       title="Close this request because the data has been provided another way"
                     >
@@ -413,7 +422,7 @@ export function DataRequestsPanel({
                       type="button"
                       disabled={busy}
                       onClick={() => void resolve(r, "waived")}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-300/70 px-2.5 py-1.5 text-[12px] font-semibold text-slate-600 disabled:opacity-50 dark:border-white/15 dark:text-slate-300"
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-slate-300/70 px-2.5 py-1.5 text-[12px] font-semibold text-slate-600 disabled:opacity-50 max-[479px]:justify-center dark:border-white/15 dark:text-slate-300"
                       data-resolve="waived"
                     >
                       <X className="h-3.5 w-3.5" aria-hidden /> Not applicable
