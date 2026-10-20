@@ -184,6 +184,7 @@ import {
 } from "@/lib/client-route-search";
 import { askAgentFromHash, searchWithAskAgent } from "@/lib/ask-agent";
 import { ClientRail } from "@/components/client-studio-chrome";
+import { ClientOwnerInviteHost } from "@/components/client-owner-invite-dialog";
 import { ClientBackLink, ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
 import { clientBackTarget } from "@/lib/client-back";
 import { useOverlayHistory } from "@/lib/overlay-history";
@@ -858,6 +859,7 @@ function ClientView() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     () => resolveAccountantTab(search) ?? "overview",
   );
+  const [ownerInviteOpen, setOwnerInviteOpen] = useState(false);
   const [healthDrill, setHealthDrill] = useState<{
     token: number;
     pillarId: SpherePillar["id"];
@@ -949,6 +951,21 @@ function ClientView() {
       .then(() => toast.success("Action Plan PDF downloaded"))
       .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "PDF export failed"));
   };
+  const onClientSettings = canonicalizeAccountantSearch(search).tab === "settings";
+  useEffect(() => {
+    if (search.invite !== "owner" || !onClientSettings) return;
+    setOwnerInviteOpen(true);
+    void navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: (prev) => {
+        const next = { ...(prev as Record<string, unknown>) };
+        delete next.invite;
+        return next;
+      },
+      replace: true,
+    });
+  }, [search.invite, onClientSettings, clientId, navigate]);
   useEffect(() => {
     // Old ?tab= values are rewritten to tab + section in validateSearch.
     const next = resolveAccountantTab(search);
@@ -3999,12 +4016,19 @@ function ClientView() {
                   {firmClientCrumbLabel(client.name, actingAsThisClient)}
                 </b>
               </span>
-              <ClientCrumb
-                clientId={clientId}
-                activeTab={activeTab}
-                section={search.section ?? null}
-                agent={homeAgent}
-              />
+              {onClientSettings ? (
+                <>
+                  <span>/</span>
+                  <span>Settings</span>
+                </>
+              ) : (
+                <ClientCrumb
+                  clientId={clientId}
+                  activeTab={activeTab}
+                  section={search.section ?? null}
+                  agent={homeAgent}
+                />
+              )}
               {hasFigures ? (
                 <span className="aud">On file</span>
               ) : (
@@ -4020,10 +4044,19 @@ function ClientView() {
                 onNavigate={() => setMobileNavOpen(false)}
               />
               <div className="deliverable-main">
-                {pageBack ? (
+                {pageBack && !onClientSettings ? (
                   <ClientBackLink clientId={clientId} label={pageBack.label} tab={pageBack.tab} />
                 ) : null}
                 <div data-notes-tray-slot="" className="notes-tray-slot" />
+                <ClientOwnerInviteHost
+                  clientId={client.id}
+                  clientName={client.name}
+                  market={clientMarket}
+                  open={ownerInviteOpen}
+                  onOpenChange={setOwnerInviteOpen}
+                  showEntry={onClientSettings}
+                />
+                <div hidden={onClientSettings}>
                 {!hasFigures && activeTab === "summary" ? (
                   <div className="card hero-card first-figures" id="first-figures-card">
                     <div className="ff-copy">
@@ -5492,6 +5525,7 @@ function ClientView() {
                           onFocusHandled={() => setPlanFocusMove(null)}
                           onAnswer={onPlanAnswer}
                           onRegisterAdd={registerPlanAdd}
+                          onInviteOwner={() => setOwnerInviteOpen(true)}
                         />
                       )}
                     </Suspense>
@@ -5499,6 +5533,7 @@ function ClientView() {
                   </TabErrorBoundary>
                   </ClientSubpageFrame>
                   ) : null}
+                </div>
                 </div>
 
               </div>
