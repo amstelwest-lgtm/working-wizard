@@ -84,4 +84,70 @@ for (const root of ["src/reports", "src/lib"]) {
 }
 
 assert.deepEqual(problems, [], problems.join("\n"));
+
+/**
+ * '// date-ok' as a JSX text child: it follows a '}' that has already closed
+ * the expression. `prop={expr} // date-ok` stays a real comment inside the tag.
+ * `} · label // date-ok` is printed text.
+ */
+function jsxTextDateOk(line: string): boolean {
+  const marker = line.search(/\/\/\s*date-ok/);
+  if (marker < 0) return false;
+  const before = line.slice(0, marker);
+  let depth = 0;
+  let closed = false;
+  for (const char of before) {
+    if (char === "{") depth++;
+    else if (char === "}") {
+      if (depth > 0) depth--;
+      if (depth === 0) closed = true;
+    }
+  }
+  if (depth !== 0 || !closed) return false;
+  if (/=\s*\{[^}\n]*\}\s*$/.test(before)) return false;
+  return (
+    /\}\s*\/\/\s*date-ok/.test(line) || before.slice(before.lastIndexOf("}") + 1).trim().length > 0
+  );
+}
+
+assert.equal(
+  jsxTextDateOk("} · Outcome goal // date-ok: action plan quarter stamp, not a day range"),
+  true,
+);
+assert.equal(jsxTextDateOk("{label} // date-ok: week row label, not a calendar span"), true);
+assert.equal(
+  jsxTextDateOk("value={draft.period_label} // date-ok: editable plan quarter, not a day range"),
+  false,
+);
+assert.equal(
+  jsxTextDateOk(
+    'w.period_label.replace(/^Week /i, "W") // date-ok: week axis label, not a calendar span',
+  ),
+  false,
+);
+
+function tsxFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) out.push(...tsxFiles(path));
+    else if (name.endsWith(".tsx")) out.push(path);
+  }
+  return out;
+}
+
+const textChildLeaks: string[] = [];
+for (const root of ["src/components", "src/reports"]) {
+  for (const file of tsxFiles(root)) {
+    const rel = relative(process.cwd(), file);
+    readFileSync(file, "utf8")
+      .split("\n")
+      .forEach((line, index) => {
+        if (!jsxTextDateOk(line)) return;
+        textChildLeaks.push(`${rel}:${index + 1} ${line.trim()}`);
+      });
+  }
+}
+
+assert.deepEqual(textChildLeaks, [], textChildLeaks.join("\n"));
 console.log("cash-forecast-week-label-test: ok");
