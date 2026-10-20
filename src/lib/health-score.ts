@@ -665,9 +665,26 @@ export function cashPillarFollowsForecast(
      * A flat zero series is the same case when the caller does not pass this.
      */
     hasEvidence?: boolean;
+    /** False when the cash balance itself was not read. The pillar is left out. */
+    cashOnFile?: boolean;
   },
 ): OverallHealth {
   if (input.hasEvidence === false) return health;
+  const openingFlat =
+    input.opening == null || !Number.isFinite(input.opening) || Math.abs(input.opening) < 0.5;
+  const closingsFlat = (input.closings ?? []).every((n) => !Number.isFinite(n) || Math.abs(n) < 0.5);
+  // No cash line. A floor of 0 with a flat series is the missing-cash placeholder,
+  // not a breach. Leave Cash out of the average and do not force Critical.
+  const cashNotOnFile =
+    input.cashOnFile === false ||
+    (input.cashOnFile !== true && input.floor === 0 && openingFlat && closingsFlat);
+  if (cashNotOnFile) {
+    const pillars = health.pillars.map((pillar) => {
+      if (pillar.id !== "cash") return pillar;
+      return { ...pillar, score: null, status: "at_risk" as const, note: null };
+    });
+    return overallFromPillars(pillars);
+  }
   if (input.openingMissing) {
     const pillars = health.pillars.map((pillar) => {
       if (pillar.id !== "cash") return pillar;
@@ -685,9 +702,6 @@ export function cashPillarFollowsForecast(
   // Thirteen zeros under the fallback floor are not a forecast. They used to
   // mint Cash 25 / Critical on a file with no books.
   const closings = input.closings ?? [];
-  const openingFlat =
-    input.opening == null || !Number.isFinite(input.opening) || Math.abs(input.opening) < 0.5;
-  const closingsFlat = closings.every((n) => !Number.isFinite(n) || Math.abs(n) < 0.5);
   if (input.hasEvidence !== true && openingFlat && closingsFlat) return health;
   const openingUnder =
     input.opening != null && Number.isFinite(input.opening) && input.opening < floor;
