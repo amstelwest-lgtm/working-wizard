@@ -75,7 +75,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
       {children}
       <LandingFloatGate />
       <NoteArchiveSheet />
-      <Toaster position="top-right" richColors offset={16} style={{ zIndex: 200 }} />
+      <Toaster position="top-right" richColors offset={16} style={{ zIndex: 70 }} />
     </ChromeProviders>
   );
 }
@@ -86,7 +86,7 @@ export function PublicChrome() {
     <ChromeProviders>
       <LandingFloatGate />
       <NoteArchiveSheet />
-      <Toaster position="top-right" richColors offset={16} style={{ zIndex: 200 }} />
+      <Toaster position="top-right" richColors offset={16} style={{ zIndex: 70 }} />
     </ChromeProviders>
   );
 }
