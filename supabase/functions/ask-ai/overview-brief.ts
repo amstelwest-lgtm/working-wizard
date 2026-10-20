@@ -44,7 +44,7 @@ export type OverviewPillar = {
   id: "profit" | "assets" | "financing" | "cash";
   label: string;
   score: number | null;
-  status: "healthy" | "at_risk" | "critical";
+  status: "healthy" | "at_risk" | "critical" | null;
 };
 
 export type OverviewBrief = {
@@ -136,7 +136,9 @@ function chipLabel(status: "healthy" | "at_risk" | "critical"): "Healthy" | "Wat
 
 const NON_FINITE_DAY_KEYS = new Set(["Creditor Days", "Inventory Days", "Working Capital Days"]);
 
-function finiteDisplayRatios(raw: Record<string, number> | null | undefined): Record<string, number> {
+function finiteDisplayRatios(
+  raw: Record<string, number | null> | null | undefined,
+): Record<string, number> {
   const out: Record<string, number> = {};
   if (!raw) return out;
   for (const [key, val] of Object.entries(raw)) {

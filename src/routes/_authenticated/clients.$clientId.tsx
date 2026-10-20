@@ -112,6 +112,7 @@ import {
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
   liveHealthFromBooks,
+  numberRatioRecord,
   healthWithoutEvidence,
   NOT_SCORED_YET_LABEL,
   type OverallHealth,
@@ -120,6 +121,7 @@ import { playbookKeyForRatioName } from "@/lib/playbook-key";
 import { countOpenRatioQueries, ratioQueryLabel } from "@/lib/ratio-queries";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
+import type { RatioResult } from "@/reports/health-scorecard";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -3331,7 +3333,7 @@ function ClientView() {
     return pdf(
       HealthScorecardPDF({
         smeData: { name: client.name, period: periodLabel },
-        ratioResults,
+        ratioResults: ratioResults as RatioResult[],
         accountantProfile: profile,
         cashRunwayWeeks: effectiveRunway,
         overallHealth,
@@ -3877,7 +3879,7 @@ function ClientView() {
   const reportsReady = clientReportsReadyCount(financials);
   const reportsLine = reportsHomeReadyLine(reportsReady);
   const canonicalRatios = useMemo(
-    () => scorecardRatiosFromFinancials(financials, { fyStartMonth }),
+    () => numberRatioRecord(scorecardRatiosFromFinancials(financials, { fyStartMonth })),
     [financials, fyStartMonth],
   );
   const homeNeeds = useMemo(() => {
