@@ -12,7 +12,7 @@ import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
 import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
 import { canonicalScoreProse, preferLiveHealthProse, type LiveHealthQuote } from "./score-prose";
 import { quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
-import { rewriteDraftMonthStamp } from "./statement-period";
+import { offsetInsideCalendarSpan, repairCalendarFigureLeaks, rewriteDraftMonthStamp } from "./statement-period";
 
 export const TODAY_RATIO_CAP = 3;
 
@@ -309,6 +309,7 @@ function applyReplacements(
   if (!raws.length) return text;
   const pattern = raws.map((raw) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
   return text.replace(new RegExp(`(?<![R$£€][ \\u00a0\\u202f]?)(?<![\\d.])(?:${pattern})(?!\\d)(?!\\.\\d)`, "g"), (match, offset: number) => {
+    if (offsetInsideCalendarSpan(text, offset, match.length)) return match;
     const after = text.slice(offset + match.length, offset + match.length + 20);
     if (/^\s+out of\s+100\b/i.test(after) || /^\s*\/\s*100\b/.test(after)) return match;
     const window = text.slice(Math.max(0, offset - 80), offset).toLowerCase();
@@ -378,7 +379,8 @@ function scrubRawDecimals(
   figures: Record<string, number> | readonly { key: string; value: number }[] | null | undefined,
   market: MoneyMarket,
 ): string {
-  let next = text;
+  const dateMarket = { locale: market.locale };
+  let next = repairCalendarFigureLeaks(text, dateMarket);
   const replacements: { raw: string; formatted: string; unit: ReturnType<typeof draftMetricUnit> }[] = [];
   for (const { key, value } of figureEntries(figures)) {
     const formatted = formatFigure(key, value, market);
@@ -387,7 +389,7 @@ function scrubRawDecimals(
       if (worthReplacing(raw, formatted, value)) replacements.push({ raw, formatted, unit });
     }
   }
-  next = applyReplacements(next, replacements);
+  next = repairCalendarFigureLeaks(applyReplacements(next, replacements), dateMarket);
   return next.replace(/-?\d+\.\d{3,}/g, (raw, offset: number) => {
     const window = next.slice(Math.max(0, offset - 28), offset + raw.length + 16).toLowerCase();
     const n = Number(raw);

@@ -24,6 +24,7 @@ import { useMarket } from "@/contexts/market";
 import { useNotes } from "@/contexts/notes";
 import { noteBelongsToRatio } from "@/lib/ratio-queries";
 import { healthBandLabel } from "@/lib/ratios";
+import { playbookDrawerStatusLabel } from "@/lib/playbook-status";
 import { groundPlaybookSteps } from "@/lib/intervention-grounding";
 import { DigLeaf } from "@/components/health-drill-cue";
 import { useOverlayHistory } from "@/lib/overlay-history";
@@ -229,6 +230,7 @@ export function PlaybookDrawer({
   const displayNumber = new Map(displaySteps.map((step, index) => [step.step_number, index + 1]));
 
   const tier = TIER_STYLES[displayTier] ?? TIER_STYLES.at_risk;
+  const statusLabel = playbookDrawerStatusLabel(clientId, displayTier);
   const grouped = groupByTimeframe(displaySteps);
 
   return (
@@ -251,11 +253,14 @@ export function PlaybookDrawer({
             <SheetTitle className="text-[#102A43] dark:text-[#F4F7FB] flex-1 text-left text-base font-semibold leading-tight">
               {ratioName}
             </SheetTitle>
-            <span
-              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${tier.badge}`}
-            >
-              {tier.label}
-            </span>
+            {statusLabel ? (
+              <span
+                data-playbook-status={statusLabel}
+                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${tier.badge}`}
+              >
+                {statusLabel}
+              </span>
+            ) : null}
           </div>
           <div className="mt-2 flex items-center justify-between gap-3">
             <p className="text-xs font-normal text-[#3D5270] dark:text-[#C5D4E4]">

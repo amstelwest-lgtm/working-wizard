@@ -34,6 +34,15 @@ import {
 } from "@/lib/client-brain-propose";
 import { useBrainDrip } from "@/hooks/use-brain-drip";
 import {
+  DISCARD_BRAIN_ANSWER,
+  clearBrainAnswerDraft,
+  draftHasContent,
+  listBrainAnswerDrafts,
+  readBrainAnswerDraft,
+  writeBrainAnswerDraft,
+  type BrainAnswerDraft,
+} from "@/lib/brain-answer-draft";
+import {
   BUSINESS_MAP_FIELDS,
   artifactKindLabel,
   factSourceLabel,
@@ -128,10 +137,18 @@ function formatWhen(iso: string | null | undefined, fmt: (d: Date | string) => s
   return fmt(iso);
 }
 
-function StatusDot({ answered, asking }: { answered: boolean; asking?: boolean }) {
-  const label = answered ? "Answered" : asking ? "Asking now" : "Empty";
+function StatusDot({
+  answered,
+  asking,
+  unsaved,
+}: {
+  answered: boolean;
+  asking?: boolean;
+  unsaved?: boolean;
+}) {
+  const label = answered ? "Answered" : unsaved ? "Unsaved" : asking ? "Asking now" : "Empty";
   return (
-    <span className={`status-tag ${answered ? "ok" : asking ? "gold" : "faint"}`}>{label}</span>
+    <span className={`status-tag ${answered ? "ok" : unsaved || asking ? "gold" : "faint"}`}>{label}</span>
   );
 }
 
@@ -249,6 +266,7 @@ export function ClientBrainSummary({
   const [fillDialog, setFillDialog] = useState<FillDialog>(null);
   const [fillText, setFillText] = useState("");
   const [fillSaving, setFillSaving] = useState(false);
+  const [answerDrafts, setAnswerDrafts] = useState<Record<string, BrainAnswerDraft>>({});
   const [factText, setFactText] = useState("");
   const [factCategory, setFactCategory] = useState<(typeof FACT_CATEGORIES)[number]["id"]>("other");
   const [factSaving, setFactSaving] = useState(false);
@@ -484,14 +502,42 @@ export function ClientBrainSummary({
     }
   };
 
+  const reloadAnswerDrafts = useCallback(() => {
+    setAnswerDrafts(listBrainAnswerDrafts(clientId, "accountant"));
+  }, [clientId]);
+
+  useEffect(() => {
+    reloadAnswerDrafts();
+  }, [reloadAnswerDrafts]);
+
   const closeFill = () => {
     setFillDialog(null);
     setFillText("");
   };
 
-  const openFill = (next: FillDialog) => {
+  const rememberFill = (key: string, text: string) => {
+    setFillText(text);
+    setAnswerDrafts(writeBrainAnswerDraft(clientId, "accountant", key, { text }));
+  };
+
+  const openFill = (next: Exclude<FillDialog, null>) => {
+    const saved = readBrainAnswerDraft(clientId, "accountant", next.key);
     setFillDialog(next);
-    setFillText("");
+    setFillText(saved?.text ?? "");
+  };
+
+  const requestCloseFill = () => {
+    if (fillSaving) return;
+    const text = fillText.trim();
+    const key = fillDialog?.key;
+    if (!text) {
+      if (key) setAnswerDrafts(clearBrainAnswerDraft(clientId, "accountant", key));
+      closeFill();
+      return;
+    }
+    if (typeof window !== "undefined" && !window.confirm(DISCARD_BRAIN_ANSWER)) return;
+    if (key) setAnswerDrafts(clearBrainAnswerDraft(clientId, "accountant", key));
+    closeFill();
   };
 
   const routeQuestionAnswer = (q: { key: string; prompt: string; audience: "owner" | "accountant" | "both"; source: string }) => {
@@ -528,6 +574,7 @@ export function ClientBrainSummary({
         blob.business_map = { ...current, [fillDialog.key]: text };
         await saveBrainSummaryBlob(blob);
         toast.success("Business map updated");
+        setAnswerDrafts(clearBrainAnswerDraft(clientId, "accountant", fillDialog.key));
       } else {
         const now = new Date().toISOString();
         const { error } = await supabase.from("client_brain_questions").upsert(
@@ -545,6 +592,7 @@ export function ClientBrainSummary({
         );
         if (error) throw error;
         toast.success("Answer saved");
+        setAnswerDrafts(clearBrainAnswerDraft(clientId, "accountant", fillDialog.key));
         await load();
       }
       closeFill();
@@ -856,11 +904,14 @@ export function ClientBrainSummary({
             <ul className="brain-list">
               {BUSINESS_MAP_FIELDS.map((field) => {
                 const value = businessMap[field.key];
+                const unsaved = !value && draftHasContent(answerDrafts[field.key]);
                 return (
                   <li key={field.key} className="brain-row">
                     <div>
                       <div className="brain-row-title">{field.label}</div>
-                      <div className="brain-row-meta">{value || "Empty"}</div>
+                      <div className="brain-row-meta">
+                        {value || (unsaved ? answerDrafts[field.key]?.text : "") || "Empty"}
+                      </div>
                     </div>
                     <div className="brain-row-actions">
                       {!value && (
@@ -872,7 +923,7 @@ export function ClientBrainSummary({
                           }
                         />
                       )}
-                      <StatusDot answered={!!value} />
+                      <StatusDot answered={!!value} unsaved={unsaved} />
                     </div>
                   </li>
                 );
@@ -1084,30 +1135,33 @@ export function ClientBrainSummary({
               </p>
             ) : (
               <ul className="brain-list">
-                {outstandingRows.map((q) => (
+                {outstandingRows.map((q) => {
+                  const unsaved = draftHasContent(answerDrafts[q.key]);
+                  return (
                   <li key={q.key} className="brain-row">
                     <div>
                       <div className="brain-row-title">{q.prompt}</div>
                       <div className="brain-row-meta">
-                        {humanQuestionLabel(q.key)}
-                        {q.audience !== "both" ? ` · ${q.audience}` : ""}
+                        {unsaved ? answerDrafts[q.key]?.text : humanQuestionLabel(q.key)}
+                        {!unsaved && q.audience !== "both" ? ` · ${q.audience}` : ""}
                       </div>
                     </div>
                     <div className="brain-row-actions">
                       <AnswerButton onClick={() => routeQuestionAnswer(q)} />
-                      <span className={`status-tag ${drip?.key === q.key ? "gold" : "faint"}`}>
-                        {drip?.key === q.key ? "Asking now" : "Empty"}
+                      <span className={`status-tag ${unsaved || drip?.key === q.key ? "gold" : "faint"}`}>
+                        {unsaved ? "Unsaved" : drip?.key === q.key ? "Asking now" : "Empty"}
                       </span>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </section>
         </div>
       )}
 
-      <Dialog open={fillDialog != null} onOpenChange={(open) => !open && closeFill()}>
+      <Dialog open={fillDialog != null} onOpenChange={(open) => !open && requestCloseFill()}>
         <DialogContent className="border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]">
           <DialogHeader>
             <DialogTitle>
@@ -1124,14 +1178,18 @@ export function ClientBrainSummary({
             <Textarea
               id="brain-fill-answer"
               value={fillText}
-              onChange={(e) => setFillText(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (fillDialog) rememberFill(fillDialog.key, next);
+                else setFillText(next);
+              }}
               className="bg-[#0a0e1a] border-slate-700"
               rows={4}
               placeholder="Type the answer…"
             />
           </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={closeFill} disabled={fillSaving}>
+            <Button type="button" variant="ghost" onClick={requestCloseFill} disabled={fillSaving}>
               Cancel
             </Button>
             <Button type="button" onClick={() => void saveFill()} disabled={fillSaving}>

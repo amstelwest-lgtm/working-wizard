@@ -118,6 +118,8 @@ export function statementSpanLabel(input: {
     if (fresh) return fresh;
   }
   if (!stored) return null;
+  const repaired = repairCalendarFigureLeaks(stored, input.market);
+  if (repaired !== stored) return repaired;
   if (!isBakedDayRangeLabel(stored)) return stored;
   const order = storedLabelOrder(stored);
   const want = dateOrder(input.market.locale) === "us" ? "month" : "day";
@@ -526,6 +528,186 @@ export function rewriteSavedMonthStamp(text: string): string {
  * Stored draft prose. A month with no day ("Sep 2026 accounts") is the file
  * stamp. A dated day ("8 Sep 2026") stays. Display only.
  */
+const MONTH_SRC = MONTHS.join("|");
+const DAY_SRC = String.raw`\d+(?:\.\d+)?%|\d+\s+days|\d{1,2}`;
+const DASH_SRC = String.raw`[\u2010-\u2015-]`;
+
+type CalendarSlot = { year: number; month: number; day: number };
+
+function monthNumber(name: string): number | null {
+  const head = name.slice(0, 3).toLowerCase();
+  const idx = MONTHS.findIndex((month) => month.toLowerCase() === head);
+  return idx >= 0 ? idx + 1 : null;
+}
+
+function tokenLeaked(token: string): boolean {
+  return /%|\bdays\b/i.test(token);
+}
+
+/**
+ * A day slot that a percent or day-count replacement overwrote.
+ * `100%` is the spelling of a 1.0 ratio, which is what used to replace day 1.
+ * A 1–31 percent is the day with a leaked % sign. `allowScaled` is only for
+ * a slot that is already inside a date, not a bare "100% Sep 2026".
+ */
+function dayFromToken(token: string, allowScaled: boolean): number | null {
+  const text = token.trim();
+  const days = /^(\d+)\s+days$/i.exec(text);
+  if (days) {
+    const n = Number(days[1]);
+    return n >= 1 && n <= 31 ? n : null;
+  }
+  const pct = /^(\d+(?:\.\d+)?)%$/.exec(text);
+  if (pct) {
+    const n = Number(pct[1]);
+    if (Number.isInteger(n) && n >= 1 && n <= 31) return n;
+    if (allowScaled && n === 100) return 1;
+    return null;
+  }
+  if (!/^\d{1,2}$/.test(text)) return null;
+  const n = Number(text);
+  return n >= 1 && n <= 31 ? n : null;
+}
+
+function isoDay(slot: CalendarSlot): string {
+  return `${slot.year}-${String(slot.month).padStart(2, "0")}-${String(slot.day).padStart(2, "0")}`;
+}
+
+function emitRange(start: CalendarSlot, end: CalendarSlot, market: DateMarket): string | null {
+  const label = formatDateRange(isoDay(start), isoDay(end), market);
+  return label && label !== "—" ? label : null;
+}
+
+function slot(year: string, monthName: string, dayToken: string, allowScaled: boolean): CalendarSlot | null {
+  const month = monthNumber(monthName);
+  const day = dayFromToken(dayToken, allowScaled);
+  const y = Number(year);
+  if (!month || !day || !Number.isInteger(y) || y < 1900 || y > 2200) return null;
+  return { year: y, month, day };
+}
+
+/**
+ * A percent that landed in a calendar day. "Jan 100% – Sep 30, 2026" was
+ * "Jan 1 – Sep 30, 2026" after a 1.0 ratio was written as 100%.
+ * The repaired span is `formatDateRange` in the client's market.
+ * A date that was not overwritten is left as written.
+ */
+export function repairCalendarFigureLeaks(text: string, market: DateMarket): string {
+  if (!text || !market) return text;
+  const usCross = new RegExp(
+    `\\b(${MONTH_SRC})\\s+(${DAY_SRC}),\\s*(\\d{4})\\s*${DASH_SRC}\\s*(${MONTH_SRC})\\s+(${DAY_SRC}),\\s*(\\d{4})\\b`,
+    "gi",
+  );
+  const zaCross = new RegExp(
+    `\\b(${DAY_SRC})\\s+(${MONTH_SRC})\\s+(\\d{4})\\s*${DASH_SRC}\\s*(${DAY_SRC})\\s+(${MONTH_SRC})\\s+(\\d{4})\\b`,
+    "gi",
+  );
+  const usYear = new RegExp(
+    `\\b(${MONTH_SRC})\\s+(${DAY_SRC})\\s*${DASH_SRC}\\s*(${MONTH_SRC})\\s+(${DAY_SRC}),\\s*(\\d{4})\\b`,
+    "gi",
+  );
+  const zaYear = new RegExp(
+    `\\b(${DAY_SRC})\\s+(${MONTH_SRC})\\s*${DASH_SRC}\\s*(${DAY_SRC})\\s+(${MONTH_SRC})\\s+(\\d{4})\\b`,
+    "gi",
+  );
+  const usMonth = new RegExp(
+    `\\b(${MONTH_SRC})\\s+(${DAY_SRC})\\s*${DASH_SRC}\\s*(${DAY_SRC}),\\s*(\\d{4})\\b`,
+    "gi",
+  );
+  const zaMonth = new RegExp(
+    `\\b(${DAY_SRC})\\s*${DASH_SRC}\\s*(${DAY_SRC})\\s+(${MONTH_SRC})\\s+(\\d{4})\\b`,
+    "gi",
+  );
+  const usDay = new RegExp(`\\b(${MONTH_SRC})\\s+(${DAY_SRC}),\\s*(\\d{4})\\b`, "gi");
+  const zaDay = new RegExp(`\\b(${DAY_SRC})\\s+(${MONTH_SRC})\\s+(\\d{4})\\b`, "gi");
+
+  const paint = (start: CalendarSlot, end: CalendarSlot) => emitRange(start, end, market);
+
+  let next = text.replace(usCross, (full, m1: string, d1: string, y1: string, m2: string, d2: string, y2: string) => {
+    if (!tokenLeaked(d1) && !tokenLeaked(d2)) return full;
+    const start = slot(y1, m1, d1, true);
+    const end = slot(y2, m2, d2, true);
+    if (!start || !end) return full;
+    return paint(start, end) ?? full;
+  });
+  next = next.replace(zaCross, (full, d1: string, m1: string, y1: string, d2: string, m2: string, y2: string) => {
+    if (!tokenLeaked(d1) && !tokenLeaked(d2)) return full;
+    const start = slot(y1, m1, d1, true);
+    const end = slot(y2, m2, d2, true);
+    if (!start || !end) return full;
+    return paint(start, end) ?? full;
+  });
+  next = next.replace(usYear, (full, m1: string, d1: string, m2: string, d2: string, year: string) => {
+    if (!tokenLeaked(d1) && !tokenLeaked(d2)) return full;
+    const start = slot(year, m1, d1, true);
+    const end = slot(year, m2, d2, true);
+    if (!start || !end) return full;
+    return paint(start, end) ?? full;
+  });
+  next = next.replace(zaYear, (full, d1: string, m1: string, d2: string, m2: string, year: string) => {
+    if (!tokenLeaked(d1) && !tokenLeaked(d2)) return full;
+    const start = slot(year, m1, d1, true);
+    const end = slot(year, m2, d2, true);
+    if (!start || !end) return full;
+    return paint(start, end) ?? full;
+  });
+  next = next.replace(usMonth, (full, month: string, d1: string, d2: string, year: string) => {
+    if (!tokenLeaked(d1) && !tokenLeaked(d2)) return full;
+    const start = slot(year, month, d1, true);
+    const end = slot(year, month, d2, true);
+    if (!start || !end) return full;
+    return paint(start, end) ?? full;
+  });
+  next = next.replace(zaMonth, (full, d1: string, d2: string, month: string, year: string) => {
+    if (!tokenLeaked(d1) && !tokenLeaked(d2)) return full;
+    const start = slot(year, month, d1, true);
+    const end = slot(year, month, d2, true);
+    if (!start || !end) return full;
+    return paint(start, end) ?? full;
+  });
+  next = next.replace(usDay, (full, month: string, day: string, year: string) => {
+    if (!tokenLeaked(day)) return full;
+    const one = slot(year, month, day, true);
+    if (!one) return full;
+    return paint(one, one) ?? full;
+  });
+  next = next.replace(zaDay, (full, day: string, month: string, year: string) => {
+    // "30% Sep 2026" can be a real percent beside a month. Only a leaked day-count is a date.
+    if (!/\bdays\b/i.test(day)) return full;
+    const one = slot(year, month, day, false);
+    if (!one) return full;
+    return paint(one, one) ?? full;
+  });
+  return next;
+}
+
+const CALENDAR_SPAN_PATTERNS = [
+  `\\b(?:${MONTH_SRC})\\s+(?:${DAY_SRC}),\\s*\\d{4}\\s*${DASH_SRC}\\s*(?:${MONTH_SRC})\\s+(?:${DAY_SRC}),\\s*\\d{4}\\b`,
+  `\\b(?:${DAY_SRC})\\s+(?:${MONTH_SRC})\\s+\\d{4}\\s*${DASH_SRC}\\s*(?:${DAY_SRC})\\s+(?:${MONTH_SRC})\\s+\\d{4}\\b`,
+  `\\b(?:${MONTH_SRC})\\s+(?:${DAY_SRC})\\s*${DASH_SRC}\\s*(?:${MONTH_SRC})\\s+(?:${DAY_SRC}),\\s*\\d{4}\\b`,
+  `\\b(?:${DAY_SRC})\\s+(?:${MONTH_SRC})\\s*${DASH_SRC}\\s*(?:${DAY_SRC})\\s+(?:${MONTH_SRC})\\s+\\d{4}\\b`,
+  `\\b(?:${MONTH_SRC})\\s+(?:${DAY_SRC})\\s*${DASH_SRC}\\s*(?:${DAY_SRC}),\\s*\\d{4}\\b`,
+  `\\b(?:${DAY_SRC})\\s*${DASH_SRC}\\s*(?:${DAY_SRC})\\s+(?:${MONTH_SRC})\\s+\\d{4}\\b`,
+  `\\b(?:${MONTH_SRC})\\s+(?:${DAY_SRC}),\\s*\\d{4}\\b`,
+  `\\b(?:${DAY_SRC})\\s+(?:${MONTH_SRC})\\s+\\d{4}\\b`,
+];
+
+/** True when this number sits inside a calendar date, including a leaked percent. */
+export function offsetInsideCalendarSpan(text: string, offset: number, length: number): boolean {
+  if (!text || length <= 0 || offset < 0) return false;
+  const end = offset + length;
+  for (const source of CALENDAR_SPAN_PATTERNS) {
+    const pattern = new RegExp(source, "gi");
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text))) {
+      const spanEnd = match.index + match[0].length;
+      if (offset >= match.index && end <= spanEnd) return true;
+      if (match[0].length === 0) break;
+    }
+  }
+  return false;
+}
+
 export function rewriteDraftMonthStamp(text: string): string {
   const monthYear = `(?<!\\d\\s)(?:${SAVED_MONTH})\\s+\\d{4}`;
   return agreeFullYearGrammar(
