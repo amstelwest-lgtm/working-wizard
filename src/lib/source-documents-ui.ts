@@ -639,7 +639,7 @@ export function buildSourceDocumentsModel(input: {
     empty:
       cards.length === 0
         ? input.surface === "upload"
-          ? "Upload an invoice, bill, receipt, or bank statement."
+          ? null
           : "No document is waiting for approval."
         : null,
     cards,

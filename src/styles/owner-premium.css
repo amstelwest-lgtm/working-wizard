@@ -70,6 +70,12 @@ html:not(.dark) .owner-door.accountant-portal {
 html:not(.dark) body:has(.owner-door) {
   background: #0e2238 !important;
 }
+/* The page-enter fade is its own stacking context. Lift it above the pencil
+   while the drawer is open, or the dim overlay paints underneath the button. */
+html.nav-drawer-open .milon-page-enter {
+  position: relative;
+  z-index: 30;
+}
 
 /* ===== type scale ===== */
 html:not(.dark) .owner-door .owner-title {
