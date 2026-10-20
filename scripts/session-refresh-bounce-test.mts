@@ -1,6 +1,7 @@
 /**
  * Two tabs refreshing one token more than 10s apart must stay signed in.
  * A null auth event must not send /clients to /auth.
+ * AQA 1020E: signup, then signed out with no click while 2–3 tabs were open.
  * Run: pnpm test:session-refresh-bounce
  */
 import { readFileSync } from "node:fs";
