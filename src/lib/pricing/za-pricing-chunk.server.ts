@@ -1,8 +1,8 @@
-import { formatMoney } from "@/lib/market/format";
-import { ZA_MARKET } from "@/lib/market/resolve";
-import { FIRM_BAND_CATALOG, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
-import { perClientRands, ZA_CHECKOUT_BANDS, ZA_MONTHLY_RANDS } from "@/lib/pricing/za-ladder";
-import { zaBandAmountCents } from "@/lib/pricing/za-ladder-amounts";
+import { formatMoney } from "../market/format.ts";
+import { ZA_MARKET } from "../market/resolve.ts";
+import { perClientRands, ZA_CHECKOUT_BANDS, ZA_MONTHLY_RANDS } from "./za-ladder.ts";
+import { zaBandAmountCents } from "./za-ladder-amounts.ts";
+import { FIRM_BAND_CATALOG, FIRM_TRIAL_SENTENCE } from "../stripe-plans.ts";
 
 export type ZaBandPriceLabel = { month: string; year: string };
 
@@ -32,7 +32,12 @@ function rand(amount: number): string {
   return formatMoney(amount, ZA_MARKET);
 }
 
-function priceLine(monthlyRands: number, annualCents: number, cap: number, interval: "month" | "year"): string {
+function priceLine(
+  monthlyRands: number,
+  annualCents: number,
+  cap: number,
+  interval: "month" | "year",
+): string {
   const per = perClientRands(monthlyRands, cap);
   const amount = interval === "year" ? rand(annualCents / 100) : rand(monthlyRands);
   const unit = interval === "year" ? "yr" : "mo";
@@ -59,21 +64,17 @@ export function loadSaPricingCopy(): SaPricingCopy {
       "Pricing in rand. One monthly price, set by how many clients you actively advise.",
     accountantsLead:
       "Management accounts, 13-week cash and advisory drafts from QuickBooks or Xero. Sage is coming soon.",
-    ownerHomepageCost:
-      `Business owners pay ${rand(299)}/mo, or nothing when their accountant is on Milōn.`,
+    ownerHomepageCost: `Business owners pay ${rand(299)}/mo, or nothing when their accountant is on Milōn.`,
     ownerBar: `${rand(299)}/mo · free when your accountant is on Milōn`,
     ownerHeroLink: `Business owner? ${rand(299)}/mo, or free when your accountant is on Milōn →`,
-    ownerRegisterNote:
-      `Business owners pay ${rand(299)}/mo, or nothing when their accountant is on Milōn.`,
-    ownerEarly:
-      `The owner plan is ${rand(299)} a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.`,
+    ownerRegisterNote: `Business owners pay ${rand(299)}/mo, or nothing when their accountant is on Milōn.`,
+    ownerEarly: `The owner plan is ${rand(299)} a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.`,
     ownerMonthly: `${rand(299)}/mo`,
     faqCostLead: `Business owners: ${rand(299)} a month, or free when your accountant is on Milōn.`,
     ownerPlanAnswer: `${rand(299)} a month, and free when your accountant is on Milōn.`,
     footerTagline: "for accounting firms and the businesses they advise.",
     footerBuilt: "An AI finance team for accounting firms",
-    footerLine:
-      "Milōn — an AI finance team for accounting firms and the businesses they advise.",
+    footerLine: "Milōn — an AI finance team for accounting firms and the businesses they advise.",
     labels,
   };
 }

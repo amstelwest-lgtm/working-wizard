@@ -6,7 +6,6 @@ import { marketingPackForGeo } from "./geo-country.ts";
 import { TAX_TALK, taxFilingAsked } from "./prospect-tax-copy.ts";
 import { prospectPricingReply, prospectSystem } from "./prospect-talk-prompts.ts";
 import {
-  PROSPECT_LEAD_ASK,
   PROSPECT_NO_BOOKS_REPLY,
   PROSPECT_NO_FILING_REPLY,
   PROSPECT_TAX_SLUG,
@@ -20,7 +19,6 @@ import {
   plainMethodReply,
   pricingAsked,
   PROSPECT_INJECTION_REPLY,
-  PROSPECT_PRICING_HOLD,
   prospectEmailAllowed,
   prospectLeadUtm,
   publicProspectAgent,
@@ -159,9 +157,7 @@ function replyFor(input: {
 }): string {
   const blocked = blockedReply(input.agent, input.message);
   if (blocked) return blocked;
-  if (pricingAsked(input.message)) {
-    return input.figures === "allow" ? prospectPricingReply(input.country) : PROSPECT_PRICING_HOLD;
-  }
+  if (pricingAsked(input.message)) return prospectPricingReply(input.country);
   if (input.figures === "hold" && methodAsked(input.message))
     return plainMethodReply(input.message);
   const drafted = input.modelText ?? scriptedProspectReply(input.agent, false);
@@ -266,20 +262,17 @@ async function takeTurn(
   }
   const visitorTurns = fromTurns + 1;
   const hasLead = Boolean(active.leadEmail);
-  const askLead = shouldAskForLead(visitorTurns, hasLead);
+  const pricing = pricingAsked(message);
   const blocked = blockedReply(scope.agent, message);
-  const openGate = askLead && !blocked;
+  const askLead = shouldAskForLead(visitorTurns, hasLead);
+  const openGate = askLead && !blocked && !pricing;
   let reply: string;
   if (blocked) {
     reply = blocked;
-  } else if (openGate) {
-    await ctx.store.setPending(active.id, message);
-    active.pendingMessage = message;
-    reply = PROSPECT_LEAD_ASK;
   } else {
     const figures = hasLead ? "allow" : "hold";
     let modelText: string | null = null;
-    const skipModel = pricingAsked(message) || (figures === "hold" && methodAsked(message));
+    const skipModel = pricing || (figures === "hold" && methodAsked(message));
     if (!skipModel) {
       try {
         modelText = await ctx.model({
@@ -297,6 +290,10 @@ async function takeTurn(
       modelText,
       figures,
     });
+    if (openGate) {
+      await ctx.store.setPending(active.id, message);
+      active.pendingMessage = message;
+    }
   }
   return {
     status: 200,

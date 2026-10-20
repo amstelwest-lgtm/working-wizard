@@ -195,6 +195,17 @@ html:has(.talk-page) body {
   opacity: 0.6;
 }
 
+.talk-skip {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid #0b5fff;
+  background: #ffffff;
+  color: #0b5fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .talk-composer textarea,
 .talk-field input {
   width: 100%;

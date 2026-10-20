@@ -199,13 +199,9 @@ export function pricingAsked(message: string): boolean {
   return /\bpric(?:e|ing)\b|\bcost\b|\bhow much\b/i.test(message);
 }
 
-/** No digits. Used when the visitor asks about price before the form. */
-export const PROSPECT_PRICING_HOLD =
-  "I'll answer pricing after your name and email. I won't invent a price. This page is a labelled SAMPLE.";
-
 /**
  * A method question needs no sample figures. "How does pricing work?" stays
- * a pricing question. The name-and-email form is unchanged.
+ * a pricing question. Pricing is answered from the public page, not held.
  */
 const METHOD_ASK = [
   /\bhow (?:do|does|can|would|should) (?:you |we |i )?(?:work out|calculate|measure|compute|figure out|estimate)\b/i,
@@ -222,8 +218,13 @@ export function methodAsked(message: string): boolean {
 export const PROSPECT_RUNWAY_METHOD =
   "Cash runway is how long the cash on hand would last at the pace the business spends it. Compare the cash held with the cash used up, and read the result as weeks.";
 
+/** Sales minus direct cost, divided by sales. No sample figures. */
+export const PROSPECT_GROSS_MARGIN_METHOD =
+  "Gross margin is the share of sales left after the direct cost of those sales. Subtract that cost from sales, then divide by sales. The result is the portion of each sale that is not spent on the direct cost.";
+
 export function plainMethodReply(message: string): string {
   if (/\brunway\b/i.test(message)) return PROSPECT_RUNWAY_METHOD;
+  if (/\bgross margin\b/i.test(message)) return PROSPECT_GROSS_MARGIN_METHOD;
   return "I can explain the method without quoting the sample. Say which line you mean, and I will walk the steps in plain words.";
 }
 

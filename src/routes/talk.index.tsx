@@ -8,7 +8,12 @@ import talkCss from "../styles/prospect-talk.css?inline";
 export const Route = createFileRoute("/talk/")({
   loader: async () => {
     const visitor = await readMarketingVisitor();
-    return { copyPack: visitor.copyPack };
+    if (visitor.copyPack === "za") {
+      const { zaTalkPriceLine } = await import("@/lib/pricing/za-talk-price.server");
+      return { copyPack: "za" as const, priceLine: zaTalkPriceLine() };
+    }
+    const { usTalkPriceLine } = await import("@/lib/public-pricing-lines");
+    return { copyPack: visitor.copyPack, priceLine: usTalkPriceLine() };
   },
   component: TalkIndexRoute,
   head: () => ({
@@ -31,10 +36,10 @@ export const Route = createFileRoute("/talk/")({
 });
 
 function TalkIndexRoute() {
-  const { copyPack } = Route.useLoaderData();
+  const { copyPack, priceLine } = Route.useLoaderData();
   const [refCode, setRefCode] = useState<string | null>(null);
   useEffect(() => {
     setRefCode(sanitizeRef(new URLSearchParams(window.location.search).get("ref")));
   }, []);
-  return <TalkIndex refCode={refCode} copyPack={copyPack} />;
+  return <TalkIndex refCode={refCode} copyPack={copyPack} priceLine={priceLine} />;
 }

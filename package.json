@@ -285,6 +285,7 @@
     "test:trial-demo": "vite-node --config scripts/vite-test.config.ts scripts/trial-demo-test.mts",
     "test:trial-followup": "vite-node --config scripts/vite-test.config.ts scripts/trial-followup-test.mts",
     "test:prospect-talk": "vite-node --config scripts/vite-test.config.ts scripts/prospect-talk-test.mts",
+    "test:prospect-talk-browser": "vite-node --config scripts/vite-test.config.ts scripts/prospect-talk-browser-test.mts",
     "test:try-outreach": "vite-node --config scripts/vite-test.config.ts scripts/render-try-outreach.mts",
     "render:try-outreach": "vite-node --config scripts/vite-test.config.ts scripts/render-try-outreach.mts"
   },

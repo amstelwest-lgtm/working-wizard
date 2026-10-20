@@ -4,9 +4,9 @@
  * Deno imports this file. Keep the imports relative and extended.
  */
 import { TAX_SPECIALIST_SYSTEM } from "../../supabase/functions/_shared/agent-prompts/tax-specialist.ts";
-import { OWNER_MONTHLY_USD_LABEL } from "./owner-plan.ts";
 import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
-import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "./starter-trial-constants.ts";
+import { zaOwnerMonthlyLabel, zaTalkPriceLine } from "./pricing/za-talk-price.server.ts";
+import { usTalkPriceLine } from "./public-pricing-lines.ts";
 import type { ProspectSlug } from "./prospect-talk.ts";
 
 export { TAX_SPECIALIST_SYSTEM };
@@ -28,47 +28,31 @@ const ROLE: Record<ProspectSlug, string> = {
 };
 
 /**
- * Same words Eng2 publishes once the shared note stops claiming a card is
- * collected at signup. Used only while that shared note still says so.
- */
-export const PROSPECT_CARD_AFTER_RESULT = "You add a card once you have seen your first result.";
-
-function sharedNoteClaimsCardAtSignup(note: string): boolean {
-  return /card/i.test(note) && /required at signup/i.test(note);
-}
-
-/** The landing trial note, unless that note still claims a card at signup. */
-export function prospectCardTiming(): string {
-  if (sharedNoteClaimsCardAtSignup(FIRM_TRIAL_CARD_NOTE)) return PROSPECT_CARD_AFTER_RESULT;
-  return FIRM_TRIAL_CARD_NOTE;
-}
-
-/**
- * Owner monthly for a ZA visitor. Same spelling as
- * loadSaPricingCopy().ownerMonthly. This file is the edge prompt, not the
- * client bundle. A US prompt must not call this.
+ * Owner monthly for a ZA visitor. Same string the pricing page renders.
+ * A US prompt must not call this.
  */
 export function prospectZaOwnerMonthly(): string {
-  return `R ${299}/mo`;
+  return zaOwnerMonthlyLabel();
 }
 
 /**
- * Published Starter trial and the owner price. The trial sentence and the
- * US owner label come from the shared constants. Rand is ZA only.
+ * The public pricing page's line for this market. Trial length and the card
+ * sentence are included only because that page states them. No hand-written
+ * price.
  */
 export function prospectPricingReply(country: "US" | "ZA"): string {
-  const owner = country === "ZA" ? prospectZaOwnerMonthly() : OWNER_MONTHLY_USD_LABEL;
-  return `Starter is a ${FIRM_TRIAL_SENTENCE}. ${prospectCardTiming()} A business owner's own workspace is ${owner}, and free when their accountant is on Milōn. I won't invent another price. This page is a labelled SAMPLE.`;
+  const published = country === "ZA" ? zaTalkPriceLine() : usTalkPriceLine();
+  return `${published} This page is a labelled SAMPLE.`;
 }
 
 function prospectPricingPrompt(country: "US" | "ZA"): string {
-  return `When the visitor asks the price, use this published line and no other price. Signup does not collect a card. The first result comes before any card. Do not quote this price before they have given a name and email.\n${prospectPricingReply(country)}`;
+  return `When the visitor asks the price, answer immediately with this published line and no other price. Do not ask for a name or an email first.\n${prospectPricingReply(country)}`;
 }
 
 export function prospectSystem(agent: ProspectSlug, country: "US" | "ZA"): string {
   const market =
     country === "ZA"
-      ? "The visitor is in South Africa. Rand amounts are allowed only inside the labelled SAMPLE, and not before they give a name and email."
+      ? "The visitor is in South Africa. Quote the published price as soon as they ask. Other rand amounts belong only in the labelled SAMPLE, after a name and email."
       : "The visitor is outside South Africa. Use dollars if you must mention money. Never use rand.";
   const pricing = prospectPricingPrompt(country);
   if (agent === "tax-specialist") {
