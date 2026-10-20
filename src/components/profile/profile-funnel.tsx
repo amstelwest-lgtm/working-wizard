@@ -339,8 +339,8 @@ export function ProfileFunnel({
   };
 
   const card =
-    "w-full rounded-xl border border-[#0B5FFF]/25 bg-slate-900/80 p-3 text-left transition hover:border-[#0B5FFF]/60 hover:bg-[#2563EB]/5";
-  const cardOn = "border-[#0B5FFF] bg-[#0B5FFF]/10";
+    "w-full rounded-xl border border-[#DBEAFE] bg-white p-3 text-left transition hover:border-[#0B5FFF] hover:bg-[#F4F8FF]";
+  const cardOn = "border-[#0B5FFF] bg-[#DBEAFE]";
 
   const toggleSecondary = (id: BudgetVolumeUnit) => {
     setSecondary((prev) =>
@@ -407,8 +407,8 @@ export function ProfileFunnel({
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0B5FFF]">
           {headerLabel} · question {step + 1} of {TOTAL}
         </p>
-        <h2 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{titles[q]}</h2>
-        <p className="mt-1 text-sm text-slate-400">{introCopy}</p>
+        <h2 className="mt-1 text-xl font-semibold text-[#102A43] sm:text-2xl">{titles[q]}</h2>
+        <p className="mt-1 text-sm text-[#3D5270]">{introCopy}</p>
       </div>
 
       <div
@@ -428,9 +428,9 @@ export function ProfileFunnel({
                 goNext();
               }}
             >
-              <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="text-xs text-slate-400">{o.hint}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+              <div className="text-sm font-semibold text-[#102A43]">{o.label}</div>
+              <div className="text-xs text-[#3D5270]">{o.hint}</div>
+              <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -447,9 +447,9 @@ export function ProfileFunnel({
                 goNext();
               }}
             >
-              <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="text-xs text-slate-400">{o.hint}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+              <div className="text-sm font-semibold text-[#102A43]">{o.label}</div>
+              <div className="text-xs text-[#3D5270]">{o.hint}</div>
+              <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -463,8 +463,8 @@ export function ProfileFunnel({
                 goNext();
               }}
             >
-              <div className="text-sm font-semibold text-slate-100">No second stream</div>
-              <div className="text-xs text-slate-400">
+              <div className="text-sm font-semibold text-[#102A43]">No second stream</div>
+              <div className="text-xs text-[#3D5270]">
                 Just the primary for now — you can refine later
               </div>
             </button>
@@ -477,17 +477,17 @@ export function ProfileFunnel({
                   className={`${card} ${on ? cardOn : ""}`}
                   onClick={() => toggleSecondary(o.id)}
                 >
-                  <div className="text-sm font-semibold text-slate-100">
+                  <div className="text-sm font-semibold text-[#102A43]">
                     {on ? "✓ " : ""}
                     {o.label}
                   </div>
-                  <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+                  <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
                 </button>
               );
             })}
             <Button
               size="sm"
-              className="mt-2 bg-[#0B5FFF] text-white hover:bg-[#c49a45]"
+              className="mt-2 bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
               onClick={goNext}
             >
               Continue{secondary.length ? ` · ${secondary.length} selected` : ""}
@@ -506,8 +506,8 @@ export function ProfileFunnel({
                 goNext();
               }}
             >
-              <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+              <div className="text-sm font-semibold text-[#102A43]">{o.label}</div>
+              <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -522,8 +522,8 @@ export function ProfileFunnel({
                 goNext();
               }}
             >
-              <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+              <div className="text-sm font-semibold text-[#102A43]">{o.label}</div>
+              <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -538,8 +538,8 @@ export function ProfileFunnel({
                 goNext();
               }}
             >
-              <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+              <div className="text-sm font-semibold text-[#102A43]">{o.label}</div>
+              <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -554,8 +554,8 @@ export function ProfileFunnel({
                 goNext();
               }}
             >
-              <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+              <div className="text-sm font-semibold text-[#102A43]">{o.label}</div>
+              <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -570,8 +570,8 @@ export function ProfileFunnel({
                 goNext();
               }}
             >
-              <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+              <div className="text-sm font-semibold text-[#102A43]">{o.label}</div>
+              <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -586,8 +586,8 @@ export function ProfileFunnel({
                 goNext();
               }}
             >
-              <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+              <div className="text-sm font-semibold text-[#102A43]">{o.label}</div>
+              <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -600,16 +600,16 @@ export function ProfileFunnel({
                 className={`${card} ${ownerGoal === o.id ? cardOn : ""}`}
                 onClick={() => setOwnerGoal(o.id)}
               >
-                <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-                <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
+                <div className="text-sm font-semibold text-[#102A43]">{o.label}</div>
+                <div className="mt-1 text-[11px] text-[#3D5270]">e.g. {loc(o.examples)}</div>
               </button>
             ))}
-            <div className="mt-2 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <div className="mt-2 rounded-xl border border-[#DBEAFE] bg-[#F4F8FF] p-3">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-[#3D5270]">
                 Financial year starts in
               </label>
               <select
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                className="mt-1 w-full rounded-lg border border-[#DBEAFE] bg-white px-3 py-2 text-sm text-[#102A43]"
                 value={fyStartMonth}
                 onChange={(e) => setFyStartMonth(Number(e.target.value))}
               >
@@ -619,7 +619,7 @@ export function ProfileFunnel({
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[11px] text-slate-500">
+              <p className="mt-1 text-[11px] text-[#3D5270]">
                 Default {MONTH_NAMES[marketFyStart - 1]} (
                 {marketFyStart === 1 ? "common for US businesses" : "common in South Africa"}). Used
                 by Budget and reporting periods.
@@ -630,9 +630,9 @@ export function ProfileFunnel({
       </div>
 
       {/* Sticky footer — Save always visible on last question (was clipped below fold). */}
-      <div className="flex shrink-0 items-center gap-2 border-t border-slate-800 pt-3">
+      <div className="flex shrink-0 items-center gap-2 border-t border-[#DBEAFE] pt-3">
         {step > 0 ? (
-          <Button variant="ghost" size="sm" className="text-slate-300" onClick={goBack}>
+          <Button variant="ghost" size="sm" className="text-[#0B5FFF]" onClick={goBack}>
             Back
           </Button>
         ) : null}
@@ -640,7 +640,7 @@ export function ProfileFunnel({
           <Button
             variant="ghost"
             size="sm"
-            className="text-slate-300"
+            className="text-[#0B5FFF]"
             data-profile-later=""
             onClick={onCancel}
           >
@@ -654,14 +654,14 @@ export function ProfileFunnel({
             {Array.from({ length: TOTAL }).map((_, i) => (
               <span
                 key={i}
-                className={`h-1.5 w-1.5 rounded-full ${i <= step ? "bg-[#0B5FFF]" : "bg-slate-700"}`}
+                className={`h-1.5 w-1.5 rounded-full ${i <= step ? "bg-[#0B5FFF]" : "bg-[#DBEAFE]"}`}
               />
             ))}
           </div>
           {isLast && (
             <Button
               disabled={!answeredCurrent || saving}
-              className="bg-[#0B5FFF] text-white hover:bg-[#c49a45]"
+              className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
               onClick={finish}
             >
               {saving

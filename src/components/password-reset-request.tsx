@@ -71,9 +71,9 @@ export function PasswordResetRequest({
     }
     return (
       <div>
-        <h2 className="text-lg font-semibold text-[#e8ede9]">Check your email</h2>
-        <p className="mt-3 text-sm leading-relaxed text-[#8a938c]">
-          We sent a reset link to <span className="text-[#e8ede9]">{email}</span>. Open it to choose
+        <h2 className="text-lg font-semibold text-[#102A43]">Check your email</h2>
+        <p className="mt-3 text-sm leading-relaxed text-[#3D5270]">
+          We sent a reset link to <span className="font-medium text-[#102A43]">{email}</span>. Open it to choose
           a new password.
         </p>
         <button
@@ -119,7 +119,7 @@ export function PasswordResetRequest({
 
   return (
     <form onSubmit={(e) => void submit(e)}>
-      <p className="text-sm leading-relaxed text-[#8a938c]">
+      <p className="text-sm leading-relaxed text-[#3D5270]">
         We&apos;ll email a reset link to this address.
       </p>
       <OwnerInviteFieldLabel htmlFor={inputId}>Email</OwnerInviteFieldLabel>

@@ -1,8 +1,9 @@
 /**
- * Computed-style scan of `/`, `/terms`, and `/privacy`. Brand gold may remain
- * only on the MILŌN wordmark (header, footer, hero mockup mark), the hero
- * trial button, and the 390 sticky trial button. The amber "74" status colour
- * is not brand gold. Legal hero sublines must not render "Inc..".
+ * Computed-style scan of `/`, `/terms`, `/privacy`, and `/join/:token`.
+ * Brand gold may remain only on the MILŌN wordmark (header, footer, hero
+ * mockup mark, invite shell), the hero trial button, and the 390 sticky
+ * trial button. The amber "74" status colour is not brand gold. Legal hero
+ * sublines must not render "Inc..". The invite page has no gold button.
  *
  *   pnpm test:landing-gold-scan
  *   LANDING_URL=http://127.0.0.1:5173 pnpm test:landing-gold-scan
@@ -305,6 +306,29 @@ async function main() {
           }
           await page.close();
         }
+      }
+    }
+    for (const width of [1280, 390]) {
+      for (const theme of ["light", "dark"] as const) {
+        const page = await browser.newPage({ viewport: { width, height: 900 } });
+        await page.goto(`${BASE}/join/sampletok`, { waitUntil: "networkidle" });
+        await page.evaluate((next) => {
+          document.documentElement.dataset.theme = next;
+          document.documentElement.classList.toggle("dark", next === "dark");
+        }, theme);
+        await page.waitForTimeout(200);
+        const painted = await scan(page, `/join/sampletok ${width} ${theme}`);
+        if (!painted.wordmark) failures.push(`/join/sampletok ${width} ${theme}: wordmark is not gold`);
+        for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
+        const canvas = await page.evaluate(() => {
+          const main = document.querySelector("main.invite-ink");
+          if (!main) return "";
+          return getComputedStyle(main).backgroundColor;
+        });
+        if (canvas !== "rgb(255, 255, 255)") {
+          failures.push(`/join/sampletok ${width} ${theme}: canvas is ${canvas || "missing"}`);
+        }
+        await page.close();
       }
     }
   } finally {

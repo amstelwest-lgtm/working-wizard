@@ -1147,6 +1147,33 @@ html:has(.auth-entry) body {
   accent-color: #0b5fff;
 }
 
+/* Invite accept surfaces stay on the light shell even when the app theme is dark. */
+.invite-ink {
+  --muted-foreground: #3d5270;
+  --border: #dbeafe;
+  --brand-ink-muted: #3d5270;
+  --ink-dim: #3d5270;
+  background: #ffffff;
+  color: #102a43;
+}
+html:not(.dark) .invite-ink h1,
+html:not(.dark) .invite-ink h2,
+html.dark .invite-ink h1,
+html.dark .invite-ink h2 {
+  color: #102a43 !important;
+}
+.invite-ink .milon-google-btn {
+  border-color: #dbeafe;
+  color: #102a43;
+  background: #ffffff;
+}
+.invite-ink .show-password label {
+  color: #3d5270;
+}
+.invite-ink .show-password input[type="checkbox"] {
+  accent-color: #0b5fff;
+}
+
 .auth-entry__primary-btn {
   display: inline-flex;
   height: 2.75rem;
