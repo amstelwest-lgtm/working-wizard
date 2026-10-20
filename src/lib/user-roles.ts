@@ -133,12 +133,21 @@ export function clearForcePortal(): void {
   removeStorage(session, PORTAL_FORCE_KEY);
 }
 
+/**
+ * The practice board paints as soon as the gate has opened this user.
+ * A second full-page skeleton after the shell was the blank gap on /practice.
+ */
+const accountantPortalOpen = new Set<string>();
+const stayResolved = new Map<string, boolean>();
+
 export function clearPortalRouting(): void {
   const { local, session } = webStorage();
   removeStorage(session, PORTAL_INTENT_KEY);
   removeStorage(session, PORTAL_FORCE_KEY);
   removeStorage(session, SETTINGS_RETURN_KEY);
   removeStorage(local, PORTAL_INTENT_KEY);
+  accountantPortalOpen.clear();
+  stayResolved.clear();
 }
 
 export function setSettingsReturn(to: SettingsReturn): void {
@@ -444,29 +453,56 @@ export async function shouldOpenItInbox(userId: string): Promise<boolean> {
   return firms.length === 0;
 }
 
+export function markAccountantPortalOpen(userId: string): void {
+  accountantPortalOpen.add(userId);
+}
+
+export function isAccountantPortalOpen(userId: string): boolean {
+  return accountantPortalOpen.has(userId);
+}
+
+/** True or false once the stay check has settled. Undefined while it is in flight. */
+export function peekAccountantStay(userId: string): boolean | undefined {
+  return stayResolved.get(userId);
+}
+
+/**
+ * A firm seat (practice role, firm row, or practice signup) already decides
+ * the portal. `is_milon_it_member` is only the override for an IT account
+ * with no firm. Waiting on that RPC held a dual-role firm + client_owner
+ * (theo) on the blank gate for the whole call.
+ */
+export function firmSeatSkipsItWait(stayFromRows: boolean): boolean {
+  return stayFromRows;
+}
+
 /**
  * Accountant portal may keep practice accounts — never business-client credentials.
  * The gate and the board share one result. Dropping it in `finally` made the
  * board start a second IT check, getUser(), and firm read after the shell opened.
  */
 export function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
-  return once(`stay:${userId}`, () => resolveAccountantStay(userId));
+  const pending = once(`stay:${userId}`, () => resolveAccountantStay(userId));
+  return pending.then((stay) => {
+    stayResolved.set(userId, stay);
+    if (stay) markAccountantPortalOpen(userId);
+    return stay;
+  });
 }
 
 async function resolveAccountantStay(userId: string): Promise<boolean> {
   const force = peekForcePortal();
-  const [isIt, portal, practiceSignup, firmCount] = await Promise.all([
-    isMilonItMember(userId),
+  const itPromise = isMilonItMember(userId);
+  const [portal, practiceSignup, firmCount] = await Promise.all([
     resolvePortalRoles(userId),
     readPracticeSignup(),
     once(firmsCacheKey(userId), () => listUserFirms(userId))
       .then((firms) => firms.length)
       .catch(() => null),
   ]);
-  if (isIt) return true;
   // A failed firm read is not proof the practice role is the old auto-grant.
   const hasFirm = firmCount === null ? portal.hasPracticeRole : firmCount > 0;
-  return decideAccountantStay({
+  const stay = decideAccountantStay({
     hasPracticeRole: portal.hasPracticeRole,
     hasClientRole: portal.hasClientRole,
     hasFirm,
@@ -474,4 +510,6 @@ async function resolveAccountantStay(userId: string): Promise<boolean> {
     force,
     practiceSignup,
   });
+  if (firmSeatSkipsItWait(stay)) return true;
+  return itPromise;
 }

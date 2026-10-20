@@ -2,6 +2,7 @@ import { createStart, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "./integrations/supabase/auth-attacher";
+import { prepareServerFnSession } from "./lib/server-fn-auth";
 import { reportServerError } from "./lib/monitoring.server";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
@@ -43,5 +44,5 @@ const reportServerFnErrors = createMiddleware({ type: "function" }).server(
 
 export const startInstance = createStart(() => ({
   requestMiddleware: [errorMiddleware],
-  functionMiddleware: [attachSupabaseAuth, reportServerFnErrors],
+  functionMiddleware: [prepareServerFnSession, attachSupabaseAuth, reportServerFnErrors],
 }));

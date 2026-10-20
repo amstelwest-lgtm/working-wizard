@@ -1,13 +1,13 @@
 /**
  * A deploy while a tab is open 404s the old hashed chunks
- * (upload-*, settings-menu-*, use-share-*, app-chrome-*, …).
+ * (benchmark-report-*, health-score-*, upload-*, app-chrome-*, …).
  * Reload once, then stop, so a missing file cannot spin the tab.
  */
 
 export const CHUNK_RELOAD_KEY = "milon_chunk_reload";
 
 const CHUNK_RE =
-  /Failed to fetch dynamically imported module|Loading chunk \d+ failed|ChunkLoadError|error loading dynamically imported module|Importing a module script failed|\/assets\/(?:upload|settings-menu|use-share|app-chrome)-/i;
+  /Failed to fetch dynamically imported module|Loading chunk \d+ failed|ChunkLoadError|error loading dynamically imported module|Importing a module script failed|\/assets\/[^/?#'"\s]+\.js/i;
 
 export function isChunkLoadError(error: unknown): boolean {
   if (error == null || error === false) return false;
@@ -92,4 +92,4 @@ export function installChunkReloadGuard(): void {
 }
 
 /** Runs before the app bundle so a 404 chunk can reload without painting a blank page. */
-export const CHUNK_RELOAD_BOOT_SCRIPT = `(function(){if(window.__milonChunkGuard)return;window.__milonChunkGuard=1;var KEY=${JSON.stringify(CHUNK_RELOAD_KEY)};function chunk(msg){return /Failed to fetch dynamically imported module|Loading chunk \\d+ failed|ChunkLoadError|error loading dynamically imported module|Importing a module script failed|\\/assets\\/(?:upload|settings-menu|use-share|app-chrome)-/i.test(String(msg||""));}function reload(){try{if(sessionStorage.getItem(KEY)==="1")return false;sessionStorage.setItem(KEY,"1");}catch(e){return false;}location.reload();return true;}window.addEventListener("vite:preloadError",function(e){if(reload())e.preventDefault();});window.addEventListener("unhandledrejection",function(e){var r=e.reason||{};if(chunk((r&&r.message)||r)&&reload())e.preventDefault();});window.addEventListener("error",function(e){var src=e.target&&e.target.src;if(src&&chunk(src)&&reload()){e.preventDefault();return;}if(chunk((e.error&&e.error.message)||e.message)&&reload())e.preventDefault();},true);})();`;
+export const CHUNK_RELOAD_BOOT_SCRIPT = `(function(){if(window.__milonChunkGuard)return;window.__milonChunkGuard=1;var KEY=${JSON.stringify(CHUNK_RELOAD_KEY)};function chunk(msg){return ${CHUNK_RE.toString()}.test(String(msg||""));}function reload(){try{if(sessionStorage.getItem(KEY)==="1")return false;sessionStorage.setItem(KEY,"1");}catch(e){return false;}location.reload();return true;}window.addEventListener("vite:preloadError",function(e){if(reload())e.preventDefault();});window.addEventListener("unhandledrejection",function(e){var r=e.reason||{};if(chunk((r&&r.message)||r)&&reload())e.preventDefault();});window.addEventListener("error",function(e){var src=e.target&&e.target.src;if(src&&chunk(src)&&reload()){e.preventDefault();return;}if(chunk((e.error&&e.error.message)||e.message)&&reload())e.preventDefault();},true);})();`;

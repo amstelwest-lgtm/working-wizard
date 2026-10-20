@@ -52,6 +52,7 @@ import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedClientsClientIdRouteImport } from './routes/_authenticated/clients.$clientId'
 import { Route as AuthenticatedClientsQueriesRouteImport } from './routes/_authenticated/clients_.queries'
 import { Route as AuthenticatedFounderMetricsRouteImport } from './routes/_authenticated/founder.metrics'
+import { Route as AuthenticatedPracticeClientsRouteImport } from './routes/_authenticated/practice_.clients'
 import { Route as AuthenticatedPracticeFollowUpRouteImport } from './routes/_authenticated/practice_.follow-up'
 import { Route as AuthenticatedPracticeInsightsRouteImport } from './routes/_authenticated/practice_.insights'
 import { Route as AuthenticatedPracticeMarketplaceRouteImport } from './routes/_authenticated/practice_.marketplace'
@@ -290,6 +291,12 @@ const AuthenticatedFounderMetricsRoute =
     path: '/founder/metrics',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedPracticeClientsRoute =
+  AuthenticatedPracticeClientsRouteImport.update({
+    id: '/practice_/clients',
+    path: '/practice/clients',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedPracticeFollowUpRoute =
   AuthenticatedPracticeFollowUpRouteImport.update({
     id: '/practice_/follow-up',
@@ -441,6 +448,7 @@ export interface FileRoutesByFullPath {
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
+  '/practice/clients': typeof AuthenticatedPracticeClientsRoute
   '/practice/follow-up': typeof AuthenticatedPracticeFollowUpRoute
   '/practice/insights': typeof AuthenticatedPracticeInsightsRoute
   '/practice/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
@@ -504,6 +512,7 @@ export interface FileRoutesByTo {
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
+  '/practice/clients': typeof AuthenticatedPracticeClientsRoute
   '/practice/follow-up': typeof AuthenticatedPracticeFollowUpRoute
   '/practice/insights': typeof AuthenticatedPracticeInsightsRoute
   '/practice/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
@@ -569,6 +578,7 @@ export interface FileRoutesById {
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/_authenticated/clients_/queries': typeof AuthenticatedClientsQueriesRoute
   '/_authenticated/founder/metrics': typeof AuthenticatedFounderMetricsRoute
+  '/_authenticated/practice_/clients': typeof AuthenticatedPracticeClientsRoute
   '/_authenticated/practice_/follow-up': typeof AuthenticatedPracticeFollowUpRoute
   '/_authenticated/practice_/insights': typeof AuthenticatedPracticeInsightsRoute
   '/_authenticated/practice_/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
@@ -634,6 +644,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/queries'
     | '/founder/metrics'
+    | '/practice/clients'
     | '/practice/follow-up'
     | '/practice/insights'
     | '/practice/marketplace'
@@ -697,6 +708,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/queries'
     | '/founder/metrics'
+    | '/practice/clients'
     | '/practice/follow-up'
     | '/practice/insights'
     | '/practice/marketplace'
@@ -761,6 +773,7 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/$clientId'
     | '/_authenticated/clients_/queries'
     | '/_authenticated/founder/metrics'
+    | '/_authenticated/practice_/clients'
     | '/_authenticated/practice_/follow-up'
     | '/_authenticated/practice_/insights'
     | '/_authenticated/practice_/marketplace'
@@ -1133,6 +1146,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFounderMetricsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/practice_/clients': {
+      id: '/_authenticated/practice_/clients'
+      path: '/practice/clients'
+      fullPath: '/practice/clients'
+      preLoaderRoute: typeof AuthenticatedPracticeClientsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/practice_/follow-up': {
       id: '/_authenticated/practice_/follow-up'
       path: '/practice/follow-up'
@@ -1277,6 +1297,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedClientsClientIdRoute: typeof AuthenticatedClientsClientIdRoute
   AuthenticatedClientsQueriesRoute: typeof AuthenticatedClientsQueriesRoute
   AuthenticatedFounderMetricsRoute: typeof AuthenticatedFounderMetricsRoute
+  AuthenticatedPracticeClientsRoute: typeof AuthenticatedPracticeClientsRoute
   AuthenticatedPracticeFollowUpRoute: typeof AuthenticatedPracticeFollowUpRoute
   AuthenticatedPracticeInsightsRoute: typeof AuthenticatedPracticeInsightsRoute
   AuthenticatedPracticeMarketplaceRoute: typeof AuthenticatedPracticeMarketplaceRoute
@@ -1298,6 +1319,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedClientsClientIdRoute: AuthenticatedClientsClientIdRoute,
   AuthenticatedClientsQueriesRoute: AuthenticatedClientsQueriesRoute,
   AuthenticatedFounderMetricsRoute: AuthenticatedFounderMetricsRoute,
+  AuthenticatedPracticeClientsRoute: AuthenticatedPracticeClientsRoute,
   AuthenticatedPracticeFollowUpRoute: AuthenticatedPracticeFollowUpRoute,
   AuthenticatedPracticeInsightsRoute: AuthenticatedPracticeInsightsRoute,
   AuthenticatedPracticeMarketplaceRoute: AuthenticatedPracticeMarketplaceRoute,

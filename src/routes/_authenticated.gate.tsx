@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
@@ -19,6 +19,8 @@ import {
   setPortalIntent,
   clearForcePortal,
   isMilonItMember,
+  markAccountantPortalOpen,
+  peekAccountantStay,
 } from "@/lib/user-roles";
 import { FirmBillingAccessProvider } from "@/contexts/firm-billing-access";
 import { useAnalytics } from "@/contexts/analytics";
@@ -66,7 +68,9 @@ export function AuthGate() {
   };
   const userId = user?.id ?? null;
   const [firmEntitled, setFirmEntitled] = useState<boolean | null>(null);
-  const [firmGate, setFirmGate] = useState<"idle" | "checking" | "allow">("idle");
+  const [firmGate, setFirmGate] = useState<"idle" | "checking" | "allow">(() =>
+    userId && peekAccountantStay(userId) === true ? "allow" : "idle",
+  );
 
   useLayoutEffect(() => {
     applyPortalTheme(resolvePortalTheme());
@@ -95,7 +99,68 @@ export function AuthGate() {
     let cancelled = false;
     // Already opened after a hang: keep the app up, but still finish the check
     // so an owner session can redirect to /app.
-    if (!failedOpenRef.current) setFirmGate("checking");
+    const knownStay = peekAccountantStay(userId) === true;
+    if (!failedOpenRef.current && !knownStay) setFirmGate("checking");
+
+    const openBilling = () => {
+      // Shell paints before Stripe. The greeting comes from the session and
+      // the firm row. Entitlement, the client-count gate, and IT confirmation
+      // continue after the outlet is up. Server routes still enforce billing.
+      void (async () => {
+        if (cancelled) return;
+        if (await isMilonItMember(userId)) {
+          if (cancelled) return;
+          entitledRef.current = true;
+          setFirmEntitled(true);
+          return;
+        }
+        if (entitledRef.current) {
+          setFirmEntitled(true);
+          return;
+        }
+        let entitled = false;
+        try {
+          const result = await latest.current.checkEntitlement({ data: {} });
+          if (cancelled) return;
+          entitled = result.entitled;
+          if (entitled) {
+            entitledRef.current = true;
+            setFirmEntitled(true);
+            return;
+          }
+        } catch {
+          if (cancelled) return;
+        }
+        const clients = await loadFirmClientGateContext();
+        if (cancelled) return;
+        const snap = latest.current;
+        const firmId = snap.firmId;
+        const gate = decideFirmBillingPathGate({
+          pathname: snap.pathname,
+          isAccountantFirmUser: true,
+          isMilonItMember: false,
+          entitled,
+          insightSeen: clients.firmClientCount === 0 ? false : readInsightSeen(firmId),
+          firmClientCount: clients.firmClientCount,
+          firstClientId: clients.firstClientId,
+        });
+        if (cancelled) return;
+        if (gate === "allow") {
+          setFirmEntitled(false);
+          return;
+        }
+        if (!isFirmProductPath(latest.current.pathname)) return;
+        const pending = snap.hasFirm
+          ? firmBillingResumeIntent(snap.firmMarket, peekPendingCheckout())
+          : (peekPendingCheckout() ?? firmBillingResumeIntent(null, null));
+        stashPendingCheckout(pending);
+        latest.current.navigate({
+          to: "/billing/required",
+          search: billingStartSearch(pending),
+          replace: true,
+        });
+      })();
+    };
 
     const failOpen = (reason: "timeout" | "error") => {
       if (cancelled || failedOpenRef.current) return;
@@ -114,8 +179,19 @@ export function AuthGate() {
         surface: "accountant_portal",
         reason,
       });
+      markAccountantPortalOpen(userId);
       setFirmGate("allow");
+      measureBootstrap("shell");
     };
+
+    if (knownStay) {
+      setFirmGate("allow");
+      measureBootstrap("shell");
+      openBilling();
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const timer = window.setTimeout(() => failOpen("timeout"), SHELL_GATE_TIMEOUT_MS);
 
@@ -130,66 +206,10 @@ export function AuthGate() {
           latest.current.navigate({ to: "/app" });
           return;
         }
-        // Shell paints before Stripe. The greeting comes from the session and
-        // the firm row. Entitlement, the client-count gate, and IT confirmation
-        // continue after the outlet is up. Server routes still enforce billing.
         window.clearTimeout(timer);
         setFirmGate("allow");
         measureBootstrap("shell");
-        void (async () => {
-          if (cancelled) return;
-          if (await isMilonItMember(userId)) {
-            if (cancelled) return;
-            entitledRef.current = true;
-            setFirmEntitled(true);
-            return;
-          }
-          if (entitledRef.current) {
-            setFirmEntitled(true);
-            return;
-          }
-          let entitled = false;
-          try {
-            const result = await latest.current.checkEntitlement({ data: {} });
-            if (cancelled) return;
-            entitled = result.entitled;
-            if (entitled) {
-              entitledRef.current = true;
-              setFirmEntitled(true);
-              return;
-            }
-          } catch {
-            if (cancelled) return;
-          }
-          const clients = await loadFirmClientGateContext();
-          if (cancelled) return;
-          const snap = latest.current;
-          const firmId = snap.firmId;
-          const gate = decideFirmBillingPathGate({
-            pathname: snap.pathname,
-            isAccountantFirmUser: true,
-            isMilonItMember: false,
-            entitled,
-            insightSeen: clients.firmClientCount === 0 ? false : readInsightSeen(firmId),
-            firmClientCount: clients.firmClientCount,
-            firstClientId: clients.firstClientId,
-          });
-          if (cancelled) return;
-          if (gate === "allow") {
-            setFirmEntitled(false);
-            return;
-          }
-          if (!isFirmProductPath(latest.current.pathname)) return;
-          const pending = snap.hasFirm
-            ? firmBillingResumeIntent(snap.firmMarket, peekPendingCheckout())
-            : (peekPendingCheckout() ?? firmBillingResumeIntent(null, null));
-          stashPendingCheckout(pending);
-          latest.current.navigate({
-            to: "/billing/required",
-            search: billingStartSearch(pending),
-            replace: true,
-          });
-        })();
+        openBilling();
       } catch (err) {
         if (cancelled) return;
         console.warn("[billing-gate] check failed", err);
@@ -209,19 +229,19 @@ export function AuthGate() {
   }
   if (!user) return null;
   if (isFirmProductPath(pathname) && firmGate !== "allow") {
+    // Same skeleton the route already painted. A one-bar pulse here was the
+    // blank body between "Loading dashboard…" and the card frames.
     return (
-      <div
-        className="bg-background px-6 py-8 text-foreground"
-        data-billing-gate="pending"
-        aria-busy="true"
-      >
-        <div className="h-4 w-48 animate-pulse rounded bg-muted" />
+      <div data-billing-gate="pending" aria-busy="true">
+        <FirmShellLoading />
       </div>
     );
   }
   return (
     <FirmBillingAccessProvider entitled={firmEntitled}>
-      <Outlet />
+      <Suspense fallback={<FirmShellLoading />}>
+        <Outlet />
+      </Suspense>
     </FirmBillingAccessProvider>
   );
 }

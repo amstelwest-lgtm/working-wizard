@@ -301,6 +301,15 @@ function RootShell({ children }: { children: React.ReactNode }) {
               'html.dark:not([data-theme="light"]),html.dark:not([data-theme="light"]) body{',
               "background:#0b1b2b!important;background-color:#0b1b2b!important;",
               "}",
+              // Signed-in shell, before Tailwind and owner-door.css. The boot
+              // skeleton keeps its canvas, and an avatar SVG cannot fall back
+              // to the 300×150 browser default (the faint giant icon).
+              "[data-shell-boot]{min-height:100vh;background:#f4f6fa;box-sizing:border-box}",
+              "[data-shell-boot] .milon-skeleton{display:block;background:#e4eaf2;border-radius:8px;min-height:16px}",
+              "[data-shell-boot] .milon-skeleton--tile{min-height:96px;border-radius:18px}",
+              ".owner-presence{width:156px;height:156px;display:inline-grid;flex:none}",
+              ".owner-presence-avatar,.owner-drift,.owner-breathe,.owner-micro{width:100%;height:100%;display:grid}",
+              ".owner-presence-svg{width:100%;height:100%;display:block}",
             ].join(""),
           }}
         />

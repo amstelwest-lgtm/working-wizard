@@ -4,6 +4,7 @@
  * because TanStack does not split that module. `?url` emits a separate file
  * that public pages never request.
  */
+import ownerDoorHref from "../components/owner-door/owner-door.css?url";
 import accountantPortalHref from "./accountant-portal.css?url";
 import featureFinderHref from "./feature-finder.css?url";
 import founderMetricsHref from "./founder-metrics.css?url";
@@ -65,4 +66,7 @@ export const authenticatedLayoutLinks: StyleLink[] = [
   ...sheetWithPreload(settingsPortalHref),
   ...sheetWithPreload(premiumShineHref),
   ...sheetWithPreload(ownerPremiumHref),
+  // Agent card faces. Without this sheet an unsized avatar SVG paints at the
+  // browser default (300×150) — the faint giant icon before styles apply.
+  ...sheetWithPreload(ownerDoorHref),
 ];

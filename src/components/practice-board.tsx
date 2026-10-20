@@ -29,6 +29,8 @@ import {
   clearForcePortal,
   openPracticeSettings,
   isMilonItMember,
+  isAccountantPortalOpen,
+  markAccountantPortalOpen,
 } from "@/lib/user-roles";
 import {
   cashPillarFollowsForecast,
@@ -1277,9 +1279,6 @@ function practiceSectionSubtitle(view: PracticeSection): string {
   return "Definitions and the highest-impact repair steps.";
 }
 
-/** A stay that already succeeded. Remounting All clients must not wait on it again. */
-const accountantPortalStay = new Set<string>();
-
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -1292,13 +1291,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   // trigger add-client against an owner login.
   const portalUserId = user?.id ?? null;
   const [portalReady, setPortalReady] = useState(
-    () => portalUserId != null && accountantPortalStay.has(portalUserId),
+    () => portalUserId != null && isAccountantPortalOpen(portalUserId),
   );
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   useEffect(() => {
     if (!portalUserId) return;
-    if (accountantPortalStay.has(portalUserId)) {
+    if (isAccountantPortalOpen(portalUserId)) {
       setPortalReady(true);
       return;
     }
@@ -1318,7 +1317,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       if (cancelled) return;
       window.clearTimeout(timer);
       if (stay) {
-        accountantPortalStay.add(portalUserId);
+        markAccountantPortalOpen(portalUserId);
         setPortalIntent("accountant");
         clearForcePortal();
         setPortalReady(true);

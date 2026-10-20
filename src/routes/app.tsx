@@ -3926,6 +3926,7 @@ function Index() {
     firstRunStep,
     profileFunnelOpen: showOnboarding || firstRunStep === "pick-type",
     financialsHydrated: !!effectiveClientId && hydratedClientId === effectiveClientId,
+    numbersTab: searchTab === "cash" || searchTab === "budget" || activeTab === "cash" || activeTab === "budget",
   });
   useEffect(() => {
     if (authLoading || !user) return;

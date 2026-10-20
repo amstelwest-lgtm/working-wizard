@@ -56,6 +56,23 @@ assert(shellBefore > 0 && entitlement > shellBefore, "Stripe entitlement runs af
 assert(!gate.includes("while (latest.current.brandLoading"), "brand hydrate does not consume the shell deadline");
 assert(gate.includes("shouldStayOnAccountantPortal"), "the stay check still runs");
 assert(gate.includes("getFirmBillingEntitlement"), "the shell still calls the Stripe gate");
+assert(gate.includes("FirmShellLoading"), "the gate keeps the dashboard skeleton while the stay check runs");
+assert(!gate.includes("animate-pulse"), "the gate does not swap the skeleton for a blank pulse");
+assert(
+  gate.indexOf("Shell paints before Stripe") < gate.indexOf("latest.current.checkEntitlement"),
+  "Stripe still runs after the shell is allowed",
+);
+
+const shell = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
+assert(
+  shell.indexOf("shouldStayOnAccountantPortal") < shell.indexOf("import(\"./_authenticated.gate\")"),
+  "the stay check starts before the gate chunk is required",
+);
+const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
+assert(root.includes("[data-shell-boot]"), "the boot skeleton has critical CSS");
+assert(root.includes(".owner-presence{width:156px"), "avatar SVG size is in the first style tag");
+const sheets = readFileSync(resolve("src/styles/app-route-styles.ts"), "utf8");
+assert(sheets.includes("owner-door.css?url"), "the authenticated layout preloads the agent-card sheet");
 
 const roles = readFileSync(resolve("src/lib/user-roles.ts"), "utf8");
 const signupAt = roles.indexOf("async function readPracticeSignup");
@@ -64,6 +81,16 @@ assert(signup.includes("getSession"), "practice signup metadata is read from the
 assert(!signup.includes(".getUser"), "practice signup metadata does not call getUser()");
 assert(roles.includes('once(`stay:${userId}`'), "the gate and the board share one stay check");
 assert(!roles.includes("accountantStayChecks.delete"), "a settled stay check is not dropped before the board mounts");
+const stayAt = roles.indexOf("async function resolveAccountantStay");
+const stayFn = roles.slice(stayAt, stayAt + 1400);
+const allAt = stayFn.indexOf("Promise.all");
+const allBlock = stayFn.slice(allAt, stayFn.indexOf("]);", allAt));
+assert(!allBlock.includes("isMilonItMember"), "the IT lookup is not in the stay Promise.all");
+assert(
+  stayFn.indexOf("firmSeatSkipsItWait(stay)") > 0 &&
+    stayFn.indexOf("firmSeatSkipsItWait(stay)") < stayFn.indexOf("return itPromise"),
+  "a firm seat opens the shell without waiting on the IT lookup",
+);
 
 const firms = readFileSync(resolve("src/lib/firm-brand.ts"), "utf8");
 const listAt = firms.indexOf("export async function listUserFirms");
