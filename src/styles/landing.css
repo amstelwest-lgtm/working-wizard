@@ -1940,9 +1940,20 @@ html[data-landing="1"] .hero-agent-name{
   html[data-landing="1"] .fc-2{order:4}
 }
 @media (max-width:420px){
-  html[data-landing="1"] .hero-agents{gap:10px}
+  html[data-landing="1"] .hero-agents{gap:8px}
+  html[data-landing="1"] .hero-agent{flex:1 1 0;min-width:0}
   html[data-landing="1"] .hero-agent-face{width:80px;height:80px}
-  html[data-landing="1"] .hero-agent-name{max-width:104px;padding:3px 6px}
+  /* The long name wraps at 10px inside a 104px pill. One line at phone width
+     keeps the three labels the same height. Desktop stays on the 10px rule. */
+  html[data-landing="1"] .hero-agent-name{
+    max-width:none;
+    width:100%;
+    font-size:clamp(7px, 2.18vw, 8.5px);
+    letter-spacing:-0.03em;
+    line-height:1.2;
+    padding:3px 4px;
+    white-space:nowrap;
+  }
 }
 @media (prefers-reduced-motion:reduce){
   html[data-landing="1"] .hero-agent-face video{display:none}
