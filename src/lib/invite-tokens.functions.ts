@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { ownerInvitePreviewPayload, type OwnerInvitePreview } from "@/lib/invite-claim";
 
 type AuthedRpc = {
   rpc: (
@@ -72,33 +73,73 @@ export const mintOwnerInvite = createServerFn({ method: "POST" })
     return { token };
   });
 
-/** Public: resolve an invite token to the business name + client code (no redeem). */
+type PreviewClient = {
+  name: string;
+  firm_id: string | null;
+  client_code: string | null;
+};
+
+/** Name, firm id, and code. The code is for the server gate only — never the response. */
+async function loadPreviewClient(clientId: string): Promise<PreviewClient> {
+  const first = await supabaseAdmin
+    .from("clients")
+    .select("name, firm_id, client_code")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (first.error && (first.error.message ?? "").includes("client_code")) {
+    const retry = await supabaseAdmin
+      .from("clients")
+      .select("name, firm_id")
+      .eq("id", clientId)
+      .maybeSingle();
+    if (retry.error) throw new Error(retry.error.message);
+    if (!retry.data) throw new Error("Invite link is invalid — client not found.");
+    return {
+      name: retry.data.name as string,
+      firm_id: retry.data.firm_id ?? null,
+      client_code: null,
+    };
+  }
+  if (first.error) throw new Error(first.error.message);
+  if (!first.data) throw new Error("Invite link is invalid — client not found.");
+  return {
+    name: first.data.name as string,
+    firm_id: first.data.firm_id ?? null,
+    client_code: (first.data as { client_code?: string | null }).client_code ?? null,
+  };
+}
+
+/** Practice display name only. A missing firm does not block the invite. */
+async function loadInvitingFirmName(firmId: string | null): Promise<string | null> {
+  if (!firmId) return null;
+  const { data, error } = await supabaseAdmin
+    .from("firms")
+    .select("name")
+    .eq("id", firmId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const name = String(data.name ?? "").trim();
+  return name || null;
+}
+
+/**
+ * Public: resolve an invite token to the business name and inviting firm.
+ * Does not redeem. Does not return the client code or any other firm/client columns.
+ */
 export const previewOwnerInvite = createServerFn({ method: "POST" })
   .inputValidator((input) => z.object({ token: z.string().trim().min(8).max(80) }).parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<OwnerInvitePreview> => {
     const { resolveInviteToClientId } = await import("@/lib/invite-tokens.resolve");
     const { assertOwnerHandoffPurpose } = await import("@/lib/accountant-invite");
     const resolved = await resolveInviteToClientId(data.token);
     assertOwnerHandoffPurpose(resolved.purpose);
-    const first = await supabaseAdmin
-      .from("clients")
-      .select("name, client_code")
-      .eq("id", resolved.clientId)
-      .maybeSingle();
-    if (first.error && (first.error.message ?? "").includes("client_code")) {
-      const retry = await supabaseAdmin
-        .from("clients")
-        .select("name")
-        .eq("id", resolved.clientId)
-        .maybeSingle();
-      if (retry.error) throw new Error(retry.error.message);
-      if (!retry.data) throw new Error("Invite link is invalid — client not found.");
-      return { clientName: retry.data.name as string, clientCode: null as string | null };
-    }
-    if (first.error) throw new Error(first.error.message);
-    if (!first.data) throw new Error("Invite link is invalid — client not found.");
-    return {
-      clientName: first.data.name,
-      clientCode: (first.data as { client_code?: string | null }).client_code ?? null,
-    };
+    const client = await loadPreviewClient(resolved.clientId);
+    const firmName = await loadInvitingFirmName(client.firm_id);
+    return ownerInvitePreviewPayload({
+      clientName: client.name,
+      firmName,
+      legacy: resolved.legacy,
+      tokenId: resolved.tokenId,
+      clientCode: client.client_code,
+    });
   });

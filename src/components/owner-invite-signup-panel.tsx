@@ -8,11 +8,14 @@ import {
   OwnerInvitePrimaryButton,
 } from "@/components/owner-invite-shell";
 import { PasswordWithShow } from "@/components/show-password";
+import { ownerInviteLead } from "@/lib/invite-claim";
 import { t } from "@/lib/market/copy";
 
 export type OwnerInviteSignupPanelProps = {
   inviteToken: string;
   businessName: string | null;
+  /** Inviting practice. Null falls back to "Your accountant". */
+  firmName?: string | null;
   inviteNeedsCode: boolean;
   inviteIsLegacyUuid: boolean;
   regClientCode: string;
@@ -35,6 +38,7 @@ export type OwnerInviteSignupPanelProps = {
 export function OwnerInviteSignupPanel({
   inviteToken,
   businessName,
+  firmName,
   inviteNeedsCode,
   inviteIsLegacyUuid,
   regClientCode,
@@ -62,9 +66,9 @@ export function OwnerInviteSignupPanel({
       <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-[#e8ede9]">
         {businessName ? `Join ${businessName}` : "Join your business workspace"}
       </h1>
-      <p className="mt-3 text-sm leading-relaxed text-[#8a938c]">
-        Your accountant invited you to view and sign off on your business numbers. Create an account
-        or sign in to accept — your workspace is already set up.
+      <p data-owner-invite-lead="" className="mt-3 text-sm leading-relaxed text-[#8a938c]">
+        {ownerInviteLead(firmName, businessName)}. Create an account or sign in to accept — your
+        workspace is already set up.
       </p>
 
       {previewError ? (
