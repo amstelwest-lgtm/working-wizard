@@ -70,6 +70,7 @@ export function MilonTeamDesk({
   marketCountry = null,
   audience = "accountant",
   sampleClient = false,
+  canonicalRatios = null,
 }: {
   feed: MilonTeamFeedApi;
   now?: Date;
@@ -87,6 +88,8 @@ export function MilonTeamDesk({
   audience?: "owner" | "accountant";
   /** clients.is_demo. A demo keeps the sample chip. A real client gets the preview chip. */
   sampleClient?: boolean;
+  /** Live scorecard ratios. Draft sentences quote these. */
+  canonicalRatios?: Record<string, number> | null;
 }) {
   const clock = now ?? new Date();
   const [filter, setFilter] = useState<FilterKey>(initialFilter);
@@ -301,6 +304,7 @@ export function MilonTeamDesk({
                       detail: row.detail,
                       figures: findingFigureEntries(row.evidence),
                       market: live?.market,
+                      canonicalRatios,
                     });
                     const draft = draftFindingLabel(row);
                     const checked = figuresCheckedLine(
@@ -326,6 +330,7 @@ export function MilonTeamDesk({
                           layout="desk"
                           row={row}
                           sentence={sentence}
+                          canonicalRatios={canonicalRatios}
                           market={live?.market}
                           meta={meta}
                           onOpen={onOpenApproved}

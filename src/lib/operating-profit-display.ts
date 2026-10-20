@@ -1,4 +1,6 @@
+import { t } from "./market/copy.ts";
 import { formatMoneyCompact, type MoneyMarket } from "./market/format.ts";
+import type { ResolvedMarket } from "./market/types.ts";
 
 /** Statement presentation scale. Actual rands stay 1. Missing scale is not guessed. */
 export function statementMoneyScale(financials: Record<string, unknown> | null | undefined): number {
@@ -45,8 +47,15 @@ export function operatingProfitLabel(input: {
  */
 export const IMPLAUSIBLE_SAMPLE_REVENUE = 10_000;
 
+/** South Africa wording. Call `implausibleSampleNote` so a US client says dollars. */
 export const IMPLAUSIBLE_SAMPLE_NOTE =
   "Implausible sample — these figures are too small to be this business's real rands.";
+
+/** Currency word comes from the client market. A US list never says rands. */
+export function implausibleSampleNote(market: Pick<ResolvedMarket, "copyPack"> | null | undefined): string {
+  const word = t("currencyWordPlural", market?.copyPack ? market : { copyPack: "za" });
+  return `Implausible sample — these figures are too small to be this business's real ${word}.`;
+}
 
 export function statementSampleImplausible(
   financials: Record<string, unknown> | null | undefined,

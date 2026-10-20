@@ -12,6 +12,7 @@ import {
   attachCitedEvidence,
   citedNumbers,
   displayAmounts,
+  draftMetricUnit,
   evidenceMetrics,
   polishAgentCopy,
   severityWithFloor,
@@ -353,6 +354,49 @@ assert(
     keptTwo.text ===
       "Profit Drivers is the weak pillar (50); stored health 69 vs live 67. Margin and pricing review for accountant.",
   "a two-sentence active title keeps both sentences and gains a full stop",
+);
+const healthNotDays = polishAgentCopy({
+  text: "Profit is the weak pillar (50); stored health 69 vs live 67.",
+  role: "title",
+  figures: { "Working Capital Days": 69, overall: 69, live_overall: 67 },
+});
+assert(
+  healthNotDays.ok === true &&
+    healthNotDays.text === "Profit is the weak pillar (50); stored health 69 vs live 67.",
+  `a health score stays a score when working capital days share 69 (${healthNotDays.ok ? healthNotDays.text : "refused"})`,
+);
+const doubledDays = polishAgentCopy({
+  text: "Creditor days of 73 days days.",
+  role: "detail",
+  figures: { "Creditor Days": 73 },
+});
+assert(
+  doubledDays.ok === true && doubledDays.text === "Creditor days of 73 days.",
+  `days is written once (${doubledDays.ok ? doubledDays.text : "refused"})`,
+);
+const healthUnit = polishAgentCopy({
+  text: "Stored health 69 days vs live 67.",
+  role: "title",
+  figures: { "Working Capital Days": 69, live_overall: 67 },
+});
+assert(
+  healthUnit.ok === true && healthUnit.text === "Stored health 69 vs live 67.",
+  `health loses a days unit (${healthUnit.ok ? healthUnit.text : "refused"})`,
+);
+assert(draftMetricUnit("overall", 69) === "count", "health is a score with no unit");
+assert(draftMetricUnit("live_overall", 67) === "count", "live health is a score");
+assert(draftMetricUnit("Working Capital Days", 69) === "days", "working capital days stay days");
+assert(draftMetricUnit("Creditor Days", 73) === "days", "creditor days stay days");
+assert(draftMetricUnit("Operating Margin", 0.086) === "percent", "operating margin is a percent");
+const margin = polishAgentCopy({
+  text: "The operating margin of 16.0% is the figure to quote.",
+  role: "detail",
+  figures: { "Operating Margin": 0.16 },
+  canonicalRatios: { "Operating Margin": 0.086 },
+});
+assert(
+  margin.ok === true && margin.text.includes("8.6%") && !margin.text.includes("16.0%"),
+  `drafts quote the scorecard operating margin (${margin.ok ? margin.text : "refused"})`,
 );
 const keptDays = polishAgentCopy({
   text: "Oct 2026: debtor days 43.8 and creditor days 73 (Sep: 25 and 37). Confirm the swing before acting",
