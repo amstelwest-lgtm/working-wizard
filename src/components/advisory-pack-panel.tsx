@@ -61,9 +61,8 @@ import {
   advisoryPackSignOffGate,
   computeEditStats,
   diffPackSections,
-  mergePackDataGaps,
+  packAsGeneratedLabel,
   packSectionsForPdf,
-  packStatementAmount,
   type AdvisoryPack,
   type PackReview,
   type PackSection,
@@ -73,11 +72,6 @@ import {
   getLatestAdvisoryPack,
   reviewAdvisoryPack,
 } from "@/lib/advisory-pack.functions";
-import { parseOperatingProfile } from "@/lib/client-profile";
-import { storedOpeningIsMissing } from "@/lib/client-metrics";
-import { liveHealthFromBooks } from "@/lib/health-score";
-import { clientIndustryDisplay } from "@/lib/profile-signals";
-import type { LiveHealthQuote } from "@/lib/score-prose";
 
 type Props = {
   clientId: string | null;
@@ -103,8 +97,8 @@ type Props = {
    */
   onSignoffAction?: (action: AdvisorySignoffAction | null) => void;
   /**
-   * Floor the Cash tab is showing. A stored pack that still quotes the
-   * $50,000 comfort fallback is rewritten on screen to this number.
+   * Kept so existing callers compile. The pack body is the stored snapshot
+   * and is not rewritten to this floor.
    */
   liveCashFloor?: number | null;
   currency?: string | null;
@@ -209,8 +203,6 @@ export function AdvisoryPackPanel({
   const [showDraft, setShowDraft] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState(true);
   const [exportingPdf, setExportingPdf] = useState(false);
-  const [liveGaps, setLiveGaps] = useState<Array<{ title: string; severity: string }>>([]);
-  const [liveHealth, setLiveHealth] = useState<LiveHealthQuote | null>(null);
   const [precardOpen, setPrecardOpen] = useState(false);
   const seq = useRef(0);
   const readMarked = useRef<string | null>(null);
@@ -233,6 +225,9 @@ export function AdvisoryPackPanel({
     [pack, currentFigures],
   );
   const shownStatus = pack ? signOffGate.presentedStatus : null;
+  const generatedOnLabel = pack
+    ? packAsGeneratedLabel(fmtWhen(pack.generated_at || pack.content.generatedAt, market))
+    : null;
 
   const load = useCallback(
     async (packId?: string) => {
@@ -266,65 +261,7 @@ export function AdvisoryPackPanel({
   useEffect(() => {
     setPack(null);
     setLoaded(false);
-    setLiveGaps([]);
-    setLiveHealth(null);
   }, [clientId]);
-
-  useEffect(() => {
-    if (!clientId || !pack) return;
-    let cancelled = false;
-    void (async () => {
-      const [clientRes, artRes] = await Promise.all([
-        supabase
-          .from("clients")
-          .select("name, business_type, financials, cashflow, financials_updated_at, operating_profile")
-          .eq("id", clientId)
-          .maybeSingle(),
-        supabase.from("client_artifacts").select("kind").eq("client_id", clientId).limit(50),
-      ]);
-      if (cancelled) return;
-      const financials =
-        clientRes.data?.financials &&
-        typeof clientRes.data.financials === "object" &&
-        !Array.isArray(clientRes.data.financials)
-          ? (clientRes.data.financials as Record<string, unknown>)
-          : null;
-      const kinds = new Set((artRes.data ?? []).map((row) => row.kind ?? ""));
-      const profile = parseOperatingProfile(clientRes.data?.operating_profile);
-      const health = liveHealthFromBooks({
-        financials,
-        cashflow: clientRes.data?.cashflow,
-        financialsUpdatedAt: clientRes.data?.financials_updated_at ?? null,
-        fyStartMonth: profile?.fyStartMonth ?? market.fyStartMonthDefault,
-        market,
-        industry: clientIndustryDisplay(
-          clientRes.data?.name,
-          profile,
-          clientRes.data?.business_type,
-        ),
-        timeZone: market.timezone,
-      });
-      setLiveHealth({
-        overall: health.overall,
-        weakestLabel: health.weakestPillar?.label ?? null,
-        weakestScore: health.weakestPillar?.score ?? null,
-        label: health.displayLabel,
-        pillars: health.pillars.map((pillar) => ({ label: pillar.label, score: pillar.score })),
-      });
-      setLiveGaps(
-        mergePackDataGaps([], {
-          receivables: packStatementAmount(financials, "receivables"),
-          payables: packStatementAmount(financials, "payables"),
-          hasAgedDebtors: kinds.has("aged_debtors"),
-          hasAgedCreditors: kinds.has("aged_creditors"),
-          openingMissing: storedOpeningIsMissing(clientRes.data?.cashflow),
-        }).map((gap) => ({ title: gap.title, severity: gap.severity })),
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [clientId, pack?.id, market]);
 
   // Owner opening an approved pack = delivery (recorded once per pack per mount).
   // A stale sign-off is not delivery — the figures no longer match Overview.
@@ -532,9 +469,6 @@ export function AdvisoryPackPanel({
         recordedSigner,
         sample: Boolean(demoRow?.is_demo),
         figuresChanged: pack.status === "approved" && signOffGate.figuresChanged,
-        liveFloor: liveCashFloor,
-        liveGaps,
-        liveHealth,
       });
       track("advisory_pack_pdf_exported", {
         clientId,
@@ -894,7 +828,7 @@ export function AdvisoryPackPanel({
           className="mt-3 rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-[12px] font-semibold text-amber-800 dark:text-amber-200"
           data-pack-stale
         >
-          STALE. {ADVISORY_PACK_STALE_NOTE}.
+          STALE. {ADVISORY_PACK_STALE_NOTE}.{generatedOnLabel ? ` ${generatedOnLabel}.` : ""}
         </p>
       ) : null}
 
@@ -909,10 +843,6 @@ export function AdvisoryPackPanel({
           {packSectionsForPdf(pack.content.sections, {
             signed: pack.status === "approved",
             firmName: signoff?.firm_name ?? profile.firmName,
-            liveFloor: liveCashFloor,
-            currency,
-            liveGaps,
-            liveHealth,
           }).map((s) => {
             const diff = changedByKey.get(s.key);
             const isEditing = editing === s.key;

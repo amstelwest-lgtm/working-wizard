@@ -142,16 +142,13 @@ const presence = ownerPresence(
   quote,
 );
 
-const shown = packSectionsForPdf(
-  [
-    {
-      key: "state_of_business",
-      title: "Where the business stands",
-      body: "Chill Pepper scores 74 (watch). Strongest pillar: Cash Flow (93). Weakest: Profit Drivers (60). Profit Drivers is the weakest pillar.",
-    },
-  ],
-  { liveHealth: quote },
-);
+const shown = packSectionsForPdf([
+  {
+    key: "state_of_business",
+    title: "Where the business stands",
+    body: "Chill Pepper scores 74 (watch). Strongest pillar: Cash Flow (93). Weakest: Profit Drivers (60). Profit Drivers is the weakest pillar.",
+  },
+]);
 const packBody = shown[0]?.body ?? "";
 
 const sameOverall = [
@@ -182,13 +179,11 @@ const analystCard = presence.agents.find((agent) => agent.agent === "analyst");
 assert(analystCard?.sentence.includes(`Health is ${overall}`), analystCard?.sentence ?? "no analyst card");
 assert(analystCard?.sentence.includes(`with ${weakest?.label} weakest at ${weakest?.score}`), analystCard?.sentence ?? "");
 
-assert(packBody.includes(`scores ${overall}`), packBody);
-assert(packBody.includes(`(${live.displayLabel.toLowerCase()})`), packBody);
-assert(packBody.includes(`Weakest: ${weakest?.label} (${weakest?.score})`), packBody);
-assert(packBody.includes(`${weakest?.label} is the weakest pillar`), packBody);
-assert(packBody.includes(`Cash (${weakest?.score})`), packBody);
-assert(!packBody.includes("scores 74"), packBody);
-assert(!packBody.includes("Cash (93)"), packBody);
-assert(!/Weakest: Profit \(\d+\)/.test(packBody), packBody);
+assert(packBody.includes("scores 74 (watch)"), packBody);
+assert(packBody.includes("Cash (93)"), packBody);
+assert(packBody.includes("Weakest: Profit (60)"), packBody);
+assert(packBody.includes("Profit is the weakest pillar"), packBody);
+assert(!packBody.includes(`scores ${overall}`), `pack body must stay stored, got ${packBody}`);
+assert(!packBody.includes("Cash Flow"), packBody);
 
 console.log(`live-health-single-source ok ${overall} ${weakest?.label} ${weakest?.score}`);

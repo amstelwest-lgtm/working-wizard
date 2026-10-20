@@ -45,7 +45,7 @@ import {
 import { cashComfortThreshold } from "./cash-runway.ts";
 import { humanizeInternalFieldNames } from "./client-brain-questions.ts";
 import { formatMoney, formatMoneyCompact } from "./market/format.ts";
-import { canonicalScoreProse, overlayLiveHealthProse, type LiveHealthQuote } from "./score-prose.ts";
+import { canonicalScoreProse } from "./score-prose.ts";
 import {
   STATEMENT_DEPTH_DISCLOSURE,
   expectedImpactLabel,
@@ -420,6 +420,16 @@ export const ADVISORY_PACK_STALE_NOTE =
   "Figures have changed since this pack was generated, regenerate";
 
 /**
+ * Snapshot label beside the stale banner. The pack body stays as generated;
+ * this says when that snapshot was written. Empty and the em dash are not dates.
+ */
+export function packAsGeneratedLabel(formatted: string | null | undefined): string | null {
+  const when = formatted?.trim() ?? "";
+  if (!when || when === "—") return null;
+  return `as generated on ${when}`;
+}
+
+/**
  * An already-generated pack keeps its text. This is true when that text no
  * longer matches the runway, cash, or health the screens show now.
  */
@@ -788,14 +798,12 @@ function packMoney(n: number, currency: string | null | undefined): string {
   return fmtMoney(n, "R");
 }
 
-/** The currency comfort constant. A live forecast floor replaces it at display time. */
+/** The currency comfort constant. Display no longer rewrites a stored pack to this. */
 const DEFAULT_COMFORT_FLOOR = 50_000;
 
 /**
- * Stored pack copy can still quote the $50,000 / R50 000 comfort fallback
- * from a generation that had no weekly outflows. The Cash tab's floor is
- * about four weeks of outflows. This rewrites only sentences that name a
- * floor or a comfort line, and only when the live floor is a different number.
+ * Rewrites a stored $50,000 / R50 000 comfort line to a live floor.
+ * Pack display does not call this: a pack stays the snapshot it was generated from.
  */
 export function alignPackFloorCopy(
   text: string,
@@ -878,26 +886,19 @@ export function signedPackNextStep(firmName: string | null | undefined): string 
  * stored content (so generation tests still see the section) and are hidden
  * here. A signed pack rewrites "reviews this pack first" at display time,
  * because the body was frozen before sign-off.
+ *
+ * The body is the stored snapshot. Live health, the cash-tab floor, and
+ * current data gaps are not painted over it — a stale banner says the books
+ * moved, and `packAsGeneratedLabel` says when this text was written.
+ * `packScoreProse` only renames legacy pillars and strips "/100".
  */
 export function packSectionsForPdf<T extends { key?: string; title: string; body: string; bullets?: string[] }>(
   sections: T[],
   opts?: {
     signed?: boolean;
     firmName?: string | null;
-    /** Cash-tab floor. Replaces a stored $50,000 comfort line at display time. */
-    liveFloor?: number | null;
-    currency?: string | null;
-    /** Missing aged lists and the opening, from the books on file now. */
-    liveGaps?: readonly { title: string; severity: string }[] | null;
-    /** Live floor-applied score. Replaces the overall and weakest baked into the body. */
-    liveHealth?: LiveHealthQuote | null;
   },
 ): T[] {
-  const align = (text: string) =>
-    overlayLiveHealthProse(
-      packScoreProse(alignPackFloorCopy(text, opts?.liveFloor, opts?.currency)),
-      opts?.liveHealth,
-    );
   return sections
     .filter((section) => {
       const recommendations = section.key === "recommendations" || section.title === "Recommendations";
@@ -909,37 +910,13 @@ export function packSectionsForPdf<T extends { key?: string; title: string; body
       const body =
         opts?.signed && nextStep && /reviews this pack first/i.test(section.body)
           ? signedPackNextStep(opts.firmName)
-          : align(section.body);
-      return overlayStillNeeds(
-        {
-          ...section,
-          body,
-          bullets: section.bullets?.map(align),
-        },
-        opts?.liveGaps,
-      );
+          : packScoreProse(section.body);
+      return {
+        ...section,
+        body,
+        bullets: section.bullets?.map(packScoreProse),
+      };
     });
-}
-
-function overlayStillNeeds<T extends { key?: string; title: string; body: string; bullets?: string[] }>(
-  section: T,
-  liveGaps: readonly { title: string; severity: string }[] | null | undefined,
-): T {
-  const isGaps = section.key === "data_gaps" || section.title === "What MILŌN still needs";
-  if (!isGaps || !liveGaps?.length) return section;
-  const hay = `${section.body}\n${(section.bullets ?? []).join("\n")}`;
-  const missing = liveGaps.filter((gap) => gap.title.trim() && !hay.includes(gap.title.trim()));
-  if (!missing.length) return section;
-  const bullets = [...(section.bullets ?? [])];
-  for (const gap of missing) {
-    const rank =
-      gap.severity === "critical" ? "Blocking" : gap.severity === "important" ? "Needed" : "Helpful";
-    bullets.push(`${rank} · ${gap.title.trim()}`);
-  }
-  const body = /Nothing outstanding/i.test(section.body)
-    ? `${bullets.length} open request${bullets.length === 1 ? "" : "s"}. Until these land, treat the affected sections as provisional.`
-    : section.body;
-  return { ...section, body, bullets };
 }
 
 export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
