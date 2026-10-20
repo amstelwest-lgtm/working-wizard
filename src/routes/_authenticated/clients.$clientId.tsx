@@ -351,7 +351,7 @@ import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, 
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
 import { healthSnapshotFromBooks, renderHealthNarrative } from "@/lib/health-snapshot";
-import { draftStoredFiguresHash, draftStoredHealth } from "@/lib/draft-figures";
+import { draftStoredFiguresHash, draftStoredHealth, latestFiguresStamp } from "@/lib/draft-figures";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState } from "@/components/primitives";
@@ -3652,13 +3652,17 @@ function ClientView() {
       ),
     [homeActivity.runs, settledRows, workingRows],
   );
+  const figuresUpdatedAt = useMemo(
+    () => latestFiguresStamp(snapshots.map((row) => ({ at: row.created_at, source: row.source }))),
+    [snapshots],
+  );
   const homePresence = useMemo(
     () =>
       steerOpenHandoffs(
-        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, liveScoreSnapshot),
+        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, liveScoreSnapshot, figuresUpdatedAt),
         openAgents,
       ),
-    [homeActivity, homeCardRuns, openAgents, overallHealth],
+    [homeActivity, homeCardRuns, openAgents, overallHealth, figuresUpdatedAt],
   );
   const shownHandoffs = useMemo(
     () =>
@@ -3890,6 +3894,8 @@ function ClientView() {
       storedHash: shownDraft ? draftStoredFiguresHash(shownDraft.evidence) : null,
       health: liveScoreSnapshot,
       storedHealth: shownDraft ? draftStoredHealth(shownDraft.evidence) : null,
+      writtenAt: shownDraft?.created_at ?? null,
+      figuresUpdatedAt,
     };
     const titlePresented = shownDraft
       ? presentHomeDraftTitle(shownDraft.title, canonicalRatios, liveDraft)
@@ -3932,6 +3938,7 @@ function ClientView() {
     dataFreshness,
     reportsLine,
     booksSpanLabel,
+    figuresUpdatedAt,
   ]);
   const homeBrief = useMemo(
     () =>
@@ -3979,8 +3986,10 @@ function ClientView() {
             detail: row.detail,
             figuresHash: draftStoredFiguresHash(row.evidence),
             storedHealth: draftStoredHealth(row.evidence),
+            createdAt: row.created_at,
           }];
         }),
+        figuresUpdatedAt,
         canonicalRatios,
         healthOverall: overallHealth.overall,
         healthSnapshot: liveScoreSnapshot,
@@ -4010,6 +4019,7 @@ function ClientView() {
       homeBooks,
       statementPosition.receivables,
       homeActivity,
+      figuresUpdatedAt,
       canonicalRatios,
       overallHealth.overall,
       gateMarket,
@@ -5665,6 +5675,7 @@ function ClientView() {
                           clientName={client.name}
                           canonicalRatios={canonicalRatios}
                           healthSnapshot={liveScoreSnapshot}
+                          figuresUpdatedAt={figuresUpdatedAt}
                           reviewSignoff={stampFromSignoff(actionPlanSignoff, false)}
                           simplified
                           isOwner

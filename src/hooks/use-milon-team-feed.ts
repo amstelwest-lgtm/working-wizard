@@ -6,7 +6,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { agentKeyFromAssignee } from "@/lib/action-handoff";
 import { adviceIndustryLabel } from "@/lib/advice-industry";
+import { latestFiguresStamp } from "@/lib/draft-figures";
+import { handoffAssigneeName } from "@/lib/owner-handoff";
+import { ACTION_PLAN_REFRESH_EVENT } from "@/lib/owner-handoff-client";
 import { getAdvisorySignoffState } from "@/lib/advisory-signoff";
 import { invokeBrainDeliverableDraft } from "@/lib/brain-deliverable-client";
 import { isMissingBrainRelation } from "@/lib/client-brain";
@@ -64,6 +68,20 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
   }, []);
 
   useEffect(() => {
+    let timer = 0;
+    const onRefresh = () => {
+      window.clearTimeout(timer);
+      // The click dispatches before the note is inserted. Wait for the later one.
+      timer = window.setTimeout(() => refresh(), 650);
+    };
+    window.addEventListener(ACTION_PLAN_REFRESH_EVENT, onRefresh);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(ACTION_PLAN_REFRESH_EVENT, onRefresh);
+    };
+  }, [refresh]);
+
+  useEffect(() => {
     const id = clientId.trim();
     if (!id) {
       loadedFor.current = "";
@@ -83,7 +101,7 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
     );
 
     void (async () => {
-      const [clientRes, snapRes, stepRes, draftRes, requestRes, noteRes, artifactRes, diagnosisRes] =
+      const [clientRes, snapRes, stepRes, draftRes, requestRes, noteRes, artifactRes, diagnosisRes, updateRes] =
         await Promise.all([
           supabase
             .from("clients")
@@ -140,6 +158,12 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
             .eq("event", "diagnosis.reviewed")
             .order("created_at", { ascending: false })
             .limit(20),
+          supabase
+            .from("action_updates")
+            .select("id, note, created_at, action_item_id")
+            .eq("client_id", id)
+            .order("created_at", { ascending: false })
+            .limit(40),
         ]);
 
       const errors = [
@@ -182,6 +206,36 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
       } catch (err) {
         signoffError = err instanceof Error ? err.message : "Could not read sign-off";
       }
+
+      const updateRows = updateRes.error ? [] : (updateRes.data ?? []);
+      const actionIds = [
+        ...new Set(
+          updateRows
+            .map((row) => row.action_item_id)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ];
+      const actionTitles = new Map<string, string>();
+      if (actionIds.length > 0) {
+        const itemRes = await supabase.from("action_items").select("id, title").in("id", actionIds);
+        if (!itemRes.error) {
+          for (const row of itemRes.data ?? []) {
+            const title = row.title?.replace(/\s+/g, " ").trim() ?? "";
+            if (row.id && title) actionTitles.set(row.id, title);
+          }
+        }
+      }
+      const handoffs = updateRows.flatMap((row) => {
+        const actionId = row.action_item_id ?? "";
+        const title = actionTitles.get(actionId) ?? "";
+        const agent = agentKeyFromAssignee(handoffAssigneeName(row.note));
+        if (!row.id || !agent || !title || !row.created_at) return [];
+        return [{ id: row.id, agent, title, at: row.created_at }];
+      });
+      const figuresUpdatedAt = latestFiguresStamp([
+        ...((snapRes.data ?? []).map((row) => ({ at: row.created_at, source: row.source }))),
+        ...((artifactRes.data ?? []).map((row) => ({ at: row.created_at, source: "upload" as const }))),
+      ]);
 
       const snapshots = snapRes.data ?? [];
       const current = snapshots[0] ?? null;
@@ -299,7 +353,9 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
               text: row.body,
               at: row.created_at,
             })),
+          handoffs,
         },
+        figuresUpdatedAt,
         error: signoffError || errors[0] || null,
       });
 

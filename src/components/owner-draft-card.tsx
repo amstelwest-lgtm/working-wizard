@@ -48,6 +48,7 @@ export function OwnerDraftCard({
   sentence,
   liveSentence = null,
   health = null,
+  figuresUpdatedAt = null,
   meta,
   market: marketProp,
   canonicalRatios = null,
@@ -63,6 +64,8 @@ export function OwnerDraftCard({
   liveSentence?: string | null;
   /** Live score snapshot. Score claims that disagree with it are not shown. */
   health?: HealthScoreSnapshot | null;
+  /** Latest upload or ledger sync. A draft written after this keeps its sentence. */
+  figuresUpdatedAt?: string | null;
   meta?: ReactNode;
   market?: MoneyMarket & DateMarket;
   /** Live scorecard ratios. A stored operating margin is rewritten to this figure. */
@@ -116,6 +119,8 @@ export function OwnerDraftCard({
           canonicalRatios,
           liveHealth: health,
           evidence: row.evidence,
+          writtenAt: row.created_at,
+          figuresUpdatedAt,
         })
       : "";
   const replacement = liveSentence ?? (health ? renderHealthNarrative(health) : null);

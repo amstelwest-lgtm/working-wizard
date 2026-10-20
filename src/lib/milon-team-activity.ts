@@ -17,7 +17,7 @@ import {
   snapshotFromLiveQuote,
   type HealthScoreSnapshot,
 } from "./health-snapshot";
-import { quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
+import { figuresMovedAfterDraft, quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
 import { offsetInsideCalendarSpan, repairCalendarFigureLeaks, rewriteDraftMonthStamp } from "./statement-period";
 
 export const TODAY_RATIO_CAP = 3;
@@ -628,6 +628,10 @@ export function findingSentence(input: {
   /** When set, a current-state health sentence is checked against this snapshot. */
   liveHealth?: LiveHealthQuote | HealthScoreSnapshot | null;
   evidence?: unknown;
+  /** When this draft was saved. */
+  writtenAt?: string | null;
+  /** Latest upload or ledger sync. A draft at or after this clock stays as written. */
+  figuresUpdatedAt?: string | null;
 }): string {
   const market = input.market ?? ZA_MARKET;
   const title = input.title.replace(/\s+/g, " ").trim();
@@ -639,7 +643,11 @@ export function findingSentence(input: {
   const formatted = formatFindingProse(text, input.figures ?? {}, market, input.canonicalRatios);
   const scored = quoteLiveScoreOnly(formatted, input.liveHealth?.overall);
   const live = narrativeSnapshot(input.liveHealth);
-  text = presentHealthNarrative(scored, live, readStoredHealthSnapshot(input.evidence)).text;
+  const moved = figuresMovedAfterDraft(input.writtenAt, input.figuresUpdatedAt);
+  text =
+    moved === false
+      ? scored
+      : presentHealthNarrative(scored, live, readStoredHealthSnapshot(input.evidence)).text;
   if (!text) return "";
   if (!/[.!?]$/.test(text)) text = `${text}.`;
   return text;
