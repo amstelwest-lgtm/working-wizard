@@ -27,7 +27,7 @@ import {
   importedUpdateMessage,
   type ImportApplyResult,
 } from "@/lib/statement-import-apply";
-import type { PeriodChoice } from "@/lib/statement-import-plan";
+import { SET_PERIOD_DATES, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { AutoPopulateOptions } from "@/components/auto-populate-options";
 import type { AutoPopulateDialogState } from "@/components/bank-statement-drafter";
 import {
@@ -74,9 +74,12 @@ interface Props {
     inputs: MappedInputs,
     autoPopulate: AutoPopulatePrefs,
     choice?: PeriodChoice | null,
+    period?: { periodStart: string; periodEnd: string; periodMonths: number } | null,
   ) => void | ImportApplyResult | Promise<void | ImportApplyResult>;
   /** Per-client auto-populate state; undefined while loading → first upload. */
   autoPopulate?: AutoPopulateDialogState | null;
+  /** Books already have a start and an end. An unknown P&L must collect both. */
+  booksHaveSpan?: boolean;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -249,7 +252,14 @@ function Section({
 
 // ─── Main modal ────────────────────────────────────────────────────────────────
 
-export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPopulate }: Props) {
+export function ExtractionReviewModal({
+  result,
+  open,
+  onClose,
+  onConfirm,
+  autoPopulate,
+  booksHaveSpan = false,
+}: Props) {
   const { money, t, market } = useMarketFormat();
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
@@ -263,6 +273,8 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
     null,
   );
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
   useEffect(() => {
     if (!open) return;
     const stored = autoPopulate?.prefs ?? defaultAutoPopulatePrefs();
@@ -350,8 +362,14 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
   const nullCount = coreFields.filter((v) => v == null).length;
   const hasNulls = nullCount > 0;
   const unresolvedConflicts = conflicts.filter((c) => !conflictSelections[c.field]);
+  const needsRange =
+    booksHaveSpan &&
+    statementKindFromMetadata(meta) !== "balance_sheet" &&
+    !statementSpan(meta?.period_start_date, meta?.period_end_date, meta?.period_months);
+  const typedSpan = needsRange ? statementSpan(rangeStart, rangeEnd) : null;
 
   const handleConfirm = (choice?: PeriodChoice | null) => {
+    if (needsRange && !typedSpan) return;
     // Build final extraction with edits + conflict resolutions applied
     const finalIS = { ...is };
     const finalBS = { ...bs };
@@ -378,7 +396,14 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
     setApplying(true);
     setApplyTone(null);
     setApplyMessage(null);
-    void Promise.resolve(onConfirm(mapped, autoPrefs, choice ?? null))
+    const period = typedSpan
+      ? {
+          periodStart: typedSpan.periodStart,
+          periodEnd: typedSpan.periodEnd,
+          periodMonths: typedSpan.months,
+        }
+      : null;
+    void Promise.resolve(onConfirm(mapped, autoPrefs, choice ?? null, period))
       .then((outcome) => {
         if (outcome && outcome.choice) {
           setChoiceLabels(outcome.choice);
@@ -761,6 +786,36 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
           )}
 
           {/* ── Footer actions ── */}
+          {needsRange ? (
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-200">
+                Statement period
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">{SET_PERIOD_DATES}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <label className="text-xs text-slate-200" htmlFor="import-period-start">
+                  Start date
+                  <input
+                    id="import-period-start"
+                    type="date"
+                    value={rangeStart}
+                    onChange={(e) => setRangeStart(e.target.value)}
+                    className="mt-1 block h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100"
+                  />
+                </label>
+                <label className="text-xs text-slate-200" htmlFor="import-period-end">
+                  End date
+                  <input
+                    id="import-period-end"
+                    type="date"
+                    value={rangeEnd}
+                    onChange={(e) => setRangeEnd(e.target.value)}
+                    className="mt-1 block h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100"
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
           <AutoPopulateOptions
             firstUpload={
               (autoPopulate?.firstUpload ?? true) &&
@@ -786,7 +841,9 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
           <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-800">
             <Button
               onClick={() => handleConfirm()}
-              disabled={unresolvedConflicts.length > 0 || !acceptedQuality || applying}
+              disabled={
+                unresolvedConflicts.length > 0 || !acceptedQuality || applying || (needsRange && !typedSpan)
+              }
               className="flex-1 bg-[#0B5FFF] hover:bg-[#2563EB] text-white font-semibold"
             >
               <CheckCircle2 className="h-4 w-4 mr-1.5" />

@@ -141,7 +141,7 @@ import {
   statementImportWhat,
   withFinancialsWriteRev,
 } from "@/lib/statement-import-apply";
-import { planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, liveStatementSpan, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -6808,6 +6808,7 @@ function Index() {
             <ExtractionReviewModal
               result={extractionForReview}
               open={reviewOpen}
+              booksHaveSpan={Boolean(liveStatementSpan(v))}
               onClose={() => {
                 setReviewOpen(false);
                 setExtractionForReview(null);
@@ -6815,18 +6816,19 @@ function Index() {
                 setReplaceLiveOnHistory(false);
               }}
               autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
-              onConfirm={async (mapped, autoPopulate, periodChoice) => {
+              onConfirm={async (mapped, autoPopulate, periodChoice, periodOverride) => {
                 const entries = Object.entries(mapped).filter(
                   ([k, val]) => val !== undefined && k in defaults,
                 );
                 const reviewMeta = extractionForReview?.document_metadata;
+                const resolvedStart = periodOverride?.periodStart ?? reviewMeta?.period_start_date ?? null;
+                const resolvedEnd = periodOverride?.periodEnd ?? reviewMeta?.period_end_date ?? null;
+                const resolvedMonths = periodOverride?.periodMonths ?? reviewMeta?.period_months ?? null;
                 const periodEntries: [string, string][] = [];
-                if (reviewMeta?.period_months)
-                  periodEntries.push(["periodMonths", String(reviewMeta.period_months)]);
-                if (reviewMeta?.period_start_date)
-                  periodEntries.push(["periodStart", reviewMeta.period_start_date]);
-                if (reviewMeta?.period_end_date)
-                  periodEntries.push(["periodEnd", reviewMeta.period_end_date]);
+                if (resolvedMonths)
+                  periodEntries.push(["periodMonths", String(resolvedMonths)]);
+                if (resolvedStart) periodEntries.push(["periodStart", resolvedStart]);
+                if (resolvedEnd) periodEntries.push(["periodEnd", resolvedEnd]);
                 // Merge CSV/Excel-only extras (variableCosts, top5Revenue, founderHours)
                 // that aren't surfaced in the review modal but were extracted from the file
                 const extras = pendingCsvExtras ?? {};
@@ -6842,7 +6844,7 @@ function Index() {
                   !replaceLiveOnHistory
                 ) {
                   const fields = Object.fromEntries(allEntries) as Record<string, string>;
-                  const periodEnd = extractionForReview?.document_metadata?.period_end_date ?? null;
+                  const periodEnd = resolvedEnd;
                   const saved = await upsertPeriodSnapshot({
                     clientId: effectiveClientId,
                     financials: fields,
@@ -6885,14 +6887,8 @@ function Index() {
                     message: importFailureMessage("No client is open for this upload."),
                   };
                 }
-                const periodEndForCash =
-                  extractionForReview?.document_metadata?.period_end_date ?? null;
+                const periodEndForCash = resolvedEnd;
                 const uploadKind = statementKindFromMetadata(reviewMeta);
-                const fileSpan = statementSpan(
-                  reviewMeta?.period_start_date,
-                  reviewMeta?.period_end_date,
-                  reviewMeta?.period_months,
-                );
                 const healthBefore = liveHealthFromBooks({
                   financials: v as unknown as Record<string, unknown>,
                   cashflow: clientMeta?.cashflow ?? null,
@@ -6900,15 +6896,19 @@ function Index() {
                   market: boardMarket,
                   timeZone: boardMarket.timezone,
                 });
-                const planned = planStatementImport({
+                const planned = confirmUploadedStatement({
                   existing: v,
                   incoming: Object.fromEntries(allEntries),
                   kind: uploadKind,
-                  span: fileSpan,
+                  periodStart: resolvedStart,
+                  periodEnd: resolvedEnd,
+                  periodMonths: resolvedMonths,
                   choice: periodChoice ?? null,
                   pillarsBefore: healthBefore.pillars,
                   market: boardMarket,
+                  fyStartMonth,
                 });
+                const fileSpan = planned.span;
                 if (planned.action === "block") {
                   return { ok: false as const, message: planned.message };
                 }

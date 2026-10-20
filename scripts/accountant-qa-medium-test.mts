@@ -293,8 +293,12 @@ assert(disclaimer.includes("aria-label={label}"), "checkbox has an accessible na
 
 const clientPage = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(
-  clientPage.includes("handleConfirmFinancials(result, prefs, period)"),
-  "confirm passes the chosen period",
+  clientPage.includes("passStatementChoice(handleConfirmFinancials)"),
+  "confirm passes the chosen period and the replace or add choice",
+);
+assert(
+  !clientPage.includes("handleConfirmFinancials(result, prefs, period)"),
+  "the page does not drop the import choice",
 );
 assert(
   clientPage.includes("Choose the statement period before importing."),
