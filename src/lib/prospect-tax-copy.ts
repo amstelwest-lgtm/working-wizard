@@ -1,19 +1,24 @@
 /**
- * Tax Specialist copy for /talk/tax-specialist.
- * Loaded by the client only after a ZA market check. The edge function
- * imports it too. A non-ZA visitor never receives this module from the route.
+ * Server-side filing refusal for /talk/tax-specialist.
+ * The public card lives in prospect-talk.ts so the index and the page
+ * share one greeting. This module is not a client route import.
  */
+import { publicProspectAgent, PROSPECT_TAX_SLUG } from "./prospect-talk.ts";
+
+const card = publicProspectAgent(PROSPECT_TAX_SLUG);
+
 export const TAX_TALK = {
-  slug: "tax-specialist" as const,
+  slug: PROSPECT_TAX_SLUG,
   face: "tax_specialist" as const,
-  role: "Tax Specialist",
-  greeting:
-    "I'm the Milōn Tax Specialist. I prepare a labelled SAMPLE company tax worksheet an accountant can check. I do not log into SARS, and I do not file anything.",
-  questions: ["Is this a standard resident company?", "When does the year of assessment end?"],
+  role: card?.role ?? "Tax Specialist",
+  greeting: card?.greeting ?? "",
+  questions: card?.questions ?? [],
   filingReply:
-    "I do not log into SARS and I do not file anything. An accountant files. This page only shows a labelled SAMPLE.",
+    "I do not log into SARS and I do not file or submit anything. An accountant reviews and signs off. This page only shows a labelled SAMPLE.",
 };
 
 export function taxFilingAsked(message: string): boolean {
-  return /sars|e-?filing|log\s*in|sign\s*in|file (my |a |the )?(tax|return)/i.test(message);
+  return /sars|e-?filing|log\s*in|sign\s*in|submit (my |a |the )?(return|tax|irp6|itr14)|file (my |a |the )?(tax|return)/i.test(
+    message,
+  );
 }
