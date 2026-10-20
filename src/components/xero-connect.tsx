@@ -18,7 +18,11 @@ import { useMarketFormat } from "@/contexts/market";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
 import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
 import type { MoneyMarket } from "@/lib/market/format";
-import { CONNECTION_NOT_CONNECTED } from "@/lib/connection-status-deadline";
+import {
+  CONNECTION_CONNECTED_UNVERIFIED,
+  CONNECTION_NOT_CONNECTED,
+  CONNECTION_STATUS_UNVERIFIED,
+} from "@/lib/connection-status-deadline";
 import { useConnectionProbe } from "@/lib/use-connection-probe";
 
 type Props = {
@@ -83,6 +87,7 @@ export function XeroConnectCard({
     clientId,
     refreshToken,
     id: "xero",
+    provider: "xero",
     probe: async () => {
       const [cfg, next] = await Promise.all([
         checkConfig({ data: undefined as never }),
@@ -178,6 +183,31 @@ export function XeroConnectCard({
           <code className="ledger-connect__code">XERO_CLIENT_SECRET</code> and{" "}
           <code className="ledger-connect__code">XERO_REDIRECT_URI</code> to enable live sync.
         </p>
+      </div>
+    );
+  }
+
+  if (gate === "unverified") {
+    return (
+      <div className="ledger-connect ledger-connect--panel" data-connection-state="unverified">
+        <p className="ledger-connect__kicker">Xero</p>
+        <p className="ledger-connect__meta">{CONNECTION_CONNECTED_UNVERIFIED}</p>
+        <p className="ledger-connect__hint">{CONNECTION_STATUS_UNVERIFIED}</p>
+        <button type="button" className="text-xs font-semibold text-[#0B5FFF]" onClick={() => void reload()}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (gate === "retry") {
+    return (
+      <div className="ledger-connect ledger-connect--panel" data-connection-state="retry">
+        <p className="ledger-connect__kicker">Xero</p>
+        <p className="ledger-connect__hint">Couldn&apos;t confirm this connection.</p>
+        <button type="button" className="text-xs font-semibold text-[#0B5FFF]" onClick={() => void reload()}>
+          Retry
+        </button>
       </div>
     );
   }

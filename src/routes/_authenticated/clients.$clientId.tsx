@@ -201,6 +201,7 @@ import {
   statementSpanLabel,
   statementYearLine,
 } from "@/lib/statement-period";
+import { NO_FIGURES_REPORT_REASON, reportIndexDetail } from "@/lib/report-card-state";
 import { clientHomePhase } from "@/lib/client-home-phase";
 import { canonicalScoreProse } from "@/lib/score-prose";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
@@ -1340,6 +1341,10 @@ function ClientView() {
     () => FIELD_LABELS.some(({ key }) => (financials[key] ?? "").toString().trim() !== ""),
     [financials],
   );
+  useEffect(() => {
+    if (activeTab !== "reports") return;
+    void import("@/routes/_authenticated/reports-studio");
+  }, [activeTab]);
   useEffect(() => {
     // Mark only once Overview is showing the score. A bot tab or an import
     // in flight must not count as "figures seen" and pull the card wall.
@@ -5054,7 +5059,7 @@ function ClientView() {
                         {
                           id: "scorecard",
                           label: "Health scorecard",
-                          detail: "The health scorecard PDF.",
+                          detail: reportIndexDetail("scorecard", hasFigures),
                           search: (prev) => {
                             const next = accountantClientTabSearch(prev, "reports", { section: "scorecard" }) as Record<string, unknown>;
                             next.report = "scorecard";
@@ -5064,7 +5069,7 @@ function ClientView() {
                         {
                           id: "forecast",
                           label: "13-week cash forecast",
-                          detail: "The 13-week cash forecast PDF.",
+                          detail: reportIndexDetail("forecast", hasFigures),
                           search: (prev) => {
                             const next = accountantClientTabSearch(prev, "reports", { section: "forecast" }) as Record<string, unknown>;
                             next.report = "forecast";
@@ -5074,7 +5079,7 @@ function ClientView() {
                         {
                           id: "waterfall",
                           label: "Profitability waterfall",
-                          detail: "The profitability waterfall PDF.",
+                          detail: reportIndexDetail("waterfall", hasFigures),
                           search: (prev) => {
                             const next = accountantClientTabSearch(prev, "reports", { section: "waterfall" }) as Record<string, unknown>;
                             next.report = "waterfall";
@@ -5096,7 +5101,7 @@ function ClientView() {
                         {
                           id: "all",
                           label: "All reports",
-                          detail: "Every board-ready PDF, with export.",
+                          detail: reportIndexDetail("all", hasFigures),
                           search: (prev) => accountantClientTabSearch(prev, "reports", { section: "all" }),
                         },
                       ]}
@@ -5197,18 +5202,26 @@ function ClientView() {
                                   : "All reports"
                       }
                       subtitle={
-                        search.section === "all"
-                          ? "Every board-ready PDF. Export one, or the whole pack."
-                          : "This PDF on its own, with its export."
+                        !hasFigures
+                          ? NO_FIGURES_REPORT_REASON
+                          : search.section === "all"
+                            ? "Every board-ready PDF. Export one, or the whole pack."
+                            : "This PDF on its own, with its export."
                       }
                     >
                       <section id="reports-pdfs">
                         <TabErrorBoundary label="Reports">
                           <Suspense
                             fallback={
-                              <div style={{ padding: 24, color: "var(--ink-dim)" }}>
-                                Loading reports…
-                              </div>
+                              hasFigures ? (
+                                <div style={{ padding: 24, color: "var(--ink-dim)" }}>
+                                  Loading reports…
+                                </div>
+                              ) : (
+                                <p data-report-empty="" className="text-[13px] leading-relaxed text-[#102A43] dark:text-[#F4F7FB]">
+                                  {NO_FIGURES_REPORT_REASON}
+                                </p>
+                              )
                             }
                           >
                             <ReportsStudioPanel

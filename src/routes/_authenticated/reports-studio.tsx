@@ -144,7 +144,13 @@ import {
   reportDownloadGate,
   scoredReturnHealth,
 } from "@/lib/report-coherence";
-import { reportCardNoFiguresState } from "@/lib/report-card-state";
+import {
+  FIGURES_READ_DEADLINE_MS,
+  reportCardNoFiguresState,
+  reportDeepLinkDecision,
+  reportReadShowsFigures,
+  type FiguresReadStatus,
+} from "@/lib/report-card-state";
 import {
   coerceMarketSelection,
   laborCostLabel,
@@ -2114,20 +2120,33 @@ async function loadBudgetWorkflow(clientId: string, scope = "budget"): Promise<{
 }
 
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
-  const [clientRes, snapshotRes, signoffRes, historyRes] = await Promise.all([
-    supabase
-      .from("clients")
-      .select(
-        "id, name, firm_id, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at, is_demo",
-      )
-      .eq("id", clientId)
-      .maybeSingle(),
-    supabase
-      .from("client_financial_snapshots")
-      .select("id, period_label, period_date, ratios, financials, created_at")
-      .eq("client_id", clientId)
-      .order("period_date", { ascending: false })
-      .limit(20), // fetch enough history to cover 12-month windows
+  const clientQuery = supabase
+    .from("clients")
+    .select(
+      "id, name, firm_id, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at, is_demo",
+    )
+    .eq("id", clientId)
+    .maybeSingle();
+  const snapshotQuery = supabase
+    .from("client_financial_snapshots")
+    .select("id, period_label, period_date, ratios, financials, created_at")
+    .eq("client_id", clientId)
+    .order("period_date", { ascending: false })
+    .limit(20); // fetch enough history to cover 12-month windows
+  const [clientRes, snapshotRes] = await Promise.all([clientQuery, snapshotQuery]);
+  const earlyRow = clientRes.data as { name?: string; market?: unknown; is_demo?: boolean | null; financials?: unknown } | null;
+  // Real empty clients store financials NULL. A non-NULL row continues, snapshots already in flight.
+  if (earlyRow == null || earlyRow.financials == null) {
+    return {
+      ...EMPTY_CLIENT_DATA,
+      clientName: earlyRow?.name ?? "",
+      market: resolveMarket(
+        parseMarketSelection(earlyRow?.market) ?? coerceMarketSelection(earlyRow?.market ?? null),
+      ),
+      isSample: Boolean(earlyRow?.is_demo),
+    };
+  }
+  const [signoffRes, historyRes] = await Promise.all([
     (
       supabase as unknown as {
         from: (t: string) => {
@@ -3583,8 +3602,12 @@ export type ReportsStudioProps = {
   inputs?: ReactNode;
   /** When set, the embedded catalogue shows only these report keys. */
   onlyKeys?: readonly string[];
-  /** Parent already has figures, so a remount does not say "No reports yet". */
-  figuresOnFile?: boolean;
+  /**
+   * Parent knowledge of the file. Omit it (unknown) to keep cards available.
+   * `false` is a known empty file. `true` keeps cards in a loading state
+   * through a slow read.
+   */
+  figuresOnFile?: boolean | "unknown";
 };
 
 /** Opening a report page keeps the catalogue. Preview and download are explicit. */
@@ -3605,7 +3628,7 @@ export function ReportsStudio({
   sourceChip = null,
   inputs = null,
   onlyKeys,
-  figuresOnFile = false,
+  figuresOnFile,
 }: ReportsStudioProps) {
   const navigate = useNavigate();
   const { profile, firmId, brandLoading } = useAccountantProfile();
@@ -3638,6 +3661,9 @@ export function ReportsStudio({
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [clientData, setClientData] = useState<ClientReportData | null>(null);
   const [dataLoading, setDataLoading] = useState(Boolean(clientId));
+  const [figuresStatus, setFiguresStatus] = useState<FiguresReadStatus>(
+    clientId ? "pending" : "settled",
+  );
   const deepLinkHandled = useRef<string | null>(null);
   const deepLinkReport =
     reportParam && REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number])
@@ -3693,8 +3719,18 @@ export function ReportsStudio({
     );
   }, [showIllustrativeDemo, firmMarket]);
 
-  /** Client-linked studio never ships mock figures — upload first. */
-  const blockedForClient = Boolean(clientId) && !dataLoading && !clientData?.hasData;
+  /** Client-linked studio never ships mock figures — upload first.
+   * A known-empty file shows the upload reason immediately. A file that
+   * already has figures, or a caller that has not said, stays on loading
+   * through the deadline.
+   */
+  const showFiguresChrome = reportReadShowsFigures({
+    clientLinked: Boolean(clientId),
+    status: figuresStatus,
+    hasData: Boolean(clientData?.hasData),
+    figuresOnFile,
+  });
+  const blockedForClient = Boolean(clientId) && !showFiguresChrome;
   const unavailableFor = (key: string): string | null => {
     if (!clientData?.hasData) return null;
     const ready = reportReady(key, {
@@ -3706,7 +3742,7 @@ export function ReportsStudio({
     if (key === "assets") return ASSET_REPORT_NEEDS;
     return null;
   };
-  const studioBusy = dataLoading || resolvingClient;
+  const studioBusy = (dataLoading || resolvingClient) && showFiguresChrome;
   const zipGate = reportDownloadGate({
     ready: isClient,
     loading: studioBusy,
@@ -3774,16 +3810,24 @@ export function ReportsStudio({
     if (!clientId) {
       setClientData(null);
       setDataLoading(false);
+      setFiguresStatus("settled");
       return;
     }
     let cancelled = false;
     setClientData(null); // clear before async starts
     setDataLoading(true);
+    setFiguresStatus("pending");
     deepLinkHandled.current = null;
+    const deadline = window.setTimeout(() => {
+      if (!cancelled) {
+        setFiguresStatus((current) => (current === "pending" ? "timeout" : current));
+      }
+    }, FIGURES_READ_DEADLINE_MS);
     loadClientReportData(clientId)
       .then((data) => {
         if (cancelled) return;
         setClientData(data);
+        setFiguresStatus("settled");
         // Keep smeName in sync with the client's real name if it differs
         if (data.clientName || data.periodMonth || data.dataPeriodLabel) {
           setSettings((prev) => ({
@@ -3797,12 +3841,17 @@ export function ReportsStudio({
       })
       .catch((err) => {
         console.error("Failed to load client report data:", err);
+        if (!cancelled) {
+          setClientData(null);
+          setFiguresStatus("error");
+        }
       })
       .finally(() => {
         if (!cancelled) setDataLoading(false);
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(deadline);
     };
   }, [clientId]);
 
@@ -3961,16 +4010,29 @@ export function ReportsStudio({
 
   // Deep-link from client gallery: /reports?clientId=&report=labor&action=preview|download
   useEffect(() => {
-    if (!isClient || studioBusy) return;
+    if (!isClient) return;
     const linked = reportDeepLinkAction(actionParam);
     if (!deepLinkReport || !linked) {
       setDeepLinkBusy(false);
       return;
     }
+    const decision = reportDeepLinkDecision({
+      status: figuresStatus,
+      showFigures: showFiguresChrome,
+    });
+    if (decision === "wait" || studioBusy) return;
     const token = `${clientId ?? "demo"}:${deepLinkReport.key}:${linked}`;
     if (deepLinkHandled.current === token) return;
 
-    if (blockedForClient) {
+    if (decision === "hold") {
+      deepLinkHandled.current = token;
+      setDeepLinkBusy(false);
+      setPreviewState(null);
+      setPreviewKey(null);
+      return;
+    }
+
+    if (decision === "blocked") {
       deepLinkHandled.current = token;
       setDeepLinkBusy(false);
       setPreviewState(null);
@@ -4019,6 +4081,8 @@ export function ReportsStudio({
     isClient,
     dataLoading,
     studioBusy,
+    figuresStatus,
+    showFiguresChrome,
     reportParam,
     actionParam,
     clientId,
@@ -4081,7 +4145,7 @@ export function ReportsStudio({
     loadedNames: clientData
       ? readyReports.map((report) => reportCopy(report, reportMarket).name)
       : null,
-    figuresOnFile,
+    figuresOnFile: figuresOnFile === true,
     catalogueNames,
   });
   const reportsSentence = reportsAnswerSentence({

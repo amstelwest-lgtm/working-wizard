@@ -3,7 +3,42 @@ export const CONNECTION_STATUS_DEADLINE_MS = 3_000;
 
 export const CONNECTION_NOT_CONNECTED = "Not connected";
 
-export type ConnectionPhase = "checking" | "live" | "stored" | "none" | "coming_soon";
+/** A row exists, but the status probe has not confirmed it. */
+export const CONNECTION_CONNECTED_UNVERIFIED = "Connected";
+
+export const CONNECTION_STATUS_UNVERIFIED = "Status unverified";
+
+export type ConnectionPhase =
+  | "checking"
+  | "live"
+  | "stored"
+  | "none"
+  | "coming_soon"
+  | "unverified"
+  | "retry";
+
+/** Cheap `xero_connections` / `qbo_connections` / `sage_connections` read. */
+export type ConnectionRowFact = "unknown" | "present" | "absent";
+
+/**
+ * First paint. "Not connected" only when a row read has already found nothing.
+ * Unknown and present stay on the skeleton so a connected client never flashes
+ * a Connect button. Sage coming soon is the absent-row resting phase.
+ */
+export function connectionRestingPhase(input?: {
+  comingSoon?: boolean;
+  row?: ConnectionRowFact;
+}): ConnectionPhase {
+  if (input?.row === "absent") return input.comingSoon ? "coming_soon" : "none";
+  return "checking";
+}
+
+/** Visible card copy. Only the absent-row phase says "Not connected". */
+export function connectionVisibleLabel(phase: ConnectionPhase): string | null {
+  if (phase === "none") return CONNECTION_NOT_CONNECTED;
+  if (phase === "unverified") return CONNECTION_CONNECTED_UNVERIFIED;
+  return null;
+}
 
 export type ConnectionStatusView<T> = {
   phase: ConnectionPhase;
@@ -14,8 +49,14 @@ export type ConnectionCheck<T> = {
   id: string;
   probe: () => Promise<T | null>;
   stored: T | null;
-  /** Sage times out to the existing coming-soon panel when nothing is stored. */
+  /** Sage times out to the existing coming-soon panel when the row is absent. */
   comingSoon?: boolean;
+  /**
+   * Updated by the cheap row select while the status probe is in flight.
+   * The deadline reads `.current`, so a row that arrives before the timeout
+   * is the fallback.
+   */
+  rowFact?: { current: ConnectionRowFact };
 };
 
 export type ConnectionCheckOptions = {
@@ -29,33 +70,66 @@ function defaultSleep(ms: number): Promise<void> {
   });
 }
 
+function probeHasStatus(live: unknown): boolean {
+  if (!live || typeof live !== "object") return false;
+  if (!("status" in live)) return true;
+  return Boolean((live as { status?: unknown }).status);
+}
+
+function absentPhase(comingSoon?: boolean): ConnectionPhase {
+  return comingSoon ? "coming_soon" : "none";
+}
+
 /**
- * Live result wins. Past the deadline, use the stored row, then coming soon,
- * then not connected. A probe that has not finished stays on checking.
+ * A live status wins. A failed or unfinished probe falls back to the row fact:
+ * present stays Connected (unverified), absent is Not connected, unknown is a
+ * neutral retry. It does not paint "Not connected" just because the probe failed.
  */
 export function resolveConnectionStatus<T>(input: {
   elapsedMs: number;
   settled: boolean;
+  failed?: boolean;
   live: T | null;
   stored: T | null;
+  row?: ConnectionRowFact;
   comingSoon?: boolean;
   deadlineMs?: number;
 }): ConnectionStatusView<T> {
   const deadline = input.deadlineMs ?? CONNECTION_STATUS_DEADLINE_MS;
-  if (input.settled) {
-    if (input.live) return { phase: "live", value: input.live };
-    return { phase: "none", value: null };
+  const row = input.row ?? "unknown";
+  if (input.settled && !input.failed && probeHasStatus(input.live)) {
+    return { phase: "live", value: input.live };
   }
+  if (
+    input.settled &&
+    !input.failed &&
+    input.live &&
+    typeof input.live === "object" &&
+    (input.live as { configured?: boolean | null }).configured === false
+  ) {
+    return { phase: "live", value: input.live };
+  }
+  if (input.settled) {
+    if (row === "present" || (input.stored && probeHasStatus(input.stored))) {
+      return input.stored && probeHasStatus(input.stored)
+        ? { phase: "stored", value: input.stored }
+        : { phase: "unverified", value: input.stored };
+    }
+    if (row === "absent") return { phase: absentPhase(input.comingSoon), value: null };
+    if (!input.failed && input.live) return { phase: "live", value: input.live };
+    return { phase: "retry", value: null };
+  }
+  if (row === "absent") return { phase: absentPhase(input.comingSoon), value: null };
   if (input.elapsedMs < deadline) return { phase: "checking", value: null };
-  if (input.stored) return { phase: "stored", value: input.stored };
-  if (input.comingSoon) return { phase: "coming_soon", value: null };
-  return { phase: "none", value: null };
+  if (input.stored && probeHasStatus(input.stored)) return { phase: "stored", value: input.stored };
+  if (row === "present") return { phase: "unverified", value: input.stored };
+  return { phase: "retry", value: null };
 }
 
 type ProbeRow<T> = {
   check: ConnectionCheck<T>;
   pending: Promise<void>;
-  read: () => { settled: boolean; live: T | null };
+  read: () => { settled: boolean; failed: boolean; live: T | null };
 };
 
 /**
@@ -74,12 +148,14 @@ export function startConnectionChecks<T>(
   const sleep = options?.sleep ?? defaultSleep;
   const rows: ProbeRow<T>[] = checks.map((check) => {
     let settled = false;
+    let failed = false;
     let live: T | null = null;
     let result: Promise<T | null>;
     try {
       result = Promise.resolve(check.probe());
     } catch {
       settled = true;
+      failed = true;
       result = Promise.resolve(null);
     }
     const pending = result.then(
@@ -89,10 +165,11 @@ export function startConnectionChecks<T>(
       },
       () => {
         settled = true;
+        failed = true;
         live = null;
       },
     );
-    return { check, pending, read: () => ({ settled, live }) };
+    return { check, pending, read: () => ({ settled, failed, live }) };
   });
 
   const snapshot = (): Record<string, ConnectionStatusView<T>> => {
@@ -102,8 +179,10 @@ export function startConnectionChecks<T>(
       out[row.check.id] = resolveConnectionStatus({
         elapsedMs: snap.settled ? 0 : deadline,
         settled: snap.settled,
+        failed: snap.failed,
         live: snap.live,
         stored: row.check.stored,
+        row: row.check.rowFact?.current ?? "unknown",
         comingSoon: row.check.comingSoon,
         deadlineMs: deadline,
       });
