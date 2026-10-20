@@ -13,6 +13,7 @@ import {
   signedDeliveryPdfUrl,
   type AdvisoryDelivery,
 } from "@/lib/advisory-deliveries";
+import { SkeletonBlock } from "@/components/primitives/skeleton-blocks";
 import { SENT_HISTORY_INTRO } from "@/lib/reports-drafter-copy";
 import { scorecardDownloadShouldRenderLive } from "@/lib/scorecard-rows";
 import { statementSpanLabel } from "@/lib/statement-period";
@@ -32,6 +33,7 @@ export function AdvisorySentHistory({
   statementPeriodLabel = null,
   liveScorecard = null,
   variant = "default",
+  seedRows,
 }: {
   clientId: string;
   refreshToken?: number;
@@ -44,13 +46,24 @@ export function AdvisorySentHistory({
    * The drafter keeps the original sent-history row.
    */
   variant?: "default" | "reports";
+  /**
+   * Rows already loaded with the reports page. Null means that fetch is
+   * still in flight. Omit the prop and this list loads itself.
+   */
+  seedRows?: AdvisoryDelivery[] | null;
 }) {
   const { dateTime, market } = useMarketFormat();
-  const [rows, setRows] = useState<AdvisoryDelivery[]>([]);
-  const [loading, setLoading] = useState(true);
+  const seeded = seedRows !== undefined;
+  const [rows, setRows] = useState<AdvisoryDelivery[]>(seedRows ?? []);
+  const [loading, setLoading] = useState(!seeded);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (seeded) {
+      setRows(seedRows ?? []);
+      setLoading(seedRows == null);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     listDeliveries(clientId)
@@ -63,7 +76,7 @@ export function AdvisorySentHistory({
     return () => {
       cancelled = true;
     };
-  }, [clientId, refreshToken]);
+  }, [clientId, refreshToken, seeded, seedRows]);
 
   const copyAckLink = async (token: string) => {
     try {
@@ -133,7 +146,11 @@ export function AdvisorySentHistory({
       <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>Sent history</div>
       <p style={{ margin: "6px 0 12px", fontSize: 13, color: "var(--ink-dim)" }}>{SENT_HISTORY_INTRO}</p>
       {loading ? (
-        <p style={{ fontSize: 13, color: "var(--ink-dim)" }}>Loading…</p>
+        <div role="status" aria-busy="true" aria-label="Sent history" style={{ display: "grid", gap: 8 }}>
+          <SkeletonBlock className="h-12 w-full rounded-[10px]" />
+          <SkeletonBlock className="h-12 w-full rounded-[10px]" />
+          <SkeletonBlock className="h-12 w-full rounded-[10px]" />
+        </div>
       ) : rows.length === 0 ? (
         <p style={{ fontSize: 13, color: "var(--ink-dim)" }}>
           Nothing logged yet. Copy, email, WhatsApp, or download a PDF to start the trail.

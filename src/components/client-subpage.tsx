@@ -52,6 +52,8 @@ export type ClientSubpageLink = {
   id: string;
   label: string;
   detail: string;
+  /** The action this page wants first. One link, drawn as the primary card. */
+  primary?: boolean;
   search: (prev: Record<string, unknown>) => Record<string, unknown>;
 };
 
@@ -79,8 +81,9 @@ export function ClientSectionOverview({
               to="/clients/$clientId"
               params={{ clientId }}
               search={link.search}
-              className="client-subpage-link"
+              className={link.primary ? "client-subpage-link client-subpage-link--primary" : "client-subpage-link"}
               data-subpage-link={link.id}
+              data-primary={link.primary ? "true" : undefined}
             >
               <span className="client-subpage-link__label">{link.label}</span>
               <span className="client-subpage-link__detail">{link.detail}</span>

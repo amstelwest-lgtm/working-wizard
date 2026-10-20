@@ -105,15 +105,6 @@ function AuthCallbackPage() {
   const [isInviteFlow, setIsInviteFlow] = useState(detectInviteFlow);
 
   useEffect(() => {
-    const el = document.documentElement;
-    const hadDark = el.classList.contains("dark");
-    el.classList.add("dark");
-    return () => {
-      if (!hadDark) el.classList.remove("dark");
-    };
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
     void (async () => {
       const established = await establishSessionFromOAuthCallback();
@@ -450,7 +441,7 @@ function AuthCallbackPage() {
         <AuthEntryEyebrow>Sign in</AuthEntryEyebrow>
         <AuthEntryTitle>Could not sign in with Google</AuthEntryTitle>
         <AuthEntryCard className="mt-6 text-center">
-          <p className="text-sm leading-relaxed text-[#8a938c]">{error}</p>
+          <p className="text-sm leading-relaxed text-[#3D5270]">{error}</p>
           <div className="mt-6 flex flex-col gap-3">
             <Link
               to="/"
@@ -461,7 +452,7 @@ function AuthCallbackPage() {
             <Link
               to="/auth"
               search={{}}
-              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#c9d0cb] hover:border-white/25 hover:text-[#e8ede9]"
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#DBEAFE] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#102A43] hover:border-[#0B5FFF] hover:text-[#0B5FFF]"
             >
               Accountant portal
             </Link>

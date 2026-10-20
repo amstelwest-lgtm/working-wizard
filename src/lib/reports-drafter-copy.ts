@@ -77,9 +77,11 @@ export function reportsAnswerSentence(input: {
   return `${count} for ${period}. Start with: ${title}`;
 }
 
-/** Gold control on the Reports strip. Zero ready reports still opens the first template. */
-export function reportsPrimaryLabel(readyCount: number): string {
-  return readyCount > 0 ? "Open report" : "Create report";
+/** Gold control on the Reports strip. A named page says which PDF it opens. */
+export function reportsPrimaryLabel(readyCount: number, reportName?: string | null): string {
+  const name = reportName?.trim();
+  if (readyCount > 0) return name ? `Open ${name}` : "Open report";
+  return name ? `Create ${name}` : "Create report";
 }
 
 const SENT_LABEL: Record<string, string> = {

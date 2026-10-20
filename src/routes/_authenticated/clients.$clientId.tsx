@@ -198,7 +198,9 @@ import {
   statementSpanLabel,
   statementYearLine,
 } from "@/lib/statement-period";
+import { clientHomePhase } from "@/lib/client-home-phase";
 import { canonicalScoreProse } from "@/lib/score-prose";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
@@ -278,9 +280,12 @@ import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/opera
 import {
   hashFigures,
   latestSnapshotId,
+  countsAsSent,
+  listDeliveries,
   recordDelivery,
   warnIfDeliveryFailed,
   warnIfPdfArchiveFailed,
+  type AdvisoryDelivery,
 } from "@/lib/advisory-deliveries";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { needsPastPeriodPrompt } from "@/lib/history-coverage";
@@ -289,6 +294,7 @@ import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { cashSignoffIsStale, reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
+import { ClientAgentStandby } from "@/components/client-agent-standby";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/financial-manager-brief";
 import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
@@ -326,7 +332,7 @@ import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
-import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
+import { EmptyState } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
 import { cashDriverDayFigures } from "@/lib/cash-driver-label";
@@ -595,6 +601,8 @@ function crumbSectionLabel(tab: string, section: string): string {
     open: "Open work",
     overdue: "Overdue",
     scorecard: "Health scorecard",
+    "budget-pdf": "Budget & variance",
+    benchmark: "Benchmark",
     drafts: "Drafts",
     sent: "Sent",
     all: "All reports",
@@ -829,6 +837,7 @@ function ClientView() {
   }, [clientId]);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     () => resolveAccountantTab(search) ?? "overview",
   );
@@ -1193,6 +1202,21 @@ function ClientView() {
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [scoreHistory, setScoreHistory] = useState<{ period_date: string; score: number }[]>([]);
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);
+  const [sentSeed, setSentSeed] = useState<AdvisoryDelivery[] | null>(null);
+  useEffect(() => {
+    if (activeTab !== "reports") return;
+    let cancelled = false;
+    listDeliveries(clientId)
+      .then((data) => {
+        if (!cancelled) setSentSeed(data.filter(countsAsSent));
+      })
+      .catch(() => {
+        if (!cancelled) setSentSeed([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, clientId, deliveryRefresh]);
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
   const [packSignoff, setPackSignoff] = useState<AdvisorySignoffAction | null>(null);
@@ -2263,8 +2287,15 @@ function ClientView() {
   // ── Load client ──────────────────────────────────────────────────────────
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadTimedOut(false);
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      setLoadTimedOut(true);
+      setLoading(false);
+    }, SHELL_GATE_TIMEOUT_MS);
     (async () => {
-      setLoading(true);
       try {
         // Defensive query: reports_issued_count may not exist yet
         const { data, error } = await supabase
@@ -2367,9 +2398,17 @@ function ClientView() {
           decideLandingTab(scalars);
         }
       } finally {
-        setLoading(false);
+        window.clearTimeout(timer);
+        if (!cancelled) {
+          setLoadTimedOut(false);
+          setLoading(false);
+        }
       }
     })();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
@@ -3720,8 +3759,13 @@ function ClientView() {
 
   // ── Loading / error states ────────────────────────────────────────────────
 
-  if (loading) {
-    return <ClientWorkspaceSkeleton className="min-h-screen" />;
+  const homePhase = clientHomePhase({
+    loading,
+    timedOut: loadTimedOut,
+    hasClient: Boolean(client),
+  });
+  if (homePhase === "loading" || homePhase === "error") {
+    return <ClientAgentStandby timedOut={homePhase === "error"} />;
   }
 
   if (!client) {
@@ -3881,7 +3925,7 @@ function ClientView() {
                     variant="character"
                     showInvite={false}
                     audience="accountant"
-                    marketCountry={clientMarket.country}
+                    marketCountry={parseMarketSelection(client.market)?.country ?? null}
                     sampleClient={Boolean(client.is_demo)}
                     firmId={client.firm_id ?? null}
                     presence={homePresence}
@@ -4083,7 +4127,7 @@ function ClientView() {
                       key={homeAgent ?? "team"}
                       clientId={clientId}
                       agent={homeAgent}
-                      marketCountry={clientMarket.country}
+                      marketCountry={parseMarketSelection(client.market)?.country ?? null}
                       audience="accountant"
                       sampleClient={Boolean(client.is_demo)}
                       homeFinding={
@@ -4925,13 +4969,36 @@ function ClientView() {
                   search.section !== "all" &&
                   search.section !== "scorecard" &&
                   search.section !== "forecast" &&
-                  search.section !== "waterfall" ? (
+                  search.section !== "waterfall" &&
+                  search.section !== "budget-pdf" &&
+                  search.section !== "benchmark" ? (
                     <ClientSectionOverview
                       clientId={clientId}
                       eyebrow="Work"
                       title="Reports"
                       subtitle="Each report, the drafts, and what has been sent has its own page."
                       links={[
+                        {
+                          id: "budget-pdf",
+                          label: "Open Budget & variance",
+                          detail: "The budget PDF, on its own page.",
+                          primary: true,
+                          search: (prev) => {
+                            const next = accountantClientTabSearch(prev, "reports", { section: "budget-pdf" }) as Record<string, unknown>;
+                            next.report = "budget";
+                            return next;
+                          },
+                        },
+                        {
+                          id: "benchmark",
+                          label: "Open Benchmark",
+                          detail: "The benchmark PDF, on its own page.",
+                          search: (prev) => {
+                            const next = accountantClientTabSearch(prev, "reports", { section: "benchmark" }) as Record<string, unknown>;
+                            next.report = "benchmark";
+                            return next;
+                          },
+                        },
                         {
                           id: "scorecard",
                           label: "Health scorecard",
@@ -5058,7 +5125,9 @@ function ClientView() {
                   (search.section === "all" ||
                     search.section === "scorecard" ||
                     search.section === "forecast" ||
-                    search.section === "waterfall") ? (
+                    search.section === "waterfall" ||
+                    search.section === "budget-pdf" ||
+                    search.section === "benchmark") ? (
                     <ClientSubpageFrame
                       id={search.section ?? "all"}
                       eyebrow="Reports"
@@ -5069,7 +5138,11 @@ function ClientView() {
                             ? "13-week cash forecast"
                             : search.section === "waterfall"
                               ? "Profitability waterfall"
-                              : "All reports"
+                              : search.section === "budget-pdf"
+                                ? "Budget & variance"
+                                : search.section === "benchmark"
+                                  ? "Benchmark"
+                                  : "All reports"
                       }
                       subtitle={
                         search.section === "all"
@@ -5090,7 +5163,13 @@ function ClientView() {
                               key={`${client.id}-${search.section ?? "all"}`}
                               client={client.name}
                               clientId={client.id}
-                              report={search.section === "all" ? undefined : search.section}
+                              report={
+                                search.section === "budget-pdf"
+                                  ? "budget"
+                                  : search.section === "all"
+                                    ? undefined
+                                    : search.section
+                              }
                               action={
                                 search.action === "preview" || search.action === "download"
                                   ? search.action
@@ -5099,9 +5178,12 @@ function ClientView() {
                               onlyKeys={
                                 search.section === "scorecard" ||
                                 search.section === "forecast" ||
-                                search.section === "waterfall"
+                                search.section === "waterfall" ||
+                                search.section === "benchmark"
                                   ? [search.section]
-                                  : undefined
+                                  : search.section === "budget-pdf"
+                                    ? ["budget"]
+                                    : undefined
                               }
                               embedded
                               figuresOnFile={hasFigures}
@@ -5144,6 +5226,7 @@ function ClientView() {
                         <AdvisorySentHistory
                           clientId={client.id}
                           refreshToken={deliveryRefresh}
+                          seedRows={sentSeed}
                           statementPeriodLabel={reportDataPeriodLabel(financials, clientMarket)}
                           liveScorecard={renderOverviewScorecard}
                         />

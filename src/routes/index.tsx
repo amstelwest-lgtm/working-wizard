@@ -2015,6 +2015,8 @@ function LandingPage() {
           </div>
 
           <div className="dash-stage hero-mock-fade">
+            {/* The three agents lead the report: seen first, above the figures. */}
+            <HeroAgents />
             <div className="dash" id="dash" role="img" aria-label={DASH_ARIA_LABEL}>
               <div className="dash-top">
                 <span className="brand">MILŌN</span>
@@ -2143,7 +2145,6 @@ function LandingPage() {
                 </div>
               </div>
             </div>
-            <HeroAgents />
             <div className="float-card fc-1">
               <span className="tag">Milōn Advisor draft · awaiting sign-off</span>
               <p>
