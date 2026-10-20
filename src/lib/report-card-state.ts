@@ -8,6 +8,18 @@ export const FIGURES_READ_DEADLINE_MS = 3_000;
 export type FiguresReadStatus = "pending" | "settled" | "error" | "timeout";
 
 /**
+ * Parent knowledge of the file. Omitted and "unknown" are the same: the caller
+ * has not said, so the cards stay available until a settled read says otherwise.
+ */
+export type FiguresOnFile = "unknown" | boolean;
+
+export function normalizeFiguresOnFile(value: boolean | "unknown" | undefined): FiguresOnFile {
+  if (value === true) return true;
+  if (value === false) return false;
+  return "unknown";
+}
+
+/**
  * Real no-books rows store `financials: null` and have no statement snapshots.
  * An empty object and a blank revenue string are the same absence. Only a
  * settled revenue value counts as figures.
@@ -23,21 +35,33 @@ export function financialsHaveRevenue(financials: unknown): boolean {
 }
 
 /**
- * Page count, sign-off, and the "Loading…" label only after a settled read
- * that actually has figures. Pending, error, and timeout stay empty — a
- * parent flag of true may hold the chrome during a still-pending read, and
- * it does not override an error or a missed deadline.
+ * A settled read wins. Until then, figures already on the file (or an unknown
+ * caller) keep the cards enabled. Only a parent that knows the file is empty
+ * shows the upload reason during a pending or timed-out read.
  */
 export function reportReadShowsFigures(input: {
   clientLinked: boolean;
   status: FiguresReadStatus;
   hasData: boolean;
-  figuresOnFile?: boolean;
+  figuresOnFile?: boolean | "unknown";
 }): boolean {
   if (!input.clientLinked) return true;
-  if (input.status === "error" || input.status === "timeout") return false;
   if (input.status === "settled") return input.hasData;
-  return input.figuresOnFile === true;
+  return normalizeFiguresOnFile(input.figuresOnFile) !== false;
+}
+
+/**
+ * Preview and download links wait until the figures read settles.
+ * A timeout is not a result, so it must not toast or clear the link.
+ */
+export function reportDeepLinkDecision(input: {
+  status: FiguresReadStatus;
+  showFigures: boolean;
+}): "wait" | "run" | "blocked" | "hold" {
+  if (input.status === "pending" || input.status === "timeout") return "wait";
+  if (input.status === "error") return input.showFigures ? "hold" : "blocked";
+  if (!input.showFigures) return "blocked";
+  return "run";
 }
 
 /** Reports index lines for a client with no positively settled figures. */

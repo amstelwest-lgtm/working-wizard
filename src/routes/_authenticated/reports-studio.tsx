@@ -141,8 +141,8 @@ import {
 } from "@/lib/report-coherence";
 import {
   FIGURES_READ_DEADLINE_MS,
-  financialsHaveRevenue,
   reportCardNoFiguresState,
+  reportDeepLinkDecision,
   reportReadShowsFigures,
   type FiguresReadStatus,
 } from "@/lib/report-card-state";
@@ -2135,15 +2135,23 @@ async function loadBudgetWorkflow(clientId: string, scope = "budget"): Promise<{
 }
 
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
-  const clientRes = await supabase
+  const clientQuery = supabase
     .from("clients")
     .select(
       "id, name, firm_id, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at, is_demo",
     )
     .eq("id", clientId)
     .maybeSingle();
+  const snapshotQuery = supabase
+    .from("client_financial_snapshots")
+    .select("id, period_label, period_date, ratios, financials, created_at")
+    .eq("client_id", clientId)
+    .order("period_date", { ascending: false })
+    .limit(20); // fetch enough history to cover 12-month windows
+  const [clientRes, snapshotRes] = await Promise.all([clientQuery, snapshotQuery]);
   const earlyRow = clientRes.data as { name?: string; market?: unknown; is_demo?: boolean | null; financials?: unknown } | null;
-  if (!financialsHaveRevenue(earlyRow?.financials)) {
+  // Real empty clients store financials NULL. A non-NULL row continues, snapshots already in flight.
+  if (earlyRow == null || earlyRow.financials == null) {
     return {
       ...EMPTY_CLIENT_DATA,
       clientName: earlyRow?.name ?? "",
@@ -2153,13 +2161,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       isSample: Boolean(earlyRow?.is_demo),
     };
   }
-  const [snapshotRes, signoffRes, historyRes] = await Promise.all([
-    supabase
-      .from("client_financial_snapshots")
-      .select("id, period_label, period_date, ratios, financials, created_at")
-      .eq("client_id", clientId)
-      .order("period_date", { ascending: false })
-      .limit(20), // fetch enough history to cover 12-month windows
+  const [signoffRes, historyRes] = await Promise.all([
     (
       supabase as unknown as {
         from: (t: string) => {
@@ -3617,8 +3619,12 @@ export type ReportsStudioProps = {
   inputs?: ReactNode;
   /** When set, the embedded catalogue shows only these report keys. */
   onlyKeys?: readonly string[];
-  /** Parent already has figures, so a remount does not say "No reports yet". */
-  figuresOnFile?: boolean;
+  /**
+   * Parent knowledge of the file. Omit it (unknown) to keep cards available.
+   * `false` is a known empty file. `true` keeps cards in a loading state
+   * through a slow read.
+   */
+  figuresOnFile?: boolean | "unknown";
 };
 
 /** Opening a report page keeps the catalogue. Preview and download are explicit. */
@@ -3639,7 +3645,7 @@ export function ReportsStudio({
   sourceChip = null,
   inputs = null,
   onlyKeys,
-  figuresOnFile = false,
+  figuresOnFile,
 }: ReportsStudioProps) {
   const navigate = useNavigate();
   const { profile, firmId, brandLoading } = useAccountantProfile();
@@ -3730,8 +3736,9 @@ export function ReportsStudio({
   }, [showIllustrativeDemo, firmMarket]);
 
   /** Client-linked studio never ships mock figures — upload first.
-   * Pending, errored, and timed-out reads are empty. Only a settled read
-   * with figures (or a parent that already confirmed figures) shows the chrome.
+   * A known-empty file shows the upload reason immediately. A file that
+   * already has figures, or a caller that has not said, stays on loading
+   * through the deadline.
    */
   const showFiguresChrome = reportReadShowsFigures({
     clientLinked: Boolean(clientId),
@@ -4001,16 +4008,30 @@ export function ReportsStudio({
 
   // Deep-link from client gallery: /reports?clientId=&report=labor&action=preview|download
   useEffect(() => {
-    if (!isClient || studioBusy) return;
+    if (!isClient) return;
     const linked = reportDeepLinkAction(actionParam);
     if (!deepLinkReport || !linked) {
       setDeepLinkBusy(false);
       return;
     }
+    const decision = reportDeepLinkDecision({
+      status: figuresStatus,
+      showFigures: showFiguresChrome,
+    });
+    if (decision === "wait" || studioBusy) return;
     const token = `${clientId ?? "demo"}:${deepLinkReport.key}:${linked}`;
     if (deepLinkHandled.current === token) return;
 
-    if (blockedForClient) {
+    if (decision === "hold") {
+      deepLinkHandled.current = token;
+      setDeepLinkBusy(false);
+      setPreviewState(null);
+      setPreviewKey(null);
+      setLoadingKey(null);
+      return;
+    }
+
+    if (decision === "blocked") {
       deepLinkHandled.current = token;
       setDeepLinkBusy(false);
       setPreviewState(null);
@@ -4060,6 +4081,8 @@ export function ReportsStudio({
     isClient,
     dataLoading,
     studioBusy,
+    figuresStatus,
+    showFiguresChrome,
     reportParam,
     actionParam,
     clientId,
@@ -4122,7 +4145,7 @@ export function ReportsStudio({
     loadedNames: clientData
       ? readyReports.map((report) => reportCopy(report, reportMarket).name)
       : null,
-    figuresOnFile,
+    figuresOnFile: figuresOnFile === true,
     catalogueNames,
   });
   const reportsSentence = reportsAnswerSentence({
