@@ -1,9 +1,12 @@
 import { AccountantNav, type NavDestination, type NavSection } from "@/components/accountant-nav";
 import { CLIENT_NAV_OPEN_KEY } from "@/lib/accountant-nav-open";
-import { clientNavSearch, clientRailSelection } from "@/lib/client-route-search";
+import {
+  canonicalizeAccountantSearch,
+  clientNavSearch,
+  clientRailSelection,
+} from "@/lib/client-route-search";
 import { askHashForAgent, searchWithAskAgent } from "@/lib/ask-agent";
 import { agentDisplayName } from "@/lib/milon-team";
-import { openPracticeSettings } from "@/lib/user-roles";
 
 /** Flat heading list, top to bottom. Kickers are not items. */
 export const CLIENT_RAIL = [
@@ -169,15 +172,21 @@ export function ClientRail({
   onNavigate?: () => void;
 }) {
   const selection = clientRailSelection(search);
+  const onClientSettings = canonicalizeAccountantSearch(search).tab === "settings";
   return (
     <AccountantNav
       label="Client workspace"
       sections={clientSections(clientId)}
       selection={selection}
       storageKey={CLIENT_NAV_OPEN_KEY}
+      settingsActive={onClientSettings}
+      settingsTo={{
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => clientNavSearch(prev, "settings"),
+      }}
       back={{ label: "All clients", to: { to: "/clients" } }}
       onNavigate={onNavigate}
-      onSettings={() => openPracticeSettings()}
     />
   );
 }

@@ -142,6 +142,7 @@ export function AccountantNav({
   selection,
   storageKey,
   settingsActive = false,
+  settingsTo,
   back,
   onSettings,
   onNavigate,
@@ -152,6 +153,8 @@ export function AccountantNav({
   /** localStorage key for this rail's open groups. */
   storageKey: string;
   settingsActive?: boolean;
+  /** Client file Settings stays on that client. Practice rails keep /settings. */
+  settingsTo?: NavDestination;
   back?: { label: string; to: NavDestination };
   onSettings?: () => void;
   /** Closes the phone drawer when a page is chosen. The chevron only expands. */
@@ -391,7 +394,7 @@ export function AccountantNav({
       ))}
       <div className="rail-settings">
         <NavLink
-          dest={{ to: "/settings" }}
+          dest={settingsTo ?? { to: "/settings" }}
           className="nav-label nav-settings"
           navId="settings"
           tabIndex={tabId === "settings" ? 0 : -1}

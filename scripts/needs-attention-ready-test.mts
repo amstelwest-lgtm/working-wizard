@@ -85,8 +85,11 @@ assert(practiceGate > 0 && practiceGate < pageAt, "the practice home strip still
 const loadCall = board.indexOf("void load(firmId, user?.id, greetingSource).finally");
 assert(loadCall > 0, "load still receives the greeting name");
 const deps = board.slice(loadCall, board.indexOf("]);", loadCall));
-const depLine = deps.split("\n").find((line) => line.includes("firmId, brandLoading"));
-assert(depLine != null && !depLine.includes("greetingSource"), "a greetingSource change does not restart the load");
+const depLine = deps.split("\n").find((line) => line.includes("}, [firmId, user?.id"));
+assert(
+  depLine != null && !depLine.includes("greetingSource") && !depLine.includes("brandLoading"),
+  "brand loading does not hold or restart the book",
+);
 assert(board.includes("practiceGreeting(greetingSource)"), "the greeting still renders from greetingSource");
 
 const timerAt = board.indexOf("[practice-board] client book timed out");

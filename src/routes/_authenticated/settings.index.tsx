@@ -52,6 +52,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { MarketSettingsCard } from "@/components/market-settings-card";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { listUserFirms } from "@/lib/firm-brand";
+import { readCachedFirmPlan } from "@/lib/firm-plan-client";
 import {
   decideSettingsView,
   getPortalIntent,
@@ -215,7 +216,7 @@ function SettingsPage() {
     }
     let cancelled = false;
     setPlanLoading(true);
-    void loadPlan({ data: { firmId } })
+    void readCachedFirmPlan(firmId, (input) => loadPlan(input))
       .then((next) => {
         if (!cancelled) setPlan(next);
       })

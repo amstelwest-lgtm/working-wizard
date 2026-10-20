@@ -793,7 +793,10 @@ assert(
   required.includes("The figures stay."),
   "required page does not pretend the workspace never opened",
 );
-assert(required.includes("Resume Checkout"), "required page resumes Checkout");
+assert(
+  required.includes("BILLING_WALL_TRIAL_ACTION"),
+  "required page offers the trial once the billing read settles",
+);
 assert(required.includes('href="/#pricing"'), "back to pricing shows pricing, not Checkout");
 assert(!required.includes('to="/"'), "back to pricing does not link at /");
 assert(required.includes("BillingSignOutButton"), "billing wall can sign out");

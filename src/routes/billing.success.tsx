@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { noteFirmEntitlement } from "@/lib/firm-entitlement-client";
 import { useServerFn } from "@tanstack/react-start";
 import {
   getCheckoutSessionStatus,
@@ -26,6 +28,7 @@ export const Route = createFileRoute("/billing/success")({
 });
 
 function BillingSuccessPage() {
+  const { user } = useAuth();
   const { session_id: sessionId } = Route.useSearch();
   const loadStatus = useServerFn(getCheckoutSessionStatus);
   const loadSaPricing = useServerFn(readSaPricingCopy);
@@ -38,7 +41,11 @@ function BillingSuccessPage() {
     if (!sessionId) {
       setLabel("Checkout finished. Open Stripe Dashboard if you need the receipt.");
       setUnlocked(true);
-      void refreshEntitlement({ data: { refresh: true } }).catch(() => undefined);
+      void refreshEntitlement({ data: { refresh: true } })
+        .then((result) => {
+          if (user?.id) noteFirmEntitlement(user.id, result);
+        })
+        .catch(() => undefined);
       return;
     }
     let cancelled = false;
@@ -64,7 +71,11 @@ function BillingSuccessPage() {
             `Checkout is complete and your card is on file. A first firm subscription is ${FIRM_TRIAL_SENTENCE} on Starter, then the paid band bills automatically. Owner plan: ${ownerLine}.`,
           );
           setUnlocked(true);
-          void refreshEntitlement({ data: { refresh: true } }).catch(() => undefined);
+          void refreshEntitlement({ data: { refresh: true } })
+            .then((result) => {
+              if (user?.id) noteFirmEntitlement(user.id, result);
+            })
+            .catch(() => undefined);
           return;
         }
         setLabel(`Stripe session status: ${result.status ?? "unknown"}.`);
@@ -77,7 +88,7 @@ function BillingSuccessPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, loadStatus, loadSaPricing, refreshEntitlement]);
+  }, [sessionId, loadStatus, loadSaPricing, refreshEntitlement, user?.id]);
 
   if (ownerReturn) {
     return (

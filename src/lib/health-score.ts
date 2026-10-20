@@ -465,6 +465,8 @@ export function liveHealthFromBooks(input: {
   });
   const cashBalance = assessed.cash.amount;
   const cashKnown = cashBalance != null;
+  // A blank cash line is not opening 0. outlook.cashOnFile is false only then.
+  const cashOnFile = assessed.outlook.cashOnFile !== false;
   const healthScored = scorecardHealthFromFinancials({
     financials,
     fyStartMonth: input.fyStartMonth,
@@ -472,15 +474,19 @@ export function liveHealthFromBooks(input: {
     cashRunwayWeeks: cashKnown ? persistedRunwayWeeks(assessed.runway) : null,
     cashBalance: cashKnown ? cashBalance : null,
     market: input.market,
-    shortfallWeek: assessed.outlook.shortfallWeek,
+    shortfallWeek: cashOnFile ? assessed.outlook.shortfallWeek : null,
     industry: input.industry,
   });
-  if (healthScored.overall == null) return healthScored;
+  // No scored pillars and a real cash line: leave the empty score alone.
+  // Missing cash still drops the pillar so a later reader cannot treat it as Critical.
+  if (healthScored.overall == null && cashOnFile) return healthScored;
   return cashPillarFollowsForecast(healthScored, {
+    hasEvidence: true,
+    cashOnFile,
     openingMissing: storedOpeningIsMissing(input.cashflow),
-    opening: assessed.outlook.opening,
-    closings: assessed.outlook.closing,
-    floor: assessed.outlook.floor,
+    opening: cashOnFile ? assessed.outlook.opening : null,
+    closings: cashOnFile ? assessed.outlook.closing : null,
+    floor: cashOnFile ? assessed.outlook.floor : 0,
   });
 }
 
@@ -757,9 +763,16 @@ export function cashPillarFollowsForecast(
      * A flat zero series is the same case when the caller does not pass this.
      */
     hasEvidence?: boolean;
+    /** False when the cash balance itself was not read. The pillar is left out. */
+    cashOnFile?: boolean;
   },
 ): OverallHealth {
   if (input.hasEvidence === false) return health;
+  const openingFlat =
+    input.opening == null || !Number.isFinite(input.opening) || Math.abs(input.opening) < 0.5;
+  const closingsFlat = (input.closings ?? []).every((n) => !Number.isFinite(n) || Math.abs(n) < 0.5);
+  // A blank stored opening keeps its own note. It is not the same as a P&L
+  // that never had a cash line.
   if (input.openingMissing) {
     const pillars = health.pillars.map((pillar) => {
       if (pillar.id !== "cash") return pillar;
@@ -772,14 +785,23 @@ export function cashPillarFollowsForecast(
     });
     return overallFromPillars(pillars, { flagUnscoredCash: true });
   }
+  // No cash line. A floor of 0 with a flat series is the missing-cash placeholder,
+  // not a breach. Leave Cash out of the average and do not force Critical.
+  const cashNotOnFile =
+    input.cashOnFile === false ||
+    (input.cashOnFile !== true && input.floor === 0 && openingFlat && closingsFlat);
+  if (cashNotOnFile) {
+    const pillars = health.pillars.map((pillar) => {
+      if (pillar.id !== "cash") return pillar;
+      return { ...pillar, score: null, status: "at_risk" as const, note: null };
+    });
+    return overallFromPillars(pillars);
+  }
   const floor = input.floor;
   if (floor == null || !Number.isFinite(floor)) return health;
   // Thirteen zeros under the fallback floor are not a forecast. They used to
   // mint Cash 25 / Critical on a file with no books.
   const closings = input.closings ?? [];
-  const openingFlat =
-    input.opening == null || !Number.isFinite(input.opening) || Math.abs(input.opening) < 0.5;
-  const closingsFlat = closings.every((n) => !Number.isFinite(n) || Math.abs(n) < 0.5);
   if (input.hasEvidence !== true && openingFlat && closingsFlat) return health;
   const openingUnder =
     input.opening != null && Number.isFinite(input.opening) && input.opening < floor;
