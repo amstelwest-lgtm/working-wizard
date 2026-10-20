@@ -104,6 +104,7 @@
     "test:review-signoff": "vite-node --config scripts/vite-test.config.ts scripts/review-signoff-test.mts",
     "test:owner-signoff-mark": "vite-node --config scripts/vite-test.config.ts scripts/owner-signoff-mark-test.mts",
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts",
+    "test:client-owner-invite": "vite-node --config scripts/vite-test.config.ts scripts/client-owner-invite-test.mts",
     "test:coza-host-redirect": "vite-node --config scripts/vite-test.config.ts scripts/coza-host-redirect-test.mts",
     "test:welcome-email": "vite-node --config scripts/vite-test.config.ts scripts/welcome-email-test.mts",
     "test:accountant-invite": "vite-node --config scripts/vite-test.config.ts scripts/accountant-invite-test.mts",
