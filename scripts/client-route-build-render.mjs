@@ -18,7 +18,9 @@ if (!chunk) {
 }
 const code = readFileSync(resolve(dir, chunk), "utf8");
 const declared = code.indexOf("reports_issued_count");
-const used = code.indexOf("Nothing ready to send");
+// A zero report count omits the Home reports line, so that old sentence is
+// gone from this chunk. "No draft waiting." is still inside the same memo.
+const used = code.indexOf("No draft waiting.");
 if (declared === -1 || used === -1 || declared > used) {
   console.error(
     `${chunk} reads the issued-report count before initializing it. /clients/:id crashes with ReferenceError: Cannot access '…' before initialization.`,

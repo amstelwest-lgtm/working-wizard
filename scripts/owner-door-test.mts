@@ -237,6 +237,98 @@ assert(
   ownerCardStatuses(outlookBooks).financial_manager == null,
   "cash above the health floor is not Critical",
 );
+const aboveFloor = {
+  opening: 7430,
+  closing: [7430],
+  floor: 5661,
+  dipsBelowFloorWeek: null,
+};
+const criticalAbove = books({
+  hasBooks: true,
+  ledger: "QuickBooks",
+  cashPillarStatus: "critical",
+  cashOutlook: aboveFloor,
+});
+const criticalAboveHome = ownerHomeLines(ownerAnswerTiles(criticalAbove), null);
+assert(
+  criticalAboveHome.financial_manager[0] === "Cash is $7,430, above the $5,661 floor.",
+  `critical without another reason keeps the cash line (${criticalAboveHome.financial_manager[0]})`,
+);
+assert(
+  ownerCardStatuses(criticalAbove).financial_manager == null,
+  "critical without another reason matches the above-floor line",
+);
+const shortRunway = books({
+  hasBooks: true,
+  ledger: "QuickBooks",
+  cashPillarStatus: "critical",
+  cashOutlook: aboveFloor,
+  cashRunwayWeeks: 2,
+});
+assert(
+  ownerHomeLines(ownerAnswerTiles(shortRunway), null).financial_manager[0] === "Cash runway is 2 weeks.",
+  "a critical runway names the runway",
+);
+assert(
+  ownerCardStatuses(shortRunway).financial_manager?.word === "Critical",
+  "a named runway keeps the Critical chip",
+);
+const burning = books({
+  hasBooks: true,
+  ledger: "QuickBooks",
+  cashPillarStatus: "critical",
+  cashOutlook: aboveFloor,
+  cashBurnScore: 10,
+});
+assert(
+  ownerHomeLines(ownerAnswerTiles(burning), null).financial_manager[0] === "Operating cash is the strain.",
+  "a critical burn names operating cash",
+);
+const stretched = books({
+  hasBooks: true,
+  ledger: "QuickBooks",
+  cashPillarStatus: "critical",
+  cashOutlook: aboveFloor,
+  cashDebtorScore: 12,
+  cashBurnScore: 10,
+  cashRunwayWeeks: 2,
+});
+assert(
+  ownerHomeLines(ownerAnswerTiles(stretched), null).financial_manager[0] === "Cash runway is 2 weeks.",
+  "runway is the reason when runway, burn, and receivables are all critical",
+);
+const receivables = books({
+  hasBooks: true,
+  ledger: "QuickBooks",
+  cashPillarStatus: "critical",
+  cashOutlook: aboveFloor,
+  cashDebtorScore: 12,
+});
+assert(
+  ownerHomeLines(ownerAnswerTiles(receivables), null).financial_manager[0] === "Receivables are the strain.",
+  "critical receivables name receivables",
+);
+assert(ownerCardStatuses(receivables).financial_manager?.word === "Critical", "named receivables stay Critical");
+const underAndCritical = books({
+  hasBooks: true,
+  ledger: "QuickBooks",
+  cashPillarStatus: "critical",
+  cashRunwayWeeks: 2,
+  cashOutlook: {
+    opening: 2000,
+    closing: [2000],
+    floor: 5661,
+    dipsBelowFloorWeek: 1,
+  },
+});
+assert(
+  /below your/.test(ownerHomeLines(ownerAnswerTiles(underAndCritical), null).financial_manager[0] ?? ""),
+  "a floor breach stays the cash line",
+);
+assert(
+  ownerCardStatuses(underAndCritical).financial_manager?.word === "Critical",
+  "cash under the floor stays Critical",
+);
 assert(
   ownerCardStatuses(
     books({

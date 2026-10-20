@@ -17,6 +17,7 @@ import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
+import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { leverageNarrative } from "./narrative";
@@ -378,6 +379,8 @@ export function LeverageSolvencyPDF({
           <DebtTable lines={d.debt_lines} accent={theme.accent} />
         ) : (
           <View
+            wrap={false}
+            minPresenceAhead={PDF_CARD_MIN_PRESENCE}
             style={{
               backgroundColor: C.soft,
               borderRadius: 5,

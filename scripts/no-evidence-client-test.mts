@@ -123,10 +123,9 @@ const needs = homeActionNeeds({
   known: true,
   titles: [],
   overdue: 0,
-  nextAction: connectBooksHeadline(us),
 });
-assert(needs.lines.length === 1 && needs.lines[0] === connectBooksHeadline(us), needs.lines.join(" | "));
-assert(!needs.lines.some((line) => /No open work/.test(line)), "an empty file does not say no open work");
+assert(needs.heading !== "Next", needs.heading);
+assert(!needs.lines.some((line) => /Connect QuickBooks/.test(line)), needs.lines.join(" | "));
 
 const moves = rankStrategicMoves({ hasEvidence: false, market: us, healthByKey: {} });
 assert(moves.length === 1 && moves[0]?.key === "connectBooks", `moves ${moves.map((move) => move.title).join(", ")}`);
@@ -195,7 +194,6 @@ const ownerNeeds = ownerNeedsView({
   quickBooks: { state: "absent" },
   xero: { state: "absent" },
   when: (iso) => iso,
-  nextAction: connect,
   statementSpan: null,
 });
 const accountantNeeds = {
@@ -255,6 +253,8 @@ for (const audience of ["owner", "accountant"] as const) {
   for (const banned of KILLED) {
     assert(!visible.includes(banned), `${audience} still shows ${banned}`);
   }
+  const plan = sliceBetween(html, 'class="owner-needs"', "owner-pane");
+  assert(!plan.includes("Connect QuickBooks"), `${audience} action plan repeats the connect line`);
   assert(fm.includes(connect), `${audience} financial manager is missing the connect action`);
   assert((fm.match(/Connect QuickBooks/g) ?? []).length === 1, `${audience} connect action renders more than once`);
   assert(!analyst.includes("Connect QuickBooks"), `${audience} analyst repeats connect`);
@@ -262,8 +262,9 @@ for (const audience of ["owner", "accountant"] as const) {
   assert(!advisor.includes("Get customers to pay faster"), `${audience} advisor still ranks a catalogue move`);
 }
 
-assert(ownerNeeds.actionLines.length === 1 && ownerNeeds.actionLines[0] === connect, ownerNeeds.actionLines.join(" | "));
-assert(needs.lines.length === 1 && needs.lines[0] === connect, needs.lines.join(" | "));
+assert(!ownerNeeds.actionLines.some((line) => /Connect QuickBooks/.test(line)), ownerNeeds.actionLines.join(" | "));
+assert(ownerNeeds.actionsHeading !== "Next", ownerNeeds.actionsHeading);
+assert(!needs.lines.some((line) => /Connect QuickBooks/.test(line)), needs.lines.join(" | "));
 assert(reported("financial_manager") === connect, reported("financial_manager"));
 assert(reported("analyst") === "", reported("analyst"));
 assert(reported("advisor") === "", reported("advisor"));

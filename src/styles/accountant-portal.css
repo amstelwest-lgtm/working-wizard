@@ -1995,18 +1995,26 @@ html.dark .health-plate{
   border-color:#0b5fff;
 }
 .accountant-portal .client-subpage-link--primary{
-  border-color:#0b5fff;
-  background:#f4f8ff;
+  border-color:#0B5FFF;
+  background:#0B5FFF;
+  background-image:none;
+  box-shadow:none;
 }
-.accountant-portal .client-subpage-link--primary .client-subpage-link__label{
-  color:#0b5fff;
+.accountant-portal .client-subpage-link--primary .client-subpage-link__label,
+.accountant-portal .client-subpage-link--primary .client-subpage-link__detail{
+  color:#ffffff;
+}
+.accountant-portal .client-subpage-link--primary:hover{
+  border-color:#2563EB;
+  background:#2563EB;
 }
 html.dark .accountant-portal .client-subpage-link--primary{
-  background:#163654;
-  border-color:#3b82f6;
+  background:#0B5FFF;
+  border-color:#0B5FFF;
 }
-html.dark .accountant-portal .client-subpage-link--primary .client-subpage-link__label{
-  color:#f4f7fb;
+html.dark .accountant-portal .client-subpage-link--primary .client-subpage-link__label,
+html.dark .accountant-portal .client-subpage-link--primary .client-subpage-link__detail{
+  color:#ffffff;
 }
 .accountant-portal .client-subpage-link__label{
   font-size:16px;

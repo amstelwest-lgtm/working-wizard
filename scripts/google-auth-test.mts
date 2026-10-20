@@ -16,13 +16,25 @@ import {
   parseOAuthCallbackParams,
   readIntentCookie,
 } from "../src/lib/google-auth";
+import {
+  accountantNeedsLocationPicker,
+  accountantProfileStamp,
+  accountantWithoutFirm,
+  redirectAccountantWithoutFirm,
+  clearGooglePracticeGate,
+  googlePracticeFirmMarket,
+  googlePracticePickerDraft,
+  readGooglePracticeGate,
+  stashGooglePracticeGate,
+} from "../src/lib/google-practice-market";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
 assert(
-  googleOAuthRedirectTo("https://www.milonfinance.com/") === "https://www.milonfinance.com/auth/callback",
+  googleOAuthRedirectTo("https://www.milonfinance.com/") ===
+    "https://www.milonfinance.com/auth/callback",
   "redirect strips trailing slash",
 );
 assert(
@@ -47,8 +59,11 @@ assert(
   "redirectTo carries accountant join (never `invite`, which is owner-handoff)",
 );
 assert(
-  googleOAuthRedirectTo("https://milonfinance.com", { checkout: "solo", interval: "month", market: "us" }) ===
-    "https://milonfinance.com/auth/callback?checkout=solo&interval=month&market=us",
+  googleOAuthRedirectTo("https://milonfinance.com", {
+    checkout: "solo",
+    interval: "month",
+    market: "us",
+  }) === "https://milonfinance.com/auth/callback?checkout=solo&interval=month&market=us",
   "redirectTo carries paid Checkout so an origin hop cannot drop the plan",
 );
 
@@ -134,13 +149,14 @@ assert(
 
 assert(parseAccountantGoogleSignup(null) === null, "empty accountant signup draft");
 assert(
-  parseAccountantGoogleSignup(JSON.stringify({ firmName: " West & Co ", fullName: "Ana", marketCountry: "ZA" }))
-    ?.firmName === "West & Co",
+  parseAccountantGoogleSignup(
+    JSON.stringify({ firmName: " West & Co ", fullName: "Ana", marketCountry: "ZA" }),
+  )?.firmName === "West & Co",
   "accountant Google signup draft keeps firm name",
 );
 assert(
-  parseAccountantGoogleSignup(JSON.stringify({ firmName: "West", marketCountry: "bogus" }))?.marketCountry ===
-    undefined,
+  parseAccountantGoogleSignup(JSON.stringify({ firmName: "West", marketCountry: "bogus" }))
+    ?.marketCountry === undefined,
   "rejects junk market on accountant Google signup draft",
 );
 
@@ -199,7 +215,8 @@ assert(
   "Google callback redeems a stashed owner invite instead of abandoning it",
 );
 assert(
-  callbackSrc.includes("peekPendingOwnerInvite") && callbackSrc.includes("resolvePendingOwnerInvite"),
+  callbackSrc.includes("peekPendingOwnerInvite") &&
+    callbackSrc.includes("resolvePendingOwnerInvite"),
   "callback reads invite from OAuth URL + storage before consuming, so a remount cannot drop it",
 );
 assert(
@@ -224,7 +241,8 @@ assert(
   "startGoogleSignIn can return an accountant to /join after Google",
 );
 assert(
-  callbackSrc.includes("signup_type: \"accountant\"") || callbackSrc.includes('signup_type: "accountant"'),
+  callbackSrc.includes('signup_type: "accountant"') ||
+    callbackSrc.includes('signup_type: "accountant"'),
   "Google Create-firm stamps accountant metadata so /app does not mint an owner client",
 );
 assert(
@@ -232,17 +250,345 @@ assert(
   "Google accountant signup provisions a practice firm",
 );
 assert(
-  callbackSrc.includes("accountantJoinFromCallbackSearch") && callbackSrc.includes('to: "/join/$token"'),
+  callbackSrc.includes("accountantJoinFromCallbackSearch") &&
+    callbackSrc.includes('to: "/join/$token"'),
   "Google callback returns accountant invites to /join/:token",
 );
 assert(
   callbackSrc.indexOf("joinToken") < callbackSrc.indexOf("goOps"),
   "accountant join hop runs before generic /app or /dashboard landing",
 );
+assert(
+  callbackSrc.includes("googlePracticeFirmMarket"),
+  "Google firm create resolves a market before ensure_practice_firm",
+);
+assert(callbackSrc.includes("<MarketPicker"), "a missing practice market opens the country picker");
+assert(
+  callbackSrc.includes("p_market: marketToJson(market)"),
+  "Google firm create writes the resolved market",
+);
+assert(
+  !callbackSrc.includes("p_market: market ? marketToJson(market) : null"),
+  "Google firm create does not pass a null market",
+);
+assert(
+  !callbackSrc.includes('ensure_practice_firm", { p_name: firmName }'),
+  "Google firm create does not fall back to a name-only insert",
+);
+assert(
+  callbackSrc.includes('marketCountry === "ZA" ? "za" : "us"'),
+  "fresh accountant checkout treats a missing market as not ZA",
+);
+
+const ny = { country: "US" as const, regionCode: "NY" as const };
+assert(
+  googlePracticeFirmMarket({
+    draftCountry: "ZA",
+    draftRegion: null,
+    visitor: ny,
+    geoCountry: "US",
+  })?.country === "ZA",
+  "a complete South Africa draft wins over a US visitor and US geo",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: ny, geoCountry: "ZA" })?.regionCode === "NY",
+  "a saved US visitor market is kept",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: null, geoCountry: "ZA" })?.country === "ZA",
+  "a South Africa edge can create a firm without the picker",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: null, geoCountry: "US" }) === null,
+  "a United States edge is not a firm market until a state is chosen",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: null, geoCountry: null }) === null,
+  "an unknown visitor does not become South Africa",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: null, geoCountry: "GB" }) === null,
+  "another country is not a practice market",
+);
+assert(
+  googlePracticePickerDraft({
+    visitorDraft: { country: null, regionCode: null },
+    geoCountry: "US",
+  }).country === "US" &&
+    googlePracticePickerDraft({
+      visitorDraft: { country: null, regionCode: null },
+      geoCountry: "US",
+    }).regionCode === null,
+  "US geo pre-selects the United States and still asks for a state",
+);
+assert(
+  googlePracticePickerDraft({
+    visitorDraft: { country: null, regionCode: null },
+    geoCountry: "GB",
+  }).country === null,
+  "an unknown edge does not pre-select South Africa",
+);
+assert(
+  googlePracticePickerDraft({
+    visitorDraft: { country: null, regionCode: null },
+    geoCountry: "ZA",
+  }).country === "ZA",
+  "ZA geo seeds the picker as South Africa",
+);
+
+const memory = new Map<string, string>();
+const previousStorage = globalThis.sessionStorage;
+globalThis.sessionStorage = {
+  getItem: (key: string) => memory.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    memory.set(key, value);
+  },
+  removeItem: (key: string) => {
+    memory.delete(key);
+  },
+  clear: () => memory.clear(),
+  key: (index: number) => Array.from(memory.keys())[index] ?? null,
+  get length() {
+    return memory.size;
+  },
+} as Storage;
+stashGooglePracticeGate({
+  userId: "user-a",
+  firmName: "North Books",
+  fullName: "Ada",
+  next: "/dashboard",
+  joinToken: "",
+});
+assert(
+  readGooglePracticeGate("user-b") === null,
+  "a practice picker stash does not apply to another user",
+);
+assert(readGooglePracticeGate("user-a") === null, "a mismatched user clears the stash");
+stashGooglePracticeGate({
+  userId: "user-a",
+  firmName: "North Books",
+  fullName: "Ada",
+  next: "/dashboard",
+  joinToken: "",
+});
+assert(
+  readGooglePracticeGate("user-a")?.firmName === "North Books",
+  "the same user keeps the practice picker stash",
+);
+clearGooglePracticeGate();
+assert(
+  readGooglePracticeGate("user-a") === null,
+  "confirming the practice location clears the stash",
+);
+globalThis.sessionStorage = previousStorage;
+
+const stamp = accountantProfileStamp({ firmName: "North Books", fullName: "Ada" });
+assert(stamp.signup_type === "accountant", "the picker stamp is an accountant signup");
+assert(stamp.firm_name === "North Books", "the picker stamp keeps the firm name");
+assert(stamp.full_name === "Ada", "the picker stamp keeps the person name");
+assert(
+  !Object.prototype.hasOwnProperty.call(stamp, "market_country") &&
+    !Object.prototype.hasOwnProperty.call(stamp, "market_region"),
+  "the picker stamp does not store a market",
+);
+assert(
+  accountantWithoutFirm({ signupType: "accountant", firmCount: 0 }),
+  "an accountant with no firm still needs a practice",
+);
+assert(
+  !accountantWithoutFirm({ signupType: "accountant", firmCount: 1 }),
+  "an accountant who already has a firm is not sent back to the picker",
+);
+assert(
+  !accountantWithoutFirm({ signupType: "customer", firmCount: 0 }),
+  "an owner with no firm is not treated as an abandoned practice",
+);
+assert(
+  accountantWithoutFirm({ firmName: "North Books", firmCount: 0 }),
+  "a firm name alone marks an abandoned practice",
+);
+assert(
+  accountantNeedsLocationPicker({ signupType: "accountant", firmCount: 0, visitor: null }),
+  "abandoning the picker still needs a location when nothing was chosen",
+);
+assert(
+  !accountantNeedsLocationPicker({ signupType: "accountant", firmCount: 0, visitor: ny }),
+  "a saved visitor market can create the firm without showing the picker again",
+);
+assert(
+  !accountantNeedsLocationPicker({ signupType: "accountant", firmCount: 1, visitor: null }),
+  "an existing firm does not reopen the picker",
+);
+assert(
+  !accountantNeedsLocationPicker({
+    signupType: "accountant",
+    firmCount: 0,
+    marketCountry: "ZA",
+    visitor: null,
+  }),
+  "a stored South Africa choice can create the firm",
+);
+
+const openAt = callbackSrc.indexOf("async function openPracticeLocation");
+const landAt = callbackSrc.indexOf("async function landGoogleUser");
+const openBody = callbackSrc.slice(openAt, landAt);
+assert(openAt >= 0 && landAt > openAt, "the practice picker opener is declared before landing");
+assert(
+  openBody.includes("accountantProfileStamp(") &&
+    openBody.indexOf("accountantProfileStamp(") < openBody.indexOf("setPracticeGate("),
+  "the picker stamp is written before the picker opens",
+);
+assert(
+  !openBody.includes("market_country") && !openBody.includes("market_region"),
+  "opening the picker does not write a market onto the profile",
+);
+assert(
+  callbackSrc.includes("practiceSignup && existingFirmCount === 0"),
+  "a later visit with practice metadata and no firm still finishes location",
+);
+assert(
+  !callbackSrc.includes("readVisitorMarket() ??"),
+  "owner Google sign-in does not default a missing market to South Africa",
+);
+assert(
+  callbackSrc.includes("p_market: readVisitorMarket()"),
+  "owner Google sign-in still stores a visitor market when one was picked",
+);
+
+const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+const provisionAt = appSrc.indexOf("const shouldProvisionOwner");
+assert(
+  provisionAt > 0 && appSrc.slice(0, provisionAt).includes("accountantWithoutFirm({"),
+  "a firm-less accountant leaves /app before an owner client is created",
+);
+assert(
+  !appSrc.includes("readVisitorMarket() ??"),
+  "the owner app does not default a missing market to South Africa",
+);
+
+const gateSrc = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
+assert(
+  gateSrc.includes("redirectAccountantWithoutFirm") &&
+    gateSrc.includes("firmsLoaded") &&
+    gateSrc.includes('to: "/auth/callback"'),
+  "a firm-less accountant returns to the picker only after firms have loaded",
+);
+assert(
+  !redirectAccountantWithoutFirm({
+    firmsLoaded: false,
+    signupType: "accountant",
+    firmCount: 0,
+  }),
+  "a timed-out firm load does not redirect to the location picker",
+);
+assert(
+  !redirectAccountantWithoutFirm({
+    firmsLoaded: false,
+    signupType: "accountant",
+    firmName: "North Books",
+    firmCount: 0,
+  }),
+  "a failed firm read does not redirect to the location picker",
+);
+assert(
+  redirectAccountantWithoutFirm({
+    firmsLoaded: true,
+    signupType: "accountant",
+    firmCount: 0,
+  }),
+  "a loaded accountant with no firm returns to the location picker",
+);
+assert(
+  !redirectAccountantWithoutFirm({
+    firmsLoaded: true,
+    signupType: "accountant",
+    firmCount: 1,
+  }),
+  "a loaded firm stays on the practice",
+);
+
+const profileSrc = readFileSync(resolve("src/contexts/accountant-profile.tsx"), "utf8");
+assert(
+  profileSrc.includes("awaitingPracticeLocation"),
+  "profile hydration does not mint a firm while practice location is still unchosen",
+);
+const timeoutAt = profileSrc.indexOf("brand load timed out");
+const timeoutEnd = profileSrc.indexOf("}, SHELL_GATE_TIMEOUT_MS);", timeoutAt);
+const timeoutBody = profileSrc.slice(timeoutAt, timeoutEnd);
+assert(timeoutAt > 0 && timeoutEnd > timeoutAt, "brand hydrate still times out");
+assert(
+  !timeoutBody.includes("setFirmsLoaded"),
+  "a brand timeout does not mark the firm list loaded",
+);
+assert(
+  profileSrc.includes("if (again.error)") &&
+    profileSrc.includes("listed.error == null") &&
+    profileSrc.indexOf("listed.error == null") < profileSrc.indexOf("setFirmsLoaded(true)"),
+  "a failed firm read does not mark the firm list loaded",
+);
+
+const nullMarketSql = readFileSync(
+  resolve("supabase/migrations/20261020130500_ensure_own_client_null_market.sql"),
+  "utf8",
+);
+assert(
+  !nullMarketSql.includes('{"country":"ZA","regionCode":null}'),
+  "ensure_own_client no longer rewrites a null market to South Africa",
+);
+assert(
+  nullMarketSql.includes(
+    "CREATE OR REPLACE FUNCTION public.ensure_own_client(p_name text, p_market jsonb DEFAULT NULL)",
+  ),
+  "ensure_own_client keeps the (text, jsonb) signature",
+);
+assert(
+  nullMarketSql.includes(
+    "REVOKE EXECUTE ON FUNCTION public.ensure_own_client(text, jsonb) FROM PUBLIC;",
+  ) &&
+    nullMarketSql.includes(
+      "GRANT EXECUTE ON FUNCTION public.ensure_own_client(text, jsonb) TO authenticated;",
+    ),
+  "ensure_own_client keeps the public revoke and authenticated grant",
+);
+assert(
+  nullMarketSql.includes("pg_advisory_xact_lock"),
+  "ensure_own_client keeps the advisory lock",
+);
+assert(
+  nullMarketSql.includes("INSERT INTO public.clients"),
+  "a missing owner market still inserts a client",
+);
+assert(nullMarketSql.includes("v_market"), "the insert stores the passed market, including null");
+const nullMarketInsertAt = nullMarketSql.indexOf("INSERT INTO public.clients");
+assert(
+  nullMarketSql.indexOf("firm_id IS NULL") < nullMarketSql.indexOf("m.role = 'client_owner'") &&
+    nullMarketSql.indexOf("m.role = 'client_owner'") < nullMarketInsertAt,
+  "firm-unlinked lookup, then client_owner, then insert",
+);
+assert(
+  (nullMarketSql.slice(0, nullMarketInsertAt).match(/RETURN v_client_id;/g) ?? []).length === 2,
+  "both lookups return before any insert",
+);
+assert(
+  !/insert\s+into\s+public\.client_memberships/i.test(nullMarketSql) &&
+    !/insert\s+into\s+public\.user_roles/i.test(nullMarketSql),
+  "return and insert still write no membership or role",
+);
+assert(
+  !/update\s+public\.clients/i.test(nullMarketSql),
+  "existing owner clients are not rewritten",
+);
+assert(
+  !/delete\s+from\s+public\.clients/i.test(nullMarketSql),
+  "existing owner clients are not deleted",
+);
 
 const authPage = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
 assert(authPage.includes("Continue with Google"), "Create firm offers Google sign-up");
-assert(authPage.includes("stashAccountantGoogleSignup"), "Create firm Google carries firm name + market");
+assert(
+  authPage.includes("stashAccountantGoogleSignup"),
+  "Create firm Google carries firm name + market",
+);
 assert(
   (authPage.match(/GoogleSignInButton/g) ?? []).length >= 2,
   "Create firm and Sign in both have a Google button",

@@ -7,6 +7,8 @@ import {
   formatMoneyCompact,
   formatMonthLabel,
   formatNumber,
+  marketForClient,
+  parseMarketSelection,
   resolveMarket,
   t,
   type CopyKey,
@@ -38,21 +40,43 @@ export function MarketProvider({
   overrides,
   onChange,
   children,
+  gatesFollowStored = false,
 }: {
   selection: MarketSelection | null | undefined;
   overrides?: MarketTaxOverrides;
   onChange?: (next: MarketSelection) => void;
   children: ReactNode;
+  /**
+   * When set, a missing stored market keeps South Africa for dates and
+   * timezone, and uses dollars plus the US copy pack for prices and ZA-only
+   * copy. Off by default so other screens keep the previous coerce.
+   */
+  gatesFollowStored?: boolean;
 }) {
   // Keyed on the two scalars so consumers see one identity per market, not
   // one per parent render.
   const country = selection?.country;
   const regionCode = selection?.regionCode ?? null;
-  const sel = useMemo(
-    () => coerceMarketSelection(country ? { country, regionCode } : null),
+  const parsed = useMemo(
+    () => parseMarketSelection(country ? { country, regionCode } : null),
     [country, regionCode],
   );
-  const market = useMemo(() => resolveMarket(sel, overrides), [sel, overrides]);
+  const sel = useMemo(
+    () => parsed ?? coerceMarketSelection(country ? { country, regionCode } : null),
+    [parsed, country, regionCode],
+  );
+  const market = useMemo(() => {
+    if (gatesFollowStored && !parsed) {
+      const dates = marketForClient(null);
+      return {
+        ...dates,
+        currency: "USD" as const,
+        copyPack: "us" as const,
+        tax: { regime: "none" as const },
+      };
+    }
+    return resolveMarket(sel, overrides);
+  }, [gatesFollowStored, parsed, sel, overrides]);
   const setSelection = useCallback(
     (next: MarketSelection) => {
       onChange?.(next);

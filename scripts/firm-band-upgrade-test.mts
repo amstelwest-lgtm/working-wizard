@@ -62,6 +62,7 @@ import { checkoutEmailRedirectTo } from "../src/lib/pending-checkout";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
 import {
   decideFirmClientCreate,
+  eligibleForIntroTrial,
   showStarterTrialEndedCopy,
   starterTrialForPlanState,
 } from "../src/lib/firm-client-cap";
@@ -69,7 +70,12 @@ import {
   STARTER_TRIAL_ENDED_MESSAGE,
   starterTrialClock,
 } from "../src/lib/firm-starter-trial";
-import { FIRM_BAND_CATALOG, FIRM_CHECKOUT_BANDS } from "../src/lib/stripe-plans";
+import {
+  FIRM_BAND_CATALOG,
+  FIRM_CHECKOUT_BANDS,
+  FIRM_TRIAL_CARD_LINE,
+  FIRM_TRIAL_SENTENCE,
+} from "../src/lib/stripe-plans";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -790,6 +796,19 @@ assert(settings.includes("FirmBandUpgrade"), "settings plan lists bands");
 assert(settings.includes("plan?.usageLabel"), "settings plan shows client usage");
 assert(settings.includes("upgradeFirmBand"), "settings upgrades through the same server function");
 assert(settings.includes("plan.canUpgrade"), "manage billing stays on the owner");
+assert(
+  settings.includes("introTrialEligible={plan.introTrialEligible}"),
+  "settings shows the Starter trial lines from the plan flag",
+);
+const capServer = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
+assert(
+  capServer.includes("eligibleForIntroTrial(history.priorSubscriptionCount)"),
+  "the plan flag uses the intro-trial helper",
+);
+assert(eligibleForIntroTrial(0), "no prior subscription is still eligible");
+assert(!eligibleForIntroTrial(1), "a prior subscription is not eligible");
+const regionCard = readFileSync(resolve("src/components/market-settings-card.tsx"), "utf8");
+assert(!regionCard.includes("FIRM_TRIAL_SENTENCE"), "the Region card is not the trial line");
 
 const fn = readFileSync(resolve("src/lib/stripe-checkout.functions.ts"), "utf8");
 assert(fn.includes("export const upgradeFirmBand"), "upgrade server function");
@@ -1062,6 +1081,64 @@ assert(!saPicker.includes("R0/mo"), "an SA picker does not invent a zero rand pr
 assert(!saPicker.includes("$39"), "an SA picker does not show the dollar Starter price");
 assert(!saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker has no discount note");
 assert(!saPicker.toLowerCase().includes("vat"), "an SA picker has no tax wording");
+assert(!saPicker.includes(FIRM_TRIAL_CARD_LINE), "a used trial does not repeat the signup line");
+
+const unusedUs = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: null,
+    interval: "month",
+    priceCurrency: "USD",
+    canUpgrade: true,
+    clientCount: 0,
+    introTrialEligible: true,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(unusedUs.includes(FIRM_TRIAL_SENTENCE), "an unused US trial names the 14-day line");
+assert(unusedUs.includes(FIRM_TRIAL_CARD_LINE), "an unused US trial names the card line");
+assert(
+  unusedUs.split(FIRM_TRIAL_CARD_LINE).length === 2,
+  "the card line appears once, on Starter",
+);
+assert(unusedUs.includes("$39"), "an unused US trial keeps the USD Starter price");
+assert(!unusedUs.includes("R299"), "an unused US trial does not show a rand price");
+assert(!unusedUs.toLowerCase().includes("vat"), "an unused US trial has no tax wording");
+
+const unusedSa = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: null,
+    interval: "month",
+    priceCurrency: "zar",
+    canUpgrade: true,
+    clientCount: 0,
+    saDiscount: true,
+    introTrialEligible: true,
+    zaLabels: {
+      starter: { month: "R299/mo · about R60 per client", year: "R2,837/yr · about R60 per client" },
+      solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
+    },
+    onUpgrade: () => undefined,
+  }),
+);
+assert(unusedSa.includes(FIRM_TRIAL_SENTENCE), "an unused SA trial names the 14-day line");
+assert(unusedSa.includes(FIRM_TRIAL_CARD_LINE), "an unused SA trial names the card line");
+assert(unusedSa.includes("R299/mo · about R60 per client"), "an unused SA trial keeps the rand price");
+assert(!unusedSa.includes("$39"), "an unused SA trial does not show the dollar price");
+assert(!unusedSa.toLowerCase().includes("vat"), "an unused SA trial has no tax wording");
+
+const usedTrial = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: "starter",
+    interval: "month",
+    priceCurrency: "USD",
+    canUpgrade: true,
+    clientCount: 1,
+    introTrialEligible: false,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(!usedTrial.includes(FIRM_TRIAL_SENTENCE), "a used trial hides the signup sentence");
+assert(!usedTrial.includes(FIRM_TRIAL_CARD_LINE), "a used trial hides the card line");
 
 for (const publicFile of [
   "src/components/firm-band-pricing.tsx",

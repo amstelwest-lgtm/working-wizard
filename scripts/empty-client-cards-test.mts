@@ -143,7 +143,7 @@ assert(
   studio.includes("reportCardNoFiguresState({ noFigures: blocked })"),
   "every report card uses the no-figures state",
 );
-assert(studio.includes("noFigures.showPageCount"), "page count is gated by the no-figures state");
+assert(!studio.includes("{report.pages}"), "the card does not print an invented page count");
 assert(studio.includes("noFigures.showSignoff"), "sign-off is gated by the no-figures state");
 assert(studio.includes("data-report-empty"), "the empty reason is rendered on the card");
 

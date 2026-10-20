@@ -710,6 +710,8 @@ html[data-landing="1"] .firm-bands-table .firm-bands-price{font-weight:800;font-
 html[data-landing="1"] .firm-bands-table th:last-child,html[data-landing="1"] .firm-bands-table .firm-bands-cta{text-align:right}
 html[data-landing="1"] .firm-bands-table .btn{margin:0;height:34px;padding:0 14px;font-size:11px;font-weight:700;letter-spacing:.08em;white-space:nowrap}
 html[data-landing="1"] .firm-bands-table .btn-gold{color:#1b1300;-webkit-text-fill-color:#1b1300;background-color:var(--gold)}
+html[data-landing="1"] .firm-bands-table .btn-cobalt,
+html[data-landing="1"] .firm-band-card .btn-cobalt{color:#fff;-webkit-text-fill-color:#fff;background-color:var(--cobalt);border-color:var(--cobalt)}
 html[data-landing="1"] .firm-bands-table .btn-ghost{color:var(--ink);-webkit-text-fill-color:var(--ink);background-color:transparent;border:1px solid var(--line)}
 html[data-landing="1"] .firm-bands-table .btn-ghost:hover{border-color:var(--gold);color:var(--gold-ink);-webkit-text-fill-color:var(--gold-ink)}
 html[data-landing="1"] .firm-bands-compact .firm-bands-table th,html[data-landing="1"] .firm-bands-compact .firm-bands-table td{padding:10px 12px}
@@ -1518,7 +1520,7 @@ html[data-landing="1"] .reg-owner-link:hover{
 /* Rebrand: white and blue. One gold primary is the hero trial button.
    The header trial button, the wordmark, and decorative gold stay distinct:
    header trial is cobalt, the MILŌN wordmark stays gold. */
-html[data-landing="1"] a.btn-gold.nav-trial{
+html[data-landing="1"] a.btn-cobalt.nav-trial{
   background:transparent;
   background-image:none;
   border:1px solid var(--cobalt);
@@ -1526,8 +1528,8 @@ html[data-landing="1"] a.btn-gold.nav-trial{
   -webkit-text-fill-color:var(--cobalt);
   box-shadow:none;
 }
-html[data-landing="1"] a.btn-gold.nav-trial::after{content:none;display:none}
-html[data-landing="1"] a.btn-gold.nav-trial:hover{
+html[data-landing="1"] a.btn-cobalt.nav-trial::after{content:none;display:none}
+html[data-landing="1"] a.btn-cobalt.nav-trial:hover{
   background:rgba(11,95,255,.08);
   background-image:none;
   border-color:#2563eb;
@@ -1938,9 +1940,20 @@ html[data-landing="1"] .hero-agent-name{
   html[data-landing="1"] .fc-2{order:4}
 }
 @media (max-width:420px){
-  html[data-landing="1"] .hero-agents{gap:10px}
+  html[data-landing="1"] .hero-agents{gap:8px}
+  html[data-landing="1"] .hero-agent{flex:1 1 0;min-width:0}
   html[data-landing="1"] .hero-agent-face{width:80px;height:80px}
-  html[data-landing="1"] .hero-agent-name{max-width:104px;padding:3px 6px}
+  /* The long name wraps at 10px inside a 104px pill. One line at phone width
+     keeps the three labels the same height. Desktop stays on the 10px rule. */
+  html[data-landing="1"] .hero-agent-name{
+    max-width:none;
+    width:100%;
+    font-size:clamp(7px, 2.18vw, 8.5px);
+    letter-spacing:-0.03em;
+    line-height:1.2;
+    padding:3px 4px;
+    white-space:nowrap;
+  }
 }
 @media (prefers-reduced-motion:reduce){
   html[data-landing="1"] .hero-agent-face video{display:none}

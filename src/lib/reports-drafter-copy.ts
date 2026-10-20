@@ -18,6 +18,50 @@ export function reportStripNames(input: {
   return source.map((name) => name.trim()).filter(Boolean);
 }
 
+/** Catalogue keys the Reports tab counts. Leverage and assets drop out when their figures are missing. */
+export const REPORT_CATALOGUE_KEYS = [
+  "scorecard",
+  "intervention",
+  "forecast",
+  "cycle",
+  "waterfall",
+  "leverage",
+  "assets",
+  "labor",
+  "movement",
+  "benchmark",
+  "budget",
+] as const;
+
+export function reportReady(
+  key: string,
+  input: { leverageReady: boolean; assetReady: boolean },
+): boolean {
+  if (key === "leverage") return input.leverageReady;
+  if (key === "assets") return input.assetReady;
+  return true;
+}
+
+/**
+ * Same count the Reports tab puts in “N reports ready”.
+ * No figures means nothing is ready, including while a report page is still closed.
+ */
+export function reportsReadyCount(input: {
+  figuresOnFile: boolean;
+  leverageReady: boolean;
+  assetReady: boolean;
+}): number {
+  if (!input.figuresOnFile) return 0;
+  return REPORT_CATALOGUE_KEYS.filter((key) => reportReady(key, input)).length;
+}
+
+/** Line under Home’s Reports heading. Null hides the line when the count is 0. */
+export function reportsHomeReadyLine(count: number): string | null {
+  if (count <= 0) return null;
+  if (count === 1) return "1 ready to send";
+  return `${count} ready to send`;
+}
+
 export function reportsAnswerSentence(input: {
   readyNames: readonly string[];
   periodLabel?: string | null;

@@ -37,5 +37,11 @@ export function pdfFooterReserve(input: { sample?: boolean; signed?: boolean } =
  */
 export const SECTION_KEEP_WITH_NEXT = 96;
 
+/**
+ * A card (header plus its body) must not start unless this much room remains,
+ * and must not split. Tables keep their own header-with-first-row rule.
+ */
+export const PDF_CARD_MIN_PRESENCE = 88;
+
 /** Draft mark sits in the page body, clear of the footer page number. */
 export const DRAFT_WATERMARK_TOP = 300;

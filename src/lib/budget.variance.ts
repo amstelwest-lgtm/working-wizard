@@ -343,3 +343,12 @@ export function formatVariancePct(pct: number | null, note?: string | null): str
   const sign = pct > 0 ? "+" : "";
   return `${sign}${pct.toFixed(1)}%`;
 }
+
+/**
+ * Narrow PDF % column. "budget is near zero" is wider than the cell and
+ * collides with the variance amount. The cell prints n/a instead.
+ */
+export function variancePctCell(pct: number | null, note?: string | null): string {
+  if ((pct == null || !Number.isFinite(pct)) && note) return "n/a";
+  return formatVariancePct(pct, null);
+}

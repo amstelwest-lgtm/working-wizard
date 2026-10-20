@@ -11,7 +11,6 @@ import { SourceDocumentsPanel } from "@/components/source-documents-panel";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { ownerRunPhase, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { supabase } from "@/integrations/supabase/client";
-import { connectBooksHeadline } from "@/lib/client-metrics";
 import { formatDate } from "@/lib/market/format";
 import { visitorCopyPack } from "@/lib/market/marketing";
 import { readVisitorDraft } from "@/lib/market/storage";
@@ -138,6 +137,9 @@ export function OwnerDoor({
   openingMissing = false,
   cashPillarStatus = null,
   hasEvidence,
+  cashRunwayWeeks = null,
+  cashDebtorScore = null,
+  cashBurnScore = null,
   market,
   marketCountry = null,
   signoffs,
@@ -192,6 +194,12 @@ export function OwnerDoor({
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   /** False when nothing is synced or parsed. Home shows one connect line. */
   hasEvidence?: boolean;
+  /** Weeks scored into the cash pillar. Names a Critical chip that is not the floor. */
+  cashRunwayWeeks?: number | null;
+  /** Scored debtor days. Names a Critical chip that is receivables. */
+  cashDebtorScore?: number | null;
+  /** Scored operating cash. Names a Critical chip that is burn. */
+  cashBurnScore?: number | null;
   market: ResolvedMarket;
   /** Stored country. Null stays off the ZA tax card even if `market` was coerced for dates. */
   marketCountry?: string | null;
@@ -694,6 +702,9 @@ export function OwnerDoor({
       openingMissing,
       cashPillarStatus,
       hasEvidence,
+      cashRunwayWeeks,
+      cashDebtorScore,
+      cashBurnScore,
       openAction,
       actionsReady,
       signedBy: latest?.signed_off_by_name ?? null,
@@ -711,6 +722,9 @@ export function OwnerDoor({
     openingMissing,
     cashPillarStatus,
     hasEvidence,
+    cashRunwayWeeks,
+    cashDebtorScore,
+    cashBurnScore,
     netIncome,
     periodEnd,
     history,
@@ -748,7 +762,6 @@ export function OwnerDoor({
         quickBooks,
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
-        nextAction: hasEvidence === false ? connectBooksHeadline(market) : null,
         statementSpan,
       }),
     [
@@ -766,7 +779,6 @@ export function OwnerDoor({
       quickBooks,
       xeroLink,
       market,
-      hasEvidence,
       statementSpan,
     ],
   );
@@ -1014,6 +1026,7 @@ export function OwnerDoor({
           marketCountry={marketCountry}
           audience="owner"
           sampleClient={sampleClient}
+          cardPhase="ready"
           onOpen={openChat}
           onAsk={openChat}
           runState={runState}

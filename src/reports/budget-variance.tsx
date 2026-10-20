@@ -12,7 +12,7 @@ import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, resolveTheme } from "@/components/pdf/theme";
-import { formatVariancePct } from "@/lib/budget.variance";
+import { variancePctCell } from "@/lib/budget.variance";
 import type { BudgetPdfModel, BudgetPdfRow } from "@/lib/budget-pdf";
 import { formatDate, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
@@ -163,9 +163,11 @@ function VarianceTable({
                 </>
               )}
             </View>
-            <Text style={[styles.cell, { flex: 0.7, textAlign: "right", color }]}>
-              {formatVariancePct(row.deltaPct, row.deltaPctNote)}
-            </Text>
+            <View style={{ flex: 0.7, overflow: "hidden" }}>
+              <Text style={[styles.cell, { textAlign: "right", color }]}>
+                {variancePctCell(row.deltaPct, row.deltaPctNote)}
+              </Text>
+            </View>
         </View>
       );
   };

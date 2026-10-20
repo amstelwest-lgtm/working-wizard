@@ -137,17 +137,17 @@ html.dark .mk {
   text-decoration: none;
   padding: 7px 15px;
   border-radius: 999px;
-  border: 1px solid var(--gold);
-  color: var(--gold-deep) !important;
+  border: 1px solid var(--cobalt, #0b5fff);
+  color: var(--cobalt, #0b5fff) !important;
   white-space: nowrap;
 }
 
 html.dark .mk .mk-top-cta {
-  color: var(--gold-bright) !important;
+  color: #8eb6ff !important;
 }
 
 .mk .mk-top-cta:hover {
-  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  background: color-mix(in srgb, var(--cobalt, #0b5fff) 12%, transparent);
 }
 
 /* Same header control as the homepage nav: text button immediately before the CTA. */
@@ -931,6 +931,13 @@ html .mk .firm-bands-table .firm-bands-name strong {
   border-color: var(--gold);
   color: #1b1300;
   -webkit-text-fill-color: #1b1300;
+}
+.mk .firm-bands-table .btn-cobalt,
+.mk .firm-band-card .btn-cobalt {
+  background-color: var(--cobalt, #0b5fff);
+  border-color: var(--cobalt, #0b5fff);
+  color: #fff;
+  -webkit-text-fill-color: #fff;
 }
 .mk .firm-bands-table .btn-ghost:hover {
   border-color: var(--gold);
