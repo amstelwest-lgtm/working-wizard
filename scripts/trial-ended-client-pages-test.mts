@@ -78,6 +78,17 @@ assert(
 );
 assert(!advisoryIds.includes("/_authenticated/dashboard"), "advisory is not the dashboard");
 
+const practiceClientsIds = routeIds("/practice/clients");
+assert(
+  practiceClientsIds.includes("/_authenticated/practice_/clients"),
+  "/practice/clients matches the redirect to the clients list",
+);
+const practiceClientsSrc = readFileSync(
+  resolve("src/routes/_authenticated/practice_.clients.tsx"),
+  "utf8",
+);
+assert(practiceClientsSrc.includes('to: "/clients"'), "/practice/clients redirects to /clients");
+
 const listIds = routeIds("/clients");
 assert(listIds.includes("/_authenticated/clients/"), "bare /clients matches the list index");
 assert(!listIds.includes("/_authenticated/clients/$clientId"), "bare /clients is not a client page");

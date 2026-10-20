@@ -4,6 +4,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { supabase } from "@/integrations/supabase/client";
+import { callAuthedServerFn } from "@/lib/server-fn-session";
 import { toast } from "sonner";
 import { FileUp, Loader2, Scale, Trash2 } from "lucide-react";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
@@ -96,9 +98,11 @@ export function BudgetVariancePanel({
     }
     setLoading(true);
     try {
-      const res = await listActuals({
-        data: { clientId, fyStart: doc.fyStart },
-      });
+      const res = await callAuthedServerFn(supabase, () =>
+        listActuals({
+          data: { clientId, fyStart: doc.fyStart },
+        }),
+      );
       setRows(res.actuals ?? []);
       setMigrationRequired(Boolean(res.migrationRequired));
     } catch (e) {

@@ -34,6 +34,10 @@ import type { BudgetDocument } from "@/lib/budget.types";
 import { MONTHS } from "@/lib/market/date-presets";
 import { currentBudgetMonth, formatBudgetMonthYear, fyMonths } from "@/lib/budget.months";
 import { listBudgetMonthActuals } from "@/lib/budget-actuals.functions";
+import { supabase } from "@/integrations/supabase/client";
+import { measureBootstrap } from "@/lib/bootstrap-perf";
+import { callAuthedServerFn } from "@/lib/server-fn-session";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { formatMoneyChartTick } from "@/lib/market/format";
 import type { VarianceSignal } from "@/lib/budget.variance";
 
@@ -112,7 +116,12 @@ export function BudgetChartTable({
     }
     let cancelled = false;
     setActualsPending(true);
-    listActuals({ data: { clientId, fyStart: doc.fyStart } })
+    const timer = window.setTimeout(() => {
+      if (!cancelled) setActualsPending(false);
+    }, SHELL_GATE_TIMEOUT_MS);
+    void callAuthedServerFn(supabase, () =>
+      listActuals({ data: { clientId, fyStart: doc.fyStart } }),
+    )
       .then((res) => {
         if (cancelled) return;
         setLoaded(
@@ -126,10 +135,15 @@ export function BudgetChartTable({
         if (!cancelled) setLoaded([]);
       })
       .finally(() => {
-        if (!cancelled) setActualsPending(false);
+        window.clearTimeout(timer);
+        if (!cancelled) {
+          setActualsPending(false);
+          measureBootstrap("client-budget-actuals");
+        }
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [actualMonths, clientId, doc.fyStart, listActuals]);
 

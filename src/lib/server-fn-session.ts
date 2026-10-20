@@ -48,18 +48,31 @@ type AuthLike = Pick<SupabaseClient, "auth">;
 function waitForAccessToken(auth: AuthLike["auth"], timeoutMs: number): Promise<string | null> {
   return new Promise((resolve) => {
     let settled = false;
+    let listening = false;
+    let pendingToken: string | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const { data } = auth.onAuthStateChange((_event, session) => {
+      const token = session?.access_token;
+      if (!token) return;
+      if (!listening) {
+        pendingToken = token;
+        return;
+      }
+      finish(token);
+    });
     const finish = (token: string | null) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
-      subscription.unsubscribe();
+      if (timer !== undefined) clearTimeout(timer);
+      data.subscription.unsubscribe();
       resolve(token);
     };
-    const { data: subscription } = auth.onAuthStateChange((_event, session) => {
-      const token = session?.access_token;
-      if (token) finish(token);
-    });
-    const timer = setTimeout(() => finish(null), timeoutMs);
+    listening = true;
+    if (pendingToken) {
+      finish(pendingToken);
+      return;
+    }
+    timer = setTimeout(() => finish(null), timeoutMs);
   });
 }
 
