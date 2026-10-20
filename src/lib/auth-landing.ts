@@ -65,3 +65,13 @@ export function decideAccountantAuthLanding(input: {
   if (explicit || input.pending) return { kind: "workspace" };
   return { kind: "app" };
 }
+
+/**
+ * A workspace landing (new firm, Checkout still ahead) keeps the stashed band
+ * so checkout-after-insight offers that plan. An existing firm — including a
+ * dual-role sign-in that opens /practice — drops it. Billing itself returns
+ * before this runs.
+ */
+export function clearStoredCheckoutForPracticeLanding(decision: AccountantAuthLanding): boolean {
+  return decision.kind !== "workspace";
+}
