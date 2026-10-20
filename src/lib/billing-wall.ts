@@ -58,16 +58,14 @@ export function firmWallTrialDetail(priceLabel: string | null): string {
 
 /**
  * Why this wall is up. The first client's file stays open without a plan
- * (`isFirstClientFiguresPath`): that client's figures, not a later file.
+ * (`isFirstClientFiguresPath`): that client's numbers, not a later file.
+ * The sentence names the file in accountant terms. A client display name
+ * such as a sports team reads as if that business is what stays open.
  * Home, the client list, and practice stay open too (`isPracticeShellPath`).
  * Reports and a later client do not.
  */
-export function firmWallWhyLine(clientName: string | null | undefined): string {
-  const name = (clientName ?? "").trim();
-  const open = name
-    ? `${name} and the figures stay open.`
-    : "The first client's figures stay open.";
-  return `This firm has no plan yet. ${open} Reports and a later client need Starter.`;
+export function firmWallWhyLine(_clientName: string | null | undefined): string {
+  return "This firm has no plan yet. Your first client and its numbers stay open. Reports and a later client need Starter.";
 }
 
 export type FirmWallEntitlementOutcome = "entitled" | "not_entitled" | "failed";
