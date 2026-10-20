@@ -283,8 +283,8 @@ export async function executeSageSync(input: {
           ytdNetIncome: ledger.year?.pnl.netIncome ?? null,
           ytdPeriodLabel: ledger.year?.label ?? null,
           ytdBasis: ledger.year?.basis ?? null,
-          agedArLine: agedArProofLine(ledger.agedAr),
-          agedApLine: agedApProofLine(ledger.agedAp),
+          agedArLine: agedArProofLine(ledger.agedAr, clientMarket),
+          agedApLine: agedApProofLine(ledger.agedAp, clientMarket),
           bankAccountCount: ledger.bankAccounts.length,
         },
       };
@@ -317,8 +317,8 @@ export async function executeSageSync(input: {
           ytdNetIncome: ledger.year?.pnl.netIncome ?? null,
           ytdPeriodLabel: ledger.year?.label ?? null,
           ytdBasis: ledger.year?.basis ?? null,
-          agedArLine: agedArProofLine(ledger.agedAr),
-          agedApLine: agedApProofLine(ledger.agedAp),
+          agedArLine: agedArProofLine(ledger.agedAr, clientMarket),
+          agedApLine: agedApProofLine(ledger.agedAp, clientMarket),
           bankAccountCount: ledger.bankAccounts.length,
         },
       };
@@ -429,8 +429,8 @@ export async function executeSageSync(input: {
         ytdNetIncome: ledger.year?.pnl.netIncome ?? null,
         ytdPeriodLabel: ledger.year?.label ?? null,
         ytdBasis: ledger.year?.basis ?? null,
-        agedArLine: agedArProofLine(ledger.agedAr),
-        agedApLine: agedApProofLine(ledger.agedAp),
+        agedArLine: agedArProofLine(ledger.agedAr, clientMarket),
+        agedApLine: agedApProofLine(ledger.agedAp, clientMarket),
         bankAccountCount: ledger.bankAccounts.length,
       },
     };

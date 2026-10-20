@@ -7,7 +7,9 @@
 export const FIRM_TRIAL_DAYS = 14;
 export const FIRM_TRIAL_CLIENT_LIMIT = 5;
 export const FIRM_TRIAL_SENTENCE = `${FIRM_TRIAL_DAYS}-day free trial · up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`;
-export const FIRM_TRIAL_CARD_LINE = `A card is required at signup. ${FIRM_TRIAL_SENTENCE} on Starter.`;
+/** Settings Starter row. The longer card line repeats this sentence, so the row uses the note alone. */
+export const FIRM_TRIAL_CARD_NOTE = "A card is required at signup.";
+export const FIRM_TRIAL_CARD_LINE = `${FIRM_TRIAL_CARD_NOTE} ${FIRM_TRIAL_SENTENCE} on Starter.`;
 
 export const STARTER_TRIAL_ENDED_MESSAGE = "Your trial has ended, choose a plan";
 

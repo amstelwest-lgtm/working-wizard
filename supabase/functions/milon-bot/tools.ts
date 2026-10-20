@@ -144,6 +144,7 @@ export function shapeHealth(
   rawRatios: Record<string, number>,
   runwayWeeks: number | null,
   copyPack: OverviewCopyPack = "za",
+  weakestPillar: string | null = null,
 ): Record<string, unknown> {
   const display = toDisplayRatios(rawRatios);
   const brief = buildOverviewBrief({
@@ -172,7 +173,7 @@ export function shapeHealth(
       higher_is_better: null,
     });
   }
-  const moves = rankNextSteps(rows, 3).map((m) => ({
+  const moves = rankNextSteps(rows, 3, weakestPillar).map((m) => ({
     rank: m.rank,
     title: m.title,
     ratio: m.ratioName,

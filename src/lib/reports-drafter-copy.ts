@@ -3,6 +3,45 @@
  * Display copy only. It does not draft, send, or score a report.
  */
 
+import { reportInputsFromFinancials } from "@/lib/equity-coherence";
+
+/**
+ * Fields that mean a client has figures on file. Same keys as the Books
+ * input list, so Home and the Reports tab agree on "nothing ready".
+ */
+export const STATEMENT_FIGURE_KEYS = [
+  "revenue",
+  "cogs",
+  "ebit",
+  "ebt",
+  "netIncome",
+  "ebitda",
+  "operatingCashflow",
+  "totalAssets",
+  "equity",
+  "receivables",
+  "inventory",
+  "payables",
+  "fixedCosts",
+  "variableCosts",
+  "top5Revenue",
+  "laborCost",
+  "employees",
+  "founderHours",
+  "cash",
+] as const;
+
+/** True once any statement figure is stored. Blank and missing values do not count. */
+export function financialsHaveStatementFigures(financials: object | null | undefined): boolean {
+  if (!financials) return false;
+  const record = financials as Record<string, unknown>;
+  return STATEMENT_FIGURE_KEYS.some((key) => {
+    const value = record[key];
+    if (value == null) return false;
+    return String(value).trim() !== "";
+  });
+}
+
 /**
  * One name list for every reports strip.
  * A loaded list wins, including an empty one. While the catalogue is still
@@ -55,11 +94,62 @@ export function reportsReadyCount(input: {
   return REPORT_CATALOGUE_KEYS.filter((key) => reportReady(key, input)).length;
 }
 
+/**
+ * Ready-report count for one client. Home and the Reports tab both use this,
+ * so a firm total of these counts matches each client line exactly.
+ */
+export function clientReportsReadyCount(financials: object | null | undefined): number {
+  const readiness = reportInputsFromFinancials(
+    financials as Record<string, unknown> | null | undefined,
+  );
+  return reportsReadyCount({
+    figuresOnFile: financialsHaveStatementFigures(financials),
+    leverageReady: readiness.leverageReady,
+    assetReady: readiness.assetReady,
+  });
+}
+
+/** Sum of each client's ready count. A client with no figures adds nothing. */
+export function firmReportsReadyTotal(clients: readonly { financials?: object | null }[]): number {
+  return clients.reduce((sum, client) => sum + clientReportsReadyCount(client.financials), 0);
+}
+
+/**
+ * Client whose Reports list the firm Home line opens.
+ * The largest ready count wins. A tie uses the client name.
+ */
+export function firmReportsHomeClient(
+  clients: readonly { id: string; name?: string | null; financials?: object | null }[],
+): string | null {
+  let best: { id: string; name: string; count: number } | null = null;
+  for (const client of clients) {
+    if (!client.id) continue;
+    const count = clientReportsReadyCount(client.financials);
+    if (count <= 0) continue;
+    const name = client.name?.trim() ?? "";
+    if (
+      !best ||
+      count > best.count ||
+      (count === best.count && name.localeCompare(best.name) < 0)
+    ) {
+      best = { id: client.id, name, count };
+    }
+  }
+  return best?.id ?? null;
+}
+
 /** Line under Home’s Reports heading. Null hides the line when the count is 0. */
 export function reportsHomeReadyLine(count: number): string | null {
   if (count <= 0) return null;
   if (count === 1) return "1 ready to send";
   return `${count} ready to send`;
+}
+
+/** Firm Home line. Null hides it when no client has a report ready to send. */
+export function firmReportsHomeLine(count: number): string | null {
+  const ready = reportsHomeReadyLine(count);
+  if (!ready) return null;
+  return `Reports: ${ready}`;
 }
 
 export function reportsAnswerSentence(input: {

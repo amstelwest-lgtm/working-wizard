@@ -331,7 +331,12 @@ assert(
   finderBusinessName(THEO, [THEO, "Westhuizen Trading"]) === "Westhuizen Trading",
   "a company name is kept only when it is not the person's name",
 );
-assert(finderAddedLabel("2026-03-03T00:00:00.000Z") === "added 3 Mar 2026", "the added label is d MMM yyyy");
+assert(finderAddedLabel("2026-03-03T00:00:00.000Z") === "added 3 Mar 2026", "a missing market stays day-first");
+assert(
+  finderAddedLabel("2026-10-20T12:00:00.000Z", { market: { country: "US", regionCode: "NY" } }) ===
+    "added Oct 20, 2026",
+  "a US client uses month-day",
+);
 const theoRecent = recentFinderClients(theoBook);
 assert(theoRecent.length === 6, "duplicate client ids collapse to one recent row");
 assert(

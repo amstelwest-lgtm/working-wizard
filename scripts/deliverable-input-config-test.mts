@@ -317,13 +317,19 @@ assert(
   agedWithStatement.includes("9,194.51") && !agedWithStatement.includes("nothing outstanding"),
   agedWithStatement,
 );
-assert(
-  ratiosAgedReadLine("Aged receivables as of 2026-10-07 · 2 contacts", "ar", {
+assert(agedWithStatement.includes("Oct 7, 2026"), agedWithStatement);
+assert(!agedWithStatement.includes("2026-10-07"), agedWithStatement);
+const namedAged = ratiosAgedReadLine(
+  "Aged receivables as of 2026-10-07 · 2 contacts",
+  "ar",
+  {
     receivables: "9194.51",
     revenue: "100000",
-  }).includes("2 contacts"),
-  "a named aged pull is left alone",
+  },
+  { currency: "ZAR", locale: "en-ZA" },
 );
+assert(namedAged.includes("2 contacts"), "a named aged pull is left alone");
+assert(namedAged.includes("7 Oct 2026") && !namedAged.includes("2026-10-07"), namedAged);
 assert(studio.includes('id="ratios-statement-position"'), "Health & Ratios shows the statement Days AR/AP cards");
 
 console.log("deliverable-input-config-test: all assertions passed");

@@ -29,13 +29,7 @@ import {
   openPracticeSettings,
   isMilonItMember,
 } from "@/lib/user-roles";
-import {
-  cashPillarFollowsForecast,
-  scorecardHealthFromFinancials,
-  scoreTier,
-  type OverallHealth,
-} from "@/lib/health-score";
-import { periodMonthsOf } from "@/lib/ratios";
+import { liveHealthFromBooks, scoreTier, type OverallHealth } from "@/lib/health-score";
 import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
 import {
   buildAttentionItems,
@@ -145,6 +139,11 @@ import { AgentWork } from "@/components/milon-team/agent-work";
 import { practiceAgentWork } from "@/lib/agent-work";
 import { useOverlayHistory } from "@/lib/overlay-history";
 import { OwnerHome } from "@/components/owner-door/owner-home";
+import {
+  firmReportsHomeClient,
+  firmReportsHomeLine,
+  firmReportsReadyTotal,
+} from "@/lib/reports-drafter-copy";
 import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
 import { ownerPresence } from "@/lib/owner-presence";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
@@ -1171,22 +1170,15 @@ function toClientRow(
     const fyStartMonth =
       parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
     const openingMissing = storedOpeningIsMissing(c.cashflow);
-    const scored = cashPillarFollowsForecast(
-      scorecardHealthFromFinancials({
-        financials: c.financials,
-        fyStartMonth,
-        periodMonths: periodMonthsOf(c.financials),
-        cashRunwayWeeks: runwayWeeks,
-        market: clientMarket,
-        shortfallWeek: assessed.outlook.shortfallWeek,
-      }),
-      {
-        openingMissing,
-        opening: outlook.opening,
-        closings: outlook.closing,
-        floor: outlook.floor,
-      },
-    );
+    const scored = liveHealthFromBooks({
+      financials: c.financials,
+      cashflow: c.cashflow,
+      financialsUpdatedAt: c.financials_updated_at ?? null,
+      fyStartMonth,
+      market: clientMarket,
+      industry: clientIndustryDisplay(c.name, parseOperatingProfile(c.operating_profile)),
+      timeZone: clientMarket.timezone,
+    });
     const statusWord = clientListStatusWord({
       healthLabel: scored.displayLabel,
       healthOverall: scored.overall,
@@ -2038,6 +2030,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     [practiceBrief, bookLoading, countsReady],
   );
   const practiceStatus = useMemo(() => practiceCardStatuses(practiceBrief), [practiceBrief]);
+  const firmReportsLine = useMemo(() => {
+    if (!bookEnriched) return null;
+    return firmReportsHomeLine(firmReportsReadyTotal(clientRows));
+  }, [bookEnriched, clientRows]);
+  const firmReportsClientId = useMemo(() => {
+    if (!firmReportsLine) return null;
+    return firmReportsHomeClient(clientRows);
+  }, [firmReportsLine, clientRows]);
   const dashAgent = view === "home" ? practiceAgent : null;
 
   const scatterClients = useMemo(
@@ -2211,6 +2211,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             ) : loading && !bookTimedOut ? (
               <DashboardSkeleton className="py-8" />
             ) : (
+            <>
             <OwnerHome
               title="Your whole finance team"
               showInvite={false}
@@ -2229,6 +2230,18 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
               }}
             />
+            {firmReportsLine && firmReportsClientId ? (
+              <Link
+                to="/clients/$clientId"
+                params={{ clientId: firmReportsClientId }}
+                search={{ tab: "reports" }}
+                className="owner-reports-ready"
+                data-firm-reports-ready=""
+              >
+                {firmReportsLine}
+              </Link>
+            ) : null}
+            </>
             )}
           </div>
         ) : null}

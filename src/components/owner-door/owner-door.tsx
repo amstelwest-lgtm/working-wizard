@@ -34,7 +34,13 @@ import {
 } from "@/lib/owner-answers";
 import { agentDisplayName } from "@/lib/milon-team";
 import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
-import { cardRunsByAgent, ownerPresence, steerOpenHandoffs, withCardHandoffRuns, type OwnerTalk } from "@/lib/owner-presence";
+import {
+  cardRunsByAgent,
+  ownerPresence,
+  steerOpenHandoffs,
+  withCardHandoffRuns,
+  type OwnerTalk,
+} from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
   clearOptimisticHandoff,
@@ -70,7 +76,11 @@ import {
 } from "@/lib/owner-needs";
 import { OwnerHome } from "./owner-home";
 import { canonicalOwnerScreen, OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
-import { ownerCheckoutHref, ownerSubscribeView, type OwnerSubscribeView } from "@/lib/owner-subscribe";
+import {
+  ownerCheckoutHref,
+  ownerSubscribeView,
+  type OwnerSubscribeView,
+} from "@/lib/owner-subscribe";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { getOwnerEntitlement, startOwnerCheckout } from "@/lib/stripe-checkout.functions";
 import { OwnerAccountant, OwnerFirst, OwnerPlan, OwnerSettings } from "./owner-pages";
@@ -126,9 +136,11 @@ export function OwnerDoor({
   cashOutlook = null,
   openingMissing = false,
   cashPillarStatus = null,
+  hasEvidence,
   cashRunwayWeeks = null,
   cashDebtorScore = null,
   cashBurnScore = null,
+  liveHealth = null,
   market,
   marketCountry = null,
   signoffs,
@@ -181,12 +193,20 @@ export function OwnerDoor({
   openingMissing?: boolean;
   /** Same cash pillar band as Health. Watch does not say below the minimum. */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
+  /** False when nothing is synced or parsed. Home shows one connect line. */
+  hasEvidence?: boolean;
   /** Weeks scored into the cash pillar. Names a Critical chip that is not the floor. */
   cashRunwayWeeks?: number | null;
   /** Scored debtor days. Names a Critical chip that is receivables. */
   cashDebtorScore?: number | null;
   /** Scored operating cash. Names a Critical chip that is burn. */
   cashBurnScore?: number | null;
+  /** Live floor-applied score. Home cards quote this instead of a stored finding. */
+  liveHealth?: {
+    overall: number | null;
+    weakestLabel: string | null;
+    weakestScore: number | null;
+  } | null;
   market: ResolvedMarket;
   /** Stored country. Null stays off the ZA tax card even if `market` was coerced for dates. */
   marketCountry?: string | null;
@@ -261,7 +281,9 @@ export function OwnerDoor({
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
   const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
-  const awaitingRun = assignmentRows.filter((row) => row.open).map((row) => ({ openedAt: row.openedAt }));
+  const awaitingRun = assignmentRows
+    .filter((row) => row.open)
+    .map((row) => ({ openedAt: row.openedAt }));
   const activity = useAgentActivity(clientId ?? "", awaitingRun);
   const pendingHandoffs = useRef(new Map<string, ActionPlanRefreshDetail>());
   const [handoffErrors, setHandoffErrors] = useState<
@@ -402,25 +424,43 @@ export function OwnerDoor({
         if (prior) {
           setAssignmentRows((current) =>
             prior.row
-              ? current.map((row) => (row.id === id ? { ...prior.row!, open: false, runId: undefined } : row))
+              ? current.map((row) =>
+                  row.id === id ? { ...prior.row!, open: false, runId: undefined } : row,
+                )
               : current.filter((row) => row.id !== id),
           );
         }
         if (detail.error && detail.agent && detail.title) {
           setHandoffErrors((current) => [
             ...current.filter((row) => row.actionItemId !== id),
-            { actionItemId: id, title: detail.title, agent: detail.agent as AgentKey, message: detail.error ?? HANDOFF_FAILED_COPY },
+            {
+              actionItemId: id,
+              title: detail.title,
+              agent: detail.agent as AgentKey,
+              message: detail.error ?? HANDOFF_FAILED_COPY,
+            },
           ]);
         }
         return;
       }
       if (detail.reused) {
-        pendingHandoffs.current.set(detail.actionItemId, { ...detail, note: undefined, reused: true });
-        setHandoffErrors((current) => current.filter((row) => row.actionItemId !== detail.actionItemId));
+        pendingHandoffs.current.set(detail.actionItemId, {
+          ...detail,
+          note: undefined,
+          reused: true,
+        });
+        setHandoffErrors((current) =>
+          current.filter((row) => row.actionItemId !== detail.actionItemId),
+        );
         setAssignmentRows((current) =>
           current.map((row) =>
             row.id === detail.actionItemId
-              ? { ...row, open: row.agent != null, openedAt: row.openedAt ?? detail.since, runId: detail.runId ?? row.runId }
+              ? {
+                  ...row,
+                  open: row.agent != null,
+                  openedAt: row.openedAt ?? detail.since,
+                  runId: detail.runId ?? row.runId,
+                }
               : row,
           ),
         );
@@ -437,10 +477,16 @@ export function OwnerDoor({
         });
       }
       pendingHandoffs.current.set(detail.actionItemId, { ...detail, agent, assigneeName: name });
-      setHandoffErrors((current) => current.filter((row) => row.actionItemId !== detail.actionItemId));
+      setHandoffErrors((current) =>
+        current.filter((row) => row.actionItemId !== detail.actionItemId),
+      );
       setAssignmentRows((current) => {
         const existing = current.find((row) => row.id === detail.actionItemId);
-        const sameWorking = !detail.runId && existing?.open === true && existing.agent === agent && Boolean(existing.runId);
+        const sameWorking =
+          !detail.runId &&
+          existing?.open === true &&
+          existing.agent === agent &&
+          Boolean(existing.runId);
         const next: RowAssignment = {
           id: detail.actionItemId,
           assigneeName: name,
@@ -548,7 +594,9 @@ export function OwnerDoor({
       const openRows = (actions.data ?? []).flatMap((row) => {
         const title = row.title?.trim() ?? "";
         if (!title || !row.id) return [];
-        return [{ id: row.id, title, email: row.owner_email, ownerName: row.owner_name?.trim() || null }];
+        return [
+          { id: row.id, title, email: row.owner_email, ownerName: row.owner_name?.trim() || null },
+        ];
       });
       const ids = openRows.map((row) => row.id);
       const earlyTitles = openPlanTitles(openRows);
@@ -560,7 +608,8 @@ export function OwnerDoor({
         : [new Map(), new Map()];
       if (cancelled) return;
       const pendings = [...pendingHandoffs.current.values()].filter(
-        (pending) => pending.assigneeName && !handoffPaintBlocked(pending.actionItemId, pending.since),
+        (pending) =>
+          pending.assigneeName && !handoffPaintBlocked(pending.actionItemId, pending.since),
       );
       const assigned = openRows.map((row) => {
         const stored = assignments.get(row.id) ?? null;
@@ -593,8 +642,11 @@ export function OwnerDoor({
           runId: pending.runId,
         };
         const serverRun = runs.get(pending.actionItemId) ?? null;
-        const reusedLanded = Boolean(pending.reused && pending.runId && serverRun?.id === pending.runId);
-        const pendingLanded = reusedLanded || (!pending.reused && pendingAssignmentLanded(pendingStored, pendingView));
+        const reusedLanded = Boolean(
+          pending.reused && pending.runId && serverRun?.id === pending.runId,
+        );
+        const pendingLanded =
+          reusedLanded || (!pending.reused && pendingAssignmentLanded(pendingStored, pendingView));
         if (pendingLanded) {
           pendingHandoffs.current.delete(pending.actionItemId);
           clearOptimisticHandoff(pending.actionItemId);
@@ -606,7 +658,9 @@ export function OwnerDoor({
       const firstOpen = merged.find((row) => row.open);
       setActionRows(titles.map((title) => ({ title, email: null })));
       setOpenAction(openRows[0]?.title ?? null);
-      setHandedTitle(firstOpen ? (openRows.find((row) => row.id === firstOpen.id)?.title ?? null) : null);
+      setHandedTitle(
+        firstOpen ? (openRows.find((row) => row.id === firstOpen.id)?.title ?? null) : null,
+      );
       setAssignedAgent(firstOpen?.agent ?? null);
       setAssignmentRows(merged);
       setActionsReady(true);
@@ -655,6 +709,7 @@ export function OwnerDoor({
       cashOutlook: cashOutlook ?? undefined,
       openingMissing,
       cashPillarStatus,
+      hasEvidence,
       cashRunwayWeeks,
       cashDebtorScore,
       cashBurnScore,
@@ -674,6 +729,7 @@ export function OwnerDoor({
     cashOutlook,
     openingMissing,
     cashPillarStatus,
+    hasEvidence,
     cashRunwayWeeks,
     cashDebtorScore,
     cashBurnScore,
@@ -693,8 +749,8 @@ export function OwnerDoor({
     [financials, market.fyStartMonthDefault],
   );
   const draftPresentations = useMemo(
-    () => ownerDraftPresentations(activity.findings, canonicalRatios),
-    [activity.findings, canonicalRatios],
+    () => ownerDraftPresentations(activity.findings, canonicalRatios, { overall: liveHealth?.overall ?? null }),
+    [activity.findings, canonicalRatios, liveHealth?.overall],
   );
   const needs = useMemo(
     () =>
@@ -710,7 +766,9 @@ export function OwnerDoor({
         deliverablesReady: actionsReady,
         deliverablesUnavailable,
         deliverableCount,
-        advisoryTitles: advisoryDeliverableTitles(activity.findings, canonicalRatios),
+        advisoryTitles: advisoryDeliverableTitles(activity.findings, canonicalRatios, {
+          overall: liveHealth?.overall ?? null,
+        }),
         quickBooks,
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
@@ -725,6 +783,7 @@ export function OwnerDoor({
       activity.error,
       activity.findings,
       draftPresentations,
+      liveHealth?.overall,
       canonicalRatios,
       deliverablesUnavailable,
       deliverableCount,
@@ -753,7 +812,7 @@ export function OwnerDoor({
     workingRows,
   );
   const presence = steerOpenHandoffs(
-    ownerPresence({ ...activity, runs: cardRuns }, talk),
+    ownerPresence({ ...activity, runs: cardRuns }, talk, liveHealth),
     openAgents,
   );
   const runState = useMemo(() => {
@@ -900,7 +959,9 @@ export function OwnerDoor({
     });
     setBusyAgent((current) => (current === asked ? null : current));
     if (!result.ok) {
-      setTalk((current) => (current?.agent === asked && current.mode === "working" ? null : current));
+      setTalk((current) =>
+        current?.agent === asked && current.mode === "working" ? null : current,
+      );
       setAgentError(asked, result.error);
       return;
     }

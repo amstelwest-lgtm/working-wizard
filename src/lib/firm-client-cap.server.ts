@@ -51,6 +51,8 @@ export type EntitlingFirmSubscription = {
   band: FirmBandId | null;
   /** ISO timestamp when the subscription is trialing; otherwise null. */
   trialEnd: string | null;
+  /** ISO current_period_end. Null when Stripe did not send one. */
+  currentPeriodEnd: string | null;
   /** ISO subscription start (start_date, else created). */
   startedAt: string | null;
   interval: FirmInterval | null;
@@ -235,8 +237,19 @@ function entitlingFromListed(
     trial_end?: number | null;
     start_date?: number | null;
     created?: number | null;
+    current_period_end?: number | null;
+    items?: { data?: Array<{ current_period_end?: number | null }> } | null;
   };
   const trialEndSeconds = rawTimes.trial_end;
+  const itemPeriodEnd = rawTimes.items?.data?.[0]?.current_period_end;
+  const periodEndSeconds =
+    typeof rawTimes.current_period_end === "number" &&
+    Number.isFinite(rawTimes.current_period_end) &&
+    rawTimes.current_period_end > 0
+      ? rawTimes.current_period_end
+      : typeof itemPeriodEnd === "number" && Number.isFinite(itemPeriodEnd) && itemPeriodEnd > 0
+        ? itemPeriodEnd
+        : null;
   const startedSeconds =
     typeof rawTimes.start_date === "number" && Number.isFinite(rawTimes.start_date)
       ? rawTimes.start_date
@@ -255,6 +268,8 @@ function entitlingFromListed(
       typeof trialEndSeconds === "number" && Number.isFinite(trialEndSeconds)
         ? new Date(trialEndSeconds * 1000).toISOString()
         : null,
+    currentPeriodEnd:
+      periodEndSeconds != null ? new Date(periodEndSeconds * 1000).toISOString() : null,
     startedAt:
       typeof startedSeconds === "number" && startedSeconds > 0
         ? new Date(startedSeconds * 1000).toISOString()
@@ -602,6 +617,7 @@ export async function loadFirmPlanDisplay(input: {
       headline: null,
       detail: null,
       trialEndsOn: null,
+      renewsOn: null,
       clientCount: null,
       clientLimit: null,
       usageLabel: null,
@@ -668,7 +684,10 @@ export async function loadFirmPlanDisplay(input: {
       phase: sub?.phase ?? "none",
       band: sub?.band ?? null,
       trialEndIso: sub?.trialEnd ?? null,
-      market: resolveMarket(parseMarketSelection(firm.market) ?? coerceMarketSelection(firm.market)),
+      periodEndIso: sub?.currentPeriodEnd ?? null,
+      market: resolveMarket(
+        parseMarketSelection(firm.market) ?? coerceMarketSelection(firm.market),
+      ),
     }),
     clientCount: upgrade.clientCount,
     clientLimit: upgrade.clientLimit,

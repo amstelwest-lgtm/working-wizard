@@ -92,7 +92,8 @@ function signedMoney(n: number, market: ResolvedMarket): string {
   return fmtRand(n, market);
 }
 
-function overUnder(delta: number): string {
+function overUnder(delta: number, budget: number, actual: number | null): string {
+  if (budget === 0 && actual === 0) return "—";
   if (Math.abs(delta) < 1) return "In line";
   return delta > 0 ? "Over" : "Under";
 }
@@ -107,13 +108,10 @@ function VarianceTable({
   rows,
   accent,
   market,
-  hideHeader = false,
 }: {
   rows: BudgetPdfRow[];
   accent: string;
   market: ResolvedMarket;
-  /** Continuation rows. The header already printed with the first row. */
-  hideHeader?: boolean;
 }) {
   const cols = [
     { label: "Line", flex: 2.1, align: "left" as const },
@@ -158,7 +156,9 @@ function VarianceTable({
                 <Text style={styles.cell}>—</Text>
               ) : (
                 <>
-                  <Text style={[styles.varTag, { color }]}>{overUnder(row.delta)}</Text>
+                  <Text style={[styles.varTag, { color }]}>
+                    {overUnder(row.delta, row.budget, row.actual)}
+                  </Text>
                   <Text style={[styles.varAmt, { color }]}>{signedMoney(row.delta, market)}</Text>
                 </>
               )}
@@ -174,17 +174,11 @@ function VarianceTable({
   const first = rows[0];
   return (
     <View style={styles.table}>
-      {hideHeader ? (
-        rows.map((row, index) => renderRow(row, index))
-      ) : (
-        <>
-          <View wrap={false}>
-            {header}
-            {first ? renderRow(first, 0) : null}
-          </View>
-          {rows.slice(1).map((row, index) => renderRow(row, index + 1))}
-        </>
-      )}
+      <View wrap={false}>
+        {header}
+        {first ? renderRow(first, 0) : null}
+      </View>
+      {rows.slice(1).map((row, index) => renderRow(row, index + 1))}
     </View>
   );
 }
@@ -259,25 +253,13 @@ export function BudgetVariancePDF({
         {model.comparedLabel}. {model.fullYearNote}
       </Text>
 
-      {model.sections.map((section) => {
-        const [first, ...rest] = section.rows;
-        return (
-          <View key={section.title}>
-            <View wrap={false}>
-              <SectionHeader title={section.title} color={theme.accent} />
-              {section.note ? <Text style={styles.note}>{section.note}</Text> : null}
-              <VarianceTable
-                rows={first ? [first] : []}
-                accent={theme.accent}
-                market={market}
-              />
-            </View>
-            {rest.length > 0 ? (
-              <VarianceTable rows={rest} accent={theme.accent} market={market} hideHeader />
-            ) : null}
-          </View>
-        );
-      })}
+      {model.sections.map((section) => (
+        <View key={section.title}>
+          <SectionHeader title={section.title} color={theme.accent} />
+          {section.note ? <Text style={styles.note}>{section.note}</Text> : null}
+          <VarianceTable rows={section.rows} accent={theme.accent} market={market} />
+        </View>
+      ))}
 
       <View wrap={false}>
       <SectionHeader title="Partner notes" color={theme.accent} />

@@ -305,6 +305,7 @@ export function MilonTeamDesk({
                       figures: findingFigureEntries(row.evidence),
                       market: live?.market,
                       canonicalRatios,
+                      liveHealth: feed.healthQuote,
                     });
                     const draft = draftFindingLabel(row);
                     const checked = figuresCheckedLine(

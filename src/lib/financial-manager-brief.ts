@@ -9,10 +9,13 @@
 import type { ChaseDraftInput } from "./chase-draft.ts";
 import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
-import { storedSeriesReading } from "./client-metrics.ts";
+import {
+  forecastHasRealLines,
+  hasFinancialEvidence,
+  storedSeriesReading,
+} from "./client-metrics.ts";
 import { cashFloorCopy } from "./owner-answers.ts";
-import { canonicalScoreProse } from "./score-prose.ts";
-import { rewriteDraftMonthStamp } from "./statement-period.ts";
+import { presentHomeDraftBody, presentHomeDraftTitle } from "./owner-needs.ts";
 import type { SavedCashflowLike } from "./cash-runway.ts";
 import type { MoneyMarket } from "./market/format.ts";
 
@@ -58,6 +61,12 @@ export type BriefAction = {
 export type BriefDraft = {
   id: string;
   title: string;
+  /** Stored body. Grounded with the title when the screen re-reads live figures. */
+  detail?: string | null;
+  /** Hash written with the draft. A mismatch with the live books is out of date. */
+  figuresHash?: string | null;
+  /** True when the stored sentence or its hash no longer matches the live books. */
+  refresh?: boolean;
 };
 
 export type FinancialManagerBrief = {
@@ -65,6 +74,8 @@ export type FinancialManagerBrief = {
   movements: BriefMovement[];
   movementEmpty: string | null;
   actions: BriefAction[];
+  /** Open rows before the Act on these preview. */
+  actionCount: number;
   actionEmpty: string | null;
   drafts: BriefDraft[];
   draftEmpty: string | null;
@@ -181,6 +192,10 @@ export function buildFinancialManagerBrief(input: {
   cashStrainLine?: string | null;
   receivables?: number | null;
   drafts?: readonly BriefDraft[];
+  /** Live scorecard ratios. Draft titles are re-read from these, not the stored sentence. */
+  canonicalRatios?: Record<string, number> | null;
+  /** Live floor-applied health score. Drafts quote this, never a stored comparison. */
+  healthOverall?: number | null;
   draftsReady?: boolean;
   actionsReady?: boolean;
   formatMoney: (amount: number) => string;
@@ -190,9 +205,7 @@ export function buildFinancialManagerBrief(input: {
     financials: input.currentFinancials,
   });
   const priorLabel = prior?.periodLabel?.trim() || null;
-  const movements = prior
-    ? topMoneyMovements(input.currentFinancials, prior.financials)
-    : [];
+  const movements = prior ? topMoneyMovements(input.currentFinancials, prior.financials) : [];
   const movementEmpty = prior
     ? movements.length
       ? null
@@ -231,7 +244,10 @@ export function buildFinancialManagerBrief(input: {
         : `${overdue} overdue on the action plan.`;
     actions.push({
       id: "chase",
-      title: receivables != null && receivables > 0 ? "Chase the outstanding balance" : "Chase overdue work",
+      title:
+        receivables != null && receivables > 0
+          ? "Chase the outstanding balance"
+          : "Chase overdue work",
       reason,
       button: "chase",
       tab: null,
@@ -239,9 +255,13 @@ export function buildFinancialManagerBrief(input: {
   }
   const passedOpening = input.cashOpening;
   const passedFloor = input.cashFloor;
-  const pillarAgrees =
-    input.cashPillarStatus === "healthy" || input.cashPillarStatus === "at_risk";
-  const series = !input.openingMissing && input.cashflow ? storedSeriesReading(input.cashflow) : null;
+  const evidenced = hasFinancialEvidence({
+    financials: input.currentFinancials,
+    cashflow: input.cashflow,
+  });
+  const pillarAgrees = input.cashPillarStatus === "healthy" || input.cashPillarStatus === "at_risk";
+  const series =
+    !input.openingMissing && input.cashflow ? storedSeriesReading(input.cashflow) : null;
   const seriesDip =
     series == null
       ? null
@@ -251,8 +271,12 @@ export function buildFinancialManagerBrief(input: {
         })();
   const cashOpening = series?.opening ?? passedOpening;
   const cashFloor = series?.floor ?? passedFloor;
-  const dipWeek = series ? seriesDip : (input.cashDipWeek ?? null);
+  // The "forecast already on file" banner needs real lines. A derived week-1
+  // dip from a $0 opening and the fallback floor is not a forecast.
+  const linesOnFile = forecastHasRealLines(input.cashflow);
+  const dipWeek = linesOnFile ? (series ? seriesDip : (input.cashDipWeek ?? null)) : null;
   const floorCopy =
+    evidenced &&
     !input.openingMissing &&
     cashOpening != null &&
     cashFloor != null &&
@@ -270,20 +294,23 @@ export function buildFinancialManagerBrief(input: {
   // Watch and Healthy keep the card sentence off the floor. The Health pillar
   // still uses this same floor reading, so its line is not cleared with the chip.
   const cashCopy = pillarAgrees ? null : floorCopy;
-  const cashFloorLine = input.openingMissing
-    ? `${OPENING_BALANCE_MISSING}.`
-    : input.cashStrainLine
-      ? input.cashStrainLine
-      : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
-        ? `Cash is ${input.formatMoney(cashOpening)}.`
-        : (cashCopy?.sentence ?? null);
+  const cashFloorLine = !evidenced
+    ? null
+    : input.openingMissing
+      ? `${OPENING_BALANCE_MISSING}.`
+      : input.cashStrainLine
+        ? input.cashStrainLine
+        : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
+          ? `Cash is ${input.formatMoney(cashOpening)}.`
+          : (cashCopy?.sentence ?? null);
   const cashFloorChip =
-    input.openingMissing || pillarAgrees
+    !evidenced || input.openingMissing || pillarAgrees
       ? null
       : input.cashStrainLine
         ? "Critical"
         : (cashCopy?.chip ?? null);
   if (
+    evidenced &&
     input.actionsReady !== false &&
     !input.openingMissing &&
     !pillarAgrees &&
@@ -302,7 +329,15 @@ export function buildFinancialManagerBrief(input: {
   const drafts = (input.drafts ?? []).flatMap((row) => {
     const title = row.title.trim();
     if (!row.id || !title) return [];
-    return [{ id: row.id, title: canonicalScoreProse(rewriteDraftMonthStamp(title)) }];
+    const live = { overall: input.healthOverall, storedHash: row.figuresHash };
+    const presented = presentHomeDraftTitle(title, input.canonicalRatios, live);
+    const body = row.detail?.trim()
+      ? presentHomeDraftBody(row.detail, input.canonicalRatios, live)
+      : null;
+    const text = presented.text || body?.text || "";
+    if (!text) return [];
+    const refresh = presented.refresh || presented.stale || Boolean(body?.refresh || body?.stale);
+    return [{ id: row.id, title: text, refresh }];
   });
   const chaseAction = actions.find((action) => action.button === "chase");
   const chase: ChaseDraftInput | null =
@@ -317,6 +352,7 @@ export function buildFinancialManagerBrief(input: {
     priorLabel,
     movements,
     movementEmpty,
+    actionCount: actions.length,
     actions: actions.slice(0, 3),
     actionEmpty:
       input.actionsReady === false
@@ -334,6 +370,6 @@ export function buildFinancialManagerBrief(input: {
     chase,
     cashFloorLine,
     cashFloorChip,
-    healthCue: input.openingMissing ? null : (floorCopy?.healthCue ?? null),
+    healthCue: !evidenced || input.openingMissing ? null : (floorCopy?.healthCue ?? null),
   };
 }

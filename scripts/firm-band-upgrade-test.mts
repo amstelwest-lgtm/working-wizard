@@ -75,6 +75,7 @@ import {
   FIRM_BAND_CATALOG,
   FIRM_CHECKOUT_BANDS,
   FIRM_TRIAL_CARD_LINE,
+  FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_SENTENCE,
 } from "../src/lib/stripe-plans";
 
@@ -875,6 +876,8 @@ assert(
 );
 assert(server.includes("chargeCurrency"), "the cap reader keeps the subscription charge currency");
 assert(server.includes("startedAt"), "the cap reader keeps the subscription start");
+assert(server.includes("current_period_end"), "the cap reader keeps the subscription period end");
+assert(server.includes("periodEndIso: sub?.currentPeriodEnd"), "Settings receives the period end for an active plan");
 assert(server.includes("starter_trial_enforced"), "the cap reader loads the pilot flag");
 assert(server.includes("starterTrialExpired"), "an expired Starter blocks a new client");
 assert(
@@ -1103,10 +1106,11 @@ const unusedUs = renderToStaticMarkup(
   }),
 );
 assert(unusedUs.includes(FIRM_TRIAL_SENTENCE), "an unused US trial names the 14-day line");
-assert(unusedUs.includes(FIRM_TRIAL_CARD_LINE), "an unused US trial names the card line");
+assert(unusedUs.includes(FIRM_TRIAL_CARD_NOTE), "an unused US trial names the card note");
+assert(!unusedUs.includes(FIRM_TRIAL_CARD_LINE), "the settings row does not repeat the trial sentence");
 assert(
-  unusedUs.split(FIRM_TRIAL_CARD_LINE).length === 2,
-  "the card line appears once, on Starter",
+  unusedUs.split(FIRM_TRIAL_SENTENCE).length === 2,
+  "the 14-day line appears once, on Starter",
 );
 assert(unusedUs.includes("$39"), "an unused US trial keeps the USD Starter price");
 assert(!unusedUs.includes("R299"), "an unused US trial does not show a rand price");
@@ -1129,7 +1133,9 @@ const unusedSa = renderToStaticMarkup(
   }),
 );
 assert(unusedSa.includes(FIRM_TRIAL_SENTENCE), "an unused SA trial names the 14-day line");
-assert(unusedSa.includes(FIRM_TRIAL_CARD_LINE), "an unused SA trial names the card line");
+assert(unusedSa.includes(FIRM_TRIAL_CARD_NOTE), "an unused SA trial names the card note");
+assert(!unusedSa.includes(FIRM_TRIAL_CARD_LINE), "an unused SA trial does not repeat the trial sentence");
+assert(unusedSa.split(FIRM_TRIAL_SENTENCE).length === 2, "the SA 14-day line appears once");
 assert(unusedSa.includes("R299/mo · about R60 per client"), "an unused SA trial keeps the rand price");
 assert(!unusedSa.includes("$39"), "an unused SA trial does not show the dollar price");
 assert(!unusedSa.toLowerCase().includes("vat"), "an unused SA trial has no tax wording");

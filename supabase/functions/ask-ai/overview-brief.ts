@@ -10,9 +10,12 @@
  * including the financial-year span Ratios uses for days.
  */
 
+import { hasFinancialEvidence } from "../../../src/lib/client-metrics.ts";
 import { parseOperatingProfile } from "../../../src/lib/client-profile.ts";
 import {
+  cashPillarFollowsForecast,
   computeOverallHealth,
+  liveHealthFromBooks,
   scorecardHealthFromFinancials,
   type ScoreMarket,
 } from "../../../src/lib/health-score.ts";
@@ -302,10 +305,24 @@ export function buildOverviewBrief(input: {
   market?: ScoreMarket;
   /** Client market for printed ranges. Copy-pack stand-in is only used when this is omitted. */
   dateMarket?: DateMarket;
+  /** Stored forecast. Real lines count as evidence. When this is passed, health comes from `liveHealthFromBooks`. */
+  cashflow?: unknown;
   clientName?: string | null;
   periodLabel?: string | null;
   figuresAsOf?: string | null;
   brainSummary?: unknown;
+  /** Industry label. A gross margin above 85% stays out of Profit outside software. */
+  industry?: string | null;
+  /** Blank opening. Cash is left unscored. */
+  openingMissing?: boolean;
+  /** 13-week opening and closings. A close under the floor caps Cash at 25. */
+  cashOpening?: number | null;
+  cashClosings?: readonly number[] | null;
+  cashFloor?: number | null;
+  financialsUpdatedAt?: string | null;
+  priorFinancials?: Record<string, unknown> | null;
+  timeZone?: string | null;
+  now?: Date;
 }): OverviewBrief {
   const copyPack = input.copyPack ?? "za";
   const market = input.market ?? marketFromCopyPack(copyPack);
@@ -328,32 +345,74 @@ export function buildOverviewBrief(input: {
   const runway = asNumber(input.runwayWeeks);
   // Same pillar math as Overview / the scorecard. A year-span health score
   // (creditor days 28) must not sit next to the stored-cover days (37).
-  const cashOnFile = input.cash !== undefined ? input.cash : asNumber(financials?.cash);
-  const scored = financials
-    ? scorecardHealthFromFinancials({
-        financials,
-        fyStartMonth,
-        periodMonths,
-        cashRunwayWeeks: runway,
-        cashBalance: cashOnFile,
-        shortfallWeek: input.shortfallWeek,
-        market,
-      })
-    : computeOverallHealth({
-        ratios,
-        cashRunwayWeeks: runway,
-        shortfallWeek: input.shortfallWeek,
-        market,
-      });
-  const pillars: OverviewPillar[] = scored.pillars.map((pillar) => ({
+  // No books: health, cash, and runway stay blank. A $0 default is not a score.
+  const evidenced = hasFinancialEvidence({
+    financials,
+    cashflow: input.cashflow,
+    ratios,
+  });
+  const cashOnFile = !evidenced
+    ? null
+    : input.cash !== undefined
+      ? input.cash
+      : asNumber(financials?.cash);
+  const fromBooks =
+    evidenced && financials && input.cashflow !== undefined
+      ? liveHealthFromBooks({
+          financials,
+          cashflow: input.cashflow,
+          financialsUpdatedAt: input.financialsUpdatedAt ?? null,
+          priorFinancials: input.priorFinancials ?? null,
+          fyStartMonth,
+          market,
+          industry: input.industry,
+          timeZone: input.timeZone,
+          now: input.now,
+        })
+      : null;
+  const raw = !evidenced
+    ? null
+    : (fromBooks ??
+      (financials
+        ? scorecardHealthFromFinancials({
+            financials,
+            fyStartMonth,
+            periodMonths,
+            cashRunwayWeeks: runway,
+            cashBalance: cashOnFile,
+            shortfallWeek: input.shortfallWeek,
+            market,
+            industry: input.industry,
+          })
+        : computeOverallHealth({
+            ratios,
+            cashRunwayWeeks: runway,
+            shortfallWeek: input.shortfallWeek,
+            market,
+          })));
+  const scored =
+    raw == null
+      ? null
+      : fromBooks
+        ? fromBooks
+        : raw.overall == null
+          ? raw
+          : cashPillarFollowsForecast(raw, {
+              hasEvidence: true,
+              openingMissing: input.openingMissing === true,
+              opening: input.cashOpening,
+              closings: input.cashClosings,
+              floor: input.cashFloor,
+            });
+  const pillars: OverviewPillar[] = (scored?.pillars ?? []).map((pillar) => ({
     id: pillar.id,
     label: pillar.label,
-    score: pillar.score,
+    score: evidenced ? pillar.score : null,
     status: pillar.status,
   }));
-  const health = scored.overall;
-  const healthStatus = health == null ? null : scored.displayStatus;
-  const weakest = scored.weakestPillar;
+  const health = evidenced ? (scored?.overall ?? null) : null;
+  const healthStatus = health == null ? null : (scored?.displayStatus ?? null);
+  const weakest = scored?.weakestPillar ?? null;
 
   const statement = financials ? readStatementMeta(financials, dateMarket) : null;
   const operatingProfit = asNumber(financials?.ebit);
@@ -380,11 +439,12 @@ export function buildOverviewBrief(input: {
       weakest && weakest.score != null
         ? { id: weakest.id, label: weakest.label, score: weakest.score }
         : null,
-    cash: input.cash !== undefined ? input.cash : asNumber(financials?.cash),
-    revenue: asNumber(financials?.revenue),
-    runwayWeeks: runway,
-    runwayLabel:
-      input.runwayLabel !== undefined
+    cash: evidenced ? cashOnFile : null,
+    revenue: evidenced ? asNumber(financials?.revenue) : null,
+    runwayWeeks: evidenced ? runway : null,
+    runwayLabel: !evidenced
+      ? null
+      : input.runwayLabel !== undefined
         ? input.runwayLabel
         : runway != null
           ? `${runway} ${runway === 1 ? "week" : "weeks"}`

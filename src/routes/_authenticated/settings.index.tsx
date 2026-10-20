@@ -17,7 +17,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { AI_MODEL_DISCLOSURE } from "@/lib/marketing-faq";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
-import { firmTrialStatusLine, showStarterTrialEndedCopy, type FirmPlanDisplay } from "@/lib/firm-client-cap";
+import {
+  firmRenewalStatusLine,
+  firmTrialStatusLine,
+  showStarterTrialEndedCopy,
+  type FirmPlanDisplay,
+} from "@/lib/firm-client-cap";
 import { firmStarterTrialCountdownCopy } from "@/lib/firm-starter-trial";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
@@ -231,6 +236,10 @@ function SettingsPage() {
     phase: plan?.phase,
     trialEndsOn: plan?.trialEndsOn,
   });
+  const renewalLine = firmRenewalStatusLine({
+    phase: plan?.phase,
+    renewsOn: plan?.renewsOn,
+  });
 
   const handleDelete = async () => {
     if (confirmText.trim().toUpperCase() !== "DELETE") return;
@@ -440,7 +449,14 @@ function SettingsPage() {
                       </p>
                     ) : null
                   ) : (
-                    <p className="settings-value">{plan?.headline ?? "No active plan"}</p>
+                    <>
+                      <p className="settings-value">{plan?.headline ?? "No active plan"}</p>
+                      {renewalLine ? (
+                        <p className="settings-value" data-plan-renews="">
+                          {renewalLine}
+                        </p>
+                      ) : null}
+                    </>
                   )}
                   {plan?.starterTrial && !trialEnded ? (
                     firmStarterTrialCountdownCopy(plan.starterTrial) ? (

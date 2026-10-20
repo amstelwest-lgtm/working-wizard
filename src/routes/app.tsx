@@ -115,16 +115,22 @@ import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
-  cashPillarFollowsForecast,
-  computeOverallHealth,
   grossMarginLooksImplausible,
+  healthWithoutEvidence,
+  NOT_SCORED_YET_LABEL,
   healthMapFromRatios,
+  liveHealthFromBooks,
   scoreRatio,
 } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
-import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
+import {
+  assessClientMetrics,
+  hasFinancialEvidence,
+  runwayDisplayLabel,
+  storedOpeningIsMissing,
+} from "@/lib/client-metrics";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -3641,7 +3647,7 @@ function Index() {
         : NaN,
   };
 
-  // Overall + pillars — same computeOverallHealth as accountant dashboard / scorecard.
+  // Overall + pillars — liveHealthFromBooks, the same call as the accountant Health page.
   // Local healthMap above stays for next-steps / sphere drivers; it must not drive the overall.
   const ownerPrior = useMemo(
     () =>
@@ -3671,13 +3677,17 @@ function Index() {
     });
   };
   const cashBalance = ownerMetrics.cash.amount;
+  const ownerEvidence = hasFinancialEvidence({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+  });
   const ownerOpeningMissing = storedOpeningIsMissing(clientMeta?.cashflow);
   // Same reading as the Financial Manager card. An outlook uses its stored
   // floor. With no outlook, the card's cashflow is included so Health cannot
   // drop the line the card already shows. A missing opening is not cash under
   // the floor, so this line stays off.
   const ownerDoorOutlook =
-    cashBalance != null
+    ownerEvidence && cashBalance != null
       ? {
           opening: ownerOutlook.opening,
           closing: ownerOutlook.closing,
@@ -3694,22 +3704,17 @@ function Index() {
       money: (amount) => formatMoney(amount, boardMarket),
     })?.healthCue ?? null;
   const grossImplausible = grossMarginLooksImplausible(grossMarginRatio, industryLabel);
-  const overallHealth = cashPillarFollowsForecast(
-    computeOverallHealth({
-      ratios: computedRatios as Record<string, number>,
-      cashRunwayWeeks: cashBalance != null ? effectiveRunway : null,
-      cashBalance,
-      market: boardMarket,
-      shortfallWeek: ownerOutlook.shortfallWeek,
-      grossMarginImplausible: grossImplausible,
-    }),
-    {
-      openingMissing: ownerOpeningMissing,
-      opening: ownerOutlook.opening,
-      closings: ownerOutlook.closing,
-      floor: ownerOutlook.floor,
-    },
-  );
+  const scoredHealth = liveHealthFromBooks({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+    financialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
+    priorFinancials: ownerPrior?.financials ?? null,
+    fyStartMonth,
+    market: boardMarket,
+    industry: industryLabel,
+    timeZone: boardMarket.timezone,
+  });
+  const overallHealth = ownerEvidence ? scoredHealth : healthWithoutEvidence(scoredHealth);
   const ownerStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -3790,6 +3795,7 @@ function Index() {
     ratioMeta: RATIO_META,
     inventoryApplies: stockSittingApplies(operatingProfile),
     dayCounts: cashDriverDayFigures(v as unknown as Record<string, unknown>),
+    driverNotes: grossImplausible ? { grossMargin: GROSS_MARGIN_MAPPING_NOTE } : undefined,
   });
 
   // Same ranker as the accountant Moves tab and Action Plan import.
@@ -3801,6 +3807,8 @@ function Index() {
     debtorDays: ratiosStatementFigures(v as unknown as Record<string, unknown>).debtorDays,
     financingHealth: pillarHealths.financing,
     weakestPillar: overallHealth.weakestPillar?.id ?? null,
+    hasEvidence: ownerEvidence,
+    market: boardMarket,
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
   const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
@@ -4099,10 +4107,20 @@ function Index() {
                 }
                 cashOutlook={ownerDoorOutlook}
                 openingMissing={ownerOpeningMissing}
-                cashPillarStatus={pillarStatus.cash ?? null}
-                cashRunwayWeeks={cashBalance != null ? effectiveRunway : null}
-                cashDebtorScore={Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null}
-                cashBurnScore={Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null}
+                hasEvidence={ownerEvidence}
+                cashPillarStatus={ownerEvidence ? (pillarStatus.cash ?? null) : null}
+                cashRunwayWeeks={ownerEvidence && cashBalance != null ? effectiveRunway : null}
+                cashDebtorScore={
+                  ownerEvidence && Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null
+                }
+                cashBurnScore={
+                  ownerEvidence && Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null
+                }
+                liveHealth={{
+                  overall: overallHealth.overall,
+                  weakestLabel: overallHealth.weakestPillar?.label ?? null,
+                  weakestScore: overallHealth.weakestPillar?.score ?? null,
+                }}
                 market={boardMarket}
                 marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
@@ -4186,9 +4204,9 @@ function Index() {
                           />
                           <OwnerHealthOrb
                             variant="ring"
-                            overallHealth={avgHealth}
-                            displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
-                            statusLabel={ownerStatusCritical ? ownerStatusWord : null}
+                            overallHealth={ownerEvidence && Number.isFinite(avgHealth) ? avgHealth : Number.NaN}
+                            displayStatus={ownerEvidence ? (ownerStatusCritical ? "critical" : overallHealth.displayStatus) : undefined}
+                            statusLabel={ownerEvidence ? (ownerStatusCritical ? ownerStatusWord : null) : NOT_SCORED_YET_LABEL}
                             pillars={spherePillars}
                             caption={HEALTH_RING_CAPTION}
                             cashFloorCue={ownerCashFloorCue}
@@ -5350,9 +5368,9 @@ function Index() {
                                   />
                                   <SphereHero
                                     compact
-                                    overallHealth={avgHealth}
-                                    displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
-                                    statusLabel={ownerStatusCritical ? ownerStatusWord : null}
+                                    overallHealth={ownerEvidence && Number.isFinite(avgHealth) ? avgHealth : Number.NaN}
+                                    displayStatus={ownerEvidence ? (ownerStatusCritical ? "critical" : overallHealth.displayStatus) : undefined}
+                                    statusLabel={ownerEvidence ? (ownerStatusCritical ? ownerStatusWord : null) : NOT_SCORED_YET_LABEL}
                                     pillars={spherePillars}
                                     cashFloorCue={ownerCashFloorCue}
                                     onCashFloor={openOwnerFm}

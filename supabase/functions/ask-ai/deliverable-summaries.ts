@@ -6,7 +6,7 @@
 
 import { forecastChatFacts } from "../../../src/lib/cash-forecast-parity.ts";
 import { MONTHS_LONG } from "../../../src/lib/market/date-presets.ts";
-import { moveFactorLabel } from "../../../src/lib/move-pillars.ts";
+import { moveFactorLabel, strategicMovePillar } from "../../../src/lib/move-pillars.ts";
 import { periodProfitBridge } from "../../../src/lib/period-profit.ts";
 import {
   baseCashflow,
@@ -521,7 +521,11 @@ function urgencyFromBenchmark(r: RatioRow): number {
   return Math.min(95, 55 + gap * 40);
 }
 
-export function rankNextSteps(ratios: RatioRow[], limit = 5): NextStepSummary[] {
+export function rankNextSteps(
+  ratios: RatioRow[],
+  limit = 5,
+  weakestPillar?: string | null,
+): NextStepSummary[] {
   const ranked = ratios
     .filter((r) => r.value != null && Number.isFinite(r.value) && RATIO_FIRST_STEP[r.key])
     .map((r) => {
@@ -534,7 +538,12 @@ export function rankNextSteps(ratios: RatioRow[], limit = 5): NextStepSummary[] 
         score,
       };
     })
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => {
+      const aWeak = weakestPillar && strategicMovePillar(a.key) === weakestPillar ? 1 : 0;
+      const bWeak = weakestPillar && strategicMovePillar(b.key) === weakestPillar ? 1 : 0;
+      if (aWeak !== bWeak) return bWeak - aWeak;
+      return b.score - a.score;
+    })
     .slice(0, limit);
   return ranked.map((r, i) => ({
     rank: i + 1,

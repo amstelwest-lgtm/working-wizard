@@ -538,6 +538,9 @@ assert(cardSrc.includes('id="xero-sync-proof"'), "Xero card shows what was synce
 assert(cardSrc.includes('id="xero-bank-summary-status"'), "Xero card states the Bank Summary result");
 assert(cardSrc.includes("openingCashNote"), "Xero card shows whether opening cash was applied");
 assert(cardSrc.includes("Balance sheet as of"), "Xero card names the balance-sheet date");
+assert(cardSrc.includes("useConnectionProbe"), "Xero uses the shared status probe");
+assert(cardSrc.includes('data-connection-state="checking"'), "Xero status check shows checking");
+assert(cardSrc.includes("Checking Xero…"), "the checking line names Xero");
 const docsSrc = readFileSync(resolve("docs/XERO.md"), "utf8");
 assert(docsSrc.includes("accounting.reports.banksummary.read"), "env doc lists the bank summary scope");
 assert(docsSrc.includes("disconnect"), "env doc says existing connections must reconnect");

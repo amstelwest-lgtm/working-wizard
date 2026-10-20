@@ -17,7 +17,7 @@ import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_BAND_IDS,
-  FIRM_TRIAL_CARD_LINE,
+  FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_SENTENCE,
   firmClientLimitLabel,
   firmUsdPublicLine,
@@ -289,7 +289,7 @@ export function FirmBandUpgrade({
                       data-starter-card=""
                       style={{ display: "block", fontSize: 12 }}
                     >
-                      {FIRM_TRIAL_CARD_LINE}
+                      {FIRM_TRIAL_CARD_NOTE}
                     </span>
                   </>
                 ) : null}

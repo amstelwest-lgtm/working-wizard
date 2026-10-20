@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
+import { marketForClient } from "@/lib/market/scope";
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import {
   agedApProofLine,
@@ -38,15 +39,16 @@ export const getPayables = createServerFn({ method: "POST" })
     assertClientScope(context.actingAsClientId, data.clientId);
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id")
+      .select("id, market")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
+    const market = marketForClient(client as { market?: unknown });
 
     const [xero, qbo] = await Promise.all([
       readAged("xero_sync_data", data.clientId),
       readAged("qbo_sync_data", data.clientId),
     ]);
     const snapshot = choosePayables([xero, qbo]);
-    return { snapshot, line: agedApProofLine(snapshot) };
+    return { snapshot, line: agedApProofLine(snapshot, market) };
   });
