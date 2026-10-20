@@ -1808,7 +1808,7 @@ function LandingPage() {
               )}
               <button
                 type="submit"
-                className="btn btn-gold"
+                className="btn btn-cobalt"
                 disabled={opsBusy}
                 style={{ width: "100%" }}
               >
@@ -1941,7 +1941,7 @@ function LandingPage() {
               }}
             />
             <a
-              className="btn btn-gold nav-trial"
+              className="btn btn-cobalt nav-trial"
               href="#register"
               aria-label={NAV_TRIAL_ARIA}
               onClick={(e) => {

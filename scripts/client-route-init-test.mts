@@ -22,5 +22,14 @@ assert(
   !src.includes("const reportsIssued = client.reports_issued_count"),
   "reportsIssued is not declared again after the loading return",
 );
+const guard = readFileSync(resolve("scripts/client-route-build-render.mjs"), "utf8");
+assert(
+  guard.includes('code.indexOf("No draft waiting.")'),
+  "the production chunk check uses a string that is still inside the Home memo",
+);
+assert(
+  !guard.includes("Nothing ready to send"),
+  "the production chunk check does not require the removed zero-count line",
+);
 
 console.log("client-route-init-test: ok");

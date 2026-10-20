@@ -25,7 +25,12 @@ import { BackLink } from "@/components/back-link";
 import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { finishReportDownload, startReportDownload } from "@/lib/report-downloads";
-import { reportStripNames, reportsAnswerSentence, reportsPrimaryLabel } from "@/lib/reports-drafter-copy";
+import {
+  reportReady,
+  reportStripNames,
+  reportsAnswerSentence,
+  reportsPrimaryLabel,
+} from "@/lib/reports-drafter-copy";
 import { reportLinkOpensPreview } from "@/lib/report-preview";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -3693,8 +3698,13 @@ export function ReportsStudio({
   const blockedForClient = Boolean(clientId) && !dataLoading && !clientData?.hasData;
   const unavailableFor = (key: string): string | null => {
     if (!clientData?.hasData) return null;
-    if (key === "leverage" && !clientData.leverage) return LEVERAGE_REPORT_NEEDS;
-    if (key === "assets" && !clientData.assets) return ASSET_REPORT_NEEDS;
+    const ready = reportReady(key, {
+      leverageReady: Boolean(clientData.leverage),
+      assetReady: Boolean(clientData.assets),
+    });
+    if (ready) return null;
+    if (key === "leverage") return LEVERAGE_REPORT_NEEDS;
+    if (key === "assets") return ASSET_REPORT_NEEDS;
     return null;
   };
   const studioBusy = dataLoading || resolvingClient;
