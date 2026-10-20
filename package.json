@@ -181,6 +181,7 @@
     "test:signup-checkout-keep": "vite-node --config scripts/vite-test.config.ts scripts/signup-checkout-keep-test.mts",
     "test:billing-gate-timeout": "vite-node --config scripts/vite-test.config.ts scripts/billing-gate-timeout-test.mts",
     "test:shell-hang-deadline": "vite-node --config scripts/vite-test.config.ts scripts/shell-hang-deadline-test.mts",
+    "test:billing-wall-copy": "vite-node --config scripts/vite-test.config.ts scripts/billing-wall-copy-test.mts",
     "test:smart-landing": "vite-node --config scripts/vite-test.config.ts scripts/smart-landing-test.mts",
     "test:funnel-timing": "vite-node --config scripts/vite-test.config.ts scripts/funnel-timing-test.mts",
     "test:firm-band-upgrade": "vite-node --config scripts/vite-test.config.ts scripts/firm-band-upgrade-test.mts",
