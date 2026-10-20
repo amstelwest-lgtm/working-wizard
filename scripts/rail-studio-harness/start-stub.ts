@@ -199,6 +199,40 @@ function fixtureFor(id: string): Promise<unknown> {
     }
     return Promise.resolve(PLAN);
   }
+  // One open bank-statement ask, so Email the owner is on client Health in
+  // the local harness. The product list still comes from the database.
+  if (id.includes("presentLiveDataRequests")) {
+    return Promise.resolve({
+      migrated: true,
+      requests: [
+        {
+          id: "harness-bank-statement",
+          client_id: "harness-client",
+          cycle_id: null,
+          kind: "bank_statement",
+          title: "Latest bank statement",
+          reason: "The forecast needs the latest statement.",
+          severity: "important",
+          status: "open",
+          source: "system",
+          rule_key: "bank_statement_missing",
+          requested_by: null,
+          requested_at: "2026-10-01T00:00:00.000Z",
+          due_at: null,
+          sent_at: null,
+          sent_to: null,
+          last_reminded_at: null,
+          fulfilled_at: null,
+          fulfilled_by: null,
+          fulfilled_with: null,
+          waived_reason: null,
+          meta: {},
+          created_at: "2026-10-01T00:00:00.000Z",
+          updated_at: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    });
+  }
   return Promise.reject(new Error("harness-local"));
 }
 
