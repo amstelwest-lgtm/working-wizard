@@ -8,6 +8,13 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { StatementFigures } from "../src/components/client-brain-summary";
 import {
+  clearBrainAnswerDraft,
+  listBrainAnswerDrafts,
+  readBrainAnswerDraft,
+  writeBrainAnswerDraft,
+} from "../src/lib/brain-answer-draft";
+import {
+  BUSINESS_MAP_FIELDS,
   artifactKindLabel,
   buildNextStepEditDiff,
   isMissingBrainRelation,
@@ -652,5 +659,56 @@ assert(
   !/display:\s*none|visibility:\s*hidden|opacity:\s*0|sr-only/.test(figuresHtml),
   "rendered statement figures are not hidden",
 );
+
+function memoryStore() {
+  const map = new Map<string, string>();
+  return {
+    getItem: (key: string) => map.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      map.set(key, value);
+    },
+    removeItem: (key: string) => {
+      map.delete(key);
+    },
+  };
+}
+
+const store = memoryStore();
+const clientId = "qa-us";
+for (const field of BUSINESS_MAP_FIELDS) {
+  writeBrainAnswerDraft(clientId, "accountant", field.key, { text: `${field.label} draft` }, store);
+}
+const listed = listBrainAnswerDrafts(clientId, "accountant", store);
+assert(listed.customers_channels?.text === "Customers / channels draft", "customers draft is kept");
+assert(Object.keys(listed).length === BUSINESS_MAP_FIELDS.length, "every business map question keeps its own draft");
+assert(
+  readBrainAnswerDraft(clientId, "owner", "customers_channels", store) == null,
+  "the owner draft is a different side",
+);
+writeBrainAnswerDraft(clientId, "owner", "customers_channels", { text: "Wholesale and the shop" }, store);
+assert(
+  readBrainAnswerDraft(clientId, "owner", "customers_channels", store)?.text === "Wholesale and the shop",
+  "owner text is restored",
+);
+assert(
+  readBrainAnswerDraft(clientId, "accountant", "customers_channels", store)?.text === "Customers / channels draft",
+  "accountant text stays",
+);
+clearBrainAnswerDraft(clientId, "accountant", "customers_channels", store);
+assert(readBrainAnswerDraft(clientId, "accountant", "customers_channels", store) == null, "discard removes the draft");
+writeBrainAnswerDraft(clientId, "accountant", "pricing_model", { text: "   " }, store);
+assert(readBrainAnswerDraft(clientId, "accountant", "pricing_model", store) == null, "blank text is not a draft");
+
+const summarySrc = readFileSync(resolve("src/components/client-brain-summary.tsx"), "utf8");
+const ownerSrc = readFileSync(resolve("src/components/owner-brain-drip.tsx"), "utf8");
+assert(
+  summarySrc.includes("window.confirm(DISCARD_BRAIN_ANSWER)"),
+  "closing an unsaved answer asks before discard",
+);
+assert(summarySrc.includes("writeBrainAnswerDraft"), "the answer dialog keeps a local draft");
+assert(summarySrc.includes('listBrainAnswerDrafts(clientId, "accountant")'), "reopen reads the accountant draft");
+assert(ownerSrc.includes('readBrainAnswerDraft(clientId, "owner"'), "the owner question restores the same kind of draft");
+assert(ownerSrc.includes("clearBrainAnswerDraft"), "a saved owner answer drops the draft");
+assert(summarySrc.includes("Unsaved"), "an unsaved business map row is not left as Empty");
 
 console.log("client-brain-summary-test: all assertions passed");

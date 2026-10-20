@@ -209,6 +209,39 @@ if (ask.ok) {
   assert(days?.value === 43.8 && days.unit === "days" && days.value_raw == null, "debtor days keep the stored 43.8");
 }
 
+const periodLeak = polishAgentCopy({
+  text: "Gross margin is 1 for Jan 1 – Sep 30, 2026.",
+  role: "detail",
+  figures: { "Gross Margin": 1 },
+  market: US,
+});
+assert(periodLeak.ok === true, "a dated margin sentence is still a sentence");
+if (periodLeak.ok) {
+  assert(periodLeak.text.includes("100%"), periodLeak.text);
+  assert(periodLeak.text.includes("Jan 1 – Sep 30, 2026"), periodLeak.text);
+  assert(!periodLeak.text.includes("100% –"), periodLeak.text);
+}
+const storedLeak = polishAgentCopy({
+  text: "Books cover Jan 100% – Sep 30, 2026.",
+  role: "detail",
+  figures: { "Gross Margin": 1 },
+  market: US,
+});
+assert(
+  storedLeak.ok === true && storedLeak.text.includes("Jan 1 – Sep 30, 2026") && !storedLeak.text.includes("100% –"),
+  storedLeak.ok ? storedLeak.text : "refused",
+);
+const zaDay = polishAgentCopy({
+  text: "Gross margin is 1 for 1 Jan – 30 Sep 2026.",
+  role: "detail",
+  figures: { "Gross Margin": 1 },
+  market: ZA,
+});
+assert(
+  zaDay.ok === true && zaDay.text.includes("1 Jan – 30 Sep 2026") && !zaDay.text.includes("100% Jan"),
+  zaDay.ok ? zaDay.text : "refused",
+);
+
 const sales = polishAgentCopy({
   text: "Cost of sales is 13846.",
   role: "detail",

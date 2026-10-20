@@ -30,6 +30,12 @@ import {
   parseLineNames,
   profileDripChoices,
 } from "@/lib/owner-drip-answer";
+import {
+  clearBrainAnswerDraft,
+  readBrainAnswerDraft,
+  writeBrainAnswerDraft,
+  type BrainAnswerDraft,
+} from "@/lib/brain-answer-draft";
 
 function choiceClass(on: boolean) {
   return on
@@ -167,9 +173,19 @@ export function OwnerBrainDrip({
   const isWeekly = drip?.key === "weekly_inputs.weeks";
   const isStored = Boolean(drip && !isHistory && !isProfile && !isOptIn && !isNames && !isLineMoney && !isWeekly);
 
+  const rememberDraft = useCallback(
+    (patch: Partial<BrainAnswerDraft>) => {
+      if (!clientId || !drip) return;
+      const current = readBrainAnswerDraft(clientId, "owner", drip.key) ?? { text: "" };
+      writeBrainAnswerDraft(clientId, "owner", drip.key, { ...current, ...patch, text: patch.text ?? current.text });
+    },
+    [clientId, drip],
+  );
+
   useEffect(() => {
-    setChoice("");
-    setText(isNames ? named.map((l) => l.name).join("\n") : "");
+    const saved = clientId && drip ? readBrainAnswerDraft(clientId, "owner", drip.key) : null;
+    setChoice(saved?.choice ?? "");
+    setText(saved?.text ?? (isNames ? named.map((l) => l.name).join("\n") : ""));
     const seed: Record<string, string> = {};
     if (drip?.key === "product_mix.prices") {
       for (const line of named) seed[line.id] = line.sellPrice != null ? String(line.sellPrice) : "";
@@ -180,15 +196,15 @@ export function OwnerBrainDrip({
         seed[line.id] = line.revenueAmount != null ? String(line.revenueAmount) : "";
       }
     }
-    setLineValues(seed);
+    setLineValues(saved?.lineValues ?? seed);
     const week = weekly.weeks[getISOWeekKey()];
-    setWeeklyRev(week?.revenue ? String(week.revenue) : "");
-    setWeeklyCos(week?.costOfSales ? String(week.costOfSales) : "");
+    setWeeklyRev(saved?.weeklyRev ?? (week?.revenue ? String(week.revenue) : ""));
+    setWeeklyCos(saved?.weeklyCos ?? (week?.costOfSales ? String(week.costOfSales) : ""));
     setError(null);
     setOpen(false);
-    // Reset only when the dripped question changes.
+    // Restore a local draft when the dripped question changes. Saved books win after submit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drip?.key]);
+  }, [drip?.key, clientId]);
 
   useEffect(() => {
     if (!open) return;
@@ -277,6 +293,7 @@ export function OwnerBrainDrip({
         await markStoredAnswered(drip.key, fluentPrompt, drip.audience, answer);
       }
       toast.success("Saved — recommendations will get sharper");
+      if (clientId) clearBrainAnswerDraft(clientId, "owner", drip.key);
       setJustAnsweredKey(drip.key);
       await load();
       setAdvanceToken((n) => n + 1);
@@ -311,6 +328,7 @@ export function OwnerBrainDrip({
     weekly,
     weeklyCos,
     weeklyRev,
+    clientId,
   ]);
 
   if (!drip) return null;
@@ -345,7 +363,10 @@ export function OwnerBrainDrip({
                   type="button"
                   ref={i === 0 ? (el) => { firstFieldRef.current = el; } : undefined}
                   className={choiceClass(choice === opt.id)}
-                  onClick={() => setChoice(opt.id)}
+                  onClick={() => {
+                    setChoice(opt.id);
+                    rememberDraft({ choice: opt.id });
+                  }}
                 >
                   {opt.label}
                 </button>
@@ -359,7 +380,10 @@ export function OwnerBrainDrip({
               value={text}
               rows={3}
               placeholder="e.g. Retail shop&#10;Wholesale deliveries"
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                rememberDraft({ text: e.target.value });
+              }}
               className="w-full rounded-lg border border-amber-900/15 bg-white/80 px-3 py-2 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-100"
             />
           ) : null}
@@ -374,7 +398,11 @@ export function OwnerBrainDrip({
                   <MoneyInput
                     inputRef={i === 0 ? firstFieldRef : undefined}
                     value={lineValues[line.id] ?? ""}
-                    onChange={(v) => setLineValues((prev) => ({ ...prev, [line.id]: v }))}
+                    onChange={(v) => {
+                      const next = { ...lineValues, [line.id]: v };
+                      setLineValues(next);
+                      rememberDraft({ lineValues: next });
+                    }}
                     placeholder={
                       drip.key === "product_mix.revenue" ? "Revenue from this line" : "Amount"
                     }
@@ -393,7 +421,10 @@ export function OwnerBrainDrip({
                 <MoneyInput
                   inputRef={firstFieldRef}
                   value={weeklyRev}
-                  onChange={setWeeklyRev}
+                  onChange={(v) => {
+                    setWeeklyRev(v);
+                    rememberDraft({ weeklyRev: v });
+                  }}
                   placeholder="0"
                 />
               </label>
@@ -401,7 +432,14 @@ export function OwnerBrainDrip({
                 <span className="mb-0.5 block text-[11px] text-amber-950/55 dark:text-amber-100/50">
                   Cost of sales
                 </span>
-                <MoneyInput value={weeklyCos} onChange={setWeeklyCos} placeholder="0" />
+                <MoneyInput
+                  value={weeklyCos}
+                  onChange={(v) => {
+                    setWeeklyCos(v);
+                    rememberDraft({ weeklyCos: v });
+                  }}
+                  placeholder="0"
+                />
               </label>
             </div>
           ) : null}
@@ -412,7 +450,10 @@ export function OwnerBrainDrip({
               value={text}
               rows={3}
               placeholder="Type your answer"
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                rememberDraft({ text: e.target.value });
+              }}
               className="w-full rounded-lg border border-amber-900/15 bg-white/80 px-3 py-2 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-100"
             />
           ) : null}

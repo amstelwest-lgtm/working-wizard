@@ -19,6 +19,8 @@ import {
   scoreFromFlatFinancials,
 } from "../src/lib/health-score";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "../src/lib/cash-runway";
+import { playbookDrawerStatusLabel } from "../src/lib/playbook-status";
+import { scoreCreditorDays } from "../src/lib/client-metrics";
 import { computeRatios, healthBandLabel, scoreTier, type RatioInputs } from "../src/lib/ratios";
 import { computeOverviewCaption } from "../src/lib/overview-insights";
 
@@ -432,6 +434,16 @@ assert(
   "a flat zero series does not mint Cash 25",
 );
 assert(!Number.isFinite(scoreRatio("Not A Ratio", 1)), "an unknown ratio is not a midpoint of 50");
+
+const dpo = Math.round(scoreCreditorDays(37));
+assert(dpo === 100, `37 creditor days score 100, got ${dpo}`);
+assert(scoreTier(dpo) === "healthy" && healthBandLabel(scoreTier(dpo)) === "Healthy", "37 days is Healthy on Health");
+assert(
+  playbookDrawerStatusLabel("qa-us", scoreTier(dpo)) === "Healthy",
+  "a client playbook tag uses that Health band",
+);
+assert(playbookDrawerStatusLabel(null, "at_risk") === null, "a playbook library with no client has no Watch tag");
+assert(playbookDrawerStatusLabel("  ", "at_risk") === null, "a blank client id is not a client");
 
 console.log("health-score-test: ok");
 console.log("sample overall", fromInputs.overall, fromInputs.displayLabel, fromInputs.pillars.map((p) => `${p.id}:${p.score}`).join(" "));

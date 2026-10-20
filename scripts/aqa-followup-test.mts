@@ -280,6 +280,21 @@ const liveNote = preferLiveHealthProse(
 );
 assert(liveNote.includes("Cash is the weakest pillar at 25"), liveNote);
 assert(liveNote.includes("overall score of 54"), liveNote);
+const healthPhrase = preferLiveHealthProse("The overall health score of 64 is the current reading.", {
+  overall: 71,
+  weakestLabel: null,
+  weakestScore: null,
+});
+assert(healthPhrase.includes("overall health score of 71"), healthPhrase);
+assert(!healthPhrase.includes("64"), healthPhrase);
+assert(
+  preferLiveHealthProse("The overall health score fell from 80 to 64.", {
+    overall: 71,
+    weakestLabel: null,
+    weakestScore: null,
+  }) === "The overall health score fell from 80 to 64.",
+  "a score that moved stays as it was written",
+);
 assert(!/tied with/i.test(liveNote), liveNote);
 assert(
   preferLiveHealthProse("Health is 74, with profit drivers weakest at 60.", {
