@@ -11,9 +11,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
   brandPrimaryColor,
-  fetchUserFirm,
   firmBrandIsEmpty,
-  listUserFirms,
+  readUserFirms,
   profileFromFirm,
   readActiveFirmId,
   saveFirmBrand,
@@ -34,6 +33,17 @@ import {
 
 function firmTimeZoneFromMarket(market: unknown): string {
   return marketForFirm({ market }).timezone;
+}
+
+function pickLoadedFirm(
+  firms: FirmBrandRow[],
+  preferredFirmId: string | null,
+): FirmBrandRow | null {
+  if (preferredFirmId) {
+    const preferred = firms.find((firm) => firm.id === preferredFirmId);
+    if (preferred) return preferred;
+  }
+  return firms[0] ?? null;
 }
 
 export type AccountantProfile = {
@@ -84,6 +94,11 @@ type AccountantProfileContextValue = {
   hasFirm: boolean;
   /** All firms this user can access (owned + memberships). */
   firms: FirmBrandRow[];
+  /**
+   * True only after a firm query finished without error. A timeout or a failed
+   * read leaves this false even when `firms` is empty.
+   */
+  firmsLoaded: boolean;
   /** Switch active firm (G27). Re-hydrates brand from the chosen firm. */
   setActiveFirm: (firmId: string) => Promise<void>;
   /** True when the signed-in user owns the firm (can UPDATE brand). */
@@ -197,6 +212,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
   const [profile, setProfile] = useState<AccountantProfile>(DEFAULT_PROFILE);
   const [firm, setFirm] = useState<FirmBrandRow | null>(null);
   const [firms, setFirms] = useState<FirmBrandRow[]>([]);
+  const [firmsLoaded, setFirmsLoaded] = useState(false);
   const [brandLoading, setBrandLoading] = useState(true);
   const hydratedRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
@@ -221,6 +237,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         if (!cancelled) {
           setFirm(null);
           setFirms([]);
+          setFirmsLoaded(false);
           setProfile(DEFAULT_PROFILE);
           setNameChain({ profileFullName: "", authFullName: "" });
           setBrandLoading(false);
@@ -235,10 +252,12 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         reportClientError(new Error("accountant brand load timed out"), {
           source: "accountant-profile",
         });
+        // firmsLoaded stays false. An empty list here is not "no firm".
         setBrandLoading(false);
       }, SHELL_GATE_TIMEOUT_MS);
 
       setBrandLoading(true);
+      setFirmsLoaded(false);
       // Soft cache for this user only — never cross-account.
       // Drop unsaved firm/name edits before paint so a sample draft cannot flash.
       const cachedRaw = loadFromStorage(signedIn.id);
@@ -254,13 +273,14 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
 
       try {
         const preferred = readActiveFirmId(signedIn.id);
-        let [all, row] = await Promise.all([
-          listUserFirms(signedIn.id),
-          fetchUserFirm(signedIn.id, preferred),
-        ]);
+        const listed = await readUserFirms(signedIn.id);
         if (cancelled) return;
 
-        if (all.length === 0) {
+        let all = listed.ok ? listed.firms : [];
+        let row = listed.ok ? pickLoadedFirm(all, preferred) : null;
+        let firmListOk = listed.ok;
+
+        if (listed.ok && all.length === 0) {
           const roles = summarizeRoles(await listAppRoles(signedIn.id));
           const meta = signedIn.user_metadata as Record<string, unknown> | undefined;
           const practiceSignup = isPracticeSignupMeta(meta);
@@ -289,12 +309,13 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
                   : { p_name: firmName },
               );
               if (!ensureErr) {
-                const again = await Promise.all([
-                  listUserFirms(signedIn.id),
-                  fetchUserFirm(signedIn.id, preferred),
-                ]);
-                all = again[0];
-                row = again[1];
+                const again = await readUserFirms(signedIn.id);
+                if (!again.ok) {
+                  firmListOk = false;
+                } else {
+                  all = again.firms;
+                  row = pickLoadedFirm(all, preferred);
+                }
               }
             }
           }
@@ -304,12 +325,14 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         const identity = await readPersistedNameChain(signedIn);
         if (cancelled) return;
         setNameChain(identity);
-        setFirms(all);
-        setFirm(row);
-
-        if (row) {
-          writeActiveFirmId(signedIn.id, row.id);
-          setProfile(applyFirmToProfile(row, signedIn.id, cached, identity));
+        if (firmListOk) {
+          setFirms(all);
+          setFirm(row);
+          setFirmsLoaded(true);
+          if (row) {
+            writeActiveFirmId(signedIn.id, row.id);
+            setProfile(applyFirmToProfile(row, signedIn.id, cached, identity));
+          }
         }
       } finally {
         window.clearTimeout(timer);
@@ -345,12 +368,13 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
   const refreshFirms = useCallback(async () => {
     if (!user) return;
     const preferred = readActiveFirmId(user.id);
-    const [all, row] = await Promise.all([
-      listUserFirms(user.id),
-      fetchUserFirm(user.id, preferred),
-    ]);
+    const listed = await readUserFirms(user.id);
+    if (!listed.ok) return;
+    const all = listed.firms;
+    const row = pickLoadedFirm(all, preferred);
     setFirms(all);
     setFirm(row);
+    setFirmsLoaded(true);
     if (row) {
       writeActiveFirmId(user.id, row.id);
       const identity = await readPersistedNameChain(user);
@@ -451,6 +475,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         firmMarket: firm?.market ?? null,
         hasFirm: Boolean(firm),
         firms,
+        firmsLoaded,
         setActiveFirm,
         canEditBrand,
         brandLoading,

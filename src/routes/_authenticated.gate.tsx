@@ -25,7 +25,7 @@ import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
-import { accountantWithoutFirm } from "@/lib/google-practice-market";
+import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
 
 function FirmShellLoading() {
   return <BootSkeleton />;
@@ -33,7 +33,7 @@ function FirmShellLoading() {
 
 export function AuthGate() {
   const { user, loading } = useAuth();
-  const { firmId, brandLoading, firmMarket, hasFirm, firms } = useAccountantProfile();
+  const { firmId, brandLoading, firmMarket, hasFirm, firms, firmsLoaded } = useAccountantProfile();
   const { track } = useAnalytics();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -52,6 +52,7 @@ export function AuthGate() {
     firmMarket,
     hasFirm,
     firmCount,
+    firmsLoaded,
     brandLoading,
     pathname,
     navigate,
@@ -63,6 +64,7 @@ export function AuthGate() {
     firmMarket,
     hasFirm,
     firmCount,
+    firmsLoaded,
     brandLoading,
     pathname,
     navigate,
@@ -84,10 +86,11 @@ export function AuthGate() {
   // Practice metadata with no firm is the abandoned location picker. Stay on
   // the callback until a market is chosen. Do not leave them on an empty practice.
   useEffect(() => {
-    if (loading || brandLoading || !user) return;
+    if (loading || !user) return;
     const meta = user.user_metadata as { signup_type?: string; firm_name?: string } | undefined;
     if (
-      !accountantWithoutFirm({
+      !redirectAccountantWithoutFirm({
+        firmsLoaded,
         signupType: meta?.signup_type,
         firmName: meta?.firm_name,
         firmCount,
@@ -96,7 +99,7 @@ export function AuthGate() {
       return;
     }
     navigate({ to: "/auth/callback", replace: true });
-  }, [loading, brandLoading, user, firmCount, navigate]);
+  }, [loading, user, firmsLoaded, firmCount, navigate]);
 
   useEffect(() => {
     if (loading || !userId) return;
@@ -153,8 +156,8 @@ export function AuthGate() {
           | { signup_type?: string; firm_name?: string }
           | undefined;
         if (
-          !latest.current.brandLoading &&
-          accountantWithoutFirm({
+          redirectAccountantWithoutFirm({
+            firmsLoaded: latest.current.firmsLoaded,
             signupType: practiceMeta?.signup_type,
             firmName: practiceMeta?.firm_name,
             firmCount: latest.current.firmCount,

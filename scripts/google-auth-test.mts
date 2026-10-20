@@ -20,6 +20,7 @@ import {
   accountantNeedsLocationPicker,
   accountantProfileStamp,
   accountantWithoutFirm,
+  redirectAccountantWithoutFirm,
   clearGooglePracticeGate,
   googlePracticeFirmMarket,
   googlePracticePickerDraft,
@@ -467,14 +468,62 @@ assert(
 
 const gateSrc = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
 assert(
-  gateSrc.includes("accountantWithoutFirm") && gateSrc.includes('to: "/auth/callback"'),
-  "a firm-less accountant on a practice route returns to the location picker",
+  gateSrc.includes("redirectAccountantWithoutFirm") &&
+    gateSrc.includes("firmsLoaded") &&
+    gateSrc.includes('to: "/auth/callback"'),
+  "a firm-less accountant returns to the picker only after firms have loaded",
+);
+assert(
+  !redirectAccountantWithoutFirm({
+    firmsLoaded: false,
+    signupType: "accountant",
+    firmCount: 0,
+  }),
+  "a timed-out firm load does not redirect to the location picker",
+);
+assert(
+  !redirectAccountantWithoutFirm({
+    firmsLoaded: false,
+    signupType: "accountant",
+    firmName: "North Books",
+    firmCount: 0,
+  }),
+  "a failed firm read does not redirect to the location picker",
+);
+assert(
+  redirectAccountantWithoutFirm({
+    firmsLoaded: true,
+    signupType: "accountant",
+    firmCount: 0,
+  }),
+  "a loaded accountant with no firm returns to the location picker",
+);
+assert(
+  !redirectAccountantWithoutFirm({
+    firmsLoaded: true,
+    signupType: "accountant",
+    firmCount: 1,
+  }),
+  "a loaded firm stays on the practice",
 );
 
 const profileSrc = readFileSync(resolve("src/contexts/accountant-profile.tsx"), "utf8");
 assert(
   profileSrc.includes("awaitingPracticeLocation"),
   "profile hydration does not mint a firm while practice location is still unchosen",
+);
+const timeoutAt = profileSrc.indexOf("brand load timed out");
+const timeoutEnd = profileSrc.indexOf("}, SHELL_GATE_TIMEOUT_MS);", timeoutAt);
+const timeoutBody = profileSrc.slice(timeoutAt, timeoutEnd);
+assert(timeoutAt > 0 && timeoutEnd > timeoutAt, "brand hydrate still times out");
+assert(
+  !timeoutBody.includes("setFirmsLoaded"),
+  "a brand timeout does not mark the firm list loaded",
+);
+assert(
+  profileSrc.includes("if (!again.ok)") &&
+    profileSrc.indexOf("if (listed.ok)") < profileSrc.indexOf("setFirmsLoaded(true)"),
+  "a failed firm read does not mark the firm list loaded",
 );
 
 const nullMarketSql = readFileSync(
@@ -500,8 +549,14 @@ assert(
     ),
   "ensure_own_client keeps the public revoke and authenticated grant",
 );
-assert(nullMarketSql.includes("pg_advisory_xact_lock"), "ensure_own_client keeps the advisory lock");
-assert(nullMarketSql.includes("INSERT INTO public.clients"), "a missing owner market still inserts a client");
+assert(
+  nullMarketSql.includes("pg_advisory_xact_lock"),
+  "ensure_own_client keeps the advisory lock",
+);
+assert(
+  nullMarketSql.includes("INSERT INTO public.clients"),
+  "a missing owner market still inserts a client",
+);
 assert(nullMarketSql.includes("v_market"), "the insert stores the passed market, including null");
 const nullMarketInsertAt = nullMarketSql.indexOf("INSERT INTO public.clients");
 assert(
@@ -518,8 +573,14 @@ assert(
     !/insert\s+into\s+public\.user_roles/i.test(nullMarketSql),
   "return and insert still write no membership or role",
 );
-assert(!/update\s+public\.clients/i.test(nullMarketSql), "existing owner clients are not rewritten");
-assert(!/delete\s+from\s+public\.clients/i.test(nullMarketSql), "existing owner clients are not deleted");
+assert(
+  !/update\s+public\.clients/i.test(nullMarketSql),
+  "existing owner clients are not rewritten",
+);
+assert(
+  !/delete\s+from\s+public\.clients/i.test(nullMarketSql),
+  "existing owner clients are not deleted",
+);
 
 const authPage = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
 assert(authPage.includes("Continue with Google"), "Create firm offers Google sign-up");

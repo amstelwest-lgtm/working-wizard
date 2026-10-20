@@ -78,39 +78,54 @@ export function writeActiveFirmId(userId: string, firmId: string): void {
   }
 }
 
-/** All firms the user owns or is a member of (deduped, owned first by created_at). */
-export async function listUserFirms(userId: string): Promise<FirmBrandRow[]> {
+/** A firm read that finished. `ok: false` is a failed query, which is not an empty practice. */
+export type UserFirmList = { ok: true; firms: FirmBrandRow[] } | { ok: false; firms: [] };
+
+/**
+ * All firms the user owns or is a member of (deduped, owned first by created_at).
+ * A query error stays `ok: false` so callers cannot treat a failed read as no firm.
+ */
+export async function readUserFirms(userId: string): Promise<UserFirmList> {
   const byId = new Map<string, FirmBrandRow>();
 
-  const { data: owned } = await supabase
+  const { data: owned, error: ownedErr } = await supabase
     .from("firms")
     .select(FIRM_SELECT)
     .eq("owner_user_id", userId)
     .order("created_at", { ascending: true });
+  if (ownedErr) return { ok: false, firms: [] };
   for (const row of owned ?? []) {
     byId.set(row.id, row as FirmBrandRow);
   }
 
-  const { data: mems } = await supabase
+  const { data: mems, error: memErr } = await supabase
     .from("firm_memberships")
     .select("firm_id")
     .eq("user_id", userId);
+  if (memErr) return { ok: false, firms: [] };
   const memberIds = (mems ?? [])
     .map((m) => m.firm_id)
     .filter((id): id is string => Boolean(id) && !byId.has(id));
 
   if (memberIds.length > 0) {
-    const { data: memberFirms } = await supabase
+    const { data: memberFirms, error: memberErr } = await supabase
       .from("firms")
       .select(FIRM_SELECT)
       .in("id", memberIds)
       .order("created_at", { ascending: true });
+    if (memberErr) return { ok: false, firms: [] };
     for (const row of memberFirms ?? []) {
       byId.set(row.id, row as FirmBrandRow);
     }
   }
 
-  return Array.from(byId.values());
+  return { ok: true, firms: Array.from(byId.values()) };
+}
+
+/** All firms the user owns or is a member of. A failed read is an empty list. */
+export async function listUserFirms(userId: string): Promise<FirmBrandRow[]> {
+  const listed = await readUserFirms(userId);
+  return listed.firms;
 }
 
 /**

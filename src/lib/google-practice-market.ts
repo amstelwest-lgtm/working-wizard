@@ -112,6 +112,21 @@ export function accountantWithoutFirm(input: {
 }
 
 /**
+ * Send a practice signup back to the location picker only after a firm read
+ * actually finished empty. A timeout or a failed query leaves `firms` empty
+ * too, and must not redirect.
+ */
+export function redirectAccountantWithoutFirm(input: {
+  firmsLoaded: boolean;
+  signupType?: string | null;
+  firmName?: string | null;
+  firmCount: number;
+}): boolean {
+  if (!input.firmsLoaded) return false;
+  return accountantWithoutFirm(input);
+}
+
+/**
  * The picker is still required. A stored draft, visitor pick, or South Africa
  * edge can create the firm instead.
  */
