@@ -125,7 +125,8 @@ import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
-import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
+import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
+import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
@@ -2649,6 +2650,10 @@ function Index() {
     () => marketForClient({ market: workspaceMarket }),
     [workspaceMarket],
   );
+  const ownerCanonicalRatios = useMemo(
+    () => scorecardRatiosFromFinancials(v as unknown as Record<string, unknown>, { fyStartMonth: boardMarket.fyStartMonthDefault }),
+    [v, boardMarket.fyStartMonthDefault],
+  );
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [reviewSignoffs, setReviewSignoffs] = useState<
     Partial<Record<ReviewScope, ClientReviewSignoff>>
@@ -4031,9 +4036,10 @@ function Index() {
                 })}
                 history={history}
                 cashflow={clientMeta?.cashflow ?? null}
+                financials={v as unknown as Record<string, unknown>}
                 sampleNotice={
                   statementSampleImplausible(v as unknown as Record<string, unknown>)
-                    ? IMPLAUSIBLE_SAMPLE_NOTE
+                    ? implausibleSampleNote(boardMarket)
                     : null
                 }
                 cashOutlook={ownerDoorOutlook}
@@ -4241,6 +4247,7 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified
                             isOwner={userRole !== "client_member"}
+                            canonicalRatios={ownerCanonicalRatios}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(
@@ -4274,7 +4281,7 @@ function Index() {
                         <>
                           {statementSampleImplausible(v as unknown as Record<string, unknown>) ? (
                             <p className="owner-lede" role="status" data-sample-notice="">
-                              {IMPLAUSIBLE_SAMPLE_NOTE}
+                              {implausibleSampleNote(boardMarket)}
                             </p>
                           ) : null}
                           <ProfitLead periodLabel={readStatementMeta(v, boardMarket).periodLabel} />
@@ -4338,6 +4345,7 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified
                             isOwner={userRole !== "client_member"}
+                            canonicalRatios={ownerCanonicalRatios}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerView
                             pillars={overallHealth.pillars}
@@ -6021,6 +6029,7 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified={viewMode === "simplified"}
                             isOwner={userRole !== "client_member"}
+                            canonicalRatios={ownerCanonicalRatios}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(

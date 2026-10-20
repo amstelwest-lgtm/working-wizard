@@ -24,7 +24,13 @@ import {
 import { BackLink } from "@/components/back-link";
 import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
-import { reportStripNames, reportsAnswerSentence, reportsPrimaryLabel } from "@/lib/reports-drafter-copy";
+import { finishReportDownload, startReportDownload } from "@/lib/report-downloads";
+import {
+  reportReady,
+  reportStripNames,
+  reportsAnswerSentence,
+  reportsPrimaryLabel,
+} from "@/lib/reports-drafter-copy";
 import { reportLinkOpensPreview } from "@/lib/report-preview";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -74,16 +80,15 @@ import {
   type SignoffPeriodSnapshot,
 } from "@/lib/signoff-status";
 import { budgetSignedFiguresChanged } from "@/lib/budget.bridges";
-import { cashOutlookIsCritical, cashSignedFiguresChanged } from "@/lib/cash-forecast-parity";
+import { cashForecastWeeksFromOutlook, cashOutlookIsCritical, cashSignedFiguresChanged } from "@/lib/cash-forecast-parity";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
   forecastIsCashGenerative,
-  resolveThirteenWeekForecast,
+  resolveCashScreenForecast,
   runwayDisplayLabel,
   scoreWorkingCapitalFunding,
   storedOpeningIsMissing,
-  type ClientRunway,
 } from "@/lib/client-metrics";
 import {
   hashFigures,
@@ -1889,40 +1894,20 @@ type SavedCashflow = {
 
 function buildCashForecastFromSavedCashflow(
   cf: SavedCashflow,
-  openingCash: number | null,
   financials: Record<string, unknown> | null,
-  runway: ClientRunway,
   timeZone?: string | null,
+  financialsUpdatedAt?: string | null,
 ): { weeks: CashForecastWeek[] | null; minimum: number } {
-  const outlook = resolveThirteenWeekForecast({
+  const outlook = resolveCashScreenForecast({
     financials,
     cashflow: cf,
-    openingCash,
-    runway,
+    financialsUpdatedAt,
     timeZone,
   });
-  const empty =
-    outlook.opening === 0 &&
-    outlook.inflow.every((n) => n === 0) &&
-    outlook.outflow.every((n) => n === 0);
-  if (empty) return { weeks: null, minimum: outlook.floor };
-  const weeks = outlook.inflow.map((inflow, i) => {
-    const receipts = Math.round(inflow);
-    const payments = Math.round(outlook.outflow[i] ?? 0);
-    const opening = i === 0 ? outlook.opening : outlook.closing[i - 1];
-    const closing = outlook.closing[i];
-    return {
-      period_label: `Week ${i + 1}`,
-      opening_balance: Math.round(opening),
-      total_receipts: receipts,
-      total_payments: payments,
-      net_movement: receipts - payments,
-      closing_balance: Math.round(closing),
-      scenario: "moderate" as const,
-      runway_weeks: 0,
-    };
-  });
-  return { weeks, minimum: outlook.floor };
+  return {
+    weeks: cashForecastWeeksFromOutlook(outlook),
+    minimum: outlook.floor,
+  };
 }
 
 
@@ -2373,10 +2358,9 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const savedCashflow = (clientRow.cashflow ?? {}) as SavedCashflow;
   const cashOutlook = buildCashForecastFromSavedCashflow(
     savedCashflow,
-    assessed.cash.amount,
     rawFin as Record<string, unknown>,
-    assessed.runway,
     market.timezone,
+    clientRow.financials_updated_at,
   );
   const cashForecast = cashOutlook.weeks;
   // Floor is four weeks of the resolved outflows. A stored threshold from the
@@ -3636,7 +3620,8 @@ export function ReportsStudio({
     industryCode: INDUSTRIES[0].code,
     includePrior: true,
   });
-  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const pendingDownloads = useRef(new Set<string>());
+  const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [previewState, setPreviewState] = useState<PreviewState | null>(() => {
     // Deep-link: open the preview shell only when the link asked for a preview.
@@ -3713,8 +3698,13 @@ export function ReportsStudio({
   const blockedForClient = Boolean(clientId) && !dataLoading && !clientData?.hasData;
   const unavailableFor = (key: string): string | null => {
     if (!clientData?.hasData) return null;
-    if (key === "leverage" && !clientData.leverage) return LEVERAGE_REPORT_NEEDS;
-    if (key === "assets" && !clientData.assets) return ASSET_REPORT_NEEDS;
+    const ready = reportReady(key, {
+      leverageReady: Boolean(clientData.leverage),
+      assetReady: Boolean(clientData.assets),
+    });
+    if (ready) return null;
+    if (key === "leverage") return LEVERAGE_REPORT_NEEDS;
+    if (key === "assets") return ASSET_REPORT_NEEDS;
     return null;
   };
   const studioBusy = dataLoading || resolvingClient;
@@ -3761,7 +3751,6 @@ export function ReportsStudio({
     const linked = reportDeepLinkAction(actionParam);
     if (!deepLinkReport || !linked) return;
     if (linked === "download") {
-      setLoadingKey(deepLinkReport.key);
       setDeepLinkBusy(true);
       return;
     }
@@ -3866,11 +3855,25 @@ export function ReportsStudio({
 
   // ── Generate single PDF ──────────────────────────────────────────────────
 
+  function publishPending(next: ReadonlySet<string>) {
+    pendingDownloads.current = next;
+    setPendingKeys(next);
+  }
+
   async function handleGenerate(report: ReportMeta) {
-    if (loadingKey) return;
-    if (!assertCanGenerate()) return;
-    setLoadingKey(report.key);
+    const start = startReportDownload(pendingDownloads.current, report.key);
+    if (!start.started) {
+      toast.error("This report is already downloading");
+      return;
+    }
+    publishPending(start.pending);
     try {
+      if (!assertCanGenerate()) {
+        if (!isClient || studioBusy) {
+          toast.error("Reports are still loading. Try the download again in a moment.");
+        }
+        return;
+      }
       const blob = await GEN[report.key](settings, profile);
       const copy = reportCopy(report, clientData?.market ?? ZA_MARKET);
       triggerDownload(blob, makeSafeFilename(settings, copy.filename, clientData?.dataPeriodLabel));
@@ -3887,7 +3890,7 @@ export function ReportsStudio({
       toast.error(`Generation failed: ${(err as Error).message}`);
       console.error(err);
     } finally {
-      setLoadingKey(null);
+      publishPending(finishReportDownload(pendingDownloads.current, report.key));
     }
   }
 
@@ -3973,7 +3976,6 @@ export function ReportsStudio({
       setDeepLinkBusy(false);
       setPreviewState(null);
       setPreviewKey(null);
-      setLoadingKey(null);
       toast.error("Upload financials for this client before generating reports.");
       clearDeepLinkSearch();
       return;
@@ -4110,7 +4112,7 @@ export function ReportsStudio({
             <ReportCard
               key={r.key}
               report={r}
-              isGenerating={loadingKey === r.key}
+              isGenerating={pendingKeys.has(r.key)}
               isPreviewing={previewKey === r.key}
               isClient={isClient}
               dataLoading={studioBusy}
@@ -4142,7 +4144,7 @@ export function ReportsStudio({
             <ReportCard
               key={r.key}
               report={r}
-              isGenerating={loadingKey === r.key}
+              isGenerating={pendingKeys.has(r.key)}
               isPreviewing={previewKey === r.key}
               isClient={isClient}
               dataLoading={studioBusy}
@@ -4239,7 +4241,14 @@ export function ReportsStudio({
                     disabled={studioBusy}
                     onClick={openPrimaryReport}
                   >
-                    {studioBusy ? "Loading…" : reportsPrimaryLabel(stripNames.length)}
+                    {studioBusy
+                      ? "Loading…"
+                      : reportsPrimaryLabel(
+                          stripNames.length,
+                          onlyKeys?.length === 1
+                            ? reportCopy(catalogueReports[0] ?? REPORTS[0], reportMarket).name
+                            : null,
+                        )}
                   </button>
                   {onlyKeys?.length === 1 ? null : (
                   <button

@@ -12,6 +12,7 @@ import { pollAfterTick } from "@/lib/agent-activity-poll";
 import { dispatchActionPlanRefresh } from "@/lib/owner-handoff-client";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { resolveMarket, ZA_MARKET } from "@/lib/market/resolve";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   agentActivityUnavailable,
   emptyAgentActivity,
@@ -159,6 +160,18 @@ export function useAgentActivity(
     }
 
     let cancelled = false;
+    const deadline = window.setTimeout(() => {
+      if (cancelled) return;
+      setState((current) =>
+        current.loading
+          ? {
+              ...current,
+              loading: false,
+              error: "Couldn't load the team. Refresh to try again.",
+            }
+          : current,
+      );
+    }, SHELL_GATE_TIMEOUT_MS);
 
     async function load() {
       const [runsRes, findingsRes, messagesRes, clientRes] = await Promise.all([
@@ -220,6 +233,7 @@ export function useAgentActivity(
     if (!CLIENT_UUID.test(id)) {
       return () => {
         cancelled = true;
+        window.clearTimeout(deadline);
       };
     }
 
@@ -246,6 +260,7 @@ export function useAgentActivity(
 
     return () => {
       cancelled = true;
+      window.clearTimeout(deadline);
       void supabase.removeChannel(channel);
     };
   }, [clientId, reload]);

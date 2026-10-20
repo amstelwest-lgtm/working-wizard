@@ -227,6 +227,8 @@ export type FirmPlanDisplay = FirmPlanStatusCopy & {
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
   starterTrial: StarterTrialBanner;
+  /** True when this billing customer has never had a Stripe subscription. */
+  introTrialEligible: boolean;
   saDiscount: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   zaPriceLabel?: string | null;

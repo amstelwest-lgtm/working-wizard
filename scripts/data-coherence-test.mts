@@ -287,7 +287,7 @@ for (const file of [
 }
 
 assert(statementSampleImplausible(woodwork), "Woodwork is an implausible sample");
-assert(src("src/components/practice-board.tsx").includes("IMPLAUSIBLE_SAMPLE_NOTE"), "the list flags the sample");
+assert(src("src/components/practice-board.tsx").includes("implausibleSampleNote"), "the list flags the sample");
 assert(IMPLAUSIBLE_SAMPLE_NOTE.includes("too small"), IMPLAUSIBLE_SAMPLE_NOTE);
 assert(!statementSampleImplausible(chill), "Chill Pepper is a real revenue");
 

@@ -1994,6 +1994,20 @@ html.dark .health-plate{
 .accountant-portal .client-subpage-link:hover{
   border-color:#0b5fff;
 }
+.accountant-portal .client-subpage-link--primary{
+  border-color:#0b5fff;
+  background:#f4f8ff;
+}
+.accountant-portal .client-subpage-link--primary .client-subpage-link__label{
+  color:#0b5fff;
+}
+html.dark .accountant-portal .client-subpage-link--primary{
+  background:#163654;
+  border-color:#3b82f6;
+}
+html.dark .accountant-portal .client-subpage-link--primary .client-subpage-link__label{
+  color:#f4f7fb;
+}
 .accountant-portal .client-subpage-link__label{
   font-size:16px;
   font-weight:700;

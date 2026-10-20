@@ -52,6 +52,8 @@ export const RAIL_SUBSECTIONS = [
   "open",
   "overdue",
   "scorecard",
+  "budget-pdf",
+  "benchmark",
   "drafts",
   "drafter",
   "pack",
@@ -239,7 +241,14 @@ function explicitRail(
     ) {
       return { tab: "reports", section: "drafts" };
     }
-    if (section === "scorecard" || section === "forecast" || section === "waterfall" || section === "all") {
+    if (
+      section === "scorecard" ||
+      section === "forecast" ||
+      section === "waterfall" ||
+      section === "budget-pdf" ||
+      section === "benchmark" ||
+      section === "all"
+    ) {
       return { tab: "reports", section };
     }
     if (
@@ -290,7 +299,14 @@ function sectionFromView(view: string | null | undefined): string {
   return VIEW_SECTION_ALIAS[value] ?? "";
 }
 
-const REPORT_PAGE_IDS = new Set(["scorecard", "forecast", "waterfall"]);
+/** Report key → its own page. `budget` must not reuse the Budget tab's section. */
+export function reportPdfSection(report: string): RailSubsection | null {
+  if (report === "scorecard" || report === "forecast" || report === "waterfall" || report === "benchmark") {
+    return report;
+  }
+  if (report === "budget") return "budget-pdf";
+  return null;
+}
 
 /**
  * A report or plan filter names a sub-page when the address did not already.
@@ -313,7 +329,8 @@ function withNamedPage(
   }
   if (result.tab === "reports") {
     const report = (input.report ?? "").trim();
-    if (REPORT_PAGE_IDS.has(report)) return { ...result, section: report as RailSubsection };
+    const page = reportPdfSection(report);
+    if (page) return { ...result, section: page };
     if (report) return { ...result, section: "all" };
   }
   return result;
@@ -451,7 +468,7 @@ export function accountantValidatedSearch(search: {
     viewNamesPage.length > 0;
   if (!hasAddress) {
     if (typeof search.report === "string" && search.report.length > 0 && search.report.length <= 64) {
-      const page = REPORT_PAGE_IDS.has(search.report) ? search.report : "all";
+      const page = reportPdfSection(search.report) ?? "all";
       out.tab = "reports";
       out.section = page;
       out.report = search.report;
@@ -576,11 +593,18 @@ export function clientRailSelection(input: {
     case "reports":
       if (section === "sent") return { headingId: "reports", subId: "sent" };
       if (section === "drafts") return { headingId: "reports", subId: "drafts" };
-      if (section === "scorecard" || section === "forecast" || section === "waterfall" || section === "all") {
+      if (
+        section === "scorecard" ||
+        section === "forecast" ||
+        section === "waterfall" ||
+        section === "budget-pdf" ||
+        section === "benchmark" ||
+        section === "all"
+      ) {
         return { headingId: "reports", subId: section };
       }
-      if (report === "scorecard" || report === "forecast" || report === "waterfall") {
-        return { headingId: "reports", subId: report };
+      if (reportPdfSection(report)) {
+        return { headingId: "reports", subId: reportPdfSection(report) };
       }
       if (report) return { headingId: "reports", subId: "all" };
       return { headingId: "reports", subId: null };
@@ -652,9 +676,15 @@ export function clientNavSearch<T extends object>(
       delete next.action;
       return next as T;
     }
-    if (sub === "scorecard" || sub === "forecast" || sub === "waterfall") {
+    if (
+      sub === "scorecard" ||
+      sub === "forecast" ||
+      sub === "waterfall" ||
+      sub === "benchmark" ||
+      sub === "budget-pdf"
+    ) {
       const next = accountantClientTabSearch(prev, "reports", { section: sub }) as Record<string, unknown>;
-      next.report = sub;
+      next.report = sub === "budget-pdf" ? "budget" : sub;
       return next as T;
     }
     if (sub === "all") {
