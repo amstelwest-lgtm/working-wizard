@@ -317,6 +317,22 @@ export function ExtractionReviewModal({
   const fileCode = currencyGate.fileCurrency;
   const amountText = (n: number) => (showFileMoney && fileCode ? printedMoney(n, fileCode) : money(n));
 
+  const reviewIdentity = [
+    result.document_metadata?.period_start_date,
+    result.document_metadata?.period_end_date,
+    result.document_metadata?.document_type,
+    result.current_period?.income_statement?.revenue,
+    result.current_period?.balance_sheet?.cash,
+    result.file_names?.join(","),
+  ].join("|");
+  useEffect(() => {
+    if (!open) return;
+    setApplying(false);
+    setApplyTone(null);
+    setApplyMessage(null);
+    setChoiceLabels(null);
+  }, [open, reviewIdentity]);
+
   const meta = result.document_metadata;
   const is = result.current_period?.income_statement;
   const bs = result.current_period?.balance_sheet;
