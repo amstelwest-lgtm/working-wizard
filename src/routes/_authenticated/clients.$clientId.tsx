@@ -321,7 +321,7 @@ import {
   withoutPersonQueuedRuns,
   type RowAssignment,
 } from "@/lib/open-plan-home";
-import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
+import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
@@ -3588,6 +3588,9 @@ function ClientView() {
         dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
       },
       cashPillarStatus: pillarStatus.cash ?? null,
+      cashRunwayWeeks: effectiveRunway,
+      cashDebtorScore: Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null,
+      cashBurnScore: Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null,
       openAction: openPlanUnavailable
         ? "Open actions aren't available yet."
         : openPlanTitles == null
@@ -3616,6 +3619,9 @@ function ClientView() {
     openingMissing,
     clientProfitBridge.ebit,
     pillarStatus.cash,
+    effectiveRunway,
+    healthMap.debtorDays,
+    healthMap.ocfToEbitda,
   ]);
   const homeLines = useMemo(
     () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null, openActionAgent, handedTitle),
@@ -3701,6 +3707,7 @@ function ClientView() {
         market: clientMarket,
         openingMissing,
         cashPillarStatus: pillarStatus.cash ?? null,
+        cashStrainLine: spokenCashStrain(homeBooks),
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
@@ -3728,6 +3735,7 @@ function ClientView() {
       cashOutlook.floor,
       openingMissing,
       pillarStatus.cash,
+      homeBooks,
       statementPosition.receivables,
       homeActivity,
       clientMarket,
@@ -3914,6 +3922,7 @@ function ClientView() {
                     audience="accountant"
                     marketCountry={parseMarketSelection(client.market)?.country ?? null}
                     sampleClient={Boolean(client.is_demo)}
+                    cardPhase="ready"
                     firmId={client.firm_id ?? null}
                     presence={homePresence}
                     lines={homeLines}

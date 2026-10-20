@@ -4039,6 +4039,9 @@ function Index() {
                 cashOutlook={ownerDoorOutlook}
                 openingMissing={ownerOpeningMissing}
                 cashPillarStatus={pillarStatus.cash ?? null}
+                cashRunwayWeeks={cashBalance != null ? effectiveRunway : null}
+                cashDebtorScore={Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null}
+                cashBurnScore={Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null}
                 market={boardMarket}
                 marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>

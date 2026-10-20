@@ -120,6 +120,38 @@ const watchPillar = buildFinancialManagerBrief({
 });
 assert(watchPillar.cashFloorLine === "Cash is $4335.", watchPillar.cashFloorLine ?? "missing watch line");
 assert(watchPillar.cashFloorChip == null, "Watch keeps the floor chip off the card");
+const runwayStrain = buildFinancialManagerBrief({
+  clientName: "Yankees",
+  currentFinancials: current,
+  currentPeriodEnd: "2026-03-31",
+  snapshots,
+  cashOpening: 7430,
+  cashFloor: 5661,
+  cashClosing: [7430],
+  cashPillarStatus: "critical",
+  cashStrainLine: "Cash runway is 2 weeks.",
+  market: { currency: "USD", locale: "en-US" },
+  formatMoney: (amount) => `$${amount}`,
+});
+assert(runwayStrain.cashFloorLine === "Cash runway is 2 weeks.", runwayStrain.cashFloorLine ?? "missing runway line");
+assert(runwayStrain.cashFloorChip === "Critical", "a named runway stays Critical on the brief");
+const criticalAbove = buildFinancialManagerBrief({
+  clientName: "Yankees",
+  currentFinancials: current,
+  currentPeriodEnd: "2026-03-31",
+  snapshots,
+  cashOpening: 7430,
+  cashFloor: 5661,
+  cashClosing: [7430],
+  cashPillarStatus: "critical",
+  market: { currency: "USD", locale: "en-US" },
+  formatMoney: (amount) => `$${amount}`,
+});
+assert(
+  criticalAbove.cashFloorLine === "Cash is $7430, above the $5661 floor.",
+  criticalAbove.cashFloorLine ?? "missing above-floor line",
+);
+assert(criticalAbove.cashFloorChip == null, "critical with no other reason does not chip the brief");
 assert(
   watchPillar.healthCue === "Below your $50k minimum · Financial Manager",
   watchPillar.healthCue ?? "Watch still lines the Health cash pillar",

@@ -125,6 +125,9 @@ export function OwnerDoor({
   cashOutlook = null,
   openingMissing = false,
   cashPillarStatus = null,
+  cashRunwayWeeks = null,
+  cashDebtorScore = null,
+  cashBurnScore = null,
   market,
   marketCountry = null,
   signoffs,
@@ -176,6 +179,12 @@ export function OwnerDoor({
   openingMissing?: boolean;
   /** Same cash pillar band as Health. Watch does not say below the minimum. */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
+  /** Weeks scored into the cash pillar. Names a Critical chip that is not the floor. */
+  cashRunwayWeeks?: number | null;
+  /** Scored debtor days. Names a Critical chip that is receivables. */
+  cashDebtorScore?: number | null;
+  /** Scored operating cash. Names a Critical chip that is burn. */
+  cashBurnScore?: number | null;
   market: ResolvedMarket;
   /** Stored country. Null stays off the ZA tax card even if `market` was coerced for dates. */
   marketCountry?: string | null;
@@ -641,6 +650,9 @@ export function OwnerDoor({
       cashOutlook: cashOutlook ?? undefined,
       openingMissing,
       cashPillarStatus,
+      cashRunwayWeeks,
+      cashDebtorScore,
+      cashBurnScore,
       openAction,
       actionsReady,
       signedBy: latest?.signed_off_by_name ?? null,
@@ -657,6 +669,9 @@ export function OwnerDoor({
     cashOutlook,
     openingMissing,
     cashPillarStatus,
+    cashRunwayWeeks,
+    cashDebtorScore,
+    cashBurnScore,
     netIncome,
     periodEnd,
     history,
@@ -945,6 +960,7 @@ export function OwnerDoor({
           marketCountry={marketCountry}
           audience="owner"
           sampleClient={sampleClient}
+          cardPhase="ready"
           onOpen={openChat}
           onAsk={openChat}
           runState={runState}
