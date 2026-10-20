@@ -70,10 +70,14 @@ const HOME_NEEDS = ownerNeedsView({
   ],
   draftsReady: true,
   draftsUnavailable: false,
-  draftTitles: ["Chase the top three invoices."],
+  draftTitles: [
+    "Chase the top three invoices.",
+    "Send the supplier statement.",
+    "Confirm the payroll draft.",
+  ],
   deliverablesReady: true,
   deliverablesUnavailable: false,
-  deliverableCount: 2,
+  deliverableCount: 0,
   advisoryTitles: [],
   quickBooks: { state: "linked", at: "2026-10-02T08:00:00.000Z" },
   xero: { state: "absent" },
@@ -153,7 +157,7 @@ function HealthOrb({
 }) {
   return (
     <div className="owner-health-hero">
-      <OwnerSignoffMark signoff={signoff} isStale={stale} className="mb-2" />
+      <OwnerSignoffMark signoff={signoff} isStale={stale} scopeLabel="Financials" className="mb-2" />
       <SphereHero
         variant="ring"
         overallHealth={80}
@@ -570,7 +574,10 @@ export function OwnerDoorPreview({
           firmName={null}
           invite={<p className="owner-lede">Invite form</p>}
           uploads={<p className="owner-lede">No files uploaded yet.</p>}
-          signed={[{ id: "s1", scope: "cash_forecast", name: "Alex Morgan", when: "2 Oct 2026" }]}
+          signed={[
+            { id: "s0", scope: "financials", name: "Alex Morgan", when: "2 Oct 2026" },
+            { id: "s1", scope: "cash_forecast", name: "Alex Morgan", when: "2 Oct 2026" },
+          ]}
           onConnect={() => undefined}
           onHome={() => undefined}
         />

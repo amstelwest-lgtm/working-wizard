@@ -1666,7 +1666,14 @@ assert(filledNeeds.actionLines.length === 3, "the strip lists every open action 
 assert(filledNeeds.actionLines[0] === "Approve the payroll run.", "the first owner action leads");
 assert(filledNeeds.actionLines[2] === "Send the supplier statement.", "the third action is on the strip");
 assert(filledNeeds.draftsHeading === "1 draft needs your OK", "a draft that needs an OK is counted");
-assert(filledNeeds.deliverablesHeading === "2 deliverables awaiting review", "unsigned deliverables are counted");
+assert(
+  filledNeeds.deliverablesHeading === "3 deliverables awaiting review",
+  "owner drafts and stored deliverables are one count",
+);
+assert(
+  filledNeeds.deliverableLines[0] === "Chase the top three invoices.",
+  "the deliverable line is the draft that needs an OK",
+);
 assert(filledNeeds.syncHeading === "QuickBooks", "the sync names the ledger");
 assert(filledNeeds.syncLines[0] === "Last synced 2 Oct 2026.", "the sync shows the last time");
 assert(homeSrc.includes("What needs you"), "home has the needs strip");

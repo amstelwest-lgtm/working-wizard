@@ -20,12 +20,18 @@ export function ownerSignoffDate(
   return formatDate(iso, { locale, timezone: market?.timezone ?? timeZone });
 }
 
-export function ownerSignoffLine(name: string, date: string): string {
+export function ownerSignoffLine(name: string, date: string, scopeLabel?: string | null): string {
   const who = name.trim();
   const when = date.trim();
-  if (who && when && when !== "—") return `Signed off by ${who} · ${when}`;
-  if (who) return `Signed off by ${who}`;
-  return "Signed off";
+  const body =
+    who && when && when !== "—"
+      ? `Signed off by ${who} · ${when}`
+      : who
+        ? `Signed off by ${who}`
+        : "Signed off";
+  const scope = scopeLabel?.trim() || "";
+  if (!scope) return body;
+  return `${scope}: ${body.charAt(0).toLowerCase()}${body.slice(1)}`;
 }
 
 export function OwnerSignoffMark({
@@ -33,11 +39,14 @@ export function OwnerSignoffMark({
   isStale,
   align = "end",
   className = "",
+  scopeLabel = null,
 }: {
   signoff: ClientReviewSignoff | null;
   isStale: boolean;
   align?: "start" | "end";
   className?: string;
+  /** Scope word, e.g. Financials on Health. Omitted leaves the signer line as it is. */
+  scopeLabel?: string | null;
 }) {
   const { market } = useMarketFormat();
   if (
@@ -52,7 +61,7 @@ export function OwnerSignoffMark({
   const date = signoff.signed_off_at
     ? ownerSignoffDate(signoff.signed_off_at, market.timezone, market)
     : "";
-  const line = ownerSignoffLine(signoff.signed_off_by_name, date);
+  const line = ownerSignoffLine(signoff.signed_off_by_name, date, scopeLabel);
   return (
     <div
       data-owner-signoff

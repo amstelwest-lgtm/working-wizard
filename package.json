@@ -193,6 +193,7 @@
     "test:precard-cap": "vite-node --config scripts/vite-test.config.ts scripts/precard-cap-test.mts",
     "test:milon-team": "vite-node --config scripts/vite-test.config.ts scripts/milon-team-test.mts",
     "test:owner-door": "vite-node --config scripts/vite-test.config.ts scripts/owner-door-test.mts",
+    "test:owner-app-tab": "vite-node --config scripts/vite-test.config.ts scripts/owner-app-tab-test.mts",
     "test:side-parity": "node --experimental-strip-types --test scripts/side-parity-test.mts",
     "test:drawer-dismiss": "vite-node --config scripts/vite-test.config.ts scripts/drawer-dismiss-test.mts",
     "test:owner-subscribe": "vite-node --config scripts/vite-test.config.ts scripts/owner-subscribe-test.mts",
