@@ -206,7 +206,7 @@ assert.equal(
 );
 const home = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 const owner = readFileSync(resolve("src/routes/app.tsx"), "utf8");
-assert.ok(home.includes("homeStatementsLine(statementSpan)"), "accountant Home uses the statement span");
+assert.ok(home.includes("homeStatementsLine(booksSpanLabel)"), "accountant Home uses the statement span");
 assert.ok(owner.includes("statementSpan={statementSpanLabel("), "owner Home passes the same span");
 
 console.log("answer-strip books ok");

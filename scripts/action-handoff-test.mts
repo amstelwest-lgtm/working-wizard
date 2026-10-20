@@ -22,6 +22,8 @@ import { agentDisplayName, agentShortName } from "../src/lib/milon-team.ts";
 import { AGENT_KEYS } from "../src/lib/milon-team-feed.ts";
 import { HANDOFF_RUN_WAIT_MS, pollAfterTick } from "../src/lib/agent-activity-poll.ts";
 import { deskSignoffText } from "../src/lib/milon-team-activity.ts";
+import { assignmentForMove, moveRowMatches } from "../src/lib/owner-handoff.ts";
+import { displayedAssignee } from "../src/lib/open-plan-home.ts";
 
 function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
@@ -431,5 +433,58 @@ assert(deskCss.includes("min-height: 96px"), "the phone composer is a full field
 
 const ask = readFileSync("src/lib/ask-ai.js", "utf8");
 assert(ask.includes('studio ? "Send" : "Ask"'), "the studio composer says Send");
+
+const moveTitle = "Move fixed contracts to variable / usage-based pricing";
+assert(
+  moveRowMatches({
+    moveKey: "fixedCostRatio",
+    title: moveTitle,
+    sourceMoveKey: "fixedCostRatio",
+    actionTitle: moveTitle,
+  }),
+  "a Next moves row matches its source_move_key",
+);
+assert(
+  moveRowMatches({
+    moveKey: "fixedCostRatio",
+    title: moveTitle,
+    actionTitle: `Hand-off: ${moveTitle}`,
+  }),
+  "a Hand-off draft title still matches the move",
+);
+assert(
+  !moveRowMatches({
+    moveKey: "fixedCostRatio",
+    title: moveTitle,
+    actionTitle: "Chase overdue invoices",
+  }),
+  "a different action is not this move",
+);
+const matched = assignmentForMove(
+  [
+    {
+      actionItemId: "a1",
+      sourceMoveKey: "fixedCostRatio",
+      driverKey: "fixedCostRatio",
+      title: moveTitle,
+      assigneeName: "Milōn Financial Manager",
+    },
+  ],
+  "fixedCostRatio",
+  moveTitle,
+);
+assert(matched?.assigneeName === "Milōn Financial Manager", "the stored assignee is the one on the move");
+assert(
+  displayedAssignee(null, [{ note: "Handed to Milōn Financial Manager.", at: "2026-10-20T18:00:00.000Z" }]) ===
+    "Milōn Financial Manager",
+  "a cleared owner still shows the hand-off note",
+);
+const painted = menu.indexOf("setAssignee(agentDisplayName(agent))");
+const ensured = menu.indexOf("const actionItemId = await ensure()");
+assert(painted >= 0 && ensured > painted, "Next moves paints the assignee before the row is created");
+assert(plan.includes("displayedAssignee(item.owner_name, notes)"), "the action row reads the stored hand-off");
+const feedHook = readFileSync("src/hooks/use-milon-team-feed.ts", "utf8");
+assert(feedHook.includes("action_updates"), "the team activity reads hand-off notes");
+assert(feedHook.includes("ACTION_PLAN_REFRESH_EVENT"), "the activity list refetches after Hand to");
 
 console.log("action-handoff ok");

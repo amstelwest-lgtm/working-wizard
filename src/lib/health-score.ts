@@ -50,7 +50,8 @@ export type PillarScore = {
   id: HealthPillarId;
   label: string;
   score: number | null;
-  status: HealthTier;
+  /** Null when the pillar has nothing to score. No Healthy / Watch / Critical band. */
+  status: HealthTier | null;
   /** Set when the pillar has no confident score, such as a missing opening balance. */
   note?: string | null;
 };
@@ -135,12 +136,12 @@ export const RATIO_NAME_TO_KEY: Record<string, string> = {
 
 /** Build a camelCase healthMap from `computeRatios` output via shared `scoreRatio`. */
 export function healthMapFromRatios(
-  ratios: Record<string, number>,
+  ratios: Record<string, number | null>,
   market?: ScoreMarket,
 ): Record<string, number> {
   const map: Record<string, number> = {};
   for (const [name, val] of Object.entries(ratios)) {
-    if (!Number.isFinite(val)) continue;
+    if (typeof val !== "number" || !Number.isFinite(val)) continue;
     const scored = scoreRatio(name, val, market);
     if (!Number.isFinite(scored)) continue;
     const key = RATIO_NAME_TO_KEY[name];
@@ -181,12 +182,12 @@ export const NOT_SCORED_YET_LABEL = "Not scored yet";
 export function scorePlaybookRatio(
   ratioKey: string,
   healthMap: Record<string, number> | null | undefined,
-): { health_score: number; health_tier: HealthTier; unscored: boolean } | null {
+): { health_score: number | null; health_tier: HealthTier | null; unscored: boolean } | null {
   if (!healthMap) return null;
   const key = PLAYBOOK_RATIO_ALIAS[ratioKey] ?? ratioKey;
   const score = healthMap[key];
   if (score == null || !Number.isFinite(score)) {
-    return { health_score: 0, health_tier: "critical", unscored: true };
+    return { health_score: null, health_tier: null, unscored: true };
   }
   const health_score = Math.round(score);
   return { health_score, health_tier: scoreTier(health_score), unscored: false };
@@ -195,13 +196,13 @@ export function scorePlaybookRatio(
 /**
  * Score a playbook catalogue from live ratios. Fixture scores on the rows are
  * dropped. A key with no inputs (revenue per employee with no headcount) is
- * "Not scored" — health_score 0 and unscored, never the demo 75 / 28 / 41.
+ * "Not scored" — health_score null and unscored, never the demo 75 / 28 / 41.
  */
 export function scorePlaybookCatalogue<T extends { ratio_key: string }>(
   rows: readonly T[],
   ratios: Record<string, number>,
   market?: ScoreMarket,
-): Array<T & { health_score: number; health_tier: HealthTier; unscored: boolean }> {
+): Array<T & { health_score: number | null; health_tier: HealthTier | null; unscored: boolean }> {
   const map = healthMapFromRatios(ratios, market);
   const wcDays = ratios["Working Capital Days"];
   if (Number.isFinite(wcDays)) {
@@ -211,7 +212,7 @@ export function scorePlaybookCatalogue<T extends { ratio_key: string }>(
   return rows.map((row) => {
     const scored = scorePlaybookRatio(row.ratio_key, map);
     if (!scored || scored.unscored) {
-      return { ...row, health_score: 0, health_tier: "at_risk" as const, unscored: true };
+      return { ...row, health_score: null, health_tier: null, unscored: true };
     }
     return {
       ...row,
@@ -353,10 +354,25 @@ function ratioCoverMonths(
  * Margins stay on the year-span cover. Debtor and creditor days are the
  * Ratios / Collections `periodMonthsOf` figures.
  */
+/** Missing stays NaN for callers typed as a number map. It is never coerced to 0. */
+export function numberRatioRecord(
+  ratios: Record<string, number | null | undefined>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(ratios)) {
+    out[key] = typeof value === "number" ? value : Number.NaN;
+  }
+  return out;
+}
+
+export function ratioOrNan(value: number | null | undefined): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : Number.NaN;
+}
+
 export function overviewRatios(
   financials: FlatFinancials | Record<string, unknown> | null | undefined,
   opts?: { fyStartMonth?: number | null; periodMonths?: number | null },
-): Record<string, number> {
+): Record<string, number | null> {
   return withCanonicalDebtorCreditorDays(
     computeRatios(overviewRatioInputs(financials, opts)),
     financials,
@@ -566,6 +582,22 @@ export function scoreRatio(name: string, val: number, market?: ScoreMarket): num
 }
 
 /**
+ * Score and band for one metric. A null or non-finite value is not a score
+ * and not a band — never 0 and never 100.
+ */
+export function scoreAndBand(
+  name: string,
+  value: number | null | undefined,
+  market?: ScoreMarket,
+): { score: number | null; tier: HealthTier | null } {
+  if (value == null || !Number.isFinite(value)) return { score: null, tier: null };
+  const raw = scoreRatio(name, value, market);
+  if (!Number.isFinite(raw)) return { score: null, tier: null };
+  const score = Math.round(raw);
+  return { score, tier: scoreTier(score) };
+}
+
+/**
  * Cash runway → 0–100.
  * Aligns with HEALTH_BAND_TABLE: ≥12 wk (85) Healthy, 4–12 wk (45 and 65)
  * Watch, <4 wk critical.
@@ -710,7 +742,7 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
       id,
       label: PILLAR_LABELS[id],
       score: rounded,
-      status: bandedPillarStatus(rounded, components),
+      status: rounded == null ? null : bandedPillarStatus(rounded, components),
     };
   });
 

@@ -8,7 +8,7 @@ import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { LANDING_FONT_CSS } from "@/lib/landing-assets";
-import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/terms")({
@@ -75,14 +75,13 @@ function TermsPage() {
       ) : null}
       <p>
         Business owners pay {saPricing?.ownerMonthly ?? "$39/mo"}, or nothing when their accountant
-        is on Milōn. Accounting firms start on Starter: {FIRM_TRIAL_SENTENCE}, with a card on file
-        at signup.
+        is on Milōn. Accounting firms start on Starter: {FIRM_TRIAL_SENTENCE}. {FIRM_TRIAL_CARD_NOTE}
       </p>
       {copyPack === "us" ? (
       <p className="mk-copy-us">
         US list prices: Starter {LIST_PRICES.us.firmStarter}/mo, {FIRM_TRIAL_SENTENCE}, Solo{" "}
         {LIST_PRICES.us.firmSolo}/mo, Scale {LIST_PRICES.us.firmScale}/mo. Annual is about 20% off.
-        Enterprise is a custom quote. A card is required at signup.
+        Enterprise is a custom quote. {FIRM_TRIAL_CARD_NOTE} Then {LIST_PRICES.us.firmStarter}/mo.
       </p>
       ) : null}
 

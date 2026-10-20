@@ -3,10 +3,10 @@
  * Name and email come after three useful replies. The chat stays open
  * after the form. Schedule a call is an optional disclosure.
  */
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
 import { TrySchedule, type TryCallResult } from "@/components/try-schedule";
-import { postProspectTalk } from "@/lib/prospect-talk-client";
+import { postProspectTalk, type ProspectTalkResponse } from "@/lib/prospect-talk-client";
 import {
   PROSPECT_FM_SLUG,
   prospectAgentsFor,
@@ -15,6 +15,7 @@ import {
   type ProspectAgentCopy,
   type TalkCopyPack,
 } from "@/lib/prospect-talk";
+import { initialTalkSession, openTalkSession, queueTalkMessage } from "@/lib/prospect-talk-session";
 
 export type TalkMessage = { role: "agent" | "you"; text: string };
 
@@ -121,6 +122,7 @@ export function ProspectTalkScreen({
   busy,
   error,
   leadReady = false,
+  sessionReady = true,
   onSend,
   onLead,
   onBookCall,
@@ -131,6 +133,7 @@ export function ProspectTalkScreen({
   busy?: boolean;
   error?: string | null;
   leadReady?: boolean;
+  sessionReady?: boolean;
   onSend?: (text: string) => void;
   onLead?: (input: { name: string; email: string; consent: boolean; honeypot: string }) => void;
   onBookCall?: (input: {
@@ -151,7 +154,12 @@ export function ProspectTalkScreen({
   const clip = busy ? "thinking" : askLead ? "waiting" : "idle";
 
   return (
-    <main className="talk-page" data-talk-view="agent" data-talk-agent={agent.slug}>
+    <main
+      className="talk-page"
+      data-talk-view="agent"
+      data-talk-agent={agent.slug}
+      data-talk-session={sessionReady ? "ready" : "pending"}
+    >
       <div className="talk-top">
         <a className="talk-wordmark" href="/">
           MILŌN
@@ -321,6 +329,8 @@ export function ProspectTalkLive({
   copyPack,
   taxAgent = null,
   onBookCall,
+  readStoredToken,
+  sendTurn = postProspectTalk,
 }: {
   slug: string;
   copyPack: "za" | "us";
@@ -333,6 +343,10 @@ export function ProspectTalkLive({
     start: string;
     timeZone: string;
   }) => Promise<TryCallResult>;
+  /** Test seam. Production reads sessionStorage after paint. */
+  readStoredToken?: () => Promise<string | null>;
+  /** Test seam. Production posts to the prospect-talk edge function. */
+  sendTurn?: (body: Record<string, unknown>) => Promise<ProspectTalkResponse>;
 }) {
   const [refCode, setRefCode] = useState<string | null>(null);
   const [messages, setMessages] = useState<TalkMessage[]>([]);
@@ -341,20 +355,78 @@ export function ProspectTalkLive({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState("");
-
-  useEffect(() => {
-    setRefCode(pageRef());
-    setMessages([]);
-    setAskLead(false);
-    setLeadReady(false);
-    setError(null);
-    setToken(window.sessionStorage.getItem(`milon-talk:${slug}`) ?? "");
-  }, [slug]);
+  const [sessionReady, setSessionReady] = useState(false);
+  const gateRef = useRef(initialTalkSession());
+  const slugSeen = useRef<string | null>(null);
+  const postRef = useRef<(text: string, sessionToken: string) => void>(() => {});
 
   function remember(next: string) {
     setToken(next);
+    gateRef.current = { ...gateRef.current, token: next };
     window.sessionStorage.setItem(`milon-talk:${slug}`, next);
   }
+
+  postRef.current = (text, sessionToken) => {
+    setBusy(true);
+    setError(null);
+    void sendTurn({
+      action: "turn",
+      agent: slug,
+      message: text,
+      sessionToken,
+      ref: pageRef(),
+      market: pageMarket(),
+      utm: pageUtm(),
+    })
+      .then((result) => {
+        if (!result.ok) {
+          setError(result.error ?? "The conversation isn't available right now.");
+          return;
+        }
+        if (result.sessionToken) remember(result.sessionToken);
+        if (result.reply) {
+          setMessages((current) => [...current, { role: "agent", text: result.reply ?? "" }]);
+        }
+        setAskLead(result.askLead === true);
+      })
+      .catch(() => setError("The conversation isn't available right now."))
+      .finally(() => setBusy(false));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const switched = slugSeen.current !== null && slugSeen.current !== slug;
+    slugSeen.current = slug;
+    if (switched) {
+      gateRef.current = initialTalkSession();
+      setMessages([]);
+      setAskLead(false);
+      setLeadReady(false);
+      setError(null);
+      setSessionReady(false);
+    }
+    setRefCode(pageRef());
+    const apply = (stored: string) => {
+      if (cancelled) return;
+      const opened = openTalkSession(gateRef.current, stored);
+      gateRef.current = opened.gate;
+      setToken(stored);
+      setSessionReady(true);
+      for (const text of opened.deliver) postRef.current(text, stored);
+    };
+    if (readStoredToken) {
+      void readStoredToken().then((stored) => {
+        if (!cancelled) apply(stored ?? "");
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    apply(window.sessionStorage.getItem(`milon-talk:${slug}`) ?? "");
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, readStoredToken]);
 
   return (
     <TalkPageView
@@ -365,40 +437,26 @@ export function ProspectTalkLive({
       messages={messages}
       askLead={askLead}
       leadReady={leadReady}
+      sessionReady={sessionReady}
       busy={busy}
       error={error}
       onBookCall={onBookCall}
       onSend={(text) => {
-        setBusy(true);
+        const trimmed = text.trim();
+        if (!trimmed || busy) return;
         setError(null);
-        setMessages((current) => [...current, { role: "you", text }]);
-        void postProspectTalk({
-          action: "turn",
-          agent: slug,
-          message: text,
-          sessionToken: token,
-          ref: refCode,
-          market: pageMarket(),
-          utm: pageUtm(),
-        })
-          .then((result) => {
-            if (!result.ok) {
-              setError(result.error ?? "The conversation isn't available right now.");
-              return;
-            }
-            if (result.sessionToken) remember(result.sessionToken);
-            if (result.reply) {
-              setMessages((current) => [...current, { role: "agent", text: result.reply ?? "" }]);
-            }
-            setAskLead(result.askLead === true);
-          })
-          .catch(() => setError("The conversation isn't available right now."))
-          .finally(() => setBusy(false));
+        setMessages((current) => [...current, { role: "you", text: trimmed }]);
+        const gate = gateRef.current;
+        if (!gate.ready) {
+          gateRef.current = queueTalkMessage(gate, trimmed);
+          return;
+        }
+        postRef.current(trimmed, gate.token);
       }}
       onLead={(input) => {
         setBusy(true);
         setError(null);
-        void postProspectTalk({
+        void sendTurn({
           action: "lead",
           agent: slug,
           sessionToken: token,
@@ -406,7 +464,7 @@ export function ProspectTalkLive({
           email: input.email,
           consent: input.consent,
           milon_leave_blank: input.honeypot,
-          ref: refCode,
+          ref: pageRef(),
           market: pageMarket(),
           utm: pageUtm(),
         })
@@ -439,6 +497,7 @@ export function TalkPageView({
   busy,
   error,
   leadReady = false,
+  sessionReady = true,
   onSend,
   onLead,
   onBookCall,
@@ -452,6 +511,7 @@ export function TalkPageView({
   busy?: boolean;
   error?: string | null;
   leadReady?: boolean;
+  sessionReady?: boolean;
   onSend?: (text: string) => void;
   onLead?: (input: { name: string; email: string; consent: boolean; honeypot: string }) => void;
   onBookCall?: (input: {
@@ -479,6 +539,7 @@ export function TalkPageView({
       busy={busy}
       error={error}
       leadReady={leadReady}
+      sessionReady={sessionReady}
       onSend={onSend}
       onLead={onLead}
       onBookCall={onBookCall}

@@ -184,7 +184,7 @@ assert(
   `live creditor card ${JSON.stringify(byKey.creditorDays)}`,
 );
 for (const key of ["currentRatio", "revenueGrowth", "salesPerEmployee", "gpToLabor"]) {
-  assert(byKey[key].unscored === true && byKey[key].health_score === 0, `${key} must be not scored`);
+  assert(byKey[key].unscored === true && byKey[key].health_score == null, `${key} must be not scored`);
 }
 
 assert(forecastIsCashGenerative(20_000, 35_160) === false, "ZAR forecast net is negative");

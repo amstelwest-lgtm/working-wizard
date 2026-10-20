@@ -212,6 +212,42 @@ assert(
     ].join(","),
   `activity is newest first, got ${order.join(",")}`,
 );
+const handoffActivity = buildTeamActivity({
+  snapshots: [],
+  uploads: [],
+  diagnosisEvents: [],
+  proposals: [],
+  drafts: [],
+  signoffAt: null,
+  signoffText: null,
+  dataRequests: [],
+  queries: [],
+  handoffs: [
+    {
+      id: "h1",
+      agent: "financial_manager",
+      title: "Move fixed contracts to variable / usage-based pricing",
+      at: "2026-10-20T18:00:00.000Z",
+    },
+    {
+      id: "h2",
+      agent: "financial_manager",
+      title: "Hand-off: Move fixed contracts to variable / usage-based pricing",
+      at: "2026-10-20T17:00:00.000Z",
+    },
+  ],
+});
+const handed = handoffActivity.find((event) => event.id === "handoff:h1");
+assert(handed?.agent === "financial_manager", "a hand-off is logged on the financial manager");
+assert(handed?.kind === "handoff", "the activity kind is a hand-off");
+assert(handed?.text.startsWith("Hand-off:"), handed?.text ?? "missing hand-off");
+assert(
+  handed?.text.includes("Move fixed contracts to variable / usage-based pricing"),
+  handed?.text ?? "missing move title",
+);
+const prefixed = handoffActivity.find((event) => event.id === "handoff:h2");
+assert(prefixed?.text === handed?.text, `the Hand-off prefix is not doubled (${prefixed?.text})`);
+
 assert(activity[0].kind === "signoff" && activity[0].agent === "financial_manager", "latest event is the financial_manager sign-off");
 assert(activity.find((event) => event.id === "approved:p1")?.agent === "analyst", "budget approval is the analyst");
 assert(activity.find((event) => event.kind === "sync")?.text === "Xero sync · Jan 2026", "sync text uses the ledger and period");

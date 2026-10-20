@@ -1953,11 +1953,11 @@ export function CashForecastPanel({
       ref={onChartFrame}
       style={{ height }}
       data-week-ticks={narrow ? "thin" : "all"}
-      className="w-full min-w-0 max-w-full max-md:pb-3"
+      className="cash-chart-frame w-full min-w-0 max-w-full overflow-x-auto max-md:pb-3"
     >
       {chartWidth > 0 ? (
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ top: 22, right: narrow ? 80 : 16, left: 0, bottom: 8 }}>
+        <ComposedChart data={chartData} margin={{ top: 22, right: narrow ? 20 : 16, left: 0, bottom: 8 }}>
           <defs>
             <linearGradient id="cfGoldFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
@@ -1987,7 +1987,7 @@ export function CashForecastPanel({
                   : formatMoneyChartTick(v, market),
               )
             }
-            width={spacedChartTicks ? 84 : enlarged ? 76 : 68}
+            width={narrow ? 48 : spacedChartTicks ? 84 : enlarged ? 76 : 68}
             tick={{ fill: "#94a3b8", fontSize: tickSize }}
             domain={
               includeFloorInDomain

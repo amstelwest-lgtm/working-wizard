@@ -687,8 +687,21 @@ const qaLive = { revenue: "1550000", cogs: "451000", fixedCosts: "", cash: "" };
 const qaSnapshot = {
   source: "pdf_upload",
   period_date: "2026-10-31",
-  financials: { revenue: "1550000", cogs: "451000", fixedCosts: "", cash: "" },
+  financials: { revenue: "1550000", cogs: "451000", fixedCosts: "", cash: "", totalAssets: "900000" },
 };
+assert(
+  !needsTrialBalanceRefresh({
+    live: { revenue: "412000", cogs: "120000", ebit: "180000", netIncome: "150000" },
+    snapshots: [
+      {
+        source: "pdf_upload",
+        period_date: "2026-10-31",
+        financials: { revenue: "412000", cogs: "120000", ebit: "180000", netIncome: "150000" },
+      },
+    ],
+  }),
+  "a P&L-only upload does not ask to re-import a trial balance",
+);
 assert(
   needsTrialBalanceRefresh({ live: qaLive, snapshots: [qaSnapshot] }),
   "a pre-metric trial balance with blank opex and cash asks for a re-import",

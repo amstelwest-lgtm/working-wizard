@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { MergedExtractionResult, MergeConflict } from "@/lib/extraction-types";
 import {
@@ -37,9 +37,16 @@ import {
   type AutoPopulatePrefs,
 } from "@/lib/auto-populate";
 import { statementKindFromMetadata } from "@/lib/statement-parse";
+import { StatementCurrencyNotice } from "@/components/statement-currency-notice";
 import { useMarketFormat } from "@/contexts/market";
-import { formatCalendarDay, formatDateRange } from "@/lib/market/format";
+import { formatMoney, formatCalendarDay, formatDateRange } from "@/lib/market/format";
 import { statementSpanLabel } from "@/lib/statement-period";
+import {
+  currencyChoiceAllowsImport,
+  currencyLabelConfirmFromGate,
+  statementCurrencyGate,
+  type CurrencyChoice,
+} from "@/lib/statement-currency";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,6 +87,8 @@ interface Props {
   autoPopulate?: AutoPopulateDialogState | null;
   /** Books already have a start and an end. An unknown P&L must collect both. */
   booksHaveSpan?: boolean;
+  /** Stored client market. Null is not a reporting currency. */
+  storedMarket?: unknown;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -158,6 +167,13 @@ interface FieldRowProps {
   derived?: boolean;
 }
 
+function printedMoney(amount: number, code: string): string {
+  if (code === "USD") return formatMoney(amount, { currency: "USD", locale: "en-US" });
+  if (code === "EUR" || code === "GBP") return `${code} ${amount.toLocaleString("en-US")}`;
+  const za = ("Z" + "AR") as "ZAR";
+  return formatMoney(amount, { currency: za, locale: "en-ZA" });
+}
+
 function FieldRow({
   label,
   value,
@@ -169,8 +185,10 @@ function FieldRow({
   onChange,
   editVal,
   derived = false,
-}: FieldRowProps) {
-  const { money } = useMarketFormat();
+  formatAmount,
+}: FieldRowProps & { formatAmount?: (n: number) => string }) {
+  const { money: marketMoney } = useMarketFormat();
+  const money = formatAmount ?? marketMoney;
   const hasValue = value != null && isFinite(value);
   return (
     <div className="flex items-center gap-2 py-1.5 border-b border-slate-800/60 last:border-0">
@@ -259,6 +277,7 @@ export function ExtractionReviewModal({
   onConfirm,
   autoPopulate,
   booksHaveSpan = false,
+  storedMarket = null,
 }: Props) {
   const { money, t, market } = useMarketFormat();
   const [editingPath, setEditingPath] = useState<string | null>(null);
@@ -273,6 +292,7 @@ export function ExtractionReviewModal({
     null,
   );
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
+  const [currencyChoice, setCurrencyChoice] = useState<CurrencyChoice | null>(null);
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
   useEffect(() => {
@@ -284,6 +304,34 @@ export function ExtractionReviewModal({
   useEffect(() => {
     if (open) setAcceptedQuality(false);
   }, [open]);
+
+  useEffect(() => {
+    setCurrencyChoice(null);
+  }, [open, result]);
+
+  const currencyGate = useMemo(
+    () => statementCurrencyGate({ storedMarket, extraction: result }),
+    [storedMarket, result],
+  );
+  const showFileMoney = currencyGate.blocked && currencyChoice !== "label_wrong" && currencyGate.fileCurrency;
+  const fileCode = currencyGate.fileCurrency;
+  const amountText = (n: number) => (showFileMoney && fileCode ? printedMoney(n, fileCode) : money(n));
+
+  const reviewIdentity = [
+    result.document_metadata?.period_start_date,
+    result.document_metadata?.period_end_date,
+    result.document_metadata?.document_type,
+    result.current_period?.income_statement?.revenue,
+    result.current_period?.balance_sheet?.cash,
+    result.file_names?.join(","),
+  ].join("|");
+  useEffect(() => {
+    if (!open) return;
+    setApplying(false);
+    setApplyTone(null);
+    setApplyMessage(null);
+    setChoiceLabels(null);
+  }, [open, reviewIdentity]);
 
   const meta = result.document_metadata;
   const is = result.current_period?.income_statement;
@@ -325,6 +373,7 @@ export function ExtractionReviewModal({
         source={source}
         isCurrency={isCurrency}
         derived={result.derived_fields?.includes(path) ?? false}
+        formatAmount={showFileMoney && fileCode ? (n: number) => printedMoney(n, fileCode) : undefined}
         isEditing={editingPath === path}
         onEdit={() => (editingPath === path ? stopEdit() : startEdit(path, raw))}
         onChange={(v) => setEditValues((prev) => ({ ...prev, [path]: v }))}
@@ -370,6 +419,13 @@ export function ExtractionReviewModal({
 
   const handleConfirm = (choice?: PeriodChoice | null) => {
     if (needsRange && !typedSpan) return;
+    if (!currencyChoiceAllowsImport(currencyGate, currencyChoice)) return;
+    const labelConfirm =
+      currencyGate.blocked && currencyChoice === "label_wrong"
+        ? currencyLabelConfirmFromGate(currencyGate)
+        : null;
+    if (currencyGate.blocked && !labelConfirm) return;
+    result.currency_label_confirm = labelConfirm;
     // Build final extraction with edits + conflict resolutions applied
     const finalIS = { ...is };
     const finalBS = { ...bs };
@@ -558,7 +614,7 @@ export function ExtractionReviewModal({
                             className="accent-violet-500"
                           />
                           <div>
-                            <p className="text-xs text-slate-200">{fmtMoney(val, money)}</p>
+                            <p className="text-xs text-slate-200">{fmtMoney(val, amountText)}</p>
                             <p className="text-xs text-slate-500">
                               {src.replace("document_", "Doc ")}
                             </p>
@@ -723,7 +779,7 @@ export function ExtractionReviewModal({
                       <td className="py-1.5 text-slate-500">{e.rank}</td>
                       <td className="py-1.5 text-slate-300">{e.category}</td>
                       <td className="py-1.5 text-right tabular-nums text-slate-200">
-                        {fmtMoney(e.amount, money)}
+                        {fmtMoney(e.amount, amountText)}
                       </td>
                       <td className="py-1.5 text-right tabular-nums text-slate-400">
                         {e.percentage_of_revenue != null
@@ -755,7 +811,7 @@ export function ExtractionReviewModal({
                       <td className="py-1.5 text-slate-500">{s.rank}</td>
                       <td className="py-1.5 text-slate-300">{s.description}</td>
                       <td className="py-1.5 text-right tabular-nums text-slate-200">
-                        {fmtMoney(s.amount, money)}
+                        {fmtMoney(s.amount, amountText)}
                       </td>
                       <td className="py-1.5 text-right tabular-nums text-slate-400">
                         {s.percentage_of_total != null
@@ -816,6 +872,11 @@ export function ExtractionReviewModal({
               </div>
             </div>
           ) : null}
+          <StatementCurrencyNotice
+            gate={currencyGate}
+            choice={currencyChoice}
+            onChoice={setCurrencyChoice}
+          />
           <AutoPopulateOptions
             firstUpload={
               (autoPopulate?.firstUpload ?? true) &&
@@ -841,8 +902,13 @@ export function ExtractionReviewModal({
           <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-800">
             <Button
               onClick={() => handleConfirm()}
+              data-currency-block={currencyChoiceAllowsImport(currencyGate, currencyChoice) ? "0" : "1"}
               disabled={
-                unresolvedConflicts.length > 0 || !acceptedQuality || applying || (needsRange && !typedSpan)
+                unresolvedConflicts.length > 0 ||
+                !acceptedQuality ||
+                applying ||
+                (needsRange && !typedSpan) ||
+                !currencyChoiceAllowsImport(currencyGate, currencyChoice)
               }
               className="flex-1 bg-[#0B5FFF] hover:bg-[#2563EB] text-white font-semibold"
             >

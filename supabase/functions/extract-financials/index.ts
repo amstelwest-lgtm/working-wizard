@@ -10,6 +10,7 @@ import { extractionAccessGranted } from "../../../src/lib/extract-access.ts";
 import { statementModelParts } from "../../../src/lib/statement-text-layer.ts";
 import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
+import { headerCurrency } from "../../../src/lib/statement-currency.ts";
 import { buildTextExtractionPayload } from "./prompt.ts";
 
 const corsHeaders = {
@@ -359,6 +360,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         financials: out,
+        currency: headerCurrency(pdfText || text),
         debug: { textChars: debugTextChars, textLayer: usedTextLayer, model: CLAUDE_MODEL },
       }),
       {

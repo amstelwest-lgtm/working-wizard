@@ -20,6 +20,7 @@ import { needsBalanceSheetPrompt } from "@/lib/balance-sheet-prompt";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
+import { loadStarterMonthlyLabel } from "@/lib/trial-card-price";
 import { FirmDashboardCrumb, firmDashboardCrumbIsLink } from "@/components/firm-dashboard-crumb";
 import { useFirmBillingEntitled } from "@/contexts/firm-billing-access";
 import { markInsightSeen } from "@/lib/funnel-timing";
@@ -88,7 +89,13 @@ import {
   withFinancialsWriteRev,
   statementImportWhat,
 } from "@/lib/statement-import-apply";
-import { confirmUploadedStatement, earlierStatementNote, liveStatementSpan, passStatementChoice, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, earlierStatementNote, liveStatementSpan, passStatementChoice, snapshotCoveringSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import {
+  CURRENCY_LABEL_CONFIRM_KEY,
+  currencyImportRefusal,
+  statementCurrencyGate,
+  withCurrencyLabelConfirm,
+} from "@/lib/statement-currency";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -112,6 +119,7 @@ import {
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
   liveHealthFromBooks,
+  numberRatioRecord,
   healthWithoutEvidence,
   NOT_SCORED_YET_LABEL,
   type OverallHealth,
@@ -120,6 +128,7 @@ import { playbookKeyForRatioName } from "@/lib/playbook-key";
 import { countOpenRatioQueries, ratioQueryLabel } from "@/lib/ratio-queries";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
+import type { RatioResult } from "@/reports/health-scorecard";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -349,7 +358,7 @@ import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, 
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
 import { healthSnapshotFromBooks, renderHealthNarrative } from "@/lib/health-snapshot";
-import { draftStoredFiguresHash, draftStoredHealth } from "@/lib/draft-figures";
+import { draftStoredFiguresHash, draftStoredHealth, latestFiguresStamp } from "@/lib/draft-figures";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState } from "@/components/primitives";
@@ -1721,7 +1730,7 @@ function ClientView() {
   // Dates already on the client. Do not wait for the ledger status request:
   // that request can return a successful sync with the period stripped, and
   // the books sentence would drop the span.
-  const statementSpan = statementSpanLabel({
+  const booksSpanLabel = statementSpanLabel({
     periodStart: liveDates ? statementMeta.periodStart : snapshotMeta.periodStart,
     periodEnd: liveDates ? statementMeta.periodEnd : snapshotMeta.periodEnd,
     periodLabel: liveDates
@@ -1729,7 +1738,7 @@ function ClientView() {
       : snapshotMeta.periodLabel || currentSnapshot?.period_label,
     market: clientMarket,
   });
-  const snapshotSpan = statementSpan;
+  const snapshotSpan = booksSpanLabel;
   const dataFreshness = dataFreshnessLine({
     xero: xeroLink
       ? {
@@ -2360,6 +2369,7 @@ function ClientView() {
             const { data } = await supabase.auth.getSession();
             return data.session?.access_token ?? null;
           },
+          getStarterMonthly: () => loadStarterMonthlyLabel(),
         });
       })
       .catch(() => {
@@ -2931,6 +2941,17 @@ function ClientView() {
       },
       choice?: PeriodChoice | null,
     ) => {
+      const currencyGate = statementCurrencyGate({
+        storedMarket: client?.market ?? null,
+        extraction: result,
+      });
+      const labelConfirm = result.currency_label_confirm ?? null;
+      const currencyRefusal = currencyImportRefusal(currencyGate, labelConfirm);
+      if (currencyRefusal) {
+        return { ok: false as const, message: importFailureMessage(currencyRefusal) };
+      }
+      const withLabel = <T extends Record<string, unknown>>(blob: T) =>
+        withCurrencyLabelConfirm(blob, labelConfirm);
       const extracted = extractionToRatioInputs(result);
       const keptEquity = preserveHandEnteredEquity(financialsRef.current, extracted);
       const drafted = {
@@ -2990,21 +3011,16 @@ function ClientView() {
           .eq("client_id", clientId)
           .order("period_date", { ascending: false })
           .limit(24);
-        const match = (rows ?? []).find((row) => {
-          const stored = statementSpan(
-            (row.financials as { periodStart?: string } | null)?.periodStart,
-            (row.financials as { periodEnd?: string } | null)?.periodEnd,
-          );
-          return Boolean(fileSpan && stored && stored.periodStart === fileSpan.periodStart && stored.periodEnd === fileSpan.periodEnd);
-        });
+        const match = snapshotCoveringSpan(rows, fileSpan);
         const ratiosOut = overviewRatios(planned.history, { fyStartMonth });
         const periodDate = fileSpan?.periodEnd ?? period?.periodEnd ?? "";
         const periodLabel = planned.periodLabel || period?.periodLabel || periodDate;
+        const historyBody = withLabel(planned.history as Record<string, unknown>);
         const write = match?.id
           ? supabase
               .from("client_financial_snapshots")
               .update({
-                financials: planned.history as never,
+                financials: historyBody as never,
                 ratios: ratiosOut as never,
                 period_label: periodLabel,
                 period_date: periodDate,
@@ -3014,7 +3030,7 @@ function ClientView() {
               client_id: clientId,
               period_label: periodLabel,
               period_date: periodDate,
-              financials: planned.history as never,
+              financials: historyBody as never,
               ratios: ratiosOut as never,
               source: "pdf_upload",
             });
@@ -3041,7 +3057,9 @@ function ClientView() {
         existing = byLabel as { id?: string; financials?: unknown } | null;
       }
 
-      const snapshotMerged = mergeStatementFinancials(existing?.financials ?? null, inputs, statementKind);
+      const snapshotMerged = withLabel(
+        mergeStatementFinancials(existing?.financials ?? null, inputs, statementKind) as Record<string, unknown>,
+      );
       const ratiosOut = overviewRatios(snapshotMerged, { fyStartMonth });
 
       let saveError: { message: string } | null = null;
@@ -3104,7 +3122,8 @@ function ClientView() {
           value == null || typeof value === "object" ? [] : [[key, String(value)]],
         ),
       ) as Record<string, string>;
-      const blob = withFinancialsWriteRev(mergeCurrentBlob(nextScalars));
+      if (labelConfirm) nextScalars[CURRENCY_LABEL_CONFIRM_KEY] = JSON.stringify(labelConfirm);
+      const blob = withFinancialsWriteRev(withLabel(mergeCurrentBlob(nextScalars)));
       const { data: savedLive, error: liveError } = await supabase
         .from("clients")
         .update({ financials: blob as never, financials_updated_at: financialsUpdatedAt })
@@ -3325,7 +3344,7 @@ function ClientView() {
     return pdf(
       HealthScorecardPDF({
         smeData: { name: client.name, period: periodLabel },
-        ratioResults,
+        ratioResults: ratioResults as RatioResult[],
         accountantProfile: profile,
         cashRunwayWeeks: effectiveRunway,
         overallHealth,
@@ -3656,13 +3675,17 @@ function ClientView() {
       ),
     [homeActivity.runs, settledRows, workingRows],
   );
+  const figuresUpdatedAt = useMemo(
+    () => latestFiguresStamp(snapshots.map((row) => ({ at: row.created_at, source: row.source }))),
+    [snapshots],
+  );
   const homePresence = useMemo(
     () =>
       steerOpenHandoffs(
-        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, liveScoreSnapshot),
+        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, liveScoreSnapshot, figuresUpdatedAt),
         openAgents,
       ),
-    [homeActivity, homeCardRuns, openAgents, overallHealth],
+    [homeActivity, homeCardRuns, openAgents, overallHealth, figuresUpdatedAt],
   );
   const shownHandoffs = useMemo(
     () =>
@@ -3871,7 +3894,7 @@ function ClientView() {
   const reportsReady = clientReportsReadyCount(financials);
   const reportsLine = reportsHomeReadyLine(reportsReady);
   const canonicalRatios = useMemo(
-    () => scorecardRatiosFromFinancials(financials, { fyStartMonth }),
+    () => numberRatioRecord(scorecardRatiosFromFinancials(financials, { fyStartMonth })),
     [financials, fyStartMonth],
   );
   const homeNeeds = useMemo(() => {
@@ -3894,6 +3917,8 @@ function ClientView() {
       storedHash: shownDraft ? draftStoredFiguresHash(shownDraft.evidence) : null,
       health: liveScoreSnapshot,
       storedHealth: shownDraft ? draftStoredHealth(shownDraft.evidence) : null,
+      writtenAt: shownDraft?.created_at ?? null,
+      figuresUpdatedAt,
     };
     const titlePresented = shownDraft
       ? presentHomeDraftTitle(shownDraft.title, canonicalRatios, liveDraft)
@@ -3911,7 +3936,7 @@ function ClientView() {
           : ["No draft waiting."];
     const draftStale = presented ? [presented.stale || presented.refresh || Boolean(bodyPresented?.refresh)] : undefined;
     const booksLine =
-      homeStatementsLine(statementSpan) ?? booksAnswerSentence({ freshness: dataFreshness });
+      homeStatementsLine(booksSpanLabel) ?? booksAnswerSentence({ freshness: dataFreshness });
     return {
       actionsHeading,
       actionLines,
@@ -3935,7 +3960,8 @@ function ClientView() {
     liveScoreSnapshot,
     dataFreshness,
     reportsLine,
-    statementSpan,
+    booksSpanLabel,
+    figuresUpdatedAt,
   ]);
   const homeBrief = useMemo(
     () =>
@@ -3983,8 +4009,10 @@ function ClientView() {
             detail: row.detail,
             figuresHash: draftStoredFiguresHash(row.evidence),
             storedHealth: draftStoredHealth(row.evidence),
+            createdAt: row.created_at,
           }];
         }),
+        figuresUpdatedAt,
         canonicalRatios,
         healthOverall: overallHealth.overall,
         healthSnapshot: liveScoreSnapshot,
@@ -4014,6 +4042,7 @@ function ClientView() {
       homeBooks,
       statementPosition.receivables,
       homeActivity,
+      figuresUpdatedAt,
       canonicalRatios,
       overallHealth.overall,
       gateMarket,
@@ -5669,6 +5698,7 @@ function ClientView() {
                           clientName={client.name}
                           canonicalRatios={canonicalRatios}
                           healthSnapshot={liveScoreSnapshot}
+                          figuresUpdatedAt={figuresUpdatedAt}
                           reviewSignoff={stampFromSignoff(actionPlanSignoff, false)}
                           simplified
                           isOwner
@@ -5841,6 +5871,7 @@ function ClientView() {
                 <UploadFinancials
                   clientName={client?.name}
                   booksHaveSpan={Boolean(liveStatementSpan(financials))}
+                  storedMarket={client?.market ?? null}
                   onConfirm={passStatementChoice(handleConfirmFinancials)}
                   onApplied={() => {
                     setActiveTab("overview");

@@ -1,6 +1,7 @@
 /**
  * Computed-style scan of `/`, `/terms`, `/privacy`, and `/join/:token`, plus
- * the accountant harness (`/clients`, client Health, client Reports). Brand
+ * the accountant harness (`/clients`, client Health, client Reports) and the
+ * owner door tabs. Brand
  * gold may remain only on the MILŌN wordmark (header, footer, hero mockup
  * mark, invite shell), the hero trial button, and the 390 sticky trial
  * button. In the accountant app the wordmark stays gold, the one primary pill
@@ -147,9 +148,9 @@ type Hit = { path: string; prop: string; sample: string };
 async function scan(
   page: Page,
   label: string,
-  opts?: { accountant?: boolean },
+  opts?: { accountant?: boolean; owner?: boolean },
 ): Promise<{ hits: Hit[]; wordmark: boolean; heroCta: boolean; amber74: boolean }> {
-  return page.evaluate(({ labelIn, accountant }) => {
+  return page.evaluate(({ labelIn, accountant, owner }) => {
     const GOLD: Array<[number, number, number]> = [
       [212, 175, 55],
       [125, 95, 15],
@@ -197,6 +198,9 @@ async function scan(
     };
     const allowed = (el: Element) => {
       if (el.closest("[data-stale-bundle]")) return true;
+      if (owner) {
+        return Boolean(el.closest(".gold-text") || el.closest("[data-status-warn]"));
+      }
       if (accountant) {
         return Boolean(
           el.closest(".gold-text") ||
@@ -297,7 +301,7 @@ async function scan(
       ? colorsIn(getComputedStyle(amber).color).some((c) => Math.min(...AMBER.map((a) => dist(c.rgb, a))) < 12)
       : false;
     return { hits, wordmark, heroCta, amber74 };
-  }, { labelIn: label, accountant: Boolean(opts?.accountant) });
+  }, { labelIn: label, accountant: Boolean(opts?.accountant), owner: Boolean(opts?.owner) });
 }
 
 async function main() {
@@ -446,6 +450,33 @@ async function main() {
               failures.push(`${path} ${width} ${theme}: Email the owner border is ${border}, expected cobalt`);
             }
           }
+          await page.close();
+        }
+      }
+    }
+
+    const ownerViews = ["rest", "health", "cash", "profit", "budget", "moves", "accountant"];
+    for (const view of ownerViews) {
+      for (const width of [1280, 385]) {
+        for (const theme of ["light", "dark"] as const) {
+          const page = await browser.newPage({ viewport: { width, height: 844 } });
+          await page.goto(`${HARNESS}/owner-door?view=${view}`, { waitUntil: "domcontentloaded" });
+          await page.waitForSelector("[data-owner-ready='true']", { timeout: 20000 });
+          await page.evaluate((next) => {
+            document.documentElement.dataset.theme = next;
+            document.documentElement.classList.toggle("dark", next === "dark");
+          }, theme);
+          await page.waitForTimeout(250);
+          const logo = page.locator(".gold-text").first();
+          if ((await logo.count()) === 0) failures.push(`owner ${view} ${width} ${theme}: wordmark missing`);
+          else {
+            const bg = await logo.evaluate((el) => getComputedStyle(el).backgroundImage);
+            if (!bg.includes("212, 175, 55") && !bg.includes("172, 132, 0")) {
+              failures.push(`owner ${view} ${width} ${theme}: wordmark is not gold`);
+            }
+          }
+          const painted = await scan(page, `owner ${view} ${width} ${theme}`, { owner: true });
+          for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
           await page.close();
         }
       }

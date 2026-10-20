@@ -22,6 +22,8 @@
   --line:#dbeafe; --line-soft:#e8f1fe;
   --card:#ffffff; --glass:#ffffff;
   --risk:#c43d4b; --warn:#b7791f; --ok:#16845b;
+  /* Amber status only (health "watch"). Not brand gold, and not a decorative fill. */
+  --status-warn:#b7791f;
   --status-healthy:#16845b; --status-attention:#b7791f; --status-critical:#c43d4b;
   --status-healthy-ink:#0e5c40; --status-attention-ink:#8a5a12; --status-critical-ink:#8e2430;
   --ease:cubic-bezier(.22,.9,.24,1);
@@ -2081,8 +2083,8 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
 @media (max-width:390px){
   .accountant-portal:not(.owner-door) .deliverable-main{
     padding-left:12px;
-    /* The pencil sits at the right. 12px let the next card's text run under it. */
-    padding-right:28px;
+    /* Pencil is 40px at a 12px inset. 52px is the minimum; 64px keeps the card clear. */
+    padding-right:64px;
   }
   .accountant-portal .health-pillar-cards{
     margin-top:12px;

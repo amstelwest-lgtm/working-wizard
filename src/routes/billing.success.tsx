@@ -11,7 +11,7 @@ import { checkoutSessionUnlocksFirm } from "@/lib/stripe-entitlement";
 import { ownerPlanPublicLine } from "@/lib/owner-plan";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { ownerCheckoutReturnCopy } from "@/lib/owner-subscribe";
-import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 
 export const Route = createFileRoute("/billing/success")({
   validateSearch: (search: Record<string, unknown>): { session_id?: string } => {
@@ -68,7 +68,7 @@ function BillingSuccessPage() {
             ? ownerPlanPublicLine("za", pricing.ownerMonthly)
             : ownerPlanPublicLine("us");
           setLabel(
-            `Checkout is complete and your card is on file. A first firm subscription is ${FIRM_TRIAL_SENTENCE} on Starter, then the paid band bills automatically. Owner plan: ${ownerLine}.`,
+            `Checkout is complete and your card is on file. A first firm subscription is ${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then the Starter price applies. Owner plan: ${ownerLine}.`,
           );
           setUnlocked(true);
           void refreshEntitlement({ data: { refresh: true } })

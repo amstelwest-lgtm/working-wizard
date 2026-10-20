@@ -75,6 +75,13 @@ import { extractionToInputs, ExtractionReviewModal } from "@/components/extracti
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
+import {
+  CURRENCY_LABEL_CONFIRM_KEY,
+  currencyImportRefusal,
+  fileCurrencyFromExtraction,
+  statementCurrencyGate,
+  withCurrencyLabelConfirm,
+} from "@/lib/statement-currency";
 import { preflightUploadFile, UPLOAD_QUALITY_DISCLAIMER } from "@/lib/upload-quality";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -113,6 +120,7 @@ import {
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { ratiosStatementFigures, withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { cashDriverDayFigures } from "@/lib/cash-driver-label";
+import { HEALTH_NOT_ENOUGH_DATA } from "@/lib/health-metric-row";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
@@ -121,6 +129,7 @@ import {
   NOT_SCORED_YET_LABEL,
   healthMapFromRatios,
   liveHealthFromBooks,
+  numberRatioRecord,
   scoreRatio,
 } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
@@ -142,7 +151,7 @@ import {
   statementImportWhat,
   withFinancialsWriteRev,
 } from "@/lib/statement-import-apply";
-import { confirmUploadedStatement, liveStatementSpan, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, liveStatementSpan, snapshotCoveringSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -203,6 +212,7 @@ import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { healthSnapshotFromBooks } from "@/lib/health-snapshot";
+import { latestFiguresStamp } from "@/lib/draft-figures";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { FindAccountantPanel } from "@/components/find-accountant-panel";
 import {
@@ -1951,7 +1961,6 @@ function flatExtractionToMergedResult(
           : "unknown";
   const income = kind !== "balance_sheet";
   const balance = kind !== "income_statement";
-  const currency = meta?.currency ?? "ZAR";
   return {
     document_metadata: {
       company_name: meta?.companyName ?? null,
@@ -1968,7 +1977,7 @@ function flatExtractionToMergedResult(
       auditor_firm: null,
       approval_date: null,
       industry_description: null,
-      functional_currency: currency === "other" || currency == null ? "ZAR" : currency,
+      functional_currency: fileCurrencyFromExtraction({ currency: meta?.currency }) ?? "other",
       foreign_currency_exposure: null,
       headcount: n("employees"),
       accounting_basis: "unknown",
@@ -2099,6 +2108,7 @@ function Index() {
   const [ownerBootTimedOut, setOwnerBootTimedOut] = useState(false);
   const [ownerBootAttempt, setOwnerBootAttempt] = useState(0);
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
+  const [storedClientMarket, setStoredClientMarket] = useState<unknown>(null);
   const [marketNeedsGate, setMarketNeedsGate] = useState(false);
 
   // Redirect unauthenticated users to the landing page. After invite accept,
@@ -2345,6 +2355,7 @@ function Index() {
       ratios: Record<string, number>;
       source?: string | null;
       financials?: Record<string, unknown> | null;
+      created_at?: string | null;
     }>
   >([]);
 
@@ -2633,7 +2644,7 @@ function Index() {
     }
     supabase
       .from("client_financial_snapshots")
-      .select("period_label, period_date, ratios, source, financials")
+      .select("period_label, period_date, ratios, source, financials, created_at")
       .eq("client_id", effectiveClientId)
       .order("period_date", { ascending: true })
       .limit(24)
@@ -2710,7 +2721,12 @@ function Index() {
     [workspaceMarket],
   );
   const ownerCanonicalRatios = useMemo(
-    () => scorecardRatiosFromFinancials(v as unknown as Record<string, unknown>, { fyStartMonth: boardMarket.fyStartMonthDefault }),
+    () =>
+      numberRatioRecord(
+        scorecardRatiosFromFinancials(v as unknown as Record<string, unknown>, {
+          fyStartMonth: boardMarket.fyStartMonthDefault,
+        }),
+      ),
     [v, boardMarket.fyStartMonthDefault],
   );
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
@@ -2805,6 +2821,7 @@ function Index() {
         } | null;
         const profile = parseOperatingProfile(data?.operating_profile);
         const parsedMarket = parseMarketSelection(data?.market);
+        setStoredClientMarket(marketColumnMissing ? null : (data?.market ?? null));
         if (!marketColumnMissing && data && data.market == null && res.error == null) {
           setMarketNeedsGate(true);
           setWorkspaceMarket(null);
@@ -3798,6 +3815,7 @@ function Index() {
     health: overallHealth,
     periodLabel: figuresPeriodLabelFrom(v as unknown as object, null, boardMarket),
   });
+  const figuresUpdatedAt = latestFiguresStamp(history.map((row) => ({ at: row.created_at, source: row.source })));
   const financialsSignoffStale = healthSignoffIsStale({
     signoff: financialsSignoff,
     dataUpdatedAt: clientMeta?.financials_updated_at ?? null,
@@ -3841,7 +3859,7 @@ function Index() {
   };
   const avgHealth = overallHealth.overall ?? NaN;
 
-  const valueMap: Record<RatioKey, { value: number; format: "x" | "pct" | "days" | "money" }> = {
+  const valueMap: Record<RatioKey, { value: number | null; format: "x" | "pct" | "days" | "money" }> = {
     taxBurden: { value: taxBurden, format: "x" },
     interestBurden: { value: interestBurden, format: "x" },
     operatingMargin: { value: operatingMargin, format: "pct" },
@@ -4480,6 +4498,7 @@ function Index() {
                             isOwner={userRole !== "client_member"}
                             canonicalRatios={ownerCanonicalRatios}
                             healthSnapshot={liveScoreSnapshot}
+                            figuresUpdatedAt={figuresUpdatedAt}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(
@@ -4579,6 +4598,7 @@ function Index() {
                             isOwner={userRole !== "client_member"}
                             canonicalRatios={ownerCanonicalRatios}
                             healthSnapshot={liveScoreSnapshot}
+                            figuresUpdatedAt={figuresUpdatedAt}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerView
                             pillars={overallHealth.pillars}
@@ -5868,21 +5888,28 @@ function Index() {
                                     }
                                     const k = row.key;
                                     const meta = RATIO_META[k];
-                                    const rawVal = valueMap[k].value;
+                                    const storedVal = valueMap[k].value;
+                                    const rawVal =
+                                      typeof storedVal === "number" && Number.isFinite(storedVal)
+                                        ? storedVal
+                                        : Number.NaN;
                                     const fmt = valueMap[k].format;
-                                    const health = healthMap[k];
+                                    const daysMissing = fmt === "days" && !isFinite(rawVal);
+                                    const health = daysMissing ? Number.NaN : healthMap[k];
                                     const series = seriesFor(k, rawVal);
                                     const delta = pctDelta(series);
                                     const bm = benchmarkFor(k);
-                                    const fmtd = !isFinite(rawVal)
-                                      ? "Not enough data"
-                                      : fmt === "pct"
-                                        ? `${(rawVal * 100).toFixed(1)}%`
-                                        : fmt === "x"
-                                          ? `${rawVal.toFixed(2)}×`
-                                          : fmt === "days"
-                                            ? `${Math.round(rawVal)} d`
-                                            : formatNumber(rawVal, boardMarket);
+                                    const fmtd = daysMissing
+                                      ? "—"
+                                      : !isFinite(rawVal)
+                                        ? "Not enough data"
+                                        : fmt === "pct"
+                                          ? `${(rawVal * 100).toFixed(1)}%`
+                                          : fmt === "x"
+                                            ? `${rawVal.toFixed(2)}×`
+                                            : fmt === "days"
+                                              ? `${Math.round(rawVal)} d`
+                                              : formatNumber(rawVal, boardMarket);
                                     const healthTier = scoreTier(health);
                                     const hCls = !isFinite(health)
                                       ? "text-slate-400"
@@ -5988,11 +6015,13 @@ function Index() {
                                                 : "—"}
                                           </div>
                                           <div className={`text-[10px] ${hLabelCls}`}>
-                                            {k === "grossMargin" && grossImplausible
-                                              ? GROSS_MARGIN_MAPPING_NOTE
-                                              : isFinite(health)
-                                                ? healthBandLabel(healthTier)
-                                                : "—"}
+                                            {daysMissing
+                                              ? HEALTH_NOT_ENOUGH_DATA
+                                              : k === "grossMargin" && grossImplausible
+                                                ? GROSS_MARGIN_MAPPING_NOTE
+                                                : isFinite(health)
+                                                  ? healthBandLabel(healthTier)
+                                                  : "—"}
                                           </div>
                                         </td>
                                       </tr>
@@ -6272,6 +6301,7 @@ function Index() {
                             isOwner={userRole !== "client_member"}
                             canonicalRatios={ownerCanonicalRatios}
                             healthSnapshot={liveScoreSnapshot}
+                            figuresUpdatedAt={figuresUpdatedAt}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(
@@ -6818,7 +6848,19 @@ function Index() {
                 setReplaceLiveOnHistory(false);
               }}
               autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
+              storedMarket={storedClientMarket}
               onConfirm={async (mapped, autoPopulate, periodChoice, periodOverride) => {
+                const currencyGate = statementCurrencyGate({
+                  storedMarket: storedClientMarket,
+                  extraction: extractionForReview,
+                });
+                const labelConfirm = extractionForReview?.currency_label_confirm ?? null;
+                const currencyRefusal = currencyImportRefusal(currencyGate, labelConfirm);
+                if (currencyRefusal) {
+                  return { ok: false as const, message: importFailureMessage(currencyRefusal) };
+                }
+                const withLabel = <T extends Record<string, unknown>>(blob: T) =>
+                  withCurrencyLabelConfirm(blob, labelConfirm);
                 const entries = Object.entries(mapped).filter(
                   ([k, val]) => val !== undefined && k in defaults,
                 );
@@ -6849,7 +6891,7 @@ function Index() {
                   const periodEnd = resolvedEnd;
                   const saved = await upsertPeriodSnapshot({
                     clientId: effectiveClientId,
-                    financials: fields,
+                    financials: withLabel(fields),
                     periodDate: periodEnd,
                     source: "upload",
                     statementKind: statementKindFromMetadata(reviewMeta),
@@ -6862,7 +6904,7 @@ function Index() {
                   }
                   const { data } = await supabase
                     .from("client_financial_snapshots")
-                    .select("period_label, period_date, ratios, source, financials")
+                    .select("period_label, period_date, ratios, source, financials, created_at")
                     .eq("client_id", effectiveClientId)
                     .order("period_date", { ascending: true })
                     .limit(24);
@@ -6930,24 +6972,13 @@ function Index() {
                     .eq("client_id", effectiveClientId)
                     .order("period_date", { ascending: false })
                     .limit(24);
-                  const match = (rows ?? []).find((row) => {
-                    const stored = statementSpan(
-                      (row.financials as { periodStart?: string } | null)?.periodStart,
-                      (row.financials as { periodEnd?: string } | null)?.periodEnd,
-                    );
-                    return Boolean(
-                      fileSpan &&
-                        stored &&
-                        stored.periodStart === fileSpan.periodStart &&
-                        stored.periodEnd === fileSpan.periodEnd,
-                    );
-                  });
+                  const match = snapshotCoveringSpan(rows, fileSpan);
                   const ratiosOut = computeRatios(planned.history as never);
                   const write = match?.id
                     ? supabase
                         .from("client_financial_snapshots")
                         .update({
-                          financials: planned.history as never,
+                          financials: withLabel(planned.history as Record<string, unknown>) as never,
                           ratios: ratiosOut as never,
                           period_label: periodLabel,
                           period_date: periodDate,
@@ -6957,7 +6988,7 @@ function Index() {
                         client_id: effectiveClientId,
                         period_label: periodLabel,
                         period_date: periodDate,
-                        financials: planned.history as never,
+                        financials: withLabel(planned.history as Record<string, unknown>) as never,
                         ratios: ratiosOut as never,
                         source: "upload",
                       });
@@ -6970,7 +7001,7 @@ function Index() {
                   }
                   const { data } = await supabase
                     .from("client_financial_snapshots")
-                    .select("period_label, period_date, ratios, source, financials")
+                    .select("period_label, period_date, ratios, source, financials, created_at")
                     .eq("client_id", effectiveClientId)
                     .order("period_date", { ascending: true })
                     .limit(24);
@@ -6986,6 +7017,9 @@ function Index() {
                       value == null || typeof value === "object" ? [] : [[key, String(value)]],
                     ),
                   ),
+                  ...(labelConfirm
+                    ? { [CURRENCY_LABEL_CONFIRM_KEY]: JSON.stringify(labelConfirm) }
+                    : {}),
                 } as Inputs;
                 ownerWriteGen.current += 1;
                 setV(next);
@@ -6994,11 +7028,13 @@ function Index() {
                 const { data: savedLive, error: liveError } = await supabase
                   .from("clients")
                   .update({
-                    financials: withFinancialsWriteRev({
-                      ...next,
-                      weeklyInputs,
-                      productMix,
-                    }) as never,
+                    financials: withFinancialsWriteRev(
+                      withLabel({
+                        ...next,
+                        weeklyInputs,
+                        productMix,
+                      }),
+                    ) as never,
                     financials_updated_at: financialsUpdatedAt,
                   })
                   .eq("id", effectiveClientId)

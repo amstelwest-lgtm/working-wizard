@@ -311,6 +311,8 @@ export function MilonTeamDesk({
                       canonicalRatios,
                       liveHealth: feed.healthQuote,
                       evidence: row.evidence,
+                      writtenAt: row.created_at,
+                      figuresUpdatedAt: feed.figuresUpdatedAt,
                     });
                     const draft = draftFindingLabel(row);
                     const checked = figuresCheckedLine(
@@ -338,6 +340,7 @@ export function MilonTeamDesk({
                           sentence={sentence}
                           liveSentence={liveSentence}
                           canonicalRatios={canonicalRatios}
+                          figuresUpdatedAt={feed.figuresUpdatedAt}
                           market={live?.market}
                           meta={meta}
                           onOpen={onOpenApproved}

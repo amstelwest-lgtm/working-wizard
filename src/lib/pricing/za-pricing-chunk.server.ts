@@ -1,6 +1,6 @@
 import { formatMoney } from "@/lib/market/format";
 import { ZA_MARKET } from "@/lib/market/resolve";
-import { FIRM_BAND_CATALOG, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+import { FIRM_BAND_CATALOG, FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import { perClientRands, ZA_CHECKOUT_BANDS, ZA_MONTHLY_RANDS } from "@/lib/pricing/za-ladder";
 import { zaBandAmountCents } from "@/lib/pricing/za-ladder-amounts";
 
@@ -53,8 +53,8 @@ export function loadSaPricingCopy(): SaPricingCopy {
   }
   return {
     heading: "Pricing in rand",
-    heroNote: `${FIRM_TRIAL_SENTENCE} on Starter. A card is required at signup. Then ${rand(299)}/mo.`,
-    trialAfter: `On Starter. A card is required at signup. Then ${rand(299)}/mo.`,
+    heroNote: `${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then ${rand(299)}/mo.`,
+    trialAfter: `On Starter. ${FIRM_TRIAL_CARD_NOTE} Then ${rand(299)}/mo.`,
     accountantsIntro:
       "Pricing in rand. One monthly price, set by how many clients you actively advise.",
     accountantsLead:

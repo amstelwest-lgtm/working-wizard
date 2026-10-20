@@ -138,6 +138,66 @@ export function personAssignmentName(note: string | null | undefined): string | 
   return name || null;
 }
 
+/** Compare a Next moves row with the action it created. Prefix and spacing do not matter. */
+export function normalizeMoveLabel(value: string | null | undefined): string {
+  return (value ?? "")
+    .replace(/^hand-off:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * The hand-off is stored on the action, not on the move key.
+ * Match the move key first, then the title with the Hand-off prefix removed.
+ */
+export function moveRowMatches(input: {
+  moveKey: string;
+  title: string;
+  sourceMoveKey?: string | null;
+  driverKey?: string | null;
+  actionTitle?: string | null;
+}): boolean {
+  const key = normalizeMoveLabel(input.moveKey);
+  const title = normalizeMoveLabel(input.title);
+  const source = normalizeMoveLabel(input.sourceMoveKey);
+  const driver = normalizeMoveLabel(input.driverKey);
+  const action = normalizeMoveLabel(input.actionTitle);
+  if (key && (source === key || driver === key)) return true;
+  if (title && action === title) return true;
+  return false;
+}
+
+export type MoveAssignmentRef = {
+  actionItemId: string;
+  sourceMoveKey: string | null;
+  driverKey: string | null;
+  title: string;
+  assigneeName: string | null;
+};
+
+/** The action this Next moves row already created, when one is on file. */
+export function assignmentForMove(
+  rows: readonly MoveAssignmentRef[],
+  moveKey: string,
+  title: string,
+): MoveAssignmentRef | null {
+  const key = normalizeMoveLabel(moveKey);
+  const matches = rows.filter((row) =>
+    moveRowMatches({
+      moveKey,
+      title,
+      sourceMoveKey: row.sourceMoveKey,
+      driverKey: row.driverKey,
+      actionTitle: row.title,
+    }),
+  );
+  const exact = matches.find(
+    (row) => normalizeMoveLabel(row.sourceMoveKey) === key || normalizeMoveLabel(row.driverKey) === key,
+  );
+  return exact ?? matches[0] ?? null;
+}
+
 /** The draft a finished hand-off may leave for a person. The action title is the label. */
 export function handoffDraftTitle(actionTitle: string): string {
   const title = actionTitle.replace(/\s+/g, " ").trim();

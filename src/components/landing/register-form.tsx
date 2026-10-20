@@ -2,7 +2,7 @@ import type { FormEvent } from "react";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { FirmSignupTerms } from "@/components/firm-signup-terms";
 import { MarketPicker } from "@/components/market-picker";
-import { FIRM_CARD_TIMING, practiceLocationHint } from "@/lib/firm-signup-copy";
+import { firmSignupTrialReminder, practiceLocationHint } from "@/lib/firm-signup-copy";
 import {
   draftToSelection,
   isDraftComplete,
@@ -376,9 +376,8 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  {FIRM_CARD_TIMING} After day 14 the paid band bills automatically. The AI
-                  team prepares the analysis and you review and approve it. By creating an account
-                  you agree to the <a href="/terms">Terms</a>.
+                  {firmSignupTrialReminder("Starter")} The AI team prepares the analysis and you
+                  review and approve it. By creating an account you agree to the <a href="/terms">Terms</a>.
                 </p>
                 <p style={{ textAlign: "center", marginTop: 16 }}>
                   <button type="button" className="reg-owner-link" onClick={goToOwnerSpark}>
@@ -490,8 +489,8 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  {ownerNote} Accounting firms:{" "}
-                  {FIRM_CARD_TIMING} By creating an account you agree to the <a href="/terms">Terms</a>.
+                  {ownerNote} Accounting firms: {firmSignupTrialReminder("Starter")} By creating an
+                  account you agree to the <a href="/terms">Terms</a>.
                 </p>
               </>
             )}

@@ -129,6 +129,8 @@ function kindLabel(kind: TeamActivityKind | null): string {
       return "Data requested";
     case "query":
       return "Question logged";
+    case "handoff":
+      return "Hand-off";
     default:
       return "Ran";
   }
