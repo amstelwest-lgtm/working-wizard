@@ -9,6 +9,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { AuthUrlReturn } from "@/components/auth-url-return";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ChunkReloadNotice } from "@/components/chunk-reload-notice";
 import { CHUNK_RELOAD_BOOT_SCRIPT, installChunkReloadGuard, isChunkLoadError } from "@/lib/chunk-reload";
@@ -355,6 +356,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <AuthUrlReturn />
         {bare ? (
           <Outlet />
         ) : onPublic ? (

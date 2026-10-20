@@ -75,15 +75,18 @@ function ResetPasswordPage() {
   const [done, setDone] = useState(false);
   const [ready, setReady] = useState(false);
 
-  /* Supabase sends the recovery token in the URL hash.
-     The client picks it up via onAuthStateChange with event = PASSWORD_RECOVERY. */
+  /* A recovery hash on the Site URL is exchanged before this page opens, so the
+     event may already be SIGNED_IN. A session is enough to set a new password. */
   useEffect(() => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" || event === "INITIAL_SESSION") {
         setReady(true);
       }
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setReady(true);
     });
     return () => subscription.unsubscribe();
   }, []);

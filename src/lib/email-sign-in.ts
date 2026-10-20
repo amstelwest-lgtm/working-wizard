@@ -6,6 +6,7 @@
 import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
 import { intentCookieDomain } from "@/lib/google-auth";
 import { supabaseAuthStorageKey } from "@/integrations/supabase/tab-auth";
+import { stashEmailReturn } from "@/lib/auth-url-return";
 import { wakeAuth } from "@/hooks/use-auth";
 
 export const EMAIL_SIGN_IN_SENT = "If an account exists for that email, we've sent a sign-in link.";
@@ -260,7 +261,10 @@ export async function requestEmailSignInLink(input: {
   const { supabase } = await import("@/integrations/supabase/client");
   const { error } = await supabase.auth.signInWithOtp(args);
   const notice = emailSignInNotice(error);
-  if (notice.kind === "sent") stashEmailCodeVerifier();
+  if (notice.kind === "sent") {
+    stashEmailCodeVerifier();
+    stashEmailReturn(input.door, input.next);
+  }
   return notice;
 }
 
