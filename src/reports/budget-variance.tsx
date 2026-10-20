@@ -162,7 +162,7 @@ function VarianceTable({
               {row.label}
             </Text>
             <Text style={[styles.cell, { flex: 1.25, textAlign: "right" }]}>
-              {fmtRand(row.budget, market)}
+              {row.hideBudget ? "—" : fmtRand(row.budget, market)}
             </Text>
             <Text style={[styles.cell, { flex: 1.25, textAlign: "right" }]}>
               {row.actual == null ? "—" : fmtRand(row.actual, market)}
@@ -213,6 +213,13 @@ function VarianceTable({
 }
 
 function summaryFigure(row: BudgetPdfRow, market: ResolvedMarket): HeadlineFigure {
+  if (row.hideBudget) {
+    return {
+      label: row.label,
+      value: row.actual == null ? "—" : fmtRand(row.actual, market),
+      note: "From the statement",
+    };
+  }
   if (row.actual == null || row.delta == null) {
     return {
       label: row.label,

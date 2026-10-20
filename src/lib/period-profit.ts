@@ -97,6 +97,42 @@ export function statementGrossMarginFraction(
   return bridge.grossProfit / bridge.revenue;
 }
 
+/**
+ * Net profit the Profit tab prints.
+ * A stored net income that does not sit above operating profit wins, so
+ * interest, tax, and other items between operating profit and the bottom
+ * line stay in the figure. Otherwise the bridge walks operating profit
+ * down by interest and tax.
+ */
+export function statementNetProfitFromSteps(input: {
+  operatingProfit: number;
+  interest: number;
+  tax: number;
+  statedNetIncome: number | null | undefined;
+}): number {
+  const stated = input.statedNetIncome;
+  if (stated != null && Number.isFinite(stated) && statedNetIsUsable(input.operatingProfit, stated)) {
+    return stated;
+  }
+  return input.operatingProfit - input.interest - input.tax;
+}
+
+/**
+ * Canonical net profit for a stored P&L. The same rule as the Analyst and
+ * ask-ai: quote stored net income when it does not exceed operating profit.
+ * Operating profit alone is not returned as net profit. An unusable stored
+ * net (above operating profit) is not returned either.
+ */
+export function statementNetProfit(
+  fields: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!fields || !fieldPresent(fields, "netIncome")) return null;
+  const stated = fieldNum(fields, "netIncome");
+  if (!fieldPresent(fields, "ebit")) return stated;
+  const operating = fieldNum(fields, "ebit");
+  return statedNetIsUsable(operating, stated) ? stated : null;
+}
+
 export function periodProfitBridge(fields: Record<string, unknown>): PeriodProfitBridge {
   const revenue = fieldNum(fields, "revenue");
   let cogs = revenue > 0 ? costMagnitude(fieldNum(fields, "cogs")) : fieldNum(fields, "cogs");

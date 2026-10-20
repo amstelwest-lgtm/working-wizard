@@ -366,6 +366,14 @@ export function budgetTableRows(
       (row) => row.budget.depreciation,
       (totals) => totals.depreciation,
     ),
-    across("profit", "Profit", "total", true, "ebit", (row) => row.budget.ebit, (totals) => totals.ebit),
+    across(
+      "profit",
+      "Operating profit",
+      "total",
+      true,
+      "ebit",
+      (row) => row.budget.ebit,
+      (totals) => totals.ebit,
+    ),
   ];
 }

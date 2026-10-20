@@ -140,7 +140,7 @@ export function BudgetVerdictStrip({
           onBuild={onBuild}
         />
         <OwnerBudgetCompare
-          label="Profit vs budget"
+          label="Operating profit vs budget"
           budget={profitBudget}
           actual={note || !(hasActuals && profitActual != null) ? null : profitActual}
           higherIsBetter
@@ -227,7 +227,7 @@ export function BudgetVerdictStrip({
             </span>
             <span className="hidden text-slate-400 sm:inline"> · </span>
             <span>
-              <span className="font-semibold">Profit</span>{" "}
+              <span className="font-semibold">Operating profit</span>{" "}
               {hasActuals && profitActual != null ? (
                 <>
                   <span className="whitespace-nowrap tabular-nums">{money(profitActual)}</span>
