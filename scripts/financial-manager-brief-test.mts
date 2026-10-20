@@ -74,7 +74,7 @@ const brief = buildFinancialManagerBrief({
   formatMoney: money,
 });
 assert(brief.movements.length === 3, "brief keeps three movements");
-assert(brief.actions.map((row) => row.button).join(",") === "hand,chase,open", brief.actions.map((a) => a.button).join(","));
+assert(brief.actions.map((row) => row.button).join(",") === "hand,chase", brief.actions.map((a) => a.button).join(","));
 assert(brief.chase?.actions[0]?.title === "Chase the outstanding balance", "chase uses the shared draft input");
 assert(brief.chase?.actions[0]?.overdue === true, "overdue actions mark the shared chase draft");
 assert(brief.drafts[0]?.title === "Advisory note", "draft title is the stored title");
@@ -157,8 +157,27 @@ assert(
   watchPillar.healthCue ?? "Watch still lines the Health cash pillar",
 );
 assert(
-  brief.actions.find((row) => row.id === "cash-floor")?.reason === brief.cashFloorLine,
-  "the cash-floor action quotes the same amounts",
+  !brief.actions.some((row) => row.id === "cash-floor"),
+  "a dip week without forecast lines is not a forecast already on file",
+);
+const withLines = buildFinancialManagerBrief({
+  clientName: "Chill Pepper",
+  currentFinancials: current,
+  currentPeriodEnd: "2026-03-31",
+  snapshots,
+  cashDipWeek: 6,
+  cashOpening: 40000,
+  cashFloor: 55000,
+  cashflow: {
+    openingBalance: "40000",
+    revenue: [{ amount: "10000", frequency: "once", startWeek: 1 }],
+    expenses: [{ amount: "80000", frequency: "once", startWeek: 6 }],
+  },
+  formatMoney: money,
+});
+assert(
+  withLines.actions.some((row) => row.id === "cash-floor"),
+  "real forecast lines can still raise the floor banner",
 );
 const missingOpening = buildFinancialManagerBrief({
   clientName: "Karoo",

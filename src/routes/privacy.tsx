@@ -12,6 +12,7 @@ import { visitorMarketBootScript } from "@/lib/market";
 import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
+import { LANDING_FONT_CSS } from "@/lib/landing-assets";
 import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/privacy")({
   component: PrivacyPage,
   head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.privacy),
-    styles: [{ children: marketingCss }],
+    styles: [{ children: LANDING_FONT_CSS }, { children: marketingCss }],
     scripts: [{ children: visitorMarketBootScript(loaderData?.copyPack) }],
   }),
 });
@@ -64,6 +65,7 @@ function PrivacyPage() {
       ctaLabel="AI notice ✦"
       ctaHref="/ai"
       navCtaLabel={FIRM_TRIAL_CTA_LABEL}
+      landingNav
     >
       <p className="mk-legal-updated">
         Effective {LEGAL_EFFECTIVE} ·{" "}

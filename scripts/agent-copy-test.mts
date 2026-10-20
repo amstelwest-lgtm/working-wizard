@@ -334,7 +334,7 @@ for (const prompt of [ANALYST_SYSTEM, FINANCIAL_MANAGER_SYSTEM, ADVISOR_SYSTEM])
 assert(AGENT_COPY_GUIDE.includes("R 13 846") && AGENT_COPY_GUIDE.includes("$13,846"), "the guide names both amount formats");
 assert(AGENT_COPY_GUIDE.includes("8.6%"), "the guide keeps one decimal on a percent");
 assert(AGENT_COPY_GUIDE.includes("30–60 day healthy band on file"), "the guide refuses an invented healthy band");
-assert(AGENT_COPY_GUIDE.includes("the stored 30–60 day band"), "the guide refuses a stored day band that was not read");
+assert(AGENT_COPY_GUIDE.includes("stored 69 vs live 67"), "the guide forbids a stored-versus-live score");
 
 const keptOpen = polishAgentCopy({
   text: "Next move: lift Profit Drivers (58/100) — review pricing on top lines and the fixed-cost base",
@@ -352,8 +352,10 @@ const keptTwo = polishAgentCopy({
 assert(
   keptTwo.ok === true &&
     keptTwo.text ===
-      "Profit Drivers is the weak pillar (50); stored health 69 vs live 67. Margin and pricing review for accountant.",
-  "a two-sentence active title keeps both sentences and gains a full stop",
+      "Profit Drivers is the weak pillar (50); health 67. Margin and pricing review for accountant." &&
+    !keptTwo.text.includes("69") &&
+    !/stored\s+health/i.test(keptTwo.text),
+  "a two-sentence title quotes the live score and drops the stored comparison",
 );
 const healthNotDays = polishAgentCopy({
   text: "Profit is the weak pillar (50); stored health 69 vs live 67.",
@@ -362,8 +364,10 @@ const healthNotDays = polishAgentCopy({
 });
 assert(
   healthNotDays.ok === true &&
-    healthNotDays.text === "Profit is the weak pillar (50); stored health 69 vs live 67.",
-  `a health score stays a score when working capital days share 69 (${healthNotDays.ok ? healthNotDays.text : "refused"})`,
+    healthNotDays.text === "Profit is the weak pillar (50); health 67." &&
+    !healthNotDays.text.includes("69") &&
+    !healthNotDays.text.includes("days"),
+  `a health score stays a score and quotes live 67 (${healthNotDays.ok ? healthNotDays.text : "refused"})`,
 );
 const doubledDays = polishAgentCopy({
   text: "Creditor days of 73 days days.",
@@ -380,8 +384,11 @@ const healthUnit = polishAgentCopy({
   figures: { "Working Capital Days": 69, live_overall: 67 },
 });
 assert(
-  healthUnit.ok === true && healthUnit.text === "Stored health 69 vs live 67.",
-  `health loses a days unit (${healthUnit.ok ? healthUnit.text : "refused"})`,
+  healthUnit.ok === true &&
+    healthUnit.text === "Health 67." &&
+    !healthUnit.text.includes("69") &&
+    !/stored\s+health/i.test(healthUnit.text),
+  `health quotes the live score and loses a days unit (${healthUnit.ok ? healthUnit.text : "refused"})`,
 );
 assert(draftMetricUnit("overall", 69) === "count", "health is a score with no unit");
 assert(draftMetricUnit("live_overall", 67) === "count", "live health is a score");

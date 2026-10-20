@@ -1,7 +1,8 @@
 /**
  * HealthScorecardPDF — Financial Health Scorecard report.
- * Page 1: exec summary, overall score, pillar grid, DuPont pointer strip.
- * Page 2: full ratio detail per pillar.
+ * Exec summary, overall score, and pillar grid come first. DuPont and the
+ * ratio detail continue in the same flow so a card that starts a page is
+ * not left alone by a hard break. Cards stay wrap={false}.
  *
  * IMPORTANT: Only import via dynamic import() — never at the top level of an
  * SSR-rendered module.
@@ -448,20 +449,18 @@ export function HealthScorecardPDF({
         </View>
       )}
 
-      {/* ── PAGE 2: Ratio detail ── */}
-      <View break>
-        {pillarData.map(({ pillar, score, ratios }) => (
-          <View key={pillar} style={styles.pillarSection}>
-            <SectionHeader title={pillarLabel(pillar)} score={score ?? undefined} />
-            {ratios.map((r, i) => {
-              const spelled = spellLabor(r.ratio_name, market ?? ZA_MARKET);
-              const percent = r.formatted_value.split(" · ")[0] ?? r.formatted_value;
-              const ratioName = r.unscored
-                ? `${spelled} — ${r.formatted_value}`
-                : r.annotation
-                  ? `${spelled} · ${r.annotation}`
-                  : spelled;
-              return (
+      {pillarData.map(({ pillar, score, ratios }) => (
+        <View key={pillar} style={styles.pillarSection}>
+          <SectionHeader title={pillarLabel(pillar)} score={score ?? undefined} />
+          {ratios.map((r, i) => {
+            const spelled = spellLabor(r.ratio_name, market ?? ZA_MARKET);
+            const percent = r.formatted_value.split(" · ")[0] ?? r.formatted_value;
+            const ratioName = r.unscored
+              ? `${spelled} — ${r.formatted_value}`
+              : r.annotation
+                ? `${spelled} · ${r.annotation}`
+                : spelled;
+            return (
               <RatioRow
                 key={r.ratio_key}
                 ratioName={ratioName}
@@ -472,11 +471,10 @@ export function HealthScorecardPDF({
                 priorScore={r.prior_period_score}
                 isAlternate={i % 2 === 1}
               />
-              );
-            })}
-          </View>
-        ))}
-      </View>
+            );
+          })}
+        </View>
+      ))}
     </PDFDocument>
   );
 }

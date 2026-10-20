@@ -69,6 +69,8 @@ export type BuildSphereArgs = {
    * Null means the days are unknown. Omit the map to leave those labels unchanged.
    */
   dayCounts?: Partial<Record<string, number | null>>;
+  /** Per-driver note, keyed by ratio key. Replaces the band word on that row. */
+  driverNotes?: Partial<Record<string, string>>;
 };
 
 export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
@@ -87,6 +89,7 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
       const tracked = isDayScoreDriver(k) && args.dayCounts != null && !noStock;
       const days = tracked ? (args.dayCounts?.[k] ?? null) : undefined;
       const reading = tracked ? dayScoreDriverLabel(label, days, health) : undefined;
+      const note = args.driverNotes?.[k]?.trim() || undefined;
       return {
         key: k,
         label,
@@ -94,6 +97,7 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
         health,
         na: noStock ? true : undefined,
         reading: reading && reading !== label ? reading : undefined,
+        note,
       };
     });
     // Drivers with no score still render as "—" so the owner sees what's missing.

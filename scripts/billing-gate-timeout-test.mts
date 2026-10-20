@@ -37,9 +37,16 @@ const gate = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8")
 assert(gate.includes("SHELL_GATE_TIMEOUT_MS"), "the billing gate arms the 8s timeout");
 assert(gate.includes("billing_gate_timeout"), "a timeout sends a telemetry event");
 assert(
-  gate.includes("opening the app. Server-side billing still applies."),
-  "a timeout logs a console warning and keeps server enforcement",
+  gate.includes(
+    "couldn't check billing. Gated client pages show Retry. Home stays open.",
+  ),
+  "a timeout logs a console warning and shows Retry on a gated client page",
 );
+assert(gate.includes("Couldn't check billing"), "a failed check shows the retry card");
+assert(gate.includes("<Outlet />"), "the outlet mounts from the session");
+assert(!gate.includes("firmGate"), "entitlement does not hold the outlet");
+assert(!gate.includes("failOpen("), "the gate does not fail open");
+assert(!gate.includes("opening the app"), "a timeout does not announce that it opened the app");
 assert(gate.includes('to: "/app"'), "an owner session still leaves the practice shell");
 assert(gate.includes("shouldStayOnAccountantPortal"), "the stay check still runs");
 assert(!gate.includes("if (brandLoading)"), "brand loading no longer abandons the check");

@@ -63,13 +63,12 @@ import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
+import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
 import {
-  cashFlowKnown,
-  coherentEquity,
-  effectivePeriodMonths,
-  reportInputsFromFinancials,
-} from "@/lib/equity-coherence";
-import { reportsHomeReadyLine, reportsReadyCount } from "@/lib/reports-drafter-copy";
+  clientReportsReadyCount,
+  financialsHaveStatementFigures,
+  reportsHomeReadyLine,
+} from "@/lib/reports-drafter-copy";
 import { pickCurrentSnapshot } from "@/lib/financial-snapshots";
 import { defaultPeriodCoverage } from "@/lib/statement-period";
 import {
@@ -81,6 +80,15 @@ import {
   statementKindFromExtraction,
   type PeriodFinancials,
 } from "@/lib/statement-financials";
+import {
+  financialsWriteRev,
+  financialsWriteSuperseded,
+  guardFinancialsWrite,
+  importFailureMessage,
+  importedUpdateMessage,
+  withFinancialsWriteRev,
+  statementImportWhat,
+} from "@/lib/statement-import-apply";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -94,16 +102,18 @@ import {
 import type { HealthTier } from "@/lib/ratios";
 import {
   scoreRatio,
-  computeOverallHealth,
   healthMapFromRatios,
   ratioScoreBand,
   overviewRatioInputs,
   overviewRatios,
   CASH_OPENING_UNSCORED,
+  GROSS_MARGIN_MAPPING_NOTE,
+  grossMarginLooksImplausible,
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
-  cashPillarFollowsForecast,
-  scorecardHealthFromFinancials,
+  liveHealthFromBooks,
+  healthWithoutEvidence,
+  NOT_SCORED_YET_LABEL,
   type OverallHealth,
 } from "@/lib/health-score";
 import { playbookKeyForRatioName } from "@/lib/playbook-key";
@@ -207,6 +217,9 @@ import { canonicalScoreProse } from "@/lib/score-prose";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   assessClientMetrics,
+  forecastHasRealLines,
+  forecastOpeningIsKnown,
+  hasFinancialEvidence,
   persistedRunwayWeeks,
   plBankDisagreement,
   runwayDisplayLabel,
@@ -333,7 +346,8 @@ import {
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
-import { homeActionNeeds, openActionSentence, presentHomeDraftTitle } from "@/lib/owner-needs";
+import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
+import { draftStoredFiguresHash } from "@/lib/draft-figures";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState } from "@/components/primitives";
@@ -1353,10 +1367,7 @@ function ClientView() {
   });
   const periodMonths = coverageMonths;
   /** True once any P&L / balance-sheet figure exists — gates the empty-state card and Ask AI note. */
-  const hasFigures = useMemo(
-    () => FIELD_LABELS.some(({ key }) => (financials[key] ?? "").toString().trim() !== ""),
-    [financials],
-  );
+  const hasFigures = useMemo(() => financialsHaveStatementFigures(financials), [financials]);
   useEffect(() => {
     // Mark only once Overview is showing the score. A bot tab or an import
     // in flight must not count as "figures seen" and pull the card wall.
@@ -1414,29 +1425,28 @@ function ClientView() {
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
   const cashBalance = assessed.cash.amount;
   const cashKnown = cashBalance != null;
+  const cashOnFile = cashKnown || forecastOpeningIsKnown(client?.cashflow);
   const openingMissing = storedOpeningIsMissing(client?.cashflow);
   const healthIndustry = clientIndustryDisplay(
     client?.name,
     parseOperatingProfile(client?.operating_profile),
   );
-  const overallHealth: OverallHealth = cashPillarFollowsForecast(
-    scorecardHealthFromFinancials({
-      financials,
-      fyStartMonth,
-      periodMonths: statementMonths,
-      cashRunwayWeeks: cashKnown ? effectiveRunway : null,
-      cashBalance: cashKnown ? cashBalance : null,
-      market: clientMarket,
-      shortfallWeek: cashOutlook.shortfallWeek,
-      industry: healthIndustry,
-    }),
-    {
-      openingMissing,
-      opening: cashOutlook.opening,
-      closings: cashOutlook.closing,
-      floor: cashOutlook.floor,
-    },
-  );
+  const evidenced = hasFinancialEvidence({
+    financials,
+    cashflow: client?.cashflow,
+  });
+  const forecastLines = forecastHasRealLines(client?.cashflow);
+  const scoredHealth = liveHealthFromBooks({
+    financials: financials as Record<string, unknown>,
+    cashflow: client?.cashflow,
+    financialsUpdatedAt: client?.financials_updated_at ?? null,
+    priorFinancials: priorSnapshot?.financials ?? null,
+    fyStartMonth,
+    market: clientMarket,
+    industry: healthIndustry,
+    timeZone: clientMarket.timezone,
+  });
+  const overallHealth: OverallHealth = evidenced ? scoredHealth : healthWithoutEvidence(scoredHealth);
   const bookStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -1447,6 +1457,7 @@ function ClientView() {
     totalInflow: cashOutlook.totalInflow,
     totalOutflow: cashOutlook.totalOutflow,
     openingMissing,
+    cashOnFile,
   });
   const bookStatusCritical = bookStatusWord.startsWith("Critical");
   const planCashBelowFloor = cashOutlookIsCritical({
@@ -1454,6 +1465,7 @@ function ClientView() {
     floor: cashOutlook.floor,
     dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
     openingMissing,
+    cashOnFile,
   });
   const plVersusBank = useMemo(
     () => plBankDisagreement({ financials, cashflow: client?.cashflow }),
@@ -1550,6 +1562,12 @@ function ClientView() {
     ratioMeta: sphereRatioMeta,
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
     dayCounts: cashDriverDayFigures(financials),
+    driverNotes: grossMarginLooksImplausible(
+      statementGrossMarginFraction(financials) ?? ratios["Gross Margin"] ?? Number.NaN,
+      healthIndustry,
+    )
+      ? { grossMargin: GROSS_MARGIN_MAPPING_NOTE }
+      : undefined,
   });
   const simplifiedSections = [
     {
@@ -1735,6 +1753,8 @@ function ClientView() {
     debtorDays: debtorDaysForMoves,
     financingHealth: pillarHealths.financing,
     weakestPillar: overallHealth.weakestPillar?.id ?? null,
+    hasEvidence: evidenced,
+    market: clientMarket,
   });
   const cashRunwayHeadline = hasFigures
     ? forecastRunwayHeadlineShared({
@@ -2311,6 +2331,8 @@ function ClientView() {
 
   // Autosave debounce ref
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped when an import writes. An autosave that started earlier must not land after it.
+  const financialsWriteGen = useRef(0);
 
   // ── Load client ──────────────────────────────────────────────────────────
 
@@ -2601,19 +2623,42 @@ function ClientView() {
 
   const persistMergedFinancials = useCallback(
     async (updated: Record<string, unknown>) => {
+      const gen = financialsWriteGen.current;
       const { data: row } = await supabase
         .from("clients")
         .select("financials")
         .eq("id", clientId)
         .maybeSingle();
+      if (gen !== financialsWriteGen.current) return false;
+      const seenRev = financialsWriteRev(row?.financials);
       const financials = autosaveKeepsLedgerSync(row?.financials ?? null, updated);
       const updatedAt = new Date().toISOString();
-      const { error } = await supabase
-        .from("clients")
-        .update({ financials: financials as never, financials_updated_at: updatedAt })
-        .eq("id", clientId);
+      if (gen !== financialsWriteGen.current) return false;
+      const pending = guardFinancialsWrite(
+        supabase
+          .from("clients")
+          .update({ financials: financials as never, financials_updated_at: updatedAt })
+          .eq("id", clientId),
+        seenRev,
+      );
+      const { data: saved, error } = await pending.select("id");
+      if (gen !== financialsWriteGen.current) return false;
       if (error) {
         toast.error(`Autosave failed: ${error.message}`);
+        setAutosaveStatus("idle");
+        return false;
+      }
+      if (!saved?.length) {
+        const { data: again } = await supabase
+          .from("clients")
+          .select("financials")
+          .eq("id", clientId)
+          .maybeSingle();
+        if (financialsWriteSuperseded(seenRev, again?.financials)) {
+          setAutosaveStatus("idle");
+          return false;
+        }
+        toast.error("Autosave failed: the figures were not written.");
         setAutosaveStatus("idle");
         return false;
       }
@@ -2863,8 +2908,7 @@ function ClientView() {
       const periodDate = period?.periodEnd?.trim() ?? "";
       const periodLabel = period?.periodLabel?.trim() ?? "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(periodDate) || !periodLabel) {
-        toast.error("Choose the statement period before importing.");
-        return;
+        return { ok: false as const, message: importFailureMessage("Choose the statement period before importing.") };
       }
 
       const statementKind = statementKindFromExtraction(result);
@@ -2908,14 +2952,14 @@ function ClientView() {
       }
 
       if (saveError) {
-        toast.error(`Failed to save snapshot: ${saveError.message}`);
-        return;
+        return {
+          ok: false as const,
+          message: importFailureMessage(`Failed to save snapshot: ${saveError.message}`),
+        };
       }
 
       if (historyOnlyUploadRef.current) {
         historyOnlyUploadRef.current = false;
-        toast.success(`Saved ${periodLabel} as history — live figures unchanged.`);
-        closeUpload();
         const { data } = await supabase
           .from("client_financial_snapshots")
           .select("id, period_label, period_date, financials, ratios, source, created_at")
@@ -2933,9 +2977,14 @@ function ClientView() {
             created_at: (s.created_at as string | null) ?? null,
           })),
         );
-        return;
+        return { ok: true as const, message: importedUpdateMessage(`${periodLabel} history`) };
       }
 
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current);
+        autosaveTimer.current = null;
+      }
+      financialsWriteGen.current += 1;
       const financialsUpdatedAt = new Date().toISOString();
       const liveMerged = mergeStatementFinancials(financialsRef.current, inputs, statementKind);
       const nextScalars = Object.fromEntries(
@@ -2943,40 +2992,45 @@ function ClientView() {
           value == null || typeof value === "object" ? [] : [[key, String(value)]],
         ),
       ) as Record<string, string>;
-      financialsRef.current = nextScalars;
-      const blob = mergeCurrentBlob(nextScalars);
-      await supabase
+      const blob = withFinancialsWriteRev(mergeCurrentBlob(nextScalars));
+      const { data: savedLive, error: liveError } = await supabase
         .from("clients")
         .update({ financials: blob as never, financials_updated_at: financialsUpdatedAt })
-        .eq("id", clientId);
+        .eq("id", clientId)
+        .select("id");
+      if (liveError || !savedLive?.length) {
+        return {
+          ok: false as const,
+          message: importFailureMessage(
+            liveError?.message ?? "The figures were not written to this client.",
+          ),
+        };
+      }
+      financialsRef.current = nextScalars;
 
       await recordScoreHistory(
         clientId,
-        computeOverallHealth({
-          ratios: ratiosOut,
-          cashRunwayWeeks: effectiveRunway,
+        liveHealthFromBooks({
+          financials: blob as Record<string, unknown>,
+          cashflow: client?.cashflow,
+          financialsUpdatedAt,
+          priorFinancials: priorSnapshot?.financials ?? null,
+          fyStartMonth,
           market: clientMarket,
-          shortfallWeek: cashOutlook.shortfallWeek,
+          industry: healthIndustry,
+          timeZone: clientMarket.timezone,
         }).overall,
       );
 
-      // Update local state with new financials
+      // Update local state with new financials. The panel stays open until it
+      // shows this message, then the caller closes it.
       setFinancials(nextScalars);
       setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
-      toast.success(`Financials saved for ${periodLabel}`);
-      setActiveTab("overview");
-      void navigate({
-        to: "/clients/$clientId",
-        params: { clientId },
-        search: (prev) => accountantClientTabSearch(prev, "home"),
-      });
-      startStudioTourAfterFigures();
       track("financials_uploaded", {
         surface: "accountant_portal",
         clientId,
         firmId,
       });
-      closeUpload();
 
       if (autoPopulate) {
         try {
@@ -3003,6 +3057,7 @@ function ClientView() {
           toast.error(`Figures saved, but drafting deliverables failed: ${(e as Error).message}`);
         }
       }
+      return { ok: true as const, message: importedUpdateMessage(statementImportWhat(statementKind)) };
     },
     [
       clientId,
@@ -3017,8 +3072,6 @@ function ClientView() {
       autoPopulateState?.prefs,
       client?.market,
       applyAutoPopulateResult,
-      startStudioTourAfterFigures,
-      navigate,
     ],
   );
 
@@ -3492,8 +3545,16 @@ function ClientView() {
     [homeActivity.runs, settledRows, workingRows],
   );
   const homePresence = useMemo(
-    () => steerOpenHandoffs(ownerPresence({ ...homeActivity, runs: homeCardRuns }), openAgents),
-    [homeActivity, homeCardRuns, openAgents],
+    () =>
+      steerOpenHandoffs(
+        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, {
+          overall: overallHealth.overall,
+          weakestLabel: overallHealth.weakestPillar?.label ?? null,
+          weakestScore: overallHealth.weakestPillar?.score ?? null,
+        }),
+        openAgents,
+      ),
+    [homeActivity, homeCardRuns, openAgents, overallHealth],
   );
   const shownHandoffs = useMemo(
     () =>
@@ -3615,16 +3676,21 @@ function ClientView() {
       openingMissing,
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
-      cashOutlook: {
-        opening: cashOutlook.opening,
-        closing: cashOutlook.closing,
-        floor: cashOutlook.floor,
-        dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
-      },
-      cashPillarStatus: pillarStatus.cash ?? null,
-      cashRunwayWeeks: effectiveRunway,
-      cashDebtorScore: Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null,
-      cashBurnScore: Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null,
+      hasEvidence: evidenced,
+      cashOnFile,
+      cashOutlook:
+        evidenced && cashOnFile
+          ? {
+              opening: cashOutlook.opening,
+              closing: cashOutlook.closing,
+              floor: cashOutlook.floor,
+              dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+            }
+          : null,
+      cashPillarStatus: evidenced && cashOnFile ? (pillarStatus.cash ?? null) : null,
+      cashRunwayWeeks: evidenced ? effectiveRunway : null,
+      cashDebtorScore: evidenced && Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null,
+      cashBurnScore: evidenced && Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null,
       openAction: openPlanUnavailable
         ? "Open actions aren't available yet."
         : openPlanTitles == null
@@ -3651,8 +3717,10 @@ function ClientView() {
     openPlanUnavailable,
     gateMarket,
     openingMissing,
+    cashOnFile,
     clientProfitBridge.ebit,
     pillarStatus.cash,
+    evidenced,
     effectiveRunway,
     healthMap.debtorDays,
     healthMap.ocfToEbitda,
@@ -3666,12 +3734,7 @@ function ClientView() {
   // the temporal dead zone here, and the minified chunk throws
   // "Cannot access '…' before initialization" on every /clients/:id render.
   const reportsIssued = client?.reports_issued_count ?? 0;
-  const reportReadiness = reportInputsFromFinancials(financials as Record<string, unknown>);
-  const reportsReady = reportsReadyCount({
-    figuresOnFile: hasFigures,
-    leverageReady: reportReadiness.leverageReady,
-    assetReady: reportReadiness.assetReady,
-  });
+  const reportsReady = clientReportsReadyCount(financials);
   const reportsLine = reportsHomeReadyLine(reportsReady);
   const canonicalRatios = useMemo(
     () => scorecardRatiosFromFinancials(financials, { fyStartMonth }),
@@ -3693,20 +3756,25 @@ function ClientView() {
         draftFindingLabel(row) === DRAFT_NEEDS_ACCOUNTANT,
     );
     const draftsHeading = homeActivity.loading ? "Drafts" : waiting.length ? "Drafts" : "Drafts";
-    const presented = waiting[0]
-      ? presentHomeDraftTitle(
-          canonicalScoreProse(rewriteDraftMonthStamp(waiting[0].title)),
-          canonicalRatios,
-        )
+    const liveDraft = {
+      overall: overallHealth.overall,
+      storedHash: waiting[0] ? draftStoredFiguresHash(waiting[0].evidence) : null,
+    };
+    const titlePresented = waiting[0]
+      ? presentHomeDraftTitle(waiting[0].title, canonicalRatios, liveDraft)
       : null;
+    const bodyPresented = waiting[0]?.detail?.trim()
+      ? presentHomeDraftBody(waiting[0].detail, canonicalRatios, liveDraft)
+      : null;
+    const presented = titlePresented?.text ? titlePresented : bodyPresented;
     const draftLines = homeActivity.loading
       ? ["Checking drafts."]
       : homeActivity.error
         ? ["Drafts aren't available yet."]
-        : presented
+        : presented?.text
           ? [presented.text]
           : ["No draft waiting."];
-    const draftStale = presented ? [presented.stale] : undefined;
+    const draftStale = presented ? [presented.stale || presented.refresh || Boolean(bodyPresented?.refresh)] : undefined;
     const booksLine =
       homeStatementsLine(statementSpan) ?? booksAnswerSentence({ freshness: dataFreshness });
     return {
@@ -3726,6 +3794,7 @@ function ClientView() {
     openPlanUnavailable,
     homeActivity,
     canonicalRatios,
+    overallHealth.overall,
     dataFreshness,
     reportsLine,
     statementSpan,
@@ -3752,23 +3821,32 @@ function ClientView() {
         openActionTitles: openPlanTitles ?? [],
         overdueActions: openPlanOverdue,
         cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
-        cashDipWeek: cashOutlook.dipsBelowFloorWeek,
-        cashOpening: hasFigures ? cashOutlook.opening : null,
+        cashDipWeek: forecastLines ? cashOutlook.dipsBelowFloorWeek : null,
+        cashOpening: evidenced && cashOnFile ? cashOutlook.opening : null,
         // Passed through for a forecast with no lines. A stored series replaces this
         // with forecastMinimumCash, the same floor as Cash.
-        cashFloor: hasFigures ? cashOutlook.floor : null,
-        cashClosing: hasFigures ? cashOutlook.closing : null,
+        cashFloor: evidenced && cashOnFile ? cashOutlook.floor : null,
+        cashClosing: evidenced && cashOnFile ? cashOutlook.closing : null,
         market: gateMarket,
         openingMissing,
-        cashPillarStatus: pillarStatus.cash ?? null,
+        cashOnFile,
+        cashPillarStatus: evidenced && cashOnFile ? (pillarStatus.cash ?? null) : null,
         cashStrainLine: spokenCashStrain(homeBooks),
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
           if (draftFindingLabel(row) !== DRAFT_NEEDS_ACCOUNTANT) return [];
           const title = row.title?.trim() ?? "";
-          return title ? [{ id: row.id, title }] : [];
+          if (!title) return [];
+          return [{
+            id: row.id,
+            title,
+            detail: row.detail,
+            figuresHash: draftStoredFiguresHash(row.evidence),
+          }];
         }),
+        canonicalRatios,
+        healthOverall: overallHealth.overall,
         draftsReady: !homeActivity.loading && !homeActivity.error,
         actionsReady: openPlanTitles != null && !openPlanUnavailable,
         formatMoney: (amount) => formatMoney(amount, gateMarket),
@@ -3784,14 +3862,19 @@ function ClientView() {
       client?.cashflow,
       cashOutlook.dipsBelowFloorWeek,
       hasFigures,
+      evidenced,
+      forecastLines,
       cashOutlook.opening,
       cashOutlook.closing,
       cashOutlook.floor,
       openingMissing,
+      cashOnFile,
       pillarStatus.cash,
       homeBooks,
       statementPosition.receivables,
       homeActivity,
+      canonicalRatios,
+      overallHealth.overall,
       gateMarket,
     ],
   );
@@ -4350,15 +4433,15 @@ function ClientView() {
                   ring={
                     <HealthRing
                       id="overview-health"
-                      score={hasFigures ? overallHealth.overall : null}
-                      status={hasFigures ? overallHealth.displayStatus : undefined}
+                      score={evidenced ? overallHealth.overall : null}
+                      status={evidenced ? overallHealth.displayStatus : undefined}
                       size={74}
                       strokeWidth={5}
                     />
                   }
-                  healthScore={hasFigures ? overallHealth.overall : null}
-                  healthLabel={bookStatusWord}
-                  healthStatus={hasFigures ? (bookStatusCritical ? "critical" : overallHealth.displayStatus) : null}
+                  healthScore={evidenced ? overallHealth.overall : null}
+                  healthLabel={evidenced ? bookStatusWord : NOT_SCORED_YET_LABEL}
+                  healthStatus={evidenced ? (bookStatusCritical ? "critical" : overallHealth.displayStatus) : null}
                   snapshot={briefingSnapshot}
                   about={briefingAbout}
                   profile={briefingProfile}
@@ -4593,9 +4676,9 @@ function ClientView() {
                           variant="ring"
                           caption={HEALTH_RING_CAPTION}
                           hideCaption
-                          overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
-                          displayStatus={bookStatusCritical ? "critical" : overallHealth.displayStatus}
-                          statusLabel={bookStatusCritical ? bookStatusWord : null}
+                          overallHealth={evidenced && isFinite(avgHealth) ? avgHealth : NaN}
+                          displayStatus={evidenced ? (bookStatusCritical ? "critical" : overallHealth.displayStatus) : undefined}
+                          statusLabel={evidenced ? (bookStatusCritical ? bookStatusWord : null) : NOT_SCORED_YET_LABEL}
                           pillars={spherePillars}
                           cashFloorCue={homeBrief.healthCue}
                           onCashFloor={() => openHomeAgent("financial_manager")}
@@ -5581,8 +5664,16 @@ function ClientView() {
                 </p>
                 <UploadFinancials
                   clientName={client?.name}
-                  onConfirm={(result, prefs, period) => {
-                    void handleConfirmFinancials(result, prefs, period);
+                  onConfirm={(result, prefs, period) => handleConfirmFinancials(result, prefs, period)}
+                  onApplied={() => {
+                    setActiveTab("overview");
+                    void navigate({
+                      to: "/clients/$clientId",
+                      params: { clientId },
+                      search: (prev) => accountantClientTabSearch(prev, "home"),
+                    });
+                    startStudioTourAfterFigures();
+                    closeUpload();
                   }}
                   onOpenBankUpload={(file) => {
                     setUploadOpen(false);
@@ -5824,23 +5915,18 @@ function ClientView() {
               const draftedFinancials = { ...financials, ...asStrings } as Record<string, unknown>;
               await recordScoreHistory(
                 clientId,
-                cashPillarFollowsForecast(
-                  scorecardHealthFromFinancials({
-                    financials: draftedFinancials,
-                    fyStartMonth,
-                    periodMonths: periodMonthsOf(draftedFinancials),
-                    cashRunwayWeeks: effectiveRunway,
-                    market: clientMarket,
-                    shortfallWeek: cashOutlook.shortfallWeek,
-                    industry: healthIndustry,
-                  }),
-                  {
-                    openingMissing,
-                    opening: cashOutlook.opening,
-                    closings: cashOutlook.closing,
-                    floor: cashOutlook.floor,
-                  },
-                ).overall,
+                hasFinancialEvidence({ financials: draftedFinancials, cashflow: client?.cashflow })
+                  ? liveHealthFromBooks({
+                      financials: draftedFinancials,
+                      cashflow: client?.cashflow,
+                      financialsUpdatedAt,
+                      priorFinancials: priorSnapshot?.financials ?? null,
+                      fyStartMonth,
+                      market: clientMarket,
+                      industry: healthIndustry,
+                      timeZone: clientMarket.timezone,
+                    }).overall
+                  : null,
               );
               toast.success(
                 annualised

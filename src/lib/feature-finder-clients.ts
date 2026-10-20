@@ -16,7 +16,8 @@ import {
   type FeatureAudience,
   type FeatureResult,
 } from "@/lib/feature-finder";
-import { MONTHS } from "@/lib/market/date-presets";
+import { formatCalendarDay } from "@/lib/market/format";
+import { marketForClient } from "@/lib/market/scope";
 
 export const CLIENTS_GROUP = "Clients";
 
@@ -38,6 +39,8 @@ export type FinderClient = {
   ownerEmail?: string | null;
   /** ISO timestamp the client row was created. */
   createdAt?: string | null;
+  /** Client market selection. The added-date follows this, not a fixed day-first order. */
+  market?: unknown;
 };
 
 export type ClientSearchResult = {
@@ -106,14 +109,30 @@ function sameName(a: string, b: string): boolean {
   return a.localeCompare(b, undefined, { sensitivity: "accent" }) === 0;
 }
 
-/** `added 3 Mar 2026`. UTC, so the label does not depend on the browser zone. */
-export function finderAddedLabel(createdAt: string | null | undefined): string | null {
+/**
+ * `added 3 Mar 2026` in ZA, `added Mar 3, 2026` in the US.
+ * The calendar day is the UTC date on the timestamp. The order follows the client market.
+ */
+export function finderAddedLabel(
+  createdAt: string | null | undefined,
+  market?: { locale?: string | null; timezone?: string | null } | { market?: unknown } | null,
+): string | null {
   if (!createdAt?.trim()) return null;
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) return null;
-  const month = MONTHS[date.getUTCMonth()];
-  if (!month) return null;
-  return `added ${date.getUTCDate()} ${month} ${date.getUTCFullYear()}`;
+  const resolved =
+    market && "locale" in market
+      ? { locale: market.locale ?? null, timezone: market.timezone ?? "UTC" }
+      : marketForClient(
+          market && "market" in market ? { market: market.market } : { market: null },
+        );
+  const y = String(date.getUTCFullYear());
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  const ymd = `${y}-${m}-${d}`;
+  const day = formatCalendarDay(ymd, resolved);
+  if (!day || day === "—") return null;
+  return `added ${day}`;
 }
 
 /**
@@ -139,7 +158,10 @@ function cleanDetail(value: string | null | undefined): string {
 }
 
 /** One field of a same-name label. Null means this row has nothing to add. */
-function finderDetailPart(client: FinderClient, step: "business" | "email" | "added" | "code"): string | null {
+function finderDetailPart(
+  client: FinderClient,
+  step: "business" | "email" | "added" | "code",
+): string | null {
   if (step === "business") {
     const business = cleanDetail(client.businessName);
     const person = client.name.trim();
@@ -147,7 +169,12 @@ function finderDetailPart(client: FinderClient, step: "business" | "email" | "ad
     return business;
   }
   if (step === "email") return cleanDetail(client.ownerEmail) || null;
-  if (step === "added") return finderAddedLabel(client.createdAt);
+  if (step === "added") {
+    return finderAddedLabel(
+      client.createdAt,
+      client.market == null ? undefined : { market: client.market },
+    );
+  }
   return cleanDetail(client.clientCode) || shortClientId(client.id);
 }
 
@@ -161,7 +188,10 @@ function labelsCollide(labels: ReadonlyMap<string, string>): boolean {
 }
 
 /** Rows still blank, or still sharing a label with another row in the group. */
-function unresolvedIds(group: readonly FinderClient[], labels: ReadonlyMap<string, string>): string[] {
+function unresolvedIds(
+  group: readonly FinderClient[],
+  labels: ReadonlyMap<string, string>,
+): string[] {
   const counts = new Map<string, number>();
   for (const client of group) {
     const label = labels.get(client.id) ?? "";
@@ -232,7 +262,11 @@ export function finderNameDisambiguators(
   return out;
 }
 
-function clientHint(client: FinderClient, disambiguator: string | undefined, fallback: string): string {
+function clientHint(
+  client: FinderClient,
+  disambiguator: string | undefined,
+  fallback: string,
+): string {
   const code = client.clientCode?.trim() || "";
   if (disambiguator && code) return `${code} · ${disambiguator}`;
   if (disambiguator) return disambiguator;

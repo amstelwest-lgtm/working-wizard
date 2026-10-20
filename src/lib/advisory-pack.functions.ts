@@ -33,6 +33,7 @@ import {
   isMissingPackRelation,
   livePackMetrics,
   packNarrativeRatios,
+  packStatementAmount,
   parsePackReviewRow,
   parsePackRow,
   type AdvisoryPack,
@@ -471,12 +472,6 @@ export async function gatherPackInputs(
   const artifactKinds = new Set(
     (artifactsRes.error ? [] : (artifactsRes.data ?? [])).map((row: { kind?: string }) => row.kind ?? ""),
   );
-  const amount = (value: unknown): number | null => {
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value !== "string" || !value.trim()) return null;
-    const parsed = Number(value.replace(/,/g, ""));
-    return Number.isFinite(parsed) ? parsed : null;
-  };
   const recommendations: Recommendation[] = (recsRes.error ? [] : (recsRes.data ?? [])).map(
     (r: Record<string, unknown>) => parseRecommendationRow(r),
   );
@@ -530,8 +525,8 @@ export async function gatherPackInputs(
     currency: overview.market.currency,
     market: overview.market,
     statementGaps: {
-      receivables: amount(financials?.receivables),
-      payables: amount(financials?.payables),
+      receivables: packStatementAmount(financials, "receivables"),
+      payables: packStatementAmount(financials, "payables"),
       hasAgedDebtors: artifactKinds.has("aged_debtors"),
       hasAgedCreditors: artifactKinds.has("aged_creditors"),
       openingMissing: storedOpeningIsMissing(client.cashflow),

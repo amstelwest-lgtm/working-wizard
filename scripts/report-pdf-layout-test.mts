@@ -92,11 +92,16 @@ const budget = readFileSync(resolve("src/reports/budget-variance.tsx"), "utf8");
 assert(budget.includes("wrap={false}"), "the budget table header stays with its first row");
 assert(budget.includes("variancePctCell"), "the budget percent cell uses the short label");
 assert(budget.includes('overflow: "hidden"'), "the percent cell cannot paint over the variance amount");
+assert(!budget.includes("hideHeader"), "each budget section is one table");
+assert(budget.includes("budget === 0 && actual === 0"), "a zero budget and zero actual is not In line");
+assert(budget.includes('return "—"'), "that zero row prints an em dash");
 
 const dupont = readFileSync(resolve("src/components/pdf/dupont.tsx"), "utf8");
 assert(dupont.includes("wrap={false}") && dupont.includes("minPresenceAhead={PDF_CARD_MIN_PRESENCE}"), "DuPont cards do not split the header from the body");
 const scorecard = readFileSync(resolve("src/reports/health-scorecard.tsx"), "utf8");
 assert(scorecard.includes("wrap={false}") && scorecard.includes("minPresenceAhead={PDF_CARD_MIN_PRESENCE}"), "scorecard cards are unbreakable");
+assert(!scorecard.includes("<View break"), "ratio detail flows under DuPont instead of a hard page break");
+assert(scorecard.includes("<SectionHeader"), "ratio headings use the keep-with-next section header");
 for (const file of [
   "src/components/pdf/exec-summary.tsx",
   "src/components/pdf/metric-box.tsx",

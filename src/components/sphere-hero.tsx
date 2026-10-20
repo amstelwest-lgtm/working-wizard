@@ -46,6 +46,8 @@ export type SphereDriver = {
    * as a score, so the row is not read as a day count.
    */
   reading?: string;
+  /** Replaces the Healthy/Watch/Critical word. Used when a margin needs a mapping check. */
+  note?: string;
 };
 
 export type SpherePillar = {
@@ -975,7 +977,11 @@ export function SphereHero({
                           <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>
                             {d.na ? "N/A" : fmtScore(d.health)}
                           </p>
-                          {d.na ? null : (
+                          {d.na ? null : d.note ? (
+                            <p className="max-w-[11rem] text-right text-[11px] font-semibold leading-snug text-amber-800 dark:text-amber-200">
+                              {d.note}
+                            </p>
+                          ) : (
                             <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
                           )}
                         </>

@@ -115,16 +115,32 @@ import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
-  cashPillarFollowsForecast,
-  computeOverallHealth,
   grossMarginLooksImplausible,
+  healthWithoutEvidence,
+  NOT_SCORED_YET_LABEL,
   healthMapFromRatios,
+  liveHealthFromBooks,
   scoreRatio,
 } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
-import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
+import {
+  assessClientMetrics,
+  forecastOpeningIsKnown,
+  hasFinancialEvidence,
+  runwayDisplayLabel,
+  storedOpeningIsMissing,
+} from "@/lib/client-metrics";
+import {
+  financialsWriteRev,
+  financialsWriteSuperseded,
+  guardFinancialsWrite,
+  importFailureMessage,
+  importedUpdateMessage,
+  statementImportWhat,
+  withFinancialsWriteRev,
+} from "@/lib/statement-import-apply";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -327,6 +343,7 @@ import {
   computeWeekChanges,
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { isOwnerDeliverablesRequest, ownerDeliverablesRedirectTarget } from "@/lib/owner-nav";
 
 function AppBootSpinner() {
@@ -2054,6 +2071,8 @@ function Index() {
   const { viewMode, setViewMode } = useViewMode();
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+  const [ownerBootTimedOut, setOwnerBootTimedOut] = useState(false);
+  const [ownerBootAttempt, setOwnerBootAttempt] = useState(0);
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
   const [marketNeedsGate, setMarketNeedsGate] = useState(false);
 
@@ -2326,14 +2345,16 @@ function Index() {
           }
           return;
         }
-        const { data: u } = await supabase.auth.getUser();
-        if (!u.user) {
+        const account = user;
+        if (!account) {
           if (!cancelled) {
             setOwnerWorkspaces([]);
             setEffectiveClientId(null);
           }
           return;
         }
+        // Session user is routing and UI only. Server functions and RLS still verify the JWT.
+        const u = { user: account };
 
         const pendingInvite =
           typeof localStorage !== "undefined"
@@ -2579,7 +2600,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [actingClientId, navigate, user?.id]);
+  }, [actingClientId, navigate, user?.id, ownerBootAttempt]);
 
   useEffect(() => {
     if (!effectiveClientId) {
@@ -2806,13 +2827,11 @@ function Index() {
   // Returning invite accept: user_metadata still points at the invited workspace.
   useEffect(() => {
     if (!effectiveClientId || invitedOwnerEntry) return;
-    void supabase.auth.getUser().then(({ data: { user: u } }) => {
-      const metaInvite = (u?.user_metadata?.invite_client_id as string | null) ?? null;
-      if (isClientUuid(metaInvite) && metaInvite === effectiveClientId) {
-        setInvitedOwnerEntry(true);
-      }
-    });
-  }, [effectiveClientId, invitedOwnerEntry]);
+    const metaInvite = (user?.user_metadata?.invite_client_id as string | null) ?? null;
+    if (isClientUuid(metaInvite) && metaInvite === effectiveClientId) {
+      setInvitedOwnerEntry(true);
+    }
+  }, [effectiveClientId, invitedOwnerEntry, user]);
 
   // Settings → Business profile deep-link
   useEffect(() => {
@@ -2848,9 +2867,11 @@ function Index() {
     if (!clientLinkResolved) return;
     let cancelled = false;
     setRoleResolved(false);
-    supabase.auth.getUser().then(async ({ data: { user: u } }) => {
+    const account = user;
+    void (async () => {
       try {
-        if (!u) return;
+        if (!account) return;
+        const u = account;
         const activeWs = ownerWorkspaces.find((w) => w.clientId === effectiveClientId);
         if (!actingClientId && activeWs) {
           setUserRole(boardRoleForWorkspace(activeWs.role));
@@ -2900,7 +2921,7 @@ function Index() {
       } finally {
         if (!cancelled) setRoleResolved(true);
       }
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -2936,6 +2957,7 @@ function Index() {
   // otherwise merely opening the dashboard bumps financials_updated_at and
   // falsely invalidates an accountant's sign-off with no real data change.
   const skipNextFinancialsAutosave = useRef(false);
+  const ownerWriteGen = useRef(0);
 
   // Load financials for whoever is the effective client (owner or impersonation)
   useEffect(() => {
@@ -3008,14 +3030,18 @@ function Index() {
     if (!hasRealFinancials && !hasWeeklyActivity(weeklyInputs) && !hasProductMixAnswer(productMix))
       return;
     setSaveStatus("saving");
+    const gen = ownerWriteGen.current;
     const t = setTimeout(async () => {
+      if (gen !== ownerWriteGen.current) return;
       const financialsUpdatedAt = new Date().toISOString();
       const { data: row } = await supabase
         .from("clients")
         .select("financials")
         .eq("id", effectiveClientId)
         .maybeSingle();
+      if (gen !== ownerWriteGen.current) return;
       const serverFinancials = (row?.financials as Record<string, unknown> | null) ?? null;
+      const seenRev = financialsWriteRev(serverFinancials);
       let blob: Record<string, unknown>;
       if (hasRealFinancials) {
         blob = autosaveKeepsLedgerSync(serverFinancials, { ...v, weeklyInputs, productMix });
@@ -3025,23 +3051,36 @@ function Index() {
           productMix,
         );
       }
-      const { data: updated, error } = await supabase
-        .from("clients")
-        .update({
-          financials: blob as never,
-          financials_updated_at: financialsUpdatedAt,
-        })
-        .eq("id", effectiveClientId)
-        .select("id");
-      if (error) {
+      if (gen !== ownerWriteGen.current) return;
+      const pending = guardFinancialsWrite(
+        supabase
+          .from("clients")
+          .update({
+            financials: blob as never,
+            financials_updated_at: financialsUpdatedAt,
+          })
+          .eq("id", effectiveClientId),
+        seenRev,
+      );
+      const { data: updated, error } = await pending.select("id");
+      if (gen !== ownerWriteGen.current) {
+        setSaveStatus("idle");
+      } else if (error) {
         toast.error(`Save failed: ${error.message}`);
         setSaveStatus("idle");
       } else if (!updated?.length) {
-        // RLS silently rejects writes that fail the policy — 0 rows returned means
-        // the update was blocked (no owner_user_id match or missing client record).
-        toast.error(
-          "Save failed: your changes were not written to the database. Please refresh and try again.",
-        );
+        const { data: again } = await supabase
+          .from("clients")
+          .select("financials")
+          .eq("id", effectiveClientId)
+          .maybeSingle();
+        if (!financialsWriteSuperseded(seenRev, again?.financials)) {
+          // RLS silently rejects writes that fail the policy — 0 rows returned means
+          // the update was blocked (no owner_user_id match or missing client record).
+          toast.error(
+            "Save failed: your changes were not written to the database. Please refresh and try again.",
+          );
+        }
         setSaveStatus("idle");
       } else {
         setClientMeta((m) => (m ? { ...m, financials_updated_at: financialsUpdatedAt } : m));
@@ -3085,23 +3124,20 @@ function Index() {
   });
 
   const exitImpersonation = async () => {
-    if (actingClientId) {
-      const { data: u } = await supabase.auth.getUser();
-      if (u.user) {
-        const { data: rows } = await supabase
+    if (actingClientId && user?.id) {
+      const { data: rows } = await supabase
+        .from("impersonation_audit")
+        .select("id")
+        .eq("firm_user_id", user.id)
+        .eq("client_id", actingClientId)
+        .is("ended_at", null)
+        .order("started_at", { ascending: false })
+        .limit(1);
+      if (rows?.[0]) {
+        await supabase
           .from("impersonation_audit")
-          .select("id")
-          .eq("firm_user_id", u.user.id)
-          .eq("client_id", actingClientId)
-          .is("ended_at", null)
-          .order("started_at", { ascending: false })
-          .limit(1);
-        if (rows?.[0]) {
-          await supabase
-            .from("impersonation_audit")
-            .update({ ended_at: new Date().toISOString() })
-            .eq("id", rows[0].id);
-        }
+          .update({ ended_at: new Date().toISOString() })
+          .eq("id", rows[0].id);
       }
     }
     sessionStorage.removeItem("acting_as_client_id");
@@ -3639,7 +3675,7 @@ function Index() {
         : NaN,
   };
 
-  // Overall + pillars — same computeOverallHealth as accountant dashboard / scorecard.
+  // Overall + pillars — liveHealthFromBooks, the same call as the accountant Health page.
   // Local healthMap above stays for next-steps / sphere drivers; it must not drive the overall.
   const ownerPrior = useMemo(
     () =>
@@ -3669,13 +3705,18 @@ function Index() {
     });
   };
   const cashBalance = ownerMetrics.cash.amount;
+  const ownerCashOnFile = cashBalance != null || forecastOpeningIsKnown(clientMeta?.cashflow);
+  const ownerEvidence = hasFinancialEvidence({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+  });
   const ownerOpeningMissing = storedOpeningIsMissing(clientMeta?.cashflow);
   // Same reading as the Financial Manager card. An outlook uses its stored
   // floor. With no outlook, the card's cashflow is included so Health cannot
   // drop the line the card already shows. A missing opening is not cash under
   // the floor, so this line stays off.
   const ownerDoorOutlook =
-    cashBalance != null
+    ownerEvidence && ownerCashOnFile && cashBalance != null
       ? {
           opening: ownerOutlook.opening,
           closing: ownerOutlook.closing,
@@ -3686,28 +3727,24 @@ function Index() {
   const ownerCashFloorCue =
     cashFloorForHome({
       openingMissing: ownerOpeningMissing,
+      cashOnFile: ownerCashOnFile,
       cashOutlook: ownerDoorOutlook,
       cashflow: clientMeta?.cashflow ?? null,
       market: boardMarket,
       money: (amount) => formatMoney(amount, boardMarket),
     })?.healthCue ?? null;
   const grossImplausible = grossMarginLooksImplausible(grossMarginRatio, industryLabel);
-  const overallHealth = cashPillarFollowsForecast(
-    computeOverallHealth({
-      ratios: computedRatios as Record<string, number>,
-      cashRunwayWeeks: cashBalance != null ? effectiveRunway : null,
-      cashBalance,
-      market: boardMarket,
-      shortfallWeek: ownerOutlook.shortfallWeek,
-      grossMarginImplausible: grossImplausible,
-    }),
-    {
-      openingMissing: ownerOpeningMissing,
-      opening: ownerOutlook.opening,
-      closings: ownerOutlook.closing,
-      floor: ownerOutlook.floor,
-    },
-  );
+  const scoredHealth = liveHealthFromBooks({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+    financialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
+    priorFinancials: ownerPrior?.financials ?? null,
+    fyStartMonth,
+    market: boardMarket,
+    industry: industryLabel,
+    timeZone: boardMarket.timezone,
+  });
+  const overallHealth = ownerEvidence ? scoredHealth : healthWithoutEvidence(scoredHealth);
   const ownerStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -3718,6 +3755,7 @@ function Index() {
     totalInflow: ownerOutlook.totalInflow,
     totalOutflow: ownerOutlook.totalOutflow,
     openingMissing: ownerOpeningMissing,
+    cashOnFile: ownerCashOnFile,
   });
   const ownerStatusCritical = ownerStatusWord.startsWith("Critical");
   const ownerCashBelowFloor = cashOutlookIsCritical({
@@ -3725,6 +3763,7 @@ function Index() {
     floor: ownerOutlook.floor,
     dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
     openingMissing: ownerOpeningMissing,
+    cashOnFile: ownerCashOnFile,
   });
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
@@ -3788,6 +3827,7 @@ function Index() {
     ratioMeta: RATIO_META,
     inventoryApplies: stockSittingApplies(operatingProfile),
     dayCounts: cashDriverDayFigures(v as unknown as Record<string, unknown>),
+    driverNotes: grossImplausible ? { grossMargin: GROSS_MARGIN_MAPPING_NOTE } : undefined,
   });
 
   // Same ranker as the accountant Moves tab and Action Plan import.
@@ -3799,6 +3839,8 @@ function Index() {
     debtorDays: ratiosStatementFigures(v as unknown as Record<string, unknown>).debtorDays,
     financingHealth: pillarHealths.financing,
     weakestPillar: overallHealth.weakestPillar?.id ?? null,
+    hasEvidence: ownerEvidence,
+    market: boardMarket,
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
   const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
@@ -3918,6 +3960,45 @@ function Index() {
     profileFunnelOpen: showOnboarding || firstRunStep === "pick-type",
     financialsHydrated: !!effectiveClientId && hydratedClientId === effectiveClientId,
   });
+  useEffect(() => {
+    if (authLoading || !user?.id || boardReady) {
+      setOwnerBootTimedOut(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setOwnerBootTimedOut(true), SHELL_GATE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [authLoading, user?.id, boardReady, ownerBootAttempt]);
+  if (user && !authLoading && !boardReady && ownerBootTimedOut) {
+    return (
+      <div
+        className="grid min-h-screen place-items-center bg-background px-4 text-foreground"
+        role="alert"
+        data-owner-boot="timeout"
+      >
+        <div className="w-full max-w-md">
+          <h1 className="text-xl font-semibold">Couldn't open your workspace</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The books didn't finish loading. Retry, or go back.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOwnerBootTimedOut(false);
+                setOwnerBootAttempt((n) => n + 1);
+              }}
+              className="inline-flex h-10 items-center rounded-full bg-foreground px-4 text-xs font-bold uppercase tracking-wider text-background"
+            >
+              Retry
+            </button>
+            <Link to="/" className="inline-flex h-10 items-center px-4 text-sm underline">
+              Back
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (authLoading || !user || !boardReady) {
     return <AppBootSpinner />;
   }
@@ -4058,10 +4139,21 @@ function Index() {
                 }
                 cashOutlook={ownerDoorOutlook}
                 openingMissing={ownerOpeningMissing}
-                cashPillarStatus={pillarStatus.cash ?? null}
-                cashRunwayWeeks={cashBalance != null ? effectiveRunway : null}
-                cashDebtorScore={Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null}
-                cashBurnScore={Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null}
+                hasEvidence={ownerEvidence}
+                cashOnFile={ownerCashOnFile}
+                cashPillarStatus={ownerEvidence && ownerCashOnFile ? (pillarStatus.cash ?? null) : null}
+                cashRunwayWeeks={ownerEvidence && cashBalance != null ? effectiveRunway : null}
+                cashDebtorScore={
+                  ownerEvidence && Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null
+                }
+                cashBurnScore={
+                  ownerEvidence && Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null
+                }
+                liveHealth={{
+                  overall: overallHealth.overall,
+                  weakestLabel: overallHealth.weakestPillar?.label ?? null,
+                  weakestScore: overallHealth.weakestPillar?.score ?? null,
+                }}
                 market={boardMarket}
                 marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
@@ -4145,9 +4237,9 @@ function Index() {
                           />
                           <OwnerHealthOrb
                             variant="ring"
-                            overallHealth={avgHealth}
-                            displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
-                            statusLabel={ownerStatusCritical ? ownerStatusWord : null}
+                            overallHealth={ownerEvidence && Number.isFinite(avgHealth) ? avgHealth : Number.NaN}
+                            displayStatus={ownerEvidence ? (ownerStatusCritical ? "critical" : overallHealth.displayStatus) : undefined}
+                            statusLabel={ownerEvidence ? (ownerStatusCritical ? ownerStatusWord : null) : NOT_SCORED_YET_LABEL}
                             pillars={spherePillars}
                             caption={HEALTH_RING_CAPTION}
                             cashFloorCue={ownerCashFloorCue}
@@ -5309,9 +5401,9 @@ function Index() {
                                   />
                                   <SphereHero
                                     compact
-                                    overallHealth={avgHealth}
-                                    displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
-                                    statusLabel={ownerStatusCritical ? ownerStatusWord : null}
+                                    overallHealth={ownerEvidence && Number.isFinite(avgHealth) ? avgHealth : Number.NaN}
+                                    displayStatus={ownerEvidence ? (ownerStatusCritical ? "critical" : overallHealth.displayStatus) : undefined}
+                                    statusLabel={ownerEvidence ? (ownerStatusCritical ? ownerStatusWord : null) : NOT_SCORED_YET_LABEL}
                                     pillars={spherePillars}
                                     cashFloorCue={ownerCashFloorCue}
                                     onCashFloor={openOwnerFm}
@@ -6592,7 +6684,7 @@ function Index() {
                 setReplaceLiveOnHistory(false);
               }}
               autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
-              onConfirm={(mapped, autoPopulate) => {
+              onConfirm={async (mapped, autoPopulate) => {
                 const entries = Object.entries(mapped).filter(
                   ([k, val]) => val !== undefined && k in defaults,
                 );
@@ -6620,105 +6712,125 @@ function Index() {
                 ) {
                   const fields = Object.fromEntries(allEntries) as Record<string, string>;
                   const periodEnd = extractionForReview?.document_metadata?.period_end_date ?? null;
-                  void upsertPeriodSnapshot({
+                  const saved = await upsertPeriodSnapshot({
                     clientId: effectiveClientId,
                     financials: fields,
                     periodDate: periodEnd,
                     source: "upload",
                     statementKind: statementKindFromMetadata(reviewMeta),
-                  }).then((saved) => {
-                    if (saved.error) {
-                      toast.error(`Could not save the past period: ${saved.error}`);
-                      return;
-                    }
-                    toast.success(
-                      `Saved ${saved.periodLabel} as history — the live board is unchanged.`,
-                    );
-                    void supabase
-                      .from("client_financial_snapshots")
-                      .select("period_label, period_date, ratios, source, financials")
-                      .eq("client_id", effectiveClientId)
-                      .order("period_date", { ascending: true })
-                      .limit(24)
-                      .then(({ data }) => {
-                        if (data) setHistory(data as never);
-                      });
                   });
+                  if (saved.error) {
+                    return {
+                      ok: false as const,
+                      message: importFailureMessage(`Could not save the past period: ${saved.error}`),
+                    };
+                  }
+                  const { data } = await supabase
+                    .from("client_financial_snapshots")
+                    .select("period_label, period_date, ratios, source, financials")
+                    .eq("client_id", effectiveClientId)
+                    .order("period_date", { ascending: true })
+                    .limit(24);
+                  if (data) setHistory(data as never);
                   setHistoryUpload(false);
                   setReplaceLiveOnHistory(false);
                   setPendingCsvExtras(null);
-                  setReviewOpen(false);
-                  setExtractionForReview(null);
-                  return;
+                  return {
+                    ok: true as const,
+                    message: importedUpdateMessage(`${saved.periodLabel} history`),
+                  };
                 }
                 setHistoryUpload(false);
                 setReplaceLiveOnHistory(false);
-                if (allEntries.length > 0) {
-                  const periodEndForCash =
-                    extractionForReview?.document_metadata?.period_end_date ?? null;
-                  const uploadKindForCash = statementKindFromMetadata(reviewMeta);
-                  const importedCash = allEntries.some(
-                    ([key, val]) => key === "cash" && String(val ?? "").trim() !== "",
-                  );
-                  setV(
-                    (prev) =>
-                      ({
-                        ...prev,
-                        ...Object.fromEntries(allEntries),
-                        ...(uploadKindForCash === "balance_sheet" &&
-                        importedCash &&
-                        periodEndForCash &&
-                        /^\d{4}-\d{2}-\d{2}$/.test(periodEndForCash)
-                          ? { cashAsOf: periodEndForCash.slice(0, 10) }
-                          : {}),
-                      }) as Inputs,
-                  );
-                  setHasRealFinancials(true);
-                  void handleOwnerFirstRealFinancialsUpload();
-                  track("financials_uploaded", {
-                    surface: "owner_app",
-                    clientId: effectiveClientId,
-                    fields: allEntries.length,
-                  });
-                  toast.success(
-                    `${entries.length} field${entries.length === 1 ? "" : "s"} imported from your statement — figures saved automatically.`,
-                  );
-                  if (effectiveClientId) {
-                    const fields = Object.fromEntries(allEntries) as Record<string, string>;
-                    const periodEnd =
-                      extractionForReview?.document_metadata?.period_end_date ?? null;
-                    const uploadKind = statementKindFromMetadata(reviewMeta);
-                    void runAutoPopulate({
-                      clientId: effectiveClientId,
-                      fields,
-                      chosen: autoPopulate,
-                      prefsToRemember: prefsToRemember(
-                        autoPopulate,
-                        uploadKind,
-                        autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
-                      ),
-                      firstUpload: autoPopulateState?.firstUpload,
-                      statementKind: uploadKind,
-                      cashOpeningDate: uploadKind === "balance_sheet" ? periodEnd : null,
-                      firstActualsMonth: periodEnd ? periodEnd.slice(0, 7) : null,
-                      fallbackMarket: workspaceMarket,
-                      surface: "owner_app",
-                      source: "financial_statement",
-                    })
-                      .then(applyAutoPopulateResult)
-                      .catch((e) => {
-                        console.warn("auto-populate after statement upload:", e);
-                        toast.error(
-                          `Figures saved, but drafting the board failed: ${(e as Error).message}`,
-                        );
-                      });
-                  }
-                } else {
-                  toast.warning("No matching fields found in the extraction result.");
+                if (allEntries.length === 0) {
+                  return {
+                    ok: false as const,
+                    message: importFailureMessage("No matching fields found in the extraction result."),
+                  };
                 }
+                if (!effectiveClientId) {
+                  return {
+                    ok: false as const,
+                    message: importFailureMessage("No client is open for this upload."),
+                  };
+                }
+                const periodEndForCash =
+                  extractionForReview?.document_metadata?.period_end_date ?? null;
+                const uploadKind = statementKindFromMetadata(reviewMeta);
+                const importedCash = allEntries.some(
+                  ([key, val]) => key === "cash" && String(val ?? "").trim() !== "",
+                );
+                const next = {
+                  ...v,
+                  ...Object.fromEntries(allEntries),
+                  ...(uploadKind === "balance_sheet" &&
+                  importedCash &&
+                  periodEndForCash &&
+                  /^\d{4}-\d{2}-\d{2}$/.test(periodEndForCash)
+                    ? { cashAsOf: periodEndForCash.slice(0, 10) }
+                    : {}),
+                } as Inputs;
+                ownerWriteGen.current += 1;
+                setV(next);
+                setHasRealFinancials(true);
+                const financialsUpdatedAt = new Date().toISOString();
+                const { data: savedLive, error: liveError } = await supabase
+                  .from("clients")
+                  .update({
+                    financials: withFinancialsWriteRev({
+                      ...next,
+                      weeklyInputs,
+                      productMix,
+                    }) as never,
+                    financials_updated_at: financialsUpdatedAt,
+                  })
+                  .eq("id", effectiveClientId)
+                  .select("id");
+                if (liveError || !savedLive?.length) {
+                  return {
+                    ok: false as const,
+                    message: importFailureMessage(
+                      liveError?.message ?? "The figures were not written to this client.",
+                    ),
+                  };
+                }
+                setClientMeta((m) => (m ? { ...m, financials_updated_at: financialsUpdatedAt } : m));
+                void handleOwnerFirstRealFinancialsUpload();
+                track("financials_uploaded", {
+                  surface: "owner_app",
+                  clientId: effectiveClientId,
+                  fields: allEntries.length,
+                });
+                const fields = Object.fromEntries(allEntries) as Record<string, string>;
+                void runAutoPopulate({
+                  clientId: effectiveClientId,
+                  fields,
+                  chosen: autoPopulate,
+                  prefsToRemember: prefsToRemember(
+                    autoPopulate,
+                    uploadKind,
+                    autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
+                  ),
+                  firstUpload: autoPopulateState?.firstUpload,
+                  statementKind: uploadKind,
+                  cashOpeningDate: uploadKind === "balance_sheet" ? periodEndForCash : null,
+                  firstActualsMonth: periodEndForCash ? periodEndForCash.slice(0, 7) : null,
+                  fallbackMarket: workspaceMarket,
+                  surface: "owner_app",
+                  source: "financial_statement",
+                })
+                  .then(applyAutoPopulateResult)
+                  .catch((e) => {
+                    console.warn("auto-populate after statement upload:", e);
+                    toast.error(
+                      `Figures saved, but drafting the board failed: ${(e as Error).message}`,
+                    );
+                  });
                 setPendingCsvExtras(null);
-                setReviewOpen(false);
-                setExtractionForReview(null);
+                return {
+                  ok: true as const,
+                  message: importedUpdateMessage(statementImportWhat(uploadKind)),
+                };
               }}
             />
           )}

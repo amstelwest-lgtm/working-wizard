@@ -241,9 +241,7 @@ export function mountAskAi(container, options) {
 
   function currentClientId() {
     return (
-      container.dataset.clientId ||
-      (typeof window !== "undefined" && window.__askAiClientId) ||
-      ""
+      container.dataset.clientId || (typeof window !== "undefined" && window.__askAiClientId) || ""
     );
   }
 
@@ -371,6 +369,10 @@ export function mountAskAi(container, options) {
     render();
   }
 
+  function mark(el, name, value) {
+    if (typeof el?.setAttribute === "function") el.setAttribute(name, value);
+  }
+
   function render() {
     container.innerHTML = "";
 
@@ -378,7 +380,14 @@ export function mountAskAi(container, options) {
     widget.className = studio ? "ask-ai-widget ask-ai-studio" : "ask-ai-widget";
     const unanswered =
       !loading && history.length > 0 && history[history.length - 1]?.role === "user";
-    widget.dataset.askState = loading ? "thinking" : unanswered || errorMsg ? "error" : answer ? "answer" : "idle";
+    widget.dataset.askState = loading
+      ? "thinking"
+      : unanswered || errorMsg
+        ? "error"
+        : answer
+          ? "answer"
+          : "idle";
+    mark(widget, "aria-busy", loading ? "true" : "false");
 
     if (!open) {
       const trigger = document.createElement("button");
@@ -525,10 +534,10 @@ export function mountAskAi(container, options) {
         thinking.textContent = creatingDeliverable
           ? "Saving the draft…"
           : workingObjective
-          ? "Working the objective…"
-          : pendingIntent === "milon-bot"
-            ? "Checking what's on file…"
-            : "Analysing your numbers…";
+            ? "Working the objective…"
+            : pendingIntent === "milon-bot"
+              ? "Checking what's on file…"
+              : "Analysing your numbers…";
         panel.appendChild(thinking);
       }
 
@@ -555,16 +564,16 @@ export function mountAskAi(container, options) {
         thread.role = "log";
         shown.forEach((turn, index) => {
           const capLimit = capLimitForTurn(turn);
-          const latest =
-            index === shown.length - 1 && !loading;
+          const latest = index === shown.length - 1 && !loading;
           const latestAssistant =
             turn.role === "assistant" && latest && Boolean(answer) && !capLimit;
           const bubble = document.createElement("div");
-          bubble.className = turn.role === "user"
-            ? "ask-ai-turn ask-ai-turn-user"
-            : capLimit
-              ? "ask-ai-turn ask-ai-answer precard-cap-card"
-              : "ask-ai-turn ask-ai-answer";
+          bubble.className =
+            turn.role === "user"
+              ? "ask-ai-turn ask-ai-turn-user"
+              : capLimit
+                ? "ask-ai-turn ask-ai-answer precard-cap-card"
+                : "ask-ai-turn ask-ai-answer";
           if (latestAssistant || (turn.role === "assistant" && latest)) bubble.dataset.latest = "1";
           if (capLimit) {
             bubble.dataset.precardCap = capLimit;
@@ -589,9 +598,13 @@ export function mountAskAi(container, options) {
           if (latestAssistant) {
             decorateLatestAnswer(bubble);
             const left =
-              typeof precardRemaining === "number" ? precardBotRemainingLabel(precardRemaining) : null;
+              typeof precardRemaining === "number"
+                ? precardBotRemainingLabel(precardRemaining)
+                : null;
             const lastHint =
-              typeof precardRemaining === "number" ? precardBotLastQuestionHint(precardRemaining) : null;
+              typeof precardRemaining === "number"
+                ? precardBotLastQuestionHint(precardRemaining)
+                : null;
             if (left) {
               const note = document.createElement("p");
               note.className = "precard-cap-remaining";
@@ -611,6 +624,15 @@ export function mountAskAi(container, options) {
             thread.appendChild(inlineTurnError(turn));
           }
         });
+        if (loading) {
+          const typing = document.createElement("div");
+          typing.className = "ask-ai-turn ask-ai-typing";
+          mark(typing, "role", "status");
+          mark(typing, "aria-live", "polite");
+          typing.innerHTML =
+            '<span class="ask-ai-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Working on a reply…</span>';
+          thread.appendChild(typing);
+        }
         panel.appendChild(thread);
         thread.scrollTop = thread.scrollHeight;
       }
@@ -781,14 +803,20 @@ export function mountAskAi(container, options) {
       try {
         return parseAskAiPayload(status, await res.text(), ok);
       } catch (e) {
-        return { ok: false, error: friendlyReachMessage(e, "Couldn't read Milōn's reply. Try again.") };
+        return {
+          ok: false,
+          error: friendlyReachMessage(e, "Couldn't read Milōn's reply. Try again."),
+        };
       }
     }
     if (res && typeof res.json === "function") {
       try {
         return parseAskAiBody(status, await res.json(), ok);
       } catch (e) {
-        return { ok: false, error: friendlyReachMessage(e, "Couldn't read Milōn's reply. Try again.") };
+        return {
+          ok: false,
+          error: friendlyReachMessage(e, "Couldn't read Milōn's reply. Try again."),
+        };
       }
     }
     return parseAskAiPayload(status, "", ok);
@@ -797,7 +825,8 @@ export function mountAskAi(container, options) {
   function capLimitForTurn(turn) {
     if (!turn || turn.role !== "assistant") return null;
     if (turn.precardCap && isPrecardLimitKind(turn.precardCap.limit)) return turn.precardCap.limit;
-    if (typeof turn.content === "string" && turn.content.trim() === PRECARD_CAP_MESSAGE) return "bot";
+    if (typeof turn.content === "string" && turn.content.trim() === PRECARD_CAP_MESSAGE)
+      return "bot";
     return null;
   }
 
@@ -968,29 +997,29 @@ export function mountAskAi(container, options) {
               audience: accountant ? "accountant" : "owner",
             }
           : useAgent
-          ? {
-              clientId,
-              mode: "agent",
-              objective,
-              turnId,
-              audience: accountant ? "accountant" : "owner",
-            }
-          : useBot
             ? {
                 clientId,
-                message: q,
+                mode: "agent",
+                objective,
                 turnId,
-                history: prior,
                 audience: accountant ? "accountant" : "owner",
-                agent,
               }
-            : {
-                clientId,
-                question: q,
-                turnId,
-                agent,
-                ...(accountant ? { audience: "accountant" } : {}),
-              },
+            : useBot
+              ? {
+                  clientId,
+                  message: q,
+                  turnId,
+                  history: prior,
+                  audience: accountant ? "accountant" : "owner",
+                  agent,
+                }
+              : {
+                  clientId,
+                  question: q,
+                  turnId,
+                  agent,
+                  ...(accountant ? { audience: "accountant" } : {}),
+                },
       );
       const send = (bearer) => {
         return fetch(url, {
@@ -1039,7 +1068,7 @@ export function mountAskAi(container, options) {
 
       answer = turn.answer;
       precardCap = turn.precardCap || null;
-      precardRemaining = turn.precardCap ? null : turn.precardRemaining ?? null;
+      precardRemaining = turn.precardCap ? null : (turn.precardRemaining ?? null);
       if (!precardCap && answer.includes("Your trial has ended, choose a plan")) {
         window.dispatchEvent(new CustomEvent("milon-starter-trial-ended"));
       }
@@ -1116,7 +1145,10 @@ export function mountAskAi(container, options) {
   container.__askContextRefresh = refreshThreadFromContext;
   container.addEventListener("ask-ai-context", refreshThreadFromContext);
   try {
-    if (container.__askThreadObserver && typeof container.__askThreadObserver.disconnect === "function") {
+    if (
+      container.__askThreadObserver &&
+      typeof container.__askThreadObserver.disconnect === "function"
+    ) {
       container.__askThreadObserver.disconnect();
     }
     if (typeof MutationObserver === "function") {

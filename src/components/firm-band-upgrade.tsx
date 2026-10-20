@@ -17,7 +17,7 @@ import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_BAND_IDS,
-  FIRM_TRIAL_CARD_LINE,
+  FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_SENTENCE,
   firmClientLimitLabel,
   firmUsdPublicLine,
@@ -27,6 +27,7 @@ import {
   type FirmInterval,
 } from "@/lib/stripe-plans";
 import { getFirmPlanDisplay } from "@/lib/stripe-checkout.functions";
+import { readCachedFirmPlan } from "@/lib/firm-plan-client";
 
 export type FirmVoucherCheckResult =
   | { ok: true; promotionCodeId: string; preview: string }
@@ -288,7 +289,7 @@ export function FirmBandUpgrade({
                       data-starter-card=""
                       style={{ display: "block", fontSize: 12 }}
                     >
-                      {FIRM_TRIAL_CARD_LINE}
+                      {FIRM_TRIAL_CARD_NOTE}
                     </span>
                   </>
                 ) : null}
@@ -426,7 +427,7 @@ export function FirmStartHereLoader({ firmId = null }: { firmId?: string | null 
   useEffect(() => {
     let cancelled = false;
     setBand(undefined);
-    void loadPlan({ data: { firmId } })
+    void readCachedFirmPlan(firmId, (input) => loadPlan(input))
       .then((plan) => {
         if (!cancelled) setBand(plan && plan.configured !== false ? (plan.band ?? null) : null);
       })

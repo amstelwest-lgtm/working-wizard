@@ -236,8 +236,10 @@ export function cashOutlookIsCritical(input: {
   dipsBelowFloorWeek?: number | null;
   /** Blank or zero opening with no source. Not a real balance under the floor. */
   openingMissing?: boolean;
+  /** False when the cash balance was not read. Not a balance under the floor. */
+  cashOnFile?: boolean;
 } | null | undefined): boolean {
-  if (!input || input.openingMissing) return false;
+  if (!input || input.openingMissing || input.cashOnFile === false) return false;
   if (!Number.isFinite(input.opening) || !Number.isFinite(input.floor)) return false;
   return input.opening < input.floor || input.dipsBelowFloorWeek != null;
 }
@@ -325,8 +327,14 @@ export function clientListStatusWord(input: {
   totalInflow?: number | null;
   totalOutflow?: number | null;
   openingMissing?: boolean;
+  /** False when the cash balance was not read. The health label stands. */
+  cashOnFile?: boolean;
 }): string {
   if (input.openingMissing) return NEEDS_DATA_OPENING;
+  if (input.cashOnFile === false) {
+    if (input.healthOverall == null) return "—";
+    return input.healthLabel;
+  }
   if (input.healthOverall == null) return "—";
   if (forecastHasCashEvidence(input) && cashOutlookIsCritical(input)) return CASH_BELOW_FLOOR_STATUS;
   return input.healthLabel;

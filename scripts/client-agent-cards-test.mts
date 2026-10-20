@@ -158,15 +158,21 @@ const noBooks: OwnerBooks = {
   market: marketForClient({ market: null }),
 };
 const noBookLines = ownerHomeLines(ownerAnswerTiles(noBooks), null);
-for (const agent of AGENTS) {
-  assert(noBookLines[agent].length > 0, `${agent} has an empty-book line`);
-}
+assert(noBookLines.financial_manager.length === 1, "no books has one financial manager line");
+assert(noBookLines.financial_manager[0]?.startsWith("Connect QuickBooks"), noBookLines.financial_manager.join(" | "));
+assert(noBookLines.analyst.length === 0, "the analyst card does not repeat connect");
+assert(noBookLines.advisor.length === 0, "the advisor card does not invent a move");
 const noBookHtml = home(null, {
   financial_manager: [...noBookLines.financial_manager],
   analyst: [...noBookLines.analyst],
   advisor: [...noBookLines.advisor],
 });
-assert(noBookHtml.includes("Connect QuickBooks or Xero."), "no books says to connect, and does not go blank");
+assert(noBookHtml.includes(noBookLines.financial_manager[0]!), "no books says to connect, and does not go blank");
+assert((noBookHtml.match(/Connect QuickBooks/g) ?? []).length === 1, "connect renders once");
+assert(
+  !noBookHtml.includes("Connect QuickBooks or Xero. / Connect QuickBooks or Xero."),
+  "the analyst does not duplicate the old connect line",
+);
 assert(!noBookHtml.includes(ZA_LEDE), "no books and a null market do not open the tax card");
 assert(!/\bR[\u00a0 ]\d/.test(noBookHtml), "no books does not invent a rand amount");
 

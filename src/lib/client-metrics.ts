@@ -12,12 +12,7 @@ import { bankHistoryIsSingleMonth, displayForecastFrequency } from "./cash-forec
 import { periodProfitBridge } from "./period-profit.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
 import { isQboBalanceSheetHoldNote } from "./xero-opening.ts";
-import {
-  computeRatios,
-  metricDirection,
-  periodMonthsOf,
-  type RatioInputs,
-} from "./ratios.ts";
+import { computeRatios, metricDirection, periodMonthsOf, type RatioInputs } from "./ratios.ts";
 
 export type CashSource = "bank" | "period" | "none";
 
@@ -185,6 +180,142 @@ export function storedOpeningIsMissing(cashflow: unknown): boolean {
   return opening == null || Math.abs(opening) < 0.5;
 }
 
+/**
+ * Statement figures that mean the books were synced or a statement was parsed.
+ * Cash is separate: a lone 0 is the empty-file default, not a balance.
+ */
+const STATEMENT_EVIDENCE_KEYS = [
+  "revenue",
+  "cogs",
+  "grossProfit",
+  "ebit",
+  "ebt",
+  "netIncome",
+  "ebitda",
+  "operatingCashflow",
+  "totalAssets",
+  "equity",
+  "receivables",
+  "inventory",
+  "payables",
+  "fixedCosts",
+  "variableCosts",
+  "currentAssets",
+  "currentLiabilities",
+  "totalLiabilities",
+  "laborCost",
+] as const;
+
+/** A written P&L or balance-sheet figure, including a real zero next to the rest of the statement. */
+export function parsedStatementFigures(financials: unknown): boolean {
+  const fin = asRecord(financials);
+  if (!fin) return false;
+  for (const key of STATEMENT_EVIDENCE_KEYS) {
+    if (!fieldPresent(fin, key)) continue;
+    if (finiteNum(fin[key]) != null) return true;
+  }
+  return false;
+}
+
+function cashflowHasMovement(cf: Record<string, unknown> | null): boolean {
+  if (!cf) return false;
+  for (const key of ["revenue", "expenses", "other"]) {
+    const rows = cf[key];
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const n = finiteNum((row as { amount?: unknown }).amount);
+      if (n != null && Math.abs(n) >= 0.5) return true;
+    }
+  }
+  return false;
+}
+
+/** Forecast lines with an amount. An empty grid and a derived $0 sketch are not lines. */
+export function forecastHasRealLines(cashflow: unknown): boolean {
+  return cashflowHasMovement(asRecord(cashflow));
+}
+
+/**
+ * A resolved cash amount that was actually read.
+ * Non-zero cash counts. Zero counts only from a published bank, a sourced
+ * ledger opening, or a statement that has other figures. A bare 0 does not.
+ * A blank cash field never reaches here: it is missing, not zero.
+ */
+export function cashAmountIsOnFile(
+  cash: { amount: number | null; source?: string | null },
+  financials: unknown,
+  cashflow: unknown,
+): boolean {
+  if (cash.amount == null || !Number.isFinite(cash.amount)) return false;
+  if (Math.abs(cash.amount) >= 0.5) return true;
+  if (cash.source === "bank") return true;
+  const fin = asRecord(financials);
+  const cf = asRecord(cashflow);
+  if (parsedStatementFigures(fin)) return true;
+  if (ledgerOpeningIsCashEvidence(cf)) return true;
+  return false;
+}
+
+/**
+ * A hand-entered forecast opening that is not the blank/zero placeholder.
+ * Home uses this so a real 13-week opening is not "cash not on file".
+ */
+export function forecastOpeningIsKnown(cashflow: unknown): boolean {
+  const cf = asRecord(cashflow);
+  if (!cf || storedOpeningIsMissing(cf)) return false;
+  const opening = finiteNum(cf.openingBalance);
+  return opening != null && Math.abs(opening) >= 0.5;
+}
+
+/**
+ * Books synced with figures, or a statement / forecast that was actually parsed.
+ * A ledger link with an empty file, and a $0 cash default, are not evidence.
+ * Finite ratio values count when the caller only has a scored snapshot.
+ */
+export function hasFinancialEvidence(input: {
+  financials?: unknown;
+  cashflow?: unknown;
+  ratios?: Record<string, unknown> | null;
+}): boolean {
+  const fin = asRecord(input.financials);
+  const cf = asRecord(input.cashflow);
+  if (parsedStatementFigures(fin)) return true;
+  if (fin && fieldPresent(fin, "cash")) {
+    const cash = finiteNum(fin.cash);
+    if (cash != null && Math.abs(cash) >= 0.5) return true;
+  }
+  if (ledgerOpeningIsCashEvidence(cf)) {
+    const opening = finiteNum(cf?.openingBalance);
+    if (opening != null) return true;
+  }
+  if (forecastHasRealLines(cf)) return true;
+  if (input.ratios) {
+    for (const value of Object.values(input.ratios)) {
+      const n = typeof value === "number" ? value : Number(value);
+      if (Number.isFinite(n)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The one next action when nothing is on file.
+ * Sage is offered outside the US. A US file does not name it.
+ */
+export function connectBooksHeadline(
+  market?: {
+    country?: string | null;
+    copyPack?: string | null;
+    locale?: string | null;
+  } | null,
+): string {
+  const us = market?.country === "US" || market?.copyPack === "us" || market?.locale === "en-US";
+  return us
+    ? "Connect QuickBooks / Xero or upload statements."
+    : "Connect QuickBooks / Xero / Sage or upload statements.";
+}
+
 function weeksInPeriod(periodMonths: number | null | undefined): number {
   const months =
     periodMonths != null && periodMonths >= 1 && periodMonths <= 12 ? periodMonths : 12;
@@ -312,12 +443,16 @@ export function assessClientMetrics(input: {
     cf && cashflowIsRealBankSeed(cf) && typeof cf.seededFromBanksAt === "string"
       ? cf.seededFromBanksAt
       : null;
-  const cash = resolveClientCash({
+  const resolvedCash = resolveClientCash({
     publishedBankBalance: seededAt ? finiteNum(cf?.openingBalance) : null,
     bankPublishedAt: seededAt,
     periodCash: finiteNum(fin?.cash),
     periodUpdatedAt: input.financialsUpdatedAt ?? null,
   });
+  // A stored 0 with no statement and no bank publish is the empty-file default.
+  const cash = cashAmountIsOnFile(resolvedCash, fin, cf)
+    ? resolvedCash
+    : { amount: null, source: "none" as const };
   let runway = clientRunway({
     cash: cash.amount,
     priorCash: finiteNum(prior?.cash),
@@ -510,10 +645,7 @@ export function forecastRunwayHeadline(input: {
   weeksUntilBreach: number | null;
   horizonWeeks: number;
 }): string {
-  if (
-    input.cashGenerative &&
-    forecastIsCashGenerative(input.totalInflow, input.totalOutflow)
-  ) {
+  if (input.cashGenerative && forecastIsCashGenerative(input.totalInflow, input.totalOutflow)) {
     return "Cash generative";
   }
   if (input.weeksUntilBreach == null) return `${input.horizonWeeks}+ wks`;
@@ -592,6 +724,12 @@ export type ThirteenWeekForecast = {
   /** Set when week 1 moved to the current week and the opening was rolled or the gap labelled. */
   anchorNote: string | null;
   reanchored: boolean;
+  /**
+   * False when no balance, bank publish, or sourced opening was read.
+   * Opening 0 and floor 0 are placeholders. They are not cash under a minimum.
+   * Omitted means the opening was read.
+   */
+  cashOnFile?: boolean;
 };
 
 type StoredForecastLine = {
@@ -785,7 +923,7 @@ export function rollBankDraftOpening(input: {
       cadence: line.cadence,
       amount: line.amount,
       weekly: Math.round(signed * 100) / 100,
-      contribution: Math.round(((signed / 7) * gapDays) * 100) / 100,
+      contribution: Math.round((signed / 7) * gapDays * 100) / 100,
     });
   }
 
@@ -800,7 +938,7 @@ export function rollBankDraftOpening(input: {
   }
 
   const weeklyNet = items.reduce((sum, item) => sum + item.weekly, 0);
-  const adjustment = Math.round(((weeklyNet / 7) * gapDays) * 100) / 100;
+  const adjustment = Math.round((weeklyNet / 7) * gapDays * 100) / 100;
   if (items.length) {
     const listed = items.reduce((sum, item) => sum + item.contribution, 0);
     const drift = Math.round((adjustment - listed) * 100) / 100;
@@ -974,9 +1112,11 @@ function asForecastLines(value: unknown): StoredForecastLine[] {
 }
 
 function forecastLineNames(cf: Record<string, unknown>): string[] {
-  return [...asForecastLines(cf.revenue), ...asForecastLines(cf.expenses), ...asForecastLines(cf.other)].map(
-    (line) => line.name ?? "",
-  );
+  return [
+    ...asForecastLines(cf.revenue),
+    ...asForecastLines(cf.expenses),
+    ...asForecastLines(cf.other),
+  ].map((line) => line.name ?? "");
 }
 
 /** Budget bridge stamps this on every seeded line. */
@@ -1050,7 +1190,10 @@ export function rollForwardForecast(
 
   const revAdj = (finiteNum(cf.revAdj) ?? 100) / 100;
   const expAdj = (finiteNum(cf.expAdj) ?? 100) / 100;
-  const collectDelay = Math.max(0, Math.min(weeks - 1, Math.round(finiteNum(cf.collectDelay) ?? 0)));
+  const collectDelay = Math.max(
+    0,
+    Math.min(weeks - 1, Math.round(finiteNum(cf.collectDelay) ?? 0)),
+  );
   const headDelta = finiteNum(cf.headcountDelta) ?? 0;
   const avgSal = finiteNum(cf.avgSalary) ?? 0;
   const fixedDelta = finiteNum(cf.fixedCostDelta) ?? 0;
@@ -1072,7 +1215,9 @@ export function rollForwardForecast(
   const inflow = new Array(weeks).fill(0);
   const outflow = new Array(weeks).fill(0);
   const startIso = typeof cf.startDate === "string" ? cf.startDate : "";
-  const weekDates = /^\d{4}-\d{2}-\d{2}/.test(startIso) ? weekDatesFrom(startIso, weeks) : undefined;
+  const weekDates = /^\d{4}-\d{2}-\d{2}/.test(startIso)
+    ? weekDatesFrom(startIso, weeks)
+    : undefined;
   // Same display cadence as the Cash page: category outflows, and receipts
   // when this file is only one month. The stored frequency is not rewritten.
   const singleMonth = bankHistoryIsSingleMonth({
@@ -1087,7 +1232,9 @@ export function rollForwardForecast(
     frequency: displayForecastFrequency(line.name ?? "", line.frequency, { side, singleMonth }),
   });
   for (const line of revenue) {
-    shiftVals(distributeForecastLine(screenLine(line, "revenue"), weeks, weekDates).map((v) => v * revAdj)).forEach((v, i) => {
+    shiftVals(
+      distributeForecastLine(screenLine(line, "revenue"), weeks, weekDates).map((v) => v * revAdj),
+    ).forEach((v, i) => {
       inflow[i] += v * growthMul(i);
     });
   }
@@ -1192,20 +1339,6 @@ function seriesTotals(inflow: number[], outflow: number[], closing: number[]) {
   };
 }
 
-function cashflowHasMovement(cf: Record<string, unknown> | null): boolean {
-  if (!cf) return false;
-  for (const key of ["revenue", "expenses", "other"]) {
-    const rows = cf[key];
-    if (!Array.isArray(rows)) continue;
-    for (const row of rows) {
-      if (!row || typeof row !== "object") continue;
-      const n = finiteNum((row as { amount?: unknown }).amount);
-      if (n != null && Math.abs(n) >= 0.5) return true;
-    }
-  }
-  return false;
-}
-
 function reclose(opening: number, inflow: number[], outflow: number[]): number[] {
   const closing: number[] = [];
   let bal = opening;
@@ -1230,7 +1363,10 @@ function landMonthlyRunRate(weekly: number, weeks: number): number[] {
   return out;
 }
 
-function derivedLines(weeklyInflow: number, weeklyOutflow: number): {
+function derivedLines(
+  weeklyInflow: number,
+  weeklyOutflow: number,
+): {
   revenue: ForecastLineSeed[];
   expenses: ForecastLineSeed[];
 } {
@@ -1275,6 +1411,61 @@ function plEstimateSpreadWeekly(cf: Record<string, unknown> | null): boolean {
 }
 
 /**
+ * Opening for the 13-week series.
+ * A number passed in, including a real zero, is the balance the caller resolved.
+ * A blank `financials.cash` is not 0. A P&L alone is not a cash balance.
+ * A stored opening that is not the blank placeholder still counts.
+ */
+function resolveForecastOpening(
+  openingCash: number | null | undefined,
+  fin: Record<string, unknown> | null,
+  cf: Record<string, unknown> | null,
+): { onFile: boolean; opening: number } {
+  const passed = finiteNum(openingCash);
+  if (passed != null) return { onFile: true, opening: passed };
+  const period = fin && fieldPresent(fin, "cash") ? finiteNum(fin.cash) : null;
+  if (period != null && cashAmountIsOnFile({ amount: period, source: "period" }, fin, cf)) {
+    return { onFile: true, opening: period };
+  }
+  if (cf && forecastOpeningIsKnown(cf)) {
+    return { onFile: true, opening: finiteNum(cf.openingBalance) ?? 0 };
+  }
+  if (cf && ledgerOpeningIsCashEvidence(cf)) {
+    const sourced = finiteNum(cf.openingBalance);
+    if (sourced != null) return { onFile: true, opening: sourced };
+  }
+  return { onFile: false, opening: 0 };
+}
+
+/** No cash line. Zeros are placeholders. The floor is not derived from the P&L. */
+function missingCashForecast(anchor: string, weeks: number): ThirteenWeekForecast {
+  const zeros = Array.from({ length: weeks }, () => 0);
+  return {
+    source: "derived",
+    startDate: anchor,
+    weekDates: weekDatesFrom(anchor, weeks),
+    opening: 0,
+    inflow: zeros,
+    outflow: zeros,
+    closing: zeros,
+    totalInflow: 0,
+    totalOutflow: 0,
+    floor: 0,
+    dipsBelowFloorWeek: null,
+    shortfall: false,
+    shortfallWeek: null,
+    timingNote: null,
+    cycleNote: null,
+    replaceStored: false,
+    lines: { revenue: [], expenses: [] },
+    estimateLabel: null,
+    anchorNote: null,
+    reanchored: false,
+    cashOnFile: false,
+  };
+}
+
+/**
  * The 13-week forecast Overview, Cash, the PDF, and the Bot all read.
  * A stored forecast is shown only when its start is on or after the anchor
  * and its opening matches live cash. Anything else — 2025 dates, a stale
@@ -1294,13 +1485,15 @@ export function resolveThirteenWeekForecast(input: {
 }): ThirteenWeekForecast {
   const weeks = CASH_FORECAST_WEEK_COUNT;
   const fin = asRecord(input.financials);
-  const periodEnd =
-    input.periodEnd ?? (typeof fin?.periodEnd === "string" ? fin.periodEnd : null);
+  const periodEnd = input.periodEnd ?? (typeof fin?.periodEnd === "string" ? fin.periodEnd : null);
   const anchor = forecastAnchorDate({ now: input.now, periodEnd, timeZone: input.timeZone });
-  const opening = finiteNum(input.openingCash) ?? finiteNum(fin?.cash) ?? 0;
   const runway = input.runway ?? { weeks: null, kind: "unknown" as const, label: "—" };
   const storedCf = asRecord(input.cashflow);
   const cf = storedCf ? baseCashflow(storedCf) : null;
+  const resolvedOpening = resolveForecastOpening(input.openingCash, fin, cf);
+  // A missing balance is not opening 0, and the P&L must not mint a minimum from it.
+  if (!resolvedOpening.onFile) return missingCashForecast(anchor, weeks);
+  const opening = resolvedOpening.opening;
 
   const months = fin ? periodMonthsOf(fin) : 12;
   const operating = fin ? periodOperatingOutflows(fin) : null;
@@ -1347,8 +1540,7 @@ export function resolveThirteenWeekForecast(input: {
       cycleNote,
       replaceStored: true,
       lines: derivedLines(rate.weeklyInflow, rate.weeklyOutflow),
-      estimateLabel:
-        rate.weeklyInflow > 1 || rate.weeklyOutflow > 1 ? PL_ESTIMATE_LABEL : null,
+      estimateLabel: rate.weeklyInflow > 1 || rate.weeklyOutflow > 1 ? PL_ESTIMATE_LABEL : null,
       anchorNote: null,
       reanchored: false,
     };
@@ -1442,7 +1634,8 @@ export function resolveThirteenWeekForecast(input: {
       if (gapDays < 7) {
         const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);
         const showShortfall =
-          totals.shortfall && (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
+          totals.shortfall &&
+          (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
         return {
           source: "stored",
           startDate: startRaw,
@@ -1473,7 +1666,8 @@ export function resolveThirteenWeekForecast(input: {
       const closing = reclose(opening, rolled.inflow, rolled.outflow);
       const totals = seriesTotals(rolled.inflow, rolled.outflow, closing);
       const showShortfall =
-        totals.shortfall && (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
+        totals.shortfall &&
+        (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
       const anchorNote =
         gapDays <= 0
           ? null
@@ -1513,7 +1707,8 @@ export function resolveThirteenWeekForecast(input: {
     if (!scaleBad) {
       const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);
       const showShortfall =
-        totals.shortfall && (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
+        totals.shortfall &&
+        (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
       return {
         source: "stored",
         startDate: anchor,
@@ -1637,7 +1832,9 @@ export function cashScreenFloor(
   const cf = asRecord(cashflow);
   const confirm = cf?.suggestionConfirm;
   const configured =
-    confirm && typeof confirm === "object" ? finiteNum((confirm as { floor?: unknown }).floor) : null;
+    confirm && typeof confirm === "object"
+      ? finiteNum((confirm as { floor?: unknown }).floor)
+      : null;
   return forecastMinimumCash({
     configured: configured != null && configured > 0 ? configured : null,
     weeklyOutflows,

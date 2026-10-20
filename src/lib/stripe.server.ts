@@ -52,6 +52,8 @@ export function getStripe(): Stripe {
     client = new Stripe(stripeSecretKey(), {
       apiVersion: STRIPE_API_VERSION,
       typescript: true,
+      timeout: 8000,
+      maxNetworkRetries: 1,
       appInfo: {
         name: "Milon",
         url: "https://milonfinance.com",

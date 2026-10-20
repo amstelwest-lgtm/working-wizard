@@ -27,10 +27,12 @@ import {
   shapeTasks,
 } from "./tools.ts";
 import type { AdvisoryFacts } from "../../../src/lib/advisory-state.ts";
+import { adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
   runwayDisplayLabel,
+  storedOpeningIsMissing,
 } from "../../../src/lib/client-metrics.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
@@ -455,6 +457,12 @@ export async function executeAgentTool(
         (snap?.ratios ?? null) as Record<string, unknown> | null,
         (snap?.financials ?? liveFinancials) as Record<string, unknown> | null,
       );
+      const clientName = typeof clientRes.data?.name === "string" ? clientRes.data.name : null;
+      const operating = clientRes.data?.operating_profile;
+      const templateId =
+        operating && typeof operating === "object" && !Array.isArray(operating)
+          ? (operating as { templateId?: unknown }).templateId
+          : null;
       const brief = buildOverviewBrief({
         financials: liveFinancials,
         ratios: resolved,
@@ -464,7 +472,7 @@ export async function executeAgentTool(
         copyPack,
         fyStartMonth,
         shortfallWeek: healthMetrics.outlook.shortfallWeek,
-        clientName: typeof clientRes.data?.name === "string" ? clientRes.data.name : null,
+        clientName,
         brainSummary: clientRes.data?.brain_summary ?? null,
         dateMarket: marketForClient({ market: clientRes.data?.market }),
         periodLabel: figuresPeriodLabelFrom(
@@ -475,8 +483,18 @@ export async function executeAgentTool(
           marketForClient({ market: clientRes.data?.market }),
         ),
         figuresAsOf: (snap?.period_date as string | null) ?? null,
+        industry: adviceIndustryLabel({
+          clientName,
+          templateId: typeof templateId === "string" ? templateId : null,
+        }),
+        cashflow: clientRes.data?.cashflow,
+        financialsUpdatedAt: (clientRes.data?.financials_updated_at as string | null) ?? null,
+        openingMissing: storedOpeningIsMissing(clientRes.data?.cashflow),
+        cashOpening: healthMetrics.outlook.opening,
+        cashClosings: healthMetrics.outlook.closing,
+        cashFloor: healthMetrics.outlook.floor,
       });
-      const shaped = shapeHealth(resolved, runway, copyPack);
+      const shaped = shapeHealth(resolved, runway, copyPack, brief.weakest?.id ?? null);
       return {
         ...shaped,
         overall: brief.health,

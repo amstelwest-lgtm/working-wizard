@@ -51,6 +51,8 @@ export type EntitlingFirmSubscription = {
   band: FirmBandId | null;
   /** ISO timestamp when the subscription is trialing; otherwise null. */
   trialEnd: string | null;
+  /** ISO current_period_end. Null when Stripe did not send one. */
+  currentPeriodEnd: string | null;
   /** ISO subscription start (start_date, else created). */
   startedAt: string | null;
   interval: FirmInterval | null;
@@ -235,8 +237,19 @@ function entitlingFromListed(
     trial_end?: number | null;
     start_date?: number | null;
     created?: number | null;
+    current_period_end?: number | null;
+    items?: { data?: Array<{ current_period_end?: number | null }> } | null;
   };
   const trialEndSeconds = rawTimes.trial_end;
+  const itemPeriodEnd = rawTimes.items?.data?.[0]?.current_period_end;
+  const periodEndSeconds =
+    typeof rawTimes.current_period_end === "number" &&
+    Number.isFinite(rawTimes.current_period_end) &&
+    rawTimes.current_period_end > 0
+      ? rawTimes.current_period_end
+      : typeof itemPeriodEnd === "number" && Number.isFinite(itemPeriodEnd) && itemPeriodEnd > 0
+        ? itemPeriodEnd
+        : null;
   const startedSeconds =
     typeof rawTimes.start_date === "number" && Number.isFinite(rawTimes.start_date)
       ? rawTimes.start_date
@@ -255,6 +268,8 @@ function entitlingFromListed(
       typeof trialEndSeconds === "number" && Number.isFinite(trialEndSeconds)
         ? new Date(trialEndSeconds * 1000).toISOString()
         : null,
+    currentPeriodEnd:
+      periodEndSeconds != null ? new Date(periodEndSeconds * 1000).toISOString() : null,
     startedAt:
       typeof startedSeconds === "number" && startedSeconds > 0
         ? new Date(startedSeconds * 1000).toISOString()
@@ -271,16 +286,50 @@ function entitlingFromListed(
   };
 }
 
-/** Entitling subscription plus the prior-count Checkout already uses. */
-export async function readFirmSubscriptionHistory(email: string): Promise<{
+/**
+ * One Stripe customer + subscription list per email for this Vercel isolate.
+ * A fresh isolate misses it. The entitlement check fills it; the trial mirror
+ * and the next call within 45s reuse it instead of scanning Stripe again.
+ */
+export const STRIPE_ISOLATE_CACHE_TTL_MS = 45_000;
+
+type FirmSubscriptionHistory = {
   entitling: EntitlingFirmSubscription | null;
   priorSubscriptionCount: number;
-}> {
-  const listed = await listCustomerSubscriptions(email);
-  return {
-    entitling: entitlingFromListed(listed.customerId, listed.data),
-    priorSubscriptionCount: listed.data.length,
+};
+
+const stripeHistoryCache = new Map<string, { at: number; value: FirmSubscriptionHistory }>();
+const stripeHistoryInflight = new Map<string, Promise<FirmSubscriptionHistory>>();
+
+/** Entitling subscription plus the prior-count Checkout already uses. */
+export async function readFirmSubscriptionHistory(
+  email: string,
+  opts?: { fresh?: boolean },
+): Promise<FirmSubscriptionHistory> {
+  const key = email.trim().toLowerCase();
+  if (!opts?.fresh && key) {
+    const hit = stripeHistoryCache.get(key);
+    if (hit && Date.now() - hit.at < STRIPE_ISOLATE_CACHE_TTL_MS) return hit.value;
+    const pending = stripeHistoryInflight.get(key);
+    if (pending) return pending;
+  }
+  const load = async (): Promise<FirmSubscriptionHistory> => {
+    const listed = await listCustomerSubscriptions(email);
+    return {
+      entitling: entitlingFromListed(listed.customerId, listed.data),
+      priorSubscriptionCount: listed.data.length,
+    };
   };
+  if (!key) return load();
+  const work = load();
+  stripeHistoryInflight.set(key, work);
+  try {
+    const value = await work;
+    stripeHistoryCache.set(key, { at: Date.now(), value });
+    return value;
+  } finally {
+    if (stripeHistoryInflight.get(key) === work) stripeHistoryInflight.delete(key);
+  }
 }
 
 export async function findEntitlingFirmSubscription(
@@ -568,6 +617,7 @@ export async function loadFirmPlanDisplay(input: {
       headline: null,
       detail: null,
       trialEndsOn: null,
+      renewsOn: null,
       clientCount: null,
       clientLimit: null,
       usageLabel: null,
@@ -634,7 +684,10 @@ export async function loadFirmPlanDisplay(input: {
       phase: sub?.phase ?? "none",
       band: sub?.band ?? null,
       trialEndIso: sub?.trialEnd ?? null,
-      market: resolveMarket(parseMarketSelection(firm.market) ?? coerceMarketSelection(firm.market)),
+      periodEndIso: sub?.currentPeriodEnd ?? null,
+      market: resolveMarket(
+        parseMarketSelection(firm.market) ?? coerceMarketSelection(firm.market),
+      ),
     }),
     clientCount: upgrade.clientCount,
     clientLimit: upgrade.clientLimit,

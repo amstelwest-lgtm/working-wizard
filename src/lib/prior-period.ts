@@ -216,10 +216,12 @@ export function withPriorRatioScores<
   return results.map((r) => {
     const priorVal = priorRatios[r.ratio_name];
     if (!Number.isFinite(priorVal)) return r;
+    const priorScore = scorePriorRatio(r.ratio_name, priorVal);
+    if (!Number.isFinite(priorScore)) return r;
     return {
       ...r,
       prior_period_value: priorVal,
-      prior_period_score: Math.round(scorePriorRatio(r.ratio_name, priorVal)),
+      prior_period_score: Math.round(priorScore),
     };
   });
 }

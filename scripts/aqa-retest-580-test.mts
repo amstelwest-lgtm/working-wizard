@@ -296,7 +296,7 @@ const ownerHealth = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 const accountantHealth = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(ownerHealth.includes("openingMissing: ownerOpeningMissing"), "owner Health passes the missing opening");
 assert(accountantHealth.includes("openingMissing,"), "accountant Health passes the missing opening");
-assert(ownerHealth.includes("cashPillarFollowsForecast") && accountantHealth.includes("cashPillarFollowsForecast"), "both Health pages use the shared cash rule");
+assert(ownerHealth.includes("liveHealthFromBooks") && accountantHealth.includes("liveHealthFromBooks"), "both Health pages use the shared cash rule");
 assert(ownerHealth.includes("pillars={overallHealth.pillars}") && accountantHealth.includes("pillars={overallHealth.pillars}"), "both action plans use the Health pillars");
 const karooStatus = clientListStatusWord({
   healthLabel: "Healthy",

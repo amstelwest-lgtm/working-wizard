@@ -15,7 +15,12 @@ import {
   groundBrainSummaryRecord,
   ratiosForBrainProse,
 } from "../../../src/lib/advisory-narrative.ts";
-import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
+import { adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
+import {
+  assessClientMetrics,
+  runwayDisplayLabel,
+  storedOpeningIsMissing,
+} from "../../../src/lib/client-metrics.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 
@@ -61,6 +66,12 @@ export async function loadOverviewBrief(
       (row as { financials_updated_at?: string | null } | null)?.financials_updated_at ?? null,
     fyStartMonth,
   });
+  const clientName = typeof row?.name === "string" ? row.name : null;
+  const operating = (row as { operating_profile?: unknown } | null)?.operating_profile;
+  const templateId =
+    operating && typeof operating === "object" && !Array.isArray(operating)
+      ? (operating as { templateId?: unknown }).templateId
+      : null;
   return buildOverviewBrief({
     financials,
     ratios: fallback,
@@ -70,7 +81,7 @@ export async function loadOverviewBrief(
     copyPack,
     fyStartMonth,
     shortfallWeek: metrics.outlook.shortfallWeek,
-    clientName: typeof row?.name === "string" ? row.name : null,
+    clientName,
     dateMarket: marketForClient({ market: row?.market }),
     periodLabel: figuresPeriodLabelFrom(
       financials,
@@ -82,5 +93,16 @@ export async function loadOverviewBrief(
       row?.brain_summary ?? null,
       ratiosForBrainProse(financials, fyStartMonth),
     ),
+    industry: adviceIndustryLabel({
+      clientName,
+      templateId: typeof templateId === "string" ? templateId : null,
+    }),
+    cashflow: (row as { cashflow?: unknown } | null)?.cashflow,
+    financialsUpdatedAt:
+      (row as { financials_updated_at?: string | null } | null)?.financials_updated_at ?? null,
+    openingMissing: storedOpeningIsMissing((row as { cashflow?: unknown } | null)?.cashflow),
+    cashOpening: metrics.outlook.opening,
+    cashClosings: metrics.outlook.closing,
+    cashFloor: metrics.outlook.floor,
   });
 }

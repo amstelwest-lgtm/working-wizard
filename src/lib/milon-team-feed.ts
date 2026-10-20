@@ -21,8 +21,8 @@ import {
 } from "./cash-runway";
 import {
   RATIO_NAME_TO_KEY,
+  liveHealthFromBooks,
   overviewRatios,
-  scorecardHealthFromFinancials,
   scoreRatio,
   type ScoreMarket,
 } from "./health-score";
@@ -122,6 +122,12 @@ export interface MilonTeamFeed {
   activity: TeamActivityEvent[];
   agents: Record<AgentKey, TeamAgentStatus>;
   signoffLine: string | null;
+  /** Live floor-applied score. Stored findings quote this on screen. */
+  healthQuote: {
+    overall: number | null;
+    weakestLabel: string | null;
+    weakestScore: number | null;
+  } | null;
   precard: PrecardState;
   loading: boolean;
   error: string | null;
@@ -319,6 +325,8 @@ export type TeamDiagnosis = {
     label: string;
     tier: "healthy" | "at_risk" | "critical";
     asOf: string | null;
+    weakestLabel?: string | null;
+    weakestScore?: number | null;
   } | null;
   ratios: TeamDiagnosisRatio[];
   brain: {
@@ -970,6 +978,7 @@ export function emptyMilonTeamFeed(): MilonTeamFeed {
     activity: [],
     agents: emptyAgentStatuses(),
     signoffLine: null,
+    healthQuote: null,
     precard: { capped: false, remaining: null, limit: null },
     loading: false,
     error: null,
@@ -1017,6 +1026,14 @@ export function buildMilonTeamFeed(input: {
     activity,
     agents: agentStatusesFromActivity(activity),
     signoffLine,
+    healthQuote:
+      input.diagnosis.health == null
+        ? null
+        : {
+            overall: input.diagnosis.health.score,
+            weakestLabel: input.diagnosis.health.weakestLabel ?? null,
+            weakestScore: input.diagnosis.health.weakestScore ?? null,
+          },
     precard: input.precard,
     loading: input.loading === true,
     error: input.error ?? null,
@@ -1035,6 +1052,8 @@ export type WorkspaceDiagnosisInput = {
   brainSummaryUpdatedAt: string | null;
   snapshotAsOf: string | null;
   proposals: TeamDiagnosisProposal[];
+  /** Industry label. A hotel gross margin above 85% stays out of Profit. */
+  industry?: string | null;
 };
 
 /**
@@ -1054,17 +1073,15 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
     fyStartMonth: input.fyStartMonth,
     timeZone: input.timeZone,
   });
-  const cashBalance = assessed.cash.amount;
-  const cashKnown = cashBalance != null;
   const runwayWeeks = persistedRunwayWeeks(assessed.runway);
-  const healthRaw = scorecardHealthFromFinancials({
+  const healthRaw = liveHealthFromBooks({
     financials,
+    cashflow: input.cashflow,
+    financialsUpdatedAt: input.financialsUpdatedAt,
     fyStartMonth: input.fyStartMonth,
-    periodMonths,
-    cashRunwayWeeks: cashKnown ? runwayWeeks : null,
-    cashBalance: cashKnown ? cashBalance : null,
     market,
-    shortfallWeek: assessed.outlook.shortfallWeek,
+    industry: input.industry,
+    timeZone: input.timeZone,
   });
 
   const ratioMap = overviewRatios(financials, {
@@ -1127,6 +1144,7 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
       ? { outstanding, debtorDays, asOf }
       : null;
 
+  const weakest = healthRaw.weakestPillar;
   const health =
     healthRaw.overall == null
       ? null
@@ -1135,6 +1153,8 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
           label: healthRaw.displayLabel,
           tier: healthRaw.displayStatus,
           asOf,
+          weakestLabel: weakest?.label ?? null,
+          weakestScore: weakest?.score ?? null,
         };
 
   return {
