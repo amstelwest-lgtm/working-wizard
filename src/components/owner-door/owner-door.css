@@ -2690,3 +2690,48 @@ html.dark .owner-door .owner-settings-link[aria-current="page"] {
   background: var(--pale);
   color: var(--navy);
 }
+
+/* Wide children scroll inside the owner door. Ancestors clip overflow, so a
+   1480px table or a chart margin must not expand the page. */
+.owner-door .cash-13w-scroll,
+.owner-door .pw-scroll,
+.owner-door .milon-scroll-table,
+.owner-door .milon-scroll-table__viewport,
+.owner-door .budget-lens,
+.owner-door .budget-month-engine,
+.owner-door .cash-chart-frame {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.owner-door .cash-13w-scroll,
+.owner-door .pw-scroll,
+.owner-door .milon-scroll-table__viewport,
+.owner-door .budget-month-engine,
+.owner-door .cash-chart-frame {
+  overflow-x: auto;
+}
+
+/* The month engine's gold wash is decorative. Owner status amber stays on the health ring. */
+.owner-door.accountant-portal .budget-month-engine {
+  background: var(--bg-2);
+  box-shadow: 0 18px 40px rgba(16, 42, 67, 0.06);
+}
+html[data-theme="light"] .owner-door.accountant-portal .budget-month-engine {
+  box-shadow: 0 18px 40px rgba(16, 42, 67, 0.06);
+}
+
+@media (max-width: 767px) {
+  .owner-door .pw-scroll > div {
+    min-width: 0 !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .owner-door .owner-money {
+    display: inline-block;
+    max-width: 100%;
+    overflow-x: auto;
+    vertical-align: bottom;
+  }
+}

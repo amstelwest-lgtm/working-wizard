@@ -367,12 +367,11 @@ html:not(.dark) .accountant-portal .deliverable-main {
     padding: 16px 14px 24px;
   }
 }
-/* At 390 the pencil sits in the right corner. The 16px inset let the next
-   card's last line run under it. */
+/* At 390 the pencil is 40px wide with a 12px inset. Keep at least 52px clear. */
 @media (max-width: 390px) {
   html:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
   html:not(.dark) .owner-door:not([data-screen="chat"]) .deliverable-main {
-    padding-right: 28px;
+    padding-right: 64px;
   }
 }
 
@@ -397,7 +396,7 @@ html:not(.dark) .reports-studio .report-card__rule {
     transparent
   );
 }
-html:not(.dark) .accountant-portal [class*="bg-gradient-to-r"][class*="from-[#2563EB]"] {
+html:not(.dark) .accountant-portal:not(.owner-door) [class*="bg-gradient-to-r"][class*="from-[#2563EB]"] {
   height: 2px;
   background-image: linear-gradient(
     90deg,
