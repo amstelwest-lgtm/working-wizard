@@ -6,6 +6,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { decideAccountantAuthLanding, safeAccountantRedirect } from "../src/lib/auth-landing";
 import {
+  firmCheckoutSessionParams,
+  firmIntegrationIdentifier,
+  firmStartTrialCheckout,
+} from "../src/lib/stripe-checkout.core";
+import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
   decideFirmBillingEntitlement,
@@ -610,7 +615,10 @@ assert(
   })) === "cus_old",
   "an email change still finds the subscription by firm id and owner id",
 );
-assert(listedEmail === "", "the new email is not listed when metadata already found the customer");
+assert(
+  listedEmail === "team@trymilon.com",
+  "the new email is compared after the stable customer is found",
+);
 assert(searchedQuery === benQuery, "the search query is the firm and owner ids");
 assert(
   (await customerHasEntitlingSubscription(movedEmailStripe, "cus_old")) === true,
@@ -626,13 +634,87 @@ const emptyNewCustomer: StripeCustomerSubscriptionReader = {
     search: async () => ({ data: [starterSub] }),
   },
 };
+const splitWarnings: string[] = [];
+const warnSplit = console.warn;
+console.warn = (...args: unknown[]) => {
+  splitWarnings.push(args.map((part) => String(part)).join(" "));
+};
+let splitHit = "";
+try {
+  splitHit =
+    (await findFirmCustomerId(emptyNewCustomer, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+    })) ?? "";
+} finally {
+  console.warn = warnSplit;
+}
+assert(splitHit === "cus_old", "a newer customer on the new email does not hide the firm's subscription");
 assert(
-  (await findFirmCustomerId(emptyNewCustomer, {
-    email: "team@trymilon.com",
-    userId: BEN_OWNER,
-    firmId: BEN_FIRM,
-  })) === "cus_old",
-  "a newer customer on the new email does not hide the firm's subscription",
+  splitWarnings.some((line) => line.includes("keeping the stable customer")),
+  "different stable and email customers are logged",
+);
+const splitTrial = firmStartTrialCheckout({
+  customerId: splitHit,
+  priorSubscriptionCount: 1,
+  hasEntitlingSubscription: false,
+  needsPaymentOnExisting: false,
+});
+const splitParams = firmCheckoutSessionParams({
+  priceId: "price_test_starter_month",
+  lookupKey: "milon_starter_monthly",
+  band: "starter",
+  interval: "month",
+  origin: "https://milonfinance.com",
+  userId: BEN_OWNER,
+  firmId: BEN_FIRM,
+  email: "team@trymilon.com",
+  customerId: splitTrial.kind === "checkout" ? splitTrial.customerId : undefined,
+  market: "us",
+  integrationIdentifier: firmIntegrationIdentifier("starter", "month", "abcdefgh"),
+  includeTrial: splitTrial.kind === "checkout" ? splitTrial.includeTrial : false,
+});
+assert(splitParams.customer === "cus_old", "Start trial keeps the stable customer");
+assert(splitParams.customer_email == null, "Start trial does not create a customer for the new email");
+assert(splitTrial.kind === "checkout" && splitTrial.includeTrial === false, "a prior subscription is not a second trial");
+
+const USER_A = "11111111-1111-4111-8111-111111111111";
+const USER_B = "22222222-2222-4222-8222-222222222222";
+const FIRM_B = "44444444-4444-4444-8444-444444444444";
+const firmBSub = {
+  id: "sub_b",
+  status: "active",
+  customer: "cus_b",
+  metadata: { milon_plan: "starter", milon_user_id: USER_B, firm_id: FIRM_B },
+  items: { data: [{ price: { lookup_key: "milon_starter_monthly" } }] },
+};
+assert(
+  customerIdFromMetadataSubscriptions([firmBSub], { userId: USER_A, firmId: FIRM_B }) === undefined,
+  "firm A's user does not take a subscription tagged for firm B's owner",
+);
+const crossFirmStripe: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [{ id: "cus_a" }] }),
+    retrieve: async () => ({
+      id: "cus_b",
+      email: "b@example.com",
+      metadata: { milon_user_id: USER_B, firm_id: FIRM_B },
+    }),
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: async () => ({ data: [firmBSub] }),
+  },
+};
+assert(
+  (await findFirmCustomerId(crossFirmStripe, {
+    email: "a@example.com",
+    userId: USER_A,
+    firmId: FIRM_B,
+    storedCustomerId: "cus_b",
+  })) === "cus_a",
+  "firm A's user cannot resolve firm B's customer",
 );
 
 let storedListCalls = 0;
@@ -680,7 +762,7 @@ try {
   console.warn = warnBefore;
 }
 assert(storedHit === "cus_stored", "a stored customer id beats an email miss");
-assert(storedListCalls === 0, "an id hit does not list customers by the new email");
+assert(storedListCalls === 1, "an id hit still compares the email customer");
 assert(storedSearchCalls === 0, "an id hit does not search when the stored customer is present");
 assert(storedUpdateCalls === 0, "an email mismatch does not update Stripe");
 assert(
@@ -1314,5 +1396,9 @@ assert(
   "checkout stores the firm customer id",
 );
 assert(fns.includes("firmStartTrialCheckout"), "Start trial reuses the resolved customer");
+assert(fns.includes("firmBillingIdsForActor"), "a client firm id is checked against the signed-in user");
+assert(!fns.includes("customerId: z."), "checkout does not take a customer id from the client");
+const capServer = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
+assert(capServer.includes("actorCanUseFirm"), "a named firm is used only when the user belongs to it");
 
 console.log("firm-billing-gate ok");

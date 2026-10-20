@@ -106,7 +106,9 @@ type BillingAuthCtx = AuthCtx & {
           column: string,
           value: string,
         ) => {
-          limit: (n: number) => Promise<{ data: Array<{ id?: string }> | null }>;
+          limit: (n: number) => Promise<{
+            data: Array<{ id?: string; owner_user_id?: string | null }> | null;
+          }>;
         };
       };
     };
@@ -258,6 +260,33 @@ async function callerOwnedFirmId(
   return typeof id === "string" && id ? id : null;
 }
 
+/**
+ * Firm id and the Stripe user id for this actor.
+ * A client-sent firm id is kept only when this signed-in user's row can read
+ * that firm. The Stripe user id is the owner on that row, not the request body.
+ * A firm the user cannot read is dropped.
+ */
+async function firmBillingIdsForActor(
+  supabase: BillingAuthCtx["supabase"],
+  userId: string,
+  requestedFirmId: string | null,
+): Promise<{ firmId: string | null; ownerUserId: string }> {
+  if (!supabase) return { firmId: null, ownerUserId: userId };
+  const requested = requestedFirmId?.trim() ?? "";
+  if (requested) {
+    const { data } = await supabase.from("firms").select("id, owner_user_id").eq("id", requested).limit(1);
+    const row = data?.[0];
+    if (!row?.id) return { firmId: null, ownerUserId: userId };
+    const owner =
+      typeof row.owner_user_id === "string" && row.owner_user_id.trim()
+        ? row.owner_user_id.trim()
+        : userId;
+    return { firmId: String(row.id), ownerUserId: owner };
+  }
+  const owned = await callerOwnedFirmId(supabase, userId);
+  return { firmId: owned, ownerUserId: userId };
+}
+
 async function countFirmMemberships(
   supabase: BillingAuthCtx["supabase"],
   userId: string,
@@ -289,13 +318,16 @@ async function resolveFirmBillingEntitlement(
     if (pending) return pending;
   }
   const work = (async (): Promise<FirmBillingEntitlement> => {
+    const billingIds = await firmBillingIdsForActor(ctx.supabase, userId, firmId);
     try {
       // One isolate-cached Stripe list. The mirror below reads that same
       // entry. It must not be awaited: a second scan used to sit on the response.
-      const resolvedFirmId =
-        (firmId && firmId.trim()) || (await callerOwnedFirmId(ctx.supabase, userId)) || null;
       const [history, owned, memberships] = await Promise.all([
-        readFirmSubscriptionHistory(email, { fresh: refresh, userId, firmId: resolvedFirmId }),
+        readFirmSubscriptionHistory(email, {
+          fresh: refresh,
+          userId: billingIds.ownerUserId,
+          firmId: billingIds.firmId,
+        }),
         countOwnedFirms(ctx.supabase, userId),
         countFirmMemberships(ctx.supabase, userId),
       ]);
@@ -308,7 +340,7 @@ async function resolveFirmBillingEntitlement(
         }),
         introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
       };
-      rememberEntitlement(email, result, userId, firmId);
+      rememberEntitlement(email, result, userId, billingIds.firmId);
       const mirror = syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
         console.warn(
           "[stripe-entitlement] trial mirror sync failed",
@@ -345,7 +377,10 @@ async function resolveFirmBillingEntitlement(
       });
       // Unknown is not unpaid. Caching this as entitled:false sent the shell
       // to the trial card. A previous success for this user and firm stays.
-      return entitlementAfterLiveFailure(lookupLastFirmEntitlement(userId, email, firmId), kind);
+      return entitlementAfterLiveFailure(
+        lookupLastFirmEntitlement(userId, email, billingIds.firmId),
+        kind,
+      );
     }
   })();
   if (key) {
@@ -679,7 +714,7 @@ export const validateFirmVoucher = createServerFn({ method: "POST" })
     }
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
-    const { billingEmail } = await assertCallerCanUpgradeFirm({
+    const { billingEmail, ownerUserId } = await assertCallerCanUpgradeFirm({
       supabase: ctx.supabase,
       userId,
       email,
@@ -696,12 +731,12 @@ export const validateFirmVoucher = createServerFn({ method: "POST" })
         ? price.unit_amount
         : (firmBandListCents(band, interval) ?? 0);
     const sub = await findEntitlingFirmSubscription(billingEmail, {
-      userId,
+      userId: ownerUserId,
       firmId: data.firmId,
     });
     const firmCustomerId =
       sub?.customerId ??
-      (await findBillingCustomerId({ email: billingEmail, userId, firmId: data.firmId })) ??
+      (await findBillingCustomerId({ email: billingEmail, userId: ownerUserId, firmId: data.firmId })) ??
       null;
     const voucher = await resolveFirmVoucher(stripe, {
       code,
@@ -752,6 +787,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const {
       billingEmail,
       clientCount,
+      ownerUserId,
       market: firmMarket,
     } = await assertCallerCanUpgradeFirm({
       supabase: ctx.supabase,
@@ -764,7 +800,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const band = data.band as FirmCheckoutBand;
     const interval = data.interval as FirmInterval;
     const sub = await findEntitlingFirmSubscription(billingEmail, {
-      userId,
+      userId: ownerUserId,
       firmId: data.firmId,
     });
     assertUpgradeTarget({
@@ -777,7 +813,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const stripe = getStripe();
     const countryCustomerId =
       sub?.customerId ??
-      (await findBillingCustomerId({ email: billingEmail, userId, firmId: data.firmId }));
+      (await findBillingCustomerId({ email: billingEmail, userId: ownerUserId, firmId: data.firmId }));
     const billingCountry = await readStripeCustomerCountry(stripe, countryCustomerId);
     const priceMarket = priceMarketForFirm({
       firmMarket: saFirm ? "za" : "us",
@@ -797,7 +833,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     if (voucherCode) {
       const firmCustomerId =
         sub?.customerId ??
-        (await findBillingCustomerId({ email: billingEmail, userId, firmId: data.firmId })) ??
+        (await findBillingCustomerId({ email: billingEmail, userId: ownerUserId, firmId: data.firmId })) ??
         null;
       const voucher = await resolveFirmVoucher(stripe, {
         code: voucherCode,
@@ -903,7 +939,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
 
     const customerId = await findBillingCustomerId({
       email: billingEmail,
-      userId,
+      userId: ownerUserId,
       firmId: data.firmId,
     });
     if (customerId) await writeFirmStripeCustomerId(data.firmId, customerId);

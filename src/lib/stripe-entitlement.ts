@@ -333,21 +333,38 @@ type MetadataSubscription = {
 };
 
 /**
+ * A metadata row belongs to this lookup only when its user id matches.
+ * Naming another firm's id does not hand over that firm's customer.
+ */
+function metadataHit(
+  meta: { firm_id?: string | null; milon_user_id?: string | null } | null | undefined,
+  input: FirmCustomerLookup,
+): { firmHit: boolean; userHit: boolean } | null {
+  const firmId = input.firmId?.trim() ?? "";
+  const userId = input.userId?.trim() ?? "";
+  const metaFirm = meta?.firm_id?.trim() ?? "";
+  const metaUser = meta?.milon_user_id?.trim() ?? "";
+  if (metaUser && userId && metaUser !== userId) return null;
+  if (metaFirm && firmId && metaFirm !== firmId) return null;
+  const firmHit = Boolean(firmId) && metaFirm === firmId;
+  const userHit = Boolean(userId) && metaUser === userId;
+  if (!firmHit && !userHit) return null;
+  return { firmHit, userHit };
+}
+
+/**
  * Customer id from subscriptions that already carry this firm or owner id.
  * An entitling firm subscription outranks an owner-plan or canceled row.
- * The signed-in email is not consulted.
+ * The signed-in email is not consulted. Another user's id never matches.
  */
 export function customerIdFromMetadataSubscriptions(
   subs: MetadataSubscription[],
   input: FirmCustomerLookup,
 ): string | undefined {
-  const firmId = input.firmId?.trim() ?? "";
-  const userId = input.userId?.trim() ?? "";
   const ranked = subs.flatMap((sub) => {
-    const meta = sub.metadata ?? {};
-    const firmHit = Boolean(firmId) && meta.firm_id === firmId;
-    const userHit = Boolean(userId) && meta.milon_user_id === userId;
-    if (!firmHit && !userHit) return [];
+    const hit = metadataHit(sub.metadata, input);
+    if (!hit) return [];
+    const { firmHit } = hit;
     const customerId = stripeCustomerId(sub.customer);
     if (!customerId) return [];
     const owner = subscriptionIsOwnerPlan(sub);
@@ -394,13 +411,10 @@ export function customerIdFromMetadataCustomers(
   customers: MetadataCustomer[],
   input: FirmCustomerLookup,
 ): string | undefined {
-  const firmId = input.firmId?.trim() ?? "";
-  const userId = input.userId?.trim() ?? "";
   const ranked = customers.flatMap((customer) => {
-    const meta = customer.metadata ?? {};
-    const firmHit = Boolean(firmId) && meta.firm_id === firmId;
-    const userHit = Boolean(userId) && meta.milon_user_id === userId;
-    if (!firmHit && !userHit) return [];
+    const hit = metadataHit(customer.metadata, input);
+    if (!hit) return [];
+    const { firmHit } = hit;
     const customerId = stripeCustomerId(customer.id);
     if (!customerId) return [];
     return [{ customerId, rank: firmHit ? 2 : 1 }];
@@ -474,6 +488,34 @@ async function readStoredCustomer(
   }
 }
 
+/**
+ * The email list found a different customer. Keep the stable one.
+ * Checkout must attach that id so Stripe does not create another customer.
+ */
+async function noteDifferentEmailCustomer(
+  stripe: StripeCustomerSubscriptionReader,
+  stableId: string,
+  email: string,
+  via: "stored_customer_id" | "subscription_metadata" | "customer_metadata",
+): Promise<void> {
+  if (!email) return;
+  let byEmail: string | undefined;
+  try {
+    byEmail = await findCustomerIdByEmail(stripe, email);
+  } catch (err) {
+    console.warn(
+      "[stripe] email customer lookup failed",
+      err instanceof Error ? err.message : err,
+    );
+    return;
+  }
+  if (!byEmail || byEmail === stableId) return;
+  console.warn(
+    "[stripe] stable customer differs from the email customer; keeping the stable customer",
+    { customerId: stableId, emailCustomerId: byEmail, via },
+  );
+}
+
 async function stripeCustomerEmail(
   stripe: StripeCustomerSubscriptionReader,
   customerId: string,
@@ -504,6 +546,7 @@ export async function findFirmCustomerId(
     const read = await readStoredCustomer(stripe, stored);
     if (read.state === "trusted" && !storedCustomerConflicts(read.metadata, input)) {
       noteStripeEmailDiffers(stored, read.email, email, "stored_customer_id");
+      await noteDifferentEmailCustomer(stripe, stored, email, "stored_customer_id");
       return stored;
     }
     if (read.state === "failed") storedRetrieveFailed = true;
@@ -521,6 +564,7 @@ export async function findFirmCustomerId(
           email,
           "subscription_metadata",
         );
+        await noteDifferentEmailCustomer(stripe, stable, email, "subscription_metadata");
         return stable;
       }
     } catch (err) {
@@ -542,6 +586,7 @@ export async function findFirmCustomerId(
       if (stable) {
         const row = rows.find((customer) => customer.id === stable);
         noteStripeEmailDiffers(stable, row?.email, email, "customer_metadata");
+        await noteDifferentEmailCustomer(stripe, stable, email, "customer_metadata");
         return stable;
       }
     } catch (err) {

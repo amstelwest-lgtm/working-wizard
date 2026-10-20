@@ -381,12 +381,16 @@ async function loadFirm(
         .eq("id", firmId)
         .maybeSingle();
       if (legacy.error) throw new Error(legacy.error.message);
-      return legacy.data ? toLoadedFirm(legacy.data, false) : null;
+      const legacyFirm = legacy.data ? toLoadedFirm(legacy.data, false) : null;
+      if (!legacyFirm) return null;
+      return (await actorCanUseFirm(db, legacyFirm, userId)) ? legacyFirm : null;
     }
     if (selected.error) throw new Error(selected.error.message);
     if (selected.data?.id) {
-      return toLoadedFirm(selected.data, selected.data.starter_trial_enforced === true);
+      const loaded = toLoadedFirm(selected.data, selected.data.starter_trial_enforced === true);
+      return (await actorCanUseFirm(db, loaded, userId)) ? loaded : null;
     }
+    return null;
   }
   const listed = await db.from("firms").select(FIRM_SELECT).eq("owner_user_id", userId).limit(1);
   if (listed.error && isMissingTrialColumn(listed.error.message)) {
@@ -457,6 +461,13 @@ function trialBannerFor(
   );
 }
 
+/** Owner on the firm row, or a membership row. A client-sent firm id is not enough. */
+async function actorCanUseFirm(db: CapDb, firm: LoadedFirm, userId: string): Promise<boolean> {
+  if (firm.ownerUserId && firm.ownerUserId === userId) return true;
+  const role = await loadMembershipRole(db, firm.id, userId);
+  return Boolean(role);
+}
+
 async function loadMembershipRole(
   db: unknown,
   firmId: string,
@@ -518,7 +529,7 @@ export async function assertCallerCanUpgradeFirm(input: {
   userId: string;
   email: string;
   firmId: string;
-}): Promise<{ billingEmail: string; clientCount: number; market: unknown }> {
+}): Promise<{ billingEmail: string; clientCount: number; market: unknown; ownerUserId: string }> {
   const userDb = asCapDb(input.supabase);
   let email = input.email.trim();
   if (!email && userDb.auth) {
@@ -538,7 +549,12 @@ export async function assertCallerCanUpgradeFirm(input: {
   const billing = await billingEmailForFirm(input.userId, email, firm.ownerUserId);
   if (!billing.email) throw new Error("The firm owner has no billing email.");
   const clientCount = await countFirmClients(db, firm.id);
-  return { billingEmail: billing.email, clientCount, market: firm.market };
+  return {
+    billingEmail: billing.email,
+    clientCount,
+    market: firm.market,
+    ownerUserId: firm.ownerUserId || input.userId,
+  };
 }
 
 /** Firm market JSON for the signed-in owner. Null when they have no firm row. */
