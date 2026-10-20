@@ -10,8 +10,8 @@ type Props = {
 };
 
 /**
- * Firm-grade shell for owner invite accept / signup surfaces.
- * Matches the token-page palette (near-black, gold accent, glass card).
+ * Light brand shell for invite accept / signup surfaces.
+ * White canvas, navy text, pale borders. Gold stays on the wordmark only.
  */
 export function OwnerInviteShell({
   children,
@@ -20,13 +20,13 @@ export function OwnerInviteShell({
   loadingMessage = "Loading invitation…",
 }: Props) {
   return (
-    <main className="flex min-h-screen flex-col bg-[#0a0c0b] text-[#e8ede9]">
+    <main className="invite-ink flex min-h-screen flex-col bg-white text-[#102A43]">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-10 pt-8">
         <header className="mb-8 flex items-center justify-between gap-4">
-          <span className="text-sm font-black tracking-[0.35em] text-[var(--brand-gold-ui)]">MILŌN</span>
+          <span className="logo-word text-sm font-black tracking-[0.35em] text-[#7D5F0F]">MILŌN</span>
           {businessName ? (
             <span
-              className="max-w-[55%] truncate rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a938c]"
+              className="max-w-[55%] truncate rounded-full border border-[#DBEAFE] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#3D5270]"
               title={businessName}
             >
               {businessName}
@@ -37,10 +37,10 @@ export function OwnerInviteShell({
         {loading ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 py-16">
             <div
-              className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--brand-gold-ui)]/25 border-t-[var(--brand-gold-ui)]"
+              className="h-6 w-6 animate-spin rounded-full border-2 border-[#DBEAFE] border-t-[#0B5FFF]"
               aria-hidden
             />
-            <p className="text-sm text-[#8a938c]">{loadingMessage}</p>
+            <p className="text-sm text-[#3D5270]">{loadingMessage}</p>
           </div>
         ) : (
           children
@@ -50,7 +50,7 @@ export function OwnerInviteShell({
   );
 }
 
-/** Glass card wrapper used inside OwnerInviteShell. */
+/** Card wrapper used inside OwnerInviteShell. */
 export function OwnerInviteCard({
   children,
   className = "",
@@ -60,7 +60,7 @@ export function OwnerInviteCard({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-white/10 bg-[#10130f] p-7 shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:p-8 ${className}`}
+      className={`rounded-2xl border border-[#DBEAFE] bg-white p-7 shadow-[0_8px_24px_rgba(16,42,67,0.06)] sm:p-8 ${className}`}
     >
       {children}
     </div>
@@ -69,7 +69,7 @@ export function OwnerInviteCard({
 
 export function OwnerInviteEyebrow({ children }: { children: ReactNode }) {
   return (
-    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8a938c]">{children}</p>
+    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#0B5FFF]">{children}</p>
   );
 }
 
@@ -83,7 +83,7 @@ export function OwnerInviteFieldLabel({
   return (
     <label
       htmlFor={htmlFor}
-      className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a938c] first:mt-0"
+      className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#3D5270] first:mt-0"
     >
       {children}
     </label>
@@ -94,7 +94,7 @@ export function OwnerInviteInput(props: React.InputHTMLAttributes<HTMLInputEleme
   return (
     <input
       {...props}
-      className={`mt-2 w-full rounded-xl border border-white/10 bg-[#0a0c0b] px-4 py-3 text-sm text-[#e8ede9] placeholder:text-[#8a938c]/55 focus:border-[var(--brand-gold-ui)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--brand-focus-ring)] ${props.className ?? ""}`}
+      className={`mt-2 w-full rounded-xl border border-[#DBEAFE] bg-white px-4 py-3 text-sm text-[#102A43] placeholder:text-[#3D5270]/55 focus:border-[#0B5FFF] focus:outline-none focus:ring-2 focus:ring-[#0B5FFF]/30 ${props.className ?? ""}`}
     />
   );
 }
@@ -108,7 +108,7 @@ export function OwnerInvitePrimaryButton({
     <button
       type="button"
       {...props}
-      className={`inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300] transition-opacity disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#0B5FFF] px-5 text-xs font-bold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#2563EB] disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {children}
     </button>
@@ -124,7 +124,7 @@ export function OwnerInviteGhostButton({
     <button
       type="button"
       {...props}
-      className={`inline-flex h-11 items-center justify-center rounded-xl border border-white/15 px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#c9d0cb] transition-colors hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`inline-flex h-11 items-center justify-center rounded-xl border border-[#0B5FFF] bg-transparent px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#0B5FFF] transition-colors hover:bg-[#DBEAFE] disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {children}
     </button>
@@ -134,7 +134,7 @@ export function OwnerInviteGhostButton({
 export function OwnerInviteNote({ children, tone = "muted" }: { children: ReactNode; tone?: "muted" | "warn" }) {
   return (
     <p
-      className={`text-xs leading-relaxed ${tone === "warn" ? "text-[#e8b34b]" : "text-[#8a938c]"}`}
+      className={`text-xs leading-relaxed ${tone === "warn" ? "text-[#9A3412]" : "text-[#3D5270]"}`}
     >
       {children}
     </p>

@@ -36,7 +36,7 @@ export function PasswordSignInAlert({
 
   if (tone === "overlay") {
     return (
-      <p className="mt-3 text-sm text-rose-300" role="alert">
+      <p className="mt-3 text-sm text-[#9F1239]" role="alert">
         {message}
         {showForgot ? (
           <>

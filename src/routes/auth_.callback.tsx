@@ -700,11 +700,11 @@ function AuthCallbackPage() {
       return (
         <OwnerInviteShell>
           <OwnerInviteEyebrow>{inviteContinue ? "Invitation" : "Sign in"}</OwnerInviteEyebrow>
-          <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-[#e8ede9]">
+          <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-[#102A43]">
             {inviteContinue ? "Could not accept invitation" : "Could not sign in with Google"}
           </h1>
           <OwnerInviteCard className="mt-6 text-center">
-            <p className="text-sm leading-relaxed text-[#8a938c]">{error}</p>
+            <p className="text-sm leading-relaxed text-[#3D5270]">{error}</p>
             <div className="mt-6 flex flex-col gap-3">
               {canRetry ? (
                 <button
@@ -785,7 +785,7 @@ function AuthCallbackPage() {
     return (
       <OwnerInviteShell loading={working} loadingMessage="Completing sign-in…">
         {!working ? (
-          <p className="text-center text-sm text-[#8a938c]">Redirecting to your workspace…</p>
+          <p className="text-center text-sm text-[#3D5270]">Redirecting to your workspace…</p>
         ) : null}
       </OwnerInviteShell>
     );

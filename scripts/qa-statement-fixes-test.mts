@@ -581,10 +581,12 @@ assert(join.includes("inviteTokenShapeOk"), "short tokens are handled on the pag
 assert(join.includes("sanitizeInviteError(previewError)"), "the page never renders a raw preview error");
 assert(!join.includes("setPreviewError(err instanceof Error ? err.message"), "preview does not store a raw thrown message");
 assert(
-  /text-foreground">\s*Accountant invitation/.test(join),
-  "Accountant invitation uses the foreground token",
+  /text-\[#0B5FFF\]">\s*Accountant invitation/.test(join),
+  "Accountant invitation uses cobalt",
 );
-assert(join.includes('el.classList.add("dark")'), "join page keeps the dark canvas so the heading stays readable");
+assert(!join.includes('el.classList.add("dark")'), "join page does not force a dark canvas");
+assert(join.includes("Accept invitation"), "the primary action is Accept invitation");
+assert(join.includes("inviteJoinHidesSignup"), "revoked and used invites still hide the sign-up form");
 
 const ask = read("src/lib/ask-ai.js");
 const submit = ask.slice(ask.indexOf("async function submit"));
