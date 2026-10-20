@@ -195,6 +195,8 @@ import {
 import { clientHomePhase } from "@/lib/client-home-phase";
 import { canonicalScoreProse } from "@/lib/score-prose";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { measureBootstrap } from "@/lib/bootstrap-perf";
+import { callAuthedServerFn } from "@/lib/server-fn-session";
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
@@ -289,6 +291,7 @@ import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { cashSignoffIsStale, reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
 import { ClientAgentStandby } from "@/components/client-agent-standby";
+import { ClientNumbersShell } from "@/components/client-numbers-shell";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/financial-manager-brief";
 import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
@@ -830,6 +833,8 @@ function ClientView() {
     setActingAsThisClient(isActingAsThisClient(stored, clientId));
   }, [clientId]);
   const [client, setClient] = useState<Client | null>(null);
+  // Market without the books blobs, so Cash and Budget can format before the fat row.
+  const [identityMarket, setIdentityMarket] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
@@ -1093,7 +1098,7 @@ function ClientView() {
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
-    void fetchXeroLink({ data: { clientId } })
+    void callAuthedServerFn(supabase, () => fetchXeroLink({ data: { clientId } }))
       .then((status) => {
         if (!cancelled) {
           setXeroLink(status);
@@ -1116,7 +1121,7 @@ function ClientView() {
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
-    void fetchQboLink({ data: { clientId } })
+    void callAuthedServerFn(supabase, () => fetchQboLink({ data: { clientId } }))
       .then((status) => {
         if (!cancelled) {
           setQboLink(status);
@@ -2284,6 +2289,16 @@ function ClientView() {
     let cancelled = false;
     setLoading(true);
     setLoadTimedOut(false);
+    setIdentityMarket(null);
+    // Country and currency do not need financials, cashflow, or budget.
+    void supabase
+      .from("clients")
+      .select("id, market")
+      .eq("id", clientId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data) setIdentityMarket(data.market);
+      });
     const timer = window.setTimeout(() => {
       if (cancelled) return;
       setLoadTimedOut(true);
@@ -2394,6 +2409,7 @@ function ClientView() {
       } finally {
         window.clearTimeout(timer);
         if (!cancelled) {
+          measureBootstrap("client-blobs");
           setLoadTimedOut(false);
           setLoading(false);
         }
@@ -2482,7 +2498,7 @@ function ClientView() {
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
-    fetchReviewSignoffs({ data: { clientId } })
+    callAuthedServerFn(supabase, () => fetchReviewSignoffs({ data: { clientId } }))
       .then(({ signoffs }) => {
         if (cancelled) return;
         setReviewSignoffs(indexReviewSignoffs(signoffs));
@@ -3751,8 +3767,22 @@ function ClientView() {
     timedOut: loadTimedOut,
     hasClient: Boolean(client),
   });
-  if (homePhase === "loading" || homePhase === "error") {
+  const numbersTab = activeTab === "cash" || activeTab === "budget";
+  // Home keeps #642's standby and its one row deadline. Cash and Budget
+  // paint their own tab; they do not wait on this fat select.
+  if (!numbersTab && (homePhase === "loading" || homePhase === "error")) {
     return <ClientAgentStandby timedOut={homePhase === "error"} />;
+  }
+  if (numbersTab && !client && (homePhase === "loading" || homePhase === "error")) {
+    return (
+      <ClientNumbersShell
+        clientId={clientId}
+        tab={activeTab}
+        section={typeof search.section === "string" ? search.section : undefined}
+        market={identityMarket}
+        timedOut={homePhase === "error"}
+      />
+    );
   }
 
   if (!client) {

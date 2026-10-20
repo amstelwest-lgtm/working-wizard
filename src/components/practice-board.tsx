@@ -2,10 +2,13 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { PeriodPill } from "@/components/chrome-icons";
 import { useEffect, useMemo, useState, useRef, Fragment } from "react";
 import { reportClientError } from "@/lib/monitoring";
-import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { SHELL_GATE_TIMEOUT_MS, shellGateRemaining } from "@/lib/shell-gate";
+import { measureBootstrap } from "@/lib/bootstrap-perf";
 import {
   CLIENTS_LOAD_ERROR,
+  FOLLOW_UPS_LOAD_ERROR,
   OPEN_QUERIES_LOAD_ERROR,
+  dashboardCardsPhase,
   openQueriesPhase,
   practiceClientsPhase,
   settleWithin,
@@ -25,6 +28,9 @@ import {
   setPortalIntent,
   clearForcePortal,
   openPracticeSettings,
+  isMilonItMember,
+  isAccountantPortalOpen,
+  markAccountantPortalOpen,
 } from "@/lib/user-roles";
 import {
   cashPillarFollowsForecast,
@@ -1273,9 +1279,6 @@ function practiceSectionSubtitle(view: PracticeSection): string {
   return "Definitions and the highest-impact repair steps.";
 }
 
-/** A stay that already succeeded. Remounting All clients must not wait on it again. */
-const accountantPortalStay = new Set<string>();
-
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -1288,13 +1291,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   // trigger add-client against an owner login.
   const portalUserId = user?.id ?? null;
   const [portalReady, setPortalReady] = useState(
-    () => portalUserId != null && accountantPortalStay.has(portalUserId),
+    () => portalUserId != null && isAccountantPortalOpen(portalUserId),
   );
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   useEffect(() => {
     if (!portalUserId) return;
-    if (accountantPortalStay.has(portalUserId)) {
+    if (isAccountantPortalOpen(portalUserId)) {
       setPortalReady(true);
       return;
     }
@@ -1314,7 +1317,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       if (cancelled) return;
       window.clearTimeout(timer);
       if (stay) {
-        accountantPortalStay.add(portalUserId);
+        markAccountantPortalOpen(portalUserId);
         setPortalIntent("accountant");
         clearForcePortal();
         setPortalReady(true);
@@ -1410,10 +1413,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     openForm();
   }, [user, finalizeUpgrade]);
   useEffect(() => {
+    // Stripe allowance is not on the greeting path. It starts once the slim
+    // book has painted (or the chain deadline has released the spinner).
     if (!portalReady || !firmId) {
       setTrialAllowance(null);
       return;
     }
+    if (loading) return;
     let cancelled = false;
     void loadTrialAllowance({ data: { firmId } })
       .then((next) => {
@@ -1425,7 +1431,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     return () => {
       cancelled = true;
     };
-  }, [portalReady, firmId, loadTrialAllowance, trialNonce]);
+  }, [portalReady, firmId, loading, loadTrialAllowance, trialNonce]);
   const [firstClientOpen, setFirstClientOpen] = useState(false);
   const [inviteDraft, setInviteDraft] = useState<InviteDraftUi | null>(null);
   const [inviteSending, setInviteSending] = useState(false);
@@ -1442,7 +1448,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const [queryRows, setQueryRows] = useState<OpenQueryRow[]>([]);
   const [queryRowsReady, setQueryRowsReady] = useState(false);
   const [bookTimedOut, setBookTimedOut] = useState(false);
+  const [countsTimedOut, setCountsTimedOut] = useState(false);
   const [queriesTimedOut, setQueriesTimedOut] = useState(false);
+  const [chainAttempt, setChainAttempt] = useState(0);
   useEffect(() => {
     if (!mobileNavOpen) return;
     const onKey = (event: KeyboardEvent) => {
@@ -1467,6 +1475,28 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const mintInvite = useServerFn(inviteClientOwner);
   const sendDraftedInvite = useServerFn(sendDraftedOwnerInvite);
   const loadGen = useRef(0);
+  /** Wall clock for the whole board chain. Brand and portal flips must not restart the 8s. */
+  const chainStartRef = useRef<number | null>(null);
+  const rowsLandedRef = useRef(false);
+  const countsLandedRef = useRef(false);
+  const queriesReadyRef = useRef(false);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  if (user?.id && chainStartRef.current == null) chainStartRef.current = Date.now();
+
+  const retryChain = () => {
+    chainStartRef.current = Date.now();
+    rowsLandedRef.current = false;
+    countsLandedRef.current = false;
+    queriesReadyRef.current = false;
+    setBookTimedOut(false);
+    setCountsTimedOut(false);
+    setQueriesTimedOut(false);
+    setQueryRowsReady(false);
+    setCountsReady(false);
+    setLoading(true);
+    setChainAttempt((n) => n + 1);
+  };
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const [chaseDraft, setChaseDraft] = useState<ChaseDraftInput | null>(null);
@@ -1485,8 +1515,12 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     const warm = readPaintedBook<ClientRow>(userId, activeFirmId);
     if (warm) {
       setClientRows(warm);
+      rowsLandedRef.current = true;
+      countsLandedRef.current = true;
       setLoading(false);
     } else {
+      rowsLandedRef.current = false;
+      countsLandedRef.current = false;
       setLoading(true);
       setCountsReady(false);
     }
@@ -1498,55 +1532,50 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setCountsReady(true);
       setBookEnriched(true);
       setBookTimedOut(false);
+      setCountsTimedOut(false);
+      rowsLandedRef.current = true;
+      countsLandedRef.current = true;
       setLoading(false);
       return;
     }
 
-    // The IT flag and the client select used to be bare awaits. A hung
-    // PostgREST call never reached setLoading(false), and the open-queries
-    // effect refused to arm its own deadline while `loading` stayed true.
-    const slim = await settleWithin(
-      (async () => {
-        let isIt = false;
-        try {
-          const { data: itFlag } = await supabase.rpc(
-            "is_milon_it_member" as never,
-            {
-              _user_id: userId,
-            } as never,
-          );
-          isIt = Boolean(itFlag);
-        } catch {
-          isIt = false;
-        }
-
-        // Firm-scoped list + legacy orphans (firm_id null) owned by this accountant.
-        // Strict firm_id-only filtering hid pre-G27 clients and made the dashboard look empty.
-        // IT members have master access — list every client they can read.
-        const listColumns =
-          "id, name, business_type, operating_profile, client_code, contact_email, cash_runway_weeks, last_forecast_at, last_login_at, firm_id, owner_user_id, financials_updated_at, created_at, reports_issued_count, market";
-        let query = supabase.from("clients").select(listColumns).order("created_at", { ascending: false });
-        if (!isIt) {
-          if (activeFirmId) {
-            query = query.or(
-              `firm_id.eq.${activeFirmId},and(firm_id.is.null,owner_user_id.eq.${userId})`,
-            );
-          } else {
-            query = query.eq("owner_user_id", userId);
-          }
-        }
-        const { data: cs, error } = await query;
-        return { isIt, cs, error };
-      })(),
-      SHELL_GATE_TIMEOUT_MS,
-    );
+    // IT membership and the client select are independent for a practice
+    // account. The IT flag only widens the list, so the firm-scoped read
+    // starts immediately and is shared with the gate's cached check.
+    const listColumns =
+      "id, name, business_type, operating_profile, client_code, contact_email, cash_runway_weeks, last_forecast_at, last_login_at, firm_id, owner_user_id, financials_updated_at, created_at, reports_issued_count, market";
+    const slimWork = (async () => {
+      let scoped = supabase.from("clients").select(listColumns).order("created_at", { ascending: false });
+      if (activeFirmId) {
+        scoped = scoped.or(
+          `firm_id.eq.${activeFirmId},and(firm_id.is.null,owner_user_id.eq.${userId})`,
+        );
+      } else {
+        scoped = scoped.eq("owner_user_id", userId);
+      }
+      const [isIt, first] = await Promise.all([isMilonItMember(userId), scoped]);
+      if (!isIt) return { isIt, cs: first.data, error: first.error };
+      const all = await supabase
+        .from("clients")
+        .select(listColumns)
+        .order("created_at", { ascending: false });
+      return { isIt: true, cs: all.data, error: all.error };
+    })();
+    const budget = shellGateRemaining(chainStartRef.current ?? Date.now(), Date.now());
+    const slim = await settleWithin(slimWork, budget);
     if (gen !== loadGen.current) return;
     if (slim.status !== "value") {
+      // The deadline is visible now. The select keeps running so a late
+      // response still paints the table instead of being dropped.
       setBookTimedOut(true);
-      return;
+      setCountsTimedOut(true);
+      setLoading(false);
+      setCountsReady(true);
     }
+    const resolvedSlim = slim.status === "value" ? slim.value : await slimWork;
+    if (gen !== loadGen.current) return;
     setBookTimedOut(false);
-    const { isIt, cs, error } = slim.value;
+    const { isIt, cs, error } = resolvedSlim;
     setIsItMember(isIt);
     if (error) toast.error(error.message);
     let rawClients = collapseDuplicateClientShells((cs ?? []) as unknown as Client[]);
@@ -1575,10 +1604,16 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
     if (gen !== loadGen.current) return;
     const lightRows = rawClients.map((c) => lightClientRow(c));
-    setClientRows(rawClients.map((c) => lightClientRow(c)));
+    setClientRows(lightRows);
+    rowsLandedRef.current = true;
     rememberPaintedBook(userId, activeFirmId, lightRows);
-    if (rawClients.length === 0) setCountsReady(true);
+    if (rawClients.length === 0) {
+      countsLandedRef.current = true;
+      setCountsTimedOut(false);
+      setCountsReady(true);
+    }
     setLoading(false);
+    measureBootstrap("book");
 
     const historyPromise = (async () => {
       const historyMap: Record<string, ScoreHistoryPoint[]> = {};
@@ -1670,10 +1705,37 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       return {} as Record<string, number>;
     });
 
-    const [historyMap, actionMaps, openQueriesMap, displayNames, figures, linkedIds] = await Promise.all([
+    // Cards wait on queries and follow-ups only. Figures, names, and history
+    // paint the table detail and must not hold "Loading…".
+    const countsPromise = Promise.all([actionsPromise, queriesPromise]);
+    const countsBudget = shellGateRemaining(chainStartRef.current ?? Date.now(), Date.now());
+    const countsSettled = await settleWithin(countsPromise, countsBudget);
+    if (gen !== loadGen.current) return;
+    if (countsSettled.status !== "value") {
+      setCountsTimedOut(true);
+      setCountsReady(true);
+    }
+    const [actionMaps, openQueriesMap] =
+      countsSettled.status === "value" ? countsSettled.value : await countsPromise;
+    if (gen !== loadGen.current) return;
+    if (rawClients.length > 0) {
+      setClientRows((rows) =>
+        rows.map((c) => ({
+          ...c,
+          openQueries: openQueriesMap[c.id] ?? 0,
+          openActions: actionMaps.openActionsMap[c.id] ?? 0,
+          overdueActions: actionMaps.overdueActionsMap[c.id] ?? 0,
+          chaseActions: actionMaps.chaseActionsMap[c.id] ?? [],
+        })),
+      );
+    }
+    countsLandedRef.current = true;
+    setCountsTimedOut(false);
+    setCountsReady(true);
+    measureBootstrap("cards");
+
+    const [historyMap, displayNames, figures, linkedIds] = await Promise.all([
       historyPromise,
-      actionsPromise,
-      queriesPromise,
       namesPromise,
       figuresPromise,
       orphansPromise,
@@ -1715,7 +1777,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     }
     } catch (err) {
       console.error("practice book:", err);
-      if (gen === loadGen.current) setBookTimedOut(true);
+      if (gen === loadGen.current) {
+        setBookTimedOut(true);
+        if (!countsLandedRef.current) setCountsTimedOut(true);
+      }
     } finally {
       if (gen === loadGen.current) {
         setLoading(false);
@@ -1725,20 +1790,33 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   };
 
   useEffect(() => {
-    if (!portalReady) return;
+    if (portalReady) measureBootstrap("greeting");
+  }, [portalReady]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (chainStartRef.current == null) chainStartRef.current = Date.now();
     let cancelled = false;
-    // Armed even while the firm row is still hydrating. brandLoading used to
-    // return before this timer existed, so a firm that never arrived left the
-    // client list on a skeleton with no deadline.
+    // One clock from the first signed-in paint. portalReady and brandLoading
+    // used to each start a fresh 8s, so the list and the cards could sit on
+    // Loading for the whole prefix (auth, firm, Stripe) without the deadline.
     const timer = window.setTimeout(() => {
       if (cancelled) return;
       console.warn("[practice-board] client book timed out; showing what has loaded");
       reportClientError(new Error("practice book load timed out"), { source: "practice-board" });
-      setBookTimedOut(true);
+      setPortalReady(true);
+      if (!rowsLandedRef.current) setBookTimedOut(true);
+      if (!countsLandedRef.current) {
+        setCountsTimedOut(true);
+        setCountsReady(true);
+      }
+      if (viewRef.current === "queries" && !queriesReadyRef.current) {
+        setQueriesTimedOut(true);
+        setQueryRowsReady(true);
+      }
       setLoading(false);
-      setCountsReady(true);
-    }, SHELL_GATE_TIMEOUT_MS);
-    if (brandLoading) {
+    }, shellGateRemaining(chainStartRef.current, Date.now(), SHELL_GATE_TIMEOUT_MS));
+    if (!portalReady || brandLoading) {
       return () => {
         cancelled = true;
         window.clearTimeout(timer);
@@ -1754,7 +1832,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     // greetingSource is read for the name chain inside load, and the greeting
     // itself renders from practiceGreeting. A name update must not restart the book.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, brandLoading, user?.id, portalReady]);
+  }, [firmId, brandLoading, user?.id, portalReady, chainAttempt]);
 
   // Load playbook catalogue
   useEffect(() => {
@@ -1885,32 +1963,42 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     if (!portalReady) return;
     revealPracticeHash(practiceHash);
   }, [portalReady, practiceHash, view, bookLoading, clientRows.length]);
+  const cardsPhase = dashboardCardsPhase({
+    bookLoading,
+    countsReady,
+    timedOut: countsTimedOut,
+  });
   const countsLoading = !countsReady;
   const clientIdKey = clientRows.map((c) => c.id).join("\n");
   useEffect(() => {
     // Slim client ids are in clientRows once `loading` drops. The deadline is
     // armed first: a client list that never settles must not skip this timer.
+    // The wait is the time left on the board chain, not a fresh 8s.
     if (view !== "queries") return;
     let cancelled = false;
-    setQueriesTimedOut(false);
+    const budget = shellGateRemaining(chainStartRef.current ?? Date.now(), Date.now());
+    if (budget > 0) setQueriesTimedOut(false);
     const ids = clientIdKey ? clientIdKey.split("\n") : [];
     const timer = window.setTimeout(() => {
       if (cancelled) return;
       console.warn("[practice-board] open queries timed out");
       reportClientError(new Error("open queries timed out"), { source: "practice-board" });
+      queriesReadyRef.current = true;
       setQueriesTimedOut(true);
       setQueryRowsReady(true);
-    }, SHELL_GATE_TIMEOUT_MS);
+    }, budget);
     if (loading) {
       return () => {
         cancelled = true;
         window.clearTimeout(timer);
       };
     }
+    queriesReadyRef.current = false;
     setQueryRowsReady(false);
-    void settleWithin(listOpenQueries(ids), SHELL_GATE_TIMEOUT_MS).then((result) => {
+    void settleWithin(listOpenQueries(ids), budget).then((result) => {
       if (cancelled) return;
       window.clearTimeout(timer);
+      queriesReadyRef.current = true;
       if (result.status === "value") {
         setQueryRows(result.value);
         setQueriesTimedOut(false);
@@ -2251,7 +2339,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
         {/* ===== STATS STRIP ===== */}
         <div className="stats-strip" id="wizard-practice-board">
-          {bookLoading ? (
+          {cardsPhase === "error" ? (
+            <p className="sub" role="alert">
+              {OPEN_QUERIES_LOAD_ERROR}{" "}
+              <button type="button" className="btn ghost mini" onClick={retryChain}>
+                Retry
+              </button>
+            </p>
+          ) : bookLoading ? (
             <>
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonTile key={i} className="min-h-[72px]" />
@@ -2350,15 +2445,24 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             <summary>
               <span>Follow up</span>
               <span className="home-fold-meta">
-                {countsLoading || bookLoading
-                  ? "Loading"
-                  : followUpItems.length > 0
-                    ? `${followUpItems.length} with open Action Plan work`
-                    : "None open"}
+                {cardsPhase === "error"
+                  ? "Couldn't load"
+                  : countsLoading || bookLoading
+                    ? "Loading"
+                    : followUpItems.length > 0
+                      ? `${followUpItems.length} with open Action Plan work`
+                      : "None open"}
               </span>
             </summary>
             <div className="home-fold-body">
-              {countsLoading || bookLoading || followUpItems.length === 0 ? (
+              {cardsPhase === "error" ? (
+                <p className="sub" role="alert">
+                  {FOLLOW_UPS_LOAD_ERROR}{" "}
+                  <button type="button" className="btn ghost mini" onClick={retryChain}>
+                    Retry
+                  </button>
+                </p>
+              ) : countsLoading || bookLoading || followUpItems.length === 0 ? (
                 <p className="sub">
                   {countsLoading || bookLoading
                     ? "Loading follow-ups…"
@@ -2518,7 +2622,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             />
             {queriesPhase === "error" ? (
               <p className="sub" role="alert">
-                {OPEN_QUERIES_LOAD_ERROR}
+                {OPEN_QUERIES_LOAD_ERROR}{" "}
+                <button type="button" className="btn ghost mini" onClick={retryChain}>
+                  Retry
+                </button>
               </p>
             ) : queriesPhase === "loading" ? (
               <p className="sub">Loading open queries…</p>
@@ -2592,7 +2699,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
         {clientsPhase === "error" ? (
           <p className="sub" role="alert">
-            {CLIENTS_LOAD_ERROR}
+            {CLIENTS_LOAD_ERROR}{" "}
+            <button type="button" className="btn ghost mini" onClick={retryChain}>
+              Retry
+            </button>
           </p>
         ) : clientsPhase === "loading" ? (
           <SkeletonBlock className="h-72 w-full rounded-[20px]" aria-label="Loading clients" />

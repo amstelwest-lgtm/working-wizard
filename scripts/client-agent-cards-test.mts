@@ -190,6 +190,12 @@ assert(page.includes("clientHomePhase("), "the client page uses the home phase")
 assert(page.includes("SHELL_GATE_TIMEOUT_MS"), "the client row read has the 8s deadline");
 assert(page.includes("setLoadTimedOut(true)"), "a hung row leaves the skeleton");
 assert(page.includes("<ClientAgentStandby"), "the team renders before the row arrives");
+assert(page.includes("ClientNumbersShell"), "cash and budget paint before the fat client row");
+assert(page.includes('select("id, market")'), "market is read without the books blobs");
+assert(
+  page.includes("!numbersTab && (homePhase === \"loading\" || homePhase === \"error\")"),
+  "the agent-card standby stays on home and does not add a second row deadline",
+);
 assert(!page.includes("marketCountry={clientMarket.country}"), "the tax card does not use the ZA date fallback");
 assert(
   (page.match(/parseMarketSelection\(client\.market\)\?\.country \?\? null/g) ?? []).length >= 2,

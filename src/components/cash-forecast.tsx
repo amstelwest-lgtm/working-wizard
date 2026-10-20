@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useId, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { measureBootstrap } from "@/lib/bootstrap-perf";
 import { forecastOpeningFromStored, isQboBalanceSheetHoldNote } from "@/lib/xero-opening";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -715,6 +716,9 @@ export function CashForecastPanel({
   const [capexAmount, setCapexAmount] = useState("0");
   const [capexWeek, setCapexWeek] = useState(1);
   const [loaded, setLoaded] = useState(!clientId);
+  useEffect(() => {
+    measureBootstrap("client-cash");
+  }, []);
   const [resolvedOpening, setResolvedOpening] = useState<number | null>(null);
   const [cashLedger, setCashLedger] = useState<CashLedger>("On file");
   const [configuredFloor, setConfiguredFloor] = useState<number | null>(null);

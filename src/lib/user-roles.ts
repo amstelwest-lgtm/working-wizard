@@ -14,6 +14,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { firmsCacheKey, once } from "@/lib/bootstrap-cache";
 import { listUserFirms } from "@/lib/firm-brand";
 
 export type AppRole = "accountant" | "firm_admin" | "client_owner" | "client_member";
@@ -62,7 +63,7 @@ export function summarizeRoles(roles: AppRole[]): PortalRoles {
 }
 
 export async function resolvePortalRoles(userId: string): Promise<PortalRoles> {
-  return summarizeRoles(await listAppRoles(userId));
+  return once(`roles:${userId}`, async () => summarizeRoles(await listAppRoles(userId)));
 }
 
 function readStorage(storage: Storage | undefined, key: string): string | null {
@@ -132,12 +133,21 @@ export function clearForcePortal(): void {
   removeStorage(session, PORTAL_FORCE_KEY);
 }
 
+/**
+ * The practice board paints as soon as the gate has opened this user.
+ * A second full-page skeleton after the shell was the blank gap on /practice.
+ */
+const accountantPortalOpen = new Set<string>();
+const stayResolved = new Map<string, boolean>();
+
 export function clearPortalRouting(): void {
   const { local, session } = webStorage();
   removeStorage(session, PORTAL_INTENT_KEY);
   removeStorage(session, PORTAL_FORCE_KEY);
   removeStorage(session, SETTINGS_RETURN_KEY);
   removeStorage(local, PORTAL_INTENT_KEY);
+  accountantPortalOpen.clear();
+  stayResolved.clear();
 }
 
 export function setSettingsReturn(to: SettingsReturn): void {
@@ -226,9 +236,11 @@ export function isPracticeSignupMeta(
 }
 
 async function readPracticeSignup(): Promise<boolean> {
-  const { data } = await supabase.auth.getUser();
+  // Local session. getUser() is a network round trip to the Auth server and
+  // takes the auth lock while the rest of the cold load is in flight.
+  const { data } = await supabase.auth.getSession();
   return isPracticeSignupMeta(
-    data.user?.user_metadata as Record<string, unknown> | undefined,
+    data.session?.user?.user_metadata as Record<string, unknown> | undefined,
   );
 }
 
@@ -356,7 +368,7 @@ export function ownerBoardRole(opts: {
  */
 async function firmRowForRouting(userId: string, hasPracticeRole: boolean): Promise<boolean> {
   try {
-    const firms = await listUserFirms(userId);
+    const firms = await once(firmsCacheKey(userId), () => listUserFirms(userId));
     return firms.length > 0;
   } catch {
     return hasPracticeRole;
@@ -411,14 +423,19 @@ export async function shouldBounceFromOwnerApp(
 }
 
 export async function isMilonItMember(userId: string): Promise<boolean> {
-  try {
-    const { data } = await supabase.rpc("is_milon_it_member" as never, {
-      _user_id: userId,
-    } as never);
-    return Boolean(data);
-  } catch {
-    return false;
-  }
+  return once(`it:${userId}`, async () => {
+    try {
+      const { data } = await supabase.rpc(
+        "is_milon_it_member" as never,
+        {
+          _user_id: userId,
+        } as never,
+      );
+      return Boolean(data);
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -426,39 +443,66 @@ export async function isMilonItMember(userId: string): Promise<boolean> {
  * on the Milōn IT section of Lighthouse rather than the firm dashboard.
  */
 export async function shouldOpenItInbox(userId: string): Promise<boolean> {
-  if (!(await isMilonItMember(userId))) return false;
-  const portal = await resolvePortalRoles(userId);
+  const [isIt, portal, firms] = await Promise.all([
+    isMilonItMember(userId),
+    resolvePortalRoles(userId),
+    once(firmsCacheKey(userId), () => listUserFirms(userId)).catch(() => []),
+  ]);
+  if (!isIt) return false;
   if (portal.hasPracticeRole) return false;
-  const firms = await listUserFirms(userId);
   return firms.length === 0;
 }
 
-const accountantStayChecks = new Map<string, Promise<boolean>>();
+export function markAccountantPortalOpen(userId: string): void {
+  accountantPortalOpen.add(userId);
+}
+
+export function isAccountantPortalOpen(userId: string): boolean {
+  return accountantPortalOpen.has(userId);
+}
+
+/** True or false once the stay check has settled. Undefined while it is in flight. */
+export function peekAccountantStay(userId: string): boolean | undefined {
+  return stayResolved.get(userId);
+}
+
+/**
+ * A firm seat (practice role, firm row, or practice signup) already decides
+ * the portal. `is_milon_it_member` is only the override for an IT account
+ * with no firm. Waiting on that RPC held a dual-role firm + client_owner
+ * (theo) on the blank gate for the whole call.
+ */
+export function firmSeatSkipsItWait(stayFromRows: boolean): boolean {
+  return stayFromRows;
+}
 
 /**
  * Accountant portal may keep practice accounts — never business-client credentials.
- * One cold load shares a single check. A cancelled render used to start another
- * read while the first still held the auth lock, and the second never fired.
+ * The gate and the board share one result. Dropping it in `finally` made the
+ * board start a second IT check, getUser(), and firm read after the shell opened.
  */
 export function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
-  const existing = accountantStayChecks.get(userId);
-  if (existing) return existing;
-  const pending = resolveAccountantStay(userId).finally(() => {
-    accountantStayChecks.delete(userId);
+  const pending = once(`stay:${userId}`, () => resolveAccountantStay(userId));
+  return pending.then((stay) => {
+    stayResolved.set(userId, stay);
+    if (stay) markAccountantPortalOpen(userId);
+    return stay;
   });
-  accountantStayChecks.set(userId, pending);
-  return pending;
 }
 
 async function resolveAccountantStay(userId: string): Promise<boolean> {
-  if (await isMilonItMember(userId)) return true;
   const force = peekForcePortal();
-  const [portal, practiceSignup] = await Promise.all([
+  const itPromise = isMilonItMember(userId);
+  const [portal, practiceSignup, firmCount] = await Promise.all([
     resolvePortalRoles(userId),
     readPracticeSignup(),
+    once(firmsCacheKey(userId), () => listUserFirms(userId))
+      .then((firms) => firms.length)
+      .catch(() => null),
   ]);
-  const hasFirm = await firmRowForRouting(userId, portal.hasPracticeRole);
-  return decideAccountantStay({
+  // A failed firm read is not proof the practice role is the old auto-grant.
+  const hasFirm = firmCount === null ? portal.hasPracticeRole : firmCount > 0;
+  const stay = decideAccountantStay({
     hasPracticeRole: portal.hasPracticeRole,
     hasClientRole: portal.hasClientRole,
     hasFirm,
@@ -466,4 +510,6 @@ async function resolveAccountantStay(userId: string): Promise<boolean> {
     force,
     practiceSignup,
   });
+  if (firmSeatSkipsItWait(stay)) return true;
+  return itPromise;
 }

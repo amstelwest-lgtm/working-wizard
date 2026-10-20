@@ -34,14 +34,14 @@ assert(
 
 const gateSrc = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
 assert(gateSrc.includes("applyPortalTheme(resolvePortalTheme())"), "the billing check applies the saved theme");
-const billingGate = gateSrc.slice(gateSrc.indexOf('data-billing-gate="pending"') - 80, gateSrc.indexOf('data-billing-gate="pending"') + 280);
+const billingGate = gateSrc.slice(gateSrc.indexOf('data-billing-gate="pending"') - 80, gateSrc.indexOf('data-billing-gate="pending"') + 400);
 assert(
-  gateSrc.includes('data-billing-gate="pending"') && billingGate.includes("bg-background"),
-  "the billing check uses the theme surface",
+  gateSrc.includes('data-billing-gate="pending"') && billingGate.includes("FirmShellLoading"),
+  "the billing check keeps the shell skeleton up",
 );
 assert(
-  !gateSrc.includes("Checking billing…") && !billingGate.includes("min-h-screen"),
-  "a paid firm does not get a full-screen billing flash",
+  !gateSrc.includes("Checking billing…") && !billingGate.includes("animate-pulse"),
+  "a paid firm does not get a billing flash or a blank pulse",
 );
 
 const settingsSrc = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
@@ -77,6 +77,17 @@ assert(
   "advisory stays on the client page",
 );
 assert(!advisoryIds.includes("/_authenticated/dashboard"), "advisory is not the dashboard");
+
+const practiceClientsIds = routeIds("/practice/clients");
+assert(
+  practiceClientsIds.includes("/_authenticated/practice_/clients"),
+  "/practice/clients matches the redirect to the clients list",
+);
+const practiceClientsSrc = readFileSync(
+  resolve("src/routes/_authenticated/practice_.clients.tsx"),
+  "utf8",
+);
+assert(practiceClientsSrc.includes('to: "/clients"'), "/practice/clients redirects to /clients");
 
 const listIds = routeIds("/clients");
 assert(listIds.includes("/_authenticated/clients/"), "bare /clients matches the list index");

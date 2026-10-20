@@ -11,16 +11,18 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
   brandPrimaryColor,
-  fetchUserFirm,
   firmBrandIsEmpty,
   listUserFirms,
+  pickActiveFirm,
   profileFromFirm,
   readActiveFirmId,
   saveFirmBrand,
   writeActiveFirmId,
   type FirmBrandRow,
 } from "@/lib/firm-brand";
-import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
+import { firmsCacheKey, forgetOnce, once } from "@/lib/bootstrap-cache";
+import { measureBootstrap } from "@/lib/bootstrap-perf";
+import { isPracticeSignupMeta, resolvePortalRoles } from "@/lib/user-roles";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { marketForFirm } from "@/lib/market/scope";
@@ -253,14 +255,18 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
 
       try {
         const preferred = readActiveFirmId(signedIn.id);
-        let [all, row] = await Promise.all([
-          listUserFirms(signedIn.id),
-          fetchUserFirm(signedIn.id, preferred),
+        // Profile name does not depend on the firm row. One firms read is shared
+        // with the portal stay check (fetchUserFirm used to list them again).
+        const [listed, identity] = await Promise.all([
+          once(firmsCacheKey(signedIn.id), () => listUserFirms(signedIn.id)),
+          readPersistedNameChain(signedIn),
         ]);
+        let all = listed;
+        let row = pickActiveFirm(all, preferred);
         if (cancelled) return;
 
         if (all.length === 0) {
-          const roles = summarizeRoles(await listAppRoles(signedIn.id));
+          const roles = await resolvePortalRoles(signedIn.id);
           const meta = signedIn.user_metadata as Record<string, unknown> | undefined;
           const practiceSignup = isPracticeSignupMeta(meta);
           const customerSignup = meta?.signup_type === "customer";
@@ -275,18 +281,13 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
               p_name: firmName,
             });
             if (!ensureErr) {
-              const again = await Promise.all([
-                listUserFirms(signedIn.id),
-                fetchUserFirm(signedIn.id, preferred),
-              ]);
-              all = again[0];
-              row = again[1];
+              forgetOnce(firmsCacheKey(signedIn.id));
+              all = await once(firmsCacheKey(signedIn.id), () => listUserFirms(signedIn.id));
+              row = pickActiveFirm(all, preferred);
             }
           }
         }
 
-        if (cancelled) return;
-        const identity = await readPersistedNameChain(signedIn);
         if (cancelled) return;
         setNameChain(identity);
         setFirms(all);
@@ -301,6 +302,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         if (!cancelled) {
           setBrandLoading(false);
           hydratedRef.current = true;
+          measureBootstrap("firm");
         }
       }
     }
@@ -330,10 +332,9 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
   const refreshFirms = useCallback(async () => {
     if (!user) return;
     const preferred = readActiveFirmId(user.id);
-    const [all, row] = await Promise.all([
-      listUserFirms(user.id),
-      fetchUserFirm(user.id, preferred),
-    ]);
+    forgetOnce(firmsCacheKey(user.id));
+    const all = await listUserFirms(user.id);
+    const row = pickActiveFirm(all, preferred);
     setFirms(all);
     setFirm(row);
     if (row) {
@@ -419,10 +420,15 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
   }, [firm, user, profile]);
 
   const canEditBrand = Boolean(user && firm && firm.owner_user_id === user.id);
+  // Session metadata is already on the auth user. The greeting does not wait
+  // for the profiles row.
+  const sessionAuthName = authDisplayName(
+    user?.user_metadata as { full_name?: unknown; name?: unknown } | null | undefined,
+  );
   const greetingSource = practiceGreetingName({
     accountantName: profile.accountantName,
     profileFullName: nameChain.profileFullName,
-    authFullName: nameChain.authFullName,
+    authFullName: nameChain.authFullName || sessionAuthName,
     email: user?.email,
   });
 

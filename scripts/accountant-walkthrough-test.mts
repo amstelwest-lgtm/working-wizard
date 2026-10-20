@@ -286,6 +286,9 @@ assert(isChunkLoadError("/assets/app-chrome-abc123.js"), "app-chrome 404s count"
 assert(isChunkLoadError("/assets/upload-abc.js"), "upload chunk 404s count");
 assert(isChunkLoadError("/assets/settings-menu-abc.js"), "settings menu chunk 404s count");
 assert(isChunkLoadError("/assets/use-share-abc.js"), "share chunk 404s count");
+assert(isChunkLoadError("/assets/benchmark-report-abc123.js"), "benchmark-report 404s count");
+assert(isChunkLoadError("/assets/health-score-abc123.js"), "health-score 404s count");
+assert(CHUNK_RELOAD_BOOT_SCRIPT.includes("\\/assets\\/"), "the boot script matches hashed asset 404s");
 assert(!isChunkLoadError(new Error("ResizeObserver loop")), "ordinary errors do not reload");
 assert(CHUNK_RELOAD_BOOT_SCRIPT.includes(CHUNK_RELOAD_KEY), "the boot script uses the reload flag");
 

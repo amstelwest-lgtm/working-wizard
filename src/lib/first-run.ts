@@ -60,6 +60,8 @@ export function ownerBoardReady(opts: {
   firstRunStep: FirstRunStep;
   profileFunnelOpen: boolean;
   financialsHydrated: boolean;
+  /** Cash and budget deep links paint that tab without the books blob. */
+  numbersTab?: boolean;
 }): boolean {
   if (!opts.roleResolved || !opts.clientLinkResolved) return false;
   if (!opts.effectiveClientId) return true;
@@ -67,6 +69,7 @@ export function ownerBoardReady(opts: {
   // First-run dialogs cover the board — don't wait for financials (and don't
   // drop back to a spinner between the profile funnel and the data nudge).
   if (opts.profileFunnelOpen || opts.firstRunStep !== null) return true;
+  if (opts.numbersTab) return true;
   return opts.financialsHydrated;
 }
 

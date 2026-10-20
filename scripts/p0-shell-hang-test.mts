@@ -142,10 +142,17 @@ const cashPanel = clientRoute.indexOf("<CashForecastPanel", cashAt);
 assert(cashGate !== -1 && cashGate < cashPanel, "CashForecastPanel is inside the cash-tab gate");
 
 const board = readFileSync("src/components/practice-board.tsx", "utf8");
-const publish = board.indexOf("setClientRows(rawClients.map((c) => lightClientRow(c)))");
+const paint = board.indexOf("const lightRows = rawClients.map((c) => lightClientRow(c))");
+const publish = board.indexOf("setClientRows(lightRows)");
 const history = board.indexOf("client_score_history");
-assert(publish !== -1 && history !== -1 && publish < history, "clients are shown before score history is loaded");
-assert(board.includes("accountantPortalStay"), "a known accountant does not wait on the role check again");
+assert(
+  paint !== -1 && publish > paint && history > publish,
+  "clients are shown before score history is loaded",
+);
+assert(
+  board.includes("isAccountantPortalOpen"),
+  "a known accountant does not wait on the role check again",
+);
 assert(board.includes("rememberPaintedBook"), "a painted book is reused when All clients remounts");
 assert(
   clientRoute.includes("Loading the plan…"),

@@ -41,7 +41,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SkeletonBlock } from "@/components/primitives/skeleton-blocks";
+import { ViewToggle } from "@/components/ui/view-toggle";
+import { measureBootstrap } from "@/lib/bootstrap-perf";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { useServerFn } from "@tanstack/react-start";
+import { callAuthedServerFn } from "@/lib/server-fn-session";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { budgetSignoffIsStale, inputsChangedSinceSignoff } from "@/lib/signoff-status";
@@ -100,11 +104,29 @@ function scheduleIdle(work: () => void): () => void {
   return () => clearTimeout(id);
 }
 
-function BudgetPanelSkeleton() {
+function BudgetPanelSkeleton({
+  timedOut,
+  lens,
+  onLensChange,
+}: {
+  timedOut: boolean;
+  lens: BudgetLens;
+  onLensChange?: (next: BudgetLens) => void;
+}) {
   return (
     <div className="space-y-4" role="status" aria-live="polite" data-budget-skeleton="">
-      <span className="sr-only">Loading budget…</span>
-      <SkeletonBlock className="h-16 w-full rounded-2xl" />
+      <span className="sr-only">{timedOut ? "Couldn't load this budget." : "Loading budget…"}</span>
+      <div className="flex justify-end">
+        <ViewToggle
+          ariaLabel="Budget"
+          value={lens}
+          onChange={(next) => onLensChange?.(next === "table" ? "table" : "chart")}
+          options={[
+            { value: "chart", label: "Chart" },
+            { value: "table", label: "Table" },
+          ]}
+        />
+      </div>
       <SkeletonBlock className="h-[280px] w-full rounded-2xl" />
     </div>
   );
@@ -220,6 +242,7 @@ export function BudgetPanel({
   const initialSeed = initialSeedRef.current;
   const skipFatSelect = useRef(initialSeed.skip);
   const [loaded, setLoaded] = useState(() => !clientId || initialSeed.skip);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [doc, setDoc] = useState<BudgetDocument | null>(initialSeed.doc);
   const [profile, setProfile] = useState<ClientOperatingProfile | null>(
     operatingProfileProp ?? null,
@@ -253,6 +276,19 @@ export function BudgetPanel({
   useEffect(() => {
     setProfile(operatingProfileProp ?? null);
   }, [operatingProfileProp]);
+
+  useEffect(() => {
+    measureBootstrap("client-budget");
+  }, []);
+
+  useEffect(() => {
+    if (loaded) {
+      setLoadTimedOut(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setLoadTimedOut(true), SHELL_GATE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [loaded, clientId]);
 
   useEffect(() => {
     loadedFinancialsRef.current = null;
@@ -384,7 +420,9 @@ export function BudgetPanel({
 
   useEffect(() => {
     if (!clientId || signoffProp !== undefined) return;
-    fetchReviewSignoffs({ data: { clientId } })
+    void callAuthedServerFn(supabase, () =>
+      fetchReviewSignoffs({ data: { clientId } }),
+    )
       .then(({ signoffs }) => {
         const row = signoffs.find((s) => s.scope === "budget") ?? null;
         setBudgetSignoff(row);
@@ -592,7 +630,13 @@ export function BudgetPanel({
   }, [profile, loaded, doc, applyProfileToExisting]);
 
   if (!loaded) {
-    return <BudgetPanelSkeleton />;
+    return (
+      <BudgetPanelSkeleton
+        timedOut={loadTimedOut}
+        lens={lens ?? "chart"}
+        onLensChange={onLensChange}
+      />
+    );
   }
 
   const budgetInputConfig = (

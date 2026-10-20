@@ -7,6 +7,8 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
+import { supabase } from "@/integrations/supabase/client";
+import { callAuthedServerFn } from "@/lib/server-fn-session";
 import { Button } from "@/components/ui/button";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
@@ -62,7 +64,9 @@ export function BudgetPdfExportButton({
       let actuals: BudgetPdfActual[] = [];
       if (clientId) {
         try {
-          const res = await listActuals({ data: { clientId, fyStart: doc.fyStart } });
+          const res = await callAuthedServerFn(supabase, () =>
+            listActuals({ data: { clientId, fyStart: doc.fyStart } }),
+          );
           actuals = (res.actuals ?? []).map((row) => ({
             month: row.month,
             status: row.status,

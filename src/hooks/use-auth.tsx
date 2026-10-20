@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session, User } from "@supabase/supabase-js";
 import { useRouterState } from "@tanstack/react-router";
 import { setMonitoringUser } from "@/lib/monitoring";
+import { clearBootstrapCache } from "@/lib/bootstrap-cache";
+import { beginBootstrap, measureBootstrap } from "@/lib/bootstrap-perf";
 import { isBarePublicPath, isPublicMarketingPath } from "@/lib/public-marketing";
 import { clearLegacyInsightSeen } from "@/lib/funnel-timing";
 
@@ -89,6 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(data.session);
         setMonitoringUser(data.session?.user.id ?? null);
         setLoading(false);
+        if (data.session) {
+          beginBootstrap();
+          measureBootstrap("auth");
+        }
       });
     });
     return () => {
@@ -106,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut: async () => {
           const { clearPortalRouting } = await import("@/lib/user-roles");
           clearPortalRouting();
+          clearBootstrapCache();
           clearLegacyInsightSeen();
           // Local only: a global revoke would kill this email's other tabs.
           const { supabase } = await import("@/integrations/supabase/client");

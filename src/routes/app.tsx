@@ -324,10 +324,27 @@ import {
   computeWeekChanges,
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
+import { measureBootstrap } from "@/lib/bootstrap-perf";
+import { SHELL_GATE_TIMEOUT_MS, shellGateRemaining } from "@/lib/shell-gate";
 import { isOwnerDeliverablesRequest, ownerDeliverablesRedirectTarget } from "@/lib/owner-nav";
 
 function AppBootSpinner() {
   return <OwnerBootSkeleton />;
+}
+
+function OwnerBootFailed({ onRetry }: { onRetry: () => void }) {
+  return (
+    <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 px-6 text-slate-100">
+      <p role="alert">Couldn&apos;t load your workspace.</p>
+      <button
+        type="button"
+        className="w-fit rounded-md border border-slate-500 px-3 py-1 text-sm"
+        onClick={onRetry}
+      >
+        Retry
+      </button>
+    </main>
+  );
 }
 
 export const Route = createFileRoute("/app")({
@@ -2275,12 +2292,16 @@ function Index() {
     void (async () => {
       const { shouldBounceFromOwnerApp, clearForcePortal, shouldOpenItInbox } =
         await import("@/lib/user-roles");
-      if (await shouldOpenItInbox(user.id)) {
-        if (!cancelled) navigate({ to: "/ops", search: { tab: "it" } });
+      const [openIt, bounce] = await Promise.all([
+        shouldOpenItInbox(user.id),
+        shouldBounceFromOwnerApp(user.id, false),
+      ]);
+      if (cancelled) return;
+      if (openIt) {
+        navigate({ to: "/ops", search: { tab: "it" } });
         return;
       }
-      const bounce = await shouldBounceFromOwnerApp(user.id, false);
-      if (!cancelled && bounce) {
+      if (bounce) {
         clearForcePortal();
         navigate({ to: "/practice" });
       }
@@ -2306,6 +2327,9 @@ function Index() {
   const [ownerWorkspaces, setOwnerWorkspaces] = useState<OwnerWorkspace[]>([]);
   archiveTargetRef.current = { clientId: effectiveClientId, visibility: uploadVisibility };
   const [clientLinkResolved, setClientLinkResolved] = useState(false);
+  const bootStartRef = useRef<number | null>(null);
+  const [bootAttempt, setBootAttempt] = useState(0);
+  const [bootTimedOut, setBootTimedOut] = useState(false);
   /** Fresh invite accept or metadata-stamped invited workspace — not self-signup. */
   const [invitedOwnerEntry, setInvitedOwnerEntry] = useState(() =>
     typeof window !== "undefined" ? hasInviteHandoffFlag() : false,
@@ -2323,8 +2347,10 @@ function Index() {
           }
           return;
         }
-        const { data: u } = await supabase.auth.getUser();
-        if (!u.user) {
+        // Cold owner link reads the local session. getUser() waits on the Auth server.
+        const { data: sessionData } = await supabase.auth.getSession();
+        const sessionUser = sessionData.session?.user ?? null;
+        if (!sessionUser) {
           if (!cancelled) {
             setOwnerWorkspaces([]);
             setEffectiveClientId(null);
@@ -2336,18 +2362,14 @@ function Index() {
           typeof localStorage !== "undefined"
             ? localStorage.getItem(PENDING_INVITE_CLIENT_KEY)
             : null;
-        const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
+        const metaInvite = (sessionUser.user_metadata?.invite_client_id as string | null) ?? null;
         const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
 
         const listWorkspaces = async (): Promise<OwnerWorkspace[]> => {
-          const { data: owned } = await supabase
-            .from("clients")
-            .select("id, name")
-            .eq("owner_user_id", u.user.id);
-          const { data: mems } = await supabase
-            .from("client_memberships")
-            .select("client_id, role")
-            .eq("user_id", u.user.id);
+          const [{ data: owned }, { data: mems }] = await Promise.all([
+            supabase.from("clients").select("id, name").eq("owner_user_id", sessionUser.id),
+            supabase.from("client_memberships").select("client_id, role").eq("user_id", sessionUser.id),
+          ]);
           const ownedRows = (owned ?? []).map((c) => ({
             id: c.id as string,
             name: c.name as string | null,
@@ -2387,26 +2409,26 @@ function Index() {
             .from("clients")
             .select("id")
             .eq("id", clientId)
-            .eq("owner_user_id", u.user.id)
+            .eq("owner_user_id", sessionUser.id)
             .maybeSingle();
           if (claimed?.id) return claimed.id;
           const { data: existingMem } = await supabase
             .from("client_memberships")
             .select("client_id, role")
             .eq("client_id", clientId)
-            .eq("user_id", u.user.id)
+            .eq("user_id", sessionUser.id)
             .maybeSingle();
           return existingMem?.client_id ?? null;
         };
 
-        const storedClientId = readStoredOwnerClientId(u.user.id);
+        const storedClientId = readStoredOwnerClientId(sessionUser.id);
         const applyWorkspaces = (workspaces: OwnerWorkspace[], preferInvite?: string | null) => {
           const active = pickActiveOwnerWorkspace({
             workspaces,
             inviteClientId: preferInvite ?? inviteClientId,
             storedClientId,
           });
-          if (active) writeStoredOwnerClientId(u.user.id, active);
+          if (active) writeStoredOwnerClientId(sessionUser.id, active);
           if (!cancelled) {
             setOwnerWorkspaces(workspaces);
             setEffectiveClientId(active);
@@ -2457,13 +2479,13 @@ function Index() {
             .from("client_memberships")
             .select("client_id, role")
             .eq("client_id", inviteClientId)
-            .eq("user_id", u.user.id)
+            .eq("user_id", sessionUser.id)
             .maybeSingle();
           if (!existingMem) {
             await supabase
               .from("client_memberships")
               .upsert(
-                { client_id: inviteClientId, user_id: u.user.id, role: "client_member" },
+                { client_id: inviteClientId, user_id: sessionUser.id, role: "client_member" },
                 { onConflict: "client_id,user_id" },
               );
           }
@@ -2499,7 +2521,7 @@ function Index() {
           }
           return;
         }
-        const meta = u.user.user_metadata as {
+        const meta = sessionUser.user_metadata as {
           full_name?: string;
           name?: string;
           business_name?: string;
@@ -2509,20 +2531,20 @@ function Index() {
         const { data: roleRows } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", u.user.id);
+          .eq("user_id", sessionUser.id);
         const roles = (roleRows ?? []).map((r) => r.role as string);
         const hasPracticeRole = roles.includes("firm_admin") || roles.includes("accountant");
         const isGoogleIdentity =
-          u.user.app_metadata?.provider === "google" ||
-          (Array.isArray(u.user.identities) &&
-            u.user.identities.some((identity) => identity.provider === "google"));
+          sessionUser.app_metadata?.provider === "google" ||
+          (Array.isArray(sessionUser.identities) &&
+            sessionUser.identities.some((identity) => identity.provider === "google"));
         // Google owner sign-in has no password signup_type until the callback stamps it.
         const shouldProvisionOwner =
           meta?.signup_type === "customer" ||
           Boolean(isGoogleIdentity && !hasPracticeRole && !meta?.firm_name);
         if (shouldProvisionOwner) {
           const clientName =
-            meta?.business_name || meta?.full_name || meta?.name || u.user.email || "My Business";
+            meta?.business_name || meta?.full_name || meta?.name || sessionUser.email || "My Business";
           const visitorMarket = readVisitorMarket() ?? { country: "ZA" as const, regionCode: null };
           const { data: clientId, error: rpcErr } = await withMarketRpcFallback(
             () =>
@@ -2543,7 +2565,7 @@ function Index() {
               );
             }
             if (clientId) {
-              writeStoredOwnerClientId(u.user.id, clientId);
+              writeStoredOwnerClientId(sessionUser.id, clientId);
               setOwnerWorkspaces([{ clientId, name: clientName, role: "owner" }]);
             } else {
               setOwnerWorkspaces([]);
@@ -2564,7 +2586,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [actingClientId, user?.id]);
+  }, [actingClientId, user?.id, bootAttempt]);
 
   useEffect(() => {
     if (!effectiveClientId) {
@@ -2782,13 +2804,14 @@ function Index() {
     roleResolved,
     invitedOwnerEntry,
     hasRealFinancials,
+    bootAttempt,
   ]);
 
   // Returning invite accept: user_metadata still points at the invited workspace.
   useEffect(() => {
     if (!effectiveClientId || invitedOwnerEntry) return;
-    void supabase.auth.getUser().then(({ data: { user: u } }) => {
-      const metaInvite = (u?.user_metadata?.invite_client_id as string | null) ?? null;
+    void supabase.auth.getSession().then(({ data }) => {
+      const metaInvite = (data.session?.user?.user_metadata?.invite_client_id as string | null) ?? null;
       if (isClientUuid(metaInvite) && metaInvite === effectiveClientId) {
         setInvitedOwnerEntry(true);
       }
@@ -2829,9 +2852,10 @@ function Index() {
     if (!clientLinkResolved) return;
     let cancelled = false;
     setRoleResolved(false);
-    supabase.auth.getUser().then(async ({ data: { user: u } }) => {
+    const signedIn = user;
+    void (async () => {
       try {
-        if (!u) return;
+        if (!signedIn) return;
         const activeWs = ownerWorkspaces.find((w) => w.clientId === effectiveClientId);
         if (!actingClientId && activeWs) {
           setUserRole(boardRoleForWorkspace(activeWs.role));
@@ -2839,7 +2863,7 @@ function Index() {
         }
         const { resolvePortalRoles, ownerBoardRole, peekForcePortal, getPortalIntent } =
           await import("@/lib/user-roles");
-        const portal = await resolvePortalRoles(u.id);
+        const portal = await resolvePortalRoles(signedIn.id);
         if (cancelled) return;
         const boardRole = ownerBoardRole({
           roles: portal.roles,
@@ -2853,12 +2877,20 @@ function Index() {
 
         // Fallback for existing users who predate the role-normalisation migration:
         // infer the app role from ownership / membership tables.
-        const { data: ownedClient } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("owner_user_id", u.id)
-          .limit(1)
-          .maybeSingle();
+        const [{ data: ownedClient }, { data: mem }] = await Promise.all([
+          supabase
+            .from("clients")
+            .select("id")
+            .eq("owner_user_id", signedIn.id)
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from("client_memberships")
+            .select("client_id")
+            .eq("user_id", signedIn.id)
+            .limit(1)
+            .maybeSingle(),
+        ]);
         if (cancelled) return;
         if (ownedClient) {
           // Infer role for this session; do not attempt a DB write — the RLS
@@ -2867,12 +2899,6 @@ function Index() {
           setUserRole("client_owner");
           return;
         }
-        const { data: mem } = await supabase
-          .from("client_memberships")
-          .select("client_id")
-          .eq("user_id", u.id)
-          .limit(1)
-          .maybeSingle();
         if (cancelled) return;
         if (mem) {
           // Same: infer only, no client-side DB write.
@@ -2881,11 +2907,13 @@ function Index() {
       } finally {
         if (!cancelled) setRoleResolved(true);
       }
-    });
+    })();
     return () => {
       cancelled = true;
     };
-  }, [user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId]);
+    // user is read for the id captured above. A new session object must not restart this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId, bootAttempt]);
 
   useEffect(() => {
     if (user) {
@@ -2974,7 +3002,7 @@ function Index() {
         setHydratedClientId(effectiveClientId);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveClientId]);
+  }, [effectiveClientId, bootAttempt]);
 
   // Debounced autosave — fires for both owners and firm impersonation.
   // Period P&L is gated on hasRealFinancials so demo defaults are never written.
@@ -3898,8 +3926,37 @@ function Index() {
     firstRunStep,
     profileFunnelOpen: showOnboarding || firstRunStep === "pick-type",
     financialsHydrated: !!effectiveClientId && hydratedClientId === effectiveClientId,
+    numbersTab: searchTab === "cash" || searchTab === "budget" || activeTab === "cash" || activeTab === "budget",
   });
+  useEffect(() => {
+    if (authLoading || !user) return;
+    if (boardReady) {
+      setBootTimedOut(false);
+      bootStartRef.current = null;
+      measureBootstrap("owner-board");
+      return;
+    }
+    if (bootStartRef.current == null) bootStartRef.current = Date.now();
+    const budget = shellGateRemaining(bootStartRef.current, Date.now(), SHELL_GATE_TIMEOUT_MS);
+    const timer = window.setTimeout(() => setBootTimedOut(true), budget);
+    return () => window.clearTimeout(timer);
+  }, [authLoading, user, boardReady, bootAttempt]);
   if (authLoading || !user || !boardReady) {
+    if (bootTimedOut && user && !authLoading) {
+      return (
+        <OwnerBootFailed
+          onRetry={() => {
+            bootStartRef.current = Date.now();
+            setBootTimedOut(false);
+            setClientLinkResolved(false);
+            setRoleResolved(false);
+            setOnboardingGateReady(false);
+            setHydratedClientId(null);
+            setBootAttempt((n) => n + 1);
+          }}
+        />
+      );
+    }
     return <AppBootSpinner />;
   }
 
