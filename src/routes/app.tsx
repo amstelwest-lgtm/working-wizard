@@ -148,6 +148,7 @@ import {
 import {
   preferStatementPeriod,
   readStatementMeta,
+  statementSpanLabel,
   statementYearLine,
 } from "@/lib/statement-period";
 import {
@@ -3043,7 +3044,7 @@ function Index() {
             setHistory((h) => {
               const next = { period_label: periodLabel, period_date: periodDate, ratios };
               const idx = h.findIndex(
-                (s) => s.period_label === periodLabel || s.period_date === periodDate,
+                (s) => s.period_label === periodLabel || s.period_date === periodDate, // date-ok: snapshot identity match, not printed copy
               );
               if (idx >= 0) {
                 const copy = h.slice();
@@ -4027,6 +4028,12 @@ function Index() {
                 receivables={v.receivables}
                 netIncome={v.netIncome}
                 periodEnd={v.periodEnd ?? null}
+                statementSpan={statementSpanLabel({
+                  periodStart: v.periodStart,
+                  periodEnd: v.periodEnd,
+                  periodLabel: readStatementMeta(v, boardMarket).periodLabel,
+                  market: boardMarket,
+                })}
                 history={history}
                 cashflow={clientMeta?.cashflow ?? null}
                 financials={v as unknown as Record<string, unknown>}
@@ -4188,7 +4195,16 @@ function Index() {
                                 )
                               : null
                           }
-                          priorYearLabel={ownerPrior?.period_label ?? null}
+                          priorYearLabel={
+                            ownerPrior
+                              ? statementSpanLabel({
+                                  periodStart: readStatementMeta(ownerPrior.financials, boardMarket).periodStart,
+                                  periodEnd: readStatementMeta(ownerPrior.financials, boardMarket).periodEnd,
+                                  periodLabel: ownerPrior.period_label,
+                                  market: boardMarket,
+                                })
+                              : null
+                          }
                           priorYearMonths={
                             ownerPrior?.financials
                               ? periodMonthsOf(ownerPrior.financials as Record<string, unknown>)

@@ -45,6 +45,7 @@ import {
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { storedOpeningIsMissing } from "@/lib/client-metrics";
 import { clientIndustryDisplay } from "@/lib/profile-signals";
+import { figuresPeriodLabelFrom } from "@/lib/statement-period";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { ZA_MARKET, resolveMarket } from "@/lib/market/resolve";
 import type { ResolvedMarket } from "@/lib/market";
@@ -304,7 +305,7 @@ export const getLatestAdvisoryPack = createServerFn({ method: "GET" })
         version: r.version,
         status: r.status,
         generated_at: r.generated_at,
-        period_label: r.period_label,
+        period_label: r.period_label, // date-ok: pack version row keeps the stored column
       })),
     };
   });
@@ -387,7 +388,7 @@ async function loadOverviewContext(
   const prior = resolvePriorSnapshot(
     snaps.map((snap) => ({
       id: snap.id,
-      period_label: snap.period_label ?? "",
+      period_label: snap.period_label ?? "", // date-ok: prior-period match key, not printed copy
       period_date: snap.period_date ?? "",
       financials: snap.financials ?? null,
       ratios: snap.ratios ?? null,
@@ -495,8 +496,18 @@ export async function gatherPackInputs(
     clientName: client.name ?? "",
     firmName,
     hasFirm: client.firm_id !== null,
-    periodLabel: current.period_label ?? null,
-    priorPeriodLabel: prior?.period_label ?? null,
+    periodLabel: figuresPeriodLabelFrom(
+      current.financials && typeof current.financials === "object" ? current.financials : null,
+      current.period_label,
+      overview.market,
+    ),
+    priorPeriodLabel: prior
+      ? figuresPeriodLabelFrom(
+          prior.financials && typeof prior.financials === "object" ? prior.financials : null,
+          prior.period_label,
+          overview.market,
+        )
+      : null,
     figuresAsOf: current.period_date ?? client.financials_updated_at ?? null,
     health: overview.metrics.health.overall == null ? null : overview.metrics.health,
     ratios: overview.metrics.ratios,

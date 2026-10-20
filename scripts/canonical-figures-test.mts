@@ -72,6 +72,11 @@ assert(stored?.figures["Operating Margin"] === 0.086, "live scorecard ratios win
 const home = presentHomeDraftTitle("Operating margin of 16.0% needs a look.", scorecard);
 assert(home.text.includes("8.6%") && !home.text.includes("16.0%"), home.text);
 assert(home.stale === true, "a stored 16.0% draft is flagged stale");
+const stamped = presentHomeDraftTitle("Sep 2026 operating margin of 16.0% needs a look.", scorecard);
+assert(
+  stamped.text.includes("Full year on file") && stamped.text.includes("8.6%") && !stamped.text.includes("Sep 2026"),
+  stamped.text,
+);
 const fresh = presentHomeDraftTitle("Operating margin of 8.6% needs a look.", scorecard);
 assert(fresh.stale === false, "a draft that already quotes 8.6% is not stale");
 

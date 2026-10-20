@@ -389,7 +389,11 @@ assert(
   }) === true,
   "a real room-night count stays",
 );
-assert(src("src/components/budget/budget-panel.tsx").includes("statementBudgetRead(doc, figureSource).doc"), "panel headline is seeded");
+assert(src("src/components/budget/budget-panel.tsx").includes("statementBudgetRead("), "panel headline is seeded");
+assert(
+  src("src/components/budget/budget-panel.tsx").includes("presentBudgetOnStatementWindow"),
+  "panel places a flat year on the statement window",
+);
 assert(
   src("src/routes/_authenticated/clients.$clientId.tsx").includes("statementBudgetRead(budgetDoc"),
   "client budget tile is seeded",

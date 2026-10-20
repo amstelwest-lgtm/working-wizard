@@ -95,13 +95,19 @@ export const listBudgetMonthActuals = createServerFn({ method: "GET" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
-    const sb = authedSupabase();
-    const { data: userData, error: userErr } = await sb.auth.getUser();
-    if (userErr || !userData?.user) throw new Error("Not authenticated");
-    await assertClientAccess(userData.user.id, data.clientId, sb);
+  .handler(async ({ data, context }): Promise<{
+    actuals: BudgetMonthActualRow[];
+    migrationRequired: boolean;
+  }> => {
+    const userId = context.userId;
+    if (!userId) throw new Error("Not authenticated");
+    const loose = context.supabase as unknown as LooseSb & {
+      rpc: (
+        fn: string,
+        args: Record<string, string>,
+      ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+    };
 
-    const loose = sb as unknown as LooseSb;
     let q = loose
       .from("budget_month_actuals")
       .select("*")
@@ -116,7 +122,17 @@ export const listBudgetMonthActuals = createServerFn({ method: "GET" })
       q = q.gte("month", data.fyStart).lte("month", end);
     }
 
-    const { data: rows, error } = await q;
+    // Access and the select used to run one after the other, and the handler
+    // also called getUser after the middleware had already checked the token.
+    // RLS still applies has_client_access on the select. The explicit check
+    // only decides the error, so it shares that round trip.
+    const [accessRes, queryRes] = await Promise.all([
+      loose.rpc("has_client_access", { _user_id: userId, _client_id: data.clientId }),
+      q,
+    ]);
+    if (accessRes.error) throw new Error(accessRes.error.message ?? "Could not check access");
+    if (!accessRes.data) throw new Error("You do not have access to this client");
+    const { data: rows, error } = queryRes;
     if (error) {
       if (/budget_month_actuals|42P01|42703/i.test(error.message ?? "")) {
         return { actuals: [] as BudgetMonthActualRow[], migrationRequired: true };

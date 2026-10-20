@@ -1029,7 +1029,7 @@ export default function ActionPlanPanel({
     try {
       await downloadActionPlanPdf({
         clientName: clientName ?? "Client",
-        periodLabel: plan?.period_label,
+        periodLabel: plan?.period_label, // date-ok: action plan quarter stamp, not a day range
         outcomeGoal: plan?.outcome_goal,
         items: items.map((item) => ({
           title: item.title,
@@ -1280,7 +1280,7 @@ export default function ActionPlanPanel({
           outcomeWhy: stripMilonProjection(it.outcome_why) || undefined,
           dueDate: it.due_date ?? undefined,
           market: { locale: market.locale, timezone: market.timezone },
-          periodLabel: plan?.period_label,
+          periodLabel: plan?.period_label, // date-ok: action plan quarter stamp, not a day range
           milestones: ms.map((m) => ({ week_no: m.week_no, label: m.label })),
           taskUrl: url,
           assignedBy: u.user?.email?.split("@")[0],
@@ -2183,7 +2183,7 @@ function GoalHeader({
           <div className="action-goal-copy min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.25em] text-[#102A43] dark:text-[#0B5FFF]/80">
-                {displayedPlanPeriod(plan.period_label, stripMilonProjection(plan.outcome_goal))} · Outcome goal
+                {displayedPlanPeriod(plan.period_label, stripMilonProjection(plan.outcome_goal))} · Outcome goal // date-ok: action plan quarter stamp, not a day range
               </span>
               {isOwner && (
                 <button
@@ -2227,7 +2227,7 @@ function GoalHeader({
                     <div className={LABEL_CLS}>Period</div>
                     <Input
                       className={INPUT_CLS}
-                      value={draft.period_label}
+                      value={draft.period_label} // date-ok: editable plan quarter, not a day range
                       onChange={(e) => setDraft({ ...draft, period_label: e.target.value })}
                     />
                   </div>

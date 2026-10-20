@@ -20,7 +20,7 @@ import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
 import { partyNamesInBrain } from "../brain-propose/prompt.ts";
 import { buildDeliverableDraftPayload } from "./prompt.ts";
 import { quotedStatementFigures, ratioPromptLines, STATEMENT_FIGURE_RULES } from "../../../src/lib/statement-margin.ts";
-import { figuresPeriodLabelFrom, rewriteSavedMonthStamp } from "../../../src/lib/statement-period.ts";
+import { figuresPeriodLabelFrom, readStatementMeta, rewriteSavedMonthStamp, statementSpanLabel } from "../../../src/lib/statement-period.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
@@ -369,7 +369,7 @@ async function handleBrainDeliverableDraft(req: Request): Promise<Response> {
       .maybeSingle(),
     userClient
       .from("client_financial_snapshots")
-      .select("period_label, period_date, ratios, source")
+      .select("period_label, period_date, ratios, source, financials")
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
       .limit(1)
@@ -425,20 +425,29 @@ async function handleBrainDeliverableDraft(req: Request): Promise<Response> {
     client && typeof client === "object" && "financials" in client && client.financials && typeof client.financials === "object"
       ? (client.financials as object)
       : null;
-  const periodLabel = figuresPeriodLabelFrom(
-    clientFinancials,
-    snap?.period_label ?? null,
-    marketForClient({ market: client && "market" in client ? client.market : null }),
-  );
+  const dateMarket = marketForClient({ market: client && "market" in client ? client.market : null });
+  const snapFinancials =
+    snap && typeof snap === "object" && "financials" in snap && snap.financials && typeof snap.financials === "object"
+      ? (snap.financials as object)
+      : clientFinancials;
+  const snapMeta = readStatementMeta(snapFinancials, dateMarket);
+  const periodLabel =
+    figuresPeriodLabelFrom(snapFinancials, null, dateMarket) ??
+    statementSpanLabel({
+      periodStart: snapMeta.periodStart,
+      periodEnd: snapMeta.periodEnd,
+      periodLabel: snap?.period_label ?? null,
+      market: dateMarket,
+    });
   if (snap) {
     contextLines.push(
-      `Latest snapshot: ${periodLabel ?? snap.period_label ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`,
+      `Latest snapshot: ${periodLabel ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`,
     );
     const ratios = ratioLines(snap.ratios);
     if (ratios.length) contextLines.push(`Ratios:\n  ${ratios.join("\n  ")}`);
     const quoted = quotedStatementFigures({
       ratios: (snap.ratios ?? null) as Record<string, unknown> | null,
-      periodLabel: periodLabel ?? snap.period_label,
+      periodLabel,
     });
     if (quoted.length) contextLines.push(quoted.join("\n"));
   }

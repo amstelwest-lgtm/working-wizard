@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import type { BudgetDocument } from "@/lib/budget.types";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
-import { budgetWindowLabel, formatMonthLabel } from "@/lib/budget.months";
+import { budgetWindowLabel, formatBudgetMonthYear } from "@/lib/budget.months";
 import { useMarketFormat } from "@/contexts/market";
 import { MONTHS } from "@/lib/market/date-presets";
 import {
@@ -53,7 +53,7 @@ function rollingTrend(values: number[], window = 3): number[] {
 export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
   const { market, moneyCompact } = useMarketFormat();
   const money = (n: number) => fmtBudgetMoney(n, market);
-  const monthLabel = (ym: string) => formatMonthLabel(ym, market);
+  const monthLabel = (ym: string) => formatBudgetMonthYear(ym, market);
 
   const results = useMemo(
     () => computeBudgetMonths(doc, doc.activeScenario),

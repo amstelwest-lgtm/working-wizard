@@ -34,6 +34,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
+import { ViewToggle } from "@/components/ui/view-toggle";
 import { cashExplainerCopy, humanizeIsoDates } from "@/lib/cash-explainer";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -2544,6 +2545,7 @@ export function CashForecastPanel({
   const inlineChart = useStableChartWidth();
   const enlargeChart = useStableChartWidth();
   const [cashEnlarge, setCashEnlarge] = useState<null | "chart" | "table">(null);
+  const [cashLens, setCashLens] = useState<"chart" | "table">("chart");
 
   useEffect(() => {
     const revealWeeklyTable = () => {
@@ -2552,6 +2554,7 @@ export function CashForecastPanel({
         hashIsCashDetailAnchor(hash) ||
         new URL(window.location.href).searchParams.get("view") === "13week";
       if (!wantsTable) return;
+      setCashLens("table");
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.requestAnimationFrame(() => {
         document.getElementById("detailed-forecast")?.scrollIntoView({
@@ -2750,31 +2753,26 @@ export function CashForecastPanel({
     <Card
       id={CASH_FORECAST_CARD_ID}
       className={`${CARD_SHELL} w-full min-w-0 max-md:pb-6 max-md:pr-3`}
-      data-cash-view="both"
+      data-cash-view={cashLens}
     >
       <div className={GOLD_RULE} />
       <CardContent className="pt-5">
-        <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]" data-cash-period>
-              {cashCopy.range || "Next 13 weeks"}
+        <div className="mb-3 min-w-0">
+          <p className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]" data-cash-period>
+            {cashCopy.range || "Next 13 weeks"}
+          </p>
+          {forecastUpdatedLabel ? (
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-forecast-updated>
+              {forecastUpdatedLabel}
             </p>
-            {forecastUpdatedLabel ? (
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-forecast-updated>
-                {forecastUpdatedLabel}
-              </p>
-            ) : null}
-            {simplified && cashCopy.ownerRollLine ? (
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-cash-roll>
-                {cashCopy.ownerRollLine}
-              </p>
-            ) : null}
-            {!simplified && runwayAside ? (
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Runway {runwayAside}</p>
-            ) : null}
-          </div>
-          {emptyPresentation.showChart && !openingTilesMissing ? (
-            <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
+          ) : null}
+          {simplified && cashCopy.ownerRollLine ? (
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-cash-roll>
+              {cashCopy.ownerRollLine}
+            </p>
+          ) : null}
+          {!simplified && runwayAside ? (
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Runway {runwayAside}</p>
           ) : null}
         </div>
         {simplified ? null : cashCopy.bullets.length > 0 ? (
@@ -2800,14 +2798,31 @@ export function CashForecastPanel({
             </Button>
           </div>
         ) : null}
-        <div aria-label="Graph">{graphPane}</div>
-        <section id="detailed-forecast" className="mt-6" aria-label="13-week">
-          <div className={`mb-3 flex items-start gap-3 ${simplified ? "justify-end" : "justify-between"}`}>
-            {simplified ? null : (
-              <p className="max-w-xl text-xs text-slate-600 dark:text-slate-400">{weekTableHint}</p>
-            )}
-            <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
-          </div>
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          {emptyPresentation.showChart && !openingTilesMissing ? (
+            <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
+          ) : null}
+          <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
+          <ViewToggle
+            ariaLabel="Cash forecast"
+            value={cashLens}
+            onChange={(next) => setCashLens(next === "table" ? "table" : "chart")}
+            options={[
+              { value: "chart", label: "Chart" },
+              { value: "table", label: "13-week" },
+            ]}
+          />
+        </div>
+        {cashLens === "chart" ? <div aria-label="Graph">{graphPane}</div> : null}
+        <section
+          id="detailed-forecast"
+          className="mt-6"
+          aria-label="13-week"
+          hidden={cashLens !== "table"}
+        >
+          {simplified ? null : (
+            <p className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400">{weekTableHint}</p>
+          )}
           {!loaded ? (
             <div
               data-cash-grid-loading

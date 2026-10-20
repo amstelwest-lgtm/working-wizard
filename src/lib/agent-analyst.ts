@@ -198,7 +198,7 @@ export function collectStoredFigures(
   if (Object.keys(figures).length === 0) return null;
   const period =
     snapshot.periodLabel ??
-    (typeof row.period_label === "string" ? row.period_label : null);
+    (typeof row.period_label === "string" ? row.period_label : null); // date-ok: evidence period key copied from a tool read
   const id =
     snapshot.snapshotId ?? (typeof row.snapshot_id === "string" ? row.snapshot_id : null);
   return { snapshotId: id, periodLabel: period, figures };
@@ -240,7 +240,7 @@ export function collectStoredReads(
     reads.push({ ...flat, figures: { ...pillars, ...flat.figures } });
   } else if (Object.keys(pillars).length > 0) {
     const period =
-      snapshot.periodLabel ?? (typeof row.period_label === "string" ? row.period_label : null);
+      snapshot.periodLabel ?? (typeof row.period_label === "string" ? row.period_label : null); // date-ok: evidence period key copied from a tool read
     const id = snapshot.snapshotId ?? (typeof row.snapshot_id === "string" ? row.snapshot_id : null);
     reads.push({ snapshotId: id, periodLabel: period, figures: pillars });
   }
@@ -248,7 +248,7 @@ export function collectStoredReads(
     for (const item of row.periods) {
       if (!item || typeof item !== "object") continue;
       const rec = item as Record<string, unknown>;
-      const period = periodText(rec.period_label) ?? periodText(rec.period_date);
+      const period = periodText(rec.period_label) ?? periodText(rec.period_date); // date-ok: evidence period key copied from a tool read
       if (!period) continue;
       const figures = { ...numericFigures(rec.ratios), ...numericFigures(rec.figures) };
       if (Object.keys(figures).length === 0) continue;

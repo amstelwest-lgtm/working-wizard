@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
     return json({
       item,
       milestones: milestones ?? [],
-      plan: plan ? { outcome_goal: plan.outcome_goal, period_label: plan.period_label } : null,
+      plan: plan ? { outcome_goal: plan.outcome_goal, period_label: plan.period_label } : null, // date-ok: action plan quarter passed through
       assignee_name: emp?.name ?? null,
       business_name: ownerFirstName,
       market: clientMarket,
