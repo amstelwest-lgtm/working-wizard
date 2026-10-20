@@ -7,6 +7,7 @@ import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "rea
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
+import { shouldRedirectToAuth } from "@/lib/auth-session-guard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BackLink } from "@/components/back-link";
@@ -2093,7 +2094,7 @@ function flatExtractionToMergedResult(
 
 function Index() {
   const { viewMode, setViewMode } = useViewMode();
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut, restoreFailed } = useAuth();
   const navigate = useNavigate();
   const [ownerBootTimedOut, setOwnerBootTimedOut] = useState(false);
   const [ownerBootAttempt, setOwnerBootAttempt] = useState(0);
@@ -2103,9 +2104,8 @@ function Index() {
   // Redirect unauthenticated users to the landing page. After invite accept,
   // React auth state can lag the real Supabase session — don't bounce yet.
   useEffect(() => {
-    if (authLoading) return;
-    if (user) {
-      consumeInviteHandoffFlag();
+    if (!shouldRedirectToAuth({ loading: authLoading, hasUser: !!user, restoreFailed })) {
+      if (user) consumeInviteHandoffFlag();
       return;
     }
     let cancelled = false;
@@ -2119,7 +2119,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, restoreFailed, navigate]);
 
   // Handle QBO / Xero OAuth callback: ?qbo= / ?xero= connected|error
   const oauthReturn = Route.useSearch();
