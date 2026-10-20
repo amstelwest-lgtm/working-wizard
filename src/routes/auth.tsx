@@ -14,6 +14,7 @@ import {
   forcePortal,
   setPortalIntent,
   clearForcePortal,
+  isPracticeSignupMeta,
   shouldOpenItInbox,
 } from "@/lib/user-roles";
 import { resolveSignedInDestination } from "@/lib/landing-sign-in-destination";
@@ -33,7 +34,15 @@ import {
 import { decideAccountantAuthLanding, safeAccountantRedirect } from "@/lib/auth-landing";
 import { isSmartLandingNext, SMART_LANDING_PATH } from "@/lib/smart-landing";
 import { readInsightSeen } from "@/lib/funnel-timing";
-import { activeFirmIdForUser, listUserFirms } from "@/lib/firm-brand";
+import { activeFirmIdForUser, listUserFirms, readUserFirms } from "@/lib/firm-brand";
+import { settleWithin } from "@/lib/bounded-load";
+import {
+  finishAccountantSignIn,
+  POST_AUTH_DEADLINE_MS,
+  POST_AUTH_TIMEOUT_MESSAGE,
+  type FirmReadResult,
+} from "@/lib/post-auth-landing";
+import { parseMarketSelection } from "@/lib/market/parse";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { practiceLocationHint } from "@/lib/firm-signup-copy";
 import { FirmSignupTerms } from "@/components/firm-signup-terms";
@@ -150,6 +159,7 @@ function AuthPage() {
   const [firmName, setFirmName] = useState(authFieldDraft.firmName);
   const [busy, setBusy] = useState(false);
   const [signInFailure, setSignInFailure] = useState<PasswordSignInFailure | null>(null);
+  const [postAuthRetry, setPostAuthRetry] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const submitLock = useRef(false);
@@ -252,6 +262,7 @@ function AuthPage() {
       : undefined;
   const landedPathRef = useRef<string | null>(null);
   const landInflightRef = useRef<Promise<string> | null>(null);
+  const knownMetaRef = useRef<Record<string, unknown>>({});
   /** While Create firm is provisioning, don't let the session effect steal the landing. */
   const signupLandingRef = useRef(false);
 
@@ -265,6 +276,7 @@ function AuthPage() {
     userId: string,
     flow: "signin" | "signup",
     hadFirmBefore?: boolean,
+    knownMeta?: Record<string, unknown> | null,
   ) => {
     if (landedPathRef.current) return landedPathRef.current;
     if (landInflightRef.current) return landInflightRef.current;
@@ -283,55 +295,89 @@ function AuthPage() {
         return "/ops";
       }
       if (isSmartLandingNext(next)) {
-        await ensurePractice().catch(() => undefined);
+        void ensurePractice().catch(() => undefined);
         landedPathRef.current = SMART_LANDING_PATH;
         navigate({ to: SMART_LANDING_PATH, replace: true });
         return SMART_LANDING_PATH;
       }
-      const firmsKnown =
-        hadFirmBefore !== undefined ? hadFirmBefore : (await listUserFirms(userId)).length > 0;
+      // Password grant already returned this user. Pass the metadata so
+      // destination resolution does not call getUser() (auth lock).
+      const meta = knownMeta ?? knownMetaRef.current;
+      const practiceSignup = isPracticeSignupMeta(meta);
       const pending = peekPendingCheckout();
       const explicitBilling = isBillingStartPath(next);
-      const mightBill =
-        !firmsKnown &&
-        ((flow === "signup" && Boolean(pending || explicitBilling)) ||
-          (flow === "signin" && explicitBilling));
-      let hasLiveEntitlement = false;
-      if (mightBill) {
-        try {
-          const ent = await checkEntitlement({ data: {} });
-          hasLiveEntitlement = ent.reason === "active_subscription" || ent.reason === "firm_member";
-        } catch {
-          hasLiveEntitlement = false;
+      const firmRowWins = !(
+        flow === "signup" &&
+        hadFirmBefore === false &&
+        Boolean(pending || explicitBilling)
+      );
+      const outcome = await finishAccountantSignIn({
+        flow,
+        practiceSignup,
+        hasPracticeRole: false,
+        hasClientRole: false,
+        firmRowWins,
+        readFirms: async (): Promise<FirmReadResult> => {
+          const read = await readUserFirms(userId);
+          if (read.error) return { ok: false };
+          const parsed = parseMarketSelection(read.firms[0]?.market ?? null);
+          return {
+            ok: true,
+            count: read.firms.length,
+            marketCountry: parsed?.country ?? null,
+          };
+        },
+        whenNoFirm: async () => {
+          const firmsKnown = hadFirmBefore === true;
+          const mightBill =
+            !firmsKnown &&
+            ((flow === "signup" && Boolean(pending || explicitBilling)) ||
+              (flow === "signin" && explicitBilling));
+          let hasLiveEntitlement = false;
+          if (mightBill) {
+            try {
+              const ent = await checkEntitlement({ data: {} });
+              hasLiveEntitlement =
+                ent.reason === "active_subscription" || ent.reason === "firm_member";
+            } catch {
+              hasLiveEntitlement = false;
+            }
+          }
+          const decision = decideAccountantAuthLanding({
+            flow,
+            hadFirmBefore: firmsKnown,
+            hasLiveEntitlement,
+            pending,
+            next,
+            insightSeen:
+              flow === "signup" && !firmsKnown
+                ? false
+                : readInsightSeen(await activeFirmIdForUser(userId)),
+          });
+          if (decision.kind === "billing") return billingStartPath(decision.pending);
+          if (await shouldOpenItInbox(userId)) return "/ops";
+          return resolveSignedInDestination(userId, { door: "accountant", knownMeta: meta });
+        },
+      });
+      if (outcome.status === "retry") {
+        setPostAuthRetry(true);
+        setSignInFailure({ kind: "other", message: POST_AUTH_TIMEOUT_MESSAGE });
+        return "retry";
+      }
+      const path = outcome.path;
+      if (path === "/billing/start" || path.startsWith("/billing/start")) {
+        const checkout = peekPendingCheckout();
+        if (checkout) {
+          landedPathRef.current = path;
+          navigate({ to: "/billing/start", search: billingStartSearch(checkout) });
+          return path;
         }
       }
-      const decision = decideAccountantAuthLanding({
-        flow,
-        hadFirmBefore: firmsKnown,
-        hasLiveEntitlement,
-        pending,
-        next,
-        insightSeen:
-          flow === "signup" && !firmsKnown
-            ? false
-            : readInsightSeen(await activeFirmIdForUser(userId)),
-      });
-      if (decision.kind === "billing") {
-        const path = billingStartPath(decision.pending);
-        landedPathRef.current = path;
-        navigate({
-          to: "/billing/start",
-          search: billingStartSearch(decision.pending),
-        });
-        return path;
-      }
-      if (decision.kind !== "workspace") clearPendingCheckout();
-      if (await shouldOpenItInbox(userId)) {
+      if (path === "/ops") {
         landedPathRef.current = "/ops";
         navigate({ to: "/ops", search: { tab: "it" } });
         return "/ops";
       }
-      const path = await resolveSignedInDestination(userId, { door: "accountant" });
       if (path === "/app") {
         clearForcePortal();
         setPortalIntent("owner");
@@ -340,12 +386,14 @@ function AuthPage() {
         navigate({ to: path });
         return path;
       }
-      await ensurePractice().catch(() => {
+      clearPendingCheckout();
+      void ensurePractice().catch(() => {
         /* non-fatal — role guard still uses firm ownership */
       });
-      landedPathRef.current = path;
-      navigate({ to: path });
-      return path;
+      const practicePath = "/practice";
+      landedPathRef.current = practicePath;
+      navigate({ to: practicePath });
+      return practicePath;
     })();
     landInflightRef.current = run;
     try {
@@ -360,6 +408,7 @@ function AuthPage() {
     let cancelled = false;
     void (async () => {
       if (signupLandingRef.current) return;
+      knownMetaRef.current = (user.user_metadata as Record<string, unknown> | undefined) ?? {};
       await landAfterAccountantAuth(user.id, mode);
       if (cancelled) return;
     })();
@@ -419,21 +468,33 @@ function AuthPage() {
         signupLandingRef.current = true;
         let hadFirmBefore = false;
         if (data.user) {
-          hadFirmBefore = (await listUserFirms(data.user.id)).length > 0;
-          // One provisioning path (firm + membership + firm_admin), serialised
-          // per user in the database so a concurrent profile hydrate cannot
-          // mint a second firm. Carries the market picked above.
-          const { error: firmErr } = await supabase.rpc("ensure_practice_firm", {
-            p_name: firmName.trim() || null,
-            p_market: market ? marketToJson(market) : null,
-          });
-          if (firmErr) toast.error(firmErr.message);
-          await welcomeWithoutBlockingSignup(() => doSendWelcome());
+          const provisioned = await settleWithin(
+            (async () => {
+              hadFirmBefore = (await listUserFirms(data.user!.id)).length > 0;
+              // One provisioning path (firm + membership + firm_admin), serialised
+              // per user in the database so a concurrent profile hydrate cannot
+              // mint a second firm. Carries the market picked above.
+              const { error: firmErr } = await supabase.rpc("ensure_practice_firm", {
+                p_name: firmName.trim() || null,
+                p_market: market ? marketToJson(market) : null,
+              });
+              if (firmErr) toast.error(firmErr.message);
+              await welcomeWithoutBlockingSignup(() => doSendWelcome());
+            })(),
+            POST_AUTH_DEADLINE_MS,
+          );
+          if (provisioned.status !== "value") {
+            toast.message(POST_AUTH_TIMEOUT_MESSAGE);
+          }
         }
         forcePortal("accountant");
         await ensurePractice().catch(() => undefined);
         toast.success("Account created");
-        if (data.user) await landAfterAccountantAuth(data.user.id, "signup", hadFirmBefore);
+        if (data.user) {
+          knownMetaRef.current =
+            (data.user.user_metadata as Record<string, unknown> | undefined) ?? {};
+          await landAfterAccountantAuth(data.user.id, "signup", hadFirmBefore);
+        }
         else navigate({ to: afterAuthPath as "/dashboard" });
       } else {
         if (!isBillingStartPath(next)) clearPendingCheckout();
@@ -487,6 +548,10 @@ function AuthPage() {
           }
         } catch {
           // provisioning failure is non-fatal — user proceeds to dashboard regardless
+        }
+        if (signInData.user) {
+          knownMetaRef.current =
+            (signInData.user.user_metadata as Record<string, unknown> | undefined) ?? {};
         }
         const path = signInData.user
           ? await landAfterAccountantAuth(signInData.user.id, "signin")
@@ -679,7 +744,10 @@ function AuthPage() {
                 onChange={(e) => {
                   authFieldDraft = { ...authFieldDraft, email: e.target.value };
                   setEmail(e.target.value);
-                  if (mode === "signin") setSignInFailure(null);
+                  if (mode === "signin") {
+                    setSignInFailure(null);
+                    setPostAuthRetry(false);
+                  }
                 }}
                 required
               />
@@ -694,7 +762,10 @@ function AuthPage() {
                     onChange={(e) => {
                       authFieldDraft = { ...authFieldDraft, password: e.target.value };
                       setPassword(e.target.value);
-                      if (mode === "signin") setSignInFailure(null);
+                      if (mode === "signin") {
+                        setSignInFailure(null);
+                        setPostAuthRetry(false);
+                      }
                     }}
                     minLength={8}
                     required
@@ -747,6 +818,24 @@ function AuthPage() {
                   onForgotPassword={openPasswordReset}
                   tone="entry"
                 />
+              ) : signInFailure ? (
+                <PasswordSignInAlert message={signInFailure.message} tone="entry" />
+              ) : null}
+              {postAuthRetry && user ? (
+                <button
+                  type="button"
+                  className="auth-entry__link mt-3"
+                  onClick={() => {
+                    setPostAuthRetry(false);
+                    setSignInFailure(null);
+                    setBusy(true);
+                    knownMetaRef.current =
+                      (user.user_metadata as Record<string, unknown> | undefined) ?? {};
+                    void landAfterAccountantAuth(user.id, mode).finally(() => setBusy(false));
+                  }}
+                >
+                  Retry
+                </button>
               ) : null}
               {mode === "signup" && (
                 <AuthEntryFootnote>
