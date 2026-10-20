@@ -7,7 +7,9 @@ import {
   closingBalancesFromCashflow,
   type SavedCashflowLike,
 } from "@/lib/cash-runway";
+import { scoreCashRunway } from "@/lib/health-score";
 import { formatMoney, formatMoneyCompact, type MoneyMarket } from "@/lib/market/format";
+import { HEALTH_BAND_TABLE } from "@/lib/ratios";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { OPENING_BALANCE_MISSING, forecastLowestPoint } from "@/lib/cash-forecast-parity";
 import { storedSeriesReading } from "@/lib/client-metrics";
@@ -64,6 +66,15 @@ export type OwnerBooks = {
    * The card chip follows Watch and Critical. Omit it and the floor chip stays.
    */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
+  /**
+   * Weeks scored into the cash pillar. A short runway can make the pillar
+   * Critical while cash is still above the floor.
+   */
+  cashRunwayWeeks?: number | null;
+  /** Scored debtor days. A critical score is receivables strain. */
+  cashDebtorScore?: number | null;
+  /** Scored operating cash (OCF / EBITDA). A critical score is burn. */
+  cashBurnScore?: number | null;
   openAction: string | null;
   /** False until the action-point read has finished. */
   actionsReady: boolean;
@@ -269,7 +280,11 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
     market: books.market,
     money: (amount) => ownerAmount(amount, books.market),
   });
-  const cash = ownerCashStatusChip(books.cashPillarStatus, floor?.chip ?? null);
+  const strainLine = spokenCashStrain(books);
+  const cash =
+    books.cashPillarStatus === "critical" && floor && !floor.chip && !strainLine
+      ? null
+      : ownerCashStatusChip(books.cashPillarStatus, floor?.chip ?? null);
 
   const gross =
     finite(books.revenue) && finite(books.cogs)
@@ -442,6 +457,58 @@ export function cashFloorForHome(input: {
   });
 }
 
+export type CashStrain = "runway" | "burn" | "receivables";
+
+function scoreIsCritical(score: number | null | undefined): boolean {
+  return score != null && Number.isFinite(score) && score < HEALTH_BAND_TABLE.watchMin;
+}
+
+function pickCashStrain(
+  books: Pick<OwnerBooks, "cashRunwayWeeks" | "cashBurnScore" | "cashDebtorScore">,
+): CashStrain | null {
+  const weeks = books.cashRunwayWeeks;
+  if (
+    weeks != null &&
+    Number.isFinite(weeks) &&
+    scoreCashRunway(weeks) < HEALTH_BAND_TABLE.watchMin
+  ) {
+    return "runway";
+  }
+  if (scoreIsCritical(books.cashBurnScore)) return "burn";
+  if (scoreIsCritical(books.cashDebtorScore)) return "receivables";
+  return null;
+}
+
+export function cashStrainSentence(strain: CashStrain, weeks?: number | null): string {
+  if (strain === "runway") {
+    const shown = weeks != null && Number.isFinite(weeks) ? Math.round(weeks) : null;
+    if (shown === 1) return "Cash runway is 1 week.";
+    if (shown != null) return `Cash runway is ${shown} weeks.`;
+    return "Cash runway is the strain.";
+  }
+  if (strain === "burn") return "Operating cash is the strain.";
+  return "Receivables are the strain.";
+}
+
+/**
+ * The Financial Manager line when Critical is runway, burn, or receivables
+ * and cash itself is still above the floor. A floor breach keeps the floor line.
+ */
+export function spokenCashStrain(books: OwnerBooks): string | null {
+  if (books.cashPillarStatus !== "critical") return null;
+  const floor = cashFloorForHome({
+    openingMissing: books.openingMissing,
+    cashOutlook: books.cashOutlook,
+    cashflow: books.cashflow,
+    market: books.market,
+    money: (amount) => ownerAmount(amount, books.market),
+  });
+  if (!floor || floor.chip) return null;
+  const strain = pickCashStrain(books);
+  if (!strain) return null;
+  return cashStrainSentence(strain, books.cashRunwayWeeks);
+}
+
 /** Same cash-floor sentence on the owner home and the accountant client brief. */
 export function cashFloorSentence(input: {
   opening: number;
@@ -473,6 +540,17 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
   const quotedOpening = series?.opening ?? outlook?.opening;
   const pillarAgrees =
     books.cashPillarStatus === "healthy" || books.cashPillarStatus === "at_risk";
+  const strainLine = spokenCashStrain(books);
+  if (strainLine) {
+    return {
+      ...base,
+      sentence: strainLine,
+      source: `${booksSource}, 13-week forecast`,
+      step: "Ask",
+      signed: false,
+      empty: false,
+    };
+  }
   if (pillarAgrees && quotedOpening != null && finite(quotedOpening)) {
     return {
       ...base,
