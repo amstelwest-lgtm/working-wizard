@@ -24,11 +24,27 @@ import {
   PROSPECT_LEADS_PER_EMAIL,
   PROSPECT_TURNS_PER_IP_PER_HOUR,
   assessProspectTurn,
+  hasPrematureFigure,
+  PROSPECT_NO_FIGURES_REPLY,
+  PROSPECT_RUNWAY_METHOD,
   prospectAgentsFor,
-  prospectPricingReply,
   shouldAskForLead,
 } from "../src/lib/prospect-talk";
-import { TAX_SPECIALIST_SYSTEM } from "../src/lib/prospect-talk-prompts";
+import {
+  prospectCardTiming,
+  prospectPricingReply,
+  prospectSystem,
+  prospectZaOwnerMonthly,
+  TAX_SPECIALIST_SYSTEM,
+} from "../src/lib/prospect-talk-prompts";
+import {
+  initialTalkSession,
+  openTalkSession,
+  queueTalkMessage,
+} from "../src/lib/prospect-talk-session";
+import { FIRM_TRIAL_SENTENCE } from "../src/lib/starter-trial-constants";
+import { OWNER_MONTHLY_USD_LABEL } from "../src/lib/owner-plan";
+import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { TRIAL_LEADS_PER_EMAIL } from "../src/lib/trial-demo";
 import { TEAM_ALERT_TO, type Mail } from "../src/lib/trial-lead-alert";
 import { trialSignupHref } from "../src/lib/trial-public";
@@ -444,8 +460,16 @@ assert(
   "the pending pricing question is answered from the published price",
 );
 assert(
-  String(lead.body.reply).includes("card is required"),
-  "the pricing answer keeps the signup fact",
+  !/card is required/i.test(String(lead.body.reply)),
+  "the pricing answer does not say a card is collected at signup",
+);
+assert(
+  String(lead.body.reply).includes(FIRM_TRIAL_SENTENCE),
+  "the pricing answer uses the published trial sentence",
+);
+assert(
+  String(lead.body.reply).includes(prospectCardTiming()),
+  "the pricing answer uses the published card timing",
 );
 assert(modelCalls === PROSPECT_FREE_REPLIES, "the published price does not call the model");
 assert(
@@ -704,7 +728,14 @@ const taxLead = await handleProspectRequest(
   ctx({ ip: "203.0.113.14", geoCountry: "ZA" }),
 );
 assert(taxLead.status === 200 && taxLead.body.continueChat === true, "the tax chat continues");
-assert(String(taxLead.body.reply).includes("$39"), "the tax chat answers the pending question");
+assert(
+  String(taxLead.body.reply).includes(prospectZaOwnerMonthly()),
+  "the tax chat answers the pending question in rand for a ZA visitor",
+);
+assert(
+  !String(taxLead.body.reply).includes(OWNER_MONTHLY_USD_LABEL),
+  "the ZA tax chat does not quote the US owner price",
+);
 const taxInjected = await handleProspectRequest(
   {
     action: "turn",
@@ -756,8 +787,15 @@ const clientSrc = readFileSync(
 assert(clientSrc.includes("milon-talk:${slug}"), "the session token is stored per agent");
 assert(!clientSrc.includes("localStorage"), "the free allowance is not a localStorage quota");
 assert(!clientSrc.includes("document.cookie"), "the free allowance is not a cookie");
-assert(prospectPricingReply().includes("$39"), "the pricing sentence is the published owner price");
-assert(!prospectPricingReply().includes("ZAR"), "the pricing sentence does not quote rand");
+assert(
+  prospectPricingReply("US").includes(OWNER_MONTHLY_USD_LABEL),
+  "the pricing sentence is the published owner price",
+);
+assert(!prospectPricingReply("US").includes("ZAR"), "the pricing sentence does not quote rand");
+assert(
+  !/card is required/i.test(prospectPricingReply("US")),
+  "the US pricing sentence does not require a card at signup",
+);
 
 const css = readFileSync(new URL("../src/styles/prospect-talk.css", import.meta.url), "utf8");
 assert(css.includes("100dvh"), "the page is full screen");
@@ -831,5 +869,248 @@ while (queue.length) {
   }
 }
 assert(talkFilesRead > 5, "the non-ZA talk graph was scanned");
+
+const METHOD_QUESTION = "How do you work out cash runway?";
+const publicSlugs = ["financial-manager", "analyst", "advisor"] as const;
+for (const [index, agent] of publicSlugs.entries()) {
+  const run = createMemoryProspectStore();
+  let calls = 0;
+  const runCtx = ctx({
+    ip: `203.0.113.${20 + index}`,
+    store: run.store,
+    model: async ({ user }) => {
+      calls += 1;
+      if (/runway/i.test(user)) throw new Error("a method question must not call the model");
+      return "Gross margin looks like 40% and the cash line is $12,000.";
+    },
+  });
+  const opened = await handleProspectRequest(
+    { action: "turn", agent, message: "We sell retainers." },
+    runCtx,
+  );
+  assert(opened.status === 200 && opened.body.askLead === false, `${agent} turn 1 stays open`);
+  assert(
+    opened.body.reply === PROSPECT_NO_FIGURES_REPLY,
+    `${agent} still holds a reply that quotes sample figures`,
+  );
+  const method = await handleProspectRequest(
+    {
+      action: "turn",
+      agent,
+      sessionToken: String(opened.body.sessionToken),
+      message: METHOD_QUESTION,
+    },
+    runCtx,
+  );
+  assert(
+    method.status === 200 && method.body.askLead === false,
+    `${agent} answers the method on turn 2`,
+  );
+  assert(method.body.reply === PROSPECT_RUNWAY_METHOD, `${agent} states the runway method`);
+  assert(
+    method.body.reply !== PROSPECT_NO_FIGURES_REPLY,
+    `${agent} does not answer a method with the figure gate`,
+  );
+  assert(!hasPrematureFigure(String(method.body.reply)), `${agent} method answer has no figures`);
+  assert(
+    !/name and email/i.test(String(method.body.reply)),
+    `${agent} method answer does not ask for a lead`,
+  );
+  assert(calls === 1, `${agent} method question does not call the model`);
+}
+
+const formRun = createMemoryProspectStore();
+const formCtx = ctx({
+  ip: "203.0.113.30",
+  store: formRun.store,
+  model: async () => "The sample is a labelled walk-through of the books.",
+});
+const formFirst = await handleProspectRequest(
+  { action: "turn", agent: "advisor", message: "We sell retainers." },
+  formCtx,
+);
+let formToken = String(formFirst.body.sessionToken);
+for (let turn = 2; turn <= PROSPECT_FREE_REPLIES; turn += 1) {
+  const step = await handleProspectRequest(
+    {
+      action: "turn",
+      agent: "advisor",
+      sessionToken: formToken,
+      message: turn === 2 ? METHOD_QUESTION : "Tell me about the sample.",
+    },
+    formCtx,
+  );
+  assert(step.body.askLead === false, `turn ${turn} stays before the form`);
+  formToken = String(step.body.sessionToken);
+}
+const formGate = await handleProspectRequest(
+  {
+    action: "turn",
+    agent: "advisor",
+    sessionToken: formToken,
+    message: METHOD_QUESTION,
+  },
+  formCtx,
+);
+assert(formGate.body.askLead === true, "the form still opens on turn 4");
+assert(
+  String(formGate.body.reply).includes("name and email"),
+  "turn 4 still asks for name and email",
+);
+
+const ownerMonthly = loadSaPricingCopy().ownerMonthly;
+assert(prospectZaOwnerMonthly() === ownerMonthly, "the ZA owner price matches the pricing page");
+for (const agent of publicSlugs) {
+  const us = prospectSystem(agent, "US");
+  const za = prospectSystem(agent, "ZA");
+  assert(!/card is required/i.test(us), `${agent} US prompt has no card-at-signup claim`);
+  assert(!/card is required/i.test(za), `${agent} ZA prompt has no card-at-signup claim`);
+  assert(us.includes(FIRM_TRIAL_SENTENCE), `${agent} US prompt uses the published trial sentence`);
+  assert(us.includes(OWNER_MONTHLY_USD_LABEL), `${agent} US prompt uses the published owner price`);
+  assert(us.includes(prospectCardTiming()), `${agent} US prompt uses the published card timing`);
+  assert(!us.includes(ownerMonthly), `${agent} US prompt does not show the rand owner price`);
+  assert(!us.includes("ZAR"), `${agent} US prompt does not show ZAR`);
+  assert(za.includes(FIRM_TRIAL_SENTENCE), `${agent} ZA prompt uses the published trial sentence`);
+  assert(za.includes(ownerMonthly), `${agent} ZA prompt uses the rand owner price`);
+  assert(
+    !/card is required/i.test(prospectPricingReply("US")),
+    "US pricing reply drops the signup card claim",
+  );
+  assert(
+    prospectPricingReply("ZA").includes(ownerMonthly),
+    "ZA pricing reply uses the rand owner price",
+  );
+  assert(
+    !prospectPricingReply("US").includes(ownerMonthly),
+    "US pricing reply hides the rand owner price",
+  );
+}
+
+let queued = queueTalkMessage(initialTalkSession(), METHOD_QUESTION);
+assert(
+  queued.queued.length === 1 && queued.ready === false,
+  "a send before session init stays queued",
+);
+const openedSession = openTalkSession(queued, "stored-token");
+assert(
+  openedSession.deliver.length === 1 && openedSession.deliver[0] === METHOD_QUESTION,
+  "the queued first message is delivered when the session opens",
+);
+assert(
+  openedSession.gate.ready === true && openedSession.gate.token === "stored-token",
+  "the session token is the stored one",
+);
+assert(
+  openTalkSession(openedSession.gate, "stored-token").deliver.length === 0,
+  "opening again does not resend",
+);
+
+const { Window } = await import("happy-dom");
+const dom = new Window({
+  url: "http://127.0.0.1:5000/talk/analyst",
+  settings: {
+    disableJavaScriptEvaluation: true,
+    disableJavaScriptFileLoading: true,
+    disableCSSFileLoading: true,
+  },
+});
+for (const key of [
+  "window",
+  "document",
+  "navigator",
+  "HTMLElement",
+  "HTMLInputElement",
+  "HTMLTextAreaElement",
+  "HTMLButtonElement",
+  "HTMLFormElement",
+  "Element",
+  "Node",
+  "Document",
+  "Event",
+  "InputEvent",
+  "KeyboardEvent",
+  "MouseEvent",
+  "getComputedStyle",
+  "requestAnimationFrame",
+  "cancelAnimationFrame",
+  "MutationObserver",
+  "sessionStorage",
+] as const) {
+  Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: dom[key] });
+}
+Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
+  configurable: true,
+  writable: true,
+  value: true,
+});
+const { act } = await import("react");
+const { createRoot } = await import("react-dom/client");
+const { ProspectTalkLive } = await import("../src/components/prospect-talk");
+
+for (const agent of publicSlugs) {
+  let release: (token: string) => void = () => {};
+  const readStoredToken = () =>
+    new Promise<string>((resolve) => {
+      release = resolve;
+    });
+  const sent: Record<string, unknown>[] = [];
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  await act(async () => {
+    root.render(
+      createElement(ProspectTalkLive, {
+        slug: agent,
+        copyPack: "us",
+        readStoredToken,
+        sendTurn: async (body) => {
+          sent.push(body);
+          return {
+            ok: true,
+            reply: PROSPECT_RUNWAY_METHOD,
+            sessionToken: "sess-after-init",
+            askLead: false,
+          };
+        },
+      }),
+    );
+  });
+  assert(
+    document.querySelector("[data-talk-session]")?.getAttribute("data-talk-session") === "pending",
+    `${agent} holds the first send until the session is ready`,
+  );
+  const area = document.querySelector("textarea");
+  assert(area instanceof HTMLTextAreaElement, `${agent} composer is on screen before init`);
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  assert(!!setter, "textarea value setter exists");
+  await act(async () => {
+    setter!.call(area, METHOD_QUESTION);
+    area.dispatchEvent(new Event("input", { bubbles: true }));
+    area.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const form = area.closest("form");
+  assert(form instanceof HTMLFormElement, `${agent} composer is a form`);
+  await act(async () => {
+    form.requestSubmit();
+  });
+  assert(sent.length === 0, `${agent} does not post the first message before session init`);
+  assert(
+    document.body.textContent?.includes(METHOD_QUESTION),
+    `${agent} keeps the first message on screen`,
+  );
+  await act(async () => {
+    release("stored-token");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  assert(sent.length === 1, `${agent} delivers the first message once the session is ready`);
+  assert(sent[0]?.action === "turn", `${agent} first send is a turn, not a lead`);
+  assert(sent[0]?.message === METHOD_QUESTION, `${agent} delivers the original first message`);
+  assert(sent[0]?.sessionToken === "stored-token", `${agent} uses the token from session init`);
+  assert(sent[0]?.agent === agent, `${agent} posts as itself`);
+  await act(async () => {
+    root.unmount();
+  });
+  host.remove();
+}
 
 console.log("prospect-talk: ok");
