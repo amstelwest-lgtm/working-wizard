@@ -6,6 +6,7 @@
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import { SAMPLE_STAMP_LINE, SAMPLE_STAMP_WORD } from "@/lib/pdf-sample";
+import { DRAFT_WATERMARK_TOP } from "@/lib/report-pdf-layout";
 import { C } from "./theme";
 import { CheckMark } from "./glyphs";
 
@@ -42,8 +43,8 @@ export function DemoWatermark() {
 }
 
 /**
- * Unsigned budget. A flat line in the page body. The old rotated header
- * word wrapped, and the last two letters sat in the top margin.
+ * Unsigned deliverable. A short diagonal in the body, clear of the footer
+ * page number. A line along the footer used to print through "1 / 2".
  */
 export function DraftWatermark({ text = "DRAFT" }: { text?: string }) {
   return (
@@ -51,15 +52,16 @@ export function DraftWatermark({ text = "DRAFT" }: { text?: string }) {
       <Text
         style={{
           position: "absolute",
-          bottom: 22,
-          left: 48,
-          width: 500,
+          top: DRAFT_WATERMARK_TOP,
+          left: 0,
+          right: 0,
           textAlign: "center",
-          fontSize: 8,
+          fontSize: 48,
           fontFamily: "Helvetica-Bold",
           color: C.blueDeep,
-          opacity: 0.35,
-          letterSpacing: 1.2,
+          opacity: 0.07,
+          letterSpacing: 8,
+          transform: "rotate(-32deg)",
         }}
       >
         {text}
