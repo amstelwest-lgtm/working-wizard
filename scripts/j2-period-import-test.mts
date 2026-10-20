@@ -20,7 +20,11 @@ import {
   type ConfirmedStatement,
   type PeriodChoice,
 } from "../src/lib/statement-import-plan";
-import { mergeStatementFinancials, parseStatementText } from "../src/lib/statement-parse";
+import {
+  mergeStatementFinancials,
+  parseStatementText,
+  statementKindFromMetadata,
+} from "../src/lib/statement-parse";
 import type { ConfirmedImportPeriod } from "../src/lib/import-period";
 import type { MergedExtractionResult } from "../src/lib/extraction-types";
 
@@ -201,6 +205,19 @@ assert(statementKindFromExtraction(bsReview) === "balance_sheet", "review is a b
 const bsFlat = periodFinancialsFromExtraction(bsReview);
 assert(bsFlat.cash === "46300", bsFlat.cash);
 assert(bsFlat.totalAssets === "179200", bsFlat.totalAssets);
+
+const earlyReview = extraction({
+  periodEnd: "2026-06-30",
+  sheet: {
+    total_assets: 90000,
+    total_liabilities: 40000,
+    current_assets: { cash_and_cash_equivalents: 12000, total: 40000 },
+    equity: { total: 50000 },
+    current_liabilities: { trade_and_other_payables: 8000, total: 20000 },
+  },
+});
+assert(statementKindFromExtraction(earlyReview) === "balance_sheet", "June sheet is a balance sheet");
+assert(earlyReview.current_period.period_start == null, "June sheet has no start");
 
 const q3Review = extraction({
   periodStart: quarter.periodStart,
@@ -574,6 +591,39 @@ for (const id of ["profit", "assets", "financing", "cash"]) {
 }
 await unmountBs();
 
+const earlyPage = pageConfirm(ytdBooks as Record<string, unknown>);
+const unmountEarly = await mount(
+  createElement(UploadFinancials, {
+    seedReview: earlyReview,
+    booksHaveSpan: true,
+    onConfirm: earlyPage.confirm,
+  }),
+);
+assert(
+  document.body.textContent?.includes("Importing as Jun 2026 (period end 2026-06-30)"),
+  "June sheet shows its own as-of date",
+);
+assert(document.getElementById("import-period-start") == null, "an earlier balance sheet does not ask for a range");
+const earlyCheck = document.getElementById("confirm-import-figures");
+assert(earlyCheck instanceof HTMLInputElement, "June quality checkbox");
+await click(earlyCheck);
+const earlyConfirm = buttonNamed("Confirm & import");
+assert(earlyConfirm && !earlyConfirm.disabled, "an earlier as-of date can confirm");
+await click(earlyConfirm);
+assert(earlyPage.calls[0]?.periodEnd === "2026-06-30", earlyPage.calls[0]?.periodEnd ?? "no June end");
+assert(earlyPage.calls[0]?.periodStart == null, "June sheet invented a start");
+const earlyPlanned = earlyPage.last();
+assert(earlyPlanned?.action === "live", earlyPlanned?.action ?? earlyPlanned?.message ?? "June blocked");
+assert(!earlyPlanned?.message.includes("Couldn't read"), earlyPlanned?.message ?? "no June message");
+assert(earlyPlanned?.live?.cash === "12000", `June cash ${earlyPlanned?.live?.cash}`);
+assert(earlyPlanned?.live?.totalAssets === "90000", `June assets ${earlyPlanned?.live?.totalAssets}`);
+assert(earlyPlanned?.live?.periodStart === "2026-01-01", `June moved the start to ${earlyPlanned?.live?.periodStart}`);
+assert(earlyPlanned?.live?.periodEnd === "2026-09-30", `June moved the end to ${earlyPlanned?.live?.periodEnd}`);
+assert(earlyPlanned?.live?.periodMonths === "9", `June moved the months to ${earlyPlanned?.live?.periodMonths}`);
+assert(earlyPlanned?.live?.revenue === ytdBooks.revenue, `June changed revenue to ${earlyPlanned?.live?.revenue}`);
+assert(ytdBooks.periodStart === "2026-01-01" && ytdBooks.periodEnd === "2026-09-30", "June import rewrote the stored books");
+await unmountEarly();
+
 const q3Page = pageConfirm(booksWithSheet as Record<string, unknown>);
 const unmountQ3 = await mount(
   createElement(UploadFinancials, {
@@ -668,35 +718,193 @@ const ranged = unknownPage.last();
 assert(ranged?.action === "choose", ranged?.action ?? ranged?.message ?? "no plan");
 await unmountUnknown();
 
-let ownerPeriod: { periodStart: string; periodEnd: string; periodMonths: number } | null = null;
-const unmountOwner = await mount(
+function ownerConfirm(existing: Record<string, unknown>, review: MergedExtractionResult) {
+  const calls: Array<{ choice: PeriodChoice | null; periodStart: string | null; periodEnd: string | null }> = [];
+  let planned: ConfirmedStatement | null = null;
+  const onConfirm = (
+    mapped: Record<string, string | undefined>,
+    _prefs: unknown,
+    choice?: PeriodChoice | null,
+    periodOverride?: { periodStart: string; periodEnd: string; periodMonths: number } | null,
+  ) => {
+    const meta = review.document_metadata;
+    const resolvedStart = periodOverride?.periodStart ?? meta.period_start_date ?? null;
+    const resolvedEnd = periodOverride?.periodEnd ?? meta.period_end_date ?? null;
+    const resolvedMonths = periodOverride?.periodMonths ?? meta.period_months ?? null;
+    const incoming: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(mapped)) {
+      if (typeof val === "string" && val.trim()) incoming[key] = val;
+    }
+    if (resolvedMonths) incoming.periodMonths = String(resolvedMonths);
+    if (resolvedStart) incoming.periodStart = resolvedStart;
+    if (resolvedEnd) incoming.periodEnd = resolvedEnd;
+    calls.push({ choice: choice ?? null, periodStart: resolvedStart, periodEnd: resolvedEnd });
+    planned = confirmUploadedStatement({
+      existing,
+      incoming,
+      kind: statementKindFromMetadata(meta),
+      periodStart: resolvedStart,
+      periodEnd: resolvedEnd,
+      periodMonths: resolvedMonths,
+      choice: choice ?? null,
+      market: US,
+      fyStartMonth: 1,
+      pillarsBefore: liveHealthFromBooks({
+        financials: existing,
+        fyStartMonth: 1,
+        market: US,
+      }).pillars,
+    });
+    if (planned.action === "choose") {
+      return {
+        ok: false as const,
+        message: planned.message,
+        choice: { replaceLabel: planned.replaceLabel, addLabel: planned.addLabel },
+      };
+    }
+    if (planned.action === "block") return { ok: false as const, message: planned.message };
+    return { ok: true as const, message: planned.message };
+  };
+  return { onConfirm, calls, last: () => planned };
+}
+
+async function acceptOwner() {
+  const box = document.getElementById("upload-quality-confirm");
+  assert(box instanceof HTMLInputElement, "owner quality checkbox");
+  await click(box);
+  const button = buttonNamed("Confirm & import figures");
+  assert(button, "owner confirm button");
+  return button;
+}
+
+const ownerBs = ownerConfirm(ytdBooks as Record<string, unknown>, ownerReview(bsReview, "balance_sheet"));
+const unmountOwnerBs = await mount(
   createElement(ExtractionReviewModal, {
-    result: ownerReview(unknownReview, "income_statement"),
+    result: ownerReview(bsReview, "balance_sheet"),
     open: true,
     booksHaveSpan: true,
     onClose: () => {},
-    onConfirm: (_mapped, _prefs, _choice, period) => {
-      ownerPeriod = period ?? null;
-      return { ok: true as const, message: "Imported, income statement updated." };
-    },
+    onConfirm: ownerBs.onConfirm,
+  }),
+);
+assert(document.getElementById("import-period-start") == null, "owner balance sheet has no start field");
+const ownerBsConfirm = await acceptOwner();
+assert(!ownerBsConfirm.disabled, "owner balance sheet can confirm from its as-of date");
+await click(ownerBsConfirm);
+assert(ownerBs.calls[0]?.periodEnd === "2026-09-30", ownerBs.calls[0]?.periodEnd ?? "owner BS dropped the end");
+assert(ownerBs.calls[0]?.periodStart == null, "owner balance sheet invented a start");
+const ownerBsPlanned = ownerBs.last();
+assert(ownerBsPlanned?.action === "live", ownerBsPlanned?.action ?? "owner BS blocked");
+assert(ownerBsPlanned?.live?.cash === "46300", `owner cash ${ownerBsPlanned?.live?.cash}`);
+assert(ownerBsPlanned?.live?.totalAssets === "179200", `owner assets ${ownerBsPlanned?.live?.totalAssets}`);
+assert(ownerBsPlanned?.live?.periodStart === "2026-01-01", `owner BS start ${ownerBsPlanned?.live?.periodStart}`);
+assert(ownerBsPlanned?.live?.periodEnd === "2026-09-30", `owner BS end ${ownerBsPlanned?.live?.periodEnd}`);
+await unmountOwnerBs();
+
+const ownerEarly = ownerConfirm(
+  ytdBooks as Record<string, unknown>,
+  ownerReview(earlyReview, "balance_sheet"),
+);
+const unmountOwnerEarly = await mount(
+  createElement(ExtractionReviewModal, {
+    result: ownerReview(earlyReview, "balance_sheet"),
+    open: true,
+    booksHaveSpan: true,
+    onClose: () => {},
+    onConfirm: ownerEarly.onConfirm,
+  }),
+);
+const ownerEarlyConfirm = await acceptOwner();
+await click(ownerEarlyConfirm);
+assert(ownerEarly.calls[0]?.periodEnd === "2026-06-30", ownerEarly.calls[0]?.periodEnd ?? "owner June end");
+const ownerEarlyPlanned = ownerEarly.last();
+assert(ownerEarlyPlanned?.action === "live", ownerEarlyPlanned?.action ?? "owner June blocked");
+assert(ownerEarlyPlanned?.live?.cash === "12000", `owner June cash ${ownerEarlyPlanned?.live?.cash}`);
+assert(ownerEarlyPlanned?.live?.totalAssets === "90000", `owner June assets ${ownerEarlyPlanned?.live?.totalAssets}`);
+assert(ownerEarlyPlanned?.live?.periodStart === "2026-01-01", `owner June start ${ownerEarlyPlanned?.live?.periodStart}`);
+assert(ownerEarlyPlanned?.live?.periodEnd === "2026-09-30", `owner June end ${ownerEarlyPlanned?.live?.periodEnd}`);
+assert(ownerEarlyPlanned?.live?.revenue === ytdBooks.revenue, "owner June changed the P&L");
+await unmountOwnerEarly();
+
+const ownerQ3Review = ownerReview(q3Review, "income_statement");
+const ownerQ3 = ownerConfirm(booksWithSheet as Record<string, unknown>, ownerQ3Review);
+const unmountOwnerQ3 = await mount(
+  createElement(ExtractionReviewModal, {
+    result: ownerQ3Review,
+    open: true,
+    booksHaveSpan: true,
+    onClose: () => {},
+    onConfirm: ownerQ3.onConfirm,
+  }),
+);
+await click(await acceptOwner());
+assert(ownerQ3.calls[0]?.choice == null, "owner Q3 has not chosen yet");
+const ownerAsked = ownerQ3.last();
+assert(ownerAsked?.action === "choose", ownerAsked?.action ?? "owner Q3 skipped the question");
+assert(ownerAsked?.addLabel === "Add as Q3", ownerAsked?.addLabel ?? "owner add label");
+const ownerAdd = document.querySelector("[data-import-choice='add_period']");
+assert(ownerAdd instanceof HTMLButtonElement, "owner Add as Q3 is a button");
+await click(ownerAdd);
+assert(ownerQ3.calls[1]?.choice === "add_period", `owner second choice ${ownerQ3.calls[1]?.choice}`);
+const ownerAdded = ownerQ3.last();
+assert(ownerAdded?.action === "history", ownerAdded?.action ?? "owner Add as Q3 looped");
+assert(ownerAdded?.live == null, "owner Add as Q3 rewrote the live books");
+assert(ownerAdded?.history?.revenue === "182000", `owner history revenue ${ownerAdded?.history?.revenue}`);
+await unmountOwnerQ3();
+
+const ownerReplaceReview = ownerReview(q3Review, "income_statement");
+const ownerReplace = ownerConfirm(booksWithSheet as Record<string, unknown>, ownerReplaceReview);
+const unmountOwnerReplace = await mount(
+  createElement(ExtractionReviewModal, {
+    result: ownerReplaceReview,
+    open: true,
+    booksHaveSpan: true,
+    onClose: () => {},
+    onConfirm: ownerReplace.onConfirm,
+  }),
+);
+await click(await acceptOwner());
+const ownerReplaceButton = document.querySelector("[data-import-choice='replace_ytd']");
+assert(ownerReplaceButton instanceof HTMLButtonElement, "owner Replace is a button");
+await click(ownerReplaceButton);
+assert(ownerReplace.calls[1]?.choice === "replace_ytd", `owner replace choice ${ownerReplace.calls[1]?.choice}`);
+const ownerReplaced = ownerReplace.last();
+assert(ownerReplaced?.action === "live", ownerReplaced?.action ?? "owner Replace looped");
+assert(ownerReplaced?.live?.periodStart === "2026-07-01", String(ownerReplaced?.live?.periodStart));
+assert(ownerReplaced?.live?.periodEnd === "2026-09-30", String(ownerReplaced?.live?.periodEnd));
+assert(ownerReplaced?.live?.revenue === "182000", `owner replaced revenue ${ownerReplaced?.live?.revenue}`);
+assert(ownerReplaced?.live?.cash === "46300", `owner replaced cash ${ownerReplaced?.live?.cash}`);
+await unmountOwnerReplace();
+
+const ownerUnknownReview = ownerReview(unknownReview, "income_statement");
+const ownerUnknown = ownerConfirm(ytdBooks as Record<string, unknown>, ownerUnknownReview);
+const unmountOwnerUnknown = await mount(
+  createElement(ExtractionReviewModal, {
+    result: ownerUnknownReview,
+    open: true,
+    booksHaveSpan: true,
+    onClose: () => {},
+    onConfirm: ownerUnknown.onConfirm,
   }),
 );
 assert(document.getElementById("import-period-start") instanceof HTMLInputElement, "owner start date");
 assert(document.getElementById("import-period-end") instanceof HTMLInputElement, "owner end date");
 assert(document.body.textContent?.includes(SET_PERIOD_DATES), "owner uses the same sentence");
-const ownerCheck = document.getElementById("upload-quality-confirm");
-assert(ownerCheck instanceof HTMLInputElement, "owner quality checkbox");
-await click(ownerCheck);
-const ownerConfirm = buttonNamed("Confirm & import figures");
-assert(ownerConfirm?.disabled, "owner confirm stays off until both dates are set");
-await setDate("import-period-start", "2026-01-01");
+const ownerUnknownConfirm = await acceptOwner();
+assert(ownerUnknownConfirm.disabled, "owner confirm stays off until both dates are set");
+await setDate("import-period-start", "2026-09-30");
+await setDate("import-period-end", "2026-07-01");
+assert(ownerUnknownConfirm.disabled, "owner rejects an end before the start");
+await setDate("import-period-start", "2026-07-01");
 await setDate("import-period-end", "2026-09-30");
-assert(!ownerConfirm?.disabled, "owner confirm enables once the range is set");
-await click(ownerConfirm!);
-assert(ownerPeriod?.periodStart === "2026-01-01", ownerPeriod?.periodStart ?? "owner dropped the start");
-assert(ownerPeriod?.periodEnd === "2026-09-30", ownerPeriod?.periodEnd ?? "owner dropped the end");
-assert(ownerPeriod?.periodMonths === 9, `owner months ${ownerPeriod?.periodMonths}`);
-await unmountOwner();
+assert(!ownerUnknownConfirm.disabled, "owner confirm enables once the range is set");
+await click(ownerUnknownConfirm);
+assert(ownerUnknown.calls[0]?.periodStart === "2026-07-01", ownerUnknown.calls[0]?.periodStart ?? "owner dropped the start");
+assert(ownerUnknown.calls[0]?.periodEnd === "2026-09-30", ownerUnknown.calls[0]?.periodEnd ?? "owner dropped the end");
+const ownerRanged = ownerUnknown.last();
+assert(ownerRanged?.action === "choose", ownerRanged?.action ?? ownerRanged?.message ?? "owner unknown did not ask");
+assert(ownerRanged?.addLabel === "Add as Q3", ownerRanged?.addLabel ?? "owner unknown add label");
+await unmountOwnerUnknown();
 
 const clientPage = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 const ownerPage = readFileSync(resolve("src/routes/app.tsx"), "utf8");
