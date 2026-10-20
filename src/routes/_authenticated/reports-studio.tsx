@@ -139,6 +139,7 @@ import {
   reportDownloadGate,
   scoredReturnHealth,
 } from "@/lib/report-coherence";
+import { reportCardNoFiguresState } from "@/lib/report-card-state";
 import {
   coerceMarketSelection,
   laborCostLabel,
@@ -3198,6 +3199,7 @@ function ReportCard({
     blocked,
     unavailableReason,
   });
+  const noFigures = reportCardNoFiguresState({ noFigures: blocked });
   const scope = REPORT_SIGNOFF_SCOPE[report.key];
   const copy = reportCopy(report, market);
   return (
@@ -3225,7 +3227,9 @@ function ReportCard({
               >
                 {report.category}
               </span>
-              <span className="text-[10px] text-muted-foreground">{report.pages}</span>
+              {noFigures.showPageCount ? (
+                <span className="text-[10px] text-muted-foreground">{report.pages}</span>
+              ) : null}
             </div>
             <h3 className="report-card__title">
               {copy.name}
@@ -3233,7 +3237,11 @@ function ReportCard({
             <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
               {localizeCopy(report.description, market)}
             </p>
-            {unavailableReason ? (
+            {noFigures.reason ? (
+              <p className="mt-2 text-[11px] leading-relaxed text-[#102A43] dark:text-[#F4F7FB]" data-report-empty="">
+                {noFigures.reason}
+              </p>
+            ) : unavailableReason ? (
               <p className="mt-2 text-[11px] leading-relaxed text-[#102A43] dark:text-[#F4F7FB]">
                 {unavailableReason}
               </p>
@@ -3242,7 +3250,7 @@ function ReportCard({
         </div>
       </div>
 
-      {clientId && scope && onSignoffChange ? (
+      {noFigures.showSignoff && clientId && scope && onSignoffChange ? (
         <div className="flex min-w-0 justify-stretch px-5 pb-2 sm:justify-end">
           <ReviewSignoffButton
             compact
