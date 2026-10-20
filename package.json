@@ -258,6 +258,7 @@
     "test:no-evidence": "vite-node --config scripts/vite-test.config.ts scripts/no-evidence-client-test.mts",
     "test:pl-only-cash": "vite-node --config scripts/vite-test.config.ts scripts/pl-only-cash-test.mts",
     "test:pl-only-period": "vite-node --config scripts/vite-test.config.ts scripts/pl-only-period-test.mts",
+    "test:j2-period-import": "vite-node --config scripts/vite-test.config.ts scripts/j2-period-import-test.mts",
     "test:statement-import": "vite-node --config scripts/vite-test.config.ts scripts/statement-import-apply-test.mts",
     "test:accountant-identity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-identity-test.mts",
     "test:client-metrics": "vite-node --config scripts/vite-test.config.ts scripts/client-metrics-test.mts",
