@@ -10,7 +10,7 @@ import {
   type StarterTrialBanner,
 } from "./firm-starter-trial";
 import { formatDate } from "./market/format.ts";
-import { ZA_MARKET } from "./market/resolve.ts";
+import { marketForFirm } from "./market/scope.ts";
 import {
   FIRM_BAND_CATALOG,
   FIRM_TRIAL_CLIENT_LIMIT,
@@ -207,7 +207,7 @@ export function firmTrialStatusLine(input: {
 /** Date label for a Stripe trial end, in the firm's market. Null when the timestamp is missing. */
 export function trialEndDateLabel(
   trialEndIso: string | null | undefined,
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  market: { locale?: string | null; timezone?: string },
 ): string | null {
   if (!trialEndIso) return null;
   const end = Date.parse(trialEndIso);
@@ -273,7 +273,7 @@ export function formatFirmPlanStatus(input: {
       band,
       headline,
       detail,
-      trialEndsOn: trialEndDateLabel(input.trialEndIso, input.market),
+      trialEndsOn: trialEndDateLabel(input.trialEndIso, input.market ?? marketForFirm(null)),
     };
   }
 

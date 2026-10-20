@@ -16,6 +16,9 @@ export { formatMonthRange };
 
 export type MoneyMarket = Pick<ResolvedMarket, "currency" | "locale">;
 
+/** Locale and zone for a printed date. Callers pass the client or the firm. */
+export type DateMarket = { locale?: string | null; timezone?: string };
+
 export function currencySymbol(market: Pick<ResolvedMarket, "currency"> = ZA_MARKET): string {
   return market.currency === "USD" ? "$" : "R";
 }
@@ -144,7 +147,7 @@ function orderOf(market: { locale?: string | null }): DateOrder {
  */
 export function formatCalendarDay(
   iso: string,
-  market: { locale?: string | null } = ZA_MARKET,
+  market: DateMarket,
   _opts?: Intl.DateTimeFormatOptions,
 ): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
@@ -160,10 +163,7 @@ export function formatCalendarDay(
 }
 
 /** Week axis. ZA "19 Oct". US "Oct 19". The day is not padded. */
-export function formatWeekHeader(
-  iso: string,
-  market: { locale?: string | null } = ZA_MARKET,
-): string {
+export function formatWeekHeader(iso: string, market: DateMarket): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if (!match) return "—";
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
@@ -178,7 +178,7 @@ export function formatWeekHeader(
 
 export function formatDate(
   d: Date | string | number,
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  market: DateMarket,
   opts?: Intl.DateTimeFormatOptions,
 ): string {
   const date = d instanceof Date ? d : new Date(d);
@@ -195,7 +195,7 @@ export function formatDate(
 
 export function formatDateTime(
   d: Date | string | number,
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  market: DateMarket,
   opts?: Intl.DateTimeFormatOptions,
 ): string {
   const date = d instanceof Date ? d : new Date(d);
@@ -317,7 +317,7 @@ function renderDateTime(
  */
 export function formatSignedOffDateTime(
   d: Date | string | number,
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  market: DateMarket,
   opts?: Intl.DateTimeFormatOptions & { firmTimeZone?: string | null },
 ): string {
   const date = d instanceof Date ? d : new Date(d);
@@ -333,7 +333,7 @@ export function formatSignedOffDateTime(
  */
 export function formatReviewDateTime(
   d: Date | string | number,
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  market: DateMarket,
   opts?: { firmTimeZone?: string | null },
 ): string {
   return formatSignedOffDateTime(d, market, { firmTimeZone: opts?.firmTimeZone });
@@ -372,7 +372,7 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 /** Month and day only. ZA "8 Sep". US "Sep 8". */
 export function formatMonthDay(
   d: Date | string | number,
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  market: DateMarket,
   opts?: { timeZone?: string },
 ): string {
   const date = d instanceof Date ? d : new Date(d);
@@ -389,7 +389,7 @@ export function formatMonthDay(
 /** Weekday plus the calendar day. ZA "Monday, 8 Sep 2026". US "Monday, Sep 8, 2026". */
 export function formatNamedDay(
   d: Date | string | number,
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  market: DateMarket,
   opts?: { timeZone?: string },
 ): string {
   const date = d instanceof Date ? d : new Date(d);
@@ -423,11 +423,8 @@ export function icuZoneName(
   }
 }
 
-/** ZA "09:54". US "9:54 AM". The clock is in the market zone. */
-export function formatClock(
-  d: Date | string | number,
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
-): string | null {
+/** ZA "09:54". US "9:54 AM". The clock is in the market zone. Slot buttons only. */
+export function formatClock(d: Date | string | number, market: DateMarket): string | null {
   const date = d instanceof Date ? d : new Date(d);
   if (Number.isNaN(date.getTime())) return null;
   try {
@@ -438,11 +435,51 @@ export function formatClock(
   }
 }
 
+function sameCalendarDay(left: ClockParts, right: ClockParts): boolean {
+  return left.year === right.year && left.month === right.month && left.day === right.day;
+}
+
+/**
+ * Event line. Same calendar day in the market zone is the clock and zone
+ * only: ZA "07:37 SAST", US "1:37 AM ET". Any other day is the full
+ * date-time preset: "20 Oct 2026, 07:37 SAST" / "Oct 20, 2026, 1:37 AM ET".
+ */
+export function formatEventTime(
+  at: Date | string | number,
+  market: DateMarket,
+  now: Date | string | number = new Date(),
+): string | null {
+  const date = at instanceof Date ? at : new Date(at);
+  if (Number.isNaN(date.getTime())) return null;
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const timeZone = market.timezone ?? "UTC";
+  let parts: ClockParts;
+  let nowParts: ClockParts;
+  try {
+    parts = readClock(date, timeZone);
+    nowParts = readClock(Number.isNaN(nowDate.getTime()) ? new Date() : nowDate, timeZone);
+  } catch {
+    return null;
+  }
+  const clock = clockLabel(parts.hour, parts.minute, orderOf(market));
+  if (!clock) return null;
+  const zone = parts.zoneName
+    ? zoneLabel(parts.zoneName, date, timeZone)
+    : offsetFromZone(date, timeZone);
+  if (sameCalendarDay(parts, nowParts)) return `${clock} ${zone}`;
+  return dateTimeLabel(
+    parts.year,
+    parts.month,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    zone,
+    orderOf(market),
+  );
+}
+
 /** Month column. Both markets: "Oct 26". */
-export function formatMonthLabel(
-  ym: string,
-  _market: { locale?: string | null } = ZA_MARKET,
-): string {
+export function formatMonthLabel(ym: string, _market: DateMarket): string {
   const [y, m] = ym.split("-").map(Number);
   if (!y || !m) return ym;
   return monthColumnLabel(y, m) ?? ym;

@@ -966,6 +966,7 @@ export function OwnerDoor({
       {railScreen === "moves" ? restored?.moves : null}
       {railScreen === "chat" && active ? (
         <OwnerChat
+          market={market}
           agent={agent}
           variant="character"
           motion={active.motion}

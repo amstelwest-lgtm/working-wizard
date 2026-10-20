@@ -323,7 +323,7 @@ function parsePeriod(text: string): {
     const year = Number(asOf[3]);
     if (month != null && day >= 1 && day <= 31) {
       return {
-        label: `As of ${day} ${MONTH_SHORT[month]} ${year}`,
+        label: null,
         start: null,
         end: iso(year, month, day),
         months: null,
@@ -337,7 +337,7 @@ function parsePeriod(text: string): {
     const year = Number(dmy[3]);
     if (month != null && day >= 1 && day <= 31) {
       return {
-        label: `As of ${day} ${MONTH_SHORT[month]} ${year}`,
+        label: null,
         start: null,
         end: iso(year, month, day),
         months: null,

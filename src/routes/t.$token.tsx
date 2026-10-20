@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { stripMilonProjection } from "@/lib/milon-projection";
 import { formatCalendarDay, formatDate } from "@/lib/market/format";
-import { ZA_MARKET } from "@/lib/market/resolve";
+import { marketForClient } from "@/lib/market";
 
 /**
  * Public tokenised task page — /t/:token
@@ -32,6 +32,7 @@ type Payload = {
   plan: { outcome_goal: string; period_label: string } | null;
   assignee_name: string | null;
   business_name: string | null;
+  market?: unknown;
 };
 
 const STATUS_OPTIONS = [
@@ -43,9 +44,9 @@ const STATUS_OPTIONS = [
 
 const GOLD = "#0B5FFF";
 
-function fmtDate(d: string | null) {
+function fmtDate(d: string | null, market: ReturnType<typeof marketForClient>) {
   if (!d) return null;
-  const day = formatCalendarDay(d, ZA_MARKET);
+  const day = formatCalendarDay(d, market);
   return day === "—" ? null : day;
 }
 
@@ -234,9 +235,10 @@ function TaskPage() {
   }
 
   const { item, plan } = data;
+  const taskMarket = marketForClient({ market: data.market });
   const done = status === "done";
   const daysLeft = item.days_remaining;
-  const dueStr = fmtDate(item.due_date);
+  const dueStr = fmtDate(item.due_date, taskMarket);
   // Pace marker: where the task *should* be today.
   const expectedPct = (() => {
     if (!item.due_date) return null;
@@ -410,7 +412,7 @@ function TaskPage() {
       </button>
 
       <p className="mt-4 text-center text-[11px] text-[#8a938c]">
-        Last updated {formatDate(item.updated_at, ZA_MARKET)} ·
+        Last updated {formatDate(item.updated_at, taskMarket)} ·
         This page shows only your task.
       </p>
     </>,

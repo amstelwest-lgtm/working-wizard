@@ -43,10 +43,11 @@ function bankSummaryLines(input: {
   warning: string | null;
   openingNote: string | null;
   linesNote: string | null;
+  market: { locale?: string | null };
 }): string[] {
   const window =
     input.from && input.to
-      ? `Bank Summary ${formatIsoDateUTC(input.from)} – ${formatIsoDateUTC(input.to)}`
+      ? `Bank Summary ${formatIsoDateUTC(input.from, input.market)} – ${formatIsoDateUTC(input.to, input.market)}`
       : null;
   const accounts =
     input.count == null
@@ -67,7 +68,8 @@ export function XeroConnectCard({
   financials,
   market,
 }: Props) {
-  const { dateTime } = useMarketFormat();
+  const { dateTime, market: contextMarket } = useMarketFormat();
+  const dateMarket = market ?? contextMarket;
   const fetchStatus = useServerFn(getXeroStatus);
   const fetchAuthUrl = useServerFn(getXeroAuthUrl);
   const doSync = useServerFn(triggerXeroSync);
@@ -200,6 +202,7 @@ export function XeroConnectCard({
       warning: lastSync?.bankWarning ?? status.bankWarning,
       openingNote: lastSync?.openingCashNote ?? status.openingCashNote,
       linesNote: lastSync?.forecastLinesNote ?? status.forecastLinesNote,
+      market: dateMarket,
     });
     const linkCopy = describeLedgerLink(
       {
@@ -272,7 +275,7 @@ export function XeroConnectCard({
               ) : null}
               {lastSync?.bsAsOf || status.bsAsOf ? (
                 <>
-                  {`Balance sheet as of ${formatIsoDateUTC(lastSync?.bsAsOf ?? status.bsAsOf)}`}
+                  {`Balance sheet as of ${formatIsoDateUTC(lastSync?.bsAsOf ?? status.bsAsOf, dateMarket)}`}
                   <br />
                 </>
               ) : null}
@@ -362,7 +365,7 @@ export function XeroConnectCard({
               { label: "Cash", value: fmtExact(lastSync?.cash ?? status.cash) },
               {
                 label: "Balance sheet",
-                value: formatIsoDateUTC(lastSync?.bsAsOf ?? status.bsAsOf) || "—",
+                value: formatIsoDateUTC(lastSync?.bsAsOf ?? status.bsAsOf, dateMarket) || "—",
               },
               {
                 label: "Bank accounts",

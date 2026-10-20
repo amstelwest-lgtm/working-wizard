@@ -1,8 +1,8 @@
 import { useAnalytics } from "@/contexts/analytics";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
-import { formatClock } from "@/lib/market/format";
-import { ZA_MARKET } from "@/lib/market/resolve";
+import { formatEventTime } from "@/lib/market/format";
+import { marketForFirm } from "@/lib/market";
 
 function countEvents(events: ReturnType<typeof useAnalytics>["events"], name: string) {
   return events.filter((e) => e.event === name).length;
@@ -140,7 +140,7 @@ export function AdminDashboard() {
               .map((e) => (
                 <div key={e.id} className="flex gap-3 py-1.5 text-[11px]">
                   <span className="w-16 shrink-0 text-slate-500">
-                    {formatClock(e.timestamp, ZA_MARKET) ?? ""}
+                    {formatEventTime(e.timestamp, marketForFirm(null)) ?? ""}
                   </span>
                   <span className="flex-1 capitalize text-white">
                     {e.event.replace(/_/g, " ")}

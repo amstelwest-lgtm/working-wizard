@@ -103,6 +103,8 @@ import {
   formatDate,
   formatMoney,
   isDraftComplete,
+  marketForClient,
+  marketForFirm,
   parseMarketSelection,
   resolveMarket,
   t,
@@ -1871,7 +1873,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const portfolioBook = useFirmPortfolioRows(firmId, clientRows.length);
   const portfolioRows = portfolioBook.rows;
   const portfolioLoaded = portfolioBook.loaded;
-  const asOf = dataAsOfLabel(new Date(), resolveMarket(parseMarketSelection(firmMarket)));
+  const asOf = dataAsOfLabel(new Date(), marketForFirm({ market: firmMarket }));
 
   const attentionItems = useMemo(
     () =>
@@ -2462,7 +2464,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 {queryRows.map((row) => {
                   const client = clientRows.find((c) => c.id === row.clientId);
                   const when = row.createdAt
-                    ? formatDate(row.createdAt, resolveMarket(parseMarketSelection(firmMarket)))
+                    ? formatDate(row.createdAt, marketForClient(client))
                     : "";
                   return (
                     <button

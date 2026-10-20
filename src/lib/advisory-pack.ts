@@ -15,7 +15,8 @@
  * Vocabulary mirrors supabase/migrations/20260918160000_advisory_packs.sql
  * plus 20261007120000_advisory_pack_stale_signoff.sql (test-guarded).
  */
-import { calendarDayFromIso } from "./market/date-presets.ts";
+import { calendarDayFromIso, dateOrder } from "./market/date-presets.ts";
+import { marketForClient } from "./market/scope.ts";
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "./advisory-narrative.ts";
 import { ratiosStatementFigures } from "./deliverable-input-config.ts";
 import type { Json } from "../integrations/supabase/types.ts";
@@ -411,9 +412,9 @@ function isImprovement(name: string, delta: number): boolean {
   return HIGHER_IS_BETTER.has(name) ? delta > 0 : delta < 0;
 }
 
-function fmtDate(iso: string | null): string {
+function fmtDate(iso: string | null, market: { locale?: string | null }): string {
   if (!iso) return "an unknown date";
-  return calendarDayFromIso(iso, "za") ?? iso;
+  return calendarDayFromIso(iso, dateOrder(market.locale)) ?? iso;
 }
 
 export const ADVISORY_PACK_STALE_NOTE =
@@ -652,6 +653,8 @@ export type PackInputs = {
   outcomes?: OutcomeStory[];
   now: string;
   currency?: string;
+  /** Client market. Missing is South Africa, via coerce, and never throws. */
+  market?: { locale?: string | null } | null;
   /**
    * Statement facts the Data and Collections surfaces already treat as missing.
    * Aged debtors are named when receivables exist and no ageing report is on file.
@@ -1122,6 +1125,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
 
   const disclosureBody = `Prepared by MILŌN from statement-level figures as at ${fmtDate(
     input.figuresAsOf,
+    input.market ?? marketForClient(null),
   )}. ${STATEMENT_DEPTH_DISCLOSURE} This is analysis and a set of suggestions for you and your adviser to weigh, not regulated financial, tax or legal advice.${
     input.hasFirm
       ? ` Accountant review status is shown on the pack; a signed-off pack names the reviewer and the time of sign-off.`

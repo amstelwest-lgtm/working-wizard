@@ -35,6 +35,7 @@ import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard, type ApprovedDraftTarget } from "@/components/owner-draft-card";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
+import { marketForClient } from "@/lib/market";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import "./milon-team-desk.css";
 
@@ -164,7 +165,12 @@ export function MilonTeamDesk({
 
   function checkedLine(item: TeamBriefingItem): string | null {
     const stamp = checkedStamp(latest[item.agent], feed.agents[item.agent]?.lastRunAt ?? null);
-    return figuresCheckedLine(item.source.asOf, stamp ?? item.source.asOf, clock, live?.market);
+    return figuresCheckedLine(
+      item.source.asOf,
+      stamp ?? item.source.asOf,
+      clock,
+      live?.market ?? marketForClient(null),
+    );
   }
   const waiting = feed.loading && !feed.error && emptyFeed && presentation !== "agent";
   const quietError = Boolean(feed.error) && emptyFeed;
@@ -297,8 +303,13 @@ export function MilonTeamDesk({
                       market: live?.market,
                     });
                     const draft = draftFindingLabel(row);
-                    const checked = figuresCheckedLine(findingPeriod(row), row.created_at, clock, live?.market);
-                    const when = formatAsOf(row.created_at, clock, live?.market);
+                    const checked = figuresCheckedLine(
+                      findingPeriod(row),
+                      row.created_at,
+                      clock,
+                      live?.market ?? marketForClient(null),
+                    );
+                    const when = formatAsOf(row.created_at, clock, live?.market ?? marketForClient(null));
                     const meta = (
                       <div className="milon-desk-meta">
                         {checked ? (

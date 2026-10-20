@@ -355,6 +355,7 @@ function withComplianceFooter(body: string, footer: string): string {
 
 function sastDayBounds(now = new Date()): { startIso: string; endIso: string; label: string } {
   // Cap is a calendar day in South Africa, not UTC midnight.
+  // date-ok: en-CA day bounds for the send cap, no month name
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Johannesburg",
     year: "numeric",

@@ -27,11 +27,13 @@ function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
+const ZA = { locale: "en-ZA" };
+
 function flatten(text: string) {
-  return ownerReplyPlainText(formatOwnerReply(text));
+  return ownerReplyPlainText(formatOwnerReply(text, ZA));
 }
 
-const blob = formatOwnerReply(OWNER_REPLY_BLOB);
+const blob = formatOwnerReply(OWNER_REPLY_BLOB, ZA);
 const blobText = ownerReplyPlainText(blob);
 assert(runsText(blob.headline).startsWith("Overall, healthy:"), `blob headline (${runsText(blob.headline)})`);
 assert(blob.headline.some((run) => run.bold && run.text === "80"), "80 is bold");
@@ -46,7 +48,7 @@ assert(!blobText.includes("2026-09-08"), "the ISO date is not left in the blob")
 assert(!blobText.includes("**"), "bold markers are not shown raw");
 assert(!blobText.includes(" - "), "inline bullets are not left in the paragraph");
 
-const bold = formatOwnerReply(OWNER_REPLY_STRUCTURED_BOLD);
+const bold = formatOwnerReply(OWNER_REPLY_STRUCTURED_BOLD, ZA);
 assert(runsText(bold.headline) === "Overall, healthy: 80 for Sep 2026.", `bold headline (${runsText(bold.headline)})`);
 assert(bold.headline.some((run) => run.bold && run.text === "80"), "structured score is bold");
 assert(bold.stats.length === 5, `five key figures (${bold.stats.length})`);
@@ -57,14 +59,14 @@ assert(runsText(bold.actions[1]).includes("8 Sep 2026"), "ISO date in a numbered
 assert(!ownerReplyPlainText(bold).includes("2026-09-08"), "structured ISO date is gone");
 assert(!ownerReplyPlainText(bold).includes("**"), "the bold heading is not raw markdown");
 
-const plain = formatOwnerReply(OWNER_REPLY_STRUCTURED_PLAIN);
+const plain = formatOwnerReply(OWNER_REPLY_STRUCTURED_PLAIN, ZA);
 assert(plain.stats.length === 3, "plain next-actions heading still yields the stat row");
 assert(plain.actions.length === 2, "plain Next actions is the same list");
 assert(ownerReplyPlainText(plain).includes("8 Sep 2026"), "a friendly date is kept");
 assert((ownerReplyPlainText(plain).match(/8 Sep 2026/g) ?? []).length === 1, "a friendly date is not rewritten twice");
 assert(!ownerReplyPlainText(plain).includes("2026-09-08"), "the plain fixture has no ISO date");
 
-const capped = formatOwnerReply(`${OWNER_REPLY_STRUCTURED_BOLD}\n4. Ignore this extra action.`);
+const capped = formatOwnerReply(`${OWNER_REPLY_STRUCTURED_BOLD}\n4. Ignore this extra action.`, ZA);
 assert(capped.actions.length === 3, "next actions stop at three");
 assert(!ownerReplyPlainText(capped).includes("Ignore this extra"), "a fourth action is not shown");
 
@@ -86,7 +88,7 @@ assert(!/javascript:/i.test(evilText), "javascript urls are dropped");
 assert(evilText.includes("Click"), "link text stays as text");
 assert(evilText.includes("Fine."), "the headline stays");
 
-const free = formatOwnerReply("Hello **there**. This is a second sentence.");
+const free = formatOwnerReply("Hello **there**. This is a second sentence.", ZA);
 assert(runsText(free.headline).startsWith("Hello "), "free text still has a headline");
 assert(free.headline.some((run) => run.bold && run.text === "there"), "free text keeps bold");
 assert(free.stats.length === 0, "free text does not invent a stat row");

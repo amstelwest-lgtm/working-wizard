@@ -2,8 +2,7 @@
  * Assignment labels for handing an action to one of the three agents.
  * Nothing here talks to the database or starts a run.
  */
-import { formatClock } from "./market/format.ts";
-import { ZA_MARKET } from "./market/resolve.ts";
+import { formatEventTime, type DateMarket } from "./market/format.ts";
 import { agentShortName } from "./milon-team.ts";
 import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
 import { AGENT_KEYS, type AgentKey } from "./milon-team-feed.ts";
@@ -36,15 +35,20 @@ export function handoffButtonLabel(agent: AgentKey, assigned: boolean): string {
   return `Hand to ${AGENT_DISPLAY_NAME[agent]}`;
 }
 
-type HandoffMarket = { locale?: string | null; timezone?: string };
+type HandoffMarket = DateMarket;
 
-/** Clock time for a finish line. ZA is 24-hour. An unreadable stamp stays off the row. */
+/**
+ * When a hand-off or finish happened. Same day in the market zone is
+ * "07:37 SAST" / "1:37 AM ET". Any other day includes the date.
+ * An unreadable stamp stays off the row.
+ */
 export function handoffClock(
   at: string | null | undefined,
-  market: HandoffMarket = ZA_MARKET,
+  market: HandoffMarket,
+  now: Date | string | number = new Date(),
 ): string | null {
   if (!at) return null;
-  return formatClock(at, market);
+  return formatEventTime(at, market, now);
 }
 
 /** A queued or running hand-off that has not moved for this long offers Retry. */
@@ -108,7 +112,8 @@ export function formatAssignmentNote(
     actorLabel?: string | null;
     actorType?: string | null;
   },
-  market: HandoffMarket = ZA_MARKET,
+  market: HandoffMarket,
+  now: Date | string | number = new Date(),
 ): string {
   const stripped = row.note.trim().replace(/\.+$/u, "");
   const friendly = costStopLine(row.note);
@@ -117,7 +122,7 @@ export function formatAssignmentNote(
   const actorNamesBot = agentKeyFromAssignee(row.actorLabel) != null;
   const hideAuthor = handed && (actorNamesBot || row.actorType === "system");
   const actor = hideAuthor ? "" : (row.actorLabel?.trim() ?? "");
-  const time = handoffClock(row.at, market);
+  const time = handoffClock(row.at, market, now);
   const tail = [actor ? `by ${actor}` : "", time ?? ""].filter(Boolean).join(" · ");
   return tail ? `${body} · ${tail}` : body;
 }
@@ -130,7 +135,12 @@ export function formatAssignmentNote(
 export function handoffProgressCaption(
   agent: AgentKey,
   status: string | null | undefined,
-  detail?: { at?: string | null; result?: string | null; market?: HandoffMarket },
+  detail?: {
+    at?: string | null;
+    result?: string | null;
+    market?: HandoffMarket;
+    now?: Date | string | number;
+  },
 ): string | null {
   const short = agentShortName(agent);
   if (status === "queued") return `${short} is queued`;
@@ -138,7 +148,7 @@ export function handoffProgressCaption(
   if (status === "succeeded" || status === "partial") {
     const result = detail?.result?.replace(/\s+/g, " ").trim();
     if (handoffCostStopped(result)) return handoffCouldNotFinish(agent);
-    const time = handoffClock(detail?.at, detail?.market);
+    const time = detail?.market ? handoffClock(detail.at, detail.market, detail.now ?? new Date()) : null;
     const head = time ? `${short} finished · ${time}` : `${short} finished`;
     return result ? `${head} — ${result}` : head;
   }
@@ -155,6 +165,7 @@ export function botPickupCaption(input: {
   result?: string | null;
   resultAt?: string | null;
   market?: HandoffMarket;
+  now?: Date | string | number;
 }): string | null {
   const assigned = agentKeyFromAssignee(input.assignee);
   if (!input.run || !assigned || assigned !== input.run.agent) return null;
@@ -162,5 +173,6 @@ export function botPickupCaption(input: {
     at: input.resultAt ?? input.run.at,
     result: input.result,
     market: input.market,
+    now: input.now,
   });
 }

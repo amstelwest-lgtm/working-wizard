@@ -59,10 +59,11 @@ export {
   formatMonthRange,
   formatMonthYear,
   formatClock,
+  formatEventTime,
   formatNumber,
   formatPercentRate,
 } from "./format";
-export type { MoneyMarket } from "./format";
+export type { DateMarket, MoneyMarket } from "./format";
 export {
   assertMarketSelection,
   clientMarketDraftFromFirm,
@@ -75,6 +76,7 @@ export {
   parseMarketSelection,
 } from "./parse";
 export { resolveMarket, ZA_MARKET } from "./resolve";
+export { marketForClient, marketForFirm } from "./scope";
 export {
   readVisitorDraft,
   readVisitorMarket,

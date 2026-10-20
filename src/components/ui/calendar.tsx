@@ -155,7 +155,7 @@ function CalendarDayButton({
       ref={ref}
       variant="ghost"
       size="icon"
-      data-day={day.date.toLocaleDateString()}
+      data-day={day.date.toLocaleDateString()} // date-ok: machine data-day key, not visible copy
       data-selected-single={
         modifiers.selected &&
         !modifiers.range_start &&

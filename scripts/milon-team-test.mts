@@ -157,9 +157,9 @@ for (const file of ["src/lib/ask-ai.js", "public/ask-ai.css", "src/hooks/use-ask
   assert(!readFileSync(file, "utf8").includes("teamDeskOwnsMount"), `${file} does not own the desk mount`);
   assert(!readFileSync(file, "utf8").includes("data-team-desk"), `${file} does not special-case the desk`);
 }
-assert(formatAsOf("2026-10-08", NOW) === "8 Oct 2026", "an as-of date is the calendar day, year included");
-assert(formatAsOf("2025-03-01", NOW) === "1 Mar 2025", "a date in another year keeps the year");
-assert(formatAsOf(null, NOW) === null, "a missing as-of date stays hidden");
+assert(formatAsOf("2026-10-08", NOW, ZA_MARKET) === "8 Oct 2026", "an as-of date is the calendar day, year included");
+assert(formatAsOf("2025-03-01", NOW, ZA_MARKET) === "1 Mar 2025", "a date in another year keeps the year");
+assert(formatAsOf(null, NOW, ZA_MARKET) === null, "a missing as-of date stays hidden");
 
 const idle: Record<AgentKey, TeamAgentStatus> = {
   financial_manager: { agent: "financial_manager", lastRunAt: null, lastRunKind: null },
@@ -639,7 +639,7 @@ assert(nullRecipient.includes("Draft, needs your OK"), "a person draft needs the
 assert(nullRecipient.includes('data-run-state="found"'), "a succeeded run with a draft is found");
 assert(!nullRecipient.includes("Do not show this null recipient"), "a draft with no to_agent is not a hand-off");
 assert(
-  figuresCheckedLine("Sep 2026", "2026-10-09T08:00:00.000Z", NOW) === "Sep figures · checked 9 Oct 2026",
+  figuresCheckedLine("Sep 2026", "2026-10-09T08:00:00.000Z", NOW, ZA_MARKET) === "Sep figures · checked 9 Oct 2026",
   "checked line is the period and the run date",
 );
 assert(

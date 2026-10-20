@@ -158,8 +158,8 @@ function monthShort(value: string | null): string | null {
 export function figuresCheckedLine(
   period: string | null,
   checkedAt: string | null,
-  now: Date = new Date(),
-  market: { locale?: string | null } = { locale: "en-ZA" },
+  now: Date,
+  market: { locale?: string | null },
 ): string | null {
   const month = monthShort(period);
   const checked = formatAsOf(checkedAt, now, market);

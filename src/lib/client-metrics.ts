@@ -624,6 +624,7 @@ export function calendarDaysBetween(fromIso: string, toIso: string): number | nu
 function calendarDate(now: Date, timeZone?: string | null): Date {
   if (!timeZone) return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   try {
+    // date-ok: en-CA year-month-day key, no month name
     const formatted = new Intl.DateTimeFormat("en-CA", {
       timeZone,
       year: "numeric",

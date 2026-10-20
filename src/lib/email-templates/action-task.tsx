@@ -3,12 +3,17 @@ import {
 } from '@react-email/components'
 import { stripMilonProjection } from '@/lib/milon-projection'
 import type { TemplateEntry } from './registry'
-import { formatCalendarDay } from '@/lib/market/format'
+import { formatCalendarDay, type DateMarket } from '@/lib/market/format'
+import { marketForClient } from '@/lib/market/scope'
 
-function shownDue(dueDate?: string): string | null {
+function shownDue(dueDate: string | undefined, market: DateMarket): string | null {
   if (!dueDate) return null
-  const formatted = formatCalendarDay(dueDate)
+  const formatted = formatCalendarDay(dueDate, market)
   return formatted === '—' ? dueDate : formatted
+}
+
+function dateMarketOf(market: DateMarket | null | undefined): DateMarket {
+  return market ?? marketForClient(null)
 }
 
 interface ActionTaskProps {
@@ -23,6 +28,7 @@ interface ActionTaskProps {
   assignedBy?: string
   clientName?: string
   emailType?: 'assignment' | 'nudge' | 'overdue' | 'done'
+  market?: DateMarket | null
 }
 
 /**
@@ -42,7 +48,9 @@ const ActionTaskEmail = ({
   assignedBy,
   clientName,
   emailType = 'assignment',
+  market,
 }: ActionTaskProps) => {
+  const due = shownDue(dueDate, dateMarketOf(market))
   const title = stripMilonProjection(taskTitle) || 'Your task'
   const whyText = stripMilonProjection(outcomeWhy)
   const intro =
@@ -54,7 +62,7 @@ const ActionTaskEmail = ({
   return (
     <Html lang="en" dir="ltr">
       <Head />
-      <Preview>{title ? `${title}${shownDue(dueDate) ? ` — due ${shownDue(dueDate)}` : ''}` : 'Your task'}</Preview>
+      <Preview>{title ? `${title}${due ? ` — due ${due}` : ''}` : 'Your task'}</Preview>
       <Body style={main}>
         <Container style={container}>
           <Heading style={h1}>{employeeName ? `Hi ${employeeName},` : 'Hello,'}</Heading>
@@ -62,7 +70,7 @@ const ActionTaskEmail = ({
 
           <Section style={card}>
             <Text style={taskTitleStyle}>{title.toUpperCase()}</Text>
-            {shownDue(dueDate) ? <Text style={meta}>Due {shownDue(dueDate)}</Text> : null}
+            {due ? <Text style={meta}>Due {due}</Text> : null}
             {whyText ? (
               <Text style={why}>
                 <strong>Why it matters:</strong> {whyText}
@@ -107,10 +115,12 @@ const ActionTaskEmail = ({
 
 export const template = {
   component: ActionTaskEmail,
-  subject: (data: Record<string, any>) =>
-    data?.taskTitle
-      ? `${data.taskTitle}${shownDue(data.dueDate) ? ` — due ${shownDue(data.dueDate)}` : ''}`
-      : 'Your task in the action plan',
+  subject: (data: Record<string, any>) => {
+    const due = shownDue(data?.dueDate, dateMarketOf(data?.market))
+    return data?.taskTitle
+      ? `${data.taskTitle}${due ? ` — due ${due}` : ''}`
+      : 'Your task in the action plan'
+  },
   displayName: 'Action plan task',
   previewData: {
     employeeName: 'Lindiwe',

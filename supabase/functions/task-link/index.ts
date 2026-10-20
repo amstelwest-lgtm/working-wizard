@@ -241,10 +241,12 @@ Deno.serve(async (req) => {
     ]);
 
     let ownerFirstName = "your plan owner";
+    let clientMarket: unknown = null;
     if (plan?.client_id) {
       const { data: client } = await db
-        .from("clients").select("name").eq("id", plan.client_id).single();
+        .from("clients").select("name, market").eq("id", plan.client_id).single();
       if (client?.name) ownerFirstName = client.name;
+      clientMarket = client?.market ?? null;
     }
 
     return json({
@@ -253,6 +255,7 @@ Deno.serve(async (req) => {
       plan: plan ? { outcome_goal: plan.outcome_goal, period_label: plan.period_label } : null,
       assignee_name: emp?.name ?? null,
       business_name: ownerFirstName,
+      market: clientMarket,
     });
   }
 

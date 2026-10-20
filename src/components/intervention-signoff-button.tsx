@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { formatDate as formatSignoffDay } from "@/lib/market/format";
+import { useMarket } from "@/contexts/market";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import {
   signoffInterventionStep,
@@ -30,8 +31,8 @@ interface Props {
   onChange: (next: InterventionSignoff | null) => void;
 }
 
-function formatDate(iso: string): string {
-  const day = formatSignoffDay(iso, { locale: "en-ZA", timezone: "Africa/Johannesburg" });
+function signoffDay(iso: string, market: { locale?: string | null; timezone?: string }): string {
+  const day = formatSignoffDay(iso, market);
   return day === "—" ? iso : day;
 }
 
@@ -43,6 +44,7 @@ export function SignoffBadgeReadonly({
   clientName?: string;
 }) {
   const { profile } = useAccountantProfile();
+  const { market } = useMarket();
   const accent = profile.accentColor || "#0f3460";
   return (
     <div className="mt-3">
@@ -62,7 +64,7 @@ export function SignoffBadgeReadonly({
             </span>
           </div>
           <span className="text-[10px] text-slate-500 flex-shrink-0">
-            {formatDate(signoff.signed_off_at)}
+            {signoffDay(signoff.signed_off_at, market)}
           </span>
         </div>
         {signoff.firm_name && (
@@ -90,6 +92,7 @@ export function InterventionSignoffButton({
   onChange,
 }: Props) {
   const { profile } = useAccountantProfile();
+  const { market } = useMarket();
   const doSignoff = useServerFn(signoffInterventionStep);
   const doRemove = useServerFn(removeInterventionSignoff);
 
@@ -165,7 +168,7 @@ export function InterventionSignoffButton({
               </span>
             </div>
             <span className="text-[10px] text-slate-500 flex-shrink-0">
-              {formatDate(signoff.signed_off_at)}
+              {signoffDay(signoff.signed_off_at, market)}
             </span>
           </div>
           {signoff.firm_name && (

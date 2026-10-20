@@ -3,7 +3,7 @@
  * Approve is the only decision word.
  */
 import { refusesSignOffWording } from "@/lib/agent-draft-decision";
-import { formatCalendarDay, formatDateTime, ZA_MARKET } from "@/lib/market";
+import { formatCalendarDay, formatDateTime, marketForClient } from "@/lib/market";
 import {
   DEFAULT_FINAL_UNLOCK_AFTER_CLEAN_DRAFTS,
   SOURCE_DOCS_MAX_BYTES,
@@ -197,18 +197,15 @@ export function holdingLabel(draftHolding: string | null | undefined): "Held in 
   return draftHolding === "held_in_milon" ? "Held in Milōn" : null;
 }
 
-export function formatIssuedOn(
-  isoDate: string,
-  market: { locale?: string | null } = ZA_MARKET,
-): string {
+export function formatIssuedOn(isoDate: string, market: { locale?: string | null }): string {
   const label = formatCalendarDay(isoDate, market);
   return label === "—" ? isoDate : label;
 }
 
 export function formatDecisionWhen(
   iso: string,
-  timeZone = "UTC",
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+  timeZone: string,
+  market: { locale?: string | null; timezone?: string },
 ): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -364,7 +361,7 @@ function approverName(
 
 function proposalRows(
   proposal: SourceProposalRow,
-  market: { locale?: string | null } = ZA_MARKET,
+  market: { locale?: string | null },
 ): { label: string; value: string }[] {
   const payload = payloadOf(proposal.payload);
   const contact = payload.contact ?? {};
@@ -424,7 +421,7 @@ export function buildSourceDocumentsModel(input: {
 }): SourceDocumentsModel {
   const canApprove = mayApproveLedgerPost(input.viewer);
   const names = input.names ?? {};
-  const market = input.market ?? ZA_MARKET;
+  const market = input.market ?? marketForClient(null);
   const timeZone = input.market?.timezone ?? input.timeZone ?? "UTC";
   const connected = input.connectedLedgers ?? [];
   const options: LedgerChoice[] = connected.length ? connected : ["xero", "qbo", "sage"];

@@ -517,6 +517,7 @@ export async function gatherPackInputs(
     ),
     now,
     currency: overview.market.currency,
+    market: overview.market,
     statementGaps: {
       receivables: amount(financials?.receivables),
       payables: amount(financials?.payables),

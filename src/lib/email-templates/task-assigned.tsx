@@ -2,11 +2,12 @@ import {
   Body, Container, Head, Heading, Html, Preview, Section, Text,
 } from '@react-email/components'
 import type { TemplateEntry } from './registry'
-import { formatCalendarDay } from '@/lib/market/format'
+import { formatCalendarDay, type DateMarket } from '@/lib/market/format'
+import { marketForClient } from '@/lib/market/scope'
 
-function shownDue(dueDate?: string): string | null {
+function shownDue(dueDate: string | undefined, market: DateMarket): string | null {
   if (!dueDate) return null
-  const formatted = formatCalendarDay(dueDate)
+  const formatted = formatCalendarDay(dueDate, market)
   return formatted === '—' ? dueDate : formatted
 }
 
@@ -19,6 +20,7 @@ interface TaskAssignedProps {
   dueDate?: string
   assignedBy?: string
   clientName?: string
+  market?: DateMarket | null
 }
 
 const TaskAssignedEmail = ({
@@ -28,7 +30,10 @@ const TaskAssignedEmail = ({
   dueDate,
   assignedBy,
   clientName,
-}: TaskAssignedProps) => (
+  market,
+}: TaskAssignedProps) => {
+  const due = shownDue(dueDate, market ?? marketForClient(null))
+  return (
   <Html lang="en" dir="ltr">
     <Head />
     <Preview>{taskTitle ? `New task: ${taskTitle}` : 'You have a new task'}</Preview>
@@ -47,9 +52,9 @@ const TaskAssignedEmail = ({
           {taskDescription ? (
             <Text style={taskDesc}>{taskDescription}</Text>
           ) : null}
-          {dueDate ? (
+          {due ? (
             <Text style={meta}>
-              <strong>Due:</strong> {shownDue(dueDate)}
+              <strong>Due:</strong> {due}
             </Text>
           ) : null}
         </Section>
@@ -61,8 +66,9 @@ const TaskAssignedEmail = ({
         <Text style={footer}>— The {SITE_NAME} team</Text>
       </Container>
     </Body>
-  </Html>
-)
+    </Html>
+  )
+}
 
 export const template = {
   component: TaskAssignedEmail,

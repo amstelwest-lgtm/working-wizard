@@ -100,8 +100,8 @@ export function formatLastRun(at: string | null, now: Date = new Date()): string
 /** Analyst note date. Same calendar-day preset as the rest of the product, year included. */
 export function formatAsOf(
   asOf: string | null,
-  _now: Date = new Date(),
-  market: { locale?: string | null } = { locale: "en-ZA" },
+  _now: Date,
+  market: { locale?: string | null },
 ): string | null {
   if (!asOf) return null;
   return calendarDayFromIso(asOf, dateOrder(market.locale)) ?? asOf;

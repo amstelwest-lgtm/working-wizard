@@ -66,6 +66,9 @@ assert(
   "a running run is a pickup",
 );
 const finishedAt = "2026-10-19T18:31:22.000Z";
+const handoffNow = new Date(finishedAt);
+const zaMarket = { locale: "en-ZA", timezone: "Africa/Johannesburg" };
+const usMarket = { locale: "en-US", timezone: "America/New_York" };
 assert(
   handoffProgressCaption("financial_manager", "succeeded") === "Financial Manager finished",
   "a finished run stays on the action",
@@ -74,9 +77,28 @@ assert(
   handoffProgressCaption("financial_manager", "succeeded", {
     at: finishedAt,
     result: "Drafts are recorded.",
-  }) === `Financial Manager finished · ${handoffClock(finishedAt)} — Drafts are recorded.`,
-  "a finished run names the time and the result",
+    market: zaMarket,
+    now: handoffNow,
+  }) === "Financial Manager finished · 20:31 SAST — Drafts are recorded.",
+  "a finished run names the time, the zone, and the result",
 );
+assert(
+  handoffProgressCaption("advisor", "succeeded", {
+    at: "2026-10-20T05:37:00.000Z",
+    market: usMarket,
+    now: new Date("2026-10-20T05:37:00.000Z"),
+  }) === "Advisor finished · 1:37 AM ET",
+  "a same-day US finish is the clock and ET",
+);
+assert(
+  handoffProgressCaption("financial_manager", "succeeded", {
+    at: "2026-10-19T05:37:00.000Z",
+    market: zaMarket,
+    now: new Date("2026-10-20T05:37:00.000Z"),
+  }) === "Financial Manager finished · 19 Oct 2026, 07:37 SAST",
+  "an earlier ZA finish includes the date and SAST",
+);
+assert(handoffClock(finishedAt, zaMarket, handoffNow) === "20:31 SAST", "same-day ZA clock keeps the zone");
 assert(
   botPickupCaption({
     assignee: "theo",
@@ -90,32 +112,53 @@ assert(
 );
 const notedAt = "2026-10-19T18:31:00.000Z";
 assert(
-  formatAssignmentNote({ note: "Assigned to theo.", at: notedAt, actorLabel: "amstel.west" }) ===
-    `Assigned to theo · by amstel.west · ${handoffClock(notedAt)}`,
+  formatAssignmentNote({ note: "Assigned to theo.", at: notedAt, actorLabel: "amstel.west" }, zaMarket, handoffNow) ===
+    "Assigned to theo · by amstel.west · 20:31 SAST",
   "a person note names the author and the time",
 );
 assert(
-  formatAssignmentNote({ note: "Handed to Analyst.", at: notedAt, actorLabel: "amstel.west" }) ===
-    `Handed to Analyst · by amstel.west · ${handoffClock(notedAt)}`,
+  formatAssignmentNote({ note: "Handed to Analyst.", at: notedAt, actorLabel: "amstel.west" }, zaMarket, handoffNow) ===
+    "Handed to Analyst · by amstel.west · 20:31 SAST",
   "a hand-off note names the author and the time",
 );
 const analystName = agentDisplayName("analyst");
 assert(
-  formatAssignmentNote({
-    note: `Handed to ${analystName}.`,
-    at: notedAt,
-    actorLabel: analystName,
-    actorType: "system",
-  }) === `Handed to ${analystName} · ${handoffClock(notedAt)}`,
+  formatAssignmentNote(
+    {
+      note: `Handed to ${analystName}.`,
+      at: notedAt,
+      actorLabel: analystName,
+      actorType: "system",
+    },
+    zaMarket,
+    handoffNow,
+  ) === `Handed to ${analystName} · 20:31 SAST`,
   "an old hand-off note does not name the bot as the author",
 );
 assert(
-  formatAssignmentNote({
-    note: `Advisor finished: ${HANDOFF_COST_STOP}`,
-    at: notedAt,
-    actorLabel: agentDisplayName("advisor"),
-    actorType: "system",
-  }) === `${handoffCouldNotFinish("advisor")} · by ${agentDisplayName("advisor")} · ${handoffClock(notedAt)}`,
+  formatAssignmentNote(
+    {
+      note: "Handed to Financial Manager.",
+      at: "2026-10-20T05:37:00.000Z",
+      actorLabel: agentDisplayName("financial_manager"),
+      actorType: "system",
+    },
+    zaMarket,
+    new Date("2026-10-20T05:37:00.000Z"),
+  ) === "Handed to Financial Manager · 07:37 SAST",
+  "a bot hand-off note hides the author and keeps the zone",
+);
+assert(
+  formatAssignmentNote(
+    {
+      note: `Advisor finished: ${HANDOFF_COST_STOP}`,
+      at: notedAt,
+      actorLabel: agentDisplayName("advisor"),
+      actorType: "system",
+    },
+    zaMarket,
+    handoffNow,
+  ) === `${handoffCouldNotFinish("advisor")} · by ${agentDisplayName("advisor")} · 20:31 SAST`,
   "a cost-ceiling finish keeps the agent and hides the raw stop",
 );
 assert(

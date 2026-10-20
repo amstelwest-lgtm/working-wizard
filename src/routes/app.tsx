@@ -45,6 +45,7 @@ import {
   currencySymbol,
   localizeCopy,
   marketToJson,
+  marketForClient,
   parseMarketSelection,
   readVisitorMarket,
   resolveMarket,
@@ -2643,7 +2644,7 @@ function Index() {
     [openProfileDialog, operatingProfile, effectiveClientId],
   );
   const boardMarket = useMemo(
-    () => resolveMarket(coerceMarketSelection(workspaceMarket)),
+    () => marketForClient({ market: workspaceMarket }),
     [workspaceMarket],
   );
   const [marketNeedsGate, setMarketNeedsGate] = useState(false);

@@ -29,7 +29,7 @@ import {
   type VarianceSignal,
   type VarianceTaxonomyKey,
 } from "@/lib/budget.variance";
-import { formatMoney, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatMoney, marketForClient, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { presentBudgetRebuildNote } from "@/lib/budget.bridges";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { periodMonthsOf } from "@/lib/ratios";
@@ -352,7 +352,7 @@ export function budgetReviewLine(input: {
   });
   if (signed && !input.isStale) {
     const when = input.signedOffAt
-      ? formatReviewDateTime(input.signedOffAt, input.market)
+      ? formatReviewDateTime(input.signedOffAt, input.market ?? marketForClient(null))
       : "";
     return {
       text: signoffStatusLine({

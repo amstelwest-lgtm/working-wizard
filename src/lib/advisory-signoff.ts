@@ -26,8 +26,7 @@ import {
 } from "./advisory-pack.ts";
 import { parseOperatingProfile } from "./client-profile.ts";
 import { formatMonthDay, formatReviewDateTime } from "./market/format.ts";
-import { coerceMarketSelection } from "./market/parse.ts";
-import { resolveMarket, ZA_MARKET } from "./market/resolve.ts";
+import { marketForClient } from "./market/scope.ts";
 import type { ResolvedMarket } from "./market/types.ts";
 import { resolvePriorSnapshot } from "./prior-period.ts";
 import { isSamplePracticeSignoff, packDisplayedSignoffLine } from "./review-signoff-stamp.ts";
@@ -165,7 +164,7 @@ export function advisorySignoffLine(
 function monthDay(iso: string, market?: Pick<ResolvedMarket, "locale" | "timezone">): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return iso;
-  const label = formatMonthDay(date, market ?? { locale: "en-US", timezone: "UTC" });
+  const label = formatMonthDay(date, market ?? marketForClient(null));
   return label === "—" ? iso : label;
 }
 
@@ -253,12 +252,7 @@ export async function getAdvisorySignoffState(
       .select("firm_id, financials, cashflow, financials_updated_at, market, operating_profile")
       .eq("id", id),
   );
-  let market = ZA_MARKET;
-  try {
-    market = resolveMarket(coerceMarketSelection(clientRow?.market));
-  } catch {
-    market = ZA_MARKET;
-  }
+  const market = marketForClient(clientRow ? { market: clientRow.market } : null);
   const zone = market.timezone;
   if (!packRow) return emptyState(zone);
 
