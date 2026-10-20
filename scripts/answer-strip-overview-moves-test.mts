@@ -276,7 +276,7 @@ assert.deepEqual(
 assert(route.includes("booksTileLines"), "the books tile uses the chip source");
 assert(route.includes("overviewBudgetTileFigure"), "the budget tile uses the YTD figure");
 assert(
-  route.includes("const budgetMoney = (amount: number) => formatMoneyCompact(amount, clientMarket);"),
+  route.includes("const budgetMoney = (amount: number) => formatMoneyCompact(amount, gateMarket);"),
   "the budget tile uses the cash compact formatter",
 );
 assert(!route.includes("fmtBudgetMoney"), "the overview tile does not spell the full budget amount");
