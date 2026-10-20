@@ -223,10 +223,14 @@ import { periodProfitBridge } from "@/lib/period-profit";
 import { statementKindFromMetadata, type StatementMeta } from "@/lib/statement-parse";
 import { prefsToRemember } from "@/lib/auto-populate";
 import {
+  clearOwnerProfileDefer,
+  deferOwnerProfile,
   hasOwnerFirstUploadHandled,
   isInvitedOwnerWithFigures,
   markOwnerFirstUploadHandled,
   ownerBoardReady,
+  ownerProfileDeferred,
+  ownerProfileResumeVisible,
   ownerWalkthroughReady,
   shouldAutoProposeAfterFirstUpload,
   shouldClearFirstRunAfterFirstUpload,
@@ -2830,7 +2834,7 @@ function Index() {
         ) {
           if (data?.business_type) setBusinessTypeId(data.business_type as string);
           setFirstRunStep("pick-type");
-          setShowOnboarding(true);
+          setShowOnboarding(!ownerProfileDeferred(effectiveClientId));
         } else if (data?.business_type) {
           setBusinessTypeId(data.business_type as string);
         }
@@ -4216,6 +4220,11 @@ function Index() {
                 onConnect={() => setShowFinData(true)}
                 onQuickBooks={() => setShowQboDialog(true)}
                 onXero={() => setShowXeroDialog(true)}
+                profileResume={ownerProfileResumeVisible({
+                  unfinished: firstRunStep === "pick-type",
+                  open: showOnboarding,
+                })}
+                onResumeProfile={() => setShowOnboarding(true)}
                 onProfile={() => openProfileDialog("retake")}
                 settingsOpen={oauthReturn.screen === "settings"}
                 openAccountant={oauthReturn.screen === "accountant"}
@@ -4820,19 +4829,18 @@ function Index() {
             {/* Business profile funnel — required on first run, retakeable thereafter */}
             <Dialog
               open={showOnboarding}
+              modal={false}
               onOpenChange={(open) => {
-                if (!open && firstRunStep === "pick-type") return;
+                if (!open && firstRunStep === "pick-type" && effectiveClientId) {
+                  deferOwnerProfile(effectiveClientId);
+                }
                 setShowOnboarding(open);
               }}
             >
               <DialogContent
-                onInteractOutside={
-                  firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined
-                }
-                onEscapeKeyDown={
-                  firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined
-                }
-                className={`flex h-[min(90vh,calc(100dvh-1rem))] max-h-[min(90vh,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:p-6 ${firstRunStep === "pick-type" ? "[&>button:first-of-type]:hidden" : ""}`}
+                overlayClassName="profile-funnel-overlay"
+                data-profile-funnel=""
+                className="profile-funnel-sheet flex h-[min(80vh,calc(100dvh-6rem))] max-h-[min(80vh,calc(100dvh-6rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:p-6"
               >
                 <DialogHeader className="sr-only">
                   <DialogTitle>Business profile</DialogTitle>
@@ -4851,9 +4859,12 @@ function Index() {
                     operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault
                   }
                   figuresReady={hasRealFinancials}
-                  onCancel={
-                    firstRunStep === "pick-type" ? undefined : () => setShowOnboarding(false)
-                  }
+                  onCancel={() => {
+                    if (firstRunStep === "pick-type" && effectiveClientId) {
+                      deferOwnerProfile(effectiveClientId);
+                    }
+                    setShowOnboarding(false);
+                  }}
                   onComplete={async (profile) => {
                     setBtSaveError(null);
                     const stamped = stampProfileProvenance(profile, "owner", undefined);
@@ -4876,6 +4887,7 @@ function Index() {
                       }
                     }
                     setShowOnboarding(false);
+                    if (effectiveClientId) clearOwnerProfileDefer(effectiveClientId);
                     if (firstRunStep === "pick-type") {
                       // Invited owner whose accountant already loaded figures:
                       // nothing to bring in — land on the scored board.

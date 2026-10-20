@@ -22,7 +22,7 @@ import {
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { PasswordWithShow } from "@/components/show-password";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
-import { accountantInviteLead } from "@/lib/invite-claim";
+import { accountantInviteLead, inviteJoinHidesSignup } from "@/lib/invite-claim";
 import {
   INVITE_LINK_INVALID,
   inviteTokenShapeOk,
@@ -228,6 +228,7 @@ function AccountantJoinPage() {
 
   const sameAccount =
     Boolean(user?.email) && user?.email?.toLowerCase() === email.trim().toLowerCase();
+  const hideSignup = inviteJoinHidesSignup(previewError);
 
   return (
     <OwnerInviteShell businessName={clientName} loading={previewLoading || authLoading}>
@@ -240,10 +241,20 @@ function AccountantJoinPage() {
       <AccountantInviteIntro inviterName={inviterName} clientName={clientName} />
 
       {previewError ? (
-        <div className="mt-5 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+        <div
+          className="mt-5 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200"
+          data-invite-block=""
+        >
           {sanitizeInviteError(previewError)}
         </div>
-      ) : (
+      ) : null}
+      {hideSignup && !signInMode ? (
+        <div className="mt-6">
+          <OwnerInvitePrimaryButton type="button" data-invite-sign-in="" onClick={() => setSignInMode(true)}>
+            Sign in
+          </OwnerInvitePrimaryButton>
+        </div>
+      ) : previewError && !signInMode ? null : (
         <OwnerInviteCard className="mt-6">
           {user?.email ? (
             <OwnerInviteNote>
@@ -384,7 +395,7 @@ function AccountantJoinPage() {
             </>
           )}
 
-          {!user ? (
+          {!user && !hideSignup ? (
             <p className="mt-5 text-center text-xs text-[#8a938c]">
               {signInMode ? "Need a new practice login? " : "Already have a Milōn account? "}
               <button

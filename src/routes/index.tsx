@@ -280,6 +280,7 @@ function LandingPage() {
   const [inviteIsLegacyUuid, setInviteIsLegacyUuid] = useState(false);
   const [inviteBusiness, setInviteBusiness] = useState<string | null>(null);
   const [inviteFirmName, setInviteFirmName] = useState<string | null>(null);
+  const [inviteeName, setInviteeName] = useState<string | null>(null);
   const [inviteNeedsCode, setInviteNeedsCode] = useState(false);
   const [invitePreviewLoading, setInvitePreviewLoading] = useState(false);
   const [invitePreviewError, setInvitePreviewError] = useState<string | null>(null);
@@ -326,6 +327,7 @@ function LandingPage() {
     // for a code; only the server preview can turn the legacy code path on.
     setInviteNeedsCode(false);
     setInviteFirmName(null);
+    setInviteeName(null);
     void import("@/lib/user-roles").then(({ forcePortal }) => forcePortal("owner"));
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (uuidRe.test(inv.trim())) {
@@ -335,6 +337,7 @@ function LandingPage() {
       .then((preview) => {
         setInviteBusiness(preview.clientName);
         setInviteFirmName(preview.firmName);
+        setInviteeName(preview.inviteeName);
         setInviteNeedsCode(preview.requiresClientCode);
       })
       .catch((err: unknown) => {
@@ -1662,6 +1665,7 @@ function LandingPage() {
               inviteToken={activeInviteToken!}
               businessName={inviteBusiness}
               firmName={inviteFirmName}
+              inviteeName={inviteeName}
               inviteNeedsCode={inviteNeedsCode}
               inviteIsLegacyUuid={inviteIsLegacyUuid}
               regClientCode={regClientCode}
