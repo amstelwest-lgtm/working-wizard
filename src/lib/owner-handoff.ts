@@ -122,7 +122,8 @@ export function handoffAssigneeName(note: string | null | undefined): string | n
 }
 
 export function handoffRequestNote(displayName: string): string {
-  return `Handed to ${displayName}.`;
+  const name = displayName.replace(/\s+/g, " ").trim();
+  return `Handed to ${name}.`;
 }
 
 /** A person on the Hand to menu. The assignee is in the text. The author is the signed-in actor. */

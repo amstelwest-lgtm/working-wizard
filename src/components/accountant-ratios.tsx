@@ -23,7 +23,7 @@ import { NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 import { computeRatios, formatQuotedDays, healthBandLabel, scoreTier } from "@/lib/ratios";
 import { liveHealthFromBooks } from "@/lib/health-score";
 import { statementKindFromMetadata } from "@/lib/statement-parse";
-import { planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, liveStatementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { PDFUploadZone } from "@/components/pdf-upload-zone";
 import { ExtractionReviewModal } from "@/components/extraction-review-modal";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
@@ -217,11 +217,13 @@ export function AccountantRatiosPanel({
       statement?.kind === "mixed"
         ? statement.kind
         : "unknown";
-    return planStatementImport({
+    return confirmUploadedStatement({
       existing: v as unknown as Record<string, unknown>,
       incoming: extracted,
       kind,
-      span: statementSpan(statement?.periodStart, statement?.periodEnd, statement?.periodMonths ?? null),
+      periodStart: statement?.periodStart,
+      periodEnd: statement?.periodEnd,
+      periodMonths: statement?.periodMonths ?? null,
       choice: choice ?? null,
       pillarsBefore: liveHealthFromBooks({
         financials: v as unknown as Record<string, unknown>,
@@ -316,6 +318,7 @@ export function AccountantRatiosPanel({
     inputs: MappedInputs,
     _prefs?: unknown,
     choice?: PeriodChoice | null,
+    period?: { periodStart: string; periodEnd: string; periodMonths: number } | null,
   ) => {
     const meta = pendingExtraction?.document_metadata;
     const incoming: Record<string, string> = {};
@@ -326,9 +329,9 @@ export function AccountantRatiosPanel({
       incoming,
       {
         kind: statementKindFromMetadata(meta),
-        periodStart: meta?.period_start_date ?? null,
-        periodEnd: meta?.period_end_date ?? null,
-        periodMonths: meta?.period_months ?? null,
+        periodStart: period?.periodStart ?? meta?.period_start_date ?? null,
+        periodEnd: period?.periodEnd ?? meta?.period_end_date ?? null,
+        periodMonths: period?.periodMonths ?? meta?.period_months ?? null,
       },
       choice ?? null,
     );
@@ -1178,6 +1181,7 @@ Your Milōn accountant`;
         <ExtractionReviewModal
           result={pendingExtraction}
           open={reviewOpen}
+          booksHaveSpan={Boolean(liveStatementSpan(v))}
           onClose={() => {
             setReviewOpen(false);
             setPendingExtraction(null);
