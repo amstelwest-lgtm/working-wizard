@@ -140,6 +140,7 @@ export function OwnerDoor({
   cashRunwayWeeks = null,
   cashDebtorScore = null,
   cashBurnScore = null,
+  liveHealth = null,
   market,
   marketCountry = null,
   signoffs,
@@ -200,6 +201,12 @@ export function OwnerDoor({
   cashDebtorScore?: number | null;
   /** Scored operating cash. Names a Critical chip that is burn. */
   cashBurnScore?: number | null;
+  /** Live floor-applied score. Home cards quote this instead of a stored finding. */
+  liveHealth?: {
+    overall: number | null;
+    weakestLabel: string | null;
+    weakestScore: number | null;
+  } | null;
   market: ResolvedMarket;
   /** Stored country. Null stays off the ZA tax card even if `market` was coerced for dates. */
   marketCountry?: string | null;
@@ -741,8 +748,8 @@ export function OwnerDoor({
     [financials, market.fyStartMonthDefault],
   );
   const draftPresentations = useMemo(
-    () => ownerDraftPresentations(activity.findings, canonicalRatios),
-    [activity.findings, canonicalRatios],
+    () => ownerDraftPresentations(activity.findings, canonicalRatios, { overall: liveHealth?.overall ?? null }),
+    [activity.findings, canonicalRatios, liveHealth?.overall],
   );
   const needs = useMemo(
     () =>
@@ -758,7 +765,9 @@ export function OwnerDoor({
         deliverablesReady: actionsReady,
         deliverablesUnavailable,
         deliverableCount,
-        advisoryTitles: advisoryDeliverableTitles(activity.findings, canonicalRatios),
+        advisoryTitles: advisoryDeliverableTitles(activity.findings, canonicalRatios, {
+          overall: liveHealth?.overall ?? null,
+        }),
         quickBooks,
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
@@ -773,6 +782,7 @@ export function OwnerDoor({
       activity.error,
       activity.findings,
       draftPresentations,
+      liveHealth?.overall,
       canonicalRatios,
       deliverablesUnavailable,
       deliverableCount,
@@ -801,7 +811,7 @@ export function OwnerDoor({
     workingRows,
   );
   const presence = steerOpenHandoffs(
-    ownerPresence({ ...activity, runs: cardRuns }, talk),
+    ownerPresence({ ...activity, runs: cardRuns }, talk, liveHealth),
     openAgents,
   );
   const runState = useMemo(() => {

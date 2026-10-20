@@ -22,6 +22,7 @@ import {
   type StoredFigures,
 } from "./agent-bus.ts";
 import { findingRecordKey } from "./agent-analyst.ts";
+import { draftFiguresHash, liveOverallFromPool } from "./draft-figures.ts";
 
 /** Hard cap for one Financial Manager or Advisor run. Do not start a call that would pass this. */
 export const RUNNER_COST_CEILING_USD = 0.06;
@@ -223,10 +224,15 @@ export function prepareDraftRecord(input: {
   if (!cited.ok) return { ok: false, error: cited.error, tool_blocked: true };
   const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, input.market);
   const storedSeverity = severityWithFloor(severity, metrics);
+  const ratios = canonicalQuoteRatios(input.pool);
   const evidence = withDraftFlags({
     ...cited.evidence,
     metrics,
     status: agentCopyStatus(storedSeverity),
+    figures_hash: draftFiguresHash({
+      ratios,
+      overall: liveOverallFromPool(input.pool),
+    }),
   });
   const recordKeys = [
     findingRecordKey({
