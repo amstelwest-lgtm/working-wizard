@@ -137,6 +137,35 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
           bash scripts/apply-source-documents-sql.sh
 
+  function-execute-lock:
+    name: Anon function EXECUTE lock
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply lock migration and SQL tests
+        env:
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+          bash scripts/apply-function-execute-lock-sql.sh
+
   # Reporting for the existing typing and Prettier backlog, except undefined
   # names. `tsc` still carries long-standing PostgREST / vite-plugin errors, and
   # `eslint .` a Prettier backlog, so those stay non-blocking. TS2304 / TS2552

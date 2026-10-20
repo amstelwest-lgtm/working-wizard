@@ -188,6 +188,7 @@
     "test:milon-team": "vite-node --config scripts/vite-test.config.ts scripts/milon-team-test.mts",
     "test:owner-door": "vite-node --config scripts/vite-test.config.ts scripts/owner-door-test.mts",
     "test:side-parity": "node --experimental-strip-types --test scripts/side-parity-test.mts",
+    "test:security-definer-revoke": "node scripts/check-security-definer-revoke.mjs",
     "test:drawer-dismiss": "vite-node --config scripts/vite-test.config.ts scripts/drawer-dismiss-test.mts",
     "test:owner-subscribe": "vite-node --config scripts/vite-test.config.ts scripts/owner-subscribe-test.mts",
     "test:owner-chat-reply": "vite-node --config scripts/vite-test.config.ts scripts/owner-chat-reply-test.mts",
