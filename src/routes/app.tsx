@@ -148,7 +148,7 @@ import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operati
 import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
-import { statementCoverMonthCount } from "@/lib/budget.bridges";
+import { budgetProfitFields, statementCoverMonthCount } from "@/lib/budget.bridges";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
@@ -4462,6 +4462,7 @@ function Index() {
                             [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
                             ...(v.periodStart ? { periodStart: v.periodStart } : {}),
                             ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
+                            ...budgetProfitFields(v),
                           }}
                           reloadToken={budgetReloadToken}
                         />
@@ -6247,6 +6248,7 @@ function Index() {
                             [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
                             ...(v.periodStart ? { periodStart: v.periodStart } : {}),
                             ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
+                            ...budgetProfitFields(v),
                           }}
                           onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
                           reloadToken={budgetReloadToken}

@@ -17,7 +17,7 @@ import {
   forecastHasRealLines,
   storedSeriesReading,
 } from "@/lib/client-metrics";
-import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
+import { periodProfitBridge, statementNetProfit, statedNetIsUsable } from "@/lib/period-profit";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 
 export type OwnerHomeLines = Record<AgentKey, readonly string[]>;
@@ -741,10 +741,14 @@ function profitTile(
   const gross = waterfallGross(books.revenue, books.cogs, books.grossProfit);
   const operating = finite(books.operatingProfit) ? books.operatingProfit : null;
   const netIncome = finite(books.netIncome) ? books.netIncome : null;
-  const netOk = netIncome != null && (operating == null || statedNetIsUsable(operating, netIncome));
+  const quotedNet = statementNetProfit({
+    ...(operating != null ? { ebit: operating } : {}),
+    ...(netIncome != null ? { netIncome } : {}),
+  });
+  const netOk = quotedNet != null && (operating == null || statedNetIsUsable(operating, quotedNet));
   const profitBit =
-    netOk && netIncome != null
-      ? ` Net profit is ${money(netIncome)}.`
+    netOk && quotedNet != null
+      ? ` Net profit is ${money(quotedNet)}.`
       : operating != null
         ? ` Operating profit is ${money(operating)}.`
         : "";
