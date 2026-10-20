@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { restoreLastFirmSuccess } from "../src/lib/billing-check-failure.ts";
 import { decideFirmClientCreate } from "../src/lib/firm-client-cap.ts";
 import { surfaceAfterEntitlementFailure } from "../src/lib/firm-gate-access.ts";
-import { noPlanTrialClock } from "../src/lib/firm-starter-trial.ts";
+import { TRIAL_CLOCK_CUTOVER, noPlanTrialClock } from "../src/lib/firm-starter-trial.ts";
 import {
   EMPTY_PRECARD_USAGE,
   PRECARD_BOT_LIMIT,
@@ -167,24 +167,60 @@ assert(
   "inside the trial a no-plan firm can still add a client",
 );
 
-const ended = noPlanTrialClock({
+const cutoverMs = Date.parse(`${TRIAL_CLOCK_CUTOVER}T00:00:00.000Z`);
+const day = 86_400_000;
+const oldFirmCreated = new Date(cutoverMs - 30 * day).toISOString();
+const dayAfterCutover = noPlanTrialClock({
   enforced: true,
   noPlan: true,
-  startedAt: "2026-10-01T12:00:00.000Z",
-  now,
+  startedAt: oldFirmCreated,
+  now: new Date(cutoverMs + day),
 });
-assert(ended.expired, "a no-plan firm past day 14 is at trial end");
-const endedCreate = decideFirmClientCreate({
+assert(!dayAfterCutover.expired, "an old no-plan firm is still open the day after cutover");
+assert(
+  decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "none",
+    band: null,
+    clientCount: 1,
+    starterTrialExpired: dayAfterCutover.expired,
+  }).allowed,
+  "an old no-plan firm can still add a client the day after cutover",
+);
+const fifteenAfter = noPlanTrialClock({
+  enforced: true,
+  noPlan: true,
+  startedAt: oldFirmCreated,
+  now: new Date(cutoverMs + 15 * day),
+});
+assert(fifteenAfter.expired, "an old no-plan firm is walled 15 days after cutover");
+const walledCreate = decideFirmClientCreate({
   stripeConfigured: true,
   phase: "none",
   band: null,
   clientCount: 1,
-  starterTrialExpired: ended.expired,
+  starterTrialExpired: fifteenAfter.expired,
 });
 assert(
-  !endedCreate.allowed && endedCreate.code === "starter_trial_ended",
-  "trial end blocks another client for a no-plan firm",
+  !walledCreate.allowed && walledCreate.code === "starter_trial_ended",
+  "trial end blocks another client 15 days after cutover",
 );
+assert(
+  !noPlanTrialClock({
+    enforced: false,
+    noPlan: true,
+    startedAt: oldFirmCreated,
+    now: new Date(cutoverMs + 15 * day),
+  }).expired,
+  "an exempt firm stays open after cutover",
+);
+const signedUpAfter = noPlanTrialClock({
+  enforced: true,
+  noPlan: true,
+  startedAt: new Date(cutoverMs + 2 * day).toISOString(),
+  now: new Date(cutoverMs + 16 * day),
+});
+assert(signedUpAfter.expired, "a firm created after cutover expires 14 days after signup");
 assert(
   !noPlanTrialClock({
     enforced: false,
