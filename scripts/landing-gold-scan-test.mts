@@ -1,9 +1,13 @@
 /**
- * Computed-style scan of `/`, `/terms`, `/privacy`, and `/join/:token`.
- * Brand gold may remain only on the MILŌN wordmark (header, footer, hero
- * mockup mark, invite shell), the hero trial button, and the 390 sticky
- * trial button. The amber "74" status colour is not brand gold. Legal hero
- * sublines must not render "Inc..". The invite page has no gold button.
+ * Computed-style scan of `/`, `/terms`, `/privacy`, and `/join/:token`, plus
+ * the accountant harness (`/clients`, client Health, client Reports). Brand
+ * gold may remain only on the MILŌN wordmark (header, footer, hero mockup
+ * mark, invite shell), the hero trial button, and the 390 sticky trial
+ * button. In the accountant app the wordmark stays gold, the one primary pill
+ * (`.btn.gold`) stays gold, and the report-card hairline stays. Email the
+ * owner must be a cobalt outline, not the gold hairline. The amber "74"
+ * status colour is not brand gold. Legal hero sublines must not render
+ * "Inc..". The invite page has no gold button.
  *
  *   pnpm test:landing-gold-scan
  *   LANDING_URL=http://127.0.0.1:5173 pnpm test:landing-gold-scan
@@ -15,21 +19,34 @@ import { chromium, type Browser, type Page } from "playwright";
 const PORT = 5198;
 const OWNED = !process.env.LANDING_URL;
 const BASE = process.env.LANDING_URL ?? `http://127.0.0.1:${PORT}`;
+const HARNESS_PORT = 5199;
+const HARNESS_OWNED = !process.env.HARNESS_URL;
+const HARNESS = process.env.HARNESS_URL ?? `http://127.0.0.1:${HARNESS_PORT}`;
 
 let server: ReturnType<typeof spawn> | null = null;
+let harness: ReturnType<typeof spawn> | null = null;
 
-function stopServer() {
-  if (!server?.pid) return;
+function stopTree(child: ReturnType<typeof spawn> | null) {
+  if (!child?.pid) return;
   try {
-    process.kill(-server.pid, "SIGTERM");
+    process.kill(-child.pid, "SIGTERM");
   } catch {
     try {
-      server.kill("SIGTERM");
+      child.kill("SIGTERM");
     } catch {
       /* already gone */
     }
   }
+}
+
+function stopServer() {
+  stopTree(server);
   server = null;
+}
+
+function stopHarness() {
+  stopTree(harness);
+  harness = null;
 }
 
 async function waitForHome() {
@@ -69,6 +86,46 @@ function startServer() {
   process.on("exit", stopServer);
 }
 
+function startHarness() {
+  const fd = openSync("/tmp/accountant-gold-scan-vite.log", "w");
+  harness = spawn(
+    "pnpm",
+    [
+      "exec",
+      "vite",
+      "dev",
+      "--config",
+      "scripts/rail-studio-harness/vite.config.ts",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(HARNESS_PORT),
+      "--strictPort",
+    ],
+    { detached: true, stdio: ["ignore", fd, fd] },
+  );
+  process.on("exit", stopHarness);
+}
+
+async function waitForHarness() {
+  const deadline = Date.now() + 90_000;
+  let last = "";
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${HARNESS}/clients`);
+      if (res.status === 200) {
+        const text = await res.text();
+        if (text.includes("Rail harness")) return;
+        last = "200 without the harness shell";
+      } else last = String(res.status);
+    } catch (err) {
+      last = err instanceof Error ? err.message : String(err);
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  throw new Error(`accountant harness did not come up at ${HARNESS} (${last})`);
+}
+
 async function launch(): Promise<Browser> {
   try {
     return await chromium.launch({ channel: "chrome", headless: true });
@@ -87,8 +144,12 @@ async function launch(): Promise<Browser> {
 
 type Hit = { path: string; prop: string; sample: string };
 
-async function scan(page: Page, label: string): Promise<{ hits: Hit[]; wordmark: boolean; heroCta: boolean; amber74: boolean }> {
-  return page.evaluate((labelIn) => {
+async function scan(
+  page: Page,
+  label: string,
+  opts?: { accountant?: boolean },
+): Promise<{ hits: Hit[]; wordmark: boolean; heroCta: boolean; amber74: boolean }> {
+  return page.evaluate(({ labelIn, accountant }) => {
     const GOLD: Array<[number, number, number]> = [
       [212, 175, 55],
       [125, 95, 15],
@@ -136,6 +197,14 @@ async function scan(page: Page, label: string): Promise<{ hits: Hit[]; wordmark:
     };
     const allowed = (el: Element) => {
       if (el.closest("[data-stale-bundle]")) return true;
+      if (accountant) {
+        return Boolean(
+          el.closest(".gold-text") ||
+            el.closest(".brand") ||
+            el.closest(".btn.gold") ||
+            el.closest(".report-card__rule"),
+        );
+      }
       return Boolean(
         el.closest(".logo-word") ||
           el.closest(".dash-top .brand") ||
@@ -228,7 +297,7 @@ async function scan(page: Page, label: string): Promise<{ hits: Hit[]; wordmark:
       ? colorsIn(getComputedStyle(amber).color).some((c) => Math.min(...AMBER.map((a) => dist(c.rgb, a))) < 12)
       : false;
     return { hits, wordmark, heroCta, amber74 };
-  }, label);
+  }, { labelIn: label, accountant: Boolean(opts?.accountant) });
 }
 
 async function main() {
@@ -331,9 +400,60 @@ async function main() {
         await page.close();
       }
     }
+
+    if (HARNESS_OWNED) startHarness();
+    await waitForHarness();
+    const accountantPaths = [
+      "/clients",
+      "/clients/harness-client?tab=health",
+      "/clients/harness-client?tab=reports&section=waterfall",
+    ];
+    const cobalt: Record<"light" | "dark", [number, number, number]> = {
+      light: [11, 95, 255],
+      dark: [96, 165, 250],
+    };
+    for (const path of accountantPaths) {
+      for (const width of [1280, 390]) {
+        for (const theme of ["light", "dark"] as const) {
+          const page = await browser.newPage({ viewport: { width, height: 760 } });
+          await page.goto(`${HARNESS}${path}`, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(600);
+          await page.evaluate((next) => {
+            document.documentElement.dataset.theme = next;
+            document.documentElement.classList.toggle("dark", next === "dark");
+          }, theme);
+          const logo = page.locator(".gold-text").first();
+          if ((await logo.count()) === 0) failures.push(`${path} ${width} ${theme}: wordmark missing`);
+          else {
+            const bg = await logo.evaluate((el) => getComputedStyle(el).backgroundImage);
+            if (!bg.includes("212, 175, 55") && !bg.includes("172, 132, 0")) {
+              failures.push(`${path} ${width} ${theme}: accountant wordmark is not gold`);
+            }
+          }
+          const painted = await scan(page, `accountant ${path} ${width} ${theme}`, { accountant: true });
+          for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
+          if (path.includes("tab=health")) {
+            const email = page.locator("[data-email-owner]");
+            await email.waitFor({ timeout: 15000 });
+            const border = await email.evaluate((el) => getComputedStyle(el).borderTopColor);
+            const match = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(border);
+            const rgb = match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+            const want = cobalt[theme];
+            const dist = rgb
+              ? Math.hypot(rgb[0] - want[0], rgb[1] - want[1], rgb[2] - want[2])
+              : 999;
+            if (dist > 20) {
+              failures.push(`${path} ${width} ${theme}: Email the owner border is ${border}, expected cobalt`);
+            }
+          }
+          await page.close();
+        }
+      }
+    }
   } finally {
     await browser.close();
     stopServer();
+    stopHarness();
   }
   if (failures.length) {
     console.error(failures.slice(0, 50).join("\n"));
@@ -345,5 +465,6 @@ async function main() {
 main().catch((err) => {
   console.error(err instanceof Error ? err.message : err);
   stopServer();
+  stopHarness();
   process.exit(1);
 });

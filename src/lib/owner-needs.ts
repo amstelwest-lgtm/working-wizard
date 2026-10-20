@@ -4,7 +4,13 @@
  */
 import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { repairDraftMetricUnits, stripRatioDumpLines } from "@/lib/agent-bus";
-import { draftStoredFiguresHash, presentLiveDraft, type DraftLiveFigures } from "@/lib/draft-figures";
+import {
+  draftStoredFiguresHash,
+  draftStoredHealth,
+  presentLiveDraft,
+  type DraftLiveFigures,
+} from "@/lib/draft-figures";
+import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { homeStatementsLine } from "@/lib/books-answer";
 import { canonicalScoreProse } from "@/lib/score-prose";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
@@ -26,6 +32,8 @@ export type OwnerNeedsView = {
   draftLines: string[];
   /** True when a stored draft quoted a figure the scorecard has since replaced. */
   draftStale?: boolean[];
+  /** Snapshot sentence. Home shows it when a draft line is the regenerate marker. */
+  draftLiveSentence?: string | null;
   deliverablesHeading: string;
   deliverableLines: string[];
   syncHeading: string;
@@ -84,6 +92,8 @@ function countPhrase(count: number, one: string, many: string): string {
 export type HomeDraftLive = {
   overall?: number | null;
   storedHash?: string | null;
+  health?: HealthScoreSnapshot | null;
+  storedHealth?: HealthScoreSnapshot | null;
 };
 
 /**
@@ -96,7 +106,7 @@ export function presentHomeDraftTitle(
   title: string,
   canonicalRatios?: Record<string, number> | null,
   live?: HomeDraftLive | null,
-): { text: string; stale: boolean; refresh: boolean } {
+): { text: string; stale: boolean; refresh: boolean; regenerate?: boolean } {
   return presentStoredDraft(title, canonicalRatios, live);
 }
 
@@ -105,7 +115,7 @@ export function presentHomeDraftBody(
   body: string,
   canonicalRatios?: Record<string, number> | null,
   live?: HomeDraftLive | null,
-): { text: string; stale: boolean; refresh: boolean } {
+): { text: string; stale: boolean; refresh: boolean; regenerate?: boolean } {
   return presentStoredDraft(body, canonicalRatios, live);
 }
 
@@ -113,7 +123,7 @@ function presentStoredDraft(
   raw: string,
   canonicalRatios?: Record<string, number> | null,
   live?: HomeDraftLive | null,
-): { text: string; stale: boolean; refresh: boolean } {
+): { text: string; stale: boolean; refresh: boolean; regenerate?: boolean } {
   const base = repairDraftMetricUnits(
     canonicalScoreProse(rewriteDraftMonthStamp(stripRatioDumpLines(raw).trim())),
   );
@@ -122,12 +132,15 @@ function presentStoredDraft(
     ratios: canonicalRatios,
     overall: live?.overall,
     storedHash: live?.storedHash,
+    health: live?.health,
+    storedHealth: live?.storedHealth,
   };
   const presented = presentLiveDraft(base, figures);
   return {
     text: presented.text ? repairDraftMetricUnits(presented.text) : "",
     stale: presented.stale,
     refresh: presented.refresh,
+    regenerate: presented.regenerate,
   };
 }
 
@@ -141,8 +154,8 @@ export function ownerDraftTitles(
 export function ownerDraftPresentations(
   findings: readonly AgentFindingRow[],
   canonicalRatios?: Record<string, number> | null,
-  live?: { overall?: number | null } | null,
-): { text: string; stale: boolean; refresh: boolean }[] {
+  live?: HomeDraftLive | null,
+): { text: string; stale: boolean; refresh: boolean; regenerate?: boolean }[] {
   return findings.flatMap((row) => {
     if (row.status === "approved") return [];
     if (!isVisibleAgentFinding(row)) return [];
@@ -155,7 +168,7 @@ export function ownerDraftPresentations(
 export function advisoryDeliverableTitles(
   findings: readonly AgentFindingRow[],
   canonicalRatios?: Record<string, number> | null,
-  live?: { overall?: number | null } | null,
+  live?: HomeDraftLive | null,
 ): string[] {
   return findings.flatMap((row) => {
     if (row.status === "approved") return [];
@@ -170,13 +183,23 @@ export function advisoryDeliverableTitles(
 function presentFindingDraft(
   row: AgentFindingRow,
   canonicalRatios?: Record<string, number> | null,
-  live?: { overall?: number | null } | null,
-): { text: string; stale: boolean; refresh: boolean } {
-  const quote = { overall: live?.overall, storedHash: draftStoredFiguresHash(row.evidence) };
+  live?: HomeDraftLive | null,
+): { text: string; stale: boolean; refresh: boolean; regenerate?: boolean } {
+  const quote: HomeDraftLive = {
+    overall: live?.overall ?? live?.health?.overall,
+    storedHash: draftStoredFiguresHash(row.evidence),
+    health: live?.health,
+    storedHealth: draftStoredHealth(row.evidence),
+  };
   const title = presentHomeDraftTitle(row.title, canonicalRatios, quote);
   const body = row.detail?.trim() ? presentHomeDraftBody(row.detail, canonicalRatios, quote) : null;
   const refresh = title.refresh || title.stale || Boolean(body?.refresh || body?.stale);
-  return { text: title.text || body?.text || "", stale: refresh, refresh };
+  return {
+    text: title.text || body?.text || "",
+    stale: refresh,
+    refresh,
+    regenerate: Boolean(title.regenerate || body?.regenerate),
+  };
 }
 
 export function booksSyncCopy(input: {
@@ -223,6 +246,7 @@ export function ownerNeedsView(input: {
   draftsUnavailable: boolean;
   draftTitles: readonly string[];
   draftStale?: readonly boolean[];
+  draftLiveSentence?: string | null;
   deliverablesReady: boolean;
   deliverablesUnavailable: boolean;
   deliverableCount: number;
@@ -315,6 +339,7 @@ export function ownerNeedsView(input: {
     draftsHeading,
     draftLines,
     draftStale,
+    draftLiveSentence: input.draftLiveSentence ?? null,
     deliverablesHeading,
     deliverableLines,
     syncHeading: sync.heading,

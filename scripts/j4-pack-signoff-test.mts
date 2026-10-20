@@ -69,12 +69,14 @@ assert(!packFnBody.includes("overlayStillNeeds"), "pack display does not append 
 const panel = read("src/components/advisory-pack-panel.tsx");
 assert(panel.includes("packAsGeneratedLabel"), "the stale banner names when the pack was generated");
 assert(panel.includes("data-pack-stale"), "the stale banner stays");
-assert(!panel.includes("setLiveHealth"), "the panel does not fetch a live score to rewrite the pack");
-assert(!panel.includes("liveHealth,"), "the panel does not pass a live score into the pack");
+assert(!panel.includes("setLiveHealth"), "the panel does not fetch a live score of its own");
+assert(panel.includes("liveHealth"), "the page snapshot is the pack's score source");
+assert(!panel.includes("overlayLiveHealthProse"), "the panel does not splice scores into stored prose");
 
 const pdf = read("src/lib/advisory-pack-pdf.ts");
 assert(pdf.includes("packAsGeneratedLabel"), "the PDF stale notice names the snapshot date");
-assert(!pdf.includes("liveHealth"), "the PDF does not overlay live health");
+assert(pdf.includes("liveHealth"), "the PDF uses the same snapshot");
+assert(!pdf.includes("overlayLiveHealthProse"), "the PDF does not splice scores into stored prose");
 
 const signedLine = presentPageSignoff({
   scope: "financials",
@@ -130,7 +132,7 @@ const changedLine = presentPageSignoff({
   name: row.signed_off_by_name,
   date: "Oct 20, 2026, 9:25 AM ET",
 });
-assert(changedLine === "Financials: signed off · figures changed", changedLine);
+assert(changedLine === "Signed off by James Fleming · figures changed since, re-review", changedLine);
 assert(!changedLine.toLowerCase().includes("draft"), changedLine);
 
 const unsigned = studioSignoffState({

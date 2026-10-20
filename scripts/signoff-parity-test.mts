@@ -11,6 +11,7 @@ import {
   reviewFiguresChanged,
   signoffStatusLine,
   signedHealthFromHistory,
+  staleSignoffLine,
 } from "../src/lib/signoff-status";
 import type { ClientReviewSignoff } from "../src/lib/review-signoffs.functions";
 import { resolveMarket } from "../src/lib/market/resolve";
@@ -136,8 +137,7 @@ const us = resolveMarket({ country: "US", regionCode: "NY" });
 const kept = stampFromSignoff(signoff, true);
 assert(kept?.figuresChanged === true, "stale stamp is kept");
 assert(
-  pdfSignoffBadgeLine(kept!, us) ===
-    `Signed off by James Fleming · ${PAGE_FIGURES_CHANGED_CLAUSE}`,
+  pdfSignoffBadgeLine(kept!, us) === staleSignoffLine("James Fleming"),
   pdfSignoffBadgeLine(kept!, us),
 );
 

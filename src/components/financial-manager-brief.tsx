@@ -141,6 +141,20 @@ function BriefHandControl({
   );
 }
 
+function DraftTitle({ draft }: { draft: FinancialManagerBrief["drafts"][number] }) {
+  const [title, setTitle] = useState(draft.title);
+  return (
+    <>
+      <span>{title}</span>
+      {draft.liveSentence && title !== draft.liveSentence ? (
+        <button type="button" className="btn ghost mini" data-health-regenerate onClick={() => setTitle(draft.liveSentence ?? title)}>
+          Regenerate
+        </button>
+      ) : null}
+    </>
+  );
+}
+
 export function FinancialManagerBrief({
   brief,
   clientId,
@@ -262,8 +276,8 @@ export function FinancialManagerBrief({
         <ul className="fm-brief-drafts">
           {brief.drafts.map((draft) => (
             <li key={draft.id} data-draft-stale={draft.refresh ? "true" : undefined}>
-              <span>{draft.title}</span>
-              {draft.refresh && draft.title !== DRAFT_OUT_OF_DATE ? (
+              <DraftTitle draft={draft} />
+              {draft.refresh && draft.title !== DRAFT_OUT_OF_DATE && !draft.liveSentence ? (
                 <span className="fm-brief-refresh">{DRAFT_OUT_OF_DATE}</span>
               ) : null}
               <button type="button" className="btn ghost mini" onClick={() => onOpen("reports")}>
