@@ -28,9 +28,9 @@ The test that was meant to lock this started from `createRoot` on a component th
 
 ## Fix
 
-An inline boot script, in the document head, listens before the bundle. A Send click, a form submit, or Enter (not Shift+Enter) on the composer is cancelled while `data-talk-live` is absent. The text is stored, the textarea is cleared, and a You bubble is painted in the thread immediately. The button is `type="button"`, so a click cannot navigate even if the script is late.
+An inline boot script, in the document head, listens before the bundle. A Send click, a form submit, or Enter (not Shift+Enter) on the composer is cancelled while `data-talk-live` is absent. The text is stored, the textarea is cleared, and a You bubble is painted immediately in a host outside the React tree, so hydration cannot drop it. The button is `type="button"`, so a click cannot navigate even if the script is late.
 
-When React hydrates, a layout effect reads that stored text into the thread state (the painted bubble stays), marks the form live, and leaves the text on the existing session queue. The passive effect then reads `sessionStorage` and posts. The POST is what creates the session. The bubble does not wait for either step.
+When React hydrates, a layout effect reads that stored text into the thread, removes the temporary host, marks the form live, and leaves the text on the existing session queue. The passive effect then reads `sessionStorage` and posts. The POST is what creates the session. The bubble does not wait for either step. If hydration retries the tree, the in-flight reply is applied to the tree that stays.
 
 Shift+Enter is a newline. After the form is live, Enter sends through React the same way.
 
