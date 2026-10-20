@@ -9,6 +9,7 @@ import { STARTER_TRIAL_ENDED_MESSAGE } from "@/lib/firm-starter-trial";
 import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import type { FirmBandId, FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 import { getFirmPlanDisplay, upgradeFirmBand } from "@/lib/stripe-checkout.functions";
+import { readCachedFirmPlan } from "@/lib/firm-plan-client";
 
 export type TrialEndedUpgrade = {
   band: FirmBandId | null;
@@ -112,7 +113,7 @@ export function TrialEndedPlanBlock({
     }
     let cancelled = false;
     setLoading(true);
-    void loadPlan({ data: { firmId } })
+    void readCachedFirmPlan(firmId, (input) => loadPlan(input))
       .then((plan) => {
         if (cancelled || !plan || plan.configured === false) {
           if (!cancelled) setFetchedPhase(null);

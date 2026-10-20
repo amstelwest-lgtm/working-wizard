@@ -10,6 +10,7 @@ import {
   registerLabelForPlan,
 } from "@/lib/pending-checkout";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
+import { readCachedFirmEntitlement } from "@/lib/firm-entitlement-client";
 import { FIRM_TRIAL_CARD_LINE, firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 
 /**
@@ -22,7 +23,7 @@ export function CheckoutAfterInsight() {
 
   useEffect(() => {
     let cancelled = false;
-    void checkEntitlement({ data: {} })
+    void readCachedFirmEntitlement((input) => checkEntitlement(input))
       .then((result) => {
         if (!cancelled) setUnpaid(!result.entitled);
       })

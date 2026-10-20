@@ -96,31 +96,42 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
   firmIdRef.current = firmId;
   ingestRef.current = ingest;
 
+  const flushingRef = useRef(false);
+
   const flush = useCallback(async () => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    if (flushingRef.current) return;
     if (!userIdRef.current) {
       queueRef.current = [];
       return;
     }
     const batch = queueRef.current.splice(0, 40);
     if (!batch.length) return;
+    flushingRef.current = true;
     try {
       await ingestRef.current({ data: { events: batch } });
     } catch {
       /* tracking must never break the product */
+    } finally {
+      flushingRef.current = false;
+      if (queueRef.current.length) scheduleFlushRef.current();
     }
   }, []);
 
+  const scheduleFlushRef = useRef<() => void>(() => {});
   const scheduleFlush = useCallback(() => {
-    if (timerRef.current) return;
+    if (timerRef.current || flushingRef.current) return;
+    // One batch after the shell deadline, so usage ingest is not the first
+    // server function in front of the billing gate and the client reads.
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       void flush();
-    }, 1800);
+    }, 8_000);
   }, [flush]);
+  scheduleFlushRef.current = scheduleFlush;
 
   const track = useCallback(
     (eventName: string, properties: TrackProps = {}) => {

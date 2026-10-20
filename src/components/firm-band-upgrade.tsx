@@ -27,6 +27,7 @@ import {
   type FirmInterval,
 } from "@/lib/stripe-plans";
 import { getFirmPlanDisplay } from "@/lib/stripe-checkout.functions";
+import { readCachedFirmPlan } from "@/lib/firm-plan-client";
 
 export type FirmVoucherCheckResult =
   | { ok: true; promotionCodeId: string; preview: string }
@@ -426,7 +427,7 @@ export function FirmStartHereLoader({ firmId = null }: { firmId?: string | null 
   useEffect(() => {
     let cancelled = false;
     setBand(undefined);
-    void loadPlan({ data: { firmId } })
+    void readCachedFirmPlan(firmId, (input) => loadPlan(input))
       .then((plan) => {
         if (!cancelled) setBand(plan && plan.configured !== false ? (plan.band ?? null) : null);
       })

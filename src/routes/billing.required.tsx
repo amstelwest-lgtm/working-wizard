@@ -26,6 +26,12 @@ import {
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
+import {
+  BILLING_WALL_TRIAL_ACTION,
+  firmWallTrialDetail,
+  resolveBillingWall,
+} from "@/lib/billing-wall";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 
 export const Route = createFileRoute("/billing/required")({
   validateSearch: (search: Record<string, unknown>): PendingCheckout => {
@@ -70,6 +76,8 @@ export function BillingRequiredCard({
   checkout,
   ownerPack,
   ownerMonthly,
+  onRetry,
+  backHref,
 }: {
   planName: string;
   priceLabel: string;
@@ -79,35 +87,51 @@ export function BillingRequiredCard({
   checkout: PendingCheckout;
   ownerPack?: "za" | "us";
   ownerMonthly?: string | null;
+  onRetry?: () => void;
+  backHref?: string;
 }) {
   const ownerLine = ownerPlanPublicLine(ownerPack === "za" ? "za" : "us", ownerMonthly);
-  const resumeClass =
-    backClientId && backLabel
-      ? "inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
-      : "inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]";
+  const trialClass =
+    "inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]";
   return (
-    <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
+    <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200" data-billing-wall="card">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
         <h1 className="mt-2 text-xl font-semibold">Continue on {planName} to keep this practice</h1>
         <p className="mt-2 text-sm text-slate-400">
           The figures stay.
           {clientName ? ` ${clientName} is still open. The firm dashboard and reports need a card. ` : " "}
-          Checkout for {planName} ({priceLabel}) starts the subscription. A card is required. A first
-          subscription is {FIRM_TRIAL_SENTENCE} on Starter. If a trial already ended, billing resumes
-          on the paid band without another trial. Owner plan is {ownerLine}.
+          {firmWallTrialDetail(priceLabel)} Checkout for {planName} ({priceLabel}) starts the
+          subscription. A card is required. A first subscription is {FIRM_TRIAL_SENTENCE} on Starter.
+          If a trial already ended, billing resumes on the paid band without another trial. Owner plan
+          is {ownerLine}.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           {backClientId && backLabel ? (
             <a
               href={`/clients/${backClientId}`}
-              className="inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]"
+              className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
             >
               {backLabel}
             </a>
           ) : null}
-          <a href={billingStartPath(checkout)} className={resumeClass}>
-            Resume Checkout
+          <a href={billingStartPath(checkout)} className={trialClass} data-billing-action="trial">
+            {BILLING_WALL_TRIAL_ACTION}
+          </a>
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
+            >
+              Retry
+            </button>
+          ) : null}
+          <a
+            href={backHref || "/dashboard"}
+            className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
+          >
+            Back
           </a>
           <a
             href="/#pricing"
@@ -133,6 +157,14 @@ function BillingRequiredPage() {
   const [returnClient, setReturnClient] = useState<FirstFirmClient | null | undefined>(undefined);
   const [quote, setQuote] = useState<FirmBillingQuote | null>(loadedQuote);
   const [quoteError, setQuoteError] = useState("");
+  const [wallAttempt, setWallAttempt] = useState(0);
+  const retryWall = () => {
+    setChecking(true);
+    setReturnClient(undefined);
+    setQuote(null);
+    setQuoteError("");
+    setWallAttempt((n) => n + 1);
+  };
 
   const priced = quote
     ? billingIntentForResolvedMarket(quote.market, pending)
@@ -152,16 +184,6 @@ function BillingRequiredPage() {
   }, [priced?.market, pending.market, navigate]);
 
   useEffect(() => {
-    let cancelled = false;
-    void loadFirstFirmClient().then((row) => {
-      if (!cancelled) setReturnClient(row);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (loading) return;
     if (!user) {
       void navigate({
@@ -172,50 +194,51 @@ function BillingRequiredPage() {
       return;
     }
     let cancelled = false;
-    void checkEntitlement({ data: { refresh: true } })
-      .then((result) => {
-        if (cancelled) return;
-        if (result.entitled) {
-          void navigate({ to: "/dashboard", replace: true });
-          return;
-        }
-        setChecking(false);
-      })
-      .catch(() => {
-        if (!cancelled) setChecking(false);
-      });
+    const plan = pending.plan;
+    const interval = pending.interval;
+    void resolveBillingWall({
+      client: loadFirstFirmClient(),
+      entitlement: checkEntitlement({ data: { refresh: true } }),
+      quote: fetchQuote({ data: { plan, interval } }),
+      plan,
+      interval,
+      timeoutMs: SHELL_GATE_TIMEOUT_MS,
+    }).then((result) => {
+      if (cancelled) return;
+      setReturnClient(result.returnClient);
+      if (result.quote) setQuote(result.quote);
+      if (result.quoteError) setQuoteError(result.quoteError);
+      if (result.entitled) {
+        void navigate({ to: "/dashboard", replace: true });
+        return;
+      }
+      setChecking(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [loading, user, pending.plan, pending.interval, navigate, checkEntitlement]);
+  }, [loading, user, pending.plan, pending.interval, navigate, checkEntitlement, fetchQuote, wallAttempt]);
 
-  useEffect(() => {
-    if (!user || quote) return;
-    let cancelled = false;
-    void fetchQuote({ data: { plan: pending.plan, interval: pending.interval } })
-      .then((next) => {
-        if (!cancelled) setQuote(next);
-      })
-      .catch(() => {
-        if (!cancelled) setQuoteError("We couldn't read this firm's billing market. Refresh and try again.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, quote, pending.plan, pending.interval, fetchQuote]);
-
-  const planName = registerLabelForPlan(priced?.plan ?? pending.plan);
+  const checkout = priced ?? pending;
+  const planName = registerLabelForPlan(checkout.plan);
   const priceLabel =
     quote?.market === "za"
       ? quote.priceLabel
       : quote?.market === "us"
-        ? usdPriceLabel(priced?.plan ?? pending.plan, priced?.interval ?? pending.interval)
+        ? usdPriceLabel(checkout.plan, checkout.interval)
         : null;
+  // A missing quote is not ZA. A ZA quote with a null price stays unresolved.
+  const shownPrice =
+    priceLabel ||
+    (quote?.market === "za"
+      ? null
+      : usdPriceLabel(checkout.plan, checkout.interval));
+  const backHref = returnClient?.id ? `/clients/${returnClient.id}` : "/dashboard";
   const backLabel = returnClient ? firmWallBackLabel(returnClient.name) : null;
 
-  if (loading || checking || !user || returnClient === undefined || (!priceLabel && !quoteError)) {
+  if (loading || checking || !user || returnClient === undefined) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
+      <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200" data-billing-wall="checking">
         <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
           <h1 className="mt-2 text-xl font-semibold">Checking firm billing…</h1>
@@ -224,16 +247,35 @@ function BillingRequiredPage() {
     );
   }
 
-  if (quoteError || !priceLabel || !priced) {
+  if (!shownPrice) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
+      <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200" data-billing-wall="error">
         <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6" role="alert">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
           <h1 className="mt-2 text-xl font-semibold">Continue on {planName} to keep this practice</h1>
           <p className="mt-2 text-sm text-slate-400">
-            The figures stay. {quoteError || "Refresh and try again."}
+            The figures stay. {quoteError || "Refresh and try again."} {firmWallTrialDetail(null)}
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
+            <a
+              href={billingStartPath(checkout)}
+              className="inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]"
+            >
+              {BILLING_WALL_TRIAL_ACTION}
+            </a>
+            <button
+              type="button"
+              onClick={retryWall}
+              className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
+            >
+              Retry
+            </button>
+            <a
+              href={backHref}
+              className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
+            >
+              Back
+            </a>
             <a
               href="/#pricing"
               className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
@@ -250,13 +292,15 @@ function BillingRequiredPage() {
   return (
     <BillingRequiredCard
       planName={planName}
-      priceLabel={priceLabel}
+      priceLabel={shownPrice}
       clientName={returnClient?.name}
       backLabel={backLabel}
       backClientId={returnClient?.id}
-      checkout={priced}
+      checkout={checkout}
       ownerPack={ownerVisitorFromPack(ownerPack)}
       ownerMonthly={ownerMonthly}
+      onRetry={retryWall}
+      backHref={backHref}
     />
   );
 }

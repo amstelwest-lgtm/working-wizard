@@ -5,9 +5,11 @@ import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   CLIENTS_LOAD_ERROR,
+  CLIENTS_LOAD_RETRY_BACKOFF_MS,
   OPEN_QUERIES_LOAD_ERROR,
   openQueriesPhase,
   practiceClientsPhase,
+  readWithOneRetry,
   settleWithin,
 } from "@/lib/bounded-load";
 import {
@@ -25,6 +27,7 @@ import {
   setPortalIntent,
   clearForcePortal,
   openPracticeSettings,
+  isMilonItMember,
 } from "@/lib/user-roles";
 import {
   cashPillarFollowsForecast,
@@ -1442,6 +1445,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const [queryRows, setQueryRows] = useState<OpenQueryRow[]>([]);
   const [queryRowsReady, setQueryRowsReady] = useState(false);
   const [bookTimedOut, setBookTimedOut] = useState(false);
+  const [clientsOutcome, setClientsOutcome] = useState<"pending" | "ready" | "error">("pending");
   const [queriesTimedOut, setQueriesTimedOut] = useState(false);
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -1467,6 +1471,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const mintInvite = useServerFn(inviteClientOwner);
   const sendDraftedInvite = useServerFn(sendDraftedOwnerInvite);
   const loadGen = useRef(0);
+  const bookDeadlineTimer = useRef<number | null>(null);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const [chaseDraft, setChaseDraft] = useState<ChaseDraftInput | null>(null);
@@ -1486,9 +1491,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     if (warm) {
       setClientRows(warm);
       setLoading(false);
+      setClientsOutcome("ready");
     } else {
       setLoading(true);
       setCountsReady(false);
+      setClientsOutcome("pending");
     }
     try {
 
@@ -1498,6 +1505,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setCountsReady(true);
       setBookEnriched(true);
       setBookTimedOut(false);
+      setClientsOutcome("ready");
       setLoading(false);
       return;
     }
@@ -1505,20 +1513,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     // The IT flag and the client select used to be bare awaits. A hung
     // PostgREST call never reached setLoading(false), and the open-queries
     // effect refused to arm its own deadline while `loading` stayed true.
-    const slim = await settleWithin(
+    const readSlim = () =>
+      settleWithin(
       (async () => {
-        let isIt = false;
-        try {
-          const { data: itFlag } = await supabase.rpc(
-            "is_milon_it_member" as never,
-            {
-              _user_id: userId,
-            } as never,
-          );
-          isIt = Boolean(itFlag);
-        } catch {
-          isIt = false;
-        }
+        const isIt = await isMilonItMember(userId);
 
         // Firm-scoped list + legacy orphans (firm_id null) owned by this accountant.
         // Strict firm_id-only filtering hid pre-G27 clients and made the dashboard look empty.
@@ -1540,11 +1538,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       })(),
       SHELL_GATE_TIMEOUT_MS,
     );
+    const slim = await readWithOneRetry(readSlim, CLIENTS_LOAD_RETRY_BACKOFF_MS);
     if (gen !== loadGen.current) return;
     if (slim.status !== "value") {
       setBookTimedOut(true);
+      if (!warm) setClientsOutcome("error");
       return;
     }
+    setClientsOutcome("ready");
     setBookTimedOut(false);
     const { isIt, cs, error } = slim.value;
     setIsItMember(isIt);
@@ -1715,21 +1716,28 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     }
     } catch (err) {
       console.error("practice book:", err);
-      if (gen === loadGen.current) setBookTimedOut(true);
+      if (gen === loadGen.current) {
+        setBookTimedOut(true);
+        if (!warm) setClientsOutcome("error");
+      }
     } finally {
       if (gen === loadGen.current) {
         setLoading(false);
         setCountsReady(true);
+        const timer = bookDeadlineTimer.current;
+        if (timer != null) {
+          window.clearTimeout(timer);
+          bookDeadlineTimer.current = null;
+        }
       }
     }
   };
 
+  // One clock from the moment this user is known. brandLoading used to restart
+  // the book timer, and the role check used to hold the book for another 8s.
   useEffect(() => {
-    if (!portalReady) return;
+    if (!user?.id) return;
     let cancelled = false;
-    // Armed even while the firm row is still hydrating. brandLoading used to
-    // return before this timer existed, so a firm that never arrived left the
-    // client list on a skeleton with no deadline.
     const timer = window.setTimeout(() => {
       if (cancelled) return;
       console.warn("[practice-board] client book timed out; showing what has loaded");
@@ -1738,23 +1746,22 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setLoading(false);
       setCountsReady(true);
     }, SHELL_GATE_TIMEOUT_MS);
-    if (brandLoading) {
-      return () => {
-        cancelled = true;
-        window.clearTimeout(timer);
-      };
-    }
-    void load(firmId, user?.id, greetingSource).finally(() => {
-      window.clearTimeout(timer);
-    });
+    bookDeadlineTimer.current = timer;
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      if (bookDeadlineTimer.current === timer) bookDeadlineTimer.current = null;
     };
+  }, [user?.id]);
+
+  useEffect(() => {
+    void load(firmId, user?.id, greetingSource).finally(() => {
+      // The user-id deadline owns the clock. This finally must not restart it.
+    });
     // greetingSource is read for the name chain inside load, and the greeting
     // itself renders from practiceGreeting. A name update must not restart the book.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, brandLoading, user?.id, portalReady]);
+  }, [firmId, brandLoading, user?.id]);
 
   // Load playbook catalogue
   useEffect(() => {
@@ -1871,8 +1878,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const greeting = practiceGreeting(greetingSource);
   const bookLoading = loading || brandLoading;
   const clientsPhase = practiceClientsPhase({
-    loading: bookLoading,
-    timedOut: bookTimedOut,
+    loading: bookLoading || clientsOutcome === "pending",
+    timedOut: clientsOutcome === "error",
     rowCount: clientRows.length,
   });
   const queriesPhase = openQueriesPhase({
@@ -2201,7 +2208,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                   })}
                 />
               </PracticeAgentThread>
-            ) : bookLoading ? (
+            ) : loading && !bookTimedOut ? (
               <DashboardSkeleton className="py-8" />
             ) : (
             <OwnerHome
@@ -2592,9 +2599,18 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         </div>
 
         {clientsPhase === "error" ? (
-          <p className="sub" role="alert">
-            {CLIENTS_LOAD_ERROR}
-          </p>
+          <div className="sub" role="alert" data-clients-load="error">
+            <p>{CLIENTS_LOAD_ERROR}</p>
+            <button
+              type="button"
+              className="btn ghost mini"
+              onClick={() => {
+                void load(firmId, user?.id, greetingSource);
+              }}
+            >
+              Retry
+            </button>
+          </div>
         ) : clientsPhase === "loading" ? (
           <SkeletonBlock className="h-72 w-full rounded-[20px]" aria-label="Loading clients" />
         ) : filteredRows.length === 0 ? (

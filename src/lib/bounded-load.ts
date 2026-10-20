@@ -7,6 +7,36 @@ export type Settled<T> =
   | { status: "timeout" }
   | { status: "error"; error: unknown };
 
+/** One quiet retry after a timed-out or failed client read, before the error card. */
+export const CLIENTS_LOAD_RETRY_BACKOFF_MS = 600;
+
+/**
+ * Runs `read` once. A timeout or a thrown read waits `backoffMs`, then runs
+ * once more. A value is returned as-is. The second result is final.
+ */
+export async function readWithOneRetry<T>(
+  read: () => Promise<Settled<T>>,
+  backoffMs: number,
+  wait: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    }),
+): Promise<Settled<T>> {
+  let first: Settled<T>;
+  try {
+    first = await read();
+  } catch (error) {
+    first = { status: "error", error };
+  }
+  if (first.status === "value") return first;
+  await wait(backoffMs);
+  try {
+    return await read();
+  } catch (error) {
+    return { status: "error", error };
+  }
+}
+
 /** Resolves when `work` settles, or with status "timeout" after `timeoutMs`. `work` is not cancelled. */
 export function settleWithin<T>(work: Promise<T>, timeoutMs: number): Promise<Settled<T>> {
   return new Promise((resolve) => {

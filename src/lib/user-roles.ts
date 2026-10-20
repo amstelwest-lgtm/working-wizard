@@ -138,6 +138,8 @@ export function clearPortalRouting(): void {
   removeStorage(session, PORTAL_FORCE_KEY);
   removeStorage(session, SETTINGS_RETURN_KEY);
   removeStorage(local, PORTAL_INTENT_KEY);
+  clearAccountantStayCache();
+  clearItMemberCache();
 }
 
 export function setSettingsReturn(to: SettingsReturn): void {
@@ -225,10 +227,15 @@ export function isPracticeSignupMeta(
   return false;
 }
 
+/**
+ * Routing and UI only. Session metadata is not an authorization decision.
+ * Server functions and RLS still verify the JWT. getUser() held the auth
+ * lock for the whole GET /auth/v1/user on every cold firm entry.
+ */
 async function readPracticeSignup(): Promise<boolean> {
-  const { data } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getSession();
   return isPracticeSignupMeta(
-    data.user?.user_metadata as Record<string, unknown> | undefined,
+    data.session?.user?.user_metadata as Record<string, unknown> | undefined,
   );
 }
 
@@ -410,15 +417,27 @@ export async function shouldBounceFromOwnerApp(
   });
 }
 
-export async function isMilonItMember(userId: string): Promise<boolean> {
-  try {
-    const { data } = await supabase.rpc("is_milon_it_member" as never, {
-      _user_id: userId,
-    } as never);
-    return Boolean(data);
-  } catch {
-    return false;
-  }
+const itMemberChecks = new Map<string, Promise<boolean>>();
+
+export function clearItMemberCache(): void {
+  itMemberChecks.clear();
+}
+
+export function isMilonItMember(userId: string): Promise<boolean> {
+  const existing = itMemberChecks.get(userId);
+  if (existing) return existing;
+  const pending = (async () => {
+    try {
+      const { data } = await supabase.rpc("is_milon_it_member" as never, {
+        _user_id: userId,
+      } as never);
+      return Boolean(data);
+    } catch {
+      return false;
+    }
+  })();
+  itMemberChecks.set(userId, pending);
+  return pending;
 }
 
 /**
@@ -437,17 +456,20 @@ const accountantStayChecks = new Map<string, Promise<boolean>>();
 
 /**
  * Accountant portal may keep practice accounts — never business-client credentials.
- * One cold load shares a single check. A cancelled render used to start another
- * read while the first still held the auth lock, and the second never fired.
+ * The result is cached for the session. A later firm navigation must not call
+ * getSession again just to decide the door. Sign-out clears the cache.
+ * This is a routing result, not an entitlement.
  */
 export function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
   const existing = accountantStayChecks.get(userId);
   if (existing) return existing;
-  const pending = resolveAccountantStay(userId).finally(() => {
-    accountantStayChecks.delete(userId);
-  });
+  const pending = resolveAccountantStay(userId).catch(() => false);
   accountantStayChecks.set(userId, pending);
   return pending;
+}
+
+export function clearAccountantStayCache(): void {
+  accountantStayChecks.clear();
 }
 
 async function resolveAccountantStay(userId: string): Promise<boolean> {

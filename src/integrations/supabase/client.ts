@@ -4,6 +4,7 @@ import type { Database } from './types';
 import {
   adoptSharedAuthSession,
   supabaseAuthStorageKey,
+  tabAuthLock,
   tabAuthStorage,
   withoutAuthBroadcast,
 } from './tab-auth';
@@ -34,6 +35,8 @@ function createSupabaseClient() {
         storage: tabAuthStorage(),
         persistSession: true,
         autoRefreshToken: true,
+        // processLock, capped. Not navigator.locks, which is shared by every tab.
+        lock: tabAuthLock,
       },
     }),
   );
