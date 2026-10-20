@@ -1,4 +1,6 @@
 import { MONTHS_LONG as MONTHS } from "@/lib/market/date-presets";
+import { CLIENTS_LOAD_RETRY_BACKOFF_MS, readWithOneRetry, settleWithin } from "@/lib/bounded-load";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -3665,6 +3667,8 @@ export function ReportsStudio({
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [clientData, setClientData] = useState<ClientReportData | null>(null);
   const [dataLoading, setDataLoading] = useState(Boolean(clientId));
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [reportLoadAttempt, setReportLoadAttempt] = useState(0);
   const deepLinkHandled = useRef<string | null>(null);
   const deepLinkReport =
     reportParam && REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number])
@@ -3827,33 +3831,37 @@ export function ReportsStudio({
     let cancelled = false;
     setClientData(null); // clear before async starts
     setDataLoading(true);
+    setDataError(null);
     deepLinkHandled.current = null;
     const fetchPlan = reportFetchPlan(onlyKeyToken ? onlyKeyToken.split("\0") : undefined);
-    loadClientReportData(clientId, fetchPlan)
-      .then((data) => {
-        if (cancelled) return;
-        setClientData(data);
-        // Keep smeName in sync with the client's real name if it differs
-        if (data.clientName || data.periodMonth || data.dataPeriodLabel) {
-          setSettings((prev) => ({
-            ...prev,
-            ...(data.clientName ? { smeName: data.clientName } : {}),
-            ...(data.periodMonth && data.periodYear
-              ? { periodMonth: data.periodMonth, periodYear: data.periodYear }
-              : {}),
-          }));
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load client report data:", err);
-      })
-      .finally(() => {
-        if (!cancelled) setDataLoading(false);
-      });
+    const read = () => settleWithin(loadClientReportData(clientId, fetchPlan), SHELL_GATE_TIMEOUT_MS);
+    void readWithOneRetry(read, CLIENTS_LOAD_RETRY_BACKOFF_MS).then((settled) => {
+      if (cancelled) return;
+      if (settled.status !== "value") {
+        console.error("Failed to load client report data:", settled.status === "error" ? settled.error : "timeout");
+        setDataError("Couldn't load reports. Try again.");
+        return;
+      }
+      const data = settled.value;
+      setClientData(data);
+      setDataError(null);
+      // Keep smeName in sync with the client's real name if it differs
+      if (data.clientName || data.periodMonth || data.dataPeriodLabel) {
+        setSettings((prev) => ({
+          ...prev,
+          ...(data.clientName ? { smeName: data.clientName } : {}),
+          ...(data.periodMonth && data.periodYear
+            ? { periodMonth: data.periodMonth, periodYear: data.periodYear }
+            : {}),
+        }));
+      }
+    }).finally(() => {
+      if (!cancelled) setDataLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [clientId, onlyKeyToken]);
+  }, [clientId, onlyKeyToken, reportLoadAttempt]);
 
   // Build the GEN map from real client data (or null = demo data)
   const GEN = useMemo(
@@ -4148,6 +4156,14 @@ export function ReportsStudio({
 
   const reportCatalogue = (
     <>
+      {dataError ? (
+        <p className="mb-3 text-sm font-semibold text-[#102A43]" role="alert" data-reports-error>
+          {dataError}{" "}
+          <button type="button" className="underline" onClick={() => setReportLoadAttempt((n) => n + 1)}>
+            Retry
+          </button>
+        </p>
+      ) : null}
       {essential.length > 0 ? (
       <section>
         {onlyKeys?.length === 1 ? null : (

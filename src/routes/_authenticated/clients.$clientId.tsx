@@ -347,7 +347,8 @@ import {
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
-import { draftStoredFiguresHash } from "@/lib/draft-figures";
+import { healthSnapshotFromBooks, renderHealthNarrative } from "@/lib/health-snapshot";
+import { draftStoredFiguresHash, draftStoredHealth } from "@/lib/draft-figures";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState } from "@/components/primitives";
@@ -1695,6 +1696,10 @@ function ClientView() {
     pickCurrentSnapshot(snapshots)?.period_label,
     clientMarket,
   );
+  const liveScoreSnapshot = healthSnapshotFromBooks({
+    health: overallHealth,
+    periodLabel: figuresPeriodLabel,
+  });
   const ledgerSpan = (link: {
     periodLabel: string | null;
     periodStart: string | null;
@@ -3660,11 +3665,7 @@ function ClientView() {
   const homePresence = useMemo(
     () =>
       steerOpenHandoffs(
-        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, {
-          overall: overallHealth.overall,
-          weakestLabel: overallHealth.weakestPillar?.label ?? null,
-          weakestScore: overallHealth.weakestPillar?.score ?? null,
-        }),
+        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, liveScoreSnapshot),
         openAgents,
       ),
     [homeActivity, homeCardRuns, openAgents, overallHealth],
@@ -3895,8 +3896,10 @@ function ClientView() {
     const shownDraft = waiting[0] ?? drafts[0] ?? null;
     const draftsHeading = "Drafts";
     const liveDraft = {
-      overall: overallHealth.overall,
+      overall: liveScoreSnapshot?.overall ?? overallHealth.overall,
       storedHash: shownDraft ? draftStoredFiguresHash(shownDraft.evidence) : null,
+      health: liveScoreSnapshot,
+      storedHealth: shownDraft ? draftStoredHealth(shownDraft.evidence) : null,
     };
     const titlePresented = shownDraft
       ? presentHomeDraftTitle(shownDraft.title, canonicalRatios, liveDraft)
@@ -3922,6 +3925,7 @@ function ClientView() {
       draftLines,
       draftId: shownDraft?.id ?? null,
       draftStale,
+      draftLiveSentence: liveScoreSnapshot ? renderHealthNarrative(liveScoreSnapshot) : null,
       deliverablesHeading: "Reports",
       deliverableLines: reportsLine ? [reportsLine] : [],
       syncHeading: "Books",
@@ -3934,6 +3938,7 @@ function ClientView() {
     homeActivity,
     canonicalRatios,
     overallHealth.overall,
+    liveScoreSnapshot,
     dataFreshness,
     reportsLine,
     statementSpan,
@@ -3983,10 +3988,12 @@ function ClientView() {
             title,
             detail: row.detail,
             figuresHash: draftStoredFiguresHash(row.evidence),
+            storedHealth: draftStoredHealth(row.evidence),
           }];
         }),
         canonicalRatios,
         healthOverall: overallHealth.overall,
+        healthSnapshot: liveScoreSnapshot,
         draftsReady: !homeActivity.loading && !homeActivity.error,
         actionsReady: openPlanTitles != null && !openPlanUnavailable,
         formatMoney: (amount) => formatMoney(amount, gateMarket),
@@ -5371,6 +5378,7 @@ function ClientView() {
                           findings={homeActivity.findings}
                           focusId={typeof search.draft === "string" ? search.draft : null}
                           canonicalRatios={canonicalRatios}
+                          health={liveScoreSnapshot}
                           onRefresh={homeActivity.refresh}
                         />
                         <AdvisoryPackPanel
@@ -5381,6 +5389,7 @@ function ClientView() {
                           audience="accountant"
                           canGenerate={hasFigures}
                           hasFirm={Boolean(client.firm_id)}
+                          liveHealth={liveScoreSnapshot}
                           refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
                           onChanged={() => setAdvisoryBump((n) => n + 1)}
                           onSignoffAction={setPackSignoff}
@@ -5645,6 +5654,7 @@ function ClientView() {
                           clientId={client.id}
                           clientName={client.name}
                           canonicalRatios={canonicalRatios}
+                          healthSnapshot={liveScoreSnapshot}
                           reviewSignoff={stampFromSignoff(actionPlanSignoff, false)}
                           simplified
                           isOwner

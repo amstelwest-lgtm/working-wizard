@@ -71,6 +71,7 @@ function sentenceFor(
     figures: findingFigureEntries(finding.evidence),
     market,
     liveHealth,
+    evidence: finding.evidence,
   });
   return text || "Nothing new from the books.";
 }

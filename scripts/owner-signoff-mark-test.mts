@@ -78,8 +78,9 @@ assert.equal(signed.includes("figures have changed"), false);
 const stale = renderToStaticMarkup(
   createElement(OwnerSignoffMark, { signoff: signoff(), isStale: true }),
 );
-assert.match(stale, /Signed off by Theo · 1 Sep 2026/);
-assert.match(stale, new RegExp(OWNER_SIGNOFF_STALE_CHIP.replace(/[·]/g, "·")));
+assert.match(stale, /Signed off by Theo · figures changed since, re-review/);
+assert.equal(stale.includes("1 Sep 2026"), false);
+assert.equal(stale.includes(OWNER_SIGNOFF_STALE_CHIP), false);
 assert.equal(stale.includes("figures have changed"), false);
 assert.match(stale, /data-signoff-stale-chip/);
 

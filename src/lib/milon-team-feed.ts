@@ -29,7 +29,8 @@ import {
 import { formatMoneyCompact, type MoneyMarket } from "./market/format";
 import { marketForClient } from "./market/scope";
 import { ZA_MARKET } from "./market/resolve";
-import { statementSpanLabel } from "./statement-period";
+import { figuresPeriodLabelFrom, statementSpanLabel } from "./statement-period";
+import { healthSnapshotFromBooks, type HealthScoreSnapshot } from "./health-snapshot";
 import {
   PRECARD_CAP_CODE,
   PRECARD_CAP_MESSAGE,
@@ -122,12 +123,8 @@ export interface MilonTeamFeed {
   activity: TeamActivityEvent[];
   agents: Record<AgentKey, TeamAgentStatus>;
   signoffLine: string | null;
-  /** Live floor-applied score. Stored findings quote this on screen. */
-  healthQuote: {
-    overall: number | null;
-    weakestLabel: string | null;
-    weakestScore: number | null;
-  } | null;
+  /** Live floor-applied score. Stored findings are checked against this. */
+  healthQuote: HealthScoreSnapshot | null;
   precard: PrecardState;
   loading: boolean;
   error: string | null;
@@ -328,6 +325,7 @@ export type TeamDiagnosis = {
     weakestLabel?: string | null;
     weakestScore?: number | null;
   } | null;
+  snapshot: HealthScoreSnapshot | null;
   ratios: TeamDiagnosisRatio[];
   brain: {
     headline: string | null;
@@ -1026,14 +1024,7 @@ export function buildMilonTeamFeed(input: {
     activity,
     agents: agentStatusesFromActivity(activity),
     signoffLine,
-    healthQuote:
-      input.diagnosis.health == null
-        ? null
-        : {
-            overall: input.diagnosis.health.score,
-            weakestLabel: input.diagnosis.health.weakestLabel ?? null,
-            weakestScore: input.diagnosis.health.weakestScore ?? null,
-          },
+    healthQuote: input.diagnosis.snapshot,
     precard: input.precard,
     loading: input.loading === true,
     error: input.error ?? null,
@@ -1145,6 +1136,12 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
       : null;
 
   const weakest = healthRaw.weakestPillar;
+  const periodLabel = figuresPeriodLabelFrom(
+    financials,
+    input.snapshotAsOf,
+    input.market,
+  );
+  const snapshot = healthSnapshotFromBooks({ health: healthRaw, periodLabel });
   const health =
     healthRaw.overall == null
       ? null
@@ -1160,6 +1157,7 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
   return {
     market,
     health,
+    snapshot,
     ratios,
     brain,
     proposals: input.proposals.filter((step) => step.title.trim()),

@@ -26,6 +26,7 @@ import {
   evidenceKeyList,
   evidenceKeysNote,
 } from "../../../../src/lib/agent-analyst.ts";
+import { loadHealthScoreSnapshot, snapshotEvidenceFields } from "../../../../src/lib/health-snapshot.ts";
 import {
   CUT_OFF_DRAFT_RESULT,
   recordDraftWasCutOff,
@@ -215,6 +216,7 @@ async function recordHandoffFinish(
       if (!duplicate) {
         const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
         const severity = severityWithFloor("info", metrics);
+        const liveSnapshot = await loadHealthScoreSnapshot(db, input.clientId, input.market);
         const { error: findingError } = await db.from("agent_findings").insert({
           agent: config.agent,
           client_id: input.clientId,
@@ -227,6 +229,7 @@ async function recordHandoffFinish(
             ...cited.evidence,
             metrics,
             status: agentCopyStatus(severity),
+            ...(liveSnapshot ? snapshotEvidenceFields(liveSnapshot) : {}),
           }),
           last_seen: new Date().toISOString(),
         });

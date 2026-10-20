@@ -8,7 +8,7 @@
 import { formatReviewDateTime } from "./market/format.ts";
 import { marketForClient } from "./market/scope.ts";
 import type { ResolvedMarket } from "./market/types.ts";
-import { signoffStatusLine } from "./signoff-status.ts";
+import { signoffStatusLine, staleSignoffLine } from "./signoff-status.ts";
 
 function stampMarket(market: Pick<ResolvedMarket, "locale" | "timezone"> | undefined) {
   return market ?? marketForClient(null);
@@ -177,7 +177,7 @@ export function pdfSignoffBadgeLine(
   market?: Pick<ResolvedMarket, "locale" | "timezone">,
 ): string {
   const name = stamp.signedOffByName.trim();
-  if (stamp.figuresChanged) return signoffStatusLine({ kind: "stale", name });
+  if (stamp.figuresChanged) return staleSignoffLine(name);
   const when = formatReviewDateTime(stamp.signedOffAt, stampMarket(market));
   return signoffStatusLine({
     kind: "signed",

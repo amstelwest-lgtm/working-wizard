@@ -69,6 +69,7 @@ import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
 import { OwnerChat } from "./owner-chat";
 import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
+import { renderHealthNarrative } from "@/lib/health-snapshot";
 import {
   advisoryDeliverableTitles,
   ownerDraftPresentations,
@@ -211,11 +212,7 @@ export function OwnerDoor({
   /** Scored operating cash. Names a Critical chip that is burn. */
   cashBurnScore?: number | null;
   /** Live floor-applied score. Home cards quote this instead of a stored finding. */
-  liveHealth?: {
-    overall: number | null;
-    weakestLabel: string | null;
-    weakestScore: number | null;
-  } | null;
+  liveHealth?: import("@/lib/health-snapshot").HealthScoreSnapshot | null;
   market: ResolvedMarket;
   /** Stored country. Null stays off the ZA tax card even if `market` was coerced for dates. */
   marketCountry?: string | null;
@@ -775,8 +772,12 @@ export function OwnerDoor({
     [financials, market.fyStartMonthDefault],
   );
   const draftPresentations = useMemo(
-    () => ownerDraftPresentations(activity.findings, canonicalRatios, { overall: liveHealth?.overall ?? null }),
-    [activity.findings, canonicalRatios, liveHealth?.overall],
+    () =>
+      ownerDraftPresentations(activity.findings, canonicalRatios, {
+        overall: liveHealth?.overall ?? null,
+        health: liveHealth,
+      }),
+    [activity.findings, canonicalRatios, liveHealth],
   );
   const needs = useMemo(
     () =>
@@ -789,11 +790,13 @@ export function OwnerDoor({
         draftsUnavailable: Boolean(activity.error),
         draftTitles: draftPresentations.map((row) => row.text),
         draftStale: draftPresentations.map((row) => row.stale),
+        draftLiveSentence: liveHealth ? renderHealthNarrative(liveHealth) : null,
         deliverablesReady: actionsReady,
         deliverablesUnavailable,
         deliverableCount,
         advisoryTitles: advisoryDeliverableTitles(activity.findings, canonicalRatios, {
           overall: liveHealth?.overall ?? null,
+          health: liveHealth,
         }),
         quickBooks,
         xero: xeroLink,
@@ -809,7 +812,7 @@ export function OwnerDoor({
       activity.error,
       activity.findings,
       draftPresentations,
-      liveHealth?.overall,
+      liveHealth,
       canonicalRatios,
       deliverablesUnavailable,
       deliverableCount,

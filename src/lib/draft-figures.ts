@@ -4,7 +4,11 @@
  * says when those inputs have moved. The stored row is not rewritten.
  */
 import { groundAdvisoryNarrative } from "./advisory-narrative.ts";
-import { preferLiveHealthProse } from "./score-prose.ts";
+import {
+  presentHealthNarrative,
+  readStoredHealthSnapshot,
+  type HealthScoreSnapshot,
+} from "./health-snapshot.ts";
 
 export const DRAFT_OUT_OF_DATE = "Out of date, refresh";
 
@@ -18,6 +22,10 @@ export type DraftLiveFigures = {
   ratios?: Record<string, number> | null;
   overall?: number | null;
   storedHash?: string | null;
+  /** Live pillars, overall, weakest, and statement period. */
+  health?: HealthScoreSnapshot | null;
+  /** Snapshot stored on the draft when it was written. */
+  storedHealth?: HealthScoreSnapshot | null;
 };
 
 /** Stable hash of the live margins and, when known, the live overall. */
@@ -65,6 +73,10 @@ export function draftFiguresDrift(
     if (now != null && now !== value) return true;
   }
   return false;
+}
+
+export function draftStoredHealth(evidence: unknown): HealthScoreSnapshot | null {
+  return readStoredHealthSnapshot(evidence);
 }
 
 export function draftStoredFiguresHash(evidence: unknown): string | null {
@@ -125,16 +137,17 @@ export function quoteLiveDraftProse(
   live: { ratios?: Record<string, number> | null; overall?: number | null },
 ): string {
   const grounded = live.ratios ? groundAdvisoryNarrative(text, live.ratios) : text;
-  const scored = quoteLiveScoreOnly(grounded, live.overall);
-  if (live.overall != null && Number.isFinite(live.overall)) {
-    return preferLiveHealthProse(scored, { overall: live.overall, weakestLabel: null, weakestScore: null });
-  }
-  return scored;
+  return quoteLiveScoreOnly(grounded, live.overall);
 }
 
 const UNGROUNDED_FIGURE = /\d+(?:\.\d+)?%|\bstored\s+health\b|\bvs\s+live\b|\bhealth\s+\d{1,3}\b/i;
 
-export type PresentedDraft = { text: string; stale: boolean; refresh: boolean };
+export type PresentedDraft = {
+  text: string;
+  stale: boolean;
+  refresh: boolean;
+  regenerate?: boolean;
+};
 
 /**
  * Re-render a stored draft from the live ratios and overall. A hash mismatch,
@@ -154,6 +167,13 @@ export function presentLiveDraft(base: string, live?: DraftLiveFigures | null): 
     return { text: DRAFT_OUT_OF_DATE, stale: true, refresh: true };
   }
   const grounded = quoteLiveDraftProse(trimmed, { ratios, overall });
+  const health = presentHealthNarrative(grounded, live?.health, live?.storedHealth ?? null);
+  if (health.regenerate) {
+    return { text: health.text, stale: true, refresh: true, regenerate: true };
+  }
+  if (health.text !== grounded) {
+    return { text: health.text, stale: false, refresh: false, regenerate: false };
+  }
   const changed = grounded !== trimmed;
   const drifted = draftFiguresDrift(live?.storedHash, { ratios, overall });
   const refresh = changed || drifted;

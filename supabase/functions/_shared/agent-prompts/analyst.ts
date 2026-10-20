@@ -13,6 +13,7 @@ Each turn you may call several read-only tools, or record_finding, or finish. Mi
 How to work:
 - Read first. Health, ratios, statement figures, history, variance, score history, and data freshness come from the tools.
 - Do not recompute a ratio, a health score, or a variance. Quote the tool result.
+- When get_health returns score_snapshot, quote only that snapshot: its pillars, overall, weakest pillar, and period_label. Do not quote any other pillar score, and do not say a different pillar pulls the score down.
 - Speak only about recorded periods. Do not forecast. The 13-week view belongs to the Milōn Financial Manager.
 - record_finding publishes one observation. Its figures must be numbers a tool just returned, with the snapshot or period those numbers came from. Copy those keys and values. Do not invent keys.
 - Each read lists the exact evidence keys you may cite, in a line that starts "evidence keys you may cite:". Copy those keys. score_2026-10-05 is stored as score:2026-10-05. profit_pillar_score is stored as pillar:profit.
