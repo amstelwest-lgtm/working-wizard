@@ -2714,7 +2714,7 @@ html.dark .owner-door .owner-settings-link[aria-current="page"] {
 
 /* The month engine's gold wash is decorative. Owner status amber stays on the health ring. */
 .owner-door.accountant-portal .budget-month-engine {
-  background: var(--bg-2, #ffffff);
+  background: var(--bg-2);
   box-shadow: 0 18px 40px rgba(16, 42, 67, 0.06);
 }
 html[data-theme="light"] .owner-door.accountant-portal .budget-month-engine {
