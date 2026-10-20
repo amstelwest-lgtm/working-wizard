@@ -192,6 +192,7 @@
     "test:firm-voucher": "vite-node --config scripts/vite-test.config.ts scripts/firm-voucher-test.mts",
     "test:starter-trial-generation": "vite-node --config scripts/vite-test.config.ts scripts/starter-trial-generation-test.mts",
     "test:precard-cap": "vite-node --config scripts/vite-test.config.ts scripts/precard-cap-test.mts",
+    "test:precard-wall-proof": "vite-node --config scripts/vite-test.config.ts scripts/precard-wall-proof-test.mts",
     "test:milon-team": "vite-node --config scripts/vite-test.config.ts scripts/milon-team-test.mts",
     "test:owner-door": "vite-node --config scripts/vite-test.config.ts scripts/owner-door-test.mts",
     "test:owner-app-tab": "vite-node --config scripts/vite-test.config.ts scripts/owner-app-tab-test.mts",

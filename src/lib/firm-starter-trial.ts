@@ -50,6 +50,28 @@ function parseInstant(value: string | number | null | undefined): number | null 
 }
 
 /**
+ * 14-day clock for a firm that has not started a subscription.
+ * Exempt firms stay open. A firm that already has a plan uses
+ * `starterTrialClock` instead. An unknown start does not invent a block.
+ */
+export function noPlanTrialClock(input: {
+  enforced: boolean;
+  /** True only when Stripe has no entitling subscription. */
+  noPlan: boolean;
+  /** Firm row created_at. Not a Stripe subscription start. */
+  startedAt?: string | number | null;
+  now?: Date;
+}): StarterTrialBanner {
+  if (!input.enforced || !input.noPlan) return idleStarterTrialBanner();
+  return starterTrialClock({
+    enforced: true,
+    band: "starter",
+    startedAt: input.startedAt,
+    now: input.now,
+  });
+}
+
+/**
  * Trial clock for an active or trialing Starter subscription.
  * `enforced` is the per-firm pilot flag. Paid bands ignore it.
  */
