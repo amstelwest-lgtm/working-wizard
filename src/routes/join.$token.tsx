@@ -50,7 +50,7 @@ export function AccountantInviteIntro({
   clientName: string | null;
 }) {
   return (
-    <p data-accountant-invite-lead="" className="mt-3 text-sm leading-relaxed text-[#8a938c]">
+    <p data-accountant-invite-lead="" className="mt-3 text-sm leading-relaxed text-[#3D5270]">
       {accountantInviteLead({ inviterName, clientName })}. You will land in the practice portal,
       linked to this client — not as a second owner.
     </p>
@@ -80,17 +80,6 @@ function AccountantJoinPage() {
   const [signInFailure, setSignInFailure] = useState<PasswordSignInFailure | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const submitLock = useRef(false);
-
-  // This page is a dark canvas. Force the dark class so light-mode heading
-  // overrides (html:not(.dark) h1 { color }) cannot paint dark text on it.
-  useEffect(() => {
-    const el = document.documentElement;
-    const hadDark = el.classList.contains("dark");
-    el.classList.add("dark");
-    return () => {
-      if (!hadDark) el.classList.remove("dark");
-    };
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -232,17 +221,17 @@ function AccountantJoinPage() {
 
   return (
     <OwnerInviteShell businessName={clientName} loading={previewLoading || authLoading}>
-      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-foreground">
+      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#0B5FFF]">
         Accountant invitation
       </p>
-      <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-foreground">
+      <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-[#102A43]">
         {clientName ? `Join ${clientName}` : "Join a shared workspace"}
       </h1>
       <AccountantInviteIntro inviterName={inviterName} clientName={clientName} />
 
       {previewError ? (
         <div
-          className="mt-5 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200"
+          className="mt-5 rounded-xl border border-[#DBEAFE] bg-[#F4F8FF] px-4 py-3 text-sm text-[#102A43]"
           data-invite-block=""
         >
           {sanitizeInviteError(previewError)}
@@ -258,12 +247,12 @@ function AccountantJoinPage() {
         <OwnerInviteCard className="mt-6">
           {user?.email ? (
             <OwnerInviteNote>
-              Signed in as <span className="text-[#e8ede9]">{user.email}</span>. Accepting opens the
+              Signed in as <span className="font-medium text-[#102A43]">{user.email}</span>. Accepting opens the
               accountant portal for this client.
             </OwnerInviteNote>
           ) : invitedEmail ? (
             <OwnerInviteNote>
-              Use <span className="text-[#e8ede9]">{invitedEmail}</span> — the address this invite
+              Use <span className="font-medium text-[#102A43]">{invitedEmail}</span> — the address this invite
               was sent to.
             </OwnerInviteNote>
           ) : (
@@ -363,7 +352,7 @@ function AccountantJoinPage() {
                   <>
                     <OwnerInviteFieldLabel htmlFor="accInviteFirm">
                       Practice name{" "}
-                      <span className="normal-case tracking-normal text-[#8a938c]">(optional)</span>
+                      <span className="normal-case tracking-normal text-[#3D5270]">(optional)</span>
                     </OwnerInviteFieldLabel>
                     <OwnerInviteInput
                       id="accInviteFirm"
@@ -383,7 +372,7 @@ function AccountantJoinPage() {
                         : "Accepting…"
                       : signInMode
                         ? "Sign in"
-                        : "Accept as accountant"}
+                        : "Accept invitation"}
                   </OwnerInvitePrimaryButton>
                 </div>
                 <PasswordSignInAlert
@@ -396,7 +385,7 @@ function AccountantJoinPage() {
           )}
 
           {!user && !hideSignup ? (
-            <p className="mt-5 text-center text-xs text-[#8a938c]">
+            <p className="mt-5 text-center text-xs text-[#3D5270]">
               {signInMode ? "Need a new practice login? " : "Already have a Milōn account? "}
               <button
                 type="button"

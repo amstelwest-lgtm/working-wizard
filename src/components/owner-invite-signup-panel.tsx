@@ -67,10 +67,10 @@ export function OwnerInviteSignupPanel({
   return (
     <>
       <OwnerInviteEyebrow>Workspace invitation</OwnerInviteEyebrow>
-      <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-[#e8ede9]">
+      <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-[#102A43]">
         {businessName ? `Join ${businessName}` : "Join your business workspace"}
       </h1>
-      <p data-owner-invite-lead="" className="mt-3 text-sm leading-relaxed text-[#8a938c]">
+      <p data-owner-invite-lead="" className="mt-3 text-sm leading-relaxed text-[#3D5270]">
         {ownerInviteGreeting({ firmName, clientName: businessName, inviteeName })}.
         {hideSignup
           ? ""
@@ -79,7 +79,7 @@ export function OwnerInviteSignupPanel({
 
       {previewError ? (
         <div
-          className="mt-5 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200"
+          className="mt-5 rounded-xl border border-[#DBEAFE] bg-[#F4F8FF] px-4 py-3 text-sm text-[#102A43]"
           data-invite-block=""
         >
           {previewError}
@@ -98,7 +98,7 @@ export function OwnerInviteSignupPanel({
       <OwnerInviteCard className="mt-6">
         {signedInEmail ? (
           <OwnerInviteNote>
-            Signed in as <span className="text-[#e8ede9]">{signedInEmail}</span>.
+            Signed in as <span className="font-medium text-[#102A43]">{signedInEmail}</span>.
             {signedInEmail.toLowerCase() !== regEmail.trim().toLowerCase() && regEmail
               ? ` Accepting will attach the workspace to ${regEmail}.`
               : " Accepting will open your owner workspace."}
@@ -110,7 +110,7 @@ export function OwnerInviteSignupPanel({
         )}
 
         {inviteIsLegacyUuid ? (
-          <p className="mt-3 text-xs leading-relaxed text-[#e8b34b]">
+          <p className="mt-3 text-xs leading-relaxed text-[#9A3412]">
             This link uses an older format. It still works — ask your accountant for a fresh invite
             when convenient.
           </p>
@@ -128,7 +128,7 @@ export function OwnerInviteSignupPanel({
               value={regClientCode}
               onChange={(e) => onRegClientCodeChange(e.target.value.toUpperCase())}
             />
-            <p className="mt-2 text-[11px] text-[#8a938c]">
+            <p className="mt-2 text-[11px] text-[#3D5270]">
               From your invite email, next to the claim link.
             </p>
           </>
@@ -198,19 +198,19 @@ export function OwnerInviteSignupPanel({
         </form>
 
         {!signedInEmail ? (
-          <p className="mt-5 text-center text-xs text-[#8a938c]">
+          <p className="mt-5 text-center text-xs text-[#3D5270]">
             Already have an account?{" "}
             <button
               type="button"
               onClick={onSignInClick}
-              className="font-medium text-[#d4a550] underline underline-offset-2"
+              className="font-medium text-[#0B5FFF] underline underline-offset-2"
             >
               Sign in
             </button>
           </p>
         ) : null}
 
-        <p className="mt-5 text-center text-[11px] leading-relaxed text-[#8a938c]">
+        <p className="mt-5 text-center text-[11px] leading-relaxed text-[#3D5270]">
           By joining you agree to the{" "}
           <a href="/terms" className="underline underline-offset-2">
             Terms

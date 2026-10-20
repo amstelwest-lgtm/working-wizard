@@ -4909,7 +4909,7 @@ function Index() {
               <DialogContent
                 overlayClassName="profile-funnel-overlay"
                 data-profile-funnel=""
-                className="profile-funnel-sheet flex h-[min(80vh,calc(100dvh-6rem))] max-h-[min(80vh,calc(100dvh-6rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:p-6"
+                className="profile-funnel-sheet flex h-[min(80vh,calc(100dvh-6rem))] max-h-[min(80vh,calc(100dvh-6rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-[#DBEAFE] bg-white p-4 text-[#102A43] sm:p-6"
               >
                 <DialogHeader className="sr-only">
                   <DialogTitle>Business profile</DialogTitle>

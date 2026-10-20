@@ -48,7 +48,7 @@ export function OwnerInviteSigninOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#050507]/90 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#102A43]/40 px-4"
       onClick={onClose}
       role="dialog"
       aria-modal
@@ -58,12 +58,12 @@ export function OwnerInviteSigninOverlay({
         <OwnerInviteCard>
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8a938c]">
+              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#0B5FFF]">
                 Existing account
               </p>
               <h2
                 id="owner-invite-signin-title"
-                className="mt-1 text-lg font-semibold text-[#e8ede9]"
+                className="mt-1 text-lg font-semibold text-[#102A43]"
               >
                 Sign in to accept
               </h2>
@@ -71,7 +71,7 @@ export function OwnerInviteSigninOverlay({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-[#8a938c] hover:border-white/20"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#DBEAFE] text-[#3D5270] hover:border-[#0B5FFF]"
               aria-label="Close"
             >
               ×

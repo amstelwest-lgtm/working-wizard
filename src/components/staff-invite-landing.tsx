@@ -56,7 +56,7 @@ function LockedEmail({ email }: { email: string }) {
           /* locked to the invited address */
         }}
       />
-      <p className="mt-2 text-[11px] leading-relaxed text-[#8a938c]">
+      <p className="mt-2 text-[11px] leading-relaxed text-[#3D5270]">
         Locked to this invitation. Use this address to join the firm.
       </p>
     </>
@@ -89,15 +89,6 @@ export function StaffInviteLanding({
   const next = `/access/${token}`;
 
   useEffect(() => {
-    const el = document.documentElement;
-    const hadDark = el.classList.contains("dark");
-    el.classList.add("dark");
-    return () => {
-      if (!hadDark) el.classList.remove("dark");
-    };
-  }, []);
-
-  useEffect(() => {
     if (phase !== "signin") setResetOpen(false);
   }, [phase]);
 
@@ -105,13 +96,13 @@ export function StaffInviteLanding({
     <OwnerInviteShell businessName={firmName}>
       <div data-staff-invite={phase} data-invite-ready="true">
         <OwnerInviteEyebrow>Practice invitation</OwnerInviteEyebrow>
-        <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-[#e8ede9]">
+        <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-[#102A43]">
           {phase === "invalid" || phase === "used" ? "Practice invitation" : `Join ${practice}`}
         </h1>
 
         {phase === "invalid" ? (
           <OwnerInviteCard className="mt-6">
-            <p className="text-sm leading-relaxed text-rose-200" role="alert">
+            <p className="text-sm leading-relaxed text-[#9F1239]" role="alert">
               {STAFF_INVITE_INVALID_MESSAGE}
             </p>
           </OwnerInviteCard>
@@ -119,7 +110,7 @@ export function StaffInviteLanding({
 
         {phase === "used" ? (
           <OwnerInviteCard className="mt-6">
-            <p className="text-sm leading-relaxed text-[#8a938c]" role="status">
+            <p className="text-sm leading-relaxed text-[#3D5270]" role="status">
               {STAFF_INVITE_USED_MESSAGE}
             </p>
           </OwnerInviteCard>
@@ -128,16 +119,16 @@ export function StaffInviteLanding({
         {phase === "joining" || phase === "auto_accept" ? (
           <OwnerInviteCard className="mt-6">
             {error ? (
-              <p className="text-sm leading-relaxed text-rose-200" role="alert">
+              <p className="text-sm leading-relaxed text-[#9F1239]" role="alert">
                 {error}
               </p>
             ) : (
               <div className="flex flex-col items-center gap-4 py-4">
                 <div
-                  className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--brand-gold-ui)]/25 border-t-[var(--brand-gold-ui)]"
+                  className="h-6 w-6 animate-spin rounded-full border-2 border-[#DBEAFE] border-t-[#0B5FFF]"
                   aria-hidden
                 />
-                <p className="text-sm text-[#8a938c]">Joining {practice}…</p>
+                <p className="text-sm text-[#3D5270]">Joining {practice}…</p>
               </div>
             )}
           </OwnerInviteCard>
@@ -145,11 +136,11 @@ export function StaffInviteLanding({
 
         {phase === "mismatch" ? (
           <>
-            <p className="mt-3 text-sm leading-relaxed text-[#8a938c]">
+            <p className="mt-3 text-sm leading-relaxed text-[#3D5270]">
               You&apos;re signed in as {signedInEmail}. This invitation is for {memberEmail}.
             </p>
             <OwnerInviteCard className="mt-6">
-              <p className="text-sm leading-relaxed text-[#e8b34b]" role="alert">
+              <p className="text-sm leading-relaxed text-[#9A3412]" role="alert">
                 You&apos;re signed in as {signedInEmail}. This invitation is for {memberEmail}.
               </p>
               <div className="mt-6">
@@ -168,13 +159,13 @@ export function StaffInviteLanding({
 
         {phase === "create" || phase === "signin" ? (
           <>
-            <p className="mt-3 text-sm leading-relaxed text-[#8a938c]">
+            <p className="mt-3 text-sm leading-relaxed text-[#3D5270]">
               {practice} invited {memberName?.trim() || "you"} to join their Milōn workspace as {role}.
               {phase === "create"
                 ? " Create your account with this email address. It takes a minute."
                 : " Sign in with this email address to accept."}
             </p>
-            <p className="mt-3 text-xs leading-relaxed text-[#c5b48a]">
+            <p className="mt-3 text-xs leading-relaxed text-[#3D5270]">
               {[memberName, memberEmail, classification, firmName].filter(Boolean).join(" · ")}
             </p>
             <OwnerInviteCard className="mt-6">
@@ -236,12 +227,12 @@ export function StaffInviteLanding({
                       )}
                     </PasswordWithShow>
                     {phase === "create" ? (
-                      <p id="staff-invite-password-hint" className="mt-2 text-[11px] text-[#8a938c]">
+                      <p id="staff-invite-password-hint" className="mt-2 text-[11px] text-[#3D5270]">
                         At least 8 characters.
                       </p>
                     ) : null}
                     {notice ? (
-                      <p className="mt-4 text-sm leading-relaxed text-[#c5b48a]" role="status">
+                      <p className="mt-4 text-sm leading-relaxed text-[#3D5270]" role="status">
                         {notice}
                       </p>
                     ) : null}
@@ -252,7 +243,7 @@ export function StaffInviteLanding({
                         tone="overlay"
                       />
                     ) : error ? (
-                      <p className="mt-4 text-sm text-rose-200" role="alert">
+                      <p className="mt-4 text-sm text-[#9F1239]" role="alert">
                         {error}
                       </p>
                     ) : null}
@@ -269,7 +260,7 @@ export function StaffInviteLanding({
                     </div>
                   </form>
                   {phase === "create" ? (
-                    <p className="mt-5 text-center text-[11px] leading-relaxed text-[#8a938c]">
+                    <p className="mt-5 text-center text-[11px] leading-relaxed text-[#3D5270]">
                       By joining you agree to the{" "}
                       <a href="/terms" className="underline underline-offset-2">
                         Terms
