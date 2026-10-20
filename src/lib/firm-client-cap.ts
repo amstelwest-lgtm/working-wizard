@@ -188,6 +188,8 @@ export type FirmPlanStatusCopy = {
   detail: string | null;
   /** Calendar date from Stripe trial_end. Null when there is no trial end to show. */
   trialEndsOn: string | null;
+  /** Calendar date from Stripe current_period_end. Null unless the plan is active and Stripe sent a period end. */
+  renewsOn: string | null;
 };
 
 /**
@@ -202,6 +204,20 @@ export function firmTrialStatusLine(input: {
   const date = input.trialEndsOn?.trim();
   if (!date) return null;
   return `Free trial · ends ${date}`;
+}
+
+/**
+ * Settings line for a paid plan. Null when the phase is not active or Stripe
+ * did not send current_period_end, so the page does not invent a renewal date.
+ */
+export function firmRenewalStatusLine(input: {
+  phase: FirmSubscriptionPhase | null | undefined;
+  renewsOn: string | null | undefined;
+}): string | null {
+  if (input.phase !== "active") return null;
+  const date = input.renewsOn?.trim();
+  if (!date) return null;
+  return `Renews ${date}`;
 }
 
 /** Date label for a Stripe trial end, in the firm's market. Null when the timestamp is missing. */
@@ -255,11 +271,14 @@ export function formatFirmPlanStatus(input: {
   phase: FirmSubscriptionPhase;
   band: FirmBandId | null;
   trialEndIso?: string | null;
+  /** Stripe current_period_end. Shown only for an active plan. */
+  periodEndIso?: string | null;
   now?: Date;
   market?: { locale?: string | null; timezone?: string };
 }): FirmPlanStatusCopy {
   const band = input.band && isFirmBandId(input.band) ? input.band : null;
   const bandName = band ? FIRM_BAND_CATALOG[band].name : null;
+  const market = input.market ?? marketForFirm(null);
 
   if (input.phase === "trialing") {
     const days = trialDaysRemaining(input.trialEndIso, input.now);
@@ -275,7 +294,8 @@ export function formatFirmPlanStatus(input: {
       band,
       headline,
       detail,
-      trialEndsOn: trialEndDateLabel(input.trialEndIso, input.market ?? marketForFirm(null)),
+      trialEndsOn: trialEndDateLabel(input.trialEndIso, market),
+      renewsOn: null,
     };
   }
 
@@ -286,8 +306,16 @@ export function formatFirmPlanStatus(input: {
       headline: bandName ?? "Paid plan",
       detail: band ? firmClientLimitLabel(band) : null,
       trialEndsOn: null,
+      renewsOn: trialEndDateLabel(input.periodEndIso, market),
     };
   }
 
-  return { phase: "none", band: null, headline: "No active plan", detail: null, trialEndsOn: null };
+  return {
+    phase: "none",
+    band: null,
+    headline: "No active plan",
+    detail: null,
+    trialEndsOn: null,
+    renewsOn: null,
+  };
 }
