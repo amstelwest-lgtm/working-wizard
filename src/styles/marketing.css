@@ -607,6 +607,21 @@ html .mk .mk-cta p {
   box-shadow: 0 8px 22px -14px rgba(172, 132, 0, 0.9);
 }
 
+/* Bottom-card cross-links are not trial CTAs. Gold stays on sign-up buttons. */
+.mk .mk-cta .mk-btn.mk-btn-cobalt {
+  background: var(--cobalt);
+  background-image: none;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  box-shadow: none;
+}
+.mk .mk-cta .mk-btn.mk-btn-cobalt:hover {
+  background: var(--royal);
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  box-shadow: none;
+}
+
 .mk .mk-btn-ghost {
   display: inline-block;
   padding: 12px 22px;

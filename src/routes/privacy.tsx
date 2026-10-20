@@ -64,6 +64,7 @@ function PrivacyPage() {
       }
       ctaLabel="AI notice ✦"
       ctaHref="/ai"
+      ctaTone="cobalt"
       navCtaLabel={FIRM_TRIAL_CTA_LABEL}
       landingNav
     >
@@ -77,7 +78,7 @@ function PrivacyPage() {
         <p>
           {LEGAL_ENTITY} runs Milōn, a financial-health workspace for business owners and the
           accountants they invite. The responsible party for personal information processed on this
-          platform is {LEGAL_ENTITY}.
+          platform is {LEGAL_ENTITY}
         </p>
         <p>
           The Privacy contact is {LEGAL_INFORMATION_OFFICER}. Email {LEGAL_PRIVACY_EMAIL}, reply to

@@ -39,7 +39,7 @@ function TermsPage() {
       }
       lead={
         <>
-          These terms cover the Milōn workspace run by {LEGAL_ENTITY}. They are a first public
+          These terms cover the Milōn workspace run by {LEGAL_ENTITY} They are a first public
           version. Effective {LEGAL_EFFECTIVE}.
         </>
       }
@@ -52,6 +52,7 @@ function TermsPage() {
       }
       ctaLabel="Privacy ✦"
       ctaHref="/privacy"
+      ctaTone="cobalt"
       navCtaLabel={FIRM_TRIAL_CTA_LABEL}
       landingNav
     >

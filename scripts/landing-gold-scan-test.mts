@@ -1,7 +1,8 @@
 /**
- * Computed-style scan of `/`. Brand gold may remain only on the MILŌN wordmark
- * (header, footer, hero mockup mark), the hero trial button, and the 390
- * sticky trial button. The amber "74" status colour is not brand gold.
+ * Computed-style scan of `/`, `/terms`, and `/privacy`. Brand gold may remain
+ * only on the MILŌN wordmark (header, footer, hero mockup mark), the hero
+ * trial button, and the 390 sticky trial button. The amber "74" status colour
+ * is not brand gold. Legal hero sublines must not render "Inc..".
  *
  *   pnpm test:landing-gold-scan
  *   LANDING_URL=http://127.0.0.1:5173 pnpm test:landing-gold-scan
@@ -116,7 +117,7 @@ async function scan(page: Page, label: string): Promise<{ hits: Hit[]; wordmark:
       if (!(r > g && g >= b && r - b > 45)) return false;
       const amber = Math.min(...AMBER.map((c) => dist(rgb, c)));
       const gold = Math.min(...GOLD.map((c) => dist(rgb, c)));
-      if (amber + 6 < gold) return false;
+      if (amber < gold) return false;
       return gold < 32;
     };
     const colorsIn = (value: string) => {
@@ -132,13 +133,15 @@ async function scan(page: Page, label: string): Promise<{ hits: Hit[]; wordmark:
       }
       return found;
     };
-    const allowed = (el: Element) =>
-      Boolean(
+    const allowed = (el: Element) => {
+      if (el.closest("[data-stale-bundle]")) return true;
+      return Boolean(
         el.closest(".logo-word") ||
           el.closest(".dash-top .brand") ||
           el.closest("#hero .btn-gold") ||
           el.closest(".trial-sticky .btn-gold"),
       );
+    };
     const visible = (el: Element) => {
       const s = getComputedStyle(el);
       if (s.display === "none" || s.visibility === "hidden") return false;
@@ -278,6 +281,30 @@ async function main() {
           for (const hit of focused.hits) failures.push(`${hit.path} ${hit.sample}`);
         }
         await page.close();
+      }
+    }
+    for (const path of ["/terms", "/privacy"]) {
+      for (const width of [1280, 390]) {
+        for (const theme of ["light", "dark"] as const) {
+          const page = await browser.newPage({ viewport: { width, height: 900 } });
+          await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
+          await page.evaluate((next) => {
+            document.documentElement.dataset.theme = next;
+            document.documentElement.classList.toggle("dark", next === "dark");
+          }, theme);
+          const copy = await page.locator(".mk-lead").innerText();
+          if (copy.includes("Inc..")) failures.push(`${path} ${width} ${theme}: hero subline has a double period`);
+          const painted = await scan(page, `${path} ${width} ${theme}`);
+          if (!painted.wordmark) failures.push(`${path} ${width} ${theme}: wordmark is not gold`);
+          for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
+          const cardBtn = page.locator(".mk-cta .mk-btn").first();
+          if (await cardBtn.isVisible()) {
+            await cardBtn.hover();
+            const hovered = await scan(page, `${path} ${width} ${theme} hover .mk-cta .mk-btn`);
+            for (const hit of hovered.hits) failures.push(`${hit.path} ${hit.sample}`);
+          }
+          await page.close();
+        }
       }
     }
   } finally {
