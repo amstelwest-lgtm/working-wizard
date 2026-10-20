@@ -7,11 +7,19 @@
  * need that module.
  */
 import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
+import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "./starter-trial-constants.ts";
 
 export const PROSPECT_MESSAGE_MAX = 500;
-/** Visitor messages before the name-and-email ask. Two exchanges, inside the 2–3 window. */
-export const PROSPECT_LEAD_AFTER_EXCHANGES = 2;
-export const PROSPECT_TURNS_PER_SESSION = 6;
+/**
+ * Useful answers in one agent conversation before the name-and-email form.
+ * The next visitor message is held and answered after the form.
+ * Three is inside the 2–3 window. This counter is the session's own
+ * visitor_turns, not an IP total and not a browser store.
+ */
+export const PROSPECT_FREE_REPLIES = 3;
+/** Answered turns after the form, including the message the form was holding. */
+export const PROSPECT_POST_LEAD_TURNS = 4;
+export const PROSPECT_TURNS_PER_SESSION = PROSPECT_FREE_REPLIES + PROSPECT_POST_LEAD_TURNS;
 export const PROSPECT_TURNS_PER_IP_PER_HOUR = 20;
 export const PROSPECT_SESSIONS_PER_IP_PER_DAY = 8;
 export const PROSPECT_GLOBAL_TURNS_PER_DAY = 400;
@@ -19,10 +27,15 @@ export const PROSPECT_GLOBAL_TURNS_PER_DAY = 400;
 export const PROSPECT_LEADS_PER_EMAIL = 2;
 export const PROSPECT_DEFAULT_MODEL = "claude-haiku-4-5";
 
-export const PROSPECT_PUBLIC_SLUGS = ["financial-manager", "analyst", "advisor"] as const;
-export type ProspectPublicSlug = (typeof PROSPECT_PUBLIC_SLUGS)[number];
 export const PROSPECT_TAX_SLUG = "tax-specialist";
-export type ProspectSlug = ProspectPublicSlug | typeof PROSPECT_TAX_SLUG;
+export const PROSPECT_PUBLIC_SLUGS = [
+  "financial-manager",
+  "analyst",
+  "advisor",
+  PROSPECT_TAX_SLUG,
+] as const;
+export type ProspectPublicSlug = (typeof PROSPECT_PUBLIC_SLUGS)[number];
+export type ProspectSlug = ProspectPublicSlug;
 
 export type ProspectFace = "financial_manager" | "analyst" | "advisor" | "tax_specialist";
 
@@ -62,6 +75,14 @@ export const PROSPECT_PUBLIC_AGENTS: readonly ProspectAgentCopy[] = [
     greeting: `I'm the ${AGENT_DISPLAY_NAME.advisor}. I turn a sample diagnosis into moves. Nothing is written to a ledger, and an accountant signs off.`,
     questions: ["What decision are you weighing?", "Is that about cash, profit, or the next move?"],
   },
+  {
+    slug: PROSPECT_TAX_SLUG,
+    face: "tax_specialist",
+    role: "Tax Specialist",
+    greeting:
+      "I'm the Milōn Tax Specialist. I prepare a labelled SAMPLE company tax worksheet for an accountant to review and sign off. I do not log into SARS, and I do not file or submit anything.",
+    questions: ["Is this a standard resident company?", "When does the year of assessment end?"],
+  },
 ];
 
 const PUBLIC_BY_SLUG = new Map(PROSPECT_PUBLIC_AGENTS.map((agent) => [agent.slug, agent]));
@@ -72,17 +93,12 @@ export function publicProspectAgent(slug: string): ProspectAgentCopy | null {
 
 export type TalkResolution =
   | { kind: "agent"; agent: ProspectAgentCopy }
-  | { kind: "tax" }
   | { kind: "picker"; reason: "unknown" | "unavailable" };
 
-/** Unknown slugs and a non-ZA tax link fall back to the picker. */
-export function resolveTalkSlug(slug: string, copyPack: "za" | "us"): TalkResolution {
-  const normalized = slug.trim().toLowerCase();
-  const agent = publicProspectAgent(normalized);
+/** Unknown slugs fall back to the picker. Tax Specialist is one of the four. */
+export function resolveTalkSlug(slug: string, _copyPack: "za" | "us"): TalkResolution {
+  const agent = publicProspectAgent(slug);
   if (agent) return { kind: "agent", agent };
-  if (normalized === PROSPECT_TAX_SLUG) {
-    return copyPack === "za" ? { kind: "tax" } : { kind: "picker", reason: "unavailable" };
-  }
   return { kind: "picker", reason: "unknown" };
 }
 
@@ -155,9 +171,30 @@ export function assessProspectTurn(input: {
   return { ok: true };
 }
 
-/** The reply to the Nth visitor message asks for name and email. */
-export function shouldAskForLead(visitorTurnsAfter: number): boolean {
-  return visitorTurnsAfter >= PROSPECT_LEAD_AFTER_EXCHANGES;
+/**
+ * The form opens on the message after the free replies, and only when this
+ * conversation has not already taken a name and email. A lead on the session
+ * ends the gate. Another agent's session does not count.
+ */
+export function shouldAskForLead(visitorTurnsAfter: number, leadCaptured = false): boolean {
+  if (leadCaptured) return false;
+  return visitorTurnsAfter > PROSPECT_FREE_REPLIES;
+}
+
+export function pricingAsked(message: string): boolean {
+  return /\bpric(?:e|ing)\b|\bcost\b|\bhow much\b/i.test(message);
+}
+
+/** No digits. Used when the visitor asks about price before the form. */
+export const PROSPECT_PRICING_HOLD =
+  "I'll answer pricing after your name and email. I won't invent a price. This page is a labelled SAMPLE.";
+
+/**
+ * Published Starter trial and the owner workspace price. Firm list prices
+ * are USD. This sentence does not invent a fee and does not quote rand.
+ */
+export function prospectPricingReply(): string {
+  return `Starter is a ${FIRM_TRIAL_SENTENCE}. ${FIRM_TRIAL_CARD_NOTE} A business owner's own workspace is $39 a month, and free when their accountant is on Milōn. I won't invent another price. This page is a labelled SAMPLE.`;
 }
 
 const INJECTION = [
@@ -220,7 +257,12 @@ export function hasPrematureFigure(text: string): boolean {
 export const PROSPECT_NO_FIGURES_REPLY =
   "I'll open the labelled SAMPLE after your name and email. I won't quote figures before that.";
 
-export function guardProspectReply(text: string, country: "US" | "ZA", askLead: boolean): string {
+export function guardProspectReply(
+  text: string,
+  country: "US" | "ZA",
+  askLead: boolean,
+  figures: "hold" | "allow" = "hold",
+): string {
   const trimmed = text.replace(/\s+/g, " ").trim().slice(0, 800);
   if (!trimmed) return askLead ? PROSPECT_LEAD_ASK : PROSPECT_NO_FIGURES_REPLY;
   if (mentionsBlockedMoney(trimmed, country)) {
@@ -228,7 +270,8 @@ export function guardProspectReply(text: string, country: "US" | "ZA", askLead: 
   }
   if (mentionsLiveWrite(trimmed)) return PROSPECT_NO_BOOKS_REPLY;
   if (mentionsFiling(trimmed)) return PROSPECT_NO_FILING_REPLY;
-  if (!askLead && hasPrematureFigure(trimmed)) return PROSPECT_NO_FIGURES_REPLY;
+  if (figures === "hold" && !askLead && hasPrematureFigure(trimmed))
+    return PROSPECT_NO_FIGURES_REPLY;
   return trimmed;
 }
 
