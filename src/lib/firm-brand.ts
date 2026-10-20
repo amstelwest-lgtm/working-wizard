@@ -78,39 +78,58 @@ export function writeActiveFirmId(userId: string, firmId: string): void {
   }
 }
 
-/** All firms the user owns or is a member of (deduped, owned first by created_at). */
-export async function listUserFirms(userId: string): Promise<FirmBrandRow[]> {
+/**
+ * All firms the user owns or is a member of (deduped, owned first by created_at).
+ * `error` is set when a read failed. Callers that only need rows should use
+ * listUserFirms, which still returns whatever rows were collected (often []).
+ * Sign-in must not treat that [] as "this person has no firm".
+ */
+export async function readUserFirms(userId: string): Promise<{
+  firms: FirmBrandRow[];
+  error: string | null;
+}> {
   const byId = new Map<string, FirmBrandRow>();
 
-  const { data: owned } = await supabase
+  const owned = await supabase
     .from("firms")
     .select(FIRM_SELECT)
     .eq("owner_user_id", userId)
     .order("created_at", { ascending: true });
-  for (const row of owned ?? []) {
+  if (owned.error) return { firms: [], error: owned.error.message };
+  for (const row of owned.data ?? []) {
     byId.set(row.id, row as FirmBrandRow);
   }
 
-  const { data: mems } = await supabase
+  const mems = await supabase
     .from("firm_memberships")
     .select("firm_id")
     .eq("user_id", userId);
-  const memberIds = (mems ?? [])
+  if (mems.error) return { firms: Array.from(byId.values()), error: mems.error.message };
+  const memberIds = (mems.data ?? [])
     .map((m) => m.firm_id)
     .filter((id): id is string => Boolean(id) && !byId.has(id));
 
   if (memberIds.length > 0) {
-    const { data: memberFirms } = await supabase
+    const memberFirms = await supabase
       .from("firms")
       .select(FIRM_SELECT)
       .in("id", memberIds)
       .order("created_at", { ascending: true });
-    for (const row of memberFirms ?? []) {
+    if (memberFirms.error) {
+      return { firms: Array.from(byId.values()), error: memberFirms.error.message };
+    }
+    for (const row of memberFirms.data ?? []) {
       byId.set(row.id, row as FirmBrandRow);
     }
   }
 
-  return Array.from(byId.values());
+  return { firms: Array.from(byId.values()), error: null };
+}
+
+/** All firms the user owns or is a member of. Errors become an empty list. */
+export async function listUserFirms(userId: string): Promise<FirmBrandRow[]> {
+  const { firms } = await readUserFirms(userId);
+  return firms;
 }
 
 /**

@@ -130,6 +130,7 @@
     "test:history-coverage": "vite-node --config scripts/vite-test.config.ts scripts/history-coverage-test.mts",
     "test:auth-reliability": "vite-node --config scripts/vite-test.config.ts scripts/auth-reliability-test.mts",
     "test:password-sign-in": "vite-node --config scripts/vite-test.config.ts scripts/password-sign-in-test.mts",
+    "test:post-auth-landing": "vite-node --config scripts/vite-test.config.ts scripts/post-auth-landing-test.mts",
     "test:legal-notices": "vite-node --config scripts/vite-test.config.ts scripts/legal-notices-test.mts",
     "test:home-reports-brand": "vite-node --config scripts/vite-test.config.ts scripts/home-reports-brand-test.mts",
     "test:tax-specialist-sample": "vite-node --config scripts/vite-test.config.ts scripts/tax-specialist-sample-test.mts",

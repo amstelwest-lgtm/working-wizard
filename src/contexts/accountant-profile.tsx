@@ -22,6 +22,7 @@ import {
 } from "@/lib/firm-brand";
 import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
 import { reportClientError } from "@/lib/monitoring";
+import { firmsAfterAccountChange, firmsAfterLoadTimeout } from "@/lib/post-auth-landing";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { marketForFirm } from "@/lib/market/scope";
 import {
@@ -199,6 +200,8 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
   const [brandLoading, setBrandLoading] = useState(true);
   const hydratedRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
+  const heldUserRef = useRef<string | null>(null);
+  const firmCommittedRef = useRef(false);
   const [nameChain, setNameChain] = useState<PersistedNameChain>({
     profileFullName: "",
     authFullName: "",
@@ -213,6 +216,26 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
     // setSession with the same id must not cancel this hydrate: the billing
     // gate waits on brandLoading, and a cancelled hydrate leaves it true.
     const signedIn = user;
+    const previousUserId = heldUserRef.current;
+    if (previousUserId !== userId) {
+      // Sign-out → sign-in in this tab. The effect only re-runs on the id,
+      // so drop the previous account before any await. A timeout used to
+      // leave brandLoading false with firms=[] (or the previous user's rows)
+      // and nothing scheduled another load.
+      heldUserRef.current = userId;
+      firmCommittedRef.current = false;
+      const cleared = firmsAfterAccountChange({
+        previousUserId,
+        nextUserId: userId,
+        firms: previousUserId ? [{ id: "previous", ownerUserId: previousUserId }] : [],
+      });
+      if (cleared.length === 0) setFirms([]);
+      setFirm(null);
+      setProfile(DEFAULT_PROFILE);
+      setNameChain({ profileFullName: "", authFullName: "" });
+      hydratedRef.current = false;
+      if (!userId) setBrandLoading(false);
+    }
 
     async function hydrate() {
       if (authLoading) return;
@@ -229,11 +252,19 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
       }
 
       timer = window.setTimeout(() => {
-        if (cancelled) return;
+        if (cancelled || firmCommittedRef.current) return;
         console.warn("[accountant-profile] brand load timed out; continuing without the firm row");
         reportClientError(new Error("accountant brand load timed out"), {
           source: "accountant-profile",
         });
+        const held = firmsAfterLoadTimeout({
+          committed: firmCommittedRef.current,
+          firms: [{ id: "uncommitted", ownerUserId: signedIn.id }],
+        });
+        if (held.length === 0) {
+          setFirms([]);
+          setFirm(null);
+        }
         setBrandLoading(false);
       }, SHELL_GATE_TIMEOUT_MS);
 
@@ -288,6 +319,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         if (cancelled) return;
         const identity = await readPersistedNameChain(signedIn);
         if (cancelled) return;
+        firmCommittedRef.current = true;
         setNameChain(identity);
         setFirms(all);
         setFirm(row);
