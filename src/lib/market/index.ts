@@ -56,6 +56,7 @@ export {
   formatMoneyChartTick,
   formatMoneyCompact,
   formatMoneyUnit,
+  formatReportAmount,
   formatMonthLabel,
   formatMonthRange,
   formatMonthYear,

@@ -7,7 +7,7 @@
  */
 
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { formatMoney, formatMoneyCompact, ZA_MARKET, type MoneyMarket } from "@/lib/market";
+import { formatReportAmount, ZA_MARKET, type MoneyMarket } from "@/lib/market";
 import { healthBandLabel, scoreTier } from "@/lib/ratios";
 
 // ── Palette ────────────────────────────────────────────────────────────────
@@ -142,14 +142,13 @@ export function scoreColor(score?: number | null): string {
 // ── Formatting helpers ─────────────────────────────────────────────────────
 
 export function fmtRand(value: number, market: MoneyMarket = ZA_MARKET): string {
-  return formatMoney(Math.round(value), market);
+  return formatReportAmount(value, market, { style: "money" });
 }
 
 export function fmtRandCompact(value: number, market: MoneyMarket = ZA_MARKET): string {
-  return formatMoneyCompact(value, market);
+  return formatReportAmount(value, market, { style: "compact" });
 }
 
 export function fmtPct(value: number, dp = 1): string {
-  if (!Number.isFinite(value)) return "n/m";
-  return `${(value * 100).toFixed(dp)}%`;
+  return formatReportAmount(value, ZA_MARKET, { style: "percent", dp, missing: "n/m" });
 }

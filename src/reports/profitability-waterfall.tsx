@@ -16,6 +16,7 @@ import { derivedProfitStepsAreFacts } from "@/lib/period-profit";
 import { interestBurdenRatio, metricDirection, scoreTier, taxBurdenRatio } from "@/lib/ratios";
 import { NO_PRIOR_PERIOD, priorMarginsDiffer } from "@/lib/report-coherence";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
+import { formatReportAmount } from "@/lib/market";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { currencySymbol, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { RatioRow } from "@/components/pdf/ratio-row";
@@ -247,7 +248,7 @@ function BridgeChart({ d, accent }: { d: ProfitabilityData; accent: string }) {
                 ]}
               >
                 {s.kind === "decrease"
-                  ? `(${fmtRandCompact(Math.abs(s.delta), market)})`
+                  ? formatReportAmount(s.delta, market, { style: "compact", sign: "parens" })
                   : fmtRandCompact(s.delta, market)}
               </Text>
               <Text style={[brStyles.colLabel, { left: i * slot, width: slot }]}>{s.label}</Text>
@@ -450,7 +451,13 @@ function ComparisonTable({ rows, accent }: { rows: CompRow[]; accent: string }) 
                 { flex: 1, textAlign: "right" },
               ]}
             >
-              {changePct !== null ? `${isPos ? "+" : ""}${changePct.toFixed(1)}%` : "—"}
+              {changePct !== null
+                ? formatReportAmount(changePct, market, {
+                    style: "percent",
+                    percentPoints: true,
+                    sign: "always",
+                  })
+                : "—"}
             </Text>
           </View>
         );
@@ -566,7 +573,7 @@ export function ProfitabilityWaterfallPDF({
       good: revChange === undefined ? undefined : revChange >= 0,
       note:
         revChange !== undefined
-          ? `${revChange >= 0 ? "+" : ""}${revChange.toFixed(1)}% vs prior`
+          ? `${formatReportAmount(revChange, m, { style: "percent", percentPoints: true, sign: "always" })} vs prior`
           : undefined,
     },
     {
