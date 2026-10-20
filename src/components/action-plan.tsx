@@ -302,6 +302,8 @@ interface Props {
   onOpenApproved?: (target: { table: string; recordId: string | null; screen: "moves" | "accountant" }) => void;
   /** 409 client_has_no_firm. The accountant page holds the invite. */
   onInviteAccountant?: () => void;
+  /** Existing client has no owner on the file. Opens the shared invite dialog. */
+  onInviteOwner?: () => void;
   /** Owner tab sign-off. Unsigned renders nothing. */
   ownerSignoff?: ClientReviewSignoff | null;
   ownerSignoffStale?: boolean;
@@ -609,6 +611,7 @@ export default function ActionPlanPanel({
   ownerView = false,
   onOpenApproved,
   onInviteAccountant,
+  onInviteOwner,
   ownerSignoff = null,
   ownerSignoffStale = false,
   cashBelowFloor = false,
@@ -1833,6 +1836,7 @@ export default function ActionPlanPanel({
             onDrop={(id, note) => {
               void patchItem(id, { status: "done" }, { note });
             }}
+            onInviteOwner={onInviteOwner}
           />
           {filtered.length === 0 && (
             <div className="px-6 py-8 text-center">

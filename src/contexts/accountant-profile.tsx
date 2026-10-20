@@ -230,8 +230,9 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
     let cancelled = false;
     let timer = 0;
     // `user` is the object from the render that changed the id. A later
-    // setSession with the same id must not cancel this hydrate: the billing
-    // gate waits on brandLoading, and a cancelled hydrate leaves it true.
+    // setSession with the same id must not cancel this hydrate. The shell
+    // paints the neutral brand while this runs; a cancelled hydrate used
+    // to leave brandLoading true.
     const signedIn = user;
     const previousUserId = heldUserRef.current;
     if (previousUserId !== userId) {
@@ -305,7 +306,10 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
 
       try {
         const preferred = readActiveFirmId(signedIn.id);
-        const listed = await readUserFirms(signedIn.id);
+        const [listed, identity] = await Promise.all([
+          readUserFirms(signedIn.id),
+          readPersistedNameChain(signedIn),
+        ]);
         if (cancelled) return;
 
         let all = listed.error ? [] : listed.firms;
@@ -341,7 +345,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
                   : { p_name: firmName },
               );
               if (!ensureErr) {
-                const again = await readUserFirms(signedIn.id);
+                const again = await readUserFirms(signedIn.id, { fresh: true });
                 if (again.error) {
                   firmListOk = false;
                 } else {
@@ -353,8 +357,6 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
           }
         }
 
-        if (cancelled) return;
-        const identity = await readPersistedNameChain(signedIn);
         if (cancelled) return;
         firmCommittedRef.current = true;
         setNameChain(identity);
@@ -401,7 +403,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
   const refreshFirms = useCallback(async () => {
     if (!user) return;
     const preferred = readActiveFirmId(user.id);
-    const listed = await readUserFirms(user.id);
+    const listed = await readUserFirms(user.id, { fresh: true });
     if (listed.error) return;
     const all = listed.firms;
     const row = pickLoadedFirm(all, preferred);

@@ -6,7 +6,7 @@ import { agentCardLines, type AgentCardPhase } from "@/lib/agent-card-phase";
 import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
-import { DRAFT_OUT_OF_DATE } from "@/lib/draft-figures";
+import { DRAFT_OUT_OF_DATE, quoteLiveScoreOnly } from "@/lib/draft-figures";
 import { AgentChipIcon } from "@/components/chrome-icons";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import { taxSampleCardVisible } from "@/lib/tax-specialist/enabled";
@@ -212,6 +212,7 @@ export function OwnerHome({
   firmId?: string | null;
 }) {
   const handoff = presence.handoff;
+  const handoffSentence = handoff ? quoteLiveScoreOnly(handoff.sentence) : null;
   const sampleAudience = audience ?? (showInvite ? "owner" : "accountant");
   const taxCardOn = taxSampleCardVisible(marketCountry, sampleClient);
   const shownLede = taxCardOn && lede === HOME_LEDE ? ZA_HOME_LEDE : lede;
@@ -331,9 +332,9 @@ export function OwnerHome({
             audience={sampleAudience}
           />
         )}
-        {handoff ? (
+        {handoff && handoffSentence ? (
           <HandoffBeam
-            sentence={handoff.sentence}
+            sentence={handoffSentence}
             fromIndex={AGENT_KEYS.indexOf(handoff.from)}
             toIndex={AGENT_KEYS.indexOf(handoff.to)}
           />

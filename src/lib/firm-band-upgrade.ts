@@ -125,15 +125,20 @@ export function firmUsageLimit(
   return null;
 }
 
+export function activeClientsLabel(count: number): string {
+  return count === 1 ? "1 active client" : `${count} active clients`;
+}
+
 export function formatFirmClientUsage(
   count: number,
   limit: number | null,
   planName?: string | null,
 ): string {
-  if (limit == null) return `${count} active clients`;
+  const clients = activeClientsLabel(count);
+  if (limit == null) return clients;
   const name = planName?.trim();
-  if (name) return `${count} active clients · ${name} limit ${limit}`;
-  return `${count} active clients · limit ${limit}`;
+  if (name) return `${clients} · ${name} limit ${limit}`;
+  return `${clients} · limit ${limit}`;
 }
 
 /**
@@ -152,7 +157,7 @@ export function formatFirmOverLimitNote(input: {
   if (count <= limit) return null;
   const name = input.planName?.trim() || "This plan";
   const extra = count - limit;
-  return `${name} includes ${limit} active clients. This practice has ${count} active clients, ${extra} over the limit. Upgrade to raise it.`;
+  return `${name} includes ${activeClientsLabel(limit)}. This practice has ${activeClientsLabel(count)}, ${extra} over the limit. Upgrade to raise it.`;
 }
 
 /**

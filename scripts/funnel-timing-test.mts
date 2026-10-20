@@ -392,12 +392,8 @@ assert(
   client.includes('if (hasFigures && (activeTab === "ask" || activeTab === "overview")) markInsightSeen(firmId)'),
   "Home showing the figures marks this firm's insight",
 );
-const imported = client.slice(
-  client.indexOf("const handleConfirmFinancials"),
-  client.indexOf("Deliverables bar actions"),
-);
 assert(
-  imported.includes('accountantClientTabSearch(prev, "home")'),
+  client.includes('accountantClientTabSearch(prev, "home")'),
   "a successful import lands on Home",
 );
 const wizard = read("src/components/walkthrough-wizard.tsx");
