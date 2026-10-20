@@ -203,7 +203,9 @@ assert(
   "the client file passes the stored client country",
 );
 assert(
-  client.includes("parseMarketSelection(client?.market)?.country ?? null"),
+  client.includes(
+    "const clientGateCountry = parseMarketSelection(client?.market)?.country ?? null",
+  ),
   "a missing client market is not treated as ZA for the tax card",
 );
 assert(client.includes('audience="accountant"'), "the client file is the accountant side");

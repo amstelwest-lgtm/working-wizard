@@ -56,17 +56,24 @@ export function storedPeriodSpan(start: string, end: string): string {
   return `${from}/${to}`;
 }
 
+function labelText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export function parseStoredPeriodSpan(
   label: string | null | undefined,
 ): { start: string; end: string } | null {
-  const match = STORED_SPAN.exec(label?.trim() ?? "");
+  const text = labelText(label);
+  const match = STORED_SPAN.exec(text);
   if (!match) return null;
   return { start: match[1]!, end: match[2]! };
 }
 
 export function isStatementRangeLabel(label: string): boolean {
-  if (parseStoredPeriodSpan(label)) return true;
-  return label.includes("–") && /\d{4}/.test(label);
+  const text = labelText(label);
+  if (!text) return false;
+  if (parseStoredPeriodSpan(text)) return true;
+  return text.includes("–") && /\d{4}/.test(text);
 }
 
 /**
@@ -97,13 +104,14 @@ export function statementSpanLabel(input: {
   periodLabel?: string | null;
   market: DateMarket;
 }): string | null {
-  const start = input.periodStart?.trim() || "";
-  const end = input.periodEnd?.trim() || "";
+  const start = labelText(input.periodStart);
+  const end = labelText(input.periodEnd);
+  const stored = labelText(input.periodLabel);
+  if (!input.market) return stored || null;
   if (start && end) {
     const fresh = formatStatementPeriodLabel(start, end, input.market);
     if (fresh) return fresh;
   }
-  const stored = input.periodLabel?.trim() ?? "";
   const parsed = parseStoredPeriodSpan(stored);
   if (parsed) {
     const fresh = formatStatementPeriodLabel(parsed.start, parsed.end, input.market);
@@ -125,7 +133,7 @@ export function resolveSnapshotPeriodLabel(
   existing: string | null | undefined,
   incoming: string,
 ): string {
-  const prev = existing?.trim() ?? "";
+  const prev = labelText(existing);
   if (prev && isStatementRangeLabel(prev) && isMonthStampLabel(incoming)) return prev;
   return incoming;
 }
@@ -447,6 +455,7 @@ export function figuresPeriodLabelFrom(
   snapshotPeriodLabel: string | null | undefined,
   market: DateMarket,
 ): string | null {
+  if (!market) return labelText(snapshotPeriodLabel) || null;
   const meta = readStatementMeta(financials, market);
   if (meta.periodStart && meta.periodEnd) {
     const fromStatement = meta.periodLabel?.trim() ?? "";
@@ -464,7 +473,7 @@ export function figuresPeriodLabelFrom(
     const stamp = calendarMonthStamp(meta.periodEnd);
     if (stamp) return stamp;
   }
-  const snap = snapshotPeriodLabel?.trim() ?? "";
+  const snap = labelText(snapshotPeriodLabel);
   // A snapshot named "Sep 2026" is the month the file was saved. Figures with
   // no start or end are the full statement on file, not that month.
   if (!meta.periodStart && !meta.periodEnd && snapshotIsMonthStamp(snap)) {

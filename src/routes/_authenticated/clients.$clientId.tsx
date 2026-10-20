@@ -195,7 +195,9 @@ import {
   statementSpanLabel,
   statementYearLine,
 } from "@/lib/statement-period";
+import { clientHomePhase } from "@/lib/client-home-phase";
 import { canonicalScoreProse } from "@/lib/score-prose";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
@@ -286,6 +288,7 @@ import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { cashSignoffIsStale, reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
+import { ClientAgentStandby } from "@/components/client-agent-standby";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/financial-manager-brief";
 import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
@@ -323,7 +326,7 @@ import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
-import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
+import { EmptyState } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
 import { cashDriverDayFigures } from "@/lib/cash-driver-label";
@@ -826,6 +829,7 @@ function ClientView() {
   }, [clientId]);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     () => resolveAccountantTab(search) ?? "overview",
   );
@@ -2268,8 +2272,15 @@ function ClientView() {
   // ── Load client ──────────────────────────────────────────────────────────
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadTimedOut(false);
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      setLoadTimedOut(true);
+      setLoading(false);
+    }, SHELL_GATE_TIMEOUT_MS);
     (async () => {
-      setLoading(true);
       try {
         // Defensive query: reports_issued_count may not exist yet
         const { data, error } = await supabase
@@ -2372,9 +2383,17 @@ function ClientView() {
           decideLandingTab(scalars);
         }
       } finally {
-        setLoading(false);
+        window.clearTimeout(timer);
+        if (!cancelled) {
+          setLoadTimedOut(false);
+          setLoading(false);
+        }
       }
     })();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
@@ -3718,8 +3737,13 @@ function ClientView() {
 
   // ── Loading / error states ────────────────────────────────────────────────
 
-  if (loading) {
-    return <ClientWorkspaceSkeleton className="min-h-screen" />;
+  const homePhase = clientHomePhase({
+    loading,
+    timedOut: loadTimedOut,
+    hasClient: Boolean(client),
+  });
+  if (homePhase === "loading" || homePhase === "error") {
+    return <ClientAgentStandby timedOut={homePhase === "error"} />;
   }
 
   if (!client) {
