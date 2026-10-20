@@ -22,6 +22,7 @@ import {
   firmUpgradePriceCurrency,
   firmUpgradeReturnPath,
   formatFirmClientUsage,
+  formatFirmOverLimitNote,
   metadataPatchForPrice,
   MILON_DOWNGRADE_BLOCKED,
   nextBandUp,
@@ -106,6 +107,13 @@ assert(
 assert(formatFirmClientUsage(3, 15, "Solo") === "3 active clients · Solo limit 15", "usage uses the paid limit");
 assert(formatFirmClientUsage(3, 3) === "3 active clients · limit 3", "usage without a plan name still states the limit");
 assert(formatFirmClientUsage(4, null) === "4 active clients", "unlimited band has no denominator");
+assert(formatFirmClientUsage(1, 5, "Starter") === "1 active client · Starter limit 5", "one client stays singular");
+assert(formatFirmClientUsage(1, null) === "1 active client", "one client with no limit stays singular");
+assert(
+  formatFirmOverLimitNote({ count: 2, limit: 1, planName: "Starter" }) ===
+    "Starter includes 1 active client. This practice has 2 active clients, 1 over the limit. Upgrade to raise it.",
+  "a limit of one stays singular in the over-limit note",
+);
 
 const zarIncomplete = firmUpgradePriceCurrency({
   billingCurrency: "zar",
