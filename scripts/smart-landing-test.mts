@@ -173,12 +173,15 @@ assert(openRoute.includes("resolveSmartLanding"), "landing asks the server where
 assert(openRoute.includes("isSafeSmartLandingHref"), "landing refuses an unexpected href");
 
 const wall = readFileSync(resolve("src/routes/billing.required.tsx"), "utf8");
-assert(wall.includes("firmWallBackLabel"), "wall offers a way back to the client");
+assert(wall.includes("FIRM_WALL_BACK_LABEL"), "wall offers a way back to the client list");
 assert(wall.includes("loadFirstFirmClient"), "wall looks up the open client");
-assert(wall.includes("The firm dashboard and reports need a card."), "wall explains the firm dashboard");
-assert(wall.includes("The figures stay."), "wall still says the figures stay");
+assert(wall.includes("firmWallWhyLine"), "wall says why the first client stays open");
 assert(
-  wall.includes("BILLING_WALL_TRIAL_ACTION"),
+  readFileSync(resolve("src/lib/billing-wall.ts"), "utf8").includes("figures stay open"),
+  "wall still says the figures stay",
+);
+assert(
+  wall.includes("FIRM_WALL_START_LABEL"),
   "wall offers the trial once the billing read settles",
 );
 assert(!/50%|discount/i.test(wall), "wall does not advertise a discount");

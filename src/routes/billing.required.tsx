@@ -1,14 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ownerPlanPublicLine, ownerVisitorFromPack } from "@/lib/owner-plan";
-import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
 import { billingIntentForResolvedMarket } from "@/lib/billing-market";
 import { loadFirstFirmClient, type FirstFirmClient } from "@/lib/firm-client-gate";
-import { firmWallBackLabel } from "@/lib/smart-landing";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { noteFirmEntitlement } from "@/lib/firm-entitlement-client";
 import { readFirmBillingQuote, type FirmBillingQuote } from "@/lib/pricing/za-pricing.functions";
@@ -23,14 +19,20 @@ import {
 import {
   firmSignupCheckoutIntent,
   firmUsdListPrice,
-  FIRM_TRIAL_SENTENCE,
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
 import {
-  BILLING_WALL_TRIAL_ACTION,
-  firmWallTrialDetail,
+  FIRM_WALL_BACK_HREF,
+  FIRM_WALL_BACK_LABEL,
+  FIRM_WALL_START_LABEL,
+  FIRM_WALL_TRIAL_ENDED_LINE,
+  FIRM_WALL_TRIAL_LINE,
+  firmWallBackTarget,
+  firmWallOffersRetry,
+  firmWallWhyLine,
   resolveBillingWall,
+  type FirmWallEntitlementOutcome,
 } from "@/lib/billing-wall";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 
@@ -40,17 +42,14 @@ export const Route = createFileRoute("/billing/required")({
   },
   loaderDeps: ({ search }) => ({ plan: search.plan, interval: search.interval }),
   loader: async ({ deps }) => {
-    const visitor = await readMarketingVisitor();
-    const ownerPack = visitor.geoZa ? "za" : "us";
-    const ownerMonthly = visitor.showSaPricing ? (await readSaPricingCopy())?.ownerMonthly ?? null : null;
     try {
       const quote = await readFirmBillingQuote({
         data: { plan: deps.plan, interval: deps.interval },
       });
-      return { quote, ownerPack, ownerMonthly };
+      return { quote };
     } catch {
       // SSR has no bearer token. The client refetches once auth is attached.
-      return { quote: null as FirmBillingQuote | null, ownerPack, ownerMonthly };
+      return { quote: null as FirmBillingQuote | null };
     }
   },
   component: BillingRequiredPage,
@@ -72,74 +71,60 @@ export function BillingRequiredCard({
   planName,
   priceLabel,
   clientName,
-  backLabel,
-  backClientId,
   checkout,
-  ownerPack,
-  ownerMonthly,
   onRetry,
-  backHref,
+  backHref = FIRM_WALL_BACK_HREF,
+  trialEnded = false,
+  quoteError,
 }: {
   planName: string;
-  priceLabel: string;
+  priceLabel: string | null;
   clientName?: string | null;
-  backLabel?: string | null;
-  backClientId?: string | null;
   checkout: PendingCheckout;
-  ownerPack?: "za" | "us";
-  ownerMonthly?: string | null;
   onRetry?: () => void;
   backHref?: string;
+  trialEnded?: boolean;
+  quoteError?: string;
 }) {
-  const ownerLine = ownerPlanPublicLine(ownerPack === "za" ? "za" : "us", ownerMonthly);
   const trialClass =
     "inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]";
+  const secondaryClass =
+    "inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400";
+  const price = priceLabel?.trim() ?? "";
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200" data-billing-wall="card">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
         <h1 className="mt-2 text-xl font-semibold">Continue on {planName} to keep this practice</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          The figures stay.
-          {clientName ? ` ${clientName} is still open. The firm dashboard and reports need a card. ` : " "}
-          {firmWallTrialDetail(priceLabel)} Checkout for {planName} ({priceLabel}) starts the
-          subscription. A card is required. A first subscription is {FIRM_TRIAL_SENTENCE} on Starter.
-          If a trial already ended, billing resumes on the paid band without another trial. Owner plan
-          is {ownerLine}.
+        <p className="mt-2 text-sm text-slate-400" data-billing-why>
+          {firmWallWhyLine(clientName)}
         </p>
+        <p className="mt-2 text-sm text-slate-400" data-billing-trial>
+          {FIRM_WALL_TRIAL_LINE}
+        </p>
+        {price ? (
+          <p className="mt-2 text-sm text-slate-200" data-billing-price>
+            {price}
+          </p>
+        ) : null}
+        {trialEnded ? (
+          <p className="mt-2 text-sm text-slate-400" data-billing-trial-ended>
+            {FIRM_WALL_TRIAL_ENDED_LINE}
+          </p>
+        ) : null}
+        {quoteError ? <p className="mt-2 text-sm text-slate-400">{quoteError}</p> : null}
         <div className="mt-5 flex flex-wrap gap-2">
-          {backClientId && backLabel ? (
-            <a
-              href={`/clients/${backClientId}`}
-              className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
-            >
-              {backLabel}
-            </a>
-          ) : null}
           <a href={billingStartPath(checkout)} className={trialClass} data-billing-action="trial">
-            {BILLING_WALL_TRIAL_ACTION}
+            {FIRM_WALL_START_LABEL}
+          </a>
+          <a href={backHref} className={secondaryClass} data-billing-back="clients">
+            {FIRM_WALL_BACK_LABEL}
           </a>
           {onRetry ? (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
-            >
+            <button type="button" onClick={onRetry} className={secondaryClass}>
               Retry
             </button>
           ) : null}
-          <a
-            href={backHref || "/dashboard"}
-            className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
-          >
-            Back
-          </a>
-          <a
-            href="/#pricing"
-            className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
-          >
-            Back to pricing
-          </a>
           <BillingSignOutButton />
         </div>
       </div>
@@ -149,7 +134,7 @@ export function BillingRequiredCard({
 
 function BillingRequiredPage() {
   const pending = Route.useSearch();
-  const { quote: loadedQuote, ownerPack, ownerMonthly } = Route.useLoaderData();
+  const { quote: loadedQuote } = Route.useLoaderData();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
@@ -159,6 +144,9 @@ function BillingRequiredPage() {
   const [quote, setQuote] = useState<FirmBillingQuote | null>(loadedQuote);
   const [quoteError, setQuoteError] = useState("");
   const [wallAttempt, setWallAttempt] = useState(0);
+  const [entitlementOutcome, setEntitlementOutcome] = useState<FirmWallEntitlementOutcome>("failed");
+  const [trialEnded, setTrialEnded] = useState(false);
+  const [backHref, setBackHref] = useState(FIRM_WALL_BACK_HREF);
   const retryWall = () => {
     setChecking(true);
     setReturnClient(undefined);
@@ -183,6 +171,16 @@ function BillingRequiredPage() {
       replace: true,
     });
   }, [priced?.market, pending.market, navigate]);
+
+  useEffect(() => {
+    setBackHref(
+      firmWallBackTarget({
+        referrer: typeof document === "undefined" ? null : document.referrer,
+        pageOrigin: typeof window === "undefined" ? null : window.location.origin,
+        firstClientId: returnClient?.id ?? null,
+      }),
+    );
+  }, [returnClient?.id]);
 
   useEffect(() => {
     if (loading) return;
@@ -212,6 +210,8 @@ function BillingRequiredPage() {
       setReturnClient(result.returnClient);
       if (result.quote) setQuote(result.quote);
       if (result.quoteError) setQuoteError(result.quoteError);
+      setEntitlementOutcome(result.entitlementOutcome);
+      setTrialEnded(result.trialEnded);
       if (result.entitled) {
         void navigate({ to: "/dashboard", replace: true });
         return;
@@ -237,8 +237,6 @@ function BillingRequiredPage() {
     (quote?.market === "za"
       ? null
       : usdPriceLabel(checkout.plan, checkout.interval));
-  const backHref = returnClient?.id ? `/clients/${returnClient.id}` : "/dashboard";
-  const backLabel = returnClient ? firmWallBackLabel(returnClient.name) : null;
 
   if (loading || checking || !user || returnClient === undefined) {
     return (
@@ -251,60 +249,16 @@ function BillingRequiredPage() {
     );
   }
 
-  if (!shownPrice) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200" data-billing-wall="error">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6" role="alert">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
-          <h1 className="mt-2 text-xl font-semibold">Continue on {planName} to keep this practice</h1>
-          <p className="mt-2 text-sm text-slate-400">
-            The figures stay. {quoteError || "Refresh and try again."} {firmWallTrialDetail(null)}
-          </p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <a
-              href={billingStartPath(checkout)}
-              className="inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]"
-            >
-              {BILLING_WALL_TRIAL_ACTION}
-            </a>
-            <button
-              type="button"
-              onClick={retryWall}
-              className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
-            >
-              Retry
-            </button>
-            <a
-              href={backHref}
-              className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
-            >
-              Back
-            </a>
-            <a
-              href="/#pricing"
-              className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
-            >
-              Back to pricing
-            </a>
-            <BillingSignOutButton />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <BillingRequiredCard
       planName={planName}
       priceLabel={shownPrice}
       clientName={returnClient?.name}
-      backLabel={backLabel}
-      backClientId={returnClient?.id}
       checkout={checkout}
-      ownerPack={ownerVisitorFromPack(ownerPack)}
-      ownerMonthly={ownerMonthly}
-      onRetry={retryWall}
+      onRetry={firmWallOffersRetry(entitlementOutcome) ? retryWall : undefined}
       backHref={backHref}
+      trialEnded={trialEnded}
+      quoteError={shownPrice ? undefined : quoteError || "Refresh and try again."}
     />
   );
 }

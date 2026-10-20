@@ -242,11 +242,13 @@ assert(sync.includes("await syncStarterTrialMirrorForActor"), "billing sync stil
 const wall = src("src/routes/billing.required.tsx");
 const wallCopy = src("src/lib/billing-wall.ts");
 assert(
-  wall.includes("BILLING_WALL_TRIAL_ACTION") &&
-    wallCopy.includes("Start your 14-day free trial · add a card"),
-  "the wall shows the trial action",
+  wall.includes("FIRM_WALL_TRIAL_LINE") && wallCopy.includes("card at signup"),
+  "the wall shows the trial line once, on the body",
 );
-assert(wall.includes("Retry") && wall.includes("Back"), "the wall has Retry and Back");
+assert(
+  wall.includes("firmWallOffersRetry") && wallCopy.includes("Back to clients"),
+  "Retry is conditional and Back goes to clients",
+);
 assert(!wall.includes("R299") && !wall.includes("VAT"), "the wall does not hard-code a rand price or VAT");
 assert(wall.includes("resolveBillingWall"), "the wall reads through the deadline");
 
