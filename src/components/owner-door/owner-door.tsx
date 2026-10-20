@@ -137,6 +137,7 @@ export function OwnerDoor({
   openingMissing = false,
   cashPillarStatus = null,
   hasEvidence,
+  cashOnFile,
   cashRunwayWeeks = null,
   cashDebtorScore = null,
   cashBurnScore = null,
@@ -195,6 +196,8 @@ export function OwnerDoor({
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   /** False when nothing is synced or parsed. Home shows one connect line. */
   hasEvidence?: boolean;
+  /** False when the cash balance was not read. Home asks for a balance sheet. */
+  cashOnFile?: boolean;
   /** Weeks scored into the cash pillar. Names a Critical chip that is not the floor. */
   cashRunwayWeeks?: number | null;
   /** Scored debtor days. Names a Critical chip that is receivables. */
@@ -710,6 +713,7 @@ export function OwnerDoor({
       openingMissing,
       cashPillarStatus,
       hasEvidence,
+      cashOnFile,
       cashRunwayWeeks,
       cashDebtorScore,
       cashBurnScore,
@@ -730,6 +734,7 @@ export function OwnerDoor({
     openingMissing,
     cashPillarStatus,
     hasEvidence,
+    cashOnFile,
     cashRunwayWeeks,
     cashDebtorScore,
     cashBurnScore,

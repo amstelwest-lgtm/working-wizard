@@ -80,6 +80,15 @@ import {
   statementKindFromExtraction,
   type PeriodFinancials,
 } from "@/lib/statement-financials";
+import {
+  financialsWriteRev,
+  financialsWriteSuperseded,
+  guardFinancialsWrite,
+  importFailureMessage,
+  importedUpdateMessage,
+  withFinancialsWriteRev,
+  statementImportWhat,
+} from "@/lib/statement-import-apply";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -208,6 +217,7 @@ import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   assessClientMetrics,
   forecastHasRealLines,
+  forecastOpeningIsKnown,
   hasFinancialEvidence,
   persistedRunwayWeeks,
   plBankDisagreement,
@@ -1396,6 +1406,9 @@ function ClientView() {
   /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
   const effectiveRunway =
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
+  const cashBalance = assessed.cash.amount;
+  const cashKnown = cashBalance != null;
+  const cashOnFile = cashKnown || forecastOpeningIsKnown(client?.cashflow);
   const openingMissing = storedOpeningIsMissing(client?.cashflow);
   const healthIndustry = clientIndustryDisplay(
     client?.name,
@@ -1427,6 +1440,7 @@ function ClientView() {
     totalInflow: cashOutlook.totalInflow,
     totalOutflow: cashOutlook.totalOutflow,
     openingMissing,
+    cashOnFile,
   });
   const bookStatusCritical = bookStatusWord.startsWith("Critical");
   const planCashBelowFloor = cashOutlookIsCritical({
@@ -1434,6 +1448,7 @@ function ClientView() {
     floor: cashOutlook.floor,
     dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
     openingMissing,
+    cashOnFile,
   });
   const plVersusBank = useMemo(
     () => plBankDisagreement({ financials, cashflow: client?.cashflow }),
@@ -2299,6 +2314,8 @@ function ClientView() {
 
   // Autosave debounce ref
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped when an import writes. An autosave that started earlier must not land after it.
+  const financialsWriteGen = useRef(0);
 
   // ── Load client ──────────────────────────────────────────────────────────
 
@@ -2589,19 +2606,42 @@ function ClientView() {
 
   const persistMergedFinancials = useCallback(
     async (updated: Record<string, unknown>) => {
+      const gen = financialsWriteGen.current;
       const { data: row } = await supabase
         .from("clients")
         .select("financials")
         .eq("id", clientId)
         .maybeSingle();
+      if (gen !== financialsWriteGen.current) return false;
+      const seenRev = financialsWriteRev(row?.financials);
       const financials = autosaveKeepsLedgerSync(row?.financials ?? null, updated);
       const updatedAt = new Date().toISOString();
-      const { error } = await supabase
-        .from("clients")
-        .update({ financials: financials as never, financials_updated_at: updatedAt })
-        .eq("id", clientId);
+      if (gen !== financialsWriteGen.current) return false;
+      const pending = guardFinancialsWrite(
+        supabase
+          .from("clients")
+          .update({ financials: financials as never, financials_updated_at: updatedAt })
+          .eq("id", clientId),
+        seenRev,
+      );
+      const { data: saved, error } = await pending.select("id");
+      if (gen !== financialsWriteGen.current) return false;
       if (error) {
         toast.error(`Autosave failed: ${error.message}`);
+        setAutosaveStatus("idle");
+        return false;
+      }
+      if (!saved?.length) {
+        const { data: again } = await supabase
+          .from("clients")
+          .select("financials")
+          .eq("id", clientId)
+          .maybeSingle();
+        if (financialsWriteSuperseded(seenRev, again?.financials)) {
+          setAutosaveStatus("idle");
+          return false;
+        }
+        toast.error("Autosave failed: the figures were not written.");
         setAutosaveStatus("idle");
         return false;
       }
@@ -2851,8 +2891,7 @@ function ClientView() {
       const periodDate = period?.periodEnd?.trim() ?? "";
       const periodLabel = period?.periodLabel?.trim() ?? "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(periodDate) || !periodLabel) {
-        toast.error("Choose the statement period before importing.");
-        return;
+        return { ok: false as const, message: importFailureMessage("Choose the statement period before importing.") };
       }
 
       const statementKind = statementKindFromExtraction(result);
@@ -2896,14 +2935,14 @@ function ClientView() {
       }
 
       if (saveError) {
-        toast.error(`Failed to save snapshot: ${saveError.message}`);
-        return;
+        return {
+          ok: false as const,
+          message: importFailureMessage(`Failed to save snapshot: ${saveError.message}`),
+        };
       }
 
       if (historyOnlyUploadRef.current) {
         historyOnlyUploadRef.current = false;
-        toast.success(`Saved ${periodLabel} as history — live figures unchanged.`);
-        closeUpload();
         const { data } = await supabase
           .from("client_financial_snapshots")
           .select("id, period_label, period_date, financials, ratios, source, created_at")
@@ -2921,9 +2960,14 @@ function ClientView() {
             created_at: (s.created_at as string | null) ?? null,
           })),
         );
-        return;
+        return { ok: true as const, message: importedUpdateMessage(`${periodLabel} history`) };
       }
 
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current);
+        autosaveTimer.current = null;
+      }
+      financialsWriteGen.current += 1;
       const financialsUpdatedAt = new Date().toISOString();
       const liveMerged = mergeStatementFinancials(financialsRef.current, inputs, statementKind);
       const nextScalars = Object.fromEntries(
@@ -2931,12 +2975,21 @@ function ClientView() {
           value == null || typeof value === "object" ? [] : [[key, String(value)]],
         ),
       ) as Record<string, string>;
-      financialsRef.current = nextScalars;
-      const blob = mergeCurrentBlob(nextScalars);
-      await supabase
+      const blob = withFinancialsWriteRev(mergeCurrentBlob(nextScalars));
+      const { data: savedLive, error: liveError } = await supabase
         .from("clients")
         .update({ financials: blob as never, financials_updated_at: financialsUpdatedAt })
-        .eq("id", clientId);
+        .eq("id", clientId)
+        .select("id");
+      if (liveError || !savedLive?.length) {
+        return {
+          ok: false as const,
+          message: importFailureMessage(
+            liveError?.message ?? "The figures were not written to this client.",
+          ),
+        };
+      }
+      financialsRef.current = nextScalars;
 
       await recordScoreHistory(
         clientId,
@@ -2952,23 +3005,15 @@ function ClientView() {
         }).overall,
       );
 
-      // Update local state with new financials
+      // Update local state with new financials. The panel stays open until it
+      // shows this message, then the caller closes it.
       setFinancials(nextScalars);
       setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
-      toast.success(`Financials saved for ${periodLabel}`);
-      setActiveTab("overview");
-      void navigate({
-        to: "/clients/$clientId",
-        params: { clientId },
-        search: (prev) => accountantClientTabSearch(prev, "home"),
-      });
-      startStudioTourAfterFigures();
       track("financials_uploaded", {
         surface: "accountant_portal",
         clientId,
         firmId,
       });
-      closeUpload();
 
       if (autoPopulate) {
         try {
@@ -2995,6 +3040,7 @@ function ClientView() {
           toast.error(`Figures saved, but drafting deliverables failed: ${(e as Error).message}`);
         }
       }
+      return { ok: true as const, message: importedUpdateMessage(statementImportWhat(statementKind)) };
     },
     [
       clientId,
@@ -3009,8 +3055,6 @@ function ClientView() {
       autoPopulateState?.prefs,
       client?.market,
       applyAutoPopulateResult,
-      startStudioTourAfterFigures,
-      navigate,
     ],
   );
 
@@ -3616,15 +3660,17 @@ function ClientView() {
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
       hasEvidence: evidenced,
-      cashOutlook: evidenced
-        ? {
-            opening: cashOutlook.opening,
-            closing: cashOutlook.closing,
-            floor: cashOutlook.floor,
-            dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
-          }
-        : null,
-      cashPillarStatus: evidenced ? (pillarStatus.cash ?? null) : null,
+      cashOnFile,
+      cashOutlook:
+        evidenced && cashOnFile
+          ? {
+              opening: cashOutlook.opening,
+              closing: cashOutlook.closing,
+              floor: cashOutlook.floor,
+              dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+            }
+          : null,
+      cashPillarStatus: evidenced && cashOnFile ? (pillarStatus.cash ?? null) : null,
       cashRunwayWeeks: evidenced ? effectiveRunway : null,
       cashDebtorScore: evidenced && Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null,
       cashBurnScore: evidenced && Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null,
@@ -3654,6 +3700,7 @@ function ClientView() {
     openPlanUnavailable,
     gateMarket,
     openingMissing,
+    cashOnFile,
     clientProfitBridge.ebit,
     pillarStatus.cash,
     evidenced,
@@ -3758,14 +3805,15 @@ function ClientView() {
         overdueActions: openPlanOverdue,
         cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
         cashDipWeek: forecastLines ? cashOutlook.dipsBelowFloorWeek : null,
-        cashOpening: evidenced ? cashOutlook.opening : null,
+        cashOpening: evidenced && cashOnFile ? cashOutlook.opening : null,
         // Passed through for a forecast with no lines. A stored series replaces this
         // with forecastMinimumCash, the same floor as Cash.
-        cashFloor: evidenced ? cashOutlook.floor : null,
-        cashClosing: evidenced ? cashOutlook.closing : null,
+        cashFloor: evidenced && cashOnFile ? cashOutlook.floor : null,
+        cashClosing: evidenced && cashOnFile ? cashOutlook.closing : null,
         market: gateMarket,
         openingMissing,
-        cashPillarStatus: evidenced ? (pillarStatus.cash ?? null) : null,
+        cashOnFile,
+        cashPillarStatus: evidenced && cashOnFile ? (pillarStatus.cash ?? null) : null,
         cashStrainLine: spokenCashStrain(homeBooks),
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
@@ -3803,6 +3851,7 @@ function ClientView() {
       cashOutlook.closing,
       cashOutlook.floor,
       openingMissing,
+      cashOnFile,
       pillarStatus.cash,
       homeBooks,
       statementPosition.receivables,
@@ -5580,8 +5629,16 @@ function ClientView() {
                 </p>
                 <UploadFinancials
                   clientName={client?.name}
-                  onConfirm={(result, prefs, period) => {
-                    void handleConfirmFinancials(result, prefs, period);
+                  onConfirm={(result, prefs, period) => handleConfirmFinancials(result, prefs, period)}
+                  onApplied={() => {
+                    setActiveTab("overview");
+                    void navigate({
+                      to: "/clients/$clientId",
+                      params: { clientId },
+                      search: (prev) => accountantClientTabSearch(prev, "home"),
+                    });
+                    startStudioTourAfterFigures();
+                    closeUpload();
                   }}
                   onOpenBankUpload={(file) => {
                     setUploadOpen(false);
