@@ -362,5 +362,9 @@ assert(
   profileSrc.includes("roles.hasPracticeRole"),
   "profile provider still provisions firms for dual-role practice accounts",
 );
+assert(
+  profileSrc.includes("awaitingPracticeLocation"),
+  "profile provider does not mint a firm while practice location is still unchosen",
+);
 
 console.log("portal-routing: all assertions passed");

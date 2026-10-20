@@ -53,6 +53,8 @@ import {
   withMarketRpcFallback,
   type MarketSelection,
 } from "@/lib/market";
+import { accountantWithoutFirm } from "@/lib/google-practice-market";
+import { listUserFirms } from "@/lib/firm-brand";
 import { openOwnerSettings } from "@/lib/user-roles";
 import { HeaderShareButton } from "@/components/share";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
@@ -2517,6 +2519,18 @@ function Index() {
           u.user.app_metadata?.provider === "google" ||
           (Array.isArray(u.user.identities) &&
             u.user.identities.some((identity) => identity.provider === "google"));
+        // A practice signup that has not chosen a location yet has no firm row.
+        // Sending them through the owner seat would mint a blank client.
+        if (
+          accountantWithoutFirm({
+            signupType: meta?.signup_type,
+            firmName: meta?.firm_name,
+            firmCount: (await listUserFirms(u.user.id)).length,
+          })
+        ) {
+          if (!cancelled) navigate({ to: "/auth/callback", replace: true });
+          return;
+        }
         // Google owner sign-in has no password signup_type until the callback stamps it.
         const shouldProvisionOwner =
           meta?.signup_type === "customer" ||
@@ -2524,7 +2538,7 @@ function Index() {
         if (shouldProvisionOwner) {
           const clientName =
             meta?.business_name || meta?.full_name || meta?.name || u.user.email || "My Business";
-          const visitorMarket = readVisitorMarket() ?? { country: "ZA" as const, regionCode: null };
+          const visitorMarket = readVisitorMarket();
           const { data: clientId, error: rpcErr } = await withMarketRpcFallback(
             () =>
               supabase.rpc("ensure_own_client", {
@@ -2565,7 +2579,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [actingClientId, user?.id]);
+  }, [actingClientId, navigate, user?.id]);
 
   useEffect(() => {
     if (!effectiveClientId) {
