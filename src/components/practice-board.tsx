@@ -87,7 +87,7 @@ import {
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryDisplay } from "@/lib/profile-signals";
 import {
-  IMPLAUSIBLE_SAMPLE_NOTE,
+  implausibleSampleNote,
   operatingProfitColumnHeading,
   operatingProfitLabel,
   statementSampleImplausible,
@@ -2647,7 +2647,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                         <div className="cname">{c.name}</div>
                         {statementSampleImplausible(c.financials) ? (
                           <div className="ctype" style={{ textTransform: "none", letterSpacing: "normal" }}>
-                            {IMPLAUSIBLE_SAMPLE_NOTE}
+                            {implausibleSampleNote(marketForClient({ market: c.market }))}
                           </div>
                         ) : null}
                         <div className="ctype">

@@ -10,6 +10,7 @@ import { createContext, useContext, useEffect, useState, type ComponentType, typ
 import { createPortal } from "react-dom";
 import {
   DUAL_MARKET_FOOTER,
+  FIRM_TRIAL_CTA_LABEL,
   MARKETING_COPYRIGHT_ENTITY,
 } from "@/lib/firm-signup-copy";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
@@ -71,9 +72,9 @@ export function MarketingShell({
   children,
   ctaTitle,
   ctaBody,
-  ctaLabel = "Start free ✦",
+  ctaLabel = FIRM_TRIAL_CTA_LABEL,
   ctaHref = "/#register",
-  navCtaLabel = "Start free",
+  navCtaLabel = FIRM_TRIAL_CTA_LABEL,
   navCtaHref = "/#register",
   heroCta,
   heroTone = "default",
@@ -89,7 +90,7 @@ export function MarketingShell({
   ctaBody: ReactNode;
   ctaLabel?: string;
   ctaHref?: string;
-  /** Top-bar pill. Owner pages stay on "Start free"; firm pages pass a trial label. */
+  /** Top-bar pill. Same trial label as the landing nav. A card is required at signup. */
   navCtaLabel?: string;
   navCtaHref?: string;
   /** Optional primary button under the hero lead. */

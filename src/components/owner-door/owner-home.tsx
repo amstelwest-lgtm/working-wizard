@@ -107,8 +107,14 @@ export function OwnerNeedsStrip({
         </button>
         <button type="button" className="owner-needs-item" onClick={openDrafts}>
           <b>{needs.draftsHeading}</b>
-          {needs.draftLines.map((line) => (
-            <span key={line}>{line}</span>
+          {needs.draftLines.map((line, index) => (
+            <span
+              key={line}
+              data-draft-stale={needs.draftStale?.[index] ? "true" : undefined}
+              title={needs.draftStale?.[index] ? "Stored draft refreshed from the scorecard." : undefined}
+            >
+              {line}
+            </span>
           ))}
         </button>
         <button type="button" className="owner-needs-item" onClick={onDeliverables}>

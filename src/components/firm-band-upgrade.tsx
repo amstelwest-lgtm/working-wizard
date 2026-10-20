@@ -17,6 +17,8 @@ import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_BAND_IDS,
+  FIRM_TRIAL_CARD_LINE,
+  FIRM_TRIAL_SENTENCE,
   firmClientLimitLabel,
   firmUsdPublicLine,
   isFirmCheckoutBand,
@@ -44,6 +46,11 @@ type Props = {
   saDiscount?: boolean;
   /** Server-built rand lines. When set, these are the prices Checkout charges. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
+  /**
+   * From eligibleForIntroTrial. Starter shows the signup trial lines only
+   * while this firm has never had a subscription.
+   */
+  introTrialEligible?: boolean;
   onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval, voucherCode?: string | null) => void;
   /** Checks the code with Stripe. Absent on previews that cannot bill. */
   onValidateVoucher?: (input: {
@@ -87,6 +94,7 @@ export function FirmBandUpgrade({
   upgrading = false,
   saDiscount = false,
   zaLabels = null,
+  introTrialEligible = false,
   onUpgrade,
   onValidateVoucher,
 }: Props) {
@@ -266,6 +274,24 @@ export function FirmBandUpgrade({
                     ? "Unlimited active clients"
                     : firmClientLimitLabel(band.id)}
                 </span>
+                {band.id === "starter" && introTrialEligible ? (
+                  <>
+                    <span
+                      className="text-muted-foreground"
+                      data-starter-trial=""
+                      style={{ display: "block", fontSize: 12 }}
+                    >
+                      {FIRM_TRIAL_SENTENCE}
+                    </span>
+                    <span
+                      className="text-muted-foreground"
+                      data-starter-card=""
+                      style={{ display: "block", fontSize: 12 }}
+                    >
+                      {FIRM_TRIAL_CARD_LINE}
+                    </span>
+                  </>
+                ) : null}
               </span>
               <span className="firm-band-row__price">{price}</span>
             </label>

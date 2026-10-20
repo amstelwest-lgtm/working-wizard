@@ -109,7 +109,7 @@ function BandTable({
                   <FirmPrice price={price} />
                 </td>
                 <td className="firm-bands-cta">
-                  {startControl(band, band.id === "solo" ? "btn btn-gold" : "btn btn-ghost")}
+                  {startControl(band, band.id === "solo" ? "btn btn-cobalt" : "btn btn-ghost")}
                 </td>
               </tr>
             );
@@ -158,7 +158,7 @@ function BandCards({
                 </p>
               )}
             </div>
-            {startControl(band, solo ? "btn btn-gold" : "btn btn-ghost")}
+            {startControl(band, solo ? "btn btn-cobalt" : "btn btn-ghost")}
             {solo && SOLO_CARD_NOTE ? <p className="firm-band-card-note">{SOLO_CARD_NOTE}</p> : null}
           </li>
         );
