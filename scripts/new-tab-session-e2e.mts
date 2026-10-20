@@ -69,13 +69,17 @@ async function waitForServer(child: ChildProcess): Promise<void> {
     log += String(chunk);
   });
   const started = Date.now();
-  while (Date.now() - started < 90_000) {
+  while (Date.now() - started < 120_000) {
     if (child.exitCode != null) throw new Error(`vite exited ${child.exitCode}\n${log}`);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3_000);
     try {
-      const res = await fetch(ORIGIN);
-      if (res.ok || res.status === 404) return;
+      const res = await fetch(ORIGIN, { signal: ctrl.signal });
+      if (res.status < 500) return;
     } catch {
-      /* not up yet */
+      /* not up yet, or this probe timed out */
+    } finally {
+      clearTimeout(timer);
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -102,6 +106,11 @@ async function staySignedIn(page: Page, label: string): Promise<void> {
 
 async function main() {
   const server = startDevServer();
+  const killer = setTimeout(() => {
+    console.error("new-tab-session-e2e: timed out");
+    server.kill("SIGKILL");
+    process.exit(1);
+  }, 240_000);
   let browser: Browser | undefined;
   try {
     await waitForServer(server);
@@ -149,6 +158,7 @@ async function main() {
     assert(tab1Path.startsWith("/clients"), `tab 1 left the client for ${tab1Path}`);
     console.log("new-tab-session-e2e: ok");
   } finally {
+    clearTimeout(killer);
     await browser?.close().catch(() => undefined);
     server.kill("SIGTERM");
   }
