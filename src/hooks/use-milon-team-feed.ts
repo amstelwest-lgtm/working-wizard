@@ -12,6 +12,8 @@ import { isMissingBrainRelation } from "@/lib/client-brain";
 import { parseRecommendationRow } from "@/lib/recommendations";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { resolveMarket, ZA_MARKET } from "@/lib/market/resolve";
+import { marketForClient } from "@/lib/market/scope";
+import { readStatementMeta } from "@/lib/statement-period";
 import { isPrecardCapFailure, PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "@/lib/precard-cap";
 import {
   buildMilonTeamFeed,
@@ -239,12 +241,22 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
         signoff,
         signoffMarket: market,
         activityRecords: {
-          snapshots: snapshots.map((row) => ({
-            id: row.id,
-            source: row.source,
-            periodLabel: row.period_label,
-            at: row.created_at,
-          })),
+          market: marketForClient({ market: client?.market }),
+          snapshots: snapshots.map((row) => {
+            const fields =
+              row.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
+                ? (row.financials as object)
+                : null;
+            const meta = readStatementMeta(fields, marketForClient({ market: client?.market }));
+            return {
+              id: row.id,
+              source: row.source,
+              periodLabel: row.period_label,
+              periodStart: meta.periodStart,
+              periodEnd: meta.periodEnd,
+              at: row.created_at,
+            };
+          }),
           uploads: (artifactRes.data ?? []).map((row) => ({
             id: row.id,
             label: row.period_label,

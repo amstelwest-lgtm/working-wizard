@@ -255,6 +255,13 @@ function scanSource(rel: string, raw: string): Finding[] {
       push("formats a date day-first with toLocaleDateString");
     }
     if (/(['"])d MMM yyyy\1/i.test(line)) push("uses a day-first date format literal");
+    const printsStoredLabel =
+      /\$\{[^}\n]*\.period_label\b/.test(line) || /\{[^}\n]*\.period_label\b/.test(line);
+    const formatsStoredLabel =
+      /statementSpanLabel|formatDateRange|readStatementMeta|figuresPeriodLabelFrom|formatStatementPeriodLabel|reportDataPeriodLabel|datedPeriodLabel|homeStatementsLine/.test(
+        line,
+      );
+    if (printsStoredLabel && !formatsStoredLabel) push("prints a stored period label");
     if (line.includes("toLocaleTimeString")) push("formats a date with toLocaleTimeString");
     if (/(?:date|Date|At|at|_at|time)\w*\.toLocaleString\(/.test(line)) {
       push("formats a date with toLocaleString");
@@ -532,6 +539,19 @@ assertScan("src/example.ts", "d.toLocaleDateString('en-GB')\n", [
 assertScan(
   "src/example.ts",
   "const fmt = \"d MMM yyyy\" // date-ok: parser token, not a printed date\n",
+  [],
+);
+assertScan("src/example.ts", "const text = `Xero sync · ${row.period_label}`\n", [
+  "src/example.ts:1 prints a stored period label",
+]);
+assertScan(
+  "src/example.ts",
+  "const text = `Xero sync · ${statementSpanLabel({ periodLabel: row.period_label, market })}`\n",
+  [],
+);
+assertScan(
+  "src/example.ts",
+  "const text = `Xero sync · ${row.period_label}` // date-ok: month stamp, not a day range\n",
   [],
 );
 

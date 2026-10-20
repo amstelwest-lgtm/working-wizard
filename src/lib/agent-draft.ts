@@ -283,7 +283,7 @@ export function periodsFromFindingEvidence(evidence: unknown): Array<{
     out.push({ period_label: periodLabel, snapshot_id: snapshotId, figures: flat });
   }
   for (const item of nested) {
-    out.push({ period_label: item.period_label, snapshot_id: null, figures: item.figures });
+    out.push({ period_label: item.period_label, snapshot_id: null, figures: item.figures }); // date-ok: evidence period key, not printed copy
   }
   return out;
 }

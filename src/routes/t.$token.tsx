@@ -203,9 +203,9 @@ function TaskPage() {
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-14 pt-6">
         <header className="mb-6 flex items-center justify-between">
           <span className="text-sm font-black tracking-[0.35em] text-[#0B5FFF]">MILŌN</span>
-          {data?.plan?.period_label && (
+          {data?.plan?.period_label && ( // date-ok: action plan quarter stamp, not a day range
             <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8a938c]">
-              {data.plan.period_label}
+              {data.plan.period_label} // date-ok: action plan quarter stamp, not a day range
             </span>
           )}
         </header>

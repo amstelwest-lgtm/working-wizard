@@ -2179,7 +2179,7 @@ function GoalHeader({
           <div className="action-goal-copy min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.25em] text-[#102A43] dark:text-[#0B5FFF]/80">
-                {displayedPlanPeriod(plan.period_label, stripMilonProjection(plan.outcome_goal))} · Outcome goal
+                {displayedPlanPeriod(plan.period_label, stripMilonProjection(plan.outcome_goal))} · Outcome goal // date-ok: action plan quarter stamp, not a day range
               </span>
               {isOwner && (
                 <button
@@ -2223,7 +2223,7 @@ function GoalHeader({
                     <div className={LABEL_CLS}>Period</div>
                     <Input
                       className={INPUT_CLS}
-                      value={draft.period_label}
+                      value={draft.period_label} // date-ok: editable plan quarter, not a day range
                       onChange={(e) => setDraft({ ...draft, period_label: e.target.value })}
                     />
                   </div>
