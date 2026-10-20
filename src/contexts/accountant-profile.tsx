@@ -23,8 +23,7 @@ import {
 import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
-import { parseMarketSelection } from "@/lib/market/parse";
-import { resolveMarket } from "@/lib/market/resolve";
+import { marketForFirm } from "@/lib/market/scope";
 import {
   authDisplayName,
   practiceGreetingName,
@@ -32,14 +31,8 @@ import {
   type PersistedNameChain,
 } from "@/lib/accountant-identity";
 
-function firmTimeZoneFromMarket(market: unknown): string | null {
-  const selection = parseMarketSelection(market);
-  if (!selection) return null;
-  try {
-    return resolveMarket(selection).timezone;
-  } catch {
-    return null;
-  }
+function firmTimeZoneFromMarket(market: unknown): string {
+  return marketForFirm({ market }).timezone;
 }
 
 export type AccountantProfile = {
@@ -104,8 +97,7 @@ type AccountantProfileContextValue = {
   greetingSource: string;
 };
 
-const AccountantProfileContext =
-  createContext<AccountantProfileContextValue | null>(null);
+const AccountantProfileContext = createContext<AccountantProfileContextValue | null>(null);
 
 function coerceStoredBrand(profile: AccountantProfile): AccountantProfile {
   return { ...profile, primaryColor: brandPrimaryColor(profile.primaryColor) };
@@ -186,18 +178,18 @@ async function readPersistedNameChain(user: {
   const authFullName = authDisplayName(
     user.user_metadata as { full_name?: unknown; name?: unknown } | null | undefined,
   );
-  const { data } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+  const { data } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
   return {
     profileFullName: data?.full_name?.trim() ?? "",
     authFullName,
   };
 }
 
-export function AccountantProfileProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function AccountantProfileProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   // Stay on DEFAULT until the signed-in user is known — never paint another
   // browser tab's / previous user's brand (N8).
@@ -460,9 +452,7 @@ export function AccountantProfileProvider({
 export function useAccountantProfile(): AccountantProfileContextValue {
   const ctx = useContext(AccountantProfileContext);
   if (!ctx) {
-    throw new Error(
-      "useAccountantProfile must be used inside <AccountantProfileProvider>",
-    );
+    throw new Error("useAccountantProfile must be used inside <AccountantProfileProvider>");
   }
   return ctx;
 }

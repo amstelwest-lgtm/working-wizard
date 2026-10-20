@@ -2051,6 +2051,7 @@ function Index() {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
+  const [marketNeedsGate, setMarketNeedsGate] = useState(false);
 
   // Redirect unauthenticated users to the landing page. After invite accept,
   // React auth state can lag the real Supabase session — don't bounce yet.
@@ -2647,7 +2648,6 @@ function Index() {
     () => marketForClient({ market: workspaceMarket }),
     [workspaceMarket],
   );
-  const [marketNeedsGate, setMarketNeedsGate] = useState(false);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [reviewSignoffs, setReviewSignoffs] = useState<
     Partial<Record<ReviewScope, ClientReviewSignoff>>
@@ -3902,6 +3902,30 @@ function Index() {
     return <AppBootSpinner />;
   }
 
+  if (marketNeedsGate && effectiveClientId) {
+    return (
+      <MarketGate
+        onSave={async (draft) => {
+          const sel = parseMarketSelection({
+            country: draft.country,
+            regionCode: draft.regionCode,
+          });
+          if (!sel) throw new Error("Pick a region and, for the US, a state.");
+          const { error } = await supabase
+            .from("clients")
+            .update({
+              market: marketToJson(sel),
+              financial_year_start_month: sel.country === "US" ? 1 : 3,
+            })
+            .eq("id", effectiveClientId);
+          if (error) throw error;
+          setWorkspaceMarket(sel);
+          setMarketNeedsGate(false);
+        }}
+      />
+    );
+  }
+
   const showOwnerDoor = !searchTab && !sampleMode;
   const OwnerHealthOrb = SphereHero;
 
@@ -3914,27 +3938,6 @@ function Index() {
               <TrialEndedPlanBlock firmId={clientMeta?.firm_id ?? null} />
             </div>
           ) : null}
-          {marketNeedsGate && effectiveClientId && (
-            <MarketGate
-              onSave={async (draft) => {
-                const sel = parseMarketSelection({
-                  country: draft.country,
-                  regionCode: draft.regionCode,
-                });
-                if (!sel) throw new Error("Pick a region and, for the US, a state.");
-                const { error } = await supabase
-                  .from("clients")
-                  .update({
-                    market: marketToJson(sel),
-                    financial_year_start_month: sel.country === "US" ? 1 : 3,
-                  })
-                  .eq("id", effectiveClientId);
-                if (error) throw error;
-                setWorkspaceMarket(sel);
-                setMarketNeedsGate(false);
-              }}
-            />
-          )}
           <SplashScreen />
           {!actingClientId && !showOwnerDoor && (
             <TabErrorBoundary label="Walkthrough">
@@ -4030,6 +4033,7 @@ function Index() {
                 openingMissing={ownerOpeningMissing}
                 cashPillarStatus={pillarStatus.cash ?? null}
                 market={boardMarket}
+                marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
                   row
                     ? [

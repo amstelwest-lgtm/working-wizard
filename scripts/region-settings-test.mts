@@ -28,9 +28,22 @@ assert(
 );
 
 const missing = regionFormFromSaved({ loaded: true, saved: null });
-assert(missing.status === "ready" && missing.draft.country === "ZA", "a missing saved region is South Africa");
-assert(missing.status === "ready" && missing.draft.country !== "US", "a missing saved region is not the United States");
-assert(missing.status === "ready" && missing.draft.regionCode == null, "a missing saved region has no US state");
+assert(
+  missing.status === "ready" && missing.draft.country === "ZA",
+  "a missing saved region is South Africa",
+);
+assert(
+  missing.status === "ready" && missing.unset === true,
+  "a missing saved region is marked unset",
+);
+assert(
+  missing.status === "ready" && missing.draft.country !== "US",
+  "a missing saved region is not the United States",
+);
+assert(
+  missing.status === "ready" && missing.draft.regionCode == null,
+  "a missing saved region has no US state",
+);
 
 const savedUs = regionFormFromSaved({
   loaded: true,
@@ -40,6 +53,7 @@ assert(
   savedUs.status === "ready" && savedUs.draft.country === "US" && savedUs.draft.regionCode === "NY",
   "a saved United States region is kept after it loads",
 );
+assert(savedUs.status === "ready" && savedUs.unset === false, "a saved region is not marked unset");
 assert(
   regionSaveAllowed({
     loaded: true,
@@ -76,14 +90,23 @@ const card = renderToStaticMarkup(
   }),
 );
 assert(card.includes("data-region-loading"), "an unloaded settings card stays on the placeholder");
-assert(!card.includes("United States"), "an unloaded settings card does not render the United States");
+assert(
+  !card.includes("United States"),
+  "an unloaded settings card does not render the United States",
+);
 assert(!card.includes("New York"), "an unloaded settings card does not render New York");
-assert(!card.includes("Required for sales tax"), "an unloaded settings card does not render the sales-tax prompt");
+assert(
+  !card.includes("Required for sales tax"),
+  "an unloaded settings card does not render the sales-tax prompt",
+);
 assert(!card.includes("Save region"), "an unloaded settings card does not offer save");
 assert(!card.includes(">US<"), "an unloaded settings card does not select a US option");
 
 const settings = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
-assert(settings.includes("loaded={regionReady}"), "settings withholds the region form until the saved row loads");
+assert(
+  settings.includes("loaded={regionReady}"),
+  "settings withholds the region form until the saved row loads",
+);
 assert(settings.includes("firmTrialStatusLine"), "settings trial status uses the real trial end");
 assert(!settings.includes('?? "Trial"'), "settings does not invent a trial headline");
 
@@ -96,7 +119,13 @@ assert(
   css.includes(".settings-portal.accountant-portal:not(.owner-door) .deliverable-rail"),
   "settings pins its own sidebar",
 );
-assert(css.includes("position: sticky"), "the settings sidebar stays sticky while the page scrolls");
-assert(css.includes("align-self: start"), "the settings sidebar does not stretch away with the page");
+assert(
+  css.includes("position: sticky"),
+  "the settings sidebar stays sticky while the page scrolls",
+);
+assert(
+  css.includes("align-self: start"),
+  "the settings sidebar does not stretch away with the page",
+);
 
 console.log("region-settings: ok");

@@ -54,7 +54,15 @@ export function AuthGate() {
     navigate,
     checkEntitlement,
   });
-  latest.current = { firmId, firmMarket, hasFirm, brandLoading, pathname, navigate, checkEntitlement };
+  latest.current = {
+    firmId,
+    firmMarket,
+    hasFirm,
+    brandLoading,
+    pathname,
+    navigate,
+    checkEntitlement,
+  };
   const userId = user?.id ?? null;
   const [firmEntitled, setFirmEntitled] = useState<boolean | null>(null);
   const [firmGate, setFirmGate] = useState<"idle" | "checking" | "allow">("idle");
@@ -178,7 +186,7 @@ export function AuthGate() {
         if (!isFirmProductPath(latest.current.pathname)) return;
         const pending = snap.hasFirm
           ? firmBillingResumeIntent(snap.firmMarket, peekPendingCheckout())
-          : peekPendingCheckout() ?? firmBillingResumeIntent(null, null);
+          : (peekPendingCheckout() ?? firmBillingResumeIntent(null, null));
         stashPendingCheckout(pending);
         latest.current.navigate({
           to: "/billing/required",

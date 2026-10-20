@@ -180,16 +180,23 @@ for (const path of walk("src")) {
 
 const owner = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
 assert(
-  owner.includes("marketCountry={market.country}") && owner.includes('audience="owner"'),
-  "the owner door passes its market",
+  owner.includes("marketCountry={marketCountry}") && owner.includes('audience="owner"'),
+  "the owner door passes the stored country into the tax card",
+);
+assert(
+  !owner.includes("marketCountry={market.country}"),
+  "the owner door does not pass a coerced market country into the tax card",
 );
 const practice = readFileSync("src/components/practice-board.tsx", "utf8");
-assert(practice.includes("parseMarketSelection(firmMarket)"), "practice home uses the firm market");
 assert(
-  practice.includes("marketCountry={practiceCountry}") &&
-    practice.includes('audience="accountant"'),
-  "practice home renders the card",
+  practice.includes("marketCountry={parseMarketSelection(firmMarket)?.country ?? null}"),
+  "practice home passes the stored firm country",
 );
+assert(
+  !practice.includes("marketForFirm({ market: firmMarket }).country"),
+  "practice home does not coerce a null firm market into the tax card",
+);
+assert(practice.includes('audience="accountant"'), "practice home renders the card");
 const client = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 assert(
   client.includes("marketCountry={clientMarket.country}"),

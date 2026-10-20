@@ -125,6 +125,7 @@ export function OwnerDoor({
   openingMissing = false,
   cashPillarStatus = null,
   market,
+  marketCountry = null,
   signoffs,
   firmId,
   workspaces,
@@ -173,6 +174,8 @@ export function OwnerDoor({
   /** Same cash pillar band as Health. Watch does not say below the minimum. */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   market: ResolvedMarket;
+  /** Stored country. Null stays off the ZA tax card even if `market` was coerced for dates. */
+  marketCountry?: string | null;
   signoffs: Signoff[];
   firmId: string | null;
   workspaces: { clientId: string; name: string }[];
@@ -934,7 +937,7 @@ export function OwnerDoor({
           presence={presence}
           lines={ownerHomeLines(tiles, topMove, assignedAgent, handedTitle)}
           status={ownerCardStatuses(books)}
-          marketCountry={market.country}
+          marketCountry={marketCountry}
           audience="owner"
           sampleClient={sampleClient}
           onOpen={openChat}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,24 +39,30 @@ export function MarketSettingsCard({
   /** SA practice plan. Hides the US state list and VAT wording. Does not write the market. */
   zarPlan?: boolean;
 }) {
-  const [draft, setDraft] = useState<DraftMarket>(() => {
-    const next = regionFormFromSaved({ loaded, saved: initial });
-    return next.status === "ready" ? next.draft : { country: null, regionCode: null };
-  });
+  const gate = regionFormFromSaved({ loaded, saved: initial });
+  const savedKey = `${loaded ? "ready" : "loading"}:${JSON.stringify(initial ?? null)}`;
+  const [appliedKey, setAppliedKey] = useState(savedKey);
+  const [draft, setDraft] = useState<DraftMarket>(() =>
+    gate.status === "ready" ? gate.draft : { country: null, regionCode: null },
+  );
   const [zaExtras, setZaExtras] = useState<ZaMarketExtras>(() =>
-    loaded ? readZaMarketExtras(initial) : { provinceCode: null, vatRegistered: false, vatMode: "exclusive" },
+    loaded
+      ? readZaMarketExtras(initial)
+      : { provinceCode: null, vatRegistered: false, vatMode: "exclusive" },
   );
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const next = regionFormFromSaved({ loaded, saved: initial });
-    if (next.status !== "ready") {
-      setDraft({ country: null, regionCode: null });
-      return;
-    }
-    setDraft(next.draft);
-    setZaExtras(readZaMarketExtras(initial));
-  }, [initial, loaded]);
+  // Copy the saved region during render so the first paint already has South
+  // Africa selected. A useEffect would leave both country buttons unpressed
+  // for a frame after the row arrives.
+  if (appliedKey !== savedKey) {
+    setAppliedKey(savedKey);
+    setDraft(gate.status === "ready" ? gate.draft : { country: null, regionCode: null });
+    setZaExtras(
+      loaded
+        ? readZaMarketExtras(initial)
+        : { provinceCode: null, vatRegistered: false, vatMode: "exclusive" },
+    );
+  }
 
   const sel = draftToSelection(draft);
   const resolved = sel ? resolveMarket(sel) : null;
@@ -112,114 +118,124 @@ export function MarketSettingsCard({
     >
       {!loaded ? <RegionSettingsLoading /> : null}
       {loaded ? (
-      <>
-      {regionControls.stateDropdown ? (
-      <MarketPicker
-        value={draft}
-        onChange={setDraft}
-        vatCopy={regionControls.vatCopy}
-        stateDropdown={regionControls.stateDropdown}
-      />
-      ) : (
-        <p className="text-sm font-semibold" data-sa-plan-region="">
-          South Africa
-        </p>
-      )}
-      {draft.country === "ZA" && regionControls.vatCopy ? (
-        <div className="mt-3 space-y-3">
-          <div>
-            <label className="text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]" htmlFor="milon-za-province">
-              Province
-            </label>
-            <select
-              id="milon-za-province"
-              className="mt-1.5 w-full rounded-xl border border-[var(--line,#DBEAFE)] bg-transparent px-3 py-2.5 text-sm text-[var(--ink,#102A43)]"
-              value={zaExtras.provinceCode ?? ""}
-              onChange={(e) =>
-                setZaExtras((current) => ({
-                  ...current,
-                  provinceCode: e.target.value
-                    ? (e.target.value as ZaMarketExtras["provinceCode"])
-                    : null,
-                }))
-              }
-            >
-              <option value="">Select a province</option>
-              {ZA_PROVINCES.map((province) => (
-                <option key={province.code} value={province.code}>
-                  {province.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <fieldset className="space-y-2">
-            <legend className="text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]">
-              VAT
-            </legend>
-            <label className="flex items-center gap-2 text-sm text-[var(--ink,#102A43)]">
-              <input
-                type="checkbox"
-                checked={zaExtras.vatRegistered}
-                onChange={(e) =>
-                  setZaExtras((current) => ({ ...current, vatRegistered: e.target.checked }))
-                }
-              />
-              Registered for VAT ({formatPercentRate(ZA_VAT_RATE)})
-            </label>
-            {zaExtras.vatRegistered ? (
-              <div className="grid grid-cols-2 gap-2">
-                {(
-                  [
-                    ["exclusive", "Prices exclude VAT"],
-                    ["inclusive", "Prices include VAT"],
-                  ] as const
-                ).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={`rounded-xl border px-3 py-2 text-left text-sm ${
-                      zaExtras.vatMode === mode
-                        ? "border-[#0B5FFF] bg-[#DBEAFE] text-[#102A43]"
-                        : "border-[var(--line,#DBEAFE)] bg-transparent text-[var(--ink,#102A43)]"
-                    }`}
-                    onClick={() => setZaExtras((current) => ({ ...current, vatMode: mode }))}
-                  >
-                    {label}
-                  </button>
-                ))}
+        <>
+          {regionControls.stateDropdown ? (
+            <MarketPicker
+              value={draft}
+              onChange={setDraft}
+              vatCopy={regionControls.vatCopy}
+              stateDropdown={regionControls.stateDropdown}
+            />
+          ) : (
+            <p className="text-sm font-semibold" data-sa-plan-region="">
+              South Africa
+            </p>
+          )}
+          {gate.status === "ready" && gate.unset ? (
+            <p className="mt-3 text-xs text-[var(--ink-dim)]" data-region-default="ZA">
+              Not set, defaulting to South Africa
+            </p>
+          ) : null}
+          {draft.country === "ZA" && regionControls.vatCopy ? (
+            <div className="mt-3 space-y-3">
+              <div>
+                <label
+                  className="text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]"
+                  htmlFor="milon-za-province"
+                >
+                  Province
+                </label>
+                <select
+                  id="milon-za-province"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--line,#DBEAFE)] bg-transparent px-3 py-2.5 text-sm text-[var(--ink,#102A43)]"
+                  value={zaExtras.provinceCode ?? ""}
+                  onChange={(e) =>
+                    setZaExtras((current) => ({
+                      ...current,
+                      provinceCode: e.target.value
+                        ? (e.target.value as ZaMarketExtras["provinceCode"])
+                        : null,
+                    }))
+                  }
+                >
+                  <option value="">Select a province</option>
+                  {ZA_PROVINCES.map((province) => (
+                    <option key={province.code} value={province.code}>
+                      {province.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-            ) : (
-              <p className="text-xs text-[var(--ink-dim)]">
-                Budgets will not add a VAT line while the practice is not VAT registered.
+              <fieldset className="space-y-2">
+                <legend className="text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]">
+                  VAT
+                </legend>
+                <label className="flex items-center gap-2 text-sm text-[var(--ink,#102A43)]">
+                  <input
+                    type="checkbox"
+                    checked={zaExtras.vatRegistered}
+                    onChange={(e) =>
+                      setZaExtras((current) => ({ ...current, vatRegistered: e.target.checked }))
+                    }
+                  />
+                  Registered for VAT ({formatPercentRate(ZA_VAT_RATE)})
+                </label>
+                {zaExtras.vatRegistered ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        ["exclusive", "Prices exclude VAT"],
+                        ["inclusive", "Prices include VAT"],
+                      ] as const
+                    ).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`rounded-xl border px-3 py-2 text-left text-sm ${
+                          zaExtras.vatMode === mode
+                            ? "border-[#0B5FFF] bg-[#DBEAFE] text-[#102A43]"
+                            : "border-[var(--line,#DBEAFE)] bg-transparent text-[var(--ink,#102A43)]"
+                        }`}
+                        onClick={() => setZaExtras((current) => ({ ...current, vatMode: mode }))}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--ink-dim)]">
+                    Budgets will not add a VAT line while the practice is not VAT registered.
+                  </p>
+                )}
+              </fieldset>
+            </div>
+          ) : null}
+          {regionControls.stateDropdown && resolved?.tax.regime === "sales_tax" && (
+            <p className="mt-3 text-xs leading-relaxed text-[var(--ink-dim)]">
+              Default combined rate {formatPercentRate(resolved.tax.combinedRate)} (
+              {formatPercentRate(resolved.tax.stateRate)} state +{" "}
+              {formatPercentRate(resolved.tax.localRate)} avg local). {SALES_TAX_HONESTY}
+            </p>
+          )}
+          {regionControls.stateDropdown &&
+            resolved?.tax.regime === "none" &&
+            resolved.country === "US" && (
+              <p className="mt-3 text-xs text-[var(--ink-dim)]">
+                This state has no statewide sales tax (or none collected). Budgets will not add a
+                sales-tax line unless you change that on the budget itself.
               </p>
             )}
-          </fieldset>
-        </div>
-      ) : null}
-      {regionControls.stateDropdown && resolved?.tax.regime === "sales_tax" && (
-        <p className="mt-3 text-xs leading-relaxed text-[var(--ink-dim)]">
-          Default combined rate {formatPercentRate(resolved.tax.combinedRate)} (
-          {formatPercentRate(resolved.tax.stateRate)} state +{" "}
-          {formatPercentRate(resolved.tax.localRate)} avg local). {SALES_TAX_HONESTY}
-        </p>
-      )}
-      {regionControls.stateDropdown && resolved?.tax.regime === "none" && resolved.country === "US" && (
-        <p className="mt-3 text-xs text-[var(--ink-dim)]">
-          This state has no statewide sales tax (or none collected). Budgets will not add a
-          sales-tax line unless you change that on the budget itself.
-        </p>
-      )}
-      {regionControls.stateDropdown ? (
-      <Button
-        type="button"
-        className="settings-gold mt-4"
-        disabled={!regionSaveAllowed({ loaded, recordId, draft }) || saving}
-        onClick={() => void save()}
-      >
-        {saving ? "Saving…" : "Save region"}
-      </Button>
-      ) : null}
-      </>
+          {regionControls.stateDropdown ? (
+            <Button
+              type="button"
+              className="settings-gold mt-4"
+              disabled={!regionSaveAllowed({ loaded, recordId, draft }) || saving}
+              onClick={() => void save()}
+            >
+              {saving ? "Saving…" : "Save region"}
+            </Button>
+          ) : null}
+        </>
       ) : null}
     </SectionCard>
   );
