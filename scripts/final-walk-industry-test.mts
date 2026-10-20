@@ -256,6 +256,9 @@ assert(context.includes("adviceIndustryLabel"), "advice context uses the client'
 const sphere = read("src/components/sphere-hero.tsx");
 assert(!sphere.includes("These are the first three"), "an empty potential impact block is not shown");
 assert(sphere.includes("See all recommended moves"), "the recommended-moves button stays");
-assert(sphere.includes('d.na ? "N/A"'), "a no-stock driver reads N/A");
+assert(
+  sphere.includes('if (driver.na) return { primary: "N/A", secondary: null }'),
+  "a no-stock driver reads N/A",
+);
 
 console.log("final-walk-industry ok");

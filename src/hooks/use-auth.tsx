@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { useRouterState } from "@tanstack/react-router";
 import { setMonitoringUser } from "@/lib/monitoring";
@@ -6,11 +6,13 @@ import { isBarePublicPath, isPublicMarketingPath } from "@/lib/public-marketing"
 import { clearLegacyInsightSeen } from "@/lib/funnel-timing";
 import { restoreSession } from "@/integrations/supabase/session-deadline";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { decideAuthStateChange, resolveConfirmedSignOut } from "@/lib/auth-session-guard";
 
 type AuthCtx = {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  restoreFailed: boolean;
   signOut: () => Promise<void>;
 };
 
@@ -18,6 +20,7 @@ const Ctx = createContext<AuthCtx>({
   user: null,
   session: null,
   loading: true,
+  restoreFailed: false,
   signOut: async () => {},
 });
 
@@ -91,6 +94,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [restoreFailed, setRestoreFailed] = useState(false);
   const [wake, setWake] = useState(0);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const hadSessionRef = useRef(false);
+  const hadTokenAtStartRef = useRef(false);
+  const intentionalSignOutRef = useRef(false);
+  const confirmGen = useRef(0);
 
   useEffect(() => {
     const onWake = () => setWake((n) => (n > 0 ? n : 1));
@@ -113,19 +120,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let unsub = () => {};
     let cancelled = false;
+    hadTokenAtStartRef.current = browserHasAuthToken();
     setLoading(true);
     setRestoreFailed(false);
     void import("@/integrations/supabase/client").then(({ supabase }) => {
       if (cancelled) return;
-      const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-        setSession(s);
-        setMonitoringUser(s?.user.id ?? null);
+      const { data: sub } = supabase.auth.onAuthStateChange((event, nextSession) => {
+        const decision = decideAuthStateChange(event, nextSession);
+        if (decision === "set" && nextSession?.user) {
+          hadSessionRef.current = true;
+          intentionalSignOutRef.current = false;
+          setRestoreFailed(false);
+          setSession(nextSession);
+          setMonitoringUser(nextSession.user.id);
+          return;
+        }
+        if (decision === "keep") return;
+        const had = hadSessionRef.current || hadTokenAtStartRef.current;
+        if (intentionalSignOutRef.current || !had) {
+          setSession(null);
+          setMonitoringUser(null);
+          setRestoreFailed(false);
+          setLoading(false);
+          return;
+        }
+        // Defer past the auth lock. A getSession inside this callback deadlocks it.
+        const gen = ++confirmGen.current;
+        window.setTimeout(() => {
+          void supabase.auth.getSession().then((retry) => {
+            if (cancelled || gen !== confirmGen.current) return;
+            const outcome = resolveConfirmedSignOut({
+              hadSession: true,
+              intentional: intentionalSignOutRef.current,
+              retryHasUser: Boolean(retry.data.session?.user),
+            });
+            if (outcome === "keep" && retry.data.session?.user) {
+              hadSessionRef.current = true;
+              setSession(retry.data.session);
+              setMonitoringUser(retry.data.session.user.id);
+              setRestoreFailed(false);
+              setLoading(false);
+              return;
+            }
+            setSession(null);
+            setMonitoringUser(null);
+            setRestoreFailed(outcome === "panel");
+            setLoading(false);
+          });
+        }, 0);
       });
       unsub = () => sub.subscription.unsubscribe();
       void restoreSession(
         () => supabase.auth.getSession(),
         SHELL_GATE_TIMEOUT_MS,
-      ).then((restored) => {
+      ).then(async (restored) => {
         if (cancelled) return;
         if (!restored.ok) {
           setSession(null);
@@ -135,9 +183,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         const next = restored.value.data.session;
+        if (next?.user) {
+          hadSessionRef.current = true;
+          setRestoreFailed(false);
+          setSession(next);
+          setMonitoringUser(next.user.id);
+          setLoading(false);
+          return;
+        }
+        const had = hadSessionRef.current || hadTokenAtStartRef.current;
+        if (had) {
+          const retry = await supabase.auth.getSession();
+          if (cancelled) return;
+          if (retry.data.session?.user) {
+            hadSessionRef.current = true;
+            setRestoreFailed(false);
+            setSession(retry.data.session);
+            setMonitoringUser(retry.data.session.user.id);
+            setLoading(false);
+            return;
+          }
+          const outcome = resolveConfirmedSignOut({
+            hadSession: true,
+            intentional: intentionalSignOutRef.current,
+            retryHasUser: false,
+          });
+          setSession(null);
+          setMonitoringUser(null);
+          setRestoreFailed(outcome === "panel");
+          setLoading(false);
+          return;
+        }
         setRestoreFailed(false);
-        setSession(next);
-        setMonitoringUser(next?.user.id ?? null);
+        setSession(null);
+        setMonitoringUser(null);
         setLoading(false);
       });
     });
@@ -165,7 +244,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: session?.user ?? null,
         session,
         loading,
+        restoreFailed,
         signOut: async () => {
+          intentionalSignOutRef.current = true;
           const { clearPortalRouting } = await import("@/lib/user-roles");
           const { clearCachedFirmEntitlement } = await import("@/lib/firm-entitlement-client");
           clearPortalRouting();

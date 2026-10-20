@@ -5,6 +5,8 @@ import {
   AuthEntryInput,
 } from "@/components/auth-entry-shell";
 import {
+  EMAIL_SIGN_IN_CODE_INSTEAD,
+  EMAIL_SIGN_IN_TAP_LINK,
   emailCodeFallbackEnabled,
   requestEmailSignInLink,
   verifyEmailSignInCode,
@@ -89,40 +91,51 @@ export function EmailSignInOption({
         <AuthEntryGhostButton type="button" disabled={busy || disabled} onClick={() => void send()}>
           {busy && !showCode ? "Sending…" : "Email me a sign-in link"}
         </AuthEntryGhostButton>
-        {status ? (
+        {notice?.kind === "sent" ? (
+          <div className="mt-3" role="status">
+            <p className="auth-entry__lead">{EMAIL_SIGN_IN_TAP_LINK}</p>
+            {status ? <p className="auth-entry__lead mt-2">{status}</p> : null}
+          </div>
+        ) : null}
+        {status && notice?.kind !== "sent" ? (
           <p className="auth-entry__lead mt-3" role="status">
             {status}
           </p>
         ) : null}
         {showCode ? (
-          <div className="mt-4">
-            <AuthEntryFieldLabel htmlFor={codeId}>Enter the 6-digit code</AuthEntryFieldLabel>
-            <AuthEntryInput
-              id={codeId}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]*"
-              maxLength={6}
-              value={code}
-              onChange={(event) => {
-                setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
-                setCodeError("");
-              }}
-            />
-            <AuthEntryGhostButton
-              type="button"
-              className="mt-3"
-              disabled={busy || disabled || code.length !== 6}
-              onClick={() => void verify()}
-            >
-              {busy ? "Signing in…" : "Sign in with code"}
-            </AuthEntryGhostButton>
-            {codeError ? (
-              <p className="auth-entry__lead mt-3" role="status">
-                {codeError}
-              </p>
-            ) : null}
-          </div>
+          <details className="mt-4">
+            <summary className="auth-entry__lead cursor-pointer list-none underline">
+              {EMAIL_SIGN_IN_CODE_INSTEAD}
+            </summary>
+            <div className="mt-4">
+              <AuthEntryFieldLabel htmlFor={codeId}>Enter the 6-digit code</AuthEntryFieldLabel>
+              <AuthEntryInput
+                id={codeId}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={code}
+                onChange={(event) => {
+                  setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                  setCodeError("");
+                }}
+              />
+              <AuthEntryGhostButton
+                type="button"
+                className="mt-3"
+                disabled={busy || disabled || code.length !== 6}
+                onClick={() => void verify()}
+              >
+                {busy ? "Signing in…" : "Sign in with code"}
+              </AuthEntryGhostButton>
+              {codeError ? (
+                <p className="auth-entry__lead mt-3" role="status">
+                  {codeError}
+                </p>
+              ) : null}
+            </div>
+          </details>
         ) : null}
       </div>
     );
@@ -150,7 +163,19 @@ export function EmailSignInOption({
       >
         {busy && !showCode ? "Sending…" : "Email me a sign-in link"}
       </button>
-      {status ? (
+      {notice?.kind === "sent" ? (
+        <div role="status" style={{ marginTop: 10 }}>
+          <p style={{ fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.5 }}>
+            {EMAIL_SIGN_IN_TAP_LINK}
+          </p>
+          {status ? (
+            <p style={{ marginTop: 6, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.5 }}>
+              {status}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {status && notice?.kind !== "sent" ? (
         <p
           role="status"
           style={{ marginTop: 10, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.5 }}
@@ -159,7 +184,19 @@ export function EmailSignInOption({
         </p>
       ) : null}
       {showCode ? (
-        <div style={{ marginTop: 12 }}>
+        <details style={{ marginTop: 12 }}>
+          <summary
+            style={{
+              cursor: "pointer",
+              listStyle: "none",
+              fontSize: 13,
+              color: "var(--ink-dim)",
+              textDecoration: "underline",
+            }}
+          >
+            {EMAIL_SIGN_IN_CODE_INSTEAD}
+          </summary>
+          <div style={{ marginTop: 12 }}>
           <label htmlFor={codeId} style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
             Enter the 6-digit code
           </label>
@@ -198,7 +235,8 @@ export function EmailSignInOption({
               {codeError}
             </p>
           ) : null}
-        </div>
+          </div>
+        </details>
       ) : null}
     </div>
   );

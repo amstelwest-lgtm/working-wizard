@@ -233,7 +233,7 @@ function BudgetRangeTotalsRow({
   const items = [
     ["Revenue", totals.revenue],
     ["Expenses", totals.expenses],
-    ["Net", totals.net],
+    ["Operating profit", totals.net],
   ] as const;
   return (
     <div
@@ -485,7 +485,7 @@ function BudgetMonthTable({
           <tfoot>
             <tr data-budget-totals-row="" className="budget-grid__total">
               <th className="budget-grid__line px-3 py-2 text-left font-semibold" colSpan={1 + months.length * 3 + 3}>
-                Period total · Revenue {money(totals.revenue)} · Expenses {money(totals.expenses)} · Net {money(totals.net)}
+                Period total · Revenue {money(totals.revenue)} · Expenses {money(totals.expenses)} · Operating profit {money(totals.net)}
               </th>
             </tr>
           </tfoot>

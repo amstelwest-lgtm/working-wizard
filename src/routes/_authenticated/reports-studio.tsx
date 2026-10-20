@@ -68,6 +68,7 @@ import {
 } from "@/lib/equity-coherence";
 import { reportNumber } from "@/lib/report-catalog";
 import { liveHealthFromBooks, scoreRatio, type OverallHealth } from "@/lib/health-score";
+import { buildWorkingCapitalSlice } from "@/lib/working-capital-data";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import {
   budgetSignoffIsStale,
@@ -84,7 +85,6 @@ import {
   forecastIsCashGenerative,
   resolveCashScreenForecast,
   runwayDisplayLabel,
-  scoreWorkingCapitalFunding,
   storedOpeningIsMissing,
 } from "@/lib/client-metrics";
 import {
@@ -1111,7 +1111,7 @@ type ClientReportData = {
   cashGenerative: boolean;
   forecastMinimum: number;
   financials: Record<string, string>;
-  rawRatios: Record<string, number>;
+  rawRatios: Record<string, number | null>;
   ratioResults: RatioResult[];
   workingCapital: WorkingCapitalData | null;
   profitability: ProfitabilityData | null;
@@ -1341,7 +1341,7 @@ function fmtBenchVal(val: number, unit: string): string {
 }
 
 function buildBenchmarkRows(
-  rawRatios: Record<string, number>,
+  rawRatios: Record<string, number | null>,
   ratioResults: RatioResult[],
   sector: Record<string, SectorBenchProps>,
 ): BenchmarkRow[] {
@@ -1352,10 +1352,12 @@ function buildBenchmarkRows(
       return Number.isFinite(rawRatios[name]);
     })
     .map(([name, b]) => {
-      const val = rawRatios[name];
+      const rawVal = rawRatios[name];
+      const val = typeof rawVal === "number" && Number.isFinite(rawVal) ? rawVal : Number.NaN;
       const rr = ratioResults.find((r) => r.ratio_name === name);
       const unscored = Boolean(rr?.unscored);
-      const score = unscored ? 0 : (rr?.health_score ?? Math.round(scoreForRatio(name, val)));
+      const scored = rr?.health_score;
+      const score = unscored || scored == null ? 0 : (scored ?? Math.round(scoreForRatio(name, val)));
       return {
         ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
         ratio_name: name,
@@ -1438,7 +1440,7 @@ function closestSnapshot(
 }
 
 function buildMovementRows(
-  rawRatios: Record<string, number>,
+  rawRatios: Record<string, number | null>,
   snapshots: DatedSnapshot[],
   refDate: Date,
   market: ResolvedMarket,
@@ -1485,45 +1487,9 @@ function buildMovementRows(
 
 function buildWorkingCapitalData(
   fin: Record<string, string>,
-  rawRatios: Record<string, number>,
+  rawRatios: Record<string, number | null>,
 ): WorkingCapitalData | null {
-  const revenue = getNum(fin, "revenue");
-  if (!Number.isFinite(revenue) || revenue <= 0) return null;
-  const months = periodMonthsOf(fin);
-  const annualRevenue = revenue * (12 / months);
-  const dd = Number.isFinite(rawRatios["Debtor Days"]) ? rawRatios["Debtor Days"] : 0;
-  const id = Number.isFinite(rawRatios["Inventory Days"]) ? rawRatios["Inventory Days"] : 0;
-  const cd = Number.isFinite(rawRatios["Creditor Days"]) ? rawRatios["Creditor Days"] : 0;
-  if (!Number.isFinite(rawRatios["Debtor Days"]) && !Number.isFinite(rawRatios["Inventory Days"]))
-    return null;
-  const ccc = dd + id - cd;
-  const wcFunding = ccc / 365;
-  return {
-    debtor_days: dd,
-    inventory_days: id,
-    wip_days: 0,
-    creditor_days: cd,
-    cash_conversion_cycle: ccc,
-    working_capital_funding: wcFunding,
-    working_capital_utilization: Math.min(1, Math.max(0, wcFunding * 2)),
-    working_capital_days: ccc,
-    annual_revenue: annualRevenue,
-    cash_trapped_rands: annualRevenue * Math.max(0, wcFunding),
-    health_scores: {
-      debtor_days: Math.round(scoreForRatio("Debtor Days", dd)),
-      inventory_days: Math.round(scoreForRatio("Inventory Days", id)),
-      creditor_days: Math.round(scoreForRatio("Creditor Days", cd)),
-      // WIP not in financials — score 0 days honestly (not a soft-demo 68).
-      wip_days: Math.round(scoreForRatio("Inventory Days", 0)),
-      working_capital_days: Math.round(scoreForRatio("Working Capital Days", ccc)),
-      working_capital_funding: Math.round(scoreWorkingCapitalFunding(wcFunding)),
-      working_capital_utilization: Math.round(
-        scoreWorkingCapitalFunding(wcFunding) === 0 && (wcFunding < -1 || wcFunding > 2)
-          ? 0
-          : Math.min(100, Math.max(0, (1 - Math.min(2, Math.max(-1, wcFunding))) * 90)),
-      ),
-    },
-  };
+  return buildWorkingCapitalSlice(fin, rawRatios) as WorkingCapitalData | null;
 }
 
 function buildProfitabilityData(
@@ -1639,7 +1605,7 @@ function buildProfitabilityData(
 
 function buildLeverageData(
   fin: Record<string, string>,
-  rawRatios: Record<string, number>,
+  rawRatios: Record<string, number | null>,
   priorEquityFromSnapshot?: number | null,
 ): LeverageSolvencyData | null {
   const equity = getNum(fin, "equity");
@@ -1685,8 +1651,10 @@ function buildLeverageData(
     equity,
   });
   const d2e = deReading.value;
-  const em = rawRatios["Equity Multiplier"];
-  const ib = rawRatios["Interest Burden"];
+  const emRaw = rawRatios["Equity Multiplier"];
+  const em = typeof emRaw === "number" ? emRaw : Number.NaN;
+  const ibRaw = rawRatios["Interest Burden"];
+  const ib = typeof ibRaw === "number" ? ibRaw : Number.NaN;
   const priorEquity =
     schedule.prior_equity != null && Number.isFinite(schedule.prior_equity)
       ? schedule.prior_equity
@@ -1725,7 +1693,7 @@ function buildLeverageData(
 }
 
 function buildAssetData(
-  rawRatios: Record<string, number>,
+  rawRatios: Record<string, number | null>,
   context?: {
     equity?: number | null;
     currency?: string | null;
@@ -1733,12 +1701,14 @@ function buildAssetData(
     partMonth?: boolean;
   },
 ): AssetProductivityData | null {
-  const at = rawRatios["Asset Turnover"];
-  const em = rawRatios["Equity Multiplier"];
-  const nm = rawRatios["Net Margin"];
+  const at = typeof rawRatios["Asset Turnover"] === "number" ? rawRatios["Asset Turnover"] : Number.NaN;
+  const em = typeof rawRatios["Equity Multiplier"] === "number" ? rawRatios["Equity Multiplier"] : Number.NaN;
+  const nm = typeof rawRatios["Net Margin"] === "number" ? rawRatios["Net Margin"] : Number.NaN;
   if (!Number.isFinite(at) || !Number.isFinite(em) || !Number.isFinite(nm)) return null;
-  const roa = Number.isFinite(rawRatios["Return on Assets"]) ? rawRatios["Return on Assets"] : nm * at;
-  const roe = Number.isFinite(rawRatios["Return on Equity"]) ? rawRatios["Return on Equity"] : roa * em;
+  const roaRaw = rawRatios["Return on Assets"];
+  const roeRaw = rawRatios["Return on Equity"];
+  const roa = typeof roaRaw === "number" && Number.isFinite(roaRaw) ? roaRaw : nm * at;
+  const roe = typeof roeRaw === "number" && Number.isFinite(roeRaw) ? roeRaw : roa * em;
   const roeView = presentReturn({
     ratioName: "Return on Equity",
     value: roe,
@@ -1790,7 +1760,7 @@ function buildAssetData(
 
 function buildLaborData(
   fin: Record<string, string>,
-  _rawRatios: Record<string, number>,
+  _rawRatios: Record<string, number | null>,
   priorFin?: Record<string, string> | null,
   market: ResolvedMarket = ZA_MARKET,
 ): LaborProductivityData | null {
@@ -1799,7 +1769,8 @@ function buildLaborData(
   const employees = getNum(fin, "employees");
   const cogs = getNum(fin, "cogs");
   const hasRevenue = Number.isFinite(revenue) && revenue > 0;
-  const hasEmployees = Number.isFinite(employees) && employees > 0;
+  const employeesKnown = Number.isFinite(employees);
+  const hasEmployees = employeesKnown && employees > 0;
   const hasLabor = Number.isFinite(laborCost) && laborCost > 0;
   if (!hasRevenue && !hasEmployees && !hasLabor) return null;
   const gpKnown = hasRevenue && Number.isFinite(cogs);
@@ -1817,7 +1788,7 @@ function buildLaborData(
     Number.isFinite(priorRev) && priorRev > 0 ? (revenue - priorRev) / priorRev : null;
 
   return {
-    employee_count: hasEmployees ? Math.round(employees) : 0,
+    employee_count: employeesKnown ? Math.round(employees) : null,
     total_labor_cost: hasLabor ? laborCost : 0,
     total_revenue: hasRevenue ? revenue : 0,
     total_gp: gp,
@@ -1831,7 +1802,7 @@ function buildLaborData(
       {
         label: "Current Period",
         revenue: hasRevenue ? revenue : 0,
-        employees: hasEmployees ? Math.round(employees) : 0,
+        employees: employeesKnown ? Math.round(employees) : null,
         labor_cost: hasLabor ? laborCost : 0,
       },
     ],
@@ -1847,7 +1818,7 @@ function buildLaborData(
           ? Math.round(Math.min(100, Math.max(0, ((revenueGrowth + 0.05) / 0.25) * 100)))
           : null,
     },
-  };
+  } as LaborProductivityData;
 }
 
 // ── Cash forecast ──────────────────────────────────────────────────────────
@@ -2405,7 +2376,7 @@ async function loadClientReportData(
     forecastMinimum,
     financials: fin,
     rawRatios,
-    ratioResults,
+    ratioResults: ratioResults as RatioResult[],
     workingCapital: buildWorkingCapitalData(fin, rawRatios),
     profitability: buildProfitabilityData(fin, priorFinForProfit),
     leverage: buildLeverageData(fin, rawRatios, priorEquityNum),
@@ -2418,7 +2389,7 @@ async function loadClientReportData(
     labor: buildLaborData(fin, rawRatios, priorFinForProfit, market),
     movement: movementRows,
     movementPeriodLabels: movementLabels,
-    benchmark: buildBenchmarkRows(rawRatios, ratioResults, sectorBench),
+    benchmark: buildBenchmarkRows(rawRatios, ratioResults as RatioResult[], sectorBench),
     cashForecast,
     financialsUpdatedAt: clientRow.financials_updated_at,
     lastForecastAt: clientRow.last_forecast_at,

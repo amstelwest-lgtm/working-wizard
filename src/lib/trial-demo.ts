@@ -215,7 +215,7 @@ export type TrialPillar = {
   id: string;
   label: string;
   score: number | null;
-  status: string;
+  status: string | null;
 };
 
 export type TrialRatio = {
@@ -344,7 +344,7 @@ export function buildTrialBoard(market: TrialMarketId): TrialBoard {
         id: pillar.id,
         label: pillar.label,
         score: pillar.score,
-        status: healthBandLabel(pillar.status),
+        status: pillar.status ? healthBandLabel(pillar.status) : null,
       })),
     },
     ratios: shown,

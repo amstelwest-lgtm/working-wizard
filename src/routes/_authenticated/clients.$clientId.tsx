@@ -112,6 +112,7 @@ import {
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
   liveHealthFromBooks,
+  numberRatioRecord,
   healthWithoutEvidence,
   NOT_SCORED_YET_LABEL,
   type OverallHealth,
@@ -120,6 +121,7 @@ import { playbookKeyForRatioName } from "@/lib/playbook-key";
 import { countOpenRatioQueries, ratioQueryLabel } from "@/lib/ratio-queries";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
+import type { RatioResult } from "@/reports/health-scorecard";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -142,7 +144,8 @@ import { booksAnswerSentence, booksCoverPeriod, booksTileLines, homeStatementsLi
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { parseBudgetDocument } from "@/lib/budget-pdf";
-import { budgetSeededFromStatement, budgetVersusStatement, statementBudgetRead } from "@/lib/budget.bridges";
+import { budgetSeededFromStatement, budgetVersusStatement, statementBudgetRead, statementCoverMonthCount } from "@/lib/budget.bridges";
+import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
 import { planAnswerSentence } from "@/lib/plan-pack-copy";
 import { loadClientDisplayNames } from "@/lib/client-display-name";
 import { ProductMixPanel } from "@/components/product-mix-panel";
@@ -3324,7 +3327,7 @@ function ClientView() {
     return pdf(
       HealthScorecardPDF({
         smeData: { name: client.name, period: periodLabel },
-        ratioResults,
+        ratioResults: ratioResults as RatioResult[],
         accountantProfile: profile,
         cashRunwayWeeks: effectiveRunway,
         overallHealth,
@@ -3870,7 +3873,7 @@ function ClientView() {
   const reportsReady = clientReportsReadyCount(financials);
   const reportsLine = reportsHomeReadyLine(reportsReady);
   const canonicalRatios = useMemo(
-    () => scorecardRatiosFromFinancials(financials, { fyStartMonth }),
+    () => numberRatioRecord(scorecardRatiosFromFinancials(financials, { fyStartMonth })),
     [financials, fyStartMonth],
   );
   const homeNeeds = useMemo(() => {
@@ -5241,6 +5244,26 @@ function ClientView() {
                       businessTypeId={client.business_type}
                       operatingProfile={parseOperatingProfile(client.operating_profile)}
                       financials={financials}
+                      priorYear={
+                        priorSnapshot?.financials
+                          ? yearMoneyFromFinancials(priorSnapshot.financials as Record<string, unknown>)
+                          : null
+                      }
+                      priorYearLabel={
+                        priorSnapshot
+                          ? statementSpanLabel({
+                              periodStart: readStatementMeta(priorSnapshot.financials, clientMarket).periodStart,
+                              periodEnd: readStatementMeta(priorSnapshot.financials, clientMarket).periodEnd,
+                              periodLabel: priorSnapshot.period_label,
+                              market: clientMarket,
+                            })
+                          : null
+                      }
+                      priorYearMonths={
+                        priorSnapshot?.financials
+                          ? statementCoverMonthCount(priorSnapshot.financials as Record<string, unknown>)
+                          : null
+                      }
                       fyStartMonthDefault={fyStartMonth}
                       onRetakeProfile={() => setProfileOpen(true)}
                       onPushedToCash={() => {

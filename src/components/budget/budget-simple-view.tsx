@@ -257,15 +257,7 @@ export function BudgetSimpleView({
   const maxRev = Math.max(1, ...results.map((r) => r.revenue));
 
   const compared = actuals && actuals.chip && actuals.chip !== "None" ? actuals : null;
-  const thisYear = useMemo(() => {
-    const year = ownerYearFromStatement(compared);
-    // Statement pace has no separate month actual. The verdict shows the
-    // plan's profit for that window, so the year table uses the same figure.
-    if (!year || compared?.chip !== "Estimated from statement pace" || compared.budgetEbit == null) {
-      return year;
-    }
-    return { ...year, netProfit: compared.budgetEbit };
-  }, [compared]);
+  const thisYear = useMemo(() => ownerYearFromStatement(compared), [compared]);
   const priorOnFile = hasPriorYearFigures(priorYear);
   return (
     <div id="wizard-budget-plan" className="space-y-5">
@@ -314,17 +306,15 @@ export function BudgetSimpleView({
         uniformNote={uniformNote}
       />
       {readOnly ? null : <>{drawer}</>}
-      {readOnly ? (
-        <BudgetYearStrip
-          thisYear={thisYear}
-          thisMonths={compared?.periodMonths ?? null}
-          lastYear={priorYear}
-          lastMonths={priorYearMonths}
-          lastYearLabel={priorYearLabel}
-          market={market}
-          signed={role === "owner"}
-        />
-      ) : null}
+      <BudgetYearStrip
+        thisYear={thisYear}
+        thisMonths={compared?.periodMonths ?? null}
+        lastYear={priorYear}
+        lastMonths={priorYearMonths}
+        lastYearLabel={priorYearLabel}
+        market={market}
+        signed={role === "owner"}
+      />
       {readOnly ? null : (
       <p className="text-sm font-semibold text-[#102A43] dark:text-slate-100">
         {plainBudgetWindowHeading(shownTpl.label, doc, market)}

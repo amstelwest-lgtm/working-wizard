@@ -1,5 +1,6 @@
 import { processLock } from "@supabase/auth-js";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { createRefreshCoordinator, refreshTokenFromRequest, type RefreshBus } from "./refresh-flight";
 
 /**
  * Isolate the browser Supabase session to the current tab.
@@ -69,9 +70,10 @@ export function adoptSharedAuthSession(storageKey: string): void {
  * on, revokes the session.
  *
  * auth-js 2.74 posts `/token?grant_type=refresh_token` once per caller
- * (`_refreshAccessToken`). It does not coordinate tabs. Per-tab processLock
- * lets two tabs refresh at once; the reuse interval is what keeps that from
- * signing both out. This client does not change the server interval.
+ * (`_refreshAccessToken`). Per-tab processLock does not cross tabs, so two
+ * tabs can refresh one token. A gap at or past the reuse window revokes it.
+ * coordinatedAuthFetch lets one tab post that grant and the others reuse the
+ * successor. This client does not change the server interval.
  */
 export const REFRESH_TOKEN_REUSE_INTERVAL_MS = 10_000;
 
@@ -126,6 +128,55 @@ export function tabAuthLock<R>(
       },
     );
   });
+}
+
+let refreshFlight: ReturnType<typeof createRefreshCoordinator> | undefined;
+let refreshBus: RefreshBus | undefined;
+
+function browserTabId(): string {
+  const key = "milon-tab-id";
+  try {
+    const existing = sessionStorage.getItem(key);
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    sessionStorage.setItem(key, id);
+    return id;
+  } catch {
+    return `tab-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function browserRefreshBus(): RefreshBus {
+  if (refreshBus) return refreshBus;
+  const channel = new BroadcastChannel("milon-auth-refresh");
+  refreshBus = {
+    post: (msg) => channel.postMessage(msg),
+    subscribe: (fn) => {
+      const handler = (event: MessageEvent) => fn(event.data as Parameters<typeof fn>[0]);
+      channel.addEventListener("message", handler);
+      return () => channel.removeEventListener("message", handler);
+    },
+  };
+  return refreshBus;
+}
+
+/**
+ * Wraps fetch so only one tab posts a given refresh token. Other grants pass
+ * through. The channel opens on the first refresh, not during createClient,
+ * so GoTrue's own BroadcastChannel stays suppressed.
+ */
+export function coordinatedAuthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const token = refreshTokenFromRequest(input, init);
+  if (!token || typeof window === "undefined") return fetch(input, init);
+  if (!refreshFlight) {
+    refreshFlight = createRefreshCoordinator({
+      tabId: browserTabId(),
+      bus: browserRefreshBus(),
+      storage: window.localStorage,
+      lock: (name, fn) => tabAuthLock(name, -1, fn),
+    });
+  }
+  return refreshFlight.refresh(token, () => fetch(input, init));
 }
 
 /**

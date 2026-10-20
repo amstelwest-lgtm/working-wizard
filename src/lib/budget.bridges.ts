@@ -7,7 +7,7 @@ import { fyMonths } from "@/lib/budget.months";
 import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compute";
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
-import { periodProfitBridge } from "@/lib/period-profit";
+import { periodProfitBridge, statementNetProfit } from "@/lib/period-profit";
 import { assessClientMetrics, storedOpeningIsMissing } from "@/lib/client-metrics";
 import {
   DAYS_REVIEW_LIMIT,
@@ -1215,6 +1215,39 @@ function coverMonths(fy: string[], endMonth: string, periodMonths: number): stri
   return fy.slice(startIdx, endIdx + 1);
 }
 
+const BUDGET_PROFIT_KEYS = [
+  "grossProfit",
+  "ebit",
+  "ebitda",
+  "ebt",
+  "netIncome",
+  "interestExpense",
+  "interest",
+  "tax",
+  "otherIncome",
+] as const;
+
+/**
+ * Profit lines the budget comparison needs besides revenue and costs.
+ * Operating profit, interest, tax, other income, and net profit. Empty
+ * lines stay off the payload so a blank field is not a zero.
+ */
+export function budgetProfitFields(source: object | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!source) return out;
+  const row = source as Record<string, unknown>;
+  for (const key of BUDGET_PROFIT_KEYS) {
+    const value = row[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out[key] = String(value);
+      continue;
+    }
+    if (typeof value !== "string" || !value.trim()) continue;
+    out[key] = value.trim();
+  }
+  return out;
+}
+
 /**
  * Statement window versus the same slice of the plan.
  * Actuals are the period totals Overview uses, not an annualised month.
@@ -1231,6 +1264,7 @@ export function budgetVersusStatement(
   budgetOverheads?: number;
   ebit: number;
   budgetEbit?: number;
+  netProfit: number | null;
   periodMonths?: number;
   periodKnown: boolean;
   seededFromActuals: boolean;
@@ -1258,6 +1292,7 @@ export function budgetVersusStatement(
     cogs: bridge.cogs,
     fixedCosts: bridge.operatingExpenses,
     ebit: bridge.ebit,
+    netProfit: statementNetProfit(aliased),
     chip: "Estimated from statement pace" as const,
   };
   if (window && window.keys.length === 0) {

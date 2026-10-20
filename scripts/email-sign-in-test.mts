@@ -6,8 +6,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  EMAIL_SIGN_IN_CODE_INSTEAD,
   EMAIL_SIGN_IN_RATE_LIMIT,
   EMAIL_SIGN_IN_SENT,
+  EMAIL_SIGN_IN_TAP_LINK,
   emailCodeFallbackEnabled,
   emailSignInHidesAccount,
   emailSignInNotice,
@@ -174,7 +176,22 @@ const entry = read("src/components/email-sign-in-option.tsx");
 const authPage = read("src/routes/auth.tsx");
 const modal = read("src/components/landing/sign-in-modal.tsx");
 assert(entry.includes("Email me a sign-in link"), "the control is labelled as a sign-in link");
-assert(entry.includes("Enter the 6-digit code"), "the code fallback is labelled");
+assert(entry.includes("EMAIL_SIGN_IN_TAP_LINK"), "after a send, the link is the instruction");
+assert(
+  EMAIL_SIGN_IN_TAP_LINK === "Check your email and tap the link.",
+  "the link instruction is the primary sentence",
+);
+assert(entry.includes("<details"), "the 6-digit form stays collapsed");
+assert(entry.includes("EMAIL_SIGN_IN_CODE_INSTEAD"), "the code is a secondary disclosure");
+assert(
+  EMAIL_SIGN_IN_CODE_INSTEAD === "Have a 6-digit code instead?",
+  "the disclosure asks for a code instead of the link",
+);
+assert(
+  entry.indexOf("EMAIL_SIGN_IN_CODE_INSTEAD") < entry.indexOf("Enter the 6-digit code"),
+  "the disclosure comes before the code field",
+);
+assert(entry.includes("Enter the 6-digit code"), "the code fallback is labelled once opened");
 assert(
   entry.includes(EMAIL_SIGN_IN_SENT) || entry.includes("notice"),
   "the control shows the helper notice",

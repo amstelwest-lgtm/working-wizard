@@ -7,6 +7,7 @@ import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "rea
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
+import { shouldRedirectToAuth } from "@/lib/auth-session-guard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BackLink } from "@/components/back-link";
@@ -112,6 +113,7 @@ import {
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { ratiosStatementFigures, withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { cashDriverDayFigures } from "@/lib/cash-driver-label";
+import { HEALTH_NOT_ENOUGH_DATA } from "@/lib/health-metric-row";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
@@ -120,6 +122,7 @@ import {
   NOT_SCORED_YET_LABEL,
   healthMapFromRatios,
   liveHealthFromBooks,
+  numberRatioRecord,
   scoreRatio,
 } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
@@ -148,7 +151,7 @@ import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operati
 import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
-import { statementCoverMonthCount } from "@/lib/budget.bridges";
+import { budgetProfitFields, statementCoverMonthCount } from "@/lib/budget.bridges";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
@@ -2093,7 +2096,7 @@ function flatExtractionToMergedResult(
 
 function Index() {
   const { viewMode, setViewMode } = useViewMode();
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut, restoreFailed } = useAuth();
   const navigate = useNavigate();
   const [ownerBootTimedOut, setOwnerBootTimedOut] = useState(false);
   const [ownerBootAttempt, setOwnerBootAttempt] = useState(0);
@@ -2103,9 +2106,8 @@ function Index() {
   // Redirect unauthenticated users to the landing page. After invite accept,
   // React auth state can lag the real Supabase session — don't bounce yet.
   useEffect(() => {
-    if (authLoading) return;
-    if (user) {
-      consumeInviteHandoffFlag();
+    if (!shouldRedirectToAuth({ loading: authLoading, hasUser: !!user, restoreFailed })) {
+      if (user) consumeInviteHandoffFlag();
       return;
     }
     let cancelled = false;
@@ -2119,7 +2121,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, restoreFailed, navigate]);
 
   // Handle QBO / Xero OAuth callback: ?qbo= / ?xero= connected|error
   const oauthReturn = Route.useSearch();
@@ -2710,7 +2712,12 @@ function Index() {
     [workspaceMarket],
   );
   const ownerCanonicalRatios = useMemo(
-    () => scorecardRatiosFromFinancials(v as unknown as Record<string, unknown>, { fyStartMonth: boardMarket.fyStartMonthDefault }),
+    () =>
+      numberRatioRecord(
+        scorecardRatiosFromFinancials(v as unknown as Record<string, unknown>, {
+          fyStartMonth: boardMarket.fyStartMonthDefault,
+        }),
+      ),
     [v, boardMarket.fyStartMonthDefault],
   );
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
@@ -3841,7 +3848,7 @@ function Index() {
   };
   const avgHealth = overallHealth.overall ?? NaN;
 
-  const valueMap: Record<RatioKey, { value: number; format: "x" | "pct" | "days" | "money" }> = {
+  const valueMap: Record<RatioKey, { value: number | null; format: "x" | "pct" | "days" | "money" }> = {
     taxBurden: { value: taxBurden, format: "x" },
     interestBurden: { value: interestBurden, format: "x" },
     operatingMargin: { value: operatingMargin, format: "pct" },
@@ -4462,6 +4469,7 @@ function Index() {
                             [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
                             ...(v.periodStart ? { periodStart: v.periodStart } : {}),
                             ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
+                            ...budgetProfitFields(v),
                           }}
                           reloadToken={budgetReloadToken}
                         />
@@ -5867,21 +5875,28 @@ function Index() {
                                     }
                                     const k = row.key;
                                     const meta = RATIO_META[k];
-                                    const rawVal = valueMap[k].value;
+                                    const storedVal = valueMap[k].value;
+                                    const rawVal =
+                                      typeof storedVal === "number" && Number.isFinite(storedVal)
+                                        ? storedVal
+                                        : Number.NaN;
                                     const fmt = valueMap[k].format;
-                                    const health = healthMap[k];
+                                    const daysMissing = fmt === "days" && !isFinite(rawVal);
+                                    const health = daysMissing ? Number.NaN : healthMap[k];
                                     const series = seriesFor(k, rawVal);
                                     const delta = pctDelta(series);
                                     const bm = benchmarkFor(k);
-                                    const fmtd = !isFinite(rawVal)
-                                      ? "Not enough data"
-                                      : fmt === "pct"
-                                        ? `${(rawVal * 100).toFixed(1)}%`
-                                        : fmt === "x"
-                                          ? `${rawVal.toFixed(2)}×`
-                                          : fmt === "days"
-                                            ? `${Math.round(rawVal)} d`
-                                            : formatNumber(rawVal, boardMarket);
+                                    const fmtd = daysMissing
+                                      ? "—"
+                                      : !isFinite(rawVal)
+                                        ? "Not enough data"
+                                        : fmt === "pct"
+                                          ? `${(rawVal * 100).toFixed(1)}%`
+                                          : fmt === "x"
+                                            ? `${rawVal.toFixed(2)}×`
+                                            : fmt === "days"
+                                              ? `${Math.round(rawVal)} d`
+                                              : formatNumber(rawVal, boardMarket);
                                     const healthTier = scoreTier(health);
                                     const hCls = !isFinite(health)
                                       ? "text-slate-400"
@@ -5987,11 +6002,13 @@ function Index() {
                                                 : "—"}
                                           </div>
                                           <div className={`text-[10px] ${hLabelCls}`}>
-                                            {k === "grossMargin" && grossImplausible
-                                              ? GROSS_MARGIN_MAPPING_NOTE
-                                              : isFinite(health)
-                                                ? healthBandLabel(healthTier)
-                                                : "—"}
+                                            {daysMissing
+                                              ? HEALTH_NOT_ENOUGH_DATA
+                                              : k === "grossMargin" && grossImplausible
+                                                ? GROSS_MARGIN_MAPPING_NOTE
+                                                : isFinite(health)
+                                                  ? healthBandLabel(healthTier)
+                                                  : "—"}
                                           </div>
                                         </td>
                                       </tr>
@@ -6247,6 +6264,7 @@ function Index() {
                             [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
                             ...(v.periodStart ? { periodStart: v.periodStart } : {}),
                             ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
+                            ...budgetProfitFields(v),
                           }}
                           onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
                           reloadToken={budgetReloadToken}
