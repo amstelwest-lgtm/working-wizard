@@ -261,6 +261,8 @@ export type BudgetActuals = {
   budgetEbit?: number;
   /** Months in the statement window the header compared. */
   periodMonths?: number;
+  /** YYYY-MM keys of that window. Chart totals use these, not the whole year. */
+  windowMonths?: string[];
 };
 
 export type UnmappedDriver = {

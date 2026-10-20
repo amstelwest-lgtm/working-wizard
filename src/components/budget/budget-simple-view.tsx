@@ -21,7 +21,12 @@ import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { BudgetChartTable } from "@/components/budget/budget-chart-table";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
 import { BudgetYearStrip } from "@/components/budget/budget-year-strip";
-import { ownerYearFromStatement, type BudgetYearMoney } from "@/lib/budget-year-compare";
+import {
+  hasPriorYearFigures,
+  ownerBudgetHowBuilt,
+  ownerYearFromStatement,
+  type BudgetYearMoney,
+} from "@/lib/budget-year-compare";
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
@@ -251,6 +256,16 @@ export function BudgetSimpleView({
   const maxRev = Math.max(1, ...results.map((r) => r.revenue));
 
   const compared = actuals && actuals.chip && actuals.chip !== "None" ? actuals : null;
+  const thisYear = useMemo(() => {
+    const year = ownerYearFromStatement(compared);
+    // Statement pace has no separate month actual. The verdict shows the
+    // plan's profit for that window, so the year table uses the same figure.
+    if (!year || compared?.chip !== "Estimated from statement pace" || compared.budgetEbit == null) {
+      return year;
+    }
+    return { ...year, netProfit: compared.budgetEbit };
+  }, [compared]);
+  const priorOnFile = hasPriorYearFigures(priorYear);
   return (
     <div id="wizard-budget-plan" className="space-y-5">
       <BudgetVerdictStrip
@@ -289,6 +304,7 @@ export function BudgetSimpleView({
         onLensChange={onLensChange}
         actualMonths={actualMonths}
         statementActuals={compared}
+        windowMonths={compared?.windowMonths}
         readOnly={readOnly}
         signed={role === "owner"}
         displayTemplateId={displayTemplateId}
@@ -298,7 +314,7 @@ export function BudgetSimpleView({
       {readOnly ? null : <>{drawer}</>}
       {readOnly ? (
         <BudgetYearStrip
-          thisYear={ownerYearFromStatement(compared)}
+          thisYear={thisYear}
           thisMonths={compared?.periodMonths ?? null}
           lastYear={priorYear}
           lastMonths={priorYearMonths}
@@ -315,6 +331,7 @@ export function BudgetSimpleView({
 
       <OwnerHowBuilt
         readOnly={readOnly}
+        priorOnFile={priorOnFile}
         summary={
           hotelRevenueRows ? (
             <ul data-hotel-template="" data-hotel-section="revenue" className="mt-3 space-y-1 text-[13px] text-[#3D5270]">
@@ -748,10 +765,12 @@ export function BudgetSimpleView({
 
 function OwnerHowBuilt({
   readOnly,
+  priorOnFile,
   children,
   summary = null,
 }: {
   readOnly: boolean;
+  priorOnFile: boolean;
   children: ReactNode;
   summary?: ReactNode;
 }) {
@@ -759,8 +778,8 @@ function OwnerHowBuilt({
   return (
     <section data-budget-how="short" className="space-y-2">
       <h3 className="text-base font-semibold text-[#102A43] dark:text-slate-100">How the budget is built</h3>
-      <p className="max-w-xl text-sm leading-relaxed text-[#3D5270] dark:text-slate-300">
-        Your accountant built this from last year's actuals plus the growth you agreed.
+      <p className="max-w-xl text-sm leading-relaxed text-[#3D5270] dark:text-slate-300" data-budget-how-built>
+        {ownerBudgetHowBuilt(priorOnFile)}
       </p>
       {summary}
       <details>

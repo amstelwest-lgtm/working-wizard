@@ -20,6 +20,9 @@ import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { computeRatios, formatQuotedDays, healthBandLabel, scoreTier } from "@/lib/ratios";
+import { liveHealthFromBooks } from "@/lib/health-score";
+import { statementKindFromMetadata } from "@/lib/statement-parse";
+import { planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { PDFUploadZone } from "@/components/pdf-upload-zone";
 import { ExtractionReviewModal } from "@/components/extraction-review-modal";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
@@ -134,7 +137,7 @@ type RatioRow = {
 };
 
 function fmt(v: number, f: RatioRow["format"], market: MoneyMarket = ZA_MARKET, ratioName?: string) {
-  if (!isFinite(v)) return "—";
+  if (!isFinite(v)) return "Not enough data";
   switch (f) {
     case "pct":
       return `${(v * 100).toFixed(1)}%`;
@@ -190,6 +193,48 @@ export function AccountantRatiosPanel({
   // invalidates an accountant's sign-off with no real data change.
   const skipNextAutosave = useRef(false);
 
+  const planParsedImport = (
+    extracted: Record<string, string>,
+    statement: {
+      kind?: string;
+      periodStart?: string | null;
+      periodEnd?: string | null;
+      periodMonths?: number | null;
+    } | null,
+    choice?: PeriodChoice | null,
+  ) => {
+    const kind =
+      statement?.kind === "income_statement" ||
+      statement?.kind === "balance_sheet" ||
+      statement?.kind === "mixed"
+        ? statement.kind
+        : "unknown";
+    return planStatementImport({
+      existing: v as unknown as Record<string, unknown>,
+      incoming: extracted,
+      kind,
+      span: statementSpan(statement?.periodStart, statement?.periodEnd, statement?.periodMonths ?? null),
+      choice: choice ?? null,
+      pillarsBefore: liveHealthFromBooks({
+        financials: v as unknown as Record<string, unknown>,
+        market,
+      }).pillars,
+      market,
+    });
+  };
+
+  const applyPlannedLive = (live: Record<string, unknown> | null) => {
+    if (!live) return;
+    setV((prev) => ({
+      ...prev,
+      ...Object.fromEntries(
+        Object.entries(live).flatMap(([key, value]) =>
+          value == null || typeof value === "object" ? [] : [[key, String(value)]],
+        ),
+      ),
+    }) as Inputs);
+  };
+
   const onUpload = async (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     if (ext === "csv" || file.type === "text/csv" || ext === "txt") {
@@ -206,8 +251,15 @@ export function AccountantRatiosPanel({
         if (filledKeys.length === 0) {
           toast.warning("Couldn't extract any figures from that file.");
         } else {
-          setV((prev) => ({ ...prev, ...extracted }) as Inputs);
-          toast.success(`Auto-filled ${filledKeys.length} fields from ${file.name}`);
+          const planned = planParsedImport(
+            extracted,
+            (result as { statement?: { kind?: string; periodStart?: string | null; periodEnd?: string | null; periodMonths?: number | null } }).statement ?? null,
+          );
+          if (planned.action === "choose") toast.message(planned.message);
+          else if (planned.action === "live") {
+            applyPlannedLive(planned.live);
+            toast.success(planned.message);
+          } else toast.message(planned.message);
         }
       } catch (e) {
         toast.error(`Upload failed: ${(e as Error).message}`);
@@ -234,8 +286,15 @@ export function AccountantRatiosPanel({
         if (filledKeys.length === 0) {
           toast.warning("Couldn't extract any figures from that file.");
         } else {
-          setV((prev) => ({ ...prev, ...extracted }) as Inputs);
-          toast.success(`Auto-filled ${filledKeys.length} fields from ${file.name}`);
+          const planned = planParsedImport(
+            extracted,
+            (result as { statement?: { kind?: string; periodStart?: string | null; periodEnd?: string | null; periodMonths?: number | null } }).statement ?? null,
+          );
+          if (planned.action === "choose") toast.message(planned.message);
+          else if (planned.action === "live") {
+            applyPlannedLive(planned.live);
+            toast.success(planned.message);
+          } else toast.message(planned.message);
         }
       } catch (e) {
         toast.error(`Upload failed: ${(e as Error).message}`);
@@ -245,54 +304,57 @@ export function AccountantRatiosPanel({
     }
   };
 
-  const applyExtraction = async (inputs: MappedInputs) => {
-    const next: Inputs = { ...v };
-    const map: Partial<Record<keyof Inputs, string | undefined>> = {
-      revenue: inputs.revenue,
-      cogs: inputs.cogs,
-      ebit: inputs.ebit,
-      ebt: inputs.ebt,
-      netIncome: inputs.netIncome,
-      ebitda: inputs.ebitda,
-      operatingCashflow: inputs.operatingCashflow,
-      totalAssets: inputs.totalAssets,
-      equity: inputs.equity,
-      receivables: inputs.receivables,
-      inventory: inputs.inventory,
-      payables: inputs.payables,
-      fixedCosts: inputs.fixedCosts,
-      laborCost: inputs.laborCost,
-      employees: inputs.employees,
-    };
-    let filled = 0;
-    for (const [k, val] of Object.entries(map)) {
-      if (val !== undefined) {
-        (next as Record<string, string>)[k] = val;
-        filled++;
+  const applyExtraction = async (
+    inputs: MappedInputs,
+    _prefs?: unknown,
+    choice?: PeriodChoice | null,
+  ) => {
+    const meta = pendingExtraction?.document_metadata;
+    const incoming: Record<string, string> = {};
+    for (const [key, val] of Object.entries(inputs)) {
+      if (typeof val === "string" && val.trim()) incoming[key] = val;
+    }
+    const planned = planParsedImport(
+      incoming,
+      {
+        kind: statementKindFromMetadata(meta),
+        periodStart: meta?.period_start_date ?? null,
+        periodEnd: meta?.period_end_date ?? null,
+        periodMonths: meta?.period_months ?? null,
+      },
+      choice ?? null,
+    );
+    if (planned.action === "choose") {
+      return {
+        ok: false as const,
+        message: planned.message,
+        choice: { replaceLabel: planned.replaceLabel, addLabel: planned.addLabel },
+      };
+    }
+    if (planned.action === "live") applyPlannedLive(planned.live);
+    setUploadOpen(false);
+    const savedBody = planned.action === "history" ? planned.history : planned.live;
+    if (savedBody && planned.periodLabel) {
+      const periodDate =
+        typeof savedBody.periodEnd === "string" && savedBody.periodEnd
+          ? savedBody.periodEnd
+          : new Date().toISOString().slice(0, 10);
+      const ratios = computeRatios(savedBody as never);
+      const { error: snapErr } = await supabase.from("client_financial_snapshots").insert({
+        client_id: clientId,
+        period_label: planned.periodLabel,
+        period_date: periodDate,
+        financials: savedBody as never,
+        ratios: ratios as never,
+        source: "pdf_upload",
+      });
+      if (!snapErr) {
+        setHistory((h) =>
+          [...h, { period_label: planned.periodLabel ?? periodDate, period_date: periodDate, ratios }].slice(-6),
+        );
       }
     }
-    setV(next);
-    setUploadOpen(false);
-    toast.success(`Populated ${filled} fields from extracted data`);
-
-    // Save snapshot
-    const now = new Date();
-    const periodLabel = formatMonthYear(now, market.timezone);
-    const periodDate = now.toISOString().slice(0, 10);
-    const ratios = computeRatios(next);
-    const { error: snapErr } = await supabase.from("client_financial_snapshots").insert({
-      client_id: clientId,
-      period_label: periodLabel,
-      period_date: periodDate,
-      financials: next as never,
-      ratios: ratios as never,
-      source: "pdf_upload",
-    });
-    if (!snapErr) {
-      setHistory((h) =>
-        [...h, { period_label: periodLabel, period_date: periodDate, ratios }].slice(-6),
-      );
-    }
+    return { ok: true as const, message: planned.message };
   };
 
   const onSaveSnapshot = async () => {

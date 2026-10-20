@@ -141,6 +141,7 @@ import {
   statementImportWhat,
   withFinancialsWriteRev,
 } from "@/lib/statement-import-apply";
+import { planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -503,6 +504,8 @@ type Inputs = {
   periodEnd?: string;
   /** Date of the balance-sheet cash line. The Cash tab labels the opening with this. */
   cashAsOf?: string;
+  /** JSON scores for Cash, Assets, and Financing held across a P&L-only import. */
+  sheetPillarsHeld?: string;
 };
 
 // All fields start empty — no demo/placeholder data pre-filled.
@@ -5780,7 +5783,7 @@ function Index() {
                                     const delta = pctDelta(series);
                                     const bm = benchmarkFor(k);
                                     const fmtd = !isFinite(rawVal)
-                                      ? "—"
+                                      ? "Not enough data"
                                       : fmt === "pct"
                                         ? `${(rawVal * 100).toFixed(1)}%`
                                         : fmt === "x"
@@ -6717,7 +6720,7 @@ function Index() {
                 setReplaceLiveOnHistory(false);
               }}
               autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
-              onConfirm={async (mapped, autoPopulate) => {
+              onConfirm={async (mapped, autoPopulate, periodChoice) => {
                 const entries = Object.entries(mapped).filter(
                   ([k, val]) => val !== undefined && k in defaults,
                 );
@@ -6790,18 +6793,99 @@ function Index() {
                 const periodEndForCash =
                   extractionForReview?.document_metadata?.period_end_date ?? null;
                 const uploadKind = statementKindFromMetadata(reviewMeta);
-                const importedCash = allEntries.some(
-                  ([key, val]) => key === "cash" && String(val ?? "").trim() !== "",
+                const fileSpan = statementSpan(
+                  reviewMeta?.period_start_date,
+                  reviewMeta?.period_end_date,
+                  reviewMeta?.period_months,
                 );
+                const healthBefore = liveHealthFromBooks({
+                  financials: v as unknown as Record<string, unknown>,
+                  cashflow: clientMeta?.cashflow ?? null,
+                  fyStartMonth,
+                  market: boardMarket,
+                  timeZone: boardMarket.timezone,
+                });
+                const planned = planStatementImport({
+                  existing: v,
+                  incoming: Object.fromEntries(allEntries),
+                  kind: uploadKind,
+                  span: fileSpan,
+                  choice: periodChoice ?? null,
+                  pillarsBefore: healthBefore.pillars,
+                  market: boardMarket,
+                });
+                if (planned.action === "choose") {
+                  return {
+                    ok: false as const,
+                    message: planned.message,
+                    choice: { replaceLabel: planned.replaceLabel, addLabel: planned.addLabel },
+                  };
+                }
+                if (planned.action === "history" && planned.history) {
+                  const periodDate = fileSpan?.periodEnd ?? periodEndForCash ?? "";
+                  const periodLabel = planned.periodLabel || periodDate;
+                  const { data: rows } = await supabase
+                    .from("client_financial_snapshots")
+                    .select("id, financials")
+                    .eq("client_id", effectiveClientId)
+                    .order("period_date", { ascending: false })
+                    .limit(24);
+                  const match = (rows ?? []).find((row) => {
+                    const stored = statementSpan(
+                      (row.financials as { periodStart?: string } | null)?.periodStart,
+                      (row.financials as { periodEnd?: string } | null)?.periodEnd,
+                    );
+                    return Boolean(
+                      fileSpan &&
+                        stored &&
+                        stored.periodStart === fileSpan.periodStart &&
+                        stored.periodEnd === fileSpan.periodEnd,
+                    );
+                  });
+                  const ratiosOut = computeRatios(planned.history as never);
+                  const write = match?.id
+                    ? supabase
+                        .from("client_financial_snapshots")
+                        .update({
+                          financials: planned.history as never,
+                          ratios: ratiosOut as never,
+                          period_label: periodLabel,
+                          period_date: periodDate,
+                        })
+                        .eq("id", match.id)
+                    : supabase.from("client_financial_snapshots").insert({
+                        client_id: effectiveClientId,
+                        period_label: periodLabel,
+                        period_date: periodDate,
+                        financials: planned.history as never,
+                        ratios: ratiosOut as never,
+                        source: "upload",
+                      });
+                  const { error: historyError } = await write;
+                  if (historyError) {
+                    return {
+                      ok: false as const,
+                      message: importFailureMessage(historyError.message),
+                    };
+                  }
+                  const { data } = await supabase
+                    .from("client_financial_snapshots")
+                    .select("period_label, period_date, ratios, source, financials")
+                    .eq("client_id", effectiveClientId)
+                    .order("period_date", { ascending: true })
+                    .limit(24);
+                  if (data) setHistory(data as never);
+                  setPendingCsvExtras(null);
+                  return { ok: true as const, message: planned.message };
+                }
+                const liveFields = planned.live ?? {};
                 const next = {
                   ...v,
-                  ...Object.fromEntries(allEntries),
-                  ...(uploadKind === "balance_sheet" &&
-                  importedCash &&
-                  periodEndForCash &&
-                  /^\d{4}-\d{2}-\d{2}$/.test(periodEndForCash)
-                    ? { cashAsOf: periodEndForCash.slice(0, 10) }
-                    : {}),
+                  ...Object.fromEntries(
+                    Object.entries(liveFields).flatMap(([key, value]) =>
+                      value == null || typeof value === "object" ? [] : [[key, String(value)]],
+                    ),
+                  ),
                 } as Inputs;
                 ownerWriteGen.current += 1;
                 setV(next);
@@ -6862,7 +6946,7 @@ function Index() {
                 setPendingCsvExtras(null);
                 return {
                   ok: true as const,
-                  message: importedUpdateMessage(statementImportWhat(uploadKind)),
+                  message: planned.message || importedUpdateMessage(statementImportWhat(uploadKind)),
                 };
               }}
             />

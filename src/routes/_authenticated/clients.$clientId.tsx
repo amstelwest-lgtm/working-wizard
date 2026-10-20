@@ -89,6 +89,7 @@ import {
   withFinancialsWriteRev,
   statementImportWhat,
 } from "@/lib/statement-import-apply";
+import { earlierStatementNote, planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -2879,7 +2880,13 @@ function ClientView() {
     async (
       result: ExtractionResult,
       autoPopulate?: AutoPopulatePrefs,
-      period?: { periodEnd: string; periodLabel: string },
+      period?: {
+        periodEnd: string;
+        periodLabel: string;
+        periodStart?: string | null;
+        periodMonths?: number | null;
+      },
+      choice?: PeriodChoice | null,
     ) => {
       const extracted = extractionToRatioInputs(result);
       const keptEquity = preserveHandEnteredEquity(financialsRef.current, extracted);
@@ -2887,19 +2894,26 @@ function ClientView() {
         ...extracted,
         ...keptEquity,
       };
-      const coverage = defaultPeriodCoverage({
-        periodEnd: period?.periodEnd,
-        fyStartMonth,
-        preClose:
-          drafted.periodProfitInEquity != null &&
-          String(drafted.periodProfitInEquity).trim() !== "" &&
-          String(drafted.periodProfitInEquity) !== "0",
-      });
+      const fileSpan = statementSpan(
+        period?.periodStart,
+        period?.periodEnd,
+        period?.periodMonths,
+      );
+      const coverage = fileSpan
+        ? { months: fileSpan.months, periodStart: fileSpan.periodStart }
+        : defaultPeriodCoverage({
+            periodEnd: period?.periodEnd,
+            fyStartMonth,
+            preClose:
+              drafted.periodProfitInEquity != null &&
+              String(drafted.periodProfitInEquity).trim() !== "" &&
+              String(drafted.periodProfitInEquity) !== "0",
+          });
       const inputs = {
         ...drafted,
         periodMonths: String(coverage.months),
         [PERIOD_MONTHS_CHOSEN_KEY]: "",
-        periodEnd: period?.periodEnd ?? "",
+        periodEnd: fileSpan?.periodEnd ?? period?.periodEnd ?? "",
         ...(coverage.periodStart ? { periodStart: coverage.periodStart } : {}),
       };
       const periodDate = period?.periodEnd?.trim() ?? "";
@@ -2909,6 +2923,71 @@ function ClientView() {
       }
 
       const statementKind = statementKindFromExtraction(result);
+      const healthBefore = liveHealthFromBooks({
+        financials: financialsRef.current as Record<string, unknown>,
+        cashflow: client?.cashflow,
+        fyStartMonth,
+        market: clientMarket,
+        industry: healthIndustry,
+        timeZone: clientMarket.timezone,
+      });
+      const planned = planStatementImport({
+        existing: financialsRef.current,
+        incoming: inputs,
+        kind: statementKind,
+        span: fileSpan,
+        choice: choice ?? null,
+        pillarsBefore: healthBefore.pillars,
+        market: clientMarket,
+      });
+      if (planned.action === "choose") {
+        return {
+          ok: false as const,
+          message: planned.message,
+          choice: { replaceLabel: planned.replaceLabel, addLabel: planned.addLabel },
+        };
+      }
+      if (planned.action === "history" && planned.history) {
+        const { data: rows } = await supabase
+          .from("client_financial_snapshots")
+          .select("id, financials")
+          .eq("client_id", clientId)
+          .order("period_date", { ascending: false })
+          .limit(24);
+        const match = (rows ?? []).find((row) => {
+          const stored = statementSpan(
+            (row.financials as { periodStart?: string } | null)?.periodStart,
+            (row.financials as { periodEnd?: string } | null)?.periodEnd,
+          );
+          return Boolean(fileSpan && stored && stored.periodStart === fileSpan.periodStart && stored.periodEnd === fileSpan.periodEnd);
+        });
+        const ratiosOut = overviewRatios(planned.history, { fyStartMonth });
+        const periodDate = fileSpan?.periodEnd ?? period?.periodEnd ?? "";
+        const periodLabel = planned.periodLabel || period?.periodLabel || periodDate;
+        const write = match?.id
+          ? supabase
+              .from("client_financial_snapshots")
+              .update({
+                financials: planned.history as never,
+                ratios: ratiosOut as never,
+                period_label: periodLabel,
+                period_date: periodDate,
+              })
+              .eq("id", match.id)
+          : supabase.from("client_financial_snapshots").insert({
+              client_id: clientId,
+              period_label: periodLabel,
+              period_date: periodDate,
+              financials: planned.history as never,
+              ratios: ratiosOut as never,
+              source: "pdf_upload",
+            });
+        const { error } = await write;
+        if (error) {
+          return { ok: false as const, message: importFailureMessage(error.message) };
+        }
+        return { ok: true as const, message: planned.message };
+      }
       const { data: byDate } = await supabase
         .from("client_financial_snapshots")
         .select("id, financials")
@@ -2983,7 +3062,7 @@ function ClientView() {
       }
       financialsWriteGen.current += 1;
       const financialsUpdatedAt = new Date().toISOString();
-      const liveMerged = mergeStatementFinancials(financialsRef.current, inputs, statementKind);
+      const liveMerged = planned.live ?? mergeStatementFinancials(financialsRef.current, inputs, statementKind);
       const nextScalars = Object.fromEntries(
         Object.entries(liveMerged).flatMap(([key, value]) =>
           value == null || typeof value === "object" ? [] : [[key, String(value)]],
@@ -3054,7 +3133,7 @@ function ClientView() {
           toast.error(`Figures saved, but drafting deliverables failed: ${(e as Error).message}`);
         }
       }
-      return { ok: true as const, message: importedUpdateMessage(statementImportWhat(statementKind)) };
+      return { ok: true as const, message: planned.message || importedUpdateMessage(statementImportWhat(statementKind)) };
     },
     [
       clientId,
@@ -3722,6 +3801,7 @@ function ClientView() {
       signedBy: null,
       signedOn: null,
       market: gateMarket,
+      balanceSheetNote: earlierStatementNote(financials, gateMarket),
     };
   }, [
     priorSnapshot,
@@ -3854,6 +3934,7 @@ function ClientView() {
         cashOnFile,
         cashPillarStatus: evidenced && cashOnFile ? (pillarStatus.cash ?? null) : null,
         cashStrainLine: spokenCashStrain(homeBooks),
+        balanceSheetNote: earlierStatementNote(financials, gateMarket),
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];

@@ -25,6 +25,7 @@ import {
   writeOwnerThread,
   type OwnerAgentThread,
 } from "@/lib/owner-chat-thread";
+import { earlierStatementNote } from "@/lib/statement-import-plan";
 import {
   ownerAnswerTiles,
   ownerCardStatuses,
@@ -718,6 +719,7 @@ export function OwnerDoor({
       cashRunwayWeeks,
       cashDebtorScore,
       cashBurnScore,
+      balanceSheetNote: earlierStatementNote(financials, market),
       openAction,
       actionsReady,
       signedBy: latest?.signed_off_by_name ?? null,
@@ -743,6 +745,7 @@ export function OwnerDoor({
     periodEnd,
     history,
     cashflow,
+    financials,
     openAction,
     actionsReady,
     signoffs,

@@ -1130,6 +1130,7 @@ export function budgetVersusStatement(
   let budgetEbit = 0;
   let label = "Statement, prorated";
   let periodMonths = 1;
+  let windowMonths: string[] = [];
   if (days != null && days < 28 && months <= 1 && rows.length) {
     const row = (endInFy ? rows.find((r) => r.month === endMonth) : null) ?? rows[0];
     const frac = days / 30;
@@ -1142,11 +1143,13 @@ export function budgetVersusStatement(
       ? `${dated}, prorated`
       : `${endInFy ? budgetCoverWindowLabel([endMonth]) : "Statement"}, prorated`;
     periodMonths = 1;
+    windowMonths = endInFy ? [endMonth] : rows[0] ? [rows[0].month] : [];
   } else {
     const statementKeys = statementMonthKeys(meta.periodStart, meta.periodEnd);
     const keys = statementKeys
       ? statementKeys.filter((month) => fy.includes(month))
       : coverMonths(fy, endInFy ? endMonth : "", months);
+    windowMonths = keys;
     for (const row of rows) {
       if (!keys.includes(row.month)) continue;
       budgetRevenue += row.revenue;
@@ -1169,5 +1172,6 @@ export function budgetVersusStatement(
     budgetOverheads,
     budgetEbit,
     periodMonths,
+    windowMonths,
   };
 }

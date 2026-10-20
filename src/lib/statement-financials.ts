@@ -11,7 +11,7 @@ import type { BalanceSheet, ExtractionResult, IncomeStatement, Money } from "./f
 import { coherentEquity } from "./equity-coherence.ts";
 import type { RatioInputs } from "./ratios.ts";
 import { currentPeriodProfit } from "./statement-balance.ts";
-import type { StatementKind } from "./statement-parse.ts";
+import { parseStatementText, type StatementKind } from "./statement-parse.ts";
 
 export type PeriodFinancials = RatioInputs & {
   cash: string;
@@ -323,7 +323,11 @@ export function periodFinancialsFromExtraction(result: ExtractionResult): Period
     income.profit_before_tax ??
     (ebit != null ? ebit - (income.finance_costs ?? 0) + (income.finance_income ?? 0) : null);
   const net =
-    income.profit_after_tax ?? (ebt != null ? ebt - (income.income_tax ?? 0) : null);
+    income.profit_after_tax != null
+      ? income.profit_after_tax
+      : ebt != null && income.income_tax != null
+        ? ebt - income.income_tax
+        : null;
   const ebitda =
     ebit != null && depreciation != null ? ebit + depreciation : ebit;
   const labor = income.labor_cost ?? income.labour_cost ?? null;
@@ -380,4 +384,94 @@ export function preserveHandEnteredEquity(
     return { equity: String(current?.equity ?? ""), equityDerived: "" };
   }
   return { equity: imported.equity, equityDerived: importedDerived ? "1" : "" };
+}
+
+function blankBalanceSheet(): BalanceSheet {
+  const group = { total: null as Money };
+  return {
+    non_current_assets: {
+      property_plant_equipment: null,
+      intangible_assets: null,
+      investments: null,
+      deferred_tax_asset: null,
+      other: null,
+      ...group,
+    },
+    current_assets: {
+      inventories: null,
+      trade_and_other_receivables: null,
+      cash_and_cash_equivalents: null,
+      other: null,
+      ...group,
+    },
+    total_assets: null,
+    equity: { share_capital: null, retained_earnings: null, other_reserves: null, total: null },
+    non_current_liabilities: { borrowings: null, deferred_tax_liability: null, other: null, ...group },
+    current_liabilities: {
+      trade_and_other_payables: null,
+      borrowings: null,
+      current_tax: null,
+      bank_overdraft: null,
+      other: null,
+      ...group,
+    },
+    total_liabilities: null,
+    total_equity_and_liabilities: null,
+  };
+}
+
+function amountOrNull(value: string | undefined): number | null {
+  if (!value?.trim()) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * CSV text is authoritative for the lines it actually parsed. A P&L does not
+ * keep a balance sheet the model filled in, and a day range on the header
+ * replaces a period end alone.
+ */
+export function overlayParsedStatement(result: ExtractionResult, text: string): ExtractionResult {
+  const parsed = parseStatementText(text);
+  const fields = parsed.fields;
+  if (parsed.kind === "unknown" && !parsed.periodStart && !parsed.periodEnd) return result;
+  const income = { ...result.current_period.figures.income_statement };
+  const setIncome = (key: keyof IncomeStatement, flat: string) => {
+    const amount = amountOrNull(fields[flat]);
+    if (amount != null) income[key] = amount;
+  };
+  if (parsed.kind === "income_statement" || parsed.kind === "mixed") {
+    setIncome("revenue", "revenue");
+    setIncome("cost_of_sales", "cogs");
+    setIncome("gross_profit", "grossProfit");
+    setIncome("operating_expenses", "fixedCosts");
+    setIncome("depreciation_amortisation", "depreciation");
+    setIncome("operating_profit", "ebit");
+    setIncome("finance_costs", "interestExpense");
+    setIncome("profit_before_tax", "ebt");
+    setIncome("income_tax", "tax");
+    setIncome("profit_after_tax", "netIncome");
+  }
+  const balance =
+    parsed.kind === "income_statement"
+      ? blankBalanceSheet()
+      : result.current_period.figures.balance_sheet;
+  const periodStart = parsed.periodStart ?? result.current_period.period_start ?? null;
+  const periodEnd = parsed.periodEnd ?? result.current_period.period_end;
+  const periodMonths = parsed.periodMonths ?? result.current_period.period_months ?? null;
+  return {
+    ...result,
+    current_period: {
+      ...result.current_period,
+      period_start: periodStart,
+      period_end: periodEnd,
+      period_months: periodMonths,
+      figures: {
+        ...result.current_period.figures,
+        income_statement: income,
+        balance_sheet: balance,
+        cash_flow: parsed.kind === "income_statement" ? null : result.current_period.figures.cash_flow,
+      },
+    },
+  };
 }

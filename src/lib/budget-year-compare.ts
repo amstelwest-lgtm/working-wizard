@@ -79,6 +79,16 @@ export const NO_FIGURES_THIS_YEAR =
 export const YEAR_MONTHS_DIFFER =
   "Last year covers a different number of months, so it is not compared with this year-to-date.";
 
+export function hasPriorYearFigures(money: BudgetYearMoney | null | undefined): boolean {
+  return hasMeasuredFigures(money);
+}
+
+/** Owner "how the budget is built". It must not claim a prior year that is not on file. */
+export function ownerBudgetHowBuilt(priorOnFile: boolean): string {
+  if (!priorOnFile) return "Built from the statement on file. No prior year to compare.";
+  return "Your accountant built this from last year's actuals plus the growth you agreed.";
+}
+
 function hasMeasuredFigures(money: BudgetYearMoney | null | undefined): money is BudgetYearMoney {
   if (!money) return false;
   return LINES.some((line) => {
