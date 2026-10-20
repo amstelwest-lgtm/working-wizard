@@ -73,6 +73,11 @@ import {
   syncCheckoutSessionSubscription,
 } from "@/lib/stripe-billing-sync.server";
 import {
+  classifyBillingCheckFailure,
+  entitlementAfterLiveFailure,
+  FIRM_BILLING_ENTITLEMENT_SERVER_FN,
+} from "@/lib/billing-check-failure";
+import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
   decideFirmBillingEntitlement,
@@ -129,6 +134,15 @@ const ENTITLEMENT_CACHE_TTL_MS = 60_000;
 const NEGATIVE_ENTITLEMENT_TTL_MS = 5_000;
 const entitlementCache = new Map<string, { value: FirmBillingEntitlement; at: number; ttl: number }>();
 const entitlementInflight = new Map<string, Promise<FirmBillingEntitlement>>();
+type EntitlementLastSuccess = {
+  userId: string;
+  email: string;
+  firmId: string | null;
+  value: FirmBillingEntitlement;
+};
+/** Survives the fresh TTL. A later Stripe failure can still return it. */
+const lastSuccessByEmail = new Map<string, EntitlementLastSuccess>();
+const lastSuccessByFirm = new Map<string, EntitlementLastSuccess>();
 const PLAN_DISPLAY_CACHE_TTL_MS = 60_000;
 const planDisplayCache = new Map<
   string,
@@ -153,20 +167,69 @@ function cachedEntitlement(email: string): FirmBillingEntitlement | undefined {
 
 function forgetEntitlement(email: string): void {
   const key = email.trim().toLowerCase();
-  if (key) entitlementCache.delete(key);
+  if (!key) return;
+  entitlementCache.delete(key);
+  lastSuccessByEmail.delete(key);
+  for (const [id, record] of lastSuccessByFirm) {
+    if (record.email === key) lastSuccessByFirm.delete(id);
+  }
 }
 
 function forgetPlanDisplayCache(): void {
   planDisplayCache.clear();
 }
 
-function rememberEntitlement(email: string, value: FirmBillingEntitlement): void {
+function rememberLastSuccess(
+  userId: string,
+  email: string,
+  firmId: string | null,
+  value: FirmBillingEntitlement,
+): void {
+  if (value.reason === "stripe_error" || value.checkFailed) return;
   const key = email.trim().toLowerCase();
-  if (!key) return;
+  const record: EntitlementLastSuccess = {
+    userId,
+    email: key,
+    firmId,
+    value: {
+      entitled: value.entitled,
+      reason: value.reason,
+      introTrialEligible: value.introTrialEligible,
+    },
+  };
+  if (key) lastSuccessByEmail.set(key, record);
+  if (userId && firmId) lastSuccessByFirm.set(`${userId}:${firmId}`, record);
+}
+
+function lookupLastFirmEntitlement(
+  userId: string,
+  email: string,
+  firmId: string | null,
+): FirmBillingEntitlement | null {
+  if (userId && firmId) {
+    const exact = lastSuccessByFirm.get(`${userId}:${firmId}`);
+    if (exact) return exact.value;
+  }
+  const key = email.trim().toLowerCase();
+  const byEmail = key ? lastSuccessByEmail.get(key) : undefined;
+  if (!byEmail || byEmail.userId !== userId) return null;
+  if (firmId && byEmail.firmId && byEmail.firmId !== firmId) return null;
+  return byEmail.value;
+}
+
+function rememberEntitlement(
+  email: string,
+  value: FirmBillingEntitlement,
+  userId = "",
+  firmId: string | null = null,
+): void {
+  const key = email.trim().toLowerCase();
+  if (!key || value.reason === "stripe_error" || value.checkFailed) return;
   // A paid result can sit for a minute. An unpaid result must not: a firm
   // that just added a card was bounced until the old 60s entry expired.
   const ttl = value.entitled ? ENTITLEMENT_CACHE_TTL_MS : NEGATIVE_ENTITLEMENT_TTL_MS;
   entitlementCache.set(key, { value, at: Date.now(), ttl });
+  rememberLastSuccess(userId, email, firmId, value);
 }
 
 async function countOwnedFirms(
@@ -194,6 +257,7 @@ async function countFirmMemberships(
 async function resolveFirmBillingEntitlement(
   context: unknown,
   refresh: boolean,
+  firmId: string | null = null,
 ): Promise<FirmBillingEntitlement> {
   if (!stripeConfigured()) {
     return { entitled: true, reason: "stripe_unconfigured" };
@@ -225,7 +289,7 @@ async function resolveFirmBillingEntitlement(
         }),
         introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
       };
-      rememberEntitlement(email, result);
+      rememberEntitlement(email, result, userId, firmId);
       const mirror = syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
         console.warn(
           "[stripe-entitlement] trial mirror sync failed",
@@ -251,13 +315,18 @@ async function resolveFirmBillingEntitlement(
       }
       return result;
     } catch (err) {
-      console.warn(
-        "[stripe-entitlement] live check failed",
-        err instanceof Error ? err.message : err,
-      );
+      const kind = classifyBillingCheckFailure(err);
+      // Stripe's client times out at 8s and retries once, so one list can
+      // outlive the shell's 8s gate. dub1 calling the US Stripe API is the
+      // usual timeout. A 5xx is Stripe or this server function itself.
+      console.warn("[stripe-entitlement] live check failed", {
+        kind,
+        serverFn: FIRM_BILLING_ENTITLEMENT_SERVER_FN,
+        message: err instanceof Error ? err.message : err,
+      });
       // Unknown is not unpaid. Caching this as entitled:false sent the shell
-      // to the trial card.
-      return { entitled: false, reason: "stripe_error" };
+      // to the trial card. A previous success for this user and firm stays.
+      return entitlementAfterLiveFailure(lookupLastFirmEntitlement(userId, email, firmId), kind);
     }
   })();
   if (key) {
@@ -929,7 +998,14 @@ export type { OwnerEntitlement, StartOwnerCheckoutResult } from "@/lib/owner-bil
 /** Live Stripe entitlement for the accountant firm shell. */
 export const getFirmBillingEntitlement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ refresh: z.boolean().optional() }).parse(input ?? {}))
+  .inputValidator((input) =>
+    z
+      .object({
+        refresh: z.boolean().optional(),
+        firmId: z.string().nullable().optional(),
+      })
+      .parse(input ?? {}),
+  )
   .handler(async ({ data, context }) => {
-    return resolveFirmBillingEntitlement(context, Boolean(data?.refresh));
+    return resolveFirmBillingEntitlement(context, Boolean(data?.refresh), data?.firmId ?? null);
   });

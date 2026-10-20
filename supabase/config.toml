@@ -69,3 +69,8 @@ verify_jwt = true
 # Source document extraction. Caller JWT. Writes a proposal only. Does not post.
 [functions.extract-source-document]
 verify_jwt = true
+
+# Public one-agent sample. No user JWT. The function checks its own limits
+# and writes leads with the service role.
+[functions.prospect-talk]
+verify_jwt = false

@@ -7,6 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertCanInviteClientOwner } from "@/lib/client-owner-invites.functions";
 import { mintOwnerInviteToken } from "@/lib/invite-tokens.functions";
 import {
   draftOwnerInviteEmail,
@@ -33,6 +34,29 @@ export type OwnerInviteResult = {
   from: string | null;
 };
 
+/** Store the typed name and email on the token. A missing column must not block the link. */
+async function stampOwnerInvite(
+  token: string,
+  email: string | null,
+  name: string | null,
+): Promise<void> {
+  if (!email && !name) return;
+  const full = await supabaseAdmin
+    .from("invite_tokens")
+    .update({ invited_email: email, invited_name: name })
+    .eq("token", token)
+    .eq("purpose", "owner_handoff");
+  if (!full.error) return;
+  const message = full.error.message ?? "";
+  if (message.includes("invited_name") && email) {
+    await supabaseAdmin
+      .from("invite_tokens")
+      .update({ invited_email: email })
+      .eq("token", token)
+      .eq("purpose", "owner_handoff");
+  }
+}
+
 function claimsEmailOf(claims: unknown): string | null {
   if (claims && typeof claims === "object" && "email" in claims) {
     const email = (claims as { email?: unknown }).email;
@@ -48,12 +72,36 @@ export const inviteClientOwner = createServerFn({ method: "POST" })
       .object({
         clientId: z.string().uuid(),
         toEmail: emailSchema,
+        ownerName: z.string().trim().max(80).optional().nullable(),
         sendEmail: z.boolean().optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }): Promise<OwnerInviteResult> => {
     const userId = context.userId;
+    await assertCanInviteClientOwner(
+      context.supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            eq: (
+              col: string,
+              val: string,
+            ) => {
+              maybeSingle: () => Promise<{
+                data: Record<string, unknown> | null;
+                error: { message: string } | null;
+              }>;
+            };
+          };
+        };
+        rpc: (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+      },
+      userId,
+      data.clientId,
+    );
     const token = await mintOwnerInviteToken({
       clientId: data.clientId,
       userId,
@@ -65,6 +113,23 @@ export const inviteClientOwner = createServerFn({ method: "POST" })
       },
     });
     const url = `${inviteSiteUrl()}/?invite=${token}&mode=signup`;
+    const ownerName = (data.ownerName ?? "").trim() || null;
+    const requestedEmail = (data.toEmail ?? "").trim().toLowerCase() || null;
+    await stampOwnerInvite(token, requestedEmail, ownerName);
+    if (data.sendEmail === false) {
+      return {
+        token,
+        url,
+        subject: "",
+        body: "",
+        pasteText: url,
+        draftedBy: "template",
+        emailed: false,
+        email: requestedEmail,
+        sendError: null,
+        from: null,
+      };
+    }
 
     let client: {
       id: string;
@@ -153,7 +218,8 @@ export const inviteClientOwner = createServerFn({ method: "POST" })
     if (!accountantEmail) accountantEmail = userEmail;
 
     const toEmail = (data.toEmail || client.contact_email || "").trim().toLowerCase() || null;
-    const shouldSend = data.sendEmail !== false && Boolean(toEmail);
+    // Copy already returned above. This path always sends when there is an address.
+    const shouldSend = Boolean(toEmail);
 
     const draft = await draftOwnerInviteEmail({
       clientName: client.name,

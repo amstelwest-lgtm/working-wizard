@@ -22,6 +22,7 @@ import {
   scoreWorkingCapitalFunding,
   storedOpeningIsMissing,
 } from "./client-metrics.ts";
+import { readSheetPillarsHeld } from "./statement-import-plan.ts";
 
 export type ScoreMarket = Pick<ResolvedMarket, "country" | "copyPack">;
 
@@ -479,15 +480,35 @@ export function liveHealthFromBooks(input: {
   });
   // No scored pillars and a real cash line: leave the empty score alone.
   // Missing cash still drops the pillar so a later reader cannot treat it as Critical.
-  if (healthScored.overall == null && cashOnFile) return healthScored;
-  return cashPillarFollowsForecast(healthScored, {
-    hasEvidence: true,
-    cashOnFile,
-    openingMissing: storedOpeningIsMissing(input.cashflow),
-    opening: cashOnFile ? assessed.outlook.opening : null,
-    closings: cashOnFile ? assessed.outlook.closing : null,
-    floor: cashOnFile ? assessed.outlook.floor : 0,
+  const followed =
+    healthScored.overall == null && cashOnFile
+      ? healthScored
+      : cashPillarFollowsForecast(healthScored, {
+          hasEvidence: true,
+          cashOnFile,
+          openingMissing: storedOpeningIsMissing(input.cashflow),
+          opening: cashOnFile ? assessed.outlook.opening : null,
+          closings: cashOnFile ? assessed.outlook.closing : null,
+          floor: cashOnFile ? assessed.outlook.floor : 0,
+        });
+  // A later P&L does not rescore Cash, Assets, or Financing. Those scores
+  // were taken while the balance sheet on file was still the position.
+  return restoreHeldSheetPillars(followed, stored);
+}
+
+function restoreHeldSheetPillars(
+  health: OverallHealth,
+  financials: Record<string, unknown> | null,
+): OverallHealth {
+  const held = readSheetPillarsHeld(financials);
+  if (!held) return health;
+  const pillars = health.pillars.map((pillar) => {
+    const kept =
+      pillar.id === "cash" ? held.cash : pillar.id === "assets" ? held.assets : pillar.id === "financing" ? held.financing : null;
+    if (!kept) return pillar;
+    return { ...pillar, score: kept.score, status: kept.status };
   });
+  return overallFromPillars(pillars);
 }
 
 /**

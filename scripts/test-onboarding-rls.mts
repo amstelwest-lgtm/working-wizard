@@ -17,7 +17,10 @@
  * Run: pnpm test:onboarding
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { ownerProfileResumeVisible, profileFunnelCloseAllowed } from "../src/lib/first-run";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const ANON_KEY = process.env.SUPABASE_PUBLISHABLE_KEY!;
@@ -45,86 +48,28 @@ function section(t: string) { console.log(`\n── ${t} ──`); }
 // ── Pure-function tests (no DB required) ──────────────────────────────────────
 
 function testDialogDismissLogic() {
-  section("Dialog dismiss logic (pure function — mirrors app.tsx ~line 2243)");
+  section("Dialog dismiss logic (first-run profile can close)");
 
-  // Extracted from:
-  //   onOpenChange={(open) => {
-  //     if (!open && firstRunStep === 'pick-type') return;
-  //     setShowOnboarding(open);
-  //   }}
-  function makeOnOpenChange(
-    firstRunStep: string | null,
-    setShowOnboarding: (v: boolean) => void,
-  ) {
-    return (open: boolean) => {
-      if (!open && firstRunStep === "pick-type") return;
-      setShowOnboarding(open);
-    };
-  }
+  profileFunnelCloseAllowed("pick-type")
+    ? pass("profile close is allowed on question 1 of 4")
+    : fail("profile close is blocked on question 1");
+  ownerProfileResumeVisible({ unfinished: true, open: false })
+    ? pass("a dismissed unfinished profile resumes from Home")
+    : fail("a dismissed profile does not resume");
+  !ownerProfileResumeVisible({ unfinished: true, open: true })
+    ? pass("an open profile is not also a Home resume")
+    : fail("an open profile also shows the Home resume");
 
-  // During pick-type — dismiss is blocked
-  let called = false;
-  const handler1 = makeOnOpenChange("pick-type", () => { called = true; });
-  handler1(false); // user tries to close
-  !called
-    ? pass("onOpenChange blocks close (open=false) when firstRunStep='pick-type'")
-    : fail("onOpenChange allowed close during pick-type");
-
-  // Open event still works during pick-type
-  let calledOpen = false;
-  const handler2 = makeOnOpenChange("pick-type", () => { calledOpen = true; });
-  handler2(true);
-  calledOpen
-    ? pass("onOpenChange allows open=true even during pick-type")
-    : fail("onOpenChange blocked open=true during pick-type");
-
-  // After pick-type (firstRunStep=null) — dismiss is allowed
-  let calledAfter = false;
-  const handler3 = makeOnOpenChange(null, () => { calledAfter = true; });
-  handler3(false);
-  calledAfter
-    ? pass("onOpenChange allows close after pick-type is done (firstRunStep=null)")
-    : fail("onOpenChange blocked close after pick-type");
-
-  // ── Escape / outside-click handler ──────────────────────────────────────────
-  section("Escape / outside-click handler (pure function — mirrors app.tsx ~line 2250)");
-
-  // During pick-type — handler calls e.preventDefault()
-  const makeHandler = (firstRunStep: string | null) =>
-    firstRunStep === "pick-type" ? (e: { preventDefault: () => void }) => e.preventDefault() : undefined;
-
-  const hduring = makeHandler("pick-type");
-  if (hduring) {
-    let prevented = false;
-    hduring({ preventDefault: () => { prevented = true; } });
-    prevented
-      ? pass("onEscapeKeyDown / onInteractOutside calls preventDefault() during pick-type")
-      : fail("Handler did not call preventDefault() during pick-type");
-  } else {
-    fail("No handler returned during pick-type — Escape would close the dialog");
-  }
-
-  const hafter = makeHandler(null);
-  (hafter === undefined)
-    ? pass("onEscapeKeyDown / onInteractOutside is undefined after pick-type (Escape allowed)")
-    : fail("Handler unexpectedly present after pick-type");
-
-  // ── CSS close-button hiding ────────────────────────────────────────────────
-  section("Close-button hidden via CSS class (mirrors app.tsx ~line 2252)");
-
-  function getDialogClassName(firstRunStep: string | null) {
-    return `base-classes ${firstRunStep === "pick-type" ? "[&>button:first-of-type]:hidden" : ""}`;
-  }
-
-  const classPickType = getDialogClassName("pick-type");
-  classPickType.includes("[&>button:first-of-type]:hidden")
-    ? pass("CSS class '[&>button:first-of-type]:hidden' applied during pick-type (hides × button)")
-    : fail("CSS class not applied during pick-type — close button visible");
-
-  const classAfter = getDialogClassName(null);
-  !classAfter.includes("[&>button:first-of-type]:hidden")
-    ? pass("CSS class removed after pick-type (close button re-shown)")
-    : fail("CSS class still applied after pick-type");
+  const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+  !appSrc.includes("[&>button:first-of-type]:hidden")
+    ? pass("the close control is not hidden during pick-type")
+    : fail("the close control is still hidden");
+  !appSrc.includes("onEscapeKeyDown")
+    ? pass("Escape is not cancelled")
+    : fail("Escape is still cancelled");
+  appSrc.includes("deferOwnerProfile") && appSrc.includes('modal={false}')
+    ? pass("Later defers the profile and the dialog does not inert the header")
+    : fail("dismiss or header reachability is missing");
 }
 
 // ── Security: anon callers cannot invoke ensure_own_client ────────────────────

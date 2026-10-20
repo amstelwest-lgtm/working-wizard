@@ -635,9 +635,16 @@ export function ProfileFunnel({
           <Button variant="ghost" size="sm" className="text-slate-300" onClick={goBack}>
             Back
           </Button>
-        ) : mode !== "first-run" && onCancel ? (
-          <Button variant="ghost" size="sm" className="text-slate-300" onClick={onCancel}>
-            {mode === "complete" ? "Later" : "Cancel"}
+        ) : null}
+        {onCancel ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-slate-300"
+            data-profile-later=""
+            onClick={onCancel}
+          >
+            {mode === "retake" ? "Cancel" : "Later"}
           </Button>
         ) : (
           <span />

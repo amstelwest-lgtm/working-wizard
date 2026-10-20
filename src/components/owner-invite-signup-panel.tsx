@@ -8,7 +8,7 @@ import {
   OwnerInvitePrimaryButton,
 } from "@/components/owner-invite-shell";
 import { PasswordWithShow } from "@/components/show-password";
-import { ownerInviteLead } from "@/lib/invite-claim";
+import { inviteJoinHidesSignup, ownerInviteGreeting } from "@/lib/invite-claim";
 import { t } from "@/lib/market/copy";
 
 export type OwnerInviteSignupPanelProps = {
@@ -16,6 +16,8 @@ export type OwnerInviteSignupPanelProps = {
   businessName: string | null;
   /** Inviting practice. Null falls back to "Your accountant". */
   firmName?: string | null;
+  /** Name stored on the invite. Null keeps the firm-and-client lead. */
+  inviteeName?: string | null;
   inviteNeedsCode: boolean;
   inviteIsLegacyUuid: boolean;
   regClientCode: string;
@@ -39,6 +41,7 @@ export function OwnerInviteSignupPanel({
   inviteToken,
   businessName,
   firmName,
+  inviteeName,
   inviteNeedsCode,
   inviteIsLegacyUuid,
   regClientCode,
@@ -59,6 +62,7 @@ export function OwnerInviteSignupPanel({
 }: OwnerInviteSignupPanelProps) {
   const sameAccount =
     Boolean(signedInEmail) && signedInEmail?.toLowerCase() === regEmail.trim().toLowerCase();
+  const hideSignup = inviteJoinHidesSignup(previewError);
 
   return (
     <>
@@ -67,16 +71,30 @@ export function OwnerInviteSignupPanel({
         {businessName ? `Join ${businessName}` : "Join your business workspace"}
       </h1>
       <p data-owner-invite-lead="" className="mt-3 text-sm leading-relaxed text-[#8a938c]">
-        {ownerInviteLead(firmName, businessName)}. Create an account or sign in to accept — your
-        workspace is already set up.
+        {ownerInviteGreeting({ firmName, clientName: businessName, inviteeName })}.
+        {hideSignup
+          ? ""
+          : " Create an account or sign in to accept — your workspace is already set up."}
       </p>
 
       {previewError ? (
-        <div className="mt-5 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+        <div
+          className="mt-5 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200"
+          data-invite-block=""
+        >
           {previewError}
         </div>
       ) : null}
 
+      {hideSignup ? (
+        <div className="mt-6">
+          <OwnerInvitePrimaryButton type="button" data-invite-sign-in="" onClick={onSignInClick}>
+            Sign in
+          </OwnerInvitePrimaryButton>
+        </div>
+      ) : null}
+
+      {hideSignup ? null : (
       <OwnerInviteCard className="mt-6">
         {signedInEmail ? (
           <OwnerInviteNote>
@@ -207,6 +225,7 @@ export function OwnerInviteSignupPanel({
           </a>
         </p>
       </OwnerInviteCard>
+      )}
     </>
   );
 }

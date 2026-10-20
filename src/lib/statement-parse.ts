@@ -7,7 +7,12 @@
  * a line that says so — rent, salaries and insurance are not summed.
  */
 
-import { MONTHS as MONTH_SHORT, MONTHS_LONG_LOWER as MONTHS } from "@/lib/market/date-presets";
+import {
+  dateOrder,
+  MONTHS as MONTH_SHORT,
+  MONTHS_LONG_LOWER as MONTHS,
+  type DateOrder,
+} from "@/lib/market/date-presets";
 
 export type StatementKind = "income_statement" | "balance_sheet" | "mixed" | "unknown";
 
@@ -291,12 +296,120 @@ function endOfMonth(year: number, month: number): string {
   return iso(year, month + 1, 0);
 }
 
-function parsePeriod(text: string): {
+function ymd(year: number, monthIndex: number, day: number): string | null {
+  if (!Number.isInteger(year) || year < 1900 || year > 2200) return null;
+  if (monthIndex < 0 || monthIndex > 11 || day < 1) return null;
+  const last = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  if (day > last) return null;
+  return iso(year, monthIndex, day);
+}
+
+function inclusiveMonths(start: string, end: string): number {
+  const from = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  const to = /^(\d{4})-(\d{2})-(\d{2})$/.exec(end);
+  if (!from || !to) return 1;
+  const months =
+    (Number(to[1]) - Number(from[1])) * 12 + (Number(to[2]) - Number(from[2])) + 1;
+  return Math.min(36, Math.max(1, months));
+}
+
+function spanResult(start: string, end: string): {
+  label: string;
+  start: string;
+  end: string;
+  months: number;
+} {
+  return {
+    label: `${start}/${end}`,
+    start,
+    end,
+    months: inclusiveMonths(start, end),
+  };
+}
+
+const RANGE_SEP = "(?:-|–|—|to)";
+
+function numericSpan(
+  text: string,
+  order: DateOrder,
+): { label: string; start: string; end: string; months: number } | null {
+  const match = text.match(
+    /(\d{1,2})\s*([/.\-])\s*(\d{1,2})\s*\2\s*(\d{4})\s*(?:-|–|—|to)\s*(\d{1,2})\s*([/.\-])\s*(\d{1,2})\s*\6\s*(\d{4})/,
+  );
+  if (!match) return null;
+  const first = Number(match[1]);
+  const second = Number(match[3]);
+  const startYear = Number(match[4]);
+  const third = Number(match[5]);
+  const fourth = Number(match[7]);
+  const endYear = Number(match[8]);
+  const start =
+    order === "us" ? ymd(startYear, first - 1, second) : ymd(startYear, second - 1, first);
+  const end = order === "us" ? ymd(endYear, third - 1, fourth) : ymd(endYear, fourth - 1, third);
+  if (!start || !end || end < start) return null;
+  return spanResult(start, end);
+}
+
+/** Q1–Q4 of a calendar year, including "Q3 FY2026". */
+function quarterSpan(
+  text: string,
+): { label: string; start: string; end: string; months: number } | null {
+  const match = text.match(/\bQ([1-4])\s*(?:FY\s*)?(\d{4})\b/i);
+  if (!match) return null;
+  const quarter = Number(match[1]);
+  const year = Number(match[2]);
+  const startMonth = (quarter - 1) * 3;
+  const start = ymd(year, startMonth, 1);
+  if (!start) return null;
+  return spanResult(start, endOfMonth(year, startMonth + 2));
+}
+
+function parsePeriod(
+  text: string,
+  order: DateOrder = "za",
+): {
   label: string | null;
   start: string | null;
   end: string | null;
   months: number | null;
 } {
+  const empty = { label: null, start: null, end: null, months: null };
+  // "Jul 1 - Sep 30 2026" and "July 1, 2026 to September 30, 2026".
+  const usSpan = text.match(
+    new RegExp(
+      `\\b([A-Za-z]+)\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})?\\s*${RANGE_SEP}\\s*([A-Za-z]+)\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b`,
+      "i",
+    ),
+  );
+  if (usSpan) {
+    const startMonth = monthIndex(usSpan[1]);
+    const endMonth = monthIndex(usSpan[4]);
+    const endYear = Number(usSpan[6]);
+    const startYear = usSpan[3] ? Number(usSpan[3]) : endYear;
+    if (startMonth != null && endMonth != null) {
+      const start = ymd(startYear, startMonth, Number(usSpan[2]));
+      const end = ymd(endYear, endMonth, Number(usSpan[5]));
+      if (start && end && end >= start) return spanResult(start, end);
+    }
+  }
+  // "1 Jul - 30 Sep 2026" and "1 July 2026 to 30 September 2026".
+  const zaSpan = text.match(
+    new RegExp(
+      `\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]+)\\s+(\\d{4})?\\s*${RANGE_SEP}\\s*(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]+)\\s+(\\d{4})\\b`,
+      "i",
+    ),
+  );
+  if (zaSpan) {
+    const startMonth = monthIndex(zaSpan[2]);
+    const endMonth = monthIndex(zaSpan[5]);
+    const endYear = Number(zaSpan[6]);
+    const startYear = zaSpan[3] ? Number(zaSpan[3]) : endYear;
+    if (startMonth != null && endMonth != null) {
+      const start = ymd(startYear, startMonth, Number(zaSpan[1]));
+      const end = ymd(endYear, endMonth, Number(zaSpan[4]));
+      if (start && end && end >= start) return spanResult(start, end);
+    }
+  }
   const range = text.match(
     /\b([A-Za-z]+)\s*(?:-|–|—|to)\s*([A-Za-z]+)\s+(\d{4})\b/,
   );
@@ -314,6 +427,10 @@ function parsePeriod(text: string): {
       };
     }
   }
+  const numeric = numericSpan(text, order);
+  if (numeric) return numeric;
+  const quarter = quarterSpan(text);
+  if (quarter) return quarter;
   const asOf = text.match(
     /\b(?:as of\s+)?([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})\b/i,
   );
@@ -344,7 +461,7 @@ function parsePeriod(text: string): {
       };
     }
   }
-  return { label: null, start: null, end: null, months: null };
+  return empty;
 }
 
 function titleKind(text: string): StatementKind | null {
@@ -380,7 +497,11 @@ function lineLabel(line: string): string {
   return line.replace(/[-−(]?\d[\d ,]*(?:\.\d+)?[)]?/g, " ");
 }
 
-export function parseStatementText(text: string): ParsedStatement {
+export function parseStatementText(
+  text: string,
+  market?: { locale?: string | null } | null,
+): ParsedStatement {
+  const order = dateOrder(market?.locale);
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -388,7 +509,7 @@ export function parseStatementText(text: string): ParsedStatement {
 
   let kind: StatementKind = "unknown";
   let companyName: string | null = null;
-  let period = parsePeriod(lines.slice(0, 4).join(" "));
+  let period = parsePeriod(lines.slice(0, 4).join(" "), order);
   let currency = currencyOf(lines.slice(0, 6).join(" "));
 
   if (lines[0]) {
@@ -396,15 +517,26 @@ export function parseStatementText(text: string): ParsedStatement {
     const titled = titleKind(cells[0] ?? lines[0]);
     if (titled) {
       kind = titled;
-      if (cells[1] && !parseAmount(cells[1]) && !titleKind(cells[1])) companyName = cells[1];
-      const periodCell = cells.slice(2).join(" ");
-      const parsed = parsePeriod(periodCell || lines[0]);
-      if (parsed.label) period = parsed;
+      const nameParts: string[] = [];
+      let fromCells: ReturnType<typeof parsePeriod> | null = null;
+      for (const cell of cells.slice(1)) {
+        const parsed = parsePeriod(cell, order);
+        if (parsed.start || parsed.end || parsed.label) {
+          fromCells = parsed;
+          continue;
+        }
+        if (!parseAmount(cell) && !titleKind(cell)) nameParts.push(cell);
+      }
+      if (nameParts.length) companyName = nameParts.join(" ");
+      const parsed = fromCells ?? parsePeriod(lines[0], order);
+      if (parsed.start || parsed.end || parsed.label) period = parsed;
     }
   }
   if (!companyName) {
     for (const line of lines.slice(0, 3)) {
       const cells = splitCsvLine(line);
+      const headerPeriod = parsePeriod(cells[1] ?? "", order);
+      if (headerPeriod.start || headerPeriod.end || headerPeriod.label) continue;
       if (cells.length >= 2 && titleKind(cells[0]) && !parseAmount(cells[1])) {
         companyName = cells[1];
         break;

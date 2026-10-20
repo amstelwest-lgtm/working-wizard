@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,7 +13,15 @@ import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import { loadFirmClientGateContext, type FirmClientGateContext } from "@/lib/firm-client-gate";
 import { decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entitlement";
-import { pageWhileEntitlementUnknown } from "@/lib/firm-gate-access";
+import { pageWhileEntitlementUnknown, surfaceAfterEntitlementFailure } from "@/lib/firm-gate-access";
+import {
+  billingCheckNoticeVisible,
+  billingCheckRetryDelayMs,
+  classifyBillingCheckFailure,
+  type BillingCheckFailureKind,
+  logBillingCheckFailure,
+} from "@/lib/billing-check-failure";
+import { FirmBillingGateView } from "@/components/firm-billing-gate-view";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import {
   shouldStayOnAccountantPortal,
@@ -27,9 +35,17 @@ import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
-import { clearCachedFirmEntitlement, readCachedFirmEntitlement } from "@/lib/firm-entitlement-client";
+import {
+  clearCachedFirmEntitlement,
+  lastKnownFirmEntitlement,
+  readCachedFirmEntitlement,
+} from "@/lib/firm-entitlement-client";
 
-type EntitlementResult = { entitled: boolean; reason?: string };
+type EntitlementResult = {
+  entitled: boolean;
+  reason?: string;
+  checkFailed?: BillingCheckFailureKind;
+};
 
 type GateSnap = {
   firmId: string | null;
@@ -39,7 +55,9 @@ type GateSnap = {
   firmsLoaded: boolean;
   pathname: string;
   navigate: ReturnType<typeof useNavigate>;
-  checkEntitlement: (input: { data: { refresh?: boolean } }) => Promise<EntitlementResult>;
+  checkEntitlement: (input: {
+    data: { refresh?: boolean; firmId?: string | null };
+  }) => Promise<EntitlementResult>;
   practiceMeta: unknown;
 };
 
@@ -119,8 +137,15 @@ export function AuthGate() {
   const userId = user?.id ?? null;
   const [firmEntitled, setFirmEntitled] = useState<boolean | null>(null);
   const [billingUnknown, setBillingUnknown] = useState(false);
+  const [checkNotice, setCheckNotice] = useState(false);
+  const [showWall, setShowWall] = useState(false);
   const [clientGate, setClientGate] = useState<FirmClientGateContext | null>(null);
   const [gateAttempt, setGateAttempt] = useState(0);
+  const [quietAttempt, setQuietAttempt] = useState(0);
+  const failuresRef = useRef(0);
+  const retryTimerRef = useRef<number | null>(null);
+  const clientGateRef = useRef<FirmClientGateContext | null>(null);
+  const pendingWallRef = useRef(false);
 
   useLayoutEffect(() => {
     applyPortalTheme(resolvePortalTheme());
@@ -150,11 +175,29 @@ export function AuthGate() {
 
   // The previous account's entitlement must not paint the next sign-in.
   useEffect(() => {
+    if (retryTimerRef.current != null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    pendingWallRef.current = false;
+    clientGateRef.current = null;
     settledRef.current = null;
     setFirmEntitled(null);
     setBillingUnknown(false);
+    setCheckNotice(false);
+    setShowWall(false);
     setClientGate(null);
+    failuresRef.current = 0;
   }, [userId]);
+
+  // A remount starts unknown. The tab's last success for this firm paints
+  // before the next Stripe read, so a timeout cannot replace the page.
+  useEffect(() => {
+    if (!userId) return;
+    const known = lastKnownFirmEntitlement(userId, firmId);
+    if (!known?.entitled) return;
+    setFirmEntitled(true);
+  }, [userId, firmId]);
 
   // Known unpaid: correct the route the moment they open a gated client file.
   useEffect(() => {
@@ -169,27 +212,71 @@ export function AuthGate() {
     settledRef.current = null;
     setClientGate(null);
 
-    const noteUnknown = (reason: "timeout" | "error") => {
+    const knownKind = () => {
+      const known = lastKnownFirmEntitlement(userId, latest.current.firmId);
+      if (!known) return "none" as const;
+      return known.entitled ? ("entitled" as const) : ("unpaid" as const);
+    };
+
+    let reported = false;
+    const noteFailure = (kind: BillingCheckFailureKind) => {
       if (cancelled || settledRef.current) return;
       const path = latest.current.pathname;
+      const known = knownKind();
+      logBillingCheckFailure(kind, { known, path });
+      if (reported) return;
+      reported = true;
+      const clients = clientGateRef.current;
+      const surface = surfaceAfterEntitlementFailure({
+        known,
+        pathname: path,
+        firmClientCount: clients?.firmClientCount ?? null,
+        firstClientId: clients?.firstClientId ?? null,
+      });
+      if (surface === "content" && known === "entitled") {
+        setFirmEntitled(true);
+        setBillingUnknown(false);
+        failuresRef.current += 1;
+        setCheckNotice(billingCheckNoticeVisible(failuresRef.current));
+        if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = window.setTimeout(() => {
+          retryTimerRef.current = null;
+          setQuietAttempt((n) => n + 1);
+        }, billingCheckRetryDelayMs(failuresRef.current));
+        return;
+      }
+      if (surface === "wall") {
+        setFirmEntitled(false);
+        setBillingUnknown(false);
+        setCheckNotice(false);
+        setShowWall(true);
+        if (clients) resumeUnpaidFirm(latest.current, clients);
+        else pendingWallRef.current = true;
+        return;
+      }
+      if (surface === "content") {
+        setBillingUnknown(false);
+        return;
+      }
       console.warn(
         "[billing-gate] couldn't check billing. Gated client pages show Retry. Home stays open.",
-        { reason, path },
+        { reason: kind, path },
       );
-      reportClientError(new Error(`billing gate ${reason}`), {
+      reportClientError(new Error(`billing gate ${kind}`), {
         source: "billing-gate",
-        extra: { reason, pathname: path },
+        extra: { reason: kind, pathname: path },
       });
       trackRef.current("billing_gate_timeout", {
         path,
         surface: "accountant_portal",
-        reason,
+        reason: kind,
       });
       setFirmEntitled(null);
       setBillingUnknown(true);
+      setCheckNotice(false);
     };
 
-    const timer = window.setTimeout(() => noteUnknown("timeout"), SHELL_GATE_TIMEOUT_MS);
+    const timer = window.setTimeout(() => noteFailure("timeout"), SHELL_GATE_TIMEOUT_MS);
 
     void (async () => {
       try {
@@ -214,7 +301,13 @@ export function AuthGate() {
         const clientsPromise = loadFirmClientGateContext();
         void clientsPromise
           .then((clients) => {
-            if (!cancelled) setClientGate(clients);
+            if (cancelled) return;
+            clientGateRef.current = clients;
+            setClientGate(clients);
+            if (pendingWallRef.current) {
+              pendingWallRef.current = false;
+              resumeUnpaidFirm(latest.current, clients);
+            }
           })
           .catch(() => {
             // The entitlement path below reports this rejection. Without this
@@ -222,8 +315,12 @@ export function AuthGate() {
           });
         const entitlementPromise = readCachedFirmEntitlement(
           userId,
-          (input) => latest.current.checkEntitlement(input),
-          gateAttempt > 0,
+          (input) =>
+            latest.current.checkEntitlement({
+              data: { ...input.data, firmId: latest.current.firmId },
+            }),
+          gateAttempt > 0 || quietAttempt > 0,
+          latest.current.firmId,
         );
         const itPromise = isMilonItMember(userId);
         const stay = await stayPromise;
@@ -245,22 +342,35 @@ export function AuthGate() {
           };
           setFirmEntitled(true);
           setBillingUnknown(false);
+          failuresRef.current = 0;
+          setCheckNotice(false);
           return;
         }
         const [clients, result] = await Promise.all([clientsPromise, entitlementPromise]);
         if (cancelled) return;
         window.clearTimeout(timer);
+        clientGateRef.current = clients;
         const reason =
           result && typeof result === "object" && "reason" in result && typeof result.reason === "string"
             ? result.reason
             : result.entitled
               ? "active_subscription"
               : "no_active_subscription";
-        settledRef.current = { entitled: result.entitled === true, reason, clients };
-        if (reason === "stripe_error") {
-          noteUnknown("error");
+        const failed = reason === "stripe_error" || Boolean(result.checkFailed);
+        if (failed) {
+          noteFailure(result.checkFailed ?? classifyBillingCheckFailure(result));
           return;
         }
+        if (retryTimerRef.current != null) {
+          window.clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = null;
+        }
+        pendingWallRef.current = false;
+        setShowWall(false);
+        failuresRef.current = 0;
+        setCheckNotice(false);
+        reported = true;
+        settledRef.current = { entitled: result.entitled === true, reason, clients };
         setBillingUnknown(false);
         if (result.entitled === true) {
           setFirmEntitled(true);
@@ -270,9 +380,8 @@ export function AuthGate() {
         resumeUnpaidFirm(latest.current, clients);
       } catch (err) {
         if (cancelled) return;
-        console.warn("[billing-gate] check failed", err);
         window.clearTimeout(timer);
-        noteUnknown("error");
+        noteFailure(classifyBillingCheckFailure(err));
       }
     })();
 
@@ -280,7 +389,7 @@ export function AuthGate() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [userId, loading, gateAttempt]);
+  }, [userId, loading, gateAttempt, quietAttempt]);
 
   if (loading) {
     return <FirmShellLoading />;
@@ -295,45 +404,42 @@ export function AuthGate() {
     firmClientCount: clientGate?.firmClientCount ?? null,
     firstClientId: clientGate?.firstClientId ?? null,
   });
-  const holdGatedPage = firmEntitled !== true && unknownPage === "wall";
-  if (holdGatedPage && billingUnknown) {
+  const knownRecord = userId ? lastKnownFirmEntitlement(userId, firmId) : null;
+  const knownKind = !knownRecord ? "none" : knownRecord.entitled ? "entitled" : "unpaid";
+  const failureSurface = billingUnknown
+    ? surfaceAfterEntitlementFailure({
+        known: knownKind,
+        pathname,
+        firmClientCount: clientGate?.firmClientCount ?? null,
+        firstClientId: clientGate?.firstClientId ?? null,
+      })
+    : null;
+  if (failureSurface === "error") {
     return (
-      <div
-        className="bg-background px-6 py-8 text-foreground"
-        data-billing-gate="pending"
-        role="alert"
-      >
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
-        <h1 className="mt-2 text-xl font-semibold">Couldn't check billing</h1>
-        <p className="mt-2 max-w-md text-sm text-muted-foreground">
-          This client file stays closed until the plan check finishes. Home, the client list, settings,
-          and billing stay open.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              clearCachedFirmEntitlement();
-              setBillingUnknown(false);
-              setGateAttempt((n) => n + 1);
-            }}
-            className="inline-flex h-10 items-center rounded-full bg-foreground px-4 text-xs font-bold uppercase tracking-wider text-background"
-          >
-            Retry
-          </button>
-          <Link to="/dashboard" className="inline-flex h-10 items-center px-4 text-sm underline">
-            Back
-          </Link>
-        </div>
-      </div>
+      <FirmBillingGateView
+        surface="error"
+        onRetry={() => {
+          clearCachedFirmEntitlement();
+          setBillingUnknown(false);
+          setGateAttempt((n) => n + 1);
+        }}
+      />
     );
   }
+  if (failureSurface === "wall" || showWall) {
+    return <FirmBillingGateView surface="wall" />;
+  }
+  const holdGatedPage = firmEntitled !== true && unknownPage === "wall";
   if (holdGatedPage) {
-    return <FirmShellLoading />;
+    return (
+      <FirmShellLoading />
+    );
   }
   return (
     <FirmBillingAccessProvider entitled={firmEntitled}>
-      <Outlet />
+      <FirmBillingGateView surface="content" notice={checkNotice}>
+        <Outlet />
+      </FirmBillingGateView>
     </FirmBillingAccessProvider>
   );
 }

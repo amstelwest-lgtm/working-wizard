@@ -25,6 +25,7 @@ import {
   writeOwnerThread,
   type OwnerAgentThread,
 } from "@/lib/owner-chat-thread";
+import { earlierStatementNote } from "@/lib/statement-import-plan";
 import {
   ownerAnswerTiles,
   ownerCardStatuses,
@@ -153,6 +154,8 @@ export function OwnerDoor({
   onQuickBooks,
   onXero,
   onProfile,
+  profileResume = false,
+  onResumeProfile,
   onSettings,
   onLeaveSettings,
   onAccount,
@@ -222,6 +225,9 @@ export function OwnerDoor({
   onQuickBooks: () => void;
   onXero: () => void;
   onProfile: () => void;
+  /** First-run profile was closed. Home offers to open it again. */
+  profileResume?: boolean;
+  onResumeProfile?: () => void;
   onSettings: () => void;
   onLeaveSettings?: () => void;
   onAccount?: () => void;
@@ -718,6 +724,7 @@ export function OwnerDoor({
       cashRunwayWeeks,
       cashDebtorScore,
       cashBurnScore,
+      balanceSheetNote: earlierStatementNote(financials, market),
       openAction,
       actionsReady,
       signedBy: latest?.signed_off_by_name ?? null,
@@ -1068,6 +1075,8 @@ export function OwnerDoor({
           inviteClientId={clientId}
           firmId={firmId}
           notice={sampleNotice}
+          profileResume={profileResume}
+          onResumeProfile={onResumeProfile}
         />
       ) : null}
       {railScreen === "health" ? restored?.health : null}

@@ -35,6 +35,11 @@ export type FirmBillingEntitlement = {
    * intro trial does not apply. Omitted when that history was not read.
    */
   introTrialEligible?: boolean;
+  /**
+   * Set when the live Stripe read failed and `entitled` is the last
+   * success, or unknown (`stripe_error`) when this isolate has none.
+   */
+  checkFailed?: "timeout" | "network" | "http_5xx";
 };
 
 export type FirmBillingPathDecision = "allow" | "require_billing";

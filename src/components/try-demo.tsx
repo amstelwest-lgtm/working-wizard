@@ -10,6 +10,7 @@ import { TrySchedule, type TryCallInput, type TryCallResult } from "@/components
 import { TrySignoff } from "@/components/try-signoff";
 import {
   readTrialPublicConfig,
+  revealTrialBoard,
   runTrialAnalyst,
   startTrialSample,
   submitTrialLead,
@@ -367,7 +368,9 @@ function TryConversation({
         {remaining.length === 0 ? <p className="try-chat-close-line">{FM_CLOSING}</p> : null}
         <p className="try-value">{TRIAL_VALUE_PROP}</p>
         <TrialCta quiet className="try-cta-close" />
-        <p className="try-trial-terms">Starter. {TRIAL_SIGNUP_SENTENCE}. A card is required at signup.</p>
+        <p className="try-trial-terms">
+          Starter. {TRIAL_SIGNUP_SENTENCE}. A card is required at signup.
+        </p>
       </div>
     </section>
   );
@@ -772,9 +775,13 @@ function readUtm(): Record<string, string> {
 
 let trialViewNoted = false;
 
-export function TryDemo() {
+export function TryDemo({
+  sampleOnly = false,
+  sampleNonce = null,
+}: { sampleOnly?: boolean; sampleNonce?: string | null } = {}) {
   const start = useServerFn(startTrialSample);
   const submit = useServerFn(submitTrialLead);
+  const reveal = useServerFn(revealTrialBoard);
   const analyst = useServerFn(runTrialAnalyst);
   const loadConfig = useServerFn(readTrialPublicConfig);
   const noteView = useServerFn(noteTrialDemoView);
@@ -796,12 +803,12 @@ export function TryDemo() {
   const [runsLeft, setRunsLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    if (trialViewNoted) return;
+    if (sampleOnly || trialViewNoted) return;
     trialViewNoted = true;
     void noteView().catch(() => {
       trialViewNoted = false;
     });
-  }, [noteView]);
+  }, [noteView, sampleOnly]);
 
   useEffect(() => {
     let cancelled = false;
@@ -835,6 +842,25 @@ export function TryDemo() {
       onUseSample={() => {
         setBusy(true);
         setError(null);
+        if (sampleOnly) {
+          if (!sampleNonce) {
+            setBusy(false);
+            setError("Start again from the conversation.");
+            return;
+          }
+          void reveal({ data: { sampleNonce } })
+            .then((opened) => {
+              if (!opened.ok) {
+                setError(opened.error);
+                return;
+              }
+              setBoard(opened.board);
+              setPhase("reveal");
+            })
+            .catch(() => setError("The sample isn't available right now."))
+            .finally(() => setBusy(false));
+          return;
+        }
         void start({ data: { market: readRequestedMarket() } })
           .then((result) => {
             if (!result.ok) {

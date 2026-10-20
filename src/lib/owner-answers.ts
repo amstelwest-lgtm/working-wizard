@@ -89,6 +89,11 @@ export type OwnerBooks = {
   cashDebtorScore?: number | null;
   /** Scored operating cash (OCF / EBITDA). A critical score is burn. */
   cashBurnScore?: number | null;
+  /**
+   * Set when cash is still the earlier balance sheet. The card keeps the
+   * amount and says which date it came from.
+   */
+  balanceSheetNote?: string | null;
   openAction: string | null;
   /** False until the action-point read has finished. */
   actionsReady: boolean;
@@ -655,10 +660,11 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
     };
   }
   if (pillarAgrees && quotedOpening != null && finite(quotedOpening)) {
+    const note = books.balanceSheetNote?.trim();
     return {
       ...base,
-      sentence: `Cash is ${money(quotedOpening)}.`,
-      source: `${booksSource}, 13-week forecast`,
+      sentence: note ? `Cash is ${money(quotedOpening)}, ${note}.` : `Cash is ${money(quotedOpening)}.`,
+      source: note || `${booksSource}, 13-week forecast`,
       step: "Ask",
       signed: false,
       empty: false,

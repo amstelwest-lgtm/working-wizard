@@ -52,6 +52,8 @@ import {
   importPeriodFromParts,
   type ConfirmedImportPeriod,
 } from "@/lib/import-period";
+import { formatDateRange } from "@/lib/market/format";
+import type { PeriodChoice } from "@/lib/statement-import-plan";
 import { balanceSheetCheck } from "@/lib/statement-balance";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 
@@ -144,6 +146,7 @@ export type UploadFinancialsProps = {
     result: ExtractionResult,
     autoPopulate: AutoPopulatePrefs,
     period: ConfirmedImportPeriod,
+    choice?: PeriodChoice | null,
   ) => void | ImportApplyResult | Promise<void | ImportApplyResult>;
   /** Called after a successful apply has shown its message. */
   onApplied?: () => void;
@@ -162,7 +165,7 @@ export function UploadFinancials({
   onOpenBankUpload,
   clientName,
 }: UploadFinancialsProps) {
-  const { number, selection } = useMarketFormat();
+  const { number, selection, market } = useMarketFormat();
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "reading" | "review" | "bank">(
     "idle",
@@ -179,9 +182,12 @@ export function UploadFinancials({
   );
   const [prefsTouched, setPrefsTouched] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [applyTone, setApplyTone] = useState<"success" | "error" | null>(null);
+  const [applyTone, setApplyTone] = useState<"success" | "error" | "choice" | null>(null);
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
-  const confirmImportRef = useRef<(() => void) | null>(null);
+  const [choiceLabels, setChoiceLabels] = useState<{ replaceLabel: string; addLabel: string } | null>(
+    null,
+  );
+  const confirmImportRef = useRef<((choice?: PeriodChoice | null) => void) | null>(null);
 
   const extract = useServerFn(extractFinancialsFromPDF);
   const monthNames = importMonthNames();
@@ -373,13 +379,35 @@ export function UploadFinancials({
   if (!result) return null;
   const is = result.current_period.figures.income_statement;
   const bs = result.current_period.figures.balance_sheet;
-  const chosenPeriod = importPeriodFromParts(periodYear, periodMonth);
+  const pickedPeriod = importPeriodFromParts(periodYear, periodMonth);
+  const detectedStart = result.current_period.period_start?.slice(0, 10) ?? "";
+  const detectedEnd = result.current_period.period_end?.slice(0, 10) ?? "";
+  const spanMatchesPick = Boolean(
+    pickedPeriod && detectedStart && detectedEnd && detectedEnd.slice(0, 7) === pickedPeriod.periodEnd.slice(0, 7),
+  );
+  const rangedLabel =
+    spanMatchesPick && detectedStart && detectedEnd
+      ? formatDateRange(detectedStart, detectedEnd, market)
+      : "";
+  const chosenPeriod: ConfirmedImportPeriod | null = pickedPeriod
+    ? {
+        ...pickedPeriod,
+        ...(spanMatchesPick
+          ? {
+              periodStart: detectedStart,
+              periodEnd: detectedEnd,
+              periodMonths: result.current_period.period_months ?? null,
+              periodLabel: rangedLabel && rangedLabel !== "—" ? rangedLabel : pickedPeriod.periodLabel,
+            }
+          : {}),
+      }
+    : null;
   const periodDetected = detectImportPeriod(result.current_period.period_end) != null;
   const confirmLabel = chosenPeriod
     ? `I have reviewed these figures and confirm they should be imported for ${chosenPeriod.periodLabel}. ${UPLOAD_QUALITY_DISCLAIMER}`
     : `I have reviewed these figures and confirm they should be imported for the period I select. ${UPLOAD_QUALITY_DISCLAIMER}`;
 
-  confirmImportRef.current = () => {
+  confirmImportRef.current = (choice?: PeriodChoice | null) => {
     if (applying) return;
     if (!chosenPeriod) {
       const message = importFailureMessage("Choose the statement period before importing.");
@@ -392,15 +420,24 @@ export function UploadFinancials({
       ...result,
       current_period: {
         ...result.current_period,
+        period_start: chosenPeriod.periodStart ?? result.current_period.period_start ?? null,
         period_end: chosenPeriod.periodEnd,
+        period_months: chosenPeriod.periodMonths ?? result.current_period.period_months ?? null,
       },
     };
     const what = statementImportWhat(statementKindFromExtraction(stamped));
     setApplying(true);
     setApplyTone(null);
     setApplyMessage(null);
-    void Promise.resolve(onConfirm?.(stamped, autoPrefs, chosenPeriod))
+    void Promise.resolve(onConfirm?.(stamped, autoPrefs, chosenPeriod, choice ?? null))
       .then((outcome) => {
+        if (outcome && outcome.choice) {
+          setChoiceLabels(outcome.choice);
+          setApplyTone("choice");
+          setApplyMessage(outcome.message);
+          toast.message(outcome.message);
+          return;
+        }
         if (outcome && outcome.ok === false) {
           setApplyTone("error");
           setApplyMessage(outcome.message);
@@ -789,7 +826,11 @@ export function UploadFinancials({
         </div>
         {chosenPeriod ? (
           <p className="mt-2 text-xs text-[var(--ink,#e7e5e4)]">
-            Importing as {chosenPeriod.periodLabel} (period end {chosenPeriod.periodEnd}).
+            Importing as {chosenPeriod.periodLabel}
+            {chosenPeriod.periodStart
+              ? ""
+              : ` (period end ${chosenPeriod.periodEnd})`}
+            .
           </p>
         ) : (
           <p className="mt-2 text-xs text-amber-300">Choose a month and year to continue.</p>
@@ -815,6 +856,9 @@ export function UploadFinancials({
       <ImportApplyNotice
         message={applyMessage}
         tone={applyTone}
+        replaceLabel={choiceLabels?.replaceLabel}
+        addLabel={choiceLabels?.addLabel}
+        onChoose={(choice) => confirmImportRef.current?.(choice)}
         onRetry={applyTone === "error" ? () => confirmImportRef.current?.() : undefined}
       />
       <div className="flex items-center gap-3 pt-2">
