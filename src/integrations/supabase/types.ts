@@ -2193,6 +2193,8 @@ export type Database = {
           created_by: string
           purpose: string
           invited_email: string | null
+          invited_name: string | null
+          revoked_at: string | null
           expires_at: string
           redeemed_at: string | null
           redeemed_by: string | null
@@ -2205,6 +2207,8 @@ export type Database = {
           created_by: string
           purpose?: string
           invited_email?: string | null
+          invited_name?: string | null
+          revoked_at?: string | null
           expires_at?: string
           redeemed_at?: string | null
           redeemed_by?: string | null
@@ -2217,6 +2221,8 @@ export type Database = {
           created_by?: string
           purpose?: string
           invited_email?: string | null
+          invited_name?: string | null
+          revoked_at?: string | null
           expires_at?: string
           redeemed_at?: string | null
           redeemed_by?: string | null

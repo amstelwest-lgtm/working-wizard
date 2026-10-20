@@ -17,6 +17,8 @@ type InviteTokenRow = {
   redeemed_by?: string | null;
   purpose?: string | null;
   invited_email?: string | null;
+  invited_name?: string | null;
+  revoked_at?: string | null;
 };
 
 const inviteTokens = () => supabaseAdmin.from("invite_tokens");
@@ -65,14 +67,26 @@ export async function resolveInviteToClientId(
   alreadyRedeemedByCaller?: boolean;
   purpose?: string | null;
   invitedEmail?: string | null;
+  invitedName?: string | null;
 }> {
   const trimmed = invite.trim();
   if (!trimmed) throw new Error("Invite link is invalid.");
 
   let { data, error } = await inviteTokens()
-    .select("id, client_id, expires_at, redeemed_at, redeemed_by, purpose, invited_email")
+    .select(
+      "id, client_id, expires_at, redeemed_at, redeemed_by, purpose, invited_email, invited_name, revoked_at",
+    )
     .eq("token", trimmed)
     .maybeSingle();
+  const missingColumn = (error?.message ?? "").match(/invited_name|revoked_at|invited_email/);
+  if (error && missingColumn) {
+    const retry = await inviteTokens()
+      .select("id, client_id, expires_at, redeemed_at, redeemed_by, purpose, invited_email")
+      .eq("token", trimmed)
+      .maybeSingle();
+    data = retry.data as typeof data;
+    error = retry.error;
+  }
   if (error && (error.message ?? "").includes("invited_email")) {
     const retry = await inviteTokens()
       .select("id, client_id, expires_at, redeemed_at, redeemed_by, purpose")
@@ -102,6 +116,7 @@ export async function resolveInviteToClientId(
       alreadyRedeemedByCaller: usable.alreadyRedeemedByCaller,
       purpose: row.purpose ?? null,
       invitedEmail: row.invited_email ?? null,
+      invitedName: row.invited_name ?? null,
     };
   }
 

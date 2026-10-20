@@ -141,5 +141,6 @@ export const previewOwnerInvite = createServerFn({ method: "POST" })
       legacy: resolved.legacy,
       tokenId: resolved.tokenId,
       clientCode: client.client_code,
+      inviteeName: resolved.invitedName,
     });
   });

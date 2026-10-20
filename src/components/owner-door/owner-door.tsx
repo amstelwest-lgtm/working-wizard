@@ -154,6 +154,8 @@ export function OwnerDoor({
   onQuickBooks,
   onXero,
   onProfile,
+  profileResume = false,
+  onResumeProfile,
   onSettings,
   onLeaveSettings,
   onAccount,
@@ -223,6 +225,9 @@ export function OwnerDoor({
   onQuickBooks: () => void;
   onXero: () => void;
   onProfile: () => void;
+  /** First-run profile was closed. Home offers to open it again. */
+  profileResume?: boolean;
+  onResumeProfile?: () => void;
   onSettings: () => void;
   onLeaveSettings?: () => void;
   onAccount?: () => void;
@@ -1070,6 +1075,8 @@ export function OwnerDoor({
           inviteClientId={clientId}
           firmId={firmId}
           notice={sampleNotice}
+          profileResume={profileResume}
+          onResumeProfile={onResumeProfile}
         />
       ) : null}
       {railScreen === "health" ? restored?.health : null}

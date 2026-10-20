@@ -12,6 +12,11 @@ import {
   accountantInvitePreviewPayload,
   assertInviteTokenUsable,
   evaluateOwnerInviteClaim,
+  INVITE_EXPIRED_MESSAGE,
+  INVITE_REVOKED_MESSAGE,
+  INVITE_USED_MESSAGE,
+  inviteJoinHidesSignup,
+  ownerInviteGreeting,
   ownerInviteLead,
   ownerInvitePreviewPayload,
 } from "../src/lib/invite-claim";
@@ -98,13 +103,34 @@ throws(
       { now: NOW },
     ),
   "expired",
-  "a revoked token (expires_at in the past) is rejected",
+  "a recent past expiry with no revoke mark stays expired",
+);
+throws(
+  () =>
+    assertInviteTokenUsable(
+      { redeemed_at: null, expires_at: FUTURE, revoked_at: PAST },
+      { now: NOW },
+    ),
+  INVITE_REVOKED_MESSAGE,
+  "a revoked token says it was revoked",
+);
+throws(
+  () =>
+    assertInviteTokenUsable(
+      { redeemed_at: null, expires_at: "1970-01-01T00:00:00.000Z" },
+      { now: NOW },
+    ),
+  INVITE_REVOKED_MESSAGE,
+  "an epoch tombstone is revoked, not expired",
 );
 throws(
   () => assertInviteTokenUsable({ redeemed_at: PAST, expires_at: FUTURE }, { now: NOW }),
-  "already been used",
+  INVITE_USED_MESSAGE,
   "a used token is rejected",
 );
+assert(inviteJoinHidesSignup(INVITE_USED_MESSAGE), "a used invite hides the sign-up form");
+assert(inviteJoinHidesSignup(INVITE_REVOKED_MESSAGE), "a revoked invite hides the sign-up form");
+assert(!inviteJoinHidesSignup(INVITE_EXPIRED_MESSAGE), "an expired invite keeps the form");
 assert(
   assertInviteTokenUsable(
     { redeemed_at: PAST, expires_at: FUTURE, redeemed_by: "user-1" },
@@ -123,8 +149,29 @@ const tokenPreview = ownerInvitePreviewPayload({
 assert(tokenPreview.firmName === "Ben Accountants", "preview keeps the firm display name");
 assert(tokenPreview.requiresClientCode === false, "a token preview does not ask for the code");
 assert(
-  Object.keys(tokenPreview).sort().join(",") === "clientName,firmName,requiresClientCode",
-  "preview returns only the business name, firm name, and the code flag",
+  Object.keys(tokenPreview).sort().join(",") === "clientName,firmName,inviteeName,requiresClientCode",
+  "preview returns the business name, firm name, invitee name, and the code flag",
+);
+assert(tokenPreview.inviteeName === null, "a preview with no name stays blank");
+const namedPreview = ownerInvitePreviewPayload({
+  clientName: "Northwind",
+  firmName: "Ben Accountants",
+  legacy: false,
+  tokenId: "22222222-2222-4222-8222-222222222222",
+  clientCode: CODE,
+  inviteeName: "  Sam Owner  ",
+});
+assert(namedPreview.inviteeName === "Sam Owner", "preview keeps the owner name");
+assert(
+  ownerInvitePreviewPayload({
+    clientName: "Northwind",
+    firmName: "Ben Accountants",
+    legacy: false,
+    tokenId: "22222222-2222-4222-8222-222222222222",
+    clientCode: CODE,
+    inviteeName: "sam@example.com",
+  }).inviteeName === null,
+  "an email is not shown as the owner name",
 );
 assert(!JSON.stringify(tokenPreview).includes(CODE), "the client code is not in the preview");
 
@@ -146,6 +193,14 @@ assert(
 assert(
   ownerInviteLead(null, "Northwind") === "Your accountant invited you to join Northwind",
   "a missing firm falls back to Your accountant",
+);
+assert(
+  ownerInviteGreeting({
+    firmName: "Ben Accountants",
+    clientName: "Northwind",
+    inviteeName: "Sam Owner",
+  }) === "Hi Sam Owner. Ben Accountants invited you to join Northwind",
+  "the join greeting uses the name stored on the invite",
 );
 assert(
   accountantInviteLead({ inviterName: "Ana Owner", clientName: "Northwind" }) ===
@@ -172,12 +227,14 @@ assert(
   "accountant preview does not add owner id or firm columns",
 );
 
-function panel(needsCode: boolean) {
+function panel(needsCode: boolean, previewError?: string, inviteeName?: string) {
   return renderToStaticMarkup(
     createElement(OwnerInviteSignupPanel, {
       inviteToken: "abc123token",
       businessName: "Northwind",
       firmName: "Ben Accountants",
+      inviteeName,
+      previewError,
       inviteNeedsCode: needsCode,
       inviteIsLegacyUuid: needsCode,
       regClientCode: "",
@@ -212,6 +269,23 @@ assert(!tokenMarkup.includes("MLN-XXXXXX"), "a token invite does not hint at the
 const codeMarkup = panel(true);
 assert(codeMarkup.includes("ownerInviteClientCode"), "the code path still shows the field");
 assert(codeMarkup.includes("MLN-XXXXXX"), "the code path still names the code format");
+
+const greeted = panel(false, undefined, "Sam Owner");
+assert(
+  greeted.includes("Hi Sam Owner. Ben Accountants invited you to join Northwind"),
+  "the join page greets the named owner",
+);
+assert(greeted.includes("ownerInvitePassword"), "a live invite still shows the sign-up form");
+
+for (const message of [INVITE_USED_MESSAGE, INVITE_REVOKED_MESSAGE]) {
+  const blocked = panel(false, message);
+  assert(blocked.includes(message), "the blocked invite shows its own message");
+  assert(blocked.includes('data-invite-sign-in=""'), "a blocked invite offers Sign in");
+  assert(!blocked.includes("ownerInvitePassword"), "a blocked invite hides the sign-up form");
+}
+const expiredMarkup = panel(false, INVITE_EXPIRED_MESSAGE);
+assert(expiredMarkup.includes(INVITE_EXPIRED_MESSAGE), "an expired invite says it expired");
+assert(expiredMarkup.includes("ownerInvitePassword"), "an expired invite still shows the form");
 
 const accountantMarkup = renderToStaticMarkup(
   createElement(AccountantInviteIntro, { inviterName: "Ana Owner", clientName: "Northwind" }),
@@ -271,6 +345,11 @@ assert(
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
 assert(landing.includes("preview.requiresClientCode"), "the join page trusts the server code flag");
 assert(landing.includes("preview.firmName"), "the join page reads the firm from preview");
+assert(landing.includes("preview.inviteeName"), "the join page reads the invited name");
+assert(
+  join.includes("inviteJoinHidesSignup"),
+  "the accountant join page hides sign-up for used and revoked invites",
+);
 assert(
   !landing.includes("preview.clientCode"),
   "the join page no longer reads a client code from preview",
