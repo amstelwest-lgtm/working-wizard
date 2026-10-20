@@ -2211,6 +2211,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               audience="accountant"
               marketCountry={parseMarketSelection(firmMarket)?.country ?? null}
               sampleClient={false}
+              cardPhase="ready"
               presence={ownerPresence(emptyAgentActivity())}
               lines={practiceLines}
               status={practiceStatus}

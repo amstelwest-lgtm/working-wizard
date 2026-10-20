@@ -6,6 +6,7 @@
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
 import { C } from "./theme";
 import { DeltaChip } from "./delta-chip";
 
@@ -67,7 +68,7 @@ export function MetricBox({
   }
 
   return (
-    <View style={styles.box}>
+    <View style={styles.box} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
       <View style={[styles.tick, { backgroundColor: accentColor }]} />
       <Text style={styles.label}>{label}</Text>
       <Text style={[styles.value, value.length > 14 ? { fontSize: 9 } : { fontSize: 15 }]}>{value}</Text>

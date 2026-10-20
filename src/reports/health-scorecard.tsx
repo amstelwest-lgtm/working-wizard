@@ -29,6 +29,7 @@ import {
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { diagnoseDuPont, healthNarrative } from "./narrative";
 import { spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
 import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ function PillarBox({
 
   if (!hasScore) {
     return (
-      <View style={styles.pillarBox}>
+      <View style={styles.pillarBox} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
         <Text style={styles.pillarName}>{pillarLabel(pillar)}</Text>
         <Text style={styles.pillarUnscored}>{unscoredPillarNote(pillar, note)}</Text>
       </View>
@@ -191,7 +192,7 @@ function PillarBox({
   }
 
   return (
-    <View style={styles.pillarBox}>
+    <View style={styles.pillarBox} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
       <Text style={styles.pillarName}>{pillarLabel(pillar)}</Text>
       <View style={styles.pillarScoreRow}>
         <Text style={[styles.pillarScore, { color: scoreColor(rounded!) }]}>
@@ -393,7 +394,7 @@ export function HealthScorecardPDF({
       <ExecSummary figures={figures} narrative={narrative} />
 
       {/* Overall score band */}
-      <View style={styles.scoreBand}>
+      <View style={styles.scoreBand} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
         <View style={styles.scoreLeft}>
           <Text style={[styles.overallNumber, { color: "#0B5FFF" }]}>
             {overallScore != null ? overallScore : "—"}
@@ -435,7 +436,7 @@ export function HealthScorecardPDF({
 
       {/* DuPont pointer strip */}
       {hasDuPont && (
-        <View style={{ marginTop: 6 }}>
+        <View style={{ marginTop: 6 }} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
           <DuPontStrip
             levers={levers}
             diagnosis={dupont}
