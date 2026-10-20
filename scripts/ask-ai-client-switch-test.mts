@@ -960,7 +960,7 @@ await test("Scenario 14: the first capped reply is the full card, and a remount 
       ok: false,
       status: 403,
       json: async () => ({
-        error: "A card is required at signup. 14-day free trial · up to 5 clients on Starter.",
+        error: "14-day free trial · up to 5 clients on Starter. You add a card once you have seen your first result.",
         code: "precard_cap",
         limit: "bot",
       }),
@@ -1017,6 +1017,42 @@ await test("Scenario 14: the first capped reply is the full card, and a remount 
     if (previous) (globalThis as { sessionStorage?: Storage }).sessionStorage = previous;
     else delete (globalThis as { sessionStorage?: Storage }).sessionStorage;
   }
+});
+
+await test("Scenario 15: a later blocked send keeps one cap card", async () => {
+  (globalThis as Record<string, unknown>).fetch = async () => ({
+    ok: false,
+    status: 403,
+    json: async () => ({
+      error: "14-day free trial · up to 5 clients on Starter. You add a card once you have seen your first result.",
+      code: "precard_cap",
+      limit: "bot",
+    }),
+  });
+  const container = makeContainer("cap-once");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    getToken: async () => "test-token",
+  });
+  const send = (text: string) => {
+    container.find((el) => el.className.includes("ask-ai-textarea"))?.input(text);
+    container.find((el) => el.className.includes("ask-ai-send"))?.click();
+  };
+  send("Eleventh question");
+  await new Promise((r) => setTimeout(r, 0));
+  send("Twelfth question");
+  await new Promise((r) => setTimeout(r, 0));
+  const cards = container.findAll((el) => el.className.includes("precard-cap-card"));
+  assert(cards.length === 1, `a second blocked send does not add a card, got ${cards.length}`);
+  const users = container.findAll((el) => el.className.includes("ask-ai-turn-user"));
+  assert(users.length === 2, `both questions stay in the thread, got ${users.length}`);
+  assert(
+    (cards[0]?.find((el) => el.className.includes("precard-cap-title"))?.textContent ?? "").includes(
+      "seen your first result",
+    ),
+    "the one card uses the trial sentence",
+  );
 });
 
 await test("Scenario 13: Financial Manager, Analyst and Advisor keep separate threads", async () => {

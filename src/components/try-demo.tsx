@@ -25,11 +25,11 @@ const TrySampleBoards = lazy(() =>
 import { AGENT_DISPLAY_NAME } from "@/lib/milon-team-names";
 import { SAMPLE_BUSINESS_NAME } from "@/lib/sample-business";
 import { TRIAL_CASH_OPENING_LINE } from "@/lib/trial-sample-view";
+import { FIRM_TRIAL_CARD_LINE, firmUsdListPrice } from "@/lib/stripe-plans";
 import {
   TRIAL_CTA_LABEL,
   TRIAL_DISCLAIMER,
   TRIAL_SIGNUP_HREF,
-  TRIAL_SIGNUP_SENTENCE,
   trialSignupHref,
   TRIAL_VALUE_PROP,
   TRIAL_VALUE_PROP_SHORT,
@@ -369,7 +369,7 @@ function TryConversation({
         <p className="try-value">{TRIAL_VALUE_PROP}</p>
         <TrialCta quiet className="try-cta-close" />
         <p className="try-trial-terms">
-          Starter. {TRIAL_SIGNUP_SENTENCE}. A card is required at signup.
+          {FIRM_TRIAL_CARD_LINE} Then {firmUsdListPrice("starter", "month")}/mo.
         </p>
       </div>
     </section>
@@ -502,7 +502,7 @@ function Frame({
         <p className="try-ctabar-copy">
           <strong>Milōn</strong>
           <span>{TRIAL_VALUE_PROP_SHORT}</span>
-          <small>Starter. {TRIAL_SIGNUP_SENTENCE}. A card is required at signup.</small>
+          <small>{FIRM_TRIAL_CARD_LINE} Then {firmUsdListPrice("starter", "month")}/mo.</small>
         </p>
         <TrialCta className="try-ctabar-btn" />
       </div>

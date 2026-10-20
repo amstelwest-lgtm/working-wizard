@@ -69,6 +69,15 @@ for (const variant of [
   assert(html.includes("bg-white") && html.includes("text-[#102A43]") && html.includes("border-[#DBEAFE]"), `${variant.market} canvas is the light shell`);
   assert(!html.includes("amber") && !html.includes("#0b1220"), `${variant.market} wall has no gold or near-black canvas`);
   assert(html.includes(firmWallWhyLine("New York Test company")), `${variant.market} explains the open client`);
+  assert(
+    firmWallWhyLine("New York Test company") ===
+      "This firm has no plan yet. Your first client and its numbers stay open. Reports and a later client need Starter.",
+    `${variant.market} names the open file, not the client`,
+  );
+  assert(
+    !firmWallWhyLine("New York Test company").includes("New York Test company"),
+    `${variant.market} does not put the client name in the why line`,
+  );
   assert(!html.includes(FIRM_WALL_TRIAL_ENDED_LINE), `${variant.market} does not mention an ended trial by default`);
 }
 

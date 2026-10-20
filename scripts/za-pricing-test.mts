@@ -4,7 +4,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { FIRM_BAND_CATALOG, FIRM_CHECKOUT_BANDS, FIRM_TRIAL_SENTENCE, bandIdFromLookupKey, intervalFromLookupKey } from "../src/lib/stripe-plans";
+import { FIRM_BAND_CATALOG, FIRM_CHECKOUT_BANDS, FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE, bandIdFromLookupKey, intervalFromLookupKey } from "../src/lib/stripe-plans";
 import {
   annualZarCents,
   perClientRands,
@@ -49,11 +49,11 @@ assert(perClientRands(7999, 500) === 16, "Scale is about R16 per client");
 const copy = loadSaPricingCopy();
 assert(copy.heading === "Pricing in rand", "heading");
 assert(
-  copy.heroNote === `${FIRM_TRIAL_SENTENCE} on Starter. A card is required at signup. Then R 299/mo.`,
+  copy.heroNote === `${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then R 299/mo.`,
   "hero",
 );
 assert(
-  copy.trialAfter === "On Starter. A card is required at signup. Then R 299/mo.",
+  copy.trialAfter === `On Starter. ${FIRM_TRIAL_CARD_NOTE} Then R 299/mo.`,
   "pricing bar rand line",
 );
 assert(copy.labels.starter.month === "R 299/mo · about R 60 per client", "starter monthly line");

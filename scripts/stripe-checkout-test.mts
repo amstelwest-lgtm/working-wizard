@@ -133,7 +133,7 @@ assert(
 assert(!("automatic_tax" in monthly) || monthly.automatic_tax == null, "automatic_tax omitted");
 assert(monthly.billing_address_collection === "required", "billing address required");
 assert(monthly.allow_promotion_codes === true, "monthly paid allows FOUNDING box");
-assert(monthly.payment_method_collection === "always", "card on file at signup");
+assert(monthly.payment_method_collection === "always", "Checkout collects a card");
 assert(monthly.subscription_data?.trial_period_days === 14, "first subscription is a 14-day trial");
 assert(monthly.mode === "subscription", "subscription mode");
 assert(monthly.integration_identifier === "milon-solo-month-abcdefgh", "integration_identifier");
@@ -501,7 +501,7 @@ assert(
 );
 assert(!heroCta.includes("__mq_start"), "hero primary does not launch the quiz");
 assert(
-  landing.includes("FIRM_CARD_TIMING"),
+  landing.includes("firmSignupTrialReminder"),
   "landing states when the first figures and the card happen",
 );
 assert(
