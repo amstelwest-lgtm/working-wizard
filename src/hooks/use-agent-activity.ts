@@ -34,7 +34,7 @@ function runIsOpen(status: string): boolean {
 }
 
 const FINDING_COLUMNS =
-  "id, agent, client_id, run_id, kind, severity, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason, status, approved_by, approved_at, approved_table, approved_row_id";
+  "id, agent, client_id, run_id, kind, severity, title, detail, evidence, as_of, created_at, last_seen, superseded_by, dismissed_reason, status, approved_by, approved_at, approved_table, approved_row_id";
 
 async function fetchClientRuns(clientId: string): Promise<AgentRunRow[]> {
   const runsRes = await table("agent_runs")
@@ -128,6 +128,7 @@ function parseFinding(row: Record<string, unknown>): AgentFindingRow | null {
     evidence: row.evidence ?? {},
     as_of: textOrNull(row.as_of),
     created_at: typeof row.created_at === "string" ? row.created_at : "",
+    last_seen: textOrNull(row.last_seen),
     status: finding.status,
     approved_by: textOrNull(row.approved_by),
     approved_at: textOrNull(row.approved_at),

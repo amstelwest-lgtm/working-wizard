@@ -84,6 +84,96 @@ export function LandingSignInSession({
       : browserAppUrl("/app");
   };
 
+  const landOwnerSession = async (userId: string, knownMeta: Record<string, unknown>) => {
+    const storedPending =
+      peekPendingCheckout() ?? parsePendingCheckoutFromSearch(window.location.search);
+    let pendingCheckout: Awaited<ReturnType<typeof checkoutIntentForUser>> | null = null;
+    if (storedPending) {
+      const intent = await settleWithin(
+        checkoutIntentForUser(userId, storedPending, copyPack),
+        POST_AUTH_DEADLINE_MS,
+      );
+      if (intent.status !== "value") {
+        setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+        return;
+      }
+      pendingCheckout = intent.value;
+    }
+    if (pendingCheckout) {
+      consumeResumeFirmBilling();
+      stashPendingCheckout(pendingCheckout);
+      const { setPortalIntent } = await import("@/lib/user-roles");
+      setPortalIntent("accountant");
+      const { activeFirmIdForUser } = await import("@/lib/firm-brand");
+      const insightFirm = await settleWithin(activeFirmIdForUser(userId), POST_AUTH_DEADLINE_MS);
+      const insightFirmId = insightFirm.status === "value" ? insightFirm.value : null;
+      if (readInsightSeen(insightFirmId)) {
+        void navigate({
+          to: "/billing/start",
+          search: billingStartSearch(pendingCheckout),
+          replace: true,
+        });
+      } else {
+        void navigate({ to: "/dashboard", replace: true });
+      }
+      return;
+    }
+
+    const resumeFirmBilling = consumeResumeFirmBilling();
+    if (resumeFirmBilling) {
+      const { listUserFirms, readActiveFirmId } = await import("@/lib/firm-brand");
+      const firmRead = await settleWithin(listUserFirms(userId), POST_AUTH_DEADLINE_MS);
+      if (firmRead.status !== "value") {
+        setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+        return;
+      }
+      const firms = firmRead.value;
+      const ownsFirm = firms.some((f) => f.owner_user_id === userId);
+      const preferred = readActiveFirmId(userId);
+      const insightFirmId =
+        firms.find((f) => f.id === preferred)?.id ??
+        firms.find((f) => f.owner_user_id === userId)?.id ??
+        null;
+      const resume = decidePostLoginBillingResume({
+        hasPendingFirmCheckout: false,
+        ownsFirm,
+        resumeFirmBilling: true,
+        insightSeen: readInsightSeen(insightFirmId),
+      });
+      if (resume === "workspace") {
+        const { setPortalIntent } = await import("@/lib/user-roles");
+        setPortalIntent("accountant");
+        void navigate({ to: "/dashboard", replace: true });
+        return;
+      }
+      if (resume) {
+        const pending = await checkoutIntentForUser(userId, peekPendingCheckout(), copyPack);
+        stashPendingCheckout(pending);
+        const { setPortalIntent } = await import("@/lib/user-roles");
+        setPortalIntent("accountant");
+        void navigate({
+          to: resume === "billing_start" ? "/billing/start" : "/billing/required",
+          search: billingStartSearch(pending),
+          replace: true,
+        });
+        return;
+      }
+    }
+
+    const settled = await finishOwnerSignIn({
+      readDestination: () =>
+        resolveSignedInDestination(userId, {
+          door: "landing",
+          knownMeta,
+        }),
+    });
+    if (settled.status === "retry") {
+      setSiError(POST_AUTH_TIMEOUT_MESSAGE);
+      return;
+    }
+    void navigate({ to: settled.path, replace: true });
+  };
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (submitLock.current) return;
@@ -116,99 +206,10 @@ export function LandingSignInSession({
         void navigate({ to: "/app", replace: true });
         return;
       }
-
-      const storedPending =
-        peekPendingCheckout() ?? parsePendingCheckoutFromSearch(window.location.search);
-      let pendingCheckout: Awaited<ReturnType<typeof checkoutIntentForUser>> | null = null;
-      if (storedPending) {
-        const intent = await settleWithin(
-          checkoutIntentForUser(userId, storedPending, copyPack),
-          POST_AUTH_DEADLINE_MS,
-        );
-        if (intent.status !== "value") {
-          setSiError(POST_AUTH_TIMEOUT_MESSAGE);
-          return;
-        }
-        pendingCheckout = intent.value;
-      }
-      if (pendingCheckout) {
-        consumeResumeFirmBilling();
-        stashPendingCheckout(pendingCheckout);
-        const { setPortalIntent } = await import("@/lib/user-roles");
-        setPortalIntent("accountant");
-        const { activeFirmIdForUser } = await import("@/lib/firm-brand");
-        const insightFirm = await settleWithin(activeFirmIdForUser(userId), POST_AUTH_DEADLINE_MS);
-        const insightFirmId = insightFirm.status === "value" ? insightFirm.value : null;
-        if (readInsightSeen(insightFirmId)) {
-          void navigate({
-            to: "/billing/start",
-            search: billingStartSearch(pendingCheckout),
-            replace: true,
-          });
-        } else {
-          void navigate({ to: "/dashboard", replace: true });
-        }
-        return;
-      }
-
-      const resumeFirmBilling = consumeResumeFirmBilling();
-      if (resumeFirmBilling) {
-        const { listUserFirms, readActiveFirmId } = await import("@/lib/firm-brand");
-        const firmRead = await settleWithin(listUserFirms(userId), POST_AUTH_DEADLINE_MS);
-        if (firmRead.status !== "value") {
-          setSiError(POST_AUTH_TIMEOUT_MESSAGE);
-          return;
-        }
-        const firms = firmRead.value;
-        const ownsFirm = firms.some((f) => f.owner_user_id === userId);
-        const preferred = readActiveFirmId(userId);
-        const insightFirmId =
-          firms.find((f) => f.id === preferred)?.id ??
-          firms.find((f) => f.owner_user_id === userId)?.id ??
-          null;
-        const resume = decidePostLoginBillingResume({
-          hasPendingFirmCheckout: false,
-          ownsFirm,
-          resumeFirmBilling: true,
-          insightSeen: readInsightSeen(insightFirmId),
-        });
-        if (resume === "workspace") {
-          const { setPortalIntent } = await import("@/lib/user-roles");
-          setPortalIntent("accountant");
-          void navigate({ to: "/dashboard", replace: true });
-          return;
-        }
-        if (resume) {
-          const pending = await checkoutIntentForUser(
-            userId,
-            peekPendingCheckout(),
-            copyPack,
-          );
-          stashPendingCheckout(pending);
-          const { setPortalIntent } = await import("@/lib/user-roles");
-          setPortalIntent("accountant");
-          void navigate({
-            to: resume === "billing_start" ? "/billing/start" : "/billing/required",
-            search: billingStartSearch(pending),
-            replace: true,
-          });
-          return;
-        }
-      }
-
-      const settled = await finishOwnerSignIn({
-        readDestination: () =>
-          resolveSignedInDestination(userId, {
-            door: "landing",
-            knownMeta:
-              (granted.data.user?.user_metadata as Record<string, unknown> | undefined) ?? {},
-          }),
-      });
-      if (settled.status === "retry") {
-        setSiError(POST_AUTH_TIMEOUT_MESSAGE);
-        return;
-      }
-      void navigate({ to: settled.path, replace: true });
+      await landOwnerSession(
+        userId,
+        (granted.data.user?.user_metadata as Record<string, unknown> | undefined) ?? {},
+      );
     } catch (err: unknown) {
       const failure = explainPasswordSignInFailure(err);
       setSiUnconfirmed(failure.kind === "email_not_confirmed");
@@ -323,6 +324,7 @@ export function LandingSignInSession({
         onCreateAccount={() => {
           window.location.assign(createAccountHref);
         }}
+        onEmailSignedIn={(user) => landOwnerSession(user.id, user.user_metadata)}
       />
     </Suspense>
   );

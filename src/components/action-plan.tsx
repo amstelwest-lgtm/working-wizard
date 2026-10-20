@@ -2778,11 +2778,7 @@ function ItemRow({
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
               <Mail className="h-3 w-3" /> Sent
             </span>
-          ) : phaseLabel ? (
-            <span className="text-[10px] font-semibold text-[#0B5FFF]" data-handoff-phase={phaseLabel}>
-              {phaseLabel}
-            </span>
-          ) : !lastFailed ? (
+          ) : !lastFailed && !phaseLabel ? (
             <span className="text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500">
               Not sent
             </span>

@@ -88,7 +88,7 @@ import {
   withFinancialsWriteRev,
   statementImportWhat,
 } from "@/lib/statement-import-apply";
-import { earlierStatementNote, liveCoverageForImport, planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, earlierStatementNote, liveStatementSpan, passStatementChoice, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -2938,25 +2938,6 @@ function ClientView() {
         ...extracted,
         ...keptEquity,
       };
-      const covered = liveCoverageForImport({
-        existing: financialsRef.current,
-        periodStart: period?.periodStart,
-        periodEnd: period?.periodEnd,
-        periodMonths: period?.periodMonths,
-        fyStartMonth,
-        preClose:
-          drafted.periodProfitInEquity != null &&
-          String(drafted.periodProfitInEquity).trim() !== "" &&
-          String(drafted.periodProfitInEquity) !== "0",
-      });
-      const fileSpan = covered.span;
-      const inputs = {
-        ...drafted,
-        ...(covered.months != null ? { periodMonths: String(covered.months) } : {}),
-        [PERIOD_MONTHS_CHOSEN_KEY]: "",
-        ...(covered.periodEnd ? { periodEnd: covered.periodEnd } : {}),
-        ...(covered.periodStart ? { periodStart: covered.periodStart } : {}),
-      };
       const periodDate = period?.periodEnd?.trim() ?? "";
       const periodLabel = period?.periodLabel?.trim() ?? "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(periodDate) || !periodLabel) {
@@ -2972,15 +2953,27 @@ function ClientView() {
         industry: healthIndustry,
         timeZone: clientMarket.timezone,
       });
-      const planned = planStatementImport({
+      const planned = confirmUploadedStatement({
         existing: financialsRef.current,
-        incoming: inputs,
+        incoming: {
+          ...drafted,
+          [PERIOD_MONTHS_CHOSEN_KEY]: "",
+        },
         kind: statementKind,
-        span: fileSpan,
+        periodStart: period?.periodStart,
+        periodEnd: period?.periodEnd,
+        periodMonths: period?.periodMonths,
         choice: choice ?? null,
         pillarsBefore: healthBefore.pillars,
         market: clientMarket,
+        fyStartMonth,
+        preClose:
+          drafted.periodProfitInEquity != null &&
+          String(drafted.periodProfitInEquity).trim() !== "" &&
+          String(drafted.periodProfitInEquity) !== "0",
       });
+      const fileSpan = planned.span;
+      const inputs = planned.stamped;
       if (planned.action === "block") {
         return { ok: false as const, message: planned.message };
       }
@@ -5828,7 +5821,8 @@ function ClientView() {
                 </p>
                 <UploadFinancials
                   clientName={client?.name}
-                  onConfirm={(result, prefs, period) => handleConfirmFinancials(result, prefs, period)}
+                  booksHaveSpan={Boolean(liveStatementSpan(financials))}
+                  onConfirm={passStatementChoice(handleConfirmFinancials)}
                   onApplied={() => {
                     setActiveTab("overview");
                     void navigate({

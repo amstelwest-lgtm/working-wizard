@@ -316,7 +316,7 @@ html:not(.dark) .accountant-nav .nav-heading.is-page > .nav-row .nav-chev {
 }
 /* Group holding the current page (header itself not the page). */
 html:not(.dark) .accountant-nav .nav-heading.is-current > .nav-row .nav-label {
-  box-shadow: inset 2px 0 0 rgba(212, 175, 55, 0.55);
+  box-shadow: inset 2px 0 0 #0b5fff;
   color: var(--pp-frame-ink);
 }
 /* Gold marks: the bot-primary dot and the star. */
@@ -411,6 +411,14 @@ html:not(.dark) .accountant-portal [class*="bg-gradient-to-r"][class*="from-[#25
 html:not(.dark) .accountant-portal [class*="border-[#DBEAFE]"],
 html:not(.dark) .accountant-portal [class*="border-[#dbeafe]"] {
   border-color: var(--pp-gold-line);
+}
+/* Email the owner is a quiet outline. The pale-blue rewrite above must not
+   paint it gold. Cobalt in the light theme, royal blue on the dark canvas. */
+html:not(.dark) .accountant-portal [data-email-owner] {
+  border-color: #0b5fff;
+}
+html.dark .accountant-portal [data-email-owner] {
+  border-color: #60a5fa;
 }
 /* Inner stat tiles stay neutral (quieter than the card edge). */
 html:not(.dark) .accountant-portal [class*="border-amber"] {

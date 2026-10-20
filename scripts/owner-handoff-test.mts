@@ -186,8 +186,12 @@ assert(
   "Working is painted before the hand-off function returns",
 );
 const workingBlock = commit.slice(commit.indexOf("const working"), commit.indexOf("rememberOptimistic"));
-assert(!workingBlock.includes("note"), "Working paints before any Handed-to line");
-assert(commit.includes("else if (result.noted)"), "the Handed-to line waits for noted");
+assert(workingBlock.includes("note"), "Handed to paints with the click time");
+assert(
+  commit.indexOf("dispatchActionPlanRefresh") < commit.indexOf("signedInActorLabel"),
+  "the Handed-to line does not wait on the signed-in name",
+);
+assert(commit.includes("else if (result.noted)"), "a noted response reconciles the Handed-to line");
 const reuseBranch = commit.slice(commit.indexOf("result.reused"), commit.indexOf("else if (!result.noted)"));
 assert(!reuseBranch.includes("note,"), "a reuse does not add a Handed-to line");
 const notedBranch = commit.slice(commit.indexOf("else if (result.noted)"));

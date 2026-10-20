@@ -239,11 +239,10 @@ export async function commitActionHandoff(input: {
 }): Promise<ActionHandoffCommit> {
   const since = new Date().toISOString();
   const assigneeName = agentDisplayName(input.agent);
-  const actorLabel = await signedInActorLabel();
   const note = {
     note: handoffRequestNote(assigneeName),
     at: since,
-    actorLabel,
+    actorLabel: null as string | null,
     actorType: "owner_app" as const,
   };
   const working: ActionPlanRefreshDetail = {
@@ -252,6 +251,7 @@ export async function commitActionHandoff(input: {
     agent: input.agent,
     assigneeName,
     since,
+    note,
   };
   rememberOptimistic({
     actionItemId: input.actionItemId,
@@ -259,10 +259,12 @@ export async function commitActionHandoff(input: {
     since,
     agent: input.agent,
     assigneeName,
-    note: null,
+    note,
   });
-  // Working paints before the function returns. The Handed-to line waits for noted.
+  // Handed to paints with the click time. The signed-in name fills in after.
   dispatchActionPlanRefresh(working);
+  const actorLabel = await signedInActorLabel();
+  note.actorLabel = actorLabel;
   const fail = (error: string, comingSoon?: boolean): ActionHandoffCommit => {
     rejectOptimisticHandoff(input.actionItemId, since, comingSoon ? null : HANDOFF_FAILED_COPY);
     dispatchActionPlanRefresh({
@@ -272,11 +274,17 @@ export async function commitActionHandoff(input: {
     });
     return comingSoon ? { ok: false, error, comingSoon: true } : { ok: false, error };
   };
-  const result = await requestOwnerHandoff({
-    clientId: input.clientId,
-    actionItemId: input.actionItemId,
-    agent: input.agent,
-  });
+  let result: Awaited<ReturnType<typeof requestOwnerHandoff>>;
+  try {
+    result = await requestOwnerHandoff({
+      clientId: input.clientId,
+      actionItemId: input.actionItemId,
+      agent: input.agent,
+    });
+  } catch (err) {
+    const message = err instanceof Error && err.message.trim() ? err.message : HANDOFF_FAILED_COPY;
+    return fail(message);
+  }
   if (!result.ok && handoffComingOnline(result.error)) {
     const saved = await recordHandoffAssignment(input);
     if (!saved.ok) return fail(saved.error, true);

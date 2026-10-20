@@ -53,7 +53,7 @@ import {
   type ConfirmedImportPeriod,
 } from "@/lib/import-period";
 import { formatDateRange } from "@/lib/market/format";
-import type { PeriodChoice } from "@/lib/statement-import-plan";
+import { SET_PERIOD_DATES, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { balanceSheetCheck } from "@/lib/statement-balance";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 
@@ -156,7 +156,19 @@ export type UploadFinancialsProps = {
   onOpenBankUpload?: (file: File) => void;
   /** Client on the page. The file header is secondary, never the title. */
   clientName?: string | null;
+  /** Books already have a start and an end. An unknown P&L must collect both. */
+  booksHaveSpan?: boolean;
+  /** Opens the review step. Tests use this so the panel does not call extract. */
+  seedReview?: ExtractionResult | null;
 };
+
+function seededPeriod(periodEnd: string | null | undefined) {
+  const detected = detectImportPeriod(periodEnd);
+  return {
+    month: detected ? String(detected.month) : "",
+    year: detected ? String(detected.year) : "",
+  };
+}
 
 export function UploadFinancials({
   onConfirm,
@@ -164,18 +176,23 @@ export function UploadFinancials({
   autoPopulate,
   onOpenBankUpload,
   clientName,
+  booksHaveSpan = false,
+  seedReview = null,
 }: UploadFinancialsProps) {
   const { number, selection, market } = useMarketFormat();
   const inputRef = useRef<HTMLInputElement>(null);
+  const seeded = seededPeriod(seedReview?.current_period.period_end);
   const [status, setStatus] = useState<"idle" | "uploading" | "reading" | "review" | "bank">(
-    "idle",
+    seedReview ? "review" : "idle",
   );
-  const [result, setResult] = useState<ExtractionResult | null>(null);
+  const [result, setResult] = useState<ExtractionResult | null>(seedReview);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [autoSafe, setAutoSafe] = useState(false);
   const [acceptedQuality, setAcceptedQuality] = useState(false);
-  const [periodMonth, setPeriodMonth] = useState("");
-  const [periodYear, setPeriodYear] = useState("");
+  const [periodMonth, setPeriodMonth] = useState(seeded.month);
+  const [periodYear, setPeriodYear] = useState(seeded.year);
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
   const [bankFile, setBankFile] = useState<File | null>(null);
   const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(
     autoPopulate?.prefs ?? defaultAutoPopulatePrefs(),
@@ -265,6 +282,8 @@ export function UploadFinancials({
     setAcceptedQuality(false);
     setPeriodMonth("");
     setPeriodYear("");
+    setRangeStart("");
+    setRangeEnd("");
     setBankFile(null);
     setPrefsTouched(false);
     if (inputRef.current) inputRef.current.value = "";
@@ -379,9 +398,17 @@ export function UploadFinancials({
   if (!result) return null;
   const is = result.current_period.figures.income_statement;
   const bs = result.current_period.figures.balance_sheet;
-  const pickedPeriod = importPeriodFromParts(periodYear, periodMonth);
   const detectedStart = result.current_period.period_start?.slice(0, 10) ?? "";
   const detectedEnd = result.current_period.period_end?.slice(0, 10) ?? "";
+  const detectedSpan = statementSpan(
+    detectedStart,
+    detectedEnd,
+    result.current_period.period_months,
+  );
+  const needsRange =
+    booksHaveSpan && statementKindFromExtraction(result) !== "balance_sheet" && !detectedSpan;
+  const typedSpan = needsRange ? statementSpan(rangeStart, rangeEnd) : null;
+  const pickedPeriod = importPeriodFromParts(periodYear, periodMonth);
   const spanMatchesPick = Boolean(
     pickedPeriod && detectedStart && detectedEnd && detectedEnd.slice(0, 7) === pickedPeriod.periodEnd.slice(0, 7),
   );
@@ -389,19 +416,31 @@ export function UploadFinancials({
     spanMatchesPick && detectedStart && detectedEnd
       ? formatDateRange(detectedStart, detectedEnd, market)
       : "";
-  const chosenPeriod: ConfirmedImportPeriod | null = pickedPeriod
-    ? {
-        ...pickedPeriod,
-        ...(spanMatchesPick
-          ? {
-              periodStart: detectedStart,
-              periodEnd: detectedEnd,
-              periodMonths: result.current_period.period_months ?? null,
-              periodLabel: rangedLabel && rangedLabel !== "—" ? rangedLabel : pickedPeriod.periodLabel,
-            }
-          : {}),
-      }
-    : null;
+  const typedLabel = typedSpan
+    ? formatDateRange(typedSpan.periodStart, typedSpan.periodEnd, market)
+    : "";
+  const chosenPeriod: ConfirmedImportPeriod | null = needsRange
+    ? typedSpan
+      ? {
+          periodStart: typedSpan.periodStart,
+          periodEnd: typedSpan.periodEnd,
+          periodMonths: typedSpan.months,
+          periodLabel: typedLabel && typedLabel !== "—" ? typedLabel : `${typedSpan.periodStart}/${typedSpan.periodEnd}`,
+        }
+      : null
+    : pickedPeriod
+      ? {
+          ...pickedPeriod,
+          ...(spanMatchesPick
+            ? {
+                periodStart: detectedStart,
+                periodEnd: detectedEnd,
+                periodMonths: result.current_period.period_months ?? null,
+                periodLabel: rangedLabel && rangedLabel !== "—" ? rangedLabel : pickedPeriod.periodLabel,
+              }
+            : {}),
+        }
+      : null;
   const periodDetected = detectImportPeriod(result.current_period.period_end) != null;
   const confirmLabel = chosenPeriod
     ? `I have reviewed these figures and confirm they should be imported for ${chosenPeriod.periodLabel}. ${UPLOAD_QUALITY_DISCLAIMER}`
@@ -790,40 +829,67 @@ export function UploadFinancials({
           Statement period
         </p>
         <p className="mt-1 text-xs leading-relaxed text-[var(--ink-dim,#a8a29e)]">
-          {periodDetected
-            ? "We read a period from the file. Check it, and change the month or year if it is wrong."
-            : "Period not detected. Choose the month and year these figures belong to before importing. We will not assume the current month."}
+          {needsRange
+            ? SET_PERIOD_DATES
+            : periodDetected
+              ? "We read a period from the file. Check it, and change the month or year if it is wrong."
+              : "Period not detected. Choose the month and year these figures belong to before importing. We will not assume the current month."}
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <label className="text-xs text-[var(--ink,#e7e5e4)]" htmlFor="import-period-month">
-            Month
-            <select
-              id="import-period-month"
-              className="mt-1 block h-9 min-w-[9rem] rounded-md border border-white/15 bg-black/30 px-2 text-sm text-[var(--ink,#e7e5e4)]"
-              value={periodMonth}
-              onChange={(e) => setPeriodMonth(e.target.value)}
-            >
-              <option value="">Select month</option>
-              {monthNames.map((name, index) => (
-                <option key={name} value={String(index + 1)}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs text-[var(--ink,#e7e5e4)]" htmlFor="import-period-year">
-            Year
-            <Input
-              id="import-period-year"
-              inputMode="numeric"
-              placeholder="Year"
-              value={periodYear}
-              onChange={(e) => setPeriodYear(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
-              className="mt-1 h-9 w-28 bg-black/30 border-white/15 text-[var(--ink,#e7e5e4)]"
-              aria-label="Statement year"
-            />
-          </label>
-        </div>
+        {needsRange ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className="text-xs text-[var(--ink,#e7e5e4)]" htmlFor="import-period-start">
+              Start date
+              <input
+                id="import-period-start"
+                type="date"
+                value={rangeStart}
+                onChange={(e) => setRangeStart(e.target.value)}
+                className="mt-1 block h-9 rounded-md border border-white/15 bg-black/30 px-2 text-sm text-[var(--ink,#e7e5e4)]"
+              />
+            </label>
+            <label className="text-xs text-[var(--ink,#e7e5e4)]" htmlFor="import-period-end">
+              End date
+              <input
+                id="import-period-end"
+                type="date"
+                value={rangeEnd}
+                onChange={(e) => setRangeEnd(e.target.value)}
+                className="mt-1 block h-9 rounded-md border border-white/15 bg-black/30 px-2 text-sm text-[var(--ink,#e7e5e4)]"
+              />
+            </label>
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className="text-xs text-[var(--ink,#e7e5e4)]" htmlFor="import-period-month">
+              Month
+              <select
+                id="import-period-month"
+                className="mt-1 block h-9 min-w-[9rem] rounded-md border border-white/15 bg-black/30 px-2 text-sm text-[var(--ink,#e7e5e4)]"
+                value={periodMonth}
+                onChange={(e) => setPeriodMonth(e.target.value)}
+              >
+                <option value="">Select month</option>
+                {monthNames.map((name, index) => (
+                  <option key={name} value={String(index + 1)}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-[var(--ink,#e7e5e4)]" htmlFor="import-period-year">
+              Year
+              <Input
+                id="import-period-year"
+                inputMode="numeric"
+                placeholder="Year"
+                value={periodYear}
+                onChange={(e) => setPeriodYear(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
+                className="mt-1 h-9 w-28 bg-black/30 border-white/15 text-[var(--ink,#e7e5e4)]"
+                aria-label="Statement year"
+              />
+            </label>
+          </div>
+        )}
         {chosenPeriod ? (
           <p className="mt-2 text-xs text-[var(--ink,#e7e5e4)]">
             Importing as {chosenPeriod.periodLabel}
@@ -833,7 +899,9 @@ export function UploadFinancials({
             .
           </p>
         ) : (
-          <p className="mt-2 text-xs text-amber-300">Choose a month and year to continue.</p>
+          <p className="mt-2 text-xs text-amber-300">
+            {needsRange ? SET_PERIOD_DATES : "Choose a month and year to continue."}
+          </p>
         )}
       </div>
 
