@@ -1,0 +1,271 @@
+/* One-agent link. White canvas, cobalt actions, navy text.
+   Gold is the MILŌN wordmark only. The trial bar, when the sample opens,
+   keeps the single gold Start free trial control from the sample page.
+   Mobile first. The base layout is the 390px phone. */
+html:has(.talk-page),
+html:has(.talk-page) body {
+  background: #ffffff !important;
+  color: #102a43 !important;
+  color-scheme: light;
+}
+
+.talk-page {
+  min-height: 100dvh;
+  box-sizing: border-box;
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  background: #ffffff;
+  color: #102a43;
+  font-family: "Plus Jakarta Sans Variable", "Segoe UI", sans-serif;
+}
+
+.talk-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.talk-wordmark {
+  color: transparent;
+  background: linear-gradient(
+    120deg,
+    #7a5400 0%,
+    #b8860b 35%,
+    #d4af37 55%,
+    #b8860b 75%,
+    #7a5400 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.talk-stamp {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #0b5fff;
+  color: #0b5fff;
+  background: #ffffff;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 5px 10px;
+}
+
+.talk-stage {
+  display: grid;
+  gap: 16px;
+}
+
+.talk-portrait {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  border-radius: 28px;
+  overflow: hidden;
+  background: #dbeafe;
+}
+
+.talk-portrait img,
+.talk-portrait video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.talk-portrait video {
+  opacity: 0;
+}
+
+.talk-portrait video.is-live {
+  opacity: 1;
+}
+
+.talk-kicker {
+  margin: 0;
+  color: #0b5fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.talk-title {
+  margin: 4px 0 0;
+  font-size: 28px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: #102a43;
+}
+
+.talk-note {
+  margin: 8px 0 0;
+  color: #3d5270;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.talk-thread {
+  display: grid;
+  gap: 12px;
+}
+
+.talk-bubble {
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  line-height: 1.45;
+}
+
+.talk-bubble p {
+  margin: 0;
+}
+
+.talk-bubble-agent {
+  background: #f4f7fb;
+  color: #102a43;
+}
+
+.talk-bubble-you {
+  background: #0b5fff;
+  color: #ffffff;
+  margin-left: 32px;
+}
+
+.talk-who {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.talk-questions {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.talk-questions li + li {
+  margin-top: 6px;
+}
+
+.talk-chips,
+.talk-composer,
+.talk-form {
+  display: grid;
+  gap: 10px;
+}
+
+.talk-chip,
+.talk-send,
+.talk-step,
+.talk-pick a {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid #0b5fff;
+  background: #ffffff;
+  color: #0b5fff;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  padding: 10px 12px;
+  text-decoration: none;
+}
+
+.talk-send,
+.talk-step {
+  background: #0b5fff;
+  color: #ffffff;
+  text-align: center;
+  cursor: pointer;
+}
+
+.talk-send:disabled,
+.talk-step:disabled {
+  opacity: 0.6;
+}
+
+.talk-composer textarea,
+.talk-field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  padding: 12px;
+  font: inherit;
+  color: #102a43;
+  background: #ffffff;
+}
+
+.talk-field {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.talk-consent {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.talk-hp {
+  position: absolute;
+  left: -9999px;
+  height: 0;
+  overflow: hidden;
+}
+
+.talk-error {
+  margin: 0;
+  color: #9b1c1c;
+  font-size: 14px;
+}
+
+.talk-picks {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.talk-pick a {
+  display: flex;
+  align-items: center;
+}
+
+@media (min-width: 768px) {
+  .talk-page {
+    padding: 32px 24px 48px;
+  }
+
+  .talk-portrait,
+  .talk-portrait-lg {
+    width: 168px;
+    height: 168px;
+  }
+
+  .talk-title {
+    font-size: 36px;
+  }
+
+  .talk-stage {
+    grid-template-columns: 168px 1fr;
+    align-items: start;
+  }
+}

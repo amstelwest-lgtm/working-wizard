@@ -33,7 +33,15 @@ const TRIAL_UTM_KEYS = [
   "utm_content",
 ] as const;
 
-/** Starter signup, plus any utm params already on the page. Other query keys are dropped. */
+/** Campaign ref carried onto the signup link. Auth does not store it yet; the lead row does. */
+function signupRef(raw: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim().slice(0, 80);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(trimmed)) return null;
+  return trimmed;
+}
+
+/** Starter signup, plus utm params and ref already on the page. Other query keys are dropped. */
 export function trialSignupHref(search = ""): string {
   const incoming = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const q = new URLSearchParams(TRIAL_SIGNUP_HREF.slice(TRIAL_SIGNUP_HREF.indexOf("?") + 1));
@@ -41,6 +49,8 @@ export function trialSignupHref(search = ""): string {
     const value = incoming.get(key);
     if (value) q.set(key, value);
   }
+  const ref = signupRef(incoming.get("ref"));
+  if (ref) q.set("ref", ref);
   return `/auth?${q.toString()}`;
 }
 

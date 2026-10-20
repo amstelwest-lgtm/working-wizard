@@ -88,6 +88,8 @@ jobs:
         run: deno check --no-lock supabase/functions/agent-draft-decision/index.ts
       - name: deno check extract-source-document
         run: deno check --no-lock supabase/functions/extract-source-document/index.ts
+      - name: deno check prospect-talk
+        run: deno check --no-lock supabase/functions/prospect-talk/index.ts
 
   # Blocking: every test:* script that runs without a database.
   tests:
