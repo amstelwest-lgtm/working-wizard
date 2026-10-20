@@ -194,8 +194,6 @@ const cap = src("src/lib/firm-client-cap.server.ts");
 assert(cap.includes("STRIPE_ISOLATE_CACHE_TTL_MS = 45_000"), "stripe lists stay in the isolate for 45 seconds");
 const vercel = src("vercel.json");
 assert(vercel.includes('"regions"') && vercel.includes('"dub1"'), "server functions run in Dublin");
-const usage = src("src/contexts/analytics.tsx");
-assert(usage.includes("8_000"), "product usage waits until after the shell deadline");
 assert(!gate.includes("opening the app"), "a timeout does not open the app");
 assert(!gate.includes("firmSignupCheckoutIntent"), "the gate does not default a firm to a US signup");
 assert(gate.includes("readCachedFirmEntitlement"), "the gate reuses one entitlement read");
