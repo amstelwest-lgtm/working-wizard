@@ -7,6 +7,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getPayables } from "@/lib/payables.functions";
 import { payablesSourceLabel } from "@/lib/payables";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
+import { formatIsoDateUTC } from "@/lib/statement-period";
 
 type Props = {
   clientId: string | null;
@@ -32,7 +33,9 @@ export function PayablesOverdueNote({ clientId, market }: Props) {
           maximumFractionDigits: 0,
         });
         const who = `${snap.supplierCount} supplier${snap.supplierCount === 1 ? "" : "s"}`;
-        const when = snap.asOf ? ` · as of ${snap.asOf}` : "";
+        const when = snap.asOf
+          ? ` · as of ${formatIsoDateUTC(snap.asOf, market ?? { locale: null })}`
+          : "";
         setLine(`Overdue to pay · ${amount} · ${who}${when} · ${payablesSourceLabel(snap.source)}`);
       })
       .catch(() => {

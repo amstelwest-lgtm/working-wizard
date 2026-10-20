@@ -85,7 +85,7 @@ export function CollectionsPanel({
   useEffect(() => {
     if (fixtureSnapshot !== undefined) {
       setSnapshot(fixtureSnapshot);
-      setLine(fixtureSnapshot ? agedArProofLine(fixtureSnapshot) : "");
+      setLine(fixtureSnapshot ? agedArProofLine(fixtureSnapshot, market) : "");
       setLoading(false);
       return;
     }
@@ -112,7 +112,7 @@ export function CollectionsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, fixtureSnapshot]);
 
-  const draft = buildCollectionsDraft(snapshot);
+  const draft = buildCollectionsDraft(snapshot, market);
   const fromStatements = hasStatementWorkingCapital(position);
   const namedList =
     snapshot != null && snapshot.status === "applied" && snapshot.contacts.length > 0;
@@ -196,7 +196,7 @@ export function CollectionsPanel({
       <ReviewInputsDrawer
         hint={
           snapshot
-            ? agedArProofLine(snapshot)
+            ? agedArProofLine(snapshot, market)
             : fromStatements
               ? "Statement totals and connections"
               : "Connections"

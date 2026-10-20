@@ -170,7 +170,16 @@ const snap = finalizeCollections({
   contacts: northwind ? [northwind] : [],
 });
 eq(snap.status, "applied", "applied when someone owes");
-eq(agedArProofLine(snap), "Aged receivables as of 2026-09-22 · 1 contact · 2 invoices", "proof line");
+eq(
+  agedArProofLine(snap),
+  "Aged receivables as of 22 Sep 2026 · 1 contact · 2 invoices",
+  "proof line",
+);
+eq(
+  agedArProofLine(snap, { locale: "en-US" }),
+  "Aged receivables as of Sep 22, 2026 · 1 contact · 2 invoices",
+  "a US client does not keep the ISO date",
+);
 eq(agedArProofLine(null), "Aged receivables appear after the next Sync", "pending proof");
 
 const empty = finalizeCollections({

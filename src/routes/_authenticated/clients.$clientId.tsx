@@ -103,6 +103,8 @@ import {
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
   cashPillarFollowsForecast,
+  healthWithoutEvidence,
+  NOT_SCORED_YET_LABEL,
   scorecardHealthFromFinancials,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -206,6 +208,8 @@ import { canonicalScoreProse } from "@/lib/score-prose";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   assessClientMetrics,
+  forecastHasRealLines,
+  hasFinancialEvidence,
   persistedRunwayWeeks,
   plBankDisagreement,
   runwayDisplayLabel,
@@ -1402,24 +1406,40 @@ function ClientView() {
     client?.name,
     parseOperatingProfile(client?.operating_profile),
   );
-  const overallHealth: OverallHealth = cashPillarFollowsForecast(
-    scorecardHealthFromFinancials({
-      financials,
-      fyStartMonth,
-      periodMonths: statementMonths,
-      cashRunwayWeeks: cashKnown ? effectiveRunway : null,
-      cashBalance: cashKnown ? cashBalance : null,
-      market: clientMarket,
-      shortfallWeek: cashOutlook.shortfallWeek,
-      industry: healthIndustry,
-    }),
-    {
-      openingMissing,
-      opening: cashOutlook.opening,
-      closings: cashOutlook.closing,
-      floor: cashOutlook.floor,
-    },
-  );
+  const evidenced = hasFinancialEvidence({
+    financials,
+    cashflow: client?.cashflow,
+  });
+  const forecastLines = forecastHasRealLines(client?.cashflow);
+  const overallHealth: OverallHealth = evidenced
+    ? cashPillarFollowsForecast(
+        scorecardHealthFromFinancials({
+          financials,
+          fyStartMonth,
+          periodMonths: statementMonths,
+          cashRunwayWeeks: cashKnown ? effectiveRunway : null,
+          cashBalance: cashKnown ? cashBalance : null,
+          market: clientMarket,
+          shortfallWeek: cashOutlook.shortfallWeek,
+          industry: healthIndustry,
+        }),
+        {
+          hasEvidence: true,
+          openingMissing,
+          opening: cashOutlook.opening,
+          closings: cashOutlook.closing,
+          floor: cashOutlook.floor,
+        },
+      )
+    : healthWithoutEvidence(
+        scorecardHealthFromFinancials({
+          financials,
+          fyStartMonth,
+          periodMonths: statementMonths,
+          market: clientMarket,
+          industry: healthIndustry,
+        }),
+      );
   const bookStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -1718,6 +1738,8 @@ function ClientView() {
     debtorDays: debtorDaysForMoves,
     financingHealth: pillarHealths.financing,
     weakestPillar: overallHealth.weakestPillar?.id ?? null,
+    hasEvidence: evidenced,
+    market: clientMarket,
   });
   const cashRunwayHeadline = hasFigures
     ? forecastRunwayHeadlineShared({
@@ -3598,16 +3620,19 @@ function ClientView() {
       openingMissing,
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
-      cashOutlook: {
-        opening: cashOutlook.opening,
-        closing: cashOutlook.closing,
-        floor: cashOutlook.floor,
-        dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
-      },
-      cashPillarStatus: pillarStatus.cash ?? null,
-      cashRunwayWeeks: effectiveRunway,
-      cashDebtorScore: Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null,
-      cashBurnScore: Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null,
+      hasEvidence: evidenced,
+      cashOutlook: evidenced
+        ? {
+            opening: cashOutlook.opening,
+            closing: cashOutlook.closing,
+            floor: cashOutlook.floor,
+            dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+          }
+        : null,
+      cashPillarStatus: evidenced ? (pillarStatus.cash ?? null) : null,
+      cashRunwayWeeks: evidenced ? effectiveRunway : null,
+      cashDebtorScore: evidenced && Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null,
+      cashBurnScore: evidenced && Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null,
       openAction: openPlanUnavailable
         ? "Open actions aren't available yet."
         : openPlanTitles == null
@@ -3636,6 +3661,7 @@ function ClientView() {
     openingMissing,
     clientProfitBridge.ebit,
     pillarStatus.cash,
+    evidenced,
     effectiveRunway,
     healthMap.debtorDays,
     healthMap.ocfToEbitda,
@@ -3735,15 +3761,15 @@ function ClientView() {
         openActionTitles: openPlanTitles ?? [],
         overdueActions: openPlanOverdue,
         cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
-        cashDipWeek: cashOutlook.dipsBelowFloorWeek,
-        cashOpening: hasFigures ? cashOutlook.opening : null,
+        cashDipWeek: forecastLines ? cashOutlook.dipsBelowFloorWeek : null,
+        cashOpening: evidenced ? cashOutlook.opening : null,
         // Passed through for a forecast with no lines. A stored series replaces this
         // with forecastMinimumCash, the same floor as Cash.
-        cashFloor: hasFigures ? cashOutlook.floor : null,
-        cashClosing: hasFigures ? cashOutlook.closing : null,
+        cashFloor: evidenced ? cashOutlook.floor : null,
+        cashClosing: evidenced ? cashOutlook.closing : null,
         market: gateMarket,
         openingMissing,
-        cashPillarStatus: pillarStatus.cash ?? null,
+        cashPillarStatus: evidenced ? (pillarStatus.cash ?? null) : null,
         cashStrainLine: spokenCashStrain(homeBooks),
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
@@ -3767,6 +3793,8 @@ function ClientView() {
       client?.cashflow,
       cashOutlook.dipsBelowFloorWeek,
       hasFigures,
+      evidenced,
+      forecastLines,
       cashOutlook.opening,
       cashOutlook.closing,
       cashOutlook.floor,
@@ -4317,15 +4345,15 @@ function ClientView() {
                   ring={
                     <HealthRing
                       id="overview-health"
-                      score={hasFigures ? overallHealth.overall : null}
-                      status={hasFigures ? overallHealth.displayStatus : undefined}
+                      score={evidenced ? overallHealth.overall : null}
+                      status={evidenced ? overallHealth.displayStatus : undefined}
                       size={74}
                       strokeWidth={5}
                     />
                   }
-                  healthScore={hasFigures ? overallHealth.overall : null}
-                  healthLabel={bookStatusWord}
-                  healthStatus={hasFigures ? (bookStatusCritical ? "critical" : overallHealth.displayStatus) : null}
+                  healthScore={evidenced ? overallHealth.overall : null}
+                  healthLabel={evidenced ? bookStatusWord : NOT_SCORED_YET_LABEL}
+                  healthStatus={evidenced ? (bookStatusCritical ? "critical" : overallHealth.displayStatus) : null}
                   snapshot={briefingSnapshot}
                   about={briefingAbout}
                   profile={briefingProfile}
@@ -4560,9 +4588,9 @@ function ClientView() {
                           variant="ring"
                           caption={HEALTH_RING_CAPTION}
                           hideCaption
-                          overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
-                          displayStatus={bookStatusCritical ? "critical" : overallHealth.displayStatus}
-                          statusLabel={bookStatusCritical ? bookStatusWord : null}
+                          overallHealth={evidenced && isFinite(avgHealth) ? avgHealth : NaN}
+                          displayStatus={evidenced ? (bookStatusCritical ? "critical" : overallHealth.displayStatus) : undefined}
+                          statusLabel={evidenced ? (bookStatusCritical ? bookStatusWord : null) : NOT_SCORED_YET_LABEL}
                           pillars={spherePillars}
                           cashFloorCue={homeBrief.healthCue}
                           onCashFloor={() => openHomeAgent("financial_manager")}
@@ -5789,23 +5817,26 @@ function ClientView() {
               const draftedFinancials = { ...financials, ...asStrings } as Record<string, unknown>;
               await recordScoreHistory(
                 clientId,
-                cashPillarFollowsForecast(
-                  scorecardHealthFromFinancials({
-                    financials: draftedFinancials,
-                    fyStartMonth,
-                    periodMonths: periodMonthsOf(draftedFinancials),
-                    cashRunwayWeeks: effectiveRunway,
-                    market: clientMarket,
-                    shortfallWeek: cashOutlook.shortfallWeek,
-                    industry: healthIndustry,
-                  }),
-                  {
-                    openingMissing,
-                    opening: cashOutlook.opening,
-                    closings: cashOutlook.closing,
-                    floor: cashOutlook.floor,
-                  },
-                ).overall,
+                hasFinancialEvidence({ financials: draftedFinancials, cashflow: client?.cashflow })
+                  ? cashPillarFollowsForecast(
+                      scorecardHealthFromFinancials({
+                        financials: draftedFinancials,
+                        fyStartMonth,
+                        periodMonths: periodMonthsOf(draftedFinancials),
+                        cashRunwayWeeks: effectiveRunway,
+                        market: clientMarket,
+                        shortfallWeek: cashOutlook.shortfallWeek,
+                        industry: healthIndustry,
+                      }),
+                      {
+                        hasEvidence: true,
+                        openingMissing,
+                        opening: cashOutlook.opening,
+                        closings: cashOutlook.closing,
+                        floor: cashOutlook.floor,
+                      },
+                    ).overall
+                  : null,
               );
               toast.success(
                 annualised

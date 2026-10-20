@@ -191,7 +191,12 @@ const snap = {
     suppliers: harbour ? [harbour] : [],
   },
 };
-eq(agedApProofLine(snap), "Aged payables as of 2026-09-22 · 1 supplier · 2 bills", "proof line");
+eq(agedApProofLine(snap), "Aged payables as of 22 Sep 2026 · 1 supplier · 2 bills", "proof line");
+eq(
+  agedApProofLine(snap, { locale: "en-US" }),
+  "Aged payables as of Sep 22, 2026 · 1 supplier · 2 bills",
+  "a US client does not keep the ISO date",
+);
 eq(agedApProofLine(null), "Aged payables appear after the next Sync", "pending proof");
 
 const empty: PayablesSnapshot = {

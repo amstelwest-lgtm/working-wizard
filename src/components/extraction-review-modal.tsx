@@ -374,8 +374,8 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
       ? datedSpan
       : storedPeriod && !storedIsParsedAsOf
         ? storedPeriod
-        : endLabel && endLabel !== "—"
-          ? `As of ${endLabel}`
+        : endLabel && endLabel !== "—" && meta?.period_end_date
+          ? `As of ${formatCalendarDay(meta.period_end_date, market)}`
           : meta?.period_months
             ? `${meta.period_months}-month period`
             : "Period unknown";

@@ -294,7 +294,7 @@ export function XeroConnectCard({
                   lastSync?.agedArLine ?? status.agedArLine,
                   "ar",
                   financials,
-                  market,
+                  dateMarket,
                 )}
               </span>
               <br />
@@ -303,7 +303,7 @@ export function XeroConnectCard({
                   lastSync?.agedApLine ?? status.agedApLine,
                   "ap",
                   financials,
-                  market,
+                  dateMarket,
                 )}
               </span>
             </p>

@@ -95,10 +95,7 @@ const SOFTWARE_INDUSTRY = /saas|software/i;
  * industries. Software is exempt. No industry label leaves the ratio scored,
  * so a pack that has not been told the industry still matches Overview.
  */
-export function grossMarginLooksImplausible(
-  margin: number,
-  industry?: string | null,
-): boolean {
+export function grossMarginLooksImplausible(margin: number, industry?: string | null): boolean {
   if (!Number.isFinite(margin) || margin <= IMPLAUSIBLE_GROSS_MARGIN) return false;
   const label = (industry ?? "").trim();
   if (!label || SOFTWARE_INDUSTRY.test(label)) return false;
@@ -167,6 +164,9 @@ const PLAYBOOK_RATIO_ALIAS: Record<string, string> = {
 
 /** Chip and score line when a live client has no inputs for a catalogue ratio. */
 export const NOT_SCORED_LABEL = "Not scored";
+
+/** Health, pillars, and the ring when the file has no books and no parsed statement. */
+export const NOT_SCORED_YET_LABEL = "Not scored yet";
 
 /**
  * Playbook card score from the shared ratio map. Missing keys are unscored —
@@ -280,9 +280,7 @@ export function flatToRatioInputs(
     if (v == null || v === "") continue;
     base[k] = String(v);
   }
-  base.periodMonths = String(
-    effectivePeriodMonths(financials as Record<string, unknown>, opts),
-  );
+  base.periodMonths = String(effectivePeriodMonths(financials as Record<string, unknown>, opts));
   const liabilities = (financials as Record<string, unknown>).totalLiabilities;
   if (liabilities != null && liabilities !== "") base.totalLiabilities = String(liabilities);
   const coherent = coherentEquity(financials as Record<string, unknown>);
@@ -444,7 +442,8 @@ export function scoreRatio(name: string, val: number, market?: ScoreMarket): num
   if (name === "Current Ratio") return clamp((val / 2) * 100);
   if (name === "Revenue Growth") return clamp((val / 0.2) * 100);
 
-  return 50;
+  // An unnamed ratio is missing, not a midpoint.
+  return Number.NaN;
 }
 
 /**
@@ -636,9 +635,7 @@ function overallFromPillars(
   if (extras?.forceCritical) displayStatus = "critical";
   else if (extras?.flagUnscoredCash && displayStatus === "healthy") displayStatus = "at_risk";
   const weakestPillar =
-    scored.length === 0
-      ? null
-      : ([...scored].sort((a, b) => a.score - b.score)[0] ?? null);
+    scored.length === 0 ? null : ([...scored].sort((a, b) => a.score - b.score)[0] ?? null);
   return {
     overall,
     status,
@@ -663,8 +660,14 @@ export function cashPillarFollowsForecast(
     opening?: number | null;
     closings?: readonly number[] | null;
     floor?: number | null;
+    /**
+     * False when the file has no synced figures and no parsed statement.
+     * A flat zero series is the same case when the caller does not pass this.
+     */
+    hasEvidence?: boolean;
   },
 ): OverallHealth {
+  if (input.hasEvidence === false) return health;
   if (input.openingMissing) {
     const pillars = health.pillars.map((pillar) => {
       if (pillar.id !== "cash") return pillar;
@@ -679,6 +682,13 @@ export function cashPillarFollowsForecast(
   }
   const floor = input.floor;
   if (floor == null || !Number.isFinite(floor)) return health;
+  // Thirteen zeros under the fallback floor are not a forecast. They used to
+  // mint Cash 25 / Critical on a file with no books.
+  const closings = input.closings ?? [];
+  const openingFlat =
+    input.opening == null || !Number.isFinite(input.opening) || Math.abs(input.opening) < 0.5;
+  const closingsFlat = closings.every((n) => !Number.isFinite(n) || Math.abs(n) < 0.5);
+  if (input.hasEvidence !== true && openingFlat && closingsFlat) return health;
   const openingUnder =
     input.opening != null && Number.isFinite(input.opening) && input.opening < floor;
   const closingUnder = (input.closings ?? []).some((n) => Number.isFinite(n) && n < floor);
@@ -748,6 +758,27 @@ export function healthFromRatioInputs(
     market,
     shortfallWeek,
   });
+}
+
+/**
+ * No evidence. Overall and every pillar stay null. The ring says "Not scored yet".
+ * A critical band is not invented from the fallback floor.
+ */
+export function healthWithoutEvidence(health: OverallHealth): OverallHealth {
+  return {
+    overall: null,
+    status: "at_risk",
+    displayStatus: "at_risk",
+    displayLabel: NOT_SCORED_YET_LABEL,
+    pillars: health.pillars.map((pillar) => ({
+      ...pillar,
+      score: null,
+      status: "at_risk",
+      note: NOT_SCORED_YET_LABEL,
+    })),
+    weakestPillar: null,
+    hasCriticalPillar: false,
+  };
 }
 
 export { scoreTier };

@@ -15,6 +15,9 @@ import {
   type CollectionsContact,
   type CollectionsInvoice,
 } from "./collections.ts";
+import { formatIsoDateUTC } from "./statement-period.ts";
+
+type AsOfMarket = { locale?: string | null } | null | undefined;
 
 export type PayablesSource = "xero" | "qbo" | "sage";
 export type PayablesStatus = "applied" | "empty" | "skipped";
@@ -367,10 +370,15 @@ export function payablesAnswerSentence(
   return payablesFiguresSentence(position, money);
 }
 
-export function agedApProofLine(snap: PayablesSnapshot | null | undefined): string {
+export function agedApProofLine(
+  snap: PayablesSnapshot | null | undefined,
+  market?: AsOfMarket,
+): string {
   if (!snap) return AGED_AP_PENDING;
   if (snap.status === "skipped") return snap.skipReason ?? "Aged payables were not applied";
-  const when = snap.asOf ? `as of ${snap.asOf}` : "applied";
+  const when = snap.asOf
+    ? `as of ${formatIsoDateUTC(snap.asOf, market ?? { locale: null })}`
+    : "applied";
   if (snap.supplierCount === 0) {
     if (Math.abs(snap.totalOutstanding) >= 0.005) {
       return `Aged payables ${when} · ${moneyPlain(snap.totalOutstanding)} outstanding`;
@@ -668,11 +676,12 @@ export function runwayParagraph(weeks: number | null, overduePlain: string): str
 export function payablesPromptBlock(
   snap: PayablesSnapshot | null,
   runwayWeeks?: number | null,
+  market?: AsOfMarket,
 ): string {
   if (!snap || snap.status !== "applied" || snap.suppliers.length === 0) return "";
   const weeks = normalizeRunwayWeeks(runwayWeeks);
   const lines = [
-    `Aged payables (${payablesSourceLabel(snap.source)}${snap.asOf ? `, as of ${snap.asOf}` : ""}):`,
+    `Aged payables (${payablesSourceLabel(snap.source)}${snap.asOf ? `, as of ${formatIsoDateUTC(snap.asOf, market ?? { locale: null })}` : ""}):`,
     `Overdue total: ${moneyPlain(snap.totalOverdue)}. Outstanding total: ${moneyPlain(snap.totalOutstanding)}. Suppliers: ${snap.supplierCount}. Bill lines: ${snap.billCount}.`,
   ];
   if (snap.monthAgeing) {
@@ -714,11 +723,14 @@ export function payablesPromptBlock(
 export function buildPayablesDraft(
   snap: PayablesSnapshot | null,
   runwayWeeks?: number | null,
+  market?: AsOfMarket,
 ): PayablesDraft | null {
   if (!snap || snap.status !== "applied" || snap.totalOverdue < 0.005) return null;
   const weeks = normalizeRunwayWeeks(runwayWeeks);
   const books = payablesSourceLabel(snap.source);
-  const asOf = snap.asOf ? ` as of ${snap.asOf}` : "";
+  const asOf = snap.asOf
+    ? ` as of ${formatIsoDateUTC(snap.asOf, market ?? { locale: null })}`
+    : "";
   const overdueSuppliers = snap.suppliers.filter((supplier) => supplier.overdue >= 0.005);
   const lines: string[] = [];
   overdueSuppliers.slice(0, 8).forEach((supplier, index) => {
