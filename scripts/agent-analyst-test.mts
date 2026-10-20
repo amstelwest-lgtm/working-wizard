@@ -1621,17 +1621,18 @@ const DAY = 24 * 60 * 60 * 1000;
   );
 }
 
-// The health tool returns the stored score. The live 67 is the current books with debt-to-equity.
+// The health tool quotes the live score. The stored 69 stays beside it and does not win.
 {
   const labeled = labelHealthScore({
     liveOverall: 67,
     storedScore: 69,
     storedAsOf: "2026-10-06",
   });
-  assert(labeled.overall === 69 && labeled.overall_as_of === "2026-10-06", "overall is the stored score and its as-of");
-  assert(labeled.overall_basis === "stored", "the stored score is labeled stored");
-  assert(labeled.live_overall === 67, "the recalculation stays available");
-  assert(labeled.live_overall_label.includes("Not the stored score"), "the live score is labeled as a recalculation");
+  assert(labeled.overall === 67 && labeled.overall_as_of === null, "overall is the live score");
+  assert(labeled.overall_basis === "live", "the quoted score is labeled live");
+  assert(labeled.stored_score === 69 && labeled.stored_as_of === "2026-10-06", "the stored snapshot stays beside the live score");
+  assert(labeled.live_overall === 67, "the live score stays available");
+  assert(labeled.live_overall_label.includes("not the score to quote"), "the stored score is not the one to quote");
   const qa = {
     revenue: "700000",
     cogs: "280000",

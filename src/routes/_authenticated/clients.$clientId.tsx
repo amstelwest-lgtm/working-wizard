@@ -102,18 +102,18 @@ import {
 import type { HealthTier } from "@/lib/ratios";
 import {
   scoreRatio,
-  computeOverallHealth,
   healthMapFromRatios,
   ratioScoreBand,
   overviewRatioInputs,
   overviewRatios,
   CASH_OPENING_UNSCORED,
+  GROSS_MARGIN_MAPPING_NOTE,
+  grossMarginLooksImplausible,
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
-  cashPillarFollowsForecast,
+  liveHealthFromBooks,
   healthWithoutEvidence,
   NOT_SCORED_YET_LABEL,
-  scorecardHealthFromFinancials,
   type OverallHealth,
 } from "@/lib/health-score";
 import { playbookKeyForRatioName } from "@/lib/playbook-key";
@@ -345,7 +345,8 @@ import {
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
-import { homeActionNeeds, openActionSentence, presentHomeDraftTitle } from "@/lib/owner-needs";
+import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
+import { draftStoredFiguresHash } from "@/lib/draft-figures";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState } from "@/components/primitives";
@@ -1418,36 +1419,17 @@ function ClientView() {
     cashflow: client?.cashflow,
   });
   const forecastLines = forecastHasRealLines(client?.cashflow);
-  const overallHealth: OverallHealth = evidenced
-    ? cashPillarFollowsForecast(
-        scorecardHealthFromFinancials({
-          financials,
-          fyStartMonth,
-          periodMonths: statementMonths,
-          cashRunwayWeeks: cashKnown ? effectiveRunway : null,
-          cashBalance: cashKnown ? cashBalance : null,
-          market: clientMarket,
-          shortfallWeek: cashOutlook.shortfallWeek,
-          industry: healthIndustry,
-        }),
-        {
-          hasEvidence: true,
-          cashOnFile,
-          openingMissing,
-          opening: cashOnFile ? cashOutlook.opening : null,
-          closings: cashOnFile ? cashOutlook.closing : null,
-          floor: cashOnFile ? cashOutlook.floor : 0,
-        },
-      )
-    : healthWithoutEvidence(
-        scorecardHealthFromFinancials({
-          financials,
-          fyStartMonth,
-          periodMonths: statementMonths,
-          market: clientMarket,
-          industry: healthIndustry,
-        }),
-      );
+  const scoredHealth = liveHealthFromBooks({
+    financials: financials as Record<string, unknown>,
+    cashflow: client?.cashflow,
+    financialsUpdatedAt: client?.financials_updated_at ?? null,
+    priorFinancials: priorSnapshot?.financials ?? null,
+    fyStartMonth,
+    market: clientMarket,
+    industry: healthIndustry,
+    timeZone: clientMarket.timezone,
+  });
+  const overallHealth: OverallHealth = evidenced ? scoredHealth : healthWithoutEvidence(scoredHealth);
   const bookStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -1563,6 +1545,12 @@ function ClientView() {
     ratioMeta: sphereRatioMeta,
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
     dayCounts: cashDriverDayFigures(financials),
+    driverNotes: grossMarginLooksImplausible(
+      statementGrossMarginFraction(financials) ?? ratios["Gross Margin"] ?? Number.NaN,
+      healthIndustry,
+    )
+      ? { grossMargin: GROSS_MARGIN_MAPPING_NOTE }
+      : undefined,
   });
   const simplifiedSections = [
     {
@@ -3005,11 +2993,15 @@ function ClientView() {
 
       await recordScoreHistory(
         clientId,
-        computeOverallHealth({
-          ratios: ratiosOut,
-          cashRunwayWeeks: effectiveRunway,
+        liveHealthFromBooks({
+          financials: blob as Record<string, unknown>,
+          cashflow: client?.cashflow,
+          financialsUpdatedAt,
+          priorFinancials: priorSnapshot?.financials ?? null,
+          fyStartMonth,
           market: clientMarket,
-          shortfallWeek: cashOutlook.shortfallWeek,
+          industry: healthIndustry,
+          timeZone: clientMarket.timezone,
         }).overall,
       );
 
@@ -3536,8 +3528,16 @@ function ClientView() {
     [homeActivity.runs, settledRows, workingRows],
   );
   const homePresence = useMemo(
-    () => steerOpenHandoffs(ownerPresence({ ...homeActivity, runs: homeCardRuns }), openAgents),
-    [homeActivity, homeCardRuns, openAgents],
+    () =>
+      steerOpenHandoffs(
+        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, {
+          overall: overallHealth.overall,
+          weakestLabel: overallHealth.weakestPillar?.label ?? null,
+          weakestScore: overallHealth.weakestPillar?.score ?? null,
+        }),
+        openAgents,
+      ),
+    [homeActivity, homeCardRuns, openAgents, overallHealth],
   );
   const shownHandoffs = useMemo(
     () =>
@@ -3739,20 +3739,25 @@ function ClientView() {
         draftFindingLabel(row) === DRAFT_NEEDS_ACCOUNTANT,
     );
     const draftsHeading = homeActivity.loading ? "Drafts" : waiting.length ? "Drafts" : "Drafts";
-    const presented = waiting[0]
-      ? presentHomeDraftTitle(
-          canonicalScoreProse(rewriteDraftMonthStamp(waiting[0].title)),
-          canonicalRatios,
-        )
+    const liveDraft = {
+      overall: overallHealth.overall,
+      storedHash: waiting[0] ? draftStoredFiguresHash(waiting[0].evidence) : null,
+    };
+    const titlePresented = waiting[0]
+      ? presentHomeDraftTitle(waiting[0].title, canonicalRatios, liveDraft)
       : null;
+    const bodyPresented = waiting[0]?.detail?.trim()
+      ? presentHomeDraftBody(waiting[0].detail, canonicalRatios, liveDraft)
+      : null;
+    const presented = titlePresented?.text ? titlePresented : bodyPresented;
     const draftLines = homeActivity.loading
       ? ["Checking drafts."]
       : homeActivity.error
         ? ["Drafts aren't available yet."]
-        : presented
+        : presented?.text
           ? [presented.text]
           : ["No draft waiting."];
-    const draftStale = presented ? [presented.stale] : undefined;
+    const draftStale = presented ? [presented.stale || presented.refresh || Boolean(bodyPresented?.refresh)] : undefined;
     const booksLine =
       homeStatementsLine(statementSpan) ?? booksAnswerSentence({ freshness: dataFreshness });
     return {
@@ -3772,6 +3777,7 @@ function ClientView() {
     openPlanUnavailable,
     homeActivity,
     canonicalRatios,
+    overallHealth.overall,
     dataFreshness,
     reportsLine,
     statementSpan,
@@ -3814,8 +3820,16 @@ function ClientView() {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
           if (draftFindingLabel(row) !== DRAFT_NEEDS_ACCOUNTANT) return [];
           const title = row.title?.trim() ?? "";
-          return title ? [{ id: row.id, title }] : [];
+          if (!title) return [];
+          return [{
+            id: row.id,
+            title,
+            detail: row.detail,
+            figuresHash: draftStoredFiguresHash(row.evidence),
+          }];
         }),
+        canonicalRatios,
+        healthOverall: overallHealth.overall,
         draftsReady: !homeActivity.loading && !homeActivity.error,
         actionsReady: openPlanTitles != null && !openPlanUnavailable,
         formatMoney: (amount) => formatMoney(amount, gateMarket),
@@ -3842,6 +3856,8 @@ function ClientView() {
       homeBooks,
       statementPosition.receivables,
       homeActivity,
+      canonicalRatios,
+      overallHealth.overall,
       gateMarket,
     ],
   );
@@ -5865,24 +5881,16 @@ function ClientView() {
               await recordScoreHistory(
                 clientId,
                 hasFinancialEvidence({ financials: draftedFinancials, cashflow: client?.cashflow })
-                  ? cashPillarFollowsForecast(
-                      scorecardHealthFromFinancials({
-                        financials: draftedFinancials,
-                        fyStartMonth,
-                        periodMonths: periodMonthsOf(draftedFinancials),
-                        cashRunwayWeeks: effectiveRunway,
-                        market: clientMarket,
-                        shortfallWeek: cashOutlook.shortfallWeek,
-                        industry: healthIndustry,
-                      }),
-                      {
-                        hasEvidence: true,
-                        openingMissing,
-                        opening: cashOutlook.opening,
-                        closings: cashOutlook.closing,
-                        floor: cashOutlook.floor,
-                      },
-                    ).overall
+                  ? liveHealthFromBooks({
+                      financials: draftedFinancials,
+                      cashflow: client?.cashflow,
+                      financialsUpdatedAt,
+                      priorFinancials: priorSnapshot?.financials ?? null,
+                      fyStartMonth,
+                      market: clientMarket,
+                      industry: healthIndustry,
+                      timeZone: clientMarket.timezone,
+                    }).overall
                   : null,
               );
               toast.success(

@@ -13,6 +13,7 @@ import {
   type AgentFindingRow,
   type AgentRunRow,
 } from "@/lib/milon-team-activity";
+import type { LiveHealthQuote } from "@/lib/score-prose";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { AGENT_KEYS } from "@/lib/milon-team-feed";
 
@@ -61,6 +62,7 @@ function latestFinding(
 function sentenceFor(
   finding: AgentFindingRow | null,
   market: AgentActivitySnapshot["market"],
+  liveHealth: LiveHealthQuote | null,
 ): string {
   if (!finding) return "Nothing new from the books.";
   const text = findingSentence({
@@ -68,6 +70,7 @@ function sentenceFor(
     detail: finding.detail,
     figures: findingFigureEntries(finding.evidence),
     market,
+    liveHealth,
   });
   return text || "Nothing new from the books.";
 }
@@ -155,6 +158,7 @@ function motionFor(run: AgentRunRow | undefined, finding: AgentFindingRow | null
 export function ownerPresence(
   activity: AgentActivitySnapshot,
   talk: OwnerTalk = null,
+  liveHealth: LiveHealthQuote | null = null,
 ): OwnerPresence {
   const runs = cardRunsByAgent(activity.runs);
   const newestMessage =
@@ -170,7 +174,7 @@ export function ownerPresence(
   const agents = AGENT_KEYS.map((agent) => {
     const finding = latestFinding(activity.findings, agent);
     let motion = motionFor(runs[agent], finding);
-    let sentence = motion === "working" ? "Working…" : sentenceFor(finding, activity.market);
+    let sentence = motion === "working" ? "Working…" : sentenceFor(finding, activity.market, liveHealth);
     let lookAt: AgentKey | null = null;
     if (talk?.agent === agent) {
       motion = talk.mode;

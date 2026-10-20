@@ -46,7 +46,10 @@ assert(header.includes('className="mk-top-link" href="/faq"'), "Questions stays 
 const signInAt = header.indexOf("<MarketingSignIn");
 const ctaAt = header.indexOf("mk-top-cta");
 assert(signInAt !== -1 && ctaAt !== -1 && signInAt < ctaAt, "Sign in sits before the header CTA");
-assert(shell.includes('className="mk-top-signin"'), "Sign in uses the marketing header class");
+assert(
+  shell.includes('className="mk-top-signin"') || shell.includes('className = "mk-top-signin"'),
+  "Sign in uses the marketing header class",
+);
 assert(
   button.includes(">Sign in<") || button.includes("Sign in\n"),
   "shared control label is Sign in",
@@ -96,12 +99,10 @@ assert(
 );
 assert(modal.includes('intent="owner"'), "landing modal Google stays the owner door");
 
-const nav = index.slice(
-  index.indexOf('<nav id="topnav"'),
-  index.indexOf("{/* ══════════════════════════ HERO"),
-);
-assert(nav.includes("nav-signin"), "homepage Sign in stays a ghost button");
-assert(nav.includes("LandingSignInButton"), "homepage uses the shared Sign in control");
+const nav = read("src/components/landing/landing-header.tsx");
+assert(index.includes("<LandingHeader"), "homepage renders the shared landing header");
+assert(nav.includes("nav-signin") || index.includes("nav-signin"), "homepage Sign in stays a ghost button");
+assert(index.includes("LandingSignInButton"), "homepage uses the shared Sign in control");
 assert(
   index.includes("@/lib/landing-sign-in-destination"),
   "homepage sign-in uses the shared redirect",

@@ -44,6 +44,7 @@ const LABEL_SPECS: ReadonlyArray<{ labels: string; name: string; kind: QuoteKind
   },
   { labels: "operating margin|OM", name: "Operating Margin", kind: "margin" },
   { labels: "gross margin|GM", name: "Gross Margin", kind: "margin" },
+  { labels: "net margin|NM", name: "Net Margin", kind: "margin" },
 ];
 
 function ratioValue(ratios: Record<string, number>, name: string): number | null {

@@ -1482,7 +1482,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   );
   assert(pdfSrc.includes("overallHealth ??"), "the PDF renders the shared health when it is passed");
   assert(
-    overviewExport.includes("scorecardHealthFromFinancials"),
+    overviewExport.includes("liveHealthFromBooks"),
     "Overview scores with the shared helper",
   );
   assert(overviewExport.includes("overallHealth,"), "Overview export passes that health into the PDF");

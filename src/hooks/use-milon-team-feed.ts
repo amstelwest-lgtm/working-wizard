@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { adviceIndustryLabel } from "@/lib/advice-industry";
 import { getAdvisorySignoffState } from "@/lib/advisory-signoff";
 import { invokeBrainDeliverableDraft } from "@/lib/brain-deliverable-client";
 import { isMissingBrainRelation } from "@/lib/client-brain";
@@ -87,7 +88,7 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
           supabase
             .from("clients")
             .select(
-              "firm_id, financials, cashflow, brain_summary, brain_summary_updated_at, last_forecast_at, market, financial_year_start_month",
+              "firm_id, name, business_type, operating_profile, financials, cashflow, brain_summary, brain_summary_updated_at, last_forecast_at, market, financial_year_start_month",
             )
             .eq("id", id)
             .maybeSingle(),
@@ -222,6 +223,17 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
         brainSummary: client?.brain_summary ?? null,
         brainSummaryUpdatedAt: client?.brain_summary_updated_at ?? null,
         snapshotAsOf: current?.period_date || current?.created_at || null,
+        industry: adviceIndustryLabel({
+          clientName: client?.name ?? null,
+          templateId:
+            client?.operating_profile &&
+            typeof client.operating_profile === "object" &&
+            !Array.isArray(client.operating_profile) &&
+            typeof (client.operating_profile as { templateId?: unknown }).templateId === "string"
+              ? (client.operating_profile as { templateId: string }).templateId
+              : null,
+          businessType: client?.business_type ?? null,
+        }),
         proposals: openProposals.map((step) => ({
           id: step.id,
           title: step.title,

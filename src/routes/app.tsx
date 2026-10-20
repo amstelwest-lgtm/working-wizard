@@ -115,12 +115,11 @@ import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
-  cashPillarFollowsForecast,
-  computeOverallHealth,
   grossMarginLooksImplausible,
   healthWithoutEvidence,
   NOT_SCORED_YET_LABEL,
   healthMapFromRatios,
+  liveHealthFromBooks,
   scoreRatio,
 } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
@@ -3674,7 +3673,7 @@ function Index() {
         : NaN,
   };
 
-  // Overall + pillars — same computeOverallHealth as accountant dashboard / scorecard.
+  // Overall + pillars — liveHealthFromBooks, the same call as the accountant Health page.
   // Local healthMap above stays for next-steps / sphere drivers; it must not drive the overall.
   const ownerPrior = useMemo(
     () =>
@@ -3733,32 +3732,17 @@ function Index() {
       money: (amount) => formatMoney(amount, boardMarket),
     })?.healthCue ?? null;
   const grossImplausible = grossMarginLooksImplausible(grossMarginRatio, industryLabel);
-  const overallHealth = ownerEvidence
-    ? cashPillarFollowsForecast(
-        computeOverallHealth({
-          ratios: computedRatios as Record<string, number>,
-          cashRunwayWeeks: cashBalance != null ? effectiveRunway : null,
-          cashBalance,
-          market: boardMarket,
-          shortfallWeek: ownerOutlook.shortfallWeek,
-          grossMarginImplausible: grossImplausible,
-        }),
-        {
-          hasEvidence: true,
-          cashOnFile: ownerCashOnFile,
-          openingMissing: ownerOpeningMissing,
-          opening: ownerCashOnFile ? ownerOutlook.opening : null,
-          closings: ownerCashOnFile ? ownerOutlook.closing : null,
-          floor: ownerCashOnFile ? ownerOutlook.floor : 0,
-        },
-      )
-    : healthWithoutEvidence(
-        computeOverallHealth({
-          ratios: computedRatios as Record<string, number>,
-          market: boardMarket,
-          grossMarginImplausible: grossImplausible,
-        }),
-      );
+  const scoredHealth = liveHealthFromBooks({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+    financialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
+    priorFinancials: ownerPrior?.financials ?? null,
+    fyStartMonth,
+    market: boardMarket,
+    industry: industryLabel,
+    timeZone: boardMarket.timezone,
+  });
+  const overallHealth = ownerEvidence ? scoredHealth : healthWithoutEvidence(scoredHealth);
   const ownerStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -3841,6 +3825,7 @@ function Index() {
     ratioMeta: RATIO_META,
     inventoryApplies: stockSittingApplies(operatingProfile),
     dayCounts: cashDriverDayFigures(v as unknown as Record<string, unknown>),
+    driverNotes: grossImplausible ? { grossMargin: GROSS_MARGIN_MAPPING_NOTE } : undefined,
   });
 
   // Same ranker as the accountant Moves tab and Action Plan import.
@@ -4123,6 +4108,11 @@ function Index() {
                 cashBurnScore={
                   ownerEvidence && Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null
                 }
+                liveHealth={{
+                  overall: overallHealth.overall,
+                  weakestLabel: overallHealth.weakestPillar?.label ?? null,
+                  weakestScore: overallHealth.weakestPillar?.score ?? null,
+                }}
                 market={boardMarket}
                 marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>

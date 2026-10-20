@@ -592,7 +592,14 @@ export function rankStrategicMoves(input: {
         eisenhower: eisenhowerOf(health, entry.impact),
       };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => {
+      const aWeak =
+        input.weakestPillar != null && strategicMovePillar(a.key) === input.weakestPillar ? 1 : 0;
+      const bWeak =
+        input.weakestPillar != null && strategicMovePillar(b.key) === input.weakestPillar ? 1 : 0;
+      if (aWeak !== bWeak) return bWeak - aWeak;
+      return b.score - a.score;
+    });
   const seen = new Set<string>();
   const deduped: RankedStrategicMove[] = [];
   for (const move of ranked) {

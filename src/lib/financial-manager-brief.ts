@@ -15,8 +15,7 @@ import {
   storedSeriesReading,
 } from "./client-metrics.ts";
 import { CASH_NOT_ON_FILE, cashFloorCopy } from "./owner-answers.ts";
-import { canonicalScoreProse } from "./score-prose.ts";
-import { rewriteDraftMonthStamp } from "./statement-period.ts";
+import { presentHomeDraftBody, presentHomeDraftTitle } from "./owner-needs.ts";
 import type { SavedCashflowLike } from "./cash-runway.ts";
 import type { MoneyMarket } from "./market/format.ts";
 
@@ -62,6 +61,12 @@ export type BriefAction = {
 export type BriefDraft = {
   id: string;
   title: string;
+  /** Stored body. Grounded with the title when the screen re-reads live figures. */
+  detail?: string | null;
+  /** Hash written with the draft. A mismatch with the live books is out of date. */
+  figuresHash?: string | null;
+  /** True when the stored sentence or its hash no longer matches the live books. */
+  refresh?: boolean;
 };
 
 export type FinancialManagerBrief = {
@@ -69,6 +74,8 @@ export type FinancialManagerBrief = {
   movements: BriefMovement[];
   movementEmpty: string | null;
   actions: BriefAction[];
+  /** Open rows before the Act on these preview. */
+  actionCount: number;
   actionEmpty: string | null;
   drafts: BriefDraft[];
   draftEmpty: string | null;
@@ -187,6 +194,10 @@ export function buildFinancialManagerBrief(input: {
   cashStrainLine?: string | null;
   receivables?: number | null;
   drafts?: readonly BriefDraft[];
+  /** Live scorecard ratios. Draft titles are re-read from these, not the stored sentence. */
+  canonicalRatios?: Record<string, number> | null;
+  /** Live floor-applied health score. Drafts quote this, never a stored comparison. */
+  healthOverall?: number | null;
   draftsReady?: boolean;
   actionsReady?: boolean;
   formatMoney: (amount: number) => string;
@@ -324,7 +335,15 @@ export function buildFinancialManagerBrief(input: {
   const drafts = (input.drafts ?? []).flatMap((row) => {
     const title = row.title.trim();
     if (!row.id || !title) return [];
-    return [{ id: row.id, title: canonicalScoreProse(rewriteDraftMonthStamp(title)) }];
+    const live = { overall: input.healthOverall, storedHash: row.figuresHash };
+    const presented = presentHomeDraftTitle(title, input.canonicalRatios, live);
+    const body = row.detail?.trim()
+      ? presentHomeDraftBody(row.detail, input.canonicalRatios, live)
+      : null;
+    const text = presented.text || body?.text || "";
+    if (!text) return [];
+    const refresh = presented.refresh || presented.stale || Boolean(body?.refresh || body?.stale);
+    return [{ id: row.id, title: text, refresh }];
   });
   const chaseAction = actions.find((action) => action.button === "chase");
   const chase: ChaseDraftInput | null =
@@ -339,6 +358,7 @@ export function buildFinancialManagerBrief(input: {
     priorLabel,
     movements,
     movementEmpty,
+    actionCount: actions.length,
     actions: actions.slice(0, 3),
     actionEmpty:
       input.actionsReady === false

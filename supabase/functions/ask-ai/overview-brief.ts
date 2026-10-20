@@ -13,7 +13,9 @@
 import { hasFinancialEvidence } from "../../../src/lib/client-metrics.ts";
 import { parseOperatingProfile } from "../../../src/lib/client-profile.ts";
 import {
+  cashPillarFollowsForecast,
   computeOverallHealth,
+  liveHealthFromBooks,
   scorecardHealthFromFinancials,
   type ScoreMarket,
 } from "../../../src/lib/health-score.ts";
@@ -303,12 +305,24 @@ export function buildOverviewBrief(input: {
   market?: ScoreMarket;
   /** Client market for printed ranges. Copy-pack stand-in is only used when this is omitted. */
   dateMarket?: DateMarket;
-  /** Stored forecast. Real lines count as evidence when the statement is empty. */
+  /** Stored forecast. Real lines count as evidence. When this is passed, health comes from `liveHealthFromBooks`. */
   cashflow?: unknown;
   clientName?: string | null;
   periodLabel?: string | null;
   figuresAsOf?: string | null;
   brainSummary?: unknown;
+  /** Industry label. A gross margin above 85% stays out of Profit outside software. */
+  industry?: string | null;
+  /** Blank opening. Cash is left unscored. */
+  openingMissing?: boolean;
+  /** 13-week opening and closings. A close under the floor caps Cash at 25. */
+  cashOpening?: number | null;
+  cashClosings?: readonly number[] | null;
+  cashFloor?: number | null;
+  financialsUpdatedAt?: string | null;
+  priorFinancials?: Record<string, unknown> | null;
+  timeZone?: string | null;
+  now?: Date;
 }): OverviewBrief {
   const copyPack = input.copyPack ?? "za";
   const market = input.market ?? marketFromCopyPack(copyPack);
@@ -331,6 +345,7 @@ export function buildOverviewBrief(input: {
   const runway = asNumber(input.runwayWeeks);
   // Same pillar math as Overview / the scorecard. A year-span health score
   // (creditor days 28) must not sit next to the stored-cover days (37).
+  // No books: health, cash, and runway stay blank. A $0 default is not a score.
   const evidenced = hasFinancialEvidence({
     financials,
     cashflow: input.cashflow,
@@ -341,24 +356,55 @@ export function buildOverviewBrief(input: {
     : input.cash !== undefined
       ? input.cash
       : asNumber(financials?.cash);
-  const scored = !evidenced
+  const fromBooks =
+    evidenced && financials && input.cashflow !== undefined
+      ? liveHealthFromBooks({
+          financials,
+          cashflow: input.cashflow,
+          financialsUpdatedAt: input.financialsUpdatedAt ?? null,
+          priorFinancials: input.priorFinancials ?? null,
+          fyStartMonth,
+          market,
+          industry: input.industry,
+          timeZone: input.timeZone,
+          now: input.now,
+        })
+      : null;
+  const raw = !evidenced
     ? null
-    : financials
-    ? scorecardHealthFromFinancials({
-        financials,
-        fyStartMonth,
-        periodMonths,
-        cashRunwayWeeks: runway,
-        cashBalance: cashOnFile,
-        shortfallWeek: input.shortfallWeek,
-        market,
-      })
-    : computeOverallHealth({
-        ratios,
-        cashRunwayWeeks: runway,
-        shortfallWeek: input.shortfallWeek,
-        market,
-      });
+    : (fromBooks ??
+      (financials
+        ? scorecardHealthFromFinancials({
+            financials,
+            fyStartMonth,
+            periodMonths,
+            cashRunwayWeeks: runway,
+            cashBalance: cashOnFile,
+            shortfallWeek: input.shortfallWeek,
+            market,
+            industry: input.industry,
+          })
+        : computeOverallHealth({
+            ratios,
+            cashRunwayWeeks: runway,
+            shortfallWeek: input.shortfallWeek,
+            market,
+          })));
+  const scored =
+    raw == null
+      ? null
+      : fromBooks
+        ? fromBooks
+        : raw.overall == null
+          ? raw
+          : cashPillarFollowsForecast(raw, {
+              hasEvidence: true,
+              cashOnFile: cashOnFile != null,
+              openingMissing: input.openingMissing === true,
+              opening: cashOnFile != null ? input.cashOpening : null,
+              closings: cashOnFile != null ? input.cashClosings : null,
+              floor: cashOnFile != null ? input.cashFloor : 0,
+            });
   const pillars: OverviewPillar[] = (scored?.pillars ?? []).map((pillar) => ({
     id: pillar.id,
     label: pillar.label,

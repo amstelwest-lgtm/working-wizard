@@ -10,6 +10,7 @@ import { ownerPresence } from "../src/lib/owner-presence.ts";
 import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief.ts";
 import {
   cashPillarFollowsForecast,
+  liveHealthFromBooks,
   scorecardHealthFromFinancials,
 } from "../src/lib/health-score.ts";
 import { assessClientMetrics } from "../src/lib/client-metrics.ts";
@@ -97,6 +98,16 @@ const health = cashPillarFollowsForecast(
 const cashPillar = health.pillars.find((pillar) => pillar.id === "cash");
 assert(cashPillar?.score == null, `cash pillar was scored (${cashPillar?.score})`);
 assert(!health.pillars.some((pillar) => pillar.id === "cash" && pillar.score != null), "cash with no data is not in the score");
+
+const live = liveHealthFromBooks({
+  financials: plOnly,
+  cashflow: null,
+  market: us,
+});
+const liveCash = live.pillars.find((pillar) => pillar.id === "cash");
+assert(liveCash?.score == null, `liveHealthFromBooks scored missing cash (${liveCash?.score})`);
+assert(live.displayLabel !== "Critical", live.displayLabel);
+assert(live.hasCriticalPillar === false, "a missing cash line is not a critical pillar");
 const statusWord = clientListStatusWord({
   healthLabel: health.displayLabel,
   healthOverall: health.overall,

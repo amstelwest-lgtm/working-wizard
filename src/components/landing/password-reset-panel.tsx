@@ -96,7 +96,7 @@ export function PasswordResetPanel({
       ) : null}
       <button
         type="submit"
-        className="btn btn-gold"
+        className="btn btn-cobalt"
         disabled={busy}
         style={{ width: "100%", justifyContent: "center", marginTop: 18 }}
       >

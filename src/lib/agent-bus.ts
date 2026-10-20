@@ -3,6 +3,7 @@
  * Nothing here talks to the database or to a model.
  */
 import { groundAdvisoryNarrative } from "./advisory-narrative.ts";
+import { liveOverallFromRecord, quoteLiveScoreOnly } from "./draft-figures.ts";
 import { cashComfortThreshold } from "./cash-runway.ts";
 import { formatMoney, type MoneyMarket } from "./market/format.ts";
 import { statementSpanLabel } from "./statement-period.ts";
@@ -281,6 +282,8 @@ export type FindingEvidence = {
   metrics?: EvidenceMetric[];
   /** healthy from info, attention from watch, critical from act or a cash floor breach. */
   status?: AgentCopyStatus;
+  /** Margins and live overall this draft was written against. Display compares it to the books. */
+  figures_hash?: string | null;
 };
 
 function poolKeySet(reads: StoredFigures[]): Set<string> {
@@ -1115,6 +1118,7 @@ export const AGENT_COPY_GUIDE = `How to write a title, detail, or summary:
 - Amounts use the client's format. South Africa: R 13 846. United States: $13,846. Cashflow amounts are $46,300 or R 46 300, never a bare 46300 or 128 450.
 - A ratio is a percentage with one decimal. 0.6 is written 60%. 0.086 is written 8.6%, not 9%.
 - A health or pillar score is the bare number. 60 is written 60, not 60/100, 60 out of 100, or 60%. Pillar names are Profit, Assets, Financing, and Cash. Do not write Profit Drivers, Profitability, Leverage & Finance, or Financing & Solvency. A ratio nickname is a sub-factor under its pillar, such as Profit · Bottom-line strength.
+- Quote the live health score only. Do not write "stored 69 vs live 67" or any stored-versus-live comparison. stored_score is not a number for the title or the detail.
 - Days are whole days. 43.8 is written 44 days.
 - Quote a day band only when both numbers were stored. Do not invent "30–60 day healthy band on file" or "the stored 30–60 day band".
 - Bad: "Low R 36 154. R 13 846 under R 50 000. get emails out to 10 clients"
@@ -1512,8 +1516,13 @@ export function polishAgentCopy(input: {
   const stored = input.storedNumbers ?? figureLeaves(input.figures).map((leaf) => leaf.value);
   const stripped = stripUnstoredHealthyBand(input.text.replace(/\s+/g, " ").trim(), stored);
   const ratios = quoteRatiosFromFigures(input.figures, input.canonicalRatios);
-  const formatted = repairDraftMetricUnits(
-    ratios ? groundAdvisoryNarrative(formatCopyAmounts(stripped, input.figures, market), ratios) : formatCopyAmounts(stripped, input.figures, market),
+  const formatted = quoteLiveScoreOnly(
+    repairDraftMetricUnits(
+      ratios
+        ? groundAdvisoryNarrative(formatCopyAmounts(stripped, input.figures, market), ratios)
+        : formatCopyAmounts(stripped, input.figures, market),
+    ),
+    liveOverallFromRecord(input.figures as Record<string, unknown> | undefined),
   );
   if (!formatted) return { ok: false, error: `A ${input.role} needs a complete sentence.` };
   const parts = splitCopySentences(formatted);
