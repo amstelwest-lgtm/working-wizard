@@ -8,7 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
-import { decideLedgerPresence, type LedgerPresence } from "@/lib/ledger-presence";
+import { callerMayReadLedger, decideLedgerPresence, type LedgerPresence } from "@/lib/ledger-presence";
 
 const TABLES = {
   xero: "xero_connections",
@@ -16,45 +16,70 @@ const TABLES = {
   sage: "sage_connections",
 } as const;
 
+/** Service role: connection-table id only. Membership never uses this client. */
 type Admin = {
   from: (table: string) => {
-    select: (columns: "id" | "firm_id" | "owner_user_id" | "user_id") => {
+    select: (columns: "id") => {
       eq: (
         column: string,
         value: string,
       ) => {
-        eq: (
-          column: string,
-          value: string,
-        ) => {
-          limit: (n: number) => Promise<{ data: Array<{ user_id?: string }> | null; error: { message: string } | null }>;
-        };
-        maybeSingle: () => Promise<{
-          data: { firm_id?: string | null; owner_user_id?: string | null } | null;
-          error: { message: string } | null;
-        }>;
         limit: (n: number) => Promise<{ data: Array<{ id?: string }> | null; error: { message: string } | null }>;
       };
     };
   };
 };
 
-async function memberOfClientFirm(admin: Admin, userId: string, clientId: string): Promise<boolean | null> {
-  const { data: client, error: clientErr } = await admin
+type UserRow = {
+  firm_id?: string | null;
+  owner_user_id?: string | null;
+  user_id?: string | null;
+  client_id?: string | null;
+};
+
+type UserRead = {
+  eq: (column: string, value: string) => UserRead;
+  maybeSingle: () => Promise<{ data: UserRow | null; error: { message: string } | null }>;
+  limit: (n: number) => Promise<{ data: UserRow[] | null; error: { message: string } | null }>;
+};
+
+/** The signed-in user's client. RLS applies; this is not the service role. */
+type UserDb = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (column: string, value: string) => UserRead;
+    };
+  };
+};
+
+async function callerMayReadClient(db: UserDb, userId: string, clientId: string): Promise<boolean | null> {
+  const { data: client, error: clientErr } = await db
     .from("clients")
-    .select("firm_id")
+    .select("firm_id, owner_user_id")
     .eq("id", clientId)
     .maybeSingle();
-  if (clientErr) return null;
+  const { data: door, error: doorErr } = await db
+    .from("client_memberships")
+    .select("client_id")
+    .eq("client_id", clientId)
+    .eq("user_id", userId)
+    .limit(1);
   const firmId = client?.firm_id ?? null;
-  if (!firmId) return false;
-  const [firmRes, memRes] = await Promise.all([
-    admin.from("firms").select("owner_user_id").eq("id", firmId).maybeSingle(),
-    admin.from("firm_memberships").select("user_id").eq("firm_id", firmId).eq("user_id", userId).limit(1),
-  ]);
-  if (firmRes.error || memRes.error) return null;
-  if (firmRes.data?.owner_user_id === userId) return true;
-  return (memRes.data?.length ?? 0) > 0;
+  const [firmRes, staffRes] = firmId
+    ? await Promise.all([
+        db.from("firms").select("owner_user_id").eq("id", firmId).maybeSingle(),
+        db.from("firm_memberships").select("user_id").eq("firm_id", firmId).eq("user_id", userId).limit(1),
+      ])
+    : [null, null];
+  return callerMayReadLedger({
+    userId,
+    client,
+    clientError: Boolean(clientErr),
+    clientMembership: doorErr ? null : (door?.length ?? 0) > 0,
+    firmOwnerUserId: firmRes?.data?.owner_user_id ?? null,
+    firmError: Boolean(firmRes?.error),
+    firmStaff: staffRes ? (staffRes.error ? null : (staffRes.data?.length ?? 0) > 0) : false,
+  });
 }
 
 async function idCount(admin: Admin, table: (typeof TABLES)[keyof typeof TABLES], clientId: string): Promise<number | null> {
@@ -74,11 +99,11 @@ export const getLedgerConnectionPresence = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<LedgerPresence> => {
     const userId = context.userId;
     if (!userId) deny(401);
-    const admin = getSupabaseAdminOrNull() as Admin | null;
-    if (!admin) deny(503);
-    const member = await memberOfClientFirm(admin, userId, data.clientId);
+    const member = await callerMayReadClient(context.supabase as unknown as UserDb, userId, data.clientId);
     if (member === null) deny(503);
     if (!member) deny(403);
+    const admin = getSupabaseAdminOrNull() as Admin | null;
+    if (!admin) deny(503);
     const [xero, qbo, sage] = await Promise.all([
       idCount(admin, TABLES.xero, data.clientId),
       idCount(admin, TABLES.qbo, data.clientId),

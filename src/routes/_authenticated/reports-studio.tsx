@@ -4029,7 +4029,6 @@ export function ReportsStudio({
       setDeepLinkBusy(false);
       setPreviewState(null);
       setPreviewKey(null);
-      setLoadingKey(null);
       return;
     }
 

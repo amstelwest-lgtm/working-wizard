@@ -27,7 +27,7 @@ import {
   type ConnectionRowFact,
 } from "../src/lib/connection-status-deadline";
 import { readLedgerConnectionRow } from "../src/lib/connection-row";
-import { decideLedgerPresence, rowFactFromPresenceResponse } from "../src/lib/ledger-presence";
+import { callerMayReadLedger, decideLedgerPresence, rowFactFromPresenceResponse } from "../src/lib/ledger-presence";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -436,6 +436,38 @@ assert(
 assert(rowFactFromPresenceResponse(yankeesPresence, "qbo") === "present", "a member's service-role row is present");
 assert(rowFactFromPresenceResponse(yankeesPresence, "sage") === "absent", "a member's real missing Sage row is absent");
 
+const yankeesOwner = callerMayReadLedger({
+  userId: "yankees-owner",
+  client: { owner_user_id: "yankees-owner", firm_id: "firm-1" },
+  clientError: false,
+  clientMembership: false,
+  firmOwnerUserId: "accountant",
+  firmError: false,
+  firmStaff: false,
+});
+assert(yankeesOwner === true, "the client owner is allowed without a firm seat");
+const ownerPresence = decideLedgerPresence({
+  userId: "yankees-owner",
+  member: yankeesOwner === true,
+  counts: { xero: 1, qbo: 1, sage: 0 },
+});
+assert(ownerPresence.status === 200, "an owner receives the presence flags");
+assert(
+  ownerPresence.body?.xero === true && ownerPresence.body.qbo === true && ownerPresence.body.sage === false,
+  "an owner sees Connected for Xero and QuickBooks and Not connected for Sage",
+);
+assert(rowFactFromPresenceResponse(ownerPresence, "qbo") === "present", "an owner's QuickBooks row is present");
+assert(rowFactFromPresenceResponse(ownerPresence, "sage") === "absent", "an owner's missing Sage row is absent, not unknown");
+const doorMember = callerMayReadLedger({
+  userId: "door-member",
+  client: { owner_user_id: "yankees-owner", firm_id: null },
+  clientError: false,
+  clientMembership: true,
+  firmError: false,
+  firmStaff: false,
+});
+assert(doorMember === true, "an owner-door membership can read the connection rows");
+
 const studio = readFileSync("src/routes/_authenticated/reports-studio.tsx", "utf8");
 assert(
   studio.includes("reportCardNoFiguresState({ noFigures: blocked })"),
@@ -462,6 +494,7 @@ assert(
   "a non-NULL revenue row is not returned before the parallel read",
 );
 assert(!studio.includes("{report.pages}"), "the card does not print an invented page count");
+assert(!studio.includes("setLoadingKey"), "the deep-link hold path does not call the removed loading setter");
 assert(studio.includes("noFigures.showSignoff"), "sign-off is gated by the no-figures state");
 assert(studio.includes("data-report-empty"), "the empty reason is rendered on the card");
 
@@ -489,15 +522,28 @@ assert(!rowReader.includes("sage_connections"), "the browser does not select sag
 const presenceServer = readFileSync("src/lib/ledger-presence.functions.ts", "utf8");
 assert(presenceServer.includes("requireSupabaseAuth"), "the server action uses the same auth middleware");
 assert(presenceServer.includes("decideLedgerPresence"), "unauthorized empty counts never become a body");
+assert(presenceServer.includes("context.supabase"), "membership uses the signed-in user's client");
+assert(presenceServer.includes("client_memberships"), "the owner door's membership row is checked");
+assert(presenceServer.includes("owner_user_id"), "the client owner is checked on the user's client");
 assert(presenceServer.includes('.select("id")'), "the service role reads id only");
 assert(!presenceServer.includes("access_token"), "the presence response never selects tokens");
 assert(!presenceServer.includes("refresh_token"), "the presence response never selects refresh tokens");
 assert(!presenceServer.includes("password"), "the presence response never selects passwords");
-const handler = presenceServer.slice(presenceServer.indexOf(".handler(async"));
+const membershipFn = presenceServer.slice(
+  presenceServer.indexOf("async function callerMayReadClient"),
+  presenceServer.indexOf("async function idCount"),
+);
 assert(
-  handler.indexOf("if (!member) deny(403)") > 0 &&
-    handler.indexOf("idCount(") > handler.indexOf("if (!member) deny(403)"),
-  "connection ids are read only after the firm-membership check",
+  membershipFn.includes("context.supabase") === false && !membershipFn.includes("getSupabaseAdminOrNull"),
+  "membership lookup does not use the service role",
+);
+const handler = presenceServer.slice(presenceServer.indexOf(".handler(async"));
+const memberGate = handler.indexOf("if (!member) deny(403)");
+assert(
+  memberGate > 0 &&
+    handler.indexOf("getSupabaseAdminOrNull") > memberGate &&
+    handler.indexOf("idCount(") > memberGate,
+  "connection ids are read with the service role only after the membership check",
 );
 
 const qbo = readFileSync("src/components/qbo-connect.tsx", "utf8");

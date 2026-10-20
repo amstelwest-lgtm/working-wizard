@@ -15,10 +15,39 @@ export type LedgerPresenceDecision = {
 };
 
 /**
- * An empty count is "absent" only for a signed-in firm member, after the
- * service role has actually read the tables. A 0-row result from an
- * unauthenticated or non-member call (what RLS returns with no policy) is
- * not a decision: 401/403, and the client stays unknown.
+ * Rows the signed-in user's own client can see. The owner door treats a
+ * matching `clients.owner_user_id` or a `client_memberships` row as access,
+ * the same way the owner board lists a workspace. Firm owner and firm staff
+ * stay allowed. A query error is unknown; an empty read is not access.
+ */
+export function callerMayReadLedger(input: {
+  userId: string;
+  client: { owner_user_id?: string | null; firm_id?: string | null } | null;
+  clientError: boolean;
+  /** null when the membership read failed. */
+  clientMembership: boolean | null;
+  firmOwnerUserId?: string | null;
+  firmError: boolean;
+  /** null when the staff read failed. */
+  firmStaff: boolean | null;
+}): boolean | null {
+  if (input.clientError) return null;
+  if (input.client?.owner_user_id === input.userId) return true;
+  if (input.clientMembership === null) return null;
+  if (input.clientMembership) return true;
+  const firmId = input.client?.firm_id ?? null;
+  if (!firmId) return false;
+  if (input.firmError || input.firmStaff === null) return null;
+  if (input.firmOwnerUserId === input.userId) return true;
+  return input.firmStaff;
+}
+
+/**
+ * An empty count is "absent" only for a signed-in caller who may read the
+ * client, after the service role has actually read the connection tables.
+ * A 0-row result from an unauthenticated or non-member call (what RLS
+ * returns with no policy) is not a decision: 401/403, and the client stays
+ * unknown.
  */
 export function decideLedgerPresence(input: {
   userId: string | null;
