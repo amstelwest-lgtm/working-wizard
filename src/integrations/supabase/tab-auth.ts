@@ -1,20 +1,19 @@
 import { processLock } from "@supabase/auth-js";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { createSharedAuthStorage, shareAuthToken } from "@/lib/stored-auth-session";
 import { createRefreshCoordinator, refreshTokenFromRequest, type RefreshBus } from "./refresh-flight";
 
 /**
- * Isolate the browser Supabase session to the current tab.
+ * Share the Supabase session across tabs, and keep the refresh single-flight.
  *
- * GoTrue persists to localStorage by default and also opens a BroadcastChannel
- * named after `storageKey`. Other tabs then apply SIGNED_IN / SIGNED_OUT /
- * TOKEN_REFRESHED from that channel — even if storage is sessionStorage —
- * which is why signing in as one account replaced the session in every Milōn
- * tab on the same computer.
+ * GoTrue's BroadcastChannel is still suppressed. That channel applied
+ * SIGNED_IN / SIGNED_OUT from one tab onto every other tab, which is why
+ * signing in as one account replaced the session everywhere.
  *
- * sessionStorage survives refresh of this tab, is not shared with a newly
- * opened tab, and still holds the PKCE code verifier across the Google
- * redirect (same tab, same origin). Invite cookies in google-auth /
- * invite-handoff are unchanged.
+ * The auth token itself lives in localStorage. A new tab (Ctrl+T, middle-click)
+ * has empty sessionStorage, so a session that existed only there looked like
+ * a sign-out. Reading the token does not take the refresh lock. The PKCE
+ * verifier stays in sessionStorage for the tab that started the login.
  */
 
 /** Matches supabase-js default: `sb-<project-ref>-auth-token`. */
@@ -32,34 +31,28 @@ export function supabaseAuthStorageKey(supabaseUrl: string): string {
 export function tabAuthStorage(): Storage | undefined {
   if (typeof window === "undefined") return undefined;
   try {
-    return window.sessionStorage;
+    return createSharedAuthStorage(window.localStorage, window.sessionStorage);
   } catch {
     return undefined;
   }
 }
 
-function moveItem(from: Storage, to: Storage, key: string): void {
-  const value = from.getItem(key);
-  if (value == null) return;
-  if (to.getItem(key) == null) to.setItem(key, value);
-  from.removeItem(key);
-}
-
 /**
- * One-time: this tab keeps the previously shared localStorage session, then
- * the shared copy is removed so a second tab cannot inherit the same refresh
- * token (rotation in one tab would revoke the other).
+ * Copy the newest auth token into localStorage and this tab's sessionStorage.
+ * A new tab reads localStorage. The shared token is not removed.
  */
-export function adoptSharedAuthSession(storageKey: string): void {
+export function shareAuthSession(storageKey: string): void {
   if (typeof window === "undefined") return;
   try {
-    const local = window.localStorage;
-    const session = window.sessionStorage;
-    moveItem(local, session, storageKey);
-    moveItem(local, session, `${storageKey}-code-verifier`);
+    shareAuthToken(window.localStorage, window.sessionStorage, storageKey);
   } catch {
     /* private mode / blocked storage */
   }
+}
+
+/** @deprecated Use shareAuthSession. Kept so older call sites still publish. */
+export function adoptSharedAuthSession(storageKey: string): void {
+  shareAuthSession(storageKey);
 }
 
 /**

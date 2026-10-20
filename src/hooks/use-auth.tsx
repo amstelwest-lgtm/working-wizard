@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { useRouterState } from "@tanstack/react-router";
 import { setMonitoringUser } from "@/lib/monitoring";
@@ -7,6 +7,7 @@ import { clearLegacyInsightSeen } from "@/lib/funnel-timing";
 import { restoreSession } from "@/integrations/supabase/session-deadline";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { decideAuthStateChange, resolveConfirmedSignOut } from "@/lib/auth-session-guard";
+import { readStoredAuthSession, type StoredAuthSession } from "@/lib/stored-auth-session";
 
 type AuthCtx = {
   user: User | null;
@@ -42,16 +43,25 @@ function storageHasAuthToken(storage: Storage): boolean {
   return false;
 }
 
-/** True when this tab already has a Supabase session (sessionStorage, or a legacy local copy). */
+/** True when this tab already has a Supabase session (shared local copy, or this tab). */
 function browserHasAuthToken(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    if (storageHasAuthToken(window.sessionStorage)) return true;
     if (storageHasAuthToken(window.localStorage)) return true;
+    if (storageHasAuthToken(window.sessionStorage)) return true;
   } catch {
     /* private mode / blocked storage */
   }
   return false;
+}
+
+function readBrowserAuthSession(): StoredAuthSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return readStoredAuthSession(window.localStorage, window.sessionStorage);
+  } catch {
+    return null;
+  }
 }
 
 export function SessionRestorePanel({ onRetry }: { onRetry: () => void }) {
@@ -99,6 +109,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const intentionalSignOutRef = useRef(false);
   const confirmGen = useRef(0);
 
+  // Before the gate's effect. A new tab must show the stored user even if
+  // getSession is still waiting on another tab's refresh.
+  useLayoutEffect(() => {
+    const stored = readBrowserAuthSession();
+    if (!stored?.user?.id) return;
+    hadSessionRef.current = true;
+    hadTokenAtStartRef.current = true;
+    setSession(stored as Session);
+    setMonitoringUser(stored.user.id);
+  }, []);
+
   useEffect(() => {
     const onWake = () => setWake((n) => (n > 0 ? n : 1));
     window.addEventListener(AUTH_WAKE, onWake);
@@ -136,7 +157,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (decision === "keep") return;
-        const had = hadSessionRef.current || hadTokenAtStartRef.current;
+        const storedNow = readBrowserAuthSession();
+        const had =
+          hadSessionRef.current || hadTokenAtStartRef.current || Boolean(storedNow?.user?.id);
         if (intentionalSignOutRef.current || !had) {
           setSession(null);
           setMonitoringUser(null);
@@ -162,6 +185,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setLoading(false);
               return;
             }
+            const stillStored = readBrowserAuthSession();
+            if (stillStored?.user?.id && !intentionalSignOutRef.current) {
+              hadSessionRef.current = true;
+              setSession(stillStored as Session);
+              setMonitoringUser(stillStored.user.id);
+              setRestoreFailed(false);
+              setLoading(false);
+              return;
+            }
             setSession(null);
             setMonitoringUser(null);
             setRestoreFailed(outcome === "panel");
@@ -176,6 +208,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ).then(async (restored) => {
         if (cancelled) return;
         if (!restored.ok) {
+          const stored = readBrowserAuthSession();
+          if (stored?.user?.id) {
+            hadSessionRef.current = true;
+            setSession(stored as Session);
+            setMonitoringUser(stored.user.id);
+            setRestoreFailed(false);
+            setLoading(false);
+            return;
+          }
           setSession(null);
           setMonitoringUser(null);
           setRestoreFailed(true);
@@ -188,6 +229,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRestoreFailed(false);
           setSession(next);
           setMonitoringUser(next.user.id);
+          setLoading(false);
+          return;
+        }
+        const stored = readBrowserAuthSession();
+        if (stored?.user?.id) {
+          hadSessionRef.current = true;
+          setRestoreFailed(false);
+          setSession(stored as Session);
+          setMonitoringUser(stored.user.id);
           setLoading(false);
           return;
         }
