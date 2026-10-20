@@ -6,6 +6,7 @@
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { SECTION_KEEP_WITH_NEXT } from "@/lib/report-pdf-layout";
 import { C, scoreColor } from "./theme";
 
 type Props = {
@@ -15,7 +16,7 @@ type Props = {
 };
 
 const styles = StyleSheet.create({
-  wrapper: { marginTop: 14, marginBottom: 8 },
+  wrapper: { marginTop: 14, marginBottom: 8, breakInside: "avoid" },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -50,7 +51,7 @@ const styles = StyleSheet.create({
 
 export function SectionHeader({ title, score, color = C.blueDeep }: Props) {
   return (
-    <View style={styles.wrapper}>
+    <View style={styles.wrapper} wrap={false} minPresenceAhead={SECTION_KEEP_WITH_NEXT}>
       <View style={styles.row}>
         <View style={styles.left}>
           <View style={[styles.tick, { backgroundColor: color }]} />

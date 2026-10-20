@@ -52,47 +52,55 @@ export function DataTable<T extends Record<string, unknown>>({
   rows,
   accentColor = C.blueDeep,
 }: Props<T>) {
-  return (
-    <View style={styles.container}>
-      <View style={[styles.headerRow, { backgroundColor: accentColor }]}>
-        {columns.map((col, i) => (
+  const header = (
+    <View style={[styles.headerRow, { backgroundColor: accentColor }]}>
+      {columns.map((col, i) => (
+        <Text
+          key={i}
+          style={[
+            styles.headerCell,
+            { flex: col.flex ?? 1, textAlign: col.align ?? "left" },
+          ]}
+        >
+          {col.header}
+        </Text>
+      ))}
+    </View>
+  );
+  const renderRow = (row: T, ri: number) => (
+    <View
+      key={ri}
+      style={[
+        styles.dataRow,
+        { backgroundColor: ri % 2 === 1 ? C.soft : C.white },
+      ]}
+    >
+      {columns.map((col, ci) => {
+        const raw = row[col.key];
+        const display = col.render ? col.render(raw, row) : String(raw ?? "");
+        return (
           <Text
-            key={i}
+            key={ci}
             style={[
-              styles.headerCell,
+              styles.cell,
               { flex: col.flex ?? 1, textAlign: col.align ?? "left" },
             ]}
           >
-            {col.header}
+            {display}
           </Text>
-        ))}
+        );
+      })}
+    </View>
+  );
+  const first = rows[0];
+  return (
+    <View style={styles.container}>
+      {/* Header stays with the first row so it cannot sit alone under the footer. */}
+      <View wrap={false}>
+        {header}
+        {first ? renderRow(first, 0) : null}
       </View>
-
-      {rows.map((row, ri) => (
-        <View
-          key={ri}
-          style={[
-            styles.dataRow,
-            { backgroundColor: ri % 2 === 1 ? C.soft : C.white },
-          ]}
-        >
-          {columns.map((col, ci) => {
-            const raw = row[col.key];
-            const display = col.render ? col.render(raw, row) : String(raw ?? "");
-            return (
-              <Text
-                key={ci}
-                style={[
-                  styles.cell,
-                  { flex: col.flex ?? 1, textAlign: col.align ?? "left" },
-                ]}
-              >
-                {display}
-              </Text>
-            );
-          })}
-        </View>
-      ))}
+      {rows.slice(1).map((row, index) => renderRow(row, index + 1))}
     </View>
   );
 }

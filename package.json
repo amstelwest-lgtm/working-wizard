@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "deploy": "pnpm run build && wrangler deploy --config dist/server/wrangler.json",
     "test:reports": "vite-node --config scripts/vite-test.config.ts scripts/render-reports-test.mts",
+    "test:report-pdf-layout": "vite-node --config scripts/vite-test.config.ts scripts/report-pdf-layout-test.mts",
     "test:budget-pdf": "vite-node --config scripts/vite-test.config.ts scripts/budget-pdf-test.mts",
     "test:budget-figures-parity": "vite-node --config scripts/vite-test.config.ts scripts/budget-figures-parity-test.mts",
     "test:budget-redesign": "vite-node --config scripts/vite-test.config.ts scripts/budget-redesign-test.mts",

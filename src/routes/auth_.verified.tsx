@@ -75,7 +75,7 @@ function EmailVerifiedPage() {
             </Link>
             <Link
               to="/app"
-              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#c9d0cb] hover:border-white/25 hover:text-[#e8ede9]"
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#DBEAFE] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#102A43] hover:border-[#0B5FFF] hover:text-[#0B5FFF]"
             >
               Open my board
             </Link>
@@ -88,7 +88,7 @@ function EmailVerifiedPage() {
   return (
     <AuthEntryShell loading={state === "working"} loadingMessage="Verifying your email…">
       {state === "done" ? (
-        <p className="text-center text-sm text-[#8a938c]">Verified — opening your board…</p>
+        <p className="text-center text-sm text-[#3D5270]">Verified — opening your board…</p>
       ) : null}
     </AuthEntryShell>
   );
