@@ -185,14 +185,14 @@ assert(
 );
 const practice = readFileSync("src/components/practice-board.tsx", "utf8");
 assert(
-  practice.includes("marketForFirm({ market: firmMarket }).country"),
-  "practice home uses the firm market",
+  practice.includes("marketCountry={parseMarketSelection(firmMarket)?.country ?? null}"),
+  "practice home passes the stored firm country",
 );
 assert(
-  practice.includes("marketCountry={practiceCountry}") &&
-    practice.includes('audience="accountant"'),
-  "practice home renders the card",
+  !practice.includes("marketForFirm({ market: firmMarket }).country"),
+  "practice home does not coerce a null firm market into the tax card",
 );
+assert(practice.includes('audience="accountant"'), "practice home renders the card");
 const client = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 assert(
   client.includes("marketCountry={clientMarket.country}"),

@@ -2713,9 +2713,9 @@ function Index() {
         } | null;
         const profile = parseOperatingProfile(data?.operating_profile);
         const parsedMarket = parseMarketSelection(data?.market);
-        // A client row with no market is South Africa, same as the firm
-        // resolver. The book renders; the owner is not held on a country gate.
-        setWorkspaceMarket(parsedMarket ?? coerceMarketSelection(data?.market ?? null));
+        // Stored market only. Null stays null so ZA-only cards and prices stay
+        // off. The book still renders; dates use marketForClient separately.
+        setWorkspaceMarket(parsedMarket);
         setClientMeta(
           data
             ? {

@@ -10,8 +10,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { stripePlanMarketFromFirm } from "../src/lib/billing-market.ts";
 import { openQueriesPhase, practiceClientsPhase, settleWithin } from "../src/lib/bounded-load.ts";
 import { isSaMarketFirm } from "../src/lib/firm-sa-market.ts";
+import { parseMarketSelection } from "../src/lib/market/parse.ts";
 import { effectiveFirmMarket, marketForFirm } from "../src/lib/market/scope.ts";
 import { regionFormFromSaved } from "../src/lib/region-settings.ts";
+import { taxSampleCardVisible, taxSampleEnabled } from "../src/lib/tax-specialist/enabled.ts";
 
 function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
@@ -76,10 +78,30 @@ assert(
   "a settled empty notes list is empty, not an error",
 );
 
+const storedCountry = parseMarketSelection(null)?.country ?? null;
+assert(storedCountry === null, "a null firm market has no stored country");
+assert(taxSampleEnabled(storedCountry) === false, "a null-market firm does not enable the tax sample");
+assert(
+  taxSampleCardVisible(storedCountry, false) === false,
+  "a null-market firm does not show the ZA tax card",
+);
+assert(
+  taxSampleEnabled(marketForFirm({ market: null }).country) === true,
+  "the presentation fallback is ZA, so it must not be passed to the tax card",
+);
+
 const board = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(
-  board.includes("marketForFirm({ market: firmMarket }).country"),
-  "practice country uses the firm resolver",
+  board.includes("marketCountry={parseMarketSelection(firmMarket)?.country ?? null}"),
+  "the tax card uses the stored firm country",
+);
+assert(
+  !board.includes("marketForFirm({ market: firmMarket }).country"),
+  "the tax card does not use the ZA presentation fallback",
+);
+assert(
+  board.includes("dataAsOfLabel(new Date(), marketForFirm({ market: firmMarket }))"),
+  "dates still use the presentation fallback",
 );
 assert(board.includes("settleWithin("), "the client book bounds the select");
 assert(board.includes("CLIENTS_LOAD_ERROR"), "the clients list has an error state");
@@ -96,14 +118,19 @@ assert(
 const owner = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(!owner.includes("MarketGate"), "a null client market does not open the country gate");
 assert(
-  owner.includes("coerceMarketSelection(data?.market ?? null)"),
-  "a null client market is coerced to the effective market",
+  !owner.includes("coerceMarketSelection(data?.market ?? null)"),
+  "a null client market is not coerced into the workspace",
 );
+assert(owner.includes("setWorkspaceMarket(parsedMarket);"), "the workspace keeps the stored market");
 
 const gate = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
 assert(
-  gate.includes("marketForFirm({ market: snap.firmMarket })"),
-  "a firm row resumes billing from the effective market",
+  !gate.includes("marketForFirm("),
+  "billing does not treat a null firm market as South Africa",
+);
+assert(
+  gate.includes("firmBillingResumeIntent(snap.firmMarket, peekPendingCheckout())"),
+  "billing uses the stored firm market",
 );
 assert(gate.includes("firmBillingResumeIntent(null, null)"), "no firm row does not assume ZA");
 
@@ -132,5 +159,27 @@ assert(
   "South Africa is the selected region",
 );
 assert(card.includes("South Africa"), "the selected country is South Africa");
+
+const { OwnerHome } = await import("../src/components/owner-door/owner-home.tsx");
+const { ownerPresence } = await import("../src/lib/owner-presence.ts");
+const { emptyAgentActivity } = await import("../src/lib/milon-team-activity.ts");
+const home = renderToStaticMarkup(
+  createElement(OwnerHome, {
+    variant: "character",
+    audience: "accountant",
+    marketCountry: storedCountry,
+    sampleClient: false,
+    showInvite: false,
+    title: "Your whole finance team",
+    presence: ownerPresence(emptyAgentActivity()),
+    lines: { financial_manager: [], analyst: [], advisor: [] },
+    onOpen: () => undefined,
+    onAsk: () => undefined,
+  }),
+);
+assert(!home.includes("See a sample"), "a null-market firm does not offer the rand sample");
+assert(!home.includes("ITR14") && !home.includes("IRP6"), "a null-market firm does not render the worksheet");
+assert(!/\bR[\u00a0 ]\d/.test(home), "a null-market firm home has no rand amounts");
+assert(!home.includes("SARS"), "a null-market firm home has no SARS copy");
 
 console.log("null-market-firm: ok");

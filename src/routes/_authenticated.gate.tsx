@@ -4,7 +4,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { firmBillingResumeIntent } from "@/lib/billing-market";
-import { marketForFirm } from "@/lib/market";
 import {
   billingStartSearch,
   peekPendingCheckout,
@@ -186,10 +185,7 @@ export function AuthGate() {
         }
         if (!isFirmProductPath(latest.current.pathname)) return;
         const pending = snap.hasFirm
-          ? firmBillingResumeIntent(
-              marketForFirm({ market: snap.firmMarket }),
-              peekPendingCheckout(),
-            )
+          ? firmBillingResumeIntent(snap.firmMarket, peekPendingCheckout())
           : (peekPendingCheckout() ?? firmBillingResumeIntent(null, null));
         stashPendingCheckout(pending);
         latest.current.navigate({
