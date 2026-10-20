@@ -179,8 +179,8 @@ assert(
 );
 
 const dashboard = read("src/components/practice-board.tsx");
-assert(dashboard.includes("scorecardHealthFromFinancials"), "dashboard health uses the scorecard");
-assert(dashboard.includes("periodMonthsOf"), "dashboard health uses the statement cover");
+assert(dashboard.includes("liveHealthFromBooks"), "dashboard health uses the scorecard");
+assert(read("src/lib/health-score.ts").includes("periodMonthsOf"), "the shared score uses the statement cover");
 assert(!dashboard.includes("healthFromFlatFinancials"), "dashboard does not use the unannualised score");
 
 const portfolio = read("src/lib/portfolio.ts");

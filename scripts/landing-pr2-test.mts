@@ -41,14 +41,15 @@ assert(
   `section order ${ids.join(",")}`,
 );
 
-const nav = index.slice(index.indexOf('<nav id="topnav"'), index.indexOf("{/* ══════════════════════════ HERO"));
+const nav = readFileSync(resolve(root, "src/components/landing/landing-header.tsx"), "utf8");
+assert(index.includes("<LandingHeader"), "homepage renders the shared landing header");
 assert(nav.includes("{NAV_TRIAL_LABEL}"), "nav shows the firm trial label");
 assert(NAV_TRIAL_LABEL === "Start 14-day trial", "trial button label matches /for-accountants");
 assert(copy.includes("FIRM_TRIAL_CTA_LABEL"), "nav trial label reuses FIRM_TRIAL_CTA_LABEL");
 assert(nav.includes(`aria-label={NAV_TRIAL_ARIA}`), "nav trial button has the trial aria-label");
 assert(NAV_TRIAL_ARIA === "Start my 14-day free trial", "trial aria-label text");
 assert(!nav.includes("Create firm account"), "top nav has no Create firm account");
-assert(nav.includes("nav-signin"), "sign in stays a ghost button");
+assert(index.includes("nav-signin"), "sign in stays a ghost button");
 assert(index.includes(">Create firm account<") || index.includes("Create firm account\n"), "footer keeps Create firm account");
 
 assert(index.includes('id="proof"'), "proof section exists");

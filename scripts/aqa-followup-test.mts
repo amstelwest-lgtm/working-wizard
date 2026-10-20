@@ -11,12 +11,15 @@ import { clientListRunwayHeadline, forecastChatFacts } from "../src/lib/cash-for
 import { collapseDuplicateClientShells } from "../src/lib/client-display-name.ts";
 import { plBankDisagreement } from "../src/lib/client-metrics.ts";
 import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief.ts";
-import { homeActionNeeds, openActionSentence } from "../src/lib/owner-needs.ts";
+import { actionPreviewLine, homeActionNeeds, openActionSentence } from "../src/lib/owner-needs.ts";
+import { mergePackDataGaps, packScoreProse, packSectionsForPdf } from "../src/lib/advisory-pack.ts";
+import { preferLiveHealthProse } from "../src/lib/score-prose.ts";
 import { statementGrossMarginFraction } from "../src/lib/period-profit.ts";
 import { trendColumnVisible } from "../src/lib/portfolio-dashboard.ts";
 import { buildVarianceChips } from "../src/lib/prior-period.ts";
 import { formatQuotedDays } from "../src/lib/ratios.ts";
 import { budgetSignoffIsStale } from "../src/lib/signoff-status.ts";
+import { strategicMovePillar } from "../src/lib/move-pillars.ts";
 import { rankStrategicMoves } from "../src/lib/strategic-moves.ts";
 
 function assert(cond: unknown, msg: string) {
@@ -32,14 +35,14 @@ const five = homeActionNeeds({
   titles: ["One", "Two", "Three", "Four", "Five"],
   overdue: 0,
 });
-assert(five.heading === "Showing 3 of 5", five.heading);
+assert(five.heading === "5 open", five.heading);
 assert(five.lines.length === 3 && five.lines[0] === "One" && five.lines[2] === "Three", five.lines.join(" | "));
 const fiveOverdue = homeActionNeeds({
   known: true,
   titles: ["One", "Two", "Three", "Four", "Five"],
   overdue: 2,
 });
-assert(fiveOverdue.heading === "Showing 3 of 5, 2 overdue", fiveOverdue.heading);
+assert(fiveOverdue.heading === "5 open, 2 overdue", fiveOverdue.heading);
 assert(!needs.lines.includes("No open work."), "open rows are not no open work");
 assert(openActionSentence(titles) === "2 open actions.", openActionSentence(titles) ?? "");
 assert(openActionSentence([]) === null, "no open rows stay empty");
@@ -257,5 +260,84 @@ assert(
   budgetSignoffIsStale(signed, "2026-10-02T00:00:00.000Z", true) === true,
   "changed budget figures are stale",
 );
+
+const many = buildFinancialManagerBrief({
+  clientName: "Chill Pepper",
+  currentFinancials: {},
+  snapshots: [],
+  openActionTitles: ["One", "Two", "Three", "Four", "Five"],
+  actionsReady: true,
+  draftsReady: true,
+  formatMoney: (amount) => String(amount),
+});
+assert(many.actions.length === 3, "Act on these still shows three");
+assert(many.actionCount === 5, `the brief keeps the full count, got ${many.actionCount}`);
+assert(actionPreviewLine(many.actions.length, many.actionCount) === "Showing 3 of 5", "Showing sits on Act on these");
+
+const liveNote = preferLiveHealthProse(
+  "Profit is the weakest pillar at 60 against an overall score of 74, tied with Financing at 60.",
+  { overall: 54, weakestLabel: "Cash", weakestScore: 25 },
+);
+assert(liveNote.includes("Cash is the weakest pillar at 25"), liveNote);
+assert(liveNote.includes("overall score of 54"), liveNote);
+assert(!/tied with/i.test(liveNote), liveNote);
+assert(
+  preferLiveHealthProse("Health is 74, with profit drivers weakest at 60.", {
+    overall: 54,
+    weakestLabel: "Cash",
+    weakestScore: 25,
+  }).includes("Health is 54, with Cash weakest at 25"),
+  "home sentence quotes the live pillar",
+);
+assert(
+  preferLiveHealthProse("Health fell from 80 to 74.", {
+    overall: 54,
+    weakestLabel: "Cash",
+    weakestScore: 25,
+  }) === "Health fell from 80 to 74.",
+  "a two-period note stays stored",
+);
+
+const cashFirst = rankStrategicMoves({
+  weakestPillar: "cash",
+  debtorDays: 6,
+  healthByKey: { operatingMargin: 0, creditorDays: 90, currentRatio: 80 },
+});
+assert(cashFirst[0] && strategicMovePillar(cashFirst[0].key) === "cash", cashFirst[0]?.title ?? "none");
+assert(cashFirst[0]?.key !== "operatingMargin", "a floored cash pillar outranks a weak profit ratio");
+
+const gaps = mergePackDataGaps([], {
+  receivables: 12000,
+  payables: 8000,
+  hasAgedDebtors: false,
+  hasAgedCreditors: false,
+});
+assert(gaps.some((gap) => gap.title === "Aged debtors report"), "missing aged debtors stay on the list");
+assert(gaps.some((gap) => gap.title === "Aged creditors report"), "missing aged creditors stay on the list");
+const shown = packSectionsForPdf(
+  [
+    {
+      key: "data_gaps",
+      title: "What MILŌN still needs",
+      body: "Nothing outstanding. The figures in this pack are as complete as MILŌN can make them from what has been provided.",
+    },
+    {
+      key: "state_of_business",
+      title: "Where the business stands",
+      body: "Chill Pepper scores 74/100. Strongest pillar: Cash Flow (93). Weakest: Profit Drivers (60).",
+    },
+  ],
+  { liveGaps: gaps },
+);
+const gapSection = shown.find((section) => section.key === "data_gaps");
+assert(gapSection?.body.includes("open request"), gapSection?.body ?? "");
+assert(!/Nothing outstanding/i.test(gapSection?.body ?? ""), gapSection?.body ?? "");
+assert(gapSection?.bullets?.some((line) => line.includes("Aged debtors report")), gapSection?.bullets?.join(" | ") ?? "");
+const state = shown.find((section) => section.key === "state_of_business");
+assert(state?.body.includes("scores 74"), state?.body ?? "");
+assert(!state?.body.includes("/100"), state?.body ?? "");
+assert(state?.body.includes("Cash (93)"), state?.body ?? "");
+assert(state?.body.includes("Profit (60)"), state?.body ?? "");
+assert(packScoreProse("profit drivers is the weakest pillar at 72") === "Profit is the weakest pillar at 72", "lowercase pillar names");
 
 console.log("aqa-followup ok");

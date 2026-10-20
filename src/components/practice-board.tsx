@@ -26,13 +26,7 @@ import {
   clearForcePortal,
   openPracticeSettings,
 } from "@/lib/user-roles";
-import {
-  cashPillarFollowsForecast,
-  scorecardHealthFromFinancials,
-  scoreTier,
-  type OverallHealth,
-} from "@/lib/health-score";
-import { periodMonthsOf } from "@/lib/ratios";
+import { liveHealthFromBooks, scoreTier, type OverallHealth } from "@/lib/health-score";
 import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
 import {
   buildAttentionItems,
@@ -1173,22 +1167,15 @@ function toClientRow(
     const fyStartMonth =
       parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
     const openingMissing = storedOpeningIsMissing(c.cashflow);
-    const scored = cashPillarFollowsForecast(
-      scorecardHealthFromFinancials({
-        financials: c.financials,
-        fyStartMonth,
-        periodMonths: periodMonthsOf(c.financials),
-        cashRunwayWeeks: runwayWeeks,
-        market: clientMarket,
-        shortfallWeek: assessed.outlook.shortfallWeek,
-      }),
-      {
-        openingMissing,
-        opening: outlook.opening,
-        closings: outlook.closing,
-        floor: outlook.floor,
-      },
-    );
+    const scored = liveHealthFromBooks({
+      financials: c.financials,
+      cashflow: c.cashflow,
+      financialsUpdatedAt: c.financials_updated_at ?? null,
+      fyStartMonth,
+      market: clientMarket,
+      industry: clientIndustryDisplay(c.name, parseOperatingProfile(c.operating_profile)),
+      timeZone: clientMarket.timezone,
+    });
     const statusWord = clientListStatusWord({
       healthLabel: scored.displayLabel,
       healthOverall: scored.overall,

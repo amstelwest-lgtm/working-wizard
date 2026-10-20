@@ -57,7 +57,8 @@ assert(firmBandsIdx !== -1, "firm band table is styled");
 const firmBands = css.slice(firmBandsIdx, css.indexOf(".price-grid{", firmBandsIdx));
 assert(firmBands.includes("background-color:var(--bg-2)"), "firm band cells sit on a solid --bg-2 surface");
 assert(firmBands.includes("-webkit-text-fill-color:var(--ink)"), "firm band body text pins cream fill, not a clipped gold");
-assert(firmBands.includes("-webkit-text-fill-color:#1b1300"), "firm band gold CTAs pin near-black fill");
+assert(firmBands.includes("-webkit-text-fill-color:#fff"), "firm band CTAs pin a solid white fill");
+assert(firmBands.includes("background-color:var(--cobalt)"), "firm band CTAs use cobalt, not a gold fill");
 assert(
   !firmBands.split(/[;{}]/).some((part) => part.trim() === "color:transparent"),
   "firm band copy is never transparent clipped text",

@@ -1903,11 +1903,14 @@ export default function ActionPlanPanel({
                   const agent = handoffErrors[it.id]?.agent ?? pickups[it.id]?.agent ?? handoffByItem.get(it.id)?.run?.agent;
                   if (!agent) return undefined;
                   return () => {
+                    const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
                     void commitActionHandoff({
                       clientId,
                       actionItemId: it.id,
                       title: it.title,
                       agent,
+                    }).then((result) => {
+                      if (!result.ok) toast.error(result.error, { id: toastId });
                     });
                   };
                 })()}

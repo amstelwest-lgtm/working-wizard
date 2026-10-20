@@ -18,6 +18,7 @@ import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
 
 export {
   FIRM_TRIAL_CARD_LINE,
+  FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_CLIENT_LIMIT,
   FIRM_TRIAL_DAYS,
   FIRM_TRIAL_SENTENCE,

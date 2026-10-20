@@ -56,7 +56,9 @@ const conflated = formatFindingProse(
   ],
   US,
 );
-assert(conflated.includes("health 69 vs live 67"), conflated);
+assert(conflated.includes("health 67"), conflated);
+assert(!conflated.includes("69 vs"), conflated);
+assert(!/\bstored\s+health\b/i.test(conflated), conflated);
 assert(!conflated.includes("health 69 days"), conflated);
 assert(conflated.includes("73 days") && !conflated.includes("days days"), conflated);
 

@@ -7,6 +7,7 @@ import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
+import { LANDING_FONT_CSS } from "@/lib/landing-assets";
 import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -19,7 +20,7 @@ export const Route = createFileRoute("/terms")({
   component: TermsPage,
   head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.terms),
-    styles: [{ children: marketingCss }],
+    styles: [{ children: LANDING_FONT_CSS }, { children: marketingCss }],
     scripts: [{ children: visitorMarketBootScript(loaderData?.copyPack) }],
   }),
 });
@@ -52,6 +53,7 @@ function TermsPage() {
       ctaLabel="Privacy ✦"
       ctaHref="/privacy"
       navCtaLabel={FIRM_TRIAL_CTA_LABEL}
+      landingNav
     >
       <p className="mk-legal-updated">
         Effective {LEGAL_EFFECTIVE} ·{" "}

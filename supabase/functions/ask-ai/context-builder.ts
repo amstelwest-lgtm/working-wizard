@@ -27,7 +27,11 @@ import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import { adviceChatProductName, adviceChatVolumeUnit, adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
-import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
+import {
+  assessClientMetrics,
+  runwayDisplayLabel,
+  storedOpeningIsMissing,
+} from "../../../src/lib/client-metrics.ts";
 import { benchmarkBusinessType } from "../../../src/lib/benchmark-sector.ts";
 import { peerMedian } from "../../../src/lib/ratios.ts";
 import {
@@ -334,9 +338,6 @@ export async function buildContext(
           fyStartMonth: overviewFyStartMonth(copyPack, operatingProfile),
         });
 
-  // Rank next moves from the full ratio set (not the focused subset).
-  const nextSteps = tier === "none" ? [] : rankNextSteps(rankingRatios, 5);
-
   // ── Action plan (planned + outstanding) ───────────────────────────────────
   let actionPlan = null;
   if (tier !== "none") {
@@ -394,8 +395,16 @@ export async function buildContext(
           periodLabel: snapPeriod,
           figuresAsOf: snapDate,
           brainSummary,
+          industry: profile?.operating?.industry ?? null,
           cashflow,
+          financialsUpdatedAt,
+          openingMissing: storedOpeningIsMissing(cashflow),
+          cashOpening: metrics?.outlook.opening,
+          cashClosings: metrics?.outlook.closing,
+          cashFloor: metrics?.outlook.floor,
         });
+  const nextSteps =
+    tier === "none" ? [] : rankNextSteps(rankingRatios, 5, overview?.weakest?.id ?? null);
   let advisorySignoff = null;
   if (tier !== "none") {
     try {

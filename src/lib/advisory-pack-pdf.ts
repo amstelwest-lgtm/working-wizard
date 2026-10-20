@@ -8,6 +8,7 @@
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ResolvedMarket } from "@/lib/market";
 import { packSectionsForPdf, type AdvisoryPack, type PackStatus } from "@/lib/advisory-pack";
+import type { LiveHealthQuote } from "@/lib/score-prose";
 import { packStatusLabel } from "@/lib/advisory-pack";
 import { resolveAdvisorySignoffState } from "@/lib/advisory-signoff";
 import { SIGNOFF_STATUS_DRAFT, SIGNOFF_STATUS_READY } from "@/lib/signoff-status";
@@ -178,6 +179,9 @@ export async function downloadAdvisoryPackPdf(input: {
    * Page 1 keeps the signer and says the figures moved. The draft watermark stays off.
    */
   figuresChanged?: boolean;
+  liveFloor?: number | null;
+  liveGaps?: readonly { title: string; severity: string }[] | null;
+  liveHealth?: LiveHealthQuote | null;
 }): Promise<{ blob: Blob; filename: string; signed: boolean }> {
   const [{ pdf }, { AdvisoryPackPDF }] = await Promise.all([
     import("@react-pdf/renderer"),
@@ -201,6 +205,10 @@ export async function downloadAdvisoryPackPdf(input: {
   const sections: AdvisoryPackPdfSection[] = packSectionsForPdf(input.pack.content.sections, {
     signed: Boolean(stamp),
     firmName: stamp?.firmName ?? input.profile.firmName,
+    liveFloor: input.liveFloor,
+    currency: input.market?.currency,
+    liveGaps: input.liveGaps,
+    liveHealth: input.liveHealth,
   }).map((s) => ({
     title: s.title,
     body: s.body,

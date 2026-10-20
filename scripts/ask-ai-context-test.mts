@@ -421,8 +421,7 @@ assert(mixed.user.includes("do not quote a reconstructed EBIT"), mixed.user);
 assert(mixed.system.includes("Never say there is no bank balance"), mixed.system);
 const ownerSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(
-  ownerSrc.includes("withCanonicalDebtorCreditorDays") &&
-    /computeOverallHealth\(\s*\{/.test(ownerSrc),
+  ownerSrc.includes("liveHealthFromBooks"),
   "owner health scores the same debtor and creditor days as Ratios",
 );
 
