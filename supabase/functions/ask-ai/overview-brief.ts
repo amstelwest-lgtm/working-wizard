@@ -144,8 +144,10 @@ function finiteDisplayRatios(
   for (const [key, val] of Object.entries(raw)) {
     const display = DISPLAY_TO_CAMEL[key] ? key : CAMEL_TO_DISPLAY[key];
     if (!display) continue;
-    if (!Number.isFinite(val)) {
-      if (NON_FINITE_DAY_KEYS.has(display) && Number.isNaN(val)) out[display] = Number.NaN;
+    if (typeof val !== "number" || !Number.isFinite(val)) {
+      if (NON_FINITE_DAY_KEYS.has(display) && typeof val === "number" && Number.isNaN(val)) {
+        out[display] = Number.NaN;
+      }
       continue;
     }
     out[display] = val;
@@ -294,7 +296,7 @@ export function overviewRunwayFact(brief: OverviewBrief): string | null {
 
 export function buildOverviewBrief(input: {
   financials?: Record<string, unknown> | null;
-  ratios?: Record<string, number> | null;
+  ratios?: Record<string, number | null> | null;
   runwayWeeks?: number | null;
   runwayLabel?: string | null;
   /** Resolved cash (bank, then period). When set, wins over financials.cash. */
