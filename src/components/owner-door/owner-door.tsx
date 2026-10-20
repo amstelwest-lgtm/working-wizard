@@ -60,9 +60,10 @@ import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
 import { OwnerChat } from "./owner-chat";
+import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import {
   advisoryDeliverableTitles,
-  ownerDraftTitles,
+  ownerDraftPresentations,
   ownerNeedsView,
   type BooksLink,
   type OwnerActionRow,
@@ -125,6 +126,9 @@ export function OwnerDoor({
   cashOutlook = null,
   openingMissing = false,
   cashPillarStatus = null,
+  cashRunwayWeeks = null,
+  cashDebtorScore = null,
+  cashBurnScore = null,
   market,
   marketCountry = null,
   signoffs,
@@ -151,6 +155,7 @@ export function OwnerDoor({
   onBotChange,
   sampleNotice = null,
   planTick = 0,
+  financials = null,
 }: {
   clientId: string | null;
   businessName: string;
@@ -176,6 +181,12 @@ export function OwnerDoor({
   openingMissing?: boolean;
   /** Same cash pillar band as Health. Watch does not say below the minimum. */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
+  /** Weeks scored into the cash pillar. Names a Critical chip that is not the floor. */
+  cashRunwayWeeks?: number | null;
+  /** Scored debtor days. Names a Critical chip that is receivables. */
+  cashDebtorScore?: number | null;
+  /** Scored operating cash. Names a Critical chip that is burn. */
+  cashBurnScore?: number | null;
   market: ResolvedMarket;
   /** Stored country. Null stays off the ZA tax card even if `market` was coerced for dates. */
   marketCountry?: string | null;
@@ -213,6 +224,8 @@ export function OwnerDoor({
   sampleNotice?: string | null;
   /** Bumps when an action is handed off, so Home refetches without a reload. */
   planTick?: number;
+  /** Live books. Home drafts quote the same ratios as the scorecard. */
+  financials?: Record<string, unknown> | null;
 }) {
   const openedBot = ownerBotKey(bot);
   const [screen, setScreen] = useState<OwnerScreen>(
@@ -641,6 +654,9 @@ export function OwnerDoor({
       cashOutlook: cashOutlook ?? undefined,
       openingMissing,
       cashPillarStatus,
+      cashRunwayWeeks,
+      cashDebtorScore,
+      cashBurnScore,
       openAction,
       actionsReady,
       signedBy: latest?.signed_off_by_name ?? null,
@@ -657,6 +673,9 @@ export function OwnerDoor({
     cashOutlook,
     openingMissing,
     cashPillarStatus,
+    cashRunwayWeeks,
+    cashDebtorScore,
+    cashBurnScore,
     netIncome,
     periodEnd,
     history,
@@ -668,6 +687,14 @@ export function OwnerDoor({
   ]);
 
   const tiles = useMemo(() => ownerAnswerTiles(books), [books]);
+  const canonicalRatios = useMemo(
+    () => (financials ? scorecardRatiosFromFinancials(financials, { fyStartMonth: market.fyStartMonthDefault }) : null),
+    [financials, market.fyStartMonthDefault],
+  );
+  const draftPresentations = useMemo(
+    () => ownerDraftPresentations(activity.findings, canonicalRatios),
+    [activity.findings, canonicalRatios],
+  );
   const needs = useMemo(
     () =>
       ownerNeedsView({
@@ -677,11 +704,12 @@ export function OwnerDoor({
         actions: actionRows,
         draftsReady: !activity.loading,
         draftsUnavailable: Boolean(activity.error),
-        draftTitles: ownerDraftTitles(activity.findings),
+        draftTitles: draftPresentations.map((row) => row.text),
+        draftStale: draftPresentations.map((row) => row.stale),
         deliverablesReady: actionsReady,
         deliverablesUnavailable,
         deliverableCount,
-        advisoryTitles: advisoryDeliverableTitles(activity.findings),
+        advisoryTitles: advisoryDeliverableTitles(activity.findings, canonicalRatios),
         quickBooks,
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
@@ -695,6 +723,8 @@ export function OwnerDoor({
       activity.loading,
       activity.error,
       activity.findings,
+      draftPresentations,
+      canonicalRatios,
       deliverablesUnavailable,
       deliverableCount,
       quickBooks,
@@ -945,6 +975,7 @@ export function OwnerDoor({
           marketCountry={marketCountry}
           audience="owner"
           sampleClient={sampleClient}
+          cardPhase="ready"
           onOpen={openChat}
           onAsk={openChat}
           runState={runState}

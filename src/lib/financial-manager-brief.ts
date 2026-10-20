@@ -174,6 +174,11 @@ export function buildFinancialManagerBrief(input: {
    * Omit it and a dip under the floor still says so.
    */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
+  /**
+   * Runway, burn, or receivables, when Critical is not the cash floor.
+   * The card and this brief share the sentence.
+   */
+  cashStrainLine?: string | null;
   receivables?: number | null;
   drafts?: readonly BriefDraft[];
   draftsReady?: boolean;
@@ -267,10 +272,17 @@ export function buildFinancialManagerBrief(input: {
   const cashCopy = pillarAgrees ? null : floorCopy;
   const cashFloorLine = input.openingMissing
     ? `${OPENING_BALANCE_MISSING}.`
-    : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
-      ? `Cash is ${input.formatMoney(cashOpening)}.`
-      : (cashCopy?.sentence ?? null);
-  const cashFloorChip = input.openingMissing || pillarAgrees ? null : (cashCopy?.chip ?? null);
+    : input.cashStrainLine
+      ? input.cashStrainLine
+      : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
+        ? `Cash is ${input.formatMoney(cashOpening)}.`
+        : (cashCopy?.sentence ?? null);
+  const cashFloorChip =
+    input.openingMissing || pillarAgrees
+      ? null
+      : input.cashStrainLine
+        ? "Critical"
+        : (cashCopy?.chip ?? null);
   if (
     input.actionsReady !== false &&
     !input.openingMissing &&

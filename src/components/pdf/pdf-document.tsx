@@ -4,6 +4,7 @@ import { Document, Font, Page, View } from "@react-pdf/renderer";
 Font.registerHyphenationCallback((word) => [word]);
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { pdfFooterReserve, reportPaperSize } from "@/lib/report-pdf-layout";
 import { ReportHeader } from "./report-header";
 import { ReportFooter } from "./report-footer";
 import { DemoWatermark, DraftWatermark, SampleWatermark } from "./watermark";
@@ -93,9 +94,9 @@ export function PDFDocument({
                 producer="Milōn PDF Engine"
               >
                 <Page
-                  size="A4"
+                  size={reportPaperSize(resolved)}
                   style={{
-                    paddingBottom: sampleOn ? 68 : 56,
+                    paddingBottom: pdfFooterReserve({ sample: sampleOn, signed: Boolean(stamp) }),
                     backgroundColor: "#ffffff",
                   }}
                 >

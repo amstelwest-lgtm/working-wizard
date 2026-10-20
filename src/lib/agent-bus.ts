@@ -2,6 +2,7 @@
  * Pure rules for the agent bus. The migration's SQL mirrors these decisions.
  * Nothing here talks to the database or to a model.
  */
+import { groundAdvisoryNarrative } from "./advisory-narrative.ts";
 import { cashComfortThreshold } from "./cash-runway.ts";
 import { formatMoney, type MoneyMarket } from "./market/format.ts";
 import { statementSpanLabel } from "./statement-period.ts";
@@ -1127,13 +1128,28 @@ function compactMetricKey(key: string): string {
   return key.toLowerCase().replace(/[\s_-]/g, "");
 }
 
-function metricUnit(key: string, value: number): EvidenceMetricUnit {
+/**
+ * Health and pillar scores are bare numbers. Days metrics are checked after
+ * that, so "Working Capital Days" stays days and a health score of 69 does not.
+ */
+function isScoreMetricKey(compact: string): boolean {
+  if (compact.includes("day")) return false;
+  if (compact.startsWith("pillar")) return true;
+  if (compact === "health" || compact === "overall" || compact === "storedscore" || compact === "liveoverall") {
+    return true;
+  }
+  return compact.includes("score");
+}
+
+/** Unit for a draft figure. Health is a score (no unit). Days say days. Margins say %. */
+export function draftMetricUnit(key: string, value: number): EvidenceMetricUnit {
   const compact = compactMetricKey(key);
+  if (isScoreMetricKey(compact)) return "count";
   if (/day/.test(compact)) return "days";
   if (/margin|percent|growth|rate|burden|costratio|returnon/.test(compact)) return "percent";
   if (/turnover|multiplier|multiple|debttoequity|currentratio/.test(compact)) return "ratio";
   if (/closing|openingbalance|openingcash|bankbalance/.test(compact)) return "currency";
-  if (/week|runway|horizon|upload|ledger|score|pillar|sync/.test(compact)) return "count";
+  if (/week|runway|horizon|upload|ledger|sync/.test(compact)) return "count";
   if (
     /revenue|cash|expense|asset|liabilit|balance|amount|sales|profit|wage|cogs|payable|receivable|cost/.test(compact) ||
     Math.abs(value) >= 1000
@@ -1141,6 +1157,71 @@ function metricUnit(key: string, value: number): EvidenceMetricUnit {
     return "currency";
   }
   return "count";
+}
+
+function metricUnit(key: string, value: number): EvidenceMetricUnit {
+  return draftMetricUnit(key, value);
+}
+
+const QUOTE_RATIO_NAMES = [
+  "Debtor Days",
+  "Creditor Days",
+  "Inventory Days",
+  "Working Capital Days",
+  "Gross Margin",
+  "Operating Margin",
+  "Net Margin",
+] as const;
+
+function metricContextAt(text: string, offset: number): "score" | "days" | "margin" | "other" {
+  const before = text.slice(Math.max(0, offset - 80), offset).toLowerCase();
+  if (/\b(?:debtor|creditor|inventory|working\s+capital|wip)\s+days\b[^.\n]*$/.test(before)) return "days";
+  if (/\b(?:gross|operating|net)\s+margin\b[^.\n]*$/.test(before)) return "margin";
+  if (/\b(?:health|overall|pillar)\b[^.\n]*$/.test(before)) return "score";
+  if (/\bscore\b[^.\n]{0,24}$/.test(before)) return "score";
+  return "other";
+}
+
+/**
+ * A days figure must not rewrite a health score that shares its number, and a
+ * unit already written stays once. "73 days days" and "health 69 days" are the
+ * QA US failures.
+ */
+export function repairDraftMetricUnits(text: string): string {
+  const stripped = text.replace(
+    /\b((?:stored\s+|live\s+)?(?:health|overall)(?:\s+score)?|health\s+score|pillar(?:\s+score)?)\b([^.\n]{0,60}?)(\d+(?:\.\d+)?)(\s+days)\b/gi,
+    (_full, label: string, mid: string, num: string) => `${label}${mid}${num}`,
+  );
+  return stripped.replace(/\bdays(?:\s+days)+\b/gi, "days");
+}
+
+/** Latest scorecard ratios in the read pool. Later reads win. */
+export function canonicalQuoteRatios(pool: readonly StoredFigures[]): Record<string, number> | null {
+  const out: Record<string, number> = {};
+  for (const row of pool) {
+    for (const name of QUOTE_RATIO_NAMES) {
+      const value = row.figures[name];
+      if (typeof value === "number" && Number.isFinite(value)) out[name] = value;
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function quoteRatiosFromFigures(
+  figures: EvidenceFigures | undefined,
+  canonical?: Record<string, number> | null,
+): Record<string, number> | null {
+  const out: Record<string, number> = {};
+  for (const leaf of figureLeaves(figures)) {
+    if ((QUOTE_RATIO_NAMES as readonly string[]).includes(leaf.key)) out[leaf.key] = leaf.value;
+  }
+  if (canonical) {
+    for (const name of QUOTE_RATIO_NAMES) {
+      const value = canonical[name];
+      if (typeof value === "number" && Number.isFinite(value)) out[name] = value;
+    }
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function cashFloor(key: string, unit: EvidenceMetricUnit, market: MoneyMarket): number | undefined {
@@ -1279,21 +1360,39 @@ function rawAmountSpellings(value: number): string[] {
   return [...new Set(out)];
 }
 
-function applyCopyReplacements(text: string, replacements: { raw: string; formatted: string }[]): string {
-  const chosen = new Map<string, string>();
+type DraftAmountReplacement = { raw: string; formatted: string; unit: EvidenceMetricUnit };
+
+function applyCopyReplacements(text: string, replacements: DraftAmountReplacement[]): string {
+  const byRaw = new Map<string, DraftAmountReplacement[]>();
   for (const item of replacements) {
     if (!item.raw || item.raw === item.formatted) continue;
-    if (!chosen.has(item.raw)) chosen.set(item.raw, item.formatted);
+    const list = byRaw.get(item.raw) ?? [];
+    if (!list.some((row) => row.unit === item.unit && row.formatted === item.formatted)) list.push(item);
+    byRaw.set(item.raw, list);
   }
-  const list = [...chosen.entries()].sort((a, b) => b[0].length - a[0].length);
-  if (!list.length) return text;
-  const pattern = list.map(([raw]) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const raws = [...byRaw.keys()].sort((a, b) => b.length - a.length);
+  if (!raws.length) return text;
+  const pattern = raws.map((raw) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
   return text.replace(
     new RegExp(`(?<![R$£€][ \\u00a0\\u202f]?)(?<![\\d.])(?:${pattern})(?![\\d×%])`, "g"),
     (match, offset: number) => {
+      const options = byRaw.get(match) ?? [];
       const after = text.slice(offset + match.length, offset + match.length + 20);
       if (/^\s+out of\s+100\b/i.test(after) || /^\s*\/\s*100\b/.test(after)) return match;
-      return chosen.get(match) ?? match;
+      const ctx = metricContextAt(text, offset);
+      if (ctx === "score") return match;
+      const preferred =
+        ctx === "days"
+          ? options.find((row) => row.unit === "days")
+          : ctx === "margin"
+            ? options.find((row) => row.unit === "percent")
+            : options.length === 1
+              ? options[0]
+              : undefined;
+      if (!preferred) return match;
+      if (preferred.unit === "days" && /^\s*days\b/i.test(after)) return match;
+      if (preferred.unit === "percent" && /^\s*%/.test(after)) return match;
+      return preferred.formatted;
     },
   );
 }
@@ -1327,18 +1426,17 @@ export function storedFigureValues(rows: readonly StoredFigures[]): number[] {
 }
 
 function formatCopyAmounts(text: string, figures: EvidenceFigures | undefined, market: MoneyMarket): string {
-  const replacements: { raw: string; formatted: string }[] = [];
+  const replacements: DraftAmountReplacement[] = [];
   for (const leaf of figureLeaves(figures)) {
     const unit = metricUnit(leaf.key, leaf.value);
     if (unit === "count") continue;
     const formatted = proseForMetric(unit, leaf.value, market);
-    for (const raw of rawAmountSpellings(leaf.value)) replacements.push({ raw, formatted });
+    for (const raw of rawAmountSpellings(leaf.value)) replacements.push({ raw, formatted, unit });
     if (unit === "percent") {
-      for (const raw of loosePercentSpellings(leaf.value)) replacements.push({ raw, formatted });
+      for (const raw of loosePercentSpellings(leaf.value)) replacements.push({ raw, formatted, unit });
     }
   }
-  return applyCopyReplacements(text, replacements)
-    .replace(/\bdays\s+days\b/gi, "days")
+  return repairDraftMetricUnits(applyCopyReplacements(text, replacements))
     .replace(/\$\s*\$/g, "$")
     .replace(/R(?:[\u00a0 ]+)R(?:[\u00a0 ])/g, "R ")
     .replace(/\s+/g, " ")
@@ -1405,13 +1503,18 @@ export function polishAgentCopy(input: {
   kind?: string;
   figures?: EvidenceFigures;
   market?: MoneyMarket;
+  /** Live scorecard ratios. A stored operating margin is rewritten to this figure. */
+  canonicalRatios?: Record<string, number> | null;
   /** Every number a read returned. A healthy band is kept only when both ends are here. */
   storedNumbers?: readonly number[];
 }): { ok: true; text: string } | { ok: false; error: string } {
   const market = input.market ?? moneyMarketFromClient(null);
   const stored = input.storedNumbers ?? figureLeaves(input.figures).map((leaf) => leaf.value);
   const stripped = stripUnstoredHealthyBand(input.text.replace(/\s+/g, " ").trim(), stored);
-  const formatted = formatCopyAmounts(stripped, input.figures, market);
+  const ratios = quoteRatiosFromFigures(input.figures, input.canonicalRatios);
+  const formatted = repairDraftMetricUnits(
+    ratios ? groundAdvisoryNarrative(formatCopyAmounts(stripped, input.figures, market), ratios) : formatCopyAmounts(stripped, input.figures, market),
+  );
   if (!formatted) return { ok: false, error: `A ${input.role} needs a complete sentence.` };
   const parts = splitCopySentences(formatted);
   if (parts.length === 0) return { ok: false, error: `A ${input.role} needs a complete sentence.` };
@@ -1437,6 +1540,7 @@ export function shapeRecordedCopy(input: {
   figures: EvidenceFigures;
   periodLabel: string | null;
   market?: MoneyMarket;
+  canonicalRatios?: Record<string, number> | null;
   storedNumbers?: readonly number[];
 }):
   | {
@@ -1455,6 +1559,7 @@ export function shapeRecordedCopy(input: {
     kind: input.kind,
     figures: input.figures,
     market,
+    canonicalRatios: input.canonicalRatios,
     storedNumbers: input.storedNumbers,
   });
   if (!title.ok) return title;
@@ -1464,6 +1569,7 @@ export function shapeRecordedCopy(input: {
     kind: input.kind,
     figures: input.figures,
     market,
+    canonicalRatios: input.canonicalRatios,
     storedNumbers: input.storedNumbers,
   });
   if (!detail.ok) return detail;

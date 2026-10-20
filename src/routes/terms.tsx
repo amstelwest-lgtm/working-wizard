@@ -6,6 +6,7 @@ import { LIST_PRICES, visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
+import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -50,6 +51,7 @@ function TermsPage() {
       }
       ctaLabel="Privacy ✦"
       ctaHref="/privacy"
+      navCtaLabel={FIRM_TRIAL_CTA_LABEL}
     >
       <p className="mk-legal-updated">
         Effective {LEGAL_EFFECTIVE} ·{" "}

@@ -53,6 +53,8 @@ import {
   withMarketRpcFallback,
   type MarketSelection,
 } from "@/lib/market";
+import { accountantWithoutFirm } from "@/lib/google-practice-market";
+import { listUserFirms } from "@/lib/firm-brand";
 import { openOwnerSettings } from "@/lib/user-roles";
 import { HeaderShareButton } from "@/components/share";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
@@ -125,7 +127,8 @@ import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
-import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
+import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
+import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
@@ -2516,6 +2519,18 @@ function Index() {
           u.user.app_metadata?.provider === "google" ||
           (Array.isArray(u.user.identities) &&
             u.user.identities.some((identity) => identity.provider === "google"));
+        // A practice signup that has not chosen a location yet has no firm row.
+        // Sending them through the owner seat would mint a blank client.
+        if (
+          accountantWithoutFirm({
+            signupType: meta?.signup_type,
+            firmName: meta?.firm_name,
+            firmCount: (await listUserFirms(u.user.id)).length,
+          })
+        ) {
+          if (!cancelled) navigate({ to: "/auth/callback", replace: true });
+          return;
+        }
         // Google owner sign-in has no password signup_type until the callback stamps it.
         const shouldProvisionOwner =
           meta?.signup_type === "customer" ||
@@ -2523,7 +2538,7 @@ function Index() {
         if (shouldProvisionOwner) {
           const clientName =
             meta?.business_name || meta?.full_name || meta?.name || u.user.email || "My Business";
-          const visitorMarket = readVisitorMarket() ?? { country: "ZA" as const, regionCode: null };
+          const visitorMarket = readVisitorMarket();
           const { data: clientId, error: rpcErr } = await withMarketRpcFallback(
             () =>
               supabase.rpc("ensure_own_client", {
@@ -2564,7 +2579,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [actingClientId, user?.id]);
+  }, [actingClientId, navigate, user?.id]);
 
   useEffect(() => {
     if (!effectiveClientId) {
@@ -2648,6 +2663,10 @@ function Index() {
   const boardMarket = useMemo(
     () => marketForClient({ market: workspaceMarket }),
     [workspaceMarket],
+  );
+  const ownerCanonicalRatios = useMemo(
+    () => scorecardRatiosFromFinancials(v as unknown as Record<string, unknown>, { fyStartMonth: boardMarket.fyStartMonthDefault }),
+    [v, boardMarket.fyStartMonthDefault],
   );
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [reviewSignoffs, setReviewSignoffs] = useState<
@@ -4031,14 +4050,18 @@ function Index() {
                 })}
                 history={history}
                 cashflow={clientMeta?.cashflow ?? null}
+                financials={v as unknown as Record<string, unknown>}
                 sampleNotice={
                   statementSampleImplausible(v as unknown as Record<string, unknown>)
-                    ? IMPLAUSIBLE_SAMPLE_NOTE
+                    ? implausibleSampleNote(boardMarket)
                     : null
                 }
                 cashOutlook={ownerDoorOutlook}
                 openingMissing={ownerOpeningMissing}
                 cashPillarStatus={pillarStatus.cash ?? null}
+                cashRunwayWeeks={cashBalance != null ? effectiveRunway : null}
+                cashDebtorScore={Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null}
+                cashBurnScore={Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null}
                 market={boardMarket}
                 marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
@@ -4241,6 +4264,7 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified
                             isOwner={userRole !== "client_member"}
+                            canonicalRatios={ownerCanonicalRatios}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(
@@ -4274,7 +4298,7 @@ function Index() {
                         <>
                           {statementSampleImplausible(v as unknown as Record<string, unknown>) ? (
                             <p className="owner-lede" role="status" data-sample-notice="">
-                              {IMPLAUSIBLE_SAMPLE_NOTE}
+                              {implausibleSampleNote(boardMarket)}
                             </p>
                           ) : null}
                           <ProfitLead periodLabel={readStatementMeta(v, boardMarket).periodLabel} />
@@ -4338,6 +4362,7 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified
                             isOwner={userRole !== "client_member"}
+                            canonicalRatios={ownerCanonicalRatios}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerView
                             pillars={overallHealth.pillars}
@@ -6021,6 +6046,7 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified={viewMode === "simplified"}
                             isOwner={userRole !== "client_member"}
+                            canonicalRatios={ownerCanonicalRatios}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(

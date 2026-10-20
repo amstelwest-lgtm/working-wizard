@@ -461,7 +461,7 @@ assert(
   !loadBody.slice(0, loadBody.indexOf("earlyRow == null")).includes("financialsHaveRevenue"),
   "a non-NULL revenue row is not returned before the parallel read",
 );
-assert(studio.includes("noFigures.showPageCount"), "page count is gated by the no-figures state");
+assert(!studio.includes("{report.pages}"), "the card does not print an invented page count");
 assert(studio.includes("noFigures.showSignoff"), "sign-off is gated by the no-figures state");
 assert(studio.includes("data-report-empty"), "the empty reason is rendered on the card");
 

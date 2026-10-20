@@ -120,6 +120,8 @@ function clientSections(clientId: string): NavSection[] {
           to: go("reports"),
           items: subs("reports", [
             { id: "scorecard", label: "Health scorecard" },
+            { id: "budget-pdf", label: "Budget & variance" },
+            { id: "benchmark", label: "Benchmark" },
             { id: "forecast", label: "13-week cash forecast" },
             { id: "waterfall", label: "Profitability waterfall" },
             { id: "drafts", label: "Drafts" },

@@ -43,8 +43,8 @@ import {
 import { mergeStatementFinancials } from "@/lib/statement-parse";
 import { autosaveKeepsLedgerSync } from "@/lib/ledger-sync-financials";
 import { MarketProvider } from "@/contexts/market";
+import { MarketGate } from "@/components/market-gate";
 import {
-  coerceMarketSelection,
   currencySymbol,
   formatDate,
   formatMoneyCompact,
@@ -52,15 +52,24 @@ import {
   isUsCopy,
   laborCostLabel,
   localizeCopy,
+  marketForClient,
+  marketToJson,
   parseMarketSelection,
   resolveMarket,
+  type ResolvedMarket,
 } from "@/lib/market";
 import { formatMoney } from "@/lib/market/format";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
-import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
+import {
+  cashFlowKnown,
+  coherentEquity,
+  effectivePeriodMonths,
+  reportInputsFromFinancials,
+} from "@/lib/equity-coherence";
+import { reportsHomeReadyLine, reportsReadyCount } from "@/lib/reports-drafter-copy";
 import { pickCurrentSnapshot } from "@/lib/financial-snapshots";
 import { defaultPeriodCoverage } from "@/lib/statement-period";
 import {
@@ -271,13 +280,16 @@ import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { attachPillarScore, rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
-import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
+import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
 import {
   hashFigures,
   latestSnapshotId,
+  countsAsSent,
+  listDeliveries,
   recordDelivery,
   warnIfDeliveryFailed,
   warnIfPdfArchiveFailed,
+  type AdvisoryDelivery,
 } from "@/lib/advisory-deliveries";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { needsPastPeriodPrompt } from "@/lib/history-coverage";
@@ -319,9 +331,9 @@ import {
   withoutPersonQueuedRuns,
   type RowAssignment,
 } from "@/lib/open-plan-home";
-import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
+import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
-import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
+import { homeActionNeeds, openActionSentence, presentHomeDraftTitle } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState } from "@/components/primitives";
@@ -593,6 +605,8 @@ function crumbSectionLabel(tab: string, section: string): string {
     open: "Open work",
     overdue: "Overdue",
     scorecard: "Health scorecard",
+    "budget-pdf": "Budget & variance",
+    benchmark: "Benchmark",
     drafts: "Drafts",
     sent: "Sent",
     all: "All reports",
@@ -916,7 +930,7 @@ function ClientView() {
         headline: facts.length ? facts.join(" · ") : null,
         items: completeDeliverablePdfItems(planItems, created),
         profile,
-        market: clientMarket,
+        market: gateMarket,
       });
     })()
       .then(() => toast.success("Action Plan PDF downloaded"))
@@ -1192,6 +1206,21 @@ function ClientView() {
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [scoreHistory, setScoreHistory] = useState<{ period_date: string; score: number }[]>([]);
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);
+  const [sentSeed, setSentSeed] = useState<AdvisoryDelivery[] | null>(null);
+  useEffect(() => {
+    if (activeTab !== "reports") return;
+    let cancelled = false;
+    listDeliveries(clientId)
+      .then((data) => {
+        if (!cancelled) setSentSeed(data.filter(countsAsSent));
+      })
+      .catch(() => {
+        if (!cancelled) setSentSeed([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, clientId, deliveryRefresh]);
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
   const [packSignoff, setPackSignoff] = useState<AdvisorySignoffAction | null>(null);
@@ -1275,13 +1304,21 @@ function ClientView() {
   /** Unresolved client notes — live open-query count for triage. */
   const [openQueriesCount, setOpenQueriesCount] = useState(0);
 
-  const clientMarket = useMemo(
-    () =>
-      resolveMarket(
-        parseMarketSelection(client?.market) ?? coerceMarketSelection(client?.market ?? null),
-      ),
-    [client?.market],
-  );
+  const storedClientSelection = parseMarketSelection(client?.market);
+  /** Tax card, rand, and SA-only copy. A missing market is not ZA. */
+  const clientGateCountry = parseMarketSelection(client?.market)?.country ?? null;
+  /** Dates, timezone, and locale. A missing market stays South Africa. */
+  const clientMarket = useMemo(() => marketForClient({ market: client?.market }), [client?.market]);
+  const gateMarket = useMemo((): ResolvedMarket => {
+    if (storedClientSelection) return resolveMarket(storedClientSelection);
+    const dates = clientMarket;
+    return {
+      ...dates,
+      currency: "USD",
+      copyPack: "us",
+      tax: { regime: "none" },
+    };
+  }, [storedClientSelection, clientMarket]);
   const fyStartMonth =
     parseOperatingProfile(client?.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
   // Health and the ratios under it use the stored figures cover, the same
@@ -1483,10 +1520,10 @@ function ClientView() {
       Object.fromEntries(
         Object.entries(SPHERE_RATIO_META).map(([k, v]) => [
           k,
-          { friendly: localizeCopy(v.friendly, clientMarket) },
+          { friendly: localizeCopy(v.friendly, gateMarket) },
         ]),
       ),
-    [clientMarket],
+    [gateMarket],
   );
 
   const pillarNotes = Object.fromEntries(
@@ -1652,7 +1689,7 @@ function ClientView() {
         clientMarket,
       )
     : null;
-  const budgetMoney = (amount: number) => formatMoneyCompact(amount, clientMarket);
+  const budgetMoney = (amount: number) => formatMoneyCompact(amount, gateMarket);
   let budgetFigure: string | null = null;
   if (budgetCompared) {
     budgetFigure = overviewBudgetTileFigure({
@@ -1716,7 +1753,7 @@ function ClientView() {
       : null,
     periodLabel: figuresPeriodLabel,
     datedPeriod: statementDated,
-    market: clientMarket,
+    market: gateMarket,
     cash:
       hasFigures && assessed.cash.amount != null
         ? {
@@ -1765,14 +1802,14 @@ function ClientView() {
         opening: hasFigures ? cashOutlook.opening : null,
         lowest: cashLowPoint?.amount ?? null,
         lowestIsOpening: cashLowPoint?.isOpening ?? true,
-        money: (amount) => formatMoneyCompact(amount, clientMarket),
+        money: (amount) => formatMoneyCompact(amount, gateMarket),
       }) ?? snapshotFigure(briefingSnapshot, "cash"),
     profit: snapshotFigure(briefingSnapshot, "om"),
     collections: storedAmountFigure(statementPosition.receivables, (amount) =>
-      statementArApMoney(amount, clientMarket),
+      statementArApMoney(amount, gateMarket),
     ),
     payables: storedAmountFigure(statementPosition.payables, (amount) =>
-      statementArApMoney(amount, clientMarket),
+      statementArApMoney(amount, gateMarket),
     ),
     budget: budgetFigure,
     moves: strategicMoves[0]?.title ?? null,
@@ -3118,14 +3155,14 @@ function ClientView() {
         operatingProfile: parseOperatingProfile(client.operating_profile),
         reviewSignoff: financialsStamp,
         sample: Boolean(client.is_demo),
-        market: clientMarket,
+        market: gateMarket,
       }) as Parameters<typeof pdf>[0],
     ).toBlob();
   }, [
     client,
     financials,
     fyStartMonth,
-    clientMarket,
+    gateMarket,
     equityAmount,
     periodMonths,
     partMonth,
@@ -3300,7 +3337,7 @@ function ClientView() {
       const tier = ratioScoreBand(score).tier;
       const key = playbookKeyForRatioName(ratioName);
       const actual = ratioActualLine(ratioName, ratioInputs, (n) =>
-        formatMoneyCompact(n, clientMarket),
+        formatMoneyCompact(n, gateMarket),
       );
       setDrawerRatioKey(key);
       setDrawerRatioName(ratioName);
@@ -3324,7 +3361,7 @@ function ClientView() {
         ratioName,
       });
     },
-    [clientId, clientMarket, firmId, ratioInputs, ratios, track],
+    [clientId, gateMarket, firmId, ratioInputs, ratios, track],
   );
 
   const openDrawerFromUiKey = useCallback(
@@ -3573,6 +3610,9 @@ function ClientView() {
         dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
       },
       cashPillarStatus: pillarStatus.cash ?? null,
+      cashRunwayWeeks: effectiveRunway,
+      cashDebtorScore: Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null,
+      cashBurnScore: Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null,
       openAction: openPlanUnavailable
         ? "Open actions aren't available yet."
         : openPlanTitles == null
@@ -3581,7 +3621,7 @@ function ClientView() {
       actionsReady: openPlanUnavailable || openPlanTitles != null,
       signedBy: null,
       signedOn: null,
-      market: clientMarket,
+      market: gateMarket,
     };
   }, [
     priorSnapshot,
@@ -3597,10 +3637,13 @@ function ClientView() {
     cashOutlook.dipsBelowFloorWeek,
     openPlanTitles,
     openPlanUnavailable,
-    clientMarket,
+    gateMarket,
     openingMissing,
     clientProfitBridge.ebit,
     pillarStatus.cash,
+    effectiveRunway,
+    healthMap.debtorDays,
+    healthMap.ocfToEbitda,
   ]);
   const homeLines = useMemo(
     () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null, openActionAgent, handedTitle),
@@ -3611,6 +3654,17 @@ function ClientView() {
   // the temporal dead zone here, and the minified chunk throws
   // "Cannot access '…' before initialization" on every /clients/:id render.
   const reportsIssued = client?.reports_issued_count ?? 0;
+  const reportReadiness = reportInputsFromFinancials(financials as Record<string, unknown>);
+  const reportsReady = reportsReadyCount({
+    figuresOnFile: hasFigures,
+    leverageReady: reportReadiness.leverageReady,
+    assetReady: reportReadiness.assetReady,
+  });
+  const reportsLine = reportsHomeReadyLine(reportsReady);
+  const canonicalRatios = useMemo(
+    () => scorecardRatiosFromFinancials(financials, { fyStartMonth }),
+    [financials, fyStartMonth],
+  );
   const homeNeeds = useMemo(() => {
     const planNeeds = homeActionNeeds({
       known: openPlanTitles != null,
@@ -3627,13 +3681,20 @@ function ClientView() {
         draftFindingLabel(row) === DRAFT_NEEDS_ACCOUNTANT,
     );
     const draftsHeading = homeActivity.loading ? "Drafts" : waiting.length ? "Drafts" : "Drafts";
+    const presented = waiting[0]
+      ? presentHomeDraftTitle(
+          canonicalScoreProse(rewriteDraftMonthStamp(waiting[0].title)),
+          canonicalRatios,
+        )
+      : null;
     const draftLines = homeActivity.loading
       ? ["Checking drafts."]
       : homeActivity.error
         ? ["Drafts aren't available yet."]
-        : waiting.length
-          ? [canonicalScoreProse(rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting."))]
+        : presented
+          ? [presented.text]
           : ["No draft waiting."];
+    const draftStale = presented ? [presented.stale] : undefined;
     const booksLine =
       homeStatementsLine(statementSpan) ?? booksAnswerSentence({ freshness: dataFreshness });
     return {
@@ -3641,8 +3702,9 @@ function ClientView() {
       actionLines,
       draftsHeading,
       draftLines,
+      draftStale,
       deliverablesHeading: "Reports",
-      deliverableLines: [reportsIssued > 0 ? "Ready to send." : "Nothing ready to send."],
+      deliverableLines: reportsLine ? [reportsLine] : [],
       syncHeading: "Books",
       syncLines: [booksLine],
     };
@@ -3651,8 +3713,9 @@ function ClientView() {
     openPlanOverdue,
     openPlanUnavailable,
     homeActivity,
+    canonicalRatios,
     dataFreshness,
-    reportsIssued,
+    reportsLine,
     statementSpan,
   ]);
   const homeBrief = useMemo(
@@ -3683,9 +3746,10 @@ function ClientView() {
         // with forecastMinimumCash, the same floor as Cash.
         cashFloor: hasFigures ? cashOutlook.floor : null,
         cashClosing: hasFigures ? cashOutlook.closing : null,
-        market: clientMarket,
+        market: gateMarket,
         openingMissing,
         cashPillarStatus: pillarStatus.cash ?? null,
+        cashStrainLine: spokenCashStrain(homeBooks),
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
@@ -3695,7 +3759,7 @@ function ClientView() {
         }),
         draftsReady: !homeActivity.loading && !homeActivity.error,
         actionsReady: openPlanTitles != null && !openPlanUnavailable,
-        formatMoney: (amount) => formatMoney(amount, clientMarket),
+        formatMoney: (amount) => formatMoney(amount, gateMarket),
       }),
     [
       client?.name,
@@ -3713,9 +3777,10 @@ function ClientView() {
       cashOutlook.floor,
       openingMissing,
       pillarStatus.cash,
+      homeBooks,
       statementPosition.receivables,
       homeActivity,
-      clientMarket,
+      gateMarket,
     ],
   );
   const homeSignoffLine = signoffStatusLine({
@@ -3758,10 +3823,31 @@ function ClientView() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  if (client.market === null) {
+    return (
+      <MarketGate
+        onSave={async (draft) => {
+          const sel = parseMarketSelection({
+            country: draft.country,
+            regionCode: draft.regionCode,
+          });
+          if (!sel) throw new Error("Pick a region and, for the US, a state.");
+          const { error } = await supabase
+            .from("clients")
+            .update({
+              market: marketToJson(sel),
+              financial_year_start_month: sel.country === "US" ? 1 : 3,
+            })
+            .eq("id", client.id);
+          if (error) throw error;
+          setClient((current) => (current ? { ...current, market: marketToJson(sel) } : current));
+        }}
+      />
+    );
+  }
+
   return (
-    <MarketProvider
-      selection={parseMarketSelection(client.market) ?? coerceMarketSelection(client.market)}
-    >
+    <MarketProvider selection={storedClientSelection} gatesFollowStored>
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
         <div className={`accountant-portal premium-shell milon-page-enter${mobileNavOpen ? " nav-open" : ""}`}>
           {/* Two honest steps while the client has no figures; the full studio
@@ -3868,7 +3954,7 @@ function ClientView() {
                       <p>
                         The health orb, profit waterfall, cash forecast and Milōn Bot all wait on
                         the first numbers. Books is where the first numbers come in.{" "}
-                        {isUsCopy(clientMarket)
+                        {isUsCopy(gateMarket)
                           ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF."
                           : "Fastest: about 3 months of bank statements for every account."}
                       </p>
@@ -3882,7 +3968,7 @@ function ClientView() {
                 <div className="owner-door" data-client-home="true">
                   {statementSampleImplausible(financials) ? (
                     <p className="mb-4 text-sm text-[#3D5270] dark:text-slate-300" role="status" data-sample-notice="">
-                      {IMPLAUSIBLE_SAMPLE_NOTE}
+                      {implausibleSampleNote(clientMarket)}
                     </p>
                   ) : null}
                   <FinancialManagerBrief
@@ -3897,8 +3983,9 @@ function ClientView() {
                     variant="character"
                     showInvite={false}
                     audience="accountant"
-                    marketCountry={parseMarketSelection(client.market)?.country ?? null}
+                    marketCountry={clientGateCountry}
                     sampleClient={Boolean(client.is_demo)}
+                    cardPhase="ready"
                     firmId={client.firm_id ?? null}
                     presence={homePresence}
                     lines={homeLines}
@@ -4099,9 +4186,10 @@ function ClientView() {
                       key={homeAgent ?? "team"}
                       clientId={clientId}
                       agent={homeAgent}
-                      marketCountry={parseMarketSelection(client.market)?.country ?? null}
+                      marketCountry={clientGateCountry}
                       audience="accountant"
                       sampleClient={Boolean(client.is_demo)}
+                      canonicalRatios={canonicalRatios}
                       homeFinding={
                         homeAgent
                           ? homeLines[homeAgent].filter((line) => line.trim()).join(" ")
@@ -4220,11 +4308,11 @@ function ClientView() {
                 {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
                 {statementSampleImplausible(financials) ? (
                   <p className="mb-4 text-sm text-[#3D5270] dark:text-slate-300" role="status">
-                    {IMPLAUSIBLE_SAMPLE_NOTE}
+                    {implausibleSampleNote(clientMarket)}
                   </p>
                 ) : null}
                 {plVersusBank ? (
-                  <PlBankDisagreeNotice disagreement={plVersusBank} market={clientMarket} />
+                  <PlBankDisagreeNotice disagreement={plVersusBank} market={gateMarket} />
                 ) : null}
 
                 <ClientBriefing
@@ -4273,7 +4361,7 @@ function ClientView() {
                   onConnectQuickBooks={() => setShowQboDialog(true)}
                   onConnectXero={() => setShowXeroDialog(true)}
                   onConnectSage={
-                    isUsCopy(clientMarket) ? undefined : () => setShowSageDialog(true)
+                    isUsCopy(gateMarket) ? undefined : () => setShowSageDialog(true)
                   }
                   qboLink={
                     qboLink
@@ -4447,7 +4535,7 @@ function ClientView() {
                                 {key === "equity" && financials[EQUITY_DERIVED_KEY] === "1"
                                   ? DERIVED_EQUITY_LABEL
                                   : key === "laborCost"
-                                    ? laborCostLabel(clientMarket)
+                                    ? laborCostLabel(gateMarket)
                                     : label}
                               </label>
                               <input
@@ -4563,7 +4651,7 @@ function ClientView() {
                   {search.section !== "score" && search.section !== "pillars" && hasStatementWorkingCapital(ratiosStatementFigures(financials)) ? (
                     <StatementArApTiles
                       position={ratiosStatementFigures(financials)}
-                      market={clientMarket}
+                      market={gateMarket}
                       id="ratios-statement-position"
                     />
                   ) : null}
@@ -4621,12 +4709,12 @@ function ClientView() {
                   <DeliverableAnswerStrip
                     heading="Profitability"
                     sentence={profitAnswerSentence({
-                      currency: currencySymbol(clientMarket),
+                      currency: currencySymbol(gateMarket),
                       periodLabel: figuresPeriodLabel,
                       preferPeriod: statementDated,
                       revenueText:
                         Number(financials.revenue) > 0
-                          ? formatMoneyCompact(Number(financials.revenue), clientMarket)
+                          ? formatMoneyCompact(Number(financials.revenue), gateMarket)
                           : null,
                       netMarginPct:
                         typeof ratios["Net Margin"] === "number" && Number.isFinite(ratios["Net Margin"])
@@ -4805,7 +4893,7 @@ function ClientView() {
                 <section id="pane-collections" aria-label="Who to chase">
                   <CollectionsPanel
                     clientId={client.id}
-                    market={clientMarket}
+                    market={gateMarket}
                     periodLabel={statementDated ? statementMeta.periodLabel : null}
                     position={ratiosStatementFigures(financials)}
                     statementSource={figureSource}
@@ -4831,7 +4919,7 @@ function ClientView() {
                 <section id="pane-payables" aria-label="Who to pay">
                   <PayablesPanel
                     clientId={client.id}
-                    market={clientMarket}
+                    market={gateMarket}
                     runwayWeeks={effectiveRunway}
                     periodLabel={statementDated ? statementMeta.periodLabel : null}
                     position={ratiosStatementFigures(financials)}
@@ -4901,10 +4989,7 @@ function ClientView() {
                       businessTypeId={client.business_type}
                       operatingProfile={parseOperatingProfile(client.operating_profile)}
                       financials={financials}
-                      fyStartMonthDefault={
-                        parseOperatingProfile(client.operating_profile)?.fyStartMonth ??
-                        resolveMarket(coerceMarketSelection(client.market)).fyStartMonthDefault
-                      }
+                      fyStartMonthDefault={fyStartMonth}
                       onRetakeProfile={() => setProfileOpen(true)}
                       onPushedToCash={() => {
                         setCashForecastReloadToken((n) => n + 1);
@@ -4941,13 +5026,36 @@ function ClientView() {
                   search.section !== "all" &&
                   search.section !== "scorecard" &&
                   search.section !== "forecast" &&
-                  search.section !== "waterfall" ? (
+                  search.section !== "waterfall" &&
+                  search.section !== "budget-pdf" &&
+                  search.section !== "benchmark" ? (
                     <ClientSectionOverview
                       clientId={clientId}
                       eyebrow="Work"
                       title="Reports"
                       subtitle="Each report, the drafts, and what has been sent has its own page."
                       links={[
+                        {
+                          id: "budget-pdf",
+                          label: "Open Budget & variance",
+                          detail: "The budget PDF, on its own page.",
+                          primary: true,
+                          search: (prev) => {
+                            const next = accountantClientTabSearch(prev, "reports", { section: "budget-pdf" }) as Record<string, unknown>;
+                            next.report = "budget";
+                            return next;
+                          },
+                        },
+                        {
+                          id: "benchmark",
+                          label: "Open Benchmark",
+                          detail: "The benchmark PDF, on its own page.",
+                          search: (prev) => {
+                            const next = accountantClientTabSearch(prev, "reports", { section: "benchmark" }) as Record<string, unknown>;
+                            next.report = "benchmark";
+                            return next;
+                          },
+                        },
                         {
                           id: "scorecard",
                           label: "Health scorecard",
@@ -5020,7 +5128,7 @@ function ClientView() {
                           onSignoffAction={setPackSignoff}
                           chip={healthChip}
                           liveCashFloor={cashOutlook.floor}
-                          currency={clientMarket.currency}
+                          currency={gateMarket.currency}
                           primary={
                             <AdvisoryTabSignoff
                               hideLine
@@ -5074,7 +5182,9 @@ function ClientView() {
                   (search.section === "all" ||
                     search.section === "scorecard" ||
                     search.section === "forecast" ||
-                    search.section === "waterfall") ? (
+                    search.section === "waterfall" ||
+                    search.section === "budget-pdf" ||
+                    search.section === "benchmark") ? (
                     <ClientSubpageFrame
                       id={search.section ?? "all"}
                       eyebrow="Reports"
@@ -5085,7 +5195,11 @@ function ClientView() {
                             ? "13-week cash forecast"
                             : search.section === "waterfall"
                               ? "Profitability waterfall"
-                              : "All reports"
+                              : search.section === "budget-pdf"
+                                ? "Budget & variance"
+                                : search.section === "benchmark"
+                                  ? "Benchmark"
+                                  : "All reports"
                       }
                       subtitle={
                         !hasFigures
@@ -5114,7 +5228,13 @@ function ClientView() {
                               key={`${client.id}-${search.section ?? "all"}`}
                               client={client.name}
                               clientId={client.id}
-                              report={search.section === "all" ? undefined : search.section}
+                              report={
+                                search.section === "budget-pdf"
+                                  ? "budget"
+                                  : search.section === "all"
+                                    ? undefined
+                                    : search.section
+                              }
                               action={
                                 search.action === "preview" || search.action === "download"
                                   ? search.action
@@ -5123,9 +5243,12 @@ function ClientView() {
                               onlyKeys={
                                 search.section === "scorecard" ||
                                 search.section === "forecast" ||
-                                search.section === "waterfall"
+                                search.section === "waterfall" ||
+                                search.section === "benchmark"
                                   ? [search.section]
-                                  : undefined
+                                  : search.section === "budget-pdf"
+                                    ? ["budget"]
+                                    : undefined
                               }
                               embedded
                               figuresOnFile={hasFigures}
@@ -5168,6 +5291,7 @@ function ClientView() {
                         <AdvisorySentHistory
                           clientId={client.id}
                           refreshToken={deliveryRefresh}
+                          seedRows={sentSeed}
                           statementPeriodLabel={reportDataPeriodLabel(financials, clientMarket)}
                           liveScorecard={renderOverviewScorecard}
                         />
@@ -5266,6 +5390,7 @@ function ClientView() {
                           key={`${client.id}-${search.filter ?? "all"}`}
                           clientId={client.id}
                           clientName={client.name}
+                          canonicalRatios={canonicalRatios}
                           reviewSignoff={stampFromSignoff(actionPlanSignoff, false)}
                           simplified
                           isOwner
@@ -5331,7 +5456,7 @@ function ClientView() {
             ratioValue={drawerRatioValue}
             revenue={drawerRevenue}
             netProfit={drawerNetProfit}
-            formatAmount={(amount) => formatMoney(amount, clientMarket)}
+            formatAmount={(amount) => formatMoney(amount, gateMarket)}
             evidence={(() => {
               if (!drawerRatioKey || drawerTier === "healthy") return null;
               const related = relatedTabForRatio(drawerRatioKey);
@@ -5541,13 +5666,13 @@ function ClientView() {
                   Bring in this client's figures
                 </DialogTitle>
                 <DialogDescription className="text-[#3D5270] dark:text-[#C5D4E4]">
-                  {isUsCopy(clientMarket)
+                  {isUsCopy(gateMarket)
                     ? "One action. Fastest: the latest P&L and balance sheet as Excel, CSV or PDF. That pack drafts Health, Profit, Cash and Budget for you to review."
                     : "One action. Fastest: about 3 months of bank statements for every account. That pack drafts Health, Profit, Cash and Budget for you to review."}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-2.5 pt-2">
-                {isUsCopy(clientMarket) ? (
+                {isUsCopy(gateMarket) ? (
                   <FirstDataChoice
                     primary
                     label="Upload a P&L and balance sheet"
@@ -5573,7 +5698,7 @@ function ClientView() {
                     Other ways
                   </summary>
                   <div className="mt-2 flex flex-col gap-2.5">
-                    {isUsCopy(clientMarket) ? (
+                    {isUsCopy(gateMarket) ? (
                       <FirstDataChoice
                         label="Upload bank statements instead"
                         hint="About 3 months for each account"
@@ -5608,7 +5733,7 @@ function ClientView() {
                         setShowXeroDialog(true);
                       }}
                     />
-                    {!isUsCopy(clientMarket) ? (
+                    {!isUsCopy(gateMarket) ? (
                       <FirstDataChoice
                         label="Connect Sage"
                         hint="Sage Business Cloud Accounting (South Africa)"

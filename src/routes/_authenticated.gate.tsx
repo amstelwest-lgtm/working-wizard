@@ -25,6 +25,7 @@ import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
 
 function FirmShellLoading() {
   return <BootSkeleton />;
@@ -32,7 +33,7 @@ function FirmShellLoading() {
 
 export function AuthGate() {
   const { user, loading } = useAuth();
-  const { firmId, brandLoading, firmMarket, hasFirm } = useAccountantProfile();
+  const { firmId, brandLoading, firmMarket, hasFirm, firms, firmsLoaded } = useAccountantProfile();
   const { track } = useAnalytics();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -45,23 +46,30 @@ export function AuthGate() {
   // Session restore replaces the user object (getSession and onAuthStateChange
   // both call setSession). Reading these here keeps that identity change, and
   // brandLoading / firmId, from cancelling the in-flight check.
+  const firmCount = firms.length;
   const latest = useRef({
     firmId,
     firmMarket,
     hasFirm,
+    firmCount,
+    firmsLoaded,
     brandLoading,
     pathname,
     navigate,
     checkEntitlement,
+    practiceMeta: user?.user_metadata,
   });
   latest.current = {
     firmId,
     firmMarket,
     hasFirm,
+    firmCount,
+    firmsLoaded,
     brandLoading,
     pathname,
     navigate,
     checkEntitlement,
+    practiceMeta: user?.user_metadata,
   };
   const userId = user?.id ?? null;
   const [firmEntitled, setFirmEntitled] = useState<boolean | null>(null);
@@ -74,6 +82,24 @@ export function AuthGate() {
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth", search: {} });
   }, [user, loading, navigate]);
+
+  // Practice metadata with no firm is the abandoned location picker. Stay on
+  // the callback until a market is chosen. Do not leave them on an empty practice.
+  useEffect(() => {
+    if (loading || !user) return;
+    const meta = user.user_metadata as { signup_type?: string; firm_name?: string } | undefined;
+    if (
+      !redirectAccountantWithoutFirm({
+        firmsLoaded,
+        signupType: meta?.signup_type,
+        firmName: meta?.firm_name,
+        firmCount,
+      })
+    ) {
+      return;
+    }
+    navigate({ to: "/auth/callback", replace: true });
+  }, [loading, user, firmsLoaded, firmCount, navigate]);
 
   useEffect(() => {
     if (loading || !userId) return;
@@ -125,6 +151,21 @@ export function AuthGate() {
         while (latest.current.brandLoading && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 50));
           if (cancelled) return;
+        }
+        const practiceMeta = latest.current.practiceMeta as
+          | { signup_type?: string; firm_name?: string }
+          | undefined;
+        if (
+          redirectAccountantWithoutFirm({
+            firmsLoaded: latest.current.firmsLoaded,
+            signupType: practiceMeta?.signup_type,
+            firmName: practiceMeta?.firm_name,
+            firmCount: latest.current.firmCount,
+          })
+        ) {
+          window.clearTimeout(timer);
+          latest.current.navigate({ to: "/auth/callback", replace: true });
+          return;
         }
         const stay = await shouldStayOnAccountantPortal(userId);
         if (cancelled) return;

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ownerRunPhaseLabel, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
+import { agentCardLines, type AgentCardPhase } from "@/lib/agent-card-phase";
 import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
@@ -106,8 +107,14 @@ export function OwnerNeedsStrip({
         </button>
         <button type="button" className="owner-needs-item" onClick={openDrafts}>
           <b>{needs.draftsHeading}</b>
-          {needs.draftLines.map((line) => (
-            <span key={line}>{line}</span>
+          {needs.draftLines.map((line, index) => (
+            <span
+              key={line}
+              data-draft-stale={needs.draftStale?.[index] ? "true" : undefined}
+              title={needs.draftStale?.[index] ? "Stored draft refreshed from the scorecard." : undefined}
+            >
+              {line}
+            </span>
           ))}
         </button>
         <button type="button" className="owner-needs-item" onClick={onDeliverables}>
@@ -150,6 +157,7 @@ export function OwnerHome({
   marketCountry = null,
   audience,
   sampleClient = false,
+  cardPhase = "ready",
   title = "Your finance team",
   lede = HOME_LEDE,
   showInvite = true,
@@ -187,6 +195,12 @@ export function OwnerHome({
   audience?: "owner" | "accountant";
   /** clients.is_demo. A demo client gets the sample card. A real client gets the preview card. */
   sampleClient?: boolean;
+  /**
+   * Shared read state for every agent card. Loading and error replace the
+   * lines on the owner door and the accountant file. Empty keeps the settled
+   * empty copy. Ready keeps the settled figures.
+   */
+  cardPhase?: AgentCardPhase;
   /** Firm whose current plan carries the Start here badge. */
   firmId?: string | null;
 }) {
@@ -216,10 +230,13 @@ export function OwnerHome({
         ) : null}
       </div>
       <div className="owner-stage">
-        <div className="owner-agents">
+        <div className="owner-agents" data-agent-card-phase={cardPhase}>
           {presence.agents.map((card) => {
-            const brief = lines[card.agent] ?? [];
-            const chip = status?.[card.agent] ?? null;
+            const brief = agentCardLines(cardPhase, lines[card.agent] ?? []);
+            const chip =
+              cardPhase === "loading" || cardPhase === "error"
+                ? null
+                : (status?.[card.agent] ?? null);
             const motion = card.motion === "idle" ? null : MOTION_LABEL[card.motion];
             return (
               <div

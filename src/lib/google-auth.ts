@@ -314,19 +314,25 @@ export async function startGoogleSignIn(opts: {
   return {};
 }
 
-export async function establishSessionFromOAuthCallback(): Promise<{ error?: string }> {
+export async function establishSessionFromOAuthCallback(): Promise<{
+  error?: string;
+  user?: { id: string; email?: string; user_metadata?: Record<string, unknown>; created_at?: string };
+}> {
   const parsed = parseOAuthCallbackParams(window.location.search, window.location.hash);
   if (parsed.error) return { error: humanizeOAuthError(parsed.error) };
 
   if (parsed.code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(parsed.code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(parsed.code);
     if (error) return { error: humanizeOAuthError(error.message) };
-    return {};
+    // The code exchange already returned the user. A follow-up getUser()
+    // takes the auth lock and can hang the callback after HTTP 200.
+    const user = data.session?.user ?? data.user ?? undefined;
+    return user ? { user } : {};
   }
 
   for (let i = 0; i < 12; i++) {
     const { data } = await supabase.auth.getSession();
-    if (data.session) return {};
+    if (data.session?.user) return { user: data.session.user };
     await new Promise((r) => setTimeout(r, 80));
   }
   return { error: "Google sign-in did not complete. Please try again." };

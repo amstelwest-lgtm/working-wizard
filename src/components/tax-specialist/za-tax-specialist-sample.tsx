@@ -529,6 +529,8 @@ export function ZaTaxSpecialistSample({
         <button
           type="button"
           className="tax-sample-stage"
+          data-agent="tax_specialist"
+          data-agent-card="tax_specialist"
           data-tax-sample-open="stage"
           onClick={openFromCard}
         >
