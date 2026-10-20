@@ -1057,6 +1057,81 @@ export function presentBudgetOnStatementWindow(
   return { doc: next, moved, uniform: kind, caption };
 }
 
+/** The plan was copied from the statement it is being scored against. */
+export const SEEDED_VARIANCE_NOTE =
+  "Plan seeded from these actuals, so variance starts once new actuals arrive";
+
+/** A missing figures cover is not a silent year. */
+export const STATEMENT_PERIOD_UNKNOWN_NOTE =
+  "Statement period is not on file, so these actuals are not scored against the budget.";
+
+/** The dates are real, and none of them sit in this budget year. */
+export const STATEMENT_PERIOD_OUTSIDE_NOTE =
+  "The statement period does not fall in this budget year, so it is not scored against the plan.";
+
+export type StatementPeriodBasis =
+  | { kind: "dated"; keys: string[]; dayFraction: number | null }
+  | { kind: "stored"; months: number }
+  | { kind: "unknown" };
+
+/**
+ * How long the statement is, for a budget comparison.
+ * A stored `periodMonths` is that cover, including 12. Dates are used only
+ * when they describe the same length, or when no length is stored.
+ * A dated year that only overlaps part of the plan stays that overlap.
+ * No length and no dates are unknown — not 12 months.
+ */
+export function statementPeriodBasis(
+  fin: Record<string, unknown> | null | undefined,
+): StatementPeriodBasis {
+  if (!fin) return { kind: "unknown" };
+  const explicit = explicitPeriodMonths(fin);
+  const start = typeof fin.periodStart === "string" ? fin.periodStart : null;
+  const end = typeof fin.periodEnd === "string" ? fin.periodEnd : null;
+  const dated = statementMonthKeys(start, end);
+  const days = inclusivePeriodDays(start, end);
+  const datesAgree =
+    dated != null && dated.length > 0 && (explicit == null || explicit === dated.length);
+  if (datesAgree && dated) {
+    const partMonth =
+      days != null && days < 28 && dated.length <= 1 && (explicit == null || explicit <= 1);
+    return {
+      kind: "dated",
+      keys: dated,
+      dayFraction: partMonth ? days / 30 : null,
+    };
+  }
+  if (explicit != null) return { kind: "stored", months: explicit };
+  return { kind: "unknown" };
+}
+
+/** Months of this plan the statement is scored against. Null when the period is unknown. */
+export function varianceWindowKeys(
+  basis: StatementPeriodBasis,
+  fy: readonly string[],
+  endMonth: string,
+): { keys: string[]; dayFraction: number | null } | null {
+  if (basis.kind === "unknown") return null;
+  if (basis.kind === "stored") {
+    const keys = coverMonths([...fy], endMonth, basis.months);
+    return keys.length > 0 ? { keys, dayFraction: null } : null;
+  }
+  const keys = basis.keys.filter((month) => fy.includes(month));
+  return { keys, dayFraction: basis.dayFraction };
+}
+
+export function statementSeedAmountsMatch(
+  actualRevenue: number,
+  budgetRevenue: number,
+  actualEbit: number,
+  budgetEbit: number,
+): boolean {
+  if (Math.abs(actualRevenue - budgetRevenue) >= 1) return false;
+  const ebitGap = Math.abs(actualEbit - budgetEbit);
+  const rounding = Math.max(1, Math.abs(actualRevenue) * 0.002);
+  return ebitGap <= rounding;
+}
+
 /** "Jan 2026 – Sep 2026" for the months a statement comparison actually covers. */
 export function budgetCoverWindowLabel(months: string[]): string {
   const first = months[0];
@@ -1073,15 +1148,52 @@ export function budgetSeededFromStatement(
     budgetRevenue?: number;
     ebit?: number;
     budgetEbit?: number;
+    seededFromActuals?: boolean;
   } | null | undefined,
 ): boolean {
-  if (!actuals || actuals.chip !== "Estimated from statement pace") return false;
+  if (!actuals) return false;
+  if (actuals.seededFromActuals) return true;
+  if (actuals.chip !== "Estimated from statement pace") return false;
   if (actuals.budgetRevenue == null || actuals.ebit == null || actuals.budgetEbit == null) return false;
-  if (Math.abs(actuals.revenue - actuals.budgetRevenue) >= 1) return false;
-  const ebitGap = Math.abs(actuals.ebit - actuals.budgetEbit);
-  // Gross margin on the display seed is rounded to 0.1 point. That gap is the seed.
-  const rounding = Math.max(1, Math.abs(actuals.revenue) * 0.002);
-  return ebitGap <= rounding;
+  return statementSeedAmountsMatch(
+    actuals.revenue,
+    actuals.budgetRevenue,
+    actuals.ebit,
+    actuals.budgetEbit,
+  );
+}
+
+/** Sentence for a comparison that is not a result. Null when the variance is real. */
+export function budgetComparisonNote(
+  actuals: {
+    chip?: string | null;
+    revenue?: number;
+    budgetRevenue?: number;
+    ebit?: number;
+    budgetEbit?: number;
+    periodKnown?: boolean;
+    seededFromActuals?: boolean;
+    outsidePlan?: boolean;
+  } | null | undefined,
+): string | null {
+  if (!actuals) return null;
+  if (actuals.outsidePlan) return STATEMENT_PERIOD_OUTSIDE_NOTE;
+  if (
+    actuals.seededFromActuals ||
+    (actuals.revenue != null &&
+      budgetSeededFromStatement({
+        chip: actuals.chip,
+        revenue: actuals.revenue,
+        budgetRevenue: actuals.budgetRevenue,
+        ebit: actuals.ebit,
+        budgetEbit: actuals.budgetEbit,
+        seededFromActuals: actuals.seededFromActuals,
+      }))
+  ) {
+    return SEEDED_VARIANCE_NOTE;
+  }
+  if (actuals.periodKnown === false) return STATEMENT_PERIOD_UNKNOWN_NOTE;
+  return null;
 }
 
 function coverMonths(fy: string[], endMonth: string, periodMonths: number): string[] {
@@ -1104,12 +1216,15 @@ export function budgetVersusStatement(
   market: DateMarket,
 ): (BudgetActuals & {
   chip: BudgetActualsChip;
-  budgetRevenue: number;
-  budgetCogs: number;
-  budgetOverheads: number;
+  budgetRevenue?: number;
+  budgetCogs?: number;
+  budgetOverheads?: number;
   ebit: number;
-  budgetEbit: number;
-  periodMonths: number;
+  budgetEbit?: number;
+  periodMonths?: number;
+  periodKnown: boolean;
+  seededFromActuals: boolean;
+  outsidePlan?: boolean;
 }) | null {
   if (!periodFinancials) return null;
   const aliased = withCostAliases(
@@ -1118,56 +1233,76 @@ export function budgetVersusStatement(
   const bridge = periodProfitBridge(aliased);
   if (!(bridge.revenue || bridge.cogs || bridge.operatingExpenses)) return null;
   const meta = readStatementMeta(periodFinancials, market);
-  const months = periodMonthsOf(periodFinancials);
-  const days = inclusivePeriodDays(meta.periodStart, meta.periodEnd);
   const rows = computeBudgetMonths(doc, doc.activeScenario);
   const fy = fyMonths(doc.fyStart);
   const endMonth = meta.periodEnd?.slice(0, 7) ?? "";
   const endInFy = /^\d{4}-\d{2}$/.test(endMonth) && fy.includes(endMonth);
-  let budgetRevenue = 0;
-  let budgetCogs = 0;
-  let budgetOverheads = 0;
-  let budgetEbit = 0;
-  let label = "Statement, prorated";
-  let periodMonths = 1;
-  if (days != null && days < 28 && months <= 1 && rows.length) {
-    const row = (endInFy ? rows.find((r) => r.month === endMonth) : null) ?? rows[0];
-    const frac = days / 30;
-    budgetRevenue = row.revenue * frac;
-    budgetCogs = row.cogs * frac;
-    budgetOverheads = row.overheads * frac;
-    budgetEbit = row.ebit * frac;
-    const dated = meta.periodLabel?.trim();
-    label = dated
-      ? `${dated}, prorated`
-      : `${endInFy ? budgetCoverWindowLabel([endMonth]) : "Statement"}, prorated`;
-    periodMonths = 1;
-  } else {
-    const statementKeys = statementMonthKeys(meta.periodStart, meta.periodEnd);
-    const keys = statementKeys
-      ? statementKeys.filter((month) => fy.includes(month))
-      : coverMonths(fy, endInFy ? endMonth : "", months);
-    for (const row of rows) {
-      if (!keys.includes(row.month)) continue;
-      budgetRevenue += row.revenue;
-      budgetCogs += row.cogs;
-      budgetOverheads += row.overheads;
-      budgetEbit += row.ebit;
-    }
-    label = `${budgetCoverWindowLabel(keys)}, prorated`;
-    periodMonths = keys.length;
-  }
-  return {
-    label,
+  const window = varianceWindowKeys(
+    statementPeriodBasis(periodFinancials),
+    fy,
+    endInFy ? endMonth : "",
+  );
+  const base = {
     revenue: bridge.revenue,
     cogs: bridge.cogs,
     fixedCosts: bridge.operatingExpenses,
     ebit: bridge.ebit,
-    chip: "Estimated from statement pace",
+    chip: "Estimated from statement pace" as const,
+  };
+  if (window && window.keys.length === 0) {
+    return {
+      ...base,
+      label: "Outside this budget year",
+      periodKnown: true,
+      seededFromActuals: false,
+      outsidePlan: true,
+    };
+  }
+  if (!window) {
+    const yearRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
+    const yearEbit = rows.reduce((sum, row) => sum + row.ebit, 0);
+    const seeded =
+      budgetMonthsAreUniform(doc) &&
+      statementSeedAmountsMatch(bridge.revenue, yearRevenue, bridge.ebit, yearEbit);
+    return {
+      ...base,
+      label: "Statement period unknown",
+      budgetRevenue: seeded ? bridge.revenue : undefined,
+      budgetCogs: seeded ? bridge.cogs : undefined,
+      budgetOverheads: seeded ? bridge.operatingExpenses : undefined,
+      budgetEbit: seeded ? bridge.ebit : undefined,
+      periodKnown: false,
+      seededFromActuals: seeded,
+    };
+  }
+  let budgetRevenue = 0;
+  let budgetCogs = 0;
+  let budgetOverheads = 0;
+  let budgetEbit = 0;
+  const scale = window.dayFraction ?? 1;
+  for (const row of rows) {
+    if (!window.keys.includes(row.month)) continue;
+    budgetRevenue += row.revenue * scale;
+    budgetCogs += row.cogs * scale;
+    budgetOverheads += row.overheads * scale;
+    budgetEbit += row.ebit * scale;
+  }
+  const dated = window.dayFraction != null ? meta.periodLabel?.trim() : "";
+  const label = dated
+    ? `${dated}, prorated`
+    : `${budgetCoverWindowLabel(window.keys)}, prorated`;
+  const seeded =
+    budgetMonthsAreUniform(doc) &&
+    statementSeedAmountsMatch(bridge.revenue, budgetRevenue, bridge.ebit, budgetEbit);
+  return {
+    ...base,
+    label,
     budgetRevenue,
     budgetCogs,
     budgetOverheads,
     budgetEbit,
-    periodMonths,
+    periodMonths: window.keys.length,
+    periodKnown: true,
+    seededFromActuals: seeded,
   };
 }

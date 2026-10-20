@@ -1718,7 +1718,10 @@ function ClientView() {
     : null;
   const budgetMoney = (amount: number) => formatMoneyCompact(amount, gateMarket);
   let budgetFigure: string | null = null;
-  if (budgetCompared) {
+  const budgetComparable =
+    budgetCompared != null &&
+    (budgetCompared.periodKnown !== false || budgetSeededFromStatement(budgetCompared));
+  if (budgetComparable && budgetCompared) {
     budgetFigure = overviewBudgetTileFigure({
       budgetRevenue: budgetCompared.budgetRevenue,
       actualRevenue: budgetCompared.revenue,

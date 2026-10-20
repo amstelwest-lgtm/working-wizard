@@ -49,12 +49,15 @@ export function BudgetVariancePanel({
   doc,
   role = "owner",
   statementPace = false,
+  comparisonNote = null,
 }: {
   clientId?: string;
   doc: BudgetDocument;
   role?: "owner" | "accountant";
   /** The month tiles already compare a pro-rated statement. Don't say there are no actuals. */
   statementPace?: boolean;
+  /** Seeded plan or an unknown period. Shown to both the owner and the accountant. */
+  comparisonNote?: string | null;
 }) {
   const { market, selection } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
@@ -254,7 +257,7 @@ export function BudgetVariancePanel({
 
   const imported = rows.length;
   const accountantEmpty = statementPace
-    ? "The line above uses the saved statement spread across the year. Upload a month’s management accounts when that file exists."
+    ? "The line above uses the saved statement for the months it covers. Upload a month’s management accounts when that file exists."
     : "Closed until a month’s management accounts are on file — until then there is nothing to compare, and that is expected.";
   const accountantLoaded = `${imported} month${imported === 1 ? "" : "s"} of management accounts on file. Open to see where the plan is off.`;
 
@@ -264,17 +267,24 @@ export function BudgetVariancePanel({
       icon={Scale}
       title="Budget vs actuals"
       subtitle={
-        role === "accountant"
-          ? imported
-            ? accountantLoaded
-            : accountantEmpty
-          : imported
-            ? `${imported} month${imported === 1 ? "" : "s"} compared to the plan. Open to see the gap.`
-            : "Upload a month’s P&L when you have it — this is how the plan is checked, not how it is built."
+        comparisonNote && imported === 0
+          ? comparisonNote
+          : role === "accountant"
+            ? imported
+              ? accountantLoaded
+              : accountantEmpty
+            : imported
+              ? `${imported} month${imported === 1 ? "" : "s"} compared to the plan. Open to see the gap.`
+              : "Upload a month’s P&L when you have it — this is how the plan is checked, not how it is built."
       }
       defaultOpen={false}
     >
       <div className="space-y-4">
+        {comparisonNote && imported === 0 ? (
+          <p className="text-sm font-medium leading-relaxed text-[#102A43] dark:text-slate-100" data-budget-comparison-note="">
+            {comparisonNote}
+          </p>
+        ) : null}
         {role === "accountant" && (
           <div className="rounded-xl border border-[#DBEAFE] bg-white/55 px-4 py-3 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200">
             <p>

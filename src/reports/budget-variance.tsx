@@ -112,20 +112,29 @@ function VarianceTable({
   market,
   heading,
   intro,
+  hideVariance = false,
 }: {
   rows: BudgetPdfRow[];
   accent: string;
   market: ResolvedMarket;
   heading: ReactNode;
   intro?: ReactNode;
+  /** Seeded plans and unknown periods are not a variance result. */
+  hideVariance?: boolean;
 }) {
-  const cols = [
-    { label: "Line", flex: 2.1, align: "left" as const },
-    { label: "Budget", flex: 1.25, align: "right" as const },
-    { label: "Actual", flex: 1.25, align: "right" as const },
-    { label: "Variance", flex: 1.45, align: "right" as const },
-    { label: "%", flex: 0.7, align: "right" as const },
-  ];
+  const cols = hideVariance
+    ? [
+        { label: "Line", flex: 2.1, align: "left" as const },
+        { label: "Budget", flex: 1.25, align: "right" as const },
+        { label: "Actual", flex: 1.25, align: "right" as const },
+      ]
+    : [
+        { label: "Line", flex: 2.1, align: "left" as const },
+        { label: "Budget", flex: 1.25, align: "right" as const },
+        { label: "Actual", flex: 1.25, align: "right" as const },
+        { label: "Variance", flex: 1.45, align: "right" as const },
+        { label: "%", flex: 0.7, align: "right" as const },
+      ];
   const header = (
     <View style={[styles.headerRow, { backgroundColor: accent }]}>
       {cols.map((c) => (
@@ -157,25 +166,29 @@ function VarianceTable({
             <Text style={[styles.cell, { flex: 1.25, textAlign: "right" }]}>
               {row.actual == null ? "—" : fmtRand(row.actual, market)}
             </Text>
-            <View style={{ flex: 1.45, alignItems: "flex-end" }}>
-              {row.delta == null || varianceIsZeroPair(row.budget, row.actual) ? (
-                <Text style={styles.cell}>—</Text>
-              ) : (
-                <>
-                  <Text style={[styles.varTag, { color }]}>
-                    {overUnder(row.delta, row.budget, row.actual)}
-                  </Text>
-                  <Text style={[styles.varAmt, { color }]}>{signedMoney(row.delta, market)}</Text>
-                </>
-              )}
-            </View>
-            <View style={{ flex: 0.7, overflow: "hidden" }}>
-              <Text style={[styles.cell, { textAlign: "right", color }]}>
-                {varianceIsZeroPair(row.budget, row.actual)
-                  ? "—"
-                  : variancePctCell(row.deltaPct, row.deltaPctNote)}
-              </Text>
-            </View>
+            {hideVariance ? null : (
+              <View style={{ flex: 1.45, alignItems: "flex-end" }}>
+                {row.delta == null || varianceIsZeroPair(row.budget, row.actual) ? (
+                  <Text style={styles.cell}>—</Text>
+                ) : (
+                  <>
+                    <Text style={[styles.varTag, { color }]}>
+                      {overUnder(row.delta, row.budget, row.actual)}
+                    </Text>
+                    <Text style={[styles.varAmt, { color }]}>{signedMoney(row.delta, market)}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            {hideVariance ? null : (
+              <View style={{ flex: 0.7, overflow: "hidden" }}>
+                <Text style={[styles.cell, { textAlign: "right", color }]}>
+                  {varianceIsZeroPair(row.budget, row.actual)
+                    ? "—"
+                    : variancePctCell(row.deltaPct, row.deltaPctNote)}
+                </Text>
+              </View>
+            )}
         </View>
       );
   };
@@ -278,6 +291,7 @@ export function BudgetVariancePDF({
           market={market}
           heading={<SectionHeader title={section.title} color={theme.accent} />}
           intro={section.note ? <Text style={styles.note}>{section.note}</Text> : null}
+          hideVariance={model.suppressVariance}
         />
       ))}
 

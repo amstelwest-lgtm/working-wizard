@@ -30,9 +30,16 @@ import {
   type VarianceTaxonomyKey,
 } from "@/lib/budget.variance";
 import { formatMoney, marketForClient, ZA_MARKET, type DateMarket, type ResolvedMarket } from "@/lib/market";
-import { presentBudgetRebuildNote } from "@/lib/budget.bridges";
+import {
+  budgetMonthsAreUniform,
+  presentBudgetRebuildNote,
+  SEEDED_VARIANCE_NOTE,
+  statementPeriodBasis,
+  statementSeedAmountsMatch,
+  STATEMENT_PERIOD_OUTSIDE_NOTE,
+  STATEMENT_PERIOD_UNKNOWN_NOTE,
+} from "@/lib/budget.bridges";
 import { periodProfitBridge } from "@/lib/period-profit";
-import { periodMonthsOf } from "@/lib/ratios";
 import { inAppAccountantSignoffLine } from "@/lib/review-signoff-stamp";
 import { signoffStatusLine } from "@/lib/signoff-status";
 import { formatReviewDateTime } from "@/lib/market";
@@ -48,6 +55,15 @@ export type BudgetPdfActual = {
    * statement total once.
    */
   statementCoverMonths?: number;
+  /**
+   * Dated months the statement actually spans. Used instead of a stored
+   * length when the file did not record `periodMonths`.
+   */
+  statementMonthKeys?: string[];
+  /** Share of the end month when the statement is shorter than 28 days. */
+  dayFraction?: number | null;
+  /** The statement has figures and no period. It is not scored as a year. */
+  periodUnknown?: boolean;
   /** Interest between EBIT and profit before tax. Zero when the statement has none. */
   interest?: number;
   /** Tax between profit before tax and net profit. */
@@ -95,6 +111,8 @@ export type BudgetPdfModel = {
   includesDraftActuals: boolean;
   fullYearNote: string;
   headline: string;
+  /** The comparison is the seed, or the period is unknown. Variance columns stay off. */
+  suppressVariance: boolean;
   summary: BudgetPdfRow[];
   sections: BudgetPdfSection[];
   notes: BudgetPdfNote[];
@@ -417,17 +435,73 @@ export function budgetActualFromFinancials(
     interest: bridge.interest,
     tax: bridge.tax,
     overheadsUnsplit: true,
-    statementCoverMonths: periodMonthsOf(fin),
+    ...statementCoverFields(fin),
+  };
+}
+
+function statementCoverFields(fin: Record<string, unknown>): Pick<
+  BudgetPdfActual,
+  "statementCoverMonths" | "statementMonthKeys" | "dayFraction" | "periodUnknown"
+> {
+  const basis = statementPeriodBasis(fin);
+  if (basis.kind === "dated") {
+    return {
+      statementCoverMonths: basis.keys.length,
+      statementMonthKeys: basis.keys,
+      dayFraction: basis.dayFraction,
+      periodUnknown: false,
+    };
+  }
+  if (basis.kind === "stored") {
+    return {
+      statementCoverMonths: basis.months,
+      periodUnknown: false,
+    };
+  }
+  return { periodUnknown: true };
+}
+
+function scaleBudgetSum(row: BudgetMonthResult, fraction: number): BudgetMonthResult {
+  const scale = (n: number) => n * fraction;
+  return {
+    ...row,
+    revenue: scale(row.revenue),
+    cogs: scale(row.cogs),
+    grossProfit: scale(row.grossProfit),
+    overheads: scale(row.overheads),
+    depreciation: scale(row.depreciation),
+    ebitda: scale(row.ebitda),
+    ebit: scale(row.ebit),
+  };
+}
+
+function withoutVariance(row: BudgetPdfRow): BudgetPdfRow {
+  return {
+    ...row,
+    delta: null,
+    deltaPct: null,
+    deltaPctNote: null,
+    signal: null,
+    material: false,
   };
 }
 
 export function buildBudgetPdfModel(
   doc: BudgetDocument,
-  actuals: BudgetPdfActual[],
+  suppliedActuals: BudgetPdfActual[],
   market: ResolvedMarket = ZA_MARKET,
   displayTemplateId: BudgetTemplateId | null = null,
 ): BudgetPdfModel {
   const fy = fyMonths(doc.fyStart);
+  const unknownStatement = suppliedActuals.find((row) => row.periodUnknown) ?? null;
+  const outsideStatement =
+    suppliedActuals.find((row) => {
+      const keys = row.statementMonthKeys;
+      return Boolean(keys && keys.length > 0 && keys.every((month) => !fy.includes(month)));
+    }) ?? null;
+  const actuals = suppliedActuals.filter((row) => !row.periodUnknown && row !== outsideStatement);
+  const periodUnknown = unknownStatement != null && actuals.length === 0 && outsideStatement == null;
+  const outsidePlan = outsideStatement != null && actuals.length === 0;
   const results = computeBudgetMonths(doc, doc.activeScenario);
   const byMonth = new Map(results.map((r) => [r.month, r]));
 
@@ -458,15 +532,22 @@ export function buildBudgetPdfModel(
   const budgetAnchor = fy.includes(statementRow?.month ?? "")
     ? (statementRow?.month ?? comparedMonths[0])
     : comparedMonths[0];
+  const datedKeys = (statementRow?.statementMonthKeys ?? []).filter((month) => fy.includes(month));
   const budgetMonthKeys =
-    statementCover != null
-      ? budgetMonthsForCover(fy, budgetAnchor, statementCover)
-      : comparedMonths;
+    datedKeys.length > 0
+      ? datedKeys
+      : statementCover != null
+        ? budgetMonthsForCover(fy, budgetAnchor, statementCover)
+        : comparedMonths;
 
   const budgetWindow = hasActuals
     ? budgetMonthKeys.map((m) => byMonth.get(m)).filter((r): r is BudgetMonthResult => Boolean(r))
     : results;
-  const budgetSum = sumBudget(budgetWindow);
+  const dayScale =
+    statementRow?.dayFraction != null && statementRow.dayFraction > 0 && statementRow.dayFraction < 1
+      ? statementRow.dayFraction
+      : 1;
+  const budgetSum = scaleBudgetSum(sumBudget(budgetWindow), dayScale);
   const actualSum = hasActuals
     ? sumTotals(comparedMonths.map((m) => normalizeTaxonomyTotals(actualByMonth.get(m)?.totals)))
     : null;
@@ -507,7 +588,7 @@ export function buildBudgetPdfModel(
       const renamed = hotelLineDisplayName(displayTemplateId, line.name, index);
       return {
         label: renamed == null ? null : scrubPlaceholderText(renamed || "") || "Revenue line",
-        budget: revenueDriverBudget(doc, driverMonths, line.id),
+        budget: revenueDriverBudget(doc, driverMonths, line.id) * dayScale,
       };
     })
     .filter((row): row is { label: string; budget: number } => row.label != null && Math.abs(row.budget) >= 1);
@@ -633,23 +714,71 @@ export function buildBudgetPdfModel(
     });
   }
 
+  const fromStatement = Boolean(
+    statementRow &&
+      (statementRow.statementCoverMonths != null || (statementRow.statementMonthKeys?.length ?? 0) > 0),
+  );
+  const seededFromWindow = Boolean(
+    fromStatement &&
+      hasActuals &&
+      actualSum &&
+      budgetMonthsAreUniform(doc) &&
+      statementSeedAmountsMatch(actualSum.revenue, budgetSum.revenue, actualSum.ebit, budgetSum.ebit),
+  );
+  const unknownTotals = unknownStatement ? normalizeTaxonomyTotals(unknownStatement.totals) : null;
+  const yearSum = sumBudget(results);
+  const seededFromUnknown = Boolean(
+    periodUnknown &&
+      unknownTotals &&
+      budgetMonthsAreUniform(doc) &&
+      statementSeedAmountsMatch(unknownTotals.revenue, yearSum.revenue, unknownTotals.ebit, yearSum.ebit),
+  );
+  const seededFromActuals = seededFromWindow || seededFromUnknown;
+  const suppressVariance = seededFromActuals || periodUnknown || outsidePlan;
+
   const labelMonths = hasActuals ? budgetMonthKeys : comparedMonths;
   const pinnedStatementLabel =
     hasActuals && statementRow && !fy.includes(statementRow.month) ? statementRow.periodLabel : null;
-  const comparedLabel = pinnedStatementLabel
+  const comparedSpan = pinnedStatementLabel
     ? pinnedStatementLabel
     : hasActuals
       ? monthsAreContiguous(fy, labelMonths)
         ? contiguousLabel(labelMonths, market)
         : `${labelMonths.length} months with actuals (not consecutive)`
       : "No monthly management accounts uploaded yet";
+  const comparedLabel = outsidePlan
+    ? "Outside this budget year"
+    : periodUnknown
+      ? "Statement period unknown"
+      : comparedSpan;
 
-  const fySum = sumBudget(results);
-  const fullYearNote = hasActuals
-    ? labelMonths.length < fy.length
-      ? `Full-year budget revenue ${money(fySum.revenue, market)}, profit ${money(fySum.ebit, market)}. Variance covers ${comparedLabel} only. Opening cash ${money(doc.openingCash || 0, market)}.`
-      : `Variance covers the full budget year. Opening cash ${money(doc.openingCash || 0, market)}.`
-    : `Full-year budget. Opening cash ${money(doc.openingCash || 0, market)}.`;
+  const fySum = yearSum;
+  const openingNote = `Opening cash ${money(doc.openingCash || 0, market)}.`;
+  const fullYearNote = outsidePlan
+    ? `${STATEMENT_PERIOD_OUTSIDE_NOTE} Full-year budget. ${openingNote}`
+    : periodUnknown
+    ? `${STATEMENT_PERIOD_UNKNOWN_NOTE} Full-year budget. ${openingNote}`
+    : hasActuals
+      ? labelMonths.length < fy.length
+        ? `Full-year budget revenue ${money(fySum.revenue, market)}, profit ${money(fySum.ebit, market)}. Variance covers ${comparedLabel} only. ${openingNote}`
+        : `Variance covers the full budget year. ${openingNote}`
+      : `Full-year budget. ${openingNote}`;
+
+  const shownSummary = suppressVariance ? summary.map(withoutVariance) : summary;
+  const shownSections = suppressVariance
+    ? sections.map((section) => ({
+        ...section,
+        note:
+          section.title === "Profit and loss"
+            ? seededFromActuals
+              ? SEEDED_VARIANCE_NOTE
+              : outsidePlan
+                ? STATEMENT_PERIOD_OUTSIDE_NOTE
+                : STATEMENT_PERIOD_UNKNOWN_NOTE
+            : section.note,
+        rows: section.rows.map(withoutVariance),
+      }))
+    : sections;
 
   const notes = [...(doc.notes ?? [])]
     .map((n) => ({ ...n, text: scrubPlaceholderText(n.text ?? "") }))
@@ -673,15 +802,22 @@ export function buildBudgetPdfModel(
     includesDraftActuals,
     fullYearNote,
     headline: "",
-    summary,
-    sections,
+    suppressVariance,
+    summary: shownSummary,
+    sections: shownSections,
     notes,
     openingCash: doc.openingCash || 0,
   };
 
   return {
     ...modelBase,
-    headline: headlineFor(summary, hasActuals, includesDraftActuals, market),
+    headline: seededFromActuals
+      ? SEEDED_VARIANCE_NOTE
+      : outsidePlan
+        ? STATEMENT_PERIOD_OUTSIDE_NOTE
+        : periodUnknown
+          ? STATEMENT_PERIOD_UNKNOWN_NOTE
+          : headlineFor(summary, hasActuals, includesDraftActuals, market),
   };
 }
 
