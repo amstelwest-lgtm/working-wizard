@@ -432,9 +432,12 @@ export function isMilonItMember(userId: string): Promise<boolean> {
   if (inflight) return inflight;
   const pending = (async () => {
     try {
-      const { data } = await supabase.rpc("is_milon_it_member" as never, {
+      const { data, error } = await supabase.rpc("is_milon_it_member" as never, {
         _user_id: userId,
       } as never);
+      // PostgREST reports a failed RPC on `error` and does not throw.
+      // Caching that as "not IT" kept the member out of the inbox for the session.
+      if (error) return false;
       const member = Boolean(data);
       itMemberChecks.set(userId, Promise.resolve(member));
       return member;
