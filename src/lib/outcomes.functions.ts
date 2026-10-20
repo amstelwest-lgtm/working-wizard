@@ -116,7 +116,7 @@ export const measureOutcomes = createServerFn({ method: "POST" })
           method: d.method,
           baseline_snapshot_id: d.baseline_snapshot_id,
           measured_snapshot_id: d.measured_snapshot_id,
-          period_label: d.period_label,
+          period_label: d.period_label, // date-ok: outcome period key stored with the measurement
           measured_at: d.measured_at,
           notes: d.notes,
           created_by: context.userId,

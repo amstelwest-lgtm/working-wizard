@@ -23,7 +23,7 @@ import { preflightUploadFile } from "@/lib/upload-quality";
 import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
-import { fyMonths, currentBudgetMonth, formatMonthLabel } from "@/lib/budget.months";
+import { fyMonths, currentBudgetMonth, formatBudgetMonthYear } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
 import { useMarket } from "@/contexts/market";
 import {
@@ -212,8 +212,8 @@ export function BudgetVariancePanel({
       setReviewOpen(false);
       toast.success(
         status === "confirmed"
-          ? `Actuals confirmed for ${formatMonthLabel(res.actual.month, market)}`
-          : `Draft actuals saved for ${formatMonthLabel(res.actual.month, market)}`,
+          ? `Actuals confirmed for ${formatBudgetMonthYear(res.actual.month, market)}`
+          : `Draft actuals saved for ${formatBudgetMonthYear(res.actual.month, market)}`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save actuals");
@@ -225,7 +225,7 @@ export function BudgetVariancePanel({
     try {
       await removeActual({ data: { clientId, month } });
       setRows((prev) => prev.filter((r) => r.month !== month));
-      toast.success(`Removed actuals for ${formatMonthLabel(month, market)}`);
+      toast.success(`Removed actuals for ${formatBudgetMonthYear(month, market)}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not delete");
     }
@@ -357,7 +357,7 @@ export function BudgetVariancePanel({
             const has = actualByMonth.has(m);
             return (
               <option key={m} value={m}>
-                {formatMonthLabel(m, market)}
+                {formatBudgetMonthYear(m, market)}
                 {has ? " · actuals" : ""}
               </option>
             );
@@ -377,7 +377,7 @@ export function BudgetVariancePanel({
             <>
               No uploaded month for{" "}
               <strong className="text-slate-900 dark:text-slate-100">
-                {formatMonthLabel(focusMonth, market)}
+                {formatBudgetMonthYear(focusMonth, market)}
               </strong>
               . The comparison above uses the saved statement spread across that window, not this
               month’s management accounts.
@@ -386,7 +386,7 @@ export function BudgetVariancePanel({
             <>
               No management accounts for{" "}
               <strong className="text-slate-900 dark:text-slate-100">
-                {formatMonthLabel(focusMonth, market)}
+                {formatBudgetMonthYear(focusMonth, market)}
               </strong>{" "}
               yet. That is normal until the month has been closed. When the PDF is ready, upload it
               here — the outcome is a line-by-line gap vs the budget you just built, not a second
@@ -394,7 +394,7 @@ export function BudgetVariancePanel({
             </>
           ) : (
             <>
-              No actuals for <strong>{formatMonthLabel(focusMonth, market)}</strong> yet. Upload that
+              No actuals for <strong>{formatBudgetMonthYear(focusMonth, market)}</strong> yet. Upload that
               month’s management accounts PDF to generate variance.
             </>
           )}
@@ -499,7 +499,7 @@ export function BudgetVariancePanel({
               >
                 {months.map((m) => (
                   <option key={m} value={m}>
-                    {formatMonthLabel(m, market)}
+                    {formatBudgetMonthYear(m, market)}
                   </option>
                 ))}
               </select>

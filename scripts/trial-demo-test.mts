@@ -502,6 +502,10 @@ assert(
 );
 assert(boardsHtml.includes("Enlarge cash flow graph"), "cash chip keeps the graph enlarge control");
 assert(
+  boardsHtml.includes('aria-label="Enlarge cash flow graph"'),
+  "the shared forecast still has its graph enlarge control",
+);
+assert(
   boardsHtml.includes('aria-label="Enlarge cash flow table"'),
   "the shared forecast still has its table enlarge control",
 );

@@ -130,12 +130,10 @@ export async function executeAnalystTool(
       storedScore: finiteScore(storedRow?.score),
       storedAsOf: typeof storedRow?.period_date === "string" ? storedRow.period_date : null,
     });
-    const snapshotLabel =
-      (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null;
     // Live books win. QA US is the September statement range, not the latest snapshot.
     const periodLabel = figuresPeriodLabelFrom(
       asRecord(booksRes.data?.financials),
-      snapshotLabel,
+      (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null,
       marketForClient({ market: ctx.market }),
     );
     return {
@@ -272,7 +270,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     kind,
     severity,
     figures: grounded.evidence.figures,
-    periodLabel: grounded.evidence.period_label,
+    periodLabel: grounded.evidence.period_label, // date-ok: evidence period key, formatted when printed
     market,
     storedNumbers: storedFigureValues(ctx.pool),
   });
@@ -295,12 +293,12 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   const recordKeys = [
     findingRecordKey({
       kind,
-      periodLabel: grounded.evidence.period_label,
+      periodLabel: grounded.evidence.period_label, // date-ok: evidence period key, formatted when printed
       snapshotId: grounded.evidence.snapshot_id,
     }),
     findingRecordKey({
       kind,
-      periodLabel: evidence.period_label,
+      periodLabel: evidence.period_label, // date-ok: evidence period key, formatted when printed
       snapshotId: evidence.snapshot_id,
     }),
   ];
@@ -325,7 +323,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     candidate: {
       kind,
       figures: evidence.figures,
-      periodLabel: evidence.period_label,
+      periodLabel: evidence.period_label, // date-ok: evidence period key, formatted when printed
       snapshotId: evidence.snapshot_id,
     },
     recent: ((recent ?? []) as Array<Record<string, unknown>>).map((row) => {
@@ -334,7 +332,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
         id: String(row.id),
         kind: typeof row.kind === "string" ? row.kind : "",
         figures: evidence?.figures,
-        periodLabel: typeof evidence?.period_label === "string" ? evidence.period_label : null,
+        periodLabel: typeof evidence?.period_label === "string" ? evidence.period_label : null, // date-ok: evidence period key, formatted when printed
         snapshotId: typeof evidence?.snapshot_id === "string" ? evidence.snapshot_id : null,
         severity: typeof row.severity === "string" ? row.severity : "",
         seenAtMs: Date.parse(String(row.last_seen ?? row.created_at ?? "")),

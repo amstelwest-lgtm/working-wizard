@@ -16,6 +16,7 @@ import {
 import { SkeletonBlock } from "@/components/primitives/skeleton-blocks";
 import { SENT_HISTORY_INTRO } from "@/lib/reports-drafter-copy";
 import { scorecardDownloadShouldRenderLive } from "@/lib/scorecard-rows";
+import { statementSpanLabel } from "@/lib/statement-period";
 
 function kindLabel(kind: AdvisoryDelivery["kind"]): string {
   if (kind === "advisory_draft") return "Advisory draft";
@@ -51,7 +52,7 @@ export function AdvisorySentHistory({
    */
   seedRows?: AdvisoryDelivery[] | null;
 }) {
-  const { dateTime } = useMarketFormat();
+  const { dateTime, market } = useMarketFormat();
   const seeded = seedRows !== undefined;
   const [rows, setRows] = useState<AdvisoryDelivery[]>(seedRows ?? []);
   const [loading, setLoading] = useState(!seeded);
@@ -185,8 +186,12 @@ export function AdvisorySentHistory({
                 </div>
                 <div style={{ marginTop: 2, fontSize: 12, color: "var(--ink-dim)" }}>
                   {dateTime(r.created_at)}
-                  {statementPeriodLabel?.trim() || r.period_label
-                    ? ` · figures ${statementPeriodLabel?.trim() || r.period_label}`
+                  {statementPeriodLabel?.trim() ||
+                  statementSpanLabel({ periodLabel: r.period_label, market })
+                    ? ` · figures ${
+                        statementPeriodLabel?.trim() ||
+                        statementSpanLabel({ periodLabel: r.period_label, market })
+                      }`
                     : ""}
                   {r.figures_hash ? ` · hash ${r.figures_hash}` : ""}
                   {r.recipient_email ? ` · ${r.recipient_email}` : ""}

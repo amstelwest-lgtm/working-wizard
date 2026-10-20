@@ -204,7 +204,7 @@ export function findingFigures(evidence: unknown): Record<string, number> {
 }
 
 export function findingPeriod(row: Pick<AgentFindingRow, "evidence" | "as_of">): string | null {
-  const label = evidenceRecord(row.evidence).period_label;
+  const label = evidenceRecord(row.evidence).period_label; // date-ok: month name for the checked line, not the raw span
   if (typeof label === "string" && label.trim()) return label.trim();
   return row.as_of;
 }
@@ -419,7 +419,7 @@ function findingDisplayFigures(evidence: unknown): { key: string; value: number 
   const record = evidenceRecord(evidence);
   const figures = record.figures;
   if (!figures || typeof figures !== "object" || Array.isArray(figures)) return [];
-  const period = typeof record.period_label === "string" ? record.period_label.trim() : "";
+  const period = typeof record.period_label === "string" ? record.period_label.trim() : ""; // date-ok: figure bucket key, not printed copy
   const flat: { key: string; value: number }[] = [];
   const buckets: { name: string; entries: { key: string; value: number }[] }[] = [];
   for (const [key, value] of Object.entries(figures as Record<string, unknown>)) {
