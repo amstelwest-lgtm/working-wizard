@@ -4,7 +4,7 @@
  * Does not send mail.
  * Run: pnpm render:try-outreach
  */
-import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { createElement } from "react";
 import { render } from "@react-email/render";
 import { firmSignupHref } from "../src/lib/firm-signup-copy";
@@ -16,8 +16,6 @@ import TryOutreachEmail, {
   TRY_OUTREACH_EXAMPLE_CLOSE,
   TRY_OUTREACH_EXAMPLE_NOTE,
   TRY_OUTREACH_HEADERS,
-  TRY_OUTREACH_INCENTIVES,
-  TRY_OUTREACH_INCENTIVES_KICKER,
   TRY_OUTREACH_PREVIEW,
   TRY_OUTREACH_SIGN_OFF,
   TRY_OUTREACH_SIGNUP_LABEL,
@@ -27,10 +25,7 @@ import TryOutreachEmail, {
   TRY_OUTREACH_TRY_URL,
   TRY_OUTREACH_UNSUBSCRIBE_URL,
   WARM_DEMO_AGENT,
-  WARM_DEMO_HERO_ALT,
-  WARM_DEMO_HERO_HEIGHT,
-  WARM_DEMO_HERO_SRC,
-  WARM_DEMO_HERO_WIDTH,
+  WARM_DEMO_WORDMARK,
   warmDemoCtaUrl,
 } from "../emails/try-outreach";
 
@@ -44,15 +39,7 @@ function fail(message: string): never {
 
 function assertImages(html: string) {
   const imgs = html.match(/<img\b[^>]*>/gi) ?? [];
-  if (imgs.length > 1) fail(`expected at most one image, found ${imgs.length}`);
-  for (const tag of imgs) {
-    const alt = tag.match(/\balt\s*=\s*"([^"]*)"/i);
-    if (!alt) fail(`img missing alt: ${tag}`);
-    if (alt[1].trim().length === 0) fail("img alt is empty");
-    if (!/\bwidth\s*=\s*"\d+"/i.test(tag)) fail(`img missing width: ${tag}`);
-    if (!/\bheight\s*=\s*"\d+"/i.test(tag)) fail(`img missing height: ${tag}`);
-    if (!/display\s*:\s*block/i.test(tag)) fail("img missing display:block");
-  }
+  if (imgs.length !== 0) fail(`expected no images, found ${imgs.length}`);
 }
 
 function assertNoImageOnlyLinks(html: string) {
@@ -115,12 +102,18 @@ function assertOutlookSafe(html: string, text: string) {
   if (html.includes("/outreach/sample-scorecard") || html.includes("/outreach/sample-roadmap")) {
     fail("the #355/#381 outreach images are still in the email");
   }
-  if (/\.gif\b/i.test(WARM_DEMO_HERO_SRC)) fail("hero is a gif");
-
-  const hero = statSync("public/email/warm-hero.png");
-  if (hero.size <= 0 || hero.size >= 40 * 1024) fail(`warm-hero.png is ${hero.size} bytes`);
-  const heroBytes = readFileSync("public/email/warm-hero.png");
-  if (heroBytes[0] !== 0x89 || heroBytes[1] !== 0x50) fail("warm-hero.png is not a PNG");
+  const runway = "Cash runway is not measured";
+  const runwayCount = (value: string) => value.replace(/\s+/g, " ").split(runway).length - 1;
+  if (runwayCount(html) !== 1) fail(`html says "${runway}" ${runwayCount(html)} times`);
+  if (runwayCount(text) !== 1) fail(`text says "${runway}" ${runwayCount(text)} times`);
+  for (const claim of ["80% time saved", "70% lower cost", "In our tests"]) {
+    if (html.includes(claim) || text.includes(claim))
+      fail(`unsourced claim still present: ${claim}`);
+  }
+  if (!html.includes(WARM_DEMO_WORDMARK) || !html.includes("#d4af37")) {
+    fail("the wordmark is not live gold text");
+  }
+  if (/<img\b/i.test(html)) fail("the wordmark is still an image");
 }
 
 const rendered = await render(createElement(TryOutreachEmail), { pretty: true });
@@ -159,12 +152,8 @@ const required = [
   "Holds the 13-week cash line and the profit bridge.",
   "Reads the ratios, the margins, and what is drifting.",
   "Turns that reading into the next move.",
-  TRY_OUTREACH_INCENTIVES_KICKER,
-  ...TRY_OUTREACH_INCENTIVES,
-  WARM_DEMO_HERO_SRC,
-  WARM_DEMO_HERO_ALT,
-  `width="${WARM_DEMO_HERO_WIDTH}"`,
-  `height="${WARM_DEMO_HERO_HEIGHT}"`,
+  WARM_DEMO_WORDMARK,
+  "Georgia",
 ];
 const flatHtml = html.replace(/\s+/g, " ");
 for (const needle of required) {

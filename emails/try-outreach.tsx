@@ -3,7 +3,7 @@
  * This file does not send mail.
  *
  * Outlook-safe: live text, one table button with a VML roundrect for
- * Outlook desktop, and at most one static hero. Motion stays on /try.
+ * Outlook desktop, and no images. Motion stays on /try.
  * The scorecard and roadmap JPEGs from #355 and #381 stay off this email.
  */
 import { Fragment } from "react";
@@ -23,13 +23,6 @@ export const TRY_OUTREACH_CTA_LABEL = "Talk to your AI finance team";
  */
 export const TRY_OUTREACH_SIGNUP_URL =
   "https://www.milonfinance.com/auth?signup=true&plan=starter&interval=month&utm_source=email";
-export const TRY_OUTREACH_INCENTIVES_KICKER = "In our tests";
-export const TRY_OUTREACH_INCENTIVES = [
-  "80% time saved",
-  "70% lower cost to serve a retainer advisory client",
-  "a better client experience",
-  "advisory becomes packageable",
-] as const;
 export const TRY_OUTREACH_SIGNUP_LABEL = "Start free trial";
 export const TRY_OUTREACH_UNSUBSCRIBE_URL = "https://www.milonfinance.com/unsubscribe";
 export const TRY_OUTREACH_ADDRESS =
@@ -43,10 +36,10 @@ export const TRY_OUTREACH_HEADERS = {
   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
 } as const;
 
-export const WARM_DEMO_HERO_SRC = "https://www.milonfinance.com/email/warm-hero.png";
-export const WARM_DEMO_HERO_ALT = "Milōn wordmark";
-export const WARM_DEMO_HERO_WIDTH = 200;
-export const WARM_DEMO_HERO_HEIGHT = 120;
+export const WARM_DEMO_WORDMARK = "MILŌN";
+/** Serif fallback already used for report titles. No web font. */
+export const WARM_DEMO_WORDMARK_FONT =
+  'Georgia, "Palatino Linotype", Palatino, "Times New Roman", serif';
 
 export type WarmDemoAgent = "financial_manager" | "analyst" | "advisor";
 
@@ -104,7 +97,6 @@ const EXAMPLE_LINES = [
   `Net margin ${EXAMPLE_READING.netMargin}.`,
   `Current ratio ${EXAMPLE_READING.currentRatio}.`,
   `Debtor days ${EXAMPLE_READING.debtorDays}.`,
-  "Cash runway is not measured.",
 ] as const;
 
 export const TRY_OUTREACH_EXAMPLE_ALT = ["Example result.", ...EXAMPLE_LINES].join(" ");
@@ -119,9 +111,6 @@ export const TRY_OUTREACH_TEXT = [
   TRY_OUTREACH_EXAMPLE_ALT,
   TRY_OUTREACH_EXAMPLE_NOTE,
   TRY_OUTREACH_EXAMPLE_CLOSE,
-  "",
-  TRY_OUTREACH_INCENTIVES_KICKER,
-  ...TRY_OUTREACH_INCENTIVES,
   "",
   `${TRY_OUTREACH_CTA_LABEL}: ${warmDemoCtaUrl()}`,
   `${TRY_OUTREACH_SIGNUP_LABEL}: ${TRY_OUTREACH_SIGNUP_URL}`,
@@ -171,7 +160,7 @@ const DARK_CSS = `
     .link { color: #9CC4FF !important; }
     .rule { border-top-color: #2A4664 !important; }
     .cta-bg, .cta-link { background-color: ${GOLD} !important; color: ${INK} !important; }
-    .hero-plate, .hero { background-color: ${CARD} !important; color: ${INK} !important; }
+    .wordmark { color: ${GOLD} !important; }
   }
   [data-ogsc] .email-bg { background-color: #0E1C2E !important; }
   [data-ogsc] .email-card { background-color: #16304A !important; }
@@ -181,7 +170,7 @@ const DARK_CSS = `
   [data-ogsc] .link { color: #9CC4FF !important; }
   [data-ogsc] .rule { border-top-color: #2A4664 !important; }
   [data-ogsc] .cta-bg, [data-ogsc] .cta-link { background-color: ${GOLD} !important; color: ${INK} !important; }
-  [data-ogsc] .hero-plate, [data-ogsc] .hero { background-color: ${CARD} !important; color: ${INK} !important; }
+  [data-ogsc] .wordmark { color: ${GOLD} !important; }
 `;
 
 export default function TryOutreachEmail() {
@@ -245,20 +234,20 @@ export default function TryOutreachEmail() {
                         dir="ltr"
                         style={{ padding: "32px 28px 28px", fontFamily: FONT, color: INK }}
                       >
-                        <table role="presentation" cellPadding={0} cellSpacing={0} border={0}>
-                          <tbody>
-                            <tr>
-                              <td
-                                className="hero-plate"
-                                bgcolor={CARD}
-                                style={{ backgroundColor: CARD, padding: 0 }}
-                                dangerouslySetInnerHTML={{
-                                  __html: `<img class="hero" src="${esc(WARM_DEMO_HERO_SRC)}" alt="${esc(WARM_DEMO_HERO_ALT)}" width="${WARM_DEMO_HERO_WIDTH}" height="${WARM_DEMO_HERO_HEIGHT}" style="display:block;width:${WARM_DEMO_HERO_WIDTH}px;height:${WARM_DEMO_HERO_HEIGHT}px;border:0;outline:none;text-decoration:none;color:${INK};background-color:${CARD};font-family:${FONT};font-size:16px;font-weight:700;line-height:20px;" />`,
-                                }}
-                              />
-                            </tr>
-                          </tbody>
-                        </table>
+                        <p
+                          className="wordmark"
+                          style={{
+                            margin: 0,
+                            fontFamily: WARM_DEMO_WORDMARK_FONT,
+                            fontSize: 22,
+                            lineHeight: "28px",
+                            fontWeight: 700,
+                            letterSpacing: "0.28em",
+                            color: GOLD,
+                          }}
+                        >
+                          {WARM_DEMO_WORDMARK}
+                        </p>
 
                         <h1
                           className="ink"
@@ -369,38 +358,6 @@ export default function TryOutreachEmail() {
                         >
                           {TRY_OUTREACH_EXAMPLE_CLOSE}
                         </p>
-
-                        <p
-                          className="link"
-                          style={{
-                            margin: "28px 0 0",
-                            fontFamily: FONT,
-                            fontSize: 12,
-                            lineHeight: "16px",
-                            fontWeight: 700,
-                            letterSpacing: "0.12em",
-                            textTransform: "uppercase",
-                            color: BLUE,
-                          }}
-                        >
-                          {TRY_OUTREACH_INCENTIVES_KICKER}
-                        </p>
-                        {TRY_OUTREACH_INCENTIVES.map((line) => (
-                          <p
-                            key={line}
-                            className="ink"
-                            style={{
-                              margin: "8px 0 0",
-                              fontFamily: FONT,
-                              fontSize: 16,
-                              lineHeight: "22px",
-                              fontWeight: 700,
-                              color: INK,
-                            }}
-                          >
-                            {line}
-                          </p>
-                        ))}
 
                         <table
                           role="presentation"
