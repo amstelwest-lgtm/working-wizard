@@ -180,8 +180,10 @@ assert(
 const owner = readFileSync("src/routes/app.tsx", "utf8");
 const accountant = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 const reports = readFileSync("src/routes/_authenticated/reports-studio.tsx", "utf8");
+const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
 assert(owner.includes("healthSignoffIsStale"), "owner Health uses the shared stale helper");
 assert(accountant.includes("healthSignoffIsStale"), "accountant Score uses the shared stale helper");
+assert(home.includes("quoteLiveScoreOnly(handoff.sentence)"), "the home beam strips a stored-versus-live note");
 assert(reports.includes("liveHealthFromBooks("), "the scorecard quotes liveHealthFromBooks");
 assert(!readFileSync("src/routes/_authenticated.gate.tsx", "utf8").includes("healthSignoffIsStale"));
 
