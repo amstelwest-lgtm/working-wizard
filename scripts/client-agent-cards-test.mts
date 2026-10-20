@@ -192,8 +192,12 @@ assert(page.includes("setLoadTimedOut(true)"), "a hung row leaves the skeleton")
 assert(page.includes("<ClientAgentStandby"), "the team renders before the row arrives");
 assert(!page.includes("marketCountry={clientMarket.country}"), "the tax card does not use the ZA date fallback");
 assert(
-  (page.match(/parseMarketSelection\(client\.market\)\?\.country \?\? null/g) ?? []).length >= 2,
+  (page.match(/marketCountry=\{clientGateCountry\}/g) ?? []).length >= 2,
   "home and the desk use the stored client country",
+);
+assert(
+  page.includes("const clientGateCountry = parseMarketSelection(client?.market)?.country ?? null"),
+  "that country is the stored market, and a missing market is not ZA",
 );
 
 const activity = readFileSync("src/hooks/use-agent-activity.ts", "utf8");
