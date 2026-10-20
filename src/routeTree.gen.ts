@@ -48,6 +48,7 @@ import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe
 import { Route as JoinTokenRouteImport } from './routes/join.$token'
 import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
 import { Route as TTokenRouteImport } from './routes/t.$token'
+import { Route as TalkIndexRouteImport } from './routes/talk.index'
 import { Route as TalkAgentRouteImport } from './routes/talk.$agent'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as AuthenticatedClientsClientIdRouteImport } from './routes/_authenticated/clients.$clientId'
@@ -267,6 +268,11 @@ const TTokenRoute = TTokenRouteImport.update({
   path: '/t/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TalkIndexRoute = TalkIndexRouteImport.update({
+  id: '/talk/',
+  path: '/talk/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TalkAgentRoute = TalkAgentRouteImport.update({
   id: '/talk/$agent',
   path: '/talk/$agent',
@@ -444,6 +450,7 @@ export interface FileRoutesByFullPath {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
+  '/talk/': typeof TalkIndexRoute
   '/talk/$agent': typeof TalkAgentRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
@@ -508,6 +515,7 @@ export interface FileRoutesByTo {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
+  '/talk': typeof TalkIndexRoute
   '/talk/$agent': typeof TalkAgentRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
@@ -574,6 +582,7 @@ export interface FileRoutesById {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
+  '/talk/': typeof TalkIndexRoute
   '/talk/$agent': typeof TalkAgentRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/_authenticated/clients_/queries': typeof AuthenticatedClientsQueriesRoute
@@ -640,6 +649,7 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
+    | '/talk/'
     | '/talk/$agent'
     | '/clients/$clientId'
     | '/clients/queries'
@@ -704,6 +714,7 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
+    | '/talk'
     | '/talk/$agent'
     | '/clients/$clientId'
     | '/clients/queries'
@@ -769,6 +780,7 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
+    | '/talk/'
     | '/talk/$agent'
     | '/_authenticated/clients/$clientId'
     | '/_authenticated/clients_/queries'
@@ -831,6 +843,7 @@ export interface RootRouteChildren {
   JoinTokenRoute: typeof JoinTokenRoute
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
+  TalkIndexRoute: typeof TalkIndexRoute
   TalkAgentRoute: typeof TalkAgentRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
   ApiResendWebhookRoute: typeof ApiResendWebhookRoute
@@ -1118,6 +1131,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/talk/': {
+      id: '/talk/'
+      path: '/talk'
+      fullPath: '/talk/'
+      preLoaderRoute: typeof TalkIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/talk/$agent': {
       id: '/talk/$agent'
       path: '/talk/$agent'
@@ -1372,6 +1392,7 @@ const rootRouteChildren: RootRouteChildren = {
   JoinTokenRoute: JoinTokenRoute,
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
+  TalkIndexRoute: TalkIndexRoute,
   TalkAgentRoute: TalkAgentRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
   ApiResendWebhookRoute: ApiResendWebhookRoute,

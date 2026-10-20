@@ -7,7 +7,7 @@
 import { forecastChatFacts } from "../../../src/lib/cash-forecast-parity.ts";
 import { MONTHS_LONG } from "../../../src/lib/market/date-presets.ts";
 import { moveFactorLabel, strategicMovePillar } from "../../../src/lib/move-pillars.ts";
-import { periodProfitBridge } from "../../../src/lib/period-profit.ts";
+import { periodProfitBridge, statementNetProfitFromSteps } from "../../../src/lib/period-profit.ts";
 import {
   baseCashflow,
   cashScreenFloor,
@@ -243,6 +243,7 @@ export type WaterfallFigures = {
   fixedCosts: number;
   interest: number;
   tax: number;
+  statedNetIncome?: number | null;
   source: "weekly" | "period";
 };
 
@@ -273,6 +274,7 @@ export function extractWaterfallFigures(financials: Record<string, unknown> | nu
       fixedCosts: wFixed,
       interest: wInt,
       tax: wTax,
+      statedNetIncome: null,
       source: "weekly",
     };
   }
@@ -280,12 +282,18 @@ export function extractWaterfallFigures(financials: Record<string, unknown> | nu
   // Same bridge the profitability waterfall uses. Interest is that charge
   // divided by revenue, not the DuPont interest-burden multiple.
   const bridge = periodProfitBridge(financials ?? {});
+  const statedRaw = financials?.netIncome;
+  const statedNet =
+    statedRaw == null || String(statedRaw).trim() === ""
+      ? null
+      : Number(String(statedRaw).replace(/,/g, ""));
   return {
     revenue: bridge.revenue,
     costOfSales: bridge.cogs,
     fixedCosts: bridge.operatingExpenses + bridge.depreciation,
     interest: bridge.interest,
     tax: bridge.tax,
+    statedNetIncome: statedNet != null && Number.isFinite(statedNet) ? statedNet : null,
     source: "period",
   };
 }
@@ -296,7 +304,12 @@ export function summarizeWaterfall(figures: WaterfallFigures): WaterfallSummary 
   const gp = revenue - costOfSales;
   const ebit = gp - fixedCosts;
   const ebt = ebit - interest;
-  const ni = ebt - tax;
+  const ni = statementNetProfitFromSteps({
+    operatingProfit: ebit,
+    interest,
+    tax,
+    statedNetIncome: figures.statedNetIncome,
+  });
   const step = (label: string, amount: number): { label: string; pctOfRevenue: number | null } => ({
     label,
     pctOfRevenue: pctOf(amount, revenue),

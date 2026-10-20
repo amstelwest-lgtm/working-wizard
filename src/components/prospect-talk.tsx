@@ -1,10 +1,11 @@
 /**
  * Full-screen one-agent conversation. The greeting is already on screen.
- * Name and email come after two exchanges, before the sample deliverable.
+ * Name and email come after three useful replies. The chat stays open
+ * after the form. Schedule a call is an optional disclosure.
  */
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { TryDemo } from "@/components/try-demo";
+import { useEffect, useState, type FormEvent } from "react";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
+import { TrySchedule, type TryCallResult } from "@/components/try-schedule";
 import { postProspectTalk } from "@/lib/prospect-talk-client";
 import {
   PROSPECT_PUBLIC_AGENTS,
@@ -15,6 +16,37 @@ import {
 
 export type TalkMessage = { role: "agent" | "you"; text: string };
 
+function AgentList({ refCode }: { refCode: string | null }) {
+  const query = refCode ? `?ref=${encodeURIComponent(refCode)}` : "";
+  return (
+    <ul className="talk-picks">
+      {PROSPECT_PUBLIC_AGENTS.map((agent) => (
+        <li className="talk-pick" key={agent.slug}>
+          <a href={`/talk/${agent.slug}${query}`}>{agent.role}</a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function TalkIndex({ refCode }: { refCode: string | null }) {
+  return (
+    <main className="talk-page" data-talk-view="index">
+      <div className="talk-top">
+        <a className="talk-wordmark" href="/">
+          MILŌN
+        </a>
+        <span className="talk-stamp">SAMPLE</span>
+      </div>
+      <h1 className="talk-title">Talk to an agent</h1>
+      <p className="talk-note">
+        Four agents. Each one walks a labelled SAMPLE. No account and no password.
+      </p>
+      <AgentList refCode={refCode} />
+    </main>
+  );
+}
+
 export function AgentPicker({
   refCode,
   reason,
@@ -22,7 +54,6 @@ export function AgentPicker({
   refCode: string | null;
   reason: "unknown" | "unavailable";
 }) {
-  const query = refCode ? `?ref=${encodeURIComponent(refCode)}` : "";
   return (
     <main className="talk-page" data-talk-view="picker" data-talk-reason={reason}>
       <div className="talk-top">
@@ -37,13 +68,7 @@ export function AgentPicker({
           ? "That link doesn't match an agent. Choose who you want to talk to."
           : "This conversation isn't available here. Choose another agent."}
       </p>
-      <ul className="talk-picks">
-        {PROSPECT_PUBLIC_AGENTS.map((agent) => (
-          <li className="talk-pick" key={agent.slug}>
-            <a href={`/talk/${agent.slug}${query}`}>{agent.role}</a>
-          </li>
-        ))}
-      </ul>
+      <AgentList refCode={refCode} />
     </main>
   );
 }
@@ -54,22 +79,27 @@ export function ProspectTalkScreen({
   askLead,
   busy,
   error,
-  showDemo,
-  demo,
-  sampleNonce = null,
+  leadReady = false,
   onSend,
   onLead,
+  onBookCall,
 }: {
   agent: ProspectAgentCopy;
   messages: TalkMessage[];
   askLead: boolean;
   busy?: boolean;
   error?: string | null;
-  showDemo?: boolean;
-  demo?: ReactNode;
-  sampleNonce?: string | null;
+  leadReady?: boolean;
   onSend?: (text: string) => void;
   onLead?: (input: { name: string; email: string; consent: boolean; honeypot: string }) => void;
+  onBookCall?: (input: {
+    name: string;
+    email: string;
+    consent: boolean;
+    honeypot: string;
+    start: string;
+    timeZone: string;
+  }) => Promise<TryCallResult>;
 }) {
   const [draft, setDraft] = useState("");
   const [name, setName] = useState("");
@@ -77,14 +107,7 @@ export function ProspectTalkScreen({
   const [consent, setConsent] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const thread: TalkMessage[] = [{ role: "agent", text: agent.greeting }, ...messages];
-
-  if (showDemo) {
-    return (
-      <div data-prospect-demo="sample">
-        {demo ?? <TryDemo sampleOnly sampleNonce={sampleNonce} />}
-      </div>
-    );
-  }
+  const clip = busy ? "thinking" : askLead ? "waiting" : "idle";
 
   return (
     <main className="talk-page" data-talk-view="agent" data-talk-agent={agent.slug}>
@@ -95,7 +118,7 @@ export function ProspectTalkScreen({
         <span className="talk-stamp">SAMPLE</span>
       </div>
       <div className="talk-stage">
-        <SilentAgentPortrait face={agent.face} label={agent.role} large />
+        <SilentAgentPortrait face={agent.face} label={agent.role} large clip={clip} />
         <div>
           <p className="talk-kicker">Milōn</p>
           <h1 className="talk-title">{agent.role}</h1>
@@ -221,6 +244,12 @@ export function ProspectTalkScreen({
           {error ? <p className="talk-error">{error}</p> : null}
         </form>
       )}
+      {leadReady ? (
+        <details className="talk-schedule" data-talk-schedule="optional">
+          <summary>Schedule a call</summary>
+          <TrySchedule onBook={onBookCall} />
+        </details>
+      ) : null}
     </main>
   );
 }
@@ -246,33 +275,38 @@ function pageUtm(): Record<string, string> {
   return out;
 }
 
-export function ProspectTalkLive({ slug, copyPack }: { slug: string; copyPack: "za" | "us" }) {
+export function ProspectTalkLive({
+  slug,
+  copyPack,
+  onBookCall,
+}: {
+  slug: string;
+  copyPack: "za" | "us";
+  onBookCall?: (input: {
+    name: string;
+    email: string;
+    consent: boolean;
+    honeypot: string;
+    start: string;
+    timeZone: string;
+  }) => Promise<TryCallResult>;
+}) {
   const [refCode, setRefCode] = useState<string | null>(null);
-  const [taxAgent, setTaxAgent] = useState<ProspectAgentCopy | null>(null);
   const [messages, setMessages] = useState<TalkMessage[]>([]);
   const [askLead, setAskLead] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
-  const [sampleNonce, setSampleNonce] = useState<string | null>(null);
+  const [leadReady, setLeadReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState("");
 
   useEffect(() => {
     setRefCode(pageRef());
-    const stored = window.sessionStorage.getItem(`milon-talk:${slug}`);
-    if (stored) setToken(stored);
+    setMessages([]);
+    setAskLead(false);
+    setLeadReady(false);
+    setError(null);
+    setToken(window.sessionStorage.getItem(`milon-talk:${slug}`) ?? "");
   }, [slug]);
-
-  useEffect(() => {
-    if (resolveTalkSlug(slug, copyPack).kind !== "tax") return;
-    let cancelled = false;
-    void import("@/lib/prospect-tax-copy").then((mod) => {
-      if (!cancelled) setTaxAgent(mod.TAX_TALK);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug, copyPack]);
 
   function remember(next: string) {
     setToken(next);
@@ -284,13 +318,12 @@ export function ProspectTalkLive({ slug, copyPack }: { slug: string; copyPack: "
       slug={slug}
       copyPack={copyPack}
       refCode={refCode}
-      taxAgent={taxAgent}
       messages={messages}
       askLead={askLead}
+      leadReady={leadReady}
       busy={busy}
       error={error}
-      showDemo={showDemo}
-      sampleNonce={sampleNonce}
+      onBookCall={onBookCall}
       onSend={(text) => {
         setBusy(true);
         setError(null);
@@ -313,7 +346,7 @@ export function ProspectTalkLive({ slug, copyPack }: { slug: string; copyPack: "
             if (result.reply) {
               setMessages((current) => [...current, { role: "agent", text: result.reply ?? "" }]);
             }
-            if (result.askLead) setAskLead(true);
+            setAskLead(result.askLead === true);
           })
           .catch(() => setError("The conversation isn't available right now."))
           .finally(() => setBusy(false));
@@ -339,8 +372,11 @@ export function ProspectTalkLive({ slug, copyPack }: { slug: string; copyPack: "
               setError(result.error ?? "The sample isn't available right now.");
               return;
             }
-            if (result.sampleNonce) setSampleNonce(result.sampleNonce);
-            setShowDemo(true);
+            setAskLead(false);
+            setLeadReady(true);
+            if (result.reply) {
+              setMessages((current) => [...current, { role: "agent", text: result.reply ?? "" }]);
+            }
           })
           .catch(() => setError("The sample isn't available right now."))
           .finally(() => setBusy(false));
@@ -357,12 +393,10 @@ export function TalkPageView({
   askLead = false,
   busy,
   error,
-  showDemo = false,
-  demo,
-  sampleNonce = null,
-  taxAgent = null,
+  leadReady = false,
   onSend,
   onLead,
+  onBookCall,
 }: {
   slug: string;
   copyPack: "za" | "us";
@@ -371,39 +405,21 @@ export function TalkPageView({
   askLead?: boolean;
   busy?: boolean;
   error?: string | null;
-  showDemo?: boolean;
-  demo?: ReactNode;
-  sampleNonce?: string | null;
-  taxAgent?: ProspectAgentCopy | null;
+  leadReady?: boolean;
   onSend?: (text: string) => void;
   onLead?: (input: { name: string; email: string; consent: boolean; honeypot: string }) => void;
+  onBookCall?: (input: {
+    name: string;
+    email: string;
+    consent: boolean;
+    honeypot: string;
+    start: string;
+    timeZone: string;
+  }) => Promise<TryCallResult>;
 }) {
   const view = resolveTalkSlug(slug, copyPack);
   if (view.kind === "picker") {
     return <AgentPicker refCode={refCode} reason={view.reason} />;
-  }
-  if (view.kind === "tax") {
-    if (!taxAgent) {
-      return (
-        <main className="talk-page" data-talk-view="tax">
-          <p className="talk-note">Opening the sample.</p>
-        </main>
-      );
-    }
-    return (
-      <ProspectTalkScreen
-        agent={taxAgent}
-        messages={messages ?? []}
-        askLead={askLead}
-        busy={busy}
-        error={error}
-        showDemo={showDemo}
-        demo={demo}
-        sampleNonce={sampleNonce}
-        onSend={onSend}
-        onLead={onLead}
-      />
-    );
   }
   return (
     <ProspectTalkScreen
@@ -412,11 +428,10 @@ export function TalkPageView({
       askLead={askLead}
       busy={busy}
       error={error}
-      showDemo={showDemo}
-      demo={demo}
-      sampleNonce={sampleNonce}
+      leadReady={leadReady}
       onSend={onSend}
       onLead={onLead}
+      onBookCall={onBookCall}
     />
   );
 }

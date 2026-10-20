@@ -27,7 +27,7 @@ import {
   peerMedian,
   periodMonthsOf,
 } from "../../../src/lib/ratios.ts";
-import { statementGrossMarginFraction, statedNetIsUsable } from "../../../src/lib/period-profit.ts";
+import { statementGrossMarginFraction, statementNetProfit } from "../../../src/lib/period-profit.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import {
   figuresPeriodLabelFrom,
@@ -416,8 +416,8 @@ export function buildOverviewBrief(input: {
 
   const statement = financials ? readStatementMeta(financials, dateMarket) : null;
   const operatingProfit = asNumber(financials?.ebit);
-  const statedNet = asNumber(financials?.netIncome);
-  const netUsable = operatingProfit == null || statedNetIsUsable(operatingProfit, statedNet);
+  const quotedNet = statementNetProfit(financials);
+  const netUsable = quotedNet != null;
   const liabilities = resolveTotalLiabilities(financials);
   const currentAssets = asNumber(financials?.currentAssets);
   const currentLiabilities = asNumber(financials?.currentLiabilities);
@@ -468,7 +468,7 @@ export function buildOverviewBrief(input: {
     grossProfit: asNumber(financials?.grossProfit),
     operatingProfit,
     profitBeforeTax: asNumber(financials?.ebt),
-    netProfit: netUsable ? statedNet : null,
+    netProfit: quotedNet,
     equity: asNumber(financials?.equity),
     totalAssets: asNumber(financials?.totalAssets),
     totalLiabilities: liabilities?.amount ?? null,

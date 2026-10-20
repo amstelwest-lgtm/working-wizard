@@ -236,6 +236,19 @@ html:has(.talk-page) body {
   font-size: 14px;
 }
 
+.talk-schedule {
+  margin-top: 16px;
+}
+
+.talk-schedule summary {
+  cursor: pointer;
+  color: #0b5fff;
+  font-weight: 700;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
 .talk-picks {
   display: grid;
   gap: 10px;

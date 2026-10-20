@@ -3,8 +3,8 @@
  * Numbers are formatted here. Raw decimals never reach the screen.
  */
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "./advisory-narrative";
-import { draftMetricUnit, repairDraftMetricUnits } from "./agent-bus";
-import { formatMoney, type MoneyMarket } from "./market/format";
+import { draftMetricUnit, repairDraftMetricUnits, stripRatioDumpLines } from "./agent-bus";
+import { formatDate, formatMoney, type DateMarket, type MoneyMarket } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
@@ -61,6 +61,8 @@ export type AgentFindingRow = {
   evidence: unknown;
   as_of: string | null;
   created_at: string;
+  /** Dedupe clock. Newer than created_at once the same finding is seen again. */
+  last_seen?: string | null;
   /** Null while a draft is waiting. Approved rows stay visible. */
   status?: string | null;
   approved_by?: string | null;
@@ -411,17 +413,35 @@ function tidyRatioPercent(text: string): string {
   return text.replace(/(\d+)\.0%/g, "$1%");
 }
 
-/** Title or detail, with the finding's own figures. 0.6 on a margin becomes 60%. */
+/** Created, and Updated when last_seen is at least a minute later. Market day order. */
+export function draftWhenLabel(
+  createdAt: string | null | undefined,
+  updatedAt: string | null | undefined,
+  market: DateMarket,
+): string | null {
+  const created = (createdAt ?? "").trim();
+  if (!created || Number.isNaN(Date.parse(created))) return null;
+  const createdLabel = formatDate(created, market);
+  const updated = (updatedAt ?? "").trim();
+  const updatedMs = Date.parse(updated);
+  const createdMs = Date.parse(created);
+  if (!updated || Number.isNaN(updatedMs) || updatedMs < createdMs + 60_000) {
+    return `Created ${createdLabel}`;
+  }
+  return `Created ${createdLabel} · Updated ${formatDate(updated, market)}`;
+}
+
 export function formatFindingProse(
   text: string,
   figures?: Record<string, number> | readonly { key: string; value: number }[] | null,
   market: MoneyMarket = ZA_MARKET,
   canonicalRatios?: Record<string, number> | null,
 ): string {
+  const source = stripRatioDumpLines(text);
   const corrected = correctQuotedFigures(withCanonicalRatioFigures(figureEntries(figures), canonicalRatios));
   const formatted = canonicalScoreProse(
     rewriteDraftMonthStamp(
-      stripDoubleCurrency(stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(text, corrected, market))))
+      stripDoubleCurrency(stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(source, corrected, market))))
         .replace(/\s+/g, " ")
         .trim(),
     ),

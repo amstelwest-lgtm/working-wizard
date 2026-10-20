@@ -225,7 +225,8 @@ assert(drafter.includes("<AutoPopulateOptions"), "bank drafter shows options");
 assert(drafter.includes("autoPopulate: autoPrefs"), "bank drafter returns chosen prefs");
 const review = read("src/components/extraction-review-modal.tsx");
 assert(
-  review.includes("<AutoPopulateOptions") && review.includes("onConfirm(mapped, autoPrefs, choice ?? null)"),
+  review.includes("<AutoPopulateOptions") &&
+    review.includes("onConfirm(mapped, autoPrefs, choice ?? null, period)"),
   "owner statement modal wired",
 );
 const upload = read("src/components/upload-financials.tsx");

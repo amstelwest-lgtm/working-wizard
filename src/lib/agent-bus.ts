@@ -1501,6 +1501,38 @@ function fitCopyChars(text: string, max: number): string {
   return sentence.length <= max ? sentence : `${sentence.slice(0, max - 1)}.`;
 }
 
+const RATIO_DUMP_HEADER =
+  /^(?:ratios|raw ratios)\s*:?\s*$|^(?:stored[_ ]?ratios|quote[_ ]?basis|statement[_ ]?totals|debug)\b|^evidence keys you may cite\b/i;
+const RATIO_KEY_VALUE_LINE = /^[A-Za-z][\w ./-]{0,60}?\s*[:=]\s*-?\d[\d,]*(?:\.\d+)?%?\s*$/;
+const RATIO_KEY_VALUE_TOKEN =
+  /\b(?:[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\s*[:=]\s*-?\d[\d,]*(?:\.\d+)?%?/g;
+
+/**
+ * Drop raw ratio and debug lines the model copies out of a tool read.
+ * "Gross margin is 60%." stays. "grossMargin: 0.42" and
+ * "evidence keys you may cite:" do not.
+ */
+export function stripRatioDumpLines(text: string): string {
+  const kept: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (RATIO_DUMP_HEADER.test(trimmed) || RATIO_KEY_VALUE_LINE.test(trimmed)) continue;
+    if (/^[\[{].*[\]}]$/.test(trimmed) && /[A-Za-z]\w*"\s*:\s*-?\d/.test(trimmed)) continue;
+    const cleaned = trimmed
+      .replace(/evidence keys you may cite\s*:[^.]*(?:\.|$)/gi, "")
+      .replace(RATIO_KEY_VALUE_TOKEN, "")
+      .replace(/(?:\s*[·|]\s*){2,}/g, " ")
+      .replace(/(?:^\s*[·|]\s*|\s*[·|]\s*$)/g, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s+([.,;])/g, "$1")
+      .trim();
+    if (!cleaned || /^[.:;-]+$/.test(cleaned)) continue;
+    kept.push(cleaned);
+  }
+  return kept.join("\n");
+}
+
 /**
  * Sentence case, a full stop, and the client's amount format.
  * A long title or summary keeps the first two sentences. A detail keeps four.
@@ -1519,7 +1551,7 @@ export function polishAgentCopy(input: {
 }): { ok: true; text: string } | { ok: false; error: string } {
   const market = input.market ?? moneyMarketFromClient(null);
   const stored = input.storedNumbers ?? figureLeaves(input.figures).map((leaf) => leaf.value);
-  const stripped = stripUnstoredHealthyBand(input.text.replace(/\s+/g, " ").trim(), stored);
+  const stripped = stripUnstoredHealthyBand(stripRatioDumpLines(input.text).replace(/\s+/g, " ").trim(), stored);
   const ratios = quoteRatiosFromFigures(input.figures, input.canonicalRatios);
   const formatted = quoteLiveScoreOnly(
     repairDraftMetricUnits(
