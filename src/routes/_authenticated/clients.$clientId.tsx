@@ -1483,6 +1483,41 @@ function ClientView() {
       liveHealth: overallHealth.overall,
       scoreHistory,
     });
+  const reportSignoffStale = useMemo(
+    () => ({
+      financials: healthSignoffIsStale({
+        signoff: financialsSignoff,
+        dataUpdatedAt: client?.financials_updated_at ?? null,
+        snapshots,
+        liveHealth: overallHealth.overall,
+        scoreHistory,
+      }),
+      profitability: healthSignoffIsStale({
+        signoff: profitabilitySignoff,
+        dataUpdatedAt: client?.financials_updated_at ?? null,
+        snapshots,
+        liveHealth: overallHealth.overall,
+        scoreHistory,
+      }),
+      cash_forecast: cashSignoffIsStale(
+        cashForecastSignoff,
+        client?.last_forecast_at ?? null,
+        cashSignedFiguresChanged(cashSignedSnapshot, client?.cashflow),
+      ),
+    }),
+    [
+      financialsSignoff,
+      profitabilitySignoff,
+      cashForecastSignoff,
+      client?.financials_updated_at,
+      client?.last_forecast_at,
+      client?.cashflow,
+      cashSignedSnapshot,
+      snapshots,
+      overallHealth.overall,
+      scoreHistory,
+    ],
+  );
 
   // ── Health orb & pillar computation (same source as header / score history) ──
   const healthMap = healthMapFromRatios(ratios as Record<string, number>, clientMarket);
@@ -5384,6 +5419,10 @@ function ClientView() {
                               }
                               embedded
                               figuresOnFile={hasFigures}
+                              knownSignoffs={reviewSignoffs}
+                              signoffsKnown={signoffsKnown}
+                              knownSignoffStale={reportSignoffStale}
+                              onSignoffChange={(scope, next) => patchSignoff(scope)(next)}
                               sourceChip={healthChip}
                               inputs={
                                 <DeliverableInputConfig
