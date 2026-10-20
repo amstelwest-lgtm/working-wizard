@@ -17,6 +17,7 @@ import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
+import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { cashCycleNarrative } from "./narrative";
@@ -501,6 +502,8 @@ export function CashCyclePDF({
       <View break>
         <SectionHeader title="Cash Trapped in the Cycle" color={theme.accent} />
         <View
+          wrap={false}
+          minPresenceAhead={PDF_CARD_MIN_PRESENCE}
           style={{
             borderRadius: 6,
             borderWidth: 0.75,

@@ -6,6 +6,7 @@
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
 import { C, TIER_META, type Tier } from "./theme";
 
 type Props = {
@@ -89,7 +90,7 @@ export function InsightBox({
   const tier = TIER_META[healthTier] ?? TIER_META.at_risk;
 
   return (
-    <View style={styles.outer} wrap={false}>
+    <View style={styles.outer} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
       <View style={[styles.leftStrip, { backgroundColor: tier.color }]} />
       <View style={styles.content}>
         <View style={styles.headerRow}>

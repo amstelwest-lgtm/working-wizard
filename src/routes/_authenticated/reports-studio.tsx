@@ -3211,9 +3211,8 @@ function ReportCard({
               >
                 {report.category}
               </span>
-              {noFigures.showPageCount ? (
-                <span className="text-[10px] text-muted-foreground">{report.pages}</span>
-              ) : null}
+              {/* Page length comes from the rendered PDF, which changes with paper size.
+                  A fixed "2 pages" does not match a 4-page US Letter scorecard. */}
             </div>
             <h3 className="report-card__title">
               {copy.name}

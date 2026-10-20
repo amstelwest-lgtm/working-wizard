@@ -8,8 +8,10 @@ import { isUsCopy } from "../src/lib/market/prompt";
 import { resolveMarket } from "../src/lib/market/resolve";
 import { canonicalizeAccountantSearch, reportPdfSection } from "../src/lib/client-route-search";
 import { finishReportDownload, startReportDownload } from "../src/lib/report-downloads";
+import { variancePctCell } from "../src/lib/budget.variance";
 import {
   DRAFT_WATERMARK_TOP,
+  PDF_CARD_MIN_PRESENCE,
   SECTION_KEEP_WITH_NEXT,
   pdfFooterReserve,
   reportPaperSize,
@@ -44,6 +46,10 @@ assert(
 assert(pdfFooterReserve() >= 72, "flowing content keeps clear of the footer");
 assert(pdfFooterReserve({ signed: true }) > pdfFooterReserve(), "a sign-off row reserves more footer space");
 assert(SECTION_KEEP_WITH_NEXT >= 72, "a section header keeps room for its first rows");
+assert(PDF_CARD_MIN_PRESENCE >= 72, "a card keeps its header with its body");
+assert(variancePctCell(null, "budget is near zero") === "n/a", "a near-zero budget prints n/a in the percent cell");
+assert(variancePctCell(null, "budget is negative") === "n/a", "a negative budget prints n/a in the percent cell");
+assert(variancePctCell(12.4, null) === "+12.4%", "a real percent still prints in the cell");
 assert(DRAFT_WATERMARK_TOP > 120 && DRAFT_WATERMARK_TOP < 420, "the draft mark sits in the body");
 
 const forecast = startReportDownload(new Set(), "forecast");
@@ -84,5 +90,28 @@ assert(studio.includes('toast.error("This report is already downloading")'), "a 
 
 const budget = readFileSync(resolve("src/reports/budget-variance.tsx"), "utf8");
 assert(budget.includes("wrap={false}"), "the budget table header stays with its first row");
+assert(budget.includes("variancePctCell"), "the budget percent cell uses the short label");
+assert(budget.includes('overflow: "hidden"'), "the percent cell cannot paint over the variance amount");
+
+const dupont = readFileSync(resolve("src/components/pdf/dupont.tsx"), "utf8");
+assert(dupont.includes("wrap={false}") && dupont.includes("minPresenceAhead={PDF_CARD_MIN_PRESENCE}"), "DuPont cards do not split the header from the body");
+const scorecard = readFileSync(resolve("src/reports/health-scorecard.tsx"), "utf8");
+assert(scorecard.includes("wrap={false}") && scorecard.includes("minPresenceAhead={PDF_CARD_MIN_PRESENCE}"), "scorecard cards are unbreakable");
+for (const file of [
+  "src/components/pdf/exec-summary.tsx",
+  "src/components/pdf/metric-box.tsx",
+  "src/components/pdf/insight-box.tsx",
+]) {
+  const src = readFileSync(resolve(file), "utf8");
+  assert(src.includes("wrap={false}"), `${file} cards do not split`);
+  assert(src.includes("minPresenceAhead={PDF_CARD_MIN_PRESENCE}"), `${file} keeps the card with its body`);
+}
+const studioPages = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
+assert(!studioPages.includes("{report.pages}"), "report cards do not invent a page count");
+const landing = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
+const primaryAt = landing.indexOf(".accountant-portal .client-subpage-link--primary{");
+const primary = landing.slice(primaryAt, primaryAt + 500);
+assert(primary.includes("#0B5FFF"), "the reports landing primary is solid cobalt");
+assert(!primary.includes("#f4f8ff") && !primary.includes("gold"), "the reports landing primary is not a pale or gold card");
 
 console.log("report-pdf-layout: ok");
