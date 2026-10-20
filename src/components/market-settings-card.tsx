@@ -51,9 +51,8 @@ export function MarketSettingsCard({
       : { provinceCode: null, vatRegistered: false, vatMode: "exclusive" },
   );
   const [saving, setSaving] = useState(false);
-  // Copy the saved region during render so the first paint already has South
-  // Africa selected. A useEffect would leave both country buttons unpressed
-  // for a frame after the row arrives.
+  // Copy the saved region during render. A missing market leaves both
+  // countries unpressed. A useEffect would flash the wrong selection.
   if (appliedKey !== savedKey) {
     setAppliedKey(savedKey);
     setDraft(gate.status === "ready" ? gate.draft : { country: null, regionCode: null });
@@ -132,8 +131,10 @@ export function MarketSettingsCard({
             </p>
           )}
           {gate.status === "ready" && gate.unset ? (
-            <p className="mt-3 text-xs text-[var(--ink-dim)]" data-region-default="ZA">
-              Not set, defaulting to South Africa
+            <p className="mt-3 text-xs text-[var(--ink-dim)]" data-region-unset="">
+              {
+                "Region not set — choose South Africa or United States. Until then, dates use South African format and prices follow your location."
+              }
             </p>
           ) : null}
           {draft.country === "ZA" && regionControls.vatCopy ? (

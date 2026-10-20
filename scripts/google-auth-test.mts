@@ -16,13 +16,21 @@ import {
   parseOAuthCallbackParams,
   readIntentCookie,
 } from "../src/lib/google-auth";
+import {
+  clearGooglePracticeGate,
+  googlePracticeFirmMarket,
+  googlePracticePickerDraft,
+  readGooglePracticeGate,
+  stashGooglePracticeGate,
+} from "../src/lib/google-practice-market";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
 assert(
-  googleOAuthRedirectTo("https://www.milonfinance.com/") === "https://www.milonfinance.com/auth/callback",
+  googleOAuthRedirectTo("https://www.milonfinance.com/") ===
+    "https://www.milonfinance.com/auth/callback",
   "redirect strips trailing slash",
 );
 assert(
@@ -47,8 +55,11 @@ assert(
   "redirectTo carries accountant join (never `invite`, which is owner-handoff)",
 );
 assert(
-  googleOAuthRedirectTo("https://milonfinance.com", { checkout: "solo", interval: "month", market: "us" }) ===
-    "https://milonfinance.com/auth/callback?checkout=solo&interval=month&market=us",
+  googleOAuthRedirectTo("https://milonfinance.com", {
+    checkout: "solo",
+    interval: "month",
+    market: "us",
+  }) === "https://milonfinance.com/auth/callback?checkout=solo&interval=month&market=us",
   "redirectTo carries paid Checkout so an origin hop cannot drop the plan",
 );
 
@@ -134,13 +145,14 @@ assert(
 
 assert(parseAccountantGoogleSignup(null) === null, "empty accountant signup draft");
 assert(
-  parseAccountantGoogleSignup(JSON.stringify({ firmName: " West & Co ", fullName: "Ana", marketCountry: "ZA" }))
-    ?.firmName === "West & Co",
+  parseAccountantGoogleSignup(
+    JSON.stringify({ firmName: " West & Co ", fullName: "Ana", marketCountry: "ZA" }),
+  )?.firmName === "West & Co",
   "accountant Google signup draft keeps firm name",
 );
 assert(
-  parseAccountantGoogleSignup(JSON.stringify({ firmName: "West", marketCountry: "bogus" }))?.marketCountry ===
-    undefined,
+  parseAccountantGoogleSignup(JSON.stringify({ firmName: "West", marketCountry: "bogus" }))
+    ?.marketCountry === undefined,
   "rejects junk market on accountant Google signup draft",
 );
 
@@ -199,7 +211,8 @@ assert(
   "Google callback redeems a stashed owner invite instead of abandoning it",
 );
 assert(
-  callbackSrc.includes("peekPendingOwnerInvite") && callbackSrc.includes("resolvePendingOwnerInvite"),
+  callbackSrc.includes("peekPendingOwnerInvite") &&
+    callbackSrc.includes("resolvePendingOwnerInvite"),
   "callback reads invite from OAuth URL + storage before consuming, so a remount cannot drop it",
 );
 assert(
@@ -224,7 +237,8 @@ assert(
   "startGoogleSignIn can return an accountant to /join after Google",
 );
 assert(
-  callbackSrc.includes("signup_type: \"accountant\"") || callbackSrc.includes('signup_type: "accountant"'),
+  callbackSrc.includes('signup_type: "accountant"') ||
+    callbackSrc.includes('signup_type: "accountant"'),
   "Google Create-firm stamps accountant metadata so /app does not mint an owner client",
 );
 assert(
@@ -232,17 +246,144 @@ assert(
   "Google accountant signup provisions a practice firm",
 );
 assert(
-  callbackSrc.includes("accountantJoinFromCallbackSearch") && callbackSrc.includes('to: "/join/$token"'),
+  callbackSrc.includes("accountantJoinFromCallbackSearch") &&
+    callbackSrc.includes('to: "/join/$token"'),
   "Google callback returns accountant invites to /join/:token",
 );
 assert(
   callbackSrc.indexOf("joinToken") < callbackSrc.indexOf("goOps"),
   "accountant join hop runs before generic /app or /dashboard landing",
 );
+assert(
+  callbackSrc.includes("googlePracticeFirmMarket"),
+  "Google firm create resolves a market before ensure_practice_firm",
+);
+assert(callbackSrc.includes("<MarketPicker"), "a missing practice market opens the country picker");
+assert(
+  callbackSrc.includes("p_market: marketToJson(market)"),
+  "Google firm create writes the resolved market",
+);
+assert(
+  !callbackSrc.includes("p_market: market ? marketToJson(market) : null"),
+  "Google firm create does not pass a null market",
+);
+assert(
+  !callbackSrc.includes('ensure_practice_firm", { p_name: firmName }'),
+  "Google firm create does not fall back to a name-only insert",
+);
+assert(
+  callbackSrc.includes('marketCountry === "ZA" ? "za" : "us"'),
+  "fresh accountant checkout treats a missing market as not ZA",
+);
+
+const ny = { country: "US" as const, regionCode: "NY" as const };
+assert(
+  googlePracticeFirmMarket({
+    draftCountry: "ZA",
+    draftRegion: null,
+    visitor: ny,
+    geoCountry: "US",
+  })?.country === "ZA",
+  "a complete South Africa draft wins over a US visitor and US geo",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: ny, geoCountry: "ZA" })?.regionCode === "NY",
+  "a saved US visitor market is kept",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: null, geoCountry: "ZA" })?.country === "ZA",
+  "a South Africa edge can create a firm without the picker",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: null, geoCountry: "US" }) === null,
+  "a United States edge is not a firm market until a state is chosen",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: null, geoCountry: null }) === null,
+  "an unknown visitor does not become South Africa",
+);
+assert(
+  googlePracticeFirmMarket({ visitor: null, geoCountry: "GB" }) === null,
+  "another country is not a practice market",
+);
+assert(
+  googlePracticePickerDraft({
+    visitorDraft: { country: null, regionCode: null },
+    geoCountry: "US",
+  }).country === "US" &&
+    googlePracticePickerDraft({
+      visitorDraft: { country: null, regionCode: null },
+      geoCountry: "US",
+    }).regionCode === null,
+  "US geo pre-selects the United States and still asks for a state",
+);
+assert(
+  googlePracticePickerDraft({
+    visitorDraft: { country: null, regionCode: null },
+    geoCountry: "GB",
+  }).country === null,
+  "an unknown edge does not pre-select South Africa",
+);
+assert(
+  googlePracticePickerDraft({
+    visitorDraft: { country: null, regionCode: null },
+    geoCountry: "ZA",
+  }).country === "ZA",
+  "ZA geo seeds the picker as South Africa",
+);
+
+const memory = new Map<string, string>();
+const previousStorage = globalThis.sessionStorage;
+globalThis.sessionStorage = {
+  getItem: (key: string) => memory.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    memory.set(key, value);
+  },
+  removeItem: (key: string) => {
+    memory.delete(key);
+  },
+  clear: () => memory.clear(),
+  key: (index: number) => Array.from(memory.keys())[index] ?? null,
+  get length() {
+    return memory.size;
+  },
+} as Storage;
+stashGooglePracticeGate({
+  userId: "user-a",
+  firmName: "North Books",
+  fullName: "Ada",
+  next: "/dashboard",
+  joinToken: "",
+});
+assert(
+  readGooglePracticeGate("user-b") === null,
+  "a practice picker stash does not apply to another user",
+);
+assert(readGooglePracticeGate("user-a") === null, "a mismatched user clears the stash");
+stashGooglePracticeGate({
+  userId: "user-a",
+  firmName: "North Books",
+  fullName: "Ada",
+  next: "/dashboard",
+  joinToken: "",
+});
+assert(
+  readGooglePracticeGate("user-a")?.firmName === "North Books",
+  "the same user keeps the practice picker stash",
+);
+clearGooglePracticeGate();
+assert(
+  readGooglePracticeGate("user-a") === null,
+  "confirming the practice location clears the stash",
+);
+globalThis.sessionStorage = previousStorage;
 
 const authPage = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
 assert(authPage.includes("Continue with Google"), "Create firm offers Google sign-up");
-assert(authPage.includes("stashAccountantGoogleSignup"), "Create firm Google carries firm name + market");
+assert(
+  authPage.includes("stashAccountantGoogleSignup"),
+  "Create firm Google carries firm name + market",
+);
 assert(
   (authPage.match(/GoogleSignInButton/g) ?? []).length >= 2,
   "Create firm and Sign in both have a Google button",

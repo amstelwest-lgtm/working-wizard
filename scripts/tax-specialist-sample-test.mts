@@ -199,8 +199,12 @@ assert(
 assert(practice.includes('audience="accountant"'), "practice home renders the card");
 const client = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 assert(
-  client.includes("marketCountry={clientMarket.country}"),
-  "the client file uses that client's market",
+  client.includes("marketCountry={clientGateCountry}"),
+  "the client file passes the stored client country",
+);
+assert(
+  client.includes("parseMarketSelection(client?.market)?.country ?? null"),
+  "a missing client market is not treated as ZA for the tax card",
 );
 assert(client.includes('audience="accountant"'), "the client file is the accountant side");
 for (const path of [
