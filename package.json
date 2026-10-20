@@ -57,6 +57,7 @@
     "test:aqa-practice-nav": "vite-node --config scripts/vite-test.config.ts scripts/aqa-practice-nav-test.mts",
     "test:open-queries-ready": "vite-node --config scripts/vite-test.config.ts scripts/open-queries-ready-test.mts",
     "test:null-market-firm": "vite-node --config scripts/vite-test.config.ts scripts/null-market-firm-test.mts",
+    "test:client-agent-cards": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-cards-test.mts",
     "test:needs-attention-ready": "vite-node --config scripts/vite-test.config.ts scripts/needs-attention-ready-test.mts",
     "test:aqa-med-findings": "vite-node --config scripts/vite-test.config.ts scripts/aqa-med-findings-test.mts",
     "test:accountant-reports-studio": "vite-node --config scripts/vite-test.config.ts scripts/accountant-reports-studio-test.mts",
