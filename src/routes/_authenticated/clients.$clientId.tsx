@@ -144,7 +144,8 @@ import { booksAnswerSentence, booksCoverPeriod, booksTileLines, homeStatementsLi
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { parseBudgetDocument } from "@/lib/budget-pdf";
-import { budgetSeededFromStatement, budgetVersusStatement, statementBudgetRead } from "@/lib/budget.bridges";
+import { budgetSeededFromStatement, budgetVersusStatement, statementBudgetRead, statementCoverMonthCount } from "@/lib/budget.bridges";
+import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
 import { planAnswerSentence } from "@/lib/plan-pack-copy";
 import { loadClientDisplayNames } from "@/lib/client-display-name";
 import { ProductMixPanel } from "@/components/product-mix-panel";
@@ -5243,6 +5244,26 @@ function ClientView() {
                       businessTypeId={client.business_type}
                       operatingProfile={parseOperatingProfile(client.operating_profile)}
                       financials={financials}
+                      priorYear={
+                        priorSnapshot?.financials
+                          ? yearMoneyFromFinancials(priorSnapshot.financials as Record<string, unknown>)
+                          : null
+                      }
+                      priorYearLabel={
+                        priorSnapshot
+                          ? statementSpanLabel({
+                              periodStart: readStatementMeta(priorSnapshot.financials, clientMarket).periodStart,
+                              periodEnd: readStatementMeta(priorSnapshot.financials, clientMarket).periodEnd,
+                              periodLabel: priorSnapshot.period_label,
+                              market: clientMarket,
+                            })
+                          : null
+                      }
+                      priorYearMonths={
+                        priorSnapshot?.financials
+                          ? statementCoverMonthCount(priorSnapshot.financials as Record<string, unknown>)
+                          : null
+                      }
                       fyStartMonthDefault={fyStartMonth}
                       onRetakeProfile={() => setProfileOpen(true)}
                       onPushedToCash={() => {

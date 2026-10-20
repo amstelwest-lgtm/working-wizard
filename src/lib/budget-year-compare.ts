@@ -1,5 +1,7 @@
 /** This budget year against a prior period. Missing prior figures stay blank. */
 
+import { statementNetProfit } from "@/lib/period-profit";
+
 export type BudgetYearMoney = {
   revenue: number | null;
   cogs: number | null;
@@ -59,7 +61,12 @@ export function yearMoneyFromFinancials(
   const cogs = numberField(financials, "cogs") ?? numberField(financials, "cost_of_sales");
   const expenses =
     numberField(financials, "fixedCosts") ?? numberField(financials, "operating_expenses");
-  const netProfit = numberField(financials, "netIncome") ?? numberField(financials, "net_income");
+  const snakeNet = numberField(financials, "net_income");
+  const netProfit = statementNetProfit(
+    numberField(financials, "netIncome") == null && snakeNet != null
+      ? { ...financials, netIncome: snakeNet }
+      : financials,
+  );
   const grossProfit = finite(revenue) && finite(cogs) ? revenue - cogs : null;
   const money = { revenue, cogs, grossProfit, netProfit, expenses };
   return LINES.some((line) => finite(money[line.key])) ? money : null;
@@ -104,13 +111,15 @@ export function ownerYearFromStatement(
     cogs: number;
     fixedCosts: number;
     ebit?: number | null;
+    /** Canonical net profit. Operating profit is not a stand-in. */
+    netProfit?: number | null;
   } | null | undefined,
 ): BudgetYearMoney | null {
   if (!actuals) return null;
   const revenue = finite(actuals.revenue) ? actuals.revenue : null;
   const cogs = finite(actuals.cogs) ? actuals.cogs : null;
   const expenses = finite(actuals.fixedCosts) ? actuals.fixedCosts : null;
-  const netProfit = finite(actuals.ebit) ? actuals.ebit : null;
+  const netProfit = finite(actuals.netProfit) ? actuals.netProfit : null;
   const grossProfit = revenue != null && cogs != null ? revenue - cogs : null;
   const money = { revenue, cogs, grossProfit, netProfit, expenses };
   return hasMeasuredFigures(money) ? money : null;

@@ -259,6 +259,11 @@ export type BudgetActuals = {
   /** Operating profit for the same window. */
   ebit?: number;
   budgetEbit?: number;
+  /**
+   * Canonical net profit for the statement window. Null when the statement
+   * has operating profit only, or the stored net is not usable.
+   */
+  netProfit?: number | null;
   /** Months in the statement window the header compared. */
   periodMonths?: number;
   /** YYYY-MM keys of that window. Chart totals use these, not the whole year. */
