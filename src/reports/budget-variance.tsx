@@ -107,10 +107,13 @@ function VarianceTable({
   rows,
   accent,
   market,
+  hideHeader = false,
 }: {
   rows: BudgetPdfRow[];
   accent: string;
   market: ResolvedMarket;
+  /** Continuation rows. The header already printed with the first row. */
+  hideHeader?: boolean;
 }) {
   const cols = [
     { label: "Line", flex: 2.1, align: "left" as const },
@@ -119,16 +122,16 @@ function VarianceTable({
     { label: "Variance", flex: 1.45, align: "right" as const },
     { label: "%", flex: 0.7, align: "right" as const },
   ];
-  return (
-    <View style={styles.table}>
-      <View style={[styles.headerRow, { backgroundColor: accent }]}>
-        {cols.map((c) => (
-          <Text key={c.label} style={[styles.headerCell, { flex: c.flex, textAlign: c.align }]}>
-            {c.label}
-          </Text>
-        ))}
-      </View>
-      {rows.map((row, ri) => {
+  const header = (
+    <View style={[styles.headerRow, { backgroundColor: accent }]}>
+      {cols.map((c) => (
+        <Text key={c.label} style={[styles.headerCell, { flex: c.flex, textAlign: c.align }]}>
+          {c.label}
+        </Text>
+      ))}
+    </View>
+  );
+  const renderRow = (row: BudgetPdfRow, ri: number) => {
         const strong = row.emphasis;
         const color = signalColor(row.signal);
         return (
@@ -163,9 +166,23 @@ function VarianceTable({
             <Text style={[styles.cell, { flex: 0.7, textAlign: "right", color }]}>
               {formatVariancePct(row.deltaPct, row.deltaPctNote)}
             </Text>
+        </View>
+      );
+  };
+  const first = rows[0];
+  return (
+    <View style={styles.table}>
+      {hideHeader ? (
+        rows.map((row, index) => renderRow(row, index))
+      ) : (
+        <>
+          <View wrap={false}>
+            {header}
+            {first ? renderRow(first, 0) : null}
           </View>
-        );
-      })}
+          {rows.slice(1).map((row, index) => renderRow(row, index + 1))}
+        </>
+      )}
     </View>
   );
 }
@@ -240,14 +257,27 @@ export function BudgetVariancePDF({
         {model.comparedLabel}. {model.fullYearNote}
       </Text>
 
-      {model.sections.map((section) => (
-        <View key={section.title}>
-          <SectionHeader title={section.title} color={theme.accent} />
-          {section.note ? <Text style={styles.note}>{section.note}</Text> : null}
-          <VarianceTable rows={section.rows} accent={theme.accent} market={market} />
-        </View>
-      ))}
+      {model.sections.map((section) => {
+        const [first, ...rest] = section.rows;
+        return (
+          <View key={section.title}>
+            <View wrap={false}>
+              <SectionHeader title={section.title} color={theme.accent} />
+              {section.note ? <Text style={styles.note}>{section.note}</Text> : null}
+              <VarianceTable
+                rows={first ? [first] : []}
+                accent={theme.accent}
+                market={market}
+              />
+            </View>
+            {rest.length > 0 ? (
+              <VarianceTable rows={rest} accent={theme.accent} market={market} hideHeader />
+            ) : null}
+          </View>
+        );
+      })}
 
+      <View wrap={false}>
       <SectionHeader title="Partner notes" color={theme.accent} />
       <View style={styles.notesBox}>
         {model.notes.length === 0 ? (
@@ -268,6 +298,7 @@ export function BudgetVariancePDF({
             </View>
           ))
         )}
+      </View>
       </View>
     </PDFDocument>
   );

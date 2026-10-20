@@ -39,7 +39,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   confidential: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint, flex: 2 },
-  signoff: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.muted, marginTop: 2 },
+  signoffBand: { marginBottom: 6, maxWidth: 515 },
+  signoff: { fontSize: 6, fontFamily: "Helvetica-Bold", color: C.muted, lineHeight: 1.35 },
   signoffRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 2 },
   sampleLine: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.amberDeep, marginTop: 2 },
   pageNumber: {
@@ -68,37 +69,33 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
   return (
     <View style={styles.wrapper} fixed={fixed}>
       <View style={styles.hairline} />
-      <View style={styles.row}>
-        <View style={{ flex: 2 }}>
-          <Text style={styles.confidential}>Confidential — prepared for the addressee only</Text>
-          {reviewSignoff ? (
-            <View>
-              {reviewSignoff.signatureData ? (
-                <Image
-                  src={reviewSignoff.signatureData}
-                  style={{ height: 16, width: 64, objectFit: "contain", marginBottom: 2 }}
-                />
-              ) : null}
-              <View>
-                {(reviewSignoff.figuresChanged
-                  ? [pdfSignoffBadgeLine(reviewSignoff, market)]
-                  : signoffFooterSegments(reviewSignoff, signoffDate ?? "")
-                ).map((line, index) => (
-                  <Text key={`${index}-${line}`} style={styles.signoff}>
-                    {line}
-                  </Text>
-                ))}
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.signoff}>Prepared {preparedAt}</Text>
-          )}
-          {sample ? (
-            <Text style={styles.sampleLine}>
-              {SAMPLE_STAMP_WORD} — {SAMPLE_STAMP_LINE}
-            </Text>
+      {reviewSignoff ? (
+        <View style={styles.signoffBand}>
+          {reviewSignoff.signatureData ? (
+            <Image
+              src={reviewSignoff.signatureData}
+              style={{ height: 16, width: 64, objectFit: "contain", marginBottom: 2 }}
+            />
           ) : null}
+          {(reviewSignoff.figuresChanged
+            ? [pdfSignoffBadgeLine(reviewSignoff, market)]
+            : signoffFooterSegments(reviewSignoff, signoffDate ?? "")
+          ).map((line, index) => (
+            <Text key={`${index}-${line}`} style={styles.signoff}>
+              {line}
+            </Text>
+          ))}
         </View>
+      ) : (
+        <Text style={[styles.signoff, { marginBottom: 4 }]}>Prepared {preparedAt}</Text>
+      )}
+      {sample ? (
+        <Text style={styles.sampleLine}>
+          {SAMPLE_STAMP_WORD} — {SAMPLE_STAMP_LINE}
+        </Text>
+      ) : null}
+      <View style={styles.row}>
+        <Text style={styles.confidential}>Confidential — prepared for the addressee only</Text>
 
         <Text
           style={styles.pageNumber}
