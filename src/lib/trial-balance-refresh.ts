@@ -10,6 +10,8 @@
  * re-import. A typed value is never treated as missing.
  */
 
+import { hasBalanceSheetPosition } from "./balance-sheet-prompt.ts";
+
 export const TRIAL_BALANCE_REFRESH_COPY =
   "Re-import the trial balance to refresh operating profit and runway";
 
@@ -61,8 +63,17 @@ export function needsTrialBalanceRefresh(opts: {
     hasMoney(live, ["revenue"]) || hasMoney(live, ["cogs"]) || hasMoney(live, ["netIncome"]);
   if (!hasFigures) return false;
 
-  const imported = latestStatementImport(opts.snapshots ?? []);
+  const snapshots = opts.snapshots ?? [];
+  const imported = latestStatementImport(snapshots);
   if (!imported?.financials) return false;
+  // A P&L-only upload has the same blank cash. Re-import is only for a trial
+  // balance or balance sheet that is already on file and still stale.
+  const sheetImported = snapshots.some(
+    (row) =>
+      Boolean(row.source && STATEMENT_IMPORT_SOURCES.has(row.source)) &&
+      hasBalanceSheetPosition(row.financials),
+  );
+  if (!sheetImported) return false;
 
   const opexGap = !hasMoney(imported.financials, OPEX_KEYS) && !hasMoney(live, OPEX_KEYS);
   const cashGap = !hasMoney(imported.financials, CASH_KEYS) && !hasMoney(live, CASH_KEYS);

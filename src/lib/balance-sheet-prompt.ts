@@ -33,10 +33,16 @@ function filled(record: Record<string, unknown>, key: string): boolean {
   return String(value).trim() !== "";
 }
 
+/** True when a balance-sheet position is on the file. Cash alone does not count. */
+export function hasBalanceSheetPosition(financials: object | null | undefined): boolean {
+  if (!financials) return false;
+  const record = financials as Record<string, unknown>;
+  return BALANCE_SHEET_KEYS.some((key) => filled(record, key));
+}
+
 export function needsBalanceSheetPrompt(financials: object | null | undefined): boolean {
   if (!financials) return false;
   const record = financials as Record<string, unknown>;
   const hasProfitAndLoss = PROFIT_AND_LOSS_KEYS.some((key) => filled(record, key));
-  const hasBalanceSheet = BALANCE_SHEET_KEYS.some((key) => filled(record, key));
-  return hasProfitAndLoss && !hasBalanceSheet;
+  return hasProfitAndLoss && !hasBalanceSheetPosition(financials);
 }

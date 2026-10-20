@@ -60,7 +60,7 @@ export type SpherePillar = {
    * this instead of re-scoring the average (an average must not read Healthy
    * when every component ratio is Watch or Critical).
    */
-  status?: HealthTier;
+  status?: HealthTier | null;
   /** Shown instead of a band when the pillar has no confident score. */
   note?: string | null;
   /** Period-over-period change in score, e.g. +8 / -5. Omit to hide. */
@@ -200,6 +200,27 @@ const PILLAR_ICON: Record<SpherePillar["id"], LucideIcon> = {
 
 function fmtScore(h: number): string {
   return isFinite(h) ? String(Math.round(h)) : "—";
+}
+
+/** Right-hand text on a Health driver row. Missing days are a dash and a note, never a score. */
+export function sphereDriverAsideText(driver: {
+  health: number;
+  reading?: string;
+  note?: string;
+  na?: boolean;
+}): { primary: string; secondary: string | null } {
+  const tier = tierOf(driver.health);
+  if (driver.na) return { primary: "N/A", secondary: null };
+  if (driver.reading) {
+    return { primary: isFinite(driver.health) ? TIER_LABEL[tier] : "—", secondary: null };
+  }
+  if (!isFinite(driver.health)) {
+    return { primary: "—", secondary: driver.note?.trim() || TIER_LABEL[tier] };
+  }
+  return {
+    primary: String(Math.round(driver.health)),
+    secondary: driver.note?.trim() || TIER_LABEL[tier],
+  };
 }
 
 function pillarBandLabel(pillar: SpherePillar, tier: Tier): string {
@@ -947,6 +968,7 @@ export function SphereHero({
               }`;
               const rowStyle = { animationDelay: `${i * 60}ms`, animationFillMode: "both" as const };
               const title = d.reading ?? d.label;
+              const aside = sphereDriverAsideText(d);
               const body = (
                 <>
                   <div className="flex items-center justify-between gap-3">
@@ -965,24 +987,24 @@ export function SphereHero({
                     </div>
                     <div className="shrink-0 text-right">
                       {d.reading ? (
-                        d.na ? (
-                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>N/A</p>
-                        ) : (
-                          <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>
-                            {isFinite(d.health) ? TIER_LABEL[t] : "—"}
-                          </p>
-                        )
+                        <p
+                          className={
+                            d.na
+                              ? `text-lg font-bold leading-none ${TIER_TEXT[t]}`
+                              : `text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`
+                          }
+                        >
+                          {aside.primary}
+                        </p>
                       ) : (
                         <>
-                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>
-                            {d.na ? "N/A" : fmtScore(d.health)}
-                          </p>
-                          {d.na ? null : d.note ? (
+                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>{aside.primary}</p>
+                          {aside.secondary == null ? null : d.note && !d.na ? (
                             <p className="max-w-[11rem] text-right text-[11px] font-semibold leading-snug text-amber-800 dark:text-amber-200">
-                              {d.note}
+                              {aside.secondary}
                             </p>
                           ) : (
-                            <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
+                            <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{aside.secondary}</p>
                           )}
                         </>
                       )}
