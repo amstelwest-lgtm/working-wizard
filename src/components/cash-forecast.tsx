@@ -2735,27 +2735,22 @@ export function CashForecastPanel({
     >
       <div className={GOLD_RULE} />
       <CardContent className="pt-5">
-        <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]" data-cash-period>
-              {cashCopy.range || "Next 13 weeks"}
+        <div className="mb-3 min-w-0">
+          <p className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]" data-cash-period>
+            {cashCopy.range || "Next 13 weeks"}
+          </p>
+          {forecastUpdatedLabel ? (
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-forecast-updated>
+              {forecastUpdatedLabel}
             </p>
-            {forecastUpdatedLabel ? (
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-forecast-updated>
-                {forecastUpdatedLabel}
-              </p>
-            ) : null}
-            {simplified && cashCopy.ownerRollLine ? (
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-cash-roll>
-                {cashCopy.ownerRollLine}
-              </p>
-            ) : null}
-            {!simplified && runwayAside ? (
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Runway {runwayAside}</p>
-            ) : null}
-          </div>
-          {emptyPresentation.showChart && !openingTilesMissing ? (
-            <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
+          ) : null}
+          {simplified && cashCopy.ownerRollLine ? (
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-cash-roll>
+              {cashCopy.ownerRollLine}
+            </p>
+          ) : null}
+          {!simplified && runwayAside ? (
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Runway {runwayAside}</p>
           ) : null}
         </div>
         {simplified ? null : cashCopy.bullets.length > 0 ? (
@@ -2781,7 +2776,11 @@ export function CashForecastPanel({
             </Button>
           </div>
         ) : null}
-        <div className="mb-3 flex justify-end">
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          {emptyPresentation.showChart && !openingTilesMissing ? (
+            <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
+          ) : null}
+          <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
           <ViewToggle
             ariaLabel="Cash forecast"
             value={cashLens}
@@ -2793,14 +2792,15 @@ export function CashForecastPanel({
           />
         </div>
         {cashLens === "chart" ? <div aria-label="Graph">{graphPane}</div> : null}
-        {cashLens === "table" ? (
-        <section id="detailed-forecast" className="mt-6" aria-label="13-week">
-          <div className={`mb-3 flex items-start gap-3 ${simplified ? "justify-end" : "justify-between"}`}>
-            {simplified ? null : (
-              <p className="max-w-xl text-xs text-slate-600 dark:text-slate-400">{weekTableHint}</p>
-            )}
-            <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
-          </div>
+        <section
+          id="detailed-forecast"
+          className="mt-6"
+          aria-label="13-week"
+          hidden={cashLens !== "table"}
+        >
+          {simplified ? null : (
+            <p className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400">{weekTableHint}</p>
+          )}
           {!loaded ? (
             <div
               data-cash-grid-loading
@@ -2841,7 +2841,6 @@ export function CashForecastPanel({
           />
           )}
         </section>
-        ) : null}
       </CardContent>
     </Card>
     <EnlargeSheet
