@@ -26,6 +26,8 @@ import {
   type ConnectionPhase,
   type ConnectionRowFact,
 } from "../src/lib/connection-status-deadline";
+import { readLedgerConnectionRow } from "../src/lib/connection-row";
+import { decideLedgerPresence, rowFactFromPresenceResponse } from "../src/lib/ledger-presence";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -394,6 +396,46 @@ const connectedFailure = await enqueueConnectionCheck(
 );
 assert(connectedFailure.phase === "unverified", "a rejected probe keeps Yankees Connected");
 
+const rlsEmpty = { xero: 0, qbo: 0, sage: 0 };
+const signedOut = decideLedgerPresence({ userId: null, member: false, counts: rlsEmpty });
+assert(signedOut.status === 401 && signedOut.body === null, "an unauthenticated call is 401 and returns no row flags");
+assert(
+  rowFactFromPresenceResponse(signedOut, "qbo") === "unknown",
+  "a 0-row RLS result for a signed-out caller is not absent",
+);
+assert(
+  rowFactFromPresenceResponse(signedOut, "xero") === "unknown",
+  "a 0-row RLS result does not mark Xero absent when the caller is signed out",
+);
+const nonMember = decideLedgerPresence({ userId: "stranger", member: false, counts: rlsEmpty });
+assert(nonMember.status === 403 && nonMember.body === null, "a non-member call is 403 and returns no row flags");
+for (const provider of ["xero", "qbo", "sage"] as const) {
+  assert(
+    rowFactFromPresenceResponse(nonMember, provider) === "unknown",
+    `a non-member 0-row result is unknown for ${provider}`,
+  );
+}
+const signedOutFetch = await readLedgerConnectionRow("e9dc0c5a", "qbo", () => {
+  throw new Response("Unauthorized", { status: 401 });
+});
+assert(signedOutFetch === "unknown", "the client maps a 401 to unknown, not absent");
+const nonMemberFetch = await readLedgerConnectionRow("e9dc0c5a", "xero", () => {
+  throw new Response("Forbidden", { status: 403 });
+});
+assert(nonMemberFetch === "unknown", "the client maps a 403 to unknown, not absent");
+const yankeesPresence = decideLedgerPresence({
+  userId: "accountant",
+  member: true,
+  counts: { xero: 1, qbo: 1, sage: 0 },
+});
+assert(yankeesPresence.status === 200, "a firm member receives the presence flags");
+assert(
+  yankeesPresence.body?.xero === true && yankeesPresence.body.qbo === true && yankeesPresence.body.sage === false,
+  "Yankees is present for Xero and QuickBooks only",
+);
+assert(rowFactFromPresenceResponse(yankeesPresence, "qbo") === "present", "a member's service-role row is present");
+assert(rowFactFromPresenceResponse(yankeesPresence, "sage") === "absent", "a member's real missing Sage row is absent");
+
 const studio = readFileSync("src/routes/_authenticated/reports-studio.tsx", "utf8");
 assert(
   studio.includes("reportCardNoFiguresState({ noFigures: blocked })"),
@@ -436,12 +478,27 @@ assert(
 
 const probe = readFileSync("src/lib/use-connection-probe.ts", "utf8");
 assert(probe.includes("connectionRestingPhase"), "connection cards paint the resting phase first");
-assert(probe.includes("readLedgerConnectionRow"), "the card reads connection rows without the status server function");
+assert(probe.includes("readLedgerConnectionRow"), "the card asks the server for connection rows");
+assert(probe.includes("getLedgerConnectionPresence"), "the row check is the server action");
 assert(probe.includes('rowFact.current === "present"'), "a present row cannot fall through to Not connected");
 assert(probe.includes('next.phase === "checking"'), "an in-flight probe result does not replace the skeleton");
 const rowReader = readFileSync("src/lib/connection-row.ts", "utf8");
-assert(rowReader.includes('from(CONNECTION_TABLE[provider])'), "the row read is a direct table select");
-assert(!rowReader.includes("getQboStatus") && !rowReader.includes("getXeroStatus"), "the row read does not call the auth-claim status functions");
+assert(!rowReader.includes("xero_connections"), "the browser does not select xero_connections");
+assert(!rowReader.includes("qbo_connections"), "the browser does not select qbo_connections");
+assert(!rowReader.includes("sage_connections"), "the browser does not select sage_connections");
+const presenceServer = readFileSync("src/lib/ledger-presence.functions.ts", "utf8");
+assert(presenceServer.includes("requireSupabaseAuth"), "the server action uses the same auth middleware");
+assert(presenceServer.includes("decideLedgerPresence"), "unauthorized empty counts never become a body");
+assert(presenceServer.includes('.select("id")'), "the service role reads id only");
+assert(!presenceServer.includes("access_token"), "the presence response never selects tokens");
+assert(!presenceServer.includes("refresh_token"), "the presence response never selects refresh tokens");
+assert(!presenceServer.includes("password"), "the presence response never selects passwords");
+const handler = presenceServer.slice(presenceServer.indexOf(".handler(async"));
+assert(
+  handler.indexOf("if (!member) deny(403)") > 0 &&
+    handler.indexOf("idCount(") > handler.indexOf("if (!member) deny(403)"),
+  "connection ids are read only after the firm-membership check",
+);
 
 const qbo = readFileSync("src/components/qbo-connect.tsx", "utf8");
 const sage = readFileSync("src/components/sage-connect.tsx", "utf8");

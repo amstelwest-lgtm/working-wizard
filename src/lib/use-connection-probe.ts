@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   connectionRestingPhase,
   enqueueConnectionCheck,
@@ -7,6 +8,7 @@ import {
   type ConnectionStatusView,
 } from "@/lib/connection-status-deadline";
 import { readLedgerConnectionRow, type LedgerProvider } from "@/lib/connection-row";
+import { getLedgerConnectionPresence } from "@/lib/ledger-presence.functions";
 
 export type LedgerProbe<T> = {
   configured: boolean | null;
@@ -25,7 +27,7 @@ export function useConnectionProbe<T>(input: {
   provider: LedgerProvider;
   comingSoon?: boolean;
   probe: () => Promise<LedgerProbe<T>>;
-  readRow?: (clientId: string, provider: LedgerProvider) => Promise<"present" | "absent">;
+  readRow?: (clientId: string, provider: LedgerProvider) => Promise<ConnectionRowFact>;
 }): {
   gate: ConnectionPhase;
   configured: boolean | null;
@@ -33,7 +35,13 @@ export function useConnectionProbe<T>(input: {
   reload: () => Promise<void>;
   clear: () => void;
 } {
-  const readRow = input.readRow ?? readLedgerConnectionRow;
+  const fetchPresence = useServerFn(getLedgerConnectionPresence);
+  const fetchPresenceRef = useRef(fetchPresence);
+  fetchPresenceRef.current = fetchPresence;
+  const readRow =
+    input.readRow ??
+    ((clientId: string, provider: LedgerProvider) =>
+      readLedgerConnectionRow(clientId, provider, (id) => fetchPresenceRef.current({ data: { clientId: id } })));
   const [gate, setGate] = useState<ConnectionPhase>(connectionRestingPhase({ row: "unknown" }));
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [status, setStatus] = useState<T | null>(null);
@@ -47,6 +55,7 @@ export function useConnectionProbe<T>(input: {
 
   const paintRow = (fact: ConnectionRowFact) => {
     rowFact.current = fact;
+    if (fact === "unknown") return;
     setGate((current) => {
       if (current === "live" || current === "stored") return current;
       if (fact === "absent") return input.comingSoon ? "coming_soon" : "none";
@@ -124,7 +133,10 @@ export function useConnectionProbe<T>(input: {
         if (run.current !== token) return;
         paintRow(fact);
       },
-      () => undefined,
+      () => {
+        if (run.current !== token) return;
+        paintRow("unknown");
+      },
     );
     return enqueueConnectionCheck<LedgerProbe<T>>(
       {
@@ -156,7 +168,10 @@ export function useConnectionProbe<T>(input: {
         if (cancelled || run.current !== token) return;
         paintRow(fact);
       },
-      () => undefined,
+      () => {
+        if (cancelled || run.current !== token) return;
+        paintRow("unknown");
+      },
     );
     void enqueueConnectionCheck<LedgerProbe<T>>(
       {
