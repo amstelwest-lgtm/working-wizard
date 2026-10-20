@@ -7,7 +7,6 @@
  * need that module.
  */
 import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
-import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "./starter-trial-constants.ts";
 
 export const PROSPECT_MESSAGE_MAX = 500;
 /**
@@ -190,11 +189,27 @@ export const PROSPECT_PRICING_HOLD =
   "I'll answer pricing after your name and email. I won't invent a price. This page is a labelled SAMPLE.";
 
 /**
- * Published Starter trial and the owner workspace price. Firm list prices
- * are USD. This sentence does not invent a fee and does not quote rand.
+ * A method question needs no sample figures. "How does pricing work?" stays
+ * a pricing question. The name-and-email form is unchanged.
  */
-export function prospectPricingReply(): string {
-  return `Starter is a ${FIRM_TRIAL_SENTENCE}. ${FIRM_TRIAL_CARD_NOTE} A business owner's own workspace is $39 a month, and free when their accountant is on Milōn. I won't invent another price. This page is a labelled SAMPLE.`;
+const METHOD_ASK = [
+  /\bhow (?:do|does|can|would|should) (?:you |we |i )?(?:work out|calculate|measure|compute|figure out|estimate)\b/i,
+  /\bhow (?:is|are) [\w\s'-]{0,48}? (?:calculated|measured|worked out)\b/i,
+  /\bhow (?:does|do) [\w\s'-]{0,48}? work\b/i,
+];
+
+export function methodAsked(message: string): boolean {
+  if (pricingAsked(message)) return false;
+  return METHOD_ASK.some((pattern) => pattern.test(message));
+}
+
+/** Weeks of cash at the current pace of spending. No amounts and no week count. */
+export const PROSPECT_RUNWAY_METHOD =
+  "Cash runway is how long the cash on hand would last at the pace the business spends it. Compare the cash held with the cash used up, and read the result as weeks.";
+
+export function plainMethodReply(message: string): string {
+  if (/\brunway\b/i.test(message)) return PROSPECT_RUNWAY_METHOD;
+  return "I can explain the method without quoting the sample. Say which line you mean, and I will walk the steps in plain words.";
 }
 
 const INJECTION = [
