@@ -119,6 +119,8 @@ export type FirmCheckoutSessionInput = {
   interval: FirmInterval;
   origin: string;
   userId: string;
+  /** Stamped on the subscription so an email change still finds this firm. */
+  firmId?: string | null;
   email?: string;
   customerId?: string;
   market: StripePlanMarket;
@@ -219,6 +221,10 @@ export function firmCheckoutSessionParams(
     milon_user_id: input.userId,
     milon_lookup_key: input.lookupKey,
   };
+  const firmId = input.firmId?.trim() ?? "";
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(firmId)) {
+    meta.firm_id = firmId;
+  }
   if (input.includeTrial) meta.milon_trial_days = String(FIRM_TRIAL_DAYS);
   if (input.billingFallback) meta.milon_za_billing_fallback = "usd";
 

@@ -38,7 +38,7 @@ import { isOwnerCatalogPrice } from "@/lib/owner-price";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
 import { FIRM_BAND_CATALOG, isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
-import { findCustomerIdByEmail } from "@/lib/stripe-entitlement";
+import { findFirmCustomerId, type FirmCustomerLookup } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
 import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.server";
@@ -164,15 +164,24 @@ type ListedSubscription = Record<string, unknown> & {
  * Same Stripe list Checkout uses for eligibleForIntroTrial.
  * No customer means zero prior subscriptions.
  */
-async function listCustomerSubscriptions(email: string): Promise<{
+async function listCustomerSubscriptions(
+  email: string,
+  ids?: FirmCustomerLookup,
+): Promise<{
   customerId: string | null;
   data: ListedSubscription[];
 }> {
   if (!stripeConfigured()) return { customerId: null, data: [] };
   const trimmed = email.trim();
-  if (!trimmed) return { customerId: null, data: [] };
+  const userId = ids?.userId?.trim() ?? "";
+  const firmId = ids?.firmId?.trim() ?? "";
+  if (!trimmed && !userId && !firmId) return { customerId: null, data: [] };
   const stripe = getStripe();
-  const customerId = await findCustomerIdByEmail(stripe, trimmed);
+  const customerId = await findFirmCustomerId(stripe, {
+    email: trimmed,
+    userId,
+    firmId,
+  });
   if (!customerId) return { customerId: null, data: [] };
   let listed: { data: ListedSubscription[] };
   try {
@@ -302,19 +311,26 @@ const stripeHistoryCache = new Map<string, { at: number; value: FirmSubscription
 const stripeHistoryInflight = new Map<string, Promise<FirmSubscriptionHistory>>();
 
 /** Entitling subscription plus the prior-count Checkout already uses. */
+function subscriptionHistoryKey(email: string, ids?: FirmCustomerLookup): string {
+  return [ids?.userId?.trim() ?? "", ids?.firmId?.trim() ?? "", email.trim().toLowerCase()].join(
+    "\n",
+  );
+}
+
 export async function readFirmSubscriptionHistory(
   email: string,
-  opts?: { fresh?: boolean },
+  opts?: { fresh?: boolean } & FirmCustomerLookup,
 ): Promise<FirmSubscriptionHistory> {
-  const key = email.trim().toLowerCase();
-  if (!opts?.fresh && key) {
+  const ids = { userId: opts?.userId, firmId: opts?.firmId };
+  const key = subscriptionHistoryKey(email, ids);
+  if (!opts?.fresh && key.trim()) {
     const hit = stripeHistoryCache.get(key);
     if (hit && Date.now() - hit.at < STRIPE_ISOLATE_CACHE_TTL_MS) return hit.value;
     const pending = stripeHistoryInflight.get(key);
     if (pending) return pending;
   }
   const load = async (): Promise<FirmSubscriptionHistory> => {
-    const listed = await listCustomerSubscriptions(email);
+    const listed = await listCustomerSubscriptions(email, ids);
     return {
       entitling: entitlingFromListed(listed.customerId, listed.data),
       priorSubscriptionCount: listed.data.length,
@@ -334,8 +350,9 @@ export async function readFirmSubscriptionHistory(
 
 export async function findEntitlingFirmSubscription(
   email: string,
+  ids?: FirmCustomerLookup,
 ): Promise<EntitlingFirmSubscription | null> {
-  return (await readFirmSubscriptionHistory(email)).entitling;
+  return (await readFirmSubscriptionHistory(email, ids)).entitling;
 }
 
 async function loadFirm(
@@ -403,7 +420,10 @@ export async function firmPrecardCapApplies(input: {
   const firm = await loadFirm(db, input.firmId, input.userId);
   if (!firm) return false;
   const billing = await billingEmailForFirm(input.userId, email, firm.ownerUserId);
-  const sub = billing.email ? await findEntitlingFirmSubscription(billing.email) : null;
+  const sub = await findEntitlingFirmSubscription(billing.email, {
+    userId: firm.ownerUserId,
+    firmId: firm.id,
+  });
   const applies = (sub?.phase ?? "none") === "none";
   await writePrecardCapApplies(firm.id, applies);
   return applies;
@@ -554,7 +574,10 @@ export async function loadFirmClientCreateAllowance(input: {
     billingEmailForFirm(input.userId, email, firm.ownerUserId),
     loadMembershipRole(db, firm.id, input.userId),
   ]);
-  const sub = billing.email ? await findEntitlingFirmSubscription(billing.email) : null;
+  const sub = await findEntitlingFirmSubscription(billing.email, {
+    userId: firm.ownerUserId,
+    firmId: firm.id,
+  });
   const upgrade = await buildUpgradeSnapshot({
     isOwner: Boolean(firm.ownerUserId && firm.ownerUserId === input.userId),
     membershipRole: role,
@@ -666,7 +689,10 @@ export async function loadFirmPlanDisplay(input: {
     loadMembershipRole(db, firm.id, input.userId),
     countFirmClients(db, firm.id),
   ]);
-  const history = await readFirmSubscriptionHistory(billing.email);
+  const history = await readFirmSubscriptionHistory(billing.email, {
+    userId: firm.ownerUserId,
+    firmId: firm.id,
+  });
   const sub = history.entitling;
   const upgrade = await buildUpgradeSnapshot({
     isOwner: Boolean(firm.ownerUserId && firm.ownerUserId === input.userId),
@@ -737,7 +763,10 @@ export async function syncStarterTrialMirrorForActor(input: {
     }
     if (!firm) return;
     const billing = await billingEmailForFirm(userId, email, firm.ownerUserId);
-    const sub = billing.email ? await findEntitlingFirmSubscription(billing.email) : null;
+    const sub = await findEntitlingFirmSubscription(billing.email, {
+      userId: firm.ownerUserId,
+      firmId: firm.id,
+    });
     const trial = trialBannerFor(firm, sub);
     await writeStarterTrialGenerationBlock(firm.id, trial.expired);
     await writePrecardCapApplies(firm.id, (sub?.phase ?? "none") === "none");

@@ -12,7 +12,10 @@ import {
   decideFirmBillingPathGate,
   decidePostLoginBillingResume,
   isFirstClientFiguresPath,
+  customerIdFromMetadataSubscriptions,
   emailHasEntitlingSubscription,
+  findFirmCustomerId,
+  firmCustomerSearchQuery,
   isBillingExemptPath,
   isFirmProductPath,
   isPracticeShellPath,
@@ -543,6 +546,92 @@ assert(
     "firm@example.com",
   )) === true,
   "active subscription by email → entitled",
+);
+
+const BEN_OWNER = "d55084b0-43fe-417b-970b-37f22cee84f3";
+const BEN_FIRM = "e8f7a440-a541-422c-8e4f-82ba33dd0604";
+const benQuery = firmCustomerSearchQuery({ userId: BEN_OWNER, firmId: BEN_FIRM });
+assert(
+  benQuery ===
+    `metadata['firm_id']:'${BEN_FIRM}' OR metadata['milon_user_id']:'${BEN_OWNER}'`,
+  "firm lookup searches firm id and owner id, not email",
+);
+assert(firmCustomerSearchQuery({ userId: "team@trymilon.com" }) === null, "an email is not a search key");
+assert(
+  firmCustomerSearchQuery({ userId: "d55084b0-43fe-417b-970b-37f22cee84f3' OR " }) === null,
+  "a non-uuid cannot be interpolated into the Stripe query",
+);
+
+const starterSub = {
+  id: "sub_starter",
+  status: "active",
+  customer: "cus_old",
+  metadata: {
+    milon_plan: "starter",
+    milon_user_id: BEN_OWNER,
+    firm_id: BEN_FIRM,
+  },
+  items: { data: [{ price: { lookup_key: "milon_starter_monthly" } }] },
+};
+assert(
+  customerIdFromMetadataSubscriptions([starterSub], { userId: BEN_OWNER, firmId: BEN_FIRM }) ===
+    "cus_old",
+  "metadata on the subscription yields its customer id",
+);
+
+let searchedQuery = "";
+let listedEmail = "";
+const movedEmailStripe: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async ({ email }) => {
+      listedEmail = email;
+      return { data: [] };
+    },
+  },
+  subscriptions: {
+    list: async ({ customer, status }) => ({
+      data:
+        customer === "cus_old" && status === "active"
+          ? [starterSub]
+          : [],
+    }),
+    search: async ({ query }) => {
+      searchedQuery = query;
+      return { data: [starterSub] };
+    },
+  },
+};
+assert(
+  (await findFirmCustomerId(movedEmailStripe, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+  })) === "cus_old",
+  "an email change still finds the subscription by firm id and owner id",
+);
+assert(listedEmail === "", "the new email is not listed when metadata already found the customer");
+assert(searchedQuery === benQuery, "the search query is the firm and owner ids");
+assert(
+  (await customerHasEntitlingSubscription(movedEmailStripe, "cus_old")) === true,
+  "that customer still has an entitling Starter subscription",
+);
+
+const emptyNewCustomer: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [{ id: "cus_new_empty" }] }),
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: async () => ({ data: [starterSub] }),
+  },
+};
+assert(
+  (await findFirmCustomerId(emptyNewCustomer, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+  })) === "cus_old",
+  "a newer customer on the new email does not hide the firm's subscription",
 );
 assert(
   (await customerHasEntitlingSubscription(
