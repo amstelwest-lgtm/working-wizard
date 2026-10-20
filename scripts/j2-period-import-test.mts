@@ -1,6 +1,7 @@
 /**
- * YTD P&L, then a balance sheet, through the confirm the page actually calls.
- * Add as Q3 must land. An unknown P&L must show start and end before confirm.
+ * YTD P&L, then a balance sheet, through the confirm each page actually calls.
+ * Covers the accountant upload and the owner review: a same-day sheet, a sheet
+ * dated before the P&L end, Add as Q3, Replace, and an unknown P&L range.
  * Run: pnpm test:j2-period-import
  */
 import { readFileSync } from "node:fs";
