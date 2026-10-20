@@ -86,7 +86,11 @@ export function preferLiveHealthProse(text: string, live?: LiveHealthQuote | nul
   if (live.overall != null && Number.isFinite(live.overall)) {
     const n = String(Math.round(live.overall));
     next = next.replace(/\bHealth is\s+\d{1,3}\b/gi, `Health is ${n}`);
-    next = next.replace(/\boverall score of\s+\d{1,3}\b/gi, `overall score of ${n}`);
+    next = next.replace(
+      /\b(overall)(?:\s+(health))?\s+(score\s+of\s+)\d{1,3}\b/gi,
+      (_full, overall: string, health: string | undefined, scoreOf: string) =>
+        `${overall}${health ? ` ${health}` : ""} ${scoreOf}${n}`,
+    );
   }
   if (rewroteWeakest) {
     next = next.replace(/,?\s*tied with\s+[A-Za-z][A-Za-z &/]*\s+at\s+\d{1,3}\b/gi, "");
