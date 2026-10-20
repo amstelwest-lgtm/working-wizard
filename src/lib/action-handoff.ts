@@ -36,9 +36,28 @@ export function agentPosterSrc(agent: AgentKey): string {
   return POSTER[agent];
 }
 
-export function handoffButtonLabel(agent: AgentKey, assigned: boolean): string {
+function oneSpace(text: string): string {
+  return text.replace(/[ \t]{2,}/g, " ").trim();
+}
+
+export function handoffButtonLabel(agent: AgentKey, assigned: boolean, compact = false): string {
   if (assigned) return `Assigned to ${agentShortName(agent)} ✓`;
-  return `Hand to ${AGENT_DISPLAY_NAME[agent]}`;
+  const name = compact ? agentShortName(agent) : AGENT_DISPLAY_NAME[agent];
+  return oneSpace(`Hand to ${name}`);
+}
+
+/**
+ * Closed Hand to control. A bot assignee reads "Handed to <agent>" so the
+ * click paints the new owner. A person, or nobody, stays "Hand to".
+ * `compact` uses the short name so a 390px row does not clip the label.
+ */
+export function handoffTriggerLabel(assignee: string | null | undefined, compact = false): string {
+  const clean = (assignee ?? "").replace(/\s+/g, " ").trim();
+  if (!clean) return "Hand to";
+  const agent = agentKeyFromAssignee(clean);
+  const shown = compact && agent ? agentShortName(agent) : clean;
+  const verb = agent ? "Handed to" : "Hand to";
+  return oneSpace(`${verb} ${shown}`);
 }
 
 type HandoffMarket = DateMarket;

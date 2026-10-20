@@ -17,12 +17,13 @@ import {
   type ApprovedLiveLink,
 } from "@/lib/agent-draft-decision-client";
 import {
+  draftWhenLabel,
   findingCardCopy,
   findingFigureEntries,
   formatFindingProse,
   type AgentFindingRow,
 } from "@/lib/milon-team-activity";
-import type { MoneyMarket } from "@/lib/market/format";
+import type { DateMarket, MoneyMarket } from "@/lib/market/format";
 import {
   DRAFT_NEEDS_OWNER,
   draftFindingKindLabel,
@@ -54,7 +55,7 @@ export function OwnerDraftCard({
   layout: "moves" | "desk";
   sentence?: string;
   meta?: ReactNode;
-  market?: MoneyMarket;
+  market?: MoneyMarket & DateMarket;
   /** Live scorecard ratios. A stored operating margin is rewritten to this figure. */
   canonicalRatios?: Record<string, number> | null;
   onOpen?: (target: ApprovedDraftTarget) => void;
@@ -103,6 +104,8 @@ export function OwnerDraftCard({
         ? sentence
         : copy.lead;
   const shownContext = !approved && !editing ? copy.context : null;
+  const when =
+    layout === "moves" ? draftWhenLabel(row.created_at, row.last_seen, market) : null;
 
   function fail(result: { hideButtons: boolean; message?: string; refresh?: boolean; invite?: boolean }, restoreEdit: boolean) {
     setOptimistic(null);
@@ -284,6 +287,11 @@ export function OwnerDraftCard({
       ) : null}
       {editor}
       {status}
+      {when ? (
+        <p className="mt-1 text-[11px] tabular-nums text-slate-500 dark:text-slate-400" data-draft-when={when}>
+          {when}
+        </p>
+      ) : null}
       {actions}
       {notice}
       {inviteButton}

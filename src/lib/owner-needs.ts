@@ -3,7 +3,7 @@
  * Counts come from the caller. Empty stays empty. Nothing here is invented.
  */
 import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
-import { repairDraftMetricUnits } from "@/lib/agent-bus";
+import { repairDraftMetricUnits, stripRatioDumpLines } from "@/lib/agent-bus";
 import { draftStoredFiguresHash, presentLiveDraft, type DraftLiveFigures } from "@/lib/draft-figures";
 import { homeStatementsLine } from "@/lib/books-answer";
 import { canonicalScoreProse } from "@/lib/score-prose";
@@ -114,7 +114,9 @@ function presentStoredDraft(
   canonicalRatios?: Record<string, number> | null,
   live?: HomeDraftLive | null,
 ): { text: string; stale: boolean; refresh: boolean } {
-  const base = repairDraftMetricUnits(canonicalScoreProse(rewriteDraftMonthStamp(raw.trim())));
+  const base = repairDraftMetricUnits(
+    canonicalScoreProse(rewriteDraftMonthStamp(stripRatioDumpLines(raw).trim())),
+  );
   if (!base) return { text: "", stale: false, refresh: false };
   const figures: DraftLiveFigures = {
     ratios: canonicalRatios,
