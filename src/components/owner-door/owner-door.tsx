@@ -25,6 +25,7 @@ import {
   writeOwnerThread,
   type OwnerAgentThread,
 } from "@/lib/owner-chat-thread";
+import { latestFiguresStamp } from "@/lib/draft-figures";
 import { earlierStatementNote } from "@/lib/statement-import-plan";
 import {
   ownerAnswerTiles,
@@ -771,13 +772,18 @@ export function OwnerDoor({
     () => (financials ? scorecardRatiosFromFinancials(financials, { fyStartMonth: market.fyStartMonthDefault }) : null),
     [financials, market.fyStartMonthDefault],
   );
+  const figuresUpdatedAt = useMemo(
+    () => latestFiguresStamp(history.map((row) => ({ at: row.created_at, source: row.source }))),
+    [history],
+  );
   const draftPresentations = useMemo(
     () =>
       ownerDraftPresentations(activity.findings, canonicalRatios, {
         overall: liveHealth?.overall ?? null,
         health: liveHealth,
+        figuresUpdatedAt,
       }),
-    [activity.findings, canonicalRatios, liveHealth],
+    [activity.findings, canonicalRatios, liveHealth, figuresUpdatedAt],
   );
   const needs = useMemo(
     () =>
@@ -841,7 +847,7 @@ export function OwnerDoor({
     workingRows,
   );
   const presence = steerOpenHandoffs(
-    ownerPresence({ ...activity, runs: cardRuns }, talk, liveHealth),
+    ownerPresence({ ...activity, runs: cardRuns }, talk, liveHealth, figuresUpdatedAt),
     openAgents,
   );
   const runState = useMemo(() => {

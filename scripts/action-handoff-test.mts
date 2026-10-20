@@ -16,10 +16,14 @@ import {
   handoffCouldNotFinish,
   handoffIsSlow,
   handoffProgressCaption,
+  handoffTriggerLabel,
 } from "../src/lib/action-handoff.ts";
-import { agentDisplayName } from "../src/lib/milon-team.ts";
+import { agentDisplayName, agentShortName } from "../src/lib/milon-team.ts";
+import { AGENT_KEYS } from "../src/lib/milon-team-feed.ts";
 import { HANDOFF_RUN_WAIT_MS, pollAfterTick } from "../src/lib/agent-activity-poll.ts";
 import { deskSignoffText } from "../src/lib/milon-team-activity.ts";
+import { assignmentForMove, moveRowMatches } from "../src/lib/owner-handoff.ts";
+import { displayedAssignee } from "../src/lib/open-plan-home.ts";
 
 function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
@@ -59,6 +63,21 @@ assert(
   handoffButtonLabel("analyst", true) === "Assigned to Analyst ✓",
   "the assigned button names the short role",
 );
+for (const agent of AGENT_KEYS) {
+  const open = handoffButtonLabel(agent, false);
+  assert(open === `Hand to ${agentDisplayName(agent)}`, `one space before ${agentDisplayName(agent)}`);
+  assert(!open.includes("  "), `${agent} label has a double space: ${JSON.stringify(open)}`);
+  const handed = handoffTriggerLabel(`  ${agentDisplayName(agent)}  `);
+  assert(handed === `Handed to ${agentDisplayName(agent)}`, handed);
+  assert(!handed.includes("  "), `${agent} trigger has a double space`);
+  assert(
+    handoffTriggerLabel(agentDisplayName(agent), true) === `Handed to ${agentShortName(agent)}`,
+    "a narrow screen uses the short name",
+  );
+}
+assert(handoffTriggerLabel("  Milōn Advisor") === "Handed to Milōn Advisor", "a padded advisor name keeps one space");
+assert(handoffTriggerLabel(null) === "Hand to", "an empty assignee stays Hand to");
+assert(handoffTriggerLabel("  Ada Mbeki  ") === "Hand to Ada Mbeki", "a person stays Hand to");
 assert(
   handoffProgressCaption("analyst", "queued") === "Analyst is queued",
   "a queued run is waiting",
@@ -285,7 +304,16 @@ const menu = readFileSync("src/components/hand-to-menu.tsx", "utf8");
 assert(menu.includes("toast.success(`Handed to ${agentShortName(agent)}`)"), "Next moves toasts before the request");
 assert(menu.includes("ActionHandoffButtons"), "Hand to lists the bots");
 assert(menu.includes("data-hand-to-trigger"), "the control is labelled Hand to");
-assert(menu.includes("Hand to"), "the button says Hand to");
+assert(menu.includes("handoffTriggerLabel"), "the trigger is one collapsed string");
+assert(menu.includes("hand-to-short"), "a narrow screen can show the short name");
+const labels = readFileSync("src/lib/action-handoff.ts", "utf8");
+assert(labels.includes("Hand to ${name}") && labels.includes('"Hand to"'), "the button says Hand to");
+const phaseMarks = plan.match(/data-handoff-phase=\{phaseLabel/g) ?? [];
+assert(phaseMarks.length === 1, "Draft ready is one badge per item");
+const toastCss = readFileSync("src/styles.css", "utf8");
+assert(toastCss.includes('[data-sonner-toast][data-type="success"]'), "a hand-off success toast stays readable");
+assert(toastCss.includes('[data-sonner-toast][data-type="error"]'), "a hand-off error toast stays readable");
+assert(toastCss.includes("[data-sonner-toaster]") && toastCss.includes("z-index: 200"), "the toast sits above Hand to");
 assert(menu.includes("data-hand-to-person"), "Hand to lists team members");
 assert(!menu.includes("Assigning…"), "the button does not stay on Assigning once Working is set");
 assert(menu.includes('aria-pressed={current}'), "the current person is marked");
@@ -405,5 +433,58 @@ assert(deskCss.includes("min-height: 96px"), "the phone composer is a full field
 
 const ask = readFileSync("src/lib/ask-ai.js", "utf8");
 assert(ask.includes('studio ? "Send" : "Ask"'), "the studio composer says Send");
+
+const moveTitle = "Move fixed contracts to variable / usage-based pricing";
+assert(
+  moveRowMatches({
+    moveKey: "fixedCostRatio",
+    title: moveTitle,
+    sourceMoveKey: "fixedCostRatio",
+    actionTitle: moveTitle,
+  }),
+  "a Next moves row matches its source_move_key",
+);
+assert(
+  moveRowMatches({
+    moveKey: "fixedCostRatio",
+    title: moveTitle,
+    actionTitle: `Hand-off: ${moveTitle}`,
+  }),
+  "a Hand-off draft title still matches the move",
+);
+assert(
+  !moveRowMatches({
+    moveKey: "fixedCostRatio",
+    title: moveTitle,
+    actionTitle: "Chase overdue invoices",
+  }),
+  "a different action is not this move",
+);
+const matched = assignmentForMove(
+  [
+    {
+      actionItemId: "a1",
+      sourceMoveKey: "fixedCostRatio",
+      driverKey: "fixedCostRatio",
+      title: moveTitle,
+      assigneeName: "Milōn Financial Manager",
+    },
+  ],
+  "fixedCostRatio",
+  moveTitle,
+);
+assert(matched?.assigneeName === "Milōn Financial Manager", "the stored assignee is the one on the move");
+assert(
+  displayedAssignee(null, [{ note: "Handed to Milōn Financial Manager.", at: "2026-10-20T18:00:00.000Z" }]) ===
+    "Milōn Financial Manager",
+  "a cleared owner still shows the hand-off note",
+);
+const painted = menu.indexOf("setAssignee(agentDisplayName(agent))");
+const ensured = menu.indexOf("const actionItemId = await ensure()");
+assert(painted >= 0 && ensured > painted, "Next moves paints the assignee before the row is created");
+assert(plan.includes("displayedAssignee(item.owner_name, notes)"), "the action row reads the stored hand-off");
+const feedHook = readFileSync("src/hooks/use-milon-team-feed.ts", "utf8");
+assert(feedHook.includes("action_updates"), "the team activity reads hand-off notes");
+assert(feedHook.includes("ACTION_PLAN_REFRESH_EVENT"), "the activity list refetches after Hand to");
 
 console.log("action-handoff ok");

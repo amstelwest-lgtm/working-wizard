@@ -23,7 +23,7 @@ const GOLD_ASK =
   "inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-2.5 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50";
 
 const QUIET_ASK =
-  "inline-flex items-center gap-1.5 rounded-lg border border-[#DBEAFE] px-2.5 py-1.5 text-[12px] font-semibold text-[#102A43] disabled:opacity-50 dark:border-[#1e3a5f] dark:text-[#F4F7FB]";
+  "inline-flex items-center gap-1.5 rounded-lg border border-[#0B5FFF] px-2.5 py-1.5 text-[12px] font-semibold text-[#102A43] disabled:opacity-50 dark:border-[#60A5FA] dark:text-[#F4F7FB]";
 
 /**
  * Tracked-ask actions under Next Step. The owner board keeps the gold pill.

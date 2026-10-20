@@ -27,6 +27,15 @@ assert(
   !trackedAskClass("accountant").includes("from-[#f3d98a]"),
   "accountant tracked asks are not gold pills",
 );
+assert(
+  trackedAskClass("accountant").includes("border-[#0B5FFF]"),
+  "accountant tracked asks use a cobalt outline",
+);
+assert(
+  !trackedAskClass("accountant").includes("border-[#DBEAFE]") &&
+    !trackedAskClass("accountant").includes("border-[#dbeafe]"),
+  "accountant tracked asks are not the pale border premium-shine repaints gold",
+);
 assert(trackedAskClass("accountant").includes("border"), "accountant tracked asks stay an outline");
 assert(
   trackedAskClass("owner").includes("from-[#f3d98a]"),

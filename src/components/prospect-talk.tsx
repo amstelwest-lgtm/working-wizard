@@ -1,28 +1,101 @@
 /**
  * Full-screen one-agent conversation. The greeting is already on screen.
- * Name and email come after two exchanges, before the sample deliverable.
+ * Name and email come after three useful replies. The chat stays open
+ * after the form. Schedule a call is an optional disclosure.
  */
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { TryDemo } from "@/components/try-demo";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
-import { postProspectTalk } from "@/lib/prospect-talk-client";
+import { TrySchedule, type TryCallResult } from "@/components/try-schedule";
+import { postProspectTalk, type ProspectTalkResponse } from "@/lib/prospect-talk-client";
 import {
-  PROSPECT_PUBLIC_AGENTS,
+  PROSPECT_FM_SLUG,
+  prospectAgentsFor,
   resolveTalkSlug,
   sanitizeRef,
   type ProspectAgentCopy,
+  type TalkCopyPack,
 } from "@/lib/prospect-talk";
+import { initialTalkSession, openTalkSession, queueTalkMessage } from "@/lib/prospect-talk-session";
 
 export type TalkMessage = { role: "agent" | "you"; text: string };
 
+function packOf(copyPack: TalkCopyPack): "za" | "us" {
+  return copyPack === "za" ? "za" : "us";
+}
+
+function AgentList({
+  refCode,
+  agents,
+}: {
+  refCode: string | null;
+  agents: readonly ProspectAgentCopy[];
+}) {
+  const query = refCode ? `?ref=${encodeURIComponent(refCode)}` : "";
+  return (
+    <ul className="talk-picks">
+      {agents.map((agent) => (
+        <li className="talk-pick" key={agent.slug}>
+          <a href={`/talk/${agent.slug}${query}`}>{agent.role}</a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function TalkIndex({
+  refCode,
+  copyPack,
+}: {
+  refCode: string | null;
+  copyPack?: TalkCopyPack;
+}) {
+  const agents = prospectAgentsFor(copyPack);
+  const count = agents.length === 4 ? "Four" : "Three";
+  return (
+    <main className="talk-page" data-talk-view="index" data-talk-pack={packOf(copyPack)}>
+      <div className="talk-top">
+        <a className="talk-wordmark" href="/">
+          MILŌN
+        </a>
+        <span className="talk-stamp">SAMPLE</span>
+      </div>
+      <h1 className="talk-title">Talk to an agent</h1>
+      <p className="talk-note">
+        {count} agents. Each one walks a labelled SAMPLE. No account and no password.
+      </p>
+      <AgentList refCode={refCode} agents={agents} />
+    </main>
+  );
+}
+
+export function TaxSpecialistElsewhere({ refCode }: { refCode: string | null }) {
+  const query = refCode ? `?ref=${encodeURIComponent(refCode)}` : "";
+  return (
+    <main className="talk-page" data-talk-view="tax-elsewhere">
+      <div className="talk-top">
+        <a className="talk-wordmark" href="/">
+          MILŌN
+        </a>
+        <span className="talk-stamp">SAMPLE</span>
+      </div>
+      <h1 className="talk-title">Tax Specialist</h1>
+      <p className="talk-note">The Tax Specialist covers South African tax.</p>
+      <a className="talk-next" href={`/talk/${PROSPECT_FM_SLUG}${query}`}>
+        Talk to the Financial Manager
+      </a>
+    </main>
+  );
+}
+
 export function AgentPicker({
   refCode,
+  copyPack,
   reason,
 }: {
   refCode: string | null;
+  copyPack?: TalkCopyPack;
   reason: "unknown" | "unavailable";
 }) {
-  const query = refCode ? `?ref=${encodeURIComponent(refCode)}` : "";
   return (
     <main className="talk-page" data-talk-view="picker" data-talk-reason={reason}>
       <div className="talk-top">
@@ -37,13 +110,7 @@ export function AgentPicker({
           ? "That link doesn't match an agent. Choose who you want to talk to."
           : "This conversation isn't available here. Choose another agent."}
       </p>
-      <ul className="talk-picks">
-        {PROSPECT_PUBLIC_AGENTS.map((agent) => (
-          <li className="talk-pick" key={agent.slug}>
-            <a href={`/talk/${agent.slug}${query}`}>{agent.role}</a>
-          </li>
-        ))}
-      </ul>
+      <AgentList refCode={refCode} agents={prospectAgentsFor(copyPack)} />
     </main>
   );
 }
@@ -54,22 +121,29 @@ export function ProspectTalkScreen({
   askLead,
   busy,
   error,
-  showDemo,
-  demo,
-  sampleNonce = null,
+  leadReady = false,
+  sessionReady = true,
   onSend,
   onLead,
+  onBookCall,
 }: {
   agent: ProspectAgentCopy;
   messages: TalkMessage[];
   askLead: boolean;
   busy?: boolean;
   error?: string | null;
-  showDemo?: boolean;
-  demo?: ReactNode;
-  sampleNonce?: string | null;
+  leadReady?: boolean;
+  sessionReady?: boolean;
   onSend?: (text: string) => void;
   onLead?: (input: { name: string; email: string; consent: boolean; honeypot: string }) => void;
+  onBookCall?: (input: {
+    name: string;
+    email: string;
+    consent: boolean;
+    honeypot: string;
+    start: string;
+    timeZone: string;
+  }) => Promise<TryCallResult>;
 }) {
   const [draft, setDraft] = useState("");
   const [name, setName] = useState("");
@@ -77,17 +151,15 @@ export function ProspectTalkScreen({
   const [consent, setConsent] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const thread: TalkMessage[] = [{ role: "agent", text: agent.greeting }, ...messages];
-
-  if (showDemo) {
-    return (
-      <div data-prospect-demo="sample">
-        {demo ?? <TryDemo sampleOnly sampleNonce={sampleNonce} />}
-      </div>
-    );
-  }
+  const clip = busy ? "thinking" : askLead ? "waiting" : "idle";
 
   return (
-    <main className="talk-page" data-talk-view="agent" data-talk-agent={agent.slug}>
+    <main
+      className="talk-page"
+      data-talk-view="agent"
+      data-talk-agent={agent.slug}
+      data-talk-session={sessionReady ? "ready" : "pending"}
+    >
       <div className="talk-top">
         <a className="talk-wordmark" href="/">
           MILŌN
@@ -95,7 +167,7 @@ export function ProspectTalkScreen({
         <span className="talk-stamp">SAMPLE</span>
       </div>
       <div className="talk-stage">
-        <SilentAgentPortrait face={agent.face} label={agent.role} large />
+        <SilentAgentPortrait face={agent.face} label={agent.role} large clip={clip} />
         <div>
           <p className="talk-kicker">Milōn</p>
           <h1 className="talk-title">{agent.role}</h1>
@@ -221,6 +293,12 @@ export function ProspectTalkScreen({
           {error ? <p className="talk-error">{error}</p> : null}
         </form>
       )}
+      {leadReady ? (
+        <details className="talk-schedule" data-talk-schedule="optional">
+          <summary>Schedule a call</summary>
+          <TrySchedule onBook={onBookCall} />
+        </details>
+      ) : null}
     </main>
   );
 }
@@ -246,82 +324,139 @@ function pageUtm(): Record<string, string> {
   return out;
 }
 
-export function ProspectTalkLive({ slug, copyPack }: { slug: string; copyPack: "za" | "us" }) {
+export function ProspectTalkLive({
+  slug,
+  copyPack,
+  taxAgent = null,
+  onBookCall,
+  readStoredToken,
+  sendTurn = postProspectTalk,
+}: {
+  slug: string;
+  copyPack: "za" | "us";
+  taxAgent?: ProspectAgentCopy | null;
+  onBookCall?: (input: {
+    name: string;
+    email: string;
+    consent: boolean;
+    honeypot: string;
+    start: string;
+    timeZone: string;
+  }) => Promise<TryCallResult>;
+  /** Test seam. Production reads sessionStorage after paint. */
+  readStoredToken?: () => Promise<string | null>;
+  /** Test seam. Production posts to the prospect-talk edge function. */
+  sendTurn?: (body: Record<string, unknown>) => Promise<ProspectTalkResponse>;
+}) {
   const [refCode, setRefCode] = useState<string | null>(null);
-  const [taxAgent, setTaxAgent] = useState<ProspectAgentCopy | null>(null);
   const [messages, setMessages] = useState<TalkMessage[]>([]);
   const [askLead, setAskLead] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
-  const [sampleNonce, setSampleNonce] = useState<string | null>(null);
+  const [leadReady, setLeadReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState("");
-
-  useEffect(() => {
-    setRefCode(pageRef());
-    const stored = window.sessionStorage.getItem(`milon-talk:${slug}`);
-    if (stored) setToken(stored);
-  }, [slug]);
-
-  useEffect(() => {
-    if (resolveTalkSlug(slug, copyPack).kind !== "tax") return;
-    let cancelled = false;
-    void import("@/lib/prospect-tax-copy").then((mod) => {
-      if (!cancelled) setTaxAgent(mod.TAX_TALK);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [slug, copyPack]);
+  const [sessionReady, setSessionReady] = useState(false);
+  const gateRef = useRef(initialTalkSession());
+  const slugSeen = useRef<string | null>(null);
+  const postRef = useRef<(text: string, sessionToken: string) => void>(() => {});
 
   function remember(next: string) {
     setToken(next);
+    gateRef.current = { ...gateRef.current, token: next };
     window.sessionStorage.setItem(`milon-talk:${slug}`, next);
   }
+
+  postRef.current = (text, sessionToken) => {
+    setBusy(true);
+    setError(null);
+    void sendTurn({
+      action: "turn",
+      agent: slug,
+      message: text,
+      sessionToken,
+      ref: pageRef(),
+      market: pageMarket(),
+      utm: pageUtm(),
+    })
+      .then((result) => {
+        if (!result.ok) {
+          setError(result.error ?? "The conversation isn't available right now.");
+          return;
+        }
+        if (result.sessionToken) remember(result.sessionToken);
+        if (result.reply) {
+          setMessages((current) => [...current, { role: "agent", text: result.reply ?? "" }]);
+        }
+        setAskLead(result.askLead === true);
+      })
+      .catch(() => setError("The conversation isn't available right now."))
+      .finally(() => setBusy(false));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const switched = slugSeen.current !== null && slugSeen.current !== slug;
+    slugSeen.current = slug;
+    if (switched) {
+      gateRef.current = initialTalkSession();
+      setMessages([]);
+      setAskLead(false);
+      setLeadReady(false);
+      setError(null);
+      setSessionReady(false);
+    }
+    setRefCode(pageRef());
+    const apply = (stored: string) => {
+      if (cancelled) return;
+      const opened = openTalkSession(gateRef.current, stored);
+      gateRef.current = opened.gate;
+      setToken(stored);
+      setSessionReady(true);
+      for (const text of opened.deliver) postRef.current(text, stored);
+    };
+    if (readStoredToken) {
+      void readStoredToken().then((stored) => {
+        if (!cancelled) apply(stored ?? "");
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    apply(window.sessionStorage.getItem(`milon-talk:${slug}`) ?? "");
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, readStoredToken]);
 
   return (
     <TalkPageView
       slug={slug}
       copyPack={copyPack}
-      refCode={refCode}
       taxAgent={taxAgent}
+      refCode={refCode}
       messages={messages}
       askLead={askLead}
+      leadReady={leadReady}
+      sessionReady={sessionReady}
       busy={busy}
       error={error}
-      showDemo={showDemo}
-      sampleNonce={sampleNonce}
+      onBookCall={onBookCall}
       onSend={(text) => {
-        setBusy(true);
+        const trimmed = text.trim();
+        if (!trimmed || busy) return;
         setError(null);
-        setMessages((current) => [...current, { role: "you", text }]);
-        void postProspectTalk({
-          action: "turn",
-          agent: slug,
-          message: text,
-          sessionToken: token,
-          ref: refCode,
-          market: pageMarket(),
-          utm: pageUtm(),
-        })
-          .then((result) => {
-            if (!result.ok) {
-              setError(result.error ?? "The conversation isn't available right now.");
-              return;
-            }
-            if (result.sessionToken) remember(result.sessionToken);
-            if (result.reply) {
-              setMessages((current) => [...current, { role: "agent", text: result.reply ?? "" }]);
-            }
-            if (result.askLead) setAskLead(true);
-          })
-          .catch(() => setError("The conversation isn't available right now."))
-          .finally(() => setBusy(false));
+        setMessages((current) => [...current, { role: "you", text: trimmed }]);
+        const gate = gateRef.current;
+        if (!gate.ready) {
+          gateRef.current = queueTalkMessage(gate, trimmed);
+          return;
+        }
+        postRef.current(trimmed, gate.token);
       }}
       onLead={(input) => {
         setBusy(true);
         setError(null);
-        void postProspectTalk({
+        void sendTurn({
           action: "lead",
           agent: slug,
           sessionToken: token,
@@ -329,7 +464,7 @@ export function ProspectTalkLive({ slug, copyPack }: { slug: string; copyPack: "
           email: input.email,
           consent: input.consent,
           milon_leave_blank: input.honeypot,
-          ref: refCode,
+          ref: pageRef(),
           market: pageMarket(),
           utm: pageUtm(),
         })
@@ -339,8 +474,11 @@ export function ProspectTalkLive({ slug, copyPack }: { slug: string; copyPack: "
               setError(result.error ?? "The sample isn't available right now.");
               return;
             }
-            if (result.sampleNonce) setSampleNonce(result.sampleNonce);
-            setShowDemo(true);
+            setAskLead(false);
+            setLeadReady(true);
+            if (result.reply) {
+              setMessages((current) => [...current, { role: "agent", text: result.reply ?? "" }]);
+            }
           })
           .catch(() => setError("The sample isn't available right now."))
           .finally(() => setBusy(false));
@@ -352,71 +490,59 @@ export function ProspectTalkLive({ slug, copyPack }: { slug: string; copyPack: "
 export function TalkPageView({
   slug,
   copyPack,
+  taxAgent = null,
   refCode = null,
   messages,
   askLead = false,
   busy,
   error,
-  showDemo = false,
-  demo,
-  sampleNonce = null,
-  taxAgent = null,
+  leadReady = false,
+  sessionReady = true,
   onSend,
   onLead,
+  onBookCall,
 }: {
   slug: string;
-  copyPack: "za" | "us";
+  copyPack: TalkCopyPack;
+  taxAgent?: ProspectAgentCopy | null;
   refCode?: string | null;
   messages?: TalkMessage[];
   askLead?: boolean;
   busy?: boolean;
   error?: string | null;
-  showDemo?: boolean;
-  demo?: ReactNode;
-  sampleNonce?: string | null;
-  taxAgent?: ProspectAgentCopy | null;
+  leadReady?: boolean;
+  sessionReady?: boolean;
   onSend?: (text: string) => void;
   onLead?: (input: { name: string; email: string; consent: boolean; honeypot: string }) => void;
+  onBookCall?: (input: {
+    name: string;
+    email: string;
+    consent: boolean;
+    honeypot: string;
+    start: string;
+    timeZone: string;
+  }) => Promise<TryCallResult>;
 }) {
   const view = resolveTalkSlug(slug, copyPack);
+  if (view.kind === "tax-elsewhere") {
+    return <TaxSpecialistElsewhere refCode={refCode} />;
+  }
   if (view.kind === "picker") {
-    return <AgentPicker refCode={refCode} reason={view.reason} />;
+    return <AgentPicker refCode={refCode} copyPack={copyPack} reason={view.reason} />;
   }
-  if (view.kind === "tax") {
-    if (!taxAgent) {
-      return (
-        <main className="talk-page" data-talk-view="tax">
-          <p className="talk-note">Opening the sample.</p>
-        </main>
-      );
-    }
-    return (
-      <ProspectTalkScreen
-        agent={taxAgent}
-        messages={messages ?? []}
-        askLead={askLead}
-        busy={busy}
-        error={error}
-        showDemo={showDemo}
-        demo={demo}
-        sampleNonce={sampleNonce}
-        onSend={onSend}
-        onLead={onLead}
-      />
-    );
-  }
+  const agent = view.agent.slug === "tax-specialist" && taxAgent ? taxAgent : view.agent;
   return (
     <ProspectTalkScreen
-      agent={view.agent}
+      agent={agent}
       messages={messages ?? []}
       askLead={askLead}
       busy={busy}
       error={error}
-      showDemo={showDemo}
-      demo={demo}
-      sampleNonce={sampleNonce}
+      leadReady={leadReady}
+      sessionReady={sessionReady}
       onSend={onSend}
       onLead={onLead}
+      onBookCall={onBookCall}
     />
   );
 }

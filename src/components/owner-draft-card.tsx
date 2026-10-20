@@ -19,13 +19,14 @@ import {
   type ApprovedLiveLink,
 } from "@/lib/agent-draft-decision-client";
 import {
+  draftWhenLabel,
   findingCardCopy,
   findingFigureEntries,
   findingSentence,
   formatFindingProse,
   type AgentFindingRow,
 } from "@/lib/milon-team-activity";
-import type { MoneyMarket } from "@/lib/market/format";
+import type { DateMarket, MoneyMarket } from "@/lib/market/format";
 import {
   DRAFT_NEEDS_OWNER,
   draftFindingKindLabel,
@@ -47,6 +48,7 @@ export function OwnerDraftCard({
   sentence,
   liveSentence = null,
   health = null,
+  figuresUpdatedAt = null,
   meta,
   market: marketProp,
   canonicalRatios = null,
@@ -62,8 +64,10 @@ export function OwnerDraftCard({
   liveSentence?: string | null;
   /** Live score snapshot. Score claims that disagree with it are not shown. */
   health?: HealthScoreSnapshot | null;
+  /** Latest upload or ledger sync. A draft written after this keeps its sentence. */
+  figuresUpdatedAt?: string | null;
   meta?: ReactNode;
-  market?: MoneyMarket;
+  market?: MoneyMarket & DateMarket;
   /** Live scorecard ratios. A stored operating margin is rewritten to this figure. */
   canonicalRatios?: Record<string, number> | null;
   onOpen?: (target: ApprovedDraftTarget) => void;
@@ -115,6 +119,8 @@ export function OwnerDraftCard({
           canonicalRatios,
           liveHealth: health,
           evidence: row.evidence,
+          writtenAt: row.created_at,
+          figuresUpdatedAt,
         })
       : "";
   const replacement = liveSentence ?? (health ? renderHealthNarrative(health) : null);
@@ -127,6 +133,8 @@ export function OwnerDraftCard({
           ? sentence
           : copy.lead;
   const shownContext = !approved && !editing ? copy.context : null;
+  const when =
+    layout === "moves" ? draftWhenLabel(row.created_at, row.last_seen, market) : null;
 
   function fail(result: { hideButtons: boolean; message?: string; refresh?: boolean; invite?: boolean }, restoreEdit: boolean) {
     setOptimistic(null);
@@ -314,6 +322,11 @@ export function OwnerDraftCard({
       ) : null}
       {editor}
       {status}
+      {when ? (
+        <p className="mt-1 text-[11px] tabular-nums text-slate-500 dark:text-slate-400" data-draft-when={when}>
+          {when}
+        </p>
+      ) : null}
       {actions}
       {notice}
       {inviteButton}

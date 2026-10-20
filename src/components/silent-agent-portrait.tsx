@@ -4,16 +4,24 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
-import { avatarPoster, fmClipSources, type AvatarFace } from "@/lib/fm-avatar-state";
+import {
+  avatarPoster,
+  fmClipSources,
+  type AvatarFace,
+  type FmAvatarClip,
+} from "@/lib/fm-avatar-state";
 
 export function SilentAgentPortrait({
   face,
   label,
   large,
+  clip = "idle",
 }: {
   face: AvatarFace;
   label: string;
   large?: boolean;
+  /** Approved mood clip. Always muted. Idle while listening, thinking while a reply is in flight. */
+  clip?: Extract<FmAvatarClip, "idle" | "thinking" | "waiting">;
 }) {
   const reduced = usePrefersReducedMotion();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -35,15 +43,16 @@ export function SilentAgentPortrait({
     if (video.readyState >= 2) start();
     else video.addEventListener("canplay", start, { once: true });
     return () => video.removeEventListener("playing", onPlaying);
-  }, [reduced]);
+  }, [reduced, clip]);
 
   const poster = avatarPoster(face);
-  const sources = fmClipSources("idle", face);
+  const sources = fmClipSources(clip, face);
   return (
     <div className={large ? "talk-portrait talk-portrait-lg" : "talk-portrait"}>
       <img src={poster.webp} alt="" width={512} height={512} />
       {!reduced ? (
         <video
+          key={clip}
           ref={videoRef}
           className={live ? "is-live" : undefined}
           muted

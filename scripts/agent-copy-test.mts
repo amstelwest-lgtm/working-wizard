@@ -209,6 +209,43 @@ if (ask.ok) {
   assert(days?.value === 43.8 && days.unit === "days" && days.value_raw == null, "debtor days keep the stored 43.8");
 }
 
+const ratioDump = polishAgentCopy({
+  text: [
+    "Send the September debtors age analysis.",
+    "grossMargin: 0.42",
+    "currentRatio: 1.4",
+    "evidence keys you may cite: grossMargin, currentRatio",
+    "Ratios:",
+    'stored_ratios: {"grossMargin":0.42}',
+  ].join("\n"),
+  role: "detail",
+  kind: "data_request_draft",
+  market: ZA,
+});
+assert(ratioDump.ok === true, "a data request keeps the ask when a ratio dump is attached");
+if (ratioDump.ok) {
+  assert(ratioDump.text.includes("Send the September debtors age analysis"), ratioDump.text);
+  assert(!/grossMargin\s*:/.test(ratioDump.text), ratioDump.text);
+  assert(!/currentRatio\s*:/.test(ratioDump.text), ratioDump.text);
+  assert(!/evidence keys you may cite/i.test(ratioDump.text), ratioDump.text);
+  assert(!/stored_ratios/i.test(ratioDump.text), ratioDump.text);
+  assert(!/^ratios:?$/im.test(ratioDump.text), ratioDump.text);
+}
+const ratioDraft = polishAgentCopy({
+  text: "Current ratio is thin.\ngrossMargin: 0.42\ncurrentRatio: 1.4\nevidence keys you may cite: currentRatio",
+  role: "detail",
+  kind: "cost_ratio",
+  figures: { "Current Ratio": 1.4 },
+  market: ZA,
+});
+assert(ratioDraft.ok === true, "a ratio draft keeps the sentence");
+if (ratioDraft.ok) {
+  assert(ratioDraft.text.includes("Current ratio is thin"), ratioDraft.text);
+  assert(!/grossMargin\s*:/.test(ratioDraft.text), ratioDraft.text);
+  assert(!/currentRatio\s*:/.test(ratioDraft.text), ratioDraft.text);
+  assert(!/evidence keys you may cite/i.test(ratioDraft.text), ratioDraft.text);
+}
+
 const periodLeak = polishAgentCopy({
   text: "Gross margin is 1 for Jan 1 – Sep 30, 2026.",
   role: "detail",

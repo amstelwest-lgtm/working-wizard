@@ -108,4 +108,15 @@ export interface ExtractionResult {
   current_period: PeriodBlock;
   comparative_period: PeriodBlock | null;
   extraction_notes: string | null;
+  /**
+   * Set only after the person confirms the printed currency label is wrong.
+   * Amounts stay as printed. There is no conversion.
+   */
+  currency_label_confirm?: {
+    fileCurrency: string;
+    clientCurrency: string;
+    choice: "label_wrong";
+    statement: string;
+    at: string;
+  } | null;
 }

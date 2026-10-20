@@ -130,6 +130,17 @@ export function latestStoredAssignment(notes: readonly AssignmentNote[]): Stored
   return null;
 }
 
+/** The name on the Hand to button. A stored note wins over a cleared owner. */
+export function displayedAssignee(
+  ownerName: string | null | undefined,
+  notes: readonly AssignmentNote[],
+): string | null {
+  const stored = latestStoredAssignment(notes);
+  if (stored?.name) return stored.name;
+  const owner = ownerName?.replace(/\s+/g, " ").trim() ?? "";
+  return owner || null;
+}
+
 export type RowAssignment = {
   id: string;
   assigneeName: string | null;

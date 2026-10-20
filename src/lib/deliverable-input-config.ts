@@ -159,14 +159,18 @@ const SOURCE_HINT = {
   notes: "Open queries and engagement notes",
 } as const;
 
-function num(v: unknown): number {
-  if (v == null || v === "") return 0;
+/** A blank, missing, or non-numeric value stays null. A stored 0 stays 0. */
+function num(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === "string" && v.trim() === "") return null;
   const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
+  return Number.isFinite(n) ? n : null;
 }
 
 function hasField(financials: DeliverableInputContext["financials"], key: string): boolean {
-  return num(financials?.[key]) !== 0 || String(financials?.[key] ?? "").trim() !== "";
+  const raw = financials?.[key];
+  if (raw == null) return false;
+  return String(raw).trim() !== "";
 }
 
 function hasPl(financials: DeliverableInputContext["financials"]): boolean {
@@ -204,9 +208,10 @@ type DayCoverFinancials =
   | undefined;
 
 export function computedDaysAr(financials: DayCoverFinancials): number | null {
-  const rec = num(financials?.receivables);
+  const rec = statementStockAmount(financials?.receivables);
+  if (rec == null) return null;
   const rev = num(financials?.revenue);
-  if (rev <= 0) return null;
+  if (rev == null || rev <= 0) return null;
   const months = periodMonthsOf(financials as Record<string, unknown> | null);
   const annualRev = months > 0 && months < 12 ? rev * (12 / months) : rev;
   if (annualRev <= 0) return null;
@@ -214,17 +219,19 @@ export function computedDaysAr(financials: DayCoverFinancials): number | null {
 }
 
 export function computedDaysAp(financials: DayCoverFinancials): number | null {
-  const pay = num(financials?.payables);
+  const pay = statementStockAmount(financials?.payables);
+  if (pay == null) return null;
   const revenue = num(financials?.revenue);
   const rawCogs = num(financials?.cogs);
-  const cogs = revenue > 0 ? costMagnitude(rawCogs) : rawCogs;
+  if (rawCogs == null) return null;
+  const cogs = revenue != null && revenue > 0 ? costMagnitude(rawCogs) : rawCogs;
   if (cogs <= 0) return null;
   const months = periodMonthsOf(financials as Record<string, unknown> | null);
   const annualCogs = months > 0 && months < 12 ? cogs * (12 / months) : cogs;
-  const annualRevenue = months > 0 && months < 12 ? revenue * (12 / months) : revenue;
+  const annualRevenue = revenue == null ? 0 : months > 0 && months < 12 ? revenue * (12 / months) : revenue;
   if (annualCogs <= 0) return null;
   const days = Math.round((pay / annualCogs) * 365);
-  if (costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return null;
+  if (costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return Number.NaN;
   return days;
 }
 
@@ -234,14 +241,15 @@ export function computedDaysInventory(financials: DayCoverFinancials): number | 
   if (stock == null) return null;
   const revenue = num(financials?.revenue);
   const rawCogs = num(financials?.cogs);
-  const cogs = revenue > 0 ? costMagnitude(rawCogs) : rawCogs;
+  if (rawCogs == null) return null;
+  const cogs = revenue != null && revenue > 0 ? costMagnitude(rawCogs) : rawCogs;
   if (cogs <= 0) return null;
   const months = periodMonthsOf(financials as Record<string, unknown> | null);
   const annualCogs = months > 0 && months < 12 ? cogs * (12 / months) : cogs;
-  const annualRevenue = months > 0 && months < 12 ? revenue * (12 / months) : revenue;
+  const annualRevenue = revenue == null ? 0 : months > 0 && months < 12 ? revenue * (12 / months) : revenue;
   if (annualCogs <= 0) return null;
   const days = Math.round((stock / annualCogs) * 365);
-  if (costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return null;
+  if (costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return Number.NaN;
   return days;
 }
 
@@ -249,8 +257,7 @@ export function computedDaysInventory(financials: DayCoverFinancials): number | 
 function statementStockAmount(raw: unknown): number | null {
   if (raw == null) return null;
   if (typeof raw === "string" && raw.trim() === "") return null;
-  const n = num(raw);
-  return Number.isFinite(n) ? n : null;
+  return num(raw);
 }
 
 /**
@@ -297,20 +304,64 @@ export function ratiosAgedReadLine(
  * as Ratios, Collections, and Payables. A health-score year span must not
  * replace these (19/28 instead of 25/37).
  */
+/**
+ * A computed day wins when it is a real number, including a stored 0.
+ * A blank stock becomes null — never 0, and never the NaN `computeRatios`
+ * left behind. A present stock whose days are not meaningful stays NaN.
+ */
+function canonicalDay(
+  computed: number | null,
+  fromRatios: number | null | undefined,
+  inputPresent: boolean,
+): number | null {
+  if (typeof computed === "number" && Number.isNaN(computed)) return Number.NaN;
+  if (computed != null && Number.isFinite(computed)) return computed;
+  if (inputPresent && typeof fromRatios === "number" && Number.isNaN(fromRatios)) return Number.NaN;
+  return null;
+}
+
+function cycleFromDayParts(
+  debtorDays: number | null,
+  inventoryDays: number | null,
+  creditorDays: number | null,
+): number | null {
+  if (debtorDays == null || inventoryDays == null || creditorDays == null) return null;
+  if (![debtorDays, inventoryDays, creditorDays].every((days) => Number.isFinite(days))) {
+    return Number.NaN;
+  }
+  return Math.round(debtorDays + inventoryDays - creditorDays);
+}
+
 export function withCanonicalDebtorCreditorDays(
   ratios: Record<string, number>,
   financials: DayCoverFinancials,
-): Record<string, number> {
+): Record<string, number | null> {
   const statement = ratiosStatementFigures(financials);
-  const next = { ...ratios };
-  if (statement.debtorDays != null) next["Debtor Days"] = statement.debtorDays;
-  if (statement.creditorDays != null) next["Creditor Days"] = statement.creditorDays;
-  const dso = next["Debtor Days"];
-  const dio = next["Inventory Days"];
-  const dpo = next["Creditor Days"];
-  if ([dso, dio, dpo].every((n) => typeof n === "number" && Number.isFinite(n))) {
-    next["Working Capital Days"] = Math.round(dso + dio - dpo);
+  const next: Record<string, number | null> = { ...ratios };
+  next["Debtor Days"] = canonicalDay(
+    statement.debtorDays,
+    ratios["Debtor Days"],
+    statementStockAmount(financials?.receivables) != null,
+  );
+  next["Creditor Days"] = canonicalDay(
+    statement.creditorDays,
+    ratios["Creditor Days"],
+    statementStockAmount(financials?.payables) != null,
+  );
+  const stockPresent = statementStockAmount(financials?.inventory) != null;
+  const inventoryFromRatios = ratios["Inventory Days"];
+  if (!stockPresent) next["Inventory Days"] = null;
+  else if (typeof inventoryFromRatios === "number" && Number.isFinite(inventoryFromRatios)) {
+    next["Inventory Days"] = inventoryFromRatios;
+  } else next["Inventory Days"] = Number.NaN;
+  if (statementStockAmount(financials?.employees) == null) {
+    next["Sales-per-Employee Ratio"] = null;
   }
+  next["Working Capital Days"] = cycleFromDayParts(
+    next["Debtor Days"],
+    next["Inventory Days"],
+    next["Creditor Days"],
+  );
   return next;
 }
 
@@ -323,7 +374,7 @@ export function daysNeedReview(days: number | null | undefined): boolean {
 
 export function defaultDaysAr(ctx: DeliverableInputContext): number {
   const computed = computedDaysAr(ctx.financials);
-  if (computed != null) return computed;
+  if (computed != null && Number.isFinite(computed)) return computed;
   if (ctx.operatingProfile?.debtorDaysDefault != null)
     return ctx.operatingProfile.debtorDaysDefault;
   if (ctx.budgetWc?.debtorDays != null) return ctx.budgetWc.debtorDays;
@@ -332,7 +383,7 @@ export function defaultDaysAr(ctx: DeliverableInputContext): number {
 
 export function defaultDaysAp(ctx: DeliverableInputContext): number {
   const computed = computedDaysAp(ctx.financials);
-  if (computed != null) return computed;
+  if (computed != null && Number.isFinite(computed)) return computed;
   if (ctx.budgetWc?.creditorDays != null) return ctx.budgetWc.creditorDays;
   return DEFAULT_DAYS_AP;
 }

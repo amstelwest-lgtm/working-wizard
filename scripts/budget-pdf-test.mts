@@ -26,7 +26,7 @@ const engine = computeMonthVariance(
 );
 
 for (const key of ["revenue", "cogs", "ebit"] as const) {
-  const label = key === "ebit" ? "Profit" : key === "cogs" ? "COGS" : "Revenue";
+  const label = key === "ebit" ? "Operating profit" : key === "cogs" ? "COGS" : "Revenue";
   const row = model.summary.find((r) => r.label === label);
   const line = engine.lines.find((l) => l.key === key);
   assert(Boolean(row && line), `${label} present`);

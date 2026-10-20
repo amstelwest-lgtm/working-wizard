@@ -1,6 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import { handoffComingOnline } from "@/hooks/owner-agent-ui";
-import { handoffRequestNote, personAssignmentNote } from "@/lib/owner-handoff";
+import {
+  handoffRequestNote,
+  personAssignmentNote,
+  type MoveAssignmentRef,
+} from "@/lib/owner-handoff";
 import {
   latestStoredAssignment,
   type AssignmentNote,
@@ -239,11 +243,10 @@ export async function commitActionHandoff(input: {
 }): Promise<ActionHandoffCommit> {
   const since = new Date().toISOString();
   const assigneeName = agentDisplayName(input.agent);
-  const actorLabel = await signedInActorLabel();
   const note = {
     note: handoffRequestNote(assigneeName),
     at: since,
-    actorLabel,
+    actorLabel: null as string | null,
     actorType: "owner_app" as const,
   };
   const working: ActionPlanRefreshDetail = {
@@ -252,6 +255,7 @@ export async function commitActionHandoff(input: {
     agent: input.agent,
     assigneeName,
     since,
+    note,
   };
   rememberOptimistic({
     actionItemId: input.actionItemId,
@@ -259,10 +263,12 @@ export async function commitActionHandoff(input: {
     since,
     agent: input.agent,
     assigneeName,
-    note: null,
+    note,
   });
-  // Working paints before the function returns. The Handed-to line waits for noted.
+  // Handed to paints with the click time. The signed-in name fills in after.
   dispatchActionPlanRefresh(working);
+  const actorLabel = await signedInActorLabel();
+  note.actorLabel = actorLabel;
   const fail = (error: string, comingSoon?: boolean): ActionHandoffCommit => {
     rejectOptimisticHandoff(input.actionItemId, since, comingSoon ? null : HANDOFF_FAILED_COPY);
     dispatchActionPlanRefresh({
@@ -272,11 +278,17 @@ export async function commitActionHandoff(input: {
     });
     return comingSoon ? { ok: false, error, comingSoon: true } : { ok: false, error };
   };
-  const result = await requestOwnerHandoff({
-    clientId: input.clientId,
-    actionItemId: input.actionItemId,
-    agent: input.agent,
-  });
+  let result: Awaited<ReturnType<typeof requestOwnerHandoff>>;
+  try {
+    result = await requestOwnerHandoff({
+      clientId: input.clientId,
+      actionItemId: input.actionItemId,
+      agent: input.agent,
+    });
+  } catch (err) {
+    const message = err instanceof Error && err.message.trim() ? err.message : HANDOFF_FAILED_COPY;
+    return fail(message);
+  }
   if (!result.ok && handoffComingOnline(result.error)) {
     const saved = await recordHandoffAssignment(input);
     if (!saved.ok) return fail(saved.error, true);
@@ -534,6 +546,59 @@ async function loadAssignmentNotes(actionIds: string[]): Promise<Map<string, Ass
 /** Every note on these actions, newest first. The row shows them; assignment is a separate read. */
 export async function loadActionNotes(actionIds: string[]): Promise<Map<string, AssignmentNote[]>> {
   return loadAssignmentNotes(actionIds);
+}
+
+const moveAssignmentCache = new Map<string, MoveAssignmentRef[]>();
+const moveAssignmentLoads = new Map<string, Promise<MoveAssignmentRef[]>>();
+const moveAssignmentTokens = new Map<string, object>();
+
+/** Drop a cached Next moves read so the next load sees the note just written. */
+export function invalidateMoveAssignments(clientId: string): void {
+  const id = clientId.trim();
+  moveAssignmentCache.delete(id);
+  moveAssignmentLoads.delete(id);
+  moveAssignmentTokens.delete(id);
+}
+
+/**
+ * Open actions for this client, newest first, with the stored assignee.
+ * Next moves matches these rows by move key, then by title.
+ */
+export async function loadClientMoveAssignments(clientId: string): Promise<MoveAssignmentRef[]> {
+  const id = clientId.trim();
+  if (!id) return [];
+  const cached = moveAssignmentCache.get(id);
+  if (cached) return cached;
+  const pending = moveAssignmentLoads.get(id);
+  if (pending) return pending;
+  const token = {};
+  moveAssignmentTokens.set(id, token);
+  const load = (async (): Promise<MoveAssignmentRef[]> => {
+    const { data, error } = await supabase
+      .from("action_items")
+      .select("id, title, source_move_key, driver_key")
+      .eq("client_id", id)
+      .order("created_at", { ascending: false })
+      .limit(80);
+    if (error || !data) return [];
+    const ids = data.map((row) => row.id).filter((value): value is string => Boolean(value));
+    const assignments = await loadLatestAssignments(ids);
+    const rows: MoveAssignmentRef[] = data.map((row) => ({
+      actionItemId: row.id,
+      sourceMoveKey: row.source_move_key,
+      driverKey: row.driver_key,
+      title: row.title ?? "",
+      assigneeName: assignments.get(row.id)?.name ?? null,
+    }));
+    if (moveAssignmentTokens.get(id) === token) moveAssignmentCache.set(id, rows);
+    return rows;
+  })();
+  moveAssignmentLoads.set(id, load);
+  try {
+    return await load;
+  } finally {
+    if (moveAssignmentLoads.get(id) === load) moveAssignmentLoads.delete(id);
+  }
 }
 
 /** Newest bot or person assignment per action. Other notes stay in the log and do not hide it. */

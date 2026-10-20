@@ -8,11 +8,27 @@ import { OwnerHome } from "../src/components/owner-door/owner-home.tsx";
 import { emptyAgentActivity } from "../src/lib/milon-team-activity.ts";
 import { ownerPresence } from "../src/lib/owner-presence.ts";
 import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief.ts";
+import { buildSpherePillars } from "../src/components/sphere-hero-adapter.ts";
+import { sphereDriverAsideText } from "../src/components/sphere-hero.tsx";
+import { cashDriverDayFigures } from "../src/lib/cash-driver-label.ts";
+import {
+  HEALTH_MISSING_MARK,
+  HEALTH_NOT_ENOUGH_DATA,
+  healthDayRowPresentation,
+} from "../src/lib/health-metric-row.ts";
 import {
   cashPillarFollowsForecast,
+  healthMapFromRatios,
   liveHealthFromBooks,
+  overviewRatios,
+  scoreAndBand,
   scorecardHealthFromFinancials,
 } from "../src/lib/health-score.ts";
+import { localizeCopy } from "../src/lib/market/copy.ts";
+import {
+  needsTrialBalanceRefresh,
+  TRIAL_BALANCE_REFRESH_COPY,
+} from "../src/lib/trial-balance-refresh.ts";
 import { assessClientMetrics } from "../src/lib/client-metrics.ts";
 import { clientListStatusWord } from "../src/lib/cash-forecast-parity.ts";
 import {
@@ -188,5 +204,119 @@ const realZero = assessClientMetrics({
 assert(realZero.cash.amount === 0, `a balance-sheet zero was dropped (${realZero.cash.amount})`);
 assert(realZero.outlook.cashOnFile !== false, "a written zero stays on file");
 assert(realZero.outlook.floor > 0, "a real zero can still sit under a minimum");
+
+const plRatios = overviewRatios(plOnly);
+for (const name of ["Debtor Days", "Creditor Days", "Inventory Days", "Working Capital Days"]) {
+  assert(plRatios[name] == null, `${name} is null on a P&L with no balance sheet (${plRatios[name]})`);
+}
+const blankScore = scoreAndBand("Debtor Days", null, us);
+assert(blankScore.score == null && blankScore.tier == null, "a null day count has no score and no band");
+const plHealthMap = healthMapFromRatios(plRatios, us);
+assert(plHealthMap.debtorDays == null && plHealthMap.creditorDays == null, "null days stay out of the health map");
+assert(
+  !health.pillars.some((pillar) => pillar.id === "cash" && pillar.score != null),
+  "the cash pillar does not keep a score from blank day metrics",
+);
+
+const dayCounts = cashDriverDayFigures(plOnly);
+assert(dayCounts.debtorDays == null && dayCounts.creditorDays == null, "statement day figures stay null");
+const pillarHealths = {
+  profit: health.pillars.find((pillar) => pillar.id === "profit")?.score ?? Number.NaN,
+  assets: health.pillars.find((pillar) => pillar.id === "assets")?.score ?? Number.NaN,
+  financing: health.pillars.find((pillar) => pillar.id === "financing")?.score ?? Number.NaN,
+  cash: health.pillars.find((pillar) => pillar.id === "cash")?.score ?? Number.NaN,
+};
+const ownerDays = buildSpherePillars({
+  overallHealth: health.overall ?? Number.NaN,
+  pillarHealths,
+  healthMap: plHealthMap,
+  ratioMeta: {
+    debtorDays: { friendly: "Customer Pay Speed" },
+    creditorDays: { friendly: "Supplier Pay Window" },
+  },
+  dayCounts,
+});
+const accountantDays = buildSpherePillars({
+  overallHealth: health.overall ?? Number.NaN,
+  pillarHealths,
+  healthMap: plHealthMap,
+  ratioMeta: {
+    debtorDays: { friendly: localizeCopy("Debtor Days", us) },
+    creditorDays: { friendly: localizeCopy("Creditor Days", us) },
+  },
+  dayCounts,
+});
+const ownerCash = ownerDays.find((pillar) => pillar.id === "cash")?.drivers ?? [];
+const accountantCash = accountantDays.find((pillar) => pillar.id === "cash")?.drivers ?? [];
+for (const driver of [...ownerCash, ...accountantCash].filter((row) => row.key === "debtorDays" || row.key === "creditorDays")) {
+  const aside = sphereDriverAsideText(driver);
+  assert(driver.reading == null, `${driver.label} must not print a day count (${driver.reading})`);
+  assert(!Number.isFinite(driver.health), `${driver.label} must not keep a score`);
+  assert(driver.note === HEALTH_NOT_ENOUGH_DATA, `${driver.label} note was ${driver.note}`);
+  assert(aside.primary === HEALTH_MISSING_MARK, `${driver.label} prints ${aside.primary}`);
+  assert(aside.secondary === HEALTH_NOT_ENOUGH_DATA, `${driver.label} secondary was ${aside.secondary}`);
+  assert(!/score\s+\d+|HEALTHY|0 days/i.test(`${driver.label} ${aside.primary} ${aside.secondary}`), driver.label);
+}
+assert(
+  accountantCash.find((row) => row.key === "debtorDays")?.label === "Days sales outstanding",
+  "US Health names days sales outstanding",
+);
+assert(
+  accountantCash.find((row) => row.key === "creditorDays")?.label === "Days payable outstanding",
+  "US Health names days payable outstanding",
+);
+const dsoRow = healthDayRowPresentation(dayCounts.debtorDays, plHealthMap.debtorDays);
+const dpoRow = healthDayRowPresentation(dayCounts.creditorDays, plHealthMap.creditorDays);
+assert(dsoRow.figure === "—" && dsoRow.note === "Not enough data" && dsoRow.score == null, "DSO row");
+assert(dpoRow.figure === "—" && dpoRow.note === "Not enough data" && dpoRow.score == null, "DPO row");
+
+const plSnapshot = {
+  source: "pdf_upload",
+  period_date: "2026-10-31",
+  financials: plOnly,
+};
+assert(
+  !needsTrialBalanceRefresh({ live: plOnly, snapshots: [plSnapshot] }),
+  "a P&L-only upload does not ask to re-import the trial balance",
+);
+assert(
+  needsTrialBalanceRefresh({
+    live: { ...plOnly, fixedCosts: "", cash: "" },
+    snapshots: [
+      {
+        source: "pdf_upload",
+        period_date: "2026-10-31",
+        financials: { ...plOnly, totalAssets: "90000", fixedCosts: "", cash: "" },
+      },
+    ],
+  }),
+  "a stale balance sheet still asks for a re-import",
+);
+assert(
+  TRIAL_BALANCE_REFRESH_COPY === "Re-import the trial balance to refresh operating profit and runway",
+  "the re-import sentence stays the shared copy",
+);
+
+const fullSheet = {
+  revenue: "50000",
+  cogs: "20000",
+  ebit: "10000",
+  netIncome: "8000",
+  receivables: "6000",
+  payables: "4000",
+  inventory: "2000",
+  totalAssets: "30000",
+  equity: "20000",
+  cash: "5000",
+  periodMonths: "12",
+};
+const fullRatios = overviewRatios(fullSheet);
+assert(fullRatios["Debtor Days"] === 44, `full-sheet DSO ${fullRatios["Debtor Days"]}`);
+assert(fullRatios["Creditor Days"] === 73, `full-sheet DPO ${fullRatios["Creditor Days"]}`);
+assert(fullRatios["Inventory Days"] === 37, `full-sheet DIO ${fullRatios["Inventory Days"]}`);
+const storedZero = overviewRatios({ ...fullSheet, receivables: "0" });
+assert(storedZero["Debtor Days"] === 0, `a stored zero stays 0 days (${storedZero["Debtor Days"]})`);
+const zeroScore = scoreAndBand("Debtor Days", storedZero["Debtor Days"], us);
+assert(zeroScore.score === 100 && zeroScore.tier === "healthy", "an entered zero still scores");
 
 console.log("pl-only-cash-test: all assertions passed");
