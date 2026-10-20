@@ -9,18 +9,21 @@ import { useServerFn } from "@tanstack/react-start";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useMarketFormat } from "@/contexts/market";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
+import { ViewToggle } from "@/components/ui/view-toggle";
 import { hotelLineDisplayName } from "@/lib/budget-industry";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
 import type { BudgetTemplateId } from "@/lib/budget.types";
 import { ownerMinus } from "@/lib/owner-money";
 import {
-  budgetChartDomain,
   budgetMonthViews,
+  budgetPeriodTotalCell,
   budgetPlanIsSet,
+  budgetRangeTotals,
   budgetTableRows,
   budgetYtdSentence,
   budgetYtdSignal,
   budgetYtdWithStatement,
+  niceBudgetAxis,
   revenueYtd,
   type BudgetActualMonth,
   type BudgetLens,
@@ -29,7 +32,7 @@ import {
 } from "@/lib/budget-chart-table";
 import type { BudgetDocument } from "@/lib/budget.types";
 import { MONTHS } from "@/lib/market/date-presets";
-import { currentBudgetMonth, formatMonthLabel, fyMonths } from "@/lib/budget.months";
+import { currentBudgetMonth, formatBudgetMonthYear, fyMonths } from "@/lib/budget.months";
 import { listBudgetMonthActuals } from "@/lib/budget-actuals.functions";
 import { formatMoneyChartTick } from "@/lib/market/format";
 import type { VarianceSignal } from "@/lib/budget.variance";
@@ -59,6 +62,8 @@ export function BudgetChartTable({
   readOnly = false,
   signed = false,
   displayTemplateId = null,
+  periodCaption = null,
+  uniformNote = null,
 }: {
   doc: BudgetDocument;
   clientId?: string;
@@ -74,6 +79,10 @@ export function BudgetChartTable({
   signed?: boolean;
   /** Industry kit. Labour line names on a hotel render as the hotel drivers. */
   displayTemplateId?: BudgetTemplateId | null;
+  /** Visible window, with both periods named when the books year differs. */
+  periodCaption?: string | null;
+  /** Flat year from a statement seed or a copy-forward. */
+  uniformNote?: string | null;
 }) {
   const { market } = useMarketFormat();
   const money = (n: number) => {
@@ -82,7 +91,14 @@ export function BudgetChartTable({
   };
   const listActuals = useServerFn(listBudgetMonthActuals);
   const [loaded, setLoaded] = useState<BudgetActualMonth[]>(actualMonths ? [...actualMonths] : []);
-  const monthsOpen = lens === "table";
+  const [actualsPending, setActualsPending] = useState(!actualMonths && Boolean(clientId));
+  const [uncontrolledLens, setUncontrolledLens] = useState<BudgetLens>("chart");
+  const activeLens = lens ?? uncontrolledLens;
+  const selectLens = (next: string) => {
+    const value: BudgetLens = next === "table" ? "table" : "chart";
+    if (!lens) setUncontrolledLens(value);
+    onLensChange?.(value);
+  };
 
   useEffect(() => {
     if (actualMonths) {
@@ -91,9 +107,11 @@ export function BudgetChartTable({
     }
     if (!clientId) {
       setLoaded([]);
+      setActualsPending(false);
       return;
     }
     let cancelled = false;
+    setActualsPending(true);
     listActuals({ data: { clientId, fyStart: doc.fyStart } })
       .then((res) => {
         if (cancelled) return;
@@ -106,6 +124,9 @@ export function BudgetChartTable({
       })
       .catch(() => {
         if (!cancelled) setLoaded([]);
+      })
+      .finally(() => {
+        if (!cancelled) setActualsPending(false);
       });
     return () => {
       cancelled = true;
@@ -113,6 +134,7 @@ export function BudgetChartTable({
   }, [actualMonths, clientId, doc.fyStart, listActuals]);
 
   const views = useMemo(() => budgetMonthViews(doc, loaded), [doc, loaded]);
+  const totals = useMemo(() => budgetRangeTotals(views), [views]);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const through = currentBudgetMonth(months);
   const ytd = budgetYtdWithStatement(revenueYtd(views, through), statementActuals);
@@ -135,43 +157,88 @@ export function BudgetChartTable({
   return (
     <section
       className="budget-lens min-w-0 max-w-full rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50"
-      data-budget-lens="chart"
+      data-budget-lens={activeLens}
+      data-budget-paint="ready"
       aria-label="Budget chart and table"
+      aria-busy={actualsPending || undefined}
     >
-      <div className="min-w-0">
-        <h3 className="text-sm font-semibold text-[#102A43] dark:text-slate-100">Budget vs actual</h3>
-        <p className={`mt-1 text-[13px] leading-snug ${ytdTone}`} data-ytd-signal={budgetYtdSignal(ytd) ?? "none"}>
-          {sentence}
-        </p>
-      </div>
-      <BudgetMonthChart views={views} market={market} money={money} signed={signed} />
-      <details
-        className="mt-4"
-        {...(onLensChange
-          ? {
-              open: monthsOpen,
-              onToggle: (event: { currentTarget: HTMLDetailsElement }) => {
-                const open = event.currentTarget.open;
-                if (open === monthsOpen) return;
-                onLensChange(open ? "table" : "chart");
-              },
-            }
-          : { defaultOpen: monthsOpen })}
-      >
-        <summary className="w-fit cursor-pointer text-sm font-semibold text-[#0B5FFF]">
-          Month by month
-        </summary>
-        <div className="mt-3">
-          <BudgetMonthTable
-            doc={doc}
-            views={views}
-            money={money}
-            locale={market.locale}
-            displayTemplateId={displayTemplateId}
-          />
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-[#102A43] dark:text-slate-100">Budget vs actual</h3>
+          {periodCaption ? (
+            <p className="mt-1 text-[13px] leading-snug text-[#3D5270] dark:text-slate-300" data-budget-period>
+              {periodCaption}
+            </p>
+          ) : null}
+          <p className={`mt-1 text-[13px] leading-snug ${ytdTone}`} data-ytd-signal={budgetYtdSignal(ytd) ?? "none"}>
+            {sentence}
+          </p>
+          {uniformNote ? (
+            <p className="mt-1 text-[13px] leading-snug text-[#8A5A12] dark:text-[#F0D59A]" data-budget-uniform>
+              {uniformNote}
+            </p>
+          ) : null}
         </div>
-      </details>
+        <ViewToggle
+          ariaLabel="Budget"
+          value={activeLens}
+          onChange={selectLens}
+          options={[
+            { value: "chart", label: "Chart" },
+            { value: "table", label: "Table" },
+          ]}
+        />
+      </div>
+      <BudgetRangeTotalsRow totals={totals} money={money} />
+      {actualsPending ? (
+        <p className="sr-only" role="status">
+          Loading monthly actuals
+        </p>
+      ) : null}
+      {activeLens === "table" ? (
+        <BudgetMonthTable
+          doc={doc}
+          views={views}
+          totals={totals}
+          money={money}
+          market={market}
+          displayTemplateId={displayTemplateId}
+        />
+      ) : (
+        <BudgetMonthChart views={views} market={market} money={money} signed={signed} />
+      )}
     </section>
+  );
+}
+
+function BudgetRangeTotalsRow({
+  totals,
+  money,
+}: {
+  totals: { revenue: number; expenses: number; net: number };
+  money: (n: number) => string;
+}) {
+  const items = [
+    ["Revenue", totals.revenue],
+    ["Expenses", totals.expenses],
+    ["Net", totals.net],
+  ] as const;
+  return (
+    <div
+      className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-[#F4F8FF] px-3 py-2 dark:bg-slate-900"
+      data-budget-totals=""
+    >
+      {items.map(([label, amount]) => (
+        <div key={label} className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-[#3D5270] dark:text-slate-400">
+            {label}
+          </div>
+          <div className="truncate text-sm font-semibold tabular-nums text-[#102A43] dark:text-slate-100">
+            {money(amount)}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -228,7 +295,7 @@ function BudgetMonthChart({
     signal: row.revenue?.signal ?? null,
     delta: row.revenue?.delta ?? null,
   }));
-  const domain = budgetChartDomain(data.flatMap((row) => [row.budget, row.actual]));
+  const axis = niceBudgetAxis(data.flatMap((row) => [row.budget, row.actual]));
 
   return (
     <div className="mt-4 min-w-0">
@@ -251,9 +318,11 @@ function BudgetMonthChart({
               fontSize={10}
               tickLine={false}
               axisLine={false}
-              domain={domain}
+              domain={axis?.domain}
+              ticks={axis?.ticks}
+              allowDecimals={false}
               tickFormatter={(value) => tick(Number(value))}
-              width={48}
+              width={56}
             />
             <Tooltip
               cursor={{ fill: "rgba(56,189,248,0.12)" }}
@@ -346,14 +415,16 @@ function LegendSwatch({ color, label, faded }: { color: string; label: string; f
 function BudgetMonthTable({
   doc,
   views,
+  totals,
   money,
-  locale,
+  market,
   displayTemplateId = null,
 }: {
   doc: BudgetDocument;
   views: BudgetMonthView[];
+  totals: { revenue: number; expenses: number; net: number };
   money: (n: number) => string;
-  locale: string;
+  market: Parameters<typeof formatBudgetMonthYear>[1];
   displayTemplateId?: BudgetTemplateId | null;
 }) {
   const rows = budgetTableRows(doc, views, (name, index) =>
@@ -371,14 +442,18 @@ function BudgetMonthTable({
               </th>
               {months.map((month) => (
                 <th key={month} colSpan={3} className="px-2 py-2 text-center">
-                  {formatMonthLabel(month, { locale })}
+                  {formatBudgetMonthYear(month, market)}
                 </th>
               ))}
+              <th colSpan={3} className="px-2 py-2 text-center">
+                Total
+              </th>
             </tr>
             <tr>
               {months.map((month) => (
                 <MonthHeads key={month} />
               ))}
+              <MonthHeads />
             </tr>
           </thead>
           <tbody>
@@ -388,9 +463,20 @@ function BudgetMonthTable({
                 {row.cells.map((item, index) => (
                   <MonthCells key={`${row.id}-${months[index]}`} item={item} money={money} />
                 ))}
+                <MonthCells
+                  item={budgetPeriodTotalCell(row.cells, "ebit", row.label, row.higherIsBetter)}
+                  money={money}
+                />
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr data-budget-totals-row="" className="budget-grid__total">
+              <th className="budget-grid__line px-3 py-2 text-left font-semibold" colSpan={1 + months.length * 3 + 3}>
+                Period total · Revenue {money(totals.revenue)} · Expenses {money(totals.expenses)} · Net {money(totals.net)}
+              </th>
+            </tr>
+          </tfoot>
         </table>
       </ScrollableTable>
     </div>
