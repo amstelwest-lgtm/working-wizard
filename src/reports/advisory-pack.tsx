@@ -7,6 +7,7 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type ReportSignoffStamp, type SmeData } from "@/components/pdf/pdf-document";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
+import { ReportSection } from "@/lib/report-pdf-layout";
 import { C } from "@/components/pdf/theme";
 import type { ResolvedMarket } from "@/lib/market";
 import {
@@ -115,22 +116,30 @@ export function AdvisoryPackPDF({
       {sections.length === 0 ? (
         <Text style={S.empty}>This pack has no sections yet.</Text>
       ) : (
-        sections.map((section, i) => (
-          <View key={`${section.title}-${i}`} minPresenceAhead={88}>
-            <SectionHeader title={pdfSafeText(section.title)} />
-            {lines(section.body).map((line, li) => (
+        sections.map((section, i) => {
+          const body = [
+            ...lines(section.body).map((line, li) => (
               <Text key={li} style={S.body}>
                 {line}
               </Text>
-            ))}
-            {section.bullets?.map((bullet, bi) => (
+            )),
+            ...(section.bullets ?? []).map((bullet, bi) => (
               <Text key={`b-${bi}`} style={S.bullet}>
                 {"• "}
                 {pdfSafeText(bullet)}
               </Text>
-            ))}
-          </View>
-        ))
+            )),
+          ];
+          return (
+            <ReportSection
+              key={`${section.title}-${i}`}
+              heading={<SectionHeader title={pdfSafeText(section.title)} />}
+              lead={body.slice(0, 2)}
+            >
+              {body.slice(2)}
+            </ReportSection>
+          );
+        })
       )}
     </PDFDocument>
   );

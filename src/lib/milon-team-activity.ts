@@ -45,6 +45,8 @@ export type AgentFindingRow = {
   id: string;
   agent: AgentKey;
   client_id: string;
+  /** The run that wrote this row. Hand-off "finished" needs this on the action's run. */
+  run_id?: string | null;
   kind?: string | null;
   /** info, watch, or act. Missing on rows loaded before the column was selected. */
   severity?: string | null;
@@ -705,10 +707,17 @@ export function handoffParts(
 export function handoffLine(
   row: Pick<AgentMessageRow, "type" | "from_agent" | "to_agent" | "payload">,
   shortName: (agent: AgentKey) => string,
+  live?: LiveHealthQuote | null,
 ): string | null {
   const parts = handoffParts(row);
   if (!parts) return null;
-  return `${shortName(parts.from)} → ${shortName(parts.to)}: ${canonicalScoreProse(parts.text)}`;
+  const named = canonicalScoreProse(parts.text);
+  const quoted = quoteLiveScoreOnly(named, live?.overall ?? null);
+  const prose =
+    live && live.overall != null && Number.isFinite(live.overall)
+      ? preferLiveHealthProse(quoted, live)
+      : quoted;
+  return `${shortName(parts.from)} → ${shortName(parts.to)}: ${prose}`;
 }
 
 /** Owner review is never a sign-off. Only an accountant approval uses the check. */

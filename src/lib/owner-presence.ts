@@ -165,7 +165,7 @@ export function ownerPresence(
     [...activity.messages]
       .filter((row) => handoffLine(row, agentShortName))
       .sort((a, b) => stamp(b.created_at) - stamp(a.created_at))[0] ?? null;
-  const handoffText = newestMessage ? handoffLine(newestMessage, agentShortName) : null;
+  const handoffText = newestMessage ? handoffLine(newestMessage, agentShortName, liveHealth) : null;
   const handoff =
     newestMessage && handoffText && newestMessage.to_agent
       ? { from: newestMessage.from_agent, to: newestMessage.to_agent, sentence: handoffText }

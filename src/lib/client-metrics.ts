@@ -240,6 +240,7 @@ export function forecastHasRealLines(cashflow: unknown): boolean {
  * A resolved cash amount that was actually read.
  * Non-zero cash counts. Zero counts only from a published bank, a sourced
  * ledger opening, or a statement that has other figures. A bare 0 does not.
+ * A blank cash field never reaches here: it is missing, not zero.
  */
 export function cashAmountIsOnFile(
   cash: { amount: number | null; source?: string | null },
@@ -254,6 +255,17 @@ export function cashAmountIsOnFile(
   if (parsedStatementFigures(fin)) return true;
   if (ledgerOpeningIsCashEvidence(cf)) return true;
   return false;
+}
+
+/**
+ * A hand-entered forecast opening that is not the blank/zero placeholder.
+ * Home uses this so a real 13-week opening is not "cash not on file".
+ */
+export function forecastOpeningIsKnown(cashflow: unknown): boolean {
+  const cf = asRecord(cashflow);
+  if (!cf || storedOpeningIsMissing(cf)) return false;
+  const opening = finiteNum(cf.openingBalance);
+  return opening != null && Math.abs(opening) >= 0.5;
 }
 
 /**
@@ -712,6 +724,12 @@ export type ThirteenWeekForecast = {
   /** Set when week 1 moved to the current week and the opening was rolled or the gap labelled. */
   anchorNote: string | null;
   reanchored: boolean;
+  /**
+   * False when no balance, bank publish, or sourced opening was read.
+   * Opening 0 and floor 0 are placeholders. They are not cash under a minimum.
+   * Omitted means the opening was read.
+   */
+  cashOnFile?: boolean;
 };
 
 type StoredForecastLine = {
@@ -1393,6 +1411,61 @@ function plEstimateSpreadWeekly(cf: Record<string, unknown> | null): boolean {
 }
 
 /**
+ * Opening for the 13-week series.
+ * A number passed in, including a real zero, is the balance the caller resolved.
+ * A blank `financials.cash` is not 0. A P&L alone is not a cash balance.
+ * A stored opening that is not the blank placeholder still counts.
+ */
+function resolveForecastOpening(
+  openingCash: number | null | undefined,
+  fin: Record<string, unknown> | null,
+  cf: Record<string, unknown> | null,
+): { onFile: boolean; opening: number } {
+  const passed = finiteNum(openingCash);
+  if (passed != null) return { onFile: true, opening: passed };
+  const period = fin && fieldPresent(fin, "cash") ? finiteNum(fin.cash) : null;
+  if (period != null && cashAmountIsOnFile({ amount: period, source: "period" }, fin, cf)) {
+    return { onFile: true, opening: period };
+  }
+  if (cf && forecastOpeningIsKnown(cf)) {
+    return { onFile: true, opening: finiteNum(cf.openingBalance) ?? 0 };
+  }
+  if (cf && ledgerOpeningIsCashEvidence(cf)) {
+    const sourced = finiteNum(cf.openingBalance);
+    if (sourced != null) return { onFile: true, opening: sourced };
+  }
+  return { onFile: false, opening: 0 };
+}
+
+/** No cash line. Zeros are placeholders. The floor is not derived from the P&L. */
+function missingCashForecast(anchor: string, weeks: number): ThirteenWeekForecast {
+  const zeros = Array.from({ length: weeks }, () => 0);
+  return {
+    source: "derived",
+    startDate: anchor,
+    weekDates: weekDatesFrom(anchor, weeks),
+    opening: 0,
+    inflow: zeros,
+    outflow: zeros,
+    closing: zeros,
+    totalInflow: 0,
+    totalOutflow: 0,
+    floor: 0,
+    dipsBelowFloorWeek: null,
+    shortfall: false,
+    shortfallWeek: null,
+    timingNote: null,
+    cycleNote: null,
+    replaceStored: false,
+    lines: { revenue: [], expenses: [] },
+    estimateLabel: null,
+    anchorNote: null,
+    reanchored: false,
+    cashOnFile: false,
+  };
+}
+
+/**
  * The 13-week forecast Overview, Cash, the PDF, and the Bot all read.
  * A stored forecast is shown only when its start is on or after the anchor
  * and its opening matches live cash. Anything else — 2025 dates, a stale
@@ -1414,10 +1487,13 @@ export function resolveThirteenWeekForecast(input: {
   const fin = asRecord(input.financials);
   const periodEnd = input.periodEnd ?? (typeof fin?.periodEnd === "string" ? fin.periodEnd : null);
   const anchor = forecastAnchorDate({ now: input.now, periodEnd, timeZone: input.timeZone });
-  const opening = finiteNum(input.openingCash) ?? finiteNum(fin?.cash) ?? 0;
   const runway = input.runway ?? { weeks: null, kind: "unknown" as const, label: "—" };
   const storedCf = asRecord(input.cashflow);
   const cf = storedCf ? baseCashflow(storedCf) : null;
+  const resolvedOpening = resolveForecastOpening(input.openingCash, fin, cf);
+  // A missing balance is not opening 0, and the P&L must not mint a minimum from it.
+  if (!resolvedOpening.onFile) return missingCashForecast(anchor, weeks);
+  const opening = resolvedOpening.opening;
 
   const months = fin ? periodMonthsOf(fin) : 12;
   const operating = fin ? periodOperatingOutflows(fin) : null;

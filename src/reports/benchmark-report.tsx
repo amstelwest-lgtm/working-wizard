@@ -6,6 +6,7 @@
  * SSR safety: Only import via dynamic import().
  */
 
+import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -18,6 +19,7 @@ import { benchmarkNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { industryBenchmarkCaption, isUsCopy, spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
+import { ReportSection } from "@/lib/report-pdf-layout";
 import { PILLAR_LABELS } from "@/lib/health-score";
 import {
   benchmarkTone,
@@ -227,20 +229,7 @@ export function BenchmarkReportPDF({
 
       {pillars.map((pillar) => {
         const rows = benchmarkRows.filter((r) => r.pillar === pillar);
-        return (
-          <View key={pillar}>
-            <SectionHeader title={PILLAR_LABELS[pillar]} color={theme.accent} />
-            <View style={S.headerRow}>
-              <Text style={[S.headerCell, { flex: 2 }]}>Ratio</Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>You</Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>Median</Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>Top 25%</Text>
-              <Text style={[S.headerCell, { width: 96, textAlign: "right", paddingLeft: 6 }]}>
-                Position
-              </Text>
-              <View style={{ width: 70 }} />
-            </View>
-            {rows.map((row, i) => {
+        const rendered = rows.map((row, i) => {
               const meta = row.unscored ? null : rowBadge(row);
               const n = row.unscored ? null : normalise(row);
               return (
@@ -274,8 +263,29 @@ export function BenchmarkReportPDF({
                   </View>
                 </View>
               );
-            })}
-          </View>
+        });
+        return (
+          <ReportSection
+            key={pillar}
+            heading={<SectionHeader title={PILLAR_LABELS[pillar]} color={theme.accent} />}
+            lead={
+              <Fragment>
+                <View style={S.headerRow}>
+                  <Text style={[S.headerCell, { flex: 2 }]}>Ratio</Text>
+                  <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>You</Text>
+                  <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>Median</Text>
+                  <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>Top 25%</Text>
+                  <Text style={[S.headerCell, { width: 96, textAlign: "right", paddingLeft: 6 }]}>
+                    Position
+                  </Text>
+                  <View style={{ width: 70 }} />
+                </View>
+                {rendered.slice(0, 1)}
+              </Fragment>
+            }
+          >
+            {rendered.slice(1)}
+          </ReportSection>
         );
       })}
 

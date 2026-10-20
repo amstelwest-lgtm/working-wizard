@@ -274,14 +274,17 @@ export function MoveHandTo({
       clientId={clientId}
       audience="accountant"
       onAssignAgent={async (agent) => {
+        const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
         const actionItemId = await ensure();
-        if (!actionItemId) return;
-        const result = await commitActionHandoff({ clientId, actionItemId, title, agent });
-        if (!result.ok) {
-          toast.error(result.error);
+        if (!actionItemId) {
+          toast.dismiss(toastId);
           return;
         }
-        toast.success(`Assigned to ${agentShortName(agent)}`);
+        const result = await commitActionHandoff({ clientId, actionItemId, title, agent });
+        if (!result.ok) {
+          toast.error(result.error, { id: toastId });
+          return;
+        }
       }}
       onAssignPerson={async (person) => {
         const actionItemId = await ensure();

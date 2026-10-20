@@ -7,10 +7,12 @@ import {
   agentKeyFromAssignee,
   assignmentNoteFace,
   botPickupCaption,
+  describeActionHandoff,
   formatAssignmentNote,
   HANDOFF_COST_STOP,
   handoffButtonLabel,
   handoffClock,
+  handoffCouldNotDraft,
   handoffCouldNotFinish,
   handoffIsSlow,
   handoffProgressCaption,
@@ -69,22 +71,33 @@ const finishedAt = "2026-10-19T18:31:22.000Z";
 const handoffNow = new Date(finishedAt);
 const zaMarket = { locale: "en-ZA", timezone: "Africa/Johannesburg" };
 const usMarket = { locale: "en-US", timezone: "America/New_York" };
+const draftId = "5a2b1d31-1b64-49dd-a02a-cdd764714d3d";
 assert(
-  handoffProgressCaption("financial_manager", "succeeded") === "Financial Manager finished",
-  "a finished run stays on the action",
+  handoffProgressCaption("financial_manager", "succeeded", { draftId }) === "Financial Manager finished",
+  "a finished run stays on the action when a draft id is present",
 );
+const claimed = handoffProgressCaption("financial_manager", "succeeded", {
+  result: "Drafts are recorded. A person approves them before anything is sent.",
+});
+assert(
+  claimed === handoffCouldNotDraft("financial_manager", claimed),
+  "a succeeded run without a draft id is a failure",
+);
+assert(claimed != null && !claimed.includes("finished"), "finished cannot render without a draft id");
 assert(
   handoffProgressCaption("financial_manager", "succeeded", {
     at: finishedAt,
     result: "Drafts are recorded.",
+    draftId,
     market: zaMarket,
     now: handoffNow,
-  }) === "Financial Manager finished · 20:31 SAST — Drafts are recorded.",
-  "a finished run names the time, the zone, and the result",
+  }) === "Financial Manager finished · 20:31 SAST",
+  "a finished run names the time and the zone, and the draft id is the proof",
 );
 assert(
   handoffProgressCaption("advisor", "succeeded", {
     at: "2026-10-20T05:37:00.000Z",
+    draftId,
     market: usMarket,
     now: new Date("2026-10-20T05:37:00.000Z"),
   }) === "Advisor finished · 1:37 AM ET",
@@ -93,6 +106,7 @@ assert(
 assert(
   handoffProgressCaption("financial_manager", "succeeded", {
     at: "2026-10-19T05:37:00.000Z",
+    draftId,
     market: zaMarket,
     now: new Date("2026-10-20T05:37:00.000Z"),
   }) === "Financial Manager finished · 19 Oct 2026, 07:37 SAST",
@@ -107,8 +121,12 @@ assert(
   "a person row drops the queued bot line",
 );
 assert(
-  handoffProgressCaption("advisor", "failed") === null,
-  "a failed run does not claim progress",
+  handoffProgressCaption("advisor", "failed") === handoffCouldNotDraft("advisor"),
+  "a failed run does not say finished",
+);
+assert(
+  !String(handoffProgressCaption("advisor", "failed")).includes("finished"),
+  "finished cannot render without a draft id",
 );
 const notedAt = "2026-10-19T18:31:00.000Z";
 assert(
@@ -211,9 +229,60 @@ const handoffClient = readFileSync("src/lib/owner-handoff-client.ts", "utf8");
 assert(plan.includes("assignToAgent"), "the button assigns the action");
 assert(plan.includes("commitActionHandoff"), "the button commits the assignment");
 assert(handoffClient.includes("recordHandoffAssignment"), "a switched-off runner still writes the assignee");
-assert(plan.includes("toast.success(`Assigned to ${agentShortName(agent)}`)"), "assignment toasts");
+assert(plan.includes("toast.success(`Handed to ${agentShortName(agent)}`)"), "hand-off toasts Handed to");
+const noDraft = describeActionHandoff({
+  actionItemId: "action-1",
+  assignee: "Milōn Financial Manager",
+  sentAt: null,
+  notes: [{ note: "Financial Manager finished: Drafts are recorded.", at: finishedAt }],
+  storedRun: { id: "run-1", agent: "financial_manager", status: "succeeded", at: finishedAt },
+  runs: [
+    {
+      id: "run-1",
+      agent: "financial_manager",
+      status: "succeeded",
+      action_item_id: "action-1",
+      summary: "Drafts are recorded. A person approves them before anything is sent.",
+      finished_at: finishedAt,
+      queued_at: finishedAt,
+    },
+  ],
+  findings: [],
+  findingsReady: true,
+  market: zaMarket,
+  now: handoffNow,
+});
+assert(noDraft.draftId === null && noDraft.phase === "failed", "no finding leaves the action failed");
+assert(noDraft.caption != null && !noDraft.caption.includes("finished"), "the row cannot say finished without a draft id");
+assert(noDraft.phaseLabel === "Couldn't draft", "the status chip is not Not started");
+const withDraft = describeActionHandoff({
+  ...noDraft,
+  actionItemId: "action-1",
+  assignee: "Milōn Financial Manager",
+  sentAt: null,
+  notes: [{ note: "Financial Manager finished: Drafts are recorded.", at: finishedAt }],
+  storedRun: { id: "run-1", agent: "financial_manager", status: "succeeded", at: finishedAt },
+  runs: [
+    {
+      id: "run-1",
+      agent: "financial_manager",
+      status: "succeeded",
+      action_item_id: "action-1",
+      summary: "Drafts are recorded. A person approves them before anything is sent.",
+      finished_at: finishedAt,
+      queued_at: finishedAt,
+    },
+  ],
+  findings: [{ id: draftId, run_id: "run-1", status: null }],
+  findingsReady: true,
+  market: zaMarket,
+  now: handoffNow,
+});
+assert(withDraft.draftId === draftId && withDraft.phase === "draft_ready", "a finding for the run is Draft ready");
+assert(withDraft.caption?.includes("finished") === true, "finished renders once the draft id exists");
 assert(plan.includes("HandToMenu"), "the row renders Hand to");
 const menu = readFileSync("src/components/hand-to-menu.tsx", "utf8");
+assert(menu.includes("toast.success(`Handed to ${agentShortName(agent)}`)"), "Next moves toasts before the request");
 assert(menu.includes("ActionHandoffButtons"), "Hand to lists the bots");
 assert(menu.includes("data-hand-to-trigger"), "the control is labelled Hand to");
 assert(menu.includes("Hand to"), "the button says Hand to");
@@ -280,6 +349,9 @@ assert(
 assert(clientPage.includes("withPendingAssignment"), "the accountant home keeps the hand-off on its own row");
 assert(clientPage.includes("openedAt"), "a click keeps Working until a newer run arrives");
 const status = readFileSync("src/components/handoff-run-status.tsx", "utf8");
+assert(status.includes("data-open-draft"), "the finished row links the draft");
+assert(status.includes("couldn't draft this"), "a missing draft offers Retry");
+assert(status.includes("finished") && status.includes("!openId"), "finished stays off the row without a draft id");
 assert(status.includes("Working"), "an open hand-off shows Working on the row");
 assert(status.includes("Taking longer than usual ·"), "a slow run names the wait");
 assert(status.includes("data-handoff-retry"), "a slow run can be retried");

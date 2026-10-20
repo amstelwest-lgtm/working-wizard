@@ -352,3 +352,11 @@ export function variancePctCell(pct: number | null, note?: string | null): strin
   if ((pct == null || !Number.isFinite(pct)) && note) return "n/a";
   return formatVariancePct(pct, null);
 }
+
+/**
+ * Budget and actual are both exactly zero. The variance cell and the percent
+ * cell are a dash, and there is no amount under the dash.
+ */
+export function varianceIsZeroPair(budget: number, actual: number | null | undefined): boolean {
+  return budget === 0 && actual === 0;
+}

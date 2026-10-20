@@ -33,6 +33,9 @@ function runIsOpen(status: string): boolean {
   return status === "queued" || status === "running";
 }
 
+const FINDING_COLUMNS =
+  "id, agent, client_id, run_id, kind, severity, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason, status, approved_by, approved_at, approved_table, approved_row_id";
+
 async function fetchClientRuns(clientId: string): Promise<AgentRunRow[]> {
   const runsRes = await table("agent_runs")
     .select("id, agent, client_id, status, summary, trigger, queued_at, started_at, finished_at, action_item_id")
@@ -42,6 +45,17 @@ async function fetchClientRuns(clientId: string): Promise<AgentRunRow[]> {
   if (agentActivityUnavailable(runsRes.error)) return [];
   if (runsRes.error) throw new Error(runsRes.error.message ?? "Could not load runs");
   return rowsOf(runsRes.data).map(parseRun).filter((row): row is AgentRunRow => Boolean(row));
+}
+
+async function fetchClientFindings(clientId: string): Promise<AgentFindingRow[]> {
+  const findingsRes = await table("agent_findings")
+    .select(FINDING_COLUMNS)
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(ROW_LIMIT);
+  if (agentActivityUnavailable(findingsRes.error)) return [];
+  if (findingsRes.error) throw new Error(findingsRes.error.message ?? "Could not load findings");
+  return rowsOf(findingsRes.data).map(parseFinding).filter((row): row is AgentFindingRow => Boolean(row));
 }
 
 type QueryError = { message?: string; code?: string } | null;
@@ -106,6 +120,7 @@ function parseFinding(row: Record<string, unknown>): AgentFindingRow | null {
     id: row.id,
     agent: row.agent,
     client_id: typeof row.client_id === "string" ? row.client_id : "",
+    run_id: textOrNull(row.run_id),
     kind: textOrNull(row.kind),
     severity: textOrNull(row.severity),
     title: row.title,
@@ -181,9 +196,7 @@ export function useAgentActivity(
           .order("queued_at", { ascending: false })
           .limit(ROW_LIMIT),
         table("agent_findings")
-          .select(
-            "id, agent, client_id, kind, severity, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason, status, approved_by, approved_at, approved_table, approved_row_id",
-          )
+          .select(FINDING_COLUMNS)
           .eq("client_id", id)
           .order("created_at", { ascending: false })
           .limit(ROW_LIMIT),
@@ -286,8 +299,11 @@ export function useAgentActivity(
     const tick = async () => {
       const gen = ++generation;
       let fresh: AgentRunRow[] | null = null;
+      let findings: AgentFindingRow[] | null = null;
       try {
-        fresh = await fetchClientRuns(id);
+        // Runs and findings land together. A finish caption must not render
+        // from the run summary while the draft row is still the previous snapshot.
+        [fresh, findings] = await Promise.all([fetchClientRuns(id), fetchClientFindings(id)]);
       } catch {
         if (
           !cancelled &&
@@ -298,8 +314,13 @@ export function useAgentActivity(
         }
         return;
       }
-      if (cancelled || gen !== generation || !fresh) return;
-      setState((current) => ({ ...current, runs: fresh ?? current.runs, loading: false }));
+      if (cancelled || gen !== generation || !fresh || !findings) return;
+      setState((current) => ({
+        ...current,
+        runs: fresh ?? current.runs,
+        findings: findings ?? current.findings,
+        loading: false,
+      }));
       dispatchActionPlanRefresh();
       if (pollAfterTick(fresh, awaitingRef.current) === "continue") arm();
     };

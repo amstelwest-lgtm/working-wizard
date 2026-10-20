@@ -17,7 +17,7 @@ import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
-import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
+import { PDF_CARD_MIN_PRESENCE, ReportSection } from "@/lib/report-pdf-layout";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { leverageNarrative } from "./narrative";
@@ -342,68 +342,93 @@ export function LeverageSolvencyPDF({
 
       <ExecSummary figures={figures} narrative={narrative} />
 
-      <SectionHeader title="Funding Structure" color={theme.accent} />
-      {hasDebt ? (
-        <FundingBar debt={d.total_debt} equity={d.total_equity} accent={theme.accent} />
-      ) : (
-        <Text
-          style={{
-            fontSize: 8,
-            color: C.muted,
-            marginBottom: 8,
-            fontFamily: "Helvetica",
-            lineHeight: 1.45,
-            width: 470,
-          }}
-        >
-          {d.total_liabilities != null && Number.isFinite(d.total_liabilities)
-            ? `Total liabilities are ${fmtRand(d.total_liabilities, m)}. Interest-bearing debt is the facility schedule, which is empty — that is not the same as debt-free. Equity multiplier is assets / equity${Number.isFinite(equityMultiplier) ? ` (${equityMultiplier.toFixed(2)}x)` : ""}.`
-            : "No debt facilities captured on the client page — enter the schedule before quoting interest-bearing debt. Equity multiplier is assets / equity and does not require a facility schedule."}
-        </Text>
-      )}
-
-      <SectionHeader title="Leverage Ratio Analysis" color={theme.accent} />
-      {ratioRows.map((r, i) => (
-        <RatioRow
-          key={r.name}
-          ratioName={r.name}
-          formattedValue={r.value}
-          healthScore={r.score}
-          healthTier={scoreTier(r.score)}
-          isAlternate={i % 2 === 1}
-        />
-      ))}
-
-      <SectionHeader title="Debt Facility Breakdown" color={theme.accent} />
-        {d.debt_lines.length > 0 ? (
-          <DebtTable lines={d.debt_lines} accent={theme.accent} />
-        ) : (
-          <View
-            wrap={false}
-            minPresenceAhead={PDF_CARD_MIN_PRESENCE}
-            style={{
-              backgroundColor: C.soft,
-              borderRadius: 5,
-              borderWidth: 0.75,
-              borderColor: C.line,
-              padding: 16,
-              marginBottom: 10,
-            }}
-          >
-            <Text style={{ fontSize: 8, fontFamily: "Helvetica", color: C.muted, lineHeight: 1.5 }}>
-              No debt facilities captured yet. Enter the schedule on the client page — this report
-              will not invent a debt total from assets minus equity.
+      <ReportSection
+        heading={<SectionHeader title="Funding Structure" color={theme.accent} />}
+        lead={
+          hasDebt ? (
+            <FundingBar debt={d.total_debt} equity={d.total_equity} accent={theme.accent} />
+          ) : (
+            <Text
+              style={{
+                fontSize: 8,
+                color: C.muted,
+                marginBottom: 8,
+                fontFamily: "Helvetica",
+                lineHeight: 1.45,
+                width: 470,
+              }}
+            >
+              {d.total_liabilities != null && Number.isFinite(d.total_liabilities)
+                ? `Total liabilities are ${fmtRand(d.total_liabilities, m)}. Interest-bearing debt is the facility schedule, which is empty — that is not the same as debt-free. Equity multiplier is assets / equity${Number.isFinite(equityMultiplier) ? ` (${equityMultiplier.toFixed(2)}x)` : ""}.`
+                : "No debt facilities captured on the client page — enter the schedule before quoting interest-bearing debt. Equity multiplier is assets / equity and does not require a facility schedule."}
             </Text>
-          </View>
-        )}
+          )
+        }
+      />
 
-        <SectionHeader title="Equity Movement" color={theme.accent} />
-        <Text style={{ fontSize: 7.5, fontFamily: "Helvetica", color: C.muted, marginBottom: 6 }}>
-          {`Closing equity = opening + period profit - drawings${roll.hasPrior ? " + other movements" : ""}.`}
-          {roll.hasPrior
-            ? ""
-            : " Opening is not on file, so profit - drawings is retained this period and is not a movement in closing equity."}
-        </Text>
+      <ReportSection
+        heading={<SectionHeader title="Leverage Ratio Analysis" color={theme.accent} />}
+        lead={ratioRows.slice(0, 2).map((r, i) => (
+          <RatioRow
+            key={r.name}
+            ratioName={r.name}
+            formattedValue={r.value}
+            healthScore={r.score}
+            healthTier={scoreTier(r.score)}
+            isAlternate={i % 2 === 1}
+          />
+        ))}
+      >
+        {ratioRows.slice(2).map((r, i) => (
+          <RatioRow
+            key={r.name}
+            ratioName={r.name}
+            formattedValue={r.value}
+            healthScore={r.score}
+            healthTier={scoreTier(r.score)}
+            isAlternate={(i + 2) % 2 === 1}
+          />
+        ))}
+      </ReportSection>
+
+      <ReportSection
+        heading={<SectionHeader title="Debt Facility Breakdown" color={theme.accent} />}
+        lead={
+          d.debt_lines.length > 0 ? (
+            <DebtTable lines={d.debt_lines} accent={theme.accent} />
+          ) : (
+            <View
+              wrap={false}
+              minPresenceAhead={PDF_CARD_MIN_PRESENCE}
+              style={{
+                backgroundColor: C.soft,
+                borderRadius: 5,
+                borderWidth: 0.75,
+                borderColor: C.line,
+                padding: 16,
+                marginBottom: 10,
+              }}
+            >
+              <Text style={{ fontSize: 8, fontFamily: "Helvetica", color: C.muted, lineHeight: 1.5 }}>
+                No debt facilities captured yet. Enter the schedule on the client page — this report
+                will not invent a debt total from assets minus equity.
+              </Text>
+            </View>
+          )
+        }
+      />
+
+      <ReportSection
+        heading={<SectionHeader title="Equity Movement" color={theme.accent} />}
+        intro={
+          <Text style={{ fontSize: 7.5, fontFamily: "Helvetica", color: C.muted, marginBottom: 6 }}>
+            {`Closing equity = opening + period profit - drawings${roll.hasPrior ? " + other movements" : ""}.`}
+            {roll.hasPrior
+              ? ""
+              : " Opening is not on file, so profit - drawings is retained this period and is not a movement in closing equity."}
+          </Text>
+        }
+        lead={
         <View style={{ flexDirection: "row", gap: 8 }}>
           <MetricBox
             label="Opening Equity"
@@ -438,6 +463,8 @@ export function LeverageSolvencyPDF({
             }
           />
         </View>
+        }
+      />
     </PDFDocument>
   );
 }

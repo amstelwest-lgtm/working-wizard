@@ -27,7 +27,7 @@ import {
   evidenceKeysNote,
 } from "../../../src/lib/agent-analyst.ts";
 import { executeAnalystTool } from "./execute.ts";
-import { HANDOFF_COST_STOP, handoffFinding, handoffResultNote } from "../../../src/lib/owner-handoff.ts";
+import { HANDOFF_COST_STOP, handoffFinding, handoffFinishNote } from "../../../src/lib/owner-handoff.ts";
 import { agentDisplayNameFromKey } from "../../../src/lib/milon-team-names.ts";
 
 export type AnalystJob = {
@@ -352,42 +352,63 @@ async function recordHandoffFinish(
   if (!displayName) return;
   const market = moneyMarketFromClient(input.market);
   const stored = input.pool.find((row) => Object.keys(row.figures).length > 0) ?? null;
+  const countFindings = async () => {
+    const { count, error: countError } = await db
+      .from("agent_findings")
+      .select("id", { count: "exact", head: true })
+      .eq("run_id", input.runId);
+    if (countError) {
+      console.warn("handoff findings", countError.message);
+      return null;
+    }
+    return count ?? 0;
+  };
+  let findingCount = await countFindings();
+  if (findingCount === 0) {
+    const finding = handoffFinding({
+      summary: input.summary,
+      figures: stored?.figures ?? null,
+      periodLabel: stored?.periodLabel ?? null,
+      snapshotId: stored?.snapshotId ?? null,
+      market,
+    });
+    if (finding) {
+      const { error: findingError } = await db.from("agent_findings").insert({
+        agent: "analyst",
+        client_id: input.clientId,
+        run_id: input.runId,
+        kind: "handoff",
+        severity: finding.severity,
+        title: finding.title,
+        detail: finding.detail,
+        evidence: finding.evidence,
+        last_seen: new Date().toISOString(),
+      });
+      if (findingError) console.warn("handoff finding", findingError.message);
+    }
+    findingCount = await countFindings();
+  }
+  if (findingCount == null) return;
+  const note = handoffFinishNote({
+    displayName,
+    summary: input.summary,
+    findingCount,
+    market,
+    figures: stored?.figures,
+  });
   const { error: noteError } = await db.from("action_updates").insert({
     action_item_id: actionItemId,
     client_id: input.clientId,
     actor_type: "system",
     actor_label: displayName,
-    note: handoffResultNote(displayName, input.summary, market, stored?.figures),
+    note,
   });
   if (noteError) console.warn("handoff note", noteError.message);
-
-  const finding = handoffFinding({
-    summary: input.summary,
-    figures: stored?.figures ?? null,
-    periodLabel: stored?.periodLabel ?? null,
-    snapshotId: stored?.snapshotId ?? null,
-    market,
-  });
-  if (!finding) return;
-  const { count, error: countError } = await db
-    .from("agent_findings")
-    .select("id", { count: "exact", head: true })
-    .eq("run_id", input.runId);
-  if (countError) {
-    console.warn("handoff findings", countError.message);
-    return;
+  if (findingCount === 0) {
+    const { error: summaryError } = await db
+      .from("agent_runs")
+      .update({ summary: note, status: "partial", stop_reason: "no_draft" })
+      .eq("id", input.runId);
+    if (summaryError) console.warn("handoff summary", summaryError.message);
   }
-  if ((count ?? 0) > 0) return;
-  const { error: findingError } = await db.from("agent_findings").insert({
-    agent: "analyst",
-    client_id: input.clientId,
-    run_id: input.runId,
-    kind: "handoff",
-    severity: finding.severity,
-    title: finding.title,
-    detail: finding.detail,
-    evidence: finding.evidence,
-    last_seen: new Date().toISOString(),
-  });
-  if (findingError) console.warn("handoff finding", findingError.message);
 }

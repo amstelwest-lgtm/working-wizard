@@ -2,7 +2,11 @@
  * Confirm suggested owners and dates, and drop a duplicate or a contradiction.
  * Confirm is the only write. The panel does not email anyone.
  */
-import type { ActionAutomationRow, Contradiction, DuplicateGroup } from "@/lib/action-plan-automation";
+import type {
+  ActionAutomationRow,
+  Contradiction,
+  DuplicateGroup,
+} from "@/lib/action-plan-automation";
 import { useMarketFormat } from "@/contexts/market";
 import { formatCalendarDay } from "@/lib/market/format";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
@@ -15,6 +19,33 @@ const FOLLOW_UP: Record<ActionAutomationRow["followUp"], string> = {
   done: "Done",
 };
 
+function FollowUpText({
+  row,
+  onInviteOwner,
+}: {
+  row: ActionAutomationRow;
+  onInviteOwner?: () => void;
+}) {
+  return (
+    <>
+      {` · ${FOLLOW_UP[row.followUp]}`}
+      {row.followUp === "waiting" && onInviteOwner ? (
+        <>
+          {" "}
+          <button
+            type="button"
+            className="underline"
+            data-invite-the-owner=""
+            onClick={onInviteOwner}
+          >
+            Invite the owner
+          </button>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 export function ActionPlanAutomation({
   rows,
   duplicates,
@@ -22,6 +53,7 @@ export function ActionPlanAutomation({
   canEdit,
   onConfirm,
   onDrop,
+  onInviteOwner,
 }: {
   rows: readonly ActionAutomationRow[];
   duplicates: readonly DuplicateGroup[];
@@ -29,15 +61,33 @@ export function ActionPlanAutomation({
   canEdit: boolean;
   onConfirm: (row: ActionAutomationRow) => void;
   onDrop: (id: string, note: string) => void;
+  /** Accountant file. Shown beside "Waiting on the owner". */
+  onInviteOwner?: () => void;
 }) {
   const { market } = useMarketFormat();
   const open = rows.filter((row) => row.followUp !== "done");
   const needsConfirm = open.filter((row) => row.ownerSuggested || row.dueSuggested);
-  if (!needsConfirm.length && !duplicates.length && !contradictions.length && !open.some((row) => row.overdue)) {
+  const waitingOnly = onInviteOwner
+    ? open.filter(
+        (row) =>
+          row.followUp === "waiting" && !row.ownerSuggested && !row.dueSuggested && !row.overdue,
+      )
+    : [];
+  if (
+    !needsConfirm.length &&
+    !duplicates.length &&
+    !contradictions.length &&
+    !open.some((row) => row.overdue) &&
+    !waitingOnly.length
+  ) {
     return null;
   }
   return (
-    <section className="mx-4 mb-3 rounded-xl border border-[#DBEAFE] bg-[#F4F7FB] p-3 text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]" aria-label="Action suggestions" data-action-automation="true">
+    <section
+      className="mx-4 mb-3 rounded-xl border border-[#DBEAFE] bg-[#F4F7FB] p-3 text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]"
+      aria-label="Action suggestions"
+      data-action-automation="true"
+    >
       <h3 className="text-xs font-bold uppercase tracking-[0.16em]">Suggested — confirm</h3>
       {needsConfirm.length ? (
         <ul className="mt-2 space-y-2">
@@ -46,8 +96,10 @@ export function ActionPlanAutomation({
               <span>
                 <b>{actionDisplayTitle(row.title)}</b>
                 {row.ownerSuggested && row.owner ? ` · ${row.owner.name}` : ""}
-                {row.dueSuggested && row.dueDate ? ` · due ${formatCalendarDay(row.dueDate, market)}` : ""}
-                {` · ${FOLLOW_UP[row.followUp]}`}
+                {row.dueSuggested && row.dueDate
+                  ? ` · due ${formatCalendarDay(row.dueDate, market)}`
+                  : ""}
+                <FollowUpText row={row} onInviteOwner={onInviteOwner} />
                 {row.overdue ? " · Overdue" : ""}
               </span>
               {canEdit ? (
@@ -68,6 +120,16 @@ export function ActionPlanAutomation({
                 <b>Overdue</b> · {actionDisplayTitle(row.title)} · {FOLLOW_UP[row.followUp]}
               </li>
             ))}
+        </ul>
+      ) : null}
+      {waitingOnly.length ? (
+        <ul className="mt-2 space-y-1 text-sm">
+          {waitingOnly.map((row) => (
+            <li key={`waiting-${row.id}`}>
+              <b>{actionDisplayTitle(row.title)}</b>
+              <FollowUpText row={row} onInviteOwner={onInviteOwner} />
+            </li>
+          ))}
         </ul>
       ) : null}
       {duplicates.map((group) => (
@@ -97,7 +159,9 @@ export function ActionPlanAutomation({
             <button
               type="button"
               className="btn ghost mini mt-1"
-              onClick={() => onDrop(pair.rightId, "Dropped because it contradicts the action that was kept")}
+              onClick={() =>
+                onDrop(pair.rightId, "Dropped because it contradicts the action that was kept")
+              }
             >
               Keep the first
             </button>

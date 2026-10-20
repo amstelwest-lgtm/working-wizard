@@ -810,10 +810,10 @@ const outputs = [
   formatEventTime(NOW, usClient, NOW) ?? "",
   formatEventTime(EARLIER, zaClient, NOW) ?? "",
   formatEventTime(EARLIER, usClient, NOW) ?? "",
-  handoffProgressCaption("financial_manager", "succeeded", { at: NOW.toISOString(), market: zaClient, now: NOW }) ?? "",
-  handoffProgressCaption("advisor", "succeeded", { at: NOW.toISOString(), market: usClient, now: NOW }) ?? "",
-  handoffProgressCaption("financial_manager", "succeeded", { at: EARLIER, market: zaClient, now: NOW }) ?? "",
-  handoffProgressCaption("advisor", "succeeded", { at: EARLIER, market: usClient, now: NOW }) ?? "",
+  handoffProgressCaption("financial_manager", "succeeded", { at: NOW.toISOString(), draftId: "draft-1", market: zaClient, now: NOW }) ?? "",
+  handoffProgressCaption("advisor", "succeeded", { at: NOW.toISOString(), draftId: "draft-1", market: usClient, now: NOW }) ?? "",
+  handoffProgressCaption("financial_manager", "succeeded", { at: EARLIER, draftId: "draft-1", market: zaClient, now: NOW }) ?? "",
+  handoffProgressCaption("advisor", "succeeded", { at: EARLIER, draftId: "draft-1", market: usClient, now: NOW }) ?? "",
   formatAssignmentNote(
     {
       note: "Handed to Financial Manager.",

@@ -15,7 +15,14 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { extractFinancialsFromPDF } from "@/lib/extractFinancials.server";
 import type { ExtractionResult, Money } from "@/lib/financialSchema";
-import { DERIVED_EQUITY_LABEL } from "@/lib/statement-financials";
+import { ImportApplyNotice } from "@/components/import-apply-notice";
+import { DERIVED_EQUITY_LABEL, statementKindFromExtraction } from "@/lib/statement-financials";
+import {
+  importFailureMessage,
+  importedUpdateMessage,
+  statementImportWhat,
+  type ImportApplyResult,
+} from "@/lib/statement-import-apply";
 import type { ValidationIssue } from "@/lib/validateFinancials";
 import { UPLOAD_QUALITY_DISCLAIMER, preflightUploadFile } from "@/lib/upload-quality";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
@@ -27,7 +34,6 @@ import {
   statementAutoPopulatePrefs,
   type AutoPopulatePrefs,
 } from "@/lib/auto-populate";
-import { statementKindFromExtraction } from "@/lib/statement-financials";
 import { useMarketFormat } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 import {
@@ -138,7 +144,9 @@ export type UploadFinancialsProps = {
     result: ExtractionResult,
     autoPopulate: AutoPopulatePrefs,
     period: ConfirmedImportPeriod,
-  ) => void;
+  ) => void | ImportApplyResult | Promise<void | ImportApplyResult>;
+  /** Called after a successful apply has shown its message. */
+  onApplied?: () => void;
   /** Per-client auto-populate state; undefined → first upload. */
   autoPopulate?: AutoPopulateDialogState | null;
   /** A bank-transaction file was dropped here. Open the bank upload instead. */
@@ -149,6 +157,7 @@ export type UploadFinancialsProps = {
 
 export function UploadFinancials({
   onConfirm,
+  onApplied,
   autoPopulate,
   onOpenBankUpload,
   clientName,
@@ -169,6 +178,10 @@ export function UploadFinancials({
     autoPopulate?.prefs ?? defaultAutoPopulatePrefs(),
   );
   const [prefsTouched, setPrefsTouched] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applyTone, setApplyTone] = useState<"success" | "error" | null>(null);
+  const [applyMessage, setApplyMessage] = useState<string | null>(null);
+  const confirmImportRef = useRef<(() => void) | null>(null);
 
   const extract = useServerFn(extractFinancialsFromPDF);
   const monthNames = importMonthNames();
@@ -365,6 +378,51 @@ export function UploadFinancials({
   const confirmLabel = chosenPeriod
     ? `I have reviewed these figures and confirm they should be imported for ${chosenPeriod.periodLabel}. ${UPLOAD_QUALITY_DISCLAIMER}`
     : `I have reviewed these figures and confirm they should be imported for the period I select. ${UPLOAD_QUALITY_DISCLAIMER}`;
+
+  confirmImportRef.current = () => {
+    if (applying) return;
+    if (!chosenPeriod) {
+      const message = importFailureMessage("Choose the statement period before importing.");
+      setApplyTone("error");
+      setApplyMessage(message);
+      toast.error(message);
+      return;
+    }
+    const stamped: ExtractionResult = {
+      ...result,
+      current_period: {
+        ...result.current_period,
+        period_end: chosenPeriod.periodEnd,
+      },
+    };
+    const what = statementImportWhat(statementKindFromExtraction(stamped));
+    setApplying(true);
+    setApplyTone(null);
+    setApplyMessage(null);
+    void Promise.resolve(onConfirm?.(stamped, autoPrefs, chosenPeriod))
+      .then((outcome) => {
+        if (outcome && outcome.ok === false) {
+          setApplyTone("error");
+          setApplyMessage(outcome.message);
+          toast.error(outcome.message);
+          return;
+        }
+        const message = outcome?.message ?? importedUpdateMessage(what);
+        setApplyTone("success");
+        setApplyMessage(message);
+        toast.success(message);
+        window.setTimeout(() => onApplied?.(), 900);
+      })
+      .catch((error: unknown) => {
+        const message = importFailureMessage(
+          error instanceof Error ? error.message : "The import did not save.",
+        );
+        setApplyTone("error");
+        setApplyMessage(message);
+        toast.error(message);
+      })
+      .finally(() => setApplying(false));
+  };
 
   return (
     <div className="space-y-5">
@@ -754,28 +812,19 @@ export function UploadFinancials({
         label={confirmLabel}
         className="text-sm text-[var(--ink,#f4f1ea)]"
       />
+      <ImportApplyNotice
+        message={applyMessage}
+        tone={applyTone}
+        onRetry={applyTone === "error" ? () => confirmImportRef.current?.() : undefined}
+      />
       <div className="flex items-center gap-3 pt-2">
         <Button
-          onClick={() => {
-            if (!chosenPeriod) {
-              toast.error("Choose the statement period before importing.");
-              return;
-            }
-            const stamped: ExtractionResult = {
-              ...result,
-              current_period: {
-                ...result.current_period,
-                period_end: chosenPeriod.periodEnd,
-              },
-            };
-            onConfirm?.(stamped, autoPrefs, chosenPeriod);
-            toast.success(`Financials imported for ${chosenPeriod.periodLabel}.`);
-          }}
-          disabled={!acceptedQuality || !chosenPeriod}
+          onClick={() => confirmImportRef.current?.()}
+          disabled={!acceptedQuality || !chosenPeriod || applying}
           className="bg-amber-500 hover:bg-amber-400 text-black font-semibold disabled:opacity-50"
         >
           <CheckCircle2 className="h-4 w-4 mr-1.5" />
-          Confirm &amp; import
+          {applying ? "Importing…" : applyTone === "error" ? "Retry import" : "Confirm & import"}
         </Button>
         <Button variant="outline" size="sm" onClick={reset}>
           <RotateCcw className="h-3.5 w-3.5 mr-1.5" />

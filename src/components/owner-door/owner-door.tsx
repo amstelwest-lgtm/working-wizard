@@ -32,7 +32,8 @@ import {
   parseOwnerNumber,
   type OwnerBooks,
 } from "@/lib/owner-answers";
-import { agentDisplayName } from "@/lib/milon-team";
+import { agentDisplayName, agentShortName } from "@/lib/milon-team";
+import { toast } from "sonner";
 import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
 import {
   cardRunsByAgent,
@@ -137,6 +138,7 @@ export function OwnerDoor({
   openingMissing = false,
   cashPillarStatus = null,
   hasEvidence,
+  cashOnFile,
   cashRunwayWeeks = null,
   cashDebtorScore = null,
   cashBurnScore = null,
@@ -195,6 +197,8 @@ export function OwnerDoor({
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   /** False when nothing is synced or parsed. Home shows one connect line. */
   hasEvidence?: boolean;
+  /** False when the cash balance was not read. Home asks for a balance sheet. */
+  cashOnFile?: boolean;
   /** Weeks scored into the cash pillar. Names a Critical chip that is not the floor. */
   cashRunwayWeeks?: number | null;
   /** Scored debtor days. Names a Critical chip that is receivables. */
@@ -404,8 +408,9 @@ export function OwnerDoor({
 
   useEffect(() => {
     let cancelled = false;
-    void supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setOwnerEmail(data.user?.email ?? null);
+    // Display only. The session user is not an authorization check.
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) setOwnerEmail(data.session?.user?.email ?? null);
     });
     return () => {
       cancelled = true;
@@ -709,6 +714,7 @@ export function OwnerDoor({
       openingMissing,
       cashPillarStatus,
       hasEvidence,
+      cashOnFile,
       cashRunwayWeeks,
       cashDebtorScore,
       cashBurnScore,
@@ -729,6 +735,7 @@ export function OwnerDoor({
     openingMissing,
     cashPillarStatus,
     hasEvidence,
+    cashOnFile,
     cashRunwayWeeks,
     cashDebtorScore,
     cashBurnScore,
@@ -1045,11 +1052,14 @@ export function OwnerDoor({
           onRetryHandoff={(actionItemId) => {
             const failed = handoffErrors.find((row) => row.actionItemId === actionItemId);
             if (!failed || !clientId) return;
+            const toastId = toast.success(`Handed to ${agentShortName(failed.agent)}`);
             void commitActionHandoff({
               clientId,
               actionItemId: failed.actionItemId,
               title: failed.title,
               agent: failed.agent,
+            }).then((result) => {
+              if (!result.ok) toast.error(result.error, { id: toastId });
             });
           }}
           onMoves={() => go("moves")}
