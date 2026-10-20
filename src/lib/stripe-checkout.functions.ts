@@ -6,6 +6,7 @@
  * STRIPE_WEBHOOK_SECRET verifies POST /api/stripe/webhook, which syncs milon_plan.
  */
 
+import { waitUntil } from "@vercel/functions";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import {
   findEntitlingFirmSubscription,
   loadCallerFirmMarket,
   loadFirmPlanDisplay,
+  readFirmSubscriptionHistory,
   syncStarterTrialMirrorForActor,
 } from "@/lib/firm-client-cap.server";
 import {
@@ -74,7 +76,6 @@ import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
   decideFirmBillingEntitlement,
-  emailHasEntitlingSubscription,
   findCustomerIdByEmail as findStripeCustomerIdByEmail,
   type FirmBillingEntitlement,
 } from "@/lib/stripe-entitlement";
@@ -124,15 +125,26 @@ async function customerHasActiveSubscription(customerId: string): Promise<boolea
   return customerHasEntitlingSubscription(getStripe(), customerId);
 }
 
-const ENTITLEMENT_CACHE_TTL_MS = 45_000;
-const entitlementCache = new Map<string, { value: FirmBillingEntitlement; at: number }>();
+const ENTITLEMENT_CACHE_TTL_MS = 60_000;
+const NEGATIVE_ENTITLEMENT_TTL_MS = 5_000;
+const entitlementCache = new Map<string, { value: FirmBillingEntitlement; at: number; ttl: number }>();
+const entitlementInflight = new Map<string, Promise<FirmBillingEntitlement>>();
+const PLAN_DISPLAY_CACHE_TTL_MS = 60_000;
+const planDisplayCache = new Map<
+  string,
+  { at: number; value: Awaited<ReturnType<typeof loadFirmPlanDisplay>> }
+>();
+const planDisplayInflight = new Map<
+  string,
+  Promise<Awaited<ReturnType<typeof loadFirmPlanDisplay>>>
+>();
 
 function cachedEntitlement(email: string): FirmBillingEntitlement | undefined {
   const key = email.trim().toLowerCase();
   if (!key) return undefined;
   const hit = entitlementCache.get(key);
   if (!hit) return undefined;
-  if (Date.now() - hit.at > ENTITLEMENT_CACHE_TTL_MS) {
+  if (Date.now() - hit.at > hit.ttl) {
     entitlementCache.delete(key);
     return undefined;
   }
@@ -144,14 +156,17 @@ function forgetEntitlement(email: string): void {
   if (key) entitlementCache.delete(key);
 }
 
+function forgetPlanDisplayCache(): void {
+  planDisplayCache.clear();
+}
+
 function rememberEntitlement(email: string, value: FirmBillingEntitlement): void {
   const key = email.trim().toLowerCase();
   if (!key) return;
-  if (!value.entitled) {
-    entitlementCache.delete(key);
-    return;
-  }
-  entitlementCache.set(key, { value, at: Date.now() });
+  // A paid result can sit for a minute. An unpaid result must not: a firm
+  // that just added a card was bounced until the old 60s entry expired.
+  const ttl = value.entitled ? ENTITLEMENT_CACHE_TTL_MS : NEGATIVE_ENTITLEMENT_TTL_MS;
+  entitlementCache.set(key, { value, at: Date.now(), ttl });
 }
 
 async function countOwnedFirms(
@@ -185,32 +200,70 @@ async function resolveFirmBillingEntitlement(
   }
   const ctx = context as BillingAuthCtx;
   const { userId, email } = await checkoutActor(ctx);
-  if (!refresh) {
+  const key = email.trim().toLowerCase();
+  if (!refresh && key) {
     const cached = cachedEntitlement(email);
     if (cached) return cached;
+    const pending = entitlementInflight.get(key);
+    if (pending) return pending;
   }
-  try {
-    const [hasEntitlingSubscription, owned, memberships] = await Promise.all([
-      emailHasEntitlingSubscription(getStripe(), email),
-      countOwnedFirms(ctx.supabase, userId),
-      countFirmMemberships(ctx.supabase, userId),
-    ]);
-    const result = decideFirmBillingEntitlement({
-      stripeConfigured: true,
-      hasEntitlingSubscription,
-      ownsFirm: owned > 0,
-      isFirmMember: memberships > 0,
+  const work = (async (): Promise<FirmBillingEntitlement> => {
+    try {
+      // One isolate-cached Stripe list. The mirror below reads that same
+      // entry. It must not be awaited: a second scan used to sit on the response.
+      const [history, owned, memberships] = await Promise.all([
+        readFirmSubscriptionHistory(email, { fresh: refresh }),
+        countOwnedFirms(ctx.supabase, userId),
+        countFirmMemberships(ctx.supabase, userId),
+      ]);
+      const result = decideFirmBillingEntitlement({
+        stripeConfigured: true,
+        hasEntitlingSubscription: history.entitling != null,
+        ownsFirm: owned > 0,
+        isFirmMember: memberships > 0,
+      });
+      rememberEntitlement(email, result);
+      const mirror = syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
+        console.warn(
+          "[stripe-entitlement] trial mirror sync failed",
+          err instanceof Error ? err.message : err,
+        );
+      });
+      // waitUntil keeps the mirror alive after the response. The 3s race
+      // stops a hung Stripe scan from holding the isolate open.
+      const bounded = Promise.race([
+        mirror,
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 3_000);
+        }),
+      ]);
+      try {
+        waitUntil(bounded);
+      } catch (err) {
+        console.warn(
+          "[stripe-entitlement] waitUntil unavailable",
+          err instanceof Error ? err.message : err,
+        );
+        void bounded;
+      }
+      return result;
+    } catch (err) {
+      console.warn(
+        "[stripe-entitlement] live check failed",
+        err instanceof Error ? err.message : err,
+      );
+      // Unknown is not unpaid. Caching this as entitled:false sent the shell
+      // to the trial card.
+      return { entitled: false, reason: "stripe_error" };
+    }
+  })();
+  if (key) {
+    entitlementInflight.set(key, work);
+    void work.finally(() => {
+      if (entitlementInflight.get(key) === work) entitlementInflight.delete(key);
     });
-    rememberEntitlement(email, result);
-    await syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email });
-    return result;
-  } catch (err) {
-    console.warn(
-      "[stripe-entitlement] live check failed",
-      err instanceof Error ? err.message : err,
-    );
-    return { entitled: false, reason: "stripe_error" };
   }
+  return work;
 }
 
 async function resolveFoundingPromotionCodeId(promo?: string | null): Promise<string | undefined> {
@@ -424,6 +477,7 @@ export const endFirmTrialNow = createServerFn({ method: "POST" })
       payment_behavior: "error_if_incomplete",
     });
     forgetEntitlement(email);
+    forgetPlanDisplayCache();
     return { ok: true as const };
   });
 
@@ -439,12 +493,30 @@ export const getFirmPlanDisplay = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
-    return loadFirmPlanDisplay({
+    const firmId = data.firmId ?? null;
+    const key = `${userId}:${firmId ?? ""}`;
+    const hit = planDisplayCache.get(key);
+    if (hit && Date.now() - hit.at < PLAN_DISPLAY_CACHE_TTL_MS) return hit.value;
+    const pending = planDisplayInflight.get(key);
+    if (pending) return pending;
+    const work = loadFirmPlanDisplay({
       supabase: ctx.supabase,
       userId,
       email,
-      firmId: data.firmId ?? null,
-    });
+      firmId,
+    }).then(
+      (value) => {
+        planDisplayCache.set(key, { at: Date.now(), value });
+        planDisplayInflight.delete(key);
+        return value;
+      },
+      (err: unknown) => {
+        planDisplayInflight.delete(key);
+        throw err;
+      },
+    );
+    planDisplayInflight.set(key, work);
+    return work;
   });
 
 async function paymentMethodOnFile(
@@ -552,6 +624,8 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     }
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
+    forgetEntitlement(email);
+    forgetPlanDisplayCache();
     const {
       billingEmail,
       clientCount,

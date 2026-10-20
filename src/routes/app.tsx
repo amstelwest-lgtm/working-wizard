@@ -343,6 +343,7 @@ import {
   computeWeekChanges,
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { isOwnerDeliverablesRequest, ownerDeliverablesRedirectTarget } from "@/lib/owner-nav";
 
 function AppBootSpinner() {
@@ -2070,6 +2071,8 @@ function Index() {
   const { viewMode, setViewMode } = useViewMode();
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+  const [ownerBootTimedOut, setOwnerBootTimedOut] = useState(false);
+  const [ownerBootAttempt, setOwnerBootAttempt] = useState(0);
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
   const [marketNeedsGate, setMarketNeedsGate] = useState(false);
 
@@ -2342,14 +2345,16 @@ function Index() {
           }
           return;
         }
-        const { data: u } = await supabase.auth.getUser();
-        if (!u.user) {
+        const account = user;
+        if (!account) {
           if (!cancelled) {
             setOwnerWorkspaces([]);
             setEffectiveClientId(null);
           }
           return;
         }
+        // Session user is routing and UI only. Server functions and RLS still verify the JWT.
+        const u = { user: account };
 
         const pendingInvite =
           typeof localStorage !== "undefined"
@@ -2595,7 +2600,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [actingClientId, navigate, user?.id]);
+  }, [actingClientId, navigate, user?.id, ownerBootAttempt]);
 
   useEffect(() => {
     if (!effectiveClientId) {
@@ -2822,13 +2827,11 @@ function Index() {
   // Returning invite accept: user_metadata still points at the invited workspace.
   useEffect(() => {
     if (!effectiveClientId || invitedOwnerEntry) return;
-    void supabase.auth.getUser().then(({ data: { user: u } }) => {
-      const metaInvite = (u?.user_metadata?.invite_client_id as string | null) ?? null;
-      if (isClientUuid(metaInvite) && metaInvite === effectiveClientId) {
-        setInvitedOwnerEntry(true);
-      }
-    });
-  }, [effectiveClientId, invitedOwnerEntry]);
+    const metaInvite = (user?.user_metadata?.invite_client_id as string | null) ?? null;
+    if (isClientUuid(metaInvite) && metaInvite === effectiveClientId) {
+      setInvitedOwnerEntry(true);
+    }
+  }, [effectiveClientId, invitedOwnerEntry, user]);
 
   // Settings → Business profile deep-link
   useEffect(() => {
@@ -2864,9 +2867,11 @@ function Index() {
     if (!clientLinkResolved) return;
     let cancelled = false;
     setRoleResolved(false);
-    supabase.auth.getUser().then(async ({ data: { user: u } }) => {
+    const account = user;
+    void (async () => {
       try {
-        if (!u) return;
+        if (!account) return;
+        const u = account;
         const activeWs = ownerWorkspaces.find((w) => w.clientId === effectiveClientId);
         if (!actingClientId && activeWs) {
           setUserRole(boardRoleForWorkspace(activeWs.role));
@@ -2916,7 +2921,7 @@ function Index() {
       } finally {
         if (!cancelled) setRoleResolved(true);
       }
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -3119,23 +3124,20 @@ function Index() {
   });
 
   const exitImpersonation = async () => {
-    if (actingClientId) {
-      const { data: u } = await supabase.auth.getUser();
-      if (u.user) {
-        const { data: rows } = await supabase
+    if (actingClientId && user?.id) {
+      const { data: rows } = await supabase
+        .from("impersonation_audit")
+        .select("id")
+        .eq("firm_user_id", user.id)
+        .eq("client_id", actingClientId)
+        .is("ended_at", null)
+        .order("started_at", { ascending: false })
+        .limit(1);
+      if (rows?.[0]) {
+        await supabase
           .from("impersonation_audit")
-          .select("id")
-          .eq("firm_user_id", u.user.id)
-          .eq("client_id", actingClientId)
-          .is("ended_at", null)
-          .order("started_at", { ascending: false })
-          .limit(1);
-        if (rows?.[0]) {
-          await supabase
-            .from("impersonation_audit")
-            .update({ ended_at: new Date().toISOString() })
-            .eq("id", rows[0].id);
-        }
+          .update({ ended_at: new Date().toISOString() })
+          .eq("id", rows[0].id);
       }
     }
     sessionStorage.removeItem("acting_as_client_id");
@@ -3958,6 +3960,45 @@ function Index() {
     profileFunnelOpen: showOnboarding || firstRunStep === "pick-type",
     financialsHydrated: !!effectiveClientId && hydratedClientId === effectiveClientId,
   });
+  useEffect(() => {
+    if (authLoading || !user?.id || boardReady) {
+      setOwnerBootTimedOut(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setOwnerBootTimedOut(true), SHELL_GATE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [authLoading, user?.id, boardReady, ownerBootAttempt]);
+  if (user && !authLoading && !boardReady && ownerBootTimedOut) {
+    return (
+      <div
+        className="grid min-h-screen place-items-center bg-background px-4 text-foreground"
+        role="alert"
+        data-owner-boot="timeout"
+      >
+        <div className="w-full max-w-md">
+          <h1 className="text-xl font-semibold">Couldn't open your workspace</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The books didn't finish loading. Retry, or go back.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOwnerBootTimedOut(false);
+                setOwnerBootAttempt((n) => n + 1);
+              }}
+              className="inline-flex h-10 items-center rounded-full bg-foreground px-4 text-xs font-bold uppercase tracking-wider text-background"
+            >
+              Retry
+            </button>
+            <Link to="/" className="inline-flex h-10 items-center px-4 text-sm underline">
+              Back
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (authLoading || !user || !boardReady) {
     return <AppBootSpinner />;
   }
