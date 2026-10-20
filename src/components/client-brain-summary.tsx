@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketFormat } from "@/contexts/market";
-import { readStatementMeta } from "@/lib/statement-period";
+import { readStatementMeta, statementSpanLabel } from "@/lib/statement-period";
 import { parseOperatingProfile, profileNeedsCompletion } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { coerceMarketSelection, marketForClient, usState } from "@/lib/market";
@@ -103,8 +103,15 @@ function snapshotSpanLabel(
   market: { locale?: string | null; timezone?: string },
 ): string {
   const fields = row.financials && typeof row.financials === "object" ? row.financials : null;
-  const fresh = readStatementMeta(fields, market).periodLabel?.trim();
-  return fresh || row.period_label;
+  const meta = readStatementMeta(fields, market);
+  return (
+    statementSpanLabel({
+      periodStart: meta.periodStart,
+      periodEnd: meta.periodEnd,
+      periodLabel: row.period_label,
+      market,
+    }) ?? ""
+  );
 }
 
 function marketStripLabel(raw: unknown): string {
@@ -974,7 +981,9 @@ export function ClientBrainSummary({
                     >
                       <span>
                         {artifactKindLabel(a.kind)}
-                        {a.period_label ? ` · ${a.period_label}` : ""}
+                        {statementSpanLabel({ periodLabel: a.period_label, market: dateMarket })
+                          ? ` · ${statementSpanLabel({ periodLabel: a.period_label, market: dateMarket })}`
+                          : ""}
                       </span>
                       <span className="brain-meta" style={{ marginTop: 0 }}>
                         {formatWhen(a.created_at, dateTime)}

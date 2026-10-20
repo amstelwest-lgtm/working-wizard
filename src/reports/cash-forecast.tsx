@@ -188,7 +188,7 @@ function RunwayChart({
                 ]}
               />
               <Text style={[ch.weekLabel, { left: i * slot, width: slot }]}>
-                {w.period_label.replace(/^Week /i, "W")}
+                {w.period_label.replace(/^Week /i, "W")} // date-ok: week axis label, not a calendar span
               </Text>
             </Fragment>
           );
@@ -292,7 +292,7 @@ function WeekTable({
             ]}
           >
             <Text style={[tbl.cell, { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink }]}>
-              {w.period_label}
+              {w.period_label} // date-ok: week row label, not a calendar span
             </Text>
             <Text style={[tbl.cell, { flex: 1.4, textAlign: "right" }]}>
               {fmtRand(w.opening_balance, market)}

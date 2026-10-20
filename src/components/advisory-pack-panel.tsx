@@ -38,7 +38,7 @@ import { useMarket } from "@/contexts/market";
 import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
-import { rewriteDraftMonthStamp } from "@/lib/statement-period";
+import { rewriteDraftMonthStamp, statementSpanLabel } from "@/lib/statement-period";
 import { resolveAdvisorySignoffState, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
 import { packAnswerSentence, packDrawerHint, packStripStatus, type PackAnswerStatus } from "@/lib/plan-pack-copy";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
@@ -488,7 +488,7 @@ export function AdvisoryPackPanel({
             status: pack.status,
             sections: pack.content.sections.map((s) => s.body),
           }),
-          periodLabel: pack.period_label,
+          periodLabel: statementSpanLabel({ periodLabel: pack.period_label, market }),
           createdBy: user.id,
           pdfBlob: blob,
         });
@@ -686,7 +686,7 @@ export function AdvisoryPackPanel({
   const canRegenerate = Boolean(pack && isWriter && canGenerate);
   const sentence = pack
     ? packAnswerSentence({
-        periodLabel: pack.period_label,
+        periodLabel: statementSpanLabel({ periodLabel: pack.period_label, market }),
         sectionCount: pack.content.sections.length,
         status: advisoryState.status,
         signedBy: advisoryState.signedBy,

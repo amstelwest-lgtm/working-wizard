@@ -29,7 +29,7 @@ import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import {
   calendarMonthBounds,
   financialYearToDate,
-  formatStatementPeriodLabel,
+  storedPeriodSpan,
   type YearBasis,
 } from "@/lib/statement-period";
 import { periodMonthsBetween, ytdRange } from "@/lib/xero";
@@ -780,7 +780,7 @@ export async function fetchQboLedgerStatement(
   realmId: string,
   accessToken: string,
   now = new Date(),
-  market: DateMarket,
+  _market: DateMarket,
 ): Promise<QboLedgerStatement> {
   const month = calendarMonthBounds(now, 0);
   const yearRange = await resolveQboYearRange(realmId, accessToken, now);
@@ -802,7 +802,7 @@ export async function fetchQboLedgerStatement(
         ),
         from: yearRange.from,
         to: yearRange.to,
-        periodLabel: formatStatementPeriodLabel(yearRange.from, yearRange.to, market),
+        periodLabel: storedPeriodSpan(yearRange.from, yearRange.to),
         basis: yearRange.basis,
       }
     : null;
@@ -812,7 +812,7 @@ export async function fetchQboLedgerStatement(
     bs: parseQboBalanceSheet(bsJson, qboMoneyColumnIndex(bsJson)),
     from: month.from,
     to: month.to,
-    periodLabel: formatStatementPeriodLabel(month.from, month.to, market),
+    periodLabel: storedPeriodSpan(month.from, month.to),
     year,
     operatingCashflow: cf ? cf.operatingCashflow : null,
   };
@@ -915,7 +915,7 @@ export function mapQboToFinancialInputs(
   period?: { from: string; to: string; label: string },
   year?: QboMappedYear | null,
   operatingCashflow?: number | null,
-  market?: DateMarket,
+  _market?: DateMarket,
 ): Record<string, number | string> {
   const out: Record<string, number | string> = {};
   const dated = Boolean(period?.from && period?.to);
@@ -953,14 +953,14 @@ export function mapQboToFinancialInputs(
     out.statementSource = "qbo";
     out.periodStart = period.from;
     out.periodEnd = period.to;
-    out.periodLabel = period.label || (market ? formatStatementPeriodLabel(period.from, period.to, market) : "");
+    out.periodLabel = storedPeriodSpan(period.from, period.to);
   }
   if (year?.from && year.to && !(period?.from === year.from && period?.to === year.to)) {
     if (Number.isFinite(year.pnl.revenue)) out.ytdRevenue = year.pnl.revenue;
     if (Number.isFinite(year.pnl.netIncome)) out.ytdNetIncome = year.pnl.netIncome;
     out.ytdPeriodStart = year.from;
     out.ytdPeriodEnd = year.to;
-    out.ytdPeriodLabel = year.label || (market ? formatStatementPeriodLabel(year.from, year.to, market) : "");
+    out.ytdPeriodLabel = storedPeriodSpan(year.from, year.to);
     if (Number.isFinite(year.pnl.periodMonths) && year.pnl.periodMonths >= 1) {
       out.ytdPeriodMonths = String(year.pnl.periodMonths);
     }

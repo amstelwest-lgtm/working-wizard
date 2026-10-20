@@ -10,7 +10,11 @@ import {
   booksDrawerHint,
   booksPrimaryKind,
   booksQueriesLabel,
+  homeStatementsLine,
 } from "../src/lib/books-answer";
+import { marketForClient } from "../src/lib/market/scope";
+import { booksSyncCopy } from "../src/lib/owner-needs";
+import { statementSpanLabel } from "../src/lib/statement-period";
 import { factSourceLabel } from "../src/lib/client-brain";
 import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
 import { movesAnswerSentence } from "../src/lib/overview-moves-copy";
@@ -162,5 +166,47 @@ assert.ok(data.includes("aria-label={status.title}"), "the section title stays t
 assert.ok(!scopes.includes('"books"'), "books does not add a review scope");
 assert.ok(booksPane.includes('deliverableId="summary"'), "configure inputs stays on Books");
 assert.ok(booksPane.includes("{inputs}"), "profile questions move into the drawer");
+
+const us = marketForClient({ market: { country: "US", regionCode: "NY" } });
+const za = marketForClient(null);
+const baked = "1 Sep 2026 \u2013 21 Sep 2026";
+const usSpan = statementSpanLabel({
+  periodStart: "2026-09-01",
+  periodEnd: "2026-09-21",
+  periodLabel: baked,
+  market: us,
+});
+const zaSpan = statementSpanLabel({
+  periodStart: "2026-09-01",
+  periodEnd: "2026-09-21",
+  periodLabel: baked,
+  market: za,
+});
+assert.equal(usSpan, "Sep 1\u201321, 2026");
+assert.equal(zaSpan, "1\u201321 Sep 2026");
+const beforeLedger = homeStatementsLine(usSpan);
+const afterLedgerWithoutDates = homeStatementsLine(usSpan);
+assert.equal(beforeLedger, "Statements on file: Sep 1\u201321, 2026.");
+assert.equal(
+  afterLedgerWithoutDates,
+  beforeLedger,
+  "a later ledger status with no period dates does not drop the span",
+);
+assert.equal(homeStatementsLine(zaSpan), "Statements on file: 1\u201321 Sep 2026.");
+assert.equal(statementSpanLabel({ periodLabel: baked, market: us }), null);
+assert.equal(homeStatementsLine(null), null);
+assert.equal(
+  booksSyncCopy({
+    quickBooks: { state: "absent" },
+    xero: { state: "linked", at: "2026-09-21T12:00:00.000Z" },
+    when: () => "Sep 21, 2026",
+    statementSpan: usSpan,
+  }).lines[0],
+  "Statements on file: Sep 1\u201321, 2026.",
+);
+const home = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+const owner = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+assert.ok(home.includes("homeStatementsLine(statementSpan)"), "accountant Home uses the statement span");
+assert.ok(owner.includes("statementSpan={statementSpanLabel("), "owner Home passes the same span");
 
 console.log("answer-strip books ok");
