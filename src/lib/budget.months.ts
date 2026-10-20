@@ -182,10 +182,7 @@ export function currentBudgetMonth(months: string[], now = new Date()): string {
   return months[0] ?? cur;
 }
 
-export function formatMonthLabel(
-  ym: string,
-  market: { locale?: string | null } = ZA_MARKET,
-): string {
+export function formatMonthLabel(ym: string, market: { locale?: string | null }): string {
   return formatMonthLabelMarket(ym, market);
 }
 

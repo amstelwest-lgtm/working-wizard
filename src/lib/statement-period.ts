@@ -4,6 +4,7 @@
  */
 
 import { MONTHS, MONTHS_LONG as FULL_MONTHS } from "./market/date-presets.ts";
+import { formatCalendarDay } from "./market/format.ts";
 
 export type YearBasis = "financial" | "calendar";
 
@@ -147,6 +148,7 @@ export function calendarDateInTimeZone(
   now: Date,
   timeZone: string,
 ): { year: number; month: number; day: number } {
+  // date-ok: numeric year month and day parts, no month name
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
@@ -229,12 +231,14 @@ export function formatStatementPeriodLabel(fromIso: string, toIso: string): stri
   return `${stamp(from)} – ${stamp(to)}`;
 }
 
-/** One UTC calendar date, e.g. `21 Sep 2026`. */
-export function formatIsoDateUTC(iso: string | null | undefined): string {
+/** One calendar date from a YYYY-MM-DD prefix. Order follows the market. */
+export function formatIsoDateUTC(
+  iso: string | null | undefined,
+  market: { locale?: string | null },
+): string {
   if (!iso) return "";
-  const d = utcDate(iso);
-  if (!d) return iso;
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  const label = formatCalendarDay(iso, market);
+  return label === "—" ? iso : label;
 }
 
 /**
@@ -439,7 +443,8 @@ function isCompleteYear(from: Date, to: Date): boolean {
  */
 export function storedYearToDateEnd(
   fields: object | null | undefined,
-  fyStartMonth?: number | null,
+  fyStartMonth: number | null | undefined,
+  market: { locale?: string | null },
 ): string | null {
   const meta = readStatementMeta(fields);
   if (!meta.periodStart || !meta.periodEnd) return null;
@@ -460,7 +465,7 @@ export function storedYearToDateEnd(
     ytdStart === meta.periodStart &&
     ytdEnd === meta.periodEnd;
   if (!marked && !opensStoredYear(from, fy)) return null;
-  return formatIsoDateUTC(meta.periodEnd);
+  return formatIsoDateUTC(meta.periodEnd, market);
 }
 
 /** True when the blob came from a dated Xero or QuickBooks sync. */

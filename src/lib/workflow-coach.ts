@@ -13,7 +13,7 @@
  * There is no horizontal strip and no Continue button in the client shell.
  */
 
-import { formatDateTime, ZA_MARKET } from "@/lib/market";
+import { formatDateTime } from "@/lib/market";
 import { scoreTier } from "@/lib/ratios";
 
 export const COACH_STEPS = [
@@ -403,10 +403,7 @@ export function dataStepDone(input: {
   return syncSucceeded(input.xero) || syncSucceeded(input.qbo) || (input.snapshotCount ?? 0) > 0;
 }
 
-function formatSyncStamp(
-  iso: string,
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
-): string {
+function formatSyncStamp(iso: string, market: { locale?: string | null; timezone?: string }): string {
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return iso;
   const label = formatDateTime(d, market);
@@ -418,7 +415,7 @@ export function dataFreshnessLine(input: {
   xero?: DataSyncLink;
   qbo?: DataSyncLink;
   snapshotPeriod?: string | null;
-  market?: { locale?: string | null; timezone?: string };
+  market: { locale?: string | null; timezone?: string };
 }): string {
   const rows: { label: string; at: string; period: string | null }[] = [];
   if (syncSucceeded(input.xero) && input.xero?.lastSyncedAt) {

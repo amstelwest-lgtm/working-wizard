@@ -86,7 +86,7 @@ function LedgerProof({
   link: LedgerLinkProof;
   fallbackName: string;
 }) {
-  const { dateTime } = useMarketFormat();
+  const { dateTime, market } = useMarketFormat();
   const copy =
     link.syncStatus === "error"
       ? null
@@ -130,13 +130,13 @@ function LedgerProof({
       {link.bsAsOf ? (
         <>
           <br />
-          Balance sheet as of {formatIsoDateUTC(link.bsAsOf)}
+          Balance sheet as of {formatIsoDateUTC(link.bsAsOf, market)}
         </>
       ) : null}
       {link.bankFrom && link.bankTo ? (
         <>
           <br />
-          Bank Summary {formatIsoDateUTC(link.bankFrom)} – {formatIsoDateUTC(link.bankTo)}
+          Bank Summary {formatIsoDateUTC(link.bankFrom, market)} – {formatIsoDateUTC(link.bankTo, market)}
         </>
       ) : null}
       {link.bankCount != null ? (

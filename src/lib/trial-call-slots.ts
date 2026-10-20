@@ -91,7 +91,7 @@ export function safeTimeZone(value: string | null | undefined): string {
   const zone = (value ?? "").trim();
   if (!zone || zone.length > 80 || !/^[A-Za-z0-9_+\-/]+$/.test(zone)) return "UTC";
   try {
-    // Zone probe only. The printed slot clock is formatSlotClock below.
+    // date-ok: zone probe only, the printed slot clock is formatSlotClock
     Intl.DateTimeFormat("en-US", { timeZone: zone }).format(new Date());
     return zone;
   } catch {
@@ -122,7 +122,7 @@ export function visitorTimeZone(value: string | null | undefined): string | null
   const zone = (value ?? "").trim();
   if (!zone || zone.length > 80 || !/^[A-Za-z0-9_+\-/]+$/.test(zone)) return null;
   try {
-    Intl.DateTimeFormat("en-US", { timeZone: zone }).format(0);
+    Intl.DateTimeFormat("en-US", { timeZone: zone }).format(0); // date-ok: zone probe, not a printed date
     return zone;
   } catch {
     return null;
@@ -132,7 +132,7 @@ export function visitorTimeZone(value: string | null | undefined): string | null
 /** `Intl.DateTimeFormat().resolvedOptions().timeZone`, or null when it fails. */
 export function detectedVisitorZone(): string | null {
   try {
-    return visitorTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    return visitorTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone); // date-ok: reads the browser zone name only
   } catch {
     return null;
   }
@@ -206,5 +206,5 @@ function intlZoneName(
 
 /** Stable 24-hour clock for tests and founder mail. */
 export function formatSlotClock24(start: Date, timeZone: string): string {
-  return formatClock(start, { locale: "en-ZA", timezone: safeTimeZone(timeZone) }) ?? "";
+  return formatClock(start, { locale: "en-ZA", timezone: safeTimeZone(timeZone) }) ?? ""; // date-ok: slot test clock stays 24-hour in the slot zone
 }

@@ -146,6 +146,7 @@ export type ZonedParts = {
 };
 
 export function zonedParts(now: Date, timeZone: string): ZonedParts {
+  // date-ok: numeric parts and a weekday code for send-window math
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone,
     weekday: "short",
@@ -241,8 +242,8 @@ export function formatWindowCountdown(ms: number): string {
 
 function formatNextLabel(start: Date, timeZone: string, zone: WindowZone): string {
   const p = zonedParts(start, timeZone);
-  const hh = String(p.hour).padStart(2, "0");
-  const mm = String(p.minute).padStart(2, "0");
+  const hh = String(p.hour).padStart(2, "0"); // date-ok: ops send-window clock, not a client date
+  const mm = String(p.minute).padStart(2, "0"); // date-ok: ops send-window clock, not a client date
   return `${p.weekday} ${hh}:${mm} ${zone}`;
 }
 

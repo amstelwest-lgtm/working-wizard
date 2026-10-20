@@ -304,7 +304,7 @@ Deno.serve(async (req) => {
         item.health === "overdue" ? "overdue" : "nudge";
 
       const dueDateFormatted = item.due_date
-        ? calendarDayFromIso(item.due_date, orderByClient.get(item.client_id) ?? "za")
+        ? calendarDayFromIso(item.due_date, orderByClient.get(item.client_id) ?? "za") // date-ok: unknown client market stays on the ZA calendar
         : null;
 
       const { html, text, subject } = buildEmailHtml({

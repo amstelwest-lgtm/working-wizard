@@ -5,6 +5,8 @@
  */
 
 import { leadDisplayName } from "@/lib/lighthouse-due";
+import { formatDateTime } from "@/lib/market/format";
+import { marketForFirm } from "@/lib/market/scope";
 import { heldColdDraftRefusal } from "@/lib/lighthouse-targets";
 import {
   SA_TIME_ZONE,
@@ -206,8 +208,8 @@ export type CadenceStrip = {
 
 function shortWhen(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = iso.slice(0, 16).replace("T", " ");
-  return d || "—";
+  const label = formatDateTime(iso, marketForFirm(null));
+  return label === "—" ? "—" : label;
 }
 
 export function cadenceOf(lead: AgentLead): CadenceStrip {

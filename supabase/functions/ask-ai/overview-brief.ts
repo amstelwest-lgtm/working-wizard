@@ -32,6 +32,7 @@ import {
   storedYearToDateEnd,
 } from "../../../src/lib/statement-period.ts";
 import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
+import { marketForClient } from "../../../src/lib/market/scope.ts";
 
 export type OverviewCopyPack = "za" | "us";
 
@@ -390,7 +391,13 @@ export function buildOverviewBrief(input: {
     periodStart: statement?.periodStart ?? null,
     periodEnd: statement?.periodEnd ?? null,
     figuresSource: figuresSourcePhrase(statement?.statementSource),
-    yearToDateEnd: storedYearToDateEnd(financials, fyStartMonth),
+    yearToDateEnd: storedYearToDateEnd(
+      financials,
+      fyStartMonth,
+      marketForClient({
+        market: copyPack === "us" ? { country: "US", regionCode: "NY" } : null,
+      }),
+    ),
     grossMargin:
       statementGrossMarginFraction(financials) ??
       (Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null),

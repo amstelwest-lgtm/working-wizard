@@ -103,7 +103,7 @@ function endOfShiftedMonth(parts: Parts, monthsAhead: number): string {
 
 export function formatSampleDate(value: string): string {
   const { y, m, d } = parseIso(value);
-  return calendarDayLabel(y, m, d, "za") ?? value;
+  return calendarDayLabel(y, m, d, "za") ?? value; // date-ok: ZA tax sample is a South Africa only surface
 }
 
 export function formatSampleCents(cents: number): string {

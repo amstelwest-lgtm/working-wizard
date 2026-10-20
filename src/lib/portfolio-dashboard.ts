@@ -6,7 +6,6 @@
 
 import { overdueActionsLabel } from "@/lib/action-plan-counts";
 import { formatDate } from "@/lib/market/format";
-import { ZA_MARKET } from "@/lib/market/resolve";
 import { PILLAR_LABELS, type OverallHealth } from "@/lib/health-score";
 import type { HealthTier } from "@/lib/ratios";
 
@@ -89,10 +88,7 @@ export function practiceGreeting(name: string | null | undefined, now = new Date
 }
 
 /** Format "Data as of 16 Aug 2026" (ZA) or "Data as of Nov 2, 2026" (US). */
-export function dataAsOfLabel(
-  now = new Date(),
-  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
-): string {
+export function dataAsOfLabel(now: Date, market: { locale?: string | null; timezone?: string }): string {
   return formatDate(now, market);
 }
 

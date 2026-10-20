@@ -3,6 +3,7 @@ import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { formatOwnerReply, ownerReplyPlainText } from "@/lib/owner-reply-format";
+import type { ResolvedMarket } from "@/lib/market";
 import type { FmAvatarClip } from "@/lib/fm-avatar-state";
 import type { OwnerMotion } from "@/lib/owner-presence";
 import { browserSpeechPort, createReplySpeech, type ReplySpeech } from "@/lib/owner-reply-speech";
@@ -41,6 +42,7 @@ export function OwnerChat({
   onListen,
   onSpeech,
   onBack,
+  market,
 }: {
   agent: AgentKey;
   variant: AvatarVariant;
@@ -57,6 +59,7 @@ export function OwnerChat({
   onListen: () => void;
   onSpeech?: (speaking: boolean) => void;
   onBack: () => void;
+  market: Pick<ResolvedMarket, "locale" | "timezone">;
 }) {
   const short = agentShortName(agent);
   const speechRef = useRef<ReplySpeech | null>(null);
@@ -94,7 +97,7 @@ export function OwnerChat({
   }, [onBack]);
 
   function listenTo(messageId: string, text: string) {
-    speech().tap(messageId, ownerReplyPlainText(formatOwnerReply(text)), {
+    speech().tap(messageId, ownerReplyPlainText(formatOwnerReply(text, market)), {
       onPlay: () => {
         setPlayingId(messageId);
         onSpeechRef.current?.(true);
@@ -138,7 +141,7 @@ export function OwnerChat({
             <li key={messageId} className={`owner-turn is-${turn.role}`}>
               {turn.role === "agent" ? (
                 <>
-                  <OwnerReply model={formatOwnerReply(turn.text)} />
+                  <OwnerReply model={formatOwnerReply(turn.text, market)} />
                   <button
                     type="button"
                     className="owner-listen"

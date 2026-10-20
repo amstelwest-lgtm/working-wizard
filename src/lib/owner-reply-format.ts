@@ -1,4 +1,4 @@
-import { calendarDayFromIso } from "@/lib/market/date-presets";
+import { calendarDayFromIso, dateOrder } from "@/lib/market/date-presets";
 import { canonicalScoreProse } from "@/lib/score-prose";
 
 /**
@@ -68,13 +68,11 @@ export function stripUnsafeMarkup(input: string): string {
     .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
 }
 
-/** ISO dates become "8 Sep 2026". A date that is already friendly is left as written. */
-export function formatIsoDates(input: string): string {
+/** ISO dates become "8 Sep 2026" or "Sep 8, 2026". A date that is already friendly is left as written. */
+export function formatIsoDates(input: string, market: { locale?: string | null }): string {
+  const order = dateOrder(market.locale);
   return input.replace(/\b(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?\b/g, (full, year, month, day) => {
-    const y = Number(year);
-    const m = Number(month);
-    const d = Number(day);
-    const label = calendarDayFromIso(`${year}-${month}-${day}`, "za");
+    const label = calendarDayFromIso(`${year}-${month}-${day}`, order);
     return label ?? full;
   });
 }
@@ -321,8 +319,8 @@ function expandInlineBullets(text: string): string {
   return `${head.trim()}\n\n${items.map((item) => `- ${item}`).join("\n")}`;
 }
 
-export function formatOwnerReply(raw: string): OwnerReplyModel {
-  const clean = canonicalScoreProse(formatIsoDates(stripUnsafeMarkup(raw)).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim());
+export function formatOwnerReply(raw: string, market: { locale?: string | null }): OwnerReplyModel {
+  const clean = canonicalScoreProse(formatIsoDates(stripUnsafeMarkup(raw), market).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim());
   if (!clean) return emptyModel();
   const structured = tryStructured(clean);
   if (structured) return structured;

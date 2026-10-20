@@ -1,15 +1,19 @@
-import { calendarDayFromIso, weekHeaderFromIso } from "@/lib/market/date-presets";
+import { calendarDayFromIso, dateOrder, weekHeaderFromIso } from "@/lib/market/date-presets";
+
+type CashDateMarket = { locale?: string | null };
 
 /**
  * "12 Oct 2026" or "12 Oct". The calendar day is the written ISO date.
+ * Order follows the client market.
  */
-export function humanCalendarDay(iso: string, withYear = true): string {
-  const label = withYear ? calendarDayFromIso(iso, "za") : weekHeaderFromIso(iso, "za");
+export function humanCalendarDay(iso: string, market: CashDateMarket, withYear = true): string {
+  const order = dateOrder(market.locale);
+  const label = withYear ? calendarDayFromIso(iso, order) : weekHeaderFromIso(iso, order);
   return label ?? "—";
 }
 
-export function humanizeIsoDates(text: string): string {
-  return text.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (iso) => humanCalendarDay(iso));
+export function humanizeIsoDates(text: string, market: CashDateMarket): string {
+  return text.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (iso) => humanCalendarDay(iso, market));
 }
 
 const ROLL =
@@ -40,10 +44,12 @@ export function cashExplainerCopy(input: {
   cycleNote: string | null;
   otherNote: string | null;
   timingNote: string | null;
+  market: CashDateMarket;
 }): CashExplainerCopy {
+  const market = input.market;
   const range =
     input.rangeStart && input.rangeEnd
-      ? `${humanCalendarDay(input.rangeStart)} – ${humanCalendarDay(input.rangeEnd)}`
+      ? `${humanCalendarDay(input.rangeStart, market)} – ${humanCalendarDay(input.rangeEnd, market)}`
       : "";
   const bullets: string[] = [];
   if (input.floorText.trim()) bullets.push(`Floor ${input.floorText.trim()}.`);
@@ -53,23 +59,23 @@ export function cashExplainerCopy(input: {
   const sit = !roll && input.anchorNote ? SIT.exec(input.anchorNote) : null;
   if (roll) {
     const days = roll[1]!;
-    const from = humanCalendarDay(roll[2]!);
-    const to = humanCalendarDay(roll[3]!);
-    ownerRollLine = `Rolled forward ${humanCalendarDay(roll[3]!, false)}`;
+    const from = humanCalendarDay(roll[2]!, market);
+    const to = humanCalendarDay(roll[3]!, market);
+    ownerRollLine = `Rolled forward ${humanCalendarDay(roll[3]!, market, false)}`;
     bullets.push(`Rolled forward to ${to} (${days} days from ${from}).`);
   } else if (sit) {
     const days = sit[1]!;
-    const from = humanCalendarDay(sit[2]!);
-    const to = humanCalendarDay(sit[3]!);
+    const from = humanCalendarDay(sit[2]!, market);
+    const to = humanCalendarDay(sit[3]!, market);
     ownerRollLine = "Opening cash stays the balance on file";
     bullets.push(
       `Opening cash is still the ${from} balance. ${days} days sit before this week (${to}).`,
     );
   } else if (input.anchorNote && /\d{4}-\d{2}-\d{2}/.test(input.anchorNote)) {
-    bullets.push(ensurePeriod(humanizeIsoDates(input.anchorNote)));
+    bullets.push(ensurePeriod(humanizeIsoDates(input.anchorNote, market)));
   }
 
-  const collections = collectionsBullet(input.cycleNote);
+  const collections = collectionsBullet(input.cycleNote, market);
   if (collections) bullets.push(collections);
 
   const other = input.otherNote?.trim() ?? "";
@@ -77,17 +83,17 @@ export function cashExplainerCopy(input: {
     if (/estimated from the p&l/i.test(other)) {
       bullets.push("Estimated from the profit and loss.");
     } else if (!/rolled forward \d+ days/i.test(other)) {
-      bullets.push(ensurePeriod(humanizeIsoDates(other)));
+      bullets.push(ensurePeriod(humanizeIsoDates(other, market)));
     }
   }
 
   const timing = input.timingNote?.trim() ?? "";
-  if (timing) bullets.push(ensurePeriod(humanizeIsoDates(timing)));
+  if (timing) bullets.push(ensurePeriod(humanizeIsoDates(timing, market)));
 
   return { range, ownerRollLine, bullets };
 }
 
-function collectionsBullet(cycleNote: string | null): string | null {
+function collectionsBullet(cycleNote: string | null, market: CashDateMarket): string | null {
   if (!cycleNote) return null;
   const debtor = /Debtor days are (\d+)/i.exec(cycleNote);
   if (debtor) {
@@ -97,7 +103,7 @@ function collectionsBullet(cycleNote: string | null): string | null {
   if (creditor) {
     return `Payments follow the monthly run-rate. Creditor days (${creditor[1]}) stay on the ratios and are not used here.`;
   }
-  return ensurePeriod(humanizeIsoDates(cycleNote));
+  return ensurePeriod(humanizeIsoDates(cycleNote, market));
 }
 
 function ensurePeriod(text: string): string {

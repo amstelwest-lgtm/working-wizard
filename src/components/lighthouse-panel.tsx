@@ -9,6 +9,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { overlayMayHandleKey } from "@/lib/dialog-focus";
+import { formatDateTime } from "@/lib/market/format";
+import { marketForFirm } from "@/lib/market";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -2312,7 +2314,9 @@ function LeadDrawer({
             </p>
             <p className="mt-1.5 text-[11px] text-[var(--ops-ink-dim)]">
               From {lead.inbound[0].fromEmail}
-              {lead.inbound[0].receivedAt ? ` · ${lead.inbound[0].receivedAt.slice(0, 16).replace("T", " ")}` : ""}
+              {lead.inbound[0].receivedAt
+                ? ` · ${formatDateTime(lead.inbound[0].receivedAt, marketForFirm(null))}`
+                : ""}
             </p>
           </div>
         )}

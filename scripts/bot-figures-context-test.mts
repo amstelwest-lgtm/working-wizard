@@ -9,6 +9,7 @@ import { resolve } from "node:path";
 import { overviewRatios } from "../src/lib/health-score.ts";
 import { periodMonthsOf } from "../src/lib/ratios.ts";
 import { figuresPeriodLabelFrom, storedYearToDateEnd } from "../src/lib/statement-period.ts";
+import { ZA_MARKET } from "../src/lib/market/resolve.ts";
 import { buildPrompt } from "../supabase/functions/ask-ai/prompt.ts";
 import type { AskAiContext } from "../supabase/functions/ask-ai/types.ts";
 import {
@@ -73,7 +74,7 @@ assert(
 );
 assert(brief.periodStart === "2026-01-01" && brief.periodEnd === "2026-09-30", "ISO range is stored");
 assert(brief.figuresSource === "uploaded statement", `source ${brief.figuresSource}`);
-assert(brief.yearToDateEnd === "30 Sep 2026", `ytd end ${brief.yearToDateEnd}`);
+assert(brief.yearToDateEnd === "Sep 30, 2026", `ytd end ${brief.yearToDateEnd}`);
 
 const prompt = formatOverviewForPrompt(brief, "accountant");
 assert(prompt.includes("Inventory: $15,453 (stored balance)"), prompt);
@@ -87,10 +88,10 @@ assert(prompt.includes(`Working Capital Days: ${Math.round(deskRatios["Working C
 assert(prompt.includes("Current Ratio: 2.00×"), prompt);
 assert(prompt.includes("Figures period: 1 Jan 2026 – 30 Sep 2026 (2026-01-01 to 2026-09-30)"), prompt);
 assert(prompt.includes("Figures source: uploaded statement"), prompt);
-assert(prompt.includes("Revenue for the period on file: $450,000 (year to date to 30 Sep 2026)"), prompt);
+assert(prompt.includes("Revenue for the period on file: $450,000 (year to date to Sep 30, 2026)"), prompt);
 assert(
   prompt.includes(
-    'The stored period is year to date. When asked for revenue YTD, answer with the revenue figure above and say "year to date to 30 Sep 2026".',
+    'The stored period is year to date. When asked for revenue YTD, answer with the revenue figure above and say "year to date to Sep 30, 2026".',
   ),
   prompt,
 );
@@ -129,20 +130,21 @@ const fullYear = buildOverviewBrief({
 assert(fullYear.yearToDateEnd == null, "a finished calendar year is not year to date");
 assert(!formatOverviewForPrompt(fullYear, "owner").includes("year to date to"), "full year omits the YTD phrase");
 
-assert(storedYearToDateEnd(ytdFinancials, 1) === "30 Sep 2026", "January open is year to date");
+assert(storedYearToDateEnd(ytdFinancials, 1, ZA_MARKET) === "30 Sep 2026", "January open is year to date");
 assert(
   storedYearToDateEnd(
     { periodStart: "2026-03-01", periodEnd: "2026-09-30" },
     3,
+    ZA_MARKET,
   ) === "30 Sep 2026",
   "a financial year that opens in March is year to date",
 );
 assert(
-  storedYearToDateEnd({ periodStart: "2026-09-01", periodEnd: "2026-09-30" }, 1) == null,
+  storedYearToDateEnd({ periodStart: "2026-09-01", periodEnd: "2026-09-30" }, 1, ZA_MARKET) == null,
   "September alone is not year to date",
 );
 assert(
-  storedYearToDateEnd({ periodStart: "2026-01-01", periodEnd: "2026-12-31" }, 1) == null,
+  storedYearToDateEnd({ periodStart: "2026-01-01", periodEnd: "2026-12-31" }, 1, ZA_MARKET) == null,
   "1 Jan–31 Dec is a complete year",
 );
 assert(
@@ -155,6 +157,7 @@ assert(
       ytdPeriodEnd: "2026-09-30",
     },
     1,
+    ZA_MARKET,
   ) === "30 Sep 2026",
   "an explicit year-to-date companion still names the end date",
 );
@@ -186,9 +189,9 @@ const ctx: AskAiContext = {
 };
 const asked = buildPrompt("What are inventory days?", ctx, "focused", "accountant");
 assert(asked.user.includes("Inventory days: 47 days"), asked.user);
-assert(asked.user.includes("year to date to 30 Sep 2026"), asked.user);
+assert(asked.user.includes("year to date to Sep 30, 2026"), asked.user);
 const ytdAsk = buildPrompt("Revenue YTD?", ctx, "focused", "accountant");
-assert(ytdAsk.user.includes('say "year to date to 30 Sep 2026"'), ytdAsk.user);
+assert(ytdAsk.user.includes('say "year to date to Sep 30, 2026"'), ytdAsk.user);
 assert(ytdAsk.system.includes("year to date to <end date>"), ytdAsk.system);
 
 const askSystem = readFileSync(resolve("supabase/functions/ask-ai/prompt.ts"), "utf8");

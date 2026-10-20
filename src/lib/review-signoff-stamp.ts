@@ -6,8 +6,13 @@
  */
 
 import { formatReviewDateTime } from "./market/format.ts";
+import { marketForClient } from "./market/scope.ts";
 import type { ResolvedMarket } from "./market/types.ts";
 import { signoffStatusLine } from "./signoff-status.ts";
+
+function stampMarket(market: Pick<ResolvedMarket, "locale" | "timezone"> | undefined) {
+  return market ?? marketForClient(null);
+}
 
 /**
  * Fields the stamp reads from a review sign-off row. Kept here so this module
@@ -69,7 +74,7 @@ export function inAppAccountantSignoffLine(input: {
   const signedOffAt = (input.signedOffAt ?? "").trim();
   if (!name || !signedOffAt) return null;
   if (isSamplePracticeSignoff({ name, firmName: firm || null })) return null;
-  const when = formatReviewDateTime(signedOffAt, input.market, {
+  const when = formatReviewDateTime(signedOffAt, stampMarket(input.market), {
     firmTimeZone: input.firmTimeZone,
   });
   if (!when || when === "—") return null;
@@ -96,7 +101,7 @@ export function packHeldSignoffLine(input: {
   if (input.reviewedByKind === "owner") {
     const when = (input.reviewedAt ?? "").trim();
     if (!when) return null;
-    const clock = formatReviewDateTime(when, input.market, {
+    const clock = formatReviewDateTime(when, stampMarket(input.market), {
       firmTimeZone: input.firmTimeZone,
     });
     if (!clock || clock === "—") return null;
@@ -173,7 +178,7 @@ export function pdfSignoffBadgeLine(
 ): string {
   const name = stamp.signedOffByName.trim();
   if (stamp.figuresChanged) return signoffStatusLine({ kind: "stale", name });
-  const when = formatReviewDateTime(stamp.signedOffAt, market);
+  const when = formatReviewDateTime(stamp.signedOffAt, stampMarket(market));
   return signoffStatusLine({
     kind: "signed",
     name,

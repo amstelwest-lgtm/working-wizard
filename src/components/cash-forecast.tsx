@@ -2128,6 +2128,7 @@ export function CashForecastPanel({
     cycleNote: forecastEmpty ? null : forecastCycleNote,
     otherNote: rollNote ? null : xeroBankNote,
     timingNote: !forecastEmpty && shortfallExplain ? `Timing: ${shortfallExplain}` : null,
+    market,
   });
 
   const bankDisagree = plBankDisagreement({
@@ -2968,7 +2969,7 @@ export function CashForecastPanel({
               id="xero-bank-forecast-note"
               className="text-xs text-slate-600 md:col-span-2 dark:text-slate-400"
             >
-              {humanizeIsoDates(xeroBankNote)}
+              {humanizeIsoDates(xeroBankNote, market)}
             </p>
           ) : null}
         </div>

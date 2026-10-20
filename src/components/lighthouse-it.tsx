@@ -18,7 +18,7 @@ import { ZA_MARKET } from "@/lib/market/resolve";
 function fmtTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const label = formatDateTime(d, ZA_MARKET);
+  const label = formatDateTime(d, ZA_MARKET); // date-ok: internal IT board has no client or firm market
   return label === "—" ? iso : label;
 }
 

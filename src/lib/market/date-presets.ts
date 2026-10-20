@@ -91,13 +91,13 @@ export function formatMonthRange(startYm: string, endYm: string): string | null 
   return `${left} ${EN_DASH} ${right}`;
 }
 
-export function calendarDayFromIso(iso: string, order: DateOrder = "za"): string | null {
+export function calendarDayFromIso(iso: string, order: DateOrder): string | null {
   const parts = ymd(iso);
   if (!parts) return null;
   return calendarDayLabel(parts.year, parts.month, parts.day, order);
 }
 
-export function weekHeaderFromIso(iso: string, order: DateOrder = "za"): string | null {
+export function weekHeaderFromIso(iso: string, order: DateOrder): string | null {
   const parts = ymd(iso);
   if (!parts) return null;
   return weekHeaderLabel(parts.month, parts.day, order);

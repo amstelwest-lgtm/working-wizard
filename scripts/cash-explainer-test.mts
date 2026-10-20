@@ -8,11 +8,13 @@ function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
 }
 
-assert(humanCalendarDay("2026-10-12") === "12 Oct 2026", humanCalendarDay("2026-10-12"));
-assert(humanCalendarDay("2026-10-12", false) === "12 Oct", humanCalendarDay("2026-10-12", false));
+const ZA = { locale: "en-ZA" };
+
+assert(humanCalendarDay("2026-10-12", ZA) === "12 Oct 2026", humanCalendarDay("2026-10-12", ZA));
+assert(humanCalendarDay("2026-10-12", ZA, false) === "12 Oct", humanCalendarDay("2026-10-12", ZA, false));
 assert(
-  humanizeIsoDates("from 2026-10-05 to 2026-10-12") === "from 5 Oct 2026 to 12 Oct 2026",
-  humanizeIsoDates("from 2026-10-05 to 2026-10-12"),
+  humanizeIsoDates("from 2026-10-05 to 2026-10-12", ZA) === "from 5 Oct 2026 to 12 Oct 2026",
+  humanizeIsoDates("from 2026-10-05 to 2026-10-12", ZA),
 );
 
 const rolled = cashExplainerCopy({
@@ -24,6 +26,7 @@ const rolled = cashExplainerCopy({
     "Debtor days are 33 on Ratios. That figure is not applied to this forecast. Collections follow the monthly revenue run-rate unless a collection delay in weeks is set.",
   otherNote: null,
   timingNote: null,
+  market: ZA,
 });
 
 assert(rolled.range === "12 Oct 2026 – 4 Jan 2027", rolled.range);
@@ -48,6 +51,7 @@ const stayed = cashExplainerCopy({
   cycleNote: null,
   otherNote: null,
   timingNote: null,
+  market: ZA,
 });
 assert(
   stayed.ownerRollLine === "Opening cash stays the balance on file",
@@ -66,6 +70,7 @@ const quiet = cashExplainerCopy({
   cycleNote: null,
   otherNote: "Estimated from the P&L",
   timingNote: null,
+  market: ZA,
 });
 assert(quiet.ownerRollLine === null, "no roll line without a roll");
 assert(
@@ -82,6 +87,7 @@ const creditors = cashExplainerCopy({
     "Creditor days are 120 on Ratios. That figure is not applied to this forecast — weekly payments follow the scaled monthly run-rate.",
   otherNote: null,
   timingNote: "Timing: collections delayed 2 weeks.",
+  market: ZA,
 });
 assert(
   creditors.bullets.some((line) => line.startsWith("Payments follow the monthly run-rate. Creditor days (120)")),

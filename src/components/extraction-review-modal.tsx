@@ -30,6 +30,7 @@ import {
 } from "@/lib/auto-populate";
 import { statementKindFromMetadata } from "@/lib/statement-parse";
 import { useMarketFormat } from "@/contexts/market";
+import { formatCalendarDay } from "@/lib/market/format";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -236,7 +237,7 @@ function Section({
 // ─── Main modal ────────────────────────────────────────────────────────────────
 
 export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPopulate }: Props) {
-  const { money, t } = useMarketFormat();
+  const { money, t, market } = useMarketFormat();
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [conflicts, setConflicts] = useState<MergeConflict[]>(result.conflicts ?? []);
@@ -359,15 +360,20 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
     onClose();
   };
 
+  const endLabel = meta?.period_end_date ? formatCalendarDay(meta.period_end_date, market) : "";
+  const startLabel = meta?.period_start_date ? formatCalendarDay(meta.period_start_date, market) : "";
+  const storedPeriod = meta?.period_label?.trim() ?? "";
+  const storedIsParsedAsOf = /^As of \d/.test(storedPeriod);
   const periodLabel =
-    meta?.period_label?.trim() ||
-    (meta?.period_start_date && meta?.period_end_date
-      ? `${meta.period_start_date} to ${meta.period_end_date}`
-      : meta?.period_end_date
-        ? `As of ${meta.period_end_date}`
-        : meta?.period_months
-          ? `${meta.period_months}-month period`
-          : "Period unknown");
+    storedPeriod && !storedIsParsedAsOf
+      ? storedPeriod
+      : startLabel && endLabel && startLabel !== "—" && endLabel !== "—"
+        ? `${startLabel} – ${endLabel}`
+        : endLabel && endLabel !== "—"
+          ? `As of ${endLabel}`
+          : meta?.period_months
+            ? `${meta.period_months}-month period`
+            : "Period unknown";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>

@@ -10,8 +10,6 @@ import { UserPlus, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
-import { formatCalendarDay } from "@/lib/market/format";
-
 type Employee = { id: string; name: string; email: string | null };
 
 interface Props {
@@ -129,7 +127,8 @@ export function AssignButton({
               employeeName: emp.name,
               taskTitle: title.trim(),
               taskDescription: description.trim() || undefined,
-              dueDate: due ? formatCalendarDay(due, market) : undefined,
+              dueDate: due ?? undefined,
+              market: { locale: market.locale, timezone: market.timezone },
               assignedBy: u.user?.email ?? undefined,
               clientName,
             },
