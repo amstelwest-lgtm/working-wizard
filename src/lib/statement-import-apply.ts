@@ -4,9 +4,16 @@
  */
 import type { StatementKind } from "./statement-parse.ts";
 
+export type ImportChoiceLabels = {
+  replaceLabel: string;
+  addLabel: string;
+};
+
 export type ImportApplyResult = {
   ok: boolean;
   message: string;
+  /** Set when the file covers a different span and nothing was written yet. */
+  choice?: ImportChoiceLabels | null;
 };
 
 /** The noun in "Imported, <what> updated". */

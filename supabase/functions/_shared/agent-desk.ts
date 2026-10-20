@@ -8,6 +8,7 @@ import { executeAnalystTool, type AnalystExecCtx } from "../agent-analyst/execut
 import { displayAmounts, moneyMarketFromClient, type AgentKey } from "../../../src/lib/agent-bus.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
+import { preferStatementSnapshot } from "../../../src/lib/statement-import-plan.ts";
 import { booksQualityFigures, savedBudgetFigures, savedCashflowFigures } from "../../../src/lib/agent-books.ts";
 import {
   AGENT_OUTBOUND_TYPES,
@@ -94,7 +95,7 @@ async function connectionRow(db: SupabaseClient, table: string, clientId: string
 }
 
 export async function readBooksQuality(ctx: AgentToolCtx): Promise<unknown> {
-  const [qbo, xero, sage, snapRes, uploadRes] = await Promise.all([
+  const [qbo, xero, sage, snapRes, uploadRes, booksRes] = await Promise.all([
     connectionRow(ctx.db, "qbo_connections", ctx.clientId),
     connectionRow(ctx.db, "xero_connections", ctx.clientId),
     connectionRow(ctx.db, "sage_connections", ctx.clientId),
@@ -103,20 +104,31 @@ export async function readBooksQuality(ctx: AgentToolCtx): Promise<unknown> {
       .select("id, source, period_label, period_date, financials")
       .eq("client_id", ctx.clientId)
       .order("period_date", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(8),
     ctx.db
       .from("client_financial_snapshots")
       .select("id", { count: "exact", head: true })
       .eq("client_id", ctx.clientId)
       .in("source", UPLOAD_SOURCES),
+    ctx.db.from("clients").select("financials").eq("id", ctx.clientId).maybeSingle(),
   ]);
   if (qbo.error) return { error: qbo.error };
   if (xero.error) return { error: xero.error };
   if (sage.error) return { error: sage.error };
   if (snapRes.error) return { error: snapRes.error.message };
   if (uploadRes.error) return { error: uploadRes.error.message };
-  const snap = asRecord(snapRes.data);
+  if (booksRes.error) return { error: booksRes.error.message };
+  const live = asRecord(booksRes.data?.financials);
+  const snap = preferStatementSnapshot(
+    (snapRes.data ?? []) as Array<{
+      id?: unknown;
+      source?: unknown;
+      period_label?: unknown;
+      period_date?: string | null;
+      financials?: unknown;
+    }>,
+    live,
+  );
   const totals = numericFigures(snap?.financials);
   const figures = booksQualityFigures({
     qboConnected: qbo.connected,

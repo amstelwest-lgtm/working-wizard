@@ -64,6 +64,7 @@ export function BudgetChartTable({
   displayTemplateId = null,
   periodCaption = null,
   uniformNote = null,
+  windowMonths = null,
 }: {
   doc: BudgetDocument;
   clientId?: string;
@@ -83,6 +84,8 @@ export function BudgetChartTable({
   periodCaption?: string | null;
   /** Flat year from a statement seed or a copy-forward. */
   uniformNote?: string | null;
+  /** Statement window. Totals match the verdict instead of the whole year. */
+  windowMonths?: readonly string[] | null;
 }) {
   const { market } = useMarketFormat();
   const money = (n: number) => {
@@ -134,10 +137,19 @@ export function BudgetChartTable({
   }, [actualMonths, clientId, doc.fyStart, listActuals]);
 
   const views = useMemo(() => budgetMonthViews(doc, loaded), [doc, loaded]);
-  const totals = useMemo(() => budgetRangeTotals(views), [views]);
+  const scopedViews = useMemo(() => {
+    // No window means the whole plan. An empty window is a statement that
+    // is not scored, so the chart does not total the year in its place.
+    if (windowMonths == null) return views;
+    const wanted = windowMonths.filter(Boolean);
+    if (!wanted.length) return [];
+    const scoped = views.filter((row) => wanted.includes(row.month));
+    return scoped.length ? scoped : views;
+  }, [views, windowMonths]);
+  const totals = useMemo(() => budgetRangeTotals(scopedViews), [scopedViews]);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const through = currentBudgetMonth(months);
-  const ytd = budgetYtdWithStatement(revenueYtd(views, through), statementActuals);
+  const ytd = budgetYtdWithStatement(revenueYtd(scopedViews, through), statementActuals);
   const sentence = budgetYtdSentence({ ...ytd, money });
   const ytdTone = tone(budgetYtdSignal(ytd));
 
@@ -198,14 +210,14 @@ export function BudgetChartTable({
       {activeLens === "table" ? (
         <BudgetMonthTable
           doc={doc}
-          views={views}
+          views={scopedViews}
           totals={totals}
           money={money}
           market={market}
           displayTemplateId={displayTemplateId}
         />
       ) : (
-        <BudgetMonthChart views={views} market={market} money={money} signed={signed} />
+        <BudgetMonthChart views={scopedViews} market={market} money={money} signed={signed} />
       )}
     </section>
   );

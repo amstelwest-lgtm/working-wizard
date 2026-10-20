@@ -422,9 +422,13 @@ const LIST_WHEN_MISSING = new Set([
   "OCF / EBITDA",
   "Interest Burden",
   "Tax Burden",
+  "Fixed Cost Ratio",
   "Equity Multiplier",
   "Return on Equity",
   "Return on Assets",
+  "Debtor Days",
+  "Asset Turnover",
+  "Debt-to-Equity",
 ]);
 
 export type ScorecardPresentation = {
@@ -503,7 +507,14 @@ export function presentScorecardRatio(input: {
     if (!LIST_WHEN_MISSING.has(input.name)) {
       return { include: false, text: null, headline: null, scoredValue: null, note: null, unscored: true };
     }
-    return { include: true, text: "—", headline: "—", scoredValue: null, note: null, unscored: true };
+    return {
+      include: true,
+      text: "Not enough data",
+      headline: "Not enough data",
+      scoredValue: null,
+      note: null,
+      unscored: true,
+    };
   }
   return {
     include: true,

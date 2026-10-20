@@ -86,6 +86,10 @@ export interface FinancialFigures {
 
 export interface PeriodBlock {
   period_end: string | null;
+  /** First day of the span printed on the file. Absent when only a period end was read. */
+  period_start?: string | null;
+  /** Inclusive months between period_start and period_end, when both were read. */
+  period_months?: number | null;
   figures: FinancialFigures;
 }
 
