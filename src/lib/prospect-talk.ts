@@ -6,6 +6,7 @@
  * Tax-only copy lives in prospect-tax-copy.ts so a non-ZA bundle does not
  * need that module.
  */
+import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
 
 export const PROSPECT_MESSAGE_MAX = 500;
 /** Visitor messages before the name-and-email ask. Two exchanges, inside the 2–3 window. */
@@ -38,8 +39,7 @@ export const PROSPECT_PUBLIC_AGENTS: readonly ProspectAgentCopy[] = [
     slug: "financial-manager",
     face: "financial_manager",
     role: "Financial Manager",
-    greeting:
-      "I'm the Milōn Financial Manager. I can walk a labelled SAMPLE of a business — health, cash, and an advisory pack — and an accountant still signs off. Nothing on this page connects to accounting software.",
+    greeting: `I'm the ${AGENT_DISPLAY_NAME.financial_manager}. I can walk a labelled SAMPLE of a business — health, cash, and an advisory pack — and an accountant still signs off. Nothing on this page connects to accounting software.`,
     questions: [
       "What does the business do?",
       "What do you want to see first in the sample — profit, cash, or the advisory pack?",
@@ -49,8 +49,7 @@ export const PROSPECT_PUBLIC_AGENTS: readonly ProspectAgentCopy[] = [
     slug: "analyst",
     face: "analyst",
     role: "Analyst",
-    greeting:
-      "I'm the Milōn Analyst. I read sample ratios and margins. Every figure is labelled SAMPLE. I don't pull live books on this page.",
+    greeting: `I'm the ${AGENT_DISPLAY_NAME.analyst}. I read sample ratios and margins. Every figure is labelled SAMPLE. I don't pull live books on this page.`,
     questions: [
       "What does the business sell?",
       "What should I look at first — margin, or how long customers take to pay?",
@@ -60,8 +59,7 @@ export const PROSPECT_PUBLIC_AGENTS: readonly ProspectAgentCopy[] = [
     slug: "advisor",
     face: "advisor",
     role: "Advisor",
-    greeting:
-      "I'm the Milōn Advisor. I turn a sample diagnosis into moves. Nothing is written to a ledger, and an accountant signs off.",
+    greeting: `I'm the ${AGENT_DISPLAY_NAME.advisor}. I turn a sample diagnosis into moves. Nothing is written to a ledger, and an accountant signs off.`,
     questions: ["What decision are you weighing?", "Is that about cash, profit, or the next move?"],
   },
 ];

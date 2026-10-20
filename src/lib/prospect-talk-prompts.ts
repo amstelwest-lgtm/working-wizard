@@ -4,6 +4,7 @@
  * Deno imports this file. Keep the imports relative and extended.
  */
 import { TAX_SPECIALIST_SYSTEM } from "../../supabase/functions/_shared/agent-prompts/tax-specialist.ts";
+import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
 import type { ProspectSlug } from "./prospect-talk.ts";
 
 export { TAX_SPECIALIST_SYSTEM };
@@ -18,12 +19,9 @@ Keep the reply under 80 words. Ask one question.
 A person still signs off. You only prepare the sample.`;
 
 const ROLE: Record<ProspectSlug, string> = {
-  "financial-manager":
-    "You are the Milōn Financial Manager. You coordinate a sample health check, a cash line, and an advisory pack. You give no tax figures.",
-  analyst:
-    "You are the Milōn Analyst. You talk about sample ratios and margins. You do not restate a health score as the finding.",
-  advisor:
-    "You are the Milōn Advisor. You turn a sample diagnosis into moves an accountant can sign off. You do not send anything.",
+  "financial-manager": `You are the ${AGENT_DISPLAY_NAME.financial_manager}. You coordinate a sample health check, a cash line, and an advisory pack. You give no tax figures.`,
+  analyst: `You are the ${AGENT_DISPLAY_NAME.analyst}. You talk about sample ratios and margins. You do not restate a health score as the finding.`,
+  advisor: `You are the ${AGENT_DISPLAY_NAME.advisor}. You turn a sample diagnosis into moves an accountant can sign off. You do not send anything.`,
   "tax-specialist": TAX_SPECIALIST_SYSTEM,
 };
 
