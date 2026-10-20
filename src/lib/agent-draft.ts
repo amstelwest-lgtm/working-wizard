@@ -207,7 +207,7 @@ export function prepareDraftRecord(input: {
     kind,
     severity,
     figures: grounded.evidence.figures,
-    periodLabel: grounded.evidence.period_label,
+    periodLabel: grounded.evidence.period_label, // date-ok: evidence period key, formatted when printed
     market: input.market,
     storedNumbers: storedFigureValues(input.pool),
   });
@@ -229,12 +229,12 @@ export function prepareDraftRecord(input: {
   const recordKeys = [
     findingRecordKey({
       kind,
-      periodLabel: grounded.evidence.period_label,
+      periodLabel: grounded.evidence.period_label, // date-ok: evidence period key, formatted when printed
       snapshotId: grounded.evidence.snapshot_id,
     }),
     findingRecordKey({
       kind,
-      periodLabel: evidence.period_label,
+      periodLabel: evidence.period_label, // date-ok: evidence period key, formatted when printed
       snapshotId: evidence.snapshot_id,
     }),
   ];
@@ -261,7 +261,7 @@ export function periodsFromFindingEvidence(evidence: unknown): Array<{
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return [];
   const row = evidence as Record<string, unknown>;
   const snapshotId = typeof row.snapshot_id === "string" ? row.snapshot_id : null;
-  const periodLabel = typeof row.period_label === "string" ? row.period_label : null;
+  const periodLabel = typeof row.period_label === "string" ? row.period_label : null; // date-ok: evidence period key, not printed copy
   const figures = row.figures;
   if (!figures || typeof figures !== "object" || Array.isArray(figures)) return [];
   const flat: Record<string, number> = {};
@@ -283,7 +283,7 @@ export function periodsFromFindingEvidence(evidence: unknown): Array<{
     out.push({ period_label: periodLabel, snapshot_id: snapshotId, figures: flat });
   }
   for (const item of nested) {
-    out.push({ period_label: item.period_label, snapshot_id: null, figures: item.figures });
+    out.push({ period_label: item.period_label, snapshot_id: null, figures: item.figures }); // date-ok: evidence period key, not printed copy
   }
   return out;
 }

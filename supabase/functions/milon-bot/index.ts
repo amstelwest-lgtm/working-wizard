@@ -31,6 +31,8 @@ import {
   getAdvisorySignoffState,
 } from "../../../src/lib/advisory-signoff.ts";
 import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
+import { marketForClient } from "../../../src/lib/market/scope.ts";
+import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import { formatOverviewForPrompt } from "../ask-ai/overview-brief.ts";
 import {
   BOT_MAX_HISTORY,
@@ -213,12 +215,12 @@ async function runTool(
       .limit(30),
     ctx.userClient
       .from("clients")
-      .select("brain_summary, financials, cashflow, financials_updated_at")
+      .select("brain_summary, financials, cashflow, financials_updated_at, market")
       .eq("id", ctx.clientId)
       .maybeSingle(),
     ctx.userClient
       .from("client_financial_snapshots")
-      .select("period_label, period_date, ratios")
+      .select("period_label, period_date, ratios, financials")
       .eq("client_id", ctx.clientId)
       .order("period_date", { ascending: false })
       .limit(1)
@@ -262,10 +264,17 @@ async function runTool(
         clientRes.data?.brain_summary ?? null,
         ratiosForBrainProse(fin),
       ),
-      financials: snap
+        financials: snap
         ? {
             period_label:
-              (snap.period_label as string | null) ?? (snap.period_date as string | null) ?? null,
+              figuresPeriodLabelFrom(
+                snap.financials && typeof snap.financials === "object"
+                  ? (snap.financials as object)
+                  : fin,
+                (snap.period_label as string | null) ?? null,
+                marketForClient({ market: clientRes.data?.market }),
+              ) ??
+              ((snap.period_date as string | null) ?? null),
             ratios: numericRatios(snap.ratios),
             cash_runway_weeks: cash,
           }

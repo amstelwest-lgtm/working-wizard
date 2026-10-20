@@ -119,6 +119,7 @@ export function OwnerDoor({
   receivables,
   netIncome,
   periodEnd,
+  statementSpan = null,
   history,
   cashflow,
   cashOutlook = null,
@@ -160,6 +161,8 @@ export function OwnerDoor({
   receivables: string;
   netIncome: string;
   periodEnd: string | null;
+  /** Market-formatted statement span. Home keeps this sentence when ledger status arrives later. */
+  statementSpan?: string | null;
   history: SnapshotRow[];
   cashflow: SavedCashflowLike | null;
   /** Same opening and floor as Health and the 13-week forecast. */
@@ -682,6 +685,7 @@ export function OwnerDoor({
         quickBooks,
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
+        statementSpan,
       }),
     [
       ownerEmail,
@@ -696,6 +700,7 @@ export function OwnerDoor({
       quickBooks,
       xeroLink,
       market,
+      statementSpan,
     ],
   );
   const settledRows = applyLiveRuns(

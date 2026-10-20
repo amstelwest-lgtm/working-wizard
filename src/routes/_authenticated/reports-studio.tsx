@@ -131,7 +131,7 @@ import { clientIndustryDisplay } from "@/lib/profile-signals";
 import { clientIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
 import { parseDebtSchedule, totalDebtFromSchedule } from "@/lib/debt-schedule";
 import { resolvePriorSnapshot, withPriorRatioScores } from "@/lib/prior-period";
-import { reportDataPeriodLabel, reportPeriodMonthYear, readStatementMeta } from "@/lib/statement-period";
+import { reportDataPeriodLabel, reportPeriodMonthYear, readStatementMeta, statementSpanLabel } from "@/lib/statement-period";
 import {
   debtToEquityReading,
   presentReturn,
@@ -1438,6 +1438,7 @@ function buildMovementRows(
   rawRatios: Record<string, number>,
   snapshots: DatedSnapshot[],
   refDate: Date,
+  market: ResolvedMarket,
 ): { rows: RatioMovementRow[]; labels: ClientReportData["movementPeriodLabels"] } {
   // Target dates for each comparison column
   const t3m = new Date(refDate);
@@ -1452,11 +1453,13 @@ function buildMovementRows(
   const s6m = closestSnapshot(snapshots, t6m, 45);
   const s12m = closestSnapshot(snapshots, t12m, 60);
 
+  const columnLabel = (row: DatedSnapshot | null, fallback: string) =>
+    (row ? statementSpanLabel({ periodLabel: row.period_label, market }) : null) || fallback;
   const labels: ClientReportData["movementPeriodLabels"] = {
     current: "Current",
-    three_months: s3m ? s3m.period_label : "3 Months Ago",
-    six_months: s6m ? s6m.period_label : "6 Months Ago",
-    twelve_months: s12m ? s12m.period_label : "12 Months Ago",
+    three_months: columnLabel(s3m, "3 Months Ago"),
+    six_months: columnLabel(s6m, "6 Months Ago"),
+    twelve_months: columnLabel(s12m, "12 Months Ago"),
   };
 
   const rows = MOVEMENT_META.filter(({ name }) => Number.isFinite(rawRatios[name])).map(
@@ -2252,7 +2255,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const dataPeriodLabel = reportDataPeriodLabel(rawFinancials, market);
   const signoffSnapshots: SignoffPeriodSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
     created_at: s.created_at,
-    period_label: s.period_label,
+    period_label: s.period_label, // date-ok: sign-off period key, not printed copy
     period_date: s.period_date,
     financials: s.financials,
   }));
@@ -2308,14 +2311,14 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const partMonth = Boolean(dataPeriodLabel?.includes("part month"));
   const equityNow = getNum(fin, "equity");
   const snapshots: DatedSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
-    period_label: s.period_label,
+    period_label: s.period_label, // date-ok: movement input; column labels use statementSpanLabel
     period_date: s.period_date as string,
     ratios: (s.ratios as Record<string, number>) ?? {},
   }));
   const priorSnap = resolvePriorSnapshot(
     (snapshotRes.data ?? []).map((s) => ({
       id: s.id as string | undefined,
-      period_label: s.period_label as string,
+      period_label: s.period_label as string, // date-ok: prior-period match key, not printed copy
       period_date: s.period_date as string,
       financials: (s.financials as Record<string, unknown>) ?? null,
       ratios: (s.ratios as Record<string, number>) ?? null,
@@ -2352,6 +2355,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     rawRatios,
     snapshots,
     new Date(),
+    market,
   );
 
   const assessed = assessClientMetrics({

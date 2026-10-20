@@ -135,7 +135,7 @@ function periodKey(snap: SignoffPeriodSnapshot): string {
   const start = typeof fields?.periodStart === "string" ? fields.periodStart.slice(0, 10) : "";
   const end = typeof fields?.periodEnd === "string" ? fields.periodEnd.slice(0, 10) : "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end)) return `${start}/${end}`;
-  return (snap.period_label || snap.period_date || "").trim().toLowerCase().replace(/\s+/g, " ");
+  return (snap.period_label || snap.period_date || "").trim().toLowerCase().replace(/\s+/g, " "); // date-ok: sign-off period key, not printed copy
 }
 
 /**

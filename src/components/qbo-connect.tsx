@@ -12,7 +12,7 @@ import {
 } from "@/lib/qbo.functions";
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
-import { yearToDateTitle } from "@/lib/statement-period";
+import { statementSpanLabel, yearToDateTitle } from "@/lib/statement-period";
 import { useMarketFormat } from "@/contexts/market";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
 import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
@@ -43,7 +43,8 @@ export function QboConnectCard({
   financials,
   market,
 }: Props) {
-  const { dateTime } = useMarketFormat();
+  const { dateTime, market: contextMarket } = useMarketFormat();
+  const dateMarket = market ?? contextMarket;
   const fetchStatus = useServerFn(getQboStatus);
   const fetchAuthUrl = useServerFn(getQboAuthUrl);
   const doSync = useServerFn(triggerQboSync);
@@ -155,10 +156,17 @@ export function QboConnectCard({
 
   if (status) {
     const isError = status.syncStatus === "error";
-    const periodLabel =
-      lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel;
-    const ytdPeriodLabel =
-      lastSync?.ytdPeriodLabel ?? status.syncFigures?.ytdPeriodLabel ?? status.ytdPeriodLabel;
+    const periodLabel = statementSpanLabel({
+      periodStart: lastSync?.periodStart ?? status.periodStart,
+      periodEnd: lastSync?.periodEnd ?? status.periodEnd,
+      periodLabel: lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel,
+      market: dateMarket,
+    });
+    const ytdPeriodLabel = statementSpanLabel({
+      periodLabel:
+        lastSync?.ytdPeriodLabel ?? status.syncFigures?.ytdPeriodLabel ?? status.ytdPeriodLabel,
+      market: dateMarket,
+    });
     const ytdBasis = lastSync?.ytdBasis ?? status.syncFigures?.ytdBasis ?? status.ytdBasis;
     const linkCopy = describeLedgerLink(
       {
@@ -168,14 +176,16 @@ export function QboConnectCard({
         figuresFromThisSync: Boolean(lastSync) || status.figuresFromThisSync,
         own: lastSync
           ? {
-              periodLabel: lastSync.periodLabel,
+              periodLabel,
               revenue: lastSync.revenue,
-              ytdPeriodLabel: lastSync.ytdPeriodLabel,
+              ytdPeriodLabel,
               ytdRevenue: lastSync.ytdRevenue,
               ytdBasis: lastSync.ytdBasis,
               cash: lastSync.cash,
             }
-          : status.syncFigures,
+          : status.syncFigures
+            ? { ...status.syncFigures, periodLabel, ytdPeriodLabel }
+            : null,
         board: status.boardFigures,
       },
       dateTime,
