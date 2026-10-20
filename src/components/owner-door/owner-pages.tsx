@@ -33,7 +33,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const SCOPE_LABEL: Record<string, string> = {
-  financials: "Books",
+  financials: "Financials",
   profitability: "Profit",
   cash_forecast: "13-week cash",
   budget: "Budget",

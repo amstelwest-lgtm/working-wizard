@@ -1,4 +1,5 @@
 import { costMagnitude } from "./period-profit.ts";
+import { readSheetPillarsHeld } from "./statement-import-plan.ts";
 
 export type HealthTier = "critical" | "at_risk" | "healthy";
 
@@ -636,13 +637,14 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
   const spe = safe(n.revenue, n.employees);
   const ocfEbitda = ocfToEbitdaRatio(n.operatingCashflow, n.ebitda);
   const interestBurden = interestBurdenRatio(n.ebit, n.ebt);
-  const taxBurden = taxBurdenRatio(n.ebt, n.netIncome);
+  const taxGiven = taxLinePresent(v);
+  const taxBurden = taxGiven === false ? Number.NaN : taxBurdenRatio(n.ebt, n.netIncome);
   const debtToEquity =
     Number.isFinite(n.totalLiabilities) && Number.isFinite(n.equity) && n.equity !== 0
       ? n.totalLiabilities / n.equity
       : NaN;
 
-  return {
+  const ratios = {
     "Net Margin": netMargin,
     "Operating Margin": operatingMargin,
     "Gross Margin": grossMargin,
@@ -664,6 +666,36 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
     "Sales-per-Employee Ratio": spe,
     "OCF / EBITDA": ocfEbitda,
   };
+  // A later P&L kept the earlier balance sheet. Days, returns, and leverage
+  // would mix the two periods, so they are not a number.
+  if (readSheetPillarsHeld(v)) {
+    for (const name of SHEET_MIXED_RATIOS) ratios[name] = Number.NaN;
+    if (taxGiven !== true) ratios["Tax Burden"] = Number.NaN;
+  }
+  return ratios;
+}
+
+/** Ratios that need the balance sheet as well as the P&L. */
+const SHEET_MIXED_RATIOS = [
+  "Return on Equity",
+  "Return on Assets",
+  "Asset Turnover",
+  "Equity Multiplier",
+  "Debt-to-Equity",
+  "Debtor Days",
+  "Inventory Days",
+  "Creditor Days",
+  "Working Capital Days",
+  "OCF / EBITDA",
+] as const;
+
+/** True when tax was stated, false when the field is blank, null when the caller did not pass it. */
+function taxLinePresent(v: object): boolean | null {
+  if (!("tax" in v)) return null;
+  const raw = (v as { tax?: unknown }).tax;
+  if (raw == null || String(raw).trim() === "") return false;
+  const n = typeof raw === "number" ? raw : Number(String(raw).replace(/,/g, ""));
+  return Number.isFinite(n);
 }
 
 /**

@@ -133,11 +133,16 @@ export function statementNoteSections(
 
   const gaps: string[] = [];
   if (!result.current_period.period_end) gaps.push("Period end not in the file.");
-  if (!hasMoney(is)) gaps.push("Income statement not in the file.");
-  if (!hasMoney(bs)) gaps.push("Balance sheet not in the file.");
-  if (!hasMoney(cf)) gaps.push("Cash flow statement not in the file.");
-  if (!hasMoney(result.comparative_period?.figures)) {
-    gaps.push("Comparative period not in the file.");
+  const incomeOnly = hasMoney(is) && !hasMoney(bs);
+  if (incomeOnly) {
+    gaps.push("Balance sheet not in the file. Upload a balance sheet to keep cash current.");
+  } else {
+    if (!hasMoney(is)) gaps.push("Income statement not in the file.");
+    if (!hasMoney(bs)) gaps.push("Balance sheet not in the file.");
+    if (!hasMoney(cf)) gaps.push("Cash flow statement not in the file.");
+    if (!hasMoney(result.comparative_period?.figures)) {
+      gaps.push("Comparative period not in the file.");
+    }
   }
   gaps.push(...noteBullets(result.extraction_notes));
   if (gaps.length) sections.push({ title: "Gaps", items: gaps });

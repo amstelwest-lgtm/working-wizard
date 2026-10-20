@@ -23,11 +23,18 @@
   }
 }
 
-/* Phone owner home sits in this shell. Its 1rem padding is the white gutter. */
+/* Phone owner screens sit in this shell. Home used to drop the 1rem gutter
+   and every later screen put it back, so the page inset after the first tap. */
 @media (max-width: 860px) {
-  #board-pack.founder-shell:has(> .owner-door[data-screen="home"]) {
+  #board-pack.founder-shell:has(> .owner-door) {
     max-width: none;
     padding: 0;
+  }
+
+  /* overflow-x: hidden on the page root makes the sticky menu miss the first
+     tap after a scroll. clip still hides sideways overflow. */
+  main.milon-page-enter:has(.owner-door) {
+    overflow-x: clip;
   }
 }
 

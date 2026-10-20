@@ -1,24 +1,33 @@
 /**
  * Lead alerts and call booking for /try.
- * Mail is built here. Sending is injected so tests never hit Resend.
+ * Mail is built in trial-lead-alert.ts so /talk can send the same alert.
+ * Sending is injected so tests never hit Resend.
  */
 import { readGoogleCalendarConfig, type GoogleCalendarConfig } from "@/lib/google-calendar";
 import { formatSlotClock24, isOfferedSlot, safeTimeZone } from "@/lib/trial-call-slots";
+import {
+  deliverLeadAlert,
+  demoViewMail,
+  mailShell,
+  sendTeamMail,
+  TEAM_ALERT_FROM,
+  TEAM_ALERT_TO,
+  trialStartMail,
+  type AlertKind,
+  type Mail,
+} from "@/lib/trial-lead-alert";
 
-export const TEAM_ALERT_TO = "amstel.west@gmail.com";
-export const TEAM_ALERT_FROM = "Milōn <team@milonfinance.com>";
-export const TRIAL_CALLS_PER_IP_PER_DAY = 3;
-
-export type AlertKind = "demo_view" | "trial_start";
-
-export type Mail = {
-  to: string;
-  from: string;
-  subject: string;
-  html: string;
-  text: string;
-  idempotencyKey: string;
+export {
+  deliverLeadAlert,
+  demoViewMail,
+  sendTeamMail,
+  TEAM_ALERT_FROM,
+  TEAM_ALERT_TO,
+  trialStartMail,
 };
+export type { AlertKind, Mail };
+
+export const TRIAL_CALLS_PER_IP_PER_DAY = 3;
 
 export type CallDraft = {
   name: string;
@@ -32,58 +41,6 @@ export type CallDraft = {
 
 export function callRateAllowed(countToday: number): boolean {
   return countToday < TRIAL_CALLS_PER_IP_PER_DAY;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function mailShell(subject: string, lines: string[], idempotencyKey: string): Mail {
-  const text = [subject, "", ...lines].join("\n");
-  const html = `<!doctype html><html><body style="margin:0;background:#ffffff;color:#102A43;font-family:Segoe UI,Arial,sans-serif">
-  <div style="max-width:560px;margin:0 auto;padding:28px">
-    <p style="margin:0;font-weight:700;letter-spacing:-0.03em">Milōn</p>
-    <h1 style="margin:18px 0 0;font-size:22px;line-height:1.3">${escapeHtml(subject)}</h1>
-    ${lines.map((line) => `<p style="margin:12px 0 0;font-size:15px;line-height:1.5;color:#3D5270">${escapeHtml(line)}</p>`).join("")}
-  </div>
-</body></html>`;
-  return {
-    to: TEAM_ALERT_TO,
-    from: TEAM_ALERT_FROM,
-    subject,
-    html,
-    text,
-    idempotencyKey,
-  };
-}
-
-export function demoViewMail(input: { country: string; when: string; visitor: string }): Mail {
-  return mailShell(
-    "New sample view on /try",
-    [
-      "A visitor opened the sample for the first time.",
-      `Country: ${input.country}`,
-      `When: ${input.when}`,
-    ],
-    `try-demo-view-${input.visitor}`,
-  );
-}
-
-export function trialStartMail(input: { name: string; email: string; country: string }): Mail {
-  return mailShell(
-    "Trial started on /try",
-    [
-      "A visitor started the sample.",
-      `Name: ${input.name}`,
-      `Email: ${input.email}`,
-      `Country: ${input.country}`,
-    ],
-    `try-trial-start-${input.email}`,
-  );
 }
 
 export function callSavedMail(draft: CallDraft): Mail {
@@ -101,48 +58,6 @@ export function callSavedMail(draft: CallDraft): Mail {
     ],
     `try-call-${draft.email}-${draft.start.toISOString()}`,
   );
-}
-
-export async function sendTeamMail(
-  mail: Mail,
-  deps: { apiKey: string; fetchImpl: typeof fetch },
-): Promise<{ ok: true } | { ok: false; skipped?: boolean; error: string }> {
-  const apiKey = deps.apiKey.trim();
-  if (!apiKey) return { ok: false, skipped: true, error: "RESEND_API_KEY not configured" };
-  try {
-    const res = await deps.fetchImpl("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-        "Idempotency-Key": mail.idempotencyKey.slice(0, 256),
-      },
-      body: JSON.stringify({
-        from: mail.from,
-        to: [mail.to],
-        subject: mail.subject,
-        html: mail.html,
-        text: mail.text,
-      }),
-    });
-    if (!res.ok) return { ok: false, error: `Resend ${res.status}` };
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "Email send failed" };
-  }
-}
-
-export async function deliverLeadAlert(input: {
-  kind: AlertKind;
-  dedupeKey: string;
-  mail: Mail;
-  claim: (kind: AlertKind, dedupeKey: string) => Promise<boolean>;
-  send: (mail: Mail) => Promise<{ ok: boolean }>;
-}): Promise<{ deduped: boolean; sent: boolean }> {
-  const fresh = await input.claim(input.kind, input.dedupeKey);
-  if (!fresh) return { deduped: true, sent: false };
-  const sent = await input.send(input.mail);
-  return { deduped: false, sent: sent.ok };
 }
 
 export function validateCallRequest(input: {

@@ -12,7 +12,6 @@ import type { BudgetDocument, BudgetMonthResult, BudgetOverheadLine, BudgetTempl
 import {
   budgetWindowLabel,
   createBudgetDocument,
-  formatMonthLabel,
   fyMonths,
 } from "@/lib/budget.months";
 import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compute";
@@ -29,7 +28,7 @@ import {
   type VarianceSignal,
   type VarianceTaxonomyKey,
 } from "@/lib/budget.variance";
-import { formatMoney, marketForClient, ZA_MARKET, type DateMarket, type ResolvedMarket } from "@/lib/market";
+import { formatMonthRange, formatReportAmount, marketForClient, ZA_MARKET, type DateMarket, type ResolvedMarket } from "@/lib/market";
 import {
   budgetMonthsAreUniform,
   presentBudgetRebuildNote,
@@ -157,7 +156,7 @@ const BUCKET_ACTUAL: Record<BudgetOverheadLine["bucket"], keyof TaxonomyTotals> 
 type MoneyMarket = Pick<ResolvedMarket, "currency" | "locale">;
 
 function money(n: number, market: MoneyMarket): string {
-  return formatMoney(Math.round(n), market);
+  return formatReportAmount(n, market);
 }
 
 /** Drop keyboard-mash placeholders such as "fddff" so they cannot print on the PDF. */
@@ -252,12 +251,9 @@ function fromVariance(v: VarianceLine, label: string, emphasis = false): BudgetP
   };
 }
 
-function contiguousLabel(months: string[], market: Pick<ResolvedMarket, "locale">): string {
+function contiguousLabel(months: string[]): string {
   if (months.length === 0) return "No monthly management accounts uploaded yet";
-  if (months.length === 1) return formatMonthLabel(months[0], market);
-  const first = formatMonthLabel(months[0], market);
-  const last = formatMonthLabel(months[months.length - 1], market);
-  return `${first} – ${last} · ${months.length} months`;
+  return formatMonthRange(months[0], months[months.length - 1]) ?? months[0];
 }
 
 /**
@@ -743,7 +739,7 @@ export function buildBudgetPdfModel(
     ? pinnedStatementLabel
     : hasActuals
       ? monthsAreContiguous(fy, labelMonths)
-        ? contiguousLabel(labelMonths, market)
+        ? contiguousLabel(labelMonths)
         : `${labelMonths.length} months with actuals (not consecutive)`
       : "No monthly management accounts uploaded yet";
   const comparedLabel = outsidePlan

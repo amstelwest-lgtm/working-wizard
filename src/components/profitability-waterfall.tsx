@@ -735,6 +735,64 @@ function DetailRows({
   );
 }
 
+function WaterfallPhoneList({
+  steps,
+  revenue,
+  negative,
+  money,
+}: {
+  steps: { label: string; delta: number; runningEnd: number; kind: string }[];
+  revenue: number;
+  negative: "minus" | "paren";
+  money: (n: number) => string;
+}) {
+  return (
+    <ol className="m-0 flex list-none flex-col gap-3 p-0" data-waterfall-layout="vertical">
+      {steps.map((s) => {
+        const isDec = s.kind === "decrease";
+        const negNet = s.kind === "total" && s.label === "Net Profit" && s.runningEnd < 0;
+        const span = Math.abs(isDec ? s.delta : s.runningEnd);
+        const width = Math.max(8, Math.min(100, (span / Math.max(Math.abs(revenue), 1)) * 100));
+        const valueText = isDec
+          ? negative === "minus"
+            ? ownerOutflow(money(Math.abs(s.delta)))
+            : `(${money(Math.abs(s.delta))})`
+          : money(s.runningEnd);
+        return (
+          <li key={s.label} className="min-w-0">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0 text-xs font-bold uppercase leading-tight tracking-wide text-[#1e293b] dark:text-[#e2e8f0]">
+                {s.label}
+              </span>
+              <span
+                className="shrink-0 text-xs font-extrabold tabular-nums text-[#102A43] dark:text-[#F4F7FB]"
+                style={{ color: isDec || negNet ? "#c0392b" : undefined }}
+              >
+                {valueText}
+              </span>
+            </div>
+            <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-[#e8eef5] dark:bg-slate-800">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${width}%`,
+                  background: negNet
+                    ? "#c0392b"
+                    : isDec
+                      ? "#c94b4b"
+                      : s.kind === "total"
+                        ? "#1a3a5c"
+                        : "#3f9c72",
+                }}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export function ProfitabilityWaterfall({
   fallback,
   clientName,
@@ -1070,19 +1128,23 @@ export function ProfitabilityWaterfall({
             </p>
           )}
 
-          <PremiumWaterfallFigure
-            steps={steps}
-            revenue={revenue}
-            fixedCosts={fixedCosts}
-            netProfit={netProfit}
-            taxNote={taxNote}
-            mounted={mounted}
-            negative={negative}
-            money={fmtCompact}
-            moneyWhole={fmtWhole}
-            display={display}
-            mode="card"
-          />
+          {phone ? (
+            <WaterfallPhoneList steps={steps} revenue={revenue} negative={negative} money={fmtCompact} />
+          ) : (
+            <PremiumWaterfallFigure
+              steps={steps}
+              revenue={revenue}
+              fixedCosts={fixedCosts}
+              netProfit={netProfit}
+              taxNote={taxNote}
+              mounted={mounted}
+              negative={negative}
+              money={fmtCompact}
+              moneyWhole={fmtWhole}
+              display={display}
+              mode="card"
+            />
+          )}
           <EnlargeSheet
             open={waterfallOpen}
             onOpenChange={setWaterfallOpen}

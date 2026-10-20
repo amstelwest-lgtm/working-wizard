@@ -12,10 +12,14 @@ export type ImportPeriodParts = {
 };
 
 export type ConfirmedImportPeriod = {
-  /** Last calendar day of the chosen month, YYYY-MM-DD. */
+  /** Last calendar day of the chosen month, or the file's own end date. */
   periodEnd: string;
-  /** Short stamp, e.g. "Oct 2026". */
+  /** Short stamp, e.g. "Oct 2026", or the file's own range. */
   periodLabel: string;
+  /** Set when the file printed a start date. A month pick alone leaves this empty. */
+  periodStart?: string | null;
+  /** Inclusive months on the file. Empty when only a month was chosen. */
+  periodMonths?: number | null;
 };
 
 export function importMonthNames(): readonly string[] {

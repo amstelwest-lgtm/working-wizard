@@ -197,6 +197,8 @@ export function buildFinancialManagerBrief(input: {
    * The card and this brief share the sentence.
    */
   cashStrainLine?: string | null;
+  /** "as at Sep 30, 2026, from earlier statement" when a P&L did not replace cash. */
+  balanceSheetNote?: string | null;
   receivables?: number | null;
   drafts?: readonly BriefDraft[];
   /** Live scorecard ratios. Draft titles are re-read from these, not the stored sentence. */
@@ -313,7 +315,9 @@ export function buildFinancialManagerBrief(input: {
         : input.cashStrainLine
           ? input.cashStrainLine
           : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
-            ? `Cash is ${input.formatMoney(cashOpening)}.`
+            ? input.balanceSheetNote?.trim()
+              ? `Cash is ${input.formatMoney(cashOpening)}, ${input.balanceSheetNote.trim()}.`
+              : `Cash is ${input.formatMoney(cashOpening)}.`
             : (cashCopy?.sentence ?? null);
   const cashFloorChip =
     !evidenced || input.openingMissing || cashMissing || pillarAgrees

@@ -20,6 +20,7 @@ export default defineConfig({
       },
       { find: "@tanstack/react-start/server", replacement: resolve(root, "start-stub.ts") },
       { find: "@tanstack/react-start", replacement: resolve(root, "start-stub.ts") },
+      { find: "@vercel/functions", replacement: resolve(root, "vercel-stub.ts") },
       { find: "@", replacement: resolve(root, "../../src") },
       { find: "node:crypto", replacement: resolve(root, "crypto-stub.ts") },
     ],

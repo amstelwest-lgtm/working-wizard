@@ -33,10 +33,12 @@ assert(
 );
 
 const gateSrc = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
+const gateViewSrc = readFileSync(resolve("src/components/firm-billing-gate-view.tsx"), "utf8");
 assert(gateSrc.includes("applyPortalTheme(resolvePortalTheme())"), "the billing check applies the saved theme");
-const billingGate = gateSrc.slice(gateSrc.indexOf('data-billing-gate="pending"') - 80, gateSrc.indexOf('data-billing-gate="pending"') + 280);
+const pendingAt = gateViewSrc.indexOf('data-billing-gate="pending"');
+const billingGate = gateViewSrc.slice(pendingAt - 80, pendingAt + 280);
 assert(
-  gateSrc.includes('data-billing-gate="pending"') && billingGate.includes("bg-background"),
+  gateSrc.includes('surface="error"') && pendingAt !== -1 && billingGate.includes("bg-background"),
   "the billing check uses the theme surface",
 );
 assert(

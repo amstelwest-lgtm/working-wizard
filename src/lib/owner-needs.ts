@@ -297,23 +297,32 @@ export function ownerNeedsView(input: {
     ? undefined
     : input.draftStale?.slice(0, 1);
 
-  const deliverableTotal =
-    input.deliverableCount + (input.deliverablesUnavailable ? 0 : input.advisoryTitles.length);
-  const deliverablesHeading = !input.deliverablesReady
+  const ownerDrafts =
+    input.draftsReady && !input.draftsUnavailable
+      ? input.draftTitles.filter((title) => title.trim())
+      : [];
+  const advisory =
+    input.deliverablesReady && !input.deliverablesUnavailable
+      ? input.advisoryTitles.filter((title) => title.trim())
+      : [];
+  const stored =
+    input.deliverablesReady && !input.deliverablesUnavailable ? Math.max(0, input.deliverableCount) : 0;
+  // Owner-OK drafts, accountant advisory drafts, and stored deliverable rows.
+  // The same draft titles feed both Home cells. Nothing here is a made-up count.
+  const deliverableTotal = ownerDrafts.length + advisory.length + stored;
+  const deliverablesHeading = !input.deliverablesReady || !input.draftsReady
     ? "Deliverables"
-    : input.deliverablesUnavailable
+    : input.deliverablesUnavailable && input.draftsUnavailable
       ? "Deliverables"
       : deliverableTotal
         ? countPhrase(deliverableTotal, "deliverable awaiting review", "deliverables awaiting review")
         : "Deliverables";
-  const deliverableLines = !input.deliverablesReady
+  const deliverableLines = !input.deliverablesReady || !input.draftsReady
     ? ["Checking deliverables."]
-    : input.deliverablesUnavailable
+    : input.deliverablesUnavailable && input.draftsUnavailable
       ? ["Deliverables aren't available yet."]
       : deliverableTotal
-        ? input.advisoryTitles.slice(0, 1).length
-          ? input.advisoryTitles.slice(0, 1)
-          : ["Waiting on your accountant."]
+        ? [ownerDrafts[0] ?? advisory[0] ?? "Waiting on your accountant."]
         : ["No deliverables awaiting review."];
 
   const sync = booksSyncCopy({

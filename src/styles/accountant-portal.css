@@ -64,7 +64,8 @@ html[data-theme="light"] #atmos .glow{opacity:.3}
 /* Premium shell chrome (navy rail, white topbar) lives with the owner frame in owner-premium.css under .premium-shell. */
 
 /* ===== top bar ===== */
-.accountant-portal .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:18px;height:66px;margin:0 -28px 34px;padding:0 28px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--line-soft)}
+.accountant-portal .topbar{position:sticky;top:0;z-index:80;display:flex;align-items:center;gap:18px;height:66px;margin:0 -28px 34px;padding:0 28px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--line-soft)}
+.profile-funnel-overlay{top:4.25rem !important}
 .accountant-portal .topbar .brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:.3em;font-size:15px}
 .accountant-portal .topbar .brand img{height:30px;filter:none}
 .accountant-portal .topbar .firm-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:99px;padding:5px 14px;font-size:12px;letter-spacing:.1em;color:var(--ink-dim);white-space:nowrap;flex-shrink:0;max-width:100%}
@@ -1692,7 +1693,9 @@ html[data-theme="light"] .accountant-portal .data-fresh{
 html.nav-drawer-open,
 html.nav-drawer-open body{overflow:hidden}
 /* Scroll-up at the top of a page must not walk browser history. */
-html:has(.accountant-portal:not(.owner-door)){overscroll-behavior-y:contain}
+html:has(.accountant-portal:not(.owner-door)),
+html:has(.owner-door.accountant-portal){overscroll-behavior-y:contain}
+html.nav-drawer-open .milon-page-enter{position:relative;z-index:30}
 .accountant-nav .nav-back,
 .accountant-nav .nav-label,
 .accountant-nav .nav-sub-link{

@@ -36,6 +36,10 @@ function signoff(patch: Partial<ClientReviewSignoff> = {}): ClientReviewSignoff 
 
 assert.equal(ownerSignoffDate("2026-09-01T14:26:00.000Z", "Africa/Johannesburg"), "1 Sep 2026");
 assert.equal(ownerSignoffLine("Theo", "1 Sep 2026"), "Signed off by Theo · 1 Sep 2026");
+assert.equal(
+  ownerSignoffLine("Theo", "1 Sep 2026", "Financials"),
+  "Financials: signed off by Theo · 1 Sep 2026",
+);
 assert.equal(budgetFigureMissing(0), true);
 assert.equal(budgetFigureMissing(Number.NaN), true);
 assert.equal(budgetFigureMissing(0.4), true);
@@ -58,6 +62,15 @@ const signed = renderToStaticMarkup(
   createElement(OwnerSignoffMark, { signoff: signoff(), isStale: false }),
 );
 assert.match(signed, /Signed off by Theo · 1 Sep 2026/);
+assert.equal(signed.includes("Financials:"), false, "Health without a scope word stays a signer line");
+const financials = renderToStaticMarkup(
+  createElement(OwnerSignoffMark, {
+    signoff: signoff(),
+    isStale: false,
+    scopeLabel: "Financials",
+  }),
+);
+assert.match(financials, /Financials: signed off by Theo · 1 Sep 2026/);
 assert.match(signed, /<img /);
 assert.equal(signed.includes(OWNER_SIGNOFF_STALE_CHIP), false);
 assert.equal(signed.includes("figures have changed"), false);
@@ -153,5 +166,12 @@ const app = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert.match(app, /OwnerSignoffMark/);
 assert.equal(app.includes("ReviewSignoffBadge"), false);
 assert.equal(app.includes("OwnerTabSignoffRow"), false);
+assert.equal(
+  (app.match(/scopeLabel=\{signoffScopeLabel\("financials"\)\}/g) ?? []).length,
+  3,
+  "Health labels the financials sign-off Financials",
+);
+const pages = readFileSync(resolve("src/components/owner-door/owner-pages.tsx"), "utf8");
+assert.match(pages, /financials: "Financials"/, "the owner portal names the financials scope Financials");
 
 console.log("owner-signoff-mark-test: ok");

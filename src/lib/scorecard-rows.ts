@@ -14,7 +14,7 @@
 import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { reportScalarInputs } from "@/lib/equity-coherence";
 import { PILLAR_RATIO_NAMES, pillarForRatioName, scoreRatio, type HealthPillarId } from "@/lib/health-score";
-import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatReportAmount, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { computeRatios, periodMonthsOf, scoreTier, type HealthTier, type RatioInputs } from "@/lib/ratios";
 import { presentScorecardRatio } from "@/lib/report-coherence";
 
@@ -42,7 +42,7 @@ function fmtRatioVal(name: string, val: number): string {
   ) {
     return `${val.toFixed(2)}×`;
   }
-  return `${(val * 100).toFixed(1)}%`;
+  return formatReportAmount(val, ZA_MARKET, { style: "percent" });
 }
 
 /**

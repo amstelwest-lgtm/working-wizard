@@ -397,7 +397,7 @@ export const extractFinancials = createServerFn({ method: "POST" })
     if (!data.text?.trim()) throw new Error("No usable content provided");
     if (looksLikeBankLedger(data.text)) throw new Error(BANK_LEDGER_MESSAGE);
     const docText = data.text.slice(0, 120_000);
-    const parsed = parseStatementText(docText);
+    const parsed = parseStatementText(docText, resolvePromptMarket(data.market));
     const aiResult = await aiExtractText(docText, data.fileName, resolvePromptMarket(data.market));
     const merged = mergeStatementFields(parsed, aiResult, docText);
     assertUsable(assessFlatExtraction(Object.keys(merged).length));

@@ -455,6 +455,7 @@ function BudgetComplexWorkspace({
         onLensChange={onLensChange}
         actualMonths={actualMonths}
         statementActuals={actuals}
+        windowMonths={actuals?.windowMonths}
         displayTemplateId={displayTemplateId}
         periodCaption={periodCaption}
         uniformNote={uniformNote}

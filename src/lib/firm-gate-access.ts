@@ -43,3 +43,23 @@ export function pageWhileEntitlementUnknown(input: {
   });
   return gate === "allow" ? "allow" : "wall";
 }
+
+export type KnownFirmEntitlement = "entitled" | "unpaid" | "none";
+export type FirmGateFailureSurface = "content" | "error" | "wall";
+
+/**
+ * A transient entitlement failure.
+ * Entitled keeps the page. Unpaid on a gated route is the billing wall.
+ * No known result on a gated route is the error screen. Home stays open.
+ */
+export function surfaceAfterEntitlementFailure(input: {
+  known: KnownFirmEntitlement;
+  pathname: string;
+  firmClientCount: number | null;
+  firstClientId: string | null;
+}): FirmGateFailureSurface {
+  if (input.known === "entitled") return "content";
+  const page = pageWhileEntitlementUnknown(input);
+  if (input.known === "unpaid") return page === "wall" ? "wall" : "content";
+  return page === "wall" ? "error" : "content";
+}

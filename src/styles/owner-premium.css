@@ -15,6 +15,15 @@
  * premium-shine specificity.
  */
 
+/* The first-run profile sits under the header so Sign out stays reachable. */
+.founder-app-bar {
+  position: relative;
+  z-index: 80;
+}
+.profile-funnel-overlay {
+  top: 4.25rem !important;
+}
+
 /* ===== tokens ===== */
 .owner-door {
   /* Brushed landing gold: dark, mid, a bright highlight, then dark again.
@@ -60,6 +69,12 @@ html:not(.dark) .owner-door.accountant-portal {
 /* The frame continues past the portal (short pages, overscroll). */
 html:not(.dark) body:has(.owner-door) {
   background: #0e2238 !important;
+}
+/* The page-enter fade is its own stacking context. Lift it above the pencil
+   while the drawer is open, or the dim overlay paints underneath the button. */
+html.nav-drawer-open .milon-page-enter {
+  position: relative;
+  z-index: 30;
 }
 
 /* ===== type scale ===== */
@@ -207,7 +222,7 @@ html:not(.dark) .owner-door .topbar .profile-caret {
   }
 }
 html:not(.dark) .owner-door .deliverable-rail .tab {
-  color: var(--pp-frame-dim);
+  color: var(--pp-frame-ink);
   font-weight: 500;
   border-radius: 10px;
 }
@@ -224,7 +239,8 @@ html:not(.dark) .owner-door .deliverable-rail .tab.on {
   font-weight: 600;
 }
 html:not(.dark) .owner-door .deliverable-rail .tab-ic {
-  color: var(--pp-frame-faint);
+  color: var(--pp-frame-ink);
+  opacity: 1;
 }
 html:not(.dark) .owner-door .deliverable-rail .tab.on .tab-ic {
   color: #dbeafe;

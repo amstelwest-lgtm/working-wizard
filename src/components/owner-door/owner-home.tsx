@@ -214,6 +214,8 @@ export function OwnerHome({
   lede = HOME_LEDE,
   showInvite = true,
   firmId = null,
+  profileResume = false,
+  onResumeProfile,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
@@ -255,6 +257,9 @@ export function OwnerHome({
   cardPhase?: AgentCardPhase;
   /** Firm whose current plan carries the Start here badge. */
   firmId?: string | null;
+  /** Unfinished first-run profile. Home can open it again. */
+  profileResume?: boolean;
+  onResumeProfile?: () => void;
 }) {
   const handoff = presence.handoff;
   const handoffSentence = handoff ? quoteLiveScoreOnly(handoff.sentence) : null;
@@ -275,6 +280,14 @@ export function OwnerHome({
         <p className="owner-eyebrow">Home</p>
         <h1 className="owner-title">{title}</h1>
         <p className="owner-lede">{shownLede}</p>
+        {profileResume && onResumeProfile ? (
+          <p className="owner-lede" data-profile-resume="">
+            Business profile is 1 of 4.{" "}
+            <button type="button" className="owner-crumb-link" onClick={onResumeProfile}>
+              Continue business profile
+            </button>
+          </p>
+        ) : null}
         <FirmStartHereLoader firmId={firmId} />
         {notice ? (
           <p className="owner-lede" role="status" data-sample-notice="">

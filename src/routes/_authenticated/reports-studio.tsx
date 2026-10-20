@@ -123,7 +123,7 @@ import {
 import { publishBudgetDocument } from "@/lib/budget.bridges";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { groundPlaybookSteps, withCashFloorIntervention } from "@/lib/intervention-grounding";
-import { formatMoney as formatReportMoney } from "@/lib/market/format";
+import { formatMoney as formatReportMoney, formatReportAmount } from "@/lib/market/format";
 import type { BudgetDocument } from "@/lib/budget.types";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton } from "@/components/review-signoff";
@@ -1335,7 +1335,7 @@ async function loadSectorBenchmarks(
 }
 
 function fmtBenchVal(val: number, unit: string): string {
-  if (unit === "%") return `${(val * 100).toFixed(1)}%`;
+  if (unit === "%") return formatReportAmount(val, undefined, { style: "percent" });
   if (unit === "×") return `${val.toFixed(2)}×`;
   return `${Math.round(val)}d`;
 }
