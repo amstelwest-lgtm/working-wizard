@@ -42,7 +42,11 @@ assert(
   ),
   "a timeout logs a console warning and shows Retry on a gated client page",
 );
-assert(gate.includes("Couldn't check billing"), "a failed check shows the retry card");
+assert(
+  gate.includes('surface="error"') &&
+    readFileSync(resolve("src/components/firm-billing-gate-view.tsx"), "utf8").includes("Couldn't check billing"),
+  "a failed check shows the retry card",
+);
 assert(gate.includes("<Outlet />"), "the outlet mounts from the session");
 assert(!gate.includes("firmGate"), "entitlement does not hold the outlet");
 assert(!gate.includes("failOpen("), "the gate does not fail open");

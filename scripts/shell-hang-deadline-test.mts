@@ -193,7 +193,11 @@ assert(roles.includes("clearAccountantStayCache"), "sign-out can clear the stay 
 
 const gate = src("src/routes/_authenticated.gate.tsx");
 assert(!gate.includes("while (brandLoading)") && !gate.includes("if (brandLoading)"), "the gate does not wait on brand");
-assert(gate.includes("Couldn't check billing"), "a failed check shows the retry card");
+const gateView = src("src/components/firm-billing-gate-view.tsx");
+assert(
+  gate.includes('surface="error"') && gateView.includes("Couldn't check billing"),
+  "a failed check shows the retry card",
+);
 assert(gate.includes("pageWhileEntitlementUnknown"), "unknown entitlement uses the page decision");
 assert(
   /setFirmEntitled\(null\);[\s\S]{0,160}\}, \[userId\]\)/.test(gate),
@@ -205,8 +209,8 @@ assert(
 );
 assert(gate.includes("<FirmShellLoading />"), "a walled page shows a skeleton while entitlement is unknown");
 assert(gate.includes("<Outlet />"), "an allowed page still mounts the outlet");
-assert(gate.includes('to="/dashboard"'), "Back is a router link");
-assert(!gate.includes('href="/dashboard"'), "Back is not a full page navigation");
+assert(gateView.includes('to="/dashboard"'), "Back is a router link");
+assert(!gate.includes('href="/dashboard"') && !gateView.includes('href="/dashboard"'), "Back is not a full page navigation");
 assert(!gate.includes("firmGate"), "entitlement does not use the old gate flag");
 assert(
   gate.includes("Gated client pages show Retry"),
