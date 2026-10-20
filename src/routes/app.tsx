@@ -75,6 +75,13 @@ import { extractionToInputs, ExtractionReviewModal } from "@/components/extracti
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
+import {
+  CURRENCY_LABEL_CONFIRM_KEY,
+  currencyImportRefusal,
+  fileCurrencyFromExtraction,
+  statementCurrencyGate,
+  withCurrencyLabelConfirm,
+} from "@/lib/statement-currency";
 import { preflightUploadFile, UPLOAD_QUALITY_DISCLAIMER } from "@/lib/upload-quality";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -1954,7 +1961,6 @@ function flatExtractionToMergedResult(
           : "unknown";
   const income = kind !== "balance_sheet";
   const balance = kind !== "income_statement";
-  const currency = meta?.currency ?? "ZAR";
   return {
     document_metadata: {
       company_name: meta?.companyName ?? null,
@@ -1971,7 +1977,7 @@ function flatExtractionToMergedResult(
       auditor_firm: null,
       approval_date: null,
       industry_description: null,
-      functional_currency: currency === "other" || currency == null ? "ZAR" : currency,
+      functional_currency: fileCurrencyFromExtraction({ currency: meta?.currency }) ?? "other",
       foreign_currency_exposure: null,
       headcount: n("employees"),
       accounting_basis: "unknown",
@@ -2102,6 +2108,7 @@ function Index() {
   const [ownerBootTimedOut, setOwnerBootTimedOut] = useState(false);
   const [ownerBootAttempt, setOwnerBootAttempt] = useState(0);
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
+  const [storedClientMarket, setStoredClientMarket] = useState<unknown>(null);
   const [marketNeedsGate, setMarketNeedsGate] = useState(false);
 
   // Redirect unauthenticated users to the landing page. After invite accept,
@@ -2814,6 +2821,7 @@ function Index() {
         } | null;
         const profile = parseOperatingProfile(data?.operating_profile);
         const parsedMarket = parseMarketSelection(data?.market);
+        setStoredClientMarket(marketColumnMissing ? null : (data?.market ?? null));
         if (!marketColumnMissing && data && data.market == null && res.error == null) {
           setMarketNeedsGate(true);
           setWorkspaceMarket(null);
@@ -6840,7 +6848,19 @@ function Index() {
                 setReplaceLiveOnHistory(false);
               }}
               autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
+              storedMarket={storedClientMarket}
               onConfirm={async (mapped, autoPopulate, periodChoice, periodOverride) => {
+                const currencyGate = statementCurrencyGate({
+                  storedMarket: storedClientMarket,
+                  extraction: extractionForReview,
+                });
+                const labelConfirm = extractionForReview?.currency_label_confirm ?? null;
+                const currencyRefusal = currencyImportRefusal(currencyGate, labelConfirm);
+                if (currencyRefusal) {
+                  return { ok: false as const, message: importFailureMessage(currencyRefusal) };
+                }
+                const withLabel = <T extends Record<string, unknown>>(blob: T) =>
+                  withCurrencyLabelConfirm(blob, labelConfirm);
                 const entries = Object.entries(mapped).filter(
                   ([k, val]) => val !== undefined && k in defaults,
                 );
@@ -6871,7 +6891,7 @@ function Index() {
                   const periodEnd = resolvedEnd;
                   const saved = await upsertPeriodSnapshot({
                     clientId: effectiveClientId,
-                    financials: fields,
+                    financials: withLabel(fields),
                     periodDate: periodEnd,
                     source: "upload",
                     statementKind: statementKindFromMetadata(reviewMeta),
@@ -6958,7 +6978,7 @@ function Index() {
                     ? supabase
                         .from("client_financial_snapshots")
                         .update({
-                          financials: planned.history as never,
+                          financials: withLabel(planned.history as Record<string, unknown>) as never,
                           ratios: ratiosOut as never,
                           period_label: periodLabel,
                           period_date: periodDate,
@@ -6968,7 +6988,7 @@ function Index() {
                         client_id: effectiveClientId,
                         period_label: periodLabel,
                         period_date: periodDate,
-                        financials: planned.history as never,
+                        financials: withLabel(planned.history as Record<string, unknown>) as never,
                         ratios: ratiosOut as never,
                         source: "upload",
                       });
@@ -6997,6 +7017,9 @@ function Index() {
                       value == null || typeof value === "object" ? [] : [[key, String(value)]],
                     ),
                   ),
+                  ...(labelConfirm
+                    ? { [CURRENCY_LABEL_CONFIRM_KEY]: JSON.stringify(labelConfirm) }
+                    : {}),
                 } as Inputs;
                 ownerWriteGen.current += 1;
                 setV(next);
@@ -7005,11 +7028,13 @@ function Index() {
                 const { data: savedLive, error: liveError } = await supabase
                   .from("clients")
                   .update({
-                    financials: withFinancialsWriteRev({
-                      ...next,
-                      weeklyInputs,
-                      productMix,
-                    }) as never,
+                    financials: withFinancialsWriteRev(
+                      withLabel({
+                        ...next,
+                        weeklyInputs,
+                        productMix,
+                      }),
+                    ) as never,
                     financials_updated_at: financialsUpdatedAt,
                   })
                   .eq("id", effectiveClientId)

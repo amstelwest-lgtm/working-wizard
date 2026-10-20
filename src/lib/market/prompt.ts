@@ -97,6 +97,7 @@ EXTRACTION RULES:
 - Director remuneration is often shown in notes, not the main statement — check notes pages
 - Shareholder loans may appear as both assets and liabilities — capture both
 - Accumulated depreciation and other contra-asset balances reduce the related asset. Report property, plant and equipment and total assets at carrying amount (cost minus accumulated depreciation), not at gross cost. Do not add that contra-asset credit into equity. When a total equity line is printed, use that figure as equity.
+- functional_currency is the code printed on the statement. Do not replace it and do not convert the figures. If it differs from the region in these instructions, say so in extraction_notes: "Currency is <code> as printed, although the document is described as a <region> statement".
 
 Return this EXACT JSON structure with no deviations:`;
 
@@ -135,6 +136,7 @@ EXTRACTION RULES:
 - Officer compensation is often shown in notes, not the main statement — check notes pages
 - Shareholder / member loans may appear as both assets and liabilities — capture both
 - Accumulated depreciation and other contra-asset balances reduce the related asset. Report property, plant and equipment and total assets at carrying amount (cost minus accumulated depreciation), not at gross cost. Do not add that contra-asset credit into equity. When a total equity line is printed, use that figure as equity.
+- functional_currency is the code printed on the statement. Do not replace it and do not convert the figures. If it differs from the region in these instructions, say so in extraction_notes: "Currency is <code> as printed, although the document is described as a <region> statement".
 
 Return this EXACT JSON structure with no deviations:`;
   return `${preamble}\n\n${schemaTail.replace('"functional_currency": "ZAR"', '"functional_currency": "USD"')}`;
