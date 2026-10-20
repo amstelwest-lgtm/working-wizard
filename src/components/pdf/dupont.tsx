@@ -10,6 +10,7 @@
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
 import { t } from "@/lib/market";
 import { C, fmtPct } from "./theme";
 import { usePdfMarket } from "./pdf-market";
@@ -141,7 +142,7 @@ export function DuPontDiagram({
   const roeText = roeHeadline ?? (roeOk ? fmtPct(levers.roe) : "n/a");
 
   return (
-    <View style={D.wrap}>
+    <View style={D.wrap} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
       {/* ROE result */}
       <View style={D.roeRow}>
         <View style={D.roeBox}>
@@ -267,7 +268,7 @@ export function DuPontStrip({
     : `${diagnosis.sentence} The Asset Productivity report holds the full decomposition.`;
 
   return (
-    <View style={S.wrap}>
+    <View style={S.wrap} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
       <View style={S.goldTop} />
       <View style={S.inner}>
         <Text style={S.heading}>ROE Drivers — DuPont Lens</Text>

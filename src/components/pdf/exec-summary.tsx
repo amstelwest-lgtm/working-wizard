@@ -7,6 +7,7 @@
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { PDF_CARD_MIN_PRESENCE } from "@/lib/report-pdf-layout";
 import { C } from "./theme";
 import { Arrow } from "./glyphs";
 
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
 
 export function ExecSummary({ figures, narrative }: Props) {
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
       <View style={styles.goldTop} />
       <View style={styles.inner}>
         <Text style={styles.heading}>Executive Summary</Text>
