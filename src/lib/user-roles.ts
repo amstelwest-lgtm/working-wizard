@@ -138,6 +138,8 @@ export function clearPortalRouting(): void {
   removeStorage(session, PORTAL_FORCE_KEY);
   removeStorage(session, SETTINGS_RETURN_KEY);
   removeStorage(local, PORTAL_INTENT_KEY);
+  clearAccountantStayCache();
+  clearItMemberCache();
 }
 
 export function setSettingsReturn(to: SettingsReturn): void {
@@ -225,10 +227,15 @@ export function isPracticeSignupMeta(
   return false;
 }
 
+/**
+ * Routing and UI only. Session metadata is not an authorization decision.
+ * Server functions and RLS still verify the JWT. getUser() held the auth
+ * lock for the whole GET /auth/v1/user on every cold firm entry.
+ */
 async function readPracticeSignup(): Promise<boolean> {
-  const { data } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getSession();
   return isPracticeSignupMeta(
-    data.user?.user_metadata as Record<string, unknown> | undefined,
+    data.session?.user?.user_metadata as Record<string, unknown> | undefined,
   );
 }
 
@@ -410,15 +417,35 @@ export async function shouldBounceFromOwnerApp(
   });
 }
 
-export async function isMilonItMember(userId: string): Promise<boolean> {
-  try {
-    const { data } = await supabase.rpc("is_milon_it_member" as never, {
-      _user_id: userId,
-    } as never);
-    return Boolean(data);
-  } catch {
-    return false;
-  }
+const itMemberChecks = new Map<string, Promise<boolean>>();
+const itMemberInflight = new Map<string, Promise<boolean>>();
+
+export function clearItMemberCache(): void {
+  itMemberChecks.clear();
+  itMemberInflight.clear();
+}
+
+export function isMilonItMember(userId: string): Promise<boolean> {
+  const cached = itMemberChecks.get(userId);
+  if (cached) return cached;
+  const inflight = itMemberInflight.get(userId);
+  if (inflight) return inflight;
+  const pending = (async () => {
+    try {
+      const { data } = await supabase.rpc("is_milon_it_member" as never, {
+        _user_id: userId,
+      } as never);
+      const member = Boolean(data);
+      itMemberChecks.set(userId, Promise.resolve(member));
+      return member;
+    } catch {
+      return false;
+    } finally {
+      if (itMemberInflight.get(userId) === pending) itMemberInflight.delete(userId);
+    }
+  })();
+  itMemberInflight.set(userId, pending);
+  return pending;
 }
 
 /**
@@ -434,20 +461,36 @@ export async function shouldOpenItInbox(userId: string): Promise<boolean> {
 }
 
 const accountantStayChecks = new Map<string, Promise<boolean>>();
+const accountantStayInflight = new Map<string, Promise<boolean>>();
 
 /**
  * Accountant portal may keep practice accounts — never business-client credentials.
- * One cold load shares a single check. A cancelled render used to start another
- * read while the first still held the auth lock, and the second never fired.
+ * A successful result is cached for the session. A failure is not, so the next
+ * navigation can try again. Sign-out clears the cache.
+ * This is a routing result, not an entitlement.
  */
 export function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
-  const existing = accountantStayChecks.get(userId);
-  if (existing) return existing;
-  const pending = resolveAccountantStay(userId).finally(() => {
-    accountantStayChecks.delete(userId);
+  const cached = accountantStayChecks.get(userId);
+  if (cached) return cached;
+  const inflight = accountantStayInflight.get(userId);
+  if (inflight) return inflight;
+  const pending = resolveAccountantStay(userId).then(
+    (stay) => {
+      accountantStayChecks.set(userId, Promise.resolve(stay));
+      return stay;
+    },
+    () => false,
+  );
+  accountantStayInflight.set(userId, pending);
+  void pending.finally(() => {
+    if (accountantStayInflight.get(userId) === pending) accountantStayInflight.delete(userId);
   });
-  accountantStayChecks.set(userId, pending);
   return pending;
+}
+
+export function clearAccountantStayCache(): void {
+  accountantStayChecks.clear();
+  accountantStayInflight.clear();
 }
 
 async function resolveAccountantStay(userId: string): Promise<boolean> {

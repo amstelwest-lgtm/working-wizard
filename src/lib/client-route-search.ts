@@ -30,6 +30,7 @@ export const CLIENT_RAIL_TABS = [
   "plan",
   "reports",
   "portal",
+  "settings",
 ] as const;
 
 export type ClientRailTab = (typeof CLIENT_RAIL_TABS)[number];
@@ -421,6 +422,8 @@ export function legacyPaneForSearch(search: {
       return "reports";
     case "portal":
       return "summary";
+    case "settings":
+      return null;
     default:
       return null;
   }
@@ -612,6 +615,8 @@ export function clientRailSelection(input: {
       if (section === "connections") return { headingId: "books", subId: "connections" };
       if (section === "documents") return { headingId: "books", subId: "documents" };
       return { headingId: "books", subId: null };
+    case "settings":
+      return { headingId: "settings", subId: null };
     default:
       return { headingId: "home", subId: null };
   }
@@ -703,6 +708,11 @@ export function clientNavSearch<T extends object>(
       return accountantClientTabSearch(prev, "portal", { section: sub });
     }
     return accountantClientTabSearch(prev, "portal");
+  }
+  if (headingId === "settings") {
+    const next = accountantClientTabSearch(prev, "settings") as Record<string, unknown>;
+    delete next.invite;
+    return next as T;
   }
   return accountantClientTabSearch(prev, "home");
 }
@@ -842,6 +852,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   agent?: string;
   profile?: number;
   view?: "chart" | "table" | "13week";
+  invite?: "owner";
 } {
   const out: {
     qbo?: string;
@@ -861,6 +872,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     agent?: string;
     profile?: number;
     view?: "chart" | "table" | "13week";
+    invite?: "owner";
   } = {};
   if (typeof search.qbo === "string") out.qbo = search.qbo;
   if (typeof search.xero === "string") out.xero = search.xero;
@@ -882,5 +894,6 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   if (search.view === "13week" && (out.tab === "cash" || out.section === "forecast")) {
     out.view = "13week";
   }
+  if (search.invite === "owner" && out.tab === "settings") out.invite = "owner";
   return out;
 }

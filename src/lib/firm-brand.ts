@@ -84,23 +84,54 @@ export function writeActiveFirmId(userId: string, firmId: string): void {
  * listUserFirms, which still returns whatever rows were collected (often []).
  * Sign-in must not treat that [] as "this person has no firm".
  */
-export async function readUserFirms(userId: string): Promise<{
+const FIRM_LIST_TTL_MS = 60_000;
+const firmListCache = new Map<
+  string,
+  { at: number; value: { firms: FirmBrandRow[]; error: string | null } }
+>();
+const firmListInflight = new Map<string, Promise<{ firms: FirmBrandRow[]; error: string | null }>>();
+
+export async function readUserFirms(
+  userId: string,
+  opts?: { fresh?: boolean },
+): Promise<{
+  firms: FirmBrandRow[];
+  error: string | null;
+}> {
+  if (!opts?.fresh) {
+    const hit = firmListCache.get(userId);
+    if (hit && Date.now() - hit.at < FIRM_LIST_TTL_MS) return hit.value;
+    const pending = firmListInflight.get(userId);
+    if (pending) return pending;
+  }
+  const work = readUserFirmsNow(userId).then((result) => {
+    firmListInflight.delete(userId);
+    if (!result.error) firmListCache.set(userId, { at: Date.now(), value: result });
+    return result;
+  });
+  firmListInflight.set(userId, work);
+  return work;
+}
+
+async function readUserFirmsNow(userId: string): Promise<{
   firms: FirmBrandRow[];
   error: string | null;
 }> {
   const byId = new Map<string, FirmBrandRow>();
 
-  const owned = await supabase
-    .from("firms")
-    .select(FIRM_SELECT)
-    .eq("owner_user_id", userId)
-    .order("created_at", { ascending: true });
+  const [owned, mems] = await Promise.all([
+    supabase
+      .from("firms")
+      .select(FIRM_SELECT)
+      .eq("owner_user_id", userId)
+      .order("created_at", { ascending: true }),
+    supabase.from("firm_memberships").select("firm_id").eq("user_id", userId),
+  ]);
   if (owned.error) return { firms: [], error: owned.error.message };
   for (const row of owned.data ?? []) {
     byId.set(row.id, row as FirmBrandRow);
   }
 
-  const mems = await supabase.from("firm_memberships").select("firm_id").eq("user_id", userId);
   if (mems.error) return { firms: Array.from(byId.values()), error: mems.error.message };
   const memberIds = (mems.data ?? [])
     .map((m) => m.firm_id)

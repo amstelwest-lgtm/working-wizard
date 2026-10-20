@@ -35,6 +35,7 @@ export type FeatureDestination =
         section?: string;
         focus?: "health" | "pillars";
         onboard?: "1";
+        invite?: "owner";
       };
     }
   | { kind: "owner"; tab: OwnerTab }
@@ -76,6 +77,7 @@ type StudioTarget = {
   section?: string;
   focus?: "health" | "pillars";
   onboard?: "1";
+  invite?: "owner";
 };
 
 type FeatureDef = {
@@ -321,6 +323,17 @@ const FEATURES: readonly FeatureDef[] = [
     studio: DATA,
   },
   {
+    id: "invite-owner",
+    label: "Invite owner",
+    hint: "Owner email",
+    order: 115,
+    scope: "client",
+    synonyms: ["invite owner", "invite the owner", "owner invite", "waiting on the owner"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "settings", invite: "owner" },
+  },
+  {
     id: "upload",
     label: "Upload",
     hint: "Statements",
@@ -511,6 +524,7 @@ export function featureHref(dest: FeatureDestination): string {
   if (dest.search.section) params.set("section", dest.search.section);
   if (dest.search.focus) params.set("focus", dest.search.focus);
   if (dest.search.onboard) params.set("onboard", dest.search.onboard);
+  if (dest.search.invite) params.set("invite", dest.search.invite);
   return `/clients/${encodeURIComponent(dest.clientId)}?${params.toString()}`;
 }
 

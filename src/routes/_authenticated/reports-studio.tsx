@@ -65,12 +65,7 @@ import {
   reportScalarInputs,
 } from "@/lib/equity-coherence";
 import { reportNumber } from "@/lib/report-catalog";
-import {
-  cashPillarFollowsForecast,
-  scorecardHealthFromFinancials,
-  scoreRatio,
-  type OverallHealth,
-} from "@/lib/health-score";
+import { liveHealthFromBooks, scoreRatio, type OverallHealth } from "@/lib/health-score";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import {
   budgetSignoffIsStale,
@@ -2379,23 +2374,16 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     dipsBelowFloorWeek: assessed.outlook.dipsBelowFloorWeek,
     openingMissing: reportOpeningMissing,
   });
-  const overallHealth = cashPillarFollowsForecast(
-    scorecardHealthFromFinancials({
-      financials: rawFin as Record<string, unknown>,
-      fyStartMonth,
-      periodMonths,
-      cashRunwayWeeks: healthWeeks,
-      market,
-      shortfallWeek: assessed.outlook.shortfallWeek,
-      industry: reportIndustry,
-    }),
-    {
-      openingMissing: reportOpeningMissing,
-      opening: assessed.outlook.opening,
-      closings: assessed.outlook.closing,
-      floor: assessed.outlook.floor,
-    },
-  );
+  const overallHealth = liveHealthFromBooks({
+    financials: rawFin as Record<string, unknown>,
+    cashflow: clientRow.cashflow,
+    financialsUpdatedAt: clientRow.financials_updated_at,
+    priorFinancials: priorSnap?.financials ?? null,
+    fyStartMonth,
+    market,
+    industry: reportIndustry,
+    timeZone: market.timezone,
+  });
 
   return {
     hasData: true,
