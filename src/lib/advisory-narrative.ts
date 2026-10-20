@@ -4,7 +4,7 @@
  * already say 25 days, 37 days, and 8.6%.
  * Qualitative claims follow the same score bands as the Scorecard.
  */
-import { overviewRatios, scoreRatio } from "./health-score.ts";
+import { numberRatioRecord, overviewRatios, scoreRatio } from "./health-score.ts";
 import { formatQuotedDays, healthBandLabel, periodMonthsOf, scoreTier } from "./ratios.ts";
 
 const DAYS_RATIOS = new Set([
@@ -225,10 +225,13 @@ export function ratiosForBrainProse(
   fyStartMonth?: number | null,
 ): Record<string, number> | null {
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return null;
-  return overviewRatios(financials, {
-    fyStartMonth,
-    periodMonths: periodMonthsOf(financials),
-  });
+  // Blank days stay non-finite here so stored prose is not rewritten to 0 days.
+  return numberRatioRecord(
+    overviewRatios(financials, {
+      fyStartMonth,
+      periodMonths: periodMonthsOf(financials),
+    }),
+  );
 }
 
 const BRAIN_PROSE_KEYS = ["headline", "body", "summary"] as const;

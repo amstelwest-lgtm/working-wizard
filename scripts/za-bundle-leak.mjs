@@ -9,8 +9,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const root = resolve("dist/client");
-// "Tax Specialist" is a public /talk agent. IRP6 and ITR14 stay out of
-// the US client bundle; they live in the server prompt only.
+// Tax Specialist is ZA-only on /talk. IRP6, ITR14, SARS, and eFiling stay
+// out of the non-ZA talk path. The server prompt may still name them.
 const needles = [
   "R799",
   "R299",
@@ -203,4 +203,50 @@ if (taxReachable.length || htmlTax.length || entryStatic.length) {
   process.exit(1);
 }
 console.log(`za-bundle-leak: tax specialist chunk isolated (${taxChunks.length} file(s))`);
+
+/**
+ * Non-ZA /talk ships in the route chunks that render data-talk-view.
+ * Those chunks must not carry rand amounts or SARS terms. The ZA card
+ * is a separate dynamic import and does not render that marker.
+ */
+const talkNeedles = [
+  "SARS",
+  "IRP6",
+  "ITR14",
+  "eFiling",
+  "e-filing",
+  "efiling",
+  "rand ",
+  "ZAR",
+  "R799",
+  "R299",
+];
+const talkHits = [];
+let talkChunks = 0;
+for (const path of js) {
+  const base = path.split("/").pop() ?? "";
+  const named =
+    base.startsWith("talk.") || base.startsWith("prospect-talk-") || base.startsWith("talk-");
+  const text = readFileSync(path, "utf8");
+  if (!named && !text.includes("data-talk-view")) continue;
+  talkChunks += 1;
+  const lower = text.toLowerCase();
+  for (const needle of talkNeedles) {
+    const at =
+      needle === needle.toLowerCase() ? lower.indexOf(needle.toLowerCase()) : text.indexOf(needle);
+    if (at === -1) continue;
+    const excerpt = text.slice(Math.max(0, at - 40), at + needle.length + 40).replace(/\s+/g, " ");
+    talkHits.push(`${path}: ${JSON.stringify(needle)} ${excerpt}`);
+  }
+}
+if (talkChunks === 0) {
+  console.error("za-bundle-leak: expected a non-ZA /talk chunk");
+  process.exit(1);
+}
+if (talkHits.length) {
+  console.log(talkHits.join("\n"));
+  console.error(`za-bundle-leak: ${talkHits.length} SARS or rand hit(s) on the non-ZA /talk path`);
+  process.exit(1);
+}
+console.log(`za-bundle-leak: non-ZA /talk path has no SARS terms (${talkChunks} chunk(s))`);
 console.log("za-bundle-leak: no SA pricing strings in US-reachable assets");

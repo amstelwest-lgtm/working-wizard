@@ -26,9 +26,10 @@ export const PROSPECT_GLOBAL_TURNS_PER_DAY = 400;
 export const PROSPECT_LEADS_PER_EMAIL = 2;
 export const PROSPECT_DEFAULT_MODEL = "claude-haiku-4-5";
 
+export const PROSPECT_FM_SLUG = "financial-manager" as const;
 export const PROSPECT_TAX_SLUG = "tax-specialist";
 export const PROSPECT_PUBLIC_SLUGS = [
-  "financial-manager",
+  PROSPECT_FM_SLUG,
   "analyst",
   "advisor",
   PROSPECT_TAX_SLUG,
@@ -48,7 +49,7 @@ export type ProspectAgentCopy = {
 
 export const PROSPECT_PUBLIC_AGENTS: readonly ProspectAgentCopy[] = [
   {
-    slug: "financial-manager",
+    slug: PROSPECT_FM_SLUG,
     face: "financial_manager",
     role: "Financial Manager",
     greeting: `I'm the ${AGENT_DISPLAY_NAME.financial_manager}. I can walk a labelled SAMPLE of a business — health, cash, and an advisory pack — and an accountant still signs off. Nothing on this page connects to accounting software.`,
@@ -79,7 +80,7 @@ export const PROSPECT_PUBLIC_AGENTS: readonly ProspectAgentCopy[] = [
     face: "tax_specialist",
     role: "Tax Specialist",
     greeting:
-      "I'm the Milōn Tax Specialist. I prepare a labelled SAMPLE company tax worksheet for an accountant to review and sign off. I do not log into SARS, and I do not file or submit anything.",
+      "I'm the Milōn Tax Specialist. I prepare a labelled SAMPLE company tax worksheet for an accountant to review and sign off. I do not file or submit anything.",
     questions: ["Is this a standard resident company?", "When does the year of assessment end?"],
   },
 ];
@@ -90,13 +91,27 @@ export function publicProspectAgent(slug: string): ProspectAgentCopy | null {
   return PUBLIC_BY_SLUG.get(slug.trim().toLowerCase() as ProspectPublicSlug) ?? null;
 }
 
+export type TalkCopyPack = "za" | "us" | null | undefined;
+
+/** Null, missing, and every country other than ZA stay on the US pack. */
+export function prospectAgentsFor(copyPack: TalkCopyPack): readonly ProspectAgentCopy[] {
+  if (copyPack === "za") return PROSPECT_PUBLIC_AGENTS;
+  return PROSPECT_PUBLIC_AGENTS.filter((agent) => agent.slug !== PROSPECT_TAX_SLUG);
+}
+
 export type TalkResolution =
   | { kind: "agent"; agent: ProspectAgentCopy }
+  | { kind: "tax-elsewhere" }
   | { kind: "picker"; reason: "unknown" | "unavailable" };
 
-/** Unknown slugs fall back to the picker. Tax Specialist is one of the four. */
-export function resolveTalkSlug(slug: string, _copyPack: "za" | "us"): TalkResolution {
-  const agent = publicProspectAgent(slug);
+/**
+ * Tax Specialist is listed only for a ZA visitor. Anyone else who opens
+ * her link gets a note, not the conversation. Unknown slugs use the picker.
+ */
+export function resolveTalkSlug(slug: string, copyPack: TalkCopyPack): TalkResolution {
+  const normalized = slug.trim().toLowerCase();
+  if (normalized === PROSPECT_TAX_SLUG && copyPack !== "za") return { kind: "tax-elsewhere" };
+  const agent = publicProspectAgent(normalized);
   if (agent) return { kind: "agent", agent };
   return { kind: "picker", reason: "unknown" };
 }

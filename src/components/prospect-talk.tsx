@@ -8,20 +8,32 @@ import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
 import { TrySchedule, type TryCallResult } from "@/components/try-schedule";
 import { postProspectTalk, type ProspectTalkResponse } from "@/lib/prospect-talk-client";
 import {
-  PROSPECT_PUBLIC_AGENTS,
+  PROSPECT_FM_SLUG,
+  prospectAgentsFor,
   resolveTalkSlug,
   sanitizeRef,
   type ProspectAgentCopy,
+  type TalkCopyPack,
 } from "@/lib/prospect-talk";
 import { initialTalkSession, openTalkSession, queueTalkMessage } from "@/lib/prospect-talk-session";
 
 export type TalkMessage = { role: "agent" | "you"; text: string };
 
-function AgentList({ refCode }: { refCode: string | null }) {
+function packOf(copyPack: TalkCopyPack): "za" | "us" {
+  return copyPack === "za" ? "za" : "us";
+}
+
+function AgentList({
+  refCode,
+  agents,
+}: {
+  refCode: string | null;
+  agents: readonly ProspectAgentCopy[];
+}) {
   const query = refCode ? `?ref=${encodeURIComponent(refCode)}` : "";
   return (
     <ul className="talk-picks">
-      {PROSPECT_PUBLIC_AGENTS.map((agent) => (
+      {agents.map((agent) => (
         <li className="talk-pick" key={agent.slug}>
           <a href={`/talk/${agent.slug}${query}`}>{agent.role}</a>
         </li>
@@ -30,9 +42,17 @@ function AgentList({ refCode }: { refCode: string | null }) {
   );
 }
 
-export function TalkIndex({ refCode }: { refCode: string | null }) {
+export function TalkIndex({
+  refCode,
+  copyPack,
+}: {
+  refCode: string | null;
+  copyPack?: TalkCopyPack;
+}) {
+  const agents = prospectAgentsFor(copyPack);
+  const count = agents.length === 4 ? "Four" : "Three";
   return (
-    <main className="talk-page" data-talk-view="index">
+    <main className="talk-page" data-talk-view="index" data-talk-pack={packOf(copyPack)}>
       <div className="talk-top">
         <a className="talk-wordmark" href="/">
           MILŌN
@@ -41,18 +61,39 @@ export function TalkIndex({ refCode }: { refCode: string | null }) {
       </div>
       <h1 className="talk-title">Talk to an agent</h1>
       <p className="talk-note">
-        Four agents. Each one walks a labelled SAMPLE. No account and no password.
+        {count} agents. Each one walks a labelled SAMPLE. No account and no password.
       </p>
-      <AgentList refCode={refCode} />
+      <AgentList refCode={refCode} agents={agents} />
+    </main>
+  );
+}
+
+export function TaxSpecialistElsewhere({ refCode }: { refCode: string | null }) {
+  const query = refCode ? `?ref=${encodeURIComponent(refCode)}` : "";
+  return (
+    <main className="talk-page" data-talk-view="tax-elsewhere">
+      <div className="talk-top">
+        <a className="talk-wordmark" href="/">
+          MILŌN
+        </a>
+        <span className="talk-stamp">SAMPLE</span>
+      </div>
+      <h1 className="talk-title">Tax Specialist</h1>
+      <p className="talk-note">The Tax Specialist covers South African tax.</p>
+      <a className="talk-next" href={`/talk/${PROSPECT_FM_SLUG}${query}`}>
+        Talk to the Financial Manager
+      </a>
     </main>
   );
 }
 
 export function AgentPicker({
   refCode,
+  copyPack,
   reason,
 }: {
   refCode: string | null;
+  copyPack?: TalkCopyPack;
   reason: "unknown" | "unavailable";
 }) {
   return (
@@ -69,7 +110,7 @@ export function AgentPicker({
           ? "That link doesn't match an agent. Choose who you want to talk to."
           : "This conversation isn't available here. Choose another agent."}
       </p>
-      <AgentList refCode={refCode} />
+      <AgentList refCode={refCode} agents={prospectAgentsFor(copyPack)} />
     </main>
   );
 }
@@ -286,12 +327,14 @@ function pageUtm(): Record<string, string> {
 export function ProspectTalkLive({
   slug,
   copyPack,
+  taxAgent = null,
   onBookCall,
   readStoredToken,
   sendTurn = postProspectTalk,
 }: {
   slug: string;
   copyPack: "za" | "us";
+  taxAgent?: ProspectAgentCopy | null;
   onBookCall?: (input: {
     name: string;
     email: string;
@@ -389,6 +432,7 @@ export function ProspectTalkLive({
     <TalkPageView
       slug={slug}
       copyPack={copyPack}
+      taxAgent={taxAgent}
       refCode={refCode}
       messages={messages}
       askLead={askLead}
@@ -446,6 +490,7 @@ export function ProspectTalkLive({
 export function TalkPageView({
   slug,
   copyPack,
+  taxAgent = null,
   refCode = null,
   messages,
   askLead = false,
@@ -458,7 +503,8 @@ export function TalkPageView({
   onBookCall,
 }: {
   slug: string;
-  copyPack: "za" | "us";
+  copyPack: TalkCopyPack;
+  taxAgent?: ProspectAgentCopy | null;
   refCode?: string | null;
   messages?: TalkMessage[];
   askLead?: boolean;
@@ -478,12 +524,16 @@ export function TalkPageView({
   }) => Promise<TryCallResult>;
 }) {
   const view = resolveTalkSlug(slug, copyPack);
-  if (view.kind === "picker") {
-    return <AgentPicker refCode={refCode} reason={view.reason} />;
+  if (view.kind === "tax-elsewhere") {
+    return <TaxSpecialistElsewhere refCode={refCode} />;
   }
+  if (view.kind === "picker") {
+    return <AgentPicker refCode={refCode} copyPack={copyPack} reason={view.reason} />;
+  }
+  const agent = view.agent.slug === "tax-specialist" && taxAgent ? taxAgent : view.agent;
   return (
     <ProspectTalkScreen
-      agent={view.agent}
+      agent={agent}
       messages={messages ?? []}
       askLead={askLead}
       busy={busy}
