@@ -33,6 +33,52 @@ export function isInvitedOwnerWithFigures(opts: {
  * Invited owners with preloaded figures skip the funnel; ProfileCompletionNote
  * still nudges the six deferred questions later.
  */
+/**
+ * The first-run profile can always close. Escape, the close control, and
+ * Later dismiss it. It stays unfinished so Home can open it again.
+ */
+export function profileFunnelCloseAllowed(_step: FirstRunStep): boolean {
+  return true;
+}
+
+/** A closed unfinished profile is a Home resume, not a blocked header. */
+export function ownerProfileResumeVisible(opts: { unfinished: boolean; open: boolean }): boolean {
+  return opts.unfinished && !opts.open;
+}
+
+export const OWNER_PROFILE_LATER_PREFIX = "milon_owner_profile_later_v1:";
+
+export function ownerProfileLaterKey(clientId: string): string {
+  return `${OWNER_PROFILE_LATER_PREFIX}${clientId}`;
+}
+
+export function ownerProfileDeferred(clientId: string | null | undefined): boolean {
+  if (!clientId || typeof sessionStorage === "undefined") return false;
+  try {
+    return sessionStorage.getItem(ownerProfileLaterKey(clientId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function deferOwnerProfile(clientId: string): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(ownerProfileLaterKey(clientId), "1");
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function clearOwnerProfileDefer(clientId: string): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.removeItem(ownerProfileLaterKey(clientId));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function shouldShowOwnerProfileFunnel(opts: {
   hasOperatingProfile: boolean;
   actingClientId: string | null;

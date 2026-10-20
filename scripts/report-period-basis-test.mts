@@ -5,11 +5,23 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { BudgetVerdictStrip } from "../src/components/budget/budget-verdict";
 import {
   budgetActualFromFinancials,
   buildBudgetPdfModel,
   illustrativeBudgetPack,
 } from "../src/lib/budget-pdf";
+import {
+  budgetComparisonNote,
+  budgetVersusStatement,
+  SEEDED_VARIANCE_NOTE,
+  seedBudgetFromFinancials,
+  STATEMENT_PERIOD_OUTSIDE_NOTE,
+  STATEMENT_PERIOD_UNKNOWN_NOTE,
+  statementCoverMonthCount,
+} from "../src/lib/budget.bridges";
 import { computeBudgetMonths } from "../src/lib/budget.compute";
 import { fyMonths } from "../src/lib/budget.months";
 import { periodMonthsOf } from "../src/lib/ratios";
@@ -263,5 +275,138 @@ assert(
 const budgetPdf = readFileSync(resolve("src/reports/budget-variance.tsx"), "utf8");
 assert(budgetPdf.includes("Budget ${fmtRand(row.budget, market)}"), "exec tiles lead with the total");
 assert(!budgetPdf.includes("value: signedMoney(row.delta, market)"), "exec tiles do not lead with the variance");
+assert(budgetPdf.includes("hideVariance"), "the PDF can leave variance columns off");
+const ownerRoute = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+assert(
+  ownerRoute.includes("statementCoverMonthCount"),
+  "the owner budget page does not treat a missing prior period as 12 months",
+);
+assert(
+  ownerRoute.includes("periodStart: v.periodStart"),
+  "the owner budget page passes the statement dates into the comparison",
+);
+
+const partialFin = {
+  revenue: "700000",
+  cogs: "280000",
+  ebit: "60000",
+  fixedCosts: "351000",
+  periodStart: "2026-01-01",
+  periodEnd: "2026-09-30",
+};
+const partialActual = budgetActualFromFinancials(partialFin, ZA_MARKET);
+assert(partialActual?.statementMonthKeys?.length === 9, "a dated YTD with no stored cover is 9 months");
+assert(partialActual?.statementCoverMonths === 9, "the cover follows the dates when periodMonths is absent");
+assert(partialActual?.periodUnknown !== true, "dated months are a known period");
+const partialModel = buildBudgetPdfModel(doc, partialActual ? [partialActual] : [], ZA_MARKET);
+const partialRevenue = partialModel.summary.find((row) => row.label === "Revenue");
+const nineMonths = (fullYear * 9) / 12;
+assert(
+  Math.abs((partialRevenue?.budget ?? 0) - nineMonths) < 2,
+  `YTD budget is 9 months (${partialRevenue?.budget}), not the full year and not one month`,
+);
+assert(Math.abs((partialRevenue?.actual ?? 0) - 700000) < 1, `YTD actual stays 700000, got ${partialRevenue?.actual}`);
+assert(Math.abs((partialRevenue?.budget ?? 0) - 58333) > 1000, "the old one-month budget must not return");
+assert(partialModel.suppressVariance === false, "a real YTD gap is still a variance");
+assert(partialRevenue?.delta != null, "the partial-period variance is calculated");
+const versusPartial = budgetVersusStatement(doc, partialFin, ZA_MARKET);
+assert(versusPartial?.periodKnown === true && versusPartial.periodMonths === 9, "on-screen cover is the same 9 months");
+assert(
+  Math.abs((versusPartial?.budgetRevenue ?? 0) - nineMonths) < 2,
+  `on-screen YTD budget ${versusPartial?.budgetRevenue}`,
+);
+assert(Math.abs((versusPartial?.revenue ?? 0) - 700000) < 1, "on-screen actual stays the statement total");
+assert(budgetComparisonNote(versusPartial) == null, "a real gap does not get the seeded note");
+assert(statementCoverMonthCount(partialFin) === 9, "owner prior-year cover follows the dated YTD");
+assert(statementCoverMonthCount(qaUs) === 12, "a stored 12-month cover stays 12 for the owner year strip");
+
+const unknownFin = {
+  revenue: "700000",
+  cogs: "280000",
+  ebit: "60000",
+  fixedCosts: "351000",
+};
+const unknownActual = budgetActualFromFinancials(unknownFin, ZA_MARKET);
+assert(unknownActual?.periodUnknown === true, "no dates and no periodMonths is unknown");
+assert(unknownActual?.statementCoverMonths == null, "an unknown period is not stored as 12");
+const unknownModel = buildBudgetPdfModel(doc, unknownActual ? [unknownActual] : [], ZA_MARKET);
+assert(unknownModel.headline === STATEMENT_PERIOD_UNKNOWN_NOTE, unknownModel.headline);
+assert(unknownModel.comparedLabel === "Statement period unknown", unknownModel.comparedLabel);
+assert(unknownModel.suppressVariance === true, "an unknown period is not scored");
+assert(unknownModel.fullYearNote.includes("not on file"), unknownModel.fullYearNote);
+const unknownRevenue = unknownModel.summary.find((row) => row.label === "Revenue");
+assert(unknownRevenue?.actual == null, "unknown-period actuals are not paired with a year of budget");
+const versusUnknown = budgetVersusStatement(doc, unknownFin, ZA_MARKET);
+assert(versusUnknown?.periodKnown === false, "on-screen period is unknown");
+assert(versusUnknown?.budgetRevenue == null, "on-screen does not invent a 12-month budget");
+assert(budgetComparisonNote(versusUnknown) === STATEMENT_PERIOD_UNKNOWN_NOTE, budgetComparisonNote(versusUnknown) ?? "");
+assert(statementCoverMonthCount(unknownFin) == null, "an unknown prior year is not counted as 12");
+assert(periodMonthsOf(unknownFin) === 12, "ratios still default a missing cover to 12");
+
+const outsideFin = {
+  revenue: "700000",
+  cogs: "280000",
+  ebit: "60000",
+  fixedCosts: "351000",
+  periodStart: "2024-01-01",
+  periodEnd: "2024-12-31",
+};
+const outsideActual = budgetActualFromFinancials(outsideFin, ZA_MARKET);
+const outsideModel = buildBudgetPdfModel(doc, outsideActual ? [outsideActual] : [], ZA_MARKET);
+assert(outsideModel.headline === STATEMENT_PERIOD_OUTSIDE_NOTE, outsideModel.headline);
+assert(
+  outsideModel.summary.find((row) => row.label === "Revenue")?.actual == null,
+  "a statement from another year is not scored on this plan",
+);
+const versusOutside = budgetVersusStatement(doc, outsideFin, ZA_MARKET);
+assert(versusOutside?.outsidePlan === true, "on-screen names a statement outside the budget year");
+assert(versusOutside?.budgetRevenue == null, "an outside statement does not borrow this year's budget");
+assert(
+  budgetComparisonNote(versusOutside) === STATEMENT_PERIOD_OUTSIDE_NOTE,
+  budgetComparisonNote(versusOutside) ?? "",
+);
+
+const seedFin = {
+  revenue: "700000",
+  cogs: "280000",
+  fixedCosts: "351000",
+  ebit: "60000",
+  ebitda: "69000",
+  periodMonths: "12",
+};
+const seededDoc = seedBudgetFromFinancials(illustrativeBudgetPack("2026-01").doc, seedFin).doc;
+const seededActual = budgetActualFromFinancials(seedFin, ZA_MARKET);
+const seededModel = buildBudgetPdfModel(seededDoc, seededActual ? [seededActual] : [], ZA_MARKET);
+const seededRevenue = seededModel.summary.find((row) => row.label === "Revenue");
+assert(seededModel.suppressVariance === true, "a seed is not shown as a variance result");
+assert(seededModel.headline === SEEDED_VARIANCE_NOTE, seededModel.headline);
+assert(Math.abs((seededRevenue?.budget ?? 0) - 700000) < 50, `seeded budget ${seededRevenue?.budget}`);
+assert(Math.abs((seededRevenue?.actual ?? 0) - 700000) < 1, `seeded actual ${seededRevenue?.actual}`);
+assert(seededRevenue?.delta == null && seededRevenue?.deltaPct == null, "seeded variance columns are cleared");
+assert(
+  seededModel.sections.every((section) => section.rows.every((row) => row.delta == null && row.deltaPct == null)),
+  "every seeded line drops the variance",
+);
+const versusSeed = budgetVersusStatement(seededDoc, seedFin, ZA_MARKET);
+assert(versusSeed?.seededFromActuals === true, "on-screen names the seed");
+assert(budgetComparisonNote(versusSeed) === SEEDED_VARIANCE_NOTE, "on-screen uses the seeded sentence");
+assert(Math.abs((versusSeed?.revenue ?? 0) - (versusSeed?.budgetRevenue ?? -1)) < 50, "the seed matches on screen");
+for (const presentation of ["owner", "strip"] as const) {
+  const html = renderToStaticMarkup(
+    createElement(BudgetVerdictStrip, {
+      periodLabel: versusSeed?.label ?? "Statement",
+      revenueBudget: versusSeed?.budgetRevenue ?? 0,
+      revenueActual: versusSeed?.revenue ?? 0,
+      profitBudget: versusSeed?.budgetEbit ?? 0,
+      profitActual: versusSeed?.ebit ?? 0,
+      chip: "Estimated from statement pace",
+      market: ZA_MARKET,
+      presentation,
+      comparisonNote: budgetComparisonNote(versusSeed),
+    }),
+  );
+  assert(html.includes(SEEDED_VARIANCE_NOTE), `${presentation} shows the seeded note`);
+  assert(!html.includes("0.0%"), `${presentation} does not print 0.0%`);
+}
 
 console.log("report-period-basis-test ok");

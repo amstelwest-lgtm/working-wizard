@@ -5,6 +5,9 @@
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { assertInviteTokenUsable } from "@/lib/invite-claim";
+
+export { clientCodesMatch, normalizeClientCode } from "@/lib/invite-claim";
 
 type InviteTokenRow = {
   id: string;
@@ -14,6 +17,8 @@ type InviteTokenRow = {
   redeemed_by?: string | null;
   purpose?: string | null;
   invited_email?: string | null;
+  invited_name?: string | null;
+  revoked_at?: string | null;
 };
 
 const inviteTokens = () => supabaseAdmin.from("invite_tokens");
@@ -49,15 +54,6 @@ async function resolveLegacyUuid(trimmed: string): Promise<{
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function normalizeClientCode(raw: string): string {
-  return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-export function clientCodesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
-  if (!a || !b) return false;
-  return normalizeClientCode(a) === normalizeClientCode(b);
-}
-
 /** Resolve an invite token (or legacy client UUID) to a client id. */
 export async function resolveInviteToClientId(
   invite: string,
@@ -71,14 +67,26 @@ export async function resolveInviteToClientId(
   alreadyRedeemedByCaller?: boolean;
   purpose?: string | null;
   invitedEmail?: string | null;
+  invitedName?: string | null;
 }> {
   const trimmed = invite.trim();
   if (!trimmed) throw new Error("Invite link is invalid.");
 
   let { data, error } = await inviteTokens()
-    .select("id, client_id, expires_at, redeemed_at, redeemed_by, purpose, invited_email")
+    .select(
+      "id, client_id, expires_at, redeemed_at, redeemed_by, purpose, invited_email, invited_name, revoked_at",
+    )
     .eq("token", trimmed)
     .maybeSingle();
+  const missingColumn = (error?.message ?? "").match(/invited_name|revoked_at|invited_email/);
+  if (error && missingColumn) {
+    const retry = await inviteTokens()
+      .select("id, client_id, expires_at, redeemed_at, redeemed_by, purpose, invited_email")
+      .eq("token", trimmed)
+      .maybeSingle();
+    data = retry.data as typeof data;
+    error = retry.error;
+  }
   if (error && (error.message ?? "").includes("invited_email")) {
     const retry = await inviteTokens()
       .select("id, client_id, expires_at, redeemed_at, redeemed_by, purpose")
@@ -101,26 +109,14 @@ export async function resolveInviteToClientId(
 
   if (data) {
     const row = data as InviteTokenRow;
-    if (row.redeemed_at) {
-      if (opts?.redeemedByUserId && row.redeemed_by === opts.redeemedByUserId) {
-        return {
-          clientId: row.client_id,
-          tokenId: row.id,
-          alreadyRedeemedByCaller: true,
-          purpose: row.purpose ?? null,
-          invitedEmail: row.invited_email ?? null,
-        };
-      }
-      throw new Error("This invite has already been used.");
-    }
-    if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
-      throw new Error("This invite has expired. Ask your accountant for a new link.");
-    }
+    const usable = assertInviteTokenUsable(row, { redeemedByUserId: opts?.redeemedByUserId });
     return {
       clientId: row.client_id,
       tokenId: row.id,
+      alreadyRedeemedByCaller: usable.alreadyRedeemedByCaller,
       purpose: row.purpose ?? null,
       invitedEmail: row.invited_email ?? null,
+      invitedName: row.invited_name ?? null,
     };
   }
 

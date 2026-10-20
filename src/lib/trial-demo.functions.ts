@@ -313,12 +313,12 @@ export const readTrialPublicConfig = createServerFn({ method: "GET" }).handler(a
 
 export const startTrialSample = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => {
-    const raw =
-      input && typeof input === "object" ? (input as { market?: unknown }).market : null;
+    const raw = input && typeof input === "object" ? (input as { market?: unknown }).market : null;
     return { market: typeof raw === "string" ? raw.slice(0, 16) : null };
   })
   .handler(async ({ data }) => {
-    if (!storeReady()) return { ok: false as const, error: "The sample isn't available right now." };
+    if (!storeReady())
+      return { ok: false as const, error: "The sample isn't available right now." };
     const req = requestOf();
     const headers = req?.headers ?? new Headers();
     const geo =
@@ -350,7 +350,9 @@ export const startTrialSample = createServerFn({ method: "POST" })
       ip_hash: ipHash,
       country,
       created_at: now.toISOString(),
-      expires_at: new Date(now.getTime() + TRIAL_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+      expires_at: new Date(
+        now.getTime() + TRIAL_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+      ).toISOString(),
     };
     const saved = await insertSession(row);
     if (!saved) return { ok: false as const, error: "The sample isn't available right now." };
@@ -443,6 +445,76 @@ async function spendRun(sessionId: string, kind: string, tokens: number): Promis
   if (!saved) return null;
   return TRIAL_RUNS_PER_SESSION - (used + 1);
 }
+
+type LeadProof = { country: TrialMarketId };
+
+async function leadBySampleNonce(nonce: string): Promise<LeadProof | null> {
+  const db = admin();
+  if (!db) {
+    return null;
+  }
+  const { data, error } = await (
+    db.from("trial_leads").select("country, sample_nonce") as TrialFilter
+  )
+    .eq("sample_nonce", nonce)
+    .maybeSingle();
+  if (error || !data) return null;
+  const country = (data as { country?: string }).country;
+  if (country !== "US" && country !== "ZA") return null;
+  return { country };
+}
+
+/**
+ * Board for /talk after the edge function has saved the lead.
+ * The nonce is the proof. A bare trial session cannot open the board this way,
+ * and this does not insert another lead or send another alert.
+ */
+export const revealTrialBoard = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => {
+    const raw =
+      input && typeof input === "object" ? (input as { sampleNonce?: unknown }).sampleNonce : null;
+    return { sampleNonce: typeof raw === "string" ? raw.trim().slice(0, 120) : "" };
+  })
+  .handler(async ({ data }) => {
+    if (!/^[A-Za-z0-9_-]{20,120}$/.test(data.sampleNonce)) {
+      return { ok: false as const, error: "Start again from the conversation." };
+    }
+    if (!storeReady())
+      return { ok: false as const, error: "The sample isn't available right now." };
+    const proof = await leadBySampleNonce(data.sampleNonce);
+    if (!proof) return { ok: false as const, error: "Start again from the conversation." };
+    let session = await requireSession();
+    if (!session || session.country !== proof.country) {
+      const req = requestOf();
+      const headers = req?.headers ?? new Headers();
+      const ipHash = hashIp(clientIpFromHeaders(headers));
+      const since = startOfUtcDay(new Date()).toISOString();
+      const existing = await countSessions(ipHash, since);
+      if (!ipSessionAllowed(existing)) {
+        return {
+          ok: false as const,
+          error: "This network has already started three samples today. Try again tomorrow.",
+        };
+      }
+      const now = new Date();
+      const token = newToken();
+      const row: SessionRow = {
+        id: crypto.randomUUID(),
+        token_hash: hashToken(token),
+        ip_hash: ipHash,
+        country: proof.country,
+        created_at: now.toISOString(),
+        expires_at: new Date(
+          now.getTime() + TRIAL_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      };
+      const saved = await insertSession(row);
+      if (!saved) return { ok: false as const, error: "The sample isn't available right now." };
+      writeSessionCookie(token);
+      session = row;
+    }
+    return { ok: true as const, board: buildTrialBoard(proof.country), country: proof.country };
+  });
 
 export const runTrialAnalyst = createServerFn({ method: "POST" }).handler(async () => {
   if (!storeReady()) return { ok: false as const, error: "The sample isn't available right now." };

@@ -68,7 +68,7 @@ assert(budgetYtdSignal({ budget: 1000, actual: 1000 }) === "inline", "a matched 
 const slip = varianceLine("revenue", "Revenue", 400_000, 399_980, true);
 assert(slip.delta === -20, "a twenty dollar slip keeps its dollars");
 assert(slip.signal === "inline", "a slip that prints as 0.0% stays neutral");
-assert(formatVariancePct(slip.deltaPct) === "0.0%", "a near-zero percent has no minus");
+assert(formatVariancePct(slip.deltaPct) === "—", "a near-zero percent prints a dash");
 assert(
   varianceLine("revenue", "Revenue", 1000, 800, true).signal === "adverse",
   "a real miss stays adverse",

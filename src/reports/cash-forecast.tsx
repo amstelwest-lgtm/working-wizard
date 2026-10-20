@@ -22,10 +22,11 @@ import { cashForecastNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { profileCashAssumptions } from "@/lib/profile-signals";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
-import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatReportAmount, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 import { forecastIsCashGenerative } from "@/lib/client-metrics";
 import {
+  cashForecastWeekRowLabel,
   forecastFloorPosition,
   forecastLowestPoint,
   forecastRunwayHeadlineShared,
@@ -189,7 +190,9 @@ function RunwayChart({
                 ]}
               />
               <Text style={[ch.weekLabel, { left: i * slot, width: slot }]}>
-                {w.period_label.replace(/^Week /i, "W")} // date-ok: week axis label, not a calendar span
+                {
+                  w.period_label.replace(/^Week /i, "W") // date-ok: week axis label, not a calendar span
+                }
               </Text>
             </Fragment>
           );
@@ -295,7 +298,9 @@ function WeekTable({
             ]}
           >
             <Text style={[tbl.cell, { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink }]}>
-              {w.period_label} // date-ok: week row label, not a calendar span
+              {
+                cashForecastWeekRowLabel(w.period_label) // date-ok: week row label, not a calendar span
+              }
             </Text>
             <Text style={[tbl.cell, { flex: 1.4, textAlign: "right" }]}>
               {fmtRand(w.opening_balance, market)}
@@ -304,7 +309,7 @@ function WeekTable({
               {fmtRand(w.total_receipts, market)}
             </Text>
             <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.redDeep }]}>
-              ({fmtRand(Math.abs(w.total_payments), market)})
+              {formatReportAmount(w.total_payments, market, { sign: "parens" })}
             </Text>
             <Text
               style={[

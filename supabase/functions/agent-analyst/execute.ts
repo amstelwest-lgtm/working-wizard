@@ -31,6 +31,7 @@ import {
   type AnalystToolName,
 } from "../../../src/lib/agent-analyst.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
+import { earlierStatementNote } from "../../../src/lib/statement-import-plan.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { overviewRatios } from "../../../src/lib/health-score.ts";
 import { periodMonthsOf } from "../../../src/lib/ratios.ts";
@@ -144,6 +145,10 @@ export async function executeAnalystTool(
       ...labeled,
       snapshot_id: snap ? String(snap.id) : null,
       period_label: periodLabel,
+      balance_sheet_note: earlierStatementNote(
+        asRecord(booksRes.data?.financials),
+        marketForClient({ market: ctx.market }),
+      ),
     };
   }
 
@@ -169,6 +174,7 @@ export async function executeAnalystTool(
       stored_ratios: snap ? numericFigures(snap.ratios) : {},
       statement_totals: financials,
       figures: financials,
+      balance_sheet_note: earlierStatementNote(books, marketForClient({ market: ctx.market })),
     };
   }
 

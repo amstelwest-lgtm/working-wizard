@@ -53,6 +53,36 @@ export function signoffScopeLabel(scope: string | null | undefined): string | nu
   }
 }
 
+/**
+ * The sentence Health and the scorecard both print. Date only on a clean
+ * sign-off, or on a stale budget. Other stale scopes use the short pill.
+ */
+export function presentPageSignoff(input: {
+  scope?: string | null;
+  hasSignoff: boolean;
+  isStale: boolean;
+  readyForReview?: boolean;
+  name?: string | null;
+  /** Already formatted. "—" is not a date. */
+  date?: string | null;
+}): string {
+  const kind = signoffStatusKind({
+    hasSignoff: input.hasSignoff,
+    isStale: input.isStale,
+    readyForReview: Boolean(input.readyForReview),
+  });
+  const budgetStale = input.scope === "budget" && kind === "stale";
+  const dated = input.date?.trim() && input.date.trim() !== "—" ? input.date.trim() : null;
+  return signoffStatusLine({
+    kind,
+    name: input.name,
+    date: kind === "signed" || budgetStale ? dated : null,
+    variant: "short",
+    scopeLabel: signoffScopeLabel(input.scope),
+    staleClause: budgetStale ? "figures changed since sign-off" : null,
+  });
+}
+
 export function signoffStatusLine(input: {
   kind: SignoffStatusKind;
   name?: string | null;

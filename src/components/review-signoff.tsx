@@ -25,7 +25,7 @@ import {
   type ReviewScope,
 } from "@/lib/review-signoffs.functions";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
-import { signoffStatusLine } from "@/lib/signoff-status";
+import { presentPageSignoff } from "@/lib/signoff-status";
 import { formatReviewDateTime } from "@/lib/market/format";
 import { useMarketFormat } from "@/contexts/market";
 
@@ -83,10 +83,12 @@ function SignoffCertificate({
   const initials = (
     signoff.signed_off_by_initials || signoff.signed_off_by_name.slice(0, 2)
   ).toUpperCase();
-  const line = signoffStatusLine({
-    kind: isStale ? "stale" : "signed",
+  const line = presentPageSignoff({
+    scope,
+    hasSignoff: true,
+    isStale,
     name: signoff.signed_off_by_name,
-    date: when && when !== "—" ? when : null,
+    date: when,
   });
   const title = line;
 
@@ -570,8 +572,13 @@ export function ReviewSignoffButton({
       {!workflowLoaded ? null : (
         <>
           {!shownSignoff && !hideStatus ? (
-            <p className="text-[11px] font-semibold text-slate-500">
-              {cycleStatus === "ready_for_review" ? "Ready for review" : "Draft"}
+            <p className="text-[11px] font-semibold text-slate-500" data-signoff-status data-signoff-scope={scope}>
+              {presentPageSignoff({
+                scope,
+                hasSignoff: false,
+                isStale: false,
+                readyForReview: cycleStatus === "ready_for_review",
+              })}
               {workflow?.changeComment ? ` · ${workflow.changeComment}` : ""}
             </p>
           ) : null}

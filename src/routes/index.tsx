@@ -279,6 +279,8 @@ function LandingPage() {
   const [inviteClientId, setInviteClientId] = useState<string | null>(null);
   const [inviteIsLegacyUuid, setInviteIsLegacyUuid] = useState(false);
   const [inviteBusiness, setInviteBusiness] = useState<string | null>(null);
+  const [inviteFirmName, setInviteFirmName] = useState<string | null>(null);
+  const [inviteeName, setInviteeName] = useState<string | null>(null);
   const [inviteNeedsCode, setInviteNeedsCode] = useState(false);
   const [invitePreviewLoading, setInvitePreviewLoading] = useState(false);
   const [invitePreviewError, setInvitePreviewError] = useState<string | null>(null);
@@ -321,9 +323,11 @@ function LandingPage() {
     setInvitePreviewLoading(true);
     setInvitePreviewError(null);
     if (stored?.clientCode) setRegClientCode((prev) => prev || stored.clientCode || "");
-    // Show the code field immediately so a slow preview cannot let them submit
-    // without it. Hide only after preview confirms this client has no code.
-    setInviteNeedsCode(true);
+    // The form stays hidden until preview returns. A live token does not ask
+    // for a code; only the server preview can turn the legacy code path on.
+    setInviteNeedsCode(false);
+    setInviteFirmName(null);
+    setInviteeName(null);
     void import("@/lib/user-roles").then(({ forcePortal }) => forcePortal("owner"));
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (uuidRe.test(inv.trim())) {
@@ -332,7 +336,9 @@ function LandingPage() {
     void doPreviewInvite({ data: { token: inv } })
       .then((preview) => {
         setInviteBusiness(preview.clientName);
-        setInviteNeedsCode(Boolean(preview.clientCode));
+        setInviteFirmName(preview.firmName);
+        setInviteeName(preview.inviteeName);
+        setInviteNeedsCode(preview.requiresClientCode);
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : "This invite link is invalid.";
@@ -1658,6 +1664,8 @@ function LandingPage() {
             <OwnerInviteSignupPanel
               inviteToken={activeInviteToken!}
               businessName={inviteBusiness}
+              firmName={inviteFirmName}
+              inviteeName={inviteeName}
               inviteNeedsCode={inviteNeedsCode}
               inviteIsLegacyUuid={inviteIsLegacyUuid}
               regClientCode={regClientCode}
@@ -2686,6 +2694,7 @@ function LandingPage() {
                 ownerNote={saPricing?.ownerRegisterNote ?? OWNER_REGISTER_NOTE_US}
                 inviteClientId={inviteClientId}
                 inviteBusiness={inviteBusiness}
+                inviteFirmName={inviteFirmName}
                 inviteNeedsCode={inviteNeedsCode}
                 inviteIsLegacyUuid={inviteIsLegacyUuid}
                 user={user}

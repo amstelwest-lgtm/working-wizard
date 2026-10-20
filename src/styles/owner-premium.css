@@ -15,6 +15,15 @@
  * premium-shine specificity.
  */
 
+/* The first-run profile sits under the header so Sign out stays reachable. */
+.founder-app-bar {
+  position: relative;
+  z-index: 80;
+}
+.profile-funnel-overlay {
+  top: 4.25rem !important;
+}
+
 /* ===== tokens ===== */
 .owner-door {
   /* Brushed landing gold: dark, mid, a bright highlight, then dark again.

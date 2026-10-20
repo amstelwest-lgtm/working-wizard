@@ -70,7 +70,6 @@ import {
   reportsHomeReadyLine,
 } from "@/lib/reports-drafter-copy";
 import { pickCurrentSnapshot } from "@/lib/financial-snapshots";
-import { defaultPeriodCoverage } from "@/lib/statement-period";
 import {
   DERIVED_EQUITY_LABEL,
   EQUITY_DERIVED_KEY,
@@ -89,6 +88,7 @@ import {
   withFinancialsWriteRev,
   statementImportWhat,
 } from "@/lib/statement-import-apply";
+import { earlierStatementNote, liveCoverageForImport, planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -1483,6 +1483,41 @@ function ClientView() {
       liveHealth: overallHealth.overall,
       scoreHistory,
     });
+  const reportSignoffStale = useMemo(
+    () => ({
+      financials: healthSignoffIsStale({
+        signoff: financialsSignoff,
+        dataUpdatedAt: client?.financials_updated_at ?? null,
+        snapshots,
+        liveHealth: overallHealth.overall,
+        scoreHistory,
+      }),
+      profitability: healthSignoffIsStale({
+        signoff: profitabilitySignoff,
+        dataUpdatedAt: client?.financials_updated_at ?? null,
+        snapshots,
+        liveHealth: overallHealth.overall,
+        scoreHistory,
+      }),
+      cash_forecast: cashSignoffIsStale(
+        cashForecastSignoff,
+        client?.last_forecast_at ?? null,
+        cashSignedFiguresChanged(cashSignedSnapshot, client?.cashflow),
+      ),
+    }),
+    [
+      financialsSignoff,
+      profitabilitySignoff,
+      cashForecastSignoff,
+      client?.financials_updated_at,
+      client?.last_forecast_at,
+      client?.cashflow,
+      cashSignedSnapshot,
+      snapshots,
+      overallHealth.overall,
+      scoreHistory,
+    ],
+  );
 
   // ── Health orb & pillar computation (same source as header / score history) ──
   const healthMap = healthMapFromRatios(ratios as Record<string, number>, clientMarket);
@@ -1718,7 +1753,10 @@ function ClientView() {
     : null;
   const budgetMoney = (amount: number) => formatMoneyCompact(amount, gateMarket);
   let budgetFigure: string | null = null;
-  if (budgetCompared) {
+  const budgetComparable =
+    budgetCompared != null &&
+    (budgetCompared.periodKnown !== false || budgetSeededFromStatement(budgetCompared));
+  if (budgetComparable && budgetCompared) {
     budgetFigure = overviewBudgetTileFigure({
       budgetRevenue: budgetCompared.budgetRevenue,
       actualRevenue: budgetCompared.revenue,
@@ -2879,7 +2917,13 @@ function ClientView() {
     async (
       result: ExtractionResult,
       autoPopulate?: AutoPopulatePrefs,
-      period?: { periodEnd: string; periodLabel: string },
+      period?: {
+        periodEnd: string;
+        periodLabel: string;
+        periodStart?: string | null;
+        periodMonths?: number | null;
+      },
+      choice?: PeriodChoice | null,
     ) => {
       const extracted = extractionToRatioInputs(result);
       const keptEquity = preserveHandEnteredEquity(financialsRef.current, extracted);
@@ -2887,20 +2931,24 @@ function ClientView() {
         ...extracted,
         ...keptEquity,
       };
-      const coverage = defaultPeriodCoverage({
+      const covered = liveCoverageForImport({
+        existing: financialsRef.current,
+        periodStart: period?.periodStart,
         periodEnd: period?.periodEnd,
+        periodMonths: period?.periodMonths,
         fyStartMonth,
         preClose:
           drafted.periodProfitInEquity != null &&
           String(drafted.periodProfitInEquity).trim() !== "" &&
           String(drafted.periodProfitInEquity) !== "0",
       });
+      const fileSpan = covered.span;
       const inputs = {
         ...drafted,
-        periodMonths: String(coverage.months),
+        ...(covered.months != null ? { periodMonths: String(covered.months) } : {}),
         [PERIOD_MONTHS_CHOSEN_KEY]: "",
-        periodEnd: period?.periodEnd ?? "",
-        ...(coverage.periodStart ? { periodStart: coverage.periodStart } : {}),
+        ...(covered.periodEnd ? { periodEnd: covered.periodEnd } : {}),
+        ...(covered.periodStart ? { periodStart: covered.periodStart } : {}),
       };
       const periodDate = period?.periodEnd?.trim() ?? "";
       const periodLabel = period?.periodLabel?.trim() ?? "";
@@ -2909,6 +2957,74 @@ function ClientView() {
       }
 
       const statementKind = statementKindFromExtraction(result);
+      const healthBefore = liveHealthFromBooks({
+        financials: financialsRef.current as Record<string, unknown>,
+        cashflow: client?.cashflow,
+        fyStartMonth,
+        market: clientMarket,
+        industry: healthIndustry,
+        timeZone: clientMarket.timezone,
+      });
+      const planned = planStatementImport({
+        existing: financialsRef.current,
+        incoming: inputs,
+        kind: statementKind,
+        span: fileSpan,
+        choice: choice ?? null,
+        pillarsBefore: healthBefore.pillars,
+        market: clientMarket,
+      });
+      if (planned.action === "block") {
+        return { ok: false as const, message: planned.message };
+      }
+      if (planned.action === "choose") {
+        return {
+          ok: false as const,
+          message: planned.message,
+          choice: { replaceLabel: planned.replaceLabel, addLabel: planned.addLabel },
+        };
+      }
+      if (planned.action === "history" && planned.history) {
+        const { data: rows } = await supabase
+          .from("client_financial_snapshots")
+          .select("id, financials")
+          .eq("client_id", clientId)
+          .order("period_date", { ascending: false })
+          .limit(24);
+        const match = (rows ?? []).find((row) => {
+          const stored = statementSpan(
+            (row.financials as { periodStart?: string } | null)?.periodStart,
+            (row.financials as { periodEnd?: string } | null)?.periodEnd,
+          );
+          return Boolean(fileSpan && stored && stored.periodStart === fileSpan.periodStart && stored.periodEnd === fileSpan.periodEnd);
+        });
+        const ratiosOut = overviewRatios(planned.history, { fyStartMonth });
+        const periodDate = fileSpan?.periodEnd ?? period?.periodEnd ?? "";
+        const periodLabel = planned.periodLabel || period?.periodLabel || periodDate;
+        const write = match?.id
+          ? supabase
+              .from("client_financial_snapshots")
+              .update({
+                financials: planned.history as never,
+                ratios: ratiosOut as never,
+                period_label: periodLabel,
+                period_date: periodDate,
+              })
+              .eq("id", match.id)
+          : supabase.from("client_financial_snapshots").insert({
+              client_id: clientId,
+              period_label: periodLabel,
+              period_date: periodDate,
+              financials: planned.history as never,
+              ratios: ratiosOut as never,
+              source: "pdf_upload",
+            });
+        const { error } = await write;
+        if (error) {
+          return { ok: false as const, message: importFailureMessage(error.message) };
+        }
+        return { ok: true as const, message: planned.message };
+      }
       const { data: byDate } = await supabase
         .from("client_financial_snapshots")
         .select("id, financials")
@@ -2983,7 +3099,7 @@ function ClientView() {
       }
       financialsWriteGen.current += 1;
       const financialsUpdatedAt = new Date().toISOString();
-      const liveMerged = mergeStatementFinancials(financialsRef.current, inputs, statementKind);
+      const liveMerged = planned.live ?? mergeStatementFinancials(financialsRef.current, inputs, statementKind);
       const nextScalars = Object.fromEntries(
         Object.entries(liveMerged).flatMap(([key, value]) =>
           value == null || typeof value === "object" ? [] : [[key, String(value)]],
@@ -3054,7 +3170,7 @@ function ClientView() {
           toast.error(`Figures saved, but drafting deliverables failed: ${(e as Error).message}`);
         }
       }
-      return { ok: true as const, message: importedUpdateMessage(statementImportWhat(statementKind)) };
+      return { ok: true as const, message: planned.message || importedUpdateMessage(statementImportWhat(statementKind)) };
     },
     [
       clientId,
@@ -3722,6 +3838,7 @@ function ClientView() {
       signedBy: null,
       signedOn: null,
       market: gateMarket,
+      balanceSheetNote: earlierStatementNote(financials, gateMarket),
     };
   }, [
     priorSnapshot,
@@ -3854,6 +3971,7 @@ function ClientView() {
         cashOnFile,
         cashPillarStatus: evidenced && cashOnFile ? (pillarStatus.cash ?? null) : null,
         cashStrainLine: spokenCashStrain(homeBooks),
+        balanceSheetNote: earlierStatementNote(financials, gateMarket),
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
@@ -5384,6 +5502,10 @@ function ClientView() {
                               }
                               embedded
                               figuresOnFile={hasFigures}
+                              knownSignoffs={reviewSignoffs}
+                              signoffsKnown={signoffsKnown}
+                              knownSignoffStale={reportSignoffStale}
+                              onSignoffChange={(scope, next) => patchSignoff(scope)(next)}
                               sourceChip={healthChip}
                               inputs={
                                 <DeliverableInputConfig
@@ -5990,8 +6112,12 @@ function ClientView() {
             }}
           />
 
-          <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-            <DialogContent className="flex h-[min(90vh,calc(100dvh-1rem))] max-h-[min(90vh,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-[#DBEAFE] bg-white p-4 text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] sm:p-6">
+          <Dialog open={profileOpen} modal={false} onOpenChange={setProfileOpen}>
+            <DialogContent
+              overlayClassName="profile-funnel-overlay"
+              data-profile-funnel=""
+              className="flex h-[min(80vh,calc(100dvh-6rem))] max-h-[min(80vh,calc(100dvh-6rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-[#DBEAFE] bg-white p-4 text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] sm:p-6"
+            >
               <DialogHeader className="sr-only">
                 <DialogTitle>Business profile</DialogTitle>
                 <DialogDescription>Ten questions that tune Milōn to this client</DialogDescription>

@@ -193,7 +193,11 @@ assert(roles.includes("clearAccountantStayCache"), "sign-out can clear the stay 
 
 const gate = src("src/routes/_authenticated.gate.tsx");
 assert(!gate.includes("while (brandLoading)") && !gate.includes("if (brandLoading)"), "the gate does not wait on brand");
-assert(gate.includes("Couldn't check billing"), "a failed check shows the retry card");
+const gateView = src("src/components/firm-billing-gate-view.tsx");
+assert(
+  gate.includes('surface="error"') && gateView.includes("Couldn't check billing"),
+  "a failed check shows the retry card",
+);
 assert(gate.includes("pageWhileEntitlementUnknown"), "unknown entitlement uses the page decision");
 assert(
   /setFirmEntitled\(null\);[\s\S]{0,160}\}, \[userId\]\)/.test(gate),
@@ -205,8 +209,8 @@ assert(
 );
 assert(gate.includes("<FirmShellLoading />"), "a walled page shows a skeleton while entitlement is unknown");
 assert(gate.includes("<Outlet />"), "an allowed page still mounts the outlet");
-assert(gate.includes('to="/dashboard"'), "Back is a router link");
-assert(!gate.includes('href="/dashboard"'), "Back is not a full page navigation");
+assert(gateView.includes('to="/dashboard"'), "Back is a router link");
+assert(!gate.includes('href="/dashboard"') && !gateView.includes('href="/dashboard"'), "Back is not a full page navigation");
 assert(!gate.includes("firmGate"), "entitlement does not use the old gate flag");
 assert(
   gate.includes("Gated client pages show Retry"),
@@ -242,11 +246,13 @@ assert(sync.includes("await syncStarterTrialMirrorForActor"), "billing sync stil
 const wall = src("src/routes/billing.required.tsx");
 const wallCopy = src("src/lib/billing-wall.ts");
 assert(
-  wall.includes("BILLING_WALL_TRIAL_ACTION") &&
-    wallCopy.includes("Start your 14-day free trial · add a card"),
-  "the wall shows the trial action",
+  wall.includes("FIRM_WALL_TRIAL_LINE") && wallCopy.includes("card at signup"),
+  "the wall shows the trial line once, on the body",
 );
-assert(wall.includes("Retry") && wall.includes("Back"), "the wall has Retry and Back");
+assert(
+  wall.includes("firmWallOffersRetry") && wallCopy.includes("Back to clients"),
+  "Retry is conditional and Back goes to clients",
+);
 assert(!wall.includes("R299") && !wall.includes("VAT"), "the wall does not hard-code a rand price or VAT");
 assert(wall.includes("resolveBillingWall"), "the wall reads through the deadline");
 

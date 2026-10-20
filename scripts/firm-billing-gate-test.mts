@@ -790,14 +790,15 @@ assert(appSrc.includes("shouldBounceFromOwnerApp"), "owner bounce helper still u
 const required = readFileSync(resolve("src/routes/billing.required.tsx"), "utf8");
 assert(required.includes("Continue on"), "required page is Checkout after the figures");
 assert(
-  required.includes("The figures stay."),
-  "required page does not pretend the workspace never opened",
+  required.includes("firmWallWhyLine"),
+  "required page explains why the first client stays open",
 );
 assert(
-  required.includes("BILLING_WALL_TRIAL_ACTION"),
+  required.includes("FIRM_WALL_START_LABEL"),
   "required page offers the trial once the billing read settles",
 );
-assert(required.includes('href="/#pricing"'), "back to pricing shows pricing, not Checkout");
+assert(!required.includes('href="/#pricing"'), "the accountant wall does not link back to pricing");
+assert(required.includes("FIRM_WALL_BACK_HREF"), "back leaves for the client list");
 assert(!required.includes('to="/"'), "back to pricing does not link at /");
 assert(required.includes("BillingSignOutButton"), "billing wall can sign out");
 assert(required.includes('createFileRoute("/billing/required")'), "required route");

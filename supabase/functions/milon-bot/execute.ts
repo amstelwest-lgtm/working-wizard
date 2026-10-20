@@ -476,9 +476,7 @@ export async function executeAgentTool(
         brainSummary: clientRes.data?.brain_summary ?? null,
         dateMarket: marketForClient({ market: clientRes.data?.market }),
         periodLabel: figuresPeriodLabelFrom(
-          (snap?.financials && typeof snap.financials === "object"
-            ? snap.financials
-            : liveFinancials) as object | null,
+          liveFinancials,
           (snap?.period_label as string | null) ?? null,
           marketForClient({ market: clientRes.data?.market }),
         ),

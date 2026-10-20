@@ -5,7 +5,7 @@
 
 import type { BudgetMonthResult } from "@/lib/budget.types";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
-import { formatMoneyCompact } from "@/lib/market/format";
+import { formatMoneyCompact, formatReportAmount } from "@/lib/market/format";
 
 export type ActualsSource = "pdf" | "qbo" | "xero" | "manual";
 export type ActualsStatus = "draft" | "confirmed";
@@ -339,9 +339,11 @@ function num(v: number | null | undefined): number {
 export function formatVariancePct(pct: number | null, note?: string | null): string {
   if ((pct == null || !Number.isFinite(pct)) && note) return note;
   if (pct == null || !Number.isFinite(pct)) return "—";
-  if (Math.abs(pct) < 0.05) return "0.0%";
-  const sign = pct > 0 ? "+" : "";
-  return `${sign}${pct.toFixed(1)}%`;
+  return formatReportAmount(pct, undefined, {
+    style: "percent",
+    percentPoints: true,
+    sign: "always",
+  });
 }
 
 /**

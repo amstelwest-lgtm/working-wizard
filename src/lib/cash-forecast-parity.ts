@@ -79,6 +79,17 @@ export function forecastLinesBlank(
   return lines.every((line) => !forecastLineCountsAsEntered(line, opts));
 }
 
+/**
+ * Week column on the cash-forecast PDF. Prints `Week N` and nothing after it.
+ * A trailing lint marker is not part of the label.
+ */
+export function cashForecastWeekRowLabel(periodLabel: string): string {
+  const line = periodLabel.split("\n")[0] ?? "";
+  const withoutMarker = line.replace(/\s*\/\/.*$/, "").trim();
+  const week = /^Week\s+(\d+)$/i.exec(withoutMarker);
+  return week ? `Week ${week[1]}` : withoutMarker;
+}
+
 export type EnteredForecastWeek = {
   period_label: string;
   opening_balance: number;

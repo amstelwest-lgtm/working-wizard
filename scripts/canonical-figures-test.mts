@@ -97,6 +97,21 @@ const card = findingCardCopy(
 assert(card.context?.includes("8.6%") && !card.context.includes("16%"), card.context ?? "missing context");
 assert(card.lead.includes("8.6%") || !card.lead.includes("16"), card.lead);
 
+const garbledPeriod = formatFindingProse(
+  "Books cover Jan 100% – Sep 30, 2026.",
+  [{ key: "Gross Margin", value: 1 }],
+  US,
+);
+assert(garbledPeriod.includes("Jan 1 – Sep 30, 2026"), garbledPeriod);
+assert(!garbledPeriod.includes("100% –"), garbledPeriod);
+const sameMonth = formatFindingProse(
+  "The file is Sep 100%–21, 2026.",
+  [{ key: "Gross Margin", value: 1 }],
+  US,
+);
+assert(sameMonth.includes("Sep 1–21, 2026"), sameMonth);
+assert(!sameMonth.includes("100%"), sameMonth);
+
 const quoted = polishAgentCopy({
   text: "Operating margin of 16.0% and working capital days of 69.",
   role: "detail",

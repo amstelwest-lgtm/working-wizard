@@ -22,6 +22,7 @@ import {
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { PasswordWithShow } from "@/components/show-password";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
+import { accountantInviteLead, inviteJoinHidesSignup } from "@/lib/invite-claim";
 import {
   INVITE_LINK_INVALID,
   inviteTokenShapeOk,
@@ -40,6 +41,22 @@ export const Route = createFileRoute("/join/$token")({
   head: () => ({ meta: [{ title: "Join as accountant — Milōn" }] }),
 });
 
+/** Inviting owner, then the business. No client code, no owner email. */
+export function AccountantInviteIntro({
+  inviterName,
+  clientName,
+}: {
+  inviterName: string | null;
+  clientName: string | null;
+}) {
+  return (
+    <p data-accountant-invite-lead="" className="mt-3 text-sm leading-relaxed text-[#8a938c]">
+      {accountantInviteLead({ inviterName, clientName })}. You will land in the practice portal,
+      linked to this client — not as a second owner.
+    </p>
+  );
+}
+
 function AccountantJoinPage() {
   const { token } = Route.useParams();
   const navigate = useNavigate();
@@ -51,6 +68,7 @@ function AccountantJoinPage() {
   const [previewLoading, setPreviewLoading] = useState(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [clientName, setClientName] = useState<string | null>(null);
+  const [inviterName, setInviterName] = useState<string | null>(null);
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -85,6 +103,7 @@ function AccountantJoinPage() {
       .then((p) => {
         if (!alive) return;
         setClientName(p.clientName);
+        setInviterName(p.inviterName);
         setInvitedEmail(p.invitedEmail);
         if (p.invitedEmail) setEmail((prev) => prev || p.invitedEmail || "");
       })
@@ -209,6 +228,7 @@ function AccountantJoinPage() {
 
   const sameAccount =
     Boolean(user?.email) && user?.email?.toLowerCase() === email.trim().toLowerCase();
+  const hideSignup = inviteJoinHidesSignup(previewError);
 
   return (
     <OwnerInviteShell businessName={clientName} loading={previewLoading || authLoading}>
@@ -218,16 +238,23 @@ function AccountantJoinPage() {
       <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-foreground">
         {clientName ? `Join ${clientName}` : "Join a shared workspace"}
       </h1>
-      <p className="mt-3 text-sm leading-relaxed text-[#8a938c]">
-        A business owner invited you as their accountant. You will land in the practice portal,
-        linked to this client — not as a second owner.
-      </p>
+      <AccountantInviteIntro inviterName={inviterName} clientName={clientName} />
 
       {previewError ? (
-        <div className="mt-5 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+        <div
+          className="mt-5 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200"
+          data-invite-block=""
+        >
           {sanitizeInviteError(previewError)}
         </div>
-      ) : (
+      ) : null}
+      {hideSignup && !signInMode ? (
+        <div className="mt-6">
+          <OwnerInvitePrimaryButton type="button" data-invite-sign-in="" onClick={() => setSignInMode(true)}>
+            Sign in
+          </OwnerInvitePrimaryButton>
+        </div>
+      ) : previewError && !signInMode ? null : (
         <OwnerInviteCard className="mt-6">
           {user?.email ? (
             <OwnerInviteNote>
@@ -368,7 +395,7 @@ function AccountantJoinPage() {
             </>
           )}
 
-          {!user ? (
+          {!user && !hideSignup ? (
             <p className="mt-5 text-center text-xs text-[#8a938c]">
               {signInMode ? "Need a new practice login? " : "Already have a Milōn account? "}
               <button

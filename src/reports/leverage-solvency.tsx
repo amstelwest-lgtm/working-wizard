@@ -19,6 +19,7 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { PDF_CARD_MIN_PRESENCE, ReportSection } from "@/lib/report-pdf-layout";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
+import { formatReportAmount } from "@/lib/market";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { leverageNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
@@ -187,7 +188,7 @@ function DebtTable({ lines, accent }: { lines: DebtLine[]; accent: string }) {
             {fmtRand(l.amount, market)}
           </Text>
           <Text style={[dt.cell, { flex: 1, textAlign: "right" }]}>
-            {l.annual_rate_pct > 0 ? `${l.annual_rate_pct.toFixed(1)}%` : "—"}
+            {formatReportAmount(l.annual_rate_pct, market, { style: "percent", percentPoints: true })}
           </Text>
           <Text style={[dt.cell, { flex: 1, textAlign: "right" }]}>{l.maturity_year}</Text>
           <Text style={[dt.cell, { flex: 1, textAlign: "right" }]}>
@@ -256,7 +257,7 @@ export function LeverageSolvencyPDF({
       value: hasDebt ? fmtRandCompact(d.total_debt, m) : "—",
       note: hasDebt
         ? Number.isFinite(weightedRate)
-          ? `avg. rate ${weightedRate.toFixed(1)}%`
+          ? `avg. rate ${formatReportAmount(weightedRate, m, { style: "percent", percentPoints: true })}`
           : "Facility schedule"
         : "No facilities — not total liabilities",
     },
@@ -266,7 +267,7 @@ export function LeverageSolvencyPDF({
       direction: roll.movement == null ? undefined : roll.movement >= 0 ? "up" : "down",
       good: roll.movement == null ? undefined : roll.movement >= 0,
       note: roll.hasPrior
-        ? `${roll.movement! >= 0 ? "+" : ""}${fmtRandCompact(roll.movement!, m)} this period`
+        ? `${formatReportAmount(roll.movement!, m, { style: "compact", sign: "always" })} this period`
         : NO_PRIOR_PERIOD,
     },
     {
@@ -315,7 +316,9 @@ export function LeverageSolvencyPDF({
     },
     {
       name: "Interest Burden",
-      value: Number.isFinite(weightedRate) ? `${weightedRate.toFixed(1)}%` : "—",
+      value: Number.isFinite(weightedRate)
+        ? formatReportAmount(weightedRate, m, { style: "percent", percentPoints: true })
+        : "—",
       score: hs.interestBurden,
     },
   ].filter((r) => r.score != null) as Array<{ name: string; value: string; score: number }>;
@@ -437,12 +440,12 @@ export function LeverageSolvencyPDF({
           />
           <MetricBox
             label="Net Profit"
-            value={`+${fmtRand(Math.abs(roll.profit), m)}`}
+            value={formatReportAmount(Math.abs(roll.profit), m, { sign: "always" })}
             accentColor={C.green}
           />
           <MetricBox
             label="Drawings"
-            value={`-${fmtRand(Math.abs(roll.drawings), m)}`}
+            value={formatReportAmount(-Math.abs(roll.drawings), m, { sign: "always" })}
             accentColor={C.red}
           />
           {roll.hasPrior && Math.abs(roll.other) >= 1 ? (
@@ -458,7 +461,7 @@ export function LeverageSolvencyPDF({
             accentColor={roll.movement == null || roll.movement >= 0 ? C.green : C.red}
             note={
               roll.hasPrior
-                ? `${roll.movement! >= 0 ? "+" : ""}${fmtRandCompact(roll.movement!, m)} movement`
+                ? `${formatReportAmount(roll.movement!, m, { style: "compact", sign: "always" })} movement`
                 : NO_PRIOR_PERIOD
             }
           />

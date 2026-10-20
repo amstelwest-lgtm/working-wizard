@@ -15,7 +15,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { C, fmtRand, resolveTheme } from "@/components/pdf/theme";
 import { varianceIsZeroPair, variancePctCell } from "@/lib/budget.variance";
 import type { BudgetPdfModel, BudgetPdfRow } from "@/lib/budget-pdf";
-import { formatDate, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatDate, formatReportAmount, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 import { ReportSection, reportTablePartStyle } from "@/lib/report-pdf-layout";
 
@@ -90,14 +90,15 @@ const styles = StyleSheet.create({
 });
 
 function signedMoney(n: number, market: ResolvedMarket): string {
-  if (n > 0) return `+${fmtRand(n, market)}`;
-  return fmtRand(n, market);
+  return formatReportAmount(n, market, { sign: "always" });
 }
 
-function overUnder(delta: number, budget: number, actual: number | null): string {
-  if (budget === 0 && actual === 0) return "—";
-  if (Math.abs(delta) < 1) return "In line";
+function overUnder(delta: number): string {
   return delta > 0 ? "Over" : "Under";
+}
+
+function variancePrintsZero(row: BudgetPdfRow): boolean {
+  return row.delta == null || varianceIsZeroPair(row.budget, row.actual) || Math.round(row.delta) === 0;
 }
 
 function signalColor(signal: BudgetPdfRow["signal"]): string {
@@ -112,20 +113,29 @@ function VarianceTable({
   market,
   heading,
   intro,
+  hideVariance = false,
 }: {
   rows: BudgetPdfRow[];
   accent: string;
   market: ResolvedMarket;
   heading: ReactNode;
   intro?: ReactNode;
+  /** Seeded plans and unknown periods are not a variance result. */
+  hideVariance?: boolean;
 }) {
-  const cols = [
-    { label: "Line", flex: 2.1, align: "left" as const },
-    { label: "Budget", flex: 1.25, align: "right" as const },
-    { label: "Actual", flex: 1.25, align: "right" as const },
-    { label: "Variance", flex: 1.45, align: "right" as const },
-    { label: "%", flex: 0.7, align: "right" as const },
-  ];
+  const cols = hideVariance
+    ? [
+        { label: "Line", flex: 2.1, align: "left" as const },
+        { label: "Budget", flex: 1.25, align: "right" as const },
+        { label: "Actual", flex: 1.25, align: "right" as const },
+      ]
+    : [
+        { label: "Line", flex: 2.1, align: "left" as const },
+        { label: "Budget", flex: 1.25, align: "right" as const },
+        { label: "Actual", flex: 1.25, align: "right" as const },
+        { label: "Variance", flex: 1.45, align: "right" as const },
+        { label: "%", flex: 0.7, align: "right" as const },
+      ];
   const header = (
     <View style={[styles.headerRow, { backgroundColor: accent }]}>
       {cols.map((c) => (
@@ -157,25 +167,27 @@ function VarianceTable({
             <Text style={[styles.cell, { flex: 1.25, textAlign: "right" }]}>
               {row.actual == null ? "—" : fmtRand(row.actual, market)}
             </Text>
-            <View style={{ flex: 1.45, alignItems: "flex-end" }}>
-              {row.delta == null || varianceIsZeroPair(row.budget, row.actual) ? (
-                <Text style={styles.cell}>—</Text>
-              ) : (
-                <>
-                  <Text style={[styles.varTag, { color }]}>
-                    {overUnder(row.delta, row.budget, row.actual)}
-                  </Text>
-                  <Text style={[styles.varAmt, { color }]}>{signedMoney(row.delta, market)}</Text>
-                </>
-              )}
-            </View>
-            <View style={{ flex: 0.7, overflow: "hidden" }}>
-              <Text style={[styles.cell, { textAlign: "right", color }]}>
-                {varianceIsZeroPair(row.budget, row.actual)
-                  ? "—"
-                  : variancePctCell(row.deltaPct, row.deltaPctNote)}
-              </Text>
-            </View>
+            {hideVariance ? null : (
+              <View style={{ flex: 1.45, alignItems: "flex-end" }}>
+                {variancePrintsZero(row) ? (
+                  <Text style={styles.cell}>—</Text>
+                ) : (
+                  <>
+                    <Text style={[styles.varTag, { color }]}>
+                      {overUnder(row.delta ?? 0)}
+                    </Text>
+                    <Text style={[styles.varAmt, { color }]}>{signedMoney(row.delta ?? 0, market)}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            {hideVariance ? null : (
+              <View style={{ flex: 0.7, overflow: "hidden" }}>
+                <Text style={[styles.cell, { textAlign: "right", color }]}>
+                  {variancePrintsZero(row) ? "—" : variancePctCell(row.deltaPct, row.deltaPctNote)}
+                </Text>
+              </View>
+            )}
         </View>
       );
   };
@@ -208,9 +220,9 @@ function summaryFigure(row: BudgetPdfRow, market: ResolvedMarket): HeadlineFigur
       note: "Budget",
     };
   }
-  const good = row.signal === "favourable" ? true : row.signal === "adverse" ? false : undefined;
-  const direction =
-    row.signal === "inline" || Math.abs(row.delta) < 1 ? "flat" : row.delta > 0 ? "up" : "down";
+  const zero = Math.round(row.delta) === 0;
+  const good = zero ? undefined : row.signal === "favourable" ? true : row.signal === "adverse" ? false : undefined;
+  const direction = zero ? undefined : row.delta > 0 ? "up" : "down";
   return {
     label: row.label,
     value: fmtRand(row.actual, market),
@@ -278,6 +290,7 @@ export function BudgetVariancePDF({
           market={market}
           heading={<SectionHeader title={section.title} color={theme.accent} />}
           intro={section.note ? <Text style={styles.note}>{section.note}</Text> : null}
+          hideVariance={model.suppressVariance}
         />
       ))}
 
