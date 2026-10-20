@@ -18,6 +18,7 @@ import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { HeroAgents } from "@/components/landing/hero-agents";
+import { LandingHeader } from "@/components/landing/landing-header";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import {
   DUAL_MARKET_BUILT,
@@ -740,16 +741,6 @@ function LandingPage() {
         c.style.setProperty("--my", e.clientY - r.top + "px");
       });
     });
-
-    /* theme toggle */
-    const tbtn = document.getElementById("themeToggle");
-    if (tbtn) {
-      tbtn.onclick = () => {
-        const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
-        applyLandingTheme(next);
-        setLandingThemeRef.current(next);
-      };
-    }
 
     return () => {
       removeEventListener("scroll", onScroll);
@@ -1937,73 +1928,32 @@ function LandingPage() {
       <div id="progress" aria-hidden="true" />
 
       {/* ── nav ── */}
-      <nav id="topnav" className={mobileNavOpen ? "nav-open" : undefined}>
-        <div className="wrap">
-          <a
-            className="logo"
-            href="#hero"
-            title="MILŌN"
-            onClick={(e) => {
-              onLogoSecretTap(e);
-              setMobileNavOpen(false);
+      <LandingHeader
+        menuOpen={mobileNavOpen}
+        onMenuOpenChange={setMobileNavOpen}
+        theme={landingTheme}
+        onToggleTheme={() => {
+          const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+          applyLandingTheme(next);
+          setLandingTheme(next);
+        }}
+        onLogoClick={(event) => {
+          onLogoSecretTap(event);
+        }}
+        onStartTrial={(event) => {
+          event.preventDefault();
+          goToFirmSignup({ scrollTo: "register" });
+        }}
+        signIn={
+          <LandingSignInButton
+            className="btn btn-ghost nav-signin"
+            onClick={() => {
+              setSiError("");
+              setSigninOpen(true);
             }}
-          >
-            <img src="/milon-centaur.svg" alt="" width={24} height={34} />
-            <span className="logo-word gold-text">MILŌN</span>
-          </a>
-          <button
-            type="button"
-            className="nav-burger"
-            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
-            aria-expanded={mobileNavOpen}
-            onClick={() => setMobileNavOpen((o) => !o)}
-          >
-            <span />
-            <span />
-            <span />
-          </button>
-          <div className="links">
-            <a href="#method" onClick={() => setMobileNavOpen(false)}>
-              The Milōn Method
-            </a>
-            <a href="#how" onClick={() => setMobileNavOpen(false)}>
-              How it works
-            </a>
-            <a href="#pricing" onClick={() => setMobileNavOpen(false)}>
-              Pricing
-            </a>
-            <button
-              id="themeToggle"
-              type="button"
-              title="Toggle light / dark"
-              aria-label={
-                landingTheme === "light" ? "Switch to dark theme" : "Switch to light theme"
-              }
-            >
-              {landingTheme === "light" ? "☾" : "☀"}
-            </button>
-            <LandingSignInButton
-              className="btn btn-ghost nav-signin"
-              onClick={() => {
-                setMobileNavOpen(false);
-                setSiError("");
-                setSigninOpen(true);
-              }}
-            />
-            <a
-              className="btn btn-cobalt nav-trial"
-              href="#register"
-              aria-label={NAV_TRIAL_ARIA}
-              onClick={(e) => {
-                e.preventDefault();
-                goToFirmSignup({ scrollTo: "register" });
-              }}
-            >
-              {NAV_TRIAL_LABEL}
-            </a>
-          </div>
-        </div>
-      </nav>
+          />
+        }
+      />
 
       <main id="main">
       {/* ══════════════════════════ HERO ══════════════════════════ */}

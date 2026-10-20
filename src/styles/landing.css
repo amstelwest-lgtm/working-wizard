@@ -709,7 +709,7 @@ html[data-landing="1"] .firm-bands-table .firm-bands-limit{font-weight:500}
 html[data-landing="1"] .firm-bands-table .firm-bands-price{font-weight:800;font-size:15.5px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:normal;max-width:16rem}
 html[data-landing="1"] .firm-bands-table th:last-child,html[data-landing="1"] .firm-bands-table .firm-bands-cta{text-align:right}
 html[data-landing="1"] .firm-bands-table .btn{margin:0;height:34px;padding:0 14px;font-size:11px;font-weight:700;letter-spacing:.08em;white-space:nowrap}
-html[data-landing="1"] .firm-bands-table .btn-gold{color:#1b1300;-webkit-text-fill-color:#1b1300;background-color:var(--gold)}
+html[data-landing="1"] .firm-bands-table .btn-gold{color:#fff;-webkit-text-fill-color:#fff;background-color:var(--cobalt);background-image:none}
 html[data-landing="1"] .firm-bands-table .btn-cobalt,
 html[data-landing="1"] .firm-band-card .btn-cobalt{color:#fff;-webkit-text-fill-color:#fff;background-color:var(--cobalt);border-color:var(--cobalt)}
 html[data-landing="1"] .firm-bands-table .btn-ghost{color:var(--ink);-webkit-text-fill-color:var(--ink);background-color:transparent;border:1px solid var(--line)}
@@ -1059,8 +1059,14 @@ html[data-landing="1"] .yt-play{
   height:64px;
   margin:-32px 0 0 -32px;
   border-radius:50%;
-  background:var(--gold);
+  background:#0B5FFF;
+  background:var(--cobalt);
   box-shadow:0 8px 24px rgba(0,0,0,.35);
+}
+html[data-landing="1"] .yt-facade:hover .yt-play,
+html[data-landing="1"] .yt-facade:focus-visible .yt-play{
+  background:#2563EB;
+  background:var(--royal);
 }
 html[data-landing="1"] .yt-play::before{
   content:"";
@@ -1069,16 +1075,19 @@ html[data-landing="1"] .yt-play::before{
   top:20px;
   border-style:solid;
   border-width:12px 0 12px 18px;
-  border-color:transparent transparent transparent #1b1300;
+  border-color:transparent transparent transparent #fff;
 }
 html[data-landing="1"] .yt-facade:focus-visible{
-  outline:2px solid var(--gold);
+  outline:2px solid var(--cobalt);
   outline-offset:3px;
 }
 html[data-landing="1"] .watch-cta{
   display:inline-block;
   margin-top:14px;
-  color:var(--gold-ink);
+  color:#0B5FFF;
+  color:var(--cobalt);
+  -webkit-text-fill-color:#0B5FFF;
+  -webkit-text-fill-color:var(--cobalt);
   background:none;
   border:0;
   padding:0;
@@ -1087,6 +1096,12 @@ html[data-landing="1"] .watch-cta{
   text-decoration:underline;
   text-underline-offset:3px;
   cursor:pointer;
+}
+html[data-landing="1"] .watch-cta:hover{
+  color:#2563EB;
+  color:var(--royal);
+  -webkit-text-fill-color:#2563EB;
+  -webkit-text-fill-color:var(--royal);
 }
 @media (max-width:767px){
   html[data-landing="1"] .watch-grid{grid-template-columns:1fr;gap:16px}

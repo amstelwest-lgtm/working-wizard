@@ -201,7 +201,7 @@ export function LandingRegisterForm({
             </PasswordWithShow>
             <button
               type="submit"
-              className="btn btn-gold"
+              className="btn btn-cobalt"
               disabled={regBusy}
               style={{ width: "100%", justifyContent: "center", marginTop: 16 }}
             >
@@ -469,7 +469,7 @@ export function LandingRegisterForm({
                 </select>
                 <button
                   type="submit"
-                  className="btn btn-gold"
+                  className="btn btn-cobalt"
                   disabled={regBusy}
                   style={{ width: "100%", justifyContent: "center", marginTop: 28 }}
                 >
