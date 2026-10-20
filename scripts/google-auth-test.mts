@@ -17,6 +17,9 @@ import {
   readIntentCookie,
 } from "../src/lib/google-auth";
 import {
+  accountantNeedsLocationPicker,
+  accountantProfileStamp,
+  accountantWithoutFirm,
   clearGooglePracticeGate,
   googlePracticeFirmMarket,
   googlePracticePickerDraft,
@@ -377,6 +380,119 @@ assert(
   "confirming the practice location clears the stash",
 );
 globalThis.sessionStorage = previousStorage;
+
+const stamp = accountantProfileStamp({ firmName: "North Books", fullName: "Ada" });
+assert(stamp.signup_type === "accountant", "the picker stamp is an accountant signup");
+assert(stamp.firm_name === "North Books", "the picker stamp keeps the firm name");
+assert(stamp.full_name === "Ada", "the picker stamp keeps the person name");
+assert(
+  !Object.prototype.hasOwnProperty.call(stamp, "market_country") &&
+    !Object.prototype.hasOwnProperty.call(stamp, "market_region"),
+  "the picker stamp does not store a market",
+);
+assert(
+  accountantWithoutFirm({ signupType: "accountant", firmCount: 0 }),
+  "an accountant with no firm still needs a practice",
+);
+assert(
+  !accountantWithoutFirm({ signupType: "accountant", firmCount: 1 }),
+  "an accountant who already has a firm is not sent back to the picker",
+);
+assert(
+  !accountantWithoutFirm({ signupType: "customer", firmCount: 0 }),
+  "an owner with no firm is not treated as an abandoned practice",
+);
+assert(
+  accountantWithoutFirm({ firmName: "North Books", firmCount: 0 }),
+  "a firm name alone marks an abandoned practice",
+);
+assert(
+  accountantNeedsLocationPicker({ signupType: "accountant", firmCount: 0, visitor: null }),
+  "abandoning the picker still needs a location when nothing was chosen",
+);
+assert(
+  !accountantNeedsLocationPicker({ signupType: "accountant", firmCount: 0, visitor: ny }),
+  "a saved visitor market can create the firm without showing the picker again",
+);
+assert(
+  !accountantNeedsLocationPicker({ signupType: "accountant", firmCount: 1, visitor: null }),
+  "an existing firm does not reopen the picker",
+);
+assert(
+  !accountantNeedsLocationPicker({
+    signupType: "accountant",
+    firmCount: 0,
+    marketCountry: "ZA",
+    visitor: null,
+  }),
+  "a stored South Africa choice can create the firm",
+);
+
+const openAt = callbackSrc.indexOf("async function openPracticeLocation");
+const landAt = callbackSrc.indexOf("async function landGoogleUser");
+const openBody = callbackSrc.slice(openAt, landAt);
+assert(openAt >= 0 && landAt > openAt, "the practice picker opener is declared before landing");
+assert(
+  openBody.includes("accountantProfileStamp(") &&
+    openBody.indexOf("accountantProfileStamp(") < openBody.indexOf("setPracticeGate("),
+  "the picker stamp is written before the picker opens",
+);
+assert(
+  !openBody.includes("market_country") && !openBody.includes("market_region"),
+  "opening the picker does not write a market onto the profile",
+);
+assert(
+  callbackSrc.includes("practiceSignup && existingFirmCount === 0"),
+  "a later visit with practice metadata and no firm still finishes location",
+);
+assert(
+  !callbackSrc.includes("readVisitorMarket() ??"),
+  "owner Google sign-in does not default a missing market to South Africa",
+);
+assert(
+  callbackSrc.includes("p_market: readVisitorMarket()"),
+  "owner Google sign-in still stores a visitor market when one was picked",
+);
+
+const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+const provisionAt = appSrc.indexOf("const shouldProvisionOwner");
+assert(
+  provisionAt > 0 && appSrc.slice(0, provisionAt).includes("accountantWithoutFirm({"),
+  "a firm-less accountant leaves /app before an owner client is created",
+);
+assert(
+  !appSrc.includes("readVisitorMarket() ??"),
+  "the owner app does not default a missing market to South Africa",
+);
+
+const gateSrc = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
+assert(
+  gateSrc.includes("accountantWithoutFirm") && gateSrc.includes('to: "/auth/callback"'),
+  "a firm-less accountant on a practice route returns to the location picker",
+);
+
+const profileSrc = readFileSync(resolve("src/contexts/accountant-profile.tsx"), "utf8");
+assert(
+  profileSrc.includes("awaitingPracticeLocation"),
+  "profile hydration does not mint a firm while practice location is still unchosen",
+);
+
+const nullMarketSql = readFileSync(
+  resolve("supabase/migrations/20261020120000_ensure_own_client_null_market.sql"),
+  "utf8",
+);
+assert(
+  !nullMarketSql.includes('{"country":"ZA","regionCode":null}'),
+  "ensure_own_client no longer rewrites a null market to South Africa",
+);
+assert(nullMarketSql.includes("INSERT INTO public.clients"), "a missing owner market still inserts a client");
+assert(nullMarketSql.includes("v_market"), "the insert stores the passed market, including null");
+assert(nullMarketSql.includes("firm_id IS NULL"), "the null-market function keeps the firm-unlinked lookup");
+assert(
+  nullMarketSql.includes("m.role = 'client_owner'"),
+  "the null-market function keeps the client_owner lookup",
+);
+assert(!/update\s+public\.clients/i.test(nullMarketSql), "existing owner clients are not rewritten");
 
 const authPage = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
 assert(authPage.includes("Continue with Google"), "Create firm offers Google sign-up");

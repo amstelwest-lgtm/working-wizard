@@ -43,6 +43,7 @@ import {
   type DraftMarket,
 } from "@/lib/market";
 import {
+  accountantProfileStamp,
   clearGooglePracticeGate,
   googlePracticeFirmMarket,
   googlePracticePickerDraft,
@@ -73,6 +74,7 @@ import { activeFirmIdForUser, listUserFirms } from "@/lib/firm-brand";
 import {
   clearForcePortal,
   forcePortal,
+  isPracticeSignupMeta,
   resolvePortalRoles,
   setPortalIntent,
   shouldOpenItInbox,
@@ -257,23 +259,31 @@ function AuthCallbackPage() {
         staffJoin: Boolean(joinToken),
       });
 
-      // An explicit owner click drops a half-finished practice picker. A refresh
-      // with no new click must not mint a business seat or stamp South Africa.
+      // An explicit owner click drops the per-tab picker stash. Practice metadata
+      // is reclassified below, before a business seat is created. A refresh with
+      // no new click must not mint a business seat or stamp South Africa.
       if (consumed.intent === "owner") clearGooglePracticeGate();
       const stashedPractice = consumed.intent === "owner" ? null : readGooglePracticeGate(user.id);
       if (stashedPractice && (await listUserFirms(user.id)).length === 0) {
         const geoCountry = await readGeoCountry().catch(() => "");
         if (cancelled) return;
-        openPracticeLocation({
-          user,
-          displayName,
-          firmName: stashedPractice.firmName || displayName,
-          fullName: stashedPractice.fullName || displayName,
-          offerWelcome,
-          next: stashedPractice.next ?? next ?? null,
-          joinToken: stashedPractice.joinToken || joinToken,
-          geoCountry,
-        });
+        try {
+          await openPracticeLocation({
+            user,
+            displayName,
+            firmName: stashedPractice.firmName || displayName,
+            fullName: stashedPractice.fullName || displayName,
+            offerWelcome,
+            next: stashedPractice.next ?? next ?? null,
+            joinToken: stashedPractice.joinToken || joinToken,
+            geoCountry,
+          });
+        } catch (err) {
+          if (!cancelled) {
+            setWorking(false);
+            setError(err instanceof Error ? err.message : "Could not save the practice signup.");
+          }
+        }
         return;
       }
 
@@ -323,7 +333,7 @@ function AuthCallbackPage() {
             () =>
               supabase.rpc("ensure_own_client", {
                 p_name: displayName,
-                p_market: readVisitorMarket() ?? { country: "ZA", regionCode: null },
+                p_market: readVisitorMarket(),
               }),
             () => supabase.rpc("ensure_own_client", { p_name: displayName }),
           );
@@ -335,7 +345,9 @@ function AuthCallbackPage() {
         if (offerWelcome) await welcomeWithoutBlockingSignup(() => doSendWelcome());
       } else {
         const draft = consumeAccountantGoogleSignup();
-        const provisionPractice = isFreshAuthUser(user.created_at) || Boolean(draft);
+        const practiceSignup = isPracticeSignupMeta(
+          user.user_metadata as Record<string, unknown> | undefined,
+        );
         const firmName =
           draft?.firmName ||
           (typeof user.user_metadata?.firm_name === "string"
@@ -347,6 +359,15 @@ function AuthCallbackPage() {
           (typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : "") ||
           (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : "") ||
           displayName;
+        // A later visit has no draft and is not fresh. Practice metadata with
+        // zero firms still has to finish location, or /practice and /app loop.
+        const needsPracticeSeat =
+          isFreshAuthUser(user.created_at) || Boolean(draft) || practiceSignup;
+        const existingFirmCount = needsPracticeSeat ? (await listUserFirms(user.id)).length : 0;
+        const provisionPractice =
+          isFreshAuthUser(user.created_at) ||
+          Boolean(draft) ||
+          (practiceSignup && existingFirmCount === 0);
         let geoCountry = "";
         let market = googlePracticeFirmMarket({
           draftCountry: draft?.marketCountry,
@@ -363,11 +384,10 @@ function AuthCallbackPage() {
             geoCountry,
           });
         }
-        if (provisionPractice && !market) {
-          const firms = await listUserFirms(user.id);
-          if (firms.length === 0) {
-            if (cancelled) return;
-            openPracticeLocation({
+        if (provisionPractice && !market && existingFirmCount === 0) {
+          if (cancelled) return;
+          try {
+            await openPracticeLocation({
               user,
               displayName,
               firmName,
@@ -377,10 +397,15 @@ function AuthCallbackPage() {
               joinToken,
               geoCountry,
             });
-            return;
+          } catch (err) {
+            if (!cancelled) {
+              setWorking(false);
+              setError(err instanceof Error ? err.message : "Could not save the practice signup.");
+            }
           }
-          clearGooglePracticeGate();
-        } else if (provisionPractice && market) {
+          return;
+        }
+        if (provisionPractice && market) {
           clearGooglePracticeGate();
           writeVisitorMarket(market);
           try {
@@ -400,7 +425,19 @@ function AuthCallbackPage() {
             p_name: firmName,
             p_market: marketToJson(market),
           });
-          if (firmErr) console.error("[google] ensure_practice_firm failed:", firmErr.message);
+          if (firmErr) {
+            console.error("[google] ensure_practice_firm failed:", firmErr.message);
+            // Landing with no firm sends AuthGate straight back here.
+            if (existingFirmCount === 0) {
+              if (!cancelled) {
+                setWorking(false);
+                setError(firmErr.message);
+              }
+              return;
+            }
+          }
+        } else if (provisionPractice) {
+          clearGooglePracticeGate();
         }
         practiceMarketCountry = market?.country ?? null;
         await ensurePractice().catch(() => undefined);
@@ -429,7 +466,7 @@ function AuthCallbackPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doAcceptOwnerInvite, doSendWelcome, ensurePractice, navigate, readGeoCountry]);
 
-  function openPracticeLocation(input: {
+  async function openPracticeLocation(input: {
     user: User;
     displayName: string;
     firmName: string;
@@ -439,6 +476,11 @@ function AuthCallbackPage() {
     joinToken: string | null;
     geoCountry: string;
   }) {
+    const { error } = await supabase.auth.updateUser({
+      data: accountantProfileStamp({ firmName: input.firmName, fullName: input.fullName }),
+    });
+    if (error) throw new Error(error.message);
+    if (cancelledRef.current) return;
     practiceGateArmed.current = true;
     stashGooglePracticeGate({
       userId: input.user.id,

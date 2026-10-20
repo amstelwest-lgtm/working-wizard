@@ -77,6 +77,64 @@ export function googlePracticeFirmMarket(input: {
   return null;
 }
 
+/**
+ * Profile stamp written before the practice-location picker opens.
+ * No market fields: routing treats the account as a practice, and firm
+ * creation waits until a region is chosen.
+ */
+export function accountantProfileStamp(input: { firmName: string; fullName: string }): {
+  signup_type: "accountant";
+  firm_name: string;
+  full_name: string;
+} {
+  return {
+    signup_type: "accountant",
+    firm_name: input.firmName,
+    full_name: input.fullName,
+  };
+}
+
+function practiceSignupMeta(input: {
+  signupType?: string | null;
+  firmName?: string | null;
+}): boolean {
+  if (input.signupType === "accountant") return true;
+  return typeof input.firmName === "string" && input.firmName.trim().length > 0;
+}
+
+/** Practice metadata and no firm row. /practice and /app send this account back to the picker. */
+export function accountantWithoutFirm(input: {
+  signupType?: string | null;
+  firmName?: string | null;
+  firmCount: number;
+}): boolean {
+  return input.firmCount === 0 && practiceSignupMeta(input);
+}
+
+/**
+ * The picker is still required. A stored draft, visitor pick, or South Africa
+ * edge can create the firm instead.
+ */
+export function accountantNeedsLocationPicker(input: {
+  signupType?: string | null;
+  firmName?: string | null;
+  marketCountry?: string | null;
+  marketRegion?: string | null;
+  firmCount: number;
+  visitor: MarketSelection | null;
+  geoCountry?: string | null;
+}): boolean {
+  if (!accountantWithoutFirm(input)) return false;
+  return (
+    googlePracticeFirmMarket({
+      draftCountry: input.marketCountry,
+      draftRegion: input.marketRegion,
+      visitor: input.visitor,
+      geoCountry: input.geoCountry,
+    }) == null
+  );
+}
+
 /** Picker seed when the firm cannot be created yet. Does not default to South Africa. */
 export function googlePracticePickerDraft(input: {
   visitorDraft: DraftMarket;

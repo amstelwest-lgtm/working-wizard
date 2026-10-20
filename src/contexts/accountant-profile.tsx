@@ -23,6 +23,7 @@ import {
 import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { marketToJson, parseMarketSelection } from "@/lib/market";
 import { marketForFirm } from "@/lib/market/scope";
 import {
   authDisplayName,
@@ -271,16 +272,30 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
           if (!customerSignup && (roles.hasPracticeRole || practiceSignup)) {
             const metaFirmName = typeof meta?.firm_name === "string" ? meta.firm_name.trim() : "";
             const firmName = metaFirmName || cachedRaw.firmName || null;
-            const { error: ensureErr } = await supabase.rpc("ensure_practice_firm", {
-              p_name: firmName,
+            const storedMarket = parseMarketSelection({
+              country: meta?.market_country,
+              regionCode: meta?.market_region ?? null,
             });
-            if (!ensureErr) {
-              const again = await Promise.all([
-                listUserFirms(signedIn.id),
-                fetchUserFirm(signedIn.id, preferred),
-              ]);
-              all = again[0];
-              row = again[1];
+            // Location is still unchosen. A name-only insert would store a null
+            // market and skip the picker. A practice role without metadata is
+            // the older path and still provisions by name.
+            const awaitingPracticeLocation =
+              practiceSignup && !storedMarket && !roles.hasPracticeRole;
+            if (!awaitingPracticeLocation) {
+              const { error: ensureErr } = await supabase.rpc(
+                "ensure_practice_firm",
+                storedMarket
+                  ? { p_name: firmName, p_market: marketToJson(storedMarket) }
+                  : { p_name: firmName },
+              );
+              if (!ensureErr) {
+                const again = await Promise.all([
+                  listUserFirms(signedIn.id),
+                  fetchUserFirm(signedIn.id, preferred),
+                ]);
+                all = again[0];
+                row = again[1];
+              }
             }
           }
         }
