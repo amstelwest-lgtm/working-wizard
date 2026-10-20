@@ -6,6 +6,7 @@
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import {
   decideFirmClientCreate,
+  eligibleForIntroTrial,
   formatFirmPlanStatus,
   idleStarterTrialBanner,
   phaseFromSubscriptionStatus,
@@ -151,18 +152,27 @@ function stringMetadata(metadata: unknown): Record<string, string> {
   return out;
 }
 
-export async function findEntitlingFirmSubscription(
-  email: string,
-): Promise<EntitlingFirmSubscription | null> {
-  if (!stripeConfigured()) return null;
+type ListedSubscription = Record<string, unknown> & {
+  id: string;
+  status: string;
+  created?: number;
+};
+
+/**
+ * Same Stripe list Checkout uses for eligibleForIntroTrial.
+ * No customer means zero prior subscriptions.
+ */
+async function listCustomerSubscriptions(email: string): Promise<{
+  customerId: string | null;
+  data: ListedSubscription[];
+}> {
+  if (!stripeConfigured()) return { customerId: null, data: [] };
   const trimmed = email.trim();
-  if (!trimmed) return null;
+  if (!trimmed) return { customerId: null, data: [] };
   const stripe = getStripe();
   const customerId = await findCustomerIdByEmail(stripe, trimmed);
-  if (!customerId) return null;
-  let listed: {
-    data: Array<Record<string, unknown> & { id: string; status: string; created?: number }>;
-  };
+  if (!customerId) return { customerId: null, data: [] };
+  let listed: { data: ListedSubscription[] };
   try {
     listed = (await stripe.subscriptions.list({
       customer: customerId,
@@ -181,7 +191,15 @@ export async function findEntitlingFirmSubscription(
       limit: 20,
     })) as unknown as typeof listed;
   }
-  const ranked = listed.data.map((sub) => {
+  return { customerId, data: listed.data };
+}
+
+function entitlingFromListed(
+  customerId: string | null,
+  data: ListedSubscription[],
+): EntitlingFirmSubscription | null {
+  if (!customerId) return null;
+  const ranked = data.map((sub) => {
     const price = readSubscriptionPrice(sub as Parameters<typeof readSubscriptionPrice>[0]);
     const metadata = stringMetadata((sub as { metadata?: unknown }).metadata);
     const owner = price.lookupKey
@@ -251,6 +269,24 @@ export async function findEntitlingFirmSubscription(
     hasDefaultPaymentMethod: Boolean(defaultPaymentMethod || defaultSource),
     discounts: readSubscriptionDiscountRefs(hit.raw as { discount?: unknown; discounts?: unknown }),
   };
+}
+
+/** Entitling subscription plus the prior-count Checkout already uses. */
+export async function readFirmSubscriptionHistory(email: string): Promise<{
+  entitling: EntitlingFirmSubscription | null;
+  priorSubscriptionCount: number;
+}> {
+  const listed = await listCustomerSubscriptions(email);
+  return {
+    entitling: entitlingFromListed(listed.customerId, listed.data),
+    priorSubscriptionCount: listed.data.length,
+  };
+}
+
+export async function findEntitlingFirmSubscription(
+  email: string,
+): Promise<EntitlingFirmSubscription | null> {
+  return (await readFirmSubscriptionHistory(email)).entitling;
 }
 
 async function loadFirm(
@@ -540,6 +576,7 @@ export async function loadFirmPlanDisplay(input: {
       interval: "month",
       zarByBand: {},
       starterTrial: idleStarterTrialBanner(),
+      introTrialEligible: false,
       saDiscount: false,
     };
   }
@@ -567,6 +604,7 @@ export async function loadFirmPlanDisplay(input: {
       interval: empty.interval,
       zarByBand: {},
       starterTrial: idleStarterTrialBanner(),
+      introTrialEligible: false,
       saDiscount: false,
       zaLabels: null,
       zaPriceLabel: null,
@@ -578,7 +616,8 @@ export async function loadFirmPlanDisplay(input: {
     loadMembershipRole(db, firm.id, input.userId),
     countFirmClients(db, firm.id),
   ]);
-  const sub = billing.email ? await findEntitlingFirmSubscription(billing.email) : null;
+  const history = await readFirmSubscriptionHistory(billing.email);
+  const sub = history.entitling;
   const upgrade = await buildUpgradeSnapshot({
     isOwner: Boolean(firm.ownerUserId && firm.ownerUserId === input.userId),
     membershipRole: role,
@@ -605,6 +644,7 @@ export async function loadFirmPlanDisplay(input: {
     interval: upgrade.interval,
     zarByBand: upgrade.zarByBand,
     starterTrial,
+    introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
     saDiscount: upgrade.saDiscount,
     zaLabels: upgrade.zaLabels ?? null,
     zaPriceLabel: upgrade.zaPriceLabel ?? null,

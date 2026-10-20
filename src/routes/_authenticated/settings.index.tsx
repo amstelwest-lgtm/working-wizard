@@ -500,6 +500,7 @@ function SettingsPage() {
                   clientCount={plan.clientCount}
                   saDiscount={Boolean(plan.saDiscount) || zarPlan}
                   zaLabels={plan.zaLabels}
+                  introTrialEligible={plan.introTrialEligible}
                   upgrading={upgrading}
                   onValidateVoucher={onValidateVoucher}
                   onUpgrade={handlePlanUpgrade}
