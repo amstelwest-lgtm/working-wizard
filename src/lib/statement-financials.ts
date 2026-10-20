@@ -322,12 +322,17 @@ export function periodFinancialsFromExtraction(result: ExtractionResult): Period
   const ebt =
     income.profit_before_tax ??
     (ebit != null ? ebit - (income.finance_costs ?? 0) + (income.finance_income ?? 0) : null);
+  // A stated "profit before tax" with no tax and no profit after tax is not
+  // net profit. A management account that never had a tax section still
+  // ends on the derived profit.
   const net =
     income.profit_after_tax != null
       ? income.profit_after_tax
       : ebt != null && income.income_tax != null
         ? ebt - income.income_tax
-        : null;
+        : income.profit_before_tax == null && income.income_tax == null && ebt != null
+          ? ebt
+          : null;
   const ebitda =
     ebit != null && depreciation != null ? ebit + depreciation : ebit;
   const labor = income.labor_cost ?? income.labour_cost ?? null;

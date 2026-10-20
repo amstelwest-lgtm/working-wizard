@@ -27,7 +27,7 @@ One gate, both upload sides.
 - Add-as-period writes a snapshot only. Live books, the score, and sign-off do not move.
 - The toast and the review name what changed, that the balance sheet was missing, and one next action: `Upload a balance sheet to keep cash current.`
 - A live replace still bumps `financials_updated_at`, so the owner chip stays `Financials: signed off · figures changed`. A history-only add does not.
-- On that replace, income lines the file does not contain are cleared. The previous fixed costs, operating profit, tax, and net profit do not stay beside the quarter. Balance-sheet amounts stay. Cash, Assets, and Financing scores stay on the earlier statement.
+- On that replace, income lines the file does not contain are cleared. The previous fixed costs, operating profit, tax, and net profit do not stay beside the quarter. Balance-sheet amounts stay. Cash, Assets, and Financing scores stay on the earlier statement. A line that says profit before tax, with no tax and no profit after tax, is not filled in as net profit. A management account that never had a tax section still ends on the derived profit.
 - A ratio that needs a missing line, or that would mix the new P&L with the earlier balance sheet, is not a number. The row says `Not enough data`.
 - The owner Budget tab (and the accountant budget chart) totals the same months the verdict compares. When the comparison is statement pace, the year table’s net profit is that same window. The how-built line says the plan came from last year only when a prior year is on file.
 
