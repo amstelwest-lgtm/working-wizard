@@ -7,6 +7,7 @@ import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "rea
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
+import { shouldRedirectToAuth } from "@/lib/auth-session-guard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BackLink } from "@/components/back-link";
@@ -112,6 +113,7 @@ import {
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { ratiosStatementFigures, withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { cashDriverDayFigures } from "@/lib/cash-driver-label";
+import { HEALTH_NOT_ENOUGH_DATA } from "@/lib/health-metric-row";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
@@ -120,6 +122,7 @@ import {
   NOT_SCORED_YET_LABEL,
   healthMapFromRatios,
   liveHealthFromBooks,
+  numberRatioRecord,
   scoreRatio,
 } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
@@ -141,7 +144,7 @@ import {
   statementImportWhat,
   withFinancialsWriteRev,
 } from "@/lib/statement-import-apply";
-import { confirmUploadedStatement, liveStatementSpan, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, liveStatementSpan, snapshotCoveringSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -2094,7 +2097,7 @@ function flatExtractionToMergedResult(
 
 function Index() {
   const { viewMode, setViewMode } = useViewMode();
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut, restoreFailed } = useAuth();
   const navigate = useNavigate();
   const [ownerBootTimedOut, setOwnerBootTimedOut] = useState(false);
   const [ownerBootAttempt, setOwnerBootAttempt] = useState(0);
@@ -2104,9 +2107,8 @@ function Index() {
   // Redirect unauthenticated users to the landing page. After invite accept,
   // React auth state can lag the real Supabase session — don't bounce yet.
   useEffect(() => {
-    if (authLoading) return;
-    if (user) {
-      consumeInviteHandoffFlag();
+    if (!shouldRedirectToAuth({ loading: authLoading, hasUser: !!user, restoreFailed })) {
+      if (user) consumeInviteHandoffFlag();
       return;
     }
     let cancelled = false;
@@ -2120,7 +2122,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, restoreFailed, navigate]);
 
   // Handle QBO / Xero OAuth callback: ?qbo= / ?xero= connected|error
   const oauthReturn = Route.useSearch();
@@ -2712,7 +2714,12 @@ function Index() {
     [workspaceMarket],
   );
   const ownerCanonicalRatios = useMemo(
-    () => scorecardRatiosFromFinancials(v as unknown as Record<string, unknown>, { fyStartMonth: boardMarket.fyStartMonthDefault }),
+    () =>
+      numberRatioRecord(
+        scorecardRatiosFromFinancials(v as unknown as Record<string, unknown>, {
+          fyStartMonth: boardMarket.fyStartMonthDefault,
+        }),
+      ),
     [v, boardMarket.fyStartMonthDefault],
   );
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
@@ -3844,7 +3851,7 @@ function Index() {
   };
   const avgHealth = overallHealth.overall ?? NaN;
 
-  const valueMap: Record<RatioKey, { value: number; format: "x" | "pct" | "days" | "money" }> = {
+  const valueMap: Record<RatioKey, { value: number | null; format: "x" | "pct" | "days" | "money" }> = {
     taxBurden: { value: taxBurden, format: "x" },
     interestBurden: { value: interestBurden, format: "x" },
     operatingMargin: { value: operatingMargin, format: "pct" },
@@ -5873,21 +5880,28 @@ function Index() {
                                     }
                                     const k = row.key;
                                     const meta = RATIO_META[k];
-                                    const rawVal = valueMap[k].value;
+                                    const storedVal = valueMap[k].value;
+                                    const rawVal =
+                                      typeof storedVal === "number" && Number.isFinite(storedVal)
+                                        ? storedVal
+                                        : Number.NaN;
                                     const fmt = valueMap[k].format;
-                                    const health = healthMap[k];
+                                    const daysMissing = fmt === "days" && !isFinite(rawVal);
+                                    const health = daysMissing ? Number.NaN : healthMap[k];
                                     const series = seriesFor(k, rawVal);
                                     const delta = pctDelta(series);
                                     const bm = benchmarkFor(k);
-                                    const fmtd = !isFinite(rawVal)
-                                      ? "Not enough data"
-                                      : fmt === "pct"
-                                        ? `${(rawVal * 100).toFixed(1)}%`
-                                        : fmt === "x"
-                                          ? `${rawVal.toFixed(2)}×`
-                                          : fmt === "days"
-                                            ? `${Math.round(rawVal)} d`
-                                            : formatNumber(rawVal, boardMarket);
+                                    const fmtd = daysMissing
+                                      ? "—"
+                                      : !isFinite(rawVal)
+                                        ? "Not enough data"
+                                        : fmt === "pct"
+                                          ? `${(rawVal * 100).toFixed(1)}%`
+                                          : fmt === "x"
+                                            ? `${rawVal.toFixed(2)}×`
+                                            : fmt === "days"
+                                              ? `${Math.round(rawVal)} d`
+                                              : formatNumber(rawVal, boardMarket);
                                     const healthTier = scoreTier(health);
                                     const hCls = !isFinite(health)
                                       ? "text-slate-400"
@@ -5993,11 +6007,13 @@ function Index() {
                                                 : "—"}
                                           </div>
                                           <div className={`text-[10px] ${hLabelCls}`}>
-                                            {k === "grossMargin" && grossImplausible
-                                              ? GROSS_MARGIN_MAPPING_NOTE
-                                              : isFinite(health)
-                                                ? healthBandLabel(healthTier)
-                                                : "—"}
+                                            {daysMissing
+                                              ? HEALTH_NOT_ENOUGH_DATA
+                                              : k === "grossMargin" && grossImplausible
+                                                ? GROSS_MARGIN_MAPPING_NOTE
+                                                : isFinite(health)
+                                                  ? healthBandLabel(healthTier)
+                                                  : "—"}
                                           </div>
                                         </td>
                                       </tr>
@@ -6936,18 +6952,7 @@ function Index() {
                     .eq("client_id", effectiveClientId)
                     .order("period_date", { ascending: false })
                     .limit(24);
-                  const match = (rows ?? []).find((row) => {
-                    const stored = statementSpan(
-                      (row.financials as { periodStart?: string } | null)?.periodStart,
-                      (row.financials as { periodEnd?: string } | null)?.periodEnd,
-                    );
-                    return Boolean(
-                      fileSpan &&
-                        stored &&
-                        stored.periodStart === fileSpan.periodStart &&
-                        stored.periodEnd === fileSpan.periodEnd,
-                    );
-                  });
+                  const match = snapshotCoveringSpan(rows, fileSpan);
                   const ratiosOut = computeRatios(planned.history as never);
                   const write = match?.id
                     ? supabase

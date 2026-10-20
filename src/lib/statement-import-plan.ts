@@ -538,6 +538,23 @@ function stampHeld(
   };
 }
 
+/**
+ * The stored row whose own start and end match the file. Add-as-period uses
+ * this. Callers must not reuse the name `statementSpan` for a label: that
+ * hides this function and the lookup throws.
+ */
+export function snapshotCoveringSpan<T extends { financials?: unknown }>(
+  rows: readonly T[] | null | undefined,
+  fileSpan: StatementSpan | null,
+): T | undefined {
+  if (!fileSpan) return undefined;
+  return (rows ?? []).find((row) => {
+    const financials = row.financials as { periodStart?: string; periodEnd?: string } | null;
+    const stored = statementSpan(financials?.periodStart, financials?.periodEnd);
+    return Boolean(stored && stored.periodStart === fileSpan.periodStart && stored.periodEnd === fileSpan.periodEnd);
+  });
+}
+
 /** Prefer the snapshot that matches the live span when several share an end date. */
 export function preferStatementSnapshot<T extends { financials?: unknown; period_date?: string | null }>(
   rows: readonly T[],

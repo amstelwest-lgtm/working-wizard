@@ -88,7 +88,7 @@ import {
   withFinancialsWriteRev,
   statementImportWhat,
 } from "@/lib/statement-import-apply";
-import { confirmUploadedStatement, earlierStatementNote, liveStatementSpan, passStatementChoice, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, earlierStatementNote, liveStatementSpan, passStatementChoice, snapshotCoveringSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -112,6 +112,7 @@ import {
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
   liveHealthFromBooks,
+  numberRatioRecord,
   healthWithoutEvidence,
   NOT_SCORED_YET_LABEL,
   type OverallHealth,
@@ -120,6 +121,7 @@ import { playbookKeyForRatioName } from "@/lib/playbook-key";
 import { countOpenRatioQueries, ratioQueryLabel } from "@/lib/ratio-queries";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
+import type { RatioResult } from "@/reports/health-scorecard";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -1721,7 +1723,7 @@ function ClientView() {
   // Dates already on the client. Do not wait for the ledger status request:
   // that request can return a successful sync with the period stripped, and
   // the books sentence would drop the span.
-  const statementSpan = statementSpanLabel({
+  const booksSpanLabel = statementSpanLabel({
     periodStart: liveDates ? statementMeta.periodStart : snapshotMeta.periodStart,
     periodEnd: liveDates ? statementMeta.periodEnd : snapshotMeta.periodEnd,
     periodLabel: liveDates
@@ -1729,7 +1731,7 @@ function ClientView() {
       : snapshotMeta.periodLabel || currentSnapshot?.period_label,
     market: clientMarket,
   });
-  const snapshotSpan = statementSpan;
+  const snapshotSpan = booksSpanLabel;
   const dataFreshness = dataFreshnessLine({
     xero: xeroLink
       ? {
@@ -2990,13 +2992,7 @@ function ClientView() {
           .eq("client_id", clientId)
           .order("period_date", { ascending: false })
           .limit(24);
-        const match = (rows ?? []).find((row) => {
-          const stored = statementSpan(
-            (row.financials as { periodStart?: string } | null)?.periodStart,
-            (row.financials as { periodEnd?: string } | null)?.periodEnd,
-          );
-          return Boolean(fileSpan && stored && stored.periodStart === fileSpan.periodStart && stored.periodEnd === fileSpan.periodEnd);
-        });
+        const match = snapshotCoveringSpan(rows, fileSpan);
         const ratiosOut = overviewRatios(planned.history, { fyStartMonth });
         const periodDate = fileSpan?.periodEnd ?? period?.periodEnd ?? "";
         const periodLabel = planned.periodLabel || period?.periodLabel || periodDate;
@@ -3325,7 +3321,7 @@ function ClientView() {
     return pdf(
       HealthScorecardPDF({
         smeData: { name: client.name, period: periodLabel },
-        ratioResults,
+        ratioResults: ratioResults as RatioResult[],
         accountantProfile: profile,
         cashRunwayWeeks: effectiveRunway,
         overallHealth,
@@ -3875,7 +3871,7 @@ function ClientView() {
   const reportsReady = clientReportsReadyCount(financials);
   const reportsLine = reportsHomeReadyLine(reportsReady);
   const canonicalRatios = useMemo(
-    () => scorecardRatiosFromFinancials(financials, { fyStartMonth }),
+    () => numberRatioRecord(scorecardRatiosFromFinancials(financials, { fyStartMonth })),
     [financials, fyStartMonth],
   );
   const homeNeeds = useMemo(() => {
@@ -3917,7 +3913,7 @@ function ClientView() {
           : ["No draft waiting."];
     const draftStale = presented ? [presented.stale || presented.refresh || Boolean(bodyPresented?.refresh)] : undefined;
     const booksLine =
-      homeStatementsLine(statementSpan) ?? booksAnswerSentence({ freshness: dataFreshness });
+      homeStatementsLine(booksSpanLabel) ?? booksAnswerSentence({ freshness: dataFreshness });
     return {
       actionsHeading,
       actionLines,
@@ -3941,7 +3937,7 @@ function ClientView() {
     liveScoreSnapshot,
     dataFreshness,
     reportsLine,
-    statementSpan,
+    booksSpanLabel,
     figuresUpdatedAt,
   ]);
   const homeBrief = useMemo(

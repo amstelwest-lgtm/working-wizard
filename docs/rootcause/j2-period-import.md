@@ -60,3 +60,45 @@ One test drives the accountant confirm the page actually calls, then the owner c
 ## Files
 
 `src/lib/statement-import-plan.ts`, `src/lib/statement-parse.ts`, `src/components/upload-financials.tsx`, `src/components/extraction-review-modal.tsx`, `src/components/import-apply-notice.tsx`, `src/routes/_authenticated/clients.$clientId.tsx`, `src/routes/app.tsx`, `src/components/accountant-ratios.tsx`.
+
+## Addendum: Add as Q3 throws `sn is not a function`
+
+Prod after #683 (`472231a1`), US and ZA clients. A year-to-date P&L for Jan 1 – Sep 30 is on file. A Q3-only P&L shows `Replace year-to-date` / `Add as Q3`. Add as Q3 paints a red `Import failed. sn is not a function`. Retry asks the same question. Replace, a balance sheet after the year-to-date P&L, and an unknown period still import. The same throw happens for a ZA client, so it is not the market formatter.
+
+### Cause
+
+`sn` is the minified name of the local `statementSpan` in `ClientView`, not a missing export.
+
+`src/routes/_authenticated/clients.$clientId.tsx` imports the function `statementSpan` from `src/lib/statement-import-plan.ts` (line 91). Later in the same function it declares a books label with the same name (line 1724):
+
+```
+const statementSpan = statementSpanLabel({ ... })
+```
+
+`statementSpanLabel` (`src/lib/statement-period.ts` line 101) returns `string | null`. That `const` is in scope for the whole of `ClientView`, so it hides the import. The Add-as-Q3 branch is the only confirm path that calls it (line 2994):
+
+```
+const stored = statementSpan(row.financials?.periodStart, row.financials?.periodEnd)
+```
+
+That call runs the label string. The production chunk `clients._clientId-CYB_RMPg.js` minifies the binding to `sn` and the history lookup is `sn(co.financials?.periodStart, co.financials?.periodEnd)`. V8 reports `sn is not a function`. Nothing was written, so the books stay Jan–Sep. Retry confirms again with no choice, the plan returns `choose`, and the same question comes back.
+
+Replace, the balance-sheet merge, and the unknown-period block never call `statementSpan` inside `handleConfirmFinancials`, so they do not hit the shadowed name.
+
+### Why #676 and #683 missed it
+
+#676 tested `planStatementImport({ choice: "add_period" })` as a function call. The plan returns `history`. The throw is after that, in the page’s snapshot lookup.
+
+#683’s `scripts/j2-period-import-test.mts` clicks Add as Q3 on `UploadFinancials` and `ExtractionReviewModal`, but `onConfirm` is a test double. That double calls `confirmUploadedStatement` and returns. It never renders `ClientView`, so it never executes line 2994. The file check only asserts that the source contains `passStatementChoice(handleConfirmFinancials)`. A choice the plan accepts still passes while the page calls a string.
+
+### Owner path
+
+`src/routes/app.tsx` imports `statementSpan` (line 144) and calls it in the history branch (line 6934). It does not declare another `statementSpan`. In `app-CM55Pkuh.js` that import is `gj as Lr`, and the history lookup is `Lr(...)`. Owner Add as Q3 does not throw this TypeError. `accountant-ratios.tsx` does not call `statementSpan` when it files a period.
+
+### How to verify
+
+- Resolve the `statementSpan(...)` call inside `handleConfirmFinancials` to the import from `statement-import-plan.ts`, then call that function. While line 1724 still uses the name `statementSpan`, the call is the label and this fails.
+- Click Add as Q3 on the accountant upload and the owner review. The confirm that runs is the real `confirmUploadedStatement` plus the real `statementSpan` snapshot match, not a double that stops at the plan.
+- Check the minified history lookup still calls a function.
+- After a failed import, choosing another file or reopening the dialog clears `Import failed…` and the button reads Confirm again, on the accountant upload and the owner review.
+- No migration.

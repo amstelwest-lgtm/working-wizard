@@ -44,7 +44,7 @@ export type OverviewPillar = {
   id: "profit" | "assets" | "financing" | "cash";
   label: string;
   score: number | null;
-  status: "healthy" | "at_risk" | "critical";
+  status: "healthy" | "at_risk" | "critical" | null;
 };
 
 export type OverviewBrief = {
@@ -136,14 +136,18 @@ function chipLabel(status: "healthy" | "at_risk" | "critical"): "Healthy" | "Wat
 
 const NON_FINITE_DAY_KEYS = new Set(["Creditor Days", "Inventory Days", "Working Capital Days"]);
 
-function finiteDisplayRatios(raw: Record<string, number> | null | undefined): Record<string, number> {
+function finiteDisplayRatios(
+  raw: Record<string, number | null> | null | undefined,
+): Record<string, number> {
   const out: Record<string, number> = {};
   if (!raw) return out;
   for (const [key, val] of Object.entries(raw)) {
     const display = DISPLAY_TO_CAMEL[key] ? key : CAMEL_TO_DISPLAY[key];
     if (!display) continue;
-    if (!Number.isFinite(val)) {
-      if (NON_FINITE_DAY_KEYS.has(display) && Number.isNaN(val)) out[display] = Number.NaN;
+    if (typeof val !== "number" || !Number.isFinite(val)) {
+      if (NON_FINITE_DAY_KEYS.has(display) && typeof val === "number" && Number.isNaN(val)) {
+        out[display] = Number.NaN;
+      }
       continue;
     }
     out[display] = val;
@@ -292,7 +296,7 @@ export function overviewRunwayFact(brief: OverviewBrief): string | null {
 
 export function buildOverviewBrief(input: {
   financials?: Record<string, unknown> | null;
-  ratios?: Record<string, number> | null;
+  ratios?: Record<string, number | null> | null;
   runwayWeeks?: number | null;
   runwayLabel?: string | null;
   /** Resolved cash (bank, then period). When set, wins over financials.cash. */
