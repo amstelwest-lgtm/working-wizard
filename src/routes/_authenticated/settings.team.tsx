@@ -7,8 +7,10 @@ import { BackLink } from "@/components/back-link";
 import { PageHeader } from "@/components/primitives";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { SettingsShell } from "@/components/settings-shell";
+import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { coerceMarketSelection, formatDate, resolveMarket } from "@/lib/market";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,14 +92,13 @@ function ClassificationSelect({
   );
 }
 
-function formatInviteExpiry(iso: string): string {
+export function formatInviteExpiry(
+  iso: string,
+  market: { locale?: string | null; timezone?: string },
+): string {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return "—";
-  const label = new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(t));
+  const label = formatDate(t, market);
   return t < Date.now() ? `Expired ${label}` : label;
 }
 
@@ -106,6 +107,11 @@ const INVITE_EMAIL_FAILED =
 
 function TeamAccessPage() {
   const { user } = useAuth();
+  const { firmMarket } = useAccountantProfile();
+  const inviteMarket = useMemo(
+    () => resolveMarket(coerceMarketSelection(firmMarket)),
+    [firmMarket],
+  );
   const navigate = useNavigate();
   const loadRoster = useServerFn(getPracticeTeamRoster);
   const loadBoard = useServerFn(getPracticeAccessBoard);
@@ -543,7 +549,7 @@ function TeamAccessPage() {
                           <div className="text-xs text-slate-400">
                             {MEMBERSHIP_LABELS[row.membershipRole]} ·{" "}
                             {CLASSIFICATION_LABELS[row.classification]} · Expires{" "}
-                            {formatInviteExpiry(row.expiresAt)}
+                            {formatInviteExpiry(row.expiresAt, inviteMarket)}
                           </div>
                         </div>
                         {view.canManage ? (

@@ -1,6 +1,9 @@
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { stripMilonProjection } from "@/lib/milon-projection";
+import { formatMonthYear } from "@/lib/market/format";
+import type { ResolvedMarket } from "@/lib/market/types";
+import { ZA_MARKET } from "@/lib/market/resolve";
 import type { ActionPlanPdfItem } from "@/reports/action-plan";
 
 export type DeliverablePdfSource = {
@@ -48,13 +51,14 @@ export async function downloadActionPlanPdf(input: {
   items: ActionPlanPdfItem[];
   profile: AccountantProfile;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: Pick<ResolvedMarket, "locale" | "timezone">;
 }): Promise<void> {
   const [{ pdf }, { ActionPlanPDF }] = await Promise.all([
     import("@react-pdf/renderer"),
     import("@/reports/action-plan"),
   ]);
   const name = input.clientName.trim() || "Client";
-  const period = input.periodLabel?.trim() || new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+  const period = input.periodLabel?.trim() || formatMonthYear(new Date(), input.market?.timezone);
   const blob = await pdf(
     ActionPlanPDF({
       smeData: { name, period },
@@ -63,6 +67,7 @@ export async function downloadActionPlanPdf(input: {
       outcomeGoal: input.outcomeGoal,
       items: input.items,
       reviewSignoff: input.reviewSignoff ?? null,
+      market: input.market ?? ZA_MARKET,
     }) as Parameters<typeof pdf>[0],
   ).toBlob();
   const url = URL.createObjectURL(blob);

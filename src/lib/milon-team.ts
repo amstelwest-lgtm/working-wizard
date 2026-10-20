@@ -5,6 +5,7 @@ import {
   type TeamAgentStatus,
   type TeamBriefingItem,
 } from "@/lib/milon-team-feed";
+import { calendarDayFromIso, dateOrder } from "./market/date-presets";
 import { AGENT_DISPLAY_NAME } from "./milon-team-names";
 
 /** Display order follows Eng1's key list. The display strings live in milon-team-names.ts. */
@@ -96,20 +97,14 @@ export function formatLastRun(at: string | null, now: Date = new Date()): string
   return ago ? `Last run ${ago}` : null;
 }
 
-const AS_OF_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
-
-/** en-ZA short date. The year is omitted when it is the clock's year. */
-export function formatAsOf(asOf: string | null, now: Date = new Date()): string | null {
+/** Analyst note date. Same calendar-day preset as the rest of the product, year included. */
+export function formatAsOf(
+  asOf: string | null,
+  _now: Date = new Date(),
+  market: { locale?: string | null } = { locale: "en-ZA" },
+): string | null {
   if (!asOf) return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(asOf.trim());
-  if (!match) return asOf;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const monthName = AS_OF_MONTHS[month - 1];
-  if (!monthName || day < 1 || day > 31) return asOf;
-  if (year === now.getFullYear()) return `${day} ${monthName}`;
-  return `${day} ${monthName} ${year}`;
+  return calendarDayFromIso(asOf, dateOrder(market.locale)) ?? asOf;
 }
 
 function kindLabel(kind: TeamActivityKind | null): string {

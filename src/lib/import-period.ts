@@ -3,7 +3,7 @@
  * Never invents the current calendar month when the file has no period.
  */
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+import { MONTHS } from "@/lib/market/date-presets";
 
 export type ImportPeriodParts = {
   /** 1–12 */

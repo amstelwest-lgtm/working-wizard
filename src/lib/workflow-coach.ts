@@ -13,6 +13,7 @@
  * There is no horizontal strip and no Continue button in the client shell.
  */
 
+import { formatDateTime, ZA_MARKET } from "@/lib/market";
 import { scoreTier } from "@/lib/ratios";
 
 export const COACH_STEPS = [
@@ -402,17 +403,14 @@ export function dataStepDone(input: {
   return syncSucceeded(input.xero) || syncSucceeded(input.qbo) || (input.snapshotCount ?? 0) > 0;
 }
 
-function formatSyncStamp(iso: string): string {
+function formatSyncStamp(
+  iso: string,
+  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+): string {
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return iso;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "UTC",
-  }).format(d);
+  const label = formatDateTime(d, market);
+  return label === "—" ? iso : label;
 }
 
 /** One line for the Client Brain data section: latest successful sync, else the snapshot period. */
@@ -420,6 +418,7 @@ export function dataFreshnessLine(input: {
   xero?: DataSyncLink;
   qbo?: DataSyncLink;
   snapshotPeriod?: string | null;
+  market?: { locale?: string | null; timezone?: string };
 }): string {
   const rows: { label: string; at: string; period: string | null }[] = [];
   if (syncSucceeded(input.xero) && input.xero?.lastSyncedAt) {
@@ -440,7 +439,7 @@ export function dataFreshnessLine(input: {
   const best = rows[0];
   if (best) {
     const period = best.period ? ` · ${best.period}` : "";
-    return `Last sync ${formatSyncStamp(best.at)} · ${best.label}${period}`;
+    return `Last sync ${formatSyncStamp(best.at, input.market)} · ${best.label}${period}`;
   }
   const snapshot = input.snapshotPeriod?.trim();
   if (snapshot) return `Snapshot on file · ${snapshot}`;

@@ -5,6 +5,7 @@
  */
 
 import { forecastChatFacts } from "../../../src/lib/cash-forecast-parity.ts";
+import { MONTHS_LONG } from "../../../src/lib/market/date-presets.ts";
 import { moveFactorLabel } from "../../../src/lib/move-pillars.ts";
 import { periodProfitBridge } from "../../../src/lib/period-profit.ts";
 import {
@@ -201,7 +202,7 @@ function labelOrRaw(map: Record<string, string>, raw: unknown): string {
 function monthName(month: unknown): string {
   const n = Number(month);
   if (!Number.isFinite(n) || n < 1 || n > 12) return "";
-  return new Date(2000, n - 1, 1).toLocaleString("en-ZA", { month: "long" });
+  return MONTHS_LONG[n - 1] ?? "";
 }
 
 export function profileQuestionsFromOperating(

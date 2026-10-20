@@ -3,6 +3,7 @@
  */
 
 import type { ResolvedMarket } from "@/lib/market";
+import { MONTHS, formatMonthRange } from "@/lib/market/date-presets";
 import { ZA_MARKET, formatMonthLabel as formatMonthLabelMarket } from "@/lib/market";
 import type {
   BudgetDocument,
@@ -142,22 +143,14 @@ export function alignBudgetToFirmFy(doc: BudgetDocument): BudgetDocument {
 export function plainBudgetWindowHeading(
   templateLabel: string,
   doc: { fyStart: string },
-  market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
+  _market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
 ): string {
   const kind = templateLabel.split("/")[0].trim().replace(/(\S)\s+(?=\S)/g, "$1-");
   const months = fyMonths(doc.fyStart);
-  const fmt = (ym: string) => {
-    const [y, m] = ym.split("-").map(Number);
-    if (!y || !m) return ym;
-    return new Date(Date.UTC(y, m - 1, 1)).toLocaleString(market.locale, {
-      month: "short",
-      year: "numeric",
-      timeZone: "UTC",
-    });
-  };
-  const start = months[0] ? fmt(months[0]) : "";
-  const end = months.length ? fmt(months[months.length - 1]) : "";
-  return `${kind} budget · ${start} – ${end}`;
+  const first = months[0];
+  const last = months[months.length - 1];
+  const window = first && last ? formatMonthRange(first, last) : "";
+  return `${kind} budget · ${window ?? ""}`;
 }
 
 export function budgetWindowLabel(
@@ -165,11 +158,7 @@ export function budgetWindowLabel(
   market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
 ): string {
   const fyEndMonth = ((doc.fyStartMonth + 10) % 12) + 1;
-  const short = (m: number) =>
-    new Date(Date.UTC(2000, m - 1, 1)).toLocaleString(market.locale, {
-      month: "short",
-      timeZone: "UTC",
-    });
+  const short = (m: number) => MONTHS[m - 1] ?? "";
   const fyLabel = `FY ${short(doc.fyStartMonth)}–${short(fyEndMonth)}`;
   const [fyY, fyM] = doc.fyStart.split("-").map(Number);
   const atFyStart = fyM === doc.fyStartMonth && Number.isFinite(fyY);
@@ -195,7 +184,7 @@ export function currentBudgetMonth(months: string[], now = new Date()): string {
 
 export function formatMonthLabel(
   ym: string,
-  market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
+  market: { locale?: string | null } = ZA_MARKET,
 ): string {
   return formatMonthLabelMarket(ym, market);
 }

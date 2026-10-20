@@ -12,21 +12,10 @@ import {
   type OwnerPracticePerson,
 } from "@/lib/practice-access.functions";
 import { CLASSIFICATION_LABELS } from "@/lib/practice-access";
-
-function formatGranted(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return iso;
-  }
-}
+import { useMarketFormat } from "@/contexts/market";
 
 export function OwnerPracticeAccessCard() {
+  const { date } = useMarketFormat();
   const load = useServerFn(listOwnerPracticeAccess);
   const revoke = useServerFn(ownerRevokePracticeAccess);
   const disconnect = useServerFn(ownerDisconnectFirm);
@@ -106,7 +95,7 @@ export function OwnerPracticeAccessCard() {
               <div className="text-sm font-medium text-slate-100">{p.name}</div>
               <div className="text-xs text-slate-500">
                 {p.email} · {CLASSIFICATION_LABELS[p.classification]} · {p.firmName}
-                {p.clientName ? ` · ${p.clientName}` : ""} · since {formatGranted(p.grantedAt)}
+                {p.clientName ? ` · ${p.clientName}` : ""} · since {p.grantedAt ? date(p.grantedAt) : "—"}
               </div>
             </div>
             <Button

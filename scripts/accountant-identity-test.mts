@@ -119,9 +119,9 @@ assert(
   namedLine?.startsWith("Signed off by James Fleming · Ben Accountants · ") === true,
   `sign-off line names the row, got ${namedLine}`,
 );
-assert(namedLine != null && /EDT|UTC-4/.test(namedLine), `sign-off line keeps the zone, got ${namedLine}`);
+assert(namedLine != null && /\bET\b/.test(namedLine), `sign-off line keeps the zone, got ${namedLine}`);
 assert(
-  namedLine === "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 9:15 PM EDT",
+  namedLine === "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 9:15 PM ET",
   `sign-off line uses the shared clock, got ${namedLine}`,
 );
 assert(namedLine != null && !namedLine.includes(":15:"), `sign-off line has no seconds, got ${namedLine}`);
@@ -129,7 +129,7 @@ assert(
   formatReviewDateTime("2026-10-07T22:14:47.000Z", {
     locale: "en-US",
     timezone: "America/New_York",
-  }) === "Oct 7, 2026, 6:14 PM EDT",
+  }) === "Oct 7, 2026, 6:14 PM ET",
   "the shared clock drops the leading zero and the seconds",
 );
 assert(
@@ -176,7 +176,7 @@ assert(
     name: "James Fleming",
     firmName: "Ben Accountants",
     market: { locale: "en-US", timezone: "America/New_York" },
-  }) === "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 6:14 PM EDT",
+  }) === "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 6:14 PM ET",
   "a signed pack names the reviewer next to the chip",
 );
 assert(

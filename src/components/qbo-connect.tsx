@@ -13,6 +13,7 @@ import {
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { yearToDateTitle } from "@/lib/statement-period";
+import { useMarketFormat } from "@/contexts/market";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
 import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
 import type { MoneyMarket } from "@/lib/market/format";
@@ -29,16 +30,6 @@ type Props = {
   market?: MoneyMarket;
 };
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function fmtExact(n: number | null) {
   if (n == null || !isFinite(n)) return "—";
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -52,6 +43,7 @@ export function QboConnectCard({
   financials,
   market,
 }: Props) {
+  const { dateTime } = useMarketFormat();
   const fetchStatus = useServerFn(getQboStatus);
   const fetchAuthUrl = useServerFn(getQboAuthUrl);
   const doSync = useServerFn(triggerQboSync);
@@ -186,7 +178,7 @@ export function QboConnectCard({
           : status.syncFigures,
         board: status.boardFigures,
       },
-      fmtDate,
+      dateTime,
     );
     return (
       <div className={`ledger-connect ${isError ? "ledger-connect--error" : "ledger-connect--ok"}`}>

@@ -15,6 +15,7 @@
  * Vocabulary mirrors supabase/migrations/20260918160000_advisory_packs.sql
  * plus 20261007120000_advisory_pack_stale_signoff.sql (test-guarded).
  */
+import { calendarDayFromIso } from "./market/date-presets.ts";
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "./advisory-narrative.ts";
 import { ratiosStatementFigures } from "./deliverable-input-config.ts";
 import type { Json } from "../integrations/supabase/types.ts";
@@ -412,23 +413,7 @@ function isImprovement(name: string, delta: number): boolean {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "an unknown date";
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return iso;
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  return calendarDayFromIso(iso, "za") ?? iso;
 }
 
 export const ADVISORY_PACK_STALE_NOTE =

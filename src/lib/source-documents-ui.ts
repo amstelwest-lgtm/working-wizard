@@ -3,6 +3,7 @@
  * Approve is the only decision word.
  */
 import { refusesSignOffWording } from "@/lib/agent-draft-decision";
+import { formatCalendarDay, formatDateTime, ZA_MARKET } from "@/lib/market";
 import {
   DEFAULT_FINAL_UNLOCK_AFTER_CLEAN_DRAFTS,
   SOURCE_DOCS_MAX_BYTES,
@@ -196,30 +197,23 @@ export function holdingLabel(draftHolding: string | null | undefined): "Held in 
   return draftHolding === "held_in_milon" ? "Held in Milōn" : null;
 }
 
-export function formatIssuedOn(isoDate: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
-  if (!match) return isoDate;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+export function formatIssuedOn(
+  isoDate: string,
+  market: { locale?: string | null } = ZA_MARKET,
+): string {
+  const label = formatCalendarDay(isoDate, market);
+  return label === "—" ? isoDate : label;
 }
 
-export function formatDecisionWhen(iso: string, timeZone = "UTC"): string {
+export function formatDecisionWhen(
+  iso: string,
+  timeZone = "UTC",
+  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone,
-    hourCycle: "h23",
-  }).format(date);
+  const zone = timeZone || market.timezone || "UTC";
+  return formatDateTime(date, { locale: market.locale, timezone: zone });
 }
 
 export function approvalSentence(name: string, when: string): string {
@@ -368,7 +362,10 @@ function approverName(
   return named.trim() || "a named approver";
 }
 
-function proposalRows(proposal: SourceProposalRow): { label: string; value: string }[] {
+function proposalRows(
+  proposal: SourceProposalRow,
+  market: { locale?: string | null } = ZA_MARKET,
+): { label: string; value: string }[] {
   const payload = payloadOf(proposal.payload);
   const contact = payload.contact ?? {};
   const supplier = text(contact.name) || text(proposal.supplier_display_name) || "Supplier";
@@ -383,7 +380,7 @@ function proposalRows(proposal: SourceProposalRow): { label: string; value: stri
   const rows = [
     { label: "Supplier", value: vat ? `${created} · ${vat}` : created },
     { label: "Invoice", value: invoice },
-    { label: "Date", value: issued ? formatIssuedOn(issued) : "—" },
+    { label: "Date", value: issued ? formatIssuedOn(issued, market) : "—" },
     { label: "Ledger", value: ledgerLabel(proposal.target_ledger) },
     { label: "Mode", value: mode },
     { label: "Amounts", value: amountsLabel(text(payload.amounts_are)) || "—" },
@@ -423,10 +420,12 @@ export function buildSourceDocumentsModel(input: {
   ledgerChoice?: Partial<Record<string, LedgerChoice>>;
   duplicate?: boolean;
   timeZone?: string;
+  market?: { locale?: string | null; timezone?: string };
 }): SourceDocumentsModel {
   const canApprove = mayApproveLedgerPost(input.viewer);
   const names = input.names ?? {};
-  const timeZone = input.timeZone ?? "UTC";
+  const market = input.market ?? ZA_MARKET;
+  const timeZone = input.market?.timezone ?? input.timeZone ?? "UTC";
   const connected = input.connectedLedgers ?? [];
   const options: LedgerChoice[] = connected.length ? connected : ["xero", "qbo", "sage"];
   const extractions = latestByDocument(input.extractions);
@@ -459,7 +458,7 @@ export function buildSourceDocumentsModel(input: {
         proposal.approved_by && proposal.approved_at
           ? approvalSentence(
               approverName(proposal.approved_by, names, input.viewer),
-              formatDecisionWhen(proposal.approved_at, timeZone),
+              formatDecisionWhen(proposal.approved_at, timeZone, market),
             )
           : null;
       const base = {
@@ -467,7 +466,7 @@ export function buildSourceDocumentsModel(input: {
         fileName,
         holding,
         progress: finalLockLine(count, locked),
-        rows: proposalRows(proposal),
+        rows: proposalRows(proposal, market),
         lines: proposalLines(proposal),
         notes: flagNotes(flags),
         approval,

@@ -29,10 +29,14 @@ export type TryCallInput = {
   timeZone: string;
 };
 
-function groupByDay(slots: CallSlot[], timeZone: string): { day: string; slots: CallSlot[] }[] {
+function groupByDay(
+  slots: CallSlot[],
+  timeZone: string,
+  market: "US" | "ZA",
+): { day: string; slots: CallSlot[] }[] {
   const groups: { day: string; slots: CallSlot[] }[] = [];
   for (const slot of slots) {
-    const day = formatSlotDay(slot.start, timeZone);
+    const day = formatSlotDay(slot.start, timeZone, market);
     const last = groups[groups.length - 1];
     if (!last || last.day !== day) groups.push({ day, slots: [slot] });
     else last.slots.push(slot);
@@ -85,8 +89,8 @@ export function TrySchedule({
     setLocal(false);
   }, [now, timeZone, market]);
   const groups = useMemo(
-    () => (frozenNow ? groupByDay(callSlots(frozenNow), zone || "UTC") : []),
-    [frozenNow, zone],
+    () => (frozenNow ? groupByDay(callSlots(frozenNow), zone || "UTC", shownMarket) : []),
+    [frozenNow, zone, shownMarket],
   );
   const [more, setMore] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -160,7 +164,7 @@ export function TrySchedule({
                       aria-pressed={selected === iso}
                       onClick={() => setSelected(iso)}
                     >
-                      {formatSlotButton(slot.start, zone)}
+                      {formatSlotButton(slot.start, zone, shownMarket)}
                     </button>
                   );
                 })}

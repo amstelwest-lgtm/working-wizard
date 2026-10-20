@@ -157,7 +157,7 @@ for (const file of ["src/lib/ask-ai.js", "public/ask-ai.css", "src/hooks/use-ask
   assert(!readFileSync(file, "utf8").includes("teamDeskOwnsMount"), `${file} does not own the desk mount`);
   assert(!readFileSync(file, "utf8").includes("data-team-desk"), `${file} does not special-case the desk`);
 }
-assert(formatAsOf("2026-10-08", NOW) === "8 Oct", "a date in the current year is day and short month");
+assert(formatAsOf("2026-10-08", NOW) === "8 Oct 2026", "an as-of date is the calendar day, year included");
 assert(formatAsOf("2025-03-01", NOW) === "1 Mar 2025", "a date in another year keeps the year");
 assert(formatAsOf(null, NOW) === null, "a missing as-of date stays hidden");
 
@@ -300,7 +300,7 @@ assert(populated.includes(agentDisplayName("financial_manager")), "the team row 
 assert(populated.includes(agentShortName("financial_manager")), "tags use the Financial Manager short name");
 assert(populated.includes('data-agent-initial="F"'), "the Financial Manager avatar letter is F");
 assert(!populated.includes(BOT_ROLE), "rendered desk copy does not say the old role");
-assert(populated.includes("Oct figures · checked 8 Oct"), "a period shows the day it was checked");
+assert(populated.includes("Oct figures · checked 8 Oct 2026"), "a period shows the day it was checked");
 assert(!populated.includes("as of 2026-10-08"), "as-of dates do not keep the ISO form");
 assert(!populated.includes("0.7795"), "today does not print a raw ratio decimal");
 assert(populated.includes("milon-desk-agent-short"), "narrow screens can show the short team name");
@@ -424,7 +424,7 @@ assert(!debtRatio.includes("Pay down"), "a ratio row does not repeat the advisor
 assert(ratios.indexOf("data-ratio=") < ratios.indexOf("Pay down the short-term loan"), "findings come before the advisor move");
 assert(ratios.includes(">Debt<"), "a proposal chip names the area");
 assert(!ratios.includes("Client Brain"), "internal source names stay off the desk");
-assert(ratios.includes("Sep figures · checked 9 Oct"), "the period and the check date both show");
+assert(ratios.includes("Sep figures · checked 9 Oct 2026"), "the period and the check date both show");
 assert((ratios.match(/data-ratio=/g) ?? []).length === 3, "today caps ratio rows at three");
 assert(ratios.includes(">Show all<"), "the rest of the ratios sit behind show all");
 
@@ -483,7 +483,7 @@ assert(liveDesk.includes("Review the cash floor before the next meeting."), "a h
 assert(liveDesk.includes("milon-desk-handoff-arrow"), "a hand-off shows an arrow");
 assert(liveDesk.indexOf('data-finding="f1"') < liveDesk.indexOf('data-handoff="h1"'), "findings come before hand-offs");
 const findingHtml = liveDesk.slice(liveDesk.indexOf('data-finding="f1"'), liveDesk.indexOf("</li>"));
-assert(findingHtml.includes("Sep figures · checked 8 Oct"), "the finding keeps the checked line");
+assert(findingHtml.includes("Sep figures · checked 8 Oct 2026"), "the finding keeps the checked line");
 assert((findingHtml.match(/8 Oct/g) ?? []).length === 1, "a finding has one date line");
 assert(findingHtml.includes('data-finding-agent="analyst"'), "a finding names its agent");
 
@@ -639,7 +639,7 @@ assert(nullRecipient.includes("Draft, needs your OK"), "a person draft needs the
 assert(nullRecipient.includes('data-run-state="found"'), "a succeeded run with a draft is found");
 assert(!nullRecipient.includes("Do not show this null recipient"), "a draft with no to_agent is not a hand-off");
 assert(
-  figuresCheckedLine("Sep 2026", "2026-10-09T08:00:00.000Z", NOW) === "Sep figures · checked 9 Oct",
+  figuresCheckedLine("Sep 2026", "2026-10-09T08:00:00.000Z", NOW) === "Sep figures · checked 9 Oct 2026",
   "checked line is the period and the run date",
 );
 assert(

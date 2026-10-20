@@ -12,7 +12,7 @@ import {
   scoreCreditorDays,
   weeklyRunRate,
 } from "../src/lib/client-metrics";
-import { formatCalendarDay } from "../src/lib/market/format";
+import { formatWeekHeader } from "../src/lib/market/format";
 import { openingCashReplaceNotice } from "../src/lib/cash-from-banks.publish";
 import { healthMapFromRatios, scorePlaybookRatio } from "../src/lib/health-score";
 import { HEALTH_BAND_TABLE, healthBandLabel, scoreTier } from "../src/lib/ratios";
@@ -46,8 +46,8 @@ assert(
     "2026-10-05",
   "firm timezone: Monday afternoon in New York is this week",
 );
-const oct5 = formatCalendarDay("2026-10-05", { locale: "en-US" }, { day: "numeric", month: "short" });
-const sep23 = formatCalendarDay("2026-09-23", { locale: "en-US" }, { day: "numeric", month: "short" });
+const oct5 = formatWeekHeader("2026-10-05", { locale: "en-US" });
+const sep23 = formatWeekHeader("2026-09-23", { locale: "en-US" });
 assert(oct5.includes("Oct") && /\b5\b/.test(oct5) && !/\b4\b/.test(oct5), `Oct 5 label shifted: ${oct5}`);
 assert(sep23.includes("Sep") && sep23.includes("23") && !sep23.includes("22"), `Sep 23 label shifted: ${sep23}`);
 

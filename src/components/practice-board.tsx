@@ -100,6 +100,7 @@ import {
   clientMarketDraftFromFirm,
   coerceMarketSelection,
   draftToSelection,
+  formatDate,
   formatMoney,
   isDraftComplete,
   parseMarketSelection,
@@ -1870,7 +1871,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const portfolioBook = useFirmPortfolioRows(firmId, clientRows.length);
   const portfolioRows = portfolioBook.rows;
   const portfolioLoaded = portfolioBook.loaded;
-  const asOf = dataAsOfLabel();
+  const asOf = dataAsOfLabel(new Date(), resolveMarket(parseMarketSelection(firmMarket)));
 
   const attentionItems = useMemo(
     () =>
@@ -2461,11 +2462,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 {queryRows.map((row) => {
                   const client = clientRows.find((c) => c.id === row.clientId);
                   const when = row.createdAt
-                    ? new Date(row.createdAt).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })
+                    ? formatDate(row.createdAt, resolveMarket(parseMarketSelection(firmMarket)))
                     : "";
                   return (
                     <button

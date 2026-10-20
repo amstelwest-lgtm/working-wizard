@@ -7,6 +7,7 @@
  * Every Intuit HTTP response logs the `intuit_tid` response header.
  */
 
+import { MONTHS_LONG_LOWER as FISCAL_MONTHS } from "@/lib/market/date-presets";
 import {
   attachQboInvoiceDetail,
   finalizeCollections,
@@ -57,21 +58,6 @@ const QBO_AUTH_ENDPOINT = "https://appcenter.intuit.com/connect/oauth2";
 const QBO_TOKEN_ENDPOINT = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 const QBO_REVOKE_ENDPOINT = "https://developer.api.intuit.com/v2/oauth2/tokens/revoke";
 const MINOR_VERSION = "70";
-
-const FISCAL_MONTHS = [
-  "january",
-  "february",
-  "march",
-  "april",
-  "may",
-  "june",
-  "july",
-  "august",
-  "september",
-  "october",
-  "november",
-  "december",
-];
 
 export function qboCredentialsConfigured(): boolean {
   return Boolean(

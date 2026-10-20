@@ -1,3 +1,4 @@
+import { calendarDayFromIso } from "@/lib/market/date-presets";
 import { canonicalScoreProse } from "@/lib/score-prose";
 
 /**
@@ -22,8 +23,6 @@ export type OwnerReplyModel = {
   body: OwnerReplyBlock[];
   actions: TextRun[][];
 };
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Theo's raw reply: one paragraph, raw bold, and inline " - " actions. */
 export const OWNER_REPLY_BLOB =
@@ -75,10 +74,8 @@ export function formatIsoDates(input: string): string {
     const y = Number(year);
     const m = Number(month);
     const d = Number(day);
-    if (m < 1 || m > 12 || d < 1 || d > 31) return full;
-    const stamp = new Date(Date.UTC(y, m - 1, d));
-    if (stamp.getUTCFullYear() !== y || stamp.getUTCMonth() !== m - 1 || stamp.getUTCDate() !== d) return full;
-    return `${d} ${MONTHS[m - 1]} ${y}`;
+    const label = calendarDayFromIso(`${year}-${month}-${day}`, "za");
+    return label ?? full;
   });
 }
 

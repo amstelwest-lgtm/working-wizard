@@ -9,16 +9,15 @@ import { useMarketFormat } from "@/contexts/market";
 
 export const OWNER_SIGNOFF_STALE_CHIP = "Figures changed · re-review";
 
-/** "1 Sep 2026". Month is the three-letter form, day has no leading zero. */
-export function ownerSignoffDate(iso: string, timeZone = "UTC"): string {
-  const formatted = formatDate(
-    iso,
-    { locale: "en-GB", timezone: timeZone },
-    { day: "numeric", month: "short", year: "numeric", timeZone },
-  )
-    .replace(/\u202f/g, " ")
-    .replace(/\u00a0/g, " ");
-  return formatted.replace(/\bSept\b/g, "Sep");
+/** Calendar day of the stored sign-off. ZA "1 Sep 2026". US "Sep 1, 2026". */
+export function ownerSignoffDate(
+  iso: string,
+  timeZone = "UTC",
+  market?: { locale?: string; timezone?: string },
+): string {
+  const locale =
+    market?.locale ?? (timeZone.startsWith("America/") ? "en-US" : "en-ZA");
+  return formatDate(iso, { locale, timezone: market?.timezone ?? timeZone });
 }
 
 export function ownerSignoffLine(name: string, date: string): string {
@@ -51,7 +50,7 @@ export function OwnerSignoffMark({
     return null;
   }
   const date = signoff.signed_off_at
-    ? ownerSignoffDate(signoff.signed_off_at, market.timezone)
+    ? ownerSignoffDate(signoff.signed_off_at, market.timezone, market)
     : "";
   const line = ownerSignoffLine(signoff.signed_off_by_name, date);
   return (

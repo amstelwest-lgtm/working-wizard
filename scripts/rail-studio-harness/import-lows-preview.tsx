@@ -9,11 +9,9 @@ import {
   statementAutoPopulatePrefs,
   summariseAutoPopulate,
 } from "@/lib/auto-populate";
-import { formatCalendarDay } from "@/lib/market/format";
+import { formatWeekHeader } from "@/lib/market/format";
 import { ZA_MARKET } from "@/lib/market";
 import { balanceSheetCashAsOf } from "@/lib/statement-parse";
-
-const WEEK_DAY_LABEL = { day: "2-digit", month: "short" } as const;
 
 const sheetPrefs = statementAutoPopulatePrefs(defaultAutoPopulatePrefs(), "balance_sheet");
 
@@ -39,7 +37,7 @@ export function ImportLowsPreview() {
   const { market, moneyCompact } = useMarketFormat();
   const opening = 46300;
   const asOf = balanceSheetCashAsOf({ cash: "46300", cashAsOf: "2026-09-30" }, opening);
-  const openingLabel = asOf ? formatCalendarDay(asOf, market, WEEK_DAY_LABEL) : "";
+  const openingLabel = asOf ? formatWeekHeader(asOf, market) : "";
   const message = summariseAutoPopulate(applied, false);
 
   useEffect(() => {

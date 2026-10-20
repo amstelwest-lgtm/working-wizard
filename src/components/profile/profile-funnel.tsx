@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MONTHS_LONG } from "@/lib/market/date-presets";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type {
@@ -220,20 +221,7 @@ export function ProfileFunnel({
         ? DEFERRED_QUESTIONS
         : ALL_QUESTIONS;
   const TOTAL = order.length;
-  const MONTH_NAMES = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
+  const MONTH_NAMES = MONTHS_LONG;
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [payMotion, setPayMotion] = useState<BudgetPayMotion | null>(initial?.payMotion ?? null);

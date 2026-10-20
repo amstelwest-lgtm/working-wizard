@@ -9,6 +9,8 @@ import {
   idleStarterTrialBanner,
   type StarterTrialBanner,
 } from "./firm-starter-trial";
+import { formatDate } from "./market/format.ts";
+import { ZA_MARKET } from "./market/resolve.ts";
 import {
   FIRM_BAND_CATALOG,
   FIRM_TRIAL_CLIENT_LIMIT,
@@ -202,17 +204,16 @@ export function firmTrialStatusLine(input: {
   return `Free trial · ends ${date}`;
 }
 
-/** Date label for a Stripe trial end. Null when the timestamp is missing. */
-export function trialEndDateLabel(trialEndIso: string | null | undefined): string | null {
+/** Date label for a Stripe trial end, in the firm's market. Null when the timestamp is missing. */
+export function trialEndDateLabel(
+  trialEndIso: string | null | undefined,
+  market: { locale?: string | null; timezone?: string } = ZA_MARKET,
+): string | null {
   if (!trialEndIso) return null;
   const end = Date.parse(trialEndIso);
   if (!Number.isFinite(end)) return null;
-  return new Intl.DateTimeFormat("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Africa/Johannesburg",
-  }).format(new Date(end));
+  const label = formatDate(end, market);
+  return label === "—" ? null : label;
 }
 
 export type FirmPlanDisplay = FirmPlanStatusCopy & {
@@ -253,6 +254,7 @@ export function formatFirmPlanStatus(input: {
   band: FirmBandId | null;
   trialEndIso?: string | null;
   now?: Date;
+  market?: { locale?: string | null; timezone?: string };
 }): FirmPlanStatusCopy {
   const band = input.band && isFirmBandId(input.band) ? input.band : null;
   const bandName = band ? FIRM_BAND_CATALOG[band].name : null;
@@ -271,7 +273,7 @@ export function formatFirmPlanStatus(input: {
       band,
       headline,
       detail,
-      trialEndsOn: trialEndDateLabel(input.trialEndIso),
+      trialEndsOn: trialEndDateLabel(input.trialEndIso, input.market),
     };
   }
 

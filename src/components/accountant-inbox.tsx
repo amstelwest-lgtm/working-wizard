@@ -13,6 +13,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Check, ChevronDown, ChevronUp, Inbox, Loader2, Store, X } from "lucide-react";
 import { toast } from "sonner";
 import { useTrack } from "@/hooks/use-track";
+import { useMarketFormat } from "@/contexts/market";
 import { requestStatusLabel, type AccountantRequest, type FirmListing } from "@/lib/marketplace";
 import {
   getFirmListing,
@@ -37,6 +38,7 @@ const INPUT =
   "w-full rounded-md border border-slate-300/70 bg-white px-2 py-1.5 text-[12.5px] font-normal text-slate-900 dark:border-white/15 dark:bg-transparent dark:text-slate-100";
 
 export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) {
+  const { date } = useMarketFormat();
   const track = useTrack();
   const fetchInbox = useServerFn(listFirmInbox);
   const fetchListing = useServerFn(getFirmListing);
@@ -437,7 +439,7 @@ export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) 
                   {r.responded_at ? (
                     <span className="text-slate-400">
                       {" "}
-                      · {new Date(r.responded_at).toLocaleDateString()}
+                      · {date(r.responded_at)}
                     </span>
                   ) : null}
                 </li>
