@@ -4455,6 +4455,7 @@ function ClientView() {
                         setPlanFocusMove(moveKey);
                         openHomeSection("plan", "open");
                       }}
+                      onOpenDraft={openDraft}
                     />
                   )}
                 </div>

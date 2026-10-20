@@ -13,10 +13,12 @@ export function StrategicMovesPanel({
   moves,
   clientId,
   onOpenPlan,
+  onOpenDraft,
 }: {
   moves: RankedStrategicMove[];
   clientId: string;
   onOpenPlan: (moveKey: string) => void;
+  onOpenDraft?: (draftId: string) => void;
 }) {
   const first = moves[0];
   const assumptions = moves.filter((move) => move.impactLine.trim());
@@ -42,6 +44,7 @@ export function StrategicMovesPanel({
                 moveKey={first.key}
                 title={first.title}
                 outcomeWhy={first.impactLine || `Improves ${moveFactorLabel(first)}.`}
+                onOpenDraft={onOpenDraft}
               />
             </>
           ) : null
@@ -81,6 +84,7 @@ export function StrategicMovesPanel({
                     moveKey={move.key}
                     title={move.title}
                     outcomeWhy={move.impactLine || `Improves ${moveFactorLabel(move)}.`}
+                    onOpenDraft={onOpenDraft}
                   />
                   <AddToPlanButton
                     clientId={clientId}

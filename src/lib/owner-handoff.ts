@@ -174,9 +174,24 @@ export type MoveAssignmentRef = {
   driverKey: string | null;
   title: string;
   assigneeName: string | null;
+  /** When the stored hand-off note was written. A blank newer row does not replace it. */
+  assignedAt?: string | null;
+  runStatus?: string | null;
+  draftId?: string | null;
+  findingsReady?: boolean;
 };
 
-/** The action this Next moves row already created, when one is on file. */
+function assignmentStamp(row: MoveAssignmentRef): number {
+  if (!row.assigneeName) return Number.NEGATIVE_INFINITY;
+  const at = Date.parse(row.assignedAt ?? "");
+  return Number.isFinite(at) ? at : 0;
+}
+
+/**
+ * The action this Next moves row already created, when one is on file.
+ * A newer row with no hand-off note does not hide the row that has one.
+ * Two noted rows: the later note wins, so a reassign survives an immediate reload.
+ */
 export function assignmentForMove(
   rows: readonly MoveAssignmentRef[],
   moveKey: string,
@@ -192,10 +207,20 @@ export function assignmentForMove(
       actionTitle: row.title,
     }),
   );
-  const exact = matches.find(
+  const exact = matches.filter(
     (row) => normalizeMoveLabel(row.sourceMoveKey) === key || normalizeMoveLabel(row.driverKey) === key,
   );
-  return exact ?? matches[0] ?? null;
+  const pool = exact.length > 0 ? exact : matches;
+  if (pool.length === 0) return null;
+  const noted = pool.filter((row) => row.assigneeName);
+  const ranked = (noted.length > 0 ? noted : pool).slice();
+  ranked.sort((a, b) => assignmentStamp(b) - assignmentStamp(a));
+  return ranked[0] ?? null;
+}
+
+/** A move-list read may be cached only when it started after the latest committed hand-off. */
+export function moveLoadMayCache(startedEpoch: number, currentEpoch: number): boolean {
+  return startedEpoch === currentEpoch;
 }
 
 /** The draft a finished hand-off may leave for a person. The action title is the label. */

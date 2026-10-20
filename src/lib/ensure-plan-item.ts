@@ -37,11 +37,14 @@ export async function ensureStrategicMoveItem(input: {
     planId = created.id as string;
   }
 
+  // The original row, even when it sits on an older plan. A reassign must
+  // not insert a second blank action before the hand-off note is written.
   const { data: existing, error: existingError } = await supabase
     .from("action_items")
     .select("id")
-    .eq("plan_id", planId)
+    .eq("client_id", input.clientId)
     .eq("source_move_key", input.moveKey)
+    .order("created_at", { ascending: true })
     .limit(1);
   if (existingError) return { ok: false, error: existingError.message };
   const already = existing?.[0]?.id;

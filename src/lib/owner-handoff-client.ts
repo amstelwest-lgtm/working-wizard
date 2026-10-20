@@ -1,7 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import { handoffComingOnline } from "@/hooks/owner-agent-ui";
+import { findingForAction } from "@/lib/action-handoff";
+import { agentActivityUnavailable } from "@/lib/milon-team-activity";
 import {
   handoffRequestNote,
+  moveLoadMayCache,
   personAssignmentNote,
   type MoveAssignmentRef,
 } from "@/lib/owner-handoff";
@@ -35,6 +38,8 @@ export type ActionPlanRefreshDetail = {
   reused?: boolean;
   runId?: string;
   error?: string;
+  /** Set only after the hand-off write has been awaited. Listeners may drop the cache then. */
+  committed?: boolean;
 };
 
 export const HANDOFF_FAILED_COPY = "Couldn't hand this over";
@@ -298,10 +303,12 @@ export async function commitActionHandoff(input: {
   } else if (result.reused) {
     suppressOptimisticNote(input.actionItemId, since);
     if (result.runId) attachOptimisticRun(input.actionItemId, since, result.runId);
+    invalidateMoveAssignments(input.clientId);
     dispatchActionPlanRefresh({
       ...working,
       reused: true,
       runId: result.runId ?? undefined,
+      committed: true,
     });
     return { ok: true };
   } else if (!result.noted) {
@@ -320,14 +327,21 @@ export async function commitActionHandoff(input: {
       runId: result.runId,
       note,
     });
+    invalidateMoveAssignments(input.clientId);
     dispatchActionPlanRefresh({
       ...working,
       note,
       runId: result.runId ?? undefined,
+      committed: true,
     });
     return { ok: true };
   }
-  dispatchActionPlanRefresh({ ...working, runId: result.ok ? result.runId ?? undefined : undefined });
+  invalidateMoveAssignments(input.clientId);
+  dispatchActionPlanRefresh({
+    ...working,
+    runId: result.ok ? result.runId ?? undefined : undefined,
+    committed: true,
+  });
   return { ok: true };
 }
 
@@ -393,7 +407,8 @@ export async function assignActionToPerson(input: {
   };
   const server = await requestPersonAssignment(input);
   if (server.ok && server.noted) {
-    dispatchActionPlanRefresh(detail);
+    invalidateMoveAssignments(input.clientId);
+    dispatchActionPlanRefresh({ ...detail, committed: true });
     return { ok: true };
   }
   if (server.ok && !server.noted) {
@@ -405,7 +420,8 @@ export async function assignActionToPerson(input: {
     const saved = await writePersonAssignment(input);
     if (!saved.ok) return fail(saved.error);
   }
-  dispatchActionPlanRefresh(detail);
+  invalidateMoveAssignments(input.clientId);
+  dispatchActionPlanRefresh({ ...detail, committed: true });
   return { ok: true };
 }
 
@@ -551,6 +567,7 @@ export async function loadActionNotes(actionIds: string[]): Promise<Map<string, 
 const moveAssignmentCache = new Map<string, MoveAssignmentRef[]>();
 const moveAssignmentLoads = new Map<string, Promise<MoveAssignmentRef[]>>();
 const moveAssignmentTokens = new Map<string, object>();
+const moveAssignmentEpoch = new Map<string, number>();
 
 /** Drop a cached Next moves read so the next load sees the note just written. */
 export function invalidateMoveAssignments(clientId: string): void {
@@ -558,6 +575,89 @@ export function invalidateMoveAssignments(clientId: string): void {
   moveAssignmentCache.delete(id);
   moveAssignmentLoads.delete(id);
   moveAssignmentTokens.delete(id);
+  moveAssignmentEpoch.set(id, (moveAssignmentEpoch.get(id) ?? 0) + 1);
+}
+
+type MoveFindingRow = {
+  id: string;
+  run_id: string | null;
+  status: string | null;
+  superseded_by: unknown;
+  dismissed_reason: string | null;
+};
+
+type QuietError = { message?: string; code?: string } | null;
+
+type InOrderQuery = {
+  select(columns: string): InOrderQuery;
+  in(column: string, values: string[]): InOrderQuery;
+  order(column: string, options: { ascending: boolean }): Promise<{ data: unknown; error: QuietError }>;
+};
+
+function quietTable(name: string): InOrderQuery {
+  return (supabase as unknown as { from(relation: string): InOrderQuery }).from(name);
+}
+
+/**
+ * Newest run per action, and the drafts on those runs.
+ * A failed read leaves findingsReady false so the row stays Working instead of dropping the assignee.
+ */
+async function loadMoveActivity(actionIds: string[]): Promise<{
+  newest: Map<string, { id: string; status: string }>;
+  findings: MoveFindingRow[];
+  findingsReady: boolean;
+}> {
+  const newest = new Map<string, { id: string; status: string }>();
+  const ids = actionIds.filter(Boolean);
+  if (!ids.length) return { newest, findings: [], findingsReady: true };
+  const runsRes = await quietTable("agent_runs")
+    .select("id, action_item_id, status, queued_at")
+    .in("action_item_id", ids)
+    .order("queued_at", { ascending: false });
+  if (runsRes.error || !Array.isArray(runsRes.data)) {
+    return { newest, findings: [], findingsReady: false };
+  }
+  for (const row of runsRes.data) {
+    if (!row || typeof row !== "object") continue;
+    const record = row as { id?: unknown; action_item_id?: unknown; status?: unknown };
+    const actionId = typeof record.action_item_id === "string" ? record.action_item_id : "";
+    const runId = typeof record.id === "string" ? record.id : "";
+    const status = typeof record.status === "string" ? record.status : "";
+    if (!actionId || !runId || newest.has(actionId)) continue;
+    newest.set(actionId, { id: runId, status });
+  }
+  const runIds = [...newest.values()].map((run) => run.id);
+  if (!runIds.length) return { newest, findings: [], findingsReady: true };
+  const findingsRes = await quietTable("agent_findings")
+    .select("id, run_id, status, superseded_by, dismissed_reason, created_at")
+    .in("run_id", runIds)
+    .order("created_at", { ascending: false });
+  if (findingsRes.error) {
+    if (agentActivityUnavailable(findingsRes.error)) return { newest, findings: [], findingsReady: true };
+    return { newest, findings: [], findingsReady: false };
+  }
+  if (!Array.isArray(findingsRes.data)) return { newest, findings: [], findingsReady: false };
+  const findings: MoveFindingRow[] = [];
+  for (const row of findingsRes.data) {
+    if (!row || typeof row !== "object") continue;
+    const record = row as {
+      id?: unknown;
+      run_id?: unknown;
+      status?: unknown;
+      superseded_by?: unknown;
+      dismissed_reason?: unknown;
+    };
+    const id = typeof record.id === "string" ? record.id : "";
+    if (!id) continue;
+    findings.push({
+      id,
+      run_id: typeof record.run_id === "string" ? record.run_id : null,
+      status: typeof record.status === "string" ? record.status : null,
+      superseded_by: record.superseded_by,
+      dismissed_reason: typeof record.dismissed_reason === "string" ? record.dismissed_reason : null,
+    });
+  }
+  return { newest, findings, findingsReady: true };
 }
 
 /**
@@ -572,6 +672,7 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
   const pending = moveAssignmentLoads.get(id);
   if (pending) return pending;
   const token = {};
+  const startedEpoch = moveAssignmentEpoch.get(id) ?? 0;
   moveAssignmentTokens.set(id, token);
   const load = (async (): Promise<MoveAssignmentRef[]> => {
     const { data, error } = await supabase
@@ -583,14 +684,34 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
     if (error || !data) return [];
     const ids = data.map((row) => row.id).filter((value): value is string => Boolean(value));
     const assignments = await loadLatestAssignments(ids);
-    const rows: MoveAssignmentRef[] = data.map((row) => ({
-      actionItemId: row.id,
-      sourceMoveKey: row.source_move_key,
-      driverKey: row.driver_key,
-      title: row.title ?? "",
-      assigneeName: assignments.get(row.id)?.name ?? null,
-    }));
-    if (moveAssignmentTokens.get(id) === token) moveAssignmentCache.set(id, rows);
+    const activity = await loadMoveActivity(ids);
+    const rows: MoveAssignmentRef[] = data.map((row) => {
+      const stored = assignments.get(row.id);
+      const run = activity.newest.get(row.id);
+      const finding = findingForAction({
+        actionItemId: row.id,
+        runs: run ? [{ id: run.id, action_item_id: row.id }] : [],
+        findings: activity.findings,
+      });
+      const draftId = finding && finding.status !== "approved" ? finding.id : null;
+      return {
+        actionItemId: row.id,
+        sourceMoveKey: row.source_move_key,
+        driverKey: row.driver_key,
+        title: row.title ?? "",
+        assigneeName: stored?.name ?? null,
+        assignedAt: stored?.at ?? null,
+        runStatus: run?.status ?? null,
+        draftId,
+        findingsReady: activity.findingsReady,
+      };
+    });
+    if (
+      moveAssignmentTokens.get(id) === token &&
+      moveLoadMayCache(startedEpoch, moveAssignmentEpoch.get(id) ?? 0)
+    ) {
+      moveAssignmentCache.set(id, rows);
+    }
     return rows;
   })();
   moveAssignmentLoads.set(id, load);
