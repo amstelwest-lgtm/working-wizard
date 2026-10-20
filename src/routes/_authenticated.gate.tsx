@@ -24,6 +24,7 @@ import { FirmBillingAccessProvider } from "@/contexts/firm-billing-access";
 import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
+import { measureBootstrap } from "@/lib/bootstrap-perf";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 
 function FirmShellLoading() {
@@ -116,16 +117,10 @@ export function AuthGate() {
       setFirmGate("allow");
     };
 
-    const started = Date.now();
     const timer = window.setTimeout(() => failOpen("timeout"), SHELL_GATE_TIMEOUT_MS);
 
     void (async () => {
       try {
-        const deadline = started + SHELL_GATE_TIMEOUT_MS;
-        while (latest.current.brandLoading && Date.now() < deadline) {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-          if (cancelled) return;
-        }
         const stay = await shouldStayOnAccountantPortal(userId);
         if (cancelled) return;
         if (!stay) {
@@ -135,64 +130,66 @@ export function AuthGate() {
           latest.current.navigate({ to: "/app" });
           return;
         }
-        if (await isMilonItMember(userId)) {
+        // Shell paints before Stripe. The greeting comes from the session and
+        // the firm row. Entitlement, the client-count gate, and IT confirmation
+        // continue after the outlet is up. Server routes still enforce billing.
+        window.clearTimeout(timer);
+        setFirmGate("allow");
+        measureBootstrap("shell");
+        void (async () => {
           if (cancelled) return;
-          window.clearTimeout(timer);
-          entitledRef.current = true;
-          setFirmEntitled(true);
-          setFirmGate("allow");
-          return;
-        }
-        if (entitledRef.current) {
-          window.clearTimeout(timer);
-          setFirmEntitled(true);
-          setFirmGate("allow");
-          return;
-        }
-        let entitled = false;
-        try {
-          const result = await latest.current.checkEntitlement({ data: {} });
-          if (cancelled) return;
-          entitled = result.entitled;
-          if (entitled) {
-            window.clearTimeout(timer);
+          if (await isMilonItMember(userId)) {
+            if (cancelled) return;
             entitledRef.current = true;
             setFirmEntitled(true);
-            setFirmGate("allow");
             return;
           }
-        } catch {
+          if (entitledRef.current) {
+            setFirmEntitled(true);
+            return;
+          }
+          let entitled = false;
+          try {
+            const result = await latest.current.checkEntitlement({ data: {} });
+            if (cancelled) return;
+            entitled = result.entitled;
+            if (entitled) {
+              entitledRef.current = true;
+              setFirmEntitled(true);
+              return;
+            }
+          } catch {
+            if (cancelled) return;
+          }
+          const clients = await loadFirmClientGateContext();
           if (cancelled) return;
-        }
-        const clients = await loadFirmClientGateContext();
-        if (cancelled) return;
-        const snap = latest.current;
-        const firmId = snap.firmId;
-        const gate = decideFirmBillingPathGate({
-          pathname: snap.pathname,
-          isAccountantFirmUser: true,
-          isMilonItMember: false,
-          entitled,
-          insightSeen: clients.firmClientCount === 0 ? false : readInsightSeen(firmId),
-          firmClientCount: clients.firmClientCount,
-          firstClientId: clients.firstClientId,
-        });
-        window.clearTimeout(timer);
-        if (gate === "allow") {
-          setFirmEntitled(false);
-          setFirmGate("allow");
-          return;
-        }
-        if (!isFirmProductPath(latest.current.pathname)) return;
-        const pending = snap.hasFirm
-          ? firmBillingResumeIntent(snap.firmMarket, peekPendingCheckout())
-          : (peekPendingCheckout() ?? firmBillingResumeIntent(null, null));
-        stashPendingCheckout(pending);
-        latest.current.navigate({
-          to: "/billing/required",
-          search: billingStartSearch(pending),
-          replace: true,
-        });
+          const snap = latest.current;
+          const firmId = snap.firmId;
+          const gate = decideFirmBillingPathGate({
+            pathname: snap.pathname,
+            isAccountantFirmUser: true,
+            isMilonItMember: false,
+            entitled,
+            insightSeen: clients.firmClientCount === 0 ? false : readInsightSeen(firmId),
+            firmClientCount: clients.firmClientCount,
+            firstClientId: clients.firstClientId,
+          });
+          if (cancelled) return;
+          if (gate === "allow") {
+            setFirmEntitled(false);
+            return;
+          }
+          if (!isFirmProductPath(latest.current.pathname)) return;
+          const pending = snap.hasFirm
+            ? firmBillingResumeIntent(snap.firmMarket, peekPendingCheckout())
+            : (peekPendingCheckout() ?? firmBillingResumeIntent(null, null));
+          stashPendingCheckout(pending);
+          latest.current.navigate({
+            to: "/billing/required",
+            search: billingStartSearch(pending),
+            replace: true,
+          });
+        })();
       } catch (err) {
         if (cancelled) return;
         console.warn("[billing-gate] check failed", err);

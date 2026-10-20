@@ -62,3 +62,20 @@ export function openQueriesPhase(input: {
 
 export const CLIENTS_LOAD_ERROR = "Couldn't load clients. Refresh to try again.";
 export const OPEN_QUERIES_LOAD_ERROR = "Couldn't load open queries. Refresh to try again.";
+export const FOLLOW_UPS_LOAD_ERROR = "Couldn't load follow-ups. Refresh to try again.";
+
+export type DashboardCardsPhase = "loading" | "error" | "ready";
+
+/**
+ * Open queries and follow-ups. A chain timeout wins over "Loading…",
+ * including while the book flag is still true.
+ */
+export function dashboardCardsPhase(input: {
+  bookLoading: boolean;
+  countsReady: boolean;
+  timedOut: boolean;
+}): DashboardCardsPhase {
+  if (input.timedOut) return "error";
+  if (input.bookLoading || !input.countsReady) return "loading";
+  return "ready";
+}

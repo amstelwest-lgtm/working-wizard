@@ -91,8 +91,9 @@ assert(board.includes("practiceGreeting(greetingSource)"), "the greeting still r
 
 const timerAt = board.indexOf("[practice-board] client book timed out");
 assert(timerAt > 0, "the book timeout is still there");
-const timer = board.slice(timerAt, board.indexOf("}, SHELL_GATE_TIMEOUT_MS);", timerAt));
+const timer = board.slice(timerAt, timerAt + 1200);
 assert(timer.includes("setCountsReady(true)"), "the timer still releases counts");
+assert(timer.includes("shellGateRemaining"), "the book deadline stays on the chain clock");
 assert(!timer.includes("setBookEnriched"), "the timer does not mark the book enriched");
 
 const paintAt = board.lastIndexOf("toClientRow(");

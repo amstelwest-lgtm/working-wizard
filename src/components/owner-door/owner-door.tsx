@@ -369,8 +369,8 @@ export function OwnerDoor({
 
   useEffect(() => {
     let cancelled = false;
-    void supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setOwnerEmail(data.user?.email ?? null);
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) setOwnerEmail(data.session?.user?.email ?? null);
     });
     return () => {
       cancelled = true;

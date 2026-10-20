@@ -78,23 +78,36 @@ export function writeActiveFirmId(userId: string, firmId: string): void {
   }
 }
 
+/** Preferred firm, else the first owned row, else the first membership. */
+export function pickActiveFirm(
+  firms: readonly FirmBrandRow[],
+  preferredFirmId?: string | null,
+): FirmBrandRow | null {
+  if (firms.length === 0) return null;
+  if (preferredFirmId) {
+    const preferred = firms.find((f) => f.id === preferredFirmId);
+    if (preferred) return preferred;
+  }
+  return firms[0] ?? null;
+}
+
 /** All firms the user owns or is a member of (deduped, owned first by created_at). */
 export async function listUserFirms(userId: string): Promise<FirmBrandRow[]> {
   const byId = new Map<string, FirmBrandRow>();
 
-  const { data: owned } = await supabase
-    .from("firms")
-    .select(FIRM_SELECT)
-    .eq("owner_user_id", userId)
-    .order("created_at", { ascending: true });
+  // Owned rows and memberships do not depend on each other.
+  const [{ data: owned }, { data: mems }] = await Promise.all([
+    supabase
+      .from("firms")
+      .select(FIRM_SELECT)
+      .eq("owner_user_id", userId)
+      .order("created_at", { ascending: true }),
+    supabase.from("firm_memberships").select("firm_id").eq("user_id", userId),
+  ]);
   for (const row of owned ?? []) {
     byId.set(row.id, row as FirmBrandRow);
   }
 
-  const { data: mems } = await supabase
-    .from("firm_memberships")
-    .select("firm_id")
-    .eq("user_id", userId);
   const memberIds = (mems ?? [])
     .map((m) => m.firm_id)
     .filter((id): id is string => Boolean(id) && !byId.has(id));
@@ -121,13 +134,7 @@ export async function fetchUserFirm(
   userId: string,
   preferredFirmId?: string | null,
 ): Promise<FirmBrandRow | null> {
-  const firms = await listUserFirms(userId);
-  if (firms.length === 0) return null;
-  if (preferredFirmId) {
-    const preferred = firms.find((f) => f.id === preferredFirmId);
-    if (preferred) return preferred;
-  }
-  return firms[0] ?? null;
+  return pickActiveFirm(await listUserFirms(userId), preferredFirmId);
 }
 
 /** Id of the firm this user is in, or null when they have none yet. */
