@@ -81,13 +81,16 @@ doc.revenueLines = doc.revenueLines.map((line, index) => ({
 const fullYear = computeBudgetMonths(doc, doc.activeScenario).reduce((sum, row) => sum + row.revenue, 0);
 assert(Math.abs(fullYear - 700000) < 1, `fixture full-year budget is 700000, got ${fullYear}`);
 
-const statement = budgetActualFromFinancials({
-  ...qaUs,
-  revenue: 700000,
-  cogs: 280000,
-  ebit: 60000,
-  fixedCosts: 351000,
-});
+const statement = budgetActualFromFinancials(
+  {
+    ...qaUs,
+    revenue: 700000,
+    cogs: 280000,
+    ebit: 60000,
+    fixedCosts: 351000,
+  },
+  ZA_MARKET,
+);
 assert(statement?.statementCoverMonths === 12, "statement actual records the stored cover");
 const model = buildBudgetPdfModel(doc, statement ? [statement] : [], ZA_MARKET);
 const revenue = model.summary.find((row) => row.label === "Revenue");
@@ -95,7 +98,7 @@ assert(Math.abs((revenue?.budget ?? 0) - fullYear) < 1, `budget ${revenue?.budge
 assert(Math.abs((revenue?.actual ?? 0) - 700000) < 1, `actual stays the statement total, got ${revenue?.actual}`);
 assert(model.fullYearNote.includes("full budget year"), model.fullYearNote);
 
-const oneMonth = budgetActualFromFinancials({ ...qaUs, periodMonths: "1" });
+const oneMonth = budgetActualFromFinancials({ ...qaUs, periodMonths: "1" }, ZA_MARKET);
 const oneModel = buildBudgetPdfModel(doc, oneMonth ? [oneMonth] : [], ZA_MARKET);
 const september = computeBudgetMonths(doc, doc.activeScenario).find((row) => row.month === "2026-09");
 const oneRevenue = oneModel.summary.find((row) => row.label === "Revenue");
@@ -180,14 +183,17 @@ assert(
 );
 assert(clientRoute.includes("if (search.profile === 1) setProfileOpen(true)"), "the overview reads profile=1");
 
-const withDa = budgetActualFromFinancials({
-  ...qaUs,
-  ebitda: "69000",
-  revenue: 700000,
-  cogs: 280000,
-  ebit: 60000,
-  fixedCosts: 351000,
-});
+const withDa = budgetActualFromFinancials(
+  {
+    ...qaUs,
+    ebitda: "69000",
+    revenue: 700000,
+    cogs: 280000,
+    ebit: 60000,
+    fixedCosts: 351000,
+  },
+  ZA_MARKET,
+);
 assert(withDa?.totals.depreciation === 9000, `statement depreciation is 9k, got ${withDa?.totals.depreciation}`);
 assert(withDa?.totals.ebit === 60000, `statement profit stays EBIT, got ${withDa?.totals.ebit}`);
 assert(

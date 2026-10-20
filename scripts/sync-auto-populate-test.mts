@@ -155,6 +155,7 @@ const attribution = ledgerAttribution({
   lastSyncedAt: "2026-10-07T12:00:00.000Z",
   financials: owned,
   financialsUpdatedAt: "2026-10-07T12:00:00.000Z",
+  market: ZA_MARKET,
   snapshots: [{ source: "xero", created_at: "2026-09-18T19:44:12.740Z" }],
   ownFromBlob: {
     periodLabel: "1 Oct 2026 – 7 Oct 2026",

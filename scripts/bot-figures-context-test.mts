@@ -10,6 +10,7 @@ import { overviewRatios } from "../src/lib/health-score.ts";
 import { periodMonthsOf } from "../src/lib/ratios.ts";
 import { figuresPeriodLabelFrom, storedYearToDateEnd } from "../src/lib/statement-period.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
+import { marketForClient } from "../src/lib/market/scope.ts";
 import { buildPrompt } from "../supabase/functions/ask-ai/prompt.ts";
 import type { AskAiContext } from "../supabase/functions/ask-ai/types.ts";
 import {
@@ -20,6 +21,8 @@ import {
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
+
+const usDates = marketForClient({ market: { country: "US", regionCode: "NY" } });
 
 const ytdFinancials = {
   revenue: "450000",
@@ -47,6 +50,7 @@ assert(Number.isFinite(deskRatios["Working Capital Days"]), "Overview has workin
 const brief = buildOverviewBrief({
   financials: ytdFinancials,
   copyPack: "us",
+  dateMarket: usDates,
   fyStartMonth: 1,
   clientName: "Inventory Days Co",
   periodLabel: "Sep 2026",
@@ -65,11 +69,11 @@ assert(
 );
 assert(brief.currentRatio === 2, `current ratio ${brief.currentRatio}`);
 assert(
-  brief.periodLabel === "1 Jan 2026 – 30 Sep 2026",
+  brief.periodLabel === "Jan 1 \u2013 Sep 30, 2026",
   `dated statement label wins, got ${brief.periodLabel}`,
 );
 assert(
-  brief.periodLabel === figuresPeriodLabelFrom(ytdFinancials, "Sep 2026"),
+  brief.periodLabel === figuresPeriodLabelFrom(ytdFinancials, "Sep 2026", usDates),
   "brief uses the Overview period helper",
 );
 assert(brief.periodStart === "2026-01-01" && brief.periodEnd === "2026-09-30", "ISO range is stored");
@@ -79,14 +83,14 @@ assert(brief.yearToDateEnd === "Sep 30, 2026", `ytd end ${brief.yearToDateEnd}`)
 const prompt = formatOverviewForPrompt(brief, "accountant");
 assert(prompt.includes("Inventory: $15,453 (stored balance)"), prompt);
 assert(
-  prompt.includes("Inventory days: 47 days (period 1 Jan 2026 – 30 Sep 2026, uploaded statement)"),
+  prompt.includes("Inventory days: 47 days (period Jan 1 \u2013 Sep 30, 2026, uploaded statement)"),
   prompt,
 );
 assert(prompt.includes(`Debtor days: ${Math.round(deskRatios["Debtor Days"])} days`), prompt);
 assert(prompt.includes(`Creditor days: ${Math.round(deskRatios["Creditor Days"])} days`), prompt);
 assert(prompt.includes(`Working Capital Days: ${Math.round(deskRatios["Working Capital Days"])} days`), prompt);
 assert(prompt.includes("Current Ratio: 2.00×"), prompt);
-assert(prompt.includes("Figures period: 1 Jan 2026 – 30 Sep 2026 (2026-01-01 to 2026-09-30)"), prompt);
+assert(prompt.includes("Figures period: Jan 1 \u2013 Sep 30, 2026 (2026-01-01 to 2026-09-30)"), prompt);
 assert(prompt.includes("Figures source: uploaded statement"), prompt);
 assert(prompt.includes("Revenue for the period on file: $450,000 (year to date to Sep 30, 2026)"), prompt);
 assert(
@@ -107,6 +111,7 @@ const month = buildOverviewBrief({
     periodMonths: "1",
   },
   copyPack: "us",
+  dateMarket: usDates,
   fyStartMonth: 1,
 });
 const monthPrompt = formatOverviewForPrompt(month, "accountant");
@@ -125,6 +130,7 @@ const fullYear = buildOverviewBrief({
     periodMonths: "12",
   },
   copyPack: "us",
+  dateMarket: usDates,
   fyStartMonth: 1,
 });
 assert(fullYear.yearToDateEnd == null, "a finished calendar year is not year to date");
@@ -161,13 +167,13 @@ assert(
   ) === "30 Sep 2026",
   "an explicit year-to-date companion still names the end date",
 );
-assert(figuresPeriodLabelFrom({}, "Q3 2026") === "Q3 2026", "snapshot label is the fallback");
+assert(figuresPeriodLabelFrom({}, "Q3 2026", ZA_MARKET) === "Q3 2026", "snapshot label is the fallback");
 assert(
-  figuresPeriodLabelFrom({ periodEnd: "2026-09-30", periodMonths: "12" }, "Oct 2026") === "1 Oct 2025 – 30 Sep 2026",
+  figuresPeriodLabelFrom({ periodEnd: "2026-09-30", periodMonths: "12" }, "Oct 2026", ZA_MARKET) === "1 Oct 2025 \u2013 30 Sep 2026",
   "a missing start is derived from the end and the month count",
 );
 assert(
-  figuresPeriodLabelFrom(ytdFinancials, "Q3 2026") === "1 Jan 2026 – 30 Sep 2026",
+  figuresPeriodLabelFrom(ytdFinancials, "Q3 2026", usDates) === "Jan 1 \u2013 Sep 30, 2026",
   "statement dates replace the snapshot label",
 );
 

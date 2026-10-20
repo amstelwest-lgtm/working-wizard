@@ -22,6 +22,7 @@ import { useMarketFormat } from "@/contexts/market";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { portalButtonClass } from "@/lib/client-chrome";
+import { formatDateRange } from "@/lib/market/format";
 import { formatIsoDateUTC } from "@/lib/statement-period";
 import {
   describeLedgerLink,
@@ -136,7 +137,7 @@ function LedgerProof({
       {link.bankFrom && link.bankTo ? (
         <>
           <br />
-          Bank Summary {formatIsoDateUTC(link.bankFrom, market)} – {formatIsoDateUTC(link.bankTo, market)}
+          Bank Summary {formatDateRange(link.bankFrom, link.bankTo, market)}
         </>
       ) : null}
       {link.bankCount != null ? (

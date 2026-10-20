@@ -26,6 +26,7 @@ import {
   type PayablesSnapshot,
   type PayablesSupplier,
 } from "@/lib/payables";
+import type { DateMarket } from "@/lib/market/format";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import {
   calendarMonthBounds,
@@ -643,6 +644,7 @@ export async function fetchXeroLedgerStatement(
   tenantId: string,
   accessToken: string,
   now = new Date(),
+  market: DateMarket,
 ): Promise<XeroLedgerStatement> {
   const month = calendarMonthBounds(now, 0);
   const yearRange = await resolveYearRange(tenantId, accessToken, now);
@@ -669,7 +671,7 @@ export async function fetchXeroLedgerStatement(
         ),
         from: yearRange.from,
         to: yearRange.to,
-        periodLabel: formatStatementPeriodLabel(yearRange.from, yearRange.to),
+        periodLabel: formatStatementPeriodLabel(yearRange.from, yearRange.to, market),
         basis: yearRange.basis,
       }
     : null;
@@ -679,7 +681,7 @@ export async function fetchXeroLedgerStatement(
     bs: { ...parsedBs, asOf: month.to },
     from: month.from,
     to: month.to,
-    periodLabel: formatStatementPeriodLabel(month.from, month.to),
+    periodLabel: formatStatementPeriodLabel(month.from, month.to, market),
     year,
     bank: bankResult.bank,
     bankWarning: bankResult.bankWarning,
@@ -1242,6 +1244,7 @@ export function mapXeroToFinancialInputs(
   period?: { from: string; to: string; label: string },
   year?: XeroMappedYear | null,
   bank?: XeroBankSummary | null,
+  market?: DateMarket,
 ): Record<string, number | string> {
   const out: Record<string, number | string> = {};
   const dated = Boolean(period?.from && period?.to);
@@ -1280,7 +1283,7 @@ export function mapXeroToFinancialInputs(
     out.statementSource = "xero";
     out.periodStart = period.from;
     out.periodEnd = period.to;
-    out.periodLabel = period.label || formatStatementPeriodLabel(period.from, period.to);
+    out.periodLabel = period.label || (market ? formatStatementPeriodLabel(period.from, period.to, market) : "");
   }
   if (
     year?.from &&
@@ -1291,7 +1294,7 @@ export function mapXeroToFinancialInputs(
     if (Number.isFinite(year.pnl.netIncome)) out.ytdNetIncome = year.pnl.netIncome;
     out.ytdPeriodStart = year.from;
     out.ytdPeriodEnd = year.to;
-    out.ytdPeriodLabel = year.label || formatStatementPeriodLabel(year.from, year.to);
+    out.ytdPeriodLabel = year.label || (market ? formatStatementPeriodLabel(year.from, year.to, market) : "");
     if (Number.isFinite(year.pnl.periodMonths) && year.pnl.periodMonths >= 1) {
       out.ytdPeriodMonths = String(year.pnl.periodMonths);
     }

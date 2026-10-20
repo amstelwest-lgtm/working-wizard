@@ -1,4 +1,5 @@
 import { calendarDayFromIso, dateOrder, weekHeaderFromIso } from "@/lib/market/date-presets";
+import { formatDateRange } from "@/lib/market/format";
 
 type CashDateMarket = { locale?: string | null };
 
@@ -47,10 +48,11 @@ export function cashExplainerCopy(input: {
   market: CashDateMarket;
 }): CashExplainerCopy {
   const market = input.market;
-  const range =
+  const spanned =
     input.rangeStart && input.rangeEnd
-      ? `${humanCalendarDay(input.rangeStart, market)} – ${humanCalendarDay(input.rangeEnd, market)}`
+      ? formatDateRange(input.rangeStart, input.rangeEnd, market)
       : "";
+  const range = spanned === "—" ? "" : spanned;
   const bullets: string[] = [];
   if (input.floorText.trim()) bullets.push(`Floor ${input.floorText.trim()}.`);
 

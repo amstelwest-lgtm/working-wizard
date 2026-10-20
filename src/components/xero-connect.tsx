@@ -12,6 +12,7 @@ import {
 } from "@/lib/xero.functions";
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
+import { formatDateRange } from "@/lib/market/format";
 import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
 import { useMarketFormat } from "@/contexts/market";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
@@ -47,7 +48,7 @@ function bankSummaryLines(input: {
 }): string[] {
   const window =
     input.from && input.to
-      ? `Bank Summary ${formatIsoDateUTC(input.from, input.market)} – ${formatIsoDateUTC(input.to, input.market)}`
+      ? `Bank Summary ${formatDateRange(input.from, input.to, input.market)}`
       : null;
   const accounts =
     input.count == null

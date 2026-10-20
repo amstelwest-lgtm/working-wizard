@@ -153,7 +153,7 @@ const dep = cover.reduce((sum, row) => sum + row.depreciation, 0);
 const profit = cover.reduce((sum, row) => sum + row.ebit, 0);
 assert(Math.abs(dep - 9000) < 2, `9-month depreciation is 9000, got ${dep}`);
 assert(Math.abs(profit - 60000) < 5, `9-month profit is EBIT 60000, got ${profit}`);
-const versus = budgetVersusStatement(published, us);
+const versus = budgetVersusStatement(published, us, US_MARKET);
 assert(versus != null, "the 9-month statement is an actual");
 assert(Math.abs(versus!.revenue - 700000) < 1, `statement revenue stays 700000, got ${versus!.revenue}`);
 assert(
@@ -167,7 +167,7 @@ assert(
   budgetSeededFromStatement(versus),
   "a budget seeded from this statement is not a 0% verdict",
 );
-const pdfActual = budgetActualFromFinancials(us);
+const pdfActual = budgetActualFromFinancials(us, US_MARKET);
 const pdf = buildBudgetPdfModel(published, pdfActual ? [pdfActual] : [], US_MARKET);
 const pdfRevenue = pdf.summary.find((row) => row.label === "Revenue");
 const pdfProfit = pdf.summary.find((row) => row.label === "Profit");
@@ -177,7 +177,7 @@ assert(Math.abs((pdfRevenue?.actual ?? 0) - 700000) < 1, `PDF actual revenue ${p
 assert(Math.abs((pdfRevenue?.budget ?? 0) - 700000) < 50, `PDF budget revenue ${pdfRevenue?.budget}`);
 assert(Math.abs((pdfProfit?.budget ?? 0) - 60000) < 50, `PDF budget profit ${pdfProfit?.budget}`);
 
-const yankeesVersus = budgetVersusStatement(baseDoc(), yankeesFin);
+const yankeesVersus = budgetVersusStatement(baseDoc(), yankeesFin, US_MARKET);
 assert(yankeesVersus != null, "Yankees statement compares");
 assert(
   Math.abs(yankeesVersus!.revenue - 8633.6) < 0.05,

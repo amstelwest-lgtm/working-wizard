@@ -12,7 +12,7 @@ import { SettingsShell } from "@/components/settings-shell";
 import { LogoUploader } from "@/components/logo-uploader";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { supabase } from "@/integrations/supabase/client";
-import { coerceMarketSelection, resolveMarket, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { coerceMarketSelection, marketForClient, resolveMarket, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { formatMonthYear } from "@/lib/market/format";
 import { reportDataPeriodLabel, reportPeriodMonthYear } from "@/lib/statement-period";
 
@@ -85,7 +85,7 @@ function HeaderPreview() {
       supabase.from("firms").select("market").eq("id", firmId).maybeSingle(),
       supabase
         .from("clients")
-        .select("name, financials, created_at")
+        .select("name, financials, created_at, market")
         .eq("firm_id", firmId)
         .order("created_at", { ascending: false })
         .limit(1),
@@ -98,12 +98,13 @@ function HeaderPreview() {
         market = ZA_MARKET;
       }
       const row = clientRes.data?.[0] as
-        | { name?: string; financials?: object | null }
+        | { name?: string; financials?: object | null; market?: unknown }
         | undefined;
+      const clientDateMarket = marketForClient(row ?? null);
       if (row?.name) {
         setPreviewName(row.name);
         const fromStatement =
-          reportDataPeriodLabel(row.financials) ??
+          reportDataPeriodLabel(row.financials, clientDateMarket) ??
           (() => {
             const parts = reportPeriodMonthYear(row.financials);
             return parts ? `${parts.month} ${parts.year}` : null;

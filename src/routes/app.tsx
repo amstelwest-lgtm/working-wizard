@@ -4257,7 +4257,7 @@ function Index() {
                               {IMPLAUSIBLE_SAMPLE_NOTE}
                             </p>
                           ) : null}
-                          <ProfitLead periodLabel={readStatementMeta(v).periodLabel} />
+                          <ProfitLead periodLabel={readStatementMeta(v, boardMarket).periodLabel} />
                           <ProfitabilityWaterfall
                             appearance="premium"
                             previousMargins={priorMarginsFromFinancials(
@@ -4283,10 +4283,10 @@ function Index() {
                               ),
                             )}
                             fallback={derivePeriodWaterfallFallback(v)}
-                            periodLabel={readStatementMeta(v).periodLabel}
+                            periodLabel={readStatementMeta(v, boardMarket).periodLabel}
                             preferPeriod={preferStatementPeriod(v)}
-                            yearToDate={statementYearLine(v)}
-                            statementSource={readStatementMeta(v).statementSource}
+                            yearToDate={statementYearLine(v, boardMarket)}
+                            statementSource={readStatementMeta(v, boardMarket).statementSource}
                           />
                         </>
                       ) : (
@@ -5781,10 +5781,10 @@ function Index() {
                           ),
                         )}
                         fallback={derivePeriodWaterfallFallback(v)}
-                        periodLabel={readStatementMeta(v).periodLabel}
+                        periodLabel={readStatementMeta(v, boardMarket).periodLabel}
                         preferPeriod={preferStatementPeriod(v)}
-                        yearToDate={statementYearLine(v)}
-                        statementSource={readStatementMeta(v).statementSource}
+                        yearToDate={statementYearLine(v, boardMarket)}
+                        statementSource={readStatementMeta(v, boardMarket).statementSource}
                       />
                     </div>
                     {/* Optional product-line mix — collapsed until the owner opts in */}

@@ -16,6 +16,7 @@ import {
   daysNeedReview,
 } from "@/lib/deliverable-input-config";
 import { formatMonthRange } from "@/lib/market/date-presets";
+import type { DateMarket } from "@/lib/market/format";
 import { readStatementMeta } from "@/lib/statement-period";
 import {
   annualiseFinancials,
@@ -930,6 +931,7 @@ function coverMonths(fy: string[], endMonth: string, periodMonths: number): stri
 export function budgetVersusStatement(
   doc: BudgetDocument,
   periodFinancials: Record<string, unknown> | null | undefined,
+  market: DateMarket,
 ): (BudgetActuals & {
   chip: BudgetActualsChip;
   budgetRevenue: number;
@@ -945,7 +947,7 @@ export function budgetVersusStatement(
   );
   const bridge = periodProfitBridge(aliased);
   if (!(bridge.revenue || bridge.cogs || bridge.operatingExpenses)) return null;
-  const meta = readStatementMeta(periodFinancials);
+  const meta = readStatementMeta(periodFinancials, market);
   const months = periodMonthsOf(periodFinancials);
   const days = inclusivePeriodDays(meta.periodStart, meta.periodEnd);
   const rows = computeBudgetMonths(doc, doc.activeScenario);

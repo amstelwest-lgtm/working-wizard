@@ -373,9 +373,9 @@ const storedBudget = {
     months: Object.fromEntries(months.map((month) => [month, row.bucket === "people" ? 35_500 : 0])),
   })),
 };
-const raw = budgetVersusStatement(storedBudget, chill);
+const raw = budgetVersusStatement(storedBudget, chill, ZA_MARKET);
 const shown = statementBudgetRead(storedBudget, chill);
-const seededCompare = budgetVersusStatement(shown.doc, chill);
+const seededCompare = budgetVersusStatement(shown.doc, chill, ZA_MARKET);
 assert(raw != null && raw.budgetEbit < 0, `unseeded budget ebit ${raw?.budgetEbit}`);
 assert(seededCompare != null && seededCompare.budgetEbit > 0, `seeded budget ebit ${seededCompare?.budgetEbit}`);
 assert(budgetSeededFromStatement(seededCompare) === true, "headline uses the seeded budget");

@@ -6,6 +6,8 @@ import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/c
 import { agedArProofLine, readCollectionsSnapshot } from "@/lib/collections";
 import { agedApProofLine, readPayablesSnapshot, skippedPayables } from "@/lib/payables";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
+import { marketForClient } from "@/lib/market/scope";
+import type { DateMarket } from "@/lib/market/format";
 import { calendarMonthStamp, readStatementMeta, XERO_YTD_FIELD_KEYS } from "@/lib/statement-period";
 import {
   ledgerAttribution,
@@ -148,7 +150,7 @@ function numField(fields: Record<string, unknown>, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function xeroFigureProof(financials: unknown): {
+function xeroFigureProof(financials: unknown, market: DateMarket): {
   periodLabel: string | null;
   periodStart: string | null;
   periodEnd: string | null;
@@ -197,7 +199,7 @@ function xeroFigureProof(financials: unknown): {
     agedApLine: "Aged payables appear after the next Sync",
   };
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return empty;
-  const meta = readStatementMeta(financials);
+  const meta = readStatementMeta(financials, market);
   if (meta.statementSource !== "xero") return empty;
   const f = financials as Record<string, unknown>;
   return {
@@ -237,13 +239,14 @@ function statusFromRow(
     data_depth: string | null;
   },
   financials: unknown,
+  market: DateMarket,
 ): NonNullable<XeroStatus> {
   const derived = xeroStateFromStored({
     present: true,
     syncStatus: conn.sync_status,
     syncError: conn.sync_error,
   });
-  const proof = xeroFigureProof(financials);
+  const proof = xeroFigureProof(financials, market);
   return {
     tenantId: conn.tenant_id ?? "",
     tenantName: conn.tenant_name ?? null,
@@ -268,10 +271,11 @@ export const getXeroStatus = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id, financials, financials_updated_at")
+      .select("id, financials, financials_updated_at, market")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
+    const clientMarket = marketForClient(client as { market?: unknown });
 
     const admin = getSupabaseAdminOrNull();
     if (!admin) return null;
@@ -286,7 +290,7 @@ export const getXeroStatus = createServerFn({ method: "POST" })
 
     if (!conn) return null;
     const financials = (client as { financials?: unknown }).financials;
-    const status = statusFromRow(conn, financials);
+    const status = statusFromRow(conn, financials, clientMarket);
     const { data: caches } = await admin
       .from("xero_sync_data")
       .select("data_type, raw_data")
@@ -308,6 +312,7 @@ export const getXeroStatus = createServerFn({ method: "POST" })
     const attribution = ledgerAttribution({
       provider: "xero",
       lastSyncedAt: conn.last_synced_at ?? null,
+      market: clientMarket,
       financials,
       financialsUpdatedAt:
         (client as { financials_updated_at?: string | null }).financials_updated_at ?? null,
@@ -514,10 +519,11 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id")
+      .select("id, market")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
+    const clientMarket = marketForClient(client as { market?: unknown });
 
     const { data: connRaw } = await supabaseAdmin
       .from("xero_connections")
@@ -563,7 +569,7 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
       }
 
       const tenantId = conn.tenant_id as string;
-      const ledger = await fetchXeroLedgerStatement(tenantId, accessToken);
+      const ledger = await fetchXeroLedgerStatement(tenantId, accessToken, new Date(), clientMarket);
       const { pnl, bs } = ledger;
 
       const mapped = mapXeroToFinancialInputs(
@@ -584,6 +590,7 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
             }
           : null,
         ledger.bank,
+        clientMarket,
       );
       const mappedInputs = mappedNumbers(mapped);
       const fields: Record<string, string> = Object.fromEntries(

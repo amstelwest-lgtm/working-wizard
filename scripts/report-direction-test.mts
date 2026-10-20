@@ -18,6 +18,7 @@ import {
   creditorDaysPaysSlowly,
   metricDirection,
 } from "../src/lib/ratios";
+import { ZA_MARKET } from "../src/lib/market/resolve";
 import { reportDataPeriodLabel } from "../src/lib/statement-period";
 
 function assert(cond: boolean, msg: string) {
@@ -220,12 +221,12 @@ assert(
 );
 
 assert(
-  reportDataPeriodLabel({ periodStart: "2026-09-01", periodEnd: "2026-09-21" }) ===
+  reportDataPeriodLabel({ periodStart: "2026-09-01", periodEnd: "2026-09-21" }, ZA_MARKET) ===
     "1\u201321 Sep 2026 (part month)",
   "part month uses the statement dates",
 );
 assert(
-  reportDataPeriodLabel({ periodStart: "2026-09-01", periodEnd: "2026-09-30" }) === "September 2026",
+  reportDataPeriodLabel({ periodStart: "2026-09-01", periodEnd: "2026-09-30" }, ZA_MARKET) === "September 2026",
   "a full month is the month name",
 );
 
@@ -239,14 +240,17 @@ assert(
   bare.headline.startsWith("No monthly management accounts uploaded yet"),
   bare.headline,
 );
-const actual = budgetActualFromFinancials({
-  periodStart: "2026-09-01",
-  periodEnd: "2026-09-21",
-  revenue: 8633.6,
-  cogs: 775.98,
-  fixedCosts: 5356.5,
-  ebit: 2501.12,
-});
+const actual = budgetActualFromFinancials(
+  {
+    periodStart: "2026-09-01",
+    periodEnd: "2026-09-21",
+    revenue: 8633.6,
+    cogs: 775.98,
+    fixedCosts: 5356.5,
+    ebit: 2501.12,
+  },
+  ZA_MARKET,
+);
 assert(actual?.month === "2026-09", `statement month ${actual?.month}`);
 const withActuals = buildBudgetPdfModel(doc, actual ? [actual] : []);
 assert(withActuals.hasActuals, "statement figures count as month actuals");

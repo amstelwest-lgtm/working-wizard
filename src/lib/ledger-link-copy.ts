@@ -7,7 +7,13 @@
  * ledger's sync is the one that actually ran.
  */
 
-import { readStatementMeta, yearToDateTitle, type YearBasis } from "@/lib/statement-period";
+import type { DateMarket } from "@/lib/market/format";
+import {
+  readStatementMeta,
+  statementSourceOf,
+  yearToDateTitle,
+  type YearBasis,
+} from "@/lib/statement-period";
 
 /**
  * Source the figure chips read.
@@ -20,7 +26,7 @@ export function resolveFigureSource(input: {
   snapshotSource?: string | null;
   connectedLedger?: string | null;
 }): string | null {
-  const fromBlob = readStatementMeta(input.financials ?? null).statementSource?.trim() || "";
+  const fromBlob = statementSourceOf(input.financials ?? null)?.trim() || "";
   if (fromBlob) return fromBlob;
   const snap = input.snapshotSource?.trim() || "";
   if (snap && snap !== "autosave" && snap !== "manual") return snap;
@@ -180,12 +186,13 @@ export function boardFiguresFrom(input: {
   snapshotSource?: string | null;
   snapshotCreatedAt?: string | null;
   financialsUpdatedAt?: string | null;
+  market: DateMarket;
 }): BoardFigures | null {
   const fields =
     input.financials && typeof input.financials === "object" && !Array.isArray(input.financials)
       ? (input.financials as Record<string, unknown>)
       : null;
-  const meta = readStatementMeta(fields);
+  const meta = readStatementMeta(fields, input.market);
   const source = meta.statementSource || input.snapshotSource?.trim() || null;
   const revenue = fields ? num(fields.revenue) : null;
   const cash = fields ? num(fields.cash) : null;
@@ -207,17 +214,32 @@ export function boardFiguresFrom(input: {
 }
 
 /** Period and totals stored on a QuickBooks P&L / balance-sheet cache row. */
-export function readCachedQboSync(pl: unknown, bs?: unknown): LedgerSyncFigures | null {
+export function readCachedQboSync(
+  pl: unknown,
+  bs: unknown,
+  market: DateMarket,
+): LedgerSyncFigures | null {
   if (!pl || typeof pl !== "object" || Array.isArray(pl)) return null;
   const row = pl as Record<string, unknown>;
-  const periodLabel = typeof row.periodLabel === "string" ? row.periodLabel.trim() : "";
+  const from = typeof row.from === "string" ? row.from : "";
+  const to = typeof row.to === "string" ? row.to : "";
+  const stored = typeof row.periodLabel === "string" ? row.periodLabel.trim() : "";
+  const periodLabel =
+    (from && to ? readStatementMeta({ periodStart: from, periodEnd: to }, market).periodLabel : null) ||
+    stored;
   if (!periodLabel) return null;
   const year =
     row.year && typeof row.year === "object" && !Array.isArray(row.year)
       ? (row.year as Record<string, unknown>)
       : null;
   const basis = year?.basis === "financial" || year?.basis === "calendar" ? year.basis : null;
-  const ytdLabel = typeof year?.periodLabel === "string" ? year.periodLabel.trim() : "";
+  const yearFrom = typeof year?.from === "string" ? year.from : "";
+  const yearTo = typeof year?.to === "string" ? year.to : "";
+  const storedYear = typeof year?.periodLabel === "string" ? year.periodLabel.trim() : "";
+  const ytdLabel =
+    (yearFrom && yearTo
+      ? readStatementMeta({ periodStart: yearFrom, periodEnd: yearTo }, market).periodLabel
+      : null) || storedYear;
   const sheet =
     bs && typeof bs === "object" && !Array.isArray(bs) ? (bs as Record<string, unknown>) : null;
   return {
@@ -285,6 +307,7 @@ export function ledgerAttribution(input: {
   lastSyncedAt: string | null;
   financials: unknown;
   financialsUpdatedAt?: string | null;
+  market: DateMarket;
   snapshots?: readonly IngestSnapshotRow[] | null;
   /** Proof read off the live blob. Used only when statementSource is this provider. */
   ownFromBlob: LedgerSyncFigures | null;
@@ -299,6 +322,7 @@ export function ledgerAttribution(input: {
     input.financials && typeof input.financials === "object" && !Array.isArray(input.financials)
       ? input.financials
       : null,
+    input.market,
   );
   const ingest = pickIngestSnapshot(input.snapshots, meta.statementSource);
   const boardFigures = boardFiguresFrom({
@@ -306,6 +330,7 @@ export function ledgerAttribution(input: {
     snapshotSource: ingest?.source ?? null,
     snapshotCreatedAt: ingest?.created_at ?? null,
     financialsUpdatedAt: input.financialsUpdatedAt ?? null,
+    market: input.market,
   });
   const figuresFromThisSync =
     hasSyncTimestamp(input.lastSyncedAt) && meta.statementSource === input.provider;

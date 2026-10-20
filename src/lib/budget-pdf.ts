@@ -29,7 +29,7 @@ import {
   type VarianceSignal,
   type VarianceTaxonomyKey,
 } from "@/lib/budget.variance";
-import { formatMoney, marketForClient, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatMoney, marketForClient, ZA_MARKET, type DateMarket, type ResolvedMarket } from "@/lib/market";
 import { presentBudgetRebuildNote } from "@/lib/budget.bridges";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { periodMonthsOf } from "@/lib/ratios";
@@ -384,9 +384,10 @@ export function budgetDraftMark(reviewText: string): string {
 
 export function budgetActualFromFinancials(
   fin: Record<string, unknown> | null | undefined,
+  market: DateMarket,
 ): BudgetPdfActual | null {
   if (!fin) return null;
-  const meta = readStatementMeta(fin);
+  const meta = readStatementMeta(fin, market);
   const month = meta.periodEnd?.slice(0, 7) ?? "";
   const monthOk = /^\d{4}-\d{2}$/.test(month);
   const revenue = finiteField(fin, "revenue");

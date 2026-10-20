@@ -4,6 +4,7 @@ import {
   dateOrder,
   dateTimeLabel,
   formatMonthRange,
+  MONTHS,
   monthColumnLabel,
   monthYearLabel,
   weekHeaderLabel,
@@ -160,6 +161,67 @@ export function formatCalendarDay(
     return "—";
   }
   return calendarDayLabel(parts.year, parts.month, parts.day, orderOf(market)) ?? "—";
+}
+
+type CalendarYmd = { year: number; month: number; day: number };
+
+const RANGE_DASH = "\u2013";
+
+function calendarYmd(year: number, month: number, day: number): CalendarYmd | null {
+  if (!calendarDayLabel(year, month, day, "za")) return null;
+  return { year, month, day };
+}
+
+/** A YYYY-MM-DD prefix is that calendar day. Anything else is an instant in the market zone. */
+function readCalendarYmd(value: Date | string | number, market: DateMarket): CalendarYmd | null {
+  if (typeof value === "string") {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+    if (match) return calendarYmd(Number(match[1]), Number(match[2]), Number(match[3]));
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    const parts = readClock(date, market.timezone ?? "UTC");
+    return calendarYmd(parts.year, parts.month, parts.day);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Inclusive calendar span. Market is required.
+ * Same month collapses the month: US "Sep 1–21, 2026", ZA "1–21 Sep 2026".
+ * Same year collapses the year: US "Apr 1 – Sep 21, 2026", ZA "1 Apr – 21 Sep 2026".
+ * Cross year keeps both dates: US "Oct 1, 2025 – Sep 30, 2026", ZA "1 Oct 2025 – 30 Sep 2026".
+ * A YYYY-MM-DD string is the written day, not a timezone-shifted instant.
+ */
+export function formatDateRange(
+  start: Date | string | number,
+  end: Date | string | number,
+  market: DateMarket,
+): string {
+  const from = readCalendarYmd(start, market);
+  const to = readCalendarYmd(end, market);
+  if (!from || !to) return "—";
+  const order = orderOf(market);
+  if (from.year === to.year && from.month === to.month && from.day === to.day) {
+    return calendarDayLabel(from.year, from.month, from.day, order) ?? "—";
+  }
+  const monthName = (month: number) => MONTHS[month - 1] ?? "";
+  if (from.year === to.year && from.month === to.month) {
+    return order === "us"
+      ? `${monthName(from.month)} ${from.day}${RANGE_DASH}${to.day}, ${from.year}`
+      : `${from.day}${RANGE_DASH}${to.day} ${monthName(from.month)} ${from.year}`;
+  }
+  if (from.year === to.year) {
+    return order === "us"
+      ? `${monthName(from.month)} ${from.day} ${RANGE_DASH} ${monthName(to.month)} ${to.day}, ${from.year}`
+      : `${from.day} ${monthName(from.month)} ${RANGE_DASH} ${to.day} ${monthName(to.month)} ${from.year}`;
+  }
+  const left = calendarDayLabel(from.year, from.month, from.day, order);
+  const right = calendarDayLabel(to.year, to.month, to.day, order);
+  if (!left || !right) return "—";
+  return `${left} ${RANGE_DASH} ${right}`;
 }
 
 /** Week axis. ZA "19 Oct". US "Oct 19". The day is not padded. */

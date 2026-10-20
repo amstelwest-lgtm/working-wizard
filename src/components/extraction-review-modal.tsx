@@ -30,7 +30,7 @@ import {
 } from "@/lib/auto-populate";
 import { statementKindFromMetadata } from "@/lib/statement-parse";
 import { useMarketFormat } from "@/contexts/market";
-import { formatCalendarDay } from "@/lib/market/format";
+import { formatCalendarDay, formatDateRange } from "@/lib/market/format";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -361,14 +361,17 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
   };
 
   const endLabel = meta?.period_end_date ? formatCalendarDay(meta.period_end_date, market) : "";
-  const startLabel = meta?.period_start_date ? formatCalendarDay(meta.period_start_date, market) : "";
   const storedPeriod = meta?.period_label?.trim() ?? "";
   const storedIsParsedAsOf = /^As of \d/.test(storedPeriod);
+  const datedSpan =
+    meta?.period_start_date && meta?.period_end_date
+      ? formatDateRange(meta.period_start_date, meta.period_end_date, market)
+      : "";
   const periodLabel =
-    storedPeriod && !storedIsParsedAsOf
-      ? storedPeriod
-      : startLabel && endLabel && startLabel !== "—" && endLabel !== "—"
-        ? `${startLabel} – ${endLabel}`
+    datedSpan && datedSpan !== "—"
+      ? datedSpan
+      : storedPeriod && !storedIsParsedAsOf
+        ? storedPeriod
         : endLabel && endLabel !== "—"
           ? `As of ${endLabel}`
           : meta?.period_months

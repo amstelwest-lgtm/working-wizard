@@ -2241,7 +2241,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
         },
       )
     : null;
-  const statementActual = budgetActualFromFinancials(rawFinancials);
+  const statementActual = budgetActualFromFinancials(rawFinancials, market);
   const budgetActuals =
     uploadedBudgetActuals.length > 0
       ? uploadedBudgetActuals
@@ -2249,7 +2249,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
         ? [statementActual]
         : [];
   const periodParts = reportPeriodMonthYear(rawFinancials);
-  const dataPeriodLabel = reportDataPeriodLabel(rawFinancials);
+  const dataPeriodLabel = reportDataPeriodLabel(rawFinancials, market);
   const signoffSnapshots: SignoffPeriodSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
     created_at: s.created_at,
     period_label: s.period_label,
@@ -2304,7 +2304,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const rawRatios = scorecardRatiosFromFinancials(rawFin as Record<string, unknown>, {
     fyStartMonth,
   });
-  const statementMeta = readStatementMeta(rawFin);
+  const statementMeta = readStatementMeta(rawFin, market);
   const partMonth = Boolean(dataPeriodLabel?.includes("part month"));
   const equityNow = getNum(fin, "equity");
   const snapshots: DatedSnapshot[] = (snapshotRes.data ?? []).map((s) => ({

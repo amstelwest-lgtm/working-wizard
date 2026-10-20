@@ -29,6 +29,7 @@ import type { BudgetDocument } from "../src/lib/budget.types";
 import { displayedDataRequestReason } from "../src/lib/data-requests";
 import { profitStepBand } from "../src/lib/health-score";
 import { readTimeEquity } from "../src/lib/statement-financials";
+import { marketForClient } from "../src/lib/market/scope";
 import { reportDataPeriodLabel } from "../src/lib/statement-period";
 import { defaultTargetDate, planTargetIsOverdue } from "../src/components/action-plan";
 
@@ -239,8 +240,9 @@ assert(reason.includes("40-day benchmark") && !reason.includes("45-day"), reason
 assert(planTargetIsOverdue("2026-09-28", now), "28 Sep 2026 is overdue on 5 Oct");
 assert(defaultTargetDate(now) > "2026-10-05", `new targets land in the future, got ${defaultTargetDate(now)}`);
 
-const period = reportDataPeriodLabel(yankees.financials);
-assert(period != null && period.includes("Sep 2026") && period.includes("part month"), `statement period ${period}`);
-assert(reportDataPeriodLabel(qa.financials) == null, "QA has no statement dates to prefer");
+const yankeesMarket = marketForClient({ market: { country: "US", regionCode: "NY" } });
+const period = reportDataPeriodLabel(yankees.financials, yankeesMarket);
+assert(period === "Sep 1\u201321, 2026 (part month)", `statement period ${period}`);
+assert(reportDataPeriodLabel(qa.financials, yankeesMarket) == null, "QA has no statement dates to prefer");
 
 console.log("prod retest stored paths ok");
