@@ -12,16 +12,19 @@ import {
 } from "@/lib/pending-checkout";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { readCachedFirmEntitlement } from "@/lib/firm-entitlement-client";
-import { FIRM_TRIAL_CARD_LINE, firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { loadStarterMonthlyLabel } from "@/lib/trial-card-price";
+import { TrialCardSentence } from "@/components/trial-card-sentence";
 
 /**
  * Shown once figures are on screen. Entitled firms see nothing.
  * Unpaid firms get one Checkout action for the stashed band (Starter by default).
  */
-export function CheckoutAfterInsight() {
+export function CheckoutAfterInsight({ priceLabel }: { priceLabel?: string | null } = {}) {
   const { user } = useAuth();
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   const [unpaid, setUnpaid] = useState(false);
+  const [loadedPrice, setLoadedPrice] = useState<string | null>(priceLabel ?? null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -37,6 +40,17 @@ export function CheckoutAfterInsight() {
       cancelled = true;
     };
   }, [checkEntitlement, user?.id]);
+
+  useEffect(() => {
+    if (priceLabel != null) return;
+    let cancelled = false;
+    void loadStarterMonthlyLabel().then((label) => {
+      if (!cancelled) setLoadedPrice(label);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [priceLabel]);
 
   const profile = useOptionalAccountantProfile();
 
@@ -55,7 +69,7 @@ export function CheckoutAfterInsight() {
     >
       <p className="kicker">Next · {planName}</p>
       <h3>The figures stay on this client.</h3>
-      <p>{FIRM_TRIAL_CARD_LINE}</p>
+      <TrialCardSentence priceLabel={priceLabel ?? loadedPrice} />
       <Link to="/billing/start" search={billingStartSearch(pending)} className="btn gold">
         Add a card
       </Link>

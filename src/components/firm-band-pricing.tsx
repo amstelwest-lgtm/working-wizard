@@ -8,6 +8,7 @@ import {
 } from "@/lib/landing-copy";
 import {
   FIRM_BAND_TABLE,
+  FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_SENTENCE,
   firmUsdPublicLine,
   isFirmCheckoutBand,
@@ -219,7 +220,7 @@ export function FirmBandPricingTable({
       <div className={labels ? "firm-trial-bar firm-trial-bar-za" : "firm-trial-bar"}>
         <p className="firm-trial-bar-lead">{FIRM_TRIAL_SENTENCE}</p>
         <p className="firm-trial-bar-sub">
-          {showSaPricing ? trialAfter || "On Starter. A card is required at signup." : PRICING_TRIAL_AFTER}
+          {showSaPricing ? trialAfter || `On Starter. ${FIRM_TRIAL_CARD_NOTE}` : PRICING_TRIAL_AFTER}
         </p>
       </div>
       {onIntervalChange ? (

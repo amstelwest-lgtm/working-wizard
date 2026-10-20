@@ -102,7 +102,7 @@ export function MarketingShell({
   ctaHref?: string;
   /** Gold is the trial and sign-up CTA. Cross-links such as Privacy use cobalt. */
   ctaTone?: "gold" | "cobalt";
-  /** Top-bar pill. Same trial label as the landing nav. A card is required at signup. */
+  /** Top-bar pill. Same trial label as the landing nav. The card comes after the first result. */
   navCtaLabel?: string;
   navCtaHref?: string;
   /** Terms and privacy use the homepage header. Other collateral keeps mk-top. */

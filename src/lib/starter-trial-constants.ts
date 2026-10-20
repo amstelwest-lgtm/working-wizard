@@ -7,9 +7,9 @@
 export const FIRM_TRIAL_DAYS = 14;
 export const FIRM_TRIAL_CLIENT_LIMIT = 5;
 export const FIRM_TRIAL_SENTENCE = `${FIRM_TRIAL_DAYS}-day free trial · up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`;
-/** Settings Starter row. The longer card line repeats this sentence, so the row uses the note alone. */
-export const FIRM_TRIAL_CARD_NOTE = "A card is required at signup.";
-export const FIRM_TRIAL_CARD_LINE = `${FIRM_TRIAL_CARD_NOTE} ${FIRM_TRIAL_SENTENCE} on Starter.`;
+/** Asked at the pre-card wall, after the first result. Not at signup. */
+export const FIRM_TRIAL_CARD_NOTE = "You add a card once you have seen your first result.";
+export const FIRM_TRIAL_CARD_LINE = `${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE}`;
 
 export const STARTER_TRIAL_ENDED_MESSAGE = "Your trial has ended, choose a plan";
 

@@ -323,8 +323,9 @@ assert(
   !continued.includes('data-prospect-demo="sample"'),
   "the sample board does not replace the chat",
 );
+const cardAtSignup = ["card is required", "at signup"].join(" ");
 assert(
-  !continued.includes("A card is required at signup"),
+  !continued.toLowerCase().includes(cardAtSignup),
   "the talk page does not rewrite the signup footer",
 );
 
