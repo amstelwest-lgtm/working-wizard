@@ -399,11 +399,10 @@ export function buildOverviewBrief(input: {
           ? raw
           : cashPillarFollowsForecast(raw, {
               hasEvidence: true,
-              cashOnFile: cashOnFile != null,
               openingMissing: input.openingMissing === true,
-              opening: cashOnFile != null ? input.cashOpening : null,
-              closings: cashOnFile != null ? input.cashClosings : null,
-              floor: cashOnFile != null ? input.cashFloor : 0,
+              opening: input.cashOpening,
+              closings: input.cashClosings,
+              floor: input.cashFloor,
             });
   const pillars: OverviewPillar[] = (scored?.pillars ?? []).map((pillar) => ({
     id: pillar.id,

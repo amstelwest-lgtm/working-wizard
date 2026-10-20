@@ -22,7 +22,9 @@ const emptyRaw = forecastRunwayHeadlineShared({
   closings: empty.outlook.closing,
   floor: empty.outlook.floor,
 }).headline;
-assert(emptyRaw === "13 weeks below", `empty series raw headline (${emptyRaw})`);
+assert(empty.outlook.cashOnFile === false, "an empty file has no cash balance");
+assert(empty.outlook.dipsBelowFloorWeek == null, "an empty file does not invent a floor breach");
+assert(emptyRaw === "13+ wks", `empty series raw headline (${emptyRaw})`);
 assert(
   clientListRunwayHeadline({
     source: empty.outlook.source,

@@ -745,18 +745,8 @@ export function cashPillarFollowsForecast(
   const openingFlat =
     input.opening == null || !Number.isFinite(input.opening) || Math.abs(input.opening) < 0.5;
   const closingsFlat = (input.closings ?? []).every((n) => !Number.isFinite(n) || Math.abs(n) < 0.5);
-  // No cash line. A floor of 0 with a flat series is the missing-cash placeholder,
-  // not a breach. Leave Cash out of the average and do not force Critical.
-  const cashNotOnFile =
-    input.cashOnFile === false ||
-    (input.cashOnFile !== true && input.floor === 0 && openingFlat && closingsFlat);
-  if (cashNotOnFile) {
-    const pillars = health.pillars.map((pillar) => {
-      if (pillar.id !== "cash") return pillar;
-      return { ...pillar, score: null, status: "at_risk" as const, note: null };
-    });
-    return overallFromPillars(pillars);
-  }
+  // A blank stored opening keeps its own note. It is not the same as a P&L
+  // that never had a cash line.
   if (input.openingMissing) {
     const pillars = health.pillars.map((pillar) => {
       if (pillar.id !== "cash") return pillar;
@@ -768,6 +758,18 @@ export function cashPillarFollowsForecast(
       };
     });
     return overallFromPillars(pillars, { flagUnscoredCash: true });
+  }
+  // No cash line. A floor of 0 with a flat series is the missing-cash placeholder,
+  // not a breach. Leave Cash out of the average and do not force Critical.
+  const cashNotOnFile =
+    input.cashOnFile === false ||
+    (input.cashOnFile !== true && input.floor === 0 && openingFlat && closingsFlat);
+  if (cashNotOnFile) {
+    const pillars = health.pillars.map((pillar) => {
+      if (pillar.id !== "cash") return pillar;
+      return { ...pillar, score: null, status: "at_risk" as const, note: null };
+    });
+    return overallFromPillars(pillars);
   }
   const floor = input.floor;
   if (floor == null || !Number.isFinite(floor)) return health;
