@@ -31,6 +31,7 @@ import {
 import { statementKindFromMetadata } from "@/lib/statement-parse";
 import { useMarketFormat } from "@/contexts/market";
 import { formatCalendarDay, formatDateRange } from "@/lib/market/format";
+import { statementSpanLabel } from "@/lib/statement-period";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -361,7 +362,8 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
   };
 
   const endLabel = meta?.period_end_date ? formatCalendarDay(meta.period_end_date, market) : "";
-  const storedPeriod = meta?.period_label?.trim() ?? "";
+  const storedPeriod =
+    statementSpanLabel({ periodLabel: meta?.period_label, market })?.trim() ?? "";
   const storedIsParsedAsOf = /^As of \d/.test(storedPeriod);
   const datedSpan =
     meta?.period_start_date && meta?.period_end_date

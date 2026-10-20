@@ -121,7 +121,7 @@ import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { figureSourceChipLabel, resolveFigureSource } from "@/lib/ledger-link-copy";
-import { booksAnswerSentence, booksCoverPeriod, booksTileLines } from "@/lib/books-answer";
+import { booksAnswerSentence, booksCoverPeriod, booksTileLines, homeStatementsLine } from "@/lib/books-answer";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { parseBudgetDocument } from "@/lib/budget-pdf";
@@ -191,9 +191,12 @@ import {
   readStatementMeta,
   reportDataPeriodLabel,
   rewriteDraftMonthStamp,
+  statementSpanLabel,
   statementYearLine,
 } from "@/lib/statement-period";
+import { clientHomePhase } from "@/lib/client-home-phase";
 import { canonicalScoreProse } from "@/lib/score-prose";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   assessClientMetrics,
   connectBooksHeadline,
@@ -287,6 +290,7 @@ import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { cashSignoffIsStale, reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
+import { ClientAgentStandby } from "@/components/client-agent-standby";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/financial-manager-brief";
 import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
@@ -324,7 +328,7 @@ import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
-import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
+import { EmptyState } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
 import { cashDriverDayFigures } from "@/lib/cash-driver-label";
@@ -827,6 +831,7 @@ function ClientView() {
   }, [clientId]);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     () => resolveAccountantTab(search) ?? "overview",
   );
@@ -884,7 +889,7 @@ function ClientView() {
           outcome_goal?: string | null;
         } | null;
         if (plan) {
-          periodLabel = plan.period_label ?? null;
+          periodLabel = plan.period_label ?? null; // date-ok: action plan quarter stamp, not a day range
           outcomeGoal = plan.outcome_goal ?? null;
           const { data: rows } = await supabase
             .from("action_items_v")
@@ -1611,22 +1616,31 @@ function ClientView() {
     periodLabel: string | null;
     periodStart: string | null;
     periodEnd: string | null;
-  }) => {
-    if (link.periodStart && link.periodEnd) {
-      const fresh = formatDateRange(link.periodStart, link.periodEnd, clientMarket);
-      if (fresh !== "—") return fresh;
-    }
-    return link.periodLabel;
-  };
+  }) =>
+    statementSpanLabel({
+      periodStart: link.periodStart,
+      periodEnd: link.periodEnd,
+      periodLabel: link.periodLabel,
+      market: clientMarket,
+    });
   const snapshotFinancials =
     currentSnapshot?.financials && typeof currentSnapshot.financials === "object"
       ? currentSnapshot.financials
       : null;
-  const snapshotSpan =
-    (statementMeta.periodStart && statementMeta.periodEnd ? statementMeta.periodLabel : null) ??
-    readStatementMeta(snapshotFinancials, clientMarket).periodLabel ??
-    currentSnapshot?.period_label ??
-    null;
+  const snapshotMeta = readStatementMeta(snapshotFinancials, clientMarket);
+  const liveDates = Boolean(statementMeta.periodStart && statementMeta.periodEnd);
+  // Dates already on the client. Do not wait for the ledger status request:
+  // that request can return a successful sync with the period stripped, and
+  // the books sentence would drop the span.
+  const statementSpan = statementSpanLabel({
+    periodStart: liveDates ? statementMeta.periodStart : snapshotMeta.periodStart,
+    periodEnd: liveDates ? statementMeta.periodEnd : snapshotMeta.periodEnd,
+    periodLabel: liveDates
+      ? statementMeta.periodLabel
+      : snapshotMeta.periodLabel || currentSnapshot?.period_label,
+    market: clientMarket,
+  });
+  const snapshotSpan = statementSpan;
   const dataFreshness = dataFreshnessLine({
     xero: xeroLink
       ? {
@@ -1710,7 +1724,14 @@ function ClientView() {
     runwayLabel: cashRunwayHeadline,
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
-    priorLabel: priorSnapshot?.period_label ?? null,
+    priorLabel: priorSnapshot
+      ? statementSpanLabel({
+          periodStart: readStatementMeta(priorSnapshot.financials, clientMarket).periodStart,
+          periodEnd: readStatementMeta(priorSnapshot.financials, clientMarket).periodEnd,
+          periodLabel: priorSnapshot.period_label,
+          market: clientMarket,
+        })
+      : null,
     periodLabel: figuresPeriodLabel,
     datedPeriod: statementDated,
     market: clientMarket,
@@ -2263,8 +2284,15 @@ function ClientView() {
   // ── Load client ──────────────────────────────────────────────────────────
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadTimedOut(false);
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      setLoadTimedOut(true);
+      setLoading(false);
+    }, SHELL_GATE_TIMEOUT_MS);
     (async () => {
-      setLoading(true);
       try {
         // Defensive query: reports_issued_count may not exist yet
         const { data, error } = await supabase
@@ -2367,9 +2395,17 @@ function ClientView() {
           decideLandingTab(scalars);
         }
       } finally {
-        setLoading(false);
+        window.clearTimeout(timer);
+        if (!cancelled) {
+          setLoadTimedOut(false);
+          setLoading(false);
+        }
       }
     })();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
@@ -2406,7 +2442,7 @@ function ClientView() {
         setSnapshots(
           (data ?? []).map((s) => ({
             id: s.id as string,
-            period_label: s.period_label as string,
+            period_label: s.period_label as string, // date-ok: snapshot row kept; display formats at read time
             period_date: s.period_date as string,
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,
@@ -2858,7 +2894,7 @@ function ClientView() {
         setSnapshots(
           (data ?? []).map((s) => ({
             id: s.id as string,
-            period_label: s.period_label as string,
+            period_label: s.period_label as string, // date-ok: snapshot row kept; display formats at read time
             period_date: s.period_date as string,
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,
@@ -3621,7 +3657,8 @@ function ClientView() {
         : waiting.length
           ? [canonicalScoreProse(rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting."))]
           : ["No draft waiting."];
-    const booksLine = booksAnswerSentence({ freshness: dataFreshness });
+    const booksLine =
+      homeStatementsLine(statementSpan) ?? booksAnswerSentence({ freshness: dataFreshness });
     return {
       actionsHeading,
       actionLines,
@@ -3641,6 +3678,7 @@ function ClientView() {
     reportsIssued,
     evidenced,
     clientMarket,
+    statementSpan,
   ]);
   const homeBrief = useMemo(
     () =>
@@ -3648,11 +3686,19 @@ function ClientView() {
         clientName: client?.name ?? "",
         currentFinancials: financials,
         currentPeriodEnd: statementMeta.periodEnd,
-        snapshots: snapshots.map((row) => ({
-          periodDate: row.period_date,
-          periodLabel: row.period_label,
-          financials: row.financials,
-        })),
+        snapshots: snapshots.map((row) => {
+          const meta = readStatementMeta(row.financials, clientMarket);
+          return {
+            periodDate: row.period_date,
+            periodLabel: statementSpanLabel({
+              periodStart: meta.periodStart,
+              periodEnd: meta.periodEnd,
+              periodLabel: row.period_label,
+              market: clientMarket,
+            }),
+            financials: row.financials,
+          };
+        }),
         openActionTitles: openPlanTitles ?? [],
         overdueActions: openPlanOverdue,
         cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
@@ -3712,8 +3758,13 @@ function ClientView() {
 
   // ── Loading / error states ────────────────────────────────────────────────
 
-  if (loading) {
-    return <ClientWorkspaceSkeleton className="min-h-screen" />;
+  const homePhase = clientHomePhase({
+    loading,
+    timedOut: loadTimedOut,
+    hasClient: Boolean(client),
+  });
+  if (homePhase === "loading" || homePhase === "error") {
+    return <ClientAgentStandby timedOut={homePhase === "error"} />;
   }
 
   if (!client) {
@@ -3873,7 +3924,7 @@ function ClientView() {
                     variant="character"
                     showInvite={false}
                     audience="accountant"
-                    marketCountry={clientMarket.country}
+                    marketCountry={parseMarketSelection(client.market)?.country ?? null}
                     sampleClient={Boolean(client.is_demo)}
                     firmId={client.firm_id ?? null}
                     presence={homePresence}
@@ -4075,7 +4126,7 @@ function ClientView() {
                       key={homeAgent ?? "team"}
                       clientId={clientId}
                       agent={homeAgent}
-                      marketCountry={clientMarket.country}
+                      marketCountry={parseMarketSelection(client.market)?.country ?? null}
                       audience="accountant"
                       sampleClient={Boolean(client.is_demo)}
                       homeFinding={

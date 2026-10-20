@@ -418,7 +418,7 @@ const periodMapped = mapXeroToFinancialInputs(
 assert(periodMapped.statementSource === "xero", "statement source tagged");
 assert(periodMapped.periodStart === "2026-09-01", "period start stored");
 assert(periodMapped.periodEnd === "2026-09-21", "period end stored");
-assert(periodMapped.periodLabel === "1\u201321 Sep 2026", "period label stored");
+assert(periodMapped.periodLabel === "2026-09-01/2026-09-21", "period label stores the dates");
 assert(periodMapped.revenue === 8633.6, "mapped revenue is the month, not YTD");
 assert(periodMapped.periodMonths === "1", "a month is not annualised as nine months");
 assert(periodMapped.ytdRevenue === 29539.18, "year revenue is stored beside the month");
@@ -426,7 +426,7 @@ assert(periodMapped.ytdNetIncome === 8266.73, "year net income stored");
 assert(periodMapped.ytdBasis === "financial", "year basis is the financial year");
 assert(periodMapped.ytdPeriodStart === "2026-04-01", "year start stored");
 assert(periodMapped.ytdPeriodEnd === "2026-09-21", "year end stored");
-assert(periodMapped.ytdPeriodLabel === "1 Apr \u2013 21 Sep 2026", "year label stored");
+assert(periodMapped.ytdPeriodLabel === "2026-04-01/2026-09-21", "year label stores the dates");
 assert(periodMapped.ytdPeriodMonths === "6", "year month count stored");
 
 const zeroMonth = mapXeroToFinancialInputs(
@@ -538,8 +538,9 @@ assert(cardSrc.includes('id="xero-sync-proof"'), "Xero card shows what was synce
 assert(cardSrc.includes('id="xero-bank-summary-status"'), "Xero card states the Bank Summary result");
 assert(cardSrc.includes("openingCashNote"), "Xero card shows whether opening cash was applied");
 assert(cardSrc.includes("Balance sheet as of"), "Xero card names the balance-sheet date");
-assert(cardSrc.includes("LedgerCheckPending"), "Xero status check can leave the spinner");
-assert(cardSrc.includes('name="Xero"'), "the waiting line names Xero");
+assert(cardSrc.includes("useConnectionProbe"), "Xero uses the shared status probe");
+assert(cardSrc.includes('data-connection-state="checking"'), "Xero status check shows checking");
+assert(cardSrc.includes("Checking Xero…"), "the checking line names Xero");
 const docsSrc = readFileSync(resolve("docs/XERO.md"), "utf8");
 assert(docsSrc.includes("accounting.reports.banksummary.read"), "env doc lists the bank summary scope");
 assert(docsSrc.includes("disconnect"), "env doc says existing connections must reconnect");

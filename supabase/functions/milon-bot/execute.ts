@@ -467,7 +467,13 @@ export async function executeAgentTool(
         clientName: typeof clientRes.data?.name === "string" ? clientRes.data.name : null,
         brainSummary: clientRes.data?.brain_summary ?? null,
         dateMarket: marketForClient({ market: clientRes.data?.market }),
-        periodLabel: (snap?.period_label as string | null) ?? null,
+        periodLabel: figuresPeriodLabelFrom(
+          (snap?.financials && typeof snap.financials === "object"
+            ? snap.financials
+            : liveFinancials) as object | null,
+          (snap?.period_label as string | null) ?? null,
+          marketForClient({ market: clientRes.data?.market }),
+        ),
         figuresAsOf: (snap?.period_date as string | null) ?? null,
         cashflow: clientRes.data?.cashflow,
       });
@@ -554,6 +560,7 @@ export async function executeAgentTool(
         period_date: row.period_date,
         ratios: row.ratios,
       })),
+      dateMarket,
     );
   }
 
@@ -571,16 +578,22 @@ export async function executeAgentTool(
   }
 
   if (name === "list_prior_outcomes") {
-    const { data, error } = await ctx.userClient
-      .from("recommendation_outcomes")
-      .select(
-        "recommendation_id, metric, expected_amount, actual_amount, variance_amount, period_label, measured_at",
-      )
-      .eq("client_id", ctx.clientId)
-      .order("measured_at", { ascending: false })
-      .limit(8);
-    if (error) return { error: error.message };
-    return shapeOutcomes((data ?? []) as Array<Record<string, unknown>>);
+    const [outRes, clientRes] = await Promise.all([
+      ctx.userClient
+        .from("recommendation_outcomes")
+        .select(
+          "recommendation_id, metric, expected_amount, actual_amount, variance_amount, period_label, measured_at",
+        )
+        .eq("client_id", ctx.clientId)
+        .order("measured_at", { ascending: false })
+        .limit(8),
+      ctx.userClient.from("clients").select("market").eq("id", ctx.clientId).maybeSingle(),
+    ]);
+    if (outRes.error) return { error: outRes.error.message };
+    return shapeOutcomes(
+      (outRes.data ?? []) as Array<Record<string, unknown>>,
+      marketForClient({ market: clientRes.data?.market }),
+    );
   }
 
   if (name === "list_tasks") {

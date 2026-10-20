@@ -2,6 +2,9 @@
  * A client with no books and no parsed statement does not invent numbers.
  * Run: pnpm test:no-evidence
  */
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { OwnerHome } from "../src/components/owner-door/owner-home.tsx";
 import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief.ts";
 import {
   NOT_SCORED_YET_LABEL,
@@ -14,9 +17,17 @@ import {
   connectBooksHeadline,
   hasFinancialEvidence,
 } from "../src/lib/client-metrics.ts";
+import { emptyAgentActivity } from "../src/lib/milon-team-activity.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
-import { homeActionNeeds } from "../src/lib/owner-needs.ts";
-import { ownerAnswerTiles, ownerHomeLines, type OwnerBooks } from "../src/lib/owner-answers.ts";
+import { homeActionNeeds, ownerNeedsView } from "../src/lib/owner-needs.ts";
+import {
+  ownerAnswerTiles,
+  ownerCardStatuses,
+  ownerHomeLines,
+  type OwnerBooks,
+  type OwnerHomeLines,
+} from "../src/lib/owner-answers.ts";
+import { ownerPresence } from "../src/lib/owner-presence.ts";
 import { rankStrategicMoves } from "../src/lib/strategic-moves.ts";
 import { buildOverviewBrief } from "../supabase/functions/ask-ai/overview-brief.ts";
 
@@ -147,5 +158,114 @@ const agent = buildOverviewBrief({
 assert(agent.health == null, "the agent does not score an empty file");
 assert(agent.cash == null, "the agent does not quote cash 0");
 assert(agent.pillars.every((pillar) => pillar.score == null), "the agent leaves pillars unscored");
+
+// Prod (no-books US client) showed these. The predicate has to keep them off both homes.
+const KILLED = [
+  "Critical / Cash $0, $50,000 below your $50,000 minimum.",
+  "Cash $0, $50,000 below your $50,000 minimum.",
+  "Get customers to pay faster (deposits, autopay)",
+  "Cash goes under the floor in week 1",
+  "Connect QuickBooks or Xero. / Connect QuickBooks or Xero.",
+];
+
+const connect = connectBooksHeadline(us);
+const status = ownerCardStatuses(books);
+const topMove = moves[0]?.title ?? "Get customers to pay faster (deposits, autopay)";
+const homeLines = ownerHomeLines(tiles, topMove);
+
+function reported(agent: keyof OwnerHomeLines): string {
+  const chip = status[agent]?.word ?? "";
+  const body = homeLines[agent].join(" / ");
+  if (chip && body) return `${chip} / ${body}`;
+  return chip || body;
+}
+
+const ownerNeeds = ownerNeedsView({
+  ownerEmail: null,
+  actionsReady: true,
+  actionsUnavailable: false,
+  actions: [],
+  draftsReady: true,
+  draftsUnavailable: false,
+  draftTitles: [],
+  deliverablesReady: true,
+  deliverablesUnavailable: false,
+  deliverableCount: 0,
+  advisoryTitles: [],
+  quickBooks: { state: "absent" },
+  xero: { state: "absent" },
+  when: (iso) => iso,
+  nextAction: connect,
+  statementSpan: null,
+});
+const accountantNeeds = {
+  actionsHeading: needs.heading,
+  actionLines: needs.lines,
+  draftsHeading: "Drafts",
+  draftLines: ["No drafts need your OK."],
+  deliverablesHeading: "Reports",
+  deliverableLines: ["Nothing ready to send."],
+  syncHeading: "Books",
+  syncLines: ["Books are not connected yet."],
+};
+
+function homeHtml(audience: "owner" | "accountant"): string {
+  return renderToStaticMarkup(
+    createElement(OwnerHome, {
+      variant: "character",
+      audience,
+      showInvite: audience === "owner",
+      title: audience === "owner" ? "Your finance team" : "Your whole finance team",
+      marketCountry: "US",
+      sampleClient: false,
+      presence: ownerPresence(emptyAgentActivity()),
+      lines: homeLines,
+      status,
+      needs: audience === "owner" ? ownerNeeds : accountantNeeds,
+      onOpen: () => undefined,
+      onAsk: () => undefined,
+      onMoves: () => undefined,
+      onDeliverables: () => undefined,
+    }),
+  );
+}
+
+function sliceBetween(html: string, start: string, end: string): string {
+  const from = html.indexOf(start);
+  assert(from >= 0, `missing ${start}`);
+  const to = html.indexOf(end, from + start.length);
+  return html.slice(from, to === -1 ? undefined : to);
+}
+
+const briefText = [
+  brief.cashFloorLine ?? "",
+  brief.healthCue ?? "",
+  ...brief.actions.map((row) => `${row.title} ${row.reason}`),
+].join("\n");
+
+for (const audience of ["owner", "accountant"] as const) {
+  const html = homeHtml(audience);
+  const agents = sliceBetween(html, 'class="owner-agents"', 'class="owner-needs"');
+  const fm = sliceBetween(agents, 'data-agent-card="financial_manager"', 'data-agent-card="analyst"');
+  const analyst = sliceBetween(agents, 'data-agent-card="analyst"', 'data-agent-card="advisor"');
+  const advisor = sliceBetween(agents, 'data-agent-card="advisor"', "owner-ask");
+  const visible = [html, reported("financial_manager"), reported("analyst"), reported("advisor"), briefText].join(
+    "\n",
+  );
+  for (const banned of KILLED) {
+    assert(!visible.includes(banned), `${audience} still shows ${banned}`);
+  }
+  assert(fm.includes(connect), `${audience} financial manager is missing the connect action`);
+  assert((fm.match(/Connect QuickBooks/g) ?? []).length === 1, `${audience} connect action renders more than once`);
+  assert(!analyst.includes("Connect QuickBooks"), `${audience} analyst repeats connect`);
+  assert(!advisor.includes("Connect QuickBooks"), `${audience} advisor repeats connect`);
+  assert(!advisor.includes("Get customers to pay faster"), `${audience} advisor still ranks a catalogue move`);
+}
+
+assert(ownerNeeds.actionLines.length === 1 && ownerNeeds.actionLines[0] === connect, ownerNeeds.actionLines.join(" | "));
+assert(needs.lines.length === 1 && needs.lines[0] === connect, needs.lines.join(" | "));
+assert(reported("financial_manager") === connect, reported("financial_manager"));
+assert(reported("analyst") === "", reported("analyst"));
+assert(reported("advisor") === "", reported("advisor"));
 
 console.log("no-evidence-client-test: ok");

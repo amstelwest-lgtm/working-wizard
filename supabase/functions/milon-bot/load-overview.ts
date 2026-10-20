@@ -17,6 +17,7 @@ import {
 } from "../../../src/lib/advisory-narrative.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
+import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 
 export async function loadOverviewBrief(
   client: SupabaseClient,
@@ -71,7 +72,11 @@ export async function loadOverviewBrief(
     shortfallWeek: metrics.outlook.shortfallWeek,
     clientName: typeof row?.name === "string" ? row.name : null,
     dateMarket: marketForClient({ market: row?.market }),
-    periodLabel: (snapRes.data?.period_label as string | null) ?? null,
+    periodLabel: figuresPeriodLabelFrom(
+      financials,
+      (snapRes.data?.period_label as string | null) ?? null,
+      marketForClient({ market: row?.market }),
+    ),
     figuresAsOf: (snapRes.data?.period_date as string | null) ?? null,
     cashflow: (row as { cashflow?: unknown } | null)?.cashflow,
     brainSummary: groundBrainSummaryRecord(

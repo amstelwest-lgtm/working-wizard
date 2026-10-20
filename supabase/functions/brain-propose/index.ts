@@ -7,6 +7,7 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
+import { readStatementMeta, statementSpanLabel } from "../../../src/lib/statement-period.ts";
 import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 import { callClaude } from "../ask-ai/anthropic.ts";
 import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
@@ -216,7 +217,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
       .maybeSingle(),
     userClient
       .from("client_financial_snapshots")
-      .select("period_label, period_date, ratios, source")
+      .select("period_label, period_date, ratios, source, financials")
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
       .limit(1)
@@ -345,15 +346,29 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     if (blob.business_map) contextLines.push(`Business map: ${compact(blob.business_map, 600)}`);
   }
   const snap = snapRes.data;
+  const dateMarket = marketForClient({
+    market: client && typeof client === "object" && "market" in client ? client.market : null,
+  });
+  const snapFinancials =
+    snap && typeof snap === "object" && "financials" in snap && snap.financials && typeof snap.financials === "object"
+      ? (snap.financials as object)
+      : null;
+  const snapMeta = readStatementMeta(snapFinancials, dateMarket);
+  const snapSpan = statementSpanLabel({
+    periodStart: snapMeta.periodStart,
+    periodEnd: snapMeta.periodEnd,
+    periodLabel: snap?.period_label ?? null,
+    market: dateMarket,
+  });
   if (snap) {
     contextLines.push(
-      `Latest snapshot: ${snap.period_label ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`,
+      `Latest snapshot: ${snapSpan ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`,
     );
     const ratios = ratioLines(snap.ratios);
     if (ratios.length) contextLines.push(`Ratios:\n  ${ratios.join("\n  ")}`);
     const quoted = quotedStatementFigures({
       ratios: (snap.ratios ?? null) as Record<string, unknown> | null,
-      periodLabel: snap.period_label,
+      periodLabel: snapSpan,
     });
     if (quoted.length) contextLines.push(quoted.join("\n"));
   }
@@ -397,10 +412,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     readCollectionsSnapshot(xeroArRes.data?.raw_data),
     readCollectionsSnapshot(qboArRes.data?.raw_data),
   ]);
-  const proposeMarket = marketForClient({
-    market: clientRes.data && "market" in clientRes.data ? clientRes.data.market : null,
-  });
-  const collectionsBlock = collectionsPromptBlock(collectionsSnap, proposeMarket);
+  const collectionsBlock = collectionsPromptBlock(collectionsSnap, dateMarket);
   if (collectionsBlock) contextLines.push(collectionsBlock);
   const payablesSnap = choosePayables([
     readPayablesSnapshot(xeroApRes.data?.raw_data),
@@ -419,7 +431,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
       typeof client?.financials_updated_at === "string" ? client.financials_updated_at : null,
   });
   const runwayWeeks = persistedRunwayWeeks(assessed.runway);
-  const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks, proposeMarket);
+  const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks, dateMarket);
   if (payablesBlock) contextLines.push(payablesBlock);
 
   let skippedReason: "ai_not_configured" | "empty_context" | undefined;
@@ -506,7 +518,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     stepsInserted = toInsert.length;
   }
 
-  const collectionsDraft = buildCollectionsDraft(collectionsSnap, proposeMarket);
+  const collectionsDraft = buildCollectionsDraft(collectionsSnap, dateMarket);
   let openAfterPropose =
     existingSteps.filter((step) => step.status === "proposed" || step.status === "edited").length +
     toInsert.length;
@@ -547,7 +559,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     }
   }
 
-  const payablesDraft = buildPayablesDraft(payablesSnap, runwayWeeks, proposeMarket);
+  const payablesDraft = buildPayablesDraft(payablesSnap, runwayWeeks, dateMarket);
   if (
     payablesDraft &&
     openAfterPropose < MAX_OPEN_PROPOSED_STEPS &&

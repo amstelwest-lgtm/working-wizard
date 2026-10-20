@@ -68,8 +68,8 @@ assert(!budgetPanel.includes("Full year by month"), "the full-year pill is gone"
 assert(!clientRoute.includes("data-view-mode-toggle"), "the budget toggle is not on the page");
 assert(!budgetPanel.includes("data-view-mode-toggle"), "the summary pills are gone");
 assert(
-  readFileSync(resolve("src/components/budget/budget-chart-table.tsx"), "utf8").includes("Month by month"),
-  "month by month is a disclosure",
+  readFileSync(resolve("src/components/budget/budget-chart-table.tsx"), "utf8").includes("<ViewToggle"),
+  "chart and table share one toggle",
 );
 for (const label of ["Business Health", "Profit", "Cash Forecast", "Budget", "Next moves", "Action Plan"]) {
   assert(owner.includes(`label: "${label}"`), `owner tab ${label} stays`);

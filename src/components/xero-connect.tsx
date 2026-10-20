@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -11,14 +11,15 @@ import {
   type XeroSyncResult,
 } from "@/lib/xero.functions";
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import { LedgerCheckPending, useLedgerCheckSlow } from "@/components/ledger-connect-status";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { formatDateRange } from "@/lib/market/format";
-import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
+import { formatIsoDateUTC, statementSpanLabel, yearToDateTitle } from "@/lib/statement-period";
 import { useMarketFormat } from "@/contexts/market";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
 import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
 import type { MoneyMarket } from "@/lib/market/format";
+import { CONNECTION_NOT_CONNECTED } from "@/lib/connection-status-deadline";
+import { useConnectionProbe } from "@/lib/use-connection-probe";
 
 type Props = {
   clientId: string | null;
@@ -78,36 +79,22 @@ export function XeroConnectCard({
   const doDisconnect = useServerFn(disconnectXero);
   const checkConfig = useServerFn(getXeroConfig);
 
-  const [configured, setConfigured] = useState<boolean | null>(null);
-  const [status, setStatus] = useState<XeroStatus>(null);
-  const [loadingStatus, setLoadingStatus] = useState(false);
+  const { gate, configured, status, reload, clear } = useConnectionProbe<XeroStatus>({
+    clientId,
+    refreshToken,
+    id: "xero",
+    probe: async () => {
+      const [cfg, next] = await Promise.all([
+        checkConfig({ data: undefined as never }),
+        fetchStatus({ data: { clientId: clientId! } }),
+      ]);
+      return { configured: cfg.configured, status: next };
+    },
+  });
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [lastSync, setLastSync] = useState<XeroSyncResult["summary"] | null>(null);
-  const checkSlow = useLedgerCheckSlow(loadingStatus && configured === null);
-
-  const load = async () => {
-    if (!clientId) return;
-    setLoadingStatus(true);
-    try {
-      const [cfg, s] = await Promise.all([
-        checkConfig({ data: undefined as never }),
-        fetchStatus({ data: { clientId } }),
-      ]);
-      setConfigured(cfg.configured);
-      setStatus(s);
-    } catch {
-      // silent
-    } finally {
-      setLoadingStatus(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, refreshToken]);
 
   const handleConnect = async () => {
     if (!clientId) return;
@@ -143,10 +130,10 @@ export function XeroConnectCard({
           : "Xero sync complete.",
         bankStatus ? { description: bankStatus } : undefined,
       );
-      await load();
+      await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sync failed");
-      await load();
+      await reload();
     } finally {
       setSyncing(false);
     }
@@ -157,7 +144,7 @@ export function XeroConnectCard({
     setDisconnecting(true);
     try {
       await doDisconnect({ data: { clientId } });
-      setStatus(null);
+      clear();
       setLastSync(null);
       toast.success("Xero disconnected");
     } catch (err) {
@@ -169,8 +156,13 @@ export function XeroConnectCard({
 
   if (!clientId) return null;
 
-  if (loadingStatus && configured === null) {
-    return <LedgerCheckPending name="Xero" slow={checkSlow} />;
+  if (gate === "checking") {
+    return (
+      <div className="ledger-connect ledger-connect--panel ledger-connect--row" data-connection-state="checking">
+        <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+        <span className="ledger-connect__hint">Checking Xero…</span>
+      </div>
+    );
   }
 
   if (configured === false) {
@@ -202,6 +194,16 @@ export function XeroConnectCard({
       linesNote: lastSync?.forecastLinesNote ?? status.forecastLinesNote,
       market: dateMarket,
     });
+    const mtdLabel = statementSpanLabel({
+      periodStart: lastSync?.periodStart ?? status.periodStart,
+      periodEnd: lastSync?.periodEnd ?? status.periodEnd,
+      periodLabel: lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel,
+      market: dateMarket,
+    });
+    const ytdLabel = statementSpanLabel({
+      periodLabel: lastSync?.ytdPeriodLabel ?? status.syncFigures?.ytdPeriodLabel ?? status.ytdPeriodLabel,
+      market: dateMarket,
+    });
     const linkCopy = describeLedgerLink(
       {
         provider: "xero",
@@ -210,20 +212,21 @@ export function XeroConnectCard({
         figuresFromThisSync: Boolean(lastSync) || status.figuresFromThisSync,
         own: lastSync
           ? {
-              periodLabel: lastSync.periodLabel,
+              periodLabel: mtdLabel,
               revenue: lastSync.revenue,
-              ytdPeriodLabel: lastSync.ytdPeriodLabel,
+              ytdPeriodLabel: ytdLabel,
               ytdRevenue: lastSync.ytdRevenue,
               ytdBasis: lastSync.ytdBasis,
               cash: lastSync.cash,
             }
-          : status.syncFigures,
+          : status.syncFigures
+            ? { ...status.syncFigures, periodLabel: mtdLabel, ytdPeriodLabel: ytdLabel }
+            : null,
         board: status.boardFigures,
       },
       dateTime,
     );
-    const ownPeriod =
-      lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel;
+    const ownPeriod = mtdLabel;
     return (
       <div
         className={`ledger-connect ${isError ? "ledger-connect--error" : "ledger-connect--xero"}`}
@@ -258,10 +261,8 @@ export function XeroConnectCard({
               {linkCopy.showOwnStats && ownPeriod ? (
                 <>
                   {`P&L month to date ${ownPeriod}`}
-                  {(lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel)
-                    ? ` · ${yearToDateTitle(lastSync?.ytdBasis ?? status.ytdBasis)} ${
-                        lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel
-                      }`
+                  {ytdLabel
+                    ? ` · ${yearToDateTitle(lastSync?.ytdBasis ?? status.ytdBasis)} ${ytdLabel}`
                     : ""}
                   <br />
                 </>
@@ -338,7 +339,7 @@ export function XeroConnectCard({
             {[
               {
                 label: "Month to date",
-                value: lastSync?.periodLabel ?? status.periodLabel ?? "—",
+                value: mtdLabel ?? "—",
               },
               {
                 label: "Revenue",
@@ -350,7 +351,7 @@ export function XeroConnectCard({
               },
               {
                 label: yearToDateTitle(lastSync?.ytdBasis ?? status.ytdBasis),
-                value: lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel ?? "—",
+                value: ytdLabel ?? "—",
               },
               {
                 label: "Year revenue",
@@ -391,11 +392,12 @@ export function XeroConnectCard({
   }
 
   return (
-    <div className="ledger-connect ledger-connect--panel ledger-connect--split">
+    <div className="ledger-connect ledger-connect--panel ledger-connect--split" data-connection-state="none">
       <div>
         <p className="ledger-connect__kicker" style={{ marginBottom: 4 }}>
           Xero
         </p>
+        <p className="ledger-connect__meta">{CONNECTION_NOT_CONNECTED}</p>
         <p className="ledger-connect__hint">
           Connect to sync P&amp;L, the balance sheet and bank balances into this client&apos;s
           figures

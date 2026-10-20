@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -10,9 +10,9 @@ import {
   type SageStatus,
 } from "@/lib/sage.functions";
 import { Unlink, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
-import { LedgerCheckPending, useLedgerCheckSlow } from "@/components/ledger-connect-status";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { SAGE_CONNECTION_UNAVAILABLE, sageSyncPopulatedFields } from "@/lib/sage";
+import { useConnectionProbe } from "@/lib/use-connection-probe";
 
 type Props = {
   clientId: string | null;
@@ -39,9 +39,19 @@ export function SageConnectCard({
   const doDisconnect = useServerFn(disconnectSage);
   const doSync = useServerFn(triggerSageSync);
 
-  const [configured, setConfigured] = useState<boolean | null>(null);
-  const [status, setStatus] = useState<SageStatus>(null);
-  const [loadingStatus, setLoadingStatus] = useState(false);
+  const { gate, configured, status, reload, clear } = useConnectionProbe<SageStatus>({
+    clientId,
+    refreshToken,
+    id: "sage",
+    comingSoon: true,
+    probe: async () => {
+      const [cfg, next] = await Promise.all([
+        checkConfig({ data: undefined as never }),
+        fetchStatus({ data: { clientId: clientId! } }),
+      ]);
+      return { configured: cfg.configured, status: next };
+    },
+  });
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -49,29 +59,6 @@ export function SageConnectCard({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [companyId, setCompanyId] = useState("");
-  const checkSlow = useLedgerCheckSlow(loadingStatus && configured === null);
-
-  const load = async () => {
-    if (!clientId) return;
-    setLoadingStatus(true);
-    try {
-      const [cfg, s] = await Promise.all([
-        checkConfig({ data: undefined as never }),
-        fetchStatus({ data: { clientId } }),
-      ]);
-      setConfigured(cfg.configured);
-      setStatus(s);
-    } catch {
-      // silent — same as the other ledger cards
-    } finally {
-      setLoadingStatus(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, refreshToken]);
 
   const handleConnect = async (event: FormEvent) => {
     event.preventDefault();
@@ -90,7 +77,7 @@ export function SageConnectCard({
       setEmptySyncMessage(null);
       toast.success("Sage connected. Sync will not change figures until a statement is available.");
       onConnectionChange?.();
-      await load();
+      await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not connect Sage");
     } finally {
@@ -116,10 +103,10 @@ export function SageConnectCard({
         setEmptySyncMessage(message);
         toast.message(message);
       }
-      await load();
+      await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sync failed");
-      await load();
+      await reload();
     } finally {
       setSyncing(false);
     }
@@ -130,7 +117,7 @@ export function SageConnectCard({
     setDisconnecting(true);
     try {
       await doDisconnect({ data: { clientId } });
-      setStatus(null);
+      clear();
       setEmptySyncMessage(null);
       onConnectionChange?.();
       toast.success("Sage disconnected");
@@ -143,13 +130,18 @@ export function SageConnectCard({
 
   if (!clientId) return null;
 
-  if (loadingStatus && configured === null) {
-    return <LedgerCheckPending name="Sage" slow={checkSlow} />;
+  if (gate === "checking") {
+    return (
+      <div className="ledger-connect ledger-connect--panel ledger-connect--row" data-connection-state="checking">
+        <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+        <span className="ledger-connect__hint">Checking Sage…</span>
+      </div>
+    );
   }
 
-  if (configured === false) {
+  if (gate === "coming_soon" || configured === false) {
     return (
-      <div className="ledger-connect ledger-connect--dashed" data-sage-connect="soon">
+      <div className="ledger-connect ledger-connect--dashed" data-sage-connect="soon" data-connection-state="coming_soon">
         <p className="ledger-connect__kicker">Sage Accounting</p>
         <p className="ledger-connect__body">{SAGE_CONNECTION_UNAVAILABLE}</p>
       </div>

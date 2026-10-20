@@ -25,6 +25,7 @@ import {
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./overview-brief.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
+import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import { adviceChatProductName, adviceChatVolumeUnit, adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 import { benchmarkBusinessType } from "../../../src/lib/benchmark-sector.ts";
@@ -212,7 +213,11 @@ export async function buildContext(
       .order("period_date", { ascending: false })
       .limit(1)
       .maybeSingle();
-    snapPeriod = (snap?.period_label as string | null) ?? null;
+    snapPeriod = figuresPeriodLabelFrom(
+      financials,
+      (snap?.period_label as string | null) ?? null,
+      marketForClient({ market: clientMarketRaw }),
+    );
     snapDate = (snap?.period_date as string | null) ?? null;
 
     const snapRatios =

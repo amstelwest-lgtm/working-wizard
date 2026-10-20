@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ZA_MARKET } from "../src/lib/market/resolve";
+import { marketForClient } from "../src/lib/market/scope";
 import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap";
 import { useMilonTeamFeed } from "../src/hooks/use-milon-team-feed";
 import {
@@ -214,6 +215,81 @@ assert(
 assert(activity[0].kind === "signoff" && activity[0].agent === "financial_manager", "latest event is the financial_manager sign-off");
 assert(activity.find((event) => event.id === "approved:p1")?.agent === "analyst", "budget approval is the analyst");
 assert(activity.find((event) => event.kind === "sync")?.text === "Xero sync · Jan 2026", "sync text uses the ledger and period");
+
+const usMarket = marketForClient({ market: { country: "US", regionCode: "NY" } });
+const yankeesActivity = buildTeamActivity({
+  snapshots: [
+    {
+      id: "s-yankees",
+      source: "xero",
+      periodLabel: "1 Sep 2026 – 21 Sep 2026",
+      periodStart: "2026-09-01",
+      periodEnd: "2026-09-21",
+      at: "2026-09-21T12:00:00.000Z",
+    },
+  ],
+  market: usMarket,
+  uploads: [],
+  diagnosisEvents: [],
+  proposals: [],
+  drafts: [],
+  signoffAt: null,
+  signoffText: null,
+  dataRequests: [],
+  queries: [],
+});
+assert(
+  yankeesActivity.find((event) => event.kind === "sync")?.text === "Xero sync · Sep 1\u201321, 2026",
+  `a stored day-first sync label is formatted from the dates, got ${yankeesActivity.find((event) => event.kind === "sync")?.text}`,
+);
+const zaRange = buildTeamActivity({
+  snapshots: [
+    {
+      id: "s-za",
+      source: "xero",
+      periodLabel: "1 Sep 2026 – 21 Sep 2026",
+      periodStart: "2026-09-01",
+      periodEnd: "2026-09-21",
+      at: "2026-09-21T12:00:00.000Z",
+    },
+  ],
+  market: ZA_MARKET,
+  uploads: [],
+  diagnosisEvents: [],
+  proposals: [],
+  drafts: [],
+  signoffAt: null,
+  signoffText: null,
+  dataRequests: [],
+  queries: [],
+});
+assert(
+  zaRange.find((event) => event.kind === "sync")?.text === "Xero sync · 1\u201321 Sep 2026",
+  "ZA keeps the day-first span",
+);
+const bakedOnly = buildTeamActivity({
+  snapshots: [
+    {
+      id: "s-baked",
+      source: "xero",
+      periodLabel: "1 Sep 2026 – 21 Sep 2026",
+      at: "2026-09-21T12:00:00.000Z",
+    },
+  ],
+  market: usMarket,
+  uploads: [],
+  diagnosisEvents: [],
+  proposals: [],
+  drafts: [],
+  signoffAt: null,
+  signoffText: null,
+  dataRequests: [],
+  queries: [],
+});
+assert(
+  bakedOnly.find((event) => event.kind === "sync")?.text === "Xero sync",
+  "a day-first stored label is not shown when the dates are missing",
+);
 
 const agents = agentStatusesFromActivity(activity);
 assert(agents.financial_manager.lastRunAt === "2026-07-01T00:00:00.000Z", "financial_manager last run is the latest real event");
