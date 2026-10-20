@@ -44,10 +44,17 @@ export function homeActionNeeds(input: {
   unavailable?: boolean;
   titles: readonly string[];
   overdue: number;
+  /**
+   * One next action when the file has no evidence. Replaces "No open work"
+   * so an empty plan does not sit beside an unscored client as if nothing is due.
+   */
+  nextAction?: string | null;
 }): { heading: string; lines: string[] } {
   if (!input.known) return { heading: "Action plan", lines: ["Checking the action plan."] };
   if (input.unavailable) return { heading: "Action plan", lines: ["Open actions aren't available yet."] };
   const titles = input.titles.map((title) => actionDisplayTitle(title)).filter(Boolean);
+  const next = input.nextAction?.trim() ?? "";
+  if (titles.length === 0 && next) return { heading: "Next", lines: [next] };
   if (titles.length === 0) return { heading: "Action plan", lines: ["No open work."] };
   const lines = titles.slice(0, HOME_ACTION_PREVIEW);
   const overdueNote = input.overdue > 0 ? `, ${input.overdue} overdue` : "";
@@ -175,10 +182,14 @@ export function ownerNeedsView(input: {
   quickBooks: BooksLink;
   xero: BooksLink;
   when: (iso: string) => string;
+  /** One next action when the file has no evidence. Replaces "No open actions." */
+  nextAction?: string | null;
+  /** Statement dates already on the client. Same sentence as the accountant Home. */
   statementSpan?: string | null;
 }): OwnerNeedsView {
   const assigned = openPlanTitles(input.actions);
   const shownActions = assigned.slice(0, HOME_ACTION_PREVIEW);
+  const next = input.nextAction?.trim() ?? "";
   const actionsHeading = !input.actionsReady
     ? "Open actions"
     : input.actionsUnavailable
@@ -187,14 +198,18 @@ export function ownerNeedsView(input: {
         ? `Showing ${shownActions.length} of ${assigned.length}`
         : assigned.length
           ? countPhrase(assigned.length, "open action", "open actions")
-          : "Open actions";
+          : next
+            ? "Next"
+            : "Open actions";
   const actionLines = !input.actionsReady
     ? ["Checking open actions."]
     : input.actionsUnavailable
       ? ["Open actions aren't available yet."]
       : shownActions.length
         ? shownActions
-        : ["No open actions."];
+        : next
+          ? [next]
+          : ["No open actions."];
 
   const draftsHeading = !input.draftsReady
     ? "Drafts"

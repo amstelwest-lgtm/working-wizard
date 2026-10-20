@@ -53,6 +53,8 @@ import {
   withMarketRpcFallback,
   type MarketSelection,
 } from "@/lib/market";
+import { accountantWithoutFirm } from "@/lib/google-practice-market";
+import { listUserFirms } from "@/lib/firm-brand";
 import { openOwnerSettings } from "@/lib/user-roles";
 import { HeaderShareButton } from "@/components/share";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
@@ -116,13 +118,20 @@ import {
   cashPillarFollowsForecast,
   computeOverallHealth,
   grossMarginLooksImplausible,
+  healthWithoutEvidence,
+  NOT_SCORED_YET_LABEL,
   healthMapFromRatios,
   scoreRatio,
 } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
-import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
+import {
+  assessClientMetrics,
+  hasFinancialEvidence,
+  runwayDisplayLabel,
+  storedOpeningIsMissing,
+} from "@/lib/client-metrics";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -2517,6 +2526,18 @@ function Index() {
           u.user.app_metadata?.provider === "google" ||
           (Array.isArray(u.user.identities) &&
             u.user.identities.some((identity) => identity.provider === "google"));
+        // A practice signup that has not chosen a location yet has no firm row.
+        // Sending them through the owner seat would mint a blank client.
+        if (
+          accountantWithoutFirm({
+            signupType: meta?.signup_type,
+            firmName: meta?.firm_name,
+            firmCount: (await listUserFirms(u.user.id)).length,
+          })
+        ) {
+          if (!cancelled) navigate({ to: "/auth/callback", replace: true });
+          return;
+        }
         // Google owner sign-in has no password signup_type until the callback stamps it.
         const shouldProvisionOwner =
           meta?.signup_type === "customer" ||
@@ -2524,7 +2545,7 @@ function Index() {
         if (shouldProvisionOwner) {
           const clientName =
             meta?.business_name || meta?.full_name || meta?.name || u.user.email || "My Business";
-          const visitorMarket = readVisitorMarket() ?? { country: "ZA" as const, regionCode: null };
+          const visitorMarket = readVisitorMarket();
           const { data: clientId, error: rpcErr } = await withMarketRpcFallback(
             () =>
               supabase.rpc("ensure_own_client", {
@@ -2565,7 +2586,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [actingClientId, user?.id]);
+  }, [actingClientId, navigate, user?.id]);
 
   useEffect(() => {
     if (!effectiveClientId) {
@@ -3655,13 +3676,17 @@ function Index() {
     });
   };
   const cashBalance = ownerMetrics.cash.amount;
+  const ownerEvidence = hasFinancialEvidence({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+  });
   const ownerOpeningMissing = storedOpeningIsMissing(clientMeta?.cashflow);
   // Same reading as the Financial Manager card. An outlook uses its stored
   // floor. With no outlook, the card's cashflow is included so Health cannot
   // drop the line the card already shows. A missing opening is not cash under
   // the floor, so this line stays off.
   const ownerDoorOutlook =
-    cashBalance != null
+    ownerEvidence && cashBalance != null
       ? {
           opening: ownerOutlook.opening,
           closing: ownerOutlook.closing,
@@ -3678,22 +3703,31 @@ function Index() {
       money: (amount) => formatMoney(amount, boardMarket),
     })?.healthCue ?? null;
   const grossImplausible = grossMarginLooksImplausible(grossMarginRatio, industryLabel);
-  const overallHealth = cashPillarFollowsForecast(
-    computeOverallHealth({
-      ratios: computedRatios as Record<string, number>,
-      cashRunwayWeeks: cashBalance != null ? effectiveRunway : null,
-      cashBalance,
-      market: boardMarket,
-      shortfallWeek: ownerOutlook.shortfallWeek,
-      grossMarginImplausible: grossImplausible,
-    }),
-    {
-      openingMissing: ownerOpeningMissing,
-      opening: ownerOutlook.opening,
-      closings: ownerOutlook.closing,
-      floor: ownerOutlook.floor,
-    },
-  );
+  const overallHealth = ownerEvidence
+    ? cashPillarFollowsForecast(
+        computeOverallHealth({
+          ratios: computedRatios as Record<string, number>,
+          cashRunwayWeeks: cashBalance != null ? effectiveRunway : null,
+          cashBalance,
+          market: boardMarket,
+          shortfallWeek: ownerOutlook.shortfallWeek,
+          grossMarginImplausible: grossImplausible,
+        }),
+        {
+          hasEvidence: true,
+          openingMissing: ownerOpeningMissing,
+          opening: ownerOutlook.opening,
+          closings: ownerOutlook.closing,
+          floor: ownerOutlook.floor,
+        },
+      )
+    : healthWithoutEvidence(
+        computeOverallHealth({
+          ratios: computedRatios as Record<string, number>,
+          market: boardMarket,
+          grossMarginImplausible: grossImplausible,
+        }),
+      );
   const ownerStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -3785,6 +3819,8 @@ function Index() {
     debtorDays: ratiosStatementFigures(v as unknown as Record<string, unknown>).debtorDays,
     financingHealth: pillarHealths.financing,
     weakestPillar: overallHealth.weakestPillar?.id ?? null,
+    hasEvidence: ownerEvidence,
+    market: boardMarket,
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
   const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
@@ -4044,10 +4080,15 @@ function Index() {
                 }
                 cashOutlook={ownerDoorOutlook}
                 openingMissing={ownerOpeningMissing}
-                cashPillarStatus={pillarStatus.cash ?? null}
-                cashRunwayWeeks={cashBalance != null ? effectiveRunway : null}
-                cashDebtorScore={Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null}
-                cashBurnScore={Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null}
+                hasEvidence={ownerEvidence}
+                cashPillarStatus={ownerEvidence ? (pillarStatus.cash ?? null) : null}
+                cashRunwayWeeks={ownerEvidence && cashBalance != null ? effectiveRunway : null}
+                cashDebtorScore={
+                  ownerEvidence && Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null
+                }
+                cashBurnScore={
+                  ownerEvidence && Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null
+                }
                 market={boardMarket}
                 marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
@@ -4131,9 +4172,9 @@ function Index() {
                           />
                           <OwnerHealthOrb
                             variant="ring"
-                            overallHealth={avgHealth}
-                            displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
-                            statusLabel={ownerStatusCritical ? ownerStatusWord : null}
+                            overallHealth={ownerEvidence && Number.isFinite(avgHealth) ? avgHealth : Number.NaN}
+                            displayStatus={ownerEvidence ? (ownerStatusCritical ? "critical" : overallHealth.displayStatus) : undefined}
+                            statusLabel={ownerEvidence ? (ownerStatusCritical ? ownerStatusWord : null) : NOT_SCORED_YET_LABEL}
                             pillars={spherePillars}
                             caption={HEALTH_RING_CAPTION}
                             cashFloorCue={ownerCashFloorCue}
@@ -5295,9 +5336,9 @@ function Index() {
                                   />
                                   <SphereHero
                                     compact
-                                    overallHealth={avgHealth}
-                                    displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
-                                    statusLabel={ownerStatusCritical ? ownerStatusWord : null}
+                                    overallHealth={ownerEvidence && Number.isFinite(avgHealth) ? avgHealth : Number.NaN}
+                                    displayStatus={ownerEvidence ? (ownerStatusCritical ? "critical" : overallHealth.displayStatus) : undefined}
+                                    statusLabel={ownerEvidence ? (ownerStatusCritical ? ownerStatusWord : null) : NOT_SCORED_YET_LABEL}
                                     pillars={spherePillars}
                                     cashFloorCue={ownerCashFloorCue}
                                     onCashFloor={openOwnerFm}

@@ -87,7 +87,7 @@ export function PayablesPanel({
   useEffect(() => {
     if (fixtureSnapshot !== undefined) {
       setSnapshot(fixtureSnapshot);
-      setLine(fixtureSnapshot ? agedApProofLine(fixtureSnapshot) : "");
+      setLine(fixtureSnapshot ? agedApProofLine(fixtureSnapshot, market) : "");
       setLoading(false);
       return;
     }
@@ -115,7 +115,7 @@ export function PayablesPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, fixtureSnapshot]);
 
-  const draft = buildPayablesDraft(snapshot, runwayWeeks);
+  const draft = buildPayablesDraft(snapshot, runwayWeeks, market);
   const fromStatements = hasStatementWorkingCapital(position);
   const namedList =
     snapshot != null && snapshot.status === "applied" && snapshot.suppliers.length > 0;
@@ -198,7 +198,7 @@ export function PayablesPanel({
       <ReviewInputsDrawer
         hint={
           snapshot
-            ? agedApProofLine(snapshot)
+            ? agedApProofLine(snapshot, market)
             : fromStatements
               ? "Statement totals and connections"
               : "Connections"

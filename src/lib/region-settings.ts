@@ -1,5 +1,5 @@
 import { isDraftComplete, parseMarketSelection } from "@/lib/market/parse";
-import { ZA_SELECTION, type DraftMarket } from "@/lib/market/types";
+import type { DraftMarket } from "@/lib/market/types";
 
 export type RegionFormGate =
   | { status: "loading" }
@@ -7,18 +7,24 @@ export type RegionFormGate =
 
 /**
  * The settings region form. Until the saved row has loaded there is no
- * country to paint, so a visitor or marketing default of the United States
- * cannot appear. A loaded row that does not parse is South Africa, and
- * `unset` tells the form to say the stored market was missing.
+ * country to paint, so a visitor or marketing default cannot appear. A loaded
+ * row that does not parse leaves both countries unselected. Dates still use
+ * the South African presentation fallback until a choice is saved.
  */
 export function regionFormFromSaved(input: { loaded: boolean; saved: unknown }): RegionFormGate {
   if (!input.loaded) return { status: "loading" };
   const parsed = parseMarketSelection(input.saved);
-  const sel = parsed ?? ZA_SELECTION;
+  if (!parsed) {
+    return {
+      status: "ready",
+      unset: true,
+      draft: { country: null, regionCode: null },
+    };
+  }
   return {
     status: "ready",
-    unset: parsed == null,
-    draft: { country: sel.country, regionCode: sel.regionCode },
+    unset: false,
+    draft: { country: parsed.country, regionCode: parsed.regionCode },
   };
 }
 

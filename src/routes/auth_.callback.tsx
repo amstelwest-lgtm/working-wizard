@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { acceptOwnerInvite, ensurePracticePortalAccess } from "@/lib/auth.functions";
@@ -35,11 +35,27 @@ import {
   stashPendingOwnerInvite,
 } from "@/lib/invite-handoff";
 import {
+  draftToSelection,
+  isDraftComplete,
   marketToJson,
-  parseMarketSelection,
+  readVisitorDraft,
   readVisitorMarket,
   withMarketRpcFallback,
+  writeVisitorMarket,
+  type DraftMarket,
 } from "@/lib/market";
+import {
+  accountantProfileStamp,
+  clearGooglePracticeGate,
+  googlePracticeFirmMarket,
+  googlePracticePickerDraft,
+  readGooglePracticeGate,
+  stashGooglePracticeGate,
+} from "@/lib/google-practice-market";
+import { readRequestGeoCountry } from "@/lib/geo-country.functions";
+import { practiceLocationHint } from "@/lib/firm-signup-copy";
+import { MarketPicker } from "@/components/market-picker";
+import type { User } from "@supabase/supabase-js";
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import {
@@ -60,6 +76,7 @@ import { activeFirmIdForUser, listUserFirms } from "@/lib/firm-brand";
 import {
   clearForcePortal,
   forcePortal,
+  isPracticeSignupMeta,
   resolvePortalRoles,
   setPortalIntent,
   shouldOpenItInbox,
@@ -101,15 +118,35 @@ function AuthCallbackPage() {
   const ensurePractice = useServerFn(ensurePracticePortalAccess);
   const doSendWelcome = useServerFn(sendSignupWelcome);
   const doAcceptOwnerInvite = useServerFn(acceptOwnerInvite);
+  const readGeoCountry = useServerFn(readRequestGeoCountry);
   const [error, setError] = useState("");
   const [inviteContinue, setInviteContinue] = useState<string | null>(null);
   const [working, setWorking] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [canRetry, setCanRetry] = useState(false);
   const [isInviteFlow, setIsInviteFlow] = useState(detectInviteFlow);
+  const [practiceGate, setPracticeGate] = useState<{
+    user: User;
+    displayName: string;
+    firmName: string;
+    fullName: string;
+    offerWelcome: boolean;
+    next: string | null;
+    joinToken: string | null;
+  } | null>(null);
+  const [practiceDraft, setPracticeDraft] = useState<DraftMarket>({
+    country: null,
+    regionCode: null,
+  });
+  const [practiceSaving, setPracticeSaving] = useState(false);
+  const [practiceError, setPracticeError] = useState("");
+  const practiceGateArmed = useRef(false);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
+    if (practiceGateArmed.current) return;
     let cancelled = false;
+    cancelledRef.current = false;
     const work = (async () => {
       const established = await establishSessionFromOAuthCallback();
       if (cancelled) return;
@@ -164,6 +201,7 @@ function AuthCallbackPage() {
       // amstel.west@gmail.com to the accountant login must still open the
       // invited business seat (dual-role), not the practice console.
       if (pendingInvite?.token) {
+        clearGooglePracticeGate();
         forcePortal("owner");
         try {
           await supabase.auth.updateUser({
@@ -204,6 +242,7 @@ function AuthCallbackPage() {
       // firm Checkout. The access page accepts the invite after this hop.
       const accessTok = accessTokenFromNext(next);
       if (accessTok) {
+        clearGooglePracticeGate();
         setPortalIntent("accountant");
         forcePortal("accountant");
         if (!cancelled) {
@@ -217,6 +256,36 @@ function AuthCallbackPage() {
         ownerInvite: false,
         staffJoin: Boolean(joinToken),
       });
+
+      // An explicit owner click drops the per-tab picker stash. Practice metadata
+      // is reclassified below, before a business seat is created. A refresh with
+      // no new click must not mint a business seat or stamp South Africa.
+      if (consumed.intent === "owner") clearGooglePracticeGate();
+      const stashedPractice = consumed.intent === "owner" ? null : readGooglePracticeGate(user.id);
+      if (stashedPractice && (await listUserFirms(user.id)).length === 0) {
+        const geoCountry = await readGeoCountry().catch(() => "");
+        if (cancelled) return;
+        try {
+          await openPracticeLocation({
+            user,
+            displayName,
+            firmName: stashedPractice.firmName || displayName,
+            fullName: stashedPractice.fullName || displayName,
+            offerWelcome,
+            next: stashedPractice.next ?? next ?? null,
+            joinToken: stashedPractice.joinToken || joinToken,
+            geoCountry,
+          });
+        } catch (err) {
+          if (!cancelled) {
+            setWorking(false);
+            setError(err instanceof Error ? err.message : "Could not save the practice signup.");
+          }
+        }
+        return;
+      }
+
+      let practiceMarketCountry: "ZA" | "US" | null = null;
 
       if (intent === "owner") {
         // The landing modal stashes the owner door for Google. A practice
@@ -262,7 +331,7 @@ function AuthCallbackPage() {
             () =>
               supabase.rpc("ensure_own_client", {
                 p_name: displayName,
-                p_market: readVisitorMarket() ?? { country: "ZA", regionCode: null },
+                p_market: readVisitorMarket(),
               }),
             () => supabase.rpc("ensure_own_client", { p_name: displayName }),
           );
@@ -274,7 +343,9 @@ function AuthCallbackPage() {
         if (offerWelcome) await welcomeWithoutBlockingSignup(() => doSendWelcome());
       } else {
         const draft = consumeAccountantGoogleSignup();
-        const provisionPractice = isFreshAuthUser(user.created_at) || Boolean(draft);
+        const practiceSignup = isPracticeSignupMeta(
+          user.user_metadata as Record<string, unknown> | undefined,
+        );
         const firmName =
           draft?.firmName ||
           (typeof user.user_metadata?.firm_name === "string"
@@ -286,38 +357,87 @@ function AuthCallbackPage() {
           (typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : "") ||
           (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : "") ||
           displayName;
-        const market =
-          (draft?.marketCountry
-            ? parseMarketSelection({
-                country: draft.marketCountry,
-                regionCode: draft.marketRegion ?? null,
-              })
-            : null) ?? readVisitorMarket();
-        if (provisionPractice) {
+        // A later visit has no draft and is not fresh. Practice metadata with
+        // zero firms still has to finish location, or /practice and /app loop.
+        const needsPracticeSeat =
+          isFreshAuthUser(user.created_at) || Boolean(draft) || practiceSignup;
+        const existingFirmCount = needsPracticeSeat ? (await listUserFirms(user.id)).length : 0;
+        const provisionPractice =
+          isFreshAuthUser(user.created_at) ||
+          Boolean(draft) ||
+          (practiceSignup && existingFirmCount === 0);
+        let geoCountry = "";
+        let market = googlePracticeFirmMarket({
+          draftCountry: draft?.marketCountry,
+          draftRegion: draft?.marketRegion,
+          visitor: readVisitorMarket(),
+          geoCountry: null,
+        });
+        if (provisionPractice && !market) {
+          geoCountry = await readGeoCountry().catch(() => "");
+          market = googlePracticeFirmMarket({
+            draftCountry: draft?.marketCountry,
+            draftRegion: draft?.marketRegion,
+            visitor: readVisitorMarket(),
+            geoCountry,
+          });
+        }
+        if (provisionPractice && !market && existingFirmCount === 0) {
+          if (cancelled) return;
+          try {
+            await openPracticeLocation({
+              user,
+              displayName,
+              firmName,
+              fullName,
+              offerWelcome,
+              next: next ?? null,
+              joinToken,
+              geoCountry,
+            });
+          } catch (err) {
+            if (!cancelled) {
+              setWorking(false);
+              setError(err instanceof Error ? err.message : "Could not save the practice signup.");
+            }
+          }
+          return;
+        }
+        if (provisionPractice && market) {
+          clearGooglePracticeGate();
+          writeVisitorMarket(market);
           try {
             await supabase.auth.updateUser({
               data: {
                 signup_type: "accountant",
                 firm_name: firmName,
                 full_name: fullName,
-                ...(market
-                  ? { market_country: market.country, market_region: market.regionCode }
-                  : {}),
+                market_country: market.country,
+                market_region: market.regionCode,
               },
             });
           } catch {
-            /* metadata stamp is best-effort */
+            /* metadata stamp is best-effort; p_market below is the stored value */
           }
-          const { error: firmErr } = await withMarketRpcFallback(
-            () =>
-              supabase.rpc("ensure_practice_firm", {
-                p_name: firmName,
-                p_market: market ? marketToJson(market) : null,
-              }),
-            () => supabase.rpc("ensure_practice_firm", { p_name: firmName }),
-          );
-          if (firmErr) console.error("[google] ensure_practice_firm failed:", firmErr.message);
+          const { error: firmErr } = await supabase.rpc("ensure_practice_firm", {
+            p_name: firmName,
+            p_market: marketToJson(market),
+          });
+          if (firmErr) {
+            console.error("[google] ensure_practice_firm failed:", firmErr.message);
+            // Landing with no firm sends AuthGate straight back here.
+            if (existingFirmCount === 0) {
+              if (!cancelled) {
+                setWorking(false);
+                setError(firmErr.message);
+              }
+              return;
+            }
+          }
+        } else if (provisionPractice) {
+          clearGooglePracticeGate();
         }
+        practiceMarketCountry = market?.country ?? null;
         await ensurePractice().catch(() => undefined);
         if (isFreshAuthUser(user.created_at)) {
           notifySignup("Accountant firm (Google)", user.email ?? "", displayName);
@@ -325,84 +445,14 @@ function AuthCallbackPage() {
         if (offerWelcome) await welcomeWithoutBlockingSignup(() => doSendWelcome());
       }
 
-      if (joinToken) {
-        forcePortal("accountant");
-        if (!cancelled) {
-          void navigate({
-            to: "/join/$token",
-            params: { token: joinToken },
-            replace: true,
-          });
-        }
-        return;
-      }
-
-      let pendingCheckout =
-        parsePendingCheckoutFromSearch(window.location.search) ||
-        pendingCheckoutFromNext(next) ||
-        peekPendingCheckout();
-      if (!pendingCheckout && intent === "accountant" && isFreshAuthUser(user.created_at)) {
-        pendingCheckout = firmSignupCheckoutIntent(
-          readVisitorMarket()?.country === "ZA" ? "za" : "us",
-        );
-      }
-      if (pendingCheckout) {
-        pendingCheckout = await checkoutIntentForUser(
-          user.id,
-          pendingCheckout,
-          pendingCheckout.market,
-        );
-        stashPendingCheckout(pendingCheckout);
-      }
-      // The welcome link asked for the product, not Checkout.
-      if (isSmartLandingNext(next)) {
-        if (!cancelled) void navigate({ to: SMART_LANDING_PATH, replace: true });
-        return;
-      }
-      // Checkout after insight. A fresh Solo stash still lands in the workspace.
-      if (pendingCheckout && readInsightSeen(await activeFirmIdForUser(user.id))) {
-        if (!cancelled) {
-          void navigate({
-            to: "/billing/start",
-            search: billingStartSearch(pendingCheckout),
-            replace: true,
-          });
-        }
-        return;
-      }
-
-      let goOps = false;
-      try {
-        goOps = sessionStorage.getItem(OPS_UNLOCK_KEY) === "1";
-      } catch {
-        /* ignore */
-      }
-
-      let path: "/app" | "/practice" | "/ops" = "/app";
-      let opsTab: string | undefined;
-      if (goOps || isOpsNext(next)) {
-        path = "/ops";
-        opsTab = lighthouseTabFromOpsNext(next);
-      } else if (await shouldOpenItInbox(user.id)) {
-        path = "/ops";
-        opsTab = "it";
-      } else {
-        path = await resolveSignedInDestination(user.id, {
-          door: intent === "accountant" ? "accountant" : "landing",
-          knownMeta: user.user_metadata as Record<string, unknown> | undefined,
-        });
-        if (intent === "accountant" && path === "/app") {
-          clearForcePortal();
-          setPortalIntent("owner");
-        }
-      }
-      if (!cancelled) {
-        if (path === "/ops") {
-          void navigate({ to: "/ops", search: opsTab ? { tab: opsTab } : {}, replace: true });
-        } else {
-          void navigate({ to: path, replace: true });
-        }
-      }
+      if (cancelled) return;
+      await landGoogleUser({
+        user,
+        intent,
+        next,
+        joinToken,
+        marketCountry: practiceMarketCountry,
+      });
     })();
     void settleWithin(work, POST_AUTH_DEADLINE_MS).then((settled) => {
       if (cancelled || settled.status === "value") return;
@@ -412,10 +462,238 @@ function AuthCallbackPage() {
     });
     return () => {
       cancelled = true;
+      cancelledRef.current = true;
     };
-  }, [attempt, doAcceptOwnerInvite, doSendWelcome, ensurePractice, navigate]);
+    // openPracticeLocation and landGoogleUser are declared below so source-order
+    // tests still see the join hop before landing. Listing them here would
+    // re-run this effect every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt, doAcceptOwnerInvite, doSendWelcome, ensurePractice, navigate, readGeoCountry]);
+
+  async function openPracticeLocation(input: {
+    user: User;
+    displayName: string;
+    firmName: string;
+    fullName: string;
+    offerWelcome: boolean;
+    next: string | null;
+    joinToken: string | null;
+    geoCountry: string;
+  }) {
+    const { error } = await supabase.auth.updateUser({
+      data: accountantProfileStamp({ firmName: input.firmName, fullName: input.fullName }),
+    });
+    if (error) throw new Error(error.message);
+    if (cancelledRef.current) return;
+    practiceGateArmed.current = true;
+    stashGooglePracticeGate({
+      userId: input.user.id,
+      firmName: input.firmName,
+      fullName: input.fullName,
+      next: input.next,
+      joinToken: input.joinToken,
+    });
+    setPracticeDraft(
+      googlePracticePickerDraft({
+        visitorDraft: readVisitorDraft(),
+        geoCountry: input.geoCountry,
+      }),
+    );
+    setPracticeError("");
+    setPracticeGate({
+      user: input.user,
+      displayName: input.displayName,
+      firmName: input.firmName,
+      fullName: input.fullName,
+      offerWelcome: input.offerWelcome,
+      next: input.next,
+      joinToken: input.joinToken,
+    });
+    setWorking(false);
+  }
+
+  async function landGoogleUser(input: {
+    user: User;
+    intent: "owner" | "accountant" | null;
+    next: string | undefined;
+    joinToken: string | null;
+    marketCountry: "ZA" | "US" | null;
+  }) {
+    if (cancelledRef.current) return;
+    const { user, intent, next, joinToken } = input;
+
+    if (joinToken) {
+      forcePortal("accountant");
+      if (!cancelledRef.current) {
+        void navigate({
+          to: "/join/$token",
+          params: { token: joinToken },
+          replace: true,
+        });
+      }
+      return;
+    }
+
+    let pendingCheckout =
+      parsePendingCheckoutFromSearch(window.location.search) ||
+      pendingCheckoutFromNext(next) ||
+      peekPendingCheckout();
+    if (!pendingCheckout && intent === "accountant" && isFreshAuthUser(user.created_at)) {
+      pendingCheckout = firmSignupCheckoutIntent(input.marketCountry === "ZA" ? "za" : "us");
+    }
+    if (pendingCheckout) {
+      pendingCheckout = await checkoutIntentForUser(
+        user.id,
+        pendingCheckout,
+        pendingCheckout.market,
+      );
+      stashPendingCheckout(pendingCheckout);
+    }
+    // The welcome link asked for the product, not Checkout.
+    if (isSmartLandingNext(next)) {
+      if (!cancelledRef.current) void navigate({ to: SMART_LANDING_PATH, replace: true });
+      return;
+    }
+    // Checkout after insight. A fresh Solo stash still lands in the workspace.
+    if (pendingCheckout && readInsightSeen(await activeFirmIdForUser(user.id))) {
+      if (!cancelledRef.current) {
+        void navigate({
+          to: "/billing/start",
+          search: billingStartSearch(pendingCheckout),
+          replace: true,
+        });
+      }
+      return;
+    }
+
+    let goOps = false;
+    try {
+      goOps = sessionStorage.getItem(OPS_UNLOCK_KEY) === "1";
+    } catch {
+      /* ignore */
+    }
+
+    let path: "/app" | "/practice" | "/ops" = "/app";
+    let opsTab: string | undefined;
+    if (goOps || isOpsNext(next)) {
+      path = "/ops";
+      opsTab = lighthouseTabFromOpsNext(next);
+    } else if (await shouldOpenItInbox(user.id)) {
+      path = "/ops";
+      opsTab = "it";
+    } else {
+      path = await resolveSignedInDestination(user.id, {
+        door: intent === "accountant" ? "accountant" : "landing",
+        knownMeta: user.user_metadata as Record<string, unknown> | undefined,
+      });
+      if (intent === "accountant" && path === "/app") {
+        clearForcePortal();
+        setPortalIntent("owner");
+      }
+    }
+    if (!cancelledRef.current) {
+      if (path === "/ops") {
+        void navigate({ to: "/ops", search: opsTab ? { tab: opsTab } : {}, replace: true });
+      } else {
+        void navigate({ to: path, replace: true });
+      }
+    }
+  }
+
+  async function confirmPracticeMarket() {
+    const gate = practiceGate;
+    if (!gate || practiceSaving) return;
+    const market = draftToSelection(practiceDraft);
+    if (!market) {
+      setPracticeError(
+        "Choose a practice location first. A United States practice also needs a state.",
+      );
+      return;
+    }
+    setPracticeSaving(true);
+    setPracticeError("");
+    try {
+      writeVisitorMarket(market);
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            signup_type: "accountant",
+            firm_name: gate.firmName,
+            full_name: gate.fullName,
+            market_country: market.country,
+            market_region: market.regionCode,
+          },
+        });
+      } catch {
+        /* metadata stamp is best-effort; p_market below is the stored value */
+      }
+      const { error: firmErr } = await supabase.rpc("ensure_practice_firm", {
+        p_name: gate.firmName,
+        p_market: marketToJson(market),
+      });
+      if (firmErr) {
+        setPracticeError(firmErr.message);
+        return;
+      }
+      await ensurePractice().catch(() => undefined);
+      if (isFreshAuthUser(gate.user.created_at)) {
+        notifySignup("Accountant firm (Google)", gate.user.email ?? "", gate.displayName);
+      }
+      if (gate.offerWelcome) await welcomeWithoutBlockingSignup(() => doSendWelcome());
+      clearGooglePracticeGate();
+      practiceGateArmed.current = false;
+      cancelledRef.current = false;
+      setPracticeGate(null);
+      await landGoogleUser({
+        user: gate.user,
+        intent: "accountant",
+        next: gate.next ?? undefined,
+        joinToken: gate.joinToken,
+        marketCountry: market.country,
+      });
+    } catch (err) {
+      setPracticeError(
+        err instanceof Error ? err.message : "Could not save the practice location.",
+      );
+    } finally {
+      setPracticeSaving(false);
+    }
+  }
 
   const useInviteShell = isInviteFlow || Boolean(inviteContinue);
+
+  if (practiceGate) {
+    const hint = practiceLocationHint(practiceDraft);
+    return (
+      <AuthEntryShell>
+        <AuthEntryEyebrow>Accountant portal</AuthEntryEyebrow>
+        <AuthEntryTitle>Where is this practice?</AuthEntryTitle>
+        <AuthEntryCard className="mt-6">
+          <MarketPicker
+            value={practiceDraft}
+            onChange={setPracticeDraft}
+            variant="app"
+            audience="practice"
+            locationNoun="practice"
+            vatCopy={false}
+            taxWording={practiceDraft.country === "US"}
+          />
+          {hint ? <p className="mt-3 text-sm leading-relaxed text-[#8a938c]">{hint}</p> : null}
+          {practiceError ? (
+            <p className="mt-3 text-sm leading-relaxed text-[#8a938c]">{practiceError}</p>
+          ) : null}
+          <button
+            type="button"
+            disabled={practiceSaving || !isDraftComplete(practiceDraft)}
+            onClick={() => void confirmPracticeMarket()}
+            className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#0B5FFF] px-5 text-xs font-bold uppercase tracking-[0.14em] text-white hover:bg-[#2563EB] disabled:opacity-50"
+          >
+            {practiceSaving ? "Saving…" : "Continue"}
+          </button>
+        </AuthEntryCard>
+      </AuthEntryShell>
+    );
+  }
 
   if (error) {
     if (useInviteShell) {

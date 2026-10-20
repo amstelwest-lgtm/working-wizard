@@ -254,6 +254,17 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   color: var(--ink-dim);
 }
 
+.owner-door a.owner-reports-ready {
+  display: inline-block;
+  margin: 18px 0 8px;
+  color: var(--ink);
+  font-size: var(--type-body-sm-size);
+  font-weight: 650;
+  line-height: var(--type-body-sm-leading);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .owner-door[data-screen="home"] {
   display: flex;
   min-height: 100dvh;

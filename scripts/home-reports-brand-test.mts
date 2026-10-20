@@ -8,6 +8,11 @@ import { reportInputsFromFinancials } from "../src/lib/equity-coherence";
 import { FIRM_TRIAL_CTA_LABEL } from "../src/lib/firm-signup-copy";
 import {
   REPORT_CATALOGUE_KEYS,
+  STATEMENT_FIGURE_KEYS,
+  clientReportsReadyCount,
+  firmReportsHomeClient,
+  firmReportsHomeLine,
+  firmReportsReadyTotal,
   reportReady,
   reportsAnswerSentence,
   reportsHomeReadyLine,
@@ -32,6 +37,37 @@ assert(reportsReadyCount({ ...ready, figuresOnFile: false }) === 0, "no figures 
 assert(reportsHomeReadyLine(11) === "11 ready to send", "Home names the ready count");
 assert(reportsHomeReadyLine(1) === "1 ready to send", "one report stays singular");
 assert(reportsHomeReadyLine(0) === null, "zero ready reports has no count line");
+
+const fullBook = {
+  revenue: "100",
+  cogs: "40",
+  netIncome: "10",
+  equity: "50",
+  totalAssets: "80",
+};
+const partialBook = { revenue: "20", cogs: "5" };
+const clients = [
+  { id: "alpha", name: "Alpha", financials: fullBook },
+  { id: "beta", name: "Beta", financials: partialBook },
+  { id: "empty", name: "Empty", financials: null },
+];
+const perClient = clients.map((client) => clientReportsReadyCount(client.financials));
+assert(
+  firmReportsReadyTotal(clients) === perClient.reduce((sum, count) => sum + count, 0),
+  "the firm total equals the sum of the per-client counts",
+);
+assert(perClient[0] === 11 && perClient[1] === 9 && perClient[2] === 0, "each client uses the shared ready count");
+assert(firmReportsHomeLine(perClient.reduce((sum, count) => sum + count, 0)) === "Reports: 20 ready to send", "firm Home names the summed count");
+assert(firmReportsHomeLine(1) === "Reports: 1 ready to send", "a single ready report stays singular");
+assert(firmReportsHomeLine(0) === null, "a zero firm total hides the line");
+assert(firmReportsHomeClient(clients) === "alpha", "the reports list opens on the client with the most ready reports");
+assert(
+  firmReportsHomeClient([
+    { id: "north", name: "North", financials: partialBook },
+    { id: "south", name: "South", financials: partialBook },
+  ]) === "north",
+  "a tied ready count opens the earlier client name",
+);
 
 const names = REPORT_CATALOGUE_KEYS.filter((key) =>
   reportReady(key, { leverageReady: true, assetReady: false }),
@@ -71,9 +107,22 @@ assert(studio.includes("reportReady("), "the Reports tab filters with the shared
 
 const home = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert(home.includes("reportsHomeReadyLine"), "Home uses the shared reports line");
-assert(home.includes("reportsReadyCount"), "Home uses the Reports tab count");
+assert(home.includes("clientReportsReadyCount"), "Home uses the Reports tab count");
 assert(!home.includes("Ready to send."), "Home no longer says Ready to send without a count");
 assert(!home.includes("Nothing ready to send."), "a zero count does not invent a line");
+const fieldBlock = home.slice(home.indexOf("const FIELD_LABELS"), home.indexOf("const PROFIT_FIELD_LABELS"));
+const fieldKeys = [...fieldBlock.matchAll(/key: "([^"]+)"/g)].map((match) => match[1]);
+assert(
+  fieldKeys.join(",") === STATEMENT_FIGURE_KEYS.join(","),
+  "the Books fields and the ready count use the same figures",
+);
+
+const practice = read("src/components/practice-board.tsx");
+assert(practice.includes("firmReportsReadyTotal"), "firm Home sums the per-client ready counts");
+assert(practice.includes("firmReportsHomeLine"), "firm Home uses the shared reports line");
+assert(practice.includes('search={{ tab: "reports" }}'), "firm Home links to the reports list");
+assert(practice.includes("bookEnriched"), "the firm line waits until the books have loaded");
+assert(practice.includes('className="owner-reports-ready"'), "firm Home adds the line beside the agent desk");
 
 const landing = read("src/routes/index.tsx");
 const header = read("src/components/landing/landing-header.tsx");

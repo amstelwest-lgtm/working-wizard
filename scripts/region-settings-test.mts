@@ -29,20 +29,16 @@ assert(
 
 const missing = regionFormFromSaved({ loaded: true, saved: null });
 assert(
-  missing.status === "ready" && missing.draft.country === "ZA",
-  "a missing saved region is South Africa",
+  missing.status === "ready" && missing.draft.country === null && missing.draft.regionCode === null,
+  "a missing saved region selects no country",
 );
 assert(
   missing.status === "ready" && missing.unset === true,
   "a missing saved region is marked unset",
 );
 assert(
-  missing.status === "ready" && missing.draft.country !== "US",
-  "a missing saved region is not the United States",
-);
-assert(
-  missing.status === "ready" && missing.draft.regionCode == null,
-  "a missing saved region has no US state",
+  missing.status === "ready" && missing.draft.country !== "US" && missing.draft.country !== "ZA",
+  "a missing saved region is not pre-selected",
 );
 
 const savedUs = regionFormFromSaved({

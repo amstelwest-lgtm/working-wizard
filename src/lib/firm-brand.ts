@@ -100,10 +100,7 @@ export async function readUserFirms(userId: string): Promise<{
     byId.set(row.id, row as FirmBrandRow);
   }
 
-  const mems = await supabase
-    .from("firm_memberships")
-    .select("firm_id")
-    .eq("user_id", userId);
+  const mems = await supabase.from("firm_memberships").select("firm_id").eq("user_id", userId);
   if (mems.error) return { firms: Array.from(byId.values()), error: mems.error.message };
   const memberIds = (mems.data ?? [])
     .map((m) => m.firm_id)

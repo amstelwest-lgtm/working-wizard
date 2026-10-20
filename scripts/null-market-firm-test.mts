@@ -54,8 +54,8 @@ assert(
 
 const unset = regionFormFromSaved({ loaded: true, saved: null });
 assert(
-  unset.status === "ready" && unset.unset && unset.draft.country === "ZA",
-  "settings marks a null market as the ZA default",
+  unset.status === "ready" && unset.unset && unset.draft.country === null,
+  "settings does not pre-select a country for a null market",
 );
 
 const hungClients = await settleWithin(new Promise<unknown>(() => {}), 20);
@@ -80,7 +80,10 @@ assert(
 
 const storedCountry = parseMarketSelection(null)?.country ?? null;
 assert(storedCountry === null, "a null firm market has no stored country");
-assert(taxSampleEnabled(storedCountry) === false, "a null-market firm does not enable the tax sample");
+assert(
+  taxSampleEnabled(storedCountry) === false,
+  "a null-market firm does not enable the tax sample",
+);
 assert(
   taxSampleCardVisible(storedCountry, false) === false,
   "a null-market firm does not show the ZA tax card",
@@ -117,11 +120,17 @@ assert(
 
 const owner = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(owner.includes("setMarketNeedsGate(true)"), "a null client market opens the country gate");
-assert(owner.includes("setWorkspaceMarket(null)"), "a null client market does not become a ZA selection");
+assert(
+  owner.includes("setWorkspaceMarket(null)"),
+  "a null client market does not become a ZA selection",
+);
 const gateReturn = owner.indexOf("if (marketNeedsGate && effectiveClientId)");
 const afterGate = owner.indexOf("const showOwnerDoor", gateReturn);
 const bookAt = owner.indexOf("<OwnerDoor");
-assert(gateReturn > 0 && afterGate > gateReturn && bookAt > afterGate, "the country gate returns before the book");
+assert(
+  gateReturn > 0 && afterGate > gateReturn && bookAt > afterGate,
+  "the country gate returns before the book",
+);
 const gateBlock = owner.slice(gateReturn, afterGate);
 assert(gateBlock.includes("<MarketGate"), "a null client market renders MarketGate");
 assert(!gateBlock.includes("OwnerDoor"), "the gate does not render the owner book");
@@ -130,6 +139,32 @@ assert(!gateBlock.includes("See a sample"), "the gate does not render the tax sa
 assert(
   owner.includes("marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}"),
   "OwnerDoor gets the stored country, not the coerced market",
+);
+
+const clientPage = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+assert(
+  clientPage.includes(
+    "const clientGateCountry = parseMarketSelection(client?.market)?.country ?? null",
+  ),
+  "the accountant client page gates on the stored country",
+);
+assert(
+  clientPage.includes("marketForClient({ market: client?.market })"),
+  "accountant client dates use the presentation fallback",
+);
+assert(
+  clientPage.includes("marketCountry={clientGateCountry}"),
+  "the accountant tax card does not use the coerced country",
+);
+assert(
+  !clientPage.includes("marketCountry={clientMarket.country}"),
+  "the accountant tax card does not read the date market country",
+);
+const clientGateAt = clientPage.indexOf("if (client.market === null)");
+const clientProviderAt = clientPage.indexOf("<MarketProvider");
+assert(
+  clientGateAt > 0 && clientProviderAt > clientGateAt,
+  "a null client market returns the country gate before the book",
 );
 
 const gate = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
@@ -159,15 +194,15 @@ const card = renderToStaticMarkup(
   }),
 );
 assert(
-  card.includes("Not set, defaulting to South Africa"),
-  "settings says the market was not set",
+  card.includes(
+    "Region not set — choose South Africa or United States. Until then, dates use South African format and prices follow your location.",
+  ),
+  "settings asks for a region and explains dates and prices",
 );
-assert(card.includes('data-region-default="ZA"'), "settings marks the default as South Africa");
-assert(
-  (card.match(/aria-pressed="true"/g) ?? []).length === 1,
-  "South Africa is the selected region",
-);
-assert(card.includes("South Africa"), "the selected country is South Africa");
+assert(card.includes("data-region-unset"), "settings marks the region as unset");
+assert(!card.includes("data-region-default"), "settings does not mark a default country");
+assert(!card.includes("Not set, defaulting to South Africa"), "settings does not say it defaulted");
+assert((card.match(/aria-pressed="true"/g) ?? []).length === 0, "neither country is selected");
 
 const { MarketGate } = await import("../src/components/market-gate.tsx");
 const gateHtml = renderToStaticMarkup(
@@ -175,9 +210,15 @@ const gateHtml = renderToStaticMarkup(
     onSave: async () => undefined,
   }),
 );
-assert(gateHtml.includes("Where does this business operate?"), "the gate asks where the business operates");
+assert(
+  gateHtml.includes("Where does this business operate?"),
+  "the gate asks where the business operates",
+);
 assert(!gateHtml.includes("See a sample"), "the gate does not render the tax sample");
-assert(!gateHtml.includes("ITR14") && !gateHtml.includes("IRP6"), "the gate does not render the worksheet");
+assert(
+  !gateHtml.includes("ITR14") && !gateHtml.includes("IRP6"),
+  "the gate does not render the worksheet",
+);
 assert(!/\bR[\u00a0 ]\d/.test(gateHtml), "the gate does not render a rand amount");
 
 const { OwnerHome } = await import("../src/components/owner-door/owner-home.tsx");
@@ -198,7 +239,10 @@ const home = renderToStaticMarkup(
   }),
 );
 assert(!home.includes("See a sample"), "a null-market firm does not offer the rand sample");
-assert(!home.includes("ITR14") && !home.includes("IRP6"), "a null-market firm does not render the worksheet");
+assert(
+  !home.includes("ITR14") && !home.includes("IRP6"),
+  "a null-market firm does not render the worksheet",
+);
 assert(!/\bR[\u00a0 ]\d/.test(home), "a null-market firm home has no rand amounts");
 assert(!home.includes("SARS"), "a null-market firm home has no SARS copy");
 

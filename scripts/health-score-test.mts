@@ -420,5 +420,18 @@ assert(
 );
 assert(missingOpen.displayStatus !== "healthy", "an unscored cash pillar flags a healthy overall");
 
+const emptyFloor = cashPillarFollowsForecast(stillHealthy, {
+  opening: 0,
+  closings: [0, 0, 0],
+  floor: 50000,
+});
+assert(emptyFloor.overall === stillHealthy.overall, "a flat zero series does not replace the score");
+assert(
+  emptyFloor.pillars.find((pillar) => pillar.id === "cash")?.score ===
+    stillHealthy.pillars.find((pillar) => pillar.id === "cash")?.score,
+  "a flat zero series does not mint Cash 25",
+);
+assert(!Number.isFinite(scoreRatio("Not A Ratio", 1)), "an unknown ratio is not a midpoint of 50");
+
 console.log("health-score-test: ok");
 console.log("sample overall", fromInputs.overall, fromInputs.displayLabel, fromInputs.pillars.map((p) => `${p.id}:${p.score}`).join(" "));

@@ -868,6 +868,8 @@ assert(
 );
 assert(server.includes("chargeCurrency"), "the cap reader keeps the subscription charge currency");
 assert(server.includes("startedAt"), "the cap reader keeps the subscription start");
+assert(server.includes("current_period_end"), "the cap reader keeps the subscription period end");
+assert(server.includes("periodEndIso: sub?.currentPeriodEnd"), "Settings receives the period end for an active plan");
 assert(server.includes("starter_trial_enforced"), "the cap reader loads the pilot flag");
 assert(server.includes("starterTrialExpired"), "an expired Starter blocks a new client");
 assert(

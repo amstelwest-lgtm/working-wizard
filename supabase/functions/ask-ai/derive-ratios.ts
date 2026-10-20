@@ -114,7 +114,8 @@ export function scoreDisplayRatio(name: string, val: number): number {
     if (val <= 4) return clamp(90 - ((val - 2) / 2) * 40);
     return clamp(50 - (val - 4) * 10);
   }
-  return 50;
+  // An unnamed ratio is missing, not a midpoint.
+  return Number.NaN;
 }
 
 export type PillarBreakdownRow = {

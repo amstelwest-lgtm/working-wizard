@@ -78,6 +78,7 @@ export async function loadOverviewBrief(
       marketForClient({ market: row?.market }),
     ),
     figuresAsOf: (snapRes.data?.period_date as string | null) ?? null,
+    cashflow: (row as { cashflow?: unknown } | null)?.cashflow,
     brainSummary: groundBrainSummaryRecord(
       row?.brain_summary ?? null,
       ratiosForBrainProse(financials, fyStartMonth),
