@@ -166,6 +166,7 @@ import {
   resolveWaterfallFigures,
 } from "@/lib/weekly-inputs";
 import {
+  figuresPeriodLabelFrom,
   preferStatementPeriod,
   readStatementMeta,
   statementSpanLabel,
@@ -200,6 +201,7 @@ import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
+import { healthSnapshotFromBooks } from "@/lib/health-snapshot";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { FindAccountantPanel } from "@/components/find-accountant-panel";
 import {
@@ -3792,6 +3794,10 @@ function Index() {
     timeZone: boardMarket.timezone,
   });
   const overallHealth = ownerEvidence ? scoredHealth : healthWithoutEvidence(scoredHealth);
+  const liveScoreSnapshot = healthSnapshotFromBooks({
+    health: overallHealth,
+    periodLabel: figuresPeriodLabelFrom(v as unknown as object, null, boardMarket),
+  });
   const financialsSignoffStale = healthSignoffIsStale({
     signoff: financialsSignoff,
     dataUpdatedAt: clientMeta?.financials_updated_at ?? null,
@@ -4261,11 +4267,7 @@ function Index() {
                 cashBurnScore={
                   ownerEvidence && Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null
                 }
-                liveHealth={{
-                  overall: overallHealth.overall,
-                  weakestLabel: overallHealth.weakestPillar?.label ?? null,
-                  weakestScore: overallHealth.weakestPillar?.score ?? null,
-                }}
+                liveHealth={liveScoreSnapshot}
                 market={boardMarket}
                 marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
@@ -4476,6 +4478,7 @@ function Index() {
                             simplified
                             isOwner={userRole !== "client_member"}
                             canonicalRatios={ownerCanonicalRatios}
+                            healthSnapshot={liveScoreSnapshot}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(
@@ -4574,6 +4577,7 @@ function Index() {
                             simplified
                             isOwner={userRole !== "client_member"}
                             canonicalRatios={ownerCanonicalRatios}
+                            healthSnapshot={liveScoreSnapshot}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerView
                             pillars={overallHealth.pillars}
@@ -6086,6 +6090,7 @@ function Index() {
                       firmId={clientMeta?.firm_id ?? null}
                       signoff={advisorySignoff}
                       audience="owner"
+                      liveHealth={liveScoreSnapshot}
                       canGenerate={hasRealFinancials}
                       hasFirm={Boolean(clientMeta?.firm_id)}
                       refreshKey={`${activeTab}|${advisoryBump}`}
@@ -6264,6 +6269,7 @@ function Index() {
                             simplified={viewMode === "simplified"}
                             isOwner={userRole !== "client_member"}
                             canonicalRatios={ownerCanonicalRatios}
+                            healthSnapshot={liveScoreSnapshot}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerSignoff={actionPlanSignoff}
                             ownerSignoffStale={computeIsStale(

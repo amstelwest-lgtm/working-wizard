@@ -18,6 +18,14 @@ export const SIGNOFF_STATUS_READY = "Ready for review";
 export const PAGE_FIGURES_CHANGED_CLAUSE = "figures have changed since; re-review";
 /** Pill when the sentence already carries the long stale line. */
 export const SIGNOFF_STATUS_STALE_SHORT = "Signed off · figures changed";
+/** Scorecard page and scorecard PDF. Budget keeps its own clause. */
+export const STALE_REVIEW_CLAUSE = "figures changed since, re-review";
+
+export function staleSignoffLine(name?: string | null): string {
+  const who = name?.trim();
+  if (who) return `Signed off by ${who} · ${STALE_REVIEW_CLAUSE}`;
+  return `Signed off · ${STALE_REVIEW_CLAUSE}`;
+}
 
 export type SignoffStatusKind = "draft" | "ready" | "signed" | "stale";
 
@@ -54,8 +62,9 @@ export function signoffScopeLabel(scope: string | null | undefined): string | nu
 }
 
 /**
- * The sentence Health and the scorecard both print. Date only on a clean
- * sign-off, or on a stale budget. Other stale scopes use the short pill.
+ * The sentence Health and the scorecard both print. A stale non-budget
+ * sign-off names the signer and says the figures changed. Budget keeps its
+ * own clause, and still shows the sign-off date.
  */
 export function presentPageSignoff(input: {
   scope?: string | null;
@@ -71,6 +80,7 @@ export function presentPageSignoff(input: {
     isStale: input.isStale,
     readyForReview: Boolean(input.readyForReview),
   });
+  if (kind === "stale" && input.scope !== "budget") return staleSignoffLine(input.name);
   const budgetStale = input.scope === "budget" && kind === "stale";
   const dated = input.date?.trim() && input.date.trim() !== "—" ? input.date.trim() : null;
   return signoffStatusLine({

@@ -6,6 +6,8 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { agentShortName } from "@/lib/milon-team";
+import { HealthNarrativeLine } from "@/components/health-narrative-line";
+import { renderHealthNarrative, type HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { useMarket } from "@/contexts/market";
 import {
   approvedLiveLink,
@@ -19,6 +21,7 @@ import {
 import {
   findingCardCopy,
   findingFigureEntries,
+  findingSentence,
   formatFindingProse,
   type AgentFindingRow,
 } from "@/lib/milon-team-activity";
@@ -42,6 +45,8 @@ export function OwnerDraftCard({
   row,
   layout,
   sentence,
+  liveSentence = null,
+  health = null,
   meta,
   market: marketProp,
   canonicalRatios = null,
@@ -53,6 +58,10 @@ export function OwnerDraftCard({
   row: AgentFindingRow;
   layout: "moves" | "desk";
   sentence?: string;
+  /** Snapshot sentence shown after Regenerate. The stored row is not rewritten. */
+  liveSentence?: string | null;
+  /** Live score snapshot. Score claims that disagree with it are not shown. */
+  health?: HealthScoreSnapshot | null;
   meta?: ReactNode;
   market?: MoneyMarket;
   /** Live scorecard ratios. A stored operating margin is rewritten to this figure. */
@@ -96,12 +105,27 @@ export function OwnerDraftCard({
     (optimistic?.phase === "approved" ? optimistic.recordId : null) ?? row.approved_row_id ?? null;
   const link = approved ? approvedLiveLink(table) : null;
   const showActions = ownerOk && !blocked && !approved;
+  const fromSnapshot =
+    health && row.kind !== "data_request_draft"
+      ? findingSentence({
+          title: row.title,
+          detail: row.detail,
+          figures: findingFigureEntries(row.evidence),
+          market: marketProp ?? contextMarket,
+          canonicalRatios,
+          liveHealth: health,
+          evidence: row.evidence,
+        })
+      : "";
+  const replacement = liveSentence ?? (health ? renderHealthNarrative(health) : null);
   const shownLead =
     approved && optimistic?.phase === "approved"
       ? title
-      : layout === "desk" && sentence && row.kind !== "data_request_draft"
-        ? sentence
-        : copy.lead;
+      : fromSnapshot
+        ? fromSnapshot
+        : layout === "desk" && sentence && row.kind !== "data_request_draft"
+          ? sentence
+          : copy.lead;
   const shownContext = !approved && !editing ? copy.context : null;
 
   function fail(result: { hideButtons: boolean; message?: string; refresh?: boolean; invite?: boolean }, restoreEdit: boolean) {
@@ -257,7 +281,7 @@ export function OwnerDraftCard({
       <li className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent} data-finding-draft={label ? "true" : undefined} data-draft={row.id}>
         <div className="milon-desk-job-copy">
           <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
-          <p className="milon-desk-figure">{shownLead}</p>
+          <HealthNarrativeLine text={shownLead} liveSentence={replacement} className="milon-desk-figure" />
           {shownContext ? (
             <p className="milon-desk-draft-context" data-draft-context={shownContext}>
               {shownContext}
@@ -276,7 +300,13 @@ export function OwnerDraftCard({
 
   return (
     <li className="rounded-lg border border-amber-900/10 bg-white/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/50" data-draft={row.id}>
-      {editing ? null : <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{shownLead}</p>}
+      {editing ? null : (
+        <HealthNarrativeLine
+          text={shownLead}
+          liveSentence={replacement}
+          className="text-sm font-semibold text-slate-900 dark:text-slate-100"
+        />
+      )}
       {shownContext ? (
         <p className="owner-draft-context" data-draft-context={shownContext}>
           {shownContext}

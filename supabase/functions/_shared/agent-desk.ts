@@ -8,6 +8,7 @@ import { executeAnalystTool, type AnalystExecCtx } from "../agent-analyst/execut
 import { displayAmounts, moneyMarketFromClient, type AgentKey } from "../../../src/lib/agent-bus.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
+import { loadHealthScoreSnapshot, snapshotEvidenceFields } from "../../../src/lib/health-snapshot.ts";
 import { preferStatementSnapshot } from "../../../src/lib/statement-import-plan.ts";
 import { booksQualityFigures, savedBudgetFigures, savedCashflowFigures } from "../../../src/lib/agent-books.ts";
 import {
@@ -316,6 +317,10 @@ export async function recordAgentDraft(
     market: moneyMarketFromClient(ctx.market),
   });
   if (!prepared.ok) return { error: prepared.error, ...(prepared.tool_blocked ? { tool_blocked: true } : {}) };
+  const liveSnapshot = await loadHealthScoreSnapshot(ctx.db, ctx.clientId, ctx.market);
+  if (liveSnapshot) {
+    prepared.evidence = { ...prepared.evidence, ...snapshotEvidenceFields(liveSnapshot) };
+  }
 
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: recent, error: recentError } = await ctx.db

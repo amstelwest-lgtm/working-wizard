@@ -102,6 +102,8 @@ type Props = {
    */
   liveCashFloor?: number | null;
   currency?: string | null;
+  /** Live score snapshot. A stored section that disagrees is not printed as current. */
+  liveHealth?: import("@/lib/health-snapshot").HealthScoreSnapshot | null;
   /** Live Overview figures. A stored pack that disagrees shows a regenerate note. */
   currentFigures?: {
     runwayLabel: string | null;
@@ -168,6 +170,7 @@ export function AdvisoryPackPanel({
   firmId = null,
   className,
   currentFigures = null,
+  liveHealth = null,
   liveCashFloor = null,
   currency = null,
   signoff = null,
@@ -469,6 +472,7 @@ export function AdvisoryPackPanel({
         recordedSigner,
         sample: Boolean(demoRow?.is_demo),
         figuresChanged: pack.status === "approved" && signOffGate.figuresChanged,
+        liveHealth,
       });
       track("advisory_pack_pdf_exported", {
         clientId,
@@ -843,6 +847,7 @@ export function AdvisoryPackPanel({
           {packSectionsForPdf(pack.content.sections, {
             signed: pack.status === "approved",
             firmName: signoff?.firm_name ?? profile.firmName,
+            liveHealth,
           }).map((s) => {
             const diff = changedByKey.get(s.key);
             const isEditing = editing === s.key;

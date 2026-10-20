@@ -21,6 +21,8 @@ import { partyNamesInBrain } from "../brain-propose/prompt.ts";
 import { buildDeliverableDraftPayload } from "./prompt.ts";
 import { quotedStatementFigures, ratioPromptLines, STATEMENT_FIGURE_RULES } from "../../../src/lib/statement-margin.ts";
 import { figuresPeriodLabelFrom, readStatementMeta, rewriteSavedMonthStamp, statementSpanLabel } from "../../../src/lib/statement-period.ts";
+import { liveHealthFromBooks } from "../../../src/lib/health-score.ts";
+import { healthSnapshotFromBooks, healthSnapshotPromptBlock } from "../../../src/lib/health-snapshot.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
@@ -364,7 +366,7 @@ async function handleBrainDeliverableDraft(req: Request): Promise<Response> {
   const [clientRes, snapRes, factRes, stepRes, draftRes] = await Promise.all([
     userClient
       .from("clients")
-      .select("name, business_type, operating_profile, brain_summary, financials, market")
+      .select("name, business_type, operating_profile, brain_summary, financials, cashflow, financials_updated_at, market")
       .eq("id", clientId)
       .maybeSingle(),
     userClient
@@ -439,6 +441,21 @@ async function handleBrainDeliverableDraft(req: Request): Promise<Response> {
       periodLabel: snap?.period_label ?? null,
       market: dateMarket,
     });
+  const liveBooks =
+    client && typeof client === "object" && "financials" in client && client.financials && typeof client.financials === "object"
+      ? (client.financials as Record<string, unknown>)
+      : null;
+  const liveHealth = liveHealthFromBooks({
+    financials: liveBooks,
+    cashflow: client && "cashflow" in client ? client.cashflow : null,
+    financialsUpdatedAt:
+      client && "financials_updated_at" in client && typeof client.financials_updated_at === "string"
+        ? client.financials_updated_at
+        : null,
+    market: dateMarket,
+  });
+  const scoreSnapshot = healthSnapshotFromBooks({ health: liveHealth, periodLabel });
+  if (scoreSnapshot) contextLines.push(healthSnapshotPromptBlock(scoreSnapshot));
   if (snap) {
     contextLines.push(
       `Latest snapshot: ${periodLabel ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`,
