@@ -250,8 +250,8 @@ html.dark .mk .milon-signin-box {
 
 .mk .milon-signin-box .field input:focus {
   outline: none;
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+  border-color: var(--cobalt);
+  box-shadow: 0 0 0 3px rgba(11, 95, 255, 0.16);
 }
 
 .mk .milon-signin-box .btn {
@@ -270,11 +270,12 @@ html.dark .mk .milon-signin-box {
   text-decoration: none;
 }
 
-.mk .milon-signin-box .btn-gold {
+.mk .milon-signin-box .btn-cobalt {
   width: 100%;
   justify-content: center;
-  background: var(--gold);
-  color: #1b1300;
+  background: var(--cobalt);
+  color: #fff;
+  -webkit-text-fill-color: #fff;
 }
 
 .mk .milon-signin-box .btn-google {
@@ -606,6 +607,21 @@ html .mk .mk-cta p {
   box-shadow: 0 8px 22px -14px rgba(172, 132, 0, 0.9);
 }
 
+/* Bottom-card cross-links are not trial CTAs. Gold stays on sign-up buttons. */
+.mk .mk-cta .mk-btn.mk-btn-cobalt {
+  background: var(--cobalt);
+  background-image: none;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  box-shadow: none;
+}
+.mk .mk-cta .mk-btn.mk-btn-cobalt:hover {
+  background: var(--royal);
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
+  box-shadow: none;
+}
+
 .mk .mk-btn-ghost {
   display: inline-block;
   padding: 12px 22px;
@@ -621,7 +637,7 @@ html .mk .mk-cta p {
 }
 
 .mk .mk-btn-ghost:hover {
-  border-color: var(--gold);
+  border-color: var(--cobalt);
 }
 
 /* ── Footer ─────────────────────────────────────────────────────────────── */
@@ -916,7 +932,7 @@ html .mk .firm-bands-table .firm-bands-name strong {
 }
 .mk .firm-bands-table .btn,
 .mk .firm-bands-table .btn-ghost,
-.mk .firm-bands-table .btn-gold {
+.mk .firm-bands-table .btn-cobalt {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -935,12 +951,6 @@ html .mk .firm-bands-table .firm-bands-name strong {
   color: var(--ink);
   -webkit-text-fill-color: var(--ink);
 }
-.mk .firm-bands-table .btn-gold {
-  background-color: var(--gold);
-  border-color: var(--gold);
-  color: #1b1300;
-  -webkit-text-fill-color: #1b1300;
-}
 .mk .firm-bands-table .btn-cobalt,
 .mk .firm-band-card .btn-cobalt {
   background-color: var(--cobalt, #0b5fff);
@@ -949,9 +959,9 @@ html .mk .firm-bands-table .firm-bands-name strong {
   -webkit-text-fill-color: #fff;
 }
 .mk .firm-bands-table .btn-ghost:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  -webkit-text-fill-color: var(--gold);
+  border-color: var(--cobalt);
+  color: var(--cobalt);
+  -webkit-text-fill-color: var(--cobalt);
 }
 .mk .sr-only {
   position: absolute;
@@ -1185,8 +1195,8 @@ html.dark .mk .firm-bands-table tbody tr:hover td {
   border-color: var(--cobalt);
   box-shadow: 0 0 0 3px rgba(11, 95, 255, 0.16);
 }
-.mk .milon-signin-box .btn-gold {
-  background: var(--cobalt);
+.mk .milon-signin-box .btn-cobalt:hover {
+  background: var(--royal, #2563eb);
   color: #fff;
   -webkit-text-fill-color: #fff;
 }

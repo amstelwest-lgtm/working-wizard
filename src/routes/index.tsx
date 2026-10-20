@@ -2113,7 +2113,7 @@ function LandingPage() {
                     y1="96"
                     x2="520"
                     y2="96"
-                    stroke="rgba(212,175,55,.14)"
+                    stroke="rgba(11,95,255,.18)"
                     strokeWidth="1"
                     strokeDasharray="3 5"
                   />

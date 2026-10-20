@@ -81,6 +81,7 @@ export function MarketingShell({
   ctaBody,
   ctaLabel = FIRM_TRIAL_CTA_LABEL,
   ctaHref = "/#register",
+  ctaTone = "gold",
   navCtaLabel = FIRM_TRIAL_CTA_LABEL,
   navCtaHref = "/#register",
   /** Same header as `/`: gold mark, section links, theme, trial CTA. */
@@ -99,6 +100,8 @@ export function MarketingShell({
   ctaBody: ReactNode;
   ctaLabel?: string;
   ctaHref?: string;
+  /** Gold is the trial and sign-up CTA. Cross-links such as Privacy use cobalt. */
+  ctaTone?: "gold" | "cobalt";
   /** Top-bar pill. Same trial label as the landing nav. A card is required at signup. */
   navCtaLabel?: string;
   navCtaHref?: string;
@@ -176,7 +179,7 @@ export function MarketingShell({
           <h2>{ctaTitle}</h2>
           <p>{ctaBody}</p>
           <div style={{ marginTop: 18 }}>
-            <a className="mk-btn" href={ctaHref}>
+            <a className={ctaTone === "cobalt" ? "mk-btn mk-btn-cobalt" : "mk-btn"} href={ctaHref}>
               {ctaLabel}
             </a>
             <a className="mk-btn-ghost mk-print-hide" href="/">

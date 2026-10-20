@@ -201,6 +201,7 @@
     "test:marketing-owner-seo": "vite-node --config scripts/vite-test.config.ts scripts/marketing-owner-seo-test.mts",
     "test:assetlinks": "node scripts/assetlinks-test.mjs",
     "test:landing-gold": "vite-node --config scripts/vite-test.config.ts scripts/landing-gold-samsung-test.mts",
+    "test:landing-gold-scan": "vite-node --config scripts/vite-test.config.ts scripts/landing-gold-scan-test.mts",
     "test:landing-pr1-geo": "vite-node --config scripts/vite-test.config.ts scripts/landing-pr1-geo-test.mts",
     "test:landing-pr2": "vite-node --config scripts/vite-test.config.ts scripts/landing-pr2-test.mts",
     "test:landing-pr3": "vite-node --config scripts/vite-test.config.ts scripts/landing-pr3-test.mts",
