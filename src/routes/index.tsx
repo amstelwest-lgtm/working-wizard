@@ -44,7 +44,7 @@ import {
   pendingInviteTokenFromSearch,
   signupLooksAlreadyRegistered,
 } from "@/lib/invite-handoff";
-import { browserAppUrl } from "@/lib/app-origin";
+import { canonicalAuthUrl } from "@/lib/app-origin";
 import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
 import {
   billingStartPath,
@@ -502,7 +502,7 @@ function LandingPage() {
     const pending = peekPendingCheckout();
     return pending
       ? checkoutEmailRedirectTo(window.location.origin, pending)
-      : browserAppUrl("/app");
+      : canonicalAuthUrl("/app");
   };
 
   const resendConfirmationTo = async (email: string) => {
@@ -868,7 +868,7 @@ function LandingPage() {
     setFpBusy(true);
     try {
       const { error } = await (await landingSupabase()).auth.resetPasswordForEmail(fpEmail, {
-        redirectTo: browserAppUrl("/reset-password"),
+        redirectTo: canonicalAuthUrl("/reset-password"),
       });
       if (error) throw error;
       setFpDone(true);

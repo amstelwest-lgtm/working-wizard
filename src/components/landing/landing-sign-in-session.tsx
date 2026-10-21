@@ -7,7 +7,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "rea
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { wakeAuth } from "@/hooks/use-auth";
-import { browserAppUrl } from "@/lib/app-origin";
+import { canonicalAuthUrl } from "@/lib/app-origin";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import { resolveSignedInDestination } from "@/lib/landing-sign-in-destination";
 import { settleWithin } from "@/lib/bounded-load";
@@ -81,7 +81,7 @@ export function LandingSignInSession({
     const pending = peekPendingCheckout();
     return pending
       ? checkoutEmailRedirectTo(window.location.origin, pending)
-      : browserAppUrl("/app");
+      : canonicalAuthUrl("/app");
   };
 
   const landOwnerSession = async (userId: string, knownMeta: Record<string, unknown>) => {
@@ -275,7 +275,7 @@ export function LandingSignInSession({
               const { error } = await (
                 await landingSupabase()
               ).auth.resetPasswordForEmail(fpEmail, {
-                redirectTo: browserAppUrl("/reset-password"),
+                redirectTo: canonicalAuthUrl("/reset-password"),
               });
               if (error) throw error;
               setFpDone(true);
