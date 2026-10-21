@@ -51,7 +51,7 @@ export type FirmUpgradeAllowance = {
   priceCurrency: "USD" | "zar";
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
-  /** Server-derived. False for every non-SA firm. */
+  /** Practice list is in rand. Not the Checkout charge currency. */
   saDiscount: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   zaPriceLabel?: string | null;

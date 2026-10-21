@@ -383,6 +383,7 @@ function FirmClientCapNotice({
                 clientCount: cap.upgrade.clientCount,
                 usageLabel: cap.upgrade.usageLabel,
                 saDiscount: cap.upgrade.saDiscount,
+                zaLabels: cap.upgrade.zaLabels,
                 phase: cap.upgrade.phase,
               }
             : null

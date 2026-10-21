@@ -77,11 +77,18 @@ export type FirmUpgradeSnapshot = {
   priceCurrency: FirmPriceCurrency;
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, ZarBandAmounts>>;
-  /** Signed-in SA firm only. Public pages never set this. */
+  /**
+   * Practice list is in rand (firm row ZA, or most clients ZA).
+   * This is not the Checkout charge currency.
+   */
   saDiscount: boolean;
-  /** Server-built rand lines for an SA firm. Absent for everyone else. */
+  /** Server-built rand lines when the practice list is in rand. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
-  /** The line Checkout will charge for the current band. */
+  /**
+   * Rand line for a ZA firm row, where Checkout can charge rand.
+   * Null when the list is in rand only because of the client mix.
+   * Checkout still prices from the firm row (`priceMarketForFirm`).
+   */
   zaPriceLabel?: string | null;
 };
 
@@ -511,10 +518,14 @@ export function saFirmDisplayPrice(
 }
 
 /**
- * Settings → Plan display. A firm saved as South Africa qualifies.
- * So does a practice whose clients are mostly in South Africa, which is
- * the case when the firm row still says United States. This does not
- * change the currency Checkout charges.
+ * Whether a practice's plan list is in rand. Settings and the Add client
+ * cap snapshot both use this. True when the firm row is South Africa, or
+ * when more clients are in South Africa than in the United States.
+ *
+ * Checkout does not use this. `firmCheckoutCharge` and `priceMarketForFirm`
+ * still start from the firm row. A US firm row stays on the USD price,
+ * including when the Checkout billing country is ZA. A ZA firm row uses
+ * the ZAR price only when that billing country is ZA or still unknown.
  */
 export function practiceDisplaysZarPlan(input: {
   firmMarket: unknown;
