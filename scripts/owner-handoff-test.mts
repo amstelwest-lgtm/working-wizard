@@ -150,6 +150,21 @@ assert(
   "a new hand-off note is written by the signed-in person",
 );
 assert(fn.includes("writeAssignment"), "every hand-off stores the assignee and a note");
+const invokeAt = fn.indexOf('rpc("agent_invoke"');
+const noteAt = fn.lastIndexOf("await writeAssignment", invokeAt);
+const queuedInsert = fn.lastIndexOf('status: "queued"', invokeAt);
+assert(
+  queuedInsert > 0 && noteAt > queuedInsert && noteAt < invokeAt,
+  "the hand-off note is committed after the run row and before the agent call",
+);
+assert(
+  fn.indexOf("await writeAssignment", invokeAt) === -1,
+  "the note is not written after the agent call",
+);
+assert(
+  fn.indexOf('error: "runner_not_triggered"', invokeAt) > invokeAt,
+  "a failed agent call still marks the run failed and leaves the note in place",
+);
 assert(fn.includes("noted: true"), "the client can tell the note was stored");
 assert(fn.includes("personId"), "a person hand-off uses the same function");
 assert(fn.includes("personAssignmentNote"), "the person note names the assignee");

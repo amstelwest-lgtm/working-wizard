@@ -179,6 +179,9 @@ export type MoveAssignmentRef = {
   runStatus?: string | null;
   draftId?: string | null;
   findingsReady?: boolean;
+  /** Shared with the Action plan chip. Working or Draft ready, from every run of this action. */
+  phase?: "working" | "draft_ready" | "approved" | "sent" | "failed" | null;
+  phaseLabel?: string | null;
 };
 
 function assignmentStamp(row: MoveAssignmentRef): number {

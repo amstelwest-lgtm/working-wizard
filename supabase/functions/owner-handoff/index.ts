@@ -272,6 +272,19 @@ Deno.serve(async (req) => {
   const runId = inserted?.id as string | undefined;
   if (!runId) return json({ error: "run_insert_failed" }, 500);
 
+  // Commit the assignee before the slow agent call. A reload during agent_invoke
+  // already sees this note. If the call fails, the note stays and the run is
+  // marked failed below.
+  const failed = await writeAssignment(admin, {
+    clientId,
+    actionItemId,
+    ownerId: null,
+    actorType: "owner_app",
+    actorLabel: handoffActor,
+    note: handoffRequestNote(decision.displayName),
+  });
+  if (failed) return json({ error: failed, runId }, 500);
+
   const { error: invokeError } = await admin.rpc("agent_invoke", {
     p_function: decision.runner,
     p_body: {
@@ -290,18 +303,8 @@ Deno.serve(async (req) => {
         finished_at: new Date().toISOString(),
       })
       .eq("id", runId);
-    return json({ error: "runner_not_triggered", missing: invokeError.message }, 502);
+    return json({ error: "runner_not_triggered", missing: invokeError.message, noted: true, runId }, 502);
   }
-
-  const failed = await writeAssignment(admin, {
-    clientId,
-    actionItemId,
-    ownerId: null,
-    actorType: "owner_app",
-    actorLabel: handoffActor,
-    note: handoffRequestNote(decision.displayName),
-  });
-  if (failed) return json({ error: failed, runId }, 500);
 
   return json({ ok: true, noted: true, runId, status: "queued", runner: decision.runner });
 });

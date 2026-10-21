@@ -18,6 +18,7 @@ import {
   handoffProgressCaption,
   handoffTriggerLabel,
   moveRowStatus,
+  phaseForAction,
 } from "../src/lib/action-handoff.ts";
 import { agentDisplayName, agentShortName } from "../src/lib/milon-team.ts";
 import { AGENT_KEYS } from "../src/lib/milon-team-feed.ts";
@@ -302,7 +303,20 @@ assert(withDraft.draftId === draftId && withDraft.phase === "draft_ready", "a fi
 assert(withDraft.caption?.includes("finished") === true, "finished renders once the draft id exists");
 assert(plan.includes("HandToMenu"), "the row renders Hand to");
 const menu = readFileSync("src/components/hand-to-menu.tsx", "utf8");
-assert(menu.includes("toast.success(`Handed to ${agentShortName(agent)}`)"), "Next moves toasts before the request");
+assert(menu.includes("toast.success(`Handed to ${agentShortName(agent)}`)"), "Next moves toasts Handed to once the note is stored");
+const pendingLabel = menu.indexOf("Handing to ${agentShortName(agent)}");
+const ensured = menu.indexOf("const actionItemId = await ensure()");
+const notedGate = menu.indexOf("result.noted !== true");
+const finalAssignee = menu.indexOf("setAssignee(agentDisplayName(agent))");
+const successToast = menu.indexOf("toast.success(`Handed to ${agentShortName(agent)}`)");
+assert(
+  pendingLabel >= 0 && ensured > pendingLabel,
+  "Next moves shows Handing to before the row exists",
+);
+assert(
+  notedGate > ensured && finalAssignee > notedGate && successToast > notedGate,
+  "the Handed to label and the success toast wait until noted is true",
+);
 assert(menu.includes("ActionHandoffButtons"), "Hand to lists the bots");
 assert(menu.includes("data-hand-to-trigger"), "the control is labelled Hand to");
 assert(menu.includes("handoffTriggerLabel"), "the trigger is one collapsed string");
@@ -480,9 +494,10 @@ assert(
     "Milōn Financial Manager",
   "a cleared owner still shows the hand-off note",
 );
-const painted = menu.indexOf("setAssignee(agentDisplayName(agent))");
-const ensured = menu.indexOf("const actionItemId = await ensure()");
-assert(painted >= 0 && ensured > painted, "Next moves paints the assignee before the row is created");
+assert(
+  handoffTriggerLabel("Handing to Analyst…") === "Handing to Analyst…",
+  "a pending hand-off stays the pending sentence",
+);
 assert(plan.includes("displayedAssignee(item.owner_name, notes)"), "the action row reads the stored hand-off");
 const feedHook = readFileSync("src/hooks/use-milon-team-feed.ts", "utf8");
 assert(feedHook.includes("action_updates"), "the team activity reads hand-off notes");
@@ -547,7 +562,7 @@ assert(
 assert(moveLoadMayCache(1, 2) === false, "a read started before the commit is not cached");
 assert(moveLoadMayCache(2, 2) === true, "a read started after the commit may be cached");
 const working = moveRowStatus({ runStatus: "running" });
-assert(working.phase === "working" && working.label === "Working…", "an open run shows Working on the move row");
+assert(working.phase === "working" && working.label === "Working", "an open run shows Working on the move row");
 const ready = moveRowStatus({ runStatus: "succeeded", draftId: "d1" });
 assert(
   ready.phase === "draft_ready" && ready.label === "Draft ready" && ready.draftId === "d1",
@@ -555,6 +570,35 @@ assert(
 );
 const draftWins = moveRowStatus({ runStatus: "queued", draftId: "d1" });
 assert(draftWins.phase === "draft_ready" && draftWins.draftId === "d1", "a draft wins over a still-queued run");
+const queuedOnly = phaseForAction({
+  actionItemId: "action-1",
+  runs: [
+    { id: "newest", action_item_id: "action-1", status: "queued" },
+    { id: "older", action_item_id: "action-1", status: "succeeded" },
+  ],
+  findings: [],
+  findingsReady: true,
+});
+assert(
+  queuedOnly.phase === "working" && queuedOnly.label === "Working",
+  "a queued run with no draft on any run is Working",
+);
+const olderDraft = phaseForAction({
+  actionItemId: "action-1",
+  runs: [
+    { id: "newest", action_item_id: "action-1", status: "queued" },
+    { id: "older", action_item_id: "action-1", status: "succeeded" },
+  ],
+  findings: [{ id: "draft-old", run_id: "older", status: null }],
+  findingsReady: true,
+});
+assert(
+  olderDraft.phase === "draft_ready" && olderDraft.label === "Draft ready" && olderDraft.draftId === "draft-old",
+  "a draft on an older run is Draft ready, not only the newest run",
+);
+assert(labels.includes("export function phaseForAction"), "one phase helper names Working and Draft ready");
+assert(handoffClient.includes("phaseForAction"), "Next moves asks that helper");
+assert(labels.includes("const sharedPhase = phaseForAction"), "the Action plan chip asks that helper");
 
 const ensure = readFileSync("src/lib/ensure-plan-item.ts", "utf8");
 const keyLookup = ensure.indexOf('eq("source_move_key", input.moveKey)');
@@ -570,7 +614,10 @@ assert(
     committedBranch.indexOf("invalidateMoveAssignments") < committedBranch.indexOf("loadClientMoveAssignments"),
   "Next moves drops the cache and refetches only after the hand-off is committed",
 );
-assert(menu.includes('data-move-phase="working"') && menu.includes("Working…"), "the move row shows Working");
+assert(
+  menu.includes('data-move-phase="working"') && menu.includes("face.phaseLabel"),
+  "the move row shows the shared phase",
+);
 assert(menu.includes('data-move-phase="draft-ready"'), "the move row links Draft ready");
 const awaited = handoffClient.indexOf("await requestOwnerHandoff");
 const committedFlag = handoffClient.indexOf("committed: true");

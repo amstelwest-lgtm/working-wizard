@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { handoffComingOnline } from "@/hooks/owner-agent-ui";
-import { findingForAction } from "@/lib/action-handoff";
+import { phaseForAction } from "@/lib/action-handoff";
 import { agentActivityUnavailable } from "@/lib/milon-team-activity";
 import {
   handoffRequestNote,
@@ -233,7 +233,7 @@ export async function recordHandoffAssignment(input: {
 }
 
 export type ActionHandoffCommit =
-  | { ok: true }
+  | { ok: true; noted: boolean }
   | { ok: false; error: string; comingSoon?: boolean };
 
 /**
@@ -310,7 +310,7 @@ export async function commitActionHandoff(input: {
       runId: result.runId ?? undefined,
       committed: true,
     });
-    return { ok: true };
+    return { ok: true, noted: false };
   } else if (!result.noted) {
     // The deployed function has not confirmed the note yet. Write it here so
     // reload still sees the assignee. A function that returns noted does this itself.
@@ -334,7 +334,7 @@ export async function commitActionHandoff(input: {
       runId: result.runId ?? undefined,
       committed: true,
     });
-    return { ok: true };
+    return { ok: true, noted: true };
   }
   invalidateMoveAssignments(input.clientId);
   dispatchActionPlanRefresh({
@@ -342,7 +342,7 @@ export async function commitActionHandoff(input: {
     runId: result.ok ? result.runId ?? undefined : undefined,
     committed: true,
   });
-  return { ok: true };
+  return { ok: true, noted: true };
 }
 
 async function writePersonAssignment(input: {
@@ -598,24 +598,26 @@ function quietTable(name: string): InOrderQuery {
   return (supabase as unknown as { from(relation: string): InOrderQuery }).from(name);
 }
 
+type MoveRunRow = { id: string; actionItemId: string; status: string };
+
 /**
- * Newest run per action, and the drafts on those runs.
+ * Every run for these actions, newest first, and the drafts on those runs.
  * A failed read leaves findingsReady false so the row stays Working instead of dropping the assignee.
  */
 async function loadMoveActivity(actionIds: string[]): Promise<{
-  newest: Map<string, { id: string; status: string }>;
+  runs: MoveRunRow[];
   findings: MoveFindingRow[];
   findingsReady: boolean;
 }> {
-  const newest = new Map<string, { id: string; status: string }>();
+  const runs: MoveRunRow[] = [];
   const ids = actionIds.filter(Boolean);
-  if (!ids.length) return { newest, findings: [], findingsReady: true };
+  if (!ids.length) return { runs, findings: [], findingsReady: true };
   const runsRes = await quietTable("agent_runs")
     .select("id, action_item_id, status, queued_at")
     .in("action_item_id", ids)
     .order("queued_at", { ascending: false });
   if (runsRes.error || !Array.isArray(runsRes.data)) {
-    return { newest, findings: [], findingsReady: false };
+    return { runs, findings: [], findingsReady: false };
   }
   for (const row of runsRes.data) {
     if (!row || typeof row !== "object") continue;
@@ -623,20 +625,20 @@ async function loadMoveActivity(actionIds: string[]): Promise<{
     const actionId = typeof record.action_item_id === "string" ? record.action_item_id : "";
     const runId = typeof record.id === "string" ? record.id : "";
     const status = typeof record.status === "string" ? record.status : "";
-    if (!actionId || !runId || newest.has(actionId)) continue;
-    newest.set(actionId, { id: runId, status });
+    if (!actionId || !runId) continue;
+    runs.push({ id: runId, actionItemId: actionId, status });
   }
-  const runIds = [...newest.values()].map((run) => run.id);
-  if (!runIds.length) return { newest, findings: [], findingsReady: true };
+  const runIds = runs.map((run) => run.id);
+  if (!runIds.length) return { runs, findings: [], findingsReady: true };
   const findingsRes = await quietTable("agent_findings")
     .select("id, run_id, status, superseded_by, dismissed_reason, created_at")
     .in("run_id", runIds)
     .order("created_at", { ascending: false });
   if (findingsRes.error) {
-    if (agentActivityUnavailable(findingsRes.error)) return { newest, findings: [], findingsReady: true };
-    return { newest, findings: [], findingsReady: false };
+    if (agentActivityUnavailable(findingsRes.error)) return { runs, findings: [], findingsReady: true };
+    return { runs, findings: [], findingsReady: false };
   }
-  if (!Array.isArray(findingsRes.data)) return { newest, findings: [], findingsReady: false };
+  if (!Array.isArray(findingsRes.data)) return { runs, findings: [], findingsReady: false };
   const findings: MoveFindingRow[] = [];
   for (const row of findingsRes.data) {
     if (!row || typeof row !== "object") continue;
@@ -657,7 +659,7 @@ async function loadMoveActivity(actionIds: string[]): Promise<{
       dismissed_reason: typeof record.dismissed_reason === "string" ? record.dismissed_reason : null,
     });
   }
-  return { newest, findings, findingsReady: true };
+  return { runs, findings, findingsReady: true };
 }
 
 /**
@@ -687,13 +689,15 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
     const activity = await loadMoveActivity(ids);
     const rows: MoveAssignmentRef[] = data.map((row) => {
       const stored = assignments.get(row.id);
-      const run = activity.newest.get(row.id);
-      const finding = findingForAction({
+      const runs = activity.runs
+        .filter((run) => run.actionItemId === row.id)
+        .map((run) => ({ id: run.id, action_item_id: run.actionItemId, status: run.status }));
+      const phase = phaseForAction({
         actionItemId: row.id,
-        runs: run ? [{ id: run.id, action_item_id: row.id }] : [],
+        runs,
         findings: activity.findings,
+        findingsReady: activity.findingsReady,
       });
-      const draftId = finding && finding.status !== "approved" ? finding.id : null;
       return {
         actionItemId: row.id,
         sourceMoveKey: row.source_move_key,
@@ -701,9 +705,11 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
         title: row.title ?? "",
         assigneeName: stored?.name ?? null,
         assignedAt: stored?.at ?? null,
-        runStatus: run?.status ?? null,
-        draftId,
+        runStatus: runs.find((run) => run.status === "queued" || run.status === "running")?.status ?? runs[0]?.status ?? null,
+        draftId: phase.draftId,
         findingsReady: activity.findingsReady,
+        phase: phase.phase,
+        phaseLabel: phase.label,
       };
     });
     if (

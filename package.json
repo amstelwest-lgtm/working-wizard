@@ -210,6 +210,7 @@
     "test:owner-chat-reply": "vite-node --config scripts/vite-test.config.ts scripts/owner-chat-reply-test.mts",
     "test:owner-handoff": "vite-node --config scripts/vite-test.config.ts scripts/owner-handoff-test.mts",
     "test:action-handoff": "vite-node --config scripts/vite-test.config.ts scripts/action-handoff-test.mts",
+    "test:handoff-reload": "vite-node --config scripts/vite-handoff-reload.config.ts scripts/handoff-reload-test.mts",
     "test:nudge-cron-vault": "vite-node --config scripts/vite-test.config.ts scripts/nudge-cron-vault-test.mts",
     "test:ratio-briefing": "vite-node --config scripts/vite-test.config.ts scripts/ratio-briefing-test.mts",
     "test:ratio-queries": "vite-node --config scripts/vite-test.config.ts scripts/ratio-queries-test.mts",

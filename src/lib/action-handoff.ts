@@ -54,6 +54,7 @@ export function handoffButtonLabel(agent: AgentKey, assigned: boolean, compact =
 export function handoffTriggerLabel(assignee: string | null | undefined, compact = false): string {
   const clean = (assignee ?? "").replace(/\s+/g, " ").trim();
   if (!clean) return "Hand to";
+  if (clean.startsWith("Handing to ")) return clean;
   const agent = agentKeyFromAssignee(clean);
   const shown = compact && agent ? agentShortName(agent) : clean;
   const verb = agent ? "Handed to" : "Hand to";
@@ -279,6 +280,45 @@ export function handoffPhaseFor(input: {
 }
 
 /**
+ * One phase for the Action plan chip and the Next moves row.
+ * A draft on any run of the action is Draft ready. An open run with no draft yet is Working.
+ */
+export function phaseForAction(input: {
+  actionItemId: string;
+  runs: readonly { id: string; action_item_id?: string | null; status?: string | null }[];
+  findings: readonly HandoffFindingRef[];
+  findingsReady?: boolean;
+  sentAt?: string | null;
+}): { phase: HandoffPhase | null; label: string | null; draftId: string | null } {
+  const finding = findingForAction({
+    actionItemId: input.actionItemId,
+    runs: input.runs,
+    findings: input.findings,
+  });
+  const openDraft = finding && finding.status !== "approved" ? finding.id : null;
+  if (openDraft) {
+    if (input.sentAt) return { phase: "sent", label: handoffPhaseLabel("sent"), draftId: openDraft };
+    return { phase: "draft_ready", label: handoffPhaseLabel("draft_ready"), draftId: openDraft };
+  }
+  if (finding?.status === "approved") {
+    const phase = input.sentAt ? "sent" : "approved";
+    return { phase, label: handoffPhaseLabel(phase), draftId: null };
+  }
+  const runs = input.runs.filter((run) => run.action_item_id === input.actionItemId);
+  if (runs.some((run) => run.status === "queued" || run.status === "running")) {
+    return { phase: "working", label: handoffPhaseLabel("working"), draftId: null };
+  }
+  const settled = runs.some((run) => run.status === "succeeded" || run.status === "partial");
+  if (settled && input.findingsReady === false) {
+    return { phase: "working", label: handoffPhaseLabel("working"), draftId: null };
+  }
+  if (runs.some((run) => run.status === "succeeded" || run.status === "partial" || run.status === "failed" || run.status === "dead")) {
+    return { phase: "failed", label: handoffPhaseLabel("failed"), draftId: null };
+  }
+  return { phase: null, label: null, draftId: null };
+}
+
+/**
  * Next moves status beside Hand to.
  * An open run with no draft yet is Working. A saved draft is Draft ready.
  */
@@ -288,11 +328,14 @@ export function moveRowStatus(input: {
   findingsReady?: boolean;
 }): { phase: "working" | "draft_ready" | null; label: string | null; draftId: string | null } {
   const draftId = input.draftId?.trim() || null;
-  if (draftId) return { phase: "draft_ready", label: "Draft ready", draftId };
-  const status = input.runStatus ?? "";
-  if (status === "queued" || status === "running") return { phase: "working", label: "Working…", draftId: null };
-  if ((status === "succeeded" || status === "partial") && input.findingsReady === false) {
-    return { phase: "working", label: "Working…", draftId: null };
+  const phase = phaseForAction({
+    actionItemId: "move-row",
+    runs: input.runStatus ? [{ id: "move-run", action_item_id: "move-row", status: input.runStatus }] : [],
+    findings: draftId ? [{ id: draftId, run_id: "move-run", status: null }] : [],
+    findingsReady: input.findingsReady,
+  });
+  if (phase.phase === "working" || phase.phase === "draft_ready") {
+    return { phase: phase.phase, label: phase.label, draftId: phase.draftId };
   }
   return { phase: null, label: null, draftId: null };
 }
@@ -369,6 +412,13 @@ export function describeActionHandoff<T extends { note: string | null; at: strin
     runs: input.runs,
     findings: input.findings,
   });
+  const sharedPhase = phaseForAction({
+    actionItemId: input.actionItemId,
+    runs: input.runs,
+    findings: input.findings,
+    findingsReady: input.findingsReady,
+    sentAt: input.sentAt,
+  });
   const draftId = finding?.id ?? null;
   const caption =
     handoffCostStopped(result?.text) && run?.agent
@@ -384,15 +434,7 @@ export function describeActionHandoff<T extends { note: string | null; at: strin
           findingsReady: input.findingsReady,
         });
   const assigned = agentKeyFromAssignee(input.assignee);
-  const phase =
-    run && assigned && assigned === run.agent
-      ? handoffPhaseFor({
-          runStatus: run.status,
-          finding,
-          findingsReady: input.findingsReady,
-          sentAt: input.sentAt,
-        })
-      : null;
+  const phase = run && assigned && assigned === run.agent ? sharedPhase.phase : null;
   return {
     caption,
     run: run ? { status: run.status, at: run.at, agent: run.agent } : null,
