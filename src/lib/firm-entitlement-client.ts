@@ -12,6 +12,21 @@ export type CachedFirmEntitlement = {
   entitled: boolean;
   reason?: string;
   checkFailed?: "timeout" | "network" | "http_5xx";
+  /** Present when this read also carried the plan line. A later open reuses it. */
+  plan?: {
+    configured?: boolean;
+    phase?: string;
+    band?: string | null;
+  } | null;
+  /** Present when this read also carried the add-client allowance. */
+  allowance?: {
+    allowed: boolean;
+    canEndTrial?: boolean;
+    code?: string;
+    message?: string;
+    upgrade?: { phase?: string; band?: string | null } | null;
+    starterTrial?: { expired?: boolean; cardFree?: boolean };
+  } | null;
 };
 
 export const FIRM_ENTITLEMENT_TTL_MS = 60_000;
@@ -75,6 +90,19 @@ function sameInflight(userId: string, firmId?: string | null): boolean {
 
 function liveFailure(value: CachedFirmEntitlement): boolean {
   return value.reason === "stripe_error" || Boolean(value.checkFailed);
+}
+
+/**
+ * Gate, Start here, and the practice allowance share this read.
+ * One server call per firm for the tab. The load runs once.
+ */
+export function readFirmBillingOpen<T extends CachedFirmEntitlement>(
+  userId: string,
+  load: (input: { data: { refresh?: boolean } }) => Promise<T>,
+  refresh = false,
+  firmId?: string | null,
+): Promise<T> {
+  return readCachedFirmEntitlement(userId, load, refresh, firmId);
 }
 
 export function readCachedFirmEntitlement<T extends CachedFirmEntitlement>(
@@ -167,6 +195,8 @@ export function noteFirmEntitlement(
     value: {
       entitled: value.entitled === true,
       reason: value.reason,
+      plan: value.plan,
+      allowance: value.allowance,
     },
   };
   if (!liveFailure(value)) {

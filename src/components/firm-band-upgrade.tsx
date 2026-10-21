@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useAuth } from "@/hooks/use-auth";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
   currentPlanLabel,
@@ -27,8 +28,8 @@ import {
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
-import { getFirmPlanDisplay } from "@/lib/stripe-checkout.functions";
-import { readCachedFirmPlan } from "@/lib/firm-plan-client";
+import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
+import { readFirmBillingOpen } from "@/lib/firm-entitlement-client";
 
 export type FirmVoucherCheckResult =
   | { ok: true; promotionCodeId: string; preview: string }
@@ -437,23 +438,41 @@ export function FirmStartHereBadge({
 
 /** Loads the signed-in firm's plan and shows Start here on that band. */
 export function FirmStartHereLoader({ firmId = null }: { firmId?: string | null }) {
-  const loadPlan = useServerFn(getFirmPlanDisplay);
+  const { user } = useAuth();
+  const loadEntitlement = useServerFn(getFirmBillingEntitlement);
   const [band, setBand] = useState<FirmBandId | null | undefined>(undefined);
 
   useEffect(() => {
+    if (!user?.id) return;
     let cancelled = false;
     setBand(undefined);
-    void readCachedFirmPlan(firmId, (input) => loadPlan(input))
-      .then((plan) => {
-        if (!cancelled) setBand(plan && plan.configured !== false ? (plan.band ?? null) : null);
+    void readFirmBillingOpen(
+      user.id,
+      (input) => loadEntitlement({ data: { ...input.data, firmId } }),
+      false,
+      firmId,
+    )
+      .then((result) => {
+        if (cancelled) return;
+        const plan = result.plan;
+        if (!plan || plan.configured === false) {
+          setBand(undefined);
+          return;
+        }
+        if (plan.band) {
+          setBand(plan.band);
+          return;
+        }
+        // A stored entitled plan has no band on the row. Do not claim Starter.
+        setBand(plan.phase === "none" ? null : undefined);
       })
       .catch(() => {
-        if (!cancelled) setBand(null);
+        if (!cancelled) setBand(undefined);
       });
     return () => {
       cancelled = true;
     };
-  }, [firmId, loadPlan]);
+  }, [user?.id, firmId, loadEntitlement]);
 
   return <FirmStartHereBadge band={band ?? null} pending={band === undefined} />;
 }

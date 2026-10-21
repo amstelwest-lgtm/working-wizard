@@ -87,6 +87,12 @@ import {
 } from "@/lib/billing-check-failure";
 import { readFirmBillingPlanKnown, writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
 import {
+  entitlementFromStoredPlan,
+  firmBillingStripeRefreshDue,
+  noteFirmBillingStripeRefresh,
+  type FirmBillingOpenResult,
+} from "@/lib/firm-billing-open.server";
+import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
   decideFirmBillingEntitlement,
@@ -150,7 +156,7 @@ async function customerHasActiveSubscription(customerId: string): Promise<boolea
 
 const ENTITLEMENT_CACHE_TTL_MS = 60_000;
 const NEGATIVE_ENTITLEMENT_TTL_MS = 5_000;
-const entitlementCache = new Map<string, { value: FirmBillingEntitlement; at: number; ttl: number }>();
+const entitlementCache = new Map<string, { value: FirmBillingOpenResult; at: number; ttl: number }>();
 const entitlementInflight = new Map<string, Promise<FirmBillingEntitlement>>();
 type EntitlementLastSuccess = {
   userId: string;
@@ -171,7 +177,7 @@ const planDisplayInflight = new Map<
   Promise<Awaited<ReturnType<typeof loadFirmPlanDisplay>>>
 >();
 
-function cachedEntitlement(email: string): FirmBillingEntitlement | undefined {
+function cachedEntitlement(email: string): FirmBillingOpenResult | undefined {
   const key = email.trim().toLowerCase();
   if (!key) return undefined;
   const hit = entitlementCache.get(key);
@@ -246,7 +252,7 @@ function lookupLastFirmEntitlement(
 
 function rememberEntitlement(
   email: string,
-  value: FirmBillingEntitlement,
+  value: FirmBillingOpenResult,
   userId = "",
   firmId: string | null = null,
 ): void {
@@ -369,7 +375,7 @@ export async function resolveFirmBillingEntitlement(
   context: unknown,
   refresh: boolean,
   firmId: string | null = null,
-): Promise<FirmBillingEntitlement> {
+): Promise<FirmBillingOpenResult> {
   if (!stripeConfigured()) {
     return { entitled: true, reason: "stripe_unconfigured" };
   }
@@ -386,7 +392,25 @@ export async function resolveFirmBillingEntitlement(
     const billingIds = await firmBillingIdsForActor(ctx.supabase, userId, firmId);
     const actorPlan = await readStoredPlanFromClient(ctx.supabase, billingIds.firmId);
     const storedPlan = actorPlan ?? (await readFirmBillingPlanKnown(billingIds.firmId));
-    const live = (async (): Promise<FirmBillingEntitlement> => {
+    const firmKey = billingIds.firmId;
+    // A stored plan answers the open. Creating `live` starts Stripe immediately,
+    // so this return stays above that function. Checkout and the webhook still
+    // refresh, and a stamp older than the window may refresh once.
+    if (
+      !refresh &&
+      storedPlan &&
+      firmKey &&
+      !firmBillingStripeRefreshDue(firmKey)
+    ) {
+      noteFirmBillingStripeRefresh(firmKey);
+      const stored = entitlementFromStoredPlan(storedPlan);
+      rememberEntitlement(email, stored, userId, firmKey);
+      console.warn(`[stripe-entitlement] stored plan ${storedPlan} firm=${firmKey}`);
+      return stored;
+    }
+    const refreshStored = !refresh && Boolean(storedPlan && firmKey && firmBillingStripeRefreshDue(firmKey));
+    if (refreshStored && firmKey) noteFirmBillingStripeRefresh(firmKey);
+    const live = (async (): Promise<FirmBillingOpenResult> => {
     try {
       // One isolate-cached Stripe list. The mirror below reads that same
       // entry. It must not be awaited: a second scan used to sit on the response.
@@ -453,7 +477,10 @@ export async function resolveFirmBillingEntitlement(
       });
     }
     })();
-    if (storedPlan !== "entitled") return live;
+    // Open already returned above when the stored plan is inside the window.
+    // A due stamp awaits one refresh. Checkout (`refresh`) still returns the
+    // stored entitled plan and lets the list finish behind the response.
+    if (refreshStored || storedPlan !== "entitled") return live;
     console.warn(`[stripe-entitlement] stored plan entitled firm=${billingIds.firmId ?? ""}`);
     // A known entitled plan is the answer. The Stripe list refreshes behind
     // it. waitUntil is a no-op in api/server.js, so this must not be awaited,
