@@ -33,6 +33,16 @@ assert(
   hrefWithoutAuthReturn(prod.href) === "/",
   "the landing hash is stripped so the tokens do not stay in the URL",
 );
+assert(
+  hrefWithoutAuthReturn(
+    "https://www.milonfinance.com/#access_token=aaa.bbb&refresh_token=rrr&token_type=bearer&type=magiclink&sb=",
+  ) === "/",
+  "magic-link cleanup strips sb so the URL is https://www.milonfinance.com/ instead of /#sb=",
+);
+assert(
+  hrefWithoutAuthReturn("https://www.milonfinance.com/#sb=") === "/",
+  "a leftover sb hash is stripped",
+);
 assert(shouldConsumeAuthReturn("/"), "the landing route consumes the auth hash");
 assert(shouldConsumeAuthReturn("/for-owners"), "other marketing routes consume it too");
 assert(!shouldConsumeAuthReturn("/auth/callback"), "the callback route keeps its own exchange");
