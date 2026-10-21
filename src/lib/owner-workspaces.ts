@@ -238,6 +238,20 @@ export function boardRoleForWorkspace(role: OwnerWorkspaceRole): "client_owner" 
   return role === "owner" ? "client_owner" : "client_member";
 }
 
+/**
+ * An invite stamp for a workspace this login already owns.
+ * Owned rows and client_owner memberships are role "owner".
+ * A member-only row still goes through openInvitedClient.
+ */
+export function inviteWorkspaceAlreadyKnown(
+  workspaces: readonly { clientId: string; role: OwnerWorkspaceRole }[],
+  inviteClientId: string | null | undefined,
+): boolean {
+  const id = inviteClientId?.trim() ?? "";
+  if (!id) return false;
+  return workspaces.some((row) => row.clientId === id && row.role === "owner");
+}
+
 /** Only IDs already on this login’s workspace list can become the active board. */
 export function canOpenOwnerWorkspace(
   workspaces: OwnerWorkspace[],
