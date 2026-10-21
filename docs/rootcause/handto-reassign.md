@@ -99,3 +99,36 @@ Prod drafts for this action, both `status` null, neither superseded:
 | `61257356-2c0c-4c9a-b96e-8dcf6d2ac48a` | Analyst run | `handoff` | Recorded one finding: Profit is the weakest pillar… |
 
 The plan chip can see those because `useAgentActivity` loads the client’s runs and `findingForAction` matches every run for the action. The move span, on the #704 code, only asks `findingForAction` about the newest run. The plan chip and the move button are not the same row.
+
+## Loading paints a clickable Hand to
+
+AQA on the #706 build (`8c8f482b`): reassign passes. `Handing to …` shows, reloads stay on the new agent, and the Action plan phase matches Next moves. The new failure is the empty state while that read is still open. On a cold load of US 1020E, all five Next moves rows showed a plain clickable `Hand to` for about 7 seconds. After a reassign, the first or second reload showed `Hand to` and only then settled on `Handed to Milōn Analyst` or `Handed to Milōn Advisor`. That button starts a hand-off. A click in the gap is a second one.
+
+### Cause
+
+`MoveHandTo` (`src/components/hand-to-menu.tsx`) starts with `useState<string | null>(null)`. The button is `HandToMenu`, and `handoffTriggerLabel(null)` is the string `Hand to` (`src/lib/action-handoff.ts`). The trigger is a `<button>` with no `disabled`. Nothing in that render means “we have not read the assignment yet.” `null` means the same thing as “this move has no note.”
+
+The mount effect calls `loadClientMoveAssignments` and only then `setAssignee`. Until that promise resolves, every row is a live Hand to. A hard reload drops `moveAssignmentCache`, so the first and second reload do it again. Five rows share one in-flight promise (`moveAssignmentLoads`), so they all flip together. They do not each wait on their own copy. They all wait on the same chain.
+
+The Action plan row does the same thing on a shorter chain. `ActionPlanPanel` calls `setLoading(false)` and paints `ItemRow` before the `action_updates` read (`src/components/action-plan.tsx`). A bot hand-off has `owner_id` null, so `displayedAssignee` is null until those notes arrive, and `HandToMenu` again draws `Hand to`. The phase chip uses `phaseLabel ?? h.label`. While `useAgentActivity` is still `loading` and the notes are empty, `phaseLabel` is null and the chip shows the ordinary health label (`Not started`), not a loading state.
+
+### Why it takes about 7 seconds
+
+No single statement is a 7 second scan. The assignee is behind four serial PostgREST calls in `loadClientMoveAssignments` (`src/lib/owner-handoff-client.ts`):
+
+1. `action_items` filtered by `client_id`, limit 80. The ids are required for the next two reads.
+2. `action_updates` with `action_item_id IN (...)` ordered by `created_at` descending. This is the note `latestStoredAssignment` turns into the button. The index is `action_updates (action_item_id, created_at desc)` (`supabase/migrations/20260804120000_action_plan.sql`).
+3. `agent_runs` with `action_item_id IN (...)` ordered by `queued_at` descending. This starts only after step 2, even though it only needs the ids from step 1. Indexes: `agent_runs_action_item_idx` and `agent_runs_client_idx`.
+4. `agent_findings` with `run_id IN (...)` ordered by `created_at` descending. This starts only after step 3. Index: `agent_findings_client_idx`.
+
+The button cannot leave `Hand to` until step 4 returns. The label does not use the finding. US 1020E has a handful of actions and runs, so this is not a sequential scan of a large table. It is four round trips, one after another, on a cold page that is already sharing the Supabase connection with the rest of the client load. `SHELL_GATE_TIMEOUT_MS` is 8 seconds (`src/lib/shell-gate.ts`). That cap is for a stuck auth lock, and the observed gap sits next to it. This note does not have a trace that the lock actually hit the cap. The named wait is the serial chain above, and the last two calls are `agent_runs` then `agent_findings`.
+
+Those two are not slow queries to rewrite. They are indexed, and the row count for this client is small. An index or an RLS change would not remove the serial wait. The cheap fix is to stop waiting for them before the button is allowed to say Hand to, and to issue the independent reads together: `action_items` with `agent_runs` by `client_id` (that index already exists), then `action_updates` and `agent_findings` together.
+
+### Why #706 did not catch it
+
+#706 held the hand-off *request* and asserted the label after a remount. The assignment *read* in that test returned the Financial Manager note immediately. The assertion ran after `loadClientMoveAssignments` had already resolved, so `assignee` was no longer null. The test never rendered `MoveHandTo` while that read was still pending, and it never asserted that `data-hand-to-trigger` was absent. `useState(null)` plus `handoffTriggerLabel` was the path AQA hit, and the test did not walk it.
+
+### How this is verified
+
+Hold the assignment read. Mount `MoveHandTo`. Assert there is no `[data-hand-to-trigger]` and the row says `Checking…`. Unmount, load a fresh module so `moveAssignmentCache` is empty, and mount again while the read is still held. Assert the same. Resolve the read. Assert the Hand to button exists and shows the stored assignee. The Action plan row uses the same `HandToMenu` `pending` prop, so it cannot render the trigger until its notes have arrived, and the phase chip shows `Checking…` until the notes and `useAgentActivity` have both settled. A second hand-off is also refused in `owner-handoff`: an open run, or any run started within 60 seconds, is returned instead of calling `agent_invoke`.

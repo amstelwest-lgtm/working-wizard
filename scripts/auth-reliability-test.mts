@@ -255,7 +255,7 @@ console.log("\n── Google invite → owner seat → /app (#138) ──");
 
 assert(
   googleOAuthRedirectTo("https://milonfinance.com", { token: "tok", clientCode: "MLN-1" }) ===
-    "https://milonfinance.com/auth/callback?invite=tok&cc=MLN-1",
+    "https://www.milonfinance.com/auth/callback?invite=tok&cc=MLN-1",
   "OAuth redirectTo carries invite + client code beside PKCE",
 );
 assert(

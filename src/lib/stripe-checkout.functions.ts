@@ -77,6 +77,7 @@ import {
 import {
   classifyBillingCheckFailure,
   entitlementAfterLiveFailure,
+  restoreLastFirmSuccess,
   FIRM_BILLING_ENTITLEMENT_SERVER_FN,
 } from "@/lib/billing-check-failure";
 import {
@@ -217,13 +218,22 @@ function lookupLastFirmEntitlement(
 ): FirmBillingEntitlement | null {
   if (userId && firmId) {
     const exact = lastSuccessByFirm.get(`${userId}:${firmId}`);
-    if (exact) return exact.value;
+    if (exact) {
+      return restoreLastFirmSuccess({
+        requestedFirmId: firmId,
+        storedFirmId: exact.firmId,
+        prior: exact.value,
+      });
+    }
   }
   const key = email.trim().toLowerCase();
   const byEmail = key ? lastSuccessByEmail.get(key) : undefined;
   if (!byEmail || byEmail.userId !== userId) return null;
-  if (firmId && byEmail.firmId && byEmail.firmId !== firmId) return null;
-  return byEmail.value;
+  return restoreLastFirmSuccess({
+    requestedFirmId: firmId,
+    storedFirmId: byEmail.firmId,
+    prior: byEmail.value,
+  });
 }
 
 function rememberEntitlement(

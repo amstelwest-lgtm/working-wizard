@@ -15,6 +15,7 @@ import { persistAdvisoryCreate, type CreateIntent } from "./persist.ts";
 import { persistedCreateIntent } from "../../../src/lib/milon-bot-copy.ts";
 import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE, normalizePrecardTurnId } from "../../../src/lib/precard-cap.ts";
+import { cardlessTrialAiBlock } from "../_shared/starter-trial-gate.ts";
 import {
   finishPrecardAttempt,
   precardMessagesLeft,
@@ -390,6 +391,17 @@ async function handleMilonBot(req: Request): Promise<Response> {
     return respond({ error: "Access check failed" }, 500);
   }
   if (!hasAccess) return respond({ error: "Client not accessible" }, 403);
+
+  let aiBlock;
+  try {
+    aiBlock = await cardlessTrialAiBlock({ db: adminClient, clientId });
+  } catch (err) {
+    console.error("trial check failed", err instanceof Error ? err.message : err);
+    return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
+  }
+  if (aiBlock) {
+    return respond({ error: aiBlock.message, code: aiBlock.code }, 403);
+  }
 
   let precard;
   try {

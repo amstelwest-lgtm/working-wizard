@@ -13,7 +13,9 @@ import {
   classifyBillingCheckFailure,
   entitlementAfterLiveFailure,
   FIRM_BILLING_ENTITLEMENT_SERVER_FN,
+  restoreLastFirmSuccess,
 } from "../src/lib/billing-check-failure.ts";
+import { decideFirmBillingEntitlement } from "../src/lib/stripe-entitlement.ts";
 import {
   surfaceAfterBillingCheckFailure,
   surfaceAfterEntitlementFailure,
@@ -196,6 +198,56 @@ assert(
 const unknown = entitlementAfterLiveFailure(null, "network");
 assert(unknown.reason === "stripe_error" && unknown.entitled === false, "no server success stays unknown");
 
+const noPlan = decideFirmBillingEntitlement({
+  stripeConfigured: true,
+  hasEntitlingSubscription: false,
+  ownsFirm: true,
+  isFirmMember: false,
+});
+assert(
+  noPlan.entitled === false && noPlan.reason === "no_active_subscription",
+  "a firm with no plan is not entitled",
+);
+const cardlessPrior = restoreLastFirmSuccess({
+  requestedFirmId: "firm-cardless",
+  storedFirmId: "firm-cardless",
+  prior: { entitled: false, reason: "no_active_subscription", introTrialEligible: true },
+});
+assert(
+  cardlessPrior?.entitled === false && cardlessPrior.reason === "no_active_subscription",
+  "last success for a no-plan firm stays unpaid",
+);
+const cardlessFailure = entitlementAfterLiveFailure(cardlessPrior, "timeout");
+assert(
+  cardlessFailure.entitled === false && cardlessFailure.reason === "no_active_subscription",
+  "a billing error does not entitle a cardless firm",
+);
+const otherFirm = restoreLastFirmSuccess({
+  requestedFirmId: "firm-cardless",
+  storedFirmId: "firm-paid",
+  prior: { entitled: true, reason: "active_subscription" },
+});
+assert(otherFirm == null, "an entitled last success does not restore for a different firm id");
+const missingFirm = restoreLastFirmSuccess({
+  requestedFirmId: "firm-cardless",
+  storedFirmId: null,
+  prior: { entitled: true, reason: "active_subscription" },
+});
+assert(missingFirm == null, "an entitled last success with no firm id does not grant a plan");
+const sameFirm = restoreLastFirmSuccess({
+  requestedFirmId: "firm-paid",
+  storedFirmId: "firm-paid",
+  prior: { entitled: true, reason: "active_subscription" },
+});
+assert(sameFirm?.entitled === true, "an entitled last success restores for that firm id");
+
+clearCachedFirmEntitlement();
+noteFirmEntitlement("user-1", { entitled: true, reason: "active_subscription" });
+assert(
+  lastKnownFirmEntitlement("user-1", "firm-cardless") == null,
+  "a tab entitlement with no firm id does not cover a cardless firm",
+);
+
 assert(classifyBillingCheckFailure(new Error("Stripe request timeout")) === "timeout", "a timeout is a timeout");
 assert(
   classifyBillingCheckFailure(Object.assign(new Error("upstream"), { statusCode: 502 })) === "http_5xx",
@@ -211,6 +263,7 @@ assert(FIRM_BILLING_ENTITLEMENT_SERVER_FN === "6bfe9fa7", "logs name the entitle
 
 const fn = readFileSync(new URL("../src/lib/stripe-checkout.functions.ts", import.meta.url), "utf8");
 assert(fn.includes("entitlementAfterLiveFailure"), "a live Stripe failure uses the last success");
+assert(fn.includes("restoreLastFirmSuccess"), "last success is restored only for that firm id");
 assert(fn.includes("FIRM_BILLING_ENTITLEMENT_SERVER_FN"), "the server log names 6bfe9fa7");
 assert(!fn.includes("rememberEntitlement(email, failed)"), "a Stripe error is not cached as unpaid");
 const gate = readFileSync(new URL("../src/routes/_authenticated.gate.tsx", import.meta.url), "utf8");

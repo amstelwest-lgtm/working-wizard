@@ -5,6 +5,7 @@
  */
 
 import { overdueActionsLabel } from "@/lib/action-plan-counts";
+import { storedFiniteNumber } from "@/lib/stored-number";
 import { formatDate } from "@/lib/market/format";
 import { PILLAR_LABELS, type OverallHealth } from "@/lib/health-score";
 import type { HealthTier } from "@/lib/ratios";
@@ -104,10 +105,14 @@ export function trendDelta30d(
   if (!history.length) return null;
 
   const withDates = history
-    .filter((h) => h.period_date && Number.isFinite(h.score))
     .map((h) => ({
-      score: h.score,
-      t: Date.parse(h.period_date as string),
+      score: storedFiniteNumber(h.score),
+      t: h.period_date ? Date.parse(h.period_date) : Number.NaN,
+    }))
+    .filter((h) => h.score != null && Number.isFinite(h.t))
+    .map((h) => ({
+      score: h.score as number,
+      t: h.t,
     }))
     .filter((h) => Number.isFinite(h.t))
     .sort((a, b) => a.t - b.t);
@@ -124,7 +129,9 @@ export function trendDelta30d(
     return Math.round(latest.score - prior.score);
   }
 
-  const scores = history.map((h) => h.score).filter((s) => Number.isFinite(s));
+  const scores = history
+    .map((h) => storedFiniteNumber(h.score))
+    .filter((s): s is number => s != null);
   if (scores.length < 2) return null;
   return Math.round(scores[scores.length - 1] - scores[0]);
 }
@@ -478,18 +485,19 @@ export function todayAttentionAction(
  * Several clients: the most unresolved notes wins, then the name.
  */
 export function firmOpenQueriesClient(
-  rows: readonly { id: string; name?: string | null; openQueries: number }[],
+  rows: readonly { id: string; name?: string | null; openQueries: number | null }[],
 ): string | null {
   let best: { id: string; name: string; openQueries: number } | null = null;
   for (const row of rows) {
-    if (!row.id || row.openQueries <= 0) continue;
+    const openQueries = row.openQueries ?? 0;
+    if (!row.id || openQueries <= 0) continue;
     const name = row.name?.trim() ?? "";
     if (
       !best ||
-      row.openQueries > best.openQueries ||
-      (row.openQueries === best.openQueries && name.localeCompare(best.name) < 0)
+      openQueries > best.openQueries ||
+      (openQueries === best.openQueries && name.localeCompare(best.name) < 0)
     ) {
-      best = { id: row.id, name, openQueries: row.openQueries };
+      best = { id: row.id, name, openQueries };
     }
   }
   return best?.id ?? null;
@@ -501,7 +509,7 @@ export function firmOpenQueriesClient(
  * open a client file.
  */
 export function firmOpenQueriesDestination(
-  rows: readonly { id: string; name?: string | null; openQueries: number }[],
+  rows: readonly { id: string; name?: string | null; openQueries: number | null }[],
 ): { to: "/clients/queries" } | null {
   if (!firmOpenQueriesClient(rows)) return null;
   return { to: "/clients/queries" };
@@ -598,8 +606,8 @@ export function revenueOf(
   if (!financials) return null;
   const raw = financials.revenue;
   if (raw == null || raw === "") return null;
-  const n = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/,/g, ""));
-  return Number.isFinite(n) && n > 0 ? n : null;
+  const n = storedFiniteNumber(raw);
+  return n != null && n > 0 ? n : null;
 }
 
 /** Clients added in the current calendar month. */

@@ -28,8 +28,12 @@ const vercel = JSON.parse(readFileSync(resolve("vercel.json"), "utf8")) as {
 };
 
 const redirects = vercel.redirects ?? [];
-assert(redirects.length >= 2, "vercel.json has host redirects");
-for (const rule of redirects) {
+const cozaRedirects = redirects.filter((rule) => {
+  const host = rule.has?.[0]?.value;
+  return host?.eq === "milon.co.za" || host?.suf === ".milon.co.za";
+});
+assert(cozaRedirects.length >= 2, "vercel.json has milon.co.za host redirects");
+for (const rule of cozaRedirects) {
   assert(rule.source === "/:path*", "redirect matches every path");
   assert(rule.destination === `${CANONICAL_APP_ORIGIN}/:path*`, "redirect keeps the path on www");
   assert(rule.permanent === true, "redirect is permanent (308)");
@@ -47,7 +51,7 @@ assert(
 
 function edgeRedirect(host: string, pathAndQuery: string): string | null {
   const normalized = host.trim().toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
-  const matches = redirects.some((rule) => {
+  const matches = cozaRedirects.some((rule) => {
     const value = rule.has?.[0]?.value;
     if (!value) return false;
     if (value.eq) return normalized === value.eq;

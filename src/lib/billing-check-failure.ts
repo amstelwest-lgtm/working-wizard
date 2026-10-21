@@ -67,16 +67,54 @@ export function logBillingCheckFailure(
 }
 
 /**
+ * Last success may restore a previously entitled result only for the firm
+ * id it was recorded against. A no-plan result stays unpaid. It is never
+ * turned into an entitlement, including when the intro-trial flag is set.
+ * A stored result with no firm id cannot grant a plan.
+ */
+export function restoreLastFirmSuccess(input: {
+  requestedFirmId: string | null;
+  storedFirmId: string | null;
+  prior: FirmBillingEntitlement | null | undefined;
+}): FirmBillingEntitlement | null {
+  const prior = input.prior;
+  if (!prior || prior.reason === "stripe_error") return null;
+  const sameFirm =
+    Boolean(input.requestedFirmId) &&
+    Boolean(input.storedFirmId) &&
+    input.requestedFirmId === input.storedFirmId;
+  if (prior.entitled === true) {
+    if (!sameFirm) return null;
+    return {
+      entitled: true,
+      reason: prior.reason,
+      introTrialEligible: prior.introTrialEligible,
+    };
+  }
+  if (!sameFirm && input.requestedFirmId && input.storedFirmId) return null;
+  return {
+    entitled: false,
+    reason: prior.reason,
+    introTrialEligible: prior.introTrialEligible,
+  };
+}
+
+/**
  * A live Stripe failure keeps the last successful decision when this isolate
  * still has one. No last success stays unknown (`stripe_error`), which is not
- * an unpaid firm.
+ * an unpaid firm. Entitlement is only restored by `restoreLastFirmSuccess`.
  */
 export function entitlementAfterLiveFailure(
   prior: FirmBillingEntitlement | null | undefined,
   kind: BillingCheckFailureKind,
 ): FirmBillingEntitlement {
   if (prior && prior.reason !== "stripe_error") {
-    return { ...prior, checkFailed: kind };
+    return {
+      entitled: prior.entitled === true,
+      reason: prior.reason,
+      introTrialEligible: prior.introTrialEligible,
+      checkFailed: kind,
+    };
   }
   return { entitled: false, reason: "stripe_error", checkFailed: kind };
 }

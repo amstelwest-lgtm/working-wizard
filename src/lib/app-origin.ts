@@ -29,6 +29,39 @@ export function allowedAppOrigin(raw: string | null | undefined): string | null 
   return url.origin;
 }
 
+/**
+ * Origin for auth and invite links. The public apex and www both become
+ * https://www.milonfinance.com. Localhost and Vercel preview hosts stay, so a
+ * local callback still returns there. Anything else becomes www.
+ */
+export function canonicalAuthOrigin(raw?: string | null): string {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return CANONICAL_APP_ORIGIN;
+  let url: URL;
+  try {
+    url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+  } catch {
+    return CANONICAL_APP_ORIGIN;
+  }
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return url.origin;
+  if (
+    host.endsWith(".vercel.app") &&
+    host.length > ".vercel.app".length &&
+    url.protocol === "https:"
+  ) {
+    return url.origin;
+  }
+  if (host === "milonfinance.com" || host === "www.milonfinance.com") return CANONICAL_APP_ORIGIN;
+  return CANONICAL_APP_ORIGIN;
+}
+
+/** Path on the canonical auth origin. Ignores the page host. */
+export function canonicalAuthUrl(path: string): string {
+  const suffix = path.startsWith("/") ? path : `/${path}`;
+  return `${CANONICAL_APP_ORIGIN}${suffix}`;
+}
+
 /** First allowlisted candidate, otherwise the canonical www host. */
 export function appRedirectOrigin(candidates: Array<string | null | undefined> = []): string {
   for (const raw of candidates) {

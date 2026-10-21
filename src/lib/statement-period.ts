@@ -367,6 +367,45 @@ export function calendarMonthStamp(iso: string): string {
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+const PILL_MONTH: Record<string, number> = {};
+for (const [index, name] of MONTHS.entries()) PILL_MONTH[name.toLowerCase()] = index;
+for (const [index, name] of FULL_MONTHS.entries()) PILL_MONTH[name.toLowerCase()] = index;
+PILL_MONTH.sept = 8;
+
+/**
+ * Client-header pill. The books' period end wins ("2026-09-30" is Sep 2026).
+ * A statement label is the fallback. Null when there are no books, so the
+ * pill can use the calendar month.
+ */
+export function booksPeriodPillLabel(
+  periodEnd?: string | null,
+  periodLabel?: string | null,
+): string | null {
+  const iso = typeof periodEnd === "string" ? periodEnd.trim().slice(0, 10) : "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const stamp = calendarMonthStamp(iso);
+    if (stamp) return stamp;
+  }
+  const text = periodLabel?.trim() ?? "";
+  if (!text) return null;
+  const hits: { index: number; month: number; year: string }[] = [];
+  const patterns = [
+    /\b([A-Za-z]{3,9})\.?\s+\d{1,2},?\s+(\d{4})\b/g,
+    /\b(?:\d{1,2}\s+)?([A-Za-z]{3,9})\.?\s+(\d{4})\b/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const month = PILL_MONTH[(match[1] ?? "").toLowerCase()];
+      if (month == null || match.index == null) continue;
+      hits.push({ index: match.index, month, year: match[2] ?? "" });
+    }
+  }
+  if (hits.length === 0) return null;
+  hits.sort((a, b) => a.index - b.index);
+  const last = hits[hits.length - 1]!;
+  return `${MONTHS[last.month]} ${last.year}`;
+}
+
 function str(fields: Record<string, unknown>, key: string): string | null {
   const v = fields[key];
   if (typeof v !== "string" && typeof v !== "number") return null;

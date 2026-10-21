@@ -53,6 +53,12 @@
   ],
   "redirects": [
     {
+      "source": "/((?!\\.well-known(?:/|$)).*)",
+      "has": [{ "type": "host", "value": { "eq": "milonfinance.com" } }],
+      "destination": "https://www.milonfinance.com/$1",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [{ "type": "host", "value": { "eq": "milon.co.za" } }],
       "destination": "https://www.milonfinance.com/:path*",
