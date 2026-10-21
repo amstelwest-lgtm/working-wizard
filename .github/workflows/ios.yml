@@ -1,0 +1,46 @@
+name: iOS shell
+
+# Structural check only. ubuntu-latest cannot run xcodebuild, codesign,
+# or the iOS simulator. A signed archive waits for a Mac and an Apple
+# signing identity. See the job summary line from the check script.
+
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ios.yml"
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ios.yml"
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  structure:
+    name: iOS project structure
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install shell dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Copy web assets into the iOS project
+        working-directory: mobile
+        run: npx cap copy ios
+
+      - name: Check the iOS project without compiling it
+        working-directory: mobile
+        run: node scripts/ios-shell-check.mjs
