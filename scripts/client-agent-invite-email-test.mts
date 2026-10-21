@@ -47,6 +47,19 @@ assert(
   ),
   "text has the fallback link",
 );
+assert(mail.html.includes("Hello,"), "a missing first name greets Hello");
+assert(
+  mail.text.startsWith("Theo's practice asked for a few documents\n\nHello,"),
+  "text greets Hello",
+);
+assert(
+  mail.html.includes("To help with your tax this year, we need a few documents from you."),
+  "html asks for this year's documents",
+);
+assert(
+  mail.text.includes("To help with your tax this year, we need a few documents from you."),
+  "text asks for this year's documents",
+);
 assert(mail.html.includes("This link expires on 4 Nov 2026."), "html has the expiry");
 assert(mail.text.includes("This link expires on 4 Nov 2026."), "text has the expiry");
 assert(
@@ -68,7 +81,41 @@ assert(
   "no claims, chat apps, or prices",
 );
 assert(!/toLocaleDateString/.test(source), "the expiry is not formatted by locale");
+assert(!/formatCalendarDay/.test(source), "the expiry is not the UTC calendar prefix");
 assert(!/resend|nodemailer|sendTeamMail/i.test(source), "the template does not send");
+const rules = readFileSync(resolve(root, "src/lib/client-agent-link.ts"), "utf8");
+assert(
+  rules.includes('timezone: "Africa/Johannesburg"') &&
+    rules.includes("formatDate(expiresAt, clientAgentDateMarket)"),
+  "the expiry uses Africa/Johannesburg",
+);
+
+const late = renderClientAgentInviteEmail({
+  practiceName: "Theo's practice",
+  link: "https://www.milonfinance.com/a/exampletokenexampletoken",
+  expiresAt: "2026-11-04T23:30:00.000Z",
+  firstName: "Nicola",
+});
+assert(late.html.includes("Hi Nicola,"), "a contact first name is greeted");
+assert(late.text.includes("Hi Nicola,"), "text greets the first name");
+assert(
+  late.html.includes("This link expires on 5 Nov 2026."),
+  "23:30 UTC is the next Johannesburg day",
+);
+assert(late.text.includes("This link expires on 5 Nov 2026."), "text uses the Johannesburg day");
+
+const business = renderClientAgentInviteEmail({
+  practiceName: "Theo's practice",
+  link: "https://www.milonfinance.com/a/exampletokenexampletoken",
+  expiresAt: new Date("2026-11-04T23:30:00.000Z"),
+  firstName: "Harbour Books",
+});
+assert(business.html.includes("Hello,"), "a business name is not split into a greeting");
+assert(!business.html.includes("Hi Harbour"), "the business name is not used as a first name");
+assert(
+  business.html.includes("This link expires on 5 Nov 2026."),
+  "a Date at 23:30 UTC uses Johannesburg",
+);
 
 const escaped = renderClientAgentInviteEmail({
   practiceName: `Theo <script> & "practice"`,

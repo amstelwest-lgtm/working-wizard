@@ -7,7 +7,14 @@ import { useServerFn } from "@tanstack/react-start";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import "@/components/owner-door/owner-door.css";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES } from "@/lib/client-agent-send";
-import { SEND_LINK_BODY, closedLink, sizeAllowed, type ItemQuality } from "@/lib/client-agent-link";
+import {
+  CLIENT_AGENT_FILE_NOTE,
+  clientAgentIntro,
+  clientAgentItemHelp,
+  closedLink,
+  sizeAllowed,
+  type ItemQuality,
+} from "@/lib/client-agent-link";
 import {
   consentClientAgentLink,
   finishClientAgentItem,
@@ -24,11 +31,6 @@ const QUIET =
 
 export const CLIENT_AGENT_UPLOAD_INTRO =
   "Only upload what you have. If something doesn't apply to you, tap 'I don't have this' and move on.";
-
-export function clientAgentItemHelp(item: { totalsOnly: boolean }): string {
-  if (item.totalsOnly) return "Totals only. Do not send a line-by-line breakdown.";
-  return "PDF, JPG, PNG, or HEIC, up to 20 MB.";
-}
 
 function fileBase64(file: File): Promise<string> {
   return file.arrayBuffer().then((buffer) => {
@@ -114,7 +116,9 @@ export function ClientAgentLinkScreen({
       {view && !view.ok ? <p className="text-sm">{view.body}</p> : null}
       {openView && !openView.consented ? (
         <div className="flex flex-col gap-3">
-          <p className="text-sm leading-6 text-[#3D5270]">{SEND_LINK_BODY}</p>
+          <p className="text-sm leading-6 text-[#3D5270]" data-client-intro="true">
+            {clientAgentIntro(openView.practiceName, openView.expiresAt)}
+          </p>
           <p className="text-sm leading-6">{openView.notice}</p>
           <button type="button" className={PRIMARY} disabled={busy} onClick={onAgree}>
             I agree
@@ -196,6 +200,9 @@ export function ClientAgentLinkScreen({
               </li>
             ))}
           </ol>
+          <p className="text-sm leading-6 text-[#3D5270]" data-file-note="true">
+            {CLIENT_AGENT_FILE_NOTE}
+          </p>
         </div>
       ) : null}
       {notice ? <p className="text-sm text-[#3D5270]">{notice}</p> : null}

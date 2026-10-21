@@ -1,9 +1,12 @@
 /**
  * Invite copy for a firm-sent document link. Rendering only.
  * Nothing in this module sends mail.
+ *
+ * firstName is a contact given name when the client record has one.
+ * clients.name is the business name. Do not pass it, and do not split it.
+ * There is no contact first-name column on clients, so callers omit firstName.
  */
-import { formatCalendarDay } from "@/lib/market/format";
-import { ZA_MARKET } from "@/lib/market/resolve";
+import { clientAgentExpiryLabel } from "@/lib/client-agent-link";
 
 export type ClientAgentInviteEmail = {
   subject: string;
@@ -23,10 +26,12 @@ function clean(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function expiryLabel(expiresAt: Date | string): string {
-  const iso = expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt.trim();
-  const label = formatCalendarDay(iso, ZA_MARKET);
-  return label === "—" ? "soon" : label;
+/** A single given name. A business name, or more than one word, is not used. */
+function givenName(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").replace(/\s+/g, " ").trim();
+  if (!trimmed || trimmed.length > 40) return null;
+  if (!/^[\p{L}][\p{L}'’-]{0,39}$/u.test(trimmed)) return null;
+  return trimmed;
 }
 
 /** Subject, HTML, and plain text for the document-list invite. */
@@ -34,14 +39,18 @@ export function renderClientAgentInviteEmail(input: {
   practiceName: string;
   link: string;
   expiresAt: Date | string;
+  firstName?: string | null;
 }): ClientAgentInviteEmail {
   const practiceName = clean(input.practiceName) || "Your accountant";
   const link = input.link.trim();
-  const expires = expiryLabel(input.expiresAt);
+  const expires = clientAgentExpiryLabel(input.expiresAt);
+  const name = givenName(input.firstName);
+  const greeting = name ? `Hi ${name},` : "Hello,";
   const subject = `${practiceName} asked for a few documents`;
   const safePractice = escapeHtml(practiceName);
   const safeLink = escapeHtml(link);
   const safeExpires = escapeHtml(expires);
+  const safeGreeting = escapeHtml(greeting);
   const html = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
@@ -52,6 +61,8 @@ export function renderClientAgentInviteEmail(input: {
 <body style="margin:0;padding:0;background:#ffffff;">
   <div lang="en" dir="ltr" style="margin:0;padding:24px 16px;background:#ffffff;color:#102A43;font-family:Arial,Helvetica,sans-serif;">
     <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:700;color:#102A43;">${escapeHtml(subject)}</h1>
+    <p style="margin:0 0 12px;font-size:16px;line-height:24px;color:#102A43;">${safeGreeting}</p>
+    <p style="margin:0 0 12px;font-size:16px;line-height:24px;color:#102A43;">To help with your tax this year, we need a few documents from you.</p>
     <p style="margin:0 0 12px;font-size:16px;line-height:24px;color:#102A43;">This link opens a short list. You'll be asked to agree before anything is stored.</p>
     <p style="margin:0 0 20px;font-size:16px;line-height:24px;color:#102A43;">Only send what you have — skip anything that doesn't apply.</p>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px;">
@@ -76,6 +87,10 @@ export function renderClientAgentInviteEmail(input: {
 </html>`;
   const text = [
     subject,
+    "",
+    greeting,
+    "",
+    "To help with your tax this year, we need a few documents from you.",
     "",
     "This link opens a short list. You'll be asked to agree before anything is stored.",
     "",

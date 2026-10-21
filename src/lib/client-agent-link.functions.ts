@@ -10,8 +10,8 @@ import { z } from "zod";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import {
   SEND_ATTEMPT_WINDOW_MS,
-  SEND_CONSENT_NOTICE,
   SEND_STORAGE_BUCKET,
+  clientConsentNotice,
   SEND_FILE_BASE64_MAX,
   acceptClientFile,
   bytesFromBase64,
@@ -64,6 +64,7 @@ export type OpenLinkResult =
   | {
       ok: true;
       practiceName: string;
+      expiresAt: string;
       consented: boolean;
       notice: string;
       items: PublicItem[];
@@ -306,16 +307,18 @@ async function resolveToken(token: string): Promise<Resolved> {
 }
 
 async function present(send: SendRow, items: PublicItem[]): Promise<OpenLinkResult> {
+  const practiceName = practiceDisplayName({
+    firmId: send.firm_id,
+    practiceDisplayName: send.practice_display_name,
+    firmName: await loadFirmName(send.firm_id),
+  });
   return {
     ok: true,
-    practiceName: practiceDisplayName({
-      firmId: send.firm_id,
-      practiceDisplayName: send.practice_display_name,
-      firmName: await loadFirmName(send.firm_id),
-    }),
+    practiceName,
+    expiresAt: send.expires_at,
     ...openLinkView({
       consented: consentReady(send.consent_at),
-      notice: SEND_CONSENT_NOTICE,
+      notice: clientConsentNotice(practiceName),
       items,
     }),
   };

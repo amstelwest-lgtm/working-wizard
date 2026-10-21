@@ -15,10 +15,13 @@ import {
   FILE_LINK_BODY,
   GENERIC_LINK_BODY,
   LIMITED_LINK_BODY,
-  SEND_CONSENT_NOTICE,
+  CLIENT_AGENT_FILE_NOTE,
   SEND_CONSENT_VERSION,
-  SEND_LINK_BODY,
   SEND_LINK_META,
+  clientAgentExpiryLabel,
+  clientAgentIntro,
+  clientAgentItemHelp,
+  clientConsentNotice,
   acceptClientFile,
   bytesFromBase64,
   consentReady,
@@ -235,10 +238,15 @@ assert(
 
 const consentRow = consentWrite(now);
 assert(
+  SEND_CONSENT_VERSION === "popia-client-agent-2",
+  "the notice version matches the new wording",
+);
+assert(
   consentRow.consent_notice_version === SEND_CONSENT_VERSION &&
     consentRow.consent_at === now.toISOString(),
   "consent stores the notice version with the timestamp",
 );
+const practiceNotice = clientConsentNotice("Theo's practice");
 
 const ownItem: PublicChecklistItem = {
   itemKey: "irp5",
@@ -250,7 +258,7 @@ const ownItem: PublicChecklistItem = {
 };
 const beforeConsent = openLinkView({
   consented: false,
-  notice: SEND_CONSENT_NOTICE,
+  notice: practiceNotice,
   items: [ownItem],
 });
 assert(
@@ -259,7 +267,7 @@ assert(
 );
 const afterConsent = openLinkView({
   consented: true,
-  notice: SEND_CONSENT_NOTICE,
+  notice: practiceNotice,
   items: [ownItem],
 });
 assert(
@@ -419,22 +427,55 @@ assert(
   "usable without a file is empty",
 );
 
+const noonExpiry = "2026-11-04T12:00:00.000Z";
+const lateExpiry = "2026-11-04T23:30:00.000Z";
+const intro = clientAgentIntro("Theo's practice", noonExpiry);
 const copy = [
-  SEND_CONSENT_NOTICE,
-  SEND_LINK_BODY,
+  practiceNotice,
+  intro,
+  clientAgentIntro("Theo's practice", lateExpiry),
   GENERIC_LINK_BODY,
   LIMITED_LINK_BODY,
   CONSENT_LINK_BODY,
   FILE_LINK_BODY,
 ].join("\n");
-assert(/does not fill in a form/i.test(copy), "copy says she does not fill in a form");
-assert(/does not send a form back/i.test(copy), "copy says she does not return a form");
-assert(/does not log into SARS/i.test(copy), "copy says she does not log into SARS");
-assert(/does not make a SARS claim/i.test(copy), "copy says she makes no SARS claim");
+assert(
+  intro.includes("Hi, I'm the Tax Specialist for Theo's practice."),
+  "the intro names the practice",
+);
+assert(intro.includes("before 4 Nov 2026."), "a midday expiry stays on that Johannesburg day");
+assert(
+  clientAgentIntro("Theo's practice", lateExpiry).includes("before 5 Nov 2026."),
+  "23:30 UTC is the next day in Johannesburg",
+);
+assert(
+  clientAgentExpiryLabel(new Date(lateExpiry)) === "5 Nov 2026",
+  "a Date at 23:30 UTC uses Johannesburg",
+);
+assert(
+  practiceNotice ===
+    "I agree that Theo's practice may securely store the documents I upload here for my tax file, using Milōn. Medical aid: send the tax certificate totals only.",
+  "consent names the practice and drops the internal rules",
+);
+assert(
+  !/sars|fill in a form|send a form back/i.test(copy),
+  "client copy drops the internal denials",
+);
 assert(
   !/completed form|form is ready|return is ready|we will claim/i.test(copy),
   "copy promises no completed form",
 );
+assert(
+  clientAgentItemHelp({ itemKey: "bank_statements" }) ===
+    "All business accounts, 1 March 2025 to 28 February 2026.",
+  "bank statements use the 2026 year of assessment",
+);
+assert(
+  clientAgentItemHelp({ itemKey: "medical_aid_certificate" }) ===
+    "Totals only. Do not send a line-by-line breakdown.",
+  "medical aid stays totals only",
+);
+assert(!clientAgentItemHelp({ itemKey: "irp5" }).includes("PDF"), "a row does not list file types");
 assert(!/\b(stupid|idiot|asap|illegal|failure)\b/i.test(copy), "copy stays polite");
 assert(!/whatsapp/i.test(copy), "copy does not mention WhatsApp");
 
@@ -475,6 +516,14 @@ assert(
   "no mail, extraction, or ledger",
 );
 assert(!/whatsapp/i.test(page + route), "the page does not mention WhatsApp");
+assert(
+  !/sars|fill in a form|send a form back/i.test(page),
+  "the page does not recite internal denials",
+);
+assert(page.includes("clientAgentIntro"), "the intro is the friendly line");
+assert(page.includes("CLIENT_AGENT_FILE_NOTE"), "file types are one note");
+assert(fn.includes("clientConsentNotice"), "consent wording includes the practice");
+assert(fn.includes("expiresAt: send.expires_at"), "the page receives the expiry instant");
 assert(!/has expired|been revoked/i.test(page), "the page has one closed sentence");
 assert(!page.includes("file.name"), "the page does not read the file name");
 assert(route.includes("SEND_LINK_META"), "the route uses the noindex meta");
@@ -587,8 +636,9 @@ const consentHtml = renderToStaticMarkup(
     view: {
       ok: true,
       practiceName: "Theo's practice",
+      expiresAt: lateExpiry,
       consented: false,
-      notice: SEND_CONSENT_NOTICE,
+      notice: practiceNotice,
       items: [],
     },
     busy: false,
@@ -624,8 +674,9 @@ const checklistHtml = renderToStaticMarkup(
     view: {
       ok: true,
       practiceName: "Theo's practice",
+      expiresAt: lateExpiry,
       consented: true,
-      notice: SEND_CONSENT_NOTICE,
+      notice: practiceNotice,
       items: [
         {
           itemKey: "practice_income_expenses",
@@ -663,5 +714,12 @@ assert(
 );
 assert(checklistHtml.includes("data-missing-note"), "the optional note renders");
 assert(checklistHtml.includes("Only upload what you have"), "the checklist intro renders");
+assert(
+  (checklistHtml.match(/PDF, JPG, PNG or HEIC, up to 20 MB each/g) ?? []).length === 1,
+  "file types appear once",
+);
+assert(checklistHtml.includes(CLIENT_AGENT_FILE_NOTE), "the file note is the shared sentence");
+assert(consentHtml.includes("before 5 Nov 2026"), "the consent page shows the Johannesburg expiry");
+assert(!/sars|fill in a form/i.test(consentHtml), "the rendered consent drops internal denials");
 
 console.log("client agent link test ok");

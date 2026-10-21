@@ -3,16 +3,19 @@
  * The Tax Specialist collects documents. She does not fill in a form
  * or make a SARS claim.
  */
+import { MONTHS_LONG } from "@/lib/market/date-presets";
+import { formatDate } from "@/lib/market/format";
+import { yearOfAssessmentStart } from "@/lib/tax-specialist/sample-compute";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES, sha256Hex } from "./client-agent-send";
 import { SEND_AGENT_FIRM_ALLOWLIST, sendAgentFirmAllowed } from "./client-agent-send-allowlist";
 
-export const SEND_CONSENT_VERSION = "popia-client-agent-1";
+export const SEND_CONSENT_VERSION = "popia-client-agent-2";
 
-export const SEND_CONSENT_NOTICE =
-  "I agree that Milōn may store the documents I send on this link for my accountant. Medical aid amounts are totals only. The Tax Specialist does not fill in a form, does not send a form back, does not log into SARS, and does not make a SARS claim.";
-
-export const SEND_LINK_BODY =
-  "The Tax Specialist collects the documents on this list. She does not fill in a form, and she does not send a form back. She does not log into SARS, and she does not make a SARS claim.";
+/**
+ * SA year of assessment 2026 ends on the last day of February 2026.
+ * Today can sit in the next financial year. These documents are for 2026.
+ */
+const DOCUMENT_YEAR_OF_ASSESSMENT = 2026;
 
 export const SEND_ATTEMPT_LIMIT = 30;
 export const SEND_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
@@ -91,6 +94,68 @@ export async function hashClientAddress(address: string): Promise<string> {
 
 function cleanPracticeName(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+const clientAgentDateMarket = {
+  locale: "en-ZA",
+  timezone: "Africa/Johannesburg",
+};
+
+/** Calendar day in Africa/Johannesburg. An instant after 22:00 UTC is the next day. */
+export function clientAgentExpiryLabel(expiresAt: Date | string): string {
+  const label = formatDate(expiresAt, clientAgentDateMarket);
+  return label === "—" ? "soon" : label;
+}
+
+/** One friendly line on the consent page. Internal rules stay out of this sentence. */
+export function clientAgentIntro(practiceName: string, expiresAt: Date | string): string {
+  const practice = cleanPracticeName(practiceName) || "your accountant";
+  const expiry = clientAgentExpiryLabel(expiresAt);
+  return `Hi, I'm the Tax Specialist for ${practice}. I'll help you gather the documents your accountant needs. It takes about 5 minutes, and you can come back to this link any time before ${expiry}.`;
+}
+
+/** Wording stored against popia-client-agent-2. The practice name is filled in. */
+export function clientConsentNotice(practiceName: string): string {
+  const practice = cleanPracticeName(practiceName) || "your accountant";
+  return `I agree that ${practice} may securely store the documents I upload here for my tax file, using Milōn. Medical aid: send the tax certificate totals only.`;
+}
+
+function longCalendarDay(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return iso;
+  const month = MONTHS_LONG[Number(match[2]) - 1] ?? "";
+  return `${Number(match[3])} ${month} ${match[1]}`;
+}
+
+function februaryYearEnd(year: number): string {
+  const day = new Date(Date.UTC(year, 2, 0)).getUTCDate();
+  return `${year}-02-${String(day).padStart(2, "0")}`;
+}
+
+/** 1 March through the last day of February, from the year-of-assessment helper. */
+export function documentYearWindow(year = DOCUMENT_YEAR_OF_ASSESSMENT): string {
+  const end = februaryYearEnd(year);
+  const start = yearOfAssessmentStart(end);
+  return `${longCalendarDay(start)} to ${longCalendarDay(end)}`;
+}
+
+const ITEM_HELP: Record<string, string> = {
+  practice_income_expenses:
+    "Your income and expense summary for the year, or your bookkeeping export.",
+  bank_statements: `All business accounts, ${documentYearWindow()}.`,
+  travel_logbook: "Your business kilometres for the year, if you claim travel.",
+  medical_aid_certificate: "Totals only. Do not send a line-by-line breakdown.",
+  ra_contribution_certificate: "The annual certificate from your retirement annuity provider.",
+  irp5: "From your employer, if you had a salaried job.",
+  it3b: "Interest certificates from your bank or investments.",
+  other: "A copy of the order and proof of payments received.",
+};
+
+export const CLIENT_AGENT_FILE_NOTE = "PDF, JPG, PNG or HEIC, up to 20 MB each.";
+
+/** One short line for a checklist row. File types are not repeated here. */
+export function clientAgentItemHelp(item: { itemKey: string }): string {
+  return ITEM_HELP[item.itemKey] ?? "";
 }
 
 /**
