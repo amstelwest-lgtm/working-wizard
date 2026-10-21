@@ -21,10 +21,12 @@ import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { BudgetChartTable } from "@/components/budget/budget-chart-table";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
 import { BudgetYearStrip } from "@/components/budget/budget-year-strip";
+import { budgetHeadlineFigures } from "@/lib/budget-period";
 import {
   hasPriorYearFigures,
   ownerBudgetHowBuilt,
   ownerYearFromStatement,
+  yearMoneyFromFiscalSlice,
   type BudgetYearMoney,
 } from "@/lib/budget-year-compare";
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
@@ -257,15 +259,25 @@ export function BudgetSimpleView({
   const maxRev = Math.max(1, ...results.map((r) => r.revenue));
 
   const compared = actuals && actuals.chip && actuals.chip !== "None" ? actuals : null;
-  const thisYear = useMemo(() => ownerYearFromStatement(compared), [compared]);
+  const headline = budgetHeadlineFigures(compared?.period, {
+    revenue: compared?.budgetRevenue,
+    operatingProfit: compared?.budgetEbit,
+  });
+  const thisYear = useMemo(
+    () =>
+      compared?.period
+        ? yearMoneyFromFiscalSlice(compared.period)
+        : ownerYearFromStatement(compared),
+    [compared],
+  );
   const priorOnFile = hasPriorYearFigures(priorYear);
   return (
     <div id="wizard-budget-plan" className="space-y-5">
       <BudgetVerdictStrip
-        periodLabel={compared ? compared.label : monthLabel(focusMonth)}
-        revenueBudget={compared?.budgetRevenue ?? focus?.revenue ?? 0}
+        periodLabel={headline.label ?? (compared ? compared.label : monthLabel(focusMonth))}
+        revenueBudget={compared?.period ? headline.revenue : (compared?.budgetRevenue ?? focus?.revenue ?? 0)}
         revenueActual={compared ? compared.revenue : null}
-        profitBudget={compared?.budgetEbit ?? focus?.ebit ?? 0}
+        profitBudget={compared?.period ? headline.operatingProfit : (compared?.budgetEbit ?? focus?.ebit ?? 0)}
         profitActual={compared ? (compared.ebit ?? null) : null}
         chip={compared?.chip ?? "None"}
         market={market}
@@ -314,6 +326,7 @@ export function BudgetSimpleView({
         lastYearLabel={priorYearLabel}
         market={market}
         signed={role === "owner"}
+        periodLabel={headline.label ?? compared?.label ?? null}
       />
       {readOnly ? null : (
       <p className="text-sm font-semibold text-[#102A43] dark:text-slate-100">
@@ -435,17 +448,17 @@ export function BudgetSimpleView({
               <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--ink)]" data-hotel-driver="missing">—</p>
             ) : (
             <div className="mt-2 flex items-baseline gap-1.5">
-              <span className="text-lg font-medium text-[#102A43] dark:text-[#F4F7FB]">{symbol}</span>
               {readOnly ? (
-                <span className="text-2xl font-semibold tabular-nums text-[var(--ink)]">{cell.price}</span>
+                <span className="text-2xl font-semibold tabular-nums text-[var(--ink)]" data-month-engine-price="">
+                  {money(cell.price)}
+                </span>
               ) : (
-              <Input
-                type="number"
-                inputMode="decimal"
-                aria-label={localizeCopy(priceLabel, market)}
-                className="budget-driver-input h-12 border-0 bg-transparent px-0 text-2xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
+              <MoneyField
                 value={cell.price}
-                onChange={(e) => patchFocus({ price: parseFloat(e.target.value) || 0 })}
+                onChange={(price) => patchFocus({ price })}
+                label={localizeCopy(priceLabel, market)}
+                market={market}
+                className="budget-driver-input h-12 w-40 border-0 bg-transparent px-0 text-2xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
               />
               )}
             </div>

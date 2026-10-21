@@ -64,6 +64,7 @@ import { OwnerBusinessSwitcher } from "@/components/owner-business-switcher";
 import {
   boardRoleForWorkspace,
   canOpenOwnerWorkspace,
+  fallbackOwnerAppRole,
   inviteWorkspaceAlreadyKnown,
   clearStoredOwnerClientId,
   decideStoredClientAccess,
@@ -181,6 +182,7 @@ import {
   overlayWeeklyInputs,
   resolveWaterfallFigures,
 } from "@/lib/weekly-inputs";
+import { fiscalWaterfallFallback } from "@/lib/budget-period";
 import {
   figuresPeriodLabelFrom,
   ownerBootPeriodPill,
@@ -2396,7 +2398,7 @@ function Index() {
               (signal) =>
                 supabase
                   .from("clients")
-                  .select("id, name")
+                  .select("id, name, firm_id")
                   .eq("owner_user_id", u.user.id)
                   .abortSignal(signal),
               { critical: true },
@@ -2419,6 +2421,7 @@ function Index() {
           const ownedRows = (owned ?? []).map((c) => ({
             id: c.id as string,
             name: c.name as string | null,
+            firmId: (c.firm_id as string | null) ?? null,
           }));
           const ownedIds = new Set(ownedRows.map((c) => c.id));
           const extraIds = [
@@ -3141,11 +3144,10 @@ function Index() {
           (signal) =>
             supabase
               .from("clients")
-              .select("id")
+              .select("id, firm_id")
               .eq("owner_user_id", u.id)
-              .limit(1)
-              .abortSignal(signal)
-              .maybeSingle(),
+              .limit(20)
+              .abortSignal(signal),
           { critical: true },
         );
         if (cancelled) return;
@@ -3153,23 +3155,14 @@ function Index() {
           setCriticalBootFailed(true);
           return;
         }
-        const ownedClient = owned.value.error ? null : owned.value.data;
-        if (ownedClient) {
-          // Infer role for this session; do not attempt a DB write — the RLS
-          // hardening migration removed authenticated INSERT on user_roles.
-          // Server-side signup (adminSignUp) is responsible for writing the row.
-          setUserRole("client_owner");
-          return;
-        }
         const memRead = await bootSelect(
           (signal) =>
             supabase
               .from("client_memberships")
-              .select("client_id")
+              .select("client_id, role")
               .eq("user_id", u.id)
-              .limit(1)
-              .abortSignal(signal)
-              .maybeSingle(),
+              .limit(20)
+              .abortSignal(signal),
           { critical: true },
         );
         if (cancelled) return;
@@ -3177,11 +3170,15 @@ function Index() {
           setCriticalBootFailed(true);
           return;
         }
-        const mem = memRead.value.error ? null : memRead.value.data;
-        if (mem) {
-          // Same: infer only, no client-side DB write.
-          setUserRole("client_member");
-        }
+        // Infer only. Do not write user_roles — RLS removed authenticated INSERT.
+        // On a firm file, owner_user_id is the accountant who added the client.
+        const ownedRows = owned.value.error ? [] : (owned.value.data ?? []);
+        const memberships = memRead.value.error ? [] : (memRead.value.data ?? []);
+        const inferred = fallbackOwnerAppRole({
+          hasSelfServeOwned: ownedRows.some((row) => !row.firm_id),
+          membershipRoles: memberships.map((row) => row.role),
+        });
+        if (inferred) setUserRole(inferred);
       } finally {
         if (!cancelled) setRoleResolved(true);
       }
@@ -3687,6 +3684,15 @@ function Index() {
   }, [effectiveClientId]);
 
   const fyStartMonth = operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault;
+  const ownerProfitPeriod = useMemo(
+    () => fiscalWaterfallFallback(v as unknown as Record<string, unknown>, fyStartMonth),
+    [v, fyStartMonth],
+  );
+  const ownerWaterfallFallback =
+    ownerProfitPeriod?.fallback ??
+    derivePeriodWaterfallFallback(v as unknown as Record<string, unknown>);
+  const ownerProfitPeriodLabel =
+    ownerProfitPeriod?.slice.label ?? readStatementMeta(v, boardMarket).periodLabel;
   const coveredMonths = effectivePeriodMonths(v as unknown as Record<string, unknown>, {
     fyStartMonth,
   });
@@ -4861,7 +4867,7 @@ function Index() {
                               {implausibleSampleNote(boardMarket)}
                             </p>
                           ) : null}
-                          <ProfitLead periodLabel={readStatementMeta(v, boardMarket).periodLabel} />
+                          <ProfitLead periodLabel={ownerProfitPeriodLabel} />
                           <ProfitabilityWaterfall
                             appearance="premium"
                             previousMargins={priorMarginsFromFinancials(
@@ -4886,8 +4892,8 @@ function Index() {
                                 clientMeta?.financials_updated_at ?? null,
                               ),
                             )}
-                            fallback={derivePeriodWaterfallFallback(v)}
-                            periodLabel={readStatementMeta(v, boardMarket).periodLabel}
+                            fallback={ownerWaterfallFallback}
+                            periodLabel={ownerProfitPeriodLabel}
                             preferPeriod={preferStatementPeriod(v)}
                             yearToDate={statementYearLine(v, boardMarket)}
                             statementSource={readStatementMeta(v, boardMarket).statementSource}
@@ -6400,8 +6406,8 @@ function Index() {
                             clientMeta?.financials_updated_at ?? null,
                           ),
                         )}
-                        fallback={derivePeriodWaterfallFallback(v)}
-                        periodLabel={readStatementMeta(v, boardMarket).periodLabel}
+                        fallback={ownerWaterfallFallback}
+                        periodLabel={ownerProfitPeriodLabel}
                         preferPeriod={preferStatementPeriod(v)}
                         yearToDate={statementYearLine(v, boardMarket)}
                         statementSource={readStatementMeta(v, boardMarket).statementSource}
@@ -6411,7 +6417,7 @@ function Index() {
                     <div id="wizard-product-mix" className="mt-4">
                       <ProductMixPanel
                         totalRevenue={
-                          resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v), {
+                          resolveWaterfallFigures(weeklyInputs, ownerWaterfallFallback, {
                             preferPeriod: preferStatementPeriod(v),
                           }).revenue
                         }

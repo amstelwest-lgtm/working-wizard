@@ -1,9 +1,6 @@
 import { fmtBudgetMoney } from "@/lib/budget.compute";
 import { ownerMinus } from "@/lib/owner-money";
-import {
-  compareOwnerYear,
-  type BudgetYearMoney,
-} from "@/lib/budget-year-compare";
+import { compareOwnerYear, type BudgetYearMoney } from "@/lib/budget-year-compare";
 import type { ResolvedMarket } from "@/lib/market";
 
 const ARROW = { up: "↑", down: "↓", flat: "→" } as const;
@@ -16,6 +13,7 @@ export function BudgetYearStrip({
   lastYearLabel,
   market,
   signed = false,
+  periodLabel = null,
 }: {
   thisYear: BudgetYearMoney | null;
   /** Months in the statement window. Compared only when last year matches. */
@@ -26,6 +24,8 @@ export function BudgetYearStrip({
   market: ResolvedMarket;
   /** Owner door uses one unicode minus. */
   signed?: boolean;
+  /** Firm-year window these figures cover. Same words as the other cards. */
+  periodLabel?: string | null;
 }) {
   const money = (n: number) => {
     const text = fmtBudgetMoney(n, market);
@@ -35,17 +35,36 @@ export function BudgetYearStrip({
   const lastHeading = lastYearLabel ? `Last year · ${lastYearLabel}` : "Last year";
   return (
     <section className="space-y-2" data-budget-year={compared.mode}>
-      <h3 className="text-base font-semibold text-[#102A43] dark:text-slate-100">This year vs last year</h3>
-      <p className="text-sm leading-relaxed text-[#3D5270] dark:text-slate-300">{compared.summary}</p>
+      <h3 className="text-base font-semibold text-[#102A43] dark:text-slate-100">
+        This year vs last year
+      </h3>
+      {periodLabel ? (
+        <p
+          className="text-sm font-medium text-[#102A43] dark:text-slate-100"
+          data-budget-year-period=""
+        >
+          {periodLabel}
+        </p>
+      ) : null}
+      <p className="text-sm leading-relaxed text-[#3D5270] dark:text-slate-300">
+        {compared.summary}
+      </p>
       <ul className="space-y-2 min-[480px]:hidden" data-budget-year-layout="stack">
         {compared.rows.map((row) => (
-          <li key={row.key} className="rounded-xl border border-[#DBEAFE] px-3 py-3 dark:border-slate-700">
+          <li
+            key={row.key}
+            className="rounded-xl border border-[#DBEAFE] px-3 py-3 dark:border-slate-700"
+          >
             <p className="text-sm font-semibold text-[#102A43] dark:text-slate-100">{row.label}</p>
             <dl className="mt-2 grid grid-cols-[minmax(7rem,1fr)_auto] gap-x-3 gap-y-1 text-sm">
               <dt className="text-[#3D5270] dark:text-slate-400">This year</dt>
-              <dd className="text-right tabular-nums">{row.thisYear == null ? "—" : money(row.thisYear)}</dd>
+              <dd className="text-right tabular-nums">
+                {row.thisYear == null ? "—" : money(row.thisYear)}
+              </dd>
               <dt className="text-[#3D5270] dark:text-slate-400">{lastHeading}</dt>
-              <dd className="text-right tabular-nums">{row.lastYear == null ? "—" : money(row.lastYear)}</dd>
+              <dd className="text-right tabular-nums">
+                {row.lastYear == null ? "—" : money(row.lastYear)}
+              </dd>
               <dt className="text-[#3D5270] dark:text-slate-400">Change</dt>
               <dd
                 className={`text-right tabular-nums ${
@@ -83,9 +102,15 @@ export function BudgetYearStrip({
           <tbody>
             {compared.rows.map((row) => (
               <tr key={row.key} className="border-t border-[#DBEAFE]">
-                <th className="px-3 py-2 text-left font-semibold text-[#102A43] dark:text-slate-100">{row.label}</th>
-                <td className="px-3 py-2 text-right tabular-nums">{row.thisYear == null ? "—" : money(row.thisYear)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{row.lastYear == null ? "—" : money(row.lastYear)}</td>
+                <th className="px-3 py-2 text-left font-semibold text-[#102A43] dark:text-slate-100">
+                  {row.label}
+                </th>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {row.thisYear == null ? "—" : money(row.thisYear)}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {row.lastYear == null ? "—" : money(row.lastYear)}
+                </td>
                 <td
                   className={`px-3 py-2 text-right tabular-nums ${
                     row.signal === "favourable"

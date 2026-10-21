@@ -168,6 +168,7 @@ import {
   resolveWaterfallFigures,
   hasWeeklyProfitFigures,
 } from "@/lib/weekly-inputs";
+import { fiscalWaterfallFallback } from "@/lib/budget-period";
 import { emptyProductMix, type ProductMix, hasProductMixAnswer } from "@/lib/product-mix";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
@@ -319,6 +320,7 @@ import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { cashSignoffIsStale, healthSignoffIsStale, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
+import { financialsHomeSignoffLine } from "@/components/owner-signoff-mark";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
 import { ClientAgentStandby } from "@/components/client-agent-standby";
 import { OwnerHome } from "@/components/owner-door/owner-home";
@@ -2315,7 +2317,10 @@ function ClientView() {
     return () => window.removeEventListener("milon-starter-trial-ended", onTrialEnded);
   }, []);
 
-  const waterfallFallback = derivePeriodWaterfallFallback(financials);
+  const accountantProfitPeriod = fiscalWaterfallFallback(financials, fyStartMonth);
+  const waterfallFallback =
+    accountantProfitPeriod?.fallback ?? derivePeriodWaterfallFallback(financials);
+  const profitPeriodLabel = accountantProfitPeriod?.slice.label ?? figuresPeriodLabel;
 
   // ── Milōn Bot widget mount (same widget the owner app uses) ─────────────
   useEffect(() => {
@@ -4065,16 +4070,36 @@ function ClientView() {
       gateMarket,
     ],
   );
-  const homeSignoffLine = signoffStatusLine({
-    kind: signoffStatusKind({
-      hasSignoff: Boolean(advisorySignoff),
-      isStale: pageSignoffStale(advisorySignoff, client?.financials_updated_at ?? null),
-      readyForReview: false,
-    }),
+  const financialsHomeLine = financialsHomeSignoffLine(
+    financialsSignoff
+      ? [
+          {
+            scope: "financials",
+            signed_off_by_name: financialsSignoff.signed_off_by_name,
+            signed_off_at: financialsSignoff.signed_off_at,
+            firm_name: financialsSignoff.firm_name,
+          },
+        ]
+      : [],
+    clientMarket,
+  );
+  const advisoryHomeKind = signoffStatusKind({
+    hasSignoff: Boolean(advisorySignoff),
+    isStale: pageSignoffStale(advisorySignoff, client?.financials_updated_at ?? null),
+    readyForReview: false,
+  });
+  const advisoryHomeLine = signoffStatusLine({
+    kind: advisoryHomeKind,
     name: advisorySignoff?.signed_off_by_name,
     date: advisorySignoff ? formatDate(advisorySignoff.signed_off_at, clientMarket) : null,
     scopeLabel: "Advisory",
   });
+  const homeSignoffLine =
+    financialsHomeLine && advisoryHomeKind !== "signed" && advisoryHomeKind !== "stale"
+      ? financialsHomeLine
+      : financialsHomeLine
+        ? `${financialsHomeLine} ${advisoryHomeLine}`
+        : advisoryHomeLine;
 
   // ── Loading / error states ────────────────────────────────────────────────
 
@@ -5023,12 +5048,14 @@ function ClientView() {
                     heading="Profitability"
                     sentence={profitAnswerSentence({
                       currency: currencySymbol(gateMarket),
-                      periodLabel: figuresPeriodLabel,
+                      periodLabel: profitPeriodLabel,
                       preferPeriod: statementDated,
                       revenueText:
-                        Number(financials.revenue) > 0
-                          ? formatMoneyCompact(Number(financials.revenue), gateMarket)
-                          : null,
+                        accountantProfitPeriod?.slice.revenue != null
+                          ? formatMoneyCompact(accountantProfitPeriod.slice.revenue, gateMarket)
+                          : Number(financials.revenue) > 0
+                            ? formatMoneyCompact(Number(financials.revenue), gateMarket)
+                            : null,
                       netMarginPct:
                         typeof ratios["Net Margin"] === "number" && Number.isFinite(ratios["Net Margin"])
                           ? ratios["Net Margin"] * 100
@@ -5090,7 +5117,7 @@ function ClientView() {
                       fallback={waterfallFallback}
                       clientName={client?.name}
                       clientId={client?.id}
-                      periodLabel={figuresPeriodLabel}
+                      periodLabel={profitPeriodLabel}
                       preferPeriod={statementDated}
                       yearToDate={statementYearLine(financials, clientMarket)}
                       statementSource={figureSource}
