@@ -76,15 +76,16 @@ import {
   cashGraphWeekTickInterval,
   stableCashChartWidth,
   forecastChipSource,
+  forecastScreenTiles,
   hashIsCashDetailAnchor,
   lowestCashPoint,
-  weeksBelowFloorCopy,
 } from "@/lib/cash-forecast-view";
 import type {
   CashForecastPublishPayload,
   CashFromBanksDraftResult,
 } from "@/lib/cash-from-banks.types";
 import { interestOfRevenueSentence } from "@/lib/cash-interest-note";
+import { FORECAST_PREVIEW_EMPTY } from "@/lib/report-preview";
 import { periodMonthsOf } from "@/lib/ratios";
 import { balanceSheetCashAsOf } from "@/lib/statement-parse";
 import {
@@ -135,7 +136,6 @@ import {
 } from "@/lib/cash-recurring-payees";
 import {
   cashEmptyPresentation,
-  forecastFloorPosition,
   forecastLineCountsAsEntered,
   forecastLinesBlank,
   forecastLinesSourceLabel,
@@ -1847,7 +1847,6 @@ export function CashForecastPanel({
   });
   const lowPoint = lowestCashPoint(balanceSeries);
   const lowestBal = lowPoint.balance;
-  const lowestWeek = lowPoint.week;
   const hasWeeklyOutflows = baseCalc.outflow.some((n) => n > 0);
   const liveFloorLabel = hasWeeklyOutflows
     ? `${fmtCompact(minimumCash)} · about 4 weeks of outflows`
@@ -2186,7 +2185,6 @@ export function CashForecastPanel({
     runwayLabel: runwayDisplayLabel(publishedDirection),
     cashGenerative: publishedGenerative,
   });
-  const lowestUnderFloor = lowestBal < minimumCash;
   const direction = runwayFromForecastNet({
     base: screenRunway,
     opening: calc.opening,
@@ -2269,11 +2267,7 @@ export function CashForecastPanel({
       </div>
     ) : (
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#DBEAFE] bg-[#F4F8FF] px-4 py-3 text-sm text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
-        <span>
-          Nothing is forecast yet. This needs a bank statement or forecast inputs — the figures
-          below stay at {cur}0 until then. Upload bank statements, or set the line items in Forecast
-          Setup.
-        </span>
+        <span>{FORECAST_PREVIEW_EMPTY}</span>
       </div>
     )
   ) : null;
@@ -2699,49 +2693,32 @@ export function CashForecastPanel({
         ? "bank_pack"
         : "assumption";
 
-  const floorPos = forecastFloorPosition({
-    opening: baseCalc.opening,
-    closings: baseCalc.closing,
-    floor: minimumCash,
-  });
-  const weeksBelow = weeksBelowFloorCopy({
-    empty: forecastEmpty,
-    weeksBelow: floorPos.weeksBelow,
-    horizon: baseCalc.closing.length || WEEKS,
-    firstDipWeek: floorPos.firstDipWeek,
-    firstDipDate: floorPos.firstDipWeek != null ? (weeks[floorPos.firstDipWeek - 1] ?? null) : null,
-    opensBelow: floorPos.opensBelow,
-  });
   const runwayAside =
     !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
   // A balance-sheet date, or any non-zero opening on screen, is a real amount.
   // Only a stored blank with no date and no amount is missing.
   const openingTilesMissing = openingMissingNow;
   const openingTileValue = openingTilesMissing ? "—" : fmtCompact(baseCalc.opening);
-  const lowestTileValue =
-    openingTilesMissing || emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal);
-  const lowestTileSub = openingTilesMissing
-    ? "missing"
-    : emptyPresentation.lowestBlank
-      ? "Add an opening balance"
-      : lowPoint.week === 0
-        ? "Opening balance"
-        : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`;
-  const lowestPointSub = openingTilesMissing
-    ? "missing"
-    : emptyPresentation.lowestBlank
-      ? "Add an opening balance"
-      : lowPoint.week === 0
-        ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
-        : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`;
-  const weeksBelowValue = openingTilesMissing ? "—" : weeksBelow.value;
-  const weeksBelowSub = openingTilesMissing ? "missing" : weeksBelow.sub;
-  const weeksBelowTone =
-    openingTilesMissing || forecastEmpty
+  // Empty series: no lowest point and no floor claim. A real series scores
+  // the low, the gap, and weeks-below against this same floor.
+  const screenTiles = forecastScreenTiles({
+    empty: !loaded || forecastEmpty,
+    opening: openingTilesMissing ? null : baseCalc.opening,
+    closings: baseCalc.closing,
+    floor: forecastEmpty ? null : minimumCash,
+    format: fmtCompact,
+    weekDates: weeks,
+  });
+  const lowestTileValue = screenTiles.lowestValue;
+  const lowestTileSub = screenTiles.lowestSub;
+  const lowestPointSub = screenTiles.lowestSub;
+  const weeksBelowValue = screenTiles.weeksValue;
+  const weeksBelowSub = screenTiles.weeksSub;
+  const weeksBelowTone = screenTiles.weeksAlert
+    ? "bad"
+    : screenTiles.lowestUnder == null
       ? "neutral"
-      : floorPos.weeksBelow > 0 || floorPos.opensBelow
-        ? "bad"
-        : "good";
+      : "good";
 
   const kpiTiles = (
     <div
@@ -2773,11 +2750,7 @@ export function CashForecastPanel({
             value={lowestTileValue}
             icon={ShieldCheck}
             tone={
-              openingTilesMissing || emptyPresentation.lowestBlank
-                ? "neutral"
-                : lowestUnderFloor
-                  ? "bad"
-                  : "good"
+              screenTiles.lowestUnder == null ? "neutral" : screenTiles.lowestUnder ? "bad" : "good"
             }
             sub={lowestTileSub}
           />
@@ -2811,11 +2784,7 @@ export function CashForecastPanel({
             label="Lowest point"
             value={lowestTileValue}
             tone={
-              openingTilesMissing || emptyPresentation.lowestBlank
-                ? "neutral"
-                : lowestUnderFloor
-                  ? "bad"
-                  : "good"
+              screenTiles.lowestUnder == null ? "neutral" : screenTiles.lowestUnder ? "bad" : "good"
             }
             sub={lowestPointSub}
           />

@@ -6,7 +6,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { OPENING_CASH_UNKNOWN, SEEDED_FROM_ACTUALS_LABEL } from "../src/lib/budget.bridges.ts";
-import { cashForecastWeeksFromOutlook } from "../src/lib/cash-forecast-parity.ts";
+import { cashEmptyPresentation, cashForecastWeeksFromOutlook } from "../src/lib/cash-forecast-parity.ts";
+import { forecastScreenTiles } from "../src/lib/cash-forecast-view.ts";
 import {
   resolveCashScreenForecast,
   resolveThirteenWeekForecast,
@@ -123,6 +124,54 @@ const noWeeks = cashForecastWeeksFromOutlook(noMonths);
 assert(noWeeks == null, "zero months of actuals do not invent a forecast");
 const gap = forecastPreviewGap(noWeeks);
 assert(gap === FORECAST_PREVIEW_EMPTY && gap.includes("Not enough data"), gap ?? "missing gap");
+
+const plain = (amount: number) => String(Math.round(amount));
+const aboveFloor = forecastScreenTiles({
+  empty: false,
+  opening: 46300,
+  closings: Array.from({ length: 13 }, () => 46300),
+  floor: 36923,
+  format: plain,
+});
+assert(aboveFloor.lowestValue === "46300", aboveFloor.lowestValue);
+assert(
+  aboveFloor.lowestSub === "Opening · 9377 above the floor",
+  aboveFloor.lowestSub,
+);
+assert(!aboveFloor.lowestSub.includes("under"), "a point above the floor does not say under");
+assert(aboveFloor.weeksValue === "0 of 13", aboveFloor.weeksValue);
+assert(aboveFloor.weeksSub === "stays above the floor", aboveFloor.weeksSub);
+assert(aboveFloor.weeksAlert === false, "weeks-below agrees the series stays clear");
+
+const dippedClosings = [40000, 35000, 30000, 36923, ...Array.from({ length: 9 }, () => 42000)];
+const dipped = forecastScreenTiles({
+  empty: false,
+  opening: 46300,
+  closings: dippedClosings,
+  floor: 36923,
+  format: plain,
+});
+const weeksUnder = dippedClosings.filter((balance) => balance < 36923).length;
+assert(dipped.lowestSub === "Week 3 · 6923 under the floor", dipped.lowestSub);
+assert(dipped.weeksValue === `${weeksUnder} of 13`, `weeks-below ${dipped.weeksValue} vs ${weeksUnder}`);
+assert(dipped.weeksAlert === true, "a dip in the series marks weeks-below");
+assert(!dipped.weeksSub.includes("stays above"), dipped.weeksSub);
+
+const emptyTiles = forecastScreenTiles({
+  empty: true,
+  opening: 46300,
+  closings: Array.from({ length: 13 }, () => 46300),
+  floor: 50000,
+  format: plain,
+});
+const emptyText = `${emptyTiles.lowestValue} ${emptyTiles.lowestSub} ${emptyTiles.weeksValue} ${emptyTiles.weeksSub}`;
+assert(emptyTiles.lowestValue === "—" && emptyTiles.weeksValue === "—", emptyText);
+assert(emptyTiles.lowestSub === "Not enough data" && emptyTiles.weeksSub === "Not enough data", emptyText);
+assert(!/under|above|floor|\$0|\b0\b/.test(emptyText), `empty series made a floor claim (${emptyText})`);
+assert(
+  cashEmptyPresentation({ opening: 46300, linesBlank: true }).lowestBlank === true,
+  "an opening does not keep a lowest point when the series is empty",
+);
 
 const owner = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 const accountant = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
