@@ -6,6 +6,8 @@ export type BudgetYearMoney = {
   revenue: number | null;
   cogs: number | null;
   grossProfit: number | null;
+  /** Stated operating profit. Null when EBIT is not on the statement. */
+  operatingProfit: number | null;
   netProfit: number | null;
   expenses: number | null;
 };
@@ -30,6 +32,7 @@ const LINES: { key: BudgetYearKey; label: string }[] = [
   { key: "revenue", label: "Revenue" },
   { key: "cogs", label: "COGS" },
   { key: "grossProfit", label: "Gross profit" },
+  { key: "operatingProfit", label: "Operating profit" },
   { key: "netProfit", label: "Net profit" },
   { key: "expenses", label: "Expenses" },
 ];
@@ -65,7 +68,8 @@ export function yearMoneyFromFinancials(
       : financials,
   );
   const grossProfit = finite(revenue) && finite(cogs) ? revenue - cogs : null;
-  const money = { revenue, cogs, grossProfit, netProfit, expenses };
+  const operatingProfit = numberField(financials, "ebit");
+  const money = { revenue, cogs, grossProfit, operatingProfit, netProfit, expenses };
   return LINES.some((line) => finite(money[line.key])) ? money : null;
 }
 
@@ -111,6 +115,7 @@ export function yearMoneyFromFiscalSlice(
     cogs: number | null;
     grossProfit: number | null;
     operatingExpenses: number | null;
+    operatingProfit: number | null;
     netProfit: number | null;
   } | null,
 ): BudgetYearMoney | null {
@@ -119,12 +124,13 @@ export function yearMoneyFromFiscalSlice(
   const cogs = finite(slice.cogs) ? slice.cogs : null;
   const expenses = finite(slice.operatingExpenses) ? slice.operatingExpenses : null;
   const netProfit = finite(slice.netProfit) ? slice.netProfit : null;
+  const operatingProfit = finite(slice.operatingProfit) ? slice.operatingProfit : null;
   const grossProfit = finite(slice.grossProfit)
     ? slice.grossProfit
     : revenue != null && cogs != null
       ? revenue - cogs
       : null;
-  const money = { revenue, cogs, grossProfit, netProfit, expenses };
+  const money = { revenue, cogs, grossProfit, operatingProfit, netProfit, expenses };
   return hasMeasuredFigures(money) ? money : null;
 }
 
@@ -147,8 +153,9 @@ export function ownerYearFromStatement(
   const cogs = finite(actuals.cogs) ? actuals.cogs : null;
   const expenses = finite(actuals.fixedCosts) ? actuals.fixedCosts : null;
   const netProfit = finite(actuals.netProfit) ? actuals.netProfit : null;
+  const operatingProfit = finite(actuals.ebit) ? actuals.ebit : null;
   const grossProfit = revenue != null && cogs != null ? revenue - cogs : null;
-  const money = { revenue, cogs, grossProfit, netProfit, expenses };
+  const money = { revenue, cogs, grossProfit, operatingProfit, netProfit, expenses };
   return hasMeasuredFigures(money) ? money : null;
 }
 
