@@ -48,7 +48,6 @@ import {
   readWithinBudget,
   SUBSCRIPTION_LIST_BUDGET_MS,
   type FirmCustomerLookup,
-  type StripeCustomerSubscriptionReader,
 } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
@@ -191,24 +190,9 @@ type ListedSubscription = Record<string, unknown> & {
   created?: number;
 };
 
-/** Tests inject a Stripe reader. Production leaves this unset. */
-let subscriptionReaderForTests: StripeCustomerSubscriptionReader | null = null;
-
-export function setFirmSubscriptionReaderForTests(
-  reader: StripeCustomerSubscriptionReader | null,
-): void {
-  subscriptionReaderForTests = reader;
-}
-
-export function clearFirmSubscriptionHistoryCache(): void {
-  stripeHistoryCache.clear();
-  stripeHistoryInflight.clear();
-}
-
 /**
  * Same Stripe list Checkout uses for eligibleForIntroTrial.
  * No customer means zero prior subscriptions.
- * Both lists use the bind-fix budget: no retry, 3s, and a timeout throws.
  */
 async function listCustomerSubscriptions(
   email: string,
@@ -217,13 +201,13 @@ async function listCustomerSubscriptions(
   customerId: string | null;
   data: ListedSubscription[];
 }> {
-  if (!subscriptionReaderForTests && !stripeConfigured()) return { customerId: null, data: [] };
+  if (!stripeConfigured()) return { customerId: null, data: [] };
   const trimmed = email.trim();
   const userId = ids?.userId?.trim() ?? "";
   const firmId = ids?.firmId?.trim() ?? "";
   const storedCustomerId = ids?.storedCustomerId?.trim() ?? "";
   if (!trimmed && !userId && !firmId && !storedCustomerId) return { customerId: null, data: [] };
-  const stripe = (subscriptionReaderForTests ?? getStripe()) as StripeCustomerSubscriptionReader;
+  const stripe = getStripe();
   const customerId = await findFirmCustomerId(stripe, {
     email: trimmed,
     userId,
