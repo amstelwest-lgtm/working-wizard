@@ -7,7 +7,6 @@
  * This module does not update Stripe.
  */
 
-import { AsyncLocalStorage } from "node:async_hooks";
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import { registerMetadataFirmCustomerWrite } from "@/lib/stripe-entitlement";
 import { writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
@@ -172,11 +171,54 @@ async function persistMetadataFirmCustomer(input: {
   }
 }
 
-const metadataWriteBucket = new AsyncLocalStorage<Promise<boolean>[]>();
+type MetadataWriteStore = {
+  run<T>(store: Promise<boolean>[], fn: () => T): T;
+  getStore(): Promise<boolean>[] | undefined;
+};
+
+/**
+ * Node's AsyncLocalStorage, loaded without a static import. This module is
+ * also in the client graph (checkout installs the writer at load), and a
+ * static `node:async_hooks` import fails the browser bundle.
+ */
+function metadataWrites(): MetadataWriteStore {
+  const existing = metadataWriteStore;
+  if (existing) return existing;
+  const builtin = (
+    globalThis as {
+      process?: {
+        getBuiltinModule?: (id: string) => { AsyncLocalStorage?: new () => MetadataWriteStore };
+      };
+    }
+  ).process?.getBuiltinModule?.("node:async_hooks");
+  const Als = builtin?.AsyncLocalStorage;
+  if (Als) {
+    metadataWriteStore = new Als();
+    return metadataWriteStore;
+  }
+  let current: Promise<boolean>[] | undefined;
+  metadataWriteStore = {
+    run(store, fn) {
+      const prev = current;
+      current = store;
+      try {
+        return fn();
+      } finally {
+        current = prev;
+      }
+    },
+    getStore() {
+      return current;
+    },
+  };
+  return metadataWriteStore;
+}
+
+let metadataWriteStore: MetadataWriteStore | null = null;
 
 /** The billing deadline awaits writes started on this async path. */
 export function trackMetadataFirmCustomerWrites<T>(fn: () => Promise<T>): Promise<T> {
-  return metadataWriteBucket.run([], fn);
+  return metadataWrites().run([], fn);
 }
 
 /**
@@ -184,7 +226,7 @@ export function trackMetadataFirmCustomerWrites<T>(fn: () => Promise<T>): Promis
  * A write that misses the clock is logged and does not hold the response.
  */
 export async function finishMetadataFirmCustomerWrites(deadlineAt: number): Promise<void> {
-  const bucket = metadataWriteBucket.getStore();
+  const bucket = metadataWrites().getStore();
   if (!bucket || bucket.length === 0) return;
   const pending = bucket.splice(0, bucket.length);
   const remaining = deadlineAt - Date.now();
@@ -214,7 +256,7 @@ export function installMetadataFirmCustomerWrite(): void {
   metadataFirmWriteInstalled = true;
   registerMetadataFirmCustomerWrite((input) => {
     const pending = persistMetadataFirmCustomer(input);
-    metadataWriteBucket.getStore()?.push(pending);
+    metadataWrites().getStore()?.push(pending);
   });
 }
 
