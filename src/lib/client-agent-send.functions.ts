@@ -1,28 +1,29 @@
 /**
  * Mint and revoke a Tax Specialist link on a client file.
  * Writes go through the service role. The raw token is returned once
- * and is not stored. This file does not send mail.
+ * and is not stored. Mail goes out only from mint, after an explicit send.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { CANONICAL_APP_ORIGIN, canonicalAuthOrigin } from "@/lib/app-origin";
+import { practiceDisplayName, sendPracticeDisplayName } from "@/lib/client-agent-link";
+import { sendClientAgentInvite } from "@/lib/client-agent-invite-mail";
 import {
   PHYSIO_ITEMS,
   SEND_AGENT_SLUG,
   SEND_CHECKLIST_KEY,
   agentLink,
   newSendToken,
+  recipientEmail,
+  recipientFirstName,
   sendExpiresAt,
   sendStillOpen,
   sha256Hex,
 } from "@/lib/client-agent-send";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import {
-  isSupabaseAdminConfigured,
-  supabaseAdmin,
-} from "@/integrations/supabase/client.server";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/integrations/supabase/client.server";
 
 type DbError = { message: string; code?: string } | null;
 
@@ -47,7 +48,10 @@ function rows(data: unknown): Record<string, unknown>[] {
 
 function missingTable(error: DbError): boolean {
   const message = error?.message ?? "";
-  return /client_agent_sends/.test(message) && /does not exist|schema cache|could not find/i.test(message);
+  return (
+    /client_agent_sends/.test(message) &&
+    /does not exist|schema cache|could not find/i.test(message)
+  );
 }
 
 function linkOrigin(): string {
@@ -59,22 +63,41 @@ function linkOrigin(): string {
   }
 }
 
-async function firmOfClient(clientId: string): Promise<
-  | { ok: true; firmId: string }
+async function firmOfClient(
+  clientId: string,
+): Promise<
+  | { ok: true; firmId: string; contactEmail: string | null }
   | { ok: false; reason: "not_on_firm" | "unavailable" }
 > {
   const { data, error } = await supabaseAdmin
     .from("clients")
-    .select("firm_id")
+    .select("firm_id, contact_email")
     .eq("id", clientId)
     .maybeSingle();
   if (error) {
     if (missingTable(error)) return { ok: false, reason: "unavailable" };
-    throw new Error(error.message);
+    throw new Error("The client could not be read.");
   }
   const firmId = data?.firm_id ?? null;
   if (!firmId) return { ok: false, reason: "not_on_firm" };
-  return { ok: true, firmId };
+  const raw = typeof data?.contact_email === "string" ? data.contact_email : "";
+  return { ok: true, firmId, contactEmail: recipientEmail(raw) };
+}
+
+async function loadFirmName(firmId: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from("firms")
+    .select("name")
+    .eq("id", firmId)
+    .maybeSingle();
+  if (error || typeof data?.name !== "string") return null;
+  const name = data.name.trim();
+  return name || null;
+}
+
+function missingSendColumn(error: DbError, column: string): boolean {
+  const message = error?.message ?? "";
+  return message.includes(column) && /does not exist|schema cache|could not find/i.test(message);
 }
 
 async function isFirmMember(userId: string, firmId: string): Promise<boolean> {
@@ -128,54 +151,99 @@ function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
 export const listClientAgentSends = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
-  .handler(async ({ data, context }): Promise<{ migrated: boolean; allowed: boolean; sends: AgentSendRow[] }> => {
-    if (!isSupabaseAdminConfigured()) return { migrated: false, allowed: false, sends: [] };
-    const firm = await firmOfClient(data.clientId);
-    if (!firm.ok) return { migrated: firm.reason !== "unavailable", allowed: false, sends: [] };
-    if (!sendAgentFirmAllowed(firm.firmId)) return { migrated: true, allowed: false, sends: [] };
-    if (!(await isFirmMember(context.userId, firm.firmId))) {
-      return { migrated: true, allowed: false, sends: [] };
-    }
-
-    const listed = await table("client_agent_sends")
-      .select("id, expires_at, revoked_at, consent_at, created_at")
-      .eq("client_id", data.clientId)
-      .eq("firm_id", firm.firmId)
-      .order("created_at", { ascending: false });
-    if (listed.error) {
-      if (missingTable(listed.error)) return { migrated: false, allowed: false, sends: [] };
-      throw new Error(listed.error.message);
-    }
-    const now = new Date();
-    const sends = rows(listed.data).map((row) => parseSend(row, now));
-    if (sends.length === 0) return { migrated: true, allowed: true, sends };
-
-    for (const send of sends) {
-      const found = await table("client_agent_send_items")
-        .select("item_key, totals_only, status, quality")
-        .eq("send_id", send.id);
-      if (found.error) {
-        if (missingTable(found.error)) return { migrated: false, allowed: false, sends: [] };
-        throw new Error(found.error.message);
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{
+      migrated: boolean;
+      allowed: boolean;
+      sends: AgentSendRow[];
+      contactEmail: string | null;
+    }> => {
+      if (!isSupabaseAdminConfigured()) {
+        return { migrated: false, allowed: false, sends: [], contactEmail: null };
       }
-      send.items = rows(found.data).map((row) => ({
-        itemKey: String(row.item_key ?? ""),
-        totalsOnly: row.totals_only === true,
-        status: String(row.status ?? "open"),
-        quality: typeof row.quality === "string" ? row.quality : null,
-      }));
-    }
-    return { migrated: true, allowed: true, sends };
-  });
+      const firm = await firmOfClient(data.clientId);
+      if (!firm.ok) {
+        return {
+          migrated: firm.reason !== "unavailable",
+          allowed: false,
+          sends: [],
+          contactEmail: null,
+        };
+      }
+      if (!sendAgentFirmAllowed(firm.firmId)) {
+        return { migrated: true, allowed: false, sends: [], contactEmail: null };
+      }
+      if (!(await isFirmMember(context.userId, firm.firmId))) {
+        return { migrated: true, allowed: false, sends: [], contactEmail: null };
+      }
+
+      const listed = await table("client_agent_sends")
+        .select("id, expires_at, revoked_at, consent_at, created_at")
+        .eq("client_id", data.clientId)
+        .eq("firm_id", firm.firmId)
+        .order("created_at", { ascending: false });
+      if (listed.error) {
+        if (missingTable(listed.error)) {
+          return { migrated: false, allowed: false, sends: [], contactEmail: null };
+        }
+        throw new Error("The links could not be read.");
+      }
+      const now = new Date();
+      const sends = rows(listed.data).map((row) => parseSend(row, now));
+      if (sends.length === 0) {
+        return { migrated: true, allowed: true, sends, contactEmail: firm.contactEmail };
+      }
+
+      for (const send of sends) {
+        const found = await table("client_agent_send_items")
+          .select("item_key, totals_only, status, quality")
+          .eq("send_id", send.id);
+        if (found.error) {
+          if (missingTable(found.error)) {
+            return { migrated: false, allowed: false, sends: [], contactEmail: null };
+          }
+          throw new Error("The links could not be read.");
+        }
+        send.items = rows(found.data).map((row) => ({
+          itemKey: String(row.item_key ?? ""),
+          totalsOnly: row.totals_only === true,
+          status: String(row.status ?? "open"),
+          quality: typeof row.quality === "string" ? row.quality : null,
+        }));
+      }
+      return { migrated: true, allowed: true, sends, contactEmail: firm.contactEmail };
+    },
+  );
 
 export type MintAgentSendResult =
   | { ok: true; sendId: string; url: string; expiresAt: string }
   | { ok: false; reason: "already_open"; sendId: string; expiresAt: string }
-  | { ok: false; reason: "not_on_firm" | "unavailable" | "forbidden" | "not_allowed" };
+  | {
+      ok: false;
+      reason:
+        | "not_on_firm"
+        | "unavailable"
+        | "forbidden"
+        | "not_allowed"
+        | "address"
+        | "name"
+        | "email";
+    };
 
 export const mintClientAgentSend = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
+  .inputValidator((input) =>
+    z
+      .object({
+        clientId: z.string().uuid(),
+        recipientEmail: z.string().max(200),
+        recipientFirstName: z.string().max(80).optional(),
+      })
+      .parse(input),
+  )
   .handler(async ({ data, context }): Promise<MintAgentSendResult> => {
     if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
     const firm = await firmOfClient(data.clientId);
@@ -194,32 +262,58 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false });
     if (existing.error) {
       if (missingTable(existing.error)) return { ok: false, reason: "unavailable" };
-      throw new Error(existing.error.message);
+      throw new Error("The link could not be created.");
     }
     const now = new Date();
     const open = rows(existing.data)
       .map((row) => parseSend(row, now))
       .find((row) => row.open);
-    if (open) return { ok: false, reason: "already_open", sendId: open.id, expiresAt: open.expiresAt };
+    if (open)
+      return { ok: false, reason: "already_open", sendId: open.id, expiresAt: open.expiresAt };
+
+    const to = recipientEmail(data.recipientEmail);
+    if (!to) return { ok: false, reason: "address" };
+    const firstName = recipientFirstName(data.recipientFirstName);
+    if (!firstName.ok) return { ok: false, reason: "name" };
 
     const token = newSendToken();
     const tokenHash = await sha256Hex(token);
     const expiresAt = sendExpiresAt(now).toISOString();
-    const inserted = await table("client_agent_sends")
-      .insert({
-        firm_id: firm.firmId,
-        client_id: data.clientId,
-        agent: SEND_AGENT_SLUG,
-        checklist_key: SEND_CHECKLIST_KEY,
-        token_hash: tokenHash,
-        sent_by: context.userId,
-        expires_at: expiresAt,
-      })
+    const storedPracticeName = sendPracticeDisplayName(firm.firmId);
+    const practiceName = practiceDisplayName({
+      firmId: firm.firmId,
+      practiceDisplayName: storedPracticeName,
+      firmName: await loadFirmName(firm.firmId),
+    });
+    let sendRow: Record<string, unknown> = {
+      firm_id: firm.firmId,
+      client_id: data.clientId,
+      agent: SEND_AGENT_SLUG,
+      checklist_key: SEND_CHECKLIST_KEY,
+      token_hash: tokenHash,
+      sent_by: context.userId,
+      expires_at: expiresAt,
+      ...(storedPracticeName ? { practice_display_name: storedPracticeName } : {}),
+      ...(firstName.name ? { recipient_first_name: firstName.name } : {}),
+    };
+    let inserted = await table("client_agent_sends")
+      .insert(sendRow)
       .select("id, expires_at")
       .maybeSingle();
+    for (const column of ["practice_display_name", "recipient_first_name"] as const) {
+      if (inserted.error && missingSendColumn(inserted.error, column)) {
+        const next = { ...sendRow };
+        delete next[column];
+        sendRow = next;
+        inserted = await table("client_agent_sends")
+          .insert(sendRow)
+          .select("id, expires_at")
+          .maybeSingle();
+      }
+    }
     if (inserted.error || !inserted.data?.id) {
       if (missingTable(inserted.error)) return { ok: false, reason: "unavailable" };
-      throw new Error(inserted.error?.message || "The link could not be created.");
+      throw new Error("The link could not be created.");
     }
     const sendId = String(inserted.data.id);
     const itemRows = PHYSIO_ITEMS.map((item) => ({
@@ -231,19 +325,37 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
     const saved = await table("client_agent_send_items").insert(itemRows);
     if (saved.error) {
       await table("client_agent_sends").delete().eq("id", sendId);
-      throw new Error(saved.error.message);
+      throw new Error("The link could not be created.");
+    }
+    const url = agentLink(linkOrigin(), token);
+    const mailed = await sendClientAgentInvite({
+      practiceName,
+      to,
+      firstName: firstName.name,
+      link: url,
+      expiresAt: String(inserted.data.expires_at ?? expiresAt),
+      idempotencyKey: `client-agent-invite/${sendId}`,
+      apiKey: process.env.RESEND_API_KEY,
+      fromEmail: process.env.RESEND_FROM_EMAIL,
+    });
+    if (!mailed.ok) {
+      await table("client_agent_sends").delete().eq("id", sendId);
+      return { ok: false, reason: "email" };
     }
     return {
       ok: true,
       sendId,
-      url: agentLink(linkOrigin(), token),
+      url,
       expiresAt: String(inserted.data.expires_at ?? expiresAt),
     };
   });
 
 export type RevokeAgentSendResult =
   | { ok: true; revokedAt: string }
-  | { ok: false; reason: "not_found" | "forbidden" | "unavailable" | "not_on_firm" | "not_allowed" };
+  | {
+      ok: false;
+      reason: "not_found" | "forbidden" | "unavailable" | "not_on_firm" | "not_allowed";
+    };
 
 export const revokeClientAgentSend = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

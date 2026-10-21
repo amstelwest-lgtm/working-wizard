@@ -1,6 +1,6 @@
 /**
- * Accountant action: mint a Tax Specialist link and show it once.
- * Revoke sits with the link. Nothing is emailed.
+ * Accountant action: mint a Tax Specialist link and email the invite.
+ * The invite goes out only when Send is clicked. Revoke sits with the link.
  */
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -9,6 +9,7 @@ import {
   PHYSIO_ITEMS,
   SEND_AGENT_BODY,
   SEND_AGENT_ONCE,
+  recipientEmail,
 } from "@/lib/client-agent-send";
 import { formatDate, type DateMarket } from "@/lib/market";
 import {
@@ -36,24 +37,37 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const [fresh, setFresh] = useState<FreshLink | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [firstName, setFirstName] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailEdited, setEmailEdited] = useState(false);
+
+  const applyList = useCallback(
+    (result: {
+      allowed: boolean;
+      migrated: boolean;
+      sends: AgentSendRow[];
+      contactEmail?: string | null;
+    }) => {
+      setSends(result.allowed ? result.sends : []);
+      setAllowed(result.allowed);
+      setReady(result.migrated && result.allowed);
+      setLoaded(true);
+      if (!emailEdited && result.contactEmail) setEmail(result.contactEmail);
+    },
+    [emailEdited],
+  );
 
   const reload = useCallback(async () => {
     const result = await list({ data: { clientId } });
-    setSends(result.allowed ? result.sends : []);
-    setAllowed(result.allowed);
-    setReady(result.migrated && result.allowed);
-    setLoaded(true);
-  }, [clientId, list]);
+    applyList(result);
+  }, [applyList, clientId, list]);
 
   useEffect(() => {
     let alive = true;
     void list({ data: { clientId } })
       .then((result) => {
         if (!alive) return;
-        setSends(result.allowed ? result.sends : []);
-        setAllowed(result.allowed);
-        setReady(result.migrated && result.allowed);
-        setLoaded(true);
+        applyList(result);
       })
       .catch(() => {
         if (!alive) return;
@@ -63,7 +77,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     return () => {
       alive = false;
     };
-  }, [clientId, list]);
+  }, [applyList, clientId, list]);
 
   const open = sends.find((send) => send.open) ?? null;
   const shownId = fresh?.sendId ?? open?.id ?? null;
@@ -72,10 +86,24 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     setBusy(true);
     setNotice(null);
     try {
-      const result = await mint({ data: { clientId } });
+      const result = await mint({
+        data: { clientId, recipientEmail: email, recipientFirstName: firstName },
+      });
       if (!result.ok && result.reason === "not_allowed") {
         setAllowed(false);
         setReady(false);
+        return;
+      }
+      if (!result.ok && result.reason === "address") {
+        setNotice("Enter the email address, then send.");
+        return;
+      }
+      if (!result.ok && result.reason === "name") {
+        setNotice("Use a shorter first name.");
+        return;
+      }
+      if (!result.ok && result.reason === "email") {
+        setNotice("The invite could not be sent.");
         return;
       }
       if (!result.ok && result.reason === "already_open") {
@@ -130,12 +158,71 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   if (!allowed) return null;
 
   return (
+    <SendAgentCard
+      market={market}
+      fresh={fresh}
+      open={open}
+      busy={busy}
+      ready={ready}
+      loaded={loaded}
+      notice={notice}
+      firstName={firstName}
+      email={email}
+      onFirstName={setFirstName}
+      onEmail={(value) => {
+        setEmailEdited(true);
+        setEmail(value);
+      }}
+      onMint={() => void onMint()}
+      onCopy={() => void onCopy()}
+      onRevoke={() => void onRevoke()}
+    />
+  );
+}
+
+export function SendAgentCard({
+  market,
+  fresh,
+  open,
+  busy,
+  ready,
+  loaded,
+  notice,
+  firstName,
+  email,
+  onFirstName,
+  onEmail,
+  onMint,
+  onCopy,
+  onRevoke,
+}: {
+  market: DateMarket;
+  fresh: FreshLink | null;
+  open: { expiresAt: string } | null;
+  busy: boolean;
+  ready: boolean;
+  loaded: boolean;
+  notice: string | null;
+  firstName: string;
+  email: string;
+  onFirstName: (value: string) => void;
+  onEmail: (value: string) => void;
+  onMint: () => void;
+  onCopy: () => void;
+  onRevoke: () => void;
+}) {
+  return (
     <section
       className="flex flex-col gap-4 rounded-2xl border border-[#DBEAFE] bg-white p-4 text-[#102A43]"
       data-send-agent=""
       aria-labelledby="send-agent-title"
     >
-      <SilentAgentPortrait face="tax_specialist" label="Tax Specialist" />
+      <div
+        className="relative h-24 w-24 shrink-0 self-start overflow-hidden rounded-[28px] bg-[#DBEAFE] [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full [&_img]:object-cover [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
+        data-send-agent-portrait=""
+      >
+        <SilentAgentPortrait face="tax_specialist" label="Tax Specialist" />
+      </div>
       <div className="flex flex-col gap-2">
         <h2 id="send-agent-title" className="text-lg font-semibold">
           Tax Specialist
@@ -169,7 +256,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
               className={SECONDARY}
               data-send-agent-revoke=""
               disabled={busy}
-              onClick={() => void onRevoke()}
+              onClick={onRevoke}
             >
               Revoke
             </button>
@@ -178,8 +265,8 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
       ) : open ? (
         <div className="flex flex-col gap-3" data-send-agent-open="">
           <p className="text-sm leading-6">
-            A link is active until {formatDate(open.expiresAt, market)}. The address was shown once when it was
-            created.
+            A link is active until {formatDate(open.expiresAt, market)}. The address was shown once
+            when it was created.
           </p>
           <button
             type="button"
@@ -192,9 +279,43 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
           </button>
         </div>
       ) : (
-        <button type="button" className={PRIMARY} disabled={!ready || busy} onClick={() => void onMint()}>
-          Send an agent
-        </button>
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col text-sm font-semibold" htmlFor="send-agent-first-name">
+            Client first name
+            <span className="mt-1 font-normal text-[#3D5270]">Optional.</span>
+            <input
+              id="send-agent-first-name"
+              className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] px-3 text-sm font-normal text-[#102A43]"
+              value={firstName}
+              maxLength={60}
+              autoComplete="off"
+              onChange={(event) => onFirstName(event.target.value)}
+            />
+          </label>
+          <label className="flex flex-col text-sm font-semibold" htmlFor="send-agent-email">
+            Email
+            <span className="mt-1 font-normal text-[#3D5270]">
+              Confirm this address. The invite is sent only when you click Send.
+            </span>
+            <input
+              id="send-agent-email"
+              type="email"
+              required
+              className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] px-3 text-sm font-normal text-[#102A43]"
+              value={email}
+              autoComplete="email"
+              onChange={(event) => onEmail(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className={PRIMARY}
+            disabled={!ready || busy || !recipientEmail(email)}
+            onClick={onMint}
+          >
+            Send
+          </button>
+        </div>
       )}
       {loaded && !ready ? (
         <p className="text-sm text-[#3D5270]">This is not available on this file yet.</p>

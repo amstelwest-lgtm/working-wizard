@@ -43,10 +43,28 @@ export type PhysioItemKey = (typeof PHYSIO_ITEMS)[number]["itemKey"];
  * She does not fill in a form or make a SARS claim.
  */
 export const SEND_AGENT_BODY =
-  "The Tax Specialist collects the documents on this list. She does not fill in a form, and she does not send a form back. She does not log into SARS, and she does not make a SARS claim. Nothing is emailed. Copy the link and pass it on yourself.";
+  "The Tax Specialist collects the documents on this list. She does not fill in a form, and she does not send a form back. She does not log into SARS, and she does not make a SARS claim. Send emails the document list to the address you confirm.";
 
 export const SEND_AGENT_ONCE =
-  "Copy this link now. It is shown once and is not stored. It expires 14 days after it is created.";
+  "The invite was sent. Copy this link now if you also want to pass it on. It is shown once and is not stored. It expires 14 days after it is created.";
+
+/** Given name for the invite. Blank becomes null. Longer than 60 is refused. */
+export function recipientFirstName(
+  value: string | null | undefined,
+): { ok: true; name: string | null } | { ok: false } {
+  const trimmed = (value ?? "").replace(/\s+/g, " ").trim();
+  if (!trimmed) return { ok: true, name: null };
+  if (trimmed.length > 60) return { ok: false };
+  return { ok: true, name: trimmed };
+}
+
+/** Address the accountant confirmed. Blank or malformed is refused. */
+export function recipientEmail(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim().toLowerCase();
+  if (!trimmed || trimmed.length > 200) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return null;
+  return trimmed;
+}
 
 export function sendExpiresAt(now: Date): Date {
   return new Date(now.getTime() + SEND_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
@@ -71,7 +89,10 @@ export async function sha256Hex(value: string): Promise<string> {
   return [...new Uint8Array(buf)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function sendStillOpen(row: { revokedAt: string | null; expiresAt: string }, now: Date): boolean {
+export function sendStillOpen(
+  row: { revokedAt: string | null; expiresAt: string },
+  now: Date,
+): boolean {
   if (row.revokedAt) return false;
   const expires = new Date(row.expiresAt).getTime();
   return Number.isFinite(expires) && expires > now.getTime();

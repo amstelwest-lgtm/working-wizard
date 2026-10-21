@@ -46,3 +46,11 @@ export function raceShellGate<T>(check: Promise<T>, timeoutMs: number): Promise<
     );
   });
 }
+
+/** Page-load bucket. No ids, emails, or names. */
+export function bootRouteBucket(pathname: string): "practice" | "client" | "owner" | "other" {
+  const path = (pathname.split(/[?#]/)[0] ?? "").replace(/\/$/, "") || "/";
+  if (path === "/app" || path.startsWith("/app/")) return "owner";
+  if (/^\/clients\/.+/.test(path)) return "client";
+  return /^\/(dashboard|practice|clients|reports)(\/|$)/.test(path) ? "practice" : "other";
+}
