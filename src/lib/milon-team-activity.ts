@@ -630,7 +630,7 @@ export function findingSentence(input: {
   evidence?: unknown;
   /** When this draft was saved. */
   writtenAt?: string | null;
-  /** Latest upload or ledger sync. A later clock forces stale. It never vouches the stored sentence. */
+  /** Latest upload or ledger sync. It does not decide the health sentence. Cited scores do. */
   figuresUpdatedAt?: string | null;
 }): string {
   const market = input.market ?? ZA_MARKET;
