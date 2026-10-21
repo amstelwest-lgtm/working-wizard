@@ -90,6 +90,7 @@ import {
   entitlementFromStoredPlan,
   firmBillingStripeRefreshDue,
   noteFirmBillingStripeRefresh,
+  readStoredFirmOpenFacts,
   type FirmBillingOpenResult,
 } from "@/lib/firm-billing-open.server";
 import {
@@ -403,7 +404,8 @@ export async function resolveFirmBillingEntitlement(
       !firmBillingStripeRefreshDue(firmKey)
     ) {
       noteFirmBillingStripeRefresh(firmKey);
-      const stored = entitlementFromStoredPlan(storedPlan);
+      const facts = await readStoredFirmOpenFacts(ctx.supabase, firmKey);
+      const stored = entitlementFromStoredPlan(storedPlan, facts);
       rememberEntitlement(email, stored, userId, firmKey);
       console.warn(`[stripe-entitlement] stored plan ${storedPlan} firm=${firmKey}`);
       return stored;
@@ -477,15 +479,25 @@ export async function resolveFirmBillingEntitlement(
       });
     }
     })();
+    const reported = live.then((result) => {
+      if (refresh && !result.checkFailed) {
+        const outcome = result.entitled ? "entitled" : "none";
+        console.warn(
+          `[stripe-entitlement] refresh firm=${billingIds.firmId ?? ""} result=${outcome}`,
+        );
+      }
+      return result;
+    });
     // Open already returned above when the stored plan is inside the window.
     // A due stamp awaits one refresh. Checkout (`refresh`) still returns the
     // stored entitled plan and lets the list finish behind the response.
-    if (refreshStored || storedPlan !== "entitled") return live;
+    // /billing/required calls refresh: true. The log above is the success line.
+    if (refreshStored || storedPlan !== "entitled") return reported;
     console.warn(`[stripe-entitlement] stored plan entitled firm=${billingIds.firmId ?? ""}`);
     // A known entitled plan is the answer. The Stripe list refreshes behind
     // it. waitUntil is a no-op in api/server.js, so this must not be awaited,
     // and a rejection must not escape the request.
-    void live.catch((err) => {
+    void reported.catch((err) => {
       console.warn(
         "[stripe-entitlement] stored-plan refresh failed",
         err instanceof Error ? err.message : err,

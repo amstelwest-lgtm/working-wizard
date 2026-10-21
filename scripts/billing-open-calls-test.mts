@@ -145,6 +145,7 @@ await check("one server call per open", async () => {
   const gate = readFileSync(new URL("../src/routes/_authenticated.gate.tsx", import.meta.url), "utf8");
   const shared = typeof client.readFirmBillingOpen === "function";
   let serverCalls = 0;
+  let openCalls = 0;
   client.clearCachedFirmEntitlement();
   if (shared && loader.includes("readFirmBillingOpen") && board.includes("readFirmBillingOpen")) {
     const load = async () => {
@@ -156,6 +157,25 @@ await check("one server call per open", async () => {
       client.readFirmBillingOpen("open-user", load, false, OPEN_FIRM),
       client.readFirmBillingOpen("open-user", load, false, OPEN_FIRM),
     ]);
+    openCalls = serverCalls;
+    client.clearCachedFirmEntitlement();
+    serverCalls = 0;
+    let release: (value: { entitled: boolean; reason: "active_subscription" }) => void = () => {};
+    const pending = new Promise<{ entitled: boolean; reason: "active_subscription" }>((resolve) => {
+      release = resolve;
+    });
+    const loadSlow = () => {
+      serverCalls += 1;
+      return pending;
+    };
+    const firmRead = client.readFirmBillingOpen("open-user", loadSlow, false, OPEN_FIRM);
+    const firmLess = client.readCachedFirmEntitlement("open-user", loadSlow, false, null);
+    assert(serverCalls === 1, `a firm-less open alongside the gate started ${serverCalls} server calls`);
+    release({ entitled: true, reason: "active_subscription" });
+    await Promise.all([firmRead, firmLess]);
+    serverCalls = 0;
+    await client.readCachedFirmEntitlement("open-user", loadSlow, false, null);
+    assert(serverCalls === 0, `a later firm-less open made ${serverCalls} server calls`);
   } else {
     await Promise.all([
       client.readCachedFirmEntitlement(
@@ -173,13 +193,24 @@ await check("one server call per open", async () => {
       }),
     ]);
     if (board.includes("loadTrialAllowance")) serverCalls += 1;
+    openCalls = serverCalls;
   }
-  assert(serverCalls === 1, `open made ${serverCalls} server calls`);
+  assert(openCalls === 1, `open made ${openCalls} server calls`);
   assert(gate.includes("readCachedFirmEntitlement"), "the gate still reuses one entitlement read");
   assert(
     insight.includes("firmId"),
     "checkout after insight passes the firm id into the shared read",
   );
+  assert(
+    insight.includes("if (!user?.id || !firmId) return"),
+    "checkout after insight waits for the firm id before a second read",
+  );
+  assert(
+    loader.includes("if (!user?.id || !firmId) return"),
+    "Start here waits for the firm id before a second read",
+  );
+  const wall = readFileSync(new URL("../src/routes/billing.required.tsx", import.meta.url), "utf8");
+  assert(wall.includes("refresh: true"), "/billing/required refreshes from Stripe");
   assert(
     loader.includes("readFirmBillingOpen"),
     "Start here joins the open billing read",
@@ -190,6 +221,32 @@ await check("one server call per open", async () => {
     !mount.includes("loadTrialAllowance"),
     "the practice board open does not start a second allowance server call",
   );
+});
+
+await check("refresh true logs the live result without an email", async () => {
+  const lines: string[] = [];
+  const prev = console.warn;
+  console.warn = (...args: unknown[]) => {
+    lines.push(args.map((part) => String(part)).join(" "));
+  };
+  try {
+    setFirmBillingPlanReadForTests(async () => "none");
+    setStripeClientForTests(countingStripe());
+    const result = await resolveFirmBillingEntitlement(
+      actor("refresh-wall@example.com", NONE_FIRM),
+      true,
+      NONE_FIRM,
+    );
+    assert(stripeCalls > 0, "refresh:true reads Stripe");
+    assert(result.reason !== "stripe_unconfigured", "refresh is a real billing read");
+    const log = lines.find((line) => line.includes("[stripe-entitlement] refresh firm="));
+    assert(Boolean(log), `refresh did not log a result: ${lines.join(" | ")}`);
+    assert(log!.includes(`firm=${NONE_FIRM}`), `refresh log firm id, saw ${log}`);
+    assert(/result=(entitled|none)/.test(log!), `refresh log result, saw ${log}`);
+    assert(!log!.includes("@"), "refresh log has no email");
+  } finally {
+    console.warn = prev;
+  }
 });
 
 await check("a stale stored plan refreshes at most once per 10-15 min", async () => {
