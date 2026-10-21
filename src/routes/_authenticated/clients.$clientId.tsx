@@ -4421,7 +4421,7 @@ function ClientView() {
                               {
                                 id: "send-agent",
                                 label: "Send an agent",
-                                detail: "A Tax Specialist link for this client. Nothing is emailed.",
+                                detail: "A Tax Specialist invite for this client.",
                                 search: (prev: Record<string, unknown>) =>
                                   accountantClientTabSearch(prev, "portal", { section: "send-agent" }),
                               },
@@ -4437,7 +4437,7 @@ function ClientView() {
                       id="send-agent"
                       eyebrow="Books"
                       title="Send an agent"
-                      subtitle="A link for the Tax Specialist. Nothing is emailed."
+                      subtitle="Email the document list to the address you confirm."
                     >
                       <SendAgentPanel clientId={client.id} market={clientMarket} />
                     </ClientSubpageFrame>

@@ -4,18 +4,24 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { SEND_AGENT_FIRM_ALLOWLIST } from "../src/lib/client-agent-send-allowlist.ts";
 import { SEND_FILE_MAX_BYTES } from "../src/lib/client-agent-send.ts";
 import { isBarePublicPath } from "../src/lib/public-marketing.ts";
+import { ClientAgentLinkScreen } from "../src/components/client-agent-link-page.tsx";
 import {
   CONSENT_LINK_BODY,
   FILE_LINK_BODY,
   GENERIC_LINK_BODY,
   LIMITED_LINK_BODY,
-  SEND_CONSENT_NOTICE,
+  CLIENT_AGENT_FILE_NOTE,
   SEND_CONSENT_VERSION,
-  SEND_LINK_BODY,
   SEND_LINK_META,
+  clientAgentExpiryLabel,
+  clientAgentIntro,
+  clientAgentItemHelp,
+  clientConsentNotice,
   acceptClientFile,
   bytesFromBase64,
   consentReady,
@@ -28,7 +34,9 @@ import {
   mimeAllowed,
   openLinkView,
   pathBelongsToSend,
+  practiceDisplayName,
   resolvePresentedLink,
+  sendPracticeDisplayName,
   sendAttemptLimited,
   sendLinkLogLine,
   sendStoragePath,
@@ -230,10 +238,15 @@ assert(
 
 const consentRow = consentWrite(now);
 assert(
+  SEND_CONSENT_VERSION === "popia-client-agent-2",
+  "the notice version matches the new wording",
+);
+assert(
   consentRow.consent_notice_version === SEND_CONSENT_VERSION &&
     consentRow.consent_at === now.toISOString(),
   "consent stores the notice version with the timestamp",
 );
+const practiceNotice = clientConsentNotice("Theo's practice");
 
 const ownItem: PublicChecklistItem = {
   itemKey: "irp5",
@@ -245,7 +258,7 @@ const ownItem: PublicChecklistItem = {
 };
 const beforeConsent = openLinkView({
   consented: false,
-  notice: SEND_CONSENT_NOTICE,
+  notice: practiceNotice,
   items: [ownItem],
 });
 assert(
@@ -254,7 +267,7 @@ assert(
 );
 const afterConsent = openLinkView({
   consented: true,
-  notice: SEND_CONSENT_NOTICE,
+  notice: practiceNotice,
   items: [ownItem],
 });
 assert(
@@ -296,6 +309,10 @@ const checklist = toPublicChecklist(
 );
 const checklistJson = JSON.stringify(checklist);
 assert(checklist.length === 1 && checklist[0].itemKey === "irp5", "only her send is on the page");
+assert(
+  checklist[0].label === "IRP5 (only if you had a salaried job)",
+  "an empty IRP5 label uses the salaried-job wording",
+);
 assert(!checklistJson.includes(firm), "the firm id is not on the page");
 assert(
   !checklistJson.includes("salary.pdf") && !checklistJson.includes("other.pdf"),
@@ -410,22 +427,60 @@ assert(
   "usable without a file is empty",
 );
 
+const noonExpiry = "2026-11-04T12:00:00.000Z";
+const lateExpiry = "2026-11-04T23:30:00.000Z";
+const intro = clientAgentIntro("Theo's practice", noonExpiry);
 const copy = [
-  SEND_CONSENT_NOTICE,
-  SEND_LINK_BODY,
+  practiceNotice,
+  intro,
+  clientAgentIntro("Theo's practice", lateExpiry),
   GENERIC_LINK_BODY,
   LIMITED_LINK_BODY,
   CONSENT_LINK_BODY,
   FILE_LINK_BODY,
 ].join("\n");
-assert(/does not fill in a form/i.test(copy), "copy says she does not fill in a form");
-assert(/does not send a form back/i.test(copy), "copy says she does not return a form");
-assert(/does not log into SARS/i.test(copy), "copy says she does not log into SARS");
-assert(/does not make a SARS claim/i.test(copy), "copy says she makes no SARS claim");
+assert(
+  intro.includes("Hi, I'm the Tax Specialist for Theo's practice."),
+  "the intro names the practice",
+);
+assert(intro.includes("before 4 Nov 2026."), "a midday expiry stays on that Johannesburg day");
+assert(
+  clientAgentIntro("Theo's practice", lateExpiry).includes("before 5 Nov 2026."),
+  "23:30 UTC is the next day in Johannesburg",
+);
+assert(
+  clientAgentExpiryLabel(new Date(lateExpiry)) === "5 Nov 2026",
+  "a Date at 23:30 UTC uses Johannesburg",
+);
+assert(
+  practiceNotice ===
+    "I agree that Theo's practice may securely store the documents I upload here for my tax file, using Milōn. Medical aid: send the tax certificate totals only.",
+  "consent names the practice and drops the internal rules",
+);
+assert(
+  !/sars|fill in a form|send a form back/i.test(copy),
+  "client copy drops the internal denials",
+);
 assert(
   !/completed form|form is ready|return is ready|we will claim/i.test(copy),
   "copy promises no completed form",
 );
+assert(
+  clientAgentItemHelp({ itemKey: "bank_statements" }) ===
+    "All business accounts, 1 March 2025 to 28 February 2026.",
+  "bank statements use the 2026 year of assessment",
+);
+const linkRules = read("src/lib/client-agent-link.ts");
+assert(
+  !linkRules.includes("sample-compute"),
+  "the public link does not import company tax copy",
+);
+assert(
+  clientAgentItemHelp({ itemKey: "medical_aid_certificate" }) ===
+    "Totals only. Do not send a line-by-line breakdown.",
+  "medical aid stays totals only",
+);
+assert(!clientAgentItemHelp({ itemKey: "irp5" }).includes("PDF"), "a row does not list file types");
 assert(!/\b(stupid|idiot|asap|illegal|failure)\b/i.test(copy), "copy stays polite");
 assert(!/whatsapp/i.test(copy), "copy does not mention WhatsApp");
 
@@ -466,6 +521,14 @@ assert(
   "no mail, extraction, or ledger",
 );
 assert(!/whatsapp/i.test(page + route), "the page does not mention WhatsApp");
+assert(
+  !/sars|fill in a form|send a form back/i.test(page),
+  "the page does not recite internal denials",
+);
+assert(page.includes("clientAgentIntro"), "the intro is the friendly line");
+assert(page.includes("CLIENT_AGENT_FILE_NOTE"), "file types are one note");
+assert(fn.includes("clientConsentNotice"), "consent wording includes the practice");
+assert(fn.includes("expiresAt: send.expires_at"), "the page receives the expiry instant");
 assert(!/has expired|been revoked/i.test(page), "the page has one closed sentence");
 assert(!page.includes("file.name"), "the page does not read the file name");
 assert(route.includes("SEND_LINK_META"), "the route uses the noindex meta");
@@ -473,11 +536,35 @@ assert(
   server.includes("linkPrivacyHeaders") && server.includes("linkLogPath"),
   "the server sets privacy headers and redacts the path",
 );
-assert(page.includes("SilentAgentPortrait"), "the portrait is silent");
-assert(page.includes('face="tax_specialist"'), "Tax Specialist face");
+assert(!page.includes("SilentAgentPortrait"), "the stacked talk portrait is gone");
+assert((page.match(/<OwnerAvatar/g) ?? []).length === 1, "exactly one portrait");
+assert(page.includes('agent="tax_specialist"'), "Tax Specialist face");
+assert(page.includes('size="lg"'), "the portrait uses the agent card size");
+assert(page.includes('variant="character"'), "the portrait is the round character");
+assert(
+  !page.includes("<video") && !page.includes("<audio") && !page.includes("autoPlay"),
+  "the page adds no audio or autoplay",
+);
+assert(!/#(?:d4a550|c4a35a|b7791f)/i.test(page), "the page has no gold primary");
+const portraitAt = page.indexOf("data-client-portrait");
+const portraitSource = page.slice(Math.max(0, portraitAt - 240), page.indexOf("</span>", portraitAt));
+assert(!portraitSource.includes("w-full"), "the portrait is not full width");
+assert(portraitSource.includes("-ml-3"), "the portrait circle lines up with the text");
+const avatarCss = read("src/components/owner-door/owner-door.css");
+assert(
+  /@media \(max-width: 760px\) \{[\s\S]*\.owner-presence\.is-lg \{\s*width: 96px;\s*height: 96px;/.test(
+    avatarCss,
+  ),
+  "the agent card portrait is 96px on a narrow screen",
+);
 assert(!page.includes("flex-row"), "the page stacks vertically");
 assert(page.includes("I agree"), "consent comes first");
-assert(page.includes("This is all I have"), "the client can say that is all they have");
+assert(page.includes("I don't have this"), "the client can skip an item");
+assert(page.includes("Only upload what you have"), "the list says to upload only what they have");
+assert(/>\s*Upload\s*</.test(page), "each item has an upload button");
+assert(page.includes("min-h-11"), "tap targets are at least 44px");
+assert(page.includes('data-upload-tick="true"'), "an uploaded item shows a tick");
+assert(!page.includes("This is all I have"), "the old skip label is gone");
 assert(page.includes("uploadClientAgentFile"), "the page sends the file to the server");
 assert(route.includes('createFileRoute("/a/$token")'), "the public path is /a/<token>");
 assert(isBarePublicPath("/a/abc"), "the link page skips the signed-in shell");
@@ -502,5 +589,150 @@ assert(
   "the proof fails when authenticated can read",
 );
 assert(ci.includes("apply-client-agent-send-storage-sql.sh"), "CI runs the bucket proof");
+
+const practiceSql = read("supabase/migrations/20261022143000_client_agent_send_practice_name.sql");
+assert(
+  practiceSql.includes("practice_display_name text"),
+  "the practice name column is nullable text",
+);
+assert(
+  practiceSql.includes("ADD COLUMN IF NOT EXISTS practice_display_name"),
+  "the column is added on the send",
+);
+assert(
+  practiceSql.includes("Theo''s practice"),
+  "existing sends for this firm show Theo's practice",
+);
+assert(!/update\s+public\.firms/i.test(practiceSql), "the firm row is not renamed");
+assert(!/alter\s+table\s+public\.firms/i.test(practiceSql), "the firm table is not altered");
+assert(practiceSql.includes("recipient_first_name text"), "the first name column is nullable text");
+assert(
+  /length\(btrim\(recipient_first_name\)\) >= 1[\s\S]*length\(btrim\(recipient_first_name\)\) <= 60/.test(
+    practiceSql,
+  ),
+  "a stored first name is 1 to 60 characters once trimmed",
+);
+const allowlisted = SEND_AGENT_FIRM_ALLOWLIST[0];
+assert(
+  practiceDisplayName({
+    firmId: allowlisted,
+    practiceDisplayName: null,
+    firmName: "My practice",
+  }) === "Theo's practice",
+  "an empty display name still shows Theo's practice",
+);
+assert(
+  practiceDisplayName({
+    firmId: allowlisted,
+    practiceDisplayName: "Harbour Books",
+    firmName: "My practice",
+  }) === "Harbour Books",
+  "a stored practice name wins over the firm name",
+);
+assert(
+  practiceDisplayName({
+    firmId: "00000000-0000-4000-8000-000000000001",
+    practiceDisplayName: null,
+    firmName: "My practice",
+  }) === "My practice",
+  "another firm falls back to its firm name",
+);
+assert(
+  sendPracticeDisplayName(allowlisted) === "Theo's practice",
+  "a new send stores Theo's practice",
+);
+assert(fn.includes("practice_display_name"), "the public lookup reads the practice name");
+assert(fn.includes("practiceDisplayName"), "the page name falls back in one place");
+
+const consentHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: {
+      ok: true,
+      practiceName: "Theo's practice",
+      expiresAt: lateExpiry,
+      consented: false,
+      notice: practiceNotice,
+      items: [],
+    },
+    busy: false,
+    notice: null,
+    noteFor: null,
+    explanation: "",
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+  }),
+);
+assert(
+  (consentHtml.match(/data-client-portrait="tax_specialist"/g) ?? []).length === 1,
+  "one portrait renders",
+);
+assert(
+  (consentHtml.match(/data-agent="tax_specialist"/g) ?? []).length === 1,
+  "one agent face renders",
+);
+assert(
+  !consentHtml.includes("<video") && !consentHtml.includes("<audio"),
+  "the still portrait has no media element",
+);
+assert(
+  consentHtml.includes("Theo&#x27;s practice") || consentHtml.includes("Theo's practice"),
+  "the consent page shows the practice",
+);
+assert(consentHtml.includes("I agree"), "consent renders the agreement button");
+const checklistHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: {
+      ok: true,
+      practiceName: "Theo's practice",
+      expiresAt: lateExpiry,
+      consented: true,
+      notice: practiceNotice,
+      items: [
+        {
+          itemKey: "practice_income_expenses",
+          label: "Practice income and expenses",
+          totalsOnly: false,
+          status: "received",
+          quality: "usable",
+          hasFile: true,
+        },
+        {
+          itemKey: "medical_aid_certificate",
+          label: "Medical aid tax certificate (totals only)",
+          totalsOnly: true,
+          status: "open",
+          quality: null,
+          hasFile: false,
+        },
+      ],
+    },
+    busy: false,
+    notice: null,
+    noteFor: "medical_aid_certificate",
+    explanation: "",
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+  }),
+);
+assert((checklistHtml.match(/data-upload-tick/g) ?? []).length === 1, "one uploaded tick renders");
+assert(
+  checklistHtml.includes("I don&#x27;t have this") || checklistHtml.includes("I don't have this"),
+  "the skip link renders",
+);
+assert(checklistHtml.includes("data-missing-note"), "the optional note renders");
+assert(checklistHtml.includes("Only upload what you have"), "the checklist intro renders");
+assert(
+  (checklistHtml.match(/PDF, JPG, PNG or HEIC, up to 20 MB each/g) ?? []).length === 1,
+  "file types appear once",
+);
+assert(checklistHtml.includes(CLIENT_AGENT_FILE_NOTE), "the file note is the shared sentence");
+assert(consentHtml.includes("before 5 Nov 2026"), "the consent page shows the Johannesburg expiry");
+assert(!/sars|fill in a form/i.test(consentHtml), "the rendered consent drops internal denials");
 
 console.log("client agent link test ok");
