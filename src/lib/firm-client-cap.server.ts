@@ -42,7 +42,13 @@ import {
   installMetadataFirmCustomerWrite,
   readFirmStripeCustomerId,
 } from "@/lib/firm-stripe-customer.server";
-import { findFirmCustomerId, type FirmCustomerLookup } from "@/lib/stripe-entitlement";
+import {
+  findFirmCustomerId,
+  FirmCustomerLookupUnknown,
+  readWithinBudget,
+  SUBSCRIPTION_LIST_BUDGET_MS,
+  type FirmCustomerLookup,
+} from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
 import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.server";
@@ -209,24 +215,38 @@ async function listCustomerSubscriptions(
     storedCustomerId,
   });
   if (!customerId) return { customerId: null, data: [] };
+  const listOptions = { maxNetworkRetries: 0, timeout: SUBSCRIPTION_LIST_BUDGET_MS };
   let listed: { data: ListedSubscription[] };
   try {
-    listed = (await stripe.subscriptions.list({
-      customer: customerId,
-      status: "all",
-      limit: 20,
-      expand: ["data.items.data.price"],
-    })) as unknown as typeof listed;
+    listed = await readWithinBudget(
+      stripe.subscriptions.list(
+        {
+          customer: customerId,
+          status: "all",
+          limit: 20,
+          expand: ["data.items.data.price"],
+        },
+        listOptions,
+      ) as unknown as Promise<{ data: ListedSubscription[] }>,
+      SUBSCRIPTION_LIST_BUDGET_MS,
+    );
   } catch (err) {
+    if (err instanceof FirmCustomerLookupUnknown && err.kind === "timeout") throw err;
     console.warn(
       "[stripe] subscription price expand failed",
       err instanceof Error ? err.message : err,
     );
-    listed = (await stripe.subscriptions.list({
-      customer: customerId,
-      status: "all",
-      limit: 20,
-    })) as unknown as typeof listed;
+    listed = await readWithinBudget(
+      stripe.subscriptions.list(
+        {
+          customer: customerId,
+          status: "all",
+          limit: 20,
+        },
+        listOptions,
+      ) as unknown as Promise<{ data: ListedSubscription[] }>,
+      SUBSCRIPTION_LIST_BUDGET_MS,
+    );
   }
   return { customerId, data: listed.data };
 }

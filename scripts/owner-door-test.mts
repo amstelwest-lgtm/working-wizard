@@ -1788,4 +1788,38 @@ const watching = practiceCardStatuses({
 });
 assert(watching.analyst?.word === "Attention", "watching without review now is Attention");
 
+const uncheckedNeeds = ownerNeedsView({
+  ownerEmail: "alex@northline.test",
+  actionsReady: true,
+  actionsUnavailable: false,
+  actions: [],
+  draftsReady: true,
+  draftsUnavailable: false,
+  draftTitles: [],
+  deliverablesReady: true,
+  deliverablesUnavailable: false,
+  deliverableCount: null,
+  advisoryTitles: [],
+  quickBooks: { state: "absent" },
+  xero: { state: "absent" },
+  when: () => "2 Oct 2026",
+});
+assert(uncheckedNeeds.deliverableLines[0] !== "Checking deliverables.", "home does not spin while stored drafts are unloaded");
+assert(
+  uncheckedNeeds.deliverableLines[0] !== "No deliverables awaiting review.",
+  "an unloaded draft count is not a confirmed zero",
+);
+assert(uncheckedNeeds.deliverablesHeading === "Deliverables", "the heading omits an unloaded stored count");
+
+const mountAt = door.indexOf("void Promise.all([");
+const mountEnd = door.indexOf("]).then", mountAt);
+const mountReads = door.slice(mountAt, mountEnd);
+assert(!mountReads.includes("deliverable_drafts"), "owner door first paint does not count deliverable drafts");
+const draftRead = door.indexOf('from("deliverable_drafts")');
+assert(draftRead > mountEnd, "deliverable drafts are read after the first paint");
+assert(
+  door.includes('canonicalOwnerScreen(screen) === "accountant"'),
+  "stored drafts load when the accountant surface is open",
+);
+
 console.log("owner-door tests passed");

@@ -3,6 +3,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { AccountantProfileProvider } from "@/contexts/accountant-profile";
+import { OwnerBoardGateProvider } from "@/contexts/owner-board-gate";
 import { ViewModeProvider } from "@/contexts/view-mode";
 import { ShareButton } from "@/components/share";
 import { AnalyticsProvider } from "@/contexts/analytics";
@@ -58,13 +59,15 @@ function LandingFloatGate() {
 
 function ChromeProviders({ children }: { children: ReactNode }) {
   return (
-    <AccountantProfileProvider>
-      <AnalyticsProvider>
-        <NotesProvider>
-          <ViewModeProvider>{children}</ViewModeProvider>
-        </NotesProvider>
-      </AnalyticsProvider>
-    </AccountantProfileProvider>
+    <OwnerBoardGateProvider>
+      <AccountantProfileProvider>
+        <AnalyticsProvider>
+          <NotesProvider>
+            <ViewModeProvider>{children}</ViewModeProvider>
+          </NotesProvider>
+        </AnalyticsProvider>
+      </AccountantProfileProvider>
+    </OwnerBoardGateProvider>
   );
 }
 

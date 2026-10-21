@@ -2102,8 +2102,8 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
 @media (max-width:390px){
   .accountant-portal:not(.owner-door) .deliverable-main{
     padding-left:12px;
-    /* Pencil is 40px at a 12px inset. 52px is the minimum; 64px keeps the card clear. */
-    padding-right:64px;
+    /* Pencil is 40px at a 12px inset. The card ends where the pencil starts. */
+    padding-right:calc(40px + max(12px, env(safe-area-inset-right, 0px)));
   }
   .accountant-portal .health-pillar-cards{
     margin-top:12px;
@@ -2270,16 +2270,15 @@ html[data-theme="light"] .accountant-portal .milon-status-pill--warn *{
   .reports-studio{padding-bottom:12rem}
 }
 
-/* Under 480px the pencil, and the archive button stacked on it, are fixed
-   to the right corner. Inset the scroll pane so a row in that band ends
-   before the buttons: one 40px button plus a 12px gap on the right, and the
-   two-button stack (40 + 8 + 40) plus a 12px gap at the bottom, each on top
-   of the button's own safe-area inset. */
+/* Under 480px the pencil is fixed at the right corner. Inset the scroll pane
+   by the button itself (40px) plus its 12px screen inset, so a row ends where
+   the pencil starts. The two-button stack (40 + 8 + 40) plus a 12px gap stays
+   at the bottom, on top of the button's own safe-area inset. */
 @media (max-width: 480px) {
   html[data-milon-fab="1"]:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
   html[data-milon-fab="1"]:not(.dark) .owner-door.accountant-portal:not([data-screen="chat"]) .deliverable-main,
   html[data-milon-fab="1"].dark .accountant-portal .deliverable-main {
-    padding-right: calc(40px + 12px + max(12px, env(safe-area-inset-right, 0px)));
+    padding-right: calc(40px + max(12px, env(safe-area-inset-right, 0px)));
     padding-bottom: calc(40px + 8px + 40px + 12px + max(12px, env(safe-area-inset-bottom, 0px)));
   }
 }

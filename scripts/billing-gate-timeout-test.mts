@@ -61,7 +61,10 @@ assert(
 
 const profile = readFileSync(resolve("src/contexts/accountant-profile.tsx"), "utf8");
 assert(profile.includes("brand load timed out"), "brand hydrate cannot block the shell forever");
-assert(profile.includes("}, [userId, authLoading]);"), "a new session object does not cancel brand hydrate");
+assert(
+  profile.includes("}, [userId, authLoading, deferSideReads]);"),
+  "a new session object does not cancel brand hydrate",
+);
 
 const board = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(board.includes("role check timed out"), "Loading dashboard… cannot sit forever");

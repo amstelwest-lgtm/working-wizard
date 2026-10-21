@@ -43,10 +43,10 @@ export async function readStripeCustomerCountry(
   customerId: string | null | undefined,
 ): Promise<string | null> {
   const id = customerId?.trim() ?? "";
-  const retrieve = stripe.customers?.retrieve;
-  if (!id || !retrieve) return null;
+  const customers = stripe.customers;
+  if (!id || !customers?.retrieve) return null;
   try {
-    const customer = await retrieve(id);
+    const customer = await customers.retrieve(id);
     if (!customer || customer.deleted) return null;
     const country = customer.address?.country?.trim() ?? "";
     return country || null;

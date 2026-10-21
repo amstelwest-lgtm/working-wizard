@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { reportDeepLinkAction, ReportsStudio } from "../src/routes/_authenticated/reports-studio";
+import { FORECAST_PREVIEW_EMPTY, forecastPreviewGap } from "../src/lib/report-preview";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -16,6 +17,13 @@ assert(reportDeepLinkAction(undefined) === null, "opening Reports does not previ
 assert(reportDeepLinkAction("scorecard") === null, "a report key is not a preview action");
 assert(reportDeepLinkAction("preview") === "preview", "an explicit preview still opens");
 assert(reportDeepLinkAction("download") === "download", "an explicit download still starts");
+assert(forecastPreviewGap(null) === FORECAST_PREVIEW_EMPTY, "no forecast weeks is not enough data");
+assert(forecastPreviewGap([]) === FORECAST_PREVIEW_EMPTY, "an empty week list is not enough data");
+assert(forecastPreviewGap([{ period_label: "Week 1" }]) === null, "an entered week can preview");
+assert(
+  FORECAST_PREVIEW_EMPTY.includes("The 13-week chart appears once a forecast line is entered."),
+  "the preview uses the same sentence as the cash screen",
+);
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes("ReportsStudioPanel"), "client Reports tab mounts ReportsStudio");
@@ -46,6 +54,24 @@ assert(
 );
 assert(!studioSrc.includes("/reports/demo") && !routeSrc.includes("/reports/demo"), "studio no longer links to the mock preview");
 assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) chrome");
+{
+  const previewFn = studioSrc.slice(
+    studioSrc.indexOf("async function handlePreview"),
+    studioSrc.indexOf("function clearDeepLinkSearch"),
+  );
+  const gapAt = previewFn.indexOf("forecastGapMessage");
+  const genAt = previewFn.indexOf("await GEN[report.key]");
+  assert(gapAt !== -1 && genAt !== -1 && gapAt < genAt, "an empty forecast is explained before a PDF is built");
+  assert(
+    previewFn.includes('message.startsWith("No cash forecast saved")') &&
+      previewFn.includes("showForecastGap"),
+    "a thrown missing-forecast error still opens the message",
+  );
+  assert(studioSrc.includes('emptyHref: "cash"'), "the message links to the cash forecast");
+  const dismissAt = previewFn.lastIndexOf("setPreviewState(null)");
+  const thrownAt = previewFn.indexOf('message.startsWith("No cash forecast saved")');
+  assert(thrownAt !== -1 && dismissAt !== -1 && thrownAt < dismissAt, "the missing-forecast path returns before the modal is cleared");
+}
 assert(studioSrc.includes("REPORT_SIGNOFF_SCOPE"), "each report card maps to a deliverable sign-off");
 assert(studioSrc.includes("report-card__rule"), "studio cards keep the gold hairline");
 assert(studioSrc.includes('key: "budget"'), "studio lists a Budget & variance PDF");
