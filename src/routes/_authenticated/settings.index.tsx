@@ -31,7 +31,6 @@ import {
   formatFirmOverLimitNote,
   practiceDisplaysZarPlan,
   UPGRADE_FAILED_MESSAGE,
-  zarDisplayCheckoutNote,
 } from "@/lib/firm-band-upgrade";
 import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 import {
@@ -130,13 +129,6 @@ function SettingsPage() {
       firmMarket: regionSnapshot.market,
       clientMarkets: regionSnapshot.clientMarkets,
     });
-  const checkoutNote =
-    zarPlan && regionSnapshot
-      ? zarDisplayCheckoutNote({
-          firmMarket: regionSnapshot.market,
-          clientMarkets: regionSnapshot.clientMarkets,
-        })
-      : null;
   const planPricesReady = !isPractice || regionReady;
 
   useEffect(() => {
@@ -510,7 +502,6 @@ function SettingsPage() {
                     usageLabel: plan.usageLabel,
                     saDiscount: Boolean(plan.saDiscount) || zarPlan,
                     zaLabels: plan.zaLabels,
-                    checkoutNote,
                     phase: plan.phase,
                   }}
                   onUpgrade={handlePlanUpgrade}
@@ -530,7 +521,6 @@ function SettingsPage() {
                   clientCount={plan.clientCount}
                   saDiscount={Boolean(plan.saDiscount) || zarPlan}
                   zaLabels={plan.zaLabels}
-                  checkoutNote={checkoutNote}
                   introTrialEligible={plan.introTrialEligible}
                   cardFree={
                     plan.phase === "none" &&

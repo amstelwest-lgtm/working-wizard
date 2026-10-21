@@ -391,7 +391,6 @@ function FirmClientCapNotice({
                 usageLabel: cap.upgrade.usageLabel,
                 saDiscount: cap.upgrade.saDiscount,
                 zaLabels: cap.upgrade.zaLabels,
-                checkoutNote: cap.upgrade.checkoutNote,
                 phase: cap.upgrade.phase,
               }
             : null
@@ -456,7 +455,6 @@ function FirmClientCapNotice({
           usageLabel={upgrade.usageLabel}
           saDiscount={upgrade.saDiscount}
           zaLabels={upgrade.zaLabels}
-          checkoutNote={upgrade.checkoutNote}
           cardFree={cap.starterTrial.cardFree === true && !cap.starterTrial.expired}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}

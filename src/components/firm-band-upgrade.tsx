@@ -49,11 +49,6 @@ type Props = {
   /** Server-built rand lines for the practice list. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /**
-   * Set when this list is in rand and Checkout would charge USD.
-   * A ZA firm row leaves this empty: Checkout still follows the billing country.
-   */
-  checkoutNote?: string | null;
-  /**
    * From eligibleForIntroTrial. Starter shows the signup trial lines only
    * while this firm has never had a subscription.
    */
@@ -106,7 +101,6 @@ export function FirmBandUpgrade({
   upgrading = false,
   saDiscount = false,
   zaLabels = null,
-  checkoutNote = null,
   introTrialEligible = false,
   cardFree = false,
   onUpgrade,
@@ -140,8 +134,6 @@ export function FirmBandUpgrade({
   const starterLeads = currentBand == null && selected === "starter";
   const startHereBand = currentBand ?? (starterLeads ? "starter" : null);
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
-  // Rand on the list follows the practice helper (saDiscount / zaLabels).
-  // Checkout still charges USD for a US firm row. checkoutNote says that.
   const saFirm = saDiscount || zaLabels != null || priceCurrency.toLowerCase() === "zar";
 
   async function applyVoucher(): Promise<boolean> {
@@ -217,15 +209,6 @@ export function FirmBandUpgrade({
             Annual
           </button>
         </div>
-      ) : null}
-      {checkoutNote ? (
-        <p
-          data-checkout-note=""
-          className="text-muted-foreground"
-          style={{ margin: "0 0 12px", fontSize: 12, lineHeight: 1.5 }}
-        >
-          {checkoutNote}
-        </p>
       ) : null}
       <div role="radiogroup" aria-label="Firm bands">
         {FIRM_BAND_TABLE.map((band) => {
