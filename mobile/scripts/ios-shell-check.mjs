@@ -22,6 +22,11 @@ const plist = readFileSync(resolve(root, "ios/App/App/Info.plist"), "utf8");
 assert(plist.includes("<key>ITSAppUsesNonExemptEncryption</key>"), "export compliance key is set");
 assert(/<key>ITSAppUsesNonExemptEncryption<\/key>\s*<false\/>/.test(plist), "encryption flag is false");
 assert(plist.includes("UIStatusBarStyleDarkContent"), "status bar uses dark content on white");
+assert(plist.includes("<key>NSCameraUsageDescription</key>"), "camera usage string is set");
+assert(
+  plist.includes("photograph a receipt"),
+  "camera usage string says the photo is a receipt the person attaches",
+);
 
 const privacy = readFileSync(resolve(root, "ios/App/App/PrivacyInfo.xcprivacy"), "utf8");
 assert(privacy.includes("<key>NSPrivacyTracking</key>"), "privacy manifest tracks the tracking flag");
