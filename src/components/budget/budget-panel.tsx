@@ -26,6 +26,7 @@ import {
   reseedBudgetIfScaleBroken,
   seedBudgetFromFinancials,
 } from "@/lib/budget.bridges";
+import { fiscalStatementSlice } from "@/lib/budget-period";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { applyTemplateChange } from "@/lib/budget.model-change";
 import { industryBudgetTemplate } from "@/lib/budget-industry";
@@ -455,7 +456,13 @@ export function BudgetPanel({
     ? presentBudgetOnStatementWindow(statementView.doc, figureSource as Record<string, unknown> | null, market, statementView.fromStatement)
     : null;
   const actuals = presented
-    ? budgetVersusStatement(presented.doc, figureSource as Record<string, unknown> | null, market)
+    ? {
+        ...budgetVersusStatement(presented.doc, figureSource as Record<string, unknown> | null, market),
+        period: fiscalStatementSlice(
+          figureSource as Record<string, unknown> | null,
+          presented.doc.fyStartMonth,
+        ),
+      }
     : null;
 
   const startFresh = useCallback(

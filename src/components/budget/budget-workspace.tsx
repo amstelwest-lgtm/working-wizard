@@ -37,6 +37,7 @@ import type { BudgetYearMoney } from "@/lib/budget-year-compare";
 import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
+import { budgetHeadlineFigures } from "@/lib/budget-period";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import {
@@ -410,6 +411,10 @@ function BudgetComplexWorkspace({
   };
 
   const compared = actuals && actuals.chip && actuals.chip !== "None" ? actuals : null;
+  const headline = budgetHeadlineFigures(compared?.period, {
+    revenue: compared?.budgetRevenue,
+    operatingProfit: compared?.budgetEbit,
+  });
   const assumptionCount = 4 + (doc.showInventoryDays ? 1 : 0) + (usTax ? 1 : 2);
   const sourceCount = new Set(
     [budgetOpeningSourceLabel(doc.openingCashSource), budgetDaysSourceLabel(doc.wcDaysSource)].filter(
@@ -420,10 +425,10 @@ function BudgetComplexWorkspace({
   return (
     <div id="wizard-budget-plan" className="space-y-6">
       <BudgetVerdictStrip
-        periodLabel={compared ? compared.label : monthLabel(focusMonth)}
-        revenueBudget={compared?.budgetRevenue ?? focus?.revenue ?? 0}
+        periodLabel={headline.label ?? (compared ? compared.label : monthLabel(focusMonth))}
+        revenueBudget={compared?.period ? headline.revenue : (compared?.budgetRevenue ?? focus?.revenue ?? 0)}
         revenueActual={compared ? compared.revenue : null}
-        profitBudget={compared?.budgetEbit ?? focus?.ebit ?? 0}
+        profitBudget={compared?.period ? headline.operatingProfit : (compared?.budgetEbit ?? focus?.ebit ?? 0)}
         profitActual={compared ? (compared.ebit ?? null) : null}
         chip={compared?.chip ?? "None"}
         market={market}

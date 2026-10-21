@@ -16,6 +16,7 @@ export function BudgetYearStrip({
   lastYearLabel,
   market,
   signed = false,
+  periodLabel = null,
 }: {
   thisYear: BudgetYearMoney | null;
   /** Months in the statement window. Compared only when last year matches. */
@@ -26,6 +27,8 @@ export function BudgetYearStrip({
   market: ResolvedMarket;
   /** Owner door uses one unicode minus. */
   signed?: boolean;
+  /** Firm-year window these figures cover. Same words as the other cards. */
+  periodLabel?: string | null;
 }) {
   const money = (n: number) => {
     const text = fmtBudgetMoney(n, market);
@@ -36,6 +39,11 @@ export function BudgetYearStrip({
   return (
     <section className="space-y-2" data-budget-year={compared.mode}>
       <h3 className="text-base font-semibold text-[#102A43] dark:text-slate-100">This year vs last year</h3>
+      {periodLabel ? (
+        <p className="text-sm font-medium text-[#102A43] dark:text-slate-100" data-budget-year-period="">
+          {periodLabel}
+        </p>
+      ) : null}
       <p className="text-sm leading-relaxed text-[#3D5270] dark:text-slate-300">{compared.summary}</p>
       <ul className="space-y-2 min-[480px]:hidden" data-budget-year-layout="stack">
         {compared.rows.map((row) => (

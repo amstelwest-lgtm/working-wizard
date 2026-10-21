@@ -32,9 +32,14 @@ function signedMoney(n: number, market: ResolvedMarket): string {
   return body;
 }
 
-/** A zero or missing plan is not a variance. The cell says so instead. */
-export function budgetFigureMissing(budget: number): boolean {
-  return !Number.isFinite(budget) || Math.abs(budget) < 1;
+/** A zero, blank, or missing plan is not a variance. The cell says so instead. */
+export function budgetFigureMissing(budget: number | null | undefined): boolean {
+  return budget == null || !Number.isFinite(budget) || Math.abs(budget) < 1;
+}
+
+function moneyOrDash(value: number | null, money: (n: number) => string): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return money(value);
 }
 
 function Delta({
@@ -84,9 +89,9 @@ export function BudgetVerdictStrip({
   comparisonNote = null,
 }: {
   periodLabel: string;
-  revenueBudget: number;
+  revenueBudget: number | null;
   revenueActual: number | null;
-  profitBudget: number;
+  profitBudget: number | null;
   profitActual: number | null;
   chip: BudgetActualsChip;
   market: ResolvedMarket;
@@ -114,9 +119,9 @@ export function BudgetVerdictStrip({
   const seeded = budgetSeededFromStatement({
     chip,
     revenue: revenueActual ?? 0,
-    budgetRevenue: revenueBudget,
+    budgetRevenue: revenueBudget ?? undefined,
     ebit: profitActual ?? undefined,
-    budgetEbit: profitBudget,
+    budgetEbit: profitBudget ?? undefined,
   });
   const note = comparisonNote ?? (seeded ? SEEDED_VARIANCE_NOTE : null);
   if (presentation === "owner") {
@@ -205,7 +210,7 @@ export function BudgetVerdictStrip({
           <span className="flex flex-col gap-1 sm:block">
             <span>
               <span className="font-semibold">Revenue</span>{" "}
-              {hasActuals ? (
+              {hasActuals && revenueBudget != null ? (
                 <>
                   <span className="whitespace-nowrap tabular-nums">{money(revenueActual!)}</span>
                   {" vs budget "}
@@ -222,13 +227,13 @@ export function BudgetVerdictStrip({
                   </span>
                 </>
               ) : (
-                <span className="whitespace-nowrap tabular-nums">{money(revenueBudget)}</span>
+                <span className="whitespace-nowrap tabular-nums">{moneyOrDash(revenueBudget, money)}</span>
               )}
             </span>
             <span className="hidden text-slate-400 sm:inline"> · </span>
             <span>
               <span className="font-semibold">Operating profit</span>{" "}
-              {hasActuals && profitActual != null ? (
+              {hasActuals && profitActual != null && profitBudget != null ? (
                 <>
                   <span className="whitespace-nowrap tabular-nums">{money(profitActual)}</span>
                   {" vs budget "}
@@ -245,7 +250,7 @@ export function BudgetVerdictStrip({
                   </span>
                 </>
               ) : (
-                <span className="whitespace-nowrap tabular-nums">{money(profitBudget)}</span>
+                <span className="whitespace-nowrap tabular-nums">{moneyOrDash(profitBudget, money)}</span>
               )}
             </span>
             {monthlyActuals ? null : (
@@ -294,7 +299,10 @@ export function BudgetVerdictStrip({
             signoff={signoff}
             isStale={isStale}
             known={signoffKnown}
-            hideDraft={Math.abs(revenueBudget) >= 1 || Math.abs(profitBudget) >= 1}
+            hideDraft={
+              (revenueBudget != null && Math.abs(revenueBudget) >= 1) ||
+              (profitBudget != null && Math.abs(profitBudget) >= 1)
+            }
           />
         )}
       </div>
@@ -323,7 +331,7 @@ function OwnerBudgetCompare({
   monthlyActuals = true,
 }: {
   label: string;
-  budget: number;
+  budget: number | null;
   actual: number | null;
   higherIsBetter: boolean;
   market: ResolvedMarket;
@@ -334,9 +342,11 @@ function OwnerBudgetCompare({
 }) {
   const missing = budgetFigureMissing(budget);
   return (
-    <div className="min-w-0" data-budget-missing={missing ? "true" : "false"}>
+    <div className="min-w-0" data-budget-missing={budget == null || missing ? "true" : "false"}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#3D5270]">{label}</p>
-      {unbuilt ? (
+      {budget == null ? (
+        <p className="mt-1 text-[13px] font-medium text-[#102A43]">—</p>
+      ) : unbuilt ? (
         <p className="mt-1 text-[13px] font-medium text-[#102A43]" data-budget-unbuilt="">
           Budget not built yet
           {onBuild ? (

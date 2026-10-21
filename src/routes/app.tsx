@@ -180,6 +180,7 @@ import {
   overlayWeeklyInputs,
   resolveWaterfallFigures,
 } from "@/lib/weekly-inputs";
+import { fiscalWaterfallFallback } from "@/lib/budget-period";
 import {
   figuresPeriodLabelFrom,
   ownerBootPeriodPill,
@@ -3678,6 +3679,15 @@ function Index() {
   }, [effectiveClientId]);
 
   const fyStartMonth = operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault;
+  const ownerProfitPeriod = useMemo(
+    () => fiscalWaterfallFallback(v as unknown as Record<string, unknown>, fyStartMonth),
+    [v, fyStartMonth],
+  );
+  const ownerWaterfallFallback =
+    ownerProfitPeriod?.fallback ??
+    derivePeriodWaterfallFallback(v as unknown as Record<string, unknown>);
+  const ownerProfitPeriodLabel =
+    ownerProfitPeriod?.slice.label ?? readStatementMeta(v, boardMarket).periodLabel;
   const coveredMonths = effectivePeriodMonths(v as unknown as Record<string, unknown>, {
     fyStartMonth,
   });
@@ -4872,7 +4882,7 @@ function Index() {
                               {implausibleSampleNote(boardMarket)}
                             </p>
                           ) : null}
-                          <ProfitLead periodLabel={readStatementMeta(v, boardMarket).periodLabel} />
+                          <ProfitLead periodLabel={ownerProfitPeriodLabel} />
                           <ProfitabilityWaterfall
                             appearance="premium"
                             previousMargins={priorMarginsFromFinancials(
@@ -4897,8 +4907,8 @@ function Index() {
                                 clientMeta?.financials_updated_at ?? null,
                               ),
                             )}
-                            fallback={derivePeriodWaterfallFallback(v)}
-                            periodLabel={readStatementMeta(v, boardMarket).periodLabel}
+                            fallback={ownerWaterfallFallback}
+                            periodLabel={ownerProfitPeriodLabel}
                             preferPeriod={preferStatementPeriod(v)}
                             yearToDate={statementYearLine(v, boardMarket)}
                             statementSource={readStatementMeta(v, boardMarket).statementSource}
@@ -6411,8 +6421,8 @@ function Index() {
                             clientMeta?.financials_updated_at ?? null,
                           ),
                         )}
-                        fallback={derivePeriodWaterfallFallback(v)}
-                        periodLabel={readStatementMeta(v, boardMarket).periodLabel}
+                        fallback={ownerWaterfallFallback}
+                        periodLabel={ownerProfitPeriodLabel}
                         preferPeriod={preferStatementPeriod(v)}
                         yearToDate={statementYearLine(v, boardMarket)}
                         statementSource={readStatementMeta(v, boardMarket).statementSource}
@@ -6422,7 +6432,7 @@ function Index() {
                     <div id="wizard-product-mix" className="mt-4">
                       <ProductMixPanel
                         totalRevenue={
-                          resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v), {
+                          resolveWaterfallFigures(weeklyInputs, ownerWaterfallFallback, {
                             preferPeriod: preferStatementPeriod(v),
                           }).revenue
                         }

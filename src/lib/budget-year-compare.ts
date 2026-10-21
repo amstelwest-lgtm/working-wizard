@@ -104,6 +104,33 @@ function hasMeasuredFigures(money: BudgetYearMoney | null | undefined): money is
   });
 }
 
+/**
+ * This year on the year strip. Uses the firm-year slice, not the raw
+ * statement and not the seeded plan. Missing lines stay null.
+ */
+export function yearMoneyFromFiscalSlice(
+  slice: {
+    revenue: number | null;
+    cogs: number | null;
+    grossProfit: number | null;
+    operatingExpenses: number | null;
+    netProfit: number | null;
+  } | null,
+): BudgetYearMoney | null {
+  if (!slice) return null;
+  const revenue = finite(slice.revenue) ? slice.revenue : null;
+  const cogs = finite(slice.cogs) ? slice.cogs : null;
+  const expenses = finite(slice.operatingExpenses) ? slice.operatingExpenses : null;
+  const netProfit = finite(slice.netProfit) ? slice.netProfit : null;
+  const grossProfit = finite(slice.grossProfit)
+    ? slice.grossProfit
+    : revenue != null && cogs != null
+      ? revenue - cogs
+      : null;
+  const money = { revenue, cogs, grossProfit, netProfit, expenses };
+  return hasMeasuredFigures(money) ? money : null;
+}
+
 /** Statement window the header already scored. A $0 plan is not this year. */
 export function ownerYearFromStatement(
   actuals: {
