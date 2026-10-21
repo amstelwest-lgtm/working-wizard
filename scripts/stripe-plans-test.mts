@@ -193,7 +193,7 @@ assert(
 );
 assert(
   FIRM_TRIAL_SENTENCE === "14-day free trial · up to 5 clients",
-  "the wall CTA keeps the approved trial copy",
+  "trialing firms keep the short trial sentence",
 );
 const practiceBoard = readFileSync(new URL("../src/components/practice-board.tsx", import.meta.url), "utf8");
 assert(

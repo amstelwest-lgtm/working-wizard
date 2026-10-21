@@ -11,6 +11,7 @@ import { PRECARD_CAP_MESSAGE, precardCapApplies } from "../src/lib/precard-cap";
 import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { SAGE_CONNECTION_UNAVAILABLE, sagePublicError } from "../src/lib/sage";
 import {
+  CARD_FREE_TRIAL_LINE,
   FIRM_BAND_CATALOG,
   FIRM_TRIAL_CARD_LINE,
   FIRM_TRIAL_CARD_NOTE,
@@ -18,6 +19,7 @@ import {
   FIRM_TRIAL_DAYS,
   FIRM_TRIAL_SENTENCE,
 } from "../src/lib/stripe-plans";
+import { FIRM_WALL_TRIAL_LINE } from "../src/lib/billing-wall";
 import { TRIAL_SIGNUP_SENTENCE } from "../src/lib/trial-public";
 
 function assert(cond: boolean, msg: string) {
@@ -44,7 +46,19 @@ assert(
   "the card is asked for after the first result",
 );
 assert(FIRM_CARD_TIMING === FIRM_TRIAL_CARD_LINE, "signup timing uses the card line");
-assert(PRECARD_CAP_MESSAGE === FIRM_TRIAL_CARD_LINE, "the pre-card wall uses the card line");
+assert(
+  CARD_FREE_TRIAL_LINE ===
+    "Your first client is free to explore. Add a card to start your 14-day free trial · up to 5 clients.",
+  "card-free firms use the explore sentence",
+);
+assert(!CARD_FREE_TRIAL_LINE.includes("on Starter"), "the card-free sentence does not say on Starter");
+assert(!CARD_FREE_TRIAL_LINE.toLowerCase().includes("vat"), "the card-free sentence has no VAT wording");
+assert(PRECARD_CAP_MESSAGE === CARD_FREE_TRIAL_LINE, "the pre-card wall uses the card-free sentence");
+assert(FIRM_WALL_TRIAL_LINE === CARD_FREE_TRIAL_LINE, "the billing wall uses the card-free sentence");
+assert(
+  FIRM_TRIAL_CARD_LINE !== CARD_FREE_TRIAL_LINE,
+  "a trialing firm keeps the Starter card line",
+);
 assert(
   precardCapApplies({ stripeConfigured: true, phase: "none" }) === true,
   "the pre-card gate still applies when there is no subscription",
@@ -184,6 +198,31 @@ for (const rel of surfaces) {
   }
   assert(!text.includes("SAGE_SA_API_KEY"), `${rel} names a Sage environment variable`);
 }
+
+const oldCardFreeLine = "14-day free trial · up to 5 clients on Starter";
+const cardFreeSurfaces = [
+  "src/lib/billing-wall.ts",
+  "src/lib/precard-cap.ts",
+  "src/components/firm-starter-trial-banner.tsx",
+  "src/components/trial-card-sentence.tsx",
+  "src/components/precard-cap-card.tsx",
+  "src/components/checkout-after-insight.tsx",
+  "src/routes/billing.required.tsx",
+  "src/components/practice-board.tsx",
+  "src/components/firm-band-upgrade.tsx",
+];
+for (const rel of cardFreeSurfaces) {
+  const text = readFileSync(resolve(root, rel), "utf8");
+  assert(!text.includes(oldCardFreeLine), `${rel} still shows the old card-free line`);
+}
+const board = readFileSync(resolve(root, "src/components/practice-board.tsx"), "utf8");
+assert(board.includes("CARD_FREE_TRIAL_LINE"), "Add client renders the card-free sentence");
+assert(
+  readFileSync(resolve(root, "src/lib/firm-client-cap.ts"), "utf8").includes(
+    "`${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the ${trialLimit}-client trial limit.`",
+  ),
+  "a trialing firm still uses the Starter trial-limit sentence",
+);
 
 const sharedUsd = readFileSync(resolve(root, "src/lib/landing-copy.ts"), "utf8");
 assert(!sharedUsd.includes("R 299") && !sharedUsd.includes("R299"), "landing copy has no rand price");

@@ -10,6 +10,13 @@ export const FIRM_TRIAL_SENTENCE = `${FIRM_TRIAL_DAYS}-day free trial · up to $
 /** Asked at the pre-card wall, after the first result. Not at signup. */
 export const FIRM_TRIAL_CARD_NOTE = "You add a card once you have seen your first result.";
 export const FIRM_TRIAL_CARD_LINE = `${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE}`;
+/**
+ * Card-free enforced firm (no Stripe subscription). Replaces
+ * FIRM_TRIAL_CARD_LINE on that firm's banner, Add client card, and wall.
+ * A trialing subscription keeps FIRM_TRIAL_CARD_LINE.
+ */
+export const CARD_FREE_TRIAL_LINE =
+  "Your first client is free to explore. Add a card to start your 14-day free trial · up to 5 clients.";
 
 export const STARTER_TRIAL_ENDED_MESSAGE = "Your trial has ended, choose a plan";
 

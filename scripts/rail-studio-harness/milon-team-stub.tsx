@@ -6,6 +6,7 @@
 import { useState } from "react";
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import { ZA_MARKET } from "@/lib/market/resolve";
+import { CARD_FREE_TRIAL_LINE } from "@/lib/starter-trial-constants";
 import type { AgentActivitySnapshot } from "@/lib/milon-team-activity";
 import {
   emptyMilonTeamFeed,
@@ -310,7 +311,7 @@ export function useMilonTeamFeedStub(clientId: string): MilonTeamFeedApi {
         return {
           ok: false,
           reason: "precard_cap",
-          message: "14-day free trial · up to 5 clients on Starter. You add a card once you have seen your first result.",
+          message: CARD_FREE_TRIAL_LINE,
         };
       }
       const href = `#draft-${id}`;

@@ -61,6 +61,7 @@ import {
 } from "../supabase/functions/_shared/app-origin.ts";
 import { checkoutEmailRedirectTo } from "../src/lib/pending-checkout";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
+import { FirmStarterTrialBanner } from "../src/components/firm-starter-trial-banner";
 import {
   decideFirmClientCreate,
   eligibleForIntroTrial,
@@ -68,10 +69,12 @@ import {
   starterTrialForPlanState,
 } from "../src/lib/firm-client-cap";
 import {
+  noPlanTrialClock,
   STARTER_TRIAL_ENDED_MESSAGE,
   starterTrialClock,
 } from "../src/lib/firm-starter-trial";
 import {
+  CARD_FREE_TRIAL_LINE,
   FIRM_BAND_CATALOG,
   FIRM_CHECKOUT_BANDS,
   FIRM_TRIAL_CARD_LINE,
@@ -911,6 +914,10 @@ assert(
   settings.includes("introTrialEligible={plan.introTrialEligible}"),
   "settings shows the Starter trial lines from the plan flag",
 );
+assert(
+  settings.includes("plan.phase === \"none\"") && settings.includes("plan.starterTrial?.enforced === true"),
+  "settings uses the card-free sentence only for an enforced firm with no subscription",
+);
 const capServer = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
 assert(
   capServer.includes("eligibleForIntroTrial(history.priorSubscriptionCount)"),
@@ -1255,6 +1262,80 @@ const usedTrial = renderToStaticMarkup(
 );
 assert(!usedTrial.includes(FIRM_TRIAL_SENTENCE), "a used trial hides the signup sentence");
 assert(!usedTrial.includes(FIRM_TRIAL_CARD_LINE), "a used trial hides the card line");
+assert(!usedTrial.includes(CARD_FREE_TRIAL_LINE), "a trialing firm does not see the card-free sentence");
+
+const OLD_CARD_FREE_LINE = "14-day free trial · up to 5 clients on Starter";
+for (const [label, props] of [
+  ["US", { priceCurrency: "USD" as const, saDiscount: false, price: "$39" }],
+  [
+    "SA",
+    {
+      priceCurrency: "zar" as const,
+      saDiscount: true,
+      price: "R299/mo · about R60 per client",
+      zaLabels: {
+        starter: { month: "R299/mo · about R60 per client", year: "R2,837/yr · about R60 per client" },
+        solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
+      },
+    },
+  ],
+] as const) {
+  const html = renderToStaticMarkup(
+    createElement(FirmBandUpgrade, {
+      currentBand: null,
+      interval: "month",
+      priceCurrency: props.priceCurrency,
+      canUpgrade: true,
+      clientCount: 0,
+      cardFree: true,
+      saDiscount: props.saDiscount,
+      zaLabels: "zaLabels" in props ? props.zaLabels : null,
+      onUpgrade: () => undefined,
+    }),
+  );
+  assert(html.includes(CARD_FREE_TRIAL_LINE), `${label} Add client card uses the card-free sentence`);
+  assert(!html.includes(OLD_CARD_FREE_LINE), `${label} Add client card drops the old Starter line`);
+  assert(!html.includes(FIRM_TRIAL_CARD_NOTE), `${label} Add client card drops the old card note`);
+  assert(html.includes(props.price), `${label} Add client card keeps the Starter price`);
+  assert(!html.toLowerCase().includes("vat"), `${label} Add client card has no VAT wording`);
+}
+
+const cardFreeBanner = renderToStaticMarkup(
+  createElement(FirmStarterTrialBanner, {
+    trial: noPlanTrialClock({
+      enforced: true,
+      noPlan: true,
+      startedAt: "2026-10-18T12:00:00.000Z",
+      now: new Date("2026-10-19T12:00:00.000Z"),
+    }),
+    firmId: "firm",
+  }),
+);
+assert(cardFreeBanner.includes(CARD_FREE_TRIAL_LINE), "the card-free trial banner uses the explore sentence");
+assert(!cardFreeBanner.includes(OLD_CARD_FREE_LINE), "the card-free trial banner drops the old Starter line");
+assert(!cardFreeBanner.toLowerCase().includes("vat"), "the card-free trial banner has no VAT wording");
+
+const trialingBanner = renderToStaticMarkup(
+  createElement(FirmStarterTrialBanner, {
+    trial: starterTrialClock({
+      enforced: true,
+      band: "starter",
+      startedAt: "2026-09-26T12:00:00.000Z",
+      now: new Date("2026-10-05T12:00:00.000Z"),
+    }),
+    firmId: "firm",
+  }),
+);
+assert(!trialingBanner.includes(CARD_FREE_TRIAL_LINE), "a trialing banner keeps its countdown copy");
+assert(!trialingBanner.includes(OLD_CARD_FREE_LINE), "a trialing banner does not pick up the old card-free line");
+assert(trialingBanner.includes("Trial day 10 of 14"), "a trialing banner still counts the trial");
+
+const practiceBoard = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
+assert(practiceBoard.includes("CARD_FREE_TRIAL_LINE"), "Add client shows the card-free sentence");
+assert(
+  practiceBoard.includes("cap.starterTrial.cardFree"),
+  "Add client shows that sentence only for a card-free firm",
+);
 
 for (const publicFile of [
   "src/components/firm-band-pricing.tsx",

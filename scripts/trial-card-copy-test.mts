@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { PrecardCapCard } from "../src/components/precard-cap-card.tsx";
 import { TrialCardSentence } from "../src/components/trial-card-sentence.tsx";
 import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap.ts";
-import { FIRM_TRIAL_CARD_LINE } from "../src/lib/starter-trial-constants.ts";
+import { CARD_FREE_TRIAL_LINE, FIRM_TRIAL_CARD_LINE } from "../src/lib/starter-trial-constants.ts";
 import { starterMonthlyFromQuote } from "../src/lib/trial-card-price.ts";
 
 function assert(cond: boolean, msg: string) {
@@ -54,7 +54,8 @@ const hits: string[] = [];
 walk(root, hits);
 assert(hits.length === 0, `banned trial copy came back:\n${hits.join("\n")}`);
 
-assert(PRECARD_CAP_MESSAGE === FIRM_TRIAL_CARD_LINE, "the cap card uses the trial sentence");
+assert(PRECARD_CAP_MESSAGE === CARD_FREE_TRIAL_LINE, "the cap card uses the card-free sentence");
+assert(!PRECARD_CAP_MESSAGE.includes(FIRM_TRIAL_CARD_LINE), "the cap card does not use the Starter card line");
 assert(starterMonthlyFromQuote({ market: "us", priceLabel: null }) === "$39/mo", "a US quote is $39/mo");
 assert(
   starterMonthlyFromQuote({ market: "za", priceLabel: "R 299/mo · about R 60 per client" }) === "R 299/mo",
@@ -83,11 +84,14 @@ function priceCount(html: string, price: string): number {
   return html.split(price).length - 1;
 }
 const usCard = renderToStaticMarkup(createElement(PrecardCapCard, { priceLabel: "$39/mo" }));
-assert(usCard.includes(FIRM_TRIAL_CARD_LINE), "the cap card shows the trial sentence");
+assert(usCard.includes(CARD_FREE_TRIAL_LINE), "the cap card shows the card-free sentence");
+assert(!usCard.includes("on Starter"), "the cap card does not say on Starter");
+assert(!usCard.toLowerCase().includes("vat"), "the cap card has no VAT wording");
 assert(priceCount(usCard, "$39/mo") === 1, "the cap card shows the US price once");
 assert(!usCard.includes("R 299") && !usCard.includes("R299"), "the US cap card has no rand price");
 const zaSentence = renderToStaticMarkup(createElement(TrialCardSentence, { priceLabel: "R 299/mo" }));
-assert(zaSentence.includes(FIRM_TRIAL_CARD_LINE), "Health and the cap card share the trial sentence");
+assert(zaSentence.includes(CARD_FREE_TRIAL_LINE), "Health and the cap card share the card-free sentence");
+assert(!zaSentence.includes("on Starter"), "the ZA sentence does not say on Starter");
 assert(priceCount(zaSentence, "R 299/mo") === 1, "the ZA price is shown once");
 assert(!zaSentence.includes("$39"), "the ZA sentence does not also show the dollar price");
 
