@@ -5,8 +5,8 @@
  */
 import { groundAdvisoryNarrative } from "./advisory-narrative.ts";
 import {
-  presentHealthNarrative,
   readStoredHealthSnapshot,
+  reconcileStoredHealthNarrative,
   type HealthScoreSnapshot,
 } from "./health-snapshot.ts";
 
@@ -26,9 +26,13 @@ export type DraftLiveFigures = {
   health?: HealthScoreSnapshot | null;
   /** Snapshot stored on the draft when it was written. */
   storedHealth?: HealthScoreSnapshot | null;
+  /** score_snapshot_hash stored with the draft, including the engine version. */
+  storedScoreHash?: string | null;
+  /** Finding evidence. Legacy rows with no hash are read from metrics and figures. */
+  evidence?: unknown;
   /** When this draft was saved. */
   writtenAt?: string | null;
-  /** Latest upload or ledger sync. Compared with writtenAt. */
+  /** Latest upload or ledger sync. A later clock forces stale. It never vouches the stored sentence. */
   figuresUpdatedAt?: string | null;
 };
 
@@ -209,31 +213,31 @@ export type PresentedDraft = {
 export function presentLiveDraft(base: string, live?: DraftLiveFigures | null): PresentedDraft {
   const trimmed = base.trim();
   if (!trimmed) return { text: "", stale: false, refresh: false };
-  // A hash or a quoted score can disagree when write and read round differently.
-  // That is not a figures change. Stale only if the books moved after the draft.
-  if (figuresMovedAfterDraft(live?.writtenAt, live?.figuresUpdatedAt) === false) {
-    return { text: trimmed, stale: false, refresh: false, regenerate: false };
-  }
+  const moved = figuresMovedAfterDraft(live?.writtenAt, live?.figuresUpdatedAt) === true;
   const ratios = live?.ratios ?? null;
   const overall = live?.overall ?? null;
   const hasRatios = Boolean(
     ratios && Object.values(ratios).some((value) => typeof value === "number" && Number.isFinite(value)),
   );
   const hasOverall = overall != null && Number.isFinite(overall);
-  if (!hasRatios && !hasOverall && UNGROUNDED_FIGURE.test(trimmed)) {
+  if (!hasRatios && !hasOverall && !live?.health && UNGROUNDED_FIGURE.test(trimmed)) {
     return { text: DRAFT_OUT_OF_DATE, stale: true, refresh: true };
   }
   const grounded = quoteLiveDraftProse(trimmed, { ratios, overall });
-  const health = presentHealthNarrative(grounded, live?.health, live?.storedHealth ?? null);
+  const health = reconcileStoredHealthNarrative({
+    text: grounded,
+    live: live?.health ?? null,
+    evidence: live?.evidence,
+    storedHash: live?.storedScoreHash,
+    storedHealth: live?.storedHealth ?? null,
+    forceStale: moved,
+  });
   if (health.regenerate) {
     return { text: health.text, stale: true, refresh: true, regenerate: true };
   }
-  if (health.text !== grounded) {
-    return { text: health.text, stale: false, refresh: false, regenerate: false };
-  }
   const changed = grounded !== trimmed;
   const drifted = draftFiguresDrift(live?.storedHash, { ratios, overall });
-  const refresh = changed || drifted;
+  const refresh = changed || drifted || moved;
   if (/\bstored\s+health\b|\bvs\s+live\b/i.test(grounded)) {
     return { text: DRAFT_OUT_OF_DATE, stale: true, refresh: true };
   }

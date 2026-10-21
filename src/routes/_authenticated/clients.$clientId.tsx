@@ -214,6 +214,7 @@ import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
 import { formatDateRange } from "@/lib/market/format";
 import {
+  booksPeriodPillLabel,
   figuresPeriodLabelFrom,
   preferStatementPeriod,
   readStatementMeta,
@@ -357,7 +358,7 @@ import {
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
 import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
-import { healthSnapshotFromBooks, renderHealthNarrative } from "@/lib/health-snapshot";
+import { healthSnapshotFromBooks, readStoredScoreSnapshotHash, renderHealthNarrative } from "@/lib/health-snapshot";
 import { draftStoredFiguresHash, draftStoredHealth, latestFiguresStamp } from "@/lib/draft-figures";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
@@ -4009,6 +4010,8 @@ function ClientView() {
             detail: row.detail,
             figuresHash: draftStoredFiguresHash(row.evidence),
             storedHealth: draftStoredHealth(row.evidence),
+            storedScoreHash: readStoredScoreSnapshotHash(row.evidence),
+            evidence: row.evidence,
             createdAt: row.created_at,
           }];
         }),
@@ -4155,7 +4158,7 @@ function ClientView() {
                 <span className="gold-text">MILŌN</span>
               </span>
               <FirmSwitcher />
-              <PeriodPill />
+              <PeriodPill periodLabel={booksPeriodPillLabel(statementMeta.periodEnd, figuresPeriodLabel)} />
               <FeatureFinder audience="accountant" clientId={clientId} />
               <span className="spacer" />
               <SettingsMenu

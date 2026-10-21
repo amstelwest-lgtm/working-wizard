@@ -11,6 +11,14 @@ import { MONTHS } from "./market/date-presets.ts";
 
 export const FIGURES_CHANGED_REGENERATE = "Figures changed since this was written, regenerate";
 
+/**
+ * Bumped when the same books produce a different liveHealthFromBooks result.
+ * 1 is the scorer the 1020B narrative was written against (Cash 78).
+ * 2 leaves a missing cash ratio unscored and uses the statement's own cover,
+ * which scores those books Cash 34. A stored hash from an older engine cannot match.
+ */
+export const SCORE_ENGINE_VERSION = "2";
+
 export const SCORE_SNAPSHOT_RULE =
   "When a tool returns score_snapshot, quote only that snapshot: its pillars, overall, weakest pillar, and period_label. Do not quote any other pillar score, and do not say a different pillar pulls the score down.";
 
@@ -101,7 +109,7 @@ export function healthSnapshotHash(snapshot: HealthScoreSnapshot): string {
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((pillar) => `${pillar.id}:${pillar.score}`)
     .join(",");
-  return `o:${snapshot.overall}|w:${snapshot.weakestLabel.toLowerCase()}:${snapshot.weakestScore}|p:${pillars}|d:${normalizePeriod(snapshot.periodLabel)}`;
+  return `e:${SCORE_ENGINE_VERSION}|o:${snapshot.overall}|w:${snapshot.weakestLabel.toLowerCase()}:${snapshot.weakestScore}|p:${pillars}|d:${normalizePeriod(snapshot.periodLabel)}`;
 }
 
 export function snapshotEvidenceFields(snapshot: HealthScoreSnapshot): {
@@ -159,6 +167,12 @@ export function healthSnapshotFromTool(
     (typeof record.period_label === "string" ? record.period_label.trim() : "") || // date-ok: stored snapshot period, compared not printed
     null;
   return { overall, pillars, weakestLabel, weakestScore, periodLabel: period };
+}
+
+export function readStoredScoreSnapshotHash(evidence: unknown): string | null {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return null;
+  const hash = (evidence as { score_snapshot_hash?: unknown }).score_snapshot_hash;
+  return typeof hash === "string" && hash.trim() ? hash.trim() : null;
 }
 
 export function readStoredHealthSnapshot(evidence: unknown): HealthScoreSnapshot | null {
@@ -448,6 +462,31 @@ export function presentHealthNarrative(
   return { text: trimmed, stale: false, regenerate: false };
 }
 
+/** Weakest pillar and overall only. The other pillar numbers stay on the score card. */
+export function renderHealthNarrativeLead(snapshot: HealthScoreSnapshot): string {
+  return `${snapshot.weakestLabel} is the weakest pillar at ${snapshot.weakestScore}, against an overall health score of ${snapshot.overall}.`;
+}
+
+/** The page's lead, then the regenerate action. Stored numbers are not in this string. */
+export function staleHealthNarrative(snapshot: HealthScoreSnapshot): string {
+  return `${renderHealthNarrativeLead(snapshot)} ${FIGURES_CHANGED_REGENERATE}`;
+}
+
+/**
+ * Split a narrative that ends with the regenerate action.
+ * The lead is what the screen prints. The action is the button.
+ */
+export function splitRegenerateNarrative(text: string): { lead: string; action: boolean } {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  const bare = trimmed.replace(/[.!?]+$/, "");
+  if (bare === FIGURES_CHANGED_REGENERATE) return { lead: "", action: true };
+  if (bare.endsWith(FIGURES_CHANGED_REGENERATE)) {
+    const lead = bare.slice(0, bare.length - FIGURES_CHANGED_REGENERATE.length).trim();
+    if (lead) return { lead, action: true };
+  }
+  return { lead: trimmed, action: false };
+}
+
 /** One sentence. Every number comes from the snapshot. */
 export function renderHealthNarrative(snapshot: HealthScoreSnapshot): string {
   const pillars = snapshot.pillars;
@@ -461,7 +500,145 @@ export function renderHealthNarrative(snapshot: HealthScoreSnapshot): string {
     const tail = pillars[pillars.length - 1]!;
     list = ` ${head} and ${tail.label} scores ${tail.score}.`;
   }
-  return `${snapshot.weakestLabel} is the weakest pillar at ${snapshot.weakestScore}, against an overall health score of ${snapshot.overall}.${list}`;
+  const lead = renderHealthNarrativeLead(snapshot).replace(/\.$/, "");
+  return `${lead}.${list}`;
+}
+
+type FigureBag = Map<string, number>;
+
+function rememberScore(bag: FigureBag, key: string, value: unknown) {
+  const score = finiteScore(value);
+  if (score == null || score < 0 || score > 100 || !key.trim()) return;
+  const raw = key.trim().toLowerCase();
+  bag.set(raw, score);
+  bag.set(raw.replace(/[\s_:-]+/g, ""), score);
+}
+
+function scoreFromBag(bag: FigureBag, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const raw = key.trim().toLowerCase();
+    if (bag.has(raw)) return bag.get(raw)!;
+    const compact = raw.replace(/[\s_:-]+/g, "");
+    if (bag.has(compact)) return bag.get(compact)!;
+  }
+  return null;
+}
+
+function legacyFigureBag(
+  evidence: unknown,
+  figures?: Record<string, number> | readonly { key: string; value: number }[] | null,
+): FigureBag {
+  const bag: FigureBag = new Map();
+  const record =
+    evidence && typeof evidence === "object" && !Array.isArray(evidence)
+      ? (evidence as Record<string, unknown>)
+      : null;
+  const metrics = record?.metrics;
+  if (Array.isArray(metrics)) {
+    for (const item of metrics) {
+      if (!item || typeof item !== "object") continue;
+      const row = item as { metric?: unknown; value?: unknown };
+      if (typeof row.metric === "string") rememberScore(bag, row.metric, row.value);
+    }
+  }
+  const nested = record?.figures;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    for (const [key, value] of Object.entries(nested as Record<string, unknown>)) rememberScore(bag, key, value);
+  }
+  if (Array.isArray(figures)) {
+    for (const entry of figures) rememberScore(bag, entry.key, entry.value);
+  } else if (figures && typeof figures === "object") {
+    for (const [key, value] of Object.entries(figures)) rememberScore(bag, key, value);
+  }
+  return bag;
+}
+
+/**
+ * A finding written before score_snapshot_hash. Pillar keys and overall come
+ * from evidence.metrics, then evidence.figures. stored_score is not the
+ * narrative's overall. A missing period is filled by the caller.
+ */
+export function healthSnapshotFromLegacyEvidence(
+  evidence: unknown,
+  figures?: Record<string, number> | readonly { key: string; value: number }[] | null,
+): HealthScoreSnapshot | null {
+  const bag = legacyFigureBag(evidence, figures);
+  const pillars: HealthSnapshotPillar[] = [];
+  for (const id of PILLAR_IDS) {
+    const score = scoreFromBag(bag, `pillar:${id}`, id);
+    if (score == null) continue;
+    pillars.push({ id, label: PILLAR_LABELS[id], score });
+  }
+  const overall = scoreFromBag(bag, "overall", "live_overall", "liveoverall");
+  if (overall == null || pillars.length === 0) return null;
+  const weakest = pillars.slice().sort((a, b) => a.score - b.score || a.id.localeCompare(b.id))[0];
+  if (!weakest) return null;
+  const record =
+    evidence && typeof evidence === "object" && !Array.isArray(evidence)
+      ? (evidence as { period_label?: unknown })
+      : null;
+  const period = typeof record?.period_label === "string" ? record.period_label.trim() : "";
+  return {
+    overall,
+    pillars,
+    weakestLabel: weakest.label,
+    weakestScore: weakest.score,
+    periodLabel: period || null,
+  };
+}
+
+export type ReconciledHealthNarrative = {
+  text: string;
+  stale: boolean;
+  regenerate: boolean;
+};
+
+/**
+ * The upload clock can force this stale. It cannot vouch a stored sentence.
+ * A hash compares engine version, overall, weakest, pillars, and period.
+ * No hash falls back to metrics and figures, then a stored snapshot object.
+ * A mismatch is the page's lead plus the regenerate action.
+ */
+export function reconcileStoredHealthNarrative(input: {
+  text: string;
+  live?: HealthScoreSnapshot | null;
+  evidence?: unknown;
+  figures?: Record<string, number> | readonly { key: string; value: number }[] | null;
+  storedHash?: string | null;
+  storedHealth?: HealthScoreSnapshot | null;
+  forceStale?: boolean;
+}): ReconciledHealthNarrative {
+  const text = input.text.replace(/\s+/g, " ").trim();
+  if (!text) return { text: "", stale: false, regenerate: false };
+  const live = input.live ?? null;
+  const force = input.forceStale === true;
+  if (!live) return { text, stale: false, regenerate: false };
+  if (isHistoricalScoreNote(text) && !healthClaimsDisagree(text, live)) {
+    return { text, stale: false, regenerate: false };
+  }
+  const hash = input.storedHash?.trim() || readStoredScoreSnapshotHash(input.evidence) || "";
+  const claimed = hash
+    ? null
+    : healthSnapshotFromLegacyEvidence(input.evidence, input.figures) ?? input.storedHealth ?? null;
+  const aligned =
+    claimed && !claimed.periodLabel && live.periodLabel ? { ...claimed, periodLabel: live.periodLabel } : claimed;
+  const textDisagrees = healthClaimsDisagree(text, live) || freeFormStaleScore(text, live);
+  let comparable = false;
+  let mismatch = false;
+  if (hash) {
+    comparable = true;
+    mismatch = hash !== healthSnapshotHash(live);
+  } else if (aligned) {
+    comparable = true;
+    mismatch = healthSnapshotsDiffer(aligned, live);
+  } else if (textDisagrees) {
+    comparable = true;
+    mismatch = true;
+  }
+  if (comparable && (mismatch || force)) {
+    return { text: staleHealthNarrative(live), stale: true, regenerate: true };
+  }
+  return { text, stale: false, regenerate: false };
 }
 
 export function healthSnapshotPromptBlock(snapshot: HealthScoreSnapshot): string {

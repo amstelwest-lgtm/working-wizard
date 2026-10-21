@@ -7,7 +7,7 @@ import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
 import { DRAFT_OUT_OF_DATE, quoteLiveScoreOnly } from "@/lib/draft-figures";
-import { FIGURES_CHANGED_REGENERATE } from "@/lib/health-snapshot";
+import { FIGURES_CHANGED_REGENERATE, splitRegenerateNarrative } from "@/lib/health-snapshot";
 import { AgentChipIcon } from "@/components/chrome-icons";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import { taxSampleCardVisible } from "@/lib/tax-specialist/enabled";
@@ -17,7 +17,7 @@ import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-
 import "./owner-door.css";
 
 function narrativeMarker(line: string): boolean {
-  return line.trim().replace(/[.!?]$/, "") === FIGURES_CHANGED_REGENERATE;
+  return splitRegenerateNarrative(line).action;
 }
 
 function DraftNeedsCell({
@@ -36,6 +36,7 @@ function DraftNeedsCell({
   const body = lines.map((line, index) => {
     const stale = Boolean(needs.draftStale?.[index]);
     const marker = narrativeMarker(line);
+    const lead = marker ? splitRegenerateNarrative(line).lead || FIGURES_CHANGED_REGENERATE : line;
     return (
       <span
         key={`${line}-${index}`}
@@ -43,7 +44,7 @@ function DraftNeedsCell({
         data-health-narrative={marker ? "stale" : undefined}
         title={stale && !marker ? DRAFT_OUT_OF_DATE : undefined}
       >
-        {line}
+        {lead}
         {stale && !marker && line !== DRAFT_OUT_OF_DATE ? (
           <span className="owner-needs-refresh"> {DRAFT_OUT_OF_DATE}</span>
         ) : null}
@@ -71,7 +72,7 @@ function DraftNeedsCell({
           if (live) setLines([live]);
         }}
       >
-        Regenerate
+        {FIGURES_CHANGED_REGENERATE}
       </button>
     </div>
   );
