@@ -16,7 +16,6 @@ import {
   type FirmSubscriptionPhase,
 } from "@/lib/firm-client-cap";
 import {
-  isSaMarketFirm,
   readSubscriptionDiscountRefs,
   type StoredDiscountRef,
 } from "@/lib/firm-sa-market";
@@ -36,6 +35,8 @@ import {
   type FirmUpgradeSnapshot,
 } from "@/lib/firm-band-upgrade";
 import { isOwnerCatalogPrice } from "@/lib/owner-price";
+import { readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
+import { firmCheckoutCharge } from "@/lib/stripe-checkout.core";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
 import { FIRM_BAND_CATALOG, isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
@@ -56,6 +57,23 @@ import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.ser
 import { collapseDuplicateClientShells } from "@/lib/client-display-name";
 
 installMetadataFirmCustomerWrite();
+
+/** Stripe address country for the charge line. A miss leaves the country unknown. */
+async function checkoutBillingCountry(customerId: string | null | undefined): Promise<string | null> {
+  const id = customerId?.trim() ?? "";
+  if (!id || !stripeConfigured()) return null;
+  try {
+    return await readWithinBudget(
+      readStripeCustomerCountry(
+        getStripe() as Parameters<typeof readStripeCustomerCountry>[0],
+        id,
+      ),
+      1_000,
+    );
+  } catch {
+    return null;
+  }
+}
 
 export type EntitlingFirmSubscription = {
   id: string;
@@ -686,6 +704,7 @@ export async function loadFirmClientCreateAllowance(input: {
     clientMarkets,
     clientCount,
     sub,
+    billingCountry: await checkoutBillingCountry(sub?.customerId),
   });
   const starterTrial = trialBannerFor(firm, sub);
   await writeStarterTrialGenerationBlock(firm.id, starterTrial.expired);
@@ -807,6 +826,7 @@ export async function loadFirmPlanDisplay(input: {
     clientMarkets,
     clientCount,
     sub,
+    billingCountry: await checkoutBillingCountry(sub?.customerId),
   });
   const starterTrial = trialBannerFor(firm, sub);
   await writeStarterTrialGenerationBlock(firm.id, starterTrial.expired);
@@ -892,6 +912,8 @@ export async function buildUpgradeSnapshot(input: {
   membershipRole: string | null;
   market: unknown;
   clientMarkets?: readonly unknown[] | null;
+  /** Checkout billing country. Omitted means still unknown. */
+  billingCountry?: string | null;
   clientCount: number;
   sub: EntitlingFirmSubscription | null;
 }): Promise<FirmUpgradeSnapshot> {
@@ -908,6 +930,14 @@ export async function buildUpgradeSnapshot(input: {
     firmMarket: input.market,
     clientMarkets: input.clientMarkets,
   });
+  const charge = firmCheckoutCharge({
+    firmMarket: input.market,
+    clientMarkets: input.clientMarkets,
+    requested: "us",
+    billingCountry: input.billingCountry,
+    band: band && isFirmCheckoutBand(band) ? band : "starter",
+    interval,
+  });
   let zarByBand: FirmUpgradeSnapshot["zarByBand"] = {};
   let zaLabels: FirmUpgradeSnapshot["zaLabels"] = null;
   let zaPriceLabel: string | null = null;
@@ -916,9 +946,9 @@ export async function buildUpgradeSnapshot(input: {
       const { loadSaPricingCopy } = await import("@/lib/pricing/za-pricing-chunk.server");
       const copy = loadSaPricingCopy();
       zaLabels = copy.labels;
-      // The charge line stays rand only when Checkout can charge rand.
-      // A US firm row is USD even if the client mix shows rand.
-      if (isSaMarketFirm({ market: input.market })) {
+      // Same choice as Checkout and the ZA coupon. The list above can still
+      // be rand for a client mix whose billing country is not yet ZA.
+      if (charge.priceMarket === "za") {
         const key = band && isFirmCheckoutBand(band) ? band : "solo";
         zaPriceLabel = copy.labels[key][interval];
       }

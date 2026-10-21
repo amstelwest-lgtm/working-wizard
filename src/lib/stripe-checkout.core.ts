@@ -165,11 +165,13 @@ export function resolveFirmCheckoutMarket(
 }
 
 /**
- * Currency for one Checkout. The shared practice helper decides whether a
- * rand price is even eligible: a South Africa firm row, or more ZA clients
- * than US clients. `priceMarketForFirm` still keeps rand only when the
- * Checkout billing country is ZA, or still unknown at session creation.
- * A known non-ZA billing country falls back to USD.
+ * Currency for one Checkout, and the ZA coupon that goes with that charge.
+ * A South Africa firm row pays ZAR unless the billing country is known and
+ * is not ZA. Unknown still starts on rand, because Checkout collects the
+ * address. A non-ZA firm row pays ZAR only when the practice list is rand
+ * (more ZA clients than US clients) and the billing country is known to be
+ * ZA. Unknown, or any other country, is USD. A US firm with no ZA majority
+ * stays USD. `zaCoupon` is that same choice: on only when the charge is ZAR.
  */
 export function firmCheckoutCharge(input: {
   firmMarket: unknown;
@@ -184,16 +186,23 @@ export function firmCheckoutCharge(input: {
   priceMarket: StripePlanMarket;
   lookupKey: string;
   billingFallback: boolean;
+  zaCoupon: boolean;
 } {
   const firmMarket = resolveFirmCheckoutMarket(input.firmMarket, input.requested, input.geoCountry);
-  const wantsZar = practiceDisplaysZarPlan({
-    firmMarket: input.firmMarket,
-    clientMarkets: input.clientMarkets,
-  });
-  const priceMarket = priceMarketForFirm({
-    firmMarket: wantsZar ? "za" : firmMarket,
-    billingCountry: input.billingCountry,
-  });
+  const country = (input.billingCountry ?? "").trim().toUpperCase();
+  const knownCountry = country.length > 0;
+  const mixZar =
+    firmMarket !== "za" &&
+    practiceDisplaysZarPlan({
+      firmMarket: input.firmMarket,
+      clientMarkets: input.clientMarkets,
+    });
+  const priceMarket =
+    firmMarket === "za"
+      ? priceMarketForFirm({ firmMarket: "za", billingCountry: input.billingCountry })
+      : mixZar && country === "ZA"
+        ? "za"
+        : "us";
   const lookupKey =
     priceMarket === "za"
       ? zaLookupKey(input.band, input.interval)
@@ -202,7 +211,9 @@ export function firmCheckoutCharge(input: {
     firmMarket,
     priceMarket,
     lookupKey,
-    billingFallback: wantsZar && priceMarket === "us",
+    billingFallback:
+      priceMarket === "us" && knownCountry && country !== "ZA" && (firmMarket === "za" || mixZar),
+    zaCoupon: priceMarket === "za",
   };
 }
 

@@ -503,16 +503,17 @@ export async function completeFirmSetupUpgrade(
           return loadFirmClientMarkets(getSupabaseAdminOrNull(), setupFirmId);
         })();
   const saFirm = isSaMarketFirm({ market: firmMarket });
-  const zaCouponId = saFirm ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
   const billingCountry = await readStripeCustomerCountry(stripe, customerId);
-  const priceMarket = firmCheckoutCharge({
+  const charge = firmCheckoutCharge({
     firmMarket,
     clientMarkets,
     requested: saFirm ? "za" : "us",
     billingCountry,
     band: intent.band,
     interval: intent.interval,
-  }).priceMarket;
+  });
+  const priceMarket = charge.priceMarket;
+  const zaCouponId = charge.zaCoupon ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
   const { price, lookupKey } = await resolveFirmCatalogPrice(
     stripe as unknown as Parameters<typeof resolveFirmCatalogPrice>[0],
     intent.band,

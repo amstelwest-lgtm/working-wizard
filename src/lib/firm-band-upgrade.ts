@@ -85,9 +85,9 @@ export type FirmUpgradeSnapshot = {
   /** Server-built rand lines when the practice list is in rand. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /**
-   * Rand line for a ZA firm row, where Checkout can charge rand.
-   * Null when the list is in rand only because of the client mix.
-   * Checkout still prices from the firm row (`priceMarketForFirm`).
+   * Charge line for the current band. Set only when Checkout would charge
+   * ZAR for this billing country (`firmCheckoutCharge`). A client-mix firm
+   * leaves it empty until the billing country is known to be ZA.
    */
   zaPriceLabel?: string | null;
 };
@@ -522,9 +522,10 @@ export function saFirmDisplayPrice(
  * cap snapshot both use this. True when the firm row is South Africa, or
  * when more clients are in South Africa than in the United States.
  *
- * Checkout uses this for the price. `firmCheckoutCharge` asks this helper
- * first, then `priceMarketForFirm` keeps rand only when the Checkout billing
- * country is ZA or still unknown. A known non-ZA billing country is USD.
+ * The list can be rand while Checkout still charges USD. `firmCheckoutCharge`
+ * charges ZAR for a non-ZA firm row only when this is true and the billing
+ * country is known to be ZA. A ZA firm row still charges ZAR when the
+ * country is ZA or unknown.
  */
 export function practiceDisplaysZarPlan(input: {
   firmMarket: unknown;

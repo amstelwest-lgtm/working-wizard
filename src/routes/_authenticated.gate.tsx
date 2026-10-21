@@ -115,6 +115,25 @@ function resumeUnpaidFirm(snap: GateSnap, clients: FirmClientGateContext) {
   });
 }
 
+const billingWallWarned = new Set<string>();
+
+/** One wall line per firm for this tab. A later open of the same firm stays quiet. */
+function warnBillingWall(firmId: string, reason: string): void {
+  const id = firmId.trim();
+  if (!id || billingWallWarned.has(id)) return;
+  billingWallWarned.add(id);
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      const key = `billing-gate-wall:${id}`;
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    }
+  } catch {
+    // The set above already limits this page load.
+  }
+  console.warn("[billing-gate] wall", { firmId: id, reason });
+}
+
 export function AuthGate() {
   const { user, loading, restoreFailed } = useAuth();
   const { firmId, firmMarket, hasFirm, firms, firmsLoaded } = useAccountantProfile();
@@ -498,7 +517,7 @@ export function AuthGate() {
           setFirmEntitled(true);
           return;
         }
-        console.warn("[billing-gate] wall", { firmId: attemptFirmId, reason });
+        warnBillingWall(attemptFirmId, reason);
         setFirmEntitled(false);
         resumeUnpaidFirm(latest.current, clients);
       } catch (err) {

@@ -1,9 +1,11 @@
 /**
  * Cap snapshot currency. My practice is a US firm row with 5 ZA clients
  * and 1 US client, so the list is rand. A US book stays USD. A logged-out
- * visitor never sees a rand price. Checkout follows the same helper:
- * My practice (US row, mostly ZA clients) uses the ZAR price when the
- * billing country is ZA, and USD when it is US. A US-only firm stays USD.
+ * visitor never sees a rand price. Checkout charges ZAR for that client
+ * mix only when the billing country is known to be ZA, and that charge
+ * selects the ZA coupon. Unknown or US stays USD, with no coupon. A ZA
+ * firm row with an unknown billing country stays on ZAR. A US-only firm
+ * is USD on the panel and on Checkout.
  *
  * Run: pnpm test:strike7-cap
  */
@@ -69,7 +71,10 @@ assert(
 assert(practiceHtml.includes("Starter"), "the cap panel names Starter");
 assert(/R\s?299/.test(practiceHtml), `the cap panel should show R299, saw ${practiceHtml}`);
 assert(!/Shown in rand/.test(practiceHtml), "the panel does not add a checkout sentence");
-assert(practiceSnap.zaPriceLabel == null, "the checkout charge line stays empty when the firm row is US");
+assert(
+  practiceSnap.zaPriceLabel == null,
+  "a client-mix firm with an unknown billing country leaves the charge line empty",
+);
 
 const practiceMarkets = practice.clients.map((client) => client.market);
 const chargeZa = firmCheckoutCharge({
@@ -93,8 +98,50 @@ const chargeUs = firmCheckoutCharge({
   interval: "month",
 });
 assert(
-  chargeUs.priceMarket === "us",
-  "My practice Checkout stays USD when the billing country is not ZA",
+  chargeZa.zaCoupon === true,
+  "a client-mix firm with billing country ZA charges ZAR and selects the ZA coupon",
+);
+assert(
+  chargeUs.priceMarket === "us" && chargeUs.zaCoupon === false,
+  "a client-mix firm with billing country US charges USD and skips the ZA coupon",
+);
+const chargeUnknown = firmCheckoutCharge({
+  firmMarket: practice.market,
+  clientMarkets: practiceMarkets,
+  requested: "za",
+  billingCountry: null,
+  band: "starter",
+  interval: "month",
+});
+assert(
+  chargeUnknown.priceMarket === "us" && chargeUnknown.zaCoupon === false,
+  "a client-mix firm with an unknown billing country charges USD and skips the ZA coupon",
+);
+const mixZaSnap = await buildUpgradeSnapshot({
+  isOwner: true,
+  membershipRole: "owner",
+  market: practice.market,
+  clientMarkets: practiceMarkets,
+  clientCount: practice.clients.length,
+  sub: null,
+  billingCountry: "ZA",
+});
+assert(
+  /R\s?\d/.test(mixZaSnap.zaPriceLabel ?? ""),
+  `a client-mix firm with billing country ZA shows a rand charge line, saw ${mixZaSnap.zaPriceLabel}`,
+);
+const mixUsSnap = await buildUpgradeSnapshot({
+  isOwner: true,
+  membershipRole: "owner",
+  market: practice.market,
+  clientMarkets: practiceMarkets,
+  clientCount: practice.clients.length,
+  sub: null,
+  billingCountry: "US",
+});
+assert(
+  mixUsSnap.zaPriceLabel == null,
+  "a client-mix firm with billing country US leaves the charge line empty",
 );
 assert(
   priceMarketForFirm({ firmMarket: "za", billingCountry: "ZA" }) === "za",
@@ -152,8 +199,27 @@ const zaFirmCharge = firmCheckoutCharge({
 });
 assert(zaSnap.saDiscount === true, "a ZA firm row is a rand list on the cap snapshot");
 assert(/R\s?299/.test(zaHtml), `a ZA firm cap panel should show R299, saw ${zaHtml}`);
-assert(zaFirmCharge.priceMarket === "za", "a ZA firm Checkout with billing country ZA uses the ZAR price");
-assert(!hasRandPrice(usHtml) && usCharge.priceMarket === "us", "a US-only firm is USD on the panel and on Checkout");
+assert(zaFirmCharge.priceMarket === "za" && zaFirmCharge.zaCoupon === true, "a ZA firm Checkout with billing country ZA uses the ZAR price and the ZA coupon");
+const zaUnknownCharge = firmCheckoutCharge({
+  firmMarket: { country: "ZA", regionCode: "GP" },
+  clientMarkets: zaMarkets,
+  requested: "us",
+  billingCountry: null,
+  band: "starter",
+  interval: "month",
+});
+assert(
+  zaUnknownCharge.priceMarket === "za" && zaUnknownCharge.zaCoupon === true,
+  "a ZA-row firm with an unknown billing country charges ZAR and keeps the ZA coupon",
+);
+assert(
+  /R\s?\d/.test(zaSnap.zaPriceLabel ?? ""),
+  `a ZA-row firm charge line is rand when the billing country is unknown, saw ${zaSnap.zaPriceLabel}`,
+);
+assert(
+  !hasRandPrice(usHtml) && usCharge.priceMarket === "us" && usCharge.zaCoupon === false,
+  "a US firm is USD on the panel and on Checkout and does not take the ZA coupon",
+);
 
 const visitor = {
   pack: visitorCopyPack(null),

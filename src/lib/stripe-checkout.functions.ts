@@ -505,8 +505,8 @@ async function createPortalUrl(customerId: string, origin: string): Promise<stri
   return session.url;
 }
 
-function zaCouponIdForMarket(market: unknown): string | null {
-  if (!isSaMarketFirm({ market })) return null;
+function zaCouponIdForMarket(charge: { zaCoupon: boolean }): string | null {
+  if (!charge.zaCoupon) return null;
   return stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID);
 }
 
@@ -520,8 +520,6 @@ async function createPaidCheckoutSession(input: {
   /** Raw firms.market. Null when this user has no firm yet. */
   firmMarket: unknown;
   promo?: string | null;
-  /** From the firm row. Never the client market flag. */
-  zaCouponId?: string | null;
   firmId?: string | null;
   /** Client market JSON. The practice helper uses this for the ZAR price. */
   clientMarkets?: readonly unknown[] | null;
@@ -593,6 +591,7 @@ async function createPaidCheckoutSession(input: {
     band: input.plan,
     interval: input.interval,
   });
+  const zaCouponId = zaCouponIdForMarket(charge);
   const { price, lookupKey } = await resolveFirmCatalogPrice(
     stripe,
     input.plan,
@@ -614,6 +613,7 @@ async function createPaidCheckoutSession(input: {
     customerId: action.customerId,
     market: charge.firmMarket,
     promotionCodeId,
+    zaCouponId,
     billingFallback: charge.billingFallback,
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
     includeTrial: action.includeTrial,
@@ -654,7 +654,6 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
       requested: data.market as StripePlanMarket,
       firmMarket,
       promo: data.promo,
-      zaCouponId: zaCouponIdForMarket(firmMarket),
     });
   });
 
@@ -890,7 +889,6 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       firmId: data.firmId,
     });
     const saFirm = isSaMarketFirm({ market: firmMarket });
-    const zaCouponId = saFirm ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
     const band = data.band as FirmCheckoutBand;
     const interval = data.interval as FirmInterval;
     const sub = await findEntitlingFirmSubscription(billingEmail, {
@@ -910,14 +908,16 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       (await findBillingCustomerId({ email: billingEmail, userId: ownerUserId, firmId: data.firmId }));
     const billingCountry = await readStripeCustomerCountry(stripe, countryCustomerId);
     const clientMarkets = await loadFirmClientMarkets(ctx.supabase, data.firmId);
-    const priceMarket = firmCheckoutCharge({
+    const charge = firmCheckoutCharge({
       firmMarket,
       clientMarkets,
       requested: saFirm ? "za" : "us",
       billingCountry,
       band,
       interval,
-    }).priceMarket;
+    });
+    const priceMarket = charge.priceMarket;
+    const zaCouponId = charge.zaCoupon ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
     const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, band, interval, priceMarket);
     const voucherCode = normalizeVoucherCode(data.voucherCode);
     if (data.voucherCode?.trim() && !voucherCode) {
@@ -1015,7 +1015,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         band,
         interval,
         price,
-        saMarket: isSaMarketFirm({ market: firmMarket }) && !voucherPromotionCodeId,
+        saMarket: charge.zaCoupon && !voucherPromotionCodeId,
         promotionCodeId: voucherPromotionCodeId,
         promotionCode: voucherPromotionCodeId ? voucherCode : null,
         voucherPreview,
@@ -1074,7 +1074,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       includeTrial: false,
       replacesSubscriptionId,
       promotionCodeId: voucherPromotionCodeId,
-      billingFallback: saFirm && priceMarket === "us",
+      billingFallback: charge.billingFallback,
     });
     assertNoManagedPaymentsOverride(params);
     let session: { url: string | null };
