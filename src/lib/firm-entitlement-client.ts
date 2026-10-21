@@ -38,11 +38,13 @@ function firmKey(firmId?: string | null): string {
   return firmId?.trim() ?? "";
 }
 
-/** A result is only that firm. A missing id does not match another firm's slot. */
+/** A result is only that firm. A missing id matches only another missing id. */
 function sameFirm(slot: Slot | null, userId: string, firmId?: string | null): slot is Slot {
+  if (!slot || slot.userId !== userId) return false;
   const id = firmKey(firmId);
-  if (!slot || slot.userId !== userId || !id || slot.firmId !== id) return false;
-  return true;
+  const slotId = slot.firmId?.trim() ?? "";
+  if (!id || !slotId) return id === slotId;
+  return slotId === id;
 }
 
 /** An entitled slot is only that firm. A missing firm id does not cover another firm. */
@@ -66,7 +68,9 @@ function fresh(userId: string, firmId?: string | null): boolean {
 function sameInflight(userId: string, firmId?: string | null): boolean {
   if (!inflight || inflightUser !== userId) return false;
   const id = firmKey(firmId);
-  return Boolean(id) && inflightFirm === id;
+  const current = inflightFirm ?? "";
+  if (!id || !current) return id === current;
+  return current === id;
 }
 
 function liveFailure(value: CachedFirmEntitlement): boolean {
@@ -146,11 +150,12 @@ export function noteFirmEntitlement(
   value: CachedFirmEntitlement,
   firmId?: string | null,
 ): void {
-  const id = firmKey(firmId);
-  // A missing firm id is not a plan. Do not inherit another firm's slot.
-  if (!userId || !id) return;
+  if (!userId) return;
   // Unknown is not a result. Leave the previous success in place.
   if (value.reason === "stripe_error") return;
+  const id = firmKey(firmId);
+  // A missing firm id is not another firm's plan, and it must not erase one.
+  if (!id && lastKnown && lastKnown.userId === userId && lastKnown.firmId) return;
   // A failed recheck must not downgrade a firm this tab already knows is entitled.
   if (value.checkFailed && !value.entitled && entitledSlotMatches(lastKnown, userId, id)) {
     return;
