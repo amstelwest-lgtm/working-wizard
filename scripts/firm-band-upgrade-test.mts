@@ -915,14 +915,14 @@ assert(overSolo.includes('value="small"'), "Small stays selectable because 25 co
 assert(overSolo.includes("$99"), "the list still shows the USD catalog price");
 
 const inviteEmail = readFileSync(resolve("src/lib/client-invite-email.ts"), "utf8");
-assert(inviteEmail.includes("appRedirectOrigin"), "owner invite links use the app origin helper");
+assert(inviteEmail.includes("canonicalAuthOrigin"), "owner invite links use the canonical auth origin");
 assert(!inviteEmail.includes("https://milon.co.za"), "owner invite links do not default to milon.co.za");
 
 const reset = readFileSync(resolve("src/components/password-reset-request.tsx"), "utf8");
-assert(reset.includes("browserAppUrl(\"/reset-password\")"), "password reset uses the allowlisted origin");
+assert(reset.includes("canonicalAuthUrl(\"/reset-password\")"), "password reset uses the canonical auth origin");
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
-assert(landing.includes("browserAppUrl(\"/reset-password\")"), "landing password reset uses the allowlisted origin");
-assert(landing.includes("browserAppUrl(\"/app\")"), "owner signup redirect uses the allowlisted origin");
+assert(landing.includes("canonicalAuthUrl(\"/reset-password\")"), "landing password reset uses the canonical auth origin");
+assert(landing.includes("canonicalAuthUrl(\"/app\")"), "owner signup redirect uses the canonical auth origin");
 const google = readFileSync(resolve("src/lib/google-auth.ts"), "utf8");
 assert(google.includes("browserAppOrigin()"), "Google redirectTo uses the allowlisted origin");
 

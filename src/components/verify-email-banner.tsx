@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { MailCheck, X } from "lucide-react";
 import { toast } from "sonner";
-import { browserAppUrl } from "@/lib/app-origin";
+import { canonicalAuthUrl } from "@/lib/app-origin";
 import { supabase } from "@/integrations/supabase/client";
 
 /** Session-scoped so the banner never nags twice in one sitting. */
@@ -60,7 +60,7 @@ export function VerifyEmailBanner({
         email,
         options: {
           shouldCreateUser: false,
-          emailRedirectTo: browserAppUrl("/auth/verified"),
+          emailRedirectTo: canonicalAuthUrl("/auth/verified"),
         },
       });
       if (error) throw error;

@@ -254,8 +254,8 @@ assert(
     plan: "solo",
     interval: "month",
     market: "za",
-  }) === "https://milonfinance.com/auth/callback?checkout=solo&interval=month&market=za",
-  "email redirect strips trailing slash",
+  }) === "https://www.milonfinance.com/auth/callback?checkout=solo&interval=month&market=za",
+  "an apex email redirect returns on www and strips the trailing slash",
 );
 assert(isBillingStartPath("/billing/start?plan=solo&interval=month&market=us"), "is billing start");
 assert(!isBillingStartPath("/app"), "app is not billing start");
