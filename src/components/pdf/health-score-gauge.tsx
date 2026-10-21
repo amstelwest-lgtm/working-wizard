@@ -10,7 +10,8 @@ import { HEALTH_BAND_TABLE } from "@/lib/ratios";
 import { C, scoreColor } from "./theme";
 
 type Props = {
-  score: number;
+  /** Null when the score was not computed. A real 0 still draws. */
+  score: number | null;
   height?: number;
 };
 
@@ -33,7 +34,8 @@ const styles = StyleSheet.create({
 });
 
 export function HealthScoreGauge({ score, height = 6 }: Props) {
-  const pct = Math.max(0, Math.min(100, score || 0));
+  if (score == null || !Number.isFinite(score)) return null;
+  const pct = Math.max(0, Math.min(100, score));
 
   return (
     <View style={[styles.track, { height }]}>

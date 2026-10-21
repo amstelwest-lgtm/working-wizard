@@ -323,9 +323,10 @@ const wallCopy = src("src/lib/billing-wall.ts");
 const trialCopy = src("src/lib/starter-trial-constants.ts");
 assert(
   wall.includes("FIRM_WALL_TRIAL_LINE") &&
-    wallCopy.includes("FIRM_TRIAL_CARD_LINE") &&
+    wallCopy.includes("CARD_FREE_TRIAL_LINE") &&
+    trialCopy.includes("Your first client is free to explore") &&
     trialCopy.includes("seen your first result"),
-  "the wall shows the trial line once, on the body",
+  "the wall shows the card-free trial line, and trialing copy still names the card",
 );
 assert(
   wall.includes("firmWallOffersRetry") && wallCopy.includes("Back to clients"),

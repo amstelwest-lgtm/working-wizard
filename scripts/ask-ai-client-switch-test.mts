@@ -960,7 +960,7 @@ await test("Scenario 14: the first capped reply is the full card, and a remount 
       ok: false,
       status: 403,
       json: async () => ({
-        error: "14-day free trial · up to 5 clients on Starter. You add a card once you have seen your first result.",
+        error: "Your first client is free to explore. Add a card to start your 14-day free trial · up to 5 clients.",
         code: "precard_cap",
         limit: "bot",
       }),
@@ -1024,7 +1024,7 @@ await test("Scenario 15: a later blocked send keeps one cap card", async () => {
     ok: false,
     status: 403,
     json: async () => ({
-      error: "14-day free trial · up to 5 clients on Starter. You add a card once you have seen your first result.",
+      error: "Your first client is free to explore. Add a card to start your 14-day free trial · up to 5 clients.",
       code: "precard_cap",
       limit: "bot",
     }),
@@ -1049,9 +1049,9 @@ await test("Scenario 15: a later blocked send keeps one cap card", async () => {
   assert(users.length === 2, `both questions stay in the thread, got ${users.length}`);
   assert(
     (cards[0]?.find((el) => el.className.includes("precard-cap-title"))?.textContent ?? "").includes(
-      "seen your first result",
+      "Your first client is free to explore",
     ),
-    "the one card uses the trial sentence",
+    "the one card uses the card-free sentence",
   );
 });
 

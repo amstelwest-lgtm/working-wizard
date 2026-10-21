@@ -45,9 +45,16 @@ export function stripePublishableConfigured(): boolean {
 }
 
 let client: Stripe | undefined;
+let stripeClientForTests: Stripe | undefined;
+
+/** Tests replace the Stripe client. Production leaves this unset. */
+export function setStripeClientForTests(next: Stripe | null): void {
+  stripeClientForTests = next ?? undefined;
+}
 
 /** Shared Stripe client for server-side API calls. */
 export function getStripe(): Stripe {
+  if (stripeClientForTests) return stripeClientForTests;
   if (!client) {
     client = new Stripe(stripeSecretKey(), {
       apiVersion: STRIPE_API_VERSION,

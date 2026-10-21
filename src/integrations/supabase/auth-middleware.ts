@@ -6,6 +6,43 @@ import type { Database } from './types'
 
 
 
+type AuthClaimsResult = {
+  data: { claims?: { sub?: string; email?: string } | null } | null
+  error: { message?: string } | null
+}
+
+type AuthClaimsReader = (token: string) => Promise<AuthClaimsResult>
+
+/** A hung getClaims must not sit outside the shell's 8s gate. */
+const AUTH_CLAIMS_TIMEOUT_MS = 3_000
+
+/** Tests replace supabase.auth.getClaims. Production leaves this unset. */
+let authClaimsReaderForTests: AuthClaimsReader | null = null
+
+export function setAuthGetClaimsForTests(reader: AuthClaimsReader | null): void {
+  authClaimsReaderForTests = reader
+}
+
+async function readAuthClaims(
+  supabase: { auth: { getClaims: (token: string) => Promise<AuthClaimsResult> } },
+  token: string,
+): Promise<AuthClaimsResult> {
+  const pending = authClaimsReaderForTests
+    ? authClaimsReaderForTests(token)
+    : supabase.auth.getClaims(token)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(Object.assign(new Error('auth-timeout'), { status: 401 }))
+    }, AUTH_CLAIMS_TIMEOUT_MS)
+  })
+  try {
+    return await Promise.race([pending, timeout])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
 export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
   // `payload` is the raw server-function input forwarded by TanStack Start.
   // We inspect it here to enforce impersonation scope centrally so that every
@@ -64,7 +101,7 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
       }
     );
 
-    const { data: authData, error } = await supabase.auth.getClaims(token);
+    const { data: authData, error } = await readAuthClaims(supabase, token);
     if (error || !authData?.claims) {
       throw new Response('Unauthorized: Invalid token', { status: 401 });
     }

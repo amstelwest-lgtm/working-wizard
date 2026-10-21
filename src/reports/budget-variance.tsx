@@ -174,9 +174,9 @@ function VarianceTable({
                 ) : (
                   <>
                     <Text style={[styles.varTag, { color }]}>
-                      {overUnder(row.delta ?? 0)}
+                      {overUnder(row.delta as number)}
                     </Text>
-                    <Text style={[styles.varAmt, { color }]}>{signedMoney(row.delta ?? 0, market)}</Text>
+                    <Text style={[styles.varAmt, { color }]}>{signedMoney(row.delta as number, market)}</Text>
                   </>
                 )}
               </View>

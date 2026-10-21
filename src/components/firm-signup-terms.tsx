@@ -16,6 +16,8 @@ type Props = {
   onPlanChange: (plan: FirmCheckoutBand) => void;
   /** Homepage already has the role switcher. Auth shows the firm role in this block. */
   showRole?: boolean;
+  /** Practice country from the signup select. South Africa is rand. Anything else is dollars. */
+  country?: string | null;
 };
 
 /**
@@ -28,10 +30,11 @@ export function FirmSignupTerms({
   interval,
   onPlanChange,
   showRole = variant === "auth",
+  country = null,
 }: Props) {
   const bandId = variant === "auth" ? "auth-firm-band" : "register-firm-band";
   const intervalLabel = interval === "year" ? "annually" : "monthly";
-  const reminder = firmSignupTrialReminder(registerLabelForPlan(plan));
+  const reminder = firmSignupTrialReminder(registerLabelForPlan(plan), country);
   const hintClass = variant === "auth" ? "auth-entry__hint" : "firm-signup-hint";
   const trialClass = variant === "auth" ? "auth-entry__trial" : "firm-signup-hint";
 

@@ -35,7 +35,9 @@ import {
 } from "@/lib/reports-drafter-copy";
 import {
   FORECAST_PREVIEW_EMPTY,
+  forecastPreviewButtonDisabled,
   forecastPreviewGap,
+  forecastPreviewMessage,
   reportLinkOpensPreview,
 } from "@/lib/report-preview";
 import { Button } from "@/components/ui/button";
@@ -3214,6 +3216,15 @@ function ReportCard({
     blocked,
     unavailableReason,
   });
+  const previewDisabled =
+    report.key === "forecast"
+      ? forecastPreviewButtonDisabled({
+          gateDisabled: gate.disabled,
+          emptyClient: blocked,
+          loading: dataLoading || !isClient,
+          previewing: isPreviewing,
+        })
+      : gate.disabled || isPreviewing;
   const noFigures = reportCardNoFiguresState({ noFigures: blocked });
   const scope = REPORT_SIGNOFF_SCOPE[report.key];
   const copy = reportCopy(report, market);
@@ -3283,11 +3294,17 @@ function ReportCard({
           size="sm"
           className="flex-1 border-border bg-transparent text-foreground hover:bg-muted hover:text-foreground text-xs gap-1.5"
           onClick={() => {
-            if (gate.disabled || isPreviewing) return;
+            if (previewDisabled) return;
             onPreview();
           }}
-          disabled={gate.disabled || isPreviewing}
-          title={isPreviewing ? "This report is already opening" : gate.title}
+          disabled={previewDisabled}
+          title={
+            isPreviewing
+              ? "This report is already opening"
+              : report.key === "forecast" && blocked && !previewDisabled
+                ? FORECAST_PREVIEW_EMPTY
+                : gate.title
+          }
         >
           {isPreviewing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3501,6 +3518,15 @@ function SettingsPanel({
 
 // ── Preview modal ──────────────────────────────────────────────────────────
 
+/** Navy on white. Shown when Preview has a sentence instead of a PDF. */
+export function ForecastPreviewEmptyCopy({ message }: { message: string }) {
+  return (
+    <p className="text-sm leading-relaxed text-[#102A43]" data-forecast-preview-empty="">
+      {message}
+    </p>
+  );
+}
+
 function PreviewModal({
   state,
   clientId,
@@ -3550,14 +3576,14 @@ function PreviewModal({
             <div className="flex h-full items-center justify-center px-6">
               {/* The preview sheet is light even in the dark portal, where
                   text-foreground is cream and disappears on this card. */}
-              <div className="max-w-md rounded-lg border border-slate-300 bg-white px-6 py-5 text-center shadow-sm">
-                <p className="text-sm leading-relaxed text-slate-800">{state.emptyMessage}</p>
+              <div className="max-w-md rounded-lg border border-[#DBEAFE] bg-white px-6 py-5 text-center shadow-sm">
+                <ForecastPreviewEmptyCopy message={state.emptyMessage} />
                 {clientId && state?.emptyHref === "cash" ? (
                   <Link
                     to="/clients/$clientId"
                     params={{ clientId }}
                     search={{ tab: "cash", section: "forecast" }}
-                    className="mt-3 inline-block text-sm font-medium text-sky-900 underline underline-offset-2"
+                    className="mt-3 inline-block text-sm font-medium text-[#0B5FFF] underline underline-offset-2"
                   >
                     {state.emptyCta || "Enter a forecast line"}
                   </Link>
@@ -3566,7 +3592,7 @@ function PreviewModal({
                     to="/clients/$clientId"
                     params={{ clientId }}
                     search={{ tab: "overview", profile: 1 }}
-                    className="mt-3 inline-block text-sm font-medium text-sky-900 underline underline-offset-2"
+                    className="mt-3 inline-block text-sm font-medium text-[#0B5FFF] underline underline-offset-2"
                   >
                     {state.emptyCta || "Set the client's business type"}
                   </Link>
@@ -4021,6 +4047,17 @@ export function ReportsStudio({
   // ── Preview single PDF ───────────────────────────────────────────────────
 
   async function handlePreview(report: ReportMeta): Promise<boolean> {
+    if (
+      report.key === "forecast" &&
+      forecastPreviewMessage({
+        emptyClient: blockedForClient,
+        hasStatementData: Boolean(clientData?.hasData),
+        cashForecast: clientData?.cashForecast,
+      })
+    ) {
+      showForecastGap(report);
+      return true;
+    }
     if (!assertCanGenerate()) return false;
     const unavailable = unavailableFor(report.key);
     if (unavailable) {
@@ -4043,10 +4080,6 @@ export function ReportsStudio({
         offerSetBusinessType: empty?.offerSetBusinessType === true,
         emptyCta: empty?.cta,
       });
-      return true;
-    }
-    if (report.key === "forecast" && forecastGapMessage()) {
-      showForecastGap(report);
       return true;
     }
     if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
@@ -4128,6 +4161,11 @@ export function ReportsStudio({
 
     if (blockedForClient) {
       deepLinkHandled.current = token;
+      if (linked === "preview" && deepLinkReport.key === "forecast") {
+        showForecastGap(deepLinkReport);
+        setDeepLinkBusy(false);
+        return;
+      }
       setDeepLinkBusy(false);
       setPreviewState(null);
       setPreviewKey(null);

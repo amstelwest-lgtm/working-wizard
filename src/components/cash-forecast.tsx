@@ -129,6 +129,7 @@ import {
   groupSmallForecastRows,
   isAssumedMonthlyLine,
 } from "@/lib/cash-forecast-rows";
+import { forecastExportRunwayWeeks } from "@/lib/forecast-export-runway";
 import {
   isProjectedOnceOff,
   projectForecastFrequency,
@@ -1899,7 +1900,6 @@ export function CashForecastPanel({
       }
       const [{ pdf }, { CashForecastPDF }] = pdfModules;
 
-      const derivedRunway = screenRunway.weeks ?? 0;
       const openingKnown = openingBalance.trim() !== "" && Number.isFinite(Number(openingBalance));
       const amountPresent = (lines: LineItem[]) =>
         lines.some((line) => {
@@ -1924,7 +1924,7 @@ export function CashForecastPanel({
             receiptsPresent && paymentsPresent ? Math.round(baseCalc.net[i] ?? 0) : null,
           closing_balance: balancesKnown ? Math.round(baseCalc.closing[i] ?? 0) : null,
           scenario: "moderate" as const,
-          runway_weeks: Math.max(0, derivedRunway - i),
+          runway_weeks: forecastExportRunwayWeeks(screenRunway.weeks, i),
         };
       });
 

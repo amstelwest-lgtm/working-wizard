@@ -1946,7 +1946,10 @@ assert(
 );
 assert(fns.includes("installMetadataFirmCustomerWrite"), "checkout installs the metadata customer write");
 assert(fns.includes("readFirmBillingPlanKnown"), "a slow check reads the stored firm plan");
-assert(fns.includes("FIRM_BILLING_PLAN_FALLBACK_MS"), "a stored entitled plan is returned before the gate");
+assert(
+  fns.includes("[stripe-entitlement] stored-plan refresh failed"),
+  "a stored entitled plan returns before the Stripe list and catches the refresh",
+);
 assert(fns.includes("rememberConfirmedFirmPlan"), "a finished check stores the firm plan");
 assert(fns.includes('writeFirmBillingPlanKnown(firmId, "none")'), "only a confirmed no-plan stores none");
 const portalStart = fns.indexOf("export const createBillingPortalSession");

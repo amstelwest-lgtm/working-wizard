@@ -30,9 +30,19 @@ function storedPlan(value: unknown): StoredFirmPlan | null {
   return null;
 }
 
+type FirmPlanRead = (firmId: string | null) => Promise<StoredFirmPlan | null>;
+
+/** Tests replace the column read. Production leaves this unset. */
+let planReadForTests: FirmPlanRead | null = null;
+
+export function setFirmBillingPlanReadForTests(read: FirmPlanRead | null): void {
+  planReadForTests = read;
+}
+
 export async function readFirmBillingPlanKnown(
   firmId: string | null | undefined,
 ): Promise<StoredFirmPlan | null> {
+  if (planReadForTests) return planReadForTests(firmId?.trim() ? firmId.trim() : null);
   const id = firmId?.trim() ?? "";
   if (!FIRM_UUID.test(id) || planColumnMissing) return null;
   try {
