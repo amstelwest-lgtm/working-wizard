@@ -516,7 +516,7 @@ export function LaborProductivityPDF({
               key={r.name}
               ratioName={r.name}
               formattedValue={r.value}
-              healthScore={r.score ?? 0}
+              healthScore={r.score}
               healthTier={scoreTier(r.score)}
               unscored={r.score == null}
               isAlternate={i % 2 === 1}
@@ -528,7 +528,7 @@ export function LaborProductivityPDF({
               key={r.name}
               ratioName={r.name}
               formattedValue={r.value}
-              healthScore={r.score ?? 0}
+              healthScore={r.score}
               healthTier={scoreTier(r.score)}
               unscored={r.score == null}
               isAlternate={(i + 2) % 2 === 1}

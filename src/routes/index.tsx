@@ -24,6 +24,7 @@ import {
   DUAL_MARKET_BUILT,
   DUAL_MARKET_TAGLINE,
   MARKETING_COPYRIGHT_ENTITY,
+  firmSignupOwnerPayLine,
 } from "@/lib/firm-signup-copy";
 import { persistPortalTheme, resolvePortalTheme, THEME_BOOT_SCRIPT } from "@/lib/portal-theme";
 import { RegionCopy } from "@/components/region-copy";
@@ -81,7 +82,6 @@ import {
   HERO_LEDE,
   HERO_OWNER_LINK,
   HERO_POINTS,
-  OWNER_REGISTER_NOTE_US,
   HERO_WALKTHROUGH_LABEL,
   FAQ_MORE_LEAD,
   FAQ_MORE_LINK,
@@ -400,8 +400,10 @@ function LandingPage() {
   );
   const marketReady = useRef(false);
   // Hero and pricing copy follow the server pack, not this draft. The draft
-  // is the practice-location form, applied after mount.
+  // is the practice-location form, applied after mount. The signup price
+  // lines follow the country select.
   const copyMarket = { copyPack };
+  const signupOwnerNote = firmSignupOwnerPayLine(draftMarket.country);
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -2684,9 +2686,7 @@ function LandingPage() {
               <br />
               <span className="gold-text">AI prepares; you sign off.</span>
             </h2>
-            <p className="sub">
-              {saPricing?.ownerRegisterNote ?? OWNER_REGISTER_NOTE_US}
-            </p>
+            <p className="sub">{signupOwnerNote}</p>
           </div>
 
           {/* Client-only: prevents browser password-manager extensions (LastPass etc.)
@@ -2694,7 +2694,7 @@ function LandingPage() {
           {mounted && registerReady ? (
             <Suspense fallback={<div className="reg-shell" style={{ minHeight: 480 }} />}>
               <LandingRegisterForm
-                ownerNote={saPricing?.ownerRegisterNote ?? OWNER_REGISTER_NOTE_US}
+                ownerNote={signupOwnerNote}
                 inviteClientId={inviteClientId}
                 inviteBusiness={inviteBusiness}
                 inviteFirmName={inviteFirmName}

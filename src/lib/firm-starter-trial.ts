@@ -29,6 +29,8 @@ export type StarterTrialBanner = {
   showCountdown: boolean;
   dayOfTrial: number | null;
   daysLeft: number | null;
+  /** Enforced firm with no Stripe subscription. Trialing firms leave this unset. */
+  cardFree?: boolean;
 };
 
 export function idleStarterTrialBanner(): StarterTrialBanner {
@@ -87,12 +89,15 @@ export function noPlanTrialClock(input: {
   now?: Date;
 }): StarterTrialBanner {
   if (!input.enforced || !input.noPlan) return idleStarterTrialBanner();
-  return starterTrialClock({
-    enforced: true,
-    band: "starter",
-    startedAt: noPlanTrialStart(input.startedAt, TRIAL_CLOCK_CUTOVER, input.startOverride),
-    now: input.now,
-  });
+  return {
+    ...starterTrialClock({
+      enforced: true,
+      band: "starter",
+      startedAt: noPlanTrialStart(input.startedAt, TRIAL_CLOCK_CUTOVER, input.startOverride),
+      now: input.now,
+    }),
+    cardFree: true,
+  };
 }
 
 /**

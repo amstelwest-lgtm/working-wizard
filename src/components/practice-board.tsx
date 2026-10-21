@@ -56,7 +56,7 @@ import {
   type StoredScorePoint,
 } from "@/lib/practice-client-row";
 import { useServerFn } from "@tanstack/react-start";
-import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+import { CARD_FREE_TRIAL_LINE, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import {
   ADD_CLIENT_CREATING_AFTER_MS,
@@ -66,10 +66,17 @@ import {
   type AddClientSavePhase,
 } from "@/lib/firm-client-created";
 import {
+  firmAddClientDestination,
   idleStarterTrialBanner,
   showStarterTrialEndedCopy,
   type FirmClientCreateAllowance,
 } from "@/lib/firm-client-cap";
+import { firmBillingResumeIntent } from "@/lib/billing-market";
+import {
+  billingStartSearch,
+  peekPendingCheckout,
+  stashPendingCheckout,
+} from "@/lib/pending-checkout";
 import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade, FirmStartHereBadge } from "@/components/firm-band-upgrade";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
@@ -450,6 +457,7 @@ function FirmClientCapNotice({
           saDiscount={upgrade.saDiscount}
           zaLabels={upgrade.zaLabels}
           checkoutNote={upgrade.checkoutNote}
+          cardFree={cap.starterTrial.cardFree === true && !cap.starterTrial.expired}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}
           onValidateVoucher={onValidateVoucher}
@@ -474,9 +482,12 @@ function AddClientDialog({
   heading = "Add a client",
   blurb,
   sandboxName,
+  onBillingRequired,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Card-free firm that already has a client. Opens the Start trial wall. */
+  onBillingRequired?: () => void;
   onAdded: (created: {
     id: string;
     name: string;
@@ -509,6 +520,7 @@ function AddClientDialog({
   const endTrial = useServerFn(endFirmTrialNow);
   const upgradeBand = useServerFn(upgradeFirmBand);
   const [cap, setCap] = useState<FirmClientCreateAllowance | null>(null);
+  const billedRef = useRef(false);
   const [confirmUpgrade, setConfirmUpgrade] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const closeDrawer = useOverlayHistory(open, onClose);
@@ -541,6 +553,7 @@ function AddClientDialog({
 
   useEffect(() => {
     if (!open) {
+      billedRef.current = false;
       setCap(null);
       setConfirmUpgrade(false);
       return;
@@ -564,6 +577,13 @@ function AddClientDialog({
       cancelled = true;
     };
   }, [open, firmId, checkCap]);
+
+  useEffect(() => {
+    if (!open || !cap || cap.allowed || billedRef.current) return;
+    if (firmAddClientDestination(cap) !== "/billing/required") return;
+    billedRef.current = true;
+    onBillingRequired?.();
+  }, [open, cap, onBillingRequired]);
 
   const refreshCap = async () => {
     if (!firmId) {
@@ -756,6 +776,14 @@ function AddClientDialog({
             />
           ) : (
             <>
+              {cap?.starterTrial.cardFree && !cap.starterTrial.expired ? (
+                <p
+                  data-card-free-trial=""
+                  style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}
+                >
+                  {CARD_FREE_TRIAL_LINE}
+                </p>
+              ) : null}
               {cap?.upgrade?.usageLabel ? (
                 <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)" }}>
                   {cap.upgrade.usageLabel}
@@ -1182,6 +1210,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, headerName, firmMarket } =
     useAccountantProfile();
+  const openBillingRequired = () => {
+    const pending = firmBillingResumeIntent(firmMarket, peekPendingCheckout());
+    stashPendingCheckout(pending);
+    void navigate({
+      to: "/billing/required",
+      search: billingStartSearch(pending),
+    });
+  };
   const firm: Firm | null =
     firms.find((f) => f.id === firmId) ??
     (firms[0]
@@ -2543,7 +2579,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <button
             id="wizard-add-client"
             className={clientRows.length === 0 ? "btn ghost mini" : "btn gold mini"}
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              if (trialAllowance && firmAddClientDestination(trialAllowance) === "/billing/required") {
+                openBillingRequired();
+                return;
+              }
+              setAddOpen(true);
+            }}
           >
             <svg viewBox="0 0 24 24">
               <path d="M12 5v14M5 12h14" />
@@ -2738,6 +2780,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
               setFirstClientOpen(false);
             }
+          }}
+          onBillingRequired={() => {
+            setAddOpen(false);
+            if (firstClientOpen) {
+              markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
+              setFirstClientOpen(false);
+            }
+            openBillingRequired();
           }}
           onAdded={(created) => {
             markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);

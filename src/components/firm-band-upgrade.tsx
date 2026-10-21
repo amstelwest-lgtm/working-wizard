@@ -17,6 +17,7 @@ import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_BAND_IDS,
+  CARD_FREE_TRIAL_LINE,
   FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_SENTENCE,
   firmClientLimitLabel,
@@ -57,6 +58,11 @@ type Props = {
    * while this firm has never had a subscription.
    */
   introTrialEligible?: boolean;
+  /**
+   * starter_trial_enforced and no Stripe subscription. The Starter row
+   * uses the card-free sentence. A trialing firm leaves this false.
+   */
+  cardFree?: boolean;
   onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval, voucherCode?: string | null) => void;
   /** Checks the code with Stripe. Absent on previews that cannot bill. */
   onValidateVoucher?: (input: {
@@ -102,6 +108,7 @@ export function FirmBandUpgrade({
   zaLabels = null,
   checkoutNote = null,
   introTrialEligible = false,
+  cardFree = false,
   onUpgrade,
   onValidateVoucher,
 }: Props) {
@@ -292,7 +299,16 @@ export function FirmBandUpgrade({
                     ? "Unlimited active clients"
                     : firmClientLimitLabel(band.id)}
                 </span>
-                {band.id === "starter" && introTrialEligible ? (
+                {band.id === "starter" && cardFree ? (
+                  <span
+                    className="text-muted-foreground"
+                    data-starter-trial=""
+                    data-card-free-trial=""
+                    style={{ display: "block", fontSize: 12 }}
+                  >
+                    {CARD_FREE_TRIAL_LINE}
+                  </span>
+                ) : band.id === "starter" && introTrialEligible ? (
                   <>
                     <span
                       className="text-muted-foreground"

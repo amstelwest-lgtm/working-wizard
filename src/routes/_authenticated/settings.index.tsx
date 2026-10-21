@@ -532,6 +532,11 @@ function SettingsPage() {
                   zaLabels={plan.zaLabels}
                   checkoutNote={checkoutNote}
                   introTrialEligible={plan.introTrialEligible}
+                  cardFree={
+                    plan.phase === "none" &&
+                    plan.starterTrial?.enforced === true &&
+                    plan.starterTrial.expired !== true
+                  }
                   upgrading={upgrading}
                   onValidateVoucher={onValidateVoucher}
                   onUpgrade={handlePlanUpgrade}

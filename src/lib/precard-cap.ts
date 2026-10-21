@@ -4,10 +4,10 @@
  * A trialing or paid subscription is not capped. Figures stay outside this.
  */
 
-import { FIRM_TRIAL_CARD_LINE } from "./starter-trial-constants.ts";
+import { CARD_FREE_TRIAL_LINE } from "./starter-trial-constants.ts";
 
 export const PRECARD_CAP_CODE = "precard_cap" as const;
-export const PRECARD_CAP_MESSAGE = FIRM_TRIAL_CARD_LINE;
+export const PRECARD_CAP_MESSAGE = CARD_FREE_TRIAL_LINE;
 export const PRECARD_PACK_LIMIT = 1;
 export const PRECARD_EMAIL_LIMIT = 1;
 export const PRECARD_BOT_LIMIT = 10;

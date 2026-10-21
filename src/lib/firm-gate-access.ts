@@ -93,9 +93,9 @@ export function firmFileOnBillingResult(input: {
 }
 
 /**
- * Deadline or Stripe error. A last known plan for this firm opens the page.
- * The billing wall is a confirmed unpaid result, not a failed check.
- * No last known plan keeps the existing surface.
+ * Deadline or Stripe error. A known entitled plan opens the page.
+ * A known unpaid firm keeps the wall on a later file. No known plan
+ * keeps the Retry card. A failed check never grants entitlement.
  */
 export function surfaceAfterBillingCheckFailure(input: {
   known: KnownFirmEntitlement;
@@ -103,8 +103,7 @@ export function surfaceAfterBillingCheckFailure(input: {
   firmClientCount: number | null;
   firstClientId: string | null;
 }): FirmGateFailureSurface {
-  if (input.known === "entitled" || input.known === "unpaid") return "content";
-  return surfaceAfterEntitlementFailure({ ...input, known: "none" });
+  return surfaceAfterEntitlementFailure(input);
 }
 
 /**

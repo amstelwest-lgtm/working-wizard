@@ -14,14 +14,22 @@ import { Window } from "happy-dom";
 import {
   resetSmokeRpcLog,
   setSmokeMode,
+  smokeHedgeTiming,
+  smokeInviteOpens,
+  smokeRoleReads,
   smokeRpcLog,
+  smokeWorkspaceListWaves,
   SMOKE_CLIENT_ID,
   SMOKE_USER_ID,
   STALE_CLIENT_ID,
   STALE_CLIENT_NAME,
   type SmokeMode,
 } from "./page-smoke-supabase.ts";
-import { resetBootReadForTests, setBootReadTimeoutMsForTests } from "@/lib/boot-read";
+import {
+  resetBootReadForTests,
+  setBootReadTimeoutMsForTests,
+  setShellBackstopForTests,
+} from "@/lib/boot-read";
 import { ownerActiveClientStorageKey } from "../src/lib/owner-workspaces.ts";
 import {
   ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY,
@@ -261,6 +269,10 @@ type PageCase = {
   expectFrames?: (frames: string[]) => void;
   /** Runs while the page is still mounted, after `expect`. */
   after?: (host: HTMLElement) => Promise<void>;
+  /** Runs after the root unmounts, so an aborted in-flight read can settle. */
+  afterUnmount?: () => void | Promise<void>;
+  /** Override the paint budget. The default /app budget is 4s. */
+  waitMs?: number;
 };
 
 function htmlHasStaleClient(html: string): boolean {
@@ -292,6 +304,15 @@ const clientHome = (mode: SmokeMode): PageCase => ({
       assert(
         paneIsOpen(html, "pane-overview") || paneIsOpen(html, "pane-ask"),
         "home tab is the open pane",
+      );
+      assert(
+        html.includes('data-connect-books="home"'),
+        "home with no ledger shows the connect card",
+      );
+      assert(html.includes("Connect Xero or QuickBooks"), "connect card titles the action");
+      assert(
+        html.includes("Nothing is posted without your approval."),
+        "connect card keeps the approval line",
       );
     }
   },
@@ -505,7 +526,7 @@ async function paint(page: PageCase) {
     };
     let html = host.innerHTML;
     note(html);
-    const budget = page.url === "/app" ? 100 : 60;
+    const budget = page.waitMs ? Math.ceil(page.waitMs / 40) : page.url === "/app" ? 100 : 60;
     for (let i = 0; i < budget && !page.ready(html); i++) {
       const crashed = boundaryHit(html);
       if (crashed) break;
@@ -533,6 +554,7 @@ async function paint(page: PageCase) {
       root.unmount();
     });
     host.remove();
+    if (page.afterUnmount) await page.afterUnmount();
   }
 }
 
@@ -694,6 +716,175 @@ cases.push({
       (next) => next.includes("Harbour Books") && !next.includes('data-client-boot="load-error"'),
     );
     assert(html.includes("Harbour Books"), "Retry opens the client that loaded");
+  },
+});
+
+const roleWarns: string[] = [];
+let priorWarn: typeof console.warn = console.warn;
+
+cases.push({
+  label: "invite owner hung user_roles",
+  mode: "invite-roles-hang",
+  url: "/app",
+  prepare: () => {
+    resetSmokeRpcLog();
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    localStorage.removeItem(key);
+    localStorage.removeItem(`${key}:name`);
+    roleWarns.length = 0;
+    priorWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      roleWarns.push(args.map((value) => String(value)).join(" "));
+      priorWarn(...args);
+    };
+  },
+  ready: (html) => html.includes('data-owner-ready="true"') && html.includes('id="board-pack"'),
+  expect: (html) => {
+    assert(html.includes('id="board-pack"'), "a hung role list still opens the invited workspace");
+    assert(html.includes("Harbour Books"), "the invited workspace keeps its name");
+    assert(
+      !html.includes("Couldn't open your workspace"),
+      "a hung role list is not the 8s hard fail",
+    );
+    assert(
+      !html.includes("Couldn't load your workspace"),
+      "a hung role list is not the load error",
+    );
+    const listed = smokeRoleReads().filter((row) => row.stack?.includes("listAppRoles"));
+    assert(listed.length > 0, "listAppRoles reads user_roles");
+    assert(
+      listed.every((row) => row.signal),
+      "listAppRoles passes an abort signal",
+    );
+  },
+  afterUnmount: async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    console.warn = priorWarn;
+    assert(
+      !roleWarns.some((line) => line.includes("[user-roles] list failed")),
+      "a role list rejected after unmount is not logged",
+    );
+  },
+});
+
+cases.push({
+  label: "invite owner slow chain",
+  mode: "invite-slow-chain",
+  url: "/app",
+  waitMs: 12_000,
+  prepare: () => {
+    resetSmokeRpcLog();
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    localStorage.removeItem(key);
+    localStorage.removeItem(`${key}:name`);
+  },
+  ready: (html) => html.includes('data-owner-ready="true"') && html.includes('id="board-pack"'),
+  expect: (html) => {
+    assert(html.includes('id="board-pack"'), "a chain of sub-4s invite reads opens the board");
+    assert(html.includes("Harbour Books"), "the invited workspace keeps its name");
+    assert(
+      !html.includes("Couldn't open your workspace"),
+      "invite reads under 4s must not reach the 8s backstop",
+    );
+    assert(
+      !html.includes('data-owner-boot="timeout"'),
+      "a progressing invite chain is not the shell backstop",
+    );
+    assert(!html.includes("Couldn't load your workspace"), "a progressing chain is not a failed retry");
+    assert(!html.includes('data-owner-boot="load-error"'), "a progressing chain is not the load error");
+    assert(smokeInviteOpens() === 0, "a known client_owner skips openInvitedClient");
+  },
+});
+
+cases.push({
+  label: "no-membership invite still opens",
+  mode: "invite-fresh",
+  url: "/app",
+  prepare: () => {
+    resetSmokeRpcLog();
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    localStorage.removeItem(key);
+    localStorage.removeItem(`${key}:name`);
+  },
+  ready: (html) => html.includes('data-owner-ready="true"') && html.includes('id="board-pack"'),
+  expect: (html) => {
+    assert(html.includes('id="board-pack"'), "an invite with no membership yet opens the board");
+    assert(html.includes("Harbour Books"), "the invited workspace keeps its name");
+    assert(smokeInviteOpens() > 0, "no membership yet still calls openInvitedClient");
+    assert(!html.includes("Couldn't open your workspace"), "a fresh invite is not the hard fail");
+    assert(!html.includes("Couldn't load your workspace"), "a fresh invite is not the load error");
+  },
+});
+
+cases.push({
+  label: "progressing chain beyond 12s hits the ceiling",
+  mode: "progress-ceiling",
+  url: "/app",
+  waitMs: 3_000,
+  prepare: () => {
+    resetSmokeRpcLog();
+    setBootReadTimeoutMsForTests(2_000);
+    setShellBackstopForTests({ idleMs: 30_000, ceilingMs: 350 });
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    localStorage.removeItem(key);
+    localStorage.removeItem(`${key}:name`);
+  },
+  ready: (html) => html.includes('data-owner-boot="load-error"'),
+  expect: (html) => {
+    assert(html.includes('data-owner-boot="load-error"'), "the ceiling paints Couldn't load");
+    assert(html.includes("Couldn't load your workspace"), "the ceiling says Couldn't load");
+    assert(html.includes("Retry"), "the ceiling offers Retry");
+    assert(!html.includes('data-owner-boot="timeout"'), "the ceiling is not the idle backstop");
+    assert(!html.includes("Couldn't open your workspace"), "the ceiling is not Couldn't open");
+  },
+});
+
+cases.push({
+  label: "US owner single read unchanged",
+  mode: "loaded",
+  url: "/app",
+  prepare: () => {
+    resetSmokeRpcLog();
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    localStorage.removeItem(key);
+    localStorage.removeItem(`${key}:name`);
+  },
+  ready: (html) => html.includes('data-owner-ready="true"') && html.includes('id="board-pack"'),
+  expect: (html) => {
+    assert(html.includes("Harbour Books"), "the US owner still opens the workspace");
+    assert(smokeWorkspaceListWaves() === 1, "the US owner lists workspaces once");
+    assert(smokeInviteOpens() === 0, "the US owner does not open an invite");
+    assert(!html.includes("Couldn't open your workspace"), "the US owner is not the hard fail");
+    assert(!html.includes("Couldn't load your workspace"), "the US owner is not the load error");
+  },
+});
+
+cases.push({
+  label: "first attempt hangs past 4s and the retry returns at 5s",
+  mode: "hedge-slow-read",
+  url: "/app",
+  waitMs: 9_000,
+  prepare: () => {
+    resetSmokeRpcLog();
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    localStorage.removeItem(key);
+    localStorage.removeItem(`${key}:name`);
+  },
+  ready: (html) =>
+    html.includes('data-owner-ready="true"') &&
+    html.includes('id="board-pack"') &&
+    html.includes("Harbour Books"),
+  expect: (html) => {
+    const timing = smokeHedgeTiming();
+    const span = timing.retryResolvedAt - timing.firstAt;
+    assert(html.includes('id="board-pack"'), "a slow first attempt still opens the board");
+    assert(html.includes("Harbour Books"), "the hedged retry keeps the workspace name");
+    assert(!html.includes("Couldn't load your workspace"), "a retry that returns at 5s is not an error");
+    assert(!html.includes('data-owner-boot="load-error"'), "a retry that returns at 5s has no load error");
+    assert(!html.includes("Couldn't open your workspace"), "a retry that returns at 5s is not the hard fail");
+    assert(timing.firstAt > 0 && timing.retryResolvedAt > 0, "the hedge issued a second select");
+    assert(span >= 4_800, `the retry returns at about 5s, saw ${span}ms`);
+    assert(span < 5_800, `the second select overlaps the first, saw ${span}ms`);
   },
 });
 

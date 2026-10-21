@@ -408,7 +408,7 @@ export function HealthScorecardPDF({
         </View>
         <View style={styles.scoreRight}>
           <View style={styles.gaugeRow}>
-            <HealthScoreGauge score={overallScore ?? 0} height={9} />
+            <HealthScoreGauge score={overallScore} height={9} />
           </View>
           <View style={styles.gaugeScale}>
             <Text style={styles.gaugeScaleText}>

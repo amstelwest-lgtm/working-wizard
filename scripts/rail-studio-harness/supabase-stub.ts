@@ -365,7 +365,24 @@ const YTD_FINANCIALS = {
   periodMonths: "7",
 };
 
+function emptyClientFile(): boolean {
+  if (typeof location === "undefined") return false;
+  const search = decodeURIComponent(location.search);
+  return /(?:^|[?&])emptyClient=(?:"1"|1)(?:&|$)/.test(search);
+}
+
 function clientRow() {
+  if (emptyClientFile()) {
+    return {
+      ...CLIENT_ROW,
+      name: "Empty Client",
+      financials: null,
+      cashflow: null,
+      last_forecast_at: null,
+      budget: null,
+      budget_updated_at: null,
+    };
+  }
   if (typeof location !== "undefined" && /(?:^|[?&])open=below(?:&|$)/.test(location.search)) {
     return belowFloorClient();
   }

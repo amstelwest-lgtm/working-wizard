@@ -65,6 +65,7 @@ import {
   boardRoleForWorkspace,
   canOpenOwnerWorkspace,
   fallbackOwnerAppRole,
+  inviteWorkspaceAlreadyKnown,
   clearStoredOwnerClientId,
   decideStoredClientAccess,
   mergeOwnerWorkspaces,
@@ -348,6 +349,7 @@ import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-d
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { SageConnectCard } from "@/components/sage-connect";
+import { QBO_CONNECT_SUBCOPY, XERO_BANK_RECONNECT } from "@/lib/connect-books-copy";
 import { Button } from "@/components/ui/button";
 import { HEALTH_RING_CAPTION, SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
@@ -378,14 +380,7 @@ import {
   computeWeekChanges,
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
-import {
-  bootCriticalRetryFailed,
-  bootRetryInFlight,
-  bootSelect,
-  shellBackstopDue,
-  subscribeBootRetry,
-} from "@/lib/boot-read";
-import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
 import { isOwnerDeliverablesRequest, ownerDeliverablesRedirectTarget } from "@/lib/owner-nav";
 
 function AppBootSpinner() {
@@ -2531,6 +2526,21 @@ function Index() {
         // business stays on the list so they can switch back.
         // Retry only a successful empty read. A PostgREST error is not empty.
         if (inviteClientId) {
+          const known = await listWorkspaces();
+          if (!known.ok) {
+            giveUp(known.retryable);
+            return;
+          }
+          if (inviteWorkspaceAlreadyKnown(known.workspaces, inviteClientId)) {
+            try {
+              localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+            } catch {
+              /* ignore */
+            }
+            if (!cancelled) setInvitedOwnerEntry(true);
+            applyWorkspaces(known.workspaces, inviteClientId);
+            return;
+          }
           for (let i = 0; i < WORKSPACE_LIST_ATTEMPTS; i++) {
             const opened = await openInvitedClient(inviteClientId);
             if (!opened.ok) {
@@ -4270,14 +4280,15 @@ function Index() {
     if (acting) return;
     if (hasInviteHandoffFlag()) return;
     let cancelled = false;
+    const controller = new AbortController();
     void (async () => {
       const { shouldBounceFromOwnerApp, clearForcePortal, shouldOpenItInbox } =
         await import("@/lib/user-roles");
-      if (await shouldOpenItInbox(user.id)) {
+      if (await shouldOpenItInbox(user.id, controller.signal)) {
         if (!cancelled) navigate({ to: "/ops", search: { tab: "it" } });
         return;
       }
-      const bounce = await shouldBounceFromOwnerApp(user.id, false);
+      const bounce = await shouldBounceFromOwnerApp(user.id, false, controller.signal);
       if (!cancelled && bounce) {
         clearForcePortal();
         navigate({ to: "/practice" });
@@ -4285,6 +4296,7 @@ function Index() {
     })();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [user, actingClientId, navigate, ownerGateSettled]);
   useEffect(() => {
@@ -4292,29 +4304,10 @@ function Index() {
       setOwnerBootTimedOut(false);
       return;
     }
-    // One timestamp for this attempt. A retry must not start another 8s.
-    const backstopAt = Date.now() + SHELL_GATE_TIMEOUT_MS;
-    let timer = 0;
-    let stopped = false;
-    const arm = () => {
-      window.clearTimeout(timer);
-      if (stopped) return;
-      if (!shellBackstopDue(Date.now(), backstopAt)) {
-        // A retry still running, or one that already failed, must not be
-        // replaced by the hard fail. A failed retry has its own screen.
-        if (bootRetryInFlight() || bootCriticalRetryFailed()) return;
-        timer = window.setTimeout(arm, Math.max(0, backstopAt - Date.now()));
-        return;
-      }
-      setOwnerBootTimedOut(true);
-    };
-    arm();
-    const unsubscribe = subscribeBootRetry(arm);
-    return () => {
-      stopped = true;
-      window.clearTimeout(timer);
-      unsubscribe();
-    };
+    return bindShellBackstop((reason) => {
+      if (reason === "ceiling") setCriticalBootFailed(true);
+      else setOwnerBootTimedOut(true);
+    });
   }, [authLoading, user?.id, boardReady, ownerBootAttempt, criticalBootFailed]);
   if (user && (workspaceLoadFailed || criticalBootFailed)) {
     return (
@@ -6797,7 +6790,7 @@ function Index() {
                   <span className="text-xs text-slate-600 dark:text-slate-400">
                     {isUsCopy(boardMarket)
                       ? "Live sync from your books once QBO is switched on for this workspace. Until then, export a P&L and balance sheet and upload them below."
-                      : "Sync live accounting data when QBO is configured for this workspace."}
+                      : QBO_CONNECT_SUBCOPY}
                   </span>
                 </button>
                 <button
@@ -7533,8 +7526,8 @@ function Index() {
                   Xero Integration
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400">
-                  Connect a Xero organisation to pull P&amp;L, the balance sheet and bank balances.
-                  Existing connections need a reconnect once the bank summary scope is enabled.
+                  Connect a Xero organisation to pull P&amp;L, the balance sheet and bank balances.{" "}
+                  {XERO_BANK_RECONNECT}
                 </DialogDescription>
               </DialogHeader>
               <XeroConnectCard

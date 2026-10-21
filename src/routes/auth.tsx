@@ -654,6 +654,7 @@ function AuthPage() {
             variant="auth"
             plan={selectedPlan}
             interval={selectedInterval}
+            country={draftMarket.country}
             onPlanChange={(nextPlan) => {
               setTabOverride("signup");
               void navigate({
