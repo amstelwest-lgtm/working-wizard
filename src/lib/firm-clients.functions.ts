@@ -6,6 +6,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { loadFirmClientCreateAllowance } from "@/lib/firm-client-cap.server";
+import {
+  countFirmClientsForCreate,
+  readStoredCreateEntitlement,
+} from "@/lib/firm-client-create.server";
+import { runFirmClientCreate } from "@/lib/firm-client-create-gate";
 import { US_STATE_CODES } from "@/lib/market/types";
 import { assertMarketSelection, isMissingMarketSupport, marketToJson } from "@/lib/market";
 
@@ -45,17 +50,7 @@ export const createFirmClient = createServerFn({ method: "POST" })
       userId: string;
       claims?: { email?: string | null };
     };
-    const allowance = await loadFirmClientCreateAllowance({
-      supabase: actor.supabase,
-      userId: actor.userId,
-      email: actor.claims?.email ?? "",
-      firmId: data.firmId ?? null,
-    });
-    if (!allowance.allowed) {
-      throw new Error(allowance.message);
-    }
-    const sb = actor.supabase;
-
+    const firmId = data.firmId ?? null;
     let p_market: { country: "ZA" | "US"; regionCode: string | null } | null = null;
     if (data.marketCountry) {
       p_market = marketToJson(
@@ -66,55 +61,69 @@ export const createFirmClient = createServerFn({ method: "POST" })
       );
     }
 
-    let { data: raw, error } = await sb.rpc("create_firm_client", {
-      p_name: data.name,
-      p_firm_id: data.firmId ?? null,
-      p_business_type: data.businessType ?? null,
-      p_market,
+    return runFirmClientCreate({
+      readStoredEntitlement: () => readStoredCreateEntitlement(firmId),
+      countClients: () => countFirmClientsForCreate(firmId),
+      loadLiveAllowance: () =>
+        loadFirmClientCreateAllowance({
+          supabase: actor.supabase,
+          userId: actor.userId,
+          email: actor.claims?.email ?? "",
+          firmId,
+        }),
+      createClient: async () => {
+        const sb = actor.supabase;
+        let { data: raw, error } = await sb.rpc("create_firm_client", {
+          p_name: data.name,
+          p_firm_id: firmId,
+          p_business_type: data.businessType ?? null,
+          p_market,
+        });
+
+        if (error && p_market && isMissingMarketSupport(error)) {
+          const retry = await sb.rpc("create_firm_client", {
+            p_name: data.name,
+            p_firm_id: firmId,
+            p_business_type: data.businessType ?? null,
+          });
+          raw = retry.data;
+          error = retry.error;
+        }
+
+        if (error) {
+          if (missingRpc(error) || isMissingMarketSupport(error)) {
+            throw new Error(
+              "Add-client RPC missing — run migration 20260824120000_client_code_ensure_firm.sql in Supabase.",
+            );
+          }
+          throw new Error(error.message);
+        }
+
+        // New RPC returns jsonb { id, client_code, firm_id, name }.
+        // Older uuid-only RPC is still accepted until the migration runs.
+        if (typeof raw === "string") {
+          return {
+            id: raw,
+            name: data.name,
+            firm_id: firmId,
+            client_code: null as string | null,
+          };
+        }
+        const row = (raw ?? {}) as {
+          id?: string;
+          client_code?: string;
+          firm_id?: string;
+          name?: string;
+        };
+        if (!row.id) throw new Error("Client was not created");
+        return {
+          id: row.id,
+          name: row.name ?? data.name,
+          firm_id: row.firm_id ?? firmId,
+          client_code: row.client_code ?? null,
+        };
+      },
     });
-
-    if (error && p_market && isMissingMarketSupport(error)) {
-      const retry = await sb.rpc("create_firm_client", {
-        p_name: data.name,
-        p_firm_id: data.firmId ?? null,
-        p_business_type: data.businessType ?? null,
-      });
-      raw = retry.data;
-      error = retry.error;
-    }
-
-    if (error) {
-      if (missingRpc(error) || isMissingMarketSupport(error)) {
-        throw new Error(
-          "Add-client RPC missing — run migration 20260824120000_client_code_ensure_firm.sql in Supabase.",
-        );
-      }
-      throw new Error(error.message);
-    }
-
-    // New RPC returns jsonb { id, client_code, firm_id, name }.
-    // Older uuid-only RPC is still accepted until the migration runs.
-    if (typeof raw === "string") {
-      return {
-        id: raw,
-        name: data.name,
-        firm_id: data.firmId ?? null,
-        client_code: null as string | null,
-      };
-    }
-    const row = (raw ?? {}) as {
-      id?: string;
-      client_code?: string;
-      firm_id?: string;
-      name?: string;
-    };
-    if (!row.id) throw new Error("Client was not created");
-    return {
-      id: row.id,
-      name: row.name ?? data.name,
-      firm_id: row.firm_id ?? data.firmId ?? null,
-      client_code: row.client_code ?? null,
-    };
   });
 
 /** Whether Add client is open, or blocked on the trial / band cap. */

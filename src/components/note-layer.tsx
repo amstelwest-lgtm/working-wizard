@@ -232,6 +232,8 @@ export function NoteLayer({
     openArchive,
     tagMilonIt,
     notes: allNotes,
+    loadError,
+    refresh,
     focusNoteId,
     requestOpenNote,
     clearFocusNote,
@@ -439,7 +441,14 @@ export function NoteLayer({
   }, [pinMode]);
 
   if (!mounted || !clientId) return null;
-  if (!pinMode && tabNotes.length === 0 && !composing && !openNoteId && !focusNoteId) return null;
+  if (!pinMode && tabNotes.length === 0 && !composing && !openNoteId && !focusNoteId) {
+    if (!loadError) return null;
+    return (
+      <button type="button" data-section-retry="notes" onClick={() => void refresh()}>
+        Retry
+      </button>
+    );
+  }
 
   const trayInFlow = traySlot != null;
   const tray =
