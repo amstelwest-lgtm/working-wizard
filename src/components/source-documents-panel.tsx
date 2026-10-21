@@ -12,6 +12,7 @@ import {
   type DragEvent,
 } from "react";
 import { useMarketFormat } from "@/contexts/market";
+import { pickNativeDocument } from "@/lib/native-document-picker";
 import {
   SOURCE_DOC_ACCEPT,
   buildSourceDocumentsModel,
@@ -49,6 +50,7 @@ export function SourceDocumentsView({
   rejectId = null,
   rejectNote = "",
   onUpload,
+  onNotice,
   onLedger,
   onExtract,
   onApprove,
@@ -61,6 +63,7 @@ export function SourceDocumentsView({
   rejectId?: string | null;
   rejectNote?: string;
   onUpload?: (file: File, channel: "upload" | "camera") => void;
+  onNotice?: (message: string) => void;
   onLedger?: (documentId: string, ledger: LedgerChoice) => void;
   onExtract?: (documentId: string, ledger: LedgerChoice) => void;
   onApprove?: (proposalId: string) => void;
@@ -81,6 +84,21 @@ export function SourceDocumentsView({
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
     if (file) onUpload?.(file, "upload");
+  };
+
+  const choose = (channel: "upload" | "camera") => {
+    void pickNativeDocument(channel).then((picked) => {
+      if (picked.status === "unavailable") {
+        (channel === "camera" ? cameraRef : fileRef).current?.click();
+        return;
+      }
+      if (picked.status === "cancel") return;
+      if (picked.status === "error") {
+        onNotice?.(picked.message);
+        return;
+      }
+      onUpload?.(picked.file, channel);
+    });
   };
 
   return (
@@ -115,7 +133,7 @@ export function SourceDocumentsView({
             <button
               type="button"
               className={uploadIsPrimary ? PRIMARY : QUIET}
-              onClick={() => fileRef.current?.click()}
+              onClick={() => choose("upload")}
               disabled={busyId === "upload"}
             >
               {busyId === "upload" ? "Saving…" : "Upload a document"}
@@ -123,7 +141,7 @@ export function SourceDocumentsView({
             <button
               type="button"
               className={QUIET}
-              onClick={() => cameraRef.current?.click()}
+              onClick={() => choose("camera")}
               disabled={busyId === "upload"}
             >
               Take a photo
@@ -529,6 +547,7 @@ function LiveSourceDocuments({
       rejectId={rejectId}
       rejectNote={rejectNote}
       onUpload={(file, channel) => void upload(file, channel)}
+      onNotice={setNotice}
       onLedger={(documentId, ledger) =>
         setLedgerChoice((current) => ({ ...current, [documentId]: ledger }))
       }
