@@ -1823,6 +1823,7 @@ export function CashForecastPanel({
    * A scenario open on screen is labelled there and is not written into the PDF.
    */
   const exportPDF = async () => {
+    if (linesBlank || forecastEmpty) return;
     setExporting(true);
     setExportError(null);
     try {
@@ -2268,6 +2269,11 @@ export function CashForecastPanel({
             {answerSentence}
           </p>
         ) : null}
+        {loaded && (linesBlank || forecastEmpty) ? (
+          <p className="answer-strip__sentence" data-cash-export-reason>
+            The 13-week chart appears once a forecast line is entered.
+          </p>
+        ) : null}
         {forecastUpdatedLabel ? (
           <p className="answer-strip__sentence" data-forecast-updated>
             {forecastUpdatedLabel}
@@ -2304,9 +2310,17 @@ export function CashForecastPanel({
           <button
             type="button"
             className="answer-strip__icon"
-            aria-label="Export PDF"
-            title="Export PDF"
-            disabled={exporting}
+            aria-label={
+              linesBlank || forecastEmpty
+                ? "Export PDF unavailable. The 13-week chart appears once a forecast line is entered."
+                : "Export PDF"
+            }
+            title={
+              linesBlank || forecastEmpty
+                ? "The 13-week chart appears once a forecast line is entered."
+                : "Export PDF"
+            }
+            disabled={exporting || linesBlank || forecastEmpty}
             onClick={exportPDF}
           >
             <Download className="h-3.5 w-3.5" />
