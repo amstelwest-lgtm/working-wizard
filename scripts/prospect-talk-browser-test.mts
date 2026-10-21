@@ -8,6 +8,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
 import { chromium, type Browser, type Page } from "playwright";
+import {
+  createMemoryProspectStore,
+  handleProspectRequest,
+  type ProspectHandlerCtx,
+} from "../src/lib/prospect-talk-handler";
 
 const PORT = 5211;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -98,6 +103,87 @@ async function launch(): Promise<Browser> {
 async function shot(page: Page, name: string) {
   mkdirSync(ARTIFACTS, { recursive: true });
   await page.screenshot({ path: `${ARTIFACTS}/${name}.png`, fullPage: true });
+}
+
+function talkCtx(country: "US" | "ZA", ip: string): ProspectHandlerCtx {
+  const memory = createMemoryProspectStore();
+  return {
+    now: new Date("2026-10-20T12:00:00.000Z"),
+    ip,
+    geoCountry: country,
+    ipSalt: "browser-geo",
+    store: memory.store,
+    model: async () => "The sample is a labelled walk-through.",
+    claimAlert: async () => true,
+    sendAlert: async () => ({ ok: true }),
+  };
+}
+
+/** In-chat price. The POST is the real handler, with the edge country mocked. */
+async function answerTalk(page: Page, country: "US" | "ZA", ip: string) {
+  const talk = talkCtx(country, ip);
+  await page.route("**/functions/v1/prospect-talk", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    const result = await handleProspectRequest(body, talk);
+    await route.fulfill({
+      status: result.status,
+      contentType: "application/json",
+      body: JSON.stringify(result.body),
+    });
+  });
+}
+
+const PRICE_QUESTION = "How much does it cost?";
+
+/** The composer is enabled, and this form node has not been replaced. */
+async function waitComposerSettled(page: Page) {
+  await page.waitForFunction(
+    () => {
+      const form = document.querySelector("form.talk-composer");
+      const button = form?.querySelector(".talk-send");
+      if (!(form instanceof HTMLFormElement)) return false;
+      if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+      if (!(button.textContent ?? "").includes("Send")) return false;
+      const mark = window as Window & { __talkPriceForm?: Element; __talkPriceAt?: number };
+      const now = performance.now();
+      if (mark.__talkPriceForm !== form) {
+        mark.__talkPriceForm = form;
+        mark.__talkPriceAt = now;
+        return false;
+      }
+      return now - (mark.__talkPriceAt ?? now) > 1_200;
+    },
+    undefined,
+    { timeout: 45_000 },
+  );
+}
+
+/**
+ * Ask the price and return the agent bubble once the reply has stayed.
+ * The signed-in shell (and a late route refresh) remounts the thread and
+ * drops the message just sent, so a wiped reply is asked again.
+ */
+async function askPrice(page: Page, price: string): Promise<string> {
+  let lastBody = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await waitComposerSettled(page);
+    const already = page.locator(".talk-bubble-you", { hasText: PRICE_QUESTION });
+    if ((await already.count()) === 0) {
+      await page.locator("textarea").fill(PRICE_QUESTION);
+      await page.locator(".talk-send").click();
+    }
+    const bubble = page.locator(".talk-bubble-agent", { hasText: price }).last();
+    try {
+      await bubble.waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForTimeout(1_200);
+      if ((await bubble.count()) > 0) return await bubble.innerText();
+    } catch {
+      /* the remount dropped the reply */
+    }
+    lastBody = await page.locator("body").innerText().catch(() => "");
+  }
+  console.error("price chat body", lastBody.slice(0, 1500));
+  throw new Error(`the ${price} reply did not stay on the page`);
 }
 
 async function main() {
@@ -260,6 +346,16 @@ async function main() {
   assert(!/\bvat\b/i.test(zaText), "ZA geo does not say VAT");
   assert(!zaText.includes("$39"), "ZA geo does not show the US price");
   await shot(zaPage, "talk-geo-za");
+  await answerTalk(zaPage, "ZA", "203.0.113.91");
+  await zaPage.goto(`${BASE}/talk/financial-manager`, {
+    waitUntil: "domcontentloaded",
+    timeout: 30_000,
+  });
+  const zaChat = await askPrice(zaPage, "R299/mo");
+  assert(zaChat.includes("R299/mo"), "ZA chat prices the starter plan in rand");
+  assert(!zaChat.includes("$"), "ZA chat price has no dollar sign");
+  assert(!/\bvat\b/i.test(zaChat), "ZA chat price does not say VAT");
+  await shot(zaPage, "talk-za-price-chat");
   await zaPage.goto(`${BASE}/talk/tax-specialist`, { waitUntil: "domcontentloaded" });
   await zaPage.locator("textarea").waitFor({ timeout: 15_000 });
   await za.close();
@@ -280,6 +376,17 @@ async function main() {
   assert(!usText.includes("ZAR"), "US geo does not say ZAR");
   assert(!/\bvat\b/i.test(usText), "US geo does not say VAT");
   await shot(usPage, "talk-geo-us");
+  await answerTalk(usPage, "US", "203.0.113.92");
+  await usPage.goto(`${BASE}/talk/financial-manager`, {
+    waitUntil: "domcontentloaded",
+    timeout: 30_000,
+  });
+  const usChat = await askPrice(usPage, "$39/mo");
+  assert(usChat.includes("$39/mo"), "US chat prices the starter plan in dollars");
+  assert(!/\brand\b/i.test(usChat), "US chat price does not say rand");
+  assert(!/R\s*\d/.test(usChat), "US chat price has no rand amount");
+  assert(!usChat.includes("ZAR"), "US chat price does not say ZAR");
+  assert(!/\bvat\b/i.test(usChat), "US chat price does not say VAT");
   await usPage.goto(`${BASE}/talk/tax-specialist`, { waitUntil: "domcontentloaded" });
   await usPage
     .getByText("The Tax Specialist covers South African tax")

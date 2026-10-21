@@ -24,13 +24,24 @@ import {
   PROSPECT_LEADS_PER_EMAIL,
   PROSPECT_TURNS_PER_IP_PER_HOUR,
   assessProspectTurn,
-  hasPrematureFigure,
-  PROSPECT_GROSS_MARGIN_METHOD,
+  guardProspectReply,
+  newProspectToken,
   PROSPECT_NO_FIGURES_REPLY,
-  PROSPECT_RUNWAY_METHOD,
   prospectAgentsFor,
+  sha256Hex,
   shouldAskForLead,
 } from "../src/lib/prospect-talk";
+import { PILLAR_RATIO_NAMES } from "../src/lib/health-catalogue";
+import { METRIC_DIRECTIONS } from "../src/lib/metric-directions";
+import {
+  METHOD_SYNONYMS,
+  PROSPECT_GROSS_MARGIN_METHOD,
+  PROSPECT_METHOD_ENTRIES,
+  PROSPECT_METHOD_GENERIC,
+  PROSPECT_RUNWAY_METHOD,
+  plainMethodReply,
+  prospectMethodEntry,
+} from "../src/lib/prospect-talk-methods";
 import {
   prospectPricingReply,
   prospectSystem,
@@ -1075,7 +1086,7 @@ for (const [index, agent] of publicSlugs.entries()) {
     method.body.reply !== PROSPECT_NO_FIGURES_REPLY,
     `${agent} does not answer a method with the figure gate`,
   );
-  assert(!hasPrematureFigure(String(method.body.reply)), `${agent} method answer has no figures`);
+  assert(!/[$€£]/.test(String(method.body.reply)), `${agent} method answer quotes no money`);
   assert(
     !/name and email/i.test(String(method.body.reply)),
     `${agent} method answer does not ask for a lead`,
@@ -1171,7 +1182,7 @@ assert(
   "gross margin states the formula and the steps",
 );
 assert(!/say which line/i.test(String(gross.body.reply)), "gross margin does not ask which line");
-assert(!hasPrematureFigure(String(gross.body.reply)), "gross margin quotes no sample figure");
+assert(!/[$€£]/.test(String(gross.body.reply)), "gross margin quotes no money");
 
 const usIndexPrice = renderToStaticMarkup(
   createElement(TalkIndex, { refCode: null, copyPack: "us", priceLine: usTalkPriceLine() }),
@@ -1322,5 +1333,147 @@ for (const agent of publicSlugs) {
   });
   host.remove();
 }
+
+const DODGE = "Say which line you mean";
+for (const rel of [
+  "src/lib/prospect-talk.ts",
+  "src/lib/prospect-talk-methods.ts",
+  "src/lib/prospect-talk-handler.ts",
+]) {
+  const text = readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
+  assert(!text.includes(DODGE), `${rel} does not keep the line dodge`);
+}
+
+for (const spec of METRIC_DIRECTIONS) {
+  const entry = prospectMethodEntry(spec.key);
+  assert(entry != null && entry.formula.length > 0, `${spec.name} has a method entry`);
+  assert(entry.answer.includes(entry.formula), `${spec.name} quotes the registry formula`);
+  assert(!entry.answer.toLowerCase().includes("say which line"), `${spec.name} does not dodge`);
+}
+for (const name of Object.values(PILLAR_RATIO_NAMES).flat()) {
+  const entry = PROSPECT_METHOD_ENTRIES.find((item) => item.name === name);
+  assert(entry != null && entry.formula.length > 0, `${name} catalogue ratio has a method entry`);
+  assert(entry.answer.includes(entry.formula), `${name} quotes the registry formula`);
+}
+
+const methodPhrases = [
+  ...METRIC_DIRECTIONS.map((spec) => ({ phrase: spec.name, key: spec.key })),
+  ...METHOD_SYNONYMS,
+];
+
+async function methodTurn(phrase: string, led: boolean, ip: string) {
+  const run = createMemoryProspectStore();
+  let calls = 0;
+  const runCtx = ctx({
+    ip,
+    store: run.store,
+    model: async () => {
+      calls += 1;
+      return "Say which line you mean.";
+    },
+  });
+  let token: string | undefined;
+  if (led) {
+    token = newProspectToken();
+    const now = runCtx.now;
+    await run.store.insertSession({
+      id: crypto.randomUUID(),
+      tokenHash: await sha256Hex(token),
+      agent: "analyst",
+      ipHash: await sha256Hex(`${runCtx.ipSalt}|${ip}`),
+      country: "US",
+      ref: null,
+      visitorTurns: 0,
+      leadEmail: `ada-${ip.replace(/\./g, "-")}@example.com`,
+      pendingMessage: null,
+      sampleNonce: "n".repeat(24),
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + 86_400_000).toISOString(),
+    });
+  }
+  const result = await handleProspectRequest(
+    {
+      action: "turn",
+      agent: "analyst",
+      sessionToken: token,
+      message: `How do you calculate ${phrase}?`,
+    },
+    runCtx,
+  );
+  return { result, calls };
+}
+
+let methodIp = 0;
+for (const item of methodPhrases) {
+  const entry = prospectMethodEntry(item.key);
+  assert(entry != null, `${item.phrase} routes to a method entry`);
+  for (const led of [false, true]) {
+    methodIp += 1;
+    const ip = `198.51.100.${(methodIp % 250) + 1}`;
+    const { result, calls } = await methodTurn(item.phrase, led, ip);
+    const reply = String(result.body.reply ?? "");
+    const when = led ? "after a lead" : "before a lead";
+    assert(result.status === 200, `${item.phrase} ${when} is answered`);
+    assert(reply.includes(entry.formula), `${item.phrase} ${when} quotes ${entry.formula}`);
+    assert(!/say which line/i.test(reply), `${item.phrase} ${when} does not dodge`);
+    assert(calls === 0, `${item.phrase} ${when} does not call the model`);
+    assert(plainMethodReply(`How do you calculate ${item.phrase}?`) === reply, `${item.phrase} ${when} uses the table`);
+  }
+}
+
+const mysteryRun = createMemoryProspectStore();
+let mysteryCalls = 0;
+const mystery = await handleProspectRequest(
+  { action: "turn", agent: "analyst", message: "How do you calculate the mystery ratio?" },
+  ctx({
+    ip: "198.51.100.250",
+    store: mysteryRun.store,
+    model: async () => {
+      mysteryCalls += 1;
+      return "Say which line you mean.";
+    },
+  }),
+);
+assert(mystery.body.reply === PROSPECT_METHOD_GENERIC, "an unknown metric gets the generic method");
+assert(!/say which line/i.test(String(mystery.body.reply)), "the generic method does not dodge");
+assert(/12 \/ months/i.test(String(mystery.body.reply)), "the generic method names the figures cover");
+assert(mysteryCalls === 0, "an unknown metric does not call the model");
+
+const marked = guardProspectReply("This page is a **labelled SAMPLE**.", "US", false, "allow");
+assert(marked.includes("labelled SAMPLE"), "the sample label survives markdown stripping");
+assert(!marked.includes("*"), "guardProspectReply strips markdown asterisks");
+const markedTurn = createMemoryProspectStore();
+const markedReply = await handleProspectRequest(
+  { action: "turn", agent: "financial-manager", message: "What is on this page?" },
+  ctx({
+    ip: "198.51.100.251",
+    store: markedTurn.store,
+    model: async () => "This page is a **labelled SAMPLE**.",
+  }),
+);
+assert(String(markedReply.body.reply).includes("labelled SAMPLE"), "the model sample label is kept");
+assert(!String(markedReply.body.reply).includes("*"), "the model reply does not show asterisks");
+
+const zaPriceRun = createMemoryProspectStore();
+const zaPrice = await handleProspectRequest(
+  { action: "turn", agent: "financial-manager", message: "How much does it cost?" },
+  ctx({ ip: "198.51.100.252", geoCountry: "ZA", store: zaPriceRun.store }),
+);
+const zaPriceReply = String(zaPrice.body.reply);
+assert(zaPriceReply.includes("R299/mo"), "ZA pricing reply quotes R299/mo");
+assert(!zaPriceReply.includes("$"), "ZA pricing reply has no dollar sign");
+assert(!/\bvat\b/i.test(zaPriceReply), "ZA pricing reply does not say VAT");
+
+const usPriceRun = createMemoryProspectStore();
+const usPrice = await handleProspectRequest(
+  { action: "turn", agent: "financial-manager", message: "How much does it cost?" },
+  ctx({ ip: "198.51.100.253", geoCountry: "US", store: usPriceRun.store }),
+);
+const usPriceReply = String(usPrice.body.reply);
+assert(usPriceReply.includes("$39/mo"), "US pricing reply quotes $39/mo");
+assert(!/\brand\b/i.test(usPriceReply), "US pricing reply does not say rand");
+assert(!/R\s*\d/.test(usPriceReply), "US pricing reply has no rand amount");
+assert(!usPriceReply.includes("ZAR"), "US pricing reply does not say ZAR");
+assert(!/\bvat\b/i.test(usPriceReply), "US pricing reply does not say VAT");
 
 console.log("prospect-talk: ok");
