@@ -3,12 +3,7 @@
  * stays off the screen until Regenerate paints the snapshot sentence.
  */
 import { useEffect, useState } from "react";
-import { FIGURES_CHANGED_REGENERATE } from "@/lib/health-snapshot";
-
-function isRegenerateMarker(text: string): boolean {
-  const trimmed = text.trim().replace(/[.!?]$/, "");
-  return trimmed === FIGURES_CHANGED_REGENERATE;
-}
+import { FIGURES_CHANGED_REGENERATE, splitRegenerateNarrative } from "@/lib/health-snapshot";
 
 export function HealthNarrativeLine({
   text,
@@ -23,15 +18,20 @@ export function HealthNarrativeLine({
   useEffect(() => {
     setShown(text);
   }, [text]);
-  const stale = isRegenerateMarker(shown);
+  const parts = splitRegenerateNarrative(shown);
   return (
     <>
-      <p className={className} data-health-narrative={stale ? "stale" : "current"}>
-        {shown}
+      <p className={className} data-health-narrative={parts.action ? "stale" : "current"}>
+        {parts.action ? parts.lead || FIGURES_CHANGED_REGENERATE : shown}
       </p>
-      {stale && liveSentence ? (
-        <button type="button" className="milon-desk-btn outline" data-health-regenerate onClick={() => setShown(liveSentence)}>
-          Regenerate
+      {parts.action && liveSentence ? (
+        <button
+          type="button"
+          className="milon-desk-btn outline"
+          data-health-regenerate
+          onClick={() => setShown(liveSentence)}
+        >
+          {FIGURES_CHANGED_REGENERATE}
         </button>
       ) : null}
     </>

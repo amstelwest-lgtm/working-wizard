@@ -6,11 +6,13 @@ import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   CLIENTS_LOAD_ERROR,
   CLIENTS_LOAD_RETRY_BACKOFF_MS,
+  FIGURES_LOAD_ERROR,
   OPEN_QUERIES_LOAD_ERROR,
   openQueriesPhase,
   practiceClientsPhase,
   readWithOneRetry,
   settleWithin,
+  type PracticeFiguresPhase,
 } from "@/lib/bounded-load";
 import {
   forgetPaintedBook,
@@ -29,7 +31,7 @@ import {
   openPracticeSettings,
   isMilonItMember,
 } from "@/lib/user-roles";
-import { liveHealthFromBooks, scoreTier, type OverallHealth } from "@/lib/health-score";
+import { scoreTier, type OverallHealth } from "@/lib/health-score";
 import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
 import {
   buildAttentionItems,
@@ -43,11 +45,16 @@ import {
   needsAttentionView,
   practiceNeedsAttention,
   portfolioSummaryLine,
-  revenueOf,
   trendColumnVisible,
-  trendDelta30d,
-  type ScoreHistoryPoint,
 } from "@/lib/portfolio-dashboard";
+import {
+  clientListOpProfit,
+  lightClientRow,
+  toClientRow,
+  type PracticeClient,
+  type PracticeClientRow,
+  type StoredScorePoint,
+} from "@/lib/practice-client-row";
 import { useServerFn } from "@tanstack/react-start";
 import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
@@ -74,22 +81,21 @@ import {
   upgradeFirmBand,
 } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
-import { clientListRunwayCell, clientListRunwayHeadline, clientListStatusWord, statusColumnNeedsAttention } from "@/lib/cash-forecast-parity";
+import { clientListRunwayCell, statusColumnNeedsAttention } from "@/lib/cash-forecast-parity";
 import { revealPracticeHash } from "@/lib/practice-section-hash";
-import {
-  assessClientMetrics,
-  forecastIsCashGenerative,
-  runwayDisplayLabel,
-  storedOpeningIsMissing,
-} from "@/lib/client-metrics";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryDisplay } from "@/lib/profile-signals";
 import {
   implausibleSampleNote,
   operatingProfitColumnHeading,
-  operatingProfitLabel,
   statementSampleImplausible,
 } from "@/lib/operating-profit-display";
+import {
+  ClientsListProfit,
+  ClientsListQueries,
+  ClientsListRunway,
+  ClientsListScore,
+} from "@/components/practice-list-metrics";
 import { countOpenQueriesByClient, listOpenQueries, type OpenQueryRow } from "@/lib/open-queries";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsMenu } from "@/components/settings-menu";
@@ -160,49 +166,8 @@ import { KpiTrendline } from "@/components/kpi-trendline";
 
 type Firm = { id: string; name: string; referral_code: string | null; owner_user_id: string };
 
-type Client = {
-  id: string;
-  name: string;
-  business_type: string | null;
-  operating_profile?: unknown;
-  client_code?: string | null;
-  contact_email?: string | null;
-  cash_runway_weeks: number | null;
-  last_forecast_at: string | null;
-  last_login_at: string | null;
-  firm_id: string | null;
-  owner_user_id?: string | null;
-  financials: Record<string, string | number | null> | null;
-  financials_updated_at?: string | null;
-  cashflow?: unknown;
-  created_at?: string | null;
-  // reports_issued_count may not exist until migration runs
-  reports_issued_count?: number | null;
-  market?: unknown;
-};
-
-type ClientRow = Client & {
-  score: number | null;
-  health: OverallHealth;
-  /** ~30-day health delta from score history. The Practice chart holds the trend. */
-  trendDelta: number | null;
-  /** Dated scores already on file, oldest first. Empty when history has fewer than two points. */
-  scoreSeries: number[];
-  /** Open action titles already on the plan. Used only to draft a chase. */
-  chaseActions: { title: string; overdue: boolean }[];
-  /** Resolved runway (persisted or derived from cashflow). */
-  runwayWeeks: number | null;
-  /** Same label Overview prints, including Cash generative. */
-  runwayLabel: string | null;
-  /** Unresolved notes count. */
-  openQueries: number;
-  /** Open (not done) action-plan items. */
-  openActions: number;
-  /** Open actions past due_date, or past the plan target when they have no due date. */
-  overdueActions: number;
-  /** Revenue for scatter bubble sizing. */
-  revenue: number | null;
-};
+type Client = PracticeClient;
+type ClientRow = PracticeClientRow;
 
 // Playbook metadata shape for the library grid
 type PlaybookMeta = {
@@ -1107,142 +1072,6 @@ function InviteOwnerDialog({
   );
 }
 
-function latestStoredScore(history: ScoreHistoryPoint[]): number | null {
-  for (let i = history.length - 1; i >= 0; i--) {
-    const score = history[i]?.score;
-    if (typeof score === "number" && Number.isFinite(score)) return score;
-  }
-  return null;
-}
-
-const UNSCORED_HEALTH: OverallHealth = {
-  overall: null,
-  status: "at_risk",
-  displayStatus: "at_risk",
-  displayLabel: "Watch",
-  pillars: [],
-  weakestPillar: null,
-  hasCriticalPillar: false,
-};
-
-/** First paint. Runway and health fill in once the books and the plan load. */
-function lightClientRow(c: Client): ClientRow {
-  return {
-    ...c,
-    financials: c.financials ?? null,
-    score: null,
-    health: UNSCORED_HEALTH,
-    trendDelta: null,
-    scoreSeries: [],
-    chaseActions: [],
-    runwayWeeks: c.cash_runway_weeks,
-    runwayLabel: null,
-    openQueries: 0,
-    openActions: 0,
-    overdueActions: 0,
-    revenue: null,
-  };
-}
-
-/** One book row. A scoring throw still leaves the client on the list. */
-function toClientRow(
-  c: Client,
-  history: ScoreHistoryPoint[],
-  openActions: number,
-  overdueActions: number,
-  openQueries: number,
-  chaseActions: { title: string; overdue: boolean }[] = [],
-): ClientRow {
-  try {
-    const clientMarket = resolveMarket(
-      parseMarketSelection(c.market) ?? coerceMarketSelection(c.market),
-    );
-    const assessed = assessClientMetrics({
-      financials: c.financials,
-      cashflow: c.cashflow,
-      financialsUpdatedAt: c.financials_updated_at ?? null,
-      timeZone: clientMarket.timezone,
-    });
-    const runwayWeeks =
-      assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
-        ? assessed.runway.weeks
-        : null;
-    const outlook = assessed.outlook;
-    const fyStartMonth =
-      parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
-    const openingMissing = storedOpeningIsMissing(c.cashflow);
-    const scored = liveHealthFromBooks({
-      financials: c.financials,
-      cashflow: c.cashflow,
-      financialsUpdatedAt: c.financials_updated_at ?? null,
-      fyStartMonth,
-      market: clientMarket,
-      industry: clientIndustryDisplay(c.name, parseOperatingProfile(c.operating_profile)),
-      timeZone: clientMarket.timezone,
-    });
-    const statusWord = clientListStatusWord({
-      healthLabel: scored.displayLabel,
-      healthOverall: scored.overall,
-      source: outlook.source,
-      opening: outlook.opening,
-      floor: outlook.floor,
-      dipsBelowFloorWeek: outlook.dipsBelowFloorWeek,
-      totalInflow: outlook.totalInflow,
-      totalOutflow: outlook.totalOutflow,
-      openingMissing,
-    });
-    const health = statusWord.startsWith("Critical")
-      ? { ...scored, displayStatus: "critical" as const, displayLabel: statusWord }
-      : statusWord.startsWith("Needs data")
-        ? { ...scored, displayStatus: "at_risk" as const, displayLabel: statusWord }
-        : scored;
-    const runwayLabel = clientListRunwayHeadline({
-      source: outlook.source,
-      opening: outlook.opening,
-      closings: outlook.closing,
-      floor: outlook.floor,
-      totalInflow: outlook.totalInflow,
-      totalOutflow: outlook.totalOutflow,
-      runwayLabel: runwayDisplayLabel(assessed.runway),
-      cashGenerative:
-        assessed.runway.kind === "cash_generative" &&
-        forecastIsCashGenerative(outlook.totalInflow, outlook.totalOutflow),
-      healthOverall: scored.overall,
-      openingMissing,
-    });
-    return {
-      ...c,
-      score: health.overall ?? latestStoredScore(history),
-      health,
-      trendDelta: trendDelta30d(history, health.overall),
-      scoreSeries: history.map((point) => point.score).filter((score) => Number.isFinite(score)),
-      chaseActions,
-      runwayWeeks,
-      runwayLabel,
-      openQueries,
-      openActions,
-      overdueActions,
-      revenue: revenueOf(c.financials),
-    };
-  } catch (err) {
-    console.error("client row:", c.id, err);
-    return {
-      ...c,
-      score: null,
-      health: UNSCORED_HEALTH,
-      trendDelta: null,
-      scoreSeries: [],
-      chaseActions,
-      runwayWeeks: null,
-      runwayLabel: null,
-      openQueries,
-      openActions,
-      overdueActions,
-      revenue: null,
-    };
-  }
-}
-
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 const PRACTICE_SECTION_TITLES = {
@@ -1347,6 +1176,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const [countsReady, setCountsReady] = useState(() => warmBook != null);
   /** Set only after the enriched rows land. A warm paint and the shell timer must not set this. */
   const [bookEnriched, setBookEnriched] = useState(false);
+  /** Pending until financials and cashflow merge. A warm book is already merged. */
+  const [figuresLoad, setFiguresLoad] = useState<PracticeFiguresPhase>(() =>
+    warmBook ? "merged" : "pending",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const finalizeUpgrade = useServerFn(finalizeFirmBandCheckout);
@@ -1465,6 +1298,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const sendDraftedInvite = useServerFn(sendDraftedOwnerInvite);
   const loadGen = useRef(0);
   const bookDeadlineTimer = useRef<number | null>(null);
+  const figuresSettled = useRef(warmBook != null);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const [chaseDraft, setChaseDraft] = useState<ChaseDraftInput | null>(null);
@@ -1485,10 +1319,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setClientRows(warm);
       setLoading(false);
       setClientsOutcome("ready");
+      figuresSettled.current = true;
+      setFiguresLoad("merged");
     } else {
       setLoading(true);
       setCountsReady(false);
       setClientsOutcome("pending");
+      figuresSettled.current = false;
+      setFiguresLoad("pending");
     }
     try {
 
@@ -1499,6 +1337,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setBookEnriched(true);
       setBookTimedOut(false);
       setClientsOutcome("ready");
+      figuresSettled.current = true;
+      setFiguresLoad("merged");
       setLoading(false);
       return;
     }
@@ -1535,7 +1375,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     if (gen !== loadGen.current) return;
     if (slim.status !== "value") {
       setBookTimedOut(true);
-      if (!warm) setClientsOutcome("error");
+      if (!warm) {
+        setClientsOutcome("error");
+        setFiguresLoad("failed");
+      }
       return;
     }
     setClientsOutcome("ready");
@@ -1570,12 +1413,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     if (gen !== loadGen.current) return;
     const lightRows = rawClients.map((c) => lightClientRow(c));
     setClientRows(rawClients.map((c) => lightClientRow(c)));
-    rememberPaintedBook(userId, activeFirmId, lightRows);
-    if (rawClients.length === 0) setCountsReady(true);
+    figuresSettled.current = false;
+    setFiguresLoad("pending");
+    setCountsReady(lightRows.length === 0);
     setLoading(false);
 
     const historyPromise = (async () => {
-      const historyMap: Record<string, ScoreHistoryPoint[]> = {};
+      const historyMap: Record<string, StoredScorePoint[]> = {};
       if (clientIds.length === 0) return historyMap;
       try {
         const { data: hist, error: histErr } = await supabase
@@ -1659,12 +1503,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       return { openActionsMap, overdueActionsMap, chaseActionsMap };
     })();
 
-    const queriesPromise = countOpenQueriesByClient(clientIds).catch((err) => {
-      console.error("open queries:", err);
-      return {} as Record<string, number>;
-    });
+    const queriesPromise = countOpenQueriesByClient(clientIds)
+      .then((map) => ({ ok: true as const, map }))
+      .catch((err) => {
+        console.error("open queries:", err);
+        return { ok: false as const, map: {} as Record<string, number> };
+      });
 
-    const [historyMap, actionMaps, openQueriesMap, displayNames, figures, linkedIds] = await Promise.all([
+    const [historyMap, actionMaps, queryCounts, displayNames, figures, linkedIds] = await Promise.all([
       historyPromise,
       actionsPromise,
       queriesPromise,
@@ -1680,38 +1526,63 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         (row) => [row.id, row],
       ),
     );
-    rawClients = rawClients.map((client) => {
-      const name = displayNames.get(client.id);
-      const book = books.get(client.id);
-      return {
-        ...client,
-        name: name && name !== client.name ? name : client.name,
-        firm_id: linked.has(client.id) ? activeFirmId : client.firm_id,
-        financials: book?.financials ?? client.financials ?? null,
-        cashflow: book?.cashflow ?? client.cashflow,
-      };
-    });
-    const fullRows = rawClients.map((c) =>
-      toClientRow(
-        c,
-        historyMap[c.id] ?? [],
-        openActionsMap[c.id] ?? 0,
-        overdueActionsMap[c.id] ?? 0,
-        openQueriesMap[c.id] ?? 0,
-        chaseActionsMap[c.id] ?? [],
-      ),
-    );
-    if (gen === loadGen.current) {
-      setClientRows(fullRows);
-      rememberPaintedBook(userId, activeFirmId, fullRows);
-      setBookEnriched(true);
-      setBookTimedOut(false);
+    if (figures.error) {
+      if (gen === loadGen.current && !figuresSettled.current) {
+        const painted = readPaintedBook<ClientRow>(userId, activeFirmId);
+        if (painted && painted.length > 0) {
+          setClientRows(painted);
+          figuresSettled.current = true;
+          setFiguresLoad("merged");
+          setBookEnriched(true);
+        } else {
+          setFiguresLoad("failed");
+        }
+      }
+    } else {
+      rawClients = rawClients.map((client) => {
+        const name = displayNames.get(client.id);
+        const book = books.get(client.id);
+        return {
+          ...client,
+          name: name && name !== client.name ? name : client.name,
+          firm_id: linked.has(client.id) ? activeFirmId : client.firm_id,
+          financials: book?.financials ?? client.financials ?? null,
+          cashflow: book?.cashflow ?? client.cashflow,
+        };
+      });
+      const fullRows = rawClients.map((c) =>
+        toClientRow(
+          c,
+          historyMap[c.id] ?? [],
+          openActionsMap[c.id] ?? 0,
+          overdueActionsMap[c.id] ?? 0,
+          queryCounts.ok ? (queryCounts.map[c.id] ?? 0) : null,
+          chaseActionsMap[c.id] ?? [],
+        ),
+      );
+      if (gen === loadGen.current) {
+        setClientRows(fullRows);
+        rememberPaintedBook(userId, activeFirmId, fullRows);
+        setBookEnriched(true);
+        figuresSettled.current = true;
+        setFiguresLoad("merged");
+        setBookTimedOut(false);
+      }
     }
     } catch (err) {
       console.error("practice book:", err);
-      if (gen === loadGen.current) {
-        setBookTimedOut(true);
-        if (!warm) setClientsOutcome("error");
+      if (gen === loadGen.current && !figuresSettled.current) {
+        const painted = readPaintedBook<ClientRow>(userId, activeFirmId);
+        if (painted && painted.length > 0) {
+          setClientRows(painted);
+          figuresSettled.current = true;
+          setFiguresLoad("merged");
+          setBookEnriched(true);
+        } else {
+          setFiguresLoad("failed");
+          setBookTimedOut(true);
+          if (!warm) setClientsOutcome("error");
+        }
       }
     } finally {
       if (gen === loadGen.current) {
@@ -1738,6 +1609,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setBookTimedOut(true);
       setLoading(false);
       setCountsReady(true);
+      if (!figuresSettled.current) setFiguresLoad("failed");
     }, SHELL_GATE_TIMEOUT_MS);
     bookDeadlineTimer.current = timer;
     return () => {
@@ -1769,6 +1641,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setLoading(false);
       setCountsReady(true);
       setClientsOutcome((outcome) => (outcome === "ready" ? outcome : "error"));
+      if (!figuresSettled.current) setFiguresLoad("failed");
     }, SHELL_GATE_TIMEOUT_MS);
     return () => {
       cancelled = true;
@@ -1885,7 +1758,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const avgHealth = scoredRows.length
     ? Math.round(scoredRows.reduce((s, c) => s + (c.score as number), 0) / scoredRows.length)
     : null;
-  const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
+  const openQueriesTotal = clientRows.reduce((s, c) => s + (c.openQueries ?? 0), 0);
   const queriesDestination = firmOpenQueriesDestination(clientRows);
   const headerPending = brandLoading && !headerName.trim();
   const greetName = headerName ? firstNameOf(headerName) : "";
@@ -1895,7 +1768,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     loading: bookLoading || clientsOutcome === "pending",
     timedOut: clientsOutcome === "error",
     rowCount: clientRows.length,
+    figures: figuresLoad,
   });
+  const figuresFailed = figuresLoad === "failed" && clientRows.length > 0;
+  const clientsLoadError = figuresFailed ? FIGURES_LOAD_ERROR : CLIENTS_LOAD_ERROR;
+  const figuresPending = clientsPhase === "partial";
   const queriesPhase = openQueriesPhase({
     bookLoading,
     rowsReady: queryRowsReady,
@@ -1964,7 +1841,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           health: c.health,
           trendDelta: c.trendDelta,
           runwayWeeks: c.runwayWeeks,
-          openQueries: c.openQueries,
+          openQueries: c.openQueries ?? 0,
           openActions: c.openActions,
           overdueActions: c.overdueActions,
           revenue: c.revenue,
@@ -1989,8 +1866,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   ).length;
   const summaryLine =
     clientsPhase === "error"
-      ? CLIENTS_LOAD_ERROR
-      : clientsPhase === "loading"
+      ? clientsLoadError
+      : clientsPhase === "loading" || clientsPhase === "partial"
         ? "Loading your clients…"
         : portfolioSummaryLine({
         clientCount: clientRows.length,
@@ -2008,7 +1885,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           health: c.health,
           trendDelta: c.trendDelta,
           runwayWeeks: c.runwayWeeks,
-          openQueries: c.openQueries,
+          openQueries: c.openQueries ?? 0,
           openActions: c.openActions,
           overdueActions: c.overdueActions,
           revenue: c.revenue,
@@ -2106,18 +1983,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   // ── Derived: op margin for a client ──────────────────────────────────────
   function opMarginStr(c: ClientRow): string {
-    const f = c.financials;
-    if (!f) return "—";
-    const ebit = parseFloat(String(f.ebit ?? ""));
-    const revenue = parseFloat(String(f.revenue ?? ""));
-    if (!isFinite(ebit)) return "—";
-    const market = resolveMarket(parseMarketSelection(c.market) ?? coerceMarketSelection(c.market));
-    return operatingProfitLabel({
-      ebit,
-      revenue: isFinite(revenue) ? revenue : null,
-      market,
-      financials: f,
-    });
+    return clientListOpProfit(c.financials, c.market);
   }
 
   function runwayCell(c: ClientRow) {
@@ -2232,7 +2098,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                   label="On the book"
                   {...practiceAgentWork(dashAgent, {
                     loading: bookLoading,
-                    clients: clientRows,
+                    clients: clientRows.map((row) => ({
+                      id: row.id,
+                      name: row.name,
+                      openQueries: row.openQueries ?? 0,
+                    })),
                     attention: attentionBook.items,
                     followUps: followUpItems,
                   })}
@@ -2658,6 +2528,20 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         </div>
 
         {clientsPhase === "error" ? (
+          figuresFailed ? (
+          <div className="sub" role="alert" data-clients-load="figures">
+            <p>{FIGURES_LOAD_ERROR}</p>
+            <button
+              type="button"
+              className="btn ghost mini"
+              onClick={() => {
+                void load(firmId, user?.id, greetingSource);
+              }}
+            >
+              Retry
+            </button>
+          </div>
+          ) : (
           <div className="sub" role="alert" data-clients-load="error">
             <p>{CLIENTS_LOAD_ERROR}</p>
             <button
@@ -2670,6 +2554,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               Retry
             </button>
           </div>
+          )
         ) : clientsPhase === "loading" ? (
           <SkeletonBlock className="h-72 w-full rounded-[20px]" aria-label="Loading clients" />
         ) : filteredRows.length === 0 ? (
@@ -2688,7 +2573,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           )
         ) : (
           <ScrollableTable cardRows className="ctable-scroll">
-            <table className="ctable milon-data-table">
+            <table
+              className="ctable milon-data-table"
+              data-figures={figuresPending ? "pending" : "ready"}
+              aria-busy={figuresPending || undefined}
+            >
               <thead>
                 <tr>
                   <th>Client</th>
@@ -2710,6 +2599,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                       key={c.id}
                       className="row"
                       data-client-row
+                      aria-busy={figuresPending || undefined}
                       onClick={() =>
                         navigate({
                           to: "/clients/$clientId",
@@ -2757,8 +2647,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                       <td data-label="Health">
                         <div className="cell-health">
                           <span className="ring">
-                            <RingSvg score={score} status={c.health.displayStatus} />
-                            <span className="ring-score">{score ?? "—"}</span>
+                            {figuresPending ? null : (
+                              <RingSvg score={score} status={c.health.displayStatus} />
+                            )}
+                            <ClientsListScore pending={figuresPending} score={score} />
                           </span>
                         </div>
                       </td>
@@ -2780,14 +2672,17 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                           )}
                         </td>
                       ) : null}
-                      <td className="num" data-label="Runway" title={runway.title}>
-                        <span className="runway-val">{runway.value}</span>
+                      <td className="num" data-label="Runway" title={figuresPending ? undefined : runway.title}>
+                        <ClientsListRunway pending={figuresPending} value={runway.value} />
                       </td>
                       <td className="num" data-label="Queries">
-                        {countsLoading ? "…" : c.openQueries > 0 ? c.openQueries : "—"}
+                        <ClientsListQueries
+                          pending={figuresPending || countsLoading}
+                          count={c.openQueries}
+                        />
                       </td>
                       <td className="num" data-label="Op. profit" style={{ whiteSpace: "nowrap" }}>
-                        {opMarginStr(c)}
+                        <ClientsListProfit pending={figuresPending} text={opMarginStr(c)} />
                       </td>
                       <td data-label="Status">
                         <ClientStatus health={c.health} label={chip.label} />
