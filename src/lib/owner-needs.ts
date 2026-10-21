@@ -265,7 +265,8 @@ export function ownerNeedsView(input: {
   draftLiveSentence?: string | null;
   deliverablesReady: boolean;
   deliverablesUnavailable: boolean;
-  deliverableCount: number;
+  /** Null until the accountant surface has read deliverable_drafts. Not a confirmed zero. */
+  deliverableCount: number | null;
   advisoryTitles: readonly string[];
   quickBooks: BooksLink;
   xero: BooksLink;
@@ -323,8 +324,12 @@ export function ownerNeedsView(input: {
     input.deliverablesReady && !input.deliverablesUnavailable
       ? input.advisoryTitles.filter((title) => title.trim())
       : [];
+  const storedCount = input.deliverableCount;
+  const storedChecked = typeof storedCount === "number";
   const stored =
-    input.deliverablesReady && !input.deliverablesUnavailable ? Math.max(0, input.deliverableCount) : 0;
+    storedChecked && input.deliverablesReady && !input.deliverablesUnavailable
+      ? Math.max(0, storedCount)
+      : 0;
   // Owner-OK drafts, accountant advisory drafts, and stored deliverable rows.
   // The same draft titles feed both Home cells. Nothing here is a made-up count.
   const deliverableTotal = ownerDrafts.length + advisory.length + stored;
@@ -341,7 +346,9 @@ export function ownerNeedsView(input: {
       ? ["Deliverables aren't available yet."]
       : deliverableTotal
         ? [ownerDrafts[0] ?? advisory[0] ?? "Waiting on your accountant."]
-        : ["No deliverables awaiting review."];
+        : storedChecked
+          ? ["No deliverables awaiting review."]
+          : ["Stored deliverables load in Accountant portal."];
 
   const sync = booksSyncCopy({
     quickBooks: input.quickBooks,
