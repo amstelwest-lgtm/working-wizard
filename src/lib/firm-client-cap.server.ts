@@ -38,12 +38,17 @@ import { isOwnerCatalogPrice } from "@/lib/owner-price";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
 import { FIRM_BAND_CATALOG, isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
-import { readFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
+import {
+  installMetadataFirmCustomerWrite,
+  readFirmStripeCustomerId,
+} from "@/lib/firm-stripe-customer.server";
 import { findFirmCustomerId, type FirmCustomerLookup } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
 import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.server";
 import { collapseDuplicateClientShells } from "@/lib/client-display-name";
+
+installMetadataFirmCustomerWrite();
 
 export type EntitlingFirmSubscription = {
   id: string;
