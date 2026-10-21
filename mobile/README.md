@@ -1,15 +1,17 @@
-# Milōn Android shell
+# Milōn store shell
 
-A Capacitor shell for the public site. The installed app loads `https://www.milonfinance.com`, so a web deploy shows up without a Play update. `www/` is only the offline page, used when that host cannot be reached.
+A Capacitor shell for the public site, on Android and iOS. The installed app loads `https://www.milonfinance.com`, so a web deploy shows up without a store update. `www/` is only the offline page, used when that host cannot be reached.
 
 This folder is its own npm package. It is not in the root pnpm workspace. Root ESLint and Prettier ignore it. Do not add it to a workspace list.
 
-Package id: `com.milonfinance.app`. Display name: Milōn.
+Package id: `com.milonfinance.app`. Display name: Milōn. iPhone only (`TARGETED_DEVICE_FAMILY` 1). Android `supports-screens` leaves large and xlarge off.
+
+Shell chrome is Brand System v1.1: white `#FFFFFF`, cobalt `#0B5FFF`, navy `#102A43`. Gold is only in the MILŌN wordmark artwork.
 
 ## What the shell does
 
-- Status bar: dark background `#0a0a0a`, light icons. `@capacitor/status-bar` uses style `DARK` for that (Capacitor's name for light content on a dark bar).
-- Splash: `@capacitor/splash-screen`, gold mark on `#0a0a0a`, generated from `public/icons` and `public/milon-wordmark.png`.
+- Status bar: white `#FFFFFF`, dark icons. `@capacitor/status-bar` uses style `LIGHT` for that (Capacitor's name for dark content on a light bar).
+- Splash: `@capacitor/splash-screen`, mark and MILŌN wordmark on white, generated from `public/icons` and `public/milon-wordmark.png`.
 - Back: `@capacitor/app`. WebView history goes back. At the root the app minimises instead of finishing.
 - Custom Tabs (`@capacitor/browser`): Stripe Checkout (`checkout.stripe.com`), YouTube, QuickBooks / Intuit, Xero, and Sage OAuth hosts, plus Google sign-in.
 - App Links: `https://www.milonfinance.com` and `https://milonfinance.com`, `autoVerify`. `appUrlOpen` loads the returned URL in the WebView and the Custom Tab controller is finished.
@@ -124,15 +126,21 @@ When you want FCM:
 
 ```bash
 python3 scripts/generate-brand-assets.py
-npx capacitor-assets generate --android \
-  --iconBackgroundColor '#0a0a0a' \
-  --iconBackgroundColorDark '#0a0a0a' \
-  --splashBackgroundColor '#0a0a0a' \
-  --splashBackgroundColorDark '#0a0a0a'
+npx capacitor-assets generate --android --ios \
+  --iconBackgroundColor '#FFFFFF' \
+  --iconBackgroundColorDark '#FFFFFF' \
+  --splashBackgroundColor '#FFFFFF' \
+  --splashBackgroundColorDark '#FFFFFF'
 ```
 
 Run that from `mobile/`. Source art is the existing mark and wordmark. Generated `res/` files are committed so a Play build does not need the generator.
 
+## iOS
+
+`ios/` is the Capacitor iOS target. It loads the same remote URL. CI on Ubuntu runs `npx cap copy ios` and `node scripts/ios-shell-check.mjs`. That job does not run `xcodebuild`, sign the app, or boot a simulator. A signed archive needs a Mac, Xcode, and an Apple signing identity.
+
+`PrivacyInfo.xcprivacy` declares account and financial info the site already collects, and UserDefaults reason `CA92.1`. It does not declare card data. Crash data stays out until someone confirms a production diagnostics DSN, without pasting the value into the repo.
+
 ## Store drafts
 
-`store/play-listing.md`, `store/content-rating.md`, `store/data-safety.md`, and `store/theo-checklist.md`.
+The current listing drafts are `docs/mobile/listings/`. Older Android notes remain in `store/`.

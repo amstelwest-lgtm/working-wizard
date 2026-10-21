@@ -5,16 +5,17 @@
  * Cookies and localStorage are left alone. Nothing here clears them.
  */
 (function () {
-  if (window.__MILON_ANDROID_SHELL__) return;
+  if (window.__MILON_NATIVE_SHELL__ || window.__MILON_ANDROID_SHELL__) return;
   var host = (location.hostname || "").toLowerCase();
   var onMilon =
     host === "milonfinance.com" ||
     host.endsWith(".milonfinance.com") ||
     host === "localhost";
   if (!onMilon) return;
+  window.__MILON_NATIVE_SHELL__ = true;
   window.__MILON_ANDROID_SHELL__ = true;
 
-  var DARK = "#0a0a0a";
+  var CANVAS = "#FFFFFF";
 
   function plugin(name) {
     var cap = window.Capacitor;
@@ -74,9 +75,9 @@
 
     if (StatusBar) {
       StatusBar.setOverlaysWebView({ overlay: false });
-      StatusBar.setBackgroundColor({ color: DARK });
-      // DARK = light icons / text, for the dark bar. See StatusBar plugin.
-      StatusBar.setStyle({ style: "DARK" });
+      StatusBar.setBackgroundColor({ color: CANVAS });
+      // LIGHT = dark icons on the white bar. See StatusBar plugin.
+      StatusBar.setStyle({ style: "LIGHT" });
     }
     if (SplashScreen && typeof SplashScreen.hide === "function") {
       SplashScreen.hide();

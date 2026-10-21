@@ -76,15 +76,17 @@ import {
   cashGraphWeekTickInterval,
   stableCashChartWidth,
   forecastChipSource,
+  forecastClosingTile,
+  forecastScreenTiles,
   hashIsCashDetailAnchor,
   lowestCashPoint,
-  weeksBelowFloorCopy,
 } from "@/lib/cash-forecast-view";
 import type {
   CashForecastPublishPayload,
   CashFromBanksDraftResult,
 } from "@/lib/cash-from-banks.types";
 import { interestOfRevenueSentence } from "@/lib/cash-interest-note";
+import { FORECAST_PREVIEW_EMPTY } from "@/lib/report-preview";
 import { periodMonthsOf } from "@/lib/ratios";
 import { balanceSheetCashAsOf } from "@/lib/statement-parse";
 import {
@@ -136,7 +138,6 @@ import {
 } from "@/lib/cash-recurring-payees";
 import {
   cashEmptyPresentation,
-  forecastFloorPosition,
   forecastLineCountsAsEntered,
   forecastLinesBlank,
   forecastLinesSourceLabel,
@@ -463,7 +464,10 @@ function LineEditor({
   const sideForLabel = side ?? (tone === "revenue" ? "revenue" : "expenses");
   const rule = forecastLineRule(line.name, line.frequency, { side: sideForLabel, singleMonth });
   const ruleLabel = forecastRuleLabel(rule);
-  const assumed = isAssumedMonthlyLine(line.name, line.frequency, { side: sideForLabel, singleMonth });
+  const assumed = isAssumedMonthlyLine(line.name, line.frequency, {
+    side: sideForLabel,
+    singleMonth,
+  });
   return (
     <div
       className={`grid gap-2 rounded-lg border border-amber-900/10 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-900/50 md:grid-cols-12 ${accent}`}
@@ -503,7 +507,11 @@ function LineEditor({
           </SelectContent>
         </Select>
         {ruleLabel ? (
-          <p className="mt-1 text-[11px] text-slate-500" data-assumed-monthly={assumed ? "" : undefined} data-forecast-rule={rule}>
+          <p
+            className="mt-1 text-[11px] text-slate-500"
+            data-assumed-monthly={assumed ? "" : undefined}
+            data-forecast-rule={rule}
+          >
             {ruleLabel}
           </p>
         ) : null}
@@ -558,10 +566,7 @@ function runwayFromOpening(
 ): ClientRunway {
   const cash = typeof opening === "number" ? opening : parseFloat(String(opening ?? ""));
   const netRaw = fin?.netIncome;
-  const net =
-    typeof netRaw === "number"
-      ? netRaw
-      : parseFloat(String(netRaw ?? ""));
+  const net = typeof netRaw === "number" ? netRaw : parseFloat(String(netRaw ?? ""));
   const ocfRaw = fin?.operatingCashflow;
   const ocf = typeof ocfRaw === "number" ? ocfRaw : parseFloat(String(ocfRaw ?? ""));
   return clientRunway({
@@ -705,6 +710,9 @@ export function CashForecastPanel({
   );
   const [bankSeeded, setBankSeeded] = useState(false);
   const plEstimateRef = useRef(false);
+  const [seededFromActuals, setSeededFromActuals] = useState(false);
+  const openOnTableRef = useRef(false);
+  const [tableNudge, setTableNudge] = useState(0);
   const [openingBalance, setOpeningBalance] = useState(preview?.openingBalance ?? "0");
   const [revenue, setRevenue] = useState<LineItem[]>(preview?.revenue ?? []);
   const [expenses, setExpenses] = useState<LineItem[]>(preview?.expenses ?? DEFAULT_EXPENSES);
@@ -768,7 +776,9 @@ export function CashForecastPanel({
   );
   const [stagedOnceOffs, setStagedOnceOffs] = useState<SuggestedOnceOffLine[]>([]);
   const [linesSourceChip, setLinesSourceChip] = useState<string | null>(null);
-  const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(preview?.cycleNote ?? null);
+  const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(
+    preview?.cycleNote ?? null,
+  );
   const [xeroBankNote, setXeroBankNote] = useState<string | null>(preview?.note ?? null);
   const xeroBankNoteRef = useRef<string | null>(preview?.note ?? null);
   const xeroCashMarkers = useRef<{
@@ -941,9 +951,7 @@ export function CashForecastPanel({
       const bankOpening = bankAt ? parseFloat(String(cf?.openingBalance ?? "")) : NaN;
       const periodRaw = finRecord?.cash;
       const periodCash =
-        typeof periodRaw === "number"
-          ? periodRaw
-          : parseFloat(String(periodRaw ?? ""));
+        typeof periodRaw === "number" ? periodRaw : parseFloat(String(periodRaw ?? ""));
       const resolvedCash = resolveClientCash({
         publishedBankBalance: Number.isFinite(bankOpening) ? bankOpening : null,
         bankPublishedAt: bankAt,
@@ -958,11 +966,13 @@ export function CashForecastPanel({
         seededOpening ??
         (cf?.openingBalance != null && cf.openingBalance !== "" ? String(cf.openingBalance) : null);
       const openingSource =
-        !seededOpening && (cf?.openingBalanceSource === "xero" || cf?.openingBalanceSource === "qbo")
+        !seededOpening &&
+        (cf?.openingBalanceSource === "xero" || cf?.openingBalanceSource === "qbo")
           ? cf.openingBalanceSource
           : null;
       const linesSource =
-        cf?.forecastLinesSource === "xero-bank-summary" || cf?.forecastLinesSource === "qbo-bank-activity"
+        cf?.forecastLinesSource === "xero-bank-summary" ||
+        cf?.forecastLinesSource === "qbo-bank-activity"
           ? cf.forecastLinesSource
           : null;
       xeroCashMarkers.current = {
@@ -989,7 +999,9 @@ export function CashForecastPanel({
       setOpeningSourceKey(
         typeof cf?.openingBalanceSource === "string" ? cf.openingBalanceSource : null,
       );
-      setLinesSourceKey(typeof cf?.forecastLinesSource === "string" ? cf.forecastLinesSource : null);
+      setLinesSourceKey(
+        typeof cf?.forecastLinesSource === "string" ? cf.forecastLinesSource : null,
+      );
       const lineNames = [...(cf?.revenue ?? []), ...(cf?.expenses ?? []), ...(cf?.other ?? [])].map(
         (line) => String(line?.name ?? ""),
       );
@@ -1011,8 +1023,13 @@ export function CashForecastPanel({
       setForecastCycleNote(outlook.cycleNote);
       setStartDate(outlook.startDate);
       const withOpening =
-        seededOpening && cf ? { ...(cf as Record<string, unknown>), openingBalance: seededOpening } : cf;
-      const reanchored = reanchoredForecastPatch(withOpening as Record<string, unknown> | null, outlook);
+        seededOpening && cf
+          ? { ...(cf as Record<string, unknown>), openingBalance: seededOpening }
+          : cf;
+      const reanchored = reanchoredForecastPatch(
+        withOpening as Record<string, unknown> | null,
+        outlook,
+      );
       if (cf && clientId && (seededOpening || reanchored)) {
         const next = reanchored ?? (withOpening as Record<string, unknown>);
         loadedCashflowRef.current = next;
@@ -1032,7 +1049,12 @@ export function CashForecastPanel({
             if (!error && reanchored) setLastForecastAt(forecastUpdatedAt);
           });
       }
-      setOpeningBalance(String(Math.round(outlook.opening * 100) / 100));
+      const openingField =
+        outlook.openingCash === null ? "" : String(Math.round(outlook.opening * 100) / 100);
+      setSeededFromActuals(outlook.seededFromActuals === true);
+      openOnTableRef.current = outlook.seededFromActuals === true && outlook.openingCash === null;
+      if (openOnTableRef.current) setTableNudge((n) => n + 1);
+      setOpeningBalance(openingField);
       const enteredForecast = forecastWeeksAreEntered(outlook);
       if (!enteredForecast) {
         plEstimateRef.current = false;
@@ -1043,7 +1065,7 @@ export function CashForecastPanel({
       } else if (outlook.estimateLabel) {
         setXeroBankNote(outlook.estimateLabel);
         xeroBankNoteRef.current = outlook.estimateLabel;
-        plEstimateRef.current = true;
+        plEstimateRef.current = outlook.seededFromActuals !== true;
       } else if (outlook.anchorNote) {
         setXeroBankNote(outlook.anchorNote);
         xeroBankNoteRef.current = outlook.anchorNote;
@@ -1054,16 +1076,17 @@ export function CashForecastPanel({
         plEstimateRef.current = true;
       }
       if (outlook.replaceStored && !enteredForecast) {
-        const kept = (lines?: LineItem[]) => (lines ?? []).filter((line) => forecastLineCountsAsEntered(line));
+        const kept = (lines?: LineItem[]) =>
+          (lines ?? []).filter((line) => forecastLineCountsAsEntered(line));
         setStartDate(outlook.startDate);
-        setOpeningBalance(String(Math.round(outlook.opening * 100) / 100));
+        setOpeningBalance(openingField);
         setRevenue(kept(cf?.revenue));
         setExpenses(kept(cf?.expenses));
         setOther(kept(cf?.other));
         plEstimateRef.current = false;
       } else if (outlook.replaceStored) {
         setStartDate(outlook.startDate);
-        setOpeningBalance(String(Math.round(outlook.opening * 100) / 100));
+        setOpeningBalance(openingField);
         setRevenue(outlook.lines.revenue);
         setExpenses(outlook.lines.expenses);
         setOther([
@@ -1092,7 +1115,8 @@ export function CashForecastPanel({
         }
       } else if (cf) {
         if (cf.revenue && !blankForecastLines(cf.revenue)) setRevenue(cf.revenue);
-        else if (enteredForecast && !blankForecastLines(outlook.lines.revenue)) setRevenue(outlook.lines.revenue);
+        else if (enteredForecast && !blankForecastLines(outlook.lines.revenue))
+          setRevenue(outlook.lines.revenue);
         else setRevenue([]);
         if (cf.expenses) setExpenses(cf.expenses);
         if (cf.other) setOther(cf.other);
@@ -1131,10 +1155,15 @@ export function CashForecastPanel({
       setInputBankAccounts(fromDraft.length ? fromDraft : bankAccountsFromDraft(initialBankDraft));
       setInputHasBankDraft(Boolean(data?.cashflow_bank_draft) || Boolean(initialBankDraft));
       setBankHistory(data?.cashflow_bank_draft ?? initialBankDraft ?? null);
-      const storedConfirm = (cf as { suggestionConfirm?: ConfirmedCashSuggestions } | null)?.suggestionConfirm;
+      const storedConfirm = (cf as { suggestionConfirm?: ConfirmedCashSuggestions } | null)
+        ?.suggestionConfirm;
       if (storedConfirm && typeof storedConfirm === "object") {
         setSuggestionConfirm(storedConfirm);
-        setConfiguredFloor(typeof storedConfirm.floor === "number" && storedConfirm.floor > 0 ? storedConfirm.floor : null);
+        setConfiguredFloor(
+          typeof storedConfirm.floor === "number" && storedConfirm.floor > 0
+            ? storedConfirm.floor
+            : null,
+        );
       } else {
         setSuggestionConfirm(null);
         setConfiguredFloor(null);
@@ -1154,7 +1183,9 @@ export function CashForecastPanel({
         if (error) {
           return supabase
             .from("clients")
-            .select("cashflow, last_forecast_at, operating_profile, financials, financials_updated_at")
+            .select(
+              "cashflow, last_forecast_at, operating_profile, financials, financials_updated_at",
+            )
             .eq("id", clientId)
             .maybeSingle()
             .then((retry) => applyRow((retry.data as Record<string, unknown> | null) ?? null));
@@ -1219,8 +1250,16 @@ export function CashForecastPanel({
       skipNextAutosave.current = false;
       return;
     }
-    const silentRevenue = linesForSilentSave(revenue, savedRevenueOnceOff.current, heldRevenue.current);
-    const silentExpenses = linesForSilentSave(expenses, savedExpensesOnceOff.current, heldExpenses.current);
+    const silentRevenue = linesForSilentSave(
+      revenue,
+      savedRevenueOnceOff.current,
+      heldRevenue.current,
+    );
+    const silentExpenses = linesForSilentSave(
+      expenses,
+      savedExpensesOnceOff.current,
+      heldExpenses.current,
+    );
     const silentOther = linesForSilentSave(other, savedOtherOnceOff.current, heldOther.current);
     const key = silentForecastKey({
       startDate,
@@ -1399,9 +1438,7 @@ export function CashForecastPanel({
   const openingLabel = openingAsOf ? formatWeekHeader(openingAsOf, market) : startLabel;
 
   const horizonLabel =
-    weekIsos.length >= WEEKS
-      ? formatDateRange(weekIsos[0]!, weekIsos[WEEKS - 1]!, market)
-      : "";
+    weekIsos.length >= WEEKS ? formatDateRange(weekIsos[0]!, weekIsos[WEEKS - 1]!, market) : "";
 
   const computeScenario = (opts: {
     rMul: number;
@@ -1415,7 +1452,9 @@ export function CashForecastPanel({
     capexWeek: number;
   }) => {
     const enteredOnly = (lines: LineItem[]) =>
-      lines.filter((line) => forecastLineCountsAsEntered(line, { includeDerived: Boolean(preview) }));
+      lines.filter((line) =>
+        forecastLineCountsAsEntered(line, { includeDerived: Boolean(preview) }),
+      );
     const revenueLines = enteredOnly(revenue);
     const expenseLines = enteredOnly(expenses);
     const otherLines = enteredOnly(other);
@@ -1434,13 +1473,20 @@ export function CashForecastPanel({
       revenueLines.map((l) => ({
         id: l.id,
         bucket: "revenue" as const,
-        name: forecastRowLabel(l.name, l.frequency, { side: "revenue", singleMonth: singleMonthHistory }),
+        name: forecastRowLabel(l.name, l.frequency, {
+          side: "revenue",
+          singleMonth: singleMonthHistory,
+        }),
         onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, {
           side: "revenue",
           singleMonth: singleMonthHistory,
         }),
         vals: applyWeekOverrides(
-          shiftVals(distribute(l, "revenue", recurringPayees, singleMonthHistory, weekIsos).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
+          shiftVals(
+            distribute(l, "revenue", recurringPayees, singleMonthHistory, weekIsos).map(
+              (v) => v * opts.rMul,
+            ),
+          ).map((v, i) => v * growthMul(i)),
           l.weekOverrides,
         ),
       })),
@@ -1448,13 +1494,18 @@ export function CashForecastPanel({
     const mapExp = (l: LineItem, bucket: "expenses" | "other") => ({
       id: l.id,
       bucket,
-      name: forecastRowLabel(l.name, l.frequency, { side: bucket, singleMonth: singleMonthHistory }),
+      name: forecastRowLabel(l.name, l.frequency, {
+        side: bucket,
+        singleMonth: singleMonthHistory,
+      }),
       onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, {
         side: bucket,
         singleMonth: singleMonthHistory,
       }),
       vals: applyWeekOverrides(
-        distribute(l, bucket, recurringPayees, singleMonthHistory, weekIsos).map((v) => v * opts.eMul),
+        distribute(l, bucket, recurringPayees, singleMonthHistory, weekIsos).map(
+          (v) => v * opts.eMul,
+        ),
         l.weekOverrides,
       ),
     });
@@ -1606,7 +1657,10 @@ export function CashForecastPanel({
       }),
     [cashLedger, resolvedOpening, inputFinancials, trailingSnapshots, baseCalc],
   );
-  const suggestionsConfirmed = suggestionsMatchConfirm(cashSuggestions.suggestions, suggestionConfirm);
+  const suggestionsConfirmed = suggestionsMatchConfirm(
+    cashSuggestions.suggestions,
+    suggestionConfirm,
+  );
   const confirmCashSuggestions = async () => {
     if (!clientId || preview || suggestionsConfirmed) return;
     const opening = cashSuggestions.suggestions.find((row) => row.key === "opening");
@@ -1702,10 +1756,10 @@ export function CashForecastPanel({
   const stageSuggestedOnceOffs = () => {
     const markers = xeroCashMarkers.current;
     const linesMatch =
-      markers.linesKey != null &&
-      JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
+      markers.linesKey != null && JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
     const linesAreBank =
-      linesMatch && (markers.linesSource ? forecastChipSource(markers.linesSource) === "bank_pack" : bankSeeded);
+      linesMatch &&
+      (markers.linesSource ? forecastChipSource(markers.linesSource) === "bank_pack" : bankSeeded);
     const withSide = (list: LineItem[], side: SuggestedOnceOffLine["side"]) =>
       list.map((line) => ({ ...line, side }));
     const forecastLines = [
@@ -1731,7 +1785,8 @@ export function CashForecastPanel({
       list.map((line) => {
         const next = stagedById.get(line.id);
         if (!next) return line;
-        const sameAmount = Math.abs((parseFloat(line.amount) || 0) - (parseFloat(next.amount) || 0)) < 0.005;
+        const sameAmount =
+          Math.abs((parseFloat(line.amount) || 0) - (parseFloat(next.amount) || 0)) < 0.005;
         if (line.frequency === "once-off" && sameAmount && line.startWeek === next.startWeek) {
           return line;
         }
@@ -1745,7 +1800,10 @@ export function CashForecastPanel({
         };
       });
     const add = (list: LineItem[], side: SuggestedOnceOffLine["side"]) => [
-      ...retarget(list, side === "revenue" ? heldRevenue : side === "expenses" ? heldExpenses : heldOther),
+      ...retarget(
+        list,
+        side === "revenue" ? heldRevenue : side === "expenses" ? heldExpenses : heldOther,
+      ),
       ...result.lines
         .filter((line) => line.side === side && !present.has(line.id))
         .map((line) => ({
@@ -1768,7 +1826,9 @@ export function CashForecastPanel({
       <OnceOffSuggestBar
         showSuggest={showSuggestOnceOffs({
           suggestionCount: cashSuggestions.suggestions.length,
-          lineAmounts: [...revenue, ...expenses, ...other].map((line) => parseFloat(line.amount) || 0),
+          lineAmounts: [...revenue, ...expenses, ...other].map(
+            (line) => parseFloat(line.amount) || 0,
+          ),
         })}
         needsSave={onceOffSaveEnabled({ dirty: onceOffNeedsSave, staged: stagedOnceOffs.length })}
         saving={onceOffSaving}
@@ -1789,7 +1849,6 @@ export function CashForecastPanel({
   });
   const lowPoint = lowestCashPoint(balanceSeries);
   const lowestBal = lowPoint.balance;
-  const lowestWeek = lowPoint.week;
   const hasWeeklyOutflows = baseCalc.outflow.some((n) => n > 0);
   const liveFloorLabel = hasWeeklyOutflows
     ? `${fmtCompact(minimumCash)} · about 4 weeks of outflows`
@@ -1812,7 +1871,8 @@ export function CashForecastPanel({
     const closing = Math.round(point.balance);
     return {
       week: point.key,
-      label: point.week === 0 ? (openingAsOf ? openingLabel : "") : (weeks[point.week - 1] ?? point.key),
+      label:
+        point.week === 0 ? (openingAsOf ? openingLabel : "") : (weeks[point.week - 1] ?? point.key),
       closing,
       underFloor: point.belowFloor ? closing : floor,
       weekIndex: point.week,
@@ -1841,31 +1901,52 @@ export function CashForecastPanel({
       const [{ pdf }, { CashForecastPDF }] = pdfModules;
 
       const derivedRunway = forecastExportRunwayWeeks(screenRunway.weeks, 0);
-      const forecastWeeks = weeks.map((_, i) => ({
-        period_label: `Week ${i + 1}`,
-        opening_balance: Math.round(i === 0 ? baseCalc.opening : baseCalc.closing[i - 1]),
-        total_receipts: Math.round(baseCalc.inflow[i]),
-        total_payments: Math.round(baseCalc.outflow[i]),
-        net_movement: Math.round(baseCalc.net[i]),
-        closing_balance: Math.round(baseCalc.closing[i]),
-        scenario: "moderate" as const,
-        runway_weeks: forecastExportRunwayWeeks(screenRunway.weeks, i),
-      }));
+      const openingKnown = openingBalance.trim() !== "" && Number.isFinite(Number(openingBalance));
+      const amountPresent = (lines: LineItem[]) =>
+        lines.some((line) => {
+          const raw = line.amount;
+          if (raw == null || String(raw).trim() === "") return false;
+          return Number.isFinite(Number(raw));
+        });
+      const receiptsPresent = !seededFromActuals || amountPresent(revenue);
+      const paymentsPresent = !seededFromActuals || amountPresent(expenses);
+      const balancesKnown = openingKnown && receiptsPresent && paymentsPresent;
+      const forecastWeeks = weeks.map((_, i) => {
+        const receipts = Math.round(baseCalc.inflow[i] ?? 0);
+        const payments = Math.round(baseCalc.outflow[i] ?? 0);
+        return {
+          period_label: `Week ${i + 1}`,
+          opening_balance: balancesKnown
+            ? Math.round(i === 0 ? baseCalc.opening : (baseCalc.closing[i - 1] ?? 0))
+            : null,
+          total_receipts: receiptsPresent ? receipts : null,
+          total_payments: paymentsPresent ? payments : null,
+          net_movement:
+            receiptsPresent && paymentsPresent ? Math.round(baseCalc.net[i] ?? 0) : null,
+          closing_balance: balancesKnown ? Math.round(baseCalc.closing[i] ?? 0) : null,
+          scenario: "moderate" as const,
+          runway_weeks: forecastExportRunwayWeeks(screenRunway.weeks, i),
+        };
+      });
 
       const baseInflow = baseCalc.inflow.reduce((sum, n) => sum + n, 0);
       const baseOutflow = baseCalc.outflow.reduce((sum, n) => sum + n, 0);
-      const publishedDirection = runwayFromForecastNet({
-        base: screenRunway,
-        opening: baseCalc.opening,
-        totalInflow: baseInflow,
-        totalOutflow: baseOutflow,
-      });
+      const publishedDirection = openingKnown
+        ? runwayFromForecastNet({
+            base: screenRunway,
+            opening: baseCalc.opening,
+            totalInflow: baseInflow,
+            totalOutflow: baseOutflow,
+          })
+        : screenRunway;
       const publishedGenerative =
         publishedDirection.kind === "cash_generative" &&
         forecastIsCashGenerative(baseInflow, baseOutflow);
 
       const assumptions = [
-        `Forecast starts ${startLabel} with an opening bank balance of ${fmtR(baseCalc.opening)}${openingSourceChip ? ` (${openingSourceChip})` : ""}.`,
+        openingKnown
+          ? `Forecast starts ${startLabel} with an opening bank balance of ${fmtR(baseCalc.opening)}${openingSourceChip ? ` (${openingSourceChip})` : ""}.`
+          : `Forecast starts ${startLabel}. Opening cash unknown.`,
         "Revenue and expenses are the amounts entered, with no scenario adjustment.",
         "Customer collections land in the week they are invoiced.",
         "Collection delay in weeks is what shifts receipts. Days AR and Days AP are Ratios figures and are not applied.",
@@ -1874,8 +1955,7 @@ export function CashForecastPanel({
           : []),
       ];
 
-      const period =
-        horizonLabel || date(new Date(), { month: "long", year: "numeric" });
+      const period = horizonLabel || date(new Date(), { month: "long", year: "numeric" });
       const name = clientName?.trim() || "Your Business";
 
       const blob = await pdf(
@@ -1889,6 +1969,7 @@ export function CashForecastPanel({
           runwayLabel: runwayDisplayLabel(publishedDirection),
           cashGenerative: publishedGenerative,
           assumptions,
+          seedLabel: seededFromActuals ? xeroBankNote : null,
           reviewSignoff: stampFromSignoff(forecastSignoff, forecastStale),
         }) as Parameters<typeof pdf>[0],
       ).toBlob();
@@ -1951,134 +2032,138 @@ export function CashForecastPanel({
       chartData.map((row) => row.week),
     );
     return (
-    <div
-      ref={onChartFrame}
-      style={{ height }}
-      data-week-ticks={narrow ? "thin" : "all"}
-      className="cash-chart-frame w-full min-w-0 max-w-full overflow-x-auto max-md:pb-3"
-    >
-      {chartWidth > 0 ? (
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ top: 22, right: narrow ? 20 : 16, left: 0, bottom: 8 }}>
-          <defs>
-            <linearGradient id="cfGoldFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
-              <stop offset="100%" stopColor={GOLD} stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-          <XAxis
-            dataKey="week"
-            stroke="#94a3b8"
-            fontSize={tickSize}
-            tickLine={false}
-            axisLine={false}
-            interval={0}
-            ticks={axisTicks}
-            height={enlarged ? 36 : 28}
-          />
-          <YAxis
-            stroke="#94a3b8"
-            fontSize={tickSize}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v) =>
-              sign(
-                spacedChartTicks
-                  ? formatMoneyCompact(v, market)
-                  : formatMoneyChartTick(v, market),
-              )
-            }
-            width={narrow ? 48 : spacedChartTicks ? 84 : enlarged ? 76 : 68}
-            tick={{ fill: "#94a3b8", fontSize: tickSize }}
-            domain={
-              includeFloorInDomain
-                ? ([dataMin, dataMax]: [number, number]) =>
-                    cashYDomainIncludingFloor(dataMin, dataMax, minimumCash)
-                : undefined
-            }
-          />
-          <Tooltip
-            contentStyle={{
-              background: "rgba(17,24,39,0.95)",
-              border: "1px solid rgba(212,165,80,0.4)",
-              borderRadius: 10,
-              fontSize: 12,
-              color: "#f1f5f9",
-            }}
-            labelStyle={{ color: "#0B5FFF", fontWeight: 700 }}
-            formatter={(v: number, _name, item) => {
-              const weekIndex = (item?.payload as { weekIndex?: number } | undefined)?.weekIndex;
-              return [fmtR(v), weekIndex === 0 ? "Opening" : "Closing"];
-            }}
-            labelFormatter={(l, payload) => {
-              const p = payload?.[0]?.payload as { label?: string } | undefined;
-              return p?.label ? `${l} · ${p.label}` : String(l);
-            }}
-          />
-          <ReferenceLine y={0} stroke={RED} strokeDasharray="3 3" strokeOpacity={0.7} />
-          <ReferenceLine
-            y={minimumCash}
-            stroke={GOLD}
-            strokeDasharray="4 4"
-            strokeOpacity={0.85}
-          />
-          <Area
-            type="monotone"
-            dataKey="closing"
-            name="closing-fill"
-            stroke="none"
-            fill="url(#cfGoldFill)"
-            tooltipType="none"
-            dot={false}
-            activeDot={false}
-            isAnimationActive
-            animationDuration={mounted ? 700 : 1100}
-          />
-          <Area
-            type="monotone"
-            dataKey="underFloor"
-            className="cash-floor-breach"
-            stroke="none"
-            fill="rgba(224, 92, 92, 0.28)"
-            baseValue={Math.round(minimumCash)}
-            tooltipType="none"
-            dot={false}
-            activeDot={false}
-            isAnimationActive={false}
-          />
-          <Line
-            type="monotone"
-            dataKey="closing"
-            name="Closing"
-            stroke={GOLD}
-            strokeWidth={2.5}
-            dot={<CashNegativeDot lowestKey={lowPoint.key} />}
-            activeDot={{ r: 4, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1.5 }}
-            isAnimationActive={false}
-          />
-          {(lowPoint.belowFloor || lowPoint.negative) ? (
-            <ReferenceDot
-              x={lowPoint.key}
-              y={Math.round(lowestBal)}
-              r={5}
-              fill={RED}
-              stroke="#fff"
-              strokeWidth={1.5}
-              ifOverflow="extendDomain"
-              label={{
-                value: fmtCompact(lowestBal),
-                position: "top",
-                fill: RED,
-                fontSize: 11,
-                fontWeight: 700,
-              }}
-            />
-          ) : null}
-        </ComposedChart>
-      </ResponsiveContainer>
-      ) : null}
-    </div>
+      <div
+        ref={onChartFrame}
+        style={{ height }}
+        data-week-ticks={narrow ? "thin" : "all"}
+        className="cash-chart-frame w-full min-w-0 max-w-full overflow-x-auto max-md:pb-3"
+      >
+        {chartWidth > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart
+              data={chartData}
+              margin={{ top: 22, right: narrow ? 20 : 16, left: 0, bottom: 8 }}
+            >
+              <defs>
+                <linearGradient id="cfGoldFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={GOLD} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+              <XAxis
+                dataKey="week"
+                stroke="#94a3b8"
+                fontSize={tickSize}
+                tickLine={false}
+                axisLine={false}
+                interval={0}
+                ticks={axisTicks}
+                height={enlarged ? 36 : 28}
+              />
+              <YAxis
+                stroke="#94a3b8"
+                fontSize={tickSize}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) =>
+                  sign(
+                    spacedChartTicks
+                      ? formatMoneyCompact(v, market)
+                      : formatMoneyChartTick(v, market),
+                  )
+                }
+                width={narrow ? 48 : spacedChartTicks ? 84 : enlarged ? 76 : 68}
+                tick={{ fill: "#94a3b8", fontSize: tickSize }}
+                domain={
+                  includeFloorInDomain
+                    ? ([dataMin, dataMax]: [number, number]) =>
+                        cashYDomainIncludingFloor(dataMin, dataMax, minimumCash)
+                    : undefined
+                }
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "rgba(17,24,39,0.95)",
+                  border: "1px solid rgba(212,165,80,0.4)",
+                  borderRadius: 10,
+                  fontSize: 12,
+                  color: "#f1f5f9",
+                }}
+                labelStyle={{ color: "#0B5FFF", fontWeight: 700 }}
+                formatter={(v: number, _name, item) => {
+                  const weekIndex = (item?.payload as { weekIndex?: number } | undefined)
+                    ?.weekIndex;
+                  return [fmtR(v), weekIndex === 0 ? "Opening" : "Closing"];
+                }}
+                labelFormatter={(l, payload) => {
+                  const p = payload?.[0]?.payload as { label?: string } | undefined;
+                  return p?.label ? `${l} · ${p.label}` : String(l);
+                }}
+              />
+              <ReferenceLine y={0} stroke={RED} strokeDasharray="3 3" strokeOpacity={0.7} />
+              <ReferenceLine
+                y={minimumCash}
+                stroke={GOLD}
+                strokeDasharray="4 4"
+                strokeOpacity={0.85}
+              />
+              <Area
+                type="monotone"
+                dataKey="closing"
+                name="closing-fill"
+                stroke="none"
+                fill="url(#cfGoldFill)"
+                tooltipType="none"
+                dot={false}
+                activeDot={false}
+                isAnimationActive
+                animationDuration={mounted ? 700 : 1100}
+              />
+              <Area
+                type="monotone"
+                dataKey="underFloor"
+                className="cash-floor-breach"
+                stroke="none"
+                fill="rgba(224, 92, 92, 0.28)"
+                baseValue={Math.round(minimumCash)}
+                tooltipType="none"
+                dot={false}
+                activeDot={false}
+                isAnimationActive={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="closing"
+                name="Closing"
+                stroke={GOLD}
+                strokeWidth={2.5}
+                dot={<CashNegativeDot lowestKey={lowPoint.key} />}
+                activeDot={{ r: 4, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1.5 }}
+                isAnimationActive={false}
+              />
+              {lowPoint.belowFloor || lowPoint.negative ? (
+                <ReferenceDot
+                  x={lowPoint.key}
+                  y={Math.round(lowestBal)}
+                  r={5}
+                  fill={RED}
+                  stroke="#fff"
+                  strokeWidth={1.5}
+                  ifOverflow="extendDomain"
+                  label={{
+                    value: fmtCompact(lowestBal),
+                    position: "top",
+                    fill: RED,
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                />
+              ) : null}
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : null}
+      </div>
     );
   };
 
@@ -2086,12 +2171,16 @@ export function CashForecastPanel({
   const totalOutflow = calc.outflow.reduce((sum, n) => sum + n, 0);
   const baseInflow = baseCalc.inflow.reduce((sum, n) => sum + n, 0);
   const baseOutflow = baseCalc.outflow.reduce((sum, n) => sum + n, 0);
-  const publishedDirection = runwayFromForecastNet({
-    base: screenRunway,
-    opening: baseCalc.opening,
-    totalInflow: baseInflow,
-    totalOutflow: baseOutflow,
-  });
+  // A blank seeded opening is not cash of 0. Do not turn a burn into "0 weeks".
+  const seededOpeningUnknown = seededFromActuals && openingBalance.trim() === "";
+  const publishedDirection = seededOpeningUnknown
+    ? screenRunway
+    : runwayFromForecastNet({
+        base: screenRunway,
+        opening: baseCalc.opening,
+        totalInflow: baseInflow,
+        totalOutflow: baseOutflow,
+      });
   const publishedGenerative =
     publishedDirection.kind === "cash_generative" &&
     forecastIsCashGenerative(baseInflow, baseOutflow);
@@ -2102,13 +2191,14 @@ export function CashForecastPanel({
     runwayLabel: runwayDisplayLabel(publishedDirection),
     cashGenerative: publishedGenerative,
   });
-  const lowestUnderFloor = lowestBal < minimumCash;
-  const direction = runwayFromForecastNet({
-    base: screenRunway,
-    opening: calc.opening,
-    totalInflow,
-    totalOutflow,
-  });
+  const direction = seededOpeningUnknown
+    ? screenRunway
+    : runwayFromForecastNet({
+        base: screenRunway,
+        opening: calc.opening,
+        totalInflow,
+        totalOutflow,
+      });
   const seriesCashGenerative =
     direction.kind === "cash_generative" && forecastIsCashGenerative(totalInflow, totalOutflow);
   const scenarioLabel = forecastScenarioLabel({
@@ -2127,16 +2217,17 @@ export function CashForecastPanel({
     headcountDelta !== 0 ||
     (parseFloat(fixedCostDelta) || 0) !== 0;
   const showShortfall = shortfall && (!seriesCashGenerative || timingDriver);
-  const shortfallExplain = showShortfall && timingDriver
-    ? [
-        collectDelay > 0 ? `collections delayed ${collectDelay} weeks` : null,
-        (parseFloat(capexAmount) || 0) > 0 ? `capex in week ${capexWeek}` : null,
-        headcountDelta !== 0 ? `headcount change of ${headcountDelta}` : null,
-        (parseFloat(fixedCostDelta) || 0) !== 0 ? "a fixed-cost change" : null,
-      ]
-        .filter(Boolean)
-        .join("; ")
-    : null;
+  const shortfallExplain =
+    showShortfall && timingDriver
+      ? [
+          collectDelay > 0 ? `collections delayed ${collectDelay} weeks` : null,
+          (parseFloat(capexAmount) || 0) > 0 ? `capex in week ${capexWeek}` : null,
+          headcountDelta !== 0 ? `headcount change of ${headcountDelta}` : null,
+          (parseFloat(fixedCostDelta) || 0) !== 0 ? "a fixed-cost change" : null,
+        ]
+          .filter(Boolean)
+          .join("; ")
+      : null;
   const forecastStale = signoffStale ?? computeIsStale(forecastSignoff, lastForecastAt);
   // No forecast lines yet. A flat $0 trajectory must not be badged "In the black",
   // even when a hand-entered opening balance is already on the file.
@@ -2166,9 +2257,7 @@ export function CashForecastPanel({
 
   const bankDisagree = plBankDisagreement({
     financials: inputFinancials,
-    cashflow: bankSeeded
-      ? { revenue, expenses, other, seededFromBanksAt: "published" }
-      : null,
+    cashflow: bankSeeded ? { revenue, expenses, other, seededFromBanksAt: "published" } : null,
   });
   const disagreeNotice = bankDisagree ? (
     <PlBankDisagreeNotice disagreement={bankDisagree} market={market} />
@@ -2186,11 +2275,7 @@ export function CashForecastPanel({
       </div>
     ) : (
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#DBEAFE] bg-[#F4F8FF] px-4 py-3 text-sm text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
-        <span>
-          Nothing is forecast yet. This needs a bank statement or forecast inputs — the figures
-          below stay at {cur}0 until then. Upload bank statements, or set the line items in
-          Forecast Setup.
-        </span>
+        <span>{FORECAST_PREVIEW_EMPTY}</span>
       </div>
     )
   ) : null;
@@ -2234,27 +2319,35 @@ export function CashForecastPanel({
     ? `Updated ${ownerSignoffDate(lastForecastAt, market.timezone, market)}`
     : null;
 
+  const openingUnknownNow = seededFromActuals && openingBalance.trim() === "";
   const openingMissingNow =
-    loaded &&
-    storedOpeningIsMissing(loadedCashflowRef.current) &&
-    !openingAsOf &&
-    Math.abs(baseCalc.opening) < 0.5;
+    openingUnknownNow ||
+    (loaded &&
+      storedOpeningIsMissing(loadedCashflowRef.current) &&
+      !openingAsOf &&
+      Math.abs(baseCalc.opening) < 0.5);
   const answerSentence =
     !loaded || forecastEmpty
       ? null
-      : openingMissingNow
-        ? "Opening balance missing · add it"
-        : forecastStatusSentence({
-          opening: baseCalc.opening,
-          closings: baseCalc.closing,
-          floor: minimumCash,
-          floorText: fmtCompact(minimumCash),
-          runwayLabel: runwayDisplayLabel(publishedDirection),
-          cashGenerative: publishedGenerative,
-          openingMissing: false,
-          formatAmount: fmtCompact,
-        });
-  const stripChip = !loaded ? null : shownLineSource === "Bank" ? "Bank" : statementChip?.trim() || null;
+      : openingMissingNow && seededFromActuals
+        ? "Opening cash unknown"
+        : openingMissingNow
+          ? "Opening balance missing · add it"
+          : forecastStatusSentence({
+              opening: baseCalc.opening,
+              closings: baseCalc.closing,
+              floor: minimumCash,
+              floorText: fmtCompact(minimumCash),
+              runwayLabel: runwayDisplayLabel(publishedDirection),
+              cashGenerative: publishedGenerative,
+              openingMissing: false,
+              formatAmount: fmtCompact,
+            });
+  const stripChip = !loaded
+    ? null
+    : shownLineSource === "Bank"
+      ? "Bank"
+      : statementChip?.trim() || null;
 
   const answerStrip = (
     <section className="answer-strip" data-answer-strip>
@@ -2396,8 +2489,8 @@ export function CashForecastPanel({
         {scenarioActive ? (
           <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
             {scenarioLabel}. Week 13 would close at {fmtCompact(closingW13)}, against{" "}
-            {fmtCompact(baseCalc.closing[WEEKS - 1])} on the base. The chart and the signed
-            forecast stay on the base until you choose Reset to base.
+            {fmtCompact(baseCalc.closing[WEEKS - 1])} on the base. The chart and the signed forecast
+            stay on the base until you choose Reset to base.
           </p>
         ) : (
           <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
@@ -2556,7 +2649,6 @@ export function CashForecastPanel({
           </div>
         </div>
       </CollapsibleGoldCard>
-
     </ReviewInputsDrawer>
   );
 
@@ -2564,6 +2656,11 @@ export function CashForecastPanel({
   const enlargeChart = useStableChartWidth();
   const [cashEnlarge, setCashEnlarge] = useState<null | "chart" | "table">(null);
   const [cashLens, setCashLens] = useState<"chart" | "table">("chart");
+  useEffect(() => {
+    if (!openOnTableRef.current) return;
+    openOnTableRef.current = false;
+    setCashLens("table");
+  }, [tableNudge]);
 
   useEffect(() => {
     const revealWeeklyTable = () => {
@@ -2604,63 +2701,58 @@ export function CashForecastPanel({
         ? "bank_pack"
         : "assumption";
 
-  const floorPos = forecastFloorPosition({
-    opening: baseCalc.opening,
-    closings: baseCalc.closing,
-    floor: minimumCash,
-  });
-  const weeksBelow = weeksBelowFloorCopy({
-    empty: forecastEmpty,
-    weeksBelow: floorPos.weeksBelow,
-    horizon: baseCalc.closing.length || WEEKS,
-    firstDipWeek: floorPos.firstDipWeek,
-    firstDipDate: floorPos.firstDipWeek != null ? (weeks[floorPos.firstDipWeek - 1] ?? null) : null,
-    opensBelow: floorPos.opensBelow,
-  });
   const runwayAside =
     !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
   // A balance-sheet date, or any non-zero opening on screen, is a real amount.
   // Only a stored blank with no date and no amount is missing.
   const openingTilesMissing = openingMissingNow;
   const openingTileValue = openingTilesMissing ? "—" : fmtCompact(baseCalc.opening);
-  const lowestTileValue =
-    openingTilesMissing || emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal);
-  const lowestTileSub = openingTilesMissing
-    ? "missing"
-    : emptyPresentation.lowestBlank
-      ? "Add an opening balance"
-      : lowPoint.week === 0
-        ? "Opening balance"
-        : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`;
-  const lowestPointSub = openingTilesMissing
-    ? "missing"
-    : emptyPresentation.lowestBlank
-      ? "Add an opening balance"
-      : lowPoint.week === 0
-        ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
-        : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`;
-  const weeksBelowValue = openingTilesMissing ? "—" : weeksBelow.value;
-  const weeksBelowSub = openingTilesMissing ? "missing" : weeksBelow.sub;
-  const weeksBelowTone = openingTilesMissing || forecastEmpty
-    ? "neutral"
-    : floorPos.weeksBelow > 0 || floorPos.opensBelow
-      ? "bad"
+  // Empty series: no lowest point and no floor claim. A real series scores
+  // the low, the gap, and weeks-below against this same floor.
+  const screenTiles = forecastScreenTiles({
+    empty: !loaded || forecastEmpty,
+    opening: openingTilesMissing ? null : baseCalc.opening,
+    closings: baseCalc.closing,
+    floor: forecastEmpty ? null : minimumCash,
+    format: fmtCompact,
+    weekDates: weeks,
+  });
+  const closingTile = forecastClosingTile({
+    empty: !loaded || forecastEmpty,
+    opening: openingTilesMissing ? null : baseCalc.opening,
+    closing: openingTilesMissing ? null : closingW13,
+    format: fmtCompact,
+  });
+  const lowestTileValue = screenTiles.lowestValue;
+  const lowestTileSub = screenTiles.lowestSub;
+  const lowestPointSub = screenTiles.lowestSub;
+  const weeksBelowValue = screenTiles.weeksValue;
+  const weeksBelowSub = screenTiles.weeksSub;
+  const weeksBelowTone = screenTiles.weeksAlert
+    ? "bad"
+    : screenTiles.lowestUnder == null
+      ? "neutral"
       : "good";
 
   const kpiTiles = (
-      <div
-        className={`cash-kpis mb-5 grid grid-cols-1 gap-3 ${simplified ? "sm:grid-cols-2 min-[1100px]:grid-cols-4" : "sm:grid-cols-3"}`}
-      >
-        {!loaded ? (
-          <CashTileSkeletons count={simplified ? 4 : 3} />
-        ) : simplified ? (
-          <>
-            <Stat
-              label="Closing · Week 13"
-              value={openingTilesMissing ? "—" : fmtCompact(closingW13)}
-              icon={LineChart}
-              tone={openingTilesMissing ? "neutral" : closingW13 < 0 ? "bad" : "neutral"}
-              sub={
+    <div
+      className={`cash-kpis mb-5 grid grid-cols-1 gap-3 ${simplified ? "sm:grid-cols-2 min-[1100px]:grid-cols-4" : "sm:grid-cols-3"}`}
+    >
+      {!loaded ? (
+        <CashTileSkeletons count={simplified ? 4 : 3} />
+      ) : simplified ? (
+        <>
+          <Stat
+            label="Closing · Week 13"
+            value={closingTile.value}
+            icon={LineChart}
+            tone={
+              openingTilesMissing || forecastEmpty ? "neutral" : closingW13 < 0 ? "bad" : "neutral"
+            }
+            sub={
+              openingTilesMissing || forecastEmpty ? (
+                closingTile.sub
+              ) : (
                 <span className="inline-flex items-center gap-1">
                   {trajectory >= 0 ? (
                     <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
@@ -2670,59 +2762,76 @@ export function CashForecastPanel({
                   {trajectory >= 0 ? "+" : ""}
                   {fmtCompact(trajectory)} over 13 weeks
                 </span>
-              }
-            />
+              )
+            }
+          />
+          <Stat
+            label="Lowest balance"
+            value={lowestTileValue}
+            icon={ShieldCheck}
+            tone={
+              screenTiles.lowestUnder == null ? "neutral" : screenTiles.lowestUnder ? "bad" : "good"
+            }
+            sub={lowestTileSub}
+          />
+          <Stat
+            label="Weeks below floor"
+            value={weeksBelowValue}
+            icon={CalendarDays}
+            tone={weeksBelowTone}
+            sub={weeksBelowSub}
+          />
+          <Stat
+            label="Net cash · next 4 weeks"
+            value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
+            icon={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? TrendingDown : TrendingUp}
+            tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
+            sub="Inflows minus outflows"
+          />
+        </>
+      ) : (
+        <>
+          {openingTilesMissing ? (
             <Stat
-              label="Lowest balance"
-              value={lowestTileValue}
-              icon={ShieldCheck}
-              tone={openingTilesMissing || emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
-              sub={lowestTileSub}
+              label="Opening bank"
+              value={openingTileValue}
+              sub={seededFromActuals ? "Opening cash unknown" : "missing"}
             />
-            <Stat
-              label="Weeks below floor"
-              value={weeksBelowValue}
-              icon={CalendarDays}
-              tone={weeksBelowTone}
-              sub={weeksBelowSub}
-            />
-            <Stat
-              label="Net cash · next 4 weeks"
-              value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
-              icon={
-                calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? TrendingDown : TrendingUp
-              }
-              tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
-              sub="Inflows minus outflows"
-            />
-          </>
-        ) : (
-          <>
-            {openingTilesMissing ? (
-              <Stat label="Opening bank" value={openingTileValue} sub="missing" />
-            ) : (
-              <Stat label="Opening bank" value={openingTileValue} sub={openingLabel} />
-            )}
-            <Stat
-              label="Lowest point"
-              value={lowestTileValue}
-              tone={openingTilesMissing || emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
-              sub={lowestPointSub}
-            />
-            <Stat
-              label="Weeks below floor"
-              value={weeksBelowValue}
-              tone={weeksBelowTone}
-              sub={weeksBelowSub}
-            />
-          </>
-        )}
-      </div>
+          ) : (
+            <Stat label="Opening bank" value={openingTileValue} sub={openingLabel} />
+          )}
+          <Stat
+            label="Lowest point"
+            value={lowestTileValue}
+            tone={
+              screenTiles.lowestUnder == null ? "neutral" : screenTiles.lowestUnder ? "bad" : "good"
+            }
+            sub={lowestPointSub}
+          />
+          <Stat
+            label="Weeks below floor"
+            value={weeksBelowValue}
+            tone={weeksBelowTone}
+            sub={weeksBelowSub}
+          />
+        </>
+      )}
+    </div>
   );
   const chartBody = (
     <>
-      {openingTilesMissing ? (
-        <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300" data-opening-missing="">
+      {openingTilesMissing && seededFromActuals ? (
+        <p
+          className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300"
+          data-opening-unknown=""
+        >
+          Opening cash unknown
+        </p>
+      ) : openingTilesMissing ? (
+        <p
+          className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300"
+          data-opening-missing=""
+        >
           Opening balance missing · add it
         </p>
       ) : emptyPresentation.showChart ? (
@@ -2742,11 +2851,7 @@ export function CashForecastPanel({
               {interestNote}
             </p>
           ) : null}
-          {heroChart(
-            simplified ? 200 : 240,
-            inlineChart.chartWidth,
-            inlineChart.onChartFrame,
-          )}
+          {heroChart(simplified ? 200 : 240, inlineChart.chartWidth, inlineChart.onChartFrame)}
         </>
       ) : (
         <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
@@ -2765,89 +2870,166 @@ export function CashForecastPanel({
     ? "Red marks cash under the runway floor."
     : "Double-click a figure to edit. Red marks cash under the runway floor.";
 
-
   const forecastCard = (
     <>
-    <Card
-      id={CASH_FORECAST_CARD_ID}
-      className={`${CARD_SHELL} w-full min-w-0 max-md:pb-6 max-md:pr-3`}
-      data-cash-view={cashLens}
-    >
-      <div className={GOLD_RULE} />
-      <CardContent className="pt-5">
-        <div className="mb-3 min-w-0">
-          <p className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]" data-cash-period>
-            {cashCopy.range || "Next 13 weeks"}
-          </p>
-          {forecastUpdatedLabel ? (
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-forecast-updated>
-              {forecastUpdatedLabel}
+      <Card
+        id={CASH_FORECAST_CARD_ID}
+        className={`${CARD_SHELL} w-full min-w-0 max-md:pb-6 max-md:pr-3`}
+        data-cash-view={cashLens}
+      >
+        <div className={GOLD_RULE} />
+        <CardContent className="pt-5">
+          <div className="mb-3 min-w-0">
+            <p
+              className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]"
+              data-cash-period
+            >
+              {cashCopy.range || "Next 13 weeks"}
             </p>
-          ) : null}
-          {simplified && cashCopy.ownerRollLine ? (
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-cash-roll>
-              {cashCopy.ownerRollLine}
-            </p>
-          ) : null}
-          {!simplified && runwayAside ? (
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Runway {runwayAside}</p>
-          ) : null}
-        </div>
-        {simplified ? null : cashCopy.bullets.length > 0 ? (
-          <details className="cash-details">
-            <summary>Details</summary>
-            <ul>
-              {cashCopy.bullets.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
-        {simplified ? null : scenarioLabel ? (
-          <p className="mb-3 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">{scenarioLabel}</p>
-        ) : null}
-        {simplified ? null : disagreeNotice}
-        {simplified ? null : emptyNotice}
-        {simplified ? null : exportError ? (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
-            <span>{exportError}</span>
-            <Button size="sm" variant="outline" className="h-8" onClick={() => window.location.reload()}>
-              Reload
-            </Button>
+            {seededFromActuals && xeroBankNote ? (
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-forecast-seed>
+                {xeroBankNote}
+              </p>
+            ) : null}
+            {forecastUpdatedLabel ? (
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-forecast-updated>
+                {forecastUpdatedLabel}
+              </p>
+            ) : null}
+            {simplified && cashCopy.ownerRollLine ? (
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-cash-roll>
+                {cashCopy.ownerRollLine}
+              </p>
+            ) : null}
+            {!simplified && runwayAside ? (
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                Runway {runwayAside}
+              </p>
+            ) : null}
           </div>
-        ) : null}
-        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
-          {emptyPresentation.showChart && !openingTilesMissing ? (
-            <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
+          {simplified ? null : cashCopy.bullets.length > 0 ? (
+            <details className="cash-details">
+              <summary>Details</summary>
+              <ul>
+                {cashCopy.bullets.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </details>
           ) : null}
-          <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
-          <ViewToggle
-            ariaLabel="Cash forecast"
-            value={cashLens}
-            onChange={(next) => setCashLens(next === "table" ? "table" : "chart")}
-            options={[
-              { value: "chart", label: "Chart" },
-              { value: "table", label: "13-week" },
-            ]}
-          />
-        </div>
-        {cashLens === "chart" ? <div aria-label="Graph">{graphPane}</div> : null}
-        <section
-          id="detailed-forecast"
-          className="mt-6"
-          aria-label="13-week"
-          hidden={cashLens !== "table"}
-        >
-          {simplified ? null : (
-            <p className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400">{weekTableHint}</p>
-          )}
-          {!loaded ? (
-            <div
-              data-cash-grid-loading
-              aria-busy="true"
-              className="h-64 animate-pulse rounded-xl bg-slate-200/80 dark:bg-slate-800"
+          {simplified ? null : scenarioLabel ? (
+            <p className="mb-3 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">
+              {scenarioLabel}
+            </p>
+          ) : null}
+          {simplified ? null : disagreeNotice}
+          {simplified ? null : emptyNotice}
+          {simplified ? null : exportError ? (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
+              <span>{exportError}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => window.location.reload()}
+              >
+                Reload
+              </Button>
+            </div>
+          ) : null}
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+            {emptyPresentation.showChart && !openingTilesMissing ? (
+              <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
+            ) : null}
+            <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
+            <ViewToggle
+              ariaLabel="Cash forecast"
+              value={cashLens}
+              onChange={(next) => setCashLens(next === "table" ? "table" : "chart")}
+              options={[
+                { value: "chart", label: "Chart" },
+                { value: "table", label: "13-week" },
+              ]}
             />
-          ) : (
+          </div>
+          {cashLens === "chart" ? <div aria-label="Graph">{graphPane}</div> : null}
+          <section
+            id="detailed-forecast"
+            className="mt-6"
+            aria-label="13-week"
+            hidden={cashLens !== "table"}
+          >
+            {simplified ? null : (
+              <p className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400">
+                {weekTableHint}
+              </p>
+            )}
+            {!loaded ? (
+              <div
+                data-cash-grid-loading
+                aria-busy="true"
+                className="h-64 animate-pulse rounded-xl bg-slate-200/80 dark:bg-slate-800"
+              />
+            ) : (
+              <CashThirteenWeekGrid
+                weeks={weeks}
+                opening={baseCalc.opening}
+                receipts={baseCalc.revRows.map((row) => ({
+                  id: row.id ?? row.name,
+                  name: row.name,
+                  vals: row.vals,
+                  bucket: row.id ? ("revenue" as const) : undefined,
+                }))}
+                payments={baseCalc.expRows.map((row) => ({
+                  id: row.id ?? row.name,
+                  name: row.name,
+                  vals: row.vals,
+                  bucket: row.id && row.bucket ? row.bucket : undefined,
+                }))}
+                inflow={baseCalc.inflow}
+                outflow={baseCalc.outflow}
+                net={baseCalc.net}
+                closing={baseCalc.closing}
+                floor={minimumCash}
+                floorNote={hasWeeklyOutflows ? "about 4 weeks of outflows" : null}
+                openingNote={openingAsOf ? openingLabel : null}
+                symbol={cur}
+                format={fmtR}
+                signStyle={simplified ? "minus" : "paren"}
+                openingChip={openingChipKey}
+                flowChip={flowChipKey}
+                readOnly={readOnly}
+                openingMissing={openingTilesMissing}
+                onCommit={commitWeekOverride}
+              />
+            )}
+          </section>
+        </CardContent>
+      </Card>
+      <EnlargeSheet
+        open={cashEnlarge === "chart"}
+        onOpenChange={(next) => setCashEnlarge(next ? "chart" : null)}
+        title="Cash flow graph"
+      >
+        <div className="flex h-full min-h-[280px] flex-col">
+          {heroChart("100%", enlargeChart.chartWidth, enlargeChart.onChartFrame, true)}
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            Floor {fmtCompact(minimumCash)}
+          </p>
+        </div>
+      </EnlargeSheet>
+      <EnlargeSheet
+        open={cashEnlarge === "table"}
+        onOpenChange={(next) => setCashEnlarge(next ? "table" : null)}
+        title="13-week cash flow"
+      >
+        {!loaded ? (
+          <div
+            data-cash-grid-loading
+            aria-busy="true"
+            className="h-64 animate-pulse rounded-xl bg-slate-200/80 dark:bg-slate-800"
+          />
+        ) : (
           <CashThirteenWeekGrid
             weeks={weeks}
             opening={baseCalc.opening}
@@ -2878,69 +3060,10 @@ export function CashForecastPanel({
             readOnly={readOnly}
             openingMissing={openingTilesMissing}
             onCommit={commitWeekOverride}
+            scrollClassName="cash-13w-scroll--sheet"
           />
-          )}
-        </section>
-      </CardContent>
-    </Card>
-    <EnlargeSheet
-      open={cashEnlarge === "chart"}
-      onOpenChange={(next) => setCashEnlarge(next ? "chart" : null)}
-      title="Cash flow graph"
-    >
-      <div className="flex h-full min-h-[280px] flex-col">
-        {heroChart("100%", enlargeChart.chartWidth, enlargeChart.onChartFrame, true)}
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-          Floor {fmtCompact(minimumCash)}
-        </p>
-      </div>
-    </EnlargeSheet>
-    <EnlargeSheet
-      open={cashEnlarge === "table"}
-      onOpenChange={(next) => setCashEnlarge(next ? "table" : null)}
-      title="13-week cash flow"
-    >
-      {!loaded ? (
-        <div
-          data-cash-grid-loading
-          aria-busy="true"
-          className="h-64 animate-pulse rounded-xl bg-slate-200/80 dark:bg-slate-800"
-        />
-      ) : (
-      <CashThirteenWeekGrid
-        weeks={weeks}
-        opening={baseCalc.opening}
-        receipts={baseCalc.revRows.map((row) => ({
-          id: row.id ?? row.name,
-          name: row.name,
-          vals: row.vals,
-          bucket: row.id ? ("revenue" as const) : undefined,
-        }))}
-        payments={baseCalc.expRows.map((row) => ({
-          id: row.id ?? row.name,
-          name: row.name,
-          vals: row.vals,
-          bucket: row.id && row.bucket ? row.bucket : undefined,
-        }))}
-        inflow={baseCalc.inflow}
-        outflow={baseCalc.outflow}
-        net={baseCalc.net}
-        closing={baseCalc.closing}
-        floor={minimumCash}
-        floorNote={hasWeeklyOutflows ? "about 4 weeks of outflows" : null}
-        openingNote={openingAsOf ? openingLabel : null}
-        symbol={cur}
-        format={fmtR}
-        signStyle={simplified ? "minus" : "paren"}
-        openingChip={openingChipKey}
-        flowChip={flowChipKey}
-        readOnly={readOnly}
-        openingMissing={openingTilesMissing}
-        onCommit={commitWeekOverride}
-        scrollClassName="cash-13w-scroll--sheet"
-      />
-      )}
-    </EnlargeSheet>
+        )}
+      </EnlargeSheet>
     </>
   );
 
@@ -2969,14 +3092,21 @@ export function CashForecastPanel({
             </ul>
           ) : null}
           {scenarioLabel ? (
-            <p className="mb-3 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">{scenarioLabel}</p>
+            <p className="mb-3 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">
+              {scenarioLabel}
+            </p>
           ) : null}
           {disagreeNotice}
           {emptyNotice}
           {exportError ? (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
               <span>{exportError}</span>
-              <Button size="sm" variant="outline" className="h-8" onClick={() => window.location.reload()}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => window.location.reload()}
+              >
                 Reload
               </Button>
             </div>
@@ -2998,120 +3128,120 @@ export function CashForecastPanel({
       {readOnly ? null : reviewInputs}
       {forecastCard}
       {readOnly ? null : (
-      <>
-      <CollapsibleGoldCard
-        id="wizard-cash-setup"
-        icon={Settings2}
-        title="Forecast Setup"
-        subtitle="Start date and opening balance"
-      >
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <Label className={LABEL_CLS}>Forecast start date</Label>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className={INPUT_CLS}
-            />
-          </div>
-          <div>
-            <Label className={LABEL_CLS}>Opening bank balance ({cur})</Label>
-            <Input
-              type="number"
-              value={openingBalance}
-              onChange={(e) => setOpeningBalance(e.target.value)}
-              className={INPUT_CLS}
-            />
-          </div>
-          {xeroBankNote ? (
-            <p
-              id="xero-bank-forecast-note"
-              className="text-xs text-slate-600 md:col-span-2 dark:text-slate-400"
-            >
-              {humanizeIsoDates(xeroBankNote, market)}
-            </p>
-          ) : null}
-        </div>
-      </CollapsibleGoldCard>
+        <>
+          <CollapsibleGoldCard
+            id="wizard-cash-setup"
+            icon={Settings2}
+            title="Forecast Setup"
+            subtitle="Start date and opening balance"
+          >
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <Label className={LABEL_CLS}>Forecast start date</Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className={INPUT_CLS}
+                />
+              </div>
+              <div>
+                <Label className={LABEL_CLS}>Opening bank balance ({cur})</Label>
+                <Input
+                  type="number"
+                  value={openingBalance}
+                  onChange={(e) => setOpeningBalance(e.target.value)}
+                  className={INPUT_CLS}
+                />
+              </div>
+              {xeroBankNote ? (
+                <p
+                  id="xero-bank-forecast-note"
+                  className="text-xs text-slate-600 md:col-span-2 dark:text-slate-400"
+                >
+                  {humanizeIsoDates(xeroBankNote, market)}
+                </p>
+              ) : null}
+            </div>
+          </CollapsibleGoldCard>
 
-      <CollapsibleGoldCard
-        icon={Wallet}
-        title="Money In & Out"
-        subtitle={
-          interestNote
-            ? interestNote
-            : "Revenue and expense line items — pick how each lands across the 13 weeks"
-        }
-      >
-        <div className="space-y-6">
-          <div className="space-y-3">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#3f9c72] dark:text-[#5cc492]">
-              Revenue inputs
-            </div>
-            {revenue.map((l, i) => (
-              <LineEditor
-                key={l.id}
-                line={l}
-                tone="revenue"
-                singleMonth={singleMonthHistory}
-                onChange={(n) => updateAt(revenue, setRevenue, i, n)}
-                onRemove={
-                  revenue.length > 1
-                    ? () => setRevenue(revenue.filter((_, x) => x !== i))
-                    : undefined
-                }
-              />
-            ))}
-            <Button
-              variant="outline"
-              onClick={() => setRevenue([...revenue, makeLine("New revenue line")])}
-              className="w-full border-[#4caf82]/40 bg-[#4caf82]/5 text-[#3f9c72] hover:bg-[#4caf82]/15 dark:text-[#5cc492]"
-            >
-              <Plus className="h-4 w-4" /> Add revenue line
-            </Button>
-          </div>
+          <CollapsibleGoldCard
+            icon={Wallet}
+            title="Money In & Out"
+            subtitle={
+              interestNote
+                ? interestNote
+                : "Revenue and expense line items — pick how each lands across the 13 weeks"
+            }
+          >
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#3f9c72] dark:text-[#5cc492]">
+                  Revenue inputs
+                </div>
+                {revenue.map((l, i) => (
+                  <LineEditor
+                    key={l.id}
+                    line={l}
+                    tone="revenue"
+                    singleMonth={singleMonthHistory}
+                    onChange={(n) => updateAt(revenue, setRevenue, i, n)}
+                    onRemove={
+                      revenue.length > 1
+                        ? () => setRevenue(revenue.filter((_, x) => x !== i))
+                        : undefined
+                    }
+                  />
+                ))}
+                <Button
+                  variant="outline"
+                  onClick={() => setRevenue([...revenue, makeLine("New revenue line")])}
+                  className="w-full border-[#4caf82]/40 bg-[#4caf82]/5 text-[#3f9c72] hover:bg-[#4caf82]/15 dark:text-[#5cc492]"
+                >
+                  <Plus className="h-4 w-4" /> Add revenue line
+                </Button>
+              </div>
 
-          <div className="space-y-3 border-t border-amber-900/10 pt-5 dark:border-slate-800">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#c0392b] dark:text-[#ef6b6b]">
-              Main expenses
+              <div className="space-y-3 border-t border-amber-900/10 pt-5 dark:border-slate-800">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#c0392b] dark:text-[#ef6b6b]">
+                  Main expenses
+                </div>
+                {expenses.map((l, i) => (
+                  <LineEditor
+                    key={l.id}
+                    line={l}
+                    tone="expense"
+                    singleMonth={singleMonthHistory}
+                    onChange={(n) => updateAt(expenses, setExpenses, i, n)}
+                  />
+                ))}
+                <div className="mt-4 text-[10px] font-bold uppercase tracking-wider text-[#c0392b] dark:text-[#ef6b6b]">
+                  Other expenses
+                </div>
+                {other.map((l, i) => (
+                  <LineEditor
+                    key={l.id}
+                    line={l}
+                    tone="expense"
+                    side="other"
+                    singleMonth={singleMonthHistory}
+                    onChange={(n) => updateAt(other, setOther, i, n)}
+                    onRemove={
+                      other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined
+                    }
+                  />
+                ))}
+                <Button
+                  variant="outline"
+                  onClick={() => setOther([...other, makeLine("Other expense")])}
+                  className="w-full border-[#e05c5c]/40 bg-[#e05c5c]/5 text-[#c0392b] hover:bg-[#e05c5c]/15 dark:text-[#ef6b6b]"
+                >
+                  <Plus className="h-4 w-4" /> Add other expense line
+                </Button>
+              </div>
             </div>
-            {expenses.map((l, i) => (
-              <LineEditor
-                key={l.id}
-                line={l}
-                tone="expense"
-                singleMonth={singleMonthHistory}
-                onChange={(n) => updateAt(expenses, setExpenses, i, n)}
-              />
-            ))}
-            <div className="mt-4 text-[10px] font-bold uppercase tracking-wider text-[#c0392b] dark:text-[#ef6b6b]">
-              Other expenses
-            </div>
-            {other.map((l, i) => (
-              <LineEditor
-                key={l.id}
-                line={l}
-                tone="expense"
-                side="other"
-                singleMonth={singleMonthHistory}
-                onChange={(n) => updateAt(other, setOther, i, n)}
-                onRemove={
-                  other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined
-                }
-              />
-            ))}
-            <Button
-              variant="outline"
-              onClick={() => setOther([...other, makeLine("Other expense")])}
-              className="w-full border-[#e05c5c]/40 bg-[#e05c5c]/5 text-[#c0392b] hover:bg-[#e05c5c]/15 dark:text-[#ef6b6b]"
-            >
-              <Plus className="h-4 w-4" /> Add other expense line
-            </Button>
-          </div>
-        </div>
-      </CollapsibleGoldCard>
-      </>
+          </CollapsibleGoldCard>
+        </>
       )}
 
       <CashFromBanksDrafter

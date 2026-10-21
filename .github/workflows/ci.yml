@@ -141,6 +141,7 @@ jobs:
           bash scripts/clients-rls-initplan-check.sh
           bash scripts/apply-source-documents-sql.sh
           bash scripts/apply-client-agent-sends-sql.sh
+          bash scripts/apply-client-agent-send-storage-sql.sh
 
   # Reporting for the existing typing and Prettier backlog, except undefined
   # names. `tsc` still carries long-standing PostgREST / vite-plugin errors, and

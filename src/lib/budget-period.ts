@@ -174,6 +174,25 @@ export function fiscalWaterfallFallback(
   };
 }
 
+/**
+ * Budget vs actual tiles. The firm-year slice wins over the seeded plan.
+ * Expenses are revenue minus operating profit, so the three tiles meet.
+ * A missing line stays null.
+ */
+export function budgetStatementTiles(
+  period: { revenue: number | null; operatingProfit: number | null } | null | undefined,
+): { revenue: number | null; expenses: number | null; operatingProfit: number | null } {
+  if (!period) return { revenue: null, expenses: null, operatingProfit: null };
+  const revenue = finiteAmount(period.revenue);
+  const operatingProfit = finiteAmount(period.operatingProfit);
+  const expenses = revenue != null && operatingProfit != null ? revenue - operatingProfit : null;
+  return { revenue, expenses, operatingProfit };
+}
+
+function finiteAmount(value: number | null | undefined): number | null {
+  return value != null && Number.isFinite(value) ? value : null;
+}
+
 /** Headline revenue and operating profit. The slice wins over the seeded plan. */
 export function budgetHeadlineFigures(
   period: FiscalStatementSlice | null | undefined,

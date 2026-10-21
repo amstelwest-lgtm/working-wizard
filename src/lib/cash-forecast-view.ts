@@ -2,6 +2,7 @@
  * Cash tab view: Graph is the default (no search param). `view=13week` opens
  * the weekly model. Old detailed-forecast anchors land on that same card.
  */
+import { forecastFloorPosition } from "./cash-forecast-parity.ts";
 
 export const CASH_FORECAST_CARD_ID = "wizard-cash-table";
 
@@ -40,7 +41,7 @@ export function weeksBelowFloorCopy(input: {
   firstDipDate: string | null;
   opensBelow: boolean;
 }): { value: string; sub: string } {
-  if (input.empty) return { value: "—", sub: "Add a bank balance or lines" };
+  if (input.empty) return { value: "—", sub: "Not enough data" };
   const horizon = input.horizon > 0 ? input.horizon : 13;
   if (input.opensBelow) {
     if (input.weeksBelow <= 0) return { value: "Below floor now", sub: "recovers W1" };
@@ -48,7 +49,9 @@ export function weeksBelowFloorCopy(input: {
       const date = input.firstDipDate?.trim();
       return {
         value: "Below floor now",
-        sub: date ? `first dip W${input.firstDipWeek} · ${date}` : `first dip W${input.firstDipWeek}`,
+        sub: date
+          ? `first dip W${input.firstDipWeek} · ${date}`
+          : `first dip W${input.firstDipWeek}`,
       };
     }
     return { value: "Below floor now", sub: `${input.weeksBelow} of ${horizon} weeks` };
@@ -108,9 +111,111 @@ export function lowestCashPoint(series: readonly CashBalancePoint[]): CashBalanc
   for (const point of series) {
     if (!best || point.balance < best.balance) best = point;
   }
-  return (
-    best ?? { key: "Now", week: 0, balance: 0, belowFloor: false, negative: false }
-  );
+  return best ?? { key: "Now", week: 0, balance: 0, belowFloor: false, negative: false };
+}
+
+export type ForecastScreenTiles = {
+  lowestValue: string;
+  lowestSub: string;
+  /** Null when there is no series to score against a floor. */
+  lowestUnder: boolean | null;
+  weeksValue: string;
+  weeksSub: string;
+  /** True when this same series opens under the floor or a closing does. */
+  weeksAlert: boolean;
+};
+
+/**
+ * Lowest point, the floor gap, and weeks-below-floor from one series.
+ * An empty series does not fall back to the opening, and it does not
+ * borrow the $50,000 fallback floor. Missing openings stay unscored.
+ * "Above" / "under" follows the sign of lowest − floor.
+ */
+export function forecastScreenTiles(input: {
+  empty: boolean;
+  opening: number | null;
+  closings: readonly number[];
+  floor: number | null;
+  format: (amount: number) => string;
+  weekDates?: readonly (string | null | undefined)[];
+}): ForecastScreenTiles {
+  const unscored = (sub: string): ForecastScreenTiles => ({
+    lowestValue: "—",
+    lowestSub: sub,
+    lowestUnder: null,
+    weeksValue: "—",
+    weeksSub: sub,
+    weeksAlert: false,
+  });
+  if (input.empty) return unscored("Not enough data");
+  const floor = input.floor;
+  const opening = input.opening;
+  if (opening == null || !Number.isFinite(opening) || floor == null || !Number.isFinite(floor)) {
+    return unscored("Opening cash unknown");
+  }
+  const series = cashBalanceSeries({
+    opening,
+    closings: input.closings,
+    floor,
+  });
+  const low = lowestCashPoint(series);
+  const gap = low.balance - floor;
+  const under = gap < 0;
+  const relation =
+    gap === 0
+      ? "at the floor"
+      : `${input.format(Math.abs(gap))} ${under ? "under" : "above"} the floor`;
+  const pos = forecastFloorPosition({
+    opening,
+    closings: input.closings,
+    floor,
+  });
+  const weeks = weeksBelowFloorCopy({
+    empty: false,
+    weeksBelow: pos.weeksBelow,
+    horizon: input.closings.length > 0 ? input.closings.length : 13,
+    firstDipWeek: pos.firstDipWeek,
+    firstDipDate:
+      pos.firstDipWeek != null ? (input.weekDates?.[pos.firstDipWeek - 1] ?? null) : null,
+    opensBelow: pos.opensBelow,
+  });
+  return {
+    lowestValue: input.format(low.balance),
+    lowestSub: low.week === 0 ? `Opening · ${relation}` : `Week ${low.week} · ${relation}`,
+    lowestUnder: under,
+    weeksValue: weeks.value,
+    weeksSub: weeks.sub,
+    weeksAlert: pos.weeksBelow > 0 || pos.opensBelow,
+  };
+}
+
+/**
+ * Week-13 closing from the same opening the lowest-point tile uses.
+ * An empty series and a missing opening do not print a $0 change.
+ */
+export function forecastClosingTile(input: {
+  empty: boolean;
+  opening: number | null;
+  closing: number | null;
+  format: (amount: number) => string;
+}): { value: string; sub: string } {
+  if (input.empty) return { value: "—", sub: "Not enough data" };
+  const opening = input.opening;
+  const closing = input.closing;
+  if (
+    opening == null ||
+    closing == null ||
+    !Number.isFinite(opening) ||
+    !Number.isFinite(closing)
+  ) {
+    return { value: "—", sub: "Opening cash unknown" };
+  }
+  const trajectory = closing - opening;
+  const sign = trajectory >= 0 ? "+" : "";
+  return {
+    value: input.format(closing),
+    sub: `${sign}${input.format(trajectory)} over 13 weeks`,
+  };
 }
 
 /**

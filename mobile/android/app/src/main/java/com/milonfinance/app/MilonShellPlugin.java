@@ -17,7 +17,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "MilonShell")
 public class MilonShellPlugin extends Plugin {
 
-    private static final int TOOLBAR = 0xFF0A0A0A;
+    private static final int TOOLBAR = 0xFFFFFFFF;
 
     private Browser browser;
     private BrowserControllerActivity controller;

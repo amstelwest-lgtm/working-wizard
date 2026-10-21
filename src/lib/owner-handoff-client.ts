@@ -3,6 +3,7 @@ import { handoffComingOnline } from "@/hooks/owner-agent-ui";
 import { phaseForAction } from "@/lib/action-handoff";
 import { agentActivityUnavailable } from "@/lib/milon-team-activity";
 import {
+  handoffAuthorName,
   handoffFailureMessage,
   handoffRequestNote,
   moveLoadMayCache,
@@ -202,13 +203,21 @@ export async function requestOwnerHandoff(input: {
   };
 }
 
-async function signedInActorLabel(): Promise<string> {
-  const { data } = await supabase.auth.getSession();
-  const fromSession = data.session?.user?.email?.split("@")[0]?.trim() ?? "";
-  if (fromSession) return fromSession;
-  const { data: userData } = await supabase.auth.getUser();
-  const local = userData.user?.email?.split("@")[0]?.trim() ?? "";
-  return local || "Accountant";
+/** Profile name, then the auth display name, then the email handle. */
+export async function signedInActorLabel(): Promise<string> {
+  const sessionUser = (await supabase.auth.getSession()).data.session?.user ?? null;
+  const user = sessionUser ?? (await supabase.auth.getUser()).data.user ?? null;
+  if (!user) return handoffAuthorName({});
+  const meta = (user.user_metadata ?? {}) as { full_name?: unknown; name?: unknown };
+  let profileFullName: string | null = null;
+  const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+  if (typeof profile?.full_name === "string") profileFullName = profile.full_name;
+  return handoffAuthorName({
+    profileFullName,
+    authFullName: typeof meta.full_name === "string" ? meta.full_name : null,
+    authName: typeof meta.name === "string" ? meta.name : null,
+    email: user.email,
+  });
 }
 
 async function clearActionOwner(actionItemId: string): Promise<void> {

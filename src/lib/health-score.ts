@@ -15,6 +15,7 @@ import type { ResolvedMarket } from "./market/types.ts";
 import {
   assessClientMetrics,
   hasFinancialEvidence,
+  OPENING_CASH_UNKNOWN,
   persistedRunwayWeeks,
   scoreCreditorDays,
   scoreLowerIsBetterDays,
@@ -846,7 +847,7 @@ export function cashPillarFollowsForecast(
   if (cashNotOnFile) {
     const pillars = health.pillars.map((pillar) => {
       if (pillar.id !== "cash") return pillar;
-      return { ...pillar, score: null, status: "at_risk" as const, note: null };
+      return { ...pillar, score: null, status: "at_risk" as const, note: OPENING_CASH_UNKNOWN };
     });
     return overallFromPillars(pillars);
   }

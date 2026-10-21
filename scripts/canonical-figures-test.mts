@@ -12,6 +12,7 @@ import {
   forecastLinesBlank,
   forecastWeeksAreEntered,
 } from "../src/lib/cash-forecast-parity.ts";
+import { SEEDED_FROM_ACTUALS_LABEL } from "../src/lib/budget.bridges.ts";
 import { resolveCashScreenForecast } from "../src/lib/client-metrics.ts";
 import { marketForClient } from "../src/lib/market/scope.ts";
 import { findingCardCopy, formatFindingProse } from "../src/lib/milon-team-activity.ts";
@@ -35,7 +36,10 @@ const qaBooks = {
   periodMonths: 12,
 };
 const scorecard = scorecardRatiosFromFinancials(qaBooks);
-assert(Math.round(scorecard["Operating Margin"] * 1000) === 86, "QA US scorecard operating margin is 8.6%");
+assert(
+  Math.round(scorecard["Operating Margin"] * 1000) === 86,
+  "QA US scorecard operating margin is 8.6%",
+);
 
 assert(draftMetricUnit("health", 69) === "count", "health has no unit");
 assert(draftMetricUnit("overall", 69) === "count", "overall health has no unit");
@@ -69,14 +73,22 @@ const stored = collectStoredFigures(
   },
   { snapshotId: "snap", periodLabel: "Sep 2026" },
 );
-assert(stored?.figures["Operating Margin"] === 0.086, "live scorecard ratios win over the snapshot");
+assert(
+  stored?.figures["Operating Margin"] === 0.086,
+  "live scorecard ratios win over the snapshot",
+);
 
 const home = presentHomeDraftTitle("Operating margin of 16.0% needs a look.", scorecard);
 assert(home.text.includes("8.6%") && !home.text.includes("16.0%"), home.text);
 assert(home.stale === true, "a stored 16.0% draft is flagged stale");
-const stamped = presentHomeDraftTitle("Sep 2026 operating margin of 16.0% needs a look.", scorecard);
+const stamped = presentHomeDraftTitle(
+  "Sep 2026 operating margin of 16.0% needs a look.",
+  scorecard,
+);
 assert(
-  stamped.text.includes("Full year on file") && stamped.text.includes("8.6%") && !stamped.text.includes("Sep 2026"),
+  stamped.text.includes("Full year on file") &&
+    stamped.text.includes("8.6%") &&
+    !stamped.text.includes("Sep 2026"),
   stamped.text,
 );
 const fresh = presentHomeDraftTitle("Operating margin of 8.6% needs a look.", scorecard);
@@ -94,7 +106,10 @@ const card = findingCardCopy(
   US,
   scorecard,
 );
-assert(card.context?.includes("8.6%") && !card.context.includes("16%"), card.context ?? "missing context");
+assert(
+  card.context?.includes("8.6%") && !card.context.includes("16%"),
+  card.context ?? "missing context",
+);
 assert(card.lead.includes("8.6%") || !card.lead.includes("16"), card.lead);
 
 const garbledPeriod = formatFindingProse(
@@ -118,8 +133,14 @@ const quoted = polishAgentCopy({
   figures: { "Operating Margin": 0.16, "Working Capital Days": 69 },
   canonicalRatios: scorecard,
 });
-assert(quoted.ok === true && quoted.text.includes("8.6%") && quoted.text.includes("69 days"), quoted.ok ? quoted.text : "refused");
-assert(quoted.ok === true && !quoted.text.includes("days days"), "the scorecard quote does not double days");
+assert(
+  quoted.ok === true && quoted.text.includes("8.6%") && quoted.text.includes("69 days"),
+  quoted.ok ? quoted.text : "refused",
+);
+assert(
+  quoted.ok === true && !quoted.text.includes("days days"),
+  "the scorecard quote does not double days",
+);
 
 const monday = new Date(2026, 9, 5);
 const derived = resolveCashScreenForecast({
@@ -128,22 +149,36 @@ const derived = resolveCashScreenForecast({
   now: monday,
 });
 assert(derived.source === "derived", `blank QA US lines derive a sketch (${derived.source})`);
+assert(derived.seededFromActuals === true, "twelve months of actuals seed the forecast");
 assert(
-  derived.inflow.some((n) => Math.round(n) === 58333),
-  `the sketch still lands $58,333 (${derived.inflow.map((n) => Math.round(n)).join(",")})`,
+  derived.estimateLabel === SEEDED_FROM_ACTUALS_LABEL,
+  derived.estimateLabel ?? "missing seed label",
 );
-assert(!forecastWeeksAreEntered(derived), "a P&L sketch is not an entered forecast");
+const weeklyReceipt = Math.round(700000 / 52);
+assert(
+  derived.inflow.every((n) => Math.round(n) === weeklyReceipt),
+  `actuals spread evenly, got ${derived.inflow.map((n) => Math.round(n)).join(",")}`,
+);
+assert(forecastWeeksAreEntered(derived), "a seeded actuals baseline is the forecast");
 const derivedWeeks = cashForecastWeeksFromOutlook(derived);
-assert(derivedWeeks == null, "the 13-week PDF does not print the sketch");
-const derivedLines = [...derived.lines.revenue, ...derived.lines.expenses];
-assert(forecastLinesBlank(derivedLines), "derived line ids do not open the chart");
 assert(
-  !forecastLinesBlank(derivedLines, { includeDerived: true }),
-  "the public sample preview still counts its labelled P&L lines",
+  derivedWeeks != null && derivedWeeks.length === 13,
+  "the 13-week PDF prints the seeded weeks",
 );
 assert(
-  cashEmptyPresentation({ opening: derived.opening, linesBlank: forecastLinesBlank(derivedLines) }).showChart === false,
-  "the tab chart stays empty when the only lines are derived",
+  derivedWeeks?.[0]?.total_receipts === weeklyReceipt,
+  `week 1 receipts ${derivedWeeks?.[0]?.total_receipts}`,
+);
+const derivedLines = [...derived.lines.revenue, ...derived.lines.expenses];
+assert(!forecastLinesBlank(derivedLines), "seeded actuals lines open the chart");
+assert(
+  derivedLines.every((line) => !String(line.id).startsWith("derived-")),
+  "seed lines are not the hidden P&L sketch",
+);
+assert(
+  cashEmptyPresentation({ opening: derived.opening, linesBlank: forecastLinesBlank(derivedLines) })
+    .showChart === true,
+  "the tab chart opens once actuals have seeded a line",
 );
 
 const storedForecast = resolveCashScreenForecast({
@@ -151,33 +186,59 @@ const storedForecast = resolveCashScreenForecast({
   cashflow: {
     startDate: "2026-10-05",
     openingBalance: "128450",
-    revenue: [{ id: "sales", name: "Receipts", amount: "1000", frequency: "recurring-weekly", startWeek: 1 }],
-    expenses: [{ id: "rent", name: "Rent", amount: "400", frequency: "recurring-weekly", startWeek: 1 }],
+    revenue: [
+      {
+        id: "sales",
+        name: "Receipts",
+        amount: "1000",
+        frequency: "recurring-weekly",
+        startWeek: 1,
+      },
+    ],
+    expenses: [
+      { id: "rent", name: "Rent", amount: "400", frequency: "recurring-weekly", startWeek: 1 },
+    ],
   },
   now: monday,
 });
 assert(forecastWeeksAreEntered(storedForecast), "an entered weekly line is the forecast");
 const storedWeeks = cashForecastWeeksFromOutlook(storedForecast);
-assert(storedWeeks != null && storedWeeks[0]?.total_receipts === Math.round(storedForecast.inflow[0] ?? -1), "tab and PDF share the entered receipts");
+assert(
+  storedWeeks != null &&
+    storedWeeks[0]?.total_receipts === Math.round(storedForecast.inflow[0] ?? -1),
+  "tab and PDF share the entered receipts",
+);
 assert(
   cashEmptyPresentation({
     opening: 128450,
-    linesBlank: forecastLinesBlank(storedForecast.source === "stored" ? [{ id: "sales", amount: "1000" }] : []),
+    linesBlank: forecastLinesBlank(
+      storedForecast.source === "stored" ? [{ id: "sales", amount: "1000" }] : [],
+    ),
   }).showChart === true,
   "an entered line opens the chart",
 );
 
-const usNote = implausibleSampleNote(marketForClient({ market: { country: "US", regionCode: "NY" } }));
-const zaNote = implausibleSampleNote(marketForClient({ market: { country: "ZA", regionCode: "GP" } }));
+const usNote = implausibleSampleNote(
+  marketForClient({ market: { country: "US", regionCode: "NY" } }),
+);
+const zaNote = implausibleSampleNote(
+  marketForClient({ market: { country: "ZA", regionCode: "GP" } }),
+);
 assert(usNote.includes("dollars") && !usNote.toLowerCase().includes("rand"), usNote);
 assert(zaNote.includes("rands"), zaNote);
 
 const execute = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
 const ratiosBranch = execute.slice(execute.indexOf('if (tool === "get_ratios")'));
-assert(ratiosBranch.includes('quote_basis: "scorecard"'), "get_ratios names the scorecard as the quote");
+assert(
+  ratiosBranch.includes('quote_basis: "scorecard"'),
+  "get_ratios names the scorecard as the quote",
+);
 assert(ratiosBranch.includes("overviewRatios"), "get_ratios computes the live scorecard ratios");
 assert(ratiosBranch.includes('from("clients")'), "get_ratios reads the live books");
-assert(execute.includes("canonicalQuoteRatios"), "a new finding is saved against the scorecard ratios");
+assert(
+  execute.includes("canonicalQuoteRatios"),
+  "a new finding is saved against the scorecard ratios",
+);
 const draft = readFileSync(resolve("src/lib/agent-draft.ts"), "utf8");
 assert(draft.includes("canonicalQuoteRatios"), "advisor and FM drafts save the scorecard ratios");
 const report = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");

@@ -12,6 +12,12 @@ import { bankHistoryIsSingleMonth, displayForecastFrequency } from "./cash-forec
 import { periodProfitBridge } from "./period-profit.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
 import { isQboBalanceSheetHoldNote } from "./xero-opening.ts";
+import {
+  annualiseBudgetFinancials,
+  presentNumber,
+  statementCoverMonthCount,
+  withCostAliases,
+} from "./statement-cover.ts";
 import { computeRatios, metricDirection, periodMonthsOf, type RatioInputs } from "./ratios.ts";
 
 export type CashSource = "bank" | "period" | "none";
@@ -162,6 +168,63 @@ export function periodOperatingOutflows(
   const bridge = periodProfitBridge(fin);
   const total = bridge.cogs + bridge.operatingExpenses + bridge.depreciation;
   return total > 0 ? total : null;
+}
+
+/**
+ * Honest label for a 13-week baseline taken from the statement period.
+ * A partial month is day-paced, so this is not a monthly total.
+ */
+export const SEEDED_FROM_ACTUALS_LABEL =
+  "Estimated from actuals. The period total is spread evenly across each week.";
+
+/** Shown when the forecast has actuals but no balance-sheet or bank opening. */
+export const OPENING_CASH_UNKNOWN = "Opening cash unknown";
+
+export type WeeklyActualsBaseline = {
+  months: number;
+  /** Null when revenue is not on the actuals. A stored zero stays zero. */
+  weeklyReceipts: number | null;
+  /** Null when costs are not on the actuals. A stored zero stays zero. */
+  weeklyPayments: number | null;
+  label: string;
+};
+
+const ACTUALS_COST_FIELDS = ["cogs", "fixedCosts", "ebit", "ebitda", "laborCost"] as const;
+
+/**
+ * Weekly receipts and payments from the same actuals Budget seeds from.
+ * Month cover is {@link statementCoverMonthCount} (unknown is null, not 12).
+ * The pace is {@link annualiseBudgetFinancials}, then ÷ 52, which is the
+ * monthly average spread evenly across the weeks (× 12/52). A missing
+ * revenue or cost line stays null. It is not turned into 0.
+ */
+export function weeklyBaselineFromActuals(
+  financials: Record<string, unknown> | null | undefined,
+): WeeklyActualsBaseline | null {
+  if (!financials) return null;
+  const aliased = withCostAliases(
+    financials as Record<string, string | number | null | undefined>,
+  ) as Record<string, unknown>;
+  const months = statementCoverMonthCount(aliased);
+  if (months == null || months < 1) return null;
+  const annual = annualiseBudgetFinancials(aliased);
+  const revenue = presentNumber(annual.revenue as string | number | null | undefined);
+  const weeklyReceipts = revenue == null ? null : revenue / 52;
+  const costsOnFile = ACTUALS_COST_FIELDS.some(
+    (key) => presentNumber(aliased[key] as string | number | null | undefined) != null,
+  );
+  let weeklyPayments: number | null = null;
+  if (costsOnFile) {
+    const operating = periodOperatingOutflows(annual);
+    weeklyPayments = operating == null ? 0 : operating / 52;
+  }
+  if (weeklyReceipts == null && weeklyPayments == null) return null;
+  return {
+    months,
+    weeklyReceipts,
+    weeklyPayments,
+    label: SEEDED_FROM_ACTUALS_LABEL,
+  };
 }
 
 /**
@@ -477,10 +540,18 @@ export function assessClientMetrics(input: {
   const hasSeries =
     outlook.totalInflow > 0.5 || outlook.totalOutflow > 0.5 || outlook.source === "stored";
   const forecastNet = hasSeries ? outlook.totalInflow - outlook.totalOutflow : null;
-  if (hasSeries) {
+  // Seeded weeks count toward runway only when both sides are numbers.
+  // A missing receipt side is not inflow 0 — that invented a burn. The
+  // runway already on file stays (Not enough data, or weeks from a booked loss).
+  const bothSides = outlook.receiptsWeekly != null && outlook.paymentsWeekly != null;
+  if (
+    hasSeries &&
+    outlook.openingCash !== null &&
+    (outlook.seededFromActuals !== true || bothSides)
+  ) {
     runway = runwayFromForecastNet({
       base: runway,
-      opening: outlook.opening,
+      opening: outlook.openingCash ?? outlook.opening,
       totalInflow: outlook.totalInflow,
       totalOutflow: outlook.totalOutflow,
     });
@@ -730,6 +801,22 @@ export type ThirteenWeekForecast = {
    * Omitted means the opening was read.
    */
   cashOnFile?: boolean;
+  /**
+   * True when the weeks are an even spread of monthly actuals.
+   * The cash tab and the PDF publish this series. A lumpy P&L sketch stays hidden.
+   */
+  seededFromActuals?: boolean;
+  /** Set when the series is shown and no balance-sheet or bank opening was read. */
+  openingNote?: string | null;
+  /**
+   * The opening that was read. Null when it was not. Omitted on older series,
+   * where `opening` is the balance. A missing opening is not stored as 0 here.
+   */
+  openingCash?: number | null;
+  /** Even weekly receipts from actuals. Null when revenue is not on the file. */
+  receiptsWeekly?: number | null;
+  /** Even weekly payments from actuals. Null when costs are not on the file. */
+  paymentsWeekly?: number | null;
 };
 
 type StoredForecastLine = {
@@ -1491,8 +1578,6 @@ export function resolveThirteenWeekForecast(input: {
   const storedCf = asRecord(input.cashflow);
   const cf = storedCf ? baseCashflow(storedCf) : null;
   const resolvedOpening = resolveForecastOpening(input.openingCash, fin, cf);
-  // A missing balance is not opening 0, and the P&L must not mint a minimum from it.
-  if (!resolvedOpening.onFile) return missingCashForecast(anchor, weeks);
   const opening = resolvedOpening.opening;
 
   const months = fin ? periodMonthsOf(fin) : 12;
@@ -1516,7 +1601,121 @@ export function resolveThirteenWeekForecast(input: {
     }
   }
 
+  const baseline = weeklyBaselineFromActuals(fin);
+  const zeroWeeks = () => Array.from({ length: weeks }, () => 0);
+  const repeatWeekly = (weekly: number | null) =>
+    Array.from({ length: weeks }, () => (weekly == null || !Number.isFinite(weekly) ? 0 : weekly));
+
+  const seededForecast = (openingKnown: boolean): ThirteenWeekForecast => {
+    const receipts = baseline?.weeklyReceipts ?? null;
+    const payments = baseline?.weeklyPayments ?? null;
+    const inflow = repeatWeekly(receipts);
+    const outflow = repeatWeekly(payments);
+    const both = receipts != null && payments != null;
+    const openingAmount = openingKnown ? opening : 0;
+    let closing = zeroWeeks();
+    let totalInflow = receipts == null ? 0 : inflow.reduce((sum, n) => sum + n, 0);
+    let totalOutflow = payments == null ? 0 : outflow.reduce((sum, n) => sum + n, 0);
+    let floor = 0;
+    let dipsBelowFloorWeek: number | null = null;
+    let shortfall = false;
+    let shortfallWeek: number | null = null;
+    if (openingKnown && both) {
+      closing = reclose(openingAmount, inflow, outflow);
+      const totals = seriesTotals(inflow, outflow, closing);
+      const suppress = runway.kind === "cash_generative" && totals.structural;
+      totalInflow = totals.totalInflow;
+      totalOutflow = totals.totalOutflow;
+      floor = totals.floor;
+      dipsBelowFloorWeek = totals.dipsBelowFloorWeek;
+      shortfall = suppress ? false : totals.shortfall;
+      shortfallWeek = suppress ? null : totals.shortfallWeek;
+    }
+    const line = (id: string, name: string, amount: number): ForecastLineSeed => ({
+      id,
+      name,
+      amount: moneyString(amount),
+      frequency: "recurring-weekly",
+      startWeek: 1,
+      splitCount: 1,
+    });
+    return {
+      source: "derived",
+      startDate: anchor,
+      weekDates: weekDatesFrom(anchor, weeks),
+      opening: openingAmount,
+      inflow,
+      outflow,
+      closing,
+      totalInflow,
+      totalOutflow,
+      floor,
+      dipsBelowFloorWeek,
+      shortfall,
+      shortfallWeek,
+      timingNote: null,
+      cycleNote,
+      replaceStored: true,
+      lines: {
+        revenue:
+          receipts == null
+            ? []
+            : [line("actuals-seed-receipts", "Receipts (seeded from actuals)", receipts)],
+        expenses:
+          payments == null
+            ? []
+            : [line("actuals-seed-payments", "Payments (seeded from actuals)", payments)],
+      },
+      estimateLabel: SEEDED_FROM_ACTUALS_LABEL,
+      anchorNote: null,
+      reanchored: false,
+      ...(openingKnown ? {} : { cashOnFile: false as const }),
+      seededFromActuals: true,
+      openingNote: openingKnown ? null : OPENING_CASH_UNKNOWN,
+      openingCash: openingKnown ? openingAmount : null,
+      receiptsWeekly: receipts,
+      paymentsWeekly: payments,
+    };
+  };
+
+  // A missing balance is not opening 0. Actuals still seed the weeks.
+  // A typed line wins, and its closings stay blank until an opening is on file.
+  if (!resolvedOpening.onFile) {
+    const rolledMissing = cf ? rollForwardForecast(cf, weeks) : null;
+    if (cf && cashflowHasMovement(cf) && rolledMissing) {
+      return {
+        source: "stored",
+        startDate: anchor,
+        weekDates: weekDatesFrom(anchor, weeks),
+        opening: 0,
+        inflow: rolledMissing.inflow,
+        outflow: rolledMissing.outflow,
+        closing: zeroWeeks(),
+        totalInflow: rolledMissing.inflow.reduce((sum, n) => sum + n, 0),
+        totalOutflow: rolledMissing.outflow.reduce((sum, n) => sum + n, 0),
+        floor: 0,
+        dipsBelowFloorWeek: null,
+        shortfall: false,
+        shortfallWeek: null,
+        timingNote: null,
+        cycleNote,
+        replaceStored: false,
+        lines: { revenue: [], expenses: [] },
+        estimateLabel: null,
+        anchorNote: null,
+        reanchored: false,
+        cashOnFile: false,
+        seededFromActuals: false,
+        openingNote: OPENING_CASH_UNKNOWN,
+        openingCash: null,
+      };
+    }
+    if (baseline) return seededForecast(false);
+    return missingCashForecast(anchor, weeks);
+  }
+
   const buildDerived = (): ThirteenWeekForecast => {
+    if (baseline) return seededForecast(true);
     const inflow = landMonthlyRunRate(rate.weeklyInflow, weeks);
     const outflow = landMonthlyRunRate(rate.weeklyOutflow, weeks);
     const closing = reclose(opening, inflow, outflow);
@@ -1543,6 +1742,7 @@ export function resolveThirteenWeekForecast(input: {
       estimateLabel: rate.weeklyInflow > 1 || rate.weeklyOutflow > 1 ? PL_ESTIMATE_LABEL : null,
       anchorNote: null,
       reanchored: false,
+      seededFromActuals: false,
     };
   };
 

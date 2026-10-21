@@ -404,9 +404,10 @@ export function buildOverviewBrief(input: {
           : cashPillarFollowsForecast(raw, {
               hasEvidence: true,
               openingMissing: input.openingMissing === true,
-              opening: input.cashOpening,
-              closings: input.cashClosings,
-              floor: input.cashFloor,
+              // A caller may still pass the legacy opening of 0. Missing cash is not that balance.
+              opening: cashOnFile == null ? null : input.cashOpening,
+              closings: cashOnFile == null ? null : input.cashClosings,
+              floor: cashOnFile == null ? null : input.cashFloor,
             });
   const pillars: OverviewPillar[] = (scored?.pillars ?? []).map((pillar) => ({
     id: pillar.id,
@@ -488,6 +489,7 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
     lines.push(`Health: ${brief.health} (${brief.healthLabel})`);
   }
   if (brief.cash != null) lines.push(`Cash on file: ${money(brief.cash, brief.copyPack)}`);
+  else if (brief.revenue != null || brief.health != null) lines.push("Opening cash unknown");
   if (brief.totalAssets != null) {
     lines.push(`Total assets: ${money(brief.totalAssets, brief.copyPack)}`);
   }

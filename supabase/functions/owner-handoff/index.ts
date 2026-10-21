@@ -12,6 +12,7 @@ import { agentIdempotencyKey, agentInputHash } from "../../../src/lib/agent-bus.
 import {
   HANDOFF_TRIGGER,
   callerMayHandOff,
+  handoffAuthorName,
   handoffFailureMessage,
   handoffCollisionResult,
   handoffDecision,
@@ -185,7 +186,16 @@ Deno.serve(async (req) => {
   if (!action) return json({ error: "action_not_found" }, 404);
   if (action.client_id !== clientId) return json({ error: "action_client_mismatch" }, 403);
 
-  const handoffActor = user.email?.split("@")[0]?.trim() || "Accountant";
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  let profileFullName: string | null = null;
+  const { data: profile } = await admin.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+  if (profile && typeof profile.full_name === "string") profileFullName = profile.full_name;
+  const handoffActor = handoffAuthorName({
+    profileFullName,
+    authFullName: typeof meta.full_name === "string" ? meta.full_name : null,
+    authName: typeof meta.name === "string" ? meta.name : null,
+    email: user.email,
+  });
 
   if (personId) {
     const { data: employee, error: employeeError } = await admin

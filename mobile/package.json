@@ -2,17 +2,20 @@
   "name": "milon-android",
   "private": true,
   "version": "0.1.0",
-  "description": "Milōn Android shell. Loads https://www.milonfinance.com in a Capacitor WebView. Not part of the web app workspace.",
+  "description": "Milōn store shell. Loads https://www.milonfinance.com in a Capacitor WebView on Android and iOS. Not part of the web app workspace.",
   "scripts": {
     "sync": "cap sync android",
+    "sync:ios": "cap copy ios",
+    "check:ios": "node scripts/ios-shell-check.mjs",
     "open": "cap open android",
-    "assets": "capacitor-assets generate --android --iconBackgroundColor '#0c0b09' --iconBackgroundColorDark '#0c0b09' --splashBackgroundColor '#0c0b09' --splashBackgroundColorDark '#0c0b09'"
+    "assets": "capacitor-assets generate --android --ios --iconBackgroundColor '#FFFFFF' --iconBackgroundColorDark '#FFFFFF' --splashBackgroundColor '#FFFFFF' --splashBackgroundColorDark '#FFFFFF'"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
     "@capacitor/app": "8.1.2",
     "@capacitor/browser": "8.0.5",
     "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3",
     "@capacitor/splash-screen": "8.0.2",
     "@capacitor/status-bar": "8.0.4"
   },

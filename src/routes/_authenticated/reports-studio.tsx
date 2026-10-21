@@ -89,7 +89,11 @@ import {
 } from "@/lib/signoff-status";
 import { reportFetchPlan, studioSignoffState, type ReportFetchPlan } from "@/lib/report-load";
 import { budgetSignedFiguresChanged } from "@/lib/budget.bridges";
-import { cashForecastWeeksFromOutlook, cashOutlookIsCritical, cashSignedFiguresChanged } from "@/lib/cash-forecast-parity";
+import {
+  cashForecastWeeksFromOutlook,
+  cashOutlookIsCritical,
+  cashSignedFiguresChanged,
+} from "@/lib/cash-forecast-parity";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
@@ -144,7 +148,12 @@ import { clientIndustryDisplay } from "@/lib/profile-signals";
 import { clientIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
 import { parseDebtSchedule, totalDebtFromSchedule } from "@/lib/debt-schedule";
 import { resolvePriorSnapshot, withPriorRatioScores } from "@/lib/prior-period";
-import { reportDataPeriodLabel, reportPeriodMonthYear, readStatementMeta, statementSpanLabel } from "@/lib/statement-period";
+import {
+  reportDataPeriodLabel,
+  reportPeriodMonthYear,
+  readStatementMeta,
+  statementSpanLabel,
+} from "@/lib/statement-period";
 import {
   debtToEquityReading,
   presentReturn,
@@ -1368,7 +1377,8 @@ function buildBenchmarkRows(
       const rr = ratioResults.find((r) => r.ratio_name === name);
       const unscored = Boolean(rr?.unscored);
       const scored = rr?.health_score;
-      const score = unscored || scored == null ? 0 : (scored ?? Math.round(scoreForRatio(name, val)));
+      const score =
+        unscored || scored == null ? 0 : (scored ?? Math.round(scoreForRatio(name, val)));
       return {
         ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
         ratio_name: name,
@@ -1712,8 +1722,12 @@ export function buildAssetData(
     partMonth?: boolean;
   },
 ): AssetProductivityData | null {
-  const at = typeof rawRatios["Asset Turnover"] === "number" ? rawRatios["Asset Turnover"] : Number.NaN;
-  const em = typeof rawRatios["Equity Multiplier"] === "number" ? rawRatios["Equity Multiplier"] : Number.NaN;
+  const at =
+    typeof rawRatios["Asset Turnover"] === "number" ? rawRatios["Asset Turnover"] : Number.NaN;
+  const em =
+    typeof rawRatios["Equity Multiplier"] === "number"
+      ? rawRatios["Equity Multiplier"]
+      : Number.NaN;
   const nm = typeof rawRatios["Net Margin"] === "number" ? rawRatios["Net Margin"] : Number.NaN;
   if (!Number.isFinite(at) || !Number.isFinite(em) || !Number.isFinite(nm)) return null;
   const roaRaw = rawRatios["Return on Assets"];
@@ -1819,7 +1833,9 @@ export function buildLaborData(
     ],
     health_scores: {
       gpToLabor:
-        gpPerLabor != null ? Math.round(scoreForRatio("Gross Profit / Labor", gpPerLabor, market)) : null,
+        gpPerLabor != null
+          ? Math.round(scoreForRatio("Gross Profit / Labor", gpPerLabor, market))
+          : null,
       salesPerEmployee:
         hasEmployees && Number.isFinite(rpe)
           ? Math.round(scoreForRatio("Sales-per-Employee Ratio", rpe, market))
@@ -1889,7 +1905,6 @@ function buildCashForecastFromSavedCashflow(
   };
 }
 
-
 // Build real interventions from the playbook-data.json filtered by the
 // client's actual at-risk/critical ratios (camelCase ratio_key format).
 export async function buildInterventions(
@@ -1937,7 +1952,8 @@ export async function buildInterventions(
 
   const result: Intervention[] = [];
   for (const rr of ratioResults) {
-    if (rr.formatted_value !== "not meaningful" || !NOT_MEANINGFUL_DAY_KEYS.has(rr.ratio_key)) continue;
+    if (rr.formatted_value !== "not meaningful" || !NOT_MEANINGFUL_DAY_KEYS.has(rr.ratio_key))
+      continue;
     result.push({
       ratio_key: rr.ratio_key,
       ratio_name: rr.ratio_name,
@@ -2051,7 +2067,10 @@ async function loadBudgetActualsForPdf(clientId: string): Promise<BudgetPdfActua
   return out;
 }
 
-async function loadBudgetWorkflow(clientId: string, scope = "budget"): Promise<{
+async function loadBudgetWorkflow(
+  clientId: string,
+  scope = "budget",
+): Promise<{
   status: BudgetReviewWorkflow | null;
   snapshot: unknown;
 }> {
@@ -2085,7 +2104,9 @@ async function loadBudgetWorkflow(clientId: string, scope = "budget"): Promise<{
     if (error) return { status: null, snapshot: null };
     const status = data?.status;
     const workflow =
-      status === "draft" || status === "ready_for_review" || status === "signed_off" ? status : null;
+      status === "draft" || status === "ready_for_review" || status === "signed_off"
+        ? status
+        : null;
     return { status: workflow, snapshot: data?.content_snapshot ?? null };
   } catch {
     return { status: null, snapshot: null };
@@ -2355,11 +2376,22 @@ async function loadClientReportData(
   // Floor is four weeks of the resolved outflows. A stored threshold from the
   // old annual-as-monthly series (about $170k) must not override that.
   const forecastMinimum = cashOutlook.minimum;
-  const forecastReceipts = cashForecast?.reduce((sum, week) => sum + week.total_receipts, 0) ?? 0;
-  const forecastPayments = cashForecast?.reduce((sum, week) => sum + week.total_payments, 0) ?? 0;
+  const sumForecastSide = (pick: (week: CashForecastWeek) => number | null): number | null => {
+    if (!cashForecast) return null;
+    let total = 0;
+    for (const week of cashForecast) {
+      const value = pick(week);
+      if (value == null || !Number.isFinite(value)) return null;
+      total += value;
+    }
+    return total;
+  };
+  const forecastReceipts = sumForecastSide((week) => week.total_receipts);
+  const forecastPayments = sumForecastSide((week) => week.total_payments);
   const cashGenerative =
     assessed.runway.kind === "cash_generative" &&
-    cashForecast != null &&
+    forecastReceipts != null &&
+    forecastPayments != null &&
     forecastIsCashGenerative(forecastReceipts, forecastPayments);
   const reportOpeningMissing = storedOpeningIsMissing(clientRow.cashflow);
   const cashBelowFloor = cashOutlookIsCritical({
@@ -2687,6 +2719,11 @@ function buildGEN(
         cd?.cashForecast,
         "No cash forecast saved for this client — configure the Cash tab before generating.",
       );
+      const liveWeeks = isDemo ? null : data!;
+      const seedLabel =
+        liveWeeks && typeof liveWeeks === "object" && "seedLabel" in liveWeeks
+          ? (liveWeeks as { seedLabel?: string | null }).seedLabel
+          : null;
       return renderToBlob(CashForecastPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         cashForecast: isDemo ? MOCK_FORECAST : data!,
@@ -2700,6 +2737,7 @@ function buildGEN(
         minimumThreshold: isDemo ? undefined : cd?.forecastMinimum,
         runwayLabel: isDemo ? null : cd?.runwayLabel,
         cashGenerative: isDemo ? false : Boolean(cd?.cashGenerative),
+        seedLabel,
       });
     },
     cycle: async (s, p) => {
@@ -2742,10 +2780,7 @@ function buildGEN(
     },
     leverage: async (s, p) => {
       const { LeverageSolvencyPDF } = await import("@/reports/leverage-solvency");
-      const { isDemo, data } = liveOrDemo(
-        cd?.leverage,
-        LEVERAGE_REPORT_NEEDS,
-      );
+      const { isDemo, data } = liveOrDemo(cd?.leverage, LEVERAGE_REPORT_NEEDS);
       return renderToBlob(LeverageSolvencyPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         data: isDemo ? MOCK_LEVERAGE : data!,
@@ -2759,10 +2794,7 @@ function buildGEN(
     },
     assets: async (s, p) => {
       const { AssetProductivityPDF } = await import("@/reports/asset-productivity");
-      const { isDemo, data } = liveOrDemo(
-        cd?.assets,
-        ASSET_REPORT_NEEDS,
-      );
+      const { isDemo, data } = liveOrDemo(cd?.assets, ASSET_REPORT_NEEDS);
       return renderToBlob(AssetProductivityPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         data: isDemo ? MOCK_ASSETS : data!,
@@ -2891,8 +2923,8 @@ function buildGEN(
       const budgetSignoff = cd?.reviewSignoffs.budget ?? null;
       const budgetStale = Boolean(
         budgetSignoff &&
-          cd?.budgetUpdatedAt &&
-          new Date(cd.budgetUpdatedAt).getTime() > new Date(budgetSignoff.signed_off_at).getTime(),
+        cd?.budgetUpdatedAt &&
+        new Date(cd.budgetUpdatedAt).getTime() > new Date(budgetSignoff.signed_off_at).getTime(),
       );
       const review = budgetReviewLine({
         name: budgetSignoff?.signed_off_by_name,
@@ -2902,7 +2934,8 @@ function buildGEN(
         workflowStatus: cd?.budgetWorkflowStatus ?? null,
         market,
       });
-      const budgetStamp = isDemo || review.unsigned ? null : signoffStampFor("budget", clientData, signoffView);
+      const budgetStamp =
+        isDemo || review.unsigned ? null : signoffStampFor("budget", clientData, signoffView);
       return renderToBlob(BudgetVariancePDF, {
         smeData: {
           name: isDemo ? s.smeName || "Demo Client" : cd!.clientName,
@@ -3120,7 +3153,10 @@ type PreviewState = {
 };
 
 /** Card title and ZIP stem. Labor/Labour comes from the firm locale, in one place. */
-function reportCopy(report: ReportMeta, market: ResolvedMarket = ZA_MARKET): {
+function reportCopy(
+  report: ReportMeta,
+  market: ResolvedMarket = ZA_MARKET,
+): {
   name: string;
   filename: string;
 } {
@@ -3195,9 +3231,7 @@ function ReportCard({
   return (
     <div
       id={`report-card-${report.key}`}
-      className={`report-card group flex flex-col ${
-        highlight ? "report-card--on" : ""
-      }`}
+      className={`report-card group flex flex-col ${highlight ? "report-card--on" : ""}`}
     >
       <div className="report-card__rule" />
       <div className="p-5 pb-3 flex-1">
@@ -3220,14 +3254,15 @@ function ReportCard({
               {/* Page length comes from the rendered PDF, which changes with paper size.
                   A fixed "2 pages" does not match a 4-page US Letter scorecard. */}
             </div>
-            <h3 className="report-card__title">
-              {copy.name}
-            </h3>
+            <h3 className="report-card__title">{copy.name}</h3>
             <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
               {localizeCopy(report.description, market)}
             </p>
             {noFigures.reason ? (
-              <p className="mt-2 text-[11px] leading-relaxed text-[#102A43] dark:text-[#F4F7FB]" data-report-empty="">
+              <p
+                className="mt-2 text-[11px] leading-relaxed text-[#102A43] dark:text-[#F4F7FB]"
+                data-report-empty=""
+              >
                 {noFigures.reason}
               </p>
             ) : unavailableReason ? (
@@ -3291,9 +3326,7 @@ function ReportCard({
             onGenerate();
           }}
           disabled={gate.disabled || isGenerating}
-          title={
-            isGenerating ? "This report is already downloading" : gate.title
-          }
+          title={isGenerating ? "This report is already downloading" : gate.title}
         >
           {isGenerating ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3688,8 +3721,8 @@ export function ReportsStudio({
     reportParam && REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number])
       ? (REPORTS.find((r) => r.key === reportParam) ?? null)
       : null;
-  const [deepLinkBusy, setDeepLinkBusy] = useState(
-    () => Boolean(deepLinkReport && reportDeepLinkAction(actionParam)),
+  const [deepLinkBusy, setDeepLinkBusy] = useState(() =>
+    Boolean(deepLinkReport && reportDeepLinkAction(actionParam)),
   );
   const [firmClients, setFirmClients] = useState<Array<{ id: string; name: string }> | null>(null);
   const [firmMarket, setFirmMarket] = useState<ResolvedMarket>(ZA_MARKET);
@@ -3732,9 +3765,7 @@ export function ReportsStudio({
   useEffect(() => {
     if (!showIllustrativeDemo) return;
     setSettings((prev) =>
-      prev.smeName.trim()
-        ? prev
-        : { ...prev, smeName: t("entityExample", firmMarket) },
+      prev.smeName.trim() ? prev : { ...prev, smeName: t("entityExample", firmMarket) },
     );
   }, [showIllustrativeDemo, firmMarket]);
 
@@ -3858,30 +3889,36 @@ export function ReportsStudio({
     setDataError(null);
     deepLinkHandled.current = null;
     const fetchPlan = reportFetchPlan(onlyKeyToken ? onlyKeyToken.split("\0") : undefined);
-    const read = () => settleWithin(loadClientReportData(clientId, fetchPlan), SHELL_GATE_TIMEOUT_MS);
-    void readWithOneRetry(read, CLIENTS_LOAD_RETRY_BACKOFF_MS).then((settled) => {
-      if (cancelled) return;
-      if (settled.status !== "value") {
-        console.error("Failed to load client report data:", settled.status === "error" ? settled.error : "timeout");
-        setDataError("Couldn't load reports. Try again.");
-        return;
-      }
-      const data = settled.value;
-      setClientData(data);
-      setDataError(null);
-      // Keep smeName in sync with the client's real name if it differs
-      if (data.clientName || data.periodMonth || data.dataPeriodLabel) {
-        setSettings((prev) => ({
-          ...prev,
-          ...(data.clientName ? { smeName: data.clientName } : {}),
-          ...(data.periodMonth && data.periodYear
-            ? { periodMonth: data.periodMonth, periodYear: data.periodYear }
-            : {}),
-        }));
-      }
-    }).finally(() => {
-      if (!cancelled) setDataLoading(false);
-    });
+    const read = () =>
+      settleWithin(loadClientReportData(clientId, fetchPlan), SHELL_GATE_TIMEOUT_MS);
+    void readWithOneRetry(read, CLIENTS_LOAD_RETRY_BACKOFF_MS)
+      .then((settled) => {
+        if (cancelled) return;
+        if (settled.status !== "value") {
+          console.error(
+            "Failed to load client report data:",
+            settled.status === "error" ? settled.error : "timeout",
+          );
+          setDataError("Couldn't load reports. Try again.");
+          return;
+        }
+        const data = settled.value;
+        setClientData(data);
+        setDataError(null);
+        // Keep smeName in sync with the client's real name if it differs
+        if (data.clientName || data.periodMonth || data.dataPeriodLabel) {
+          setSettings((prev) => ({
+            ...prev,
+            ...(data.clientName ? { smeName: data.clientName } : {}),
+            ...(data.periodMonth && data.periodYear
+              ? { periodMonth: data.periodMonth, periodYear: data.periodYear }
+              : {}),
+          }));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDataLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -4024,7 +4061,8 @@ export function ReportsStudio({
     if (!assertCanGenerate()) return false;
     const unavailable = unavailableFor(report.key);
     if (unavailable) {
-      const studioIndustry = INDUSTRIES.find((i) => i.code === settings.industryCode) ?? INDUSTRIES[0];
+      const studioIndustry =
+        INDUSTRIES.find((i) => i.code === settings.industryCode) ?? INDUSTRIES[0];
       const empty =
         report.key === "benchmark"
           ? benchmarkEmptyCopy({
@@ -4255,74 +4293,78 @@ export function ReportsStudio({
       {dataError ? (
         <p className="mb-3 text-sm font-semibold text-[#102A43]" role="alert" data-reports-error>
           {dataError}{" "}
-          <button type="button" className="underline" onClick={() => setReportLoadAttempt((n) => n + 1)}>
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setReportLoadAttempt((n) => n + 1)}
+          >
             Retry
           </button>
         </p>
       ) : null}
       {essential.length > 0 ? (
-      <section>
-        {onlyKeys?.length === 1 ? null : (
-        <div className="mb-3 flex items-center gap-2">
-          <span className="rounded-full bg-[#DBEAFE] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]">
-            Essential — {essential.length} Reports
-          </span>
-          <div className="flex-1 border-t border-border" />
-        </div>
-        )}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {essential.map((r) => (
-            <ReportCard
-              key={r.key}
-              report={r}
-              isGenerating={pendingKeys.has(r.key)}
-              isPreviewing={previewKey === r.key}
-              isClient={isClient}
-              dataLoading={studioBusy}
-              blocked={blockedForClient}
-              unavailableReason={unavailableFor(r.key)}
-              highlight={reportParam === r.key}
-              onGenerate={() => handleGenerate(r)}
-              onPreview={() => handlePreview(r)}
-              downloadOutline={embedded}
-              market={clientData?.market ?? ZA_MARKET}
-              {...reportCardSignoff(r)}
-            />
-          ))}
-        </div>
-      </section>
+        <section>
+          {onlyKeys?.length === 1 ? null : (
+            <div className="mb-3 flex items-center gap-2">
+              <span className="rounded-full bg-[#DBEAFE] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]">
+                Essential — {essential.length} Reports
+              </span>
+              <div className="flex-1 border-t border-border" />
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {essential.map((r) => (
+              <ReportCard
+                key={r.key}
+                report={r}
+                isGenerating={pendingKeys.has(r.key)}
+                isPreviewing={previewKey === r.key}
+                isClient={isClient}
+                dataLoading={studioBusy}
+                blocked={blockedForClient}
+                unavailableReason={unavailableFor(r.key)}
+                highlight={reportParam === r.key}
+                onGenerate={() => handleGenerate(r)}
+                onPreview={() => handlePreview(r)}
+                downloadOutline={embedded}
+                market={clientData?.market ?? ZA_MARKET}
+                {...reportCardSignoff(r)}
+              />
+            ))}
+          </div>
+        </section>
       ) : null}
       {optional.length > 0 ? (
-      <section>
-        {onlyKeys?.length === 1 ? null : (
-        <div className="mb-3 flex items-center gap-2">
-          <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            Optional — {optional.length} Reports
-          </span>
-          <div className="flex-1 border-t border-border" />
-        </div>
-        )}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {optional.map((r) => (
-            <ReportCard
-              key={r.key}
-              report={r}
-              isGenerating={pendingKeys.has(r.key)}
-              isPreviewing={previewKey === r.key}
-              isClient={isClient}
-              dataLoading={studioBusy}
-              blocked={blockedForClient}
-              unavailableReason={unavailableFor(r.key)}
-              highlight={reportParam === r.key}
-              onGenerate={() => handleGenerate(r)}
-              onPreview={() => handlePreview(r)}
-              downloadOutline={embedded}
-              market={clientData?.market ?? ZA_MARKET}
-              {...reportCardSignoff(r)}
-            />
-          ))}
-        </div>
-      </section>
+        <section>
+          {onlyKeys?.length === 1 ? null : (
+            <div className="mb-3 flex items-center gap-2">
+              <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Optional — {optional.length} Reports
+              </span>
+              <div className="flex-1 border-t border-border" />
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {optional.map((r) => (
+              <ReportCard
+                key={r.key}
+                report={r}
+                isGenerating={pendingKeys.has(r.key)}
+                isPreviewing={previewKey === r.key}
+                isClient={isClient}
+                dataLoading={studioBusy}
+                blocked={blockedForClient}
+                unavailableReason={unavailableFor(r.key)}
+                highlight={reportParam === r.key}
+                onGenerate={() => handleGenerate(r)}
+                onPreview={() => handlePreview(r)}
+                downloadOutline={embedded}
+                market={clientData?.market ?? ZA_MARKET}
+                {...reportCardSignoff(r)}
+              />
+            ))}
+          </div>
+        </section>
       ) : null}
     </>
   );
@@ -4414,23 +4456,23 @@ export function ReportsStudio({
                         )}
                   </button>
                   {onlyKeys?.length === 1 ? null : (
-                  <button
-                    type="button"
-                    className="answer-strip__icon"
-                    aria-label="Export all reports"
-                    title="Export all reports"
-                    disabled={zipGate.disabled || zipProgress !== null}
-                    onClick={() => {
-                      if (zipGate.disabled) return;
-                      void handleGenerateAll();
-                    }}
-                  >
-                    {zipProgress ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                    ) : (
-                      <Download className="h-3.5 w-3.5" aria-hidden />
-                    )}
-                  </button>
+                    <button
+                      type="button"
+                      className="answer-strip__icon"
+                      aria-label="Export all reports"
+                      title="Export all reports"
+                      disabled={zipGate.disabled || zipProgress !== null}
+                      onClick={() => {
+                        if (zipGate.disabled) return;
+                        void handleGenerateAll();
+                      }}
+                    >
+                      {zipProgress ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                    </button>
                   )}
                 </>
               }
@@ -4458,146 +4500,148 @@ export function ReportsStudio({
 
         {/* Header — standalone studio. The client tab uses the answer strip. */}
         {!embedded ? (
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Zap className="h-4 w-4 text-[#0B5FFF] dark:text-[#F4F7FB]" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Milōn Report Suite
-              </span>
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Financial Reports
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Board-ready PDFs, branded with your firm&apos;s logo and colours. Sign each
-              report off so the stamp carries into the pack.
-            </p>
-            {/* Client data status badge */}
-            {clientId && (
-              <div className="mt-2 flex items-center gap-1.5">
-                {dataLoading ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                    <span className="text-[11px] text-muted-foreground">Loading client data…</span>
-                  </>
-                ) : clientData?.hasData ? (
-                  <>
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                      Live data — {clientData.clientName}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
-                    <span className="text-[11px] text-red-700 dark:text-red-400">
-                      No financials — generate blocked. Upload figures on the client file first.
-                    </span>
-                  </>
-                )}
-              </div>
-            )}
-            {needsClientPicker && firmClients && firmClients.length > 0 && (
-              <div className="mt-3 max-w-xs">
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Client
-                </label>
-                <Select
-                  value={clientId ?? ""}
-                  onValueChange={(id) => {
-                    const chosen = firmClients.find((row) => row.id === id);
-                    void navigate({
-                      to: "/reports",
-                      search: {
-                        clientId: id,
-                        client: chosen?.name,
-                        report: undefined,
-                        action: undefined,
-                      },
-                    });
-                  }}
-                >
-                  <SelectTrigger className="h-9 border-input bg-background text-sm text-foreground">
-                    <SelectValue placeholder="Choose a client" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border-border">
-                    {firmClients.map((row) => (
-                      <SelectItem
-                        key={row.id}
-                        value={row.id}
-                        className="text-popover-foreground focus:bg-muted"
-                      >
-                        {row.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {resolvingClient && (
-              <div className="mt-2 flex items-center gap-1.5">
-                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                <span className="text-[11px] text-muted-foreground">Loading clients…</span>
-              </div>
-            )}
-            {showIllustrativeDemo && (
-              <div className="mt-2 flex items-center gap-1.5">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#0B5FFF]" />
-                <span className="text-[11px] text-[#102A43] dark:text-[#F4F7FB]">
-                  No clients on this firm yet — PDFs use illustrative demo data (watermarked).
+          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Zap className="h-4 w-4 text-[#0B5FFF] dark:text-[#F4F7FB]" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Milōn Report Suite
                 </span>
               </div>
-            )}
-          </div>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                Financial Reports
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Board-ready PDFs, branded with your firm&apos;s logo and colours. Sign each report
+                off so the stamp carries into the pack.
+              </p>
+              {/* Client data status badge */}
+              {clientId && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  {dataLoading ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                      <span className="text-[11px] text-muted-foreground">
+                        Loading client data…
+                      </span>
+                    </>
+                  ) : clientData?.hasData ? (
+                    <>
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                        Live data — {clientData.clientName}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+                      <span className="text-[11px] text-red-700 dark:text-red-400">
+                        No financials — generate blocked. Upload figures on the client file first.
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+              {needsClientPicker && firmClients && firmClients.length > 0 && (
+                <div className="mt-3 max-w-xs">
+                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Client
+                  </label>
+                  <Select
+                    value={clientId ?? ""}
+                    onValueChange={(id) => {
+                      const chosen = firmClients.find((row) => row.id === id);
+                      void navigate({
+                        to: "/reports",
+                        search: {
+                          clientId: id,
+                          client: chosen?.name,
+                          report: undefined,
+                          action: undefined,
+                        },
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-9 border-input bg-background text-sm text-foreground">
+                      <SelectValue placeholder="Choose a client" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border-border">
+                      {firmClients.map((row) => (
+                        <SelectItem
+                          key={row.id}
+                          value={row.id}
+                          className="text-popover-foreground focus:bg-muted"
+                        >
+                          {row.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {resolvingClient && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  <span className="text-[11px] text-muted-foreground">Loading clients…</span>
+                </div>
+              )}
+              {showIllustrativeDemo && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#0B5FFF]" />
+                  <span className="text-[11px] text-[#102A43] dark:text-[#F4F7FB]">
+                    No clients on this firm yet — PDFs use illustrative demo data (watermarked).
+                  </span>
+                </div>
+              )}
+            </div>
 
-          <div className="flex flex-col items-end gap-2">
-            {zipProgress ? (
-              <div className="w-60">
-                <p className="text-xs text-muted-foreground mb-1.5">
-                  Generating {zipProgress.done}/{zipProgress.total} reports…
-                </p>
-                <Progress value={zipPct} className="h-2 bg-muted" />
-              </div>
-            ) : (
-              <Button
-                className="gap-2 bg-[#0B5FFF] hover:bg-[#2563EB] font-semibold text-white"
-                onClick={() => {
-                  if (zipGate.disabled) return;
-                  handleGenerateAll();
-                }}
-                disabled={zipGate.disabled}
-                title={zipGate.title}
-              >
-                {studioBusy ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading client data…
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4" />
-                    Generate All as ZIP
-                  </>
-                )}
-              </Button>
-            )}
+            <div className="flex flex-col items-end gap-2">
+              {zipProgress ? (
+                <div className="w-60">
+                  <p className="text-xs text-muted-foreground mb-1.5">
+                    Generating {zipProgress.done}/{zipProgress.total} reports…
+                  </p>
+                  <Progress value={zipPct} className="h-2 bg-muted" />
+                </div>
+              ) : (
+                <Button
+                  className="gap-2 bg-[#0B5FFF] hover:bg-[#2563EB] font-semibold text-white"
+                  onClick={() => {
+                    if (zipGate.disabled) return;
+                    handleGenerateAll();
+                  }}
+                  disabled={zipGate.disabled}
+                  title={zipGate.title}
+                >
+                  {studioBusy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading client data…
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      Generate All as ZIP
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
         ) : null}
 
         {embedded ? null : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-          <div className="space-y-6">{reportCatalogue}</div>
-          <SettingsPanel
-            settings={settings}
-            onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
-            profile={profile}
-            clientSector={clientData?.hasData ? clientData.benchmarkSector : null}
-            statementPeriod={clientData?.dataPeriodLabel ?? null}
-            nameExample={t("entityExample", clientData?.market ?? firmMarket)}
-          />
-        </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+            <div className="space-y-6">{reportCatalogue}</div>
+            <SettingsPanel
+              settings={settings}
+              onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
+              profile={profile}
+              clientSector={clientData?.hasData ? clientData.benchmarkSector : null}
+              statementPeriod={clientData?.dataPeriodLabel ?? null}
+              nameExample={t("entityExample", clientData?.market ?? firmMarket)}
+            />
+          </div>
         )}
       </div>
 

@@ -144,7 +144,8 @@ assert(
   "handing the same action back uses a new idempotency material",
 );
 assert(readFileSync("src/lib/owner-handoff.ts", "utf8").includes("handoffAgainInputs"), "a repeat run does not reuse the finished key");
-assert(fn.includes("const handoffActor = user.email"), "the hand-off note is written by the signed-in person");
+assert(fn.includes("handoffAuthorName"), "the hand-off note uses the signed-in person's name");
+assert(fn.includes('.from("profiles")'), "the hand-off name is read from the profile");
 assert(!fn.includes("actorLabel: decision.displayName"), "a hand-off note is not authored by the bot");
 assert(
   (fn.match(/actorLabel: handoffActor/g) ?? []).length >= 3,

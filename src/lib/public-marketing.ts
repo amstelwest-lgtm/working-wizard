@@ -20,9 +20,10 @@ export function isPublicMarketingPath(pathname: string): boolean {
  * Public pages that paint their own sheet and skip app chrome.
  * /talk is included because the signed-in shell arrives late and wraps the
  * outlet, which remounts the conversation and drops the messages on screen.
+ * /a is the public Tax Specialist link and paints its own page.
  */
 export function isBarePublicPath(pathname: string): boolean {
   let path = pathname || "/";
   if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
-  return path === "/try" || path === "/talk" || path.startsWith("/talk/");
+  return path === "/try" || path === "/talk" || path.startsWith("/talk/") || path.startsWith("/a/");
 }

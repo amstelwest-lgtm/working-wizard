@@ -43,6 +43,7 @@ import {
   loadActionHandoffRuns,
   optimisticNoteHidden,
   readOptimisticHandoffs,
+  signedInActorLabel,
   stripSuppressedNotes,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
@@ -1242,12 +1243,11 @@ export default function ActionPlanPanel({
       return;
     }
     if (log && prev) {
-      const { data: u } = await supabase.auth.getUser();
       await supabase.from("action_updates").insert({
         action_item_id: id,
         client_id: clientId,
         actor_type: "owner_app",
-        actor_label: u.user?.email?.split("@")[0] ?? "Owner",
+        actor_label: await signedInActorLabel(),
         status_from: prev.status,
         status_to: (patch.status as Status) ?? prev.status,
         progress_from: prev.progress_pct,
