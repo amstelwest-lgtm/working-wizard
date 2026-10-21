@@ -7,11 +7,18 @@ import { resolve } from "node:path";
 import {
   boardRoleForWorkspace,
   canOpenOwnerWorkspace,
+  clearStoredOwnerClientId,
+  confirmedOwnerClientId,
+  decideStoredClientAccess,
   mergeOwnerWorkspaces,
+  nextWorkspaceListStep,
   ownerActiveClientStorageKey,
+  ownerBootShellName,
   pickActiveOwnerWorkspace,
   pickOwnedSettingsClient,
+  readStoredOwnerClientId,
   workspaceDisplayName,
+  writeStoredOwnerClientId,
 } from "../src/lib/owner-workspaces";
 
 function assert(cond: boolean, msg: string) {
@@ -141,5 +148,89 @@ assert(
   serverSrc.includes("acceptOwnerInviteForUser"),
   "existing owner redeem attaches the new business instead of creating a login",
 );
+
+const stale = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const revoked = decideStoredClientAccess({ storedClientId: stale, workspaces: merged });
+assert(revoked.phase === "revoked", "a stored id missing from a successful list is revoked");
+assert(confirmedOwnerClientId(revoked) === null, "revoked access loads no client data");
+assert(
+  ownerBootShellName({ phase: "revoked", rememberedName: "Old Co", confirmedName: "Beta Shop" }) ===
+    "Your business",
+  "revoked access does not paint the old client name",
+);
+
+const inflight = decideStoredClientAccess({ storedClientId: first, workspaces: null });
+assert(inflight.phase === "provisional" && inflight.clientId === first, "a stored id paints while the list is in flight");
+assert(confirmedOwnerClientId(inflight) === null, "the provisional shell does not load figures");
+assert(
+  ownerBootShellName({ phase: "provisional", rememberedName: "First Co", confirmedName: "Beta Shop" }) ===
+    "Your business",
+  "the provisional shell does not paint a client name before access is confirmed",
+);
+
+const confirmed = decideStoredClientAccess({ storedClientId: first, workspaces: merged });
+assert(confirmed.phase === "confirmed", "a stored id still on the list is confirmed");
+assert(confirmedOwnerClientId(confirmed) === first, "a confirmed id may load the board");
+assert(
+  decideStoredClientAccess({ storedClientId: first, workspaces: [], failed: true }).phase === "error",
+  "a failed workspace read is an error, not an empty list",
+);
+
+assert(nextWorkspaceListStep({ inviting: true, outcome: "empty", attempt: 0, maxAttempts: 5 }) === "retry", "an invite retries a successful empty read");
+assert(nextWorkspaceListStep({ inviting: true, outcome: "empty", attempt: 4, maxAttempts: 5 }) === "fall-through", "the last empty invite read stops retrying");
+assert(nextWorkspaceListStep({ inviting: false, outcome: "empty", attempt: 0, maxAttempts: 5 }) === "fall-through", "a successful empty read without an invite does not retry");
+assert(nextWorkspaceListStep({ inviting: true, outcome: "error", attempt: 0, maxAttempts: 5 }) === "error", "an invite does not retry a failed read");
+assert(nextWorkspaceListStep({ inviting: false, outcome: "error", attempt: 0, maxAttempts: 1 }) === "error", "a failed read is not treated as no workspace");
+assert(nextWorkspaceListStep({ inviting: false, outcome: "rows", attempt: 0, maxAttempts: 1 }) === "apply", "rows apply on the first read");
+
+const listSlice = appSrc.slice(appSrc.indexOf("const listWorkspaces"), appSrc.indexOf("const openInvitedClient"));
+assert(listSlice.includes("Promise.all"), "owned clients and memberships are read together");
+const parallel = listSlice.slice(listSlice.indexOf("Promise.all"), listSlice.indexOf('.in("id"'));
+assert(parallel.includes('from("clients")') && parallel.includes("client_memberships"), "both list reads sit in the same Promise.all");
+assert(listSlice.indexOf('.in("id"') > listSlice.indexOf("Promise.all"), "clients.in stays behind the membership result");
+assert(listSlice.includes("ownedRes.error || memRes.error"), "a PostgREST error is not read as an empty list");
+assert(!appSrc.includes("setEffectiveClientId(storedClientId)"), "the stored id is not the board client before the list confirms it");
+assert(!appSrc.includes("setEffectiveClientId(readStoredOwnerClientId"), "financials do not start from the stored id");
+assert(appSrc.includes('access.phase === "revoked"'), "revoked access is handled on the board");
+assert(appSrc.includes("clearStoredOwnerClientId"), "revoked access clears the stored client id");
+assert(appSrc.includes('data-owner-boot={provisional ? "provisional" : "pending"}'), "the in-flight shell is marked provisional");
+assert(appSrc.includes("provisionalWhileAuth"), "a stored client paints the shell while auth is still restoring");
+
+const loadErrorAt = appSrc.indexOf('data-owner-boot="load-error"');
+const loadError = appSrc.slice(loadErrorAt, loadErrorAt + 800);
+assert(loadErrorAt > 0, "a failed workspace list has its own state");
+assert(loadError.includes("Couldn't load your workspace"), "a failed read says the workspace did not load");
+assert(loadError.includes("Retry"), "a failed read offers Retry");
+assert(!loadError.toLowerCase().includes("no workspace"), "a failed read is not the no-workspace path");
+assert(!loadError.includes("ensure_own_client"), "a failed read does not provision a client");
+
+const memory = new Map<string, string>();
+const storage = {
+  getItem: (key: string) => memory.get(key) ?? null,
+  setItem: (key: string, value: string) => void memory.set(key, value),
+  removeItem: (key: string) => void memory.delete(key),
+  clear: () => memory.clear(),
+  key: (index: number) => [...memory.keys()][index] ?? null,
+  get length() {
+    return memory.size;
+  },
+} as Storage;
+const host = globalThis as { localStorage?: Storage };
+const priorStorage = host.localStorage;
+host.localStorage = storage;
+try {
+  writeStoredOwnerClientId("user-1", stale);
+  assert(readStoredOwnerClientId("user-1") === stale, "the stored id round-trips");
+  clearStoredOwnerClientId("user-1");
+  assert(readStoredOwnerClientId("user-1") === null, "clearing a revoked id drops the stored client");
+} finally {
+  if (priorStorage === undefined) delete host.localStorage;
+  else host.localStorage = priorStorage;
+}
+
+const profileSrc = readFileSync(resolve("src/contexts/accountant-profile.tsx"), "utf8");
+assert(profileSrc.includes("if (deferSideReads) return"), "profiles wait until the owner board is ready");
+assert(appSrc.includes("reportOwnerBoardReady"), "the owner board publishes when it is ready");
+assert(appSrc.includes("if (!user || !ownerGateSettled) return"), "the practice bounce waits for the owner gate");
 
 console.log("owner-workspaces-test: ok");

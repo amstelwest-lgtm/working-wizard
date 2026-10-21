@@ -64,12 +64,17 @@ import { OwnerBusinessSwitcher } from "@/components/owner-business-switcher";
 import {
   boardRoleForWorkspace,
   canOpenOwnerWorkspace,
+  clearStoredOwnerClientId,
+  decideStoredClientAccess,
   mergeOwnerWorkspaces,
+  nextWorkspaceListStep,
+  ownerBootShellName,
   pickActiveOwnerWorkspace,
   readStoredOwnerClientId,
   writeStoredOwnerClientId,
   type OwnerWorkspace,
 } from "@/lib/owner-workspaces";
+import { useOwnerBoardGate } from "@/contexts/owner-board-gate";
 import { extractFinancials, extractPDFsWithAI } from "@/lib/extract-financials.functions";
 import { extractionToInputs, ExtractionReviewModal } from "@/components/extraction-review-modal";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
@@ -2105,9 +2110,11 @@ function flatExtractionToMergedResult(
 function Index() {
   const { viewMode, setViewMode } = useViewMode();
   const { user, loading: authLoading, signOut, restoreFailed } = useAuth();
+  const { reportOwnerBoardReady } = useOwnerBoardGate();
   const navigate = useNavigate();
   const [ownerBootTimedOut, setOwnerBootTimedOut] = useState(false);
   const [ownerBootAttempt, setOwnerBootAttempt] = useState(0);
+  const [workspaceLoadFailed, setWorkspaceLoadFailed] = useState(false);
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
   const [storedClientMarket, setStoredClientMarket] = useState<unknown>(null);
   const [marketNeedsGate, setMarketNeedsGate] = useState(false);
@@ -2317,35 +2324,6 @@ function Index() {
   const [actingClientId, setActingClientId] = useState<string | null>(null);
   const [actingClientName, setActingClientName] = useState<string | null>(null);
 
-  // Role guard — a real firm membership belongs on My practice, not the owner app.
-  // An invite redeem (owner force) and impersonating a client stay on /app.
-  useEffect(() => {
-    if (!user) return;
-    const acting =
-      actingClientId ||
-      (typeof sessionStorage !== "undefined"
-        ? sessionStorage.getItem("acting_as_client_id")
-        : null);
-    if (acting) return;
-    if (hasInviteHandoffFlag()) return;
-    let cancelled = false;
-    void (async () => {
-      const { shouldBounceFromOwnerApp, clearForcePortal, shouldOpenItInbox } =
-        await import("@/lib/user-roles");
-      if (await shouldOpenItInbox(user.id)) {
-        if (!cancelled) navigate({ to: "/ops", search: { tab: "it" } });
-        return;
-      }
-      const bounce = await shouldBounceFromOwnerApp(user.id, false);
-      if (!cancelled && bounce) {
-        clearForcePortal();
-        navigate({ to: "/practice" });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user, actingClientId, navigate]);
   const [hydratedClientId, setHydratedClientId] = useState<string | null>(null);
   // True only when the DB returned non-null financials — prevents demo defaults from masquerading as real data
   const [hasRealFinancials, setHasRealFinancials] = useState(false);
@@ -2372,6 +2350,7 @@ function Index() {
   useEffect(() => {
     let cancelled = false;
     setClientLinkResolved(false);
+    setWorkspaceLoadFailed(false);
     (async () => {
       try {
         if (actingClientId) {
@@ -2399,15 +2378,19 @@ function Index() {
         const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
         const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
 
-        const listWorkspaces = async (): Promise<OwnerWorkspace[]> => {
-          const { data: owned } = await supabase
-            .from("clients")
-            .select("id, name")
-            .eq("owner_user_id", u.user.id);
-          const { data: mems } = await supabase
-            .from("client_memberships")
-            .select("client_id, role")
-            .eq("user_id", u.user.id);
+        const listWorkspaces = async (): Promise<
+          { ok: true; workspaces: OwnerWorkspace[] } | { ok: false }
+        > => {
+          const [ownedRes, memRes] = await Promise.all([
+            supabase.from("clients").select("id, name").eq("owner_user_id", u.user.id),
+            supabase
+              .from("client_memberships")
+              .select("client_id, role")
+              .eq("user_id", u.user.id),
+          ]);
+          if (ownedRes.error || memRes.error) return { ok: false };
+          const owned = ownedRes.data;
+          const mems = memRes.data;
           const ownedRows = (owned ?? []).map((c) => ({
             id: c.id as string,
             name: c.name as string | null,
@@ -2422,49 +2405,65 @@ function Index() {
           ];
           const extraNames = new Map<string, string | null>();
           if (extraIds.length) {
-            const { data: extra } = await supabase
+            const { data: extra, error: extraError } = await supabase
               .from("clients")
               .select("id, name")
               .in("id", extraIds);
+            if (extraError) return { ok: false };
             for (const row of extra ?? [])
               extraNames.set(row.id as string, row.name as string | null);
           }
-          return mergeOwnerWorkspaces(
-            ownedRows,
-            (mems ?? []).map((m) => ({
-              client_id: m.client_id as string,
-              role: m.role as string | null,
-              name:
-                ownedRows.find((o) => o.id === m.client_id)?.name ??
-                extraNames.get(m.client_id as string) ??
-                null,
-            })),
-          );
+          return {
+            ok: true,
+            workspaces: mergeOwnerWorkspaces(
+              ownedRows,
+              (mems ?? []).map((m) => ({
+                client_id: m.client_id as string,
+                role: m.role as string | null,
+                name:
+                  ownedRows.find((o) => o.id === m.client_id)?.name ??
+                  extraNames.get(m.client_id as string) ??
+                  null,
+              })),
+            ),
+          };
         };
 
-        const openInvitedClient = async (clientId: string) => {
-          const { data: claimed } = await supabase
+        const openInvitedClient = async (
+          clientId: string,
+        ): Promise<{ ok: true; id: string | null } | { ok: false }> => {
+          const claimed = await supabase
             .from("clients")
             .select("id")
             .eq("id", clientId)
             .eq("owner_user_id", u.user.id)
             .maybeSingle();
-          if (claimed?.id) return claimed.id;
-          const { data: existingMem } = await supabase
+          if (claimed.error) return { ok: false };
+          if (claimed.data?.id) return { ok: true, id: claimed.data.id };
+          const existingMem = await supabase
             .from("client_memberships")
             .select("client_id, role")
             .eq("client_id", clientId)
             .eq("user_id", u.user.id)
             .maybeSingle();
-          return existingMem?.client_id ?? null;
+          if (existingMem.error) return { ok: false };
+          return { ok: true, id: existingMem.data?.client_id ?? null };
         };
 
         const storedClientId = readStoredOwnerClientId(u.user.id);
+        const failWorkspaceLoad = () => {
+          if (!cancelled) setWorkspaceLoadFailed(true);
+        };
         const applyWorkspaces = (workspaces: OwnerWorkspace[], preferInvite?: string | null) => {
+          const access = decideStoredClientAccess({
+            storedClientId,
+            workspaces,
+          });
+          if (access.phase === "revoked") clearStoredOwnerClientId(u.user.id);
           const active = pickActiveOwnerWorkspace({
             workspaces,
             inviteClientId: preferInvite ?? inviteClientId,
-            storedClientId,
+            storedClientId: access.phase === "revoked" ? null : storedClientId,
           });
           if (active) writeStoredOwnerClientId(u.user.id, active);
           if (!cancelled) {
@@ -2473,52 +2472,112 @@ function Index() {
           }
         };
 
+        // Shell only until this list returns. Do not point effectiveClientId at
+        // the stored id while memberships are still in flight.
+        if (!cancelled) {
+          setOwnerWorkspaces([]);
+          setEffectiveClientId(null);
+        }
+
+        const WORKSPACE_LIST_ATTEMPTS = 5;
+
         // Just-accepted invite: prefer that workspace over any older client
         // this email already owns (existing-account redeem). The older
         // business stays on the list so they can switch back.
+        // Retry only a successful empty read. A PostgREST error is not empty.
         if (inviteClientId) {
-          for (let i = 0; i < 5; i++) {
-            const invited = await openInvitedClient(inviteClientId);
-            if (invited) {
-              try {
-                localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
-              } catch {
-                /* ignore */
-              }
-              const workspaces = await listWorkspaces();
-              if (!cancelled) setInvitedOwnerEntry(true);
-              applyWorkspaces(workspaces, invited);
+          for (let i = 0; i < WORKSPACE_LIST_ATTEMPTS; i++) {
+            const opened = await openInvitedClient(inviteClientId);
+            if (!opened.ok) {
+              failWorkspaceLoad();
               return;
             }
-            if (i < 4) await new Promise((r) => setTimeout(r, 250));
-          }
-        }
-
-        // Invite accept can land before RLS sees the new owner row — retry briefly.
-        for (let i = 0; i < 5; i++) {
-          const workspaces = await listWorkspaces();
-          if (workspaces.length) {
+            if (!opened.id) {
+              const step = nextWorkspaceListStep({
+                inviting: true,
+                outcome: "empty",
+                attempt: i,
+                maxAttempts: WORKSPACE_LIST_ATTEMPTS,
+              });
+              if (step === "retry") {
+                await new Promise((r) => setTimeout(r, 250));
+                continue;
+              }
+              break;
+            }
+            const listed = await listWorkspaces();
+            if (!listed.ok) {
+              failWorkspaceLoad();
+              return;
+            }
+            const step = nextWorkspaceListStep({
+              inviting: true,
+              outcome: listed.workspaces.length ? "rows" : "empty",
+              attempt: i,
+              maxAttempts: WORKSPACE_LIST_ATTEMPTS,
+            });
+            if (step === "retry") {
+              await new Promise((r) => setTimeout(r, 250));
+              continue;
+            }
             try {
               localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
             } catch {
               /* ignore */
             }
-            applyWorkspaces(workspaces);
+            if (!cancelled) setInvitedOwnerEntry(true);
+            applyWorkspaces(listed.workspaces, opened.id);
             return;
           }
-          if (i < 4) await new Promise((r) => setTimeout(r, 250));
+        }
+
+        // No invite: one read. Empty falls through to provision. An error does not.
+        {
+          const listed = await listWorkspaces();
+          if (!listed.ok) {
+            failWorkspaceLoad();
+            return;
+          }
+          const step = nextWorkspaceListStep({
+            inviting: false,
+            outcome: listed.workspaces.length ? "rows" : "empty",
+            attempt: 0,
+            maxAttempts: 1,
+          });
+          if (step === "error") {
+            failWorkspaceLoad();
+            return;
+          }
+          if (step === "apply") {
+            try {
+              localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+            } catch {
+              /* ignore */
+            }
+            applyWorkspaces(listed.workspaces);
+            return;
+          }
+          const access = decideStoredClientAccess({
+            storedClientId,
+            workspaces: listed.workspaces,
+          });
+          if (access.phase === "revoked") clearStoredOwnerClientId(u.user.id);
         }
 
         // 3. Process a pending invite stored after accept (UUID only — never the opaque token).
         if (inviteClientId) {
           // Staff invite / legacy path — membership only. Never upsert client_member
           // over an existing client_owner membership row.
-          const { data: existingMem } = await supabase
+          const { data: existingMem, error: existingMemError } = await supabase
             .from("client_memberships")
             .select("client_id, role")
             .eq("client_id", inviteClientId)
             .eq("user_id", u.user.id)
             .maybeSingle();
+          if (existingMemError) {
+            failWorkspaceLoad();
+            return;
+          }
           if (!existingMem) {
             await supabase
               .from("client_memberships")
@@ -2528,11 +2587,15 @@ function Index() {
               );
           }
           localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
-          const workspaces = await listWorkspaces();
+          const listed = await listWorkspaces();
+          if (!listed.ok) {
+            failWorkspaceLoad();
+            return;
+          }
           if (!cancelled) setInvitedOwnerEntry(true);
           applyWorkspaces(
-            workspaces.length
-              ? workspaces
+            listed.workspaces.length
+              ? listed.workspaces
               : [
                   {
                     clientId: inviteClientId,
@@ -4038,6 +4101,40 @@ function Index() {
     profileFunnelOpen: showOnboarding || firstRunStep === "pick-type",
     financialsHydrated: !!effectiveClientId && hydratedClientId === effectiveClientId,
   });
+  const ownerGateSettled = boardReady || ownerBootTimedOut || workspaceLoadFailed;
+  useEffect(() => {
+    reportOwnerBoardReady(boardReady && !workspaceLoadFailed);
+  }, [boardReady, workspaceLoadFailed, reportOwnerBoardReady]);
+  // Role guard — a real firm membership belongs on My practice, not the owner app.
+  // An invite redeem (owner force) and impersonating a client stay on /app.
+  // user_roles and firm_memberships wait until this gate has settled.
+  useEffect(() => {
+    if (!user || !ownerGateSettled) return;
+    const acting =
+      actingClientId ||
+      (typeof sessionStorage !== "undefined"
+        ? sessionStorage.getItem("acting_as_client_id")
+        : null);
+    if (acting) return;
+    if (hasInviteHandoffFlag()) return;
+    let cancelled = false;
+    void (async () => {
+      const { shouldBounceFromOwnerApp, clearForcePortal, shouldOpenItInbox } =
+        await import("@/lib/user-roles");
+      if (await shouldOpenItInbox(user.id)) {
+        if (!cancelled) navigate({ to: "/ops", search: { tab: "it" } });
+        return;
+      }
+      const bounce = await shouldBounceFromOwnerApp(user.id, false);
+      if (!cancelled && bounce) {
+        clearForcePortal();
+        navigate({ to: "/practice" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, actingClientId, navigate, ownerGateSettled]);
   useEffect(() => {
     if (authLoading || !user?.id || boardReady) {
       setOwnerBootTimedOut(false);
@@ -4046,6 +4143,38 @@ function Index() {
     const timer = window.setTimeout(() => setOwnerBootTimedOut(true), SHELL_GATE_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
   }, [authLoading, user?.id, boardReady, ownerBootAttempt]);
+  if (user && workspaceLoadFailed) {
+    return (
+      <div
+        className="grid min-h-screen place-items-center bg-background px-4 text-foreground"
+        role="alert"
+        data-owner-boot="load-error"
+      >
+        <div className="w-full max-w-md">
+          <h1 className="text-xl font-semibold">Couldn't load your workspace</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The workspace list didn't load. Retry.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setWorkspaceLoadFailed(false);
+                setOwnerBootTimedOut(false);
+                setOwnerBootAttempt((n) => n + 1);
+              }}
+              className="inline-flex h-10 items-center rounded-full bg-foreground px-4 text-xs font-bold uppercase tracking-wider text-background"
+            >
+              Retry
+            </button>
+            <Link to="/" className="inline-flex h-10 items-center px-4 text-sm underline">
+              Back
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (user && !authLoading && !boardReady && ownerBootTimedOut) {
     return (
       <div
@@ -4077,7 +4206,12 @@ function Index() {
       </div>
     );
   }
-  if (authLoading || !user) {
+  const storedForShell = user?.id ? readStoredOwnerClientId(user.id) : null;
+  const provisionalWhileAuth =
+    Boolean(storedForShell && !clientLinkResolved && !workspaceLoadFailed) &&
+    !sampleMode &&
+    !isLegacyOwnerBoardTab(oauthReturn.tab);
+  if (!user || (authLoading && !provisionalWhileAuth && !clientLinkResolved)) {
     return <AppBootSpinner />;
   }
 
@@ -4086,8 +4220,18 @@ function Index() {
   if (!boardReady && !sampleMode && !isLegacyOwnerBoardTab(oauthReturn.tab)) {
     const bootScreen = ownerDoorScreen(oauthReturn);
     const shellScreen = bootScreen === "chat" ? "home" : bootScreen;
-    const bootName =
-      ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ?? "Your business";
+    const rememberedId = readStoredOwnerClientId(user.id);
+    const access = decideStoredClientAccess({
+      storedClientId: rememberedId,
+      workspaces: clientLinkResolved ? ownerWorkspaces : null,
+      failed: false,
+    });
+    const provisional = access.phase === "provisional";
+    const bootName = ownerBootShellName({
+      phase: access.phase,
+      rememberedName: null,
+      confirmedName: ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ?? null,
+    });
     const bootInitials =
       bootName
         .trim()
@@ -4097,8 +4241,12 @@ function Index() {
         .map((part) => part[0] ?? "")
         .join("")
         .toUpperCase() || "OW";
-    const bootPeriod = ownerBootPeriodPill({
-      booksKnown: !!effectiveClientId && hydratedClientId === effectiveClientId,
+    const booksKnown =
+      !provisional && !!effectiveClientId && hydratedClientId === effectiveClientId;
+    const bootPeriod = provisional
+      ? { pending: true as const, label: null }
+      : ownerBootPeriodPill({
+      booksKnown,
       periodEnd: v.periodEnd ?? null,
       periodLabel: statementSpanLabel({
         periodStart: v.periodStart,
@@ -4108,12 +4256,16 @@ function Index() {
       }),
     });
     return (
+      <div
+        className="contents"
+        data-owner-boot={provisional ? "provisional" : "pending"}
+      >
       <OwnerShell
         screen={shellScreen}
         businessName={bootName}
         initials={bootInitials}
-        workspaces={ownerWorkspaces}
-        activeClientId={effectiveClientId}
+        workspaces={provisional ? [] : ownerWorkspaces}
+        activeClientId={provisional ? null : effectiveClientId}
         onSwitch={switchOwnerWorkspace}
         onNavigate={(screen) => {
           void navigate({
@@ -4139,6 +4291,7 @@ function Index() {
       >
         <PanelSkeleton rows={4} />
       </OwnerShell>
+      </div>
     );
   }
   if (!boardReady) {

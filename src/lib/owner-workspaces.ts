@@ -89,10 +89,19 @@ export function pickActiveOwnerWorkspace(opts: {
   return owned?.clientId ?? opts.workspaces[0]?.clientId ?? null;
 }
 
-export function readStoredOwnerClientId(userId: string): string | null {
-  if (typeof window === "undefined" || !userId.trim()) return null;
+function browserLocalStorage(): Storage | null {
   try {
-    const raw = localStorage.getItem(ownerActiveClientStorageKey(userId));
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function readStoredOwnerClientId(userId: string): string | null {
+  const storage = browserLocalStorage();
+  if (!storage || !userId.trim()) return null;
+  try {
+    const raw = storage.getItem(ownerActiveClientStorageKey(userId));
     return raw?.trim() || null;
   } catch {
     return null;
@@ -100,12 +109,93 @@ export function readStoredOwnerClientId(userId: string): string | null {
 }
 
 export function writeStoredOwnerClientId(userId: string, clientId: string): void {
-  if (typeof window === "undefined" || !userId.trim() || !clientId.trim()) return;
+  const storage = browserLocalStorage();
+  if (!storage || !userId.trim() || !clientId.trim()) return;
   try {
-    localStorage.setItem(ownerActiveClientStorageKey(userId), clientId.trim());
+    storage.setItem(ownerActiveClientStorageKey(userId), clientId.trim());
   } catch {
     /* private browsing / quota */
   }
+}
+
+/** Drop a stored client the latest workspace list no longer includes. */
+export function clearStoredOwnerClientId(userId: string): void {
+  const storage = browserLocalStorage();
+  if (!storage || !userId.trim()) return;
+  try {
+    storage.removeItem(ownerActiveClientStorageKey(userId));
+  } catch {
+    /* private browsing / quota */
+  }
+}
+
+export type StoredClientAccess =
+  | { phase: "idle" }
+  | { phase: "provisional"; clientId: string }
+  | { phase: "confirmed"; clientId: string }
+  | { phase: "revoked" }
+  | { phase: "error" };
+
+/**
+ * Stored id while the workspace list is in flight is a shell only.
+ * A successful list that omits that id is revoked: clear it, do not paint it.
+ * A failed list is an error, not an empty book.
+ */
+export function decideStoredClientAccess(input: {
+  storedClientId?: string | null;
+  /** Null until listWorkspaces returns a successful list. */
+  workspaces: readonly { clientId: string }[] | null;
+  failed?: boolean;
+}): StoredClientAccess {
+  if (input.failed) return { phase: "error" };
+  const stored = input.storedClientId?.trim() ?? "";
+  if (input.workspaces == null) {
+    return stored ? { phase: "provisional", clientId: stored } : { phase: "idle" };
+  }
+  if (!stored) return { phase: "idle" };
+  if (input.workspaces.some((row) => row.clientId === stored)) {
+    return { phase: "confirmed", clientId: stored };
+  }
+  return { phase: "revoked" };
+}
+
+/** Id that may load figures, financials, or scores. Provisional and revoked stay closed. */
+export function confirmedOwnerClientId(access: StoredClientAccess): string | null {
+  return access.phase === "confirmed" ? access.clientId : null;
+}
+
+/**
+ * Header on the boot shell. The stored id has no name, and a revoked id must
+ * not paint one. The real name waits until the list confirms access.
+ */
+export function ownerBootShellName(input: {
+  phase: StoredClientAccess["phase"];
+  rememberedName?: string | null;
+  confirmedName?: string | null;
+}): string {
+  if (input.phase === "provisional" || input.phase === "revoked" || input.phase === "error") {
+    return "Your business";
+  }
+  const confirmed = input.confirmedName?.trim();
+  return confirmed || "Your business";
+}
+
+export type WorkspaceListOutcome = "rows" | "empty" | "error";
+
+/**
+ * Retry only a successful empty read, and only while an invite is still landing.
+ * An error stops. A successful empty with no invite falls through once.
+ */
+export function nextWorkspaceListStep(input: {
+  inviting: boolean;
+  outcome: WorkspaceListOutcome;
+  attempt: number;
+  maxAttempts: number;
+}): "apply" | "retry" | "error" | "fall-through" {
+  if (input.outcome === "error") return "error";
+  if (input.outcome === "rows") return "apply";
+  if (input.inviting && input.attempt < input.maxAttempts - 1) return "retry";
+  return "fall-through";
 }
 
 export function boardRoleForWorkspace(role: OwnerWorkspaceRole): "client_owner" | "client_member" {
