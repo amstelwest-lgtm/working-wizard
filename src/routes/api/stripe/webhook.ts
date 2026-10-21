@@ -18,6 +18,8 @@
  * subscription and does not cancel it. A price whose client limit is below
  * the firm's current client count is not applied: milon_downgrade_blocked is
  * set and, when the event includes the previous price, that price is restored.
+ * An internal firm (firms.is_internal) is never downgraded to none and its
+ * subscription is not rewritten, so a renewal cannot shrink that cap.
  * The dashboard return path runs the same sync, so the client limit does not
  * wait on this webhook.
  *

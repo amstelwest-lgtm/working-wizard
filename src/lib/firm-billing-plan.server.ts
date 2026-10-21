@@ -59,12 +59,44 @@ export type FirmBillingWebhookStore = {
   writePlan: (firmId: string, plan: StoredFirmPlan) => Promise<void>;
   readPastDueAt: (firmId: string) => Promise<FirmBillingColumnRead<string | null>>;
   writePastDueAt: (firmId: string, at: string | null) => Promise<boolean>;
+  /** When set, webhook tests decide firms.is_internal without a database. */
+  isInternal?: (firmId: string) => Promise<boolean>;
 };
 
 let webhookStore: FirmBillingWebhookStore | null = null;
 
 export function setFirmBillingWebhookStoreForTests(store: FirmBillingWebhookStore | null): void {
   webhookStore = store;
+}
+
+/**
+ * firms.is_internal. True skips a downgrade. False is a normal firm.
+ * Null means the read failed, which must not be treated as a downgrade.
+ */
+export async function readFirmIsInternal(
+  firmId: string | null | undefined,
+): Promise<boolean | null> {
+  const id = firmId?.trim() ?? "";
+  if (!FIRM_UUID.test(id)) return false;
+  if (webhookStore?.isInternal) return webhookStore.isInternal(id);
+  if (webhookStore) return false;
+  try {
+    const admin = getSupabaseAdminOrNull();
+    if (!admin) return null;
+    const { data, error } = await admin
+      .from("firms")
+      .select("is_internal")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      console.warn("[stripe] firm internal read failed");
+      return null;
+    }
+    return data?.is_internal === true;
+  } catch {
+    console.warn("[stripe] firm internal read failed");
+    return null;
+  }
 }
 
 export async function readFirmBillingPlanKnown(

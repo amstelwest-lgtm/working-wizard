@@ -2,6 +2,7 @@
  * Keep the Stripe subscription's milon_plan metadata aligned with the catalog
  * price, and retire a replaced Starter (or other) subscription once the new
  * one is entitling. The client cap reads this live — no local band column.
+ * An internal firm (firms.is_internal) is not capped or rewritten here.
  */
 
 import type Stripe from "stripe";
@@ -150,18 +151,46 @@ function customerEmailOf(customer: unknown): string | null {
   return typeof email === "string" && email.trim() ? email.trim() : null;
 }
 
-/**
- * Client count for the firm that owns this subscription. Unknown (no admin
- * client, no user, no firm) returns null so the sync does not invent a block.
- */
-export async function firmClientCountForBilling(input: {
+const FIRM_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export type FirmBillingSyncFacts = {
+  clientCount: number | null;
+  /** True only when firms.is_internal is set. Null when the read did not finish. */
+  isInternal: boolean | null;
+};
+
+type FirmBillingSyncFactsRead = (input: {
+  firmId?: string | null;
   userId?: string | null;
   email?: string | null;
-}): Promise<number | null> {
+}) => Promise<FirmBillingSyncFacts>;
+
+let syncFactsForTests: FirmBillingSyncFactsRead | null = null;
+
+/** Tests supply the firm row a renewal would resolve, including by email. */
+export function setFirmBillingSyncFactsForTests(read: FirmBillingSyncFactsRead | null): void {
+  syncFactsForTests = read;
+}
+
+const UNKNOWN_SYNC_FACTS: FirmBillingSyncFacts = { clientCount: null, isInternal: null };
+
+/**
+ * Client count and internal flag for the firm that owns this subscription.
+ * firm_id wins. Otherwise the customer email resolves the owner, which is
+ * how a legacy subscription with no firm metadata is found.
+ * Unknown (no admin client, no user, no firm) leaves the count null so the
+ * sync does not invent a block.
+ */
+export async function firmBillingSyncFacts(input: {
+  firmId?: string | null;
+  userId?: string | null;
+  email?: string | null;
+}): Promise<FirmBillingSyncFacts> {
+  if (syncFactsForTests) return syncFactsForTests(input);
   try {
     const { getSupabaseAdminOrNull } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdminOrNull();
-    if (!admin) return null;
+    if (!admin) return UNKNOWN_SYNC_FACTS;
     let userId = input.userId?.trim() ?? "";
     if (!userId && input.email?.trim()) {
       const { data } = await admin
@@ -171,32 +200,60 @@ export async function firmClientCountForBilling(input: {
         .maybeSingle();
       userId = data?.id ? String(data.id) : "";
     }
-    if (!userId) return null;
-    const owned = await admin.from("firms").select("id").eq("owner_user_id", userId).limit(1);
-    let firmId = owned.data?.[0]?.id ? String(owned.data[0].id) : "";
-    if (!firmId) {
-      const membership = await admin
-        .from("firm_memberships")
-        .select("firm_id")
-        .eq("user_id", userId)
-        .in("role", ["owner", "admin"])
+    const direct = input.firmId?.trim() ?? "";
+    let firmId = FIRM_UUID.test(direct) ? direct : "";
+    let isInternal: boolean | null = null;
+    if (firmId) {
+      const row = await admin.from("firms").select("is_internal").eq("id", firmId).maybeSingle();
+      if (row.error) return UNKNOWN_SYNC_FACTS;
+      isInternal = row.data?.is_internal === true;
+    } else if (userId) {
+      const owned = await admin
+        .from("firms")
+        .select("id, is_internal")
+        .eq("owner_user_id", userId)
         .limit(1);
-      firmId = membership.data?.[0]?.firm_id ? String(membership.data[0].firm_id) : "";
+      if (owned.error) return UNKNOWN_SYNC_FACTS;
+      firmId = owned.data?.[0]?.id ? String(owned.data[0].id) : "";
+      if (owned.data?.[0]) isInternal = owned.data[0].is_internal === true;
+      if (!firmId) {
+        const membership = await admin
+          .from("firm_memberships")
+          .select("firm_id")
+          .eq("user_id", userId)
+          .in("role", ["owner", "admin"])
+          .limit(1);
+        firmId = membership.data?.[0]?.firm_id ? String(membership.data[0].firm_id) : "";
+        if (firmId) {
+          const row = await admin.from("firms").select("is_internal").eq("id", firmId).maybeSingle();
+          if (row.error) return UNKNOWN_SYNC_FACTS;
+          isInternal = row.data?.is_internal === true;
+        }
+      }
     }
-    if (!firmId) return null;
+    if (!firmId) return { clientCount: null, isInternal: false };
     const { count, error } = await admin
       .from("clients")
       .select("id", { count: "exact", head: true })
       .eq("firm_id", firmId);
     if (error) {
       console.warn("[stripe] client count failed", error.message);
-      return null;
+      return { clientCount: null, isInternal };
     }
-    return count ?? 0;
+    return { clientCount: count ?? 0, isInternal: isInternal === true };
   } catch (err) {
     console.warn("[stripe] client count unavailable", err instanceof Error ? err.message : err);
-    return null;
+    return UNKNOWN_SYNC_FACTS;
   }
+}
+
+/** Client count for the firm that owns this subscription. */
+export async function firmClientCountForBilling(input: {
+  userId?: string | null;
+  email?: string | null;
+}): Promise<number | null> {
+  const facts = await firmBillingSyncFacts(input);
+  return facts.clientCount;
 }
 
 async function retrieveFirmSubscription(
@@ -214,8 +271,6 @@ async function retrieveFirmSubscription(
     });
   }
 }
-
-const FIRM_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Store the firm customer id after a successful subscription sync. Does not update Stripe. */
 async function rememberFirmStripeCustomer(sub: RetrievedSubscription): Promise<void> {
@@ -277,18 +332,25 @@ export async function syncFirmSubscriptionBand(
   if (replacesFromSession && !metadata.milon_replaces_subscription) {
     metadata.milon_replaces_subscription = replacesFromSession;
   }
-  const clientCount =
-    options?.clientCount !== undefined
-      ? options.clientCount
-      : await firmClientCountForBilling({
-          userId: metadata.milon_user_id,
-          email: customerEmailOf(sub.customer),
-        });
   const billedBand = billedBandFromPrice({
     lookupKey: price.lookupKey,
     productBand: price.productBand,
     productPlan: price.productPlan,
   });
+  const facts = await firmBillingSyncFacts({
+    firmId: metadata.firm_id,
+    userId: metadata.milon_user_id,
+    email: customerEmailOf(sub.customer),
+  });
+  if (facts.isInternal === true) {
+    return {
+      band: metadata.milon_plan ?? billedBand,
+      cancelledReplaced: false,
+      downgradeBlocked: false,
+    };
+  }
+  const clientCount =
+    options?.clientCount !== undefined ? options.clientCount : facts.clientCount;
   const downgradeBlocked = downgradeDropsBelowUsage(billedBand, clientCount);
   const patch = metadataPatchForPrice({
     lookupKey: price.lookupKey,

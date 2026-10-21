@@ -15,7 +15,7 @@ import {
   syncFirmSubscriptionDeleted,
   type FirmSubscriptionLister,
 } from "../src/lib/firm-billing-webhook.server";
-import { syncFirmSubscriptionBand } from "../src/lib/stripe-billing-sync.server";
+import { syncFirmSubscriptionBand, setFirmBillingSyncFactsForTests } from "../src/lib/stripe-billing-sync.server";
 import type { StoredFirmPlan } from "../src/lib/billing-check-failure";
 
 function assert(cond: boolean, msg: string) {
@@ -35,6 +35,7 @@ type Memory = {
 function memory(
   plan: StoredFirmPlan | null,
   pastDueAt: string | null = null,
+  options?: { internal?: boolean },
 ): Memory & FirmBillingWebhookStore {
   const state: Memory = { plan, pastDueAt, writes: [] };
   return {
@@ -64,6 +65,7 @@ function memory(
       state.pastDueAt = at;
       return true;
     },
+    isInternal: async () => options?.internal === true,
   };
 }
 
@@ -75,15 +77,15 @@ type ListedSub = {
   id: string;
   status: string;
   created?: number;
-  customer?: string;
+  customer?: string | { id?: string; email?: string };
   metadata?: Record<string, string>;
   items?: { data?: Array<{ id?: string; price?: unknown }> };
 };
 
-function firmPrice(lookup: string, unitAmount: number) {
+function firmPrice(lookup: string, unitAmount: number, priceId?: string) {
   const band = lookup.includes("starter") ? "starter" : "solo";
   return {
-    id: `price_${lookup}`,
+    id: priceId ?? `price_${lookup}`,
     lookup_key: lookup,
     unit_amount: unitAmount,
     currency: "usd",
@@ -95,7 +97,7 @@ function firmPrice(lookup: string, unitAmount: number) {
 function firmSub(
   id: string,
   status: string,
-  options?: { lookup?: string; unitAmount?: number; created?: number },
+  options?: { lookup?: string; unitAmount?: number; created?: number; priceId?: string },
 ): ListedSub {
   const lookup = options?.lookup ?? "milon_solo_monthly";
   const band = lookup.includes("starter") ? "starter" : "solo";
@@ -114,7 +116,7 @@ function firmSub(
       data: [
         {
           id: `si_${id}`,
-          price: firmPrice(lookup, options?.unitAmount ?? 9900),
+          price: firmPrice(lookup, options?.unitAmount ?? 9900, options?.priceId),
         },
       ],
     },
@@ -445,6 +447,196 @@ try {
   );
   assert(starter.pastDueAt === null, "subscription.updated to active clears the past-due marker");
 
+  const apiError = new Error("StripeInvalidRequestError");
+  apiError.name = "StripeInvalidRequestError";
+  const stripeErrorDeleted = memory("entitled");
+  useStore(stripeErrorDeleted);
+  const stripeErrorBefore = snapshot(stripeErrorDeleted);
+  const stripeErrorResult = await syncFirmSubscriptionDeleted(
+    firmSub("sub_old", "canceled"),
+    lister(apiError),
+  );
+  assert(
+    stripeErrorResult.stripeUnreachable &&
+      !stripeErrorResult.downgraded &&
+      stripeErrorDeleted.plan === "entitled" &&
+      snapshot(stripeErrorDeleted).writes === stripeErrorBefore.writes,
+    "a Stripe error never writes none",
+  );
+
+  const LEGACY_FREE_STARTER_PRICE_ID = "price_1UGFvQGXDN6PFbnz9aNI0cG5";
+  const legacyPrice = firmPrice("milon_starter_monthly", 0, LEGACY_FREE_STARTER_PRICE_ID);
+  assert(
+    legacyPrice.id === LEGACY_FREE_STARTER_PRICE_ID && legacyPrice.unit_amount === 0,
+    "the legacy Starter price id is price_1UGFvQGXDN6PFbnz9aNI0cG5 at $0",
+  );
+  const legacyPaid = memory("entitled", new Date(T0).toISOString());
+  useStore(legacyPaid);
+  let legacyPaidUpdates = 0;
+  const legacyListed = firmSub("sub_legacy", "active", {
+    lookup: "milon_starter_monthly",
+    unitAmount: 0,
+    priceId: LEGACY_FREE_STARTER_PRICE_ID,
+  });
+  const legacyInvoiceStripe = {
+    ...lister([legacyListed]),
+    subscriptions: {
+      ...lister([legacyListed]).subscriptions,
+      update: async () => {
+        legacyPaidUpdates += 1;
+        throw new Error("invoice.paid must not rewrite the legacy Starter subscription");
+      },
+    },
+  };
+  const legacyPaidResult = await syncFirmInvoicePaid(
+    {
+      id: "in_legacy",
+      customer: CUSTOMER,
+      subscription: "sub_legacy",
+      status: "paid",
+      metadata: legacyListed.metadata,
+      lines: {
+        data: [
+          {
+            price: {
+              id: LEGACY_FREE_STARTER_PRICE_ID,
+              lookup_key: "milon_starter_monthly",
+              unit_amount: 0,
+              product: { metadata: { band: "starter", plan: "starter" } },
+            },
+          },
+        ],
+      },
+    },
+    legacyInvoiceStripe,
+  );
+  assert(
+    legacyPaidResult.plan === "entitled" &&
+      legacyPaid.plan === "entitled" &&
+      legacyPaidUpdates === 0 &&
+      !legacyPaid.writes.includes("plan:none"),
+    "invoice.paid for legacy $0 Starter price_1UGFvQGXDN6PFbnz9aNI0cG5 stays entitled",
+  );
+
+  const internalRenewal = memory("entitled");
+  useStore(internalRenewal);
+  const internalRenewalBefore = snapshot(internalRenewal);
+  let internalUpdates = 0;
+  let internalSeen: { email?: string | null; firmId?: string | null } | null = null;
+  setFirmBillingSyncFactsForTests(async (input) => {
+    internalSeen = { email: input.email ?? null, firmId: input.firmId ?? null };
+    return { clientCount: 6, isInternal: true };
+  });
+  const internalSub = firmSub("sub_internal", "active", {
+    lookup: "milon_starter_monthly",
+    unitAmount: 0,
+    priceId: LEGACY_FREE_STARTER_PRICE_ID,
+  });
+  delete internalSub.metadata?.firm_id;
+  internalSub.customer = { id: CUSTOMER, email: "internal-firm@example.com" };
+  const internalSync = await syncFirmSubscriptionBand("sub_internal", {
+    subscriptions: {
+      retrieve: async () => internalSub,
+      update: async () => {
+        internalUpdates += 1;
+        throw new Error("an internal firm renewal must not rewrite the subscription");
+      },
+      cancel: async () => {
+        throw new Error("an internal firm renewal must not cancel");
+      },
+    },
+    prices: { list: async () => ({ data: [] }) },
+  });
+  setFirmBillingSyncFactsForTests(null);
+  assert(
+    internalSeen?.email === "internal-firm@example.com" && !internalSeen.firmId,
+    "a legacy Starter renewal resolves the internal firm by email",
+  );
+  assert(
+    internalUpdates === 0 &&
+      internalSync.downgradeBlocked === false &&
+      internalRenewal.plan === "entitled" &&
+      !internalRenewal.writes.includes("plan:none") &&
+      snapshot(internalRenewal).writes === internalRenewalBefore.writes,
+    "an internal firm with 6 clients keeps the legacy $0 Starter and is not capped",
+  );
+
+  const overLimit = memory("entitled");
+  useStore(overLimit);
+  let overLimitParams: { metadata?: Record<string, string>; items?: unknown } | null = null;
+  setFirmBillingSyncFactsForTests(async () => ({ clientCount: 6, isInternal: false }));
+  const overLimitSub = firmSub("sub_over", "active", {
+    lookup: "milon_starter_monthly",
+    unitAmount: 0,
+    priceId: LEGACY_FREE_STARTER_PRICE_ID,
+  });
+  await syncFirmSubscriptionBand("sub_over", {
+    subscriptions: {
+      retrieve: async () => overLimitSub,
+      update: async (_id: string, params: { metadata?: Record<string, string>; items?: unknown }) => {
+        overLimitParams = params;
+        return overLimitSub;
+      },
+      cancel: async () => {
+        throw new Error("unused");
+      },
+    },
+    prices: { list: async () => ({ data: [] }) },
+  });
+  setFirmBillingSyncFactsForTests(null);
+  assert(
+    overLimitParams?.metadata?.milon_downgrade_blocked === "1" && overLimitParams.items == null,
+    "a non-internal Starter over the catalog limit still records the blocked downgrade",
+  );
+  assert(overLimit.plan === "entitled", "a blocked downgrade does not write none");
+
+  const internalDeleted = memory("entitled", null, { internal: true });
+  useStore(internalDeleted);
+  const internalDeletedBefore = snapshot(internalDeleted);
+  const internalDeletedResult = await syncFirmSubscriptionDeleted(
+    firmSub("sub_only", "canceled"),
+    lister([firmSub("sub_only", "canceled")]),
+  );
+  assert(
+    internalDeletedResult.plan === "entitled" &&
+      !internalDeletedResult.downgraded &&
+      internalDeleted.plan === "entitled" &&
+      !internalDeleted.writes.includes("plan:none") &&
+      snapshot(internalDeleted).writes === internalDeletedBefore.writes,
+    "subscription.deleted does not downgrade an internal firm",
+  );
+  for (const status of ["canceled", "unpaid", "incomplete_expired"] as const) {
+    const internalStatus = memory("entitled", null, { internal: true });
+    useStore(internalStatus);
+    const statusResult = await syncFirmSubscriptionDeleted(
+      firmSub("sub_status", status),
+      lister([firmSub("sub_status", status)]),
+    );
+    assert(
+      statusResult.plan === "entitled" &&
+        internalStatus.plan === "entitled" &&
+        !internalStatus.writes.includes("plan:none"),
+      `subscription.updated ${status} does not downgrade an internal firm`,
+    );
+  }
+  const internalGrace = memory("entitled", null, { internal: true });
+  useStore(internalGrace);
+  await syncFirmInvoicePaymentFailed(firmInvoice("sub_firm"), lister([firmSub("sub_firm", "past_due")]), {
+    nowMs: T0,
+  });
+  const internalAfterGrace = await syncFirmInvoicePaymentFailed(
+    firmInvoice("sub_firm"),
+    lister([firmSub("sub_firm", "past_due")]),
+    { nowMs: T0 + FIRM_PAYMENT_FAILED_GRACE_MS },
+  );
+  assert(
+    internalAfterGrace.plan === "entitled" &&
+      !internalAfterGrace.downgraded &&
+      internalGrace.plan === "entitled" &&
+      !internalGrace.writes.includes("plan:none"),
+    "payment_failed after grace does not downgrade an internal firm",
+  );
+
   const webhookSrc = readFileSync(resolve("src/routes/api/stripe/webhook.ts"), "utf8");
   const ownerAt = webhookSrc.indexOf("ownerBillingEventSignal(event)");
   const firmDeletedAt = webhookSrc.indexOf("await syncFirmSubscriptionDeleted");
@@ -479,6 +671,17 @@ try {
     "a live subscription sync does not store a confirmed no-plan",
   );
   const handlerSrc = readFileSync(resolve("src/lib/firm-billing-webhook.server.ts"), "utf8");
+  const planSrc = readFileSync(resolve("src/lib/firm-billing-plan.server.ts"), "utf8");
+  assert(planSrc.includes('select("is_internal")'), "a downgrade reads firms.is_internal");
+  assert(handlerSrc.includes("readFirmIsInternal"), "deletion checks is_internal before writing none");
+  assert(
+    syncSrc.includes('select("id, is_internal")') && syncSrc.includes('.ilike("email"'),
+    "a renewal resolves firms.is_internal by email before it caps",
+  );
+  assert(
+    syncSrc.includes("facts.isInternal === true"),
+    "an internal firm renewal returns before a subscription rewrite",
+  );
   assert(!handlerSrc.includes("firm-gate-access"), "the webhook does not import the client gate");
   assert(
     !handlerSrc.includes("firm-entitlement-client"),
@@ -516,9 +719,15 @@ try {
     "the webhook test has no Stripe secret",
   );
 
+  assert(
+    !logs.join("\n").includes("@"),
+    "webhook logs do not include an email address",
+  );
+
   console.log("firm-billing-webhook ok");
 } finally {
   console.warn = prevWarn;
   console.info = prevInfo;
   setFirmBillingWebhookStoreForTests(null);
+  setFirmBillingSyncFactsForTests(null);
 }

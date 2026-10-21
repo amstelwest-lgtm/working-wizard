@@ -6,6 +6,7 @@
  * After that, the plan becomes none only when the customer still has no
  * active or trialing firm subscription.
  * A Stripe miss does not downgrade. Owner subscriptions are not written here.
+ * An internal firm (firms.is_internal) is never written to none.
  * This module does not change what a none firm can still open.
  */
 
@@ -20,6 +21,7 @@ import {
 import {
   readFirmBillingPastDueAt,
   readFirmBillingPlanState,
+  readFirmIsInternal,
   writeFirmBillingPastDueAt,
   writeFirmBillingPlanKnown,
   clearFirmBillingPastDueAt,
@@ -219,12 +221,22 @@ async function firmIdForRecord(record: Record<string, unknown>): Promise<string 
 async function applyPlan(
   firmId: string,
   plan: StoredFirmPlan,
-): Promise<"written" | "noop" | "blocked"> {
+): Promise<"written" | "noop" | "blocked" | "internal"> {
   const state = await readFirmBillingPlanState(firmId);
   if (plan === "none" && !state.ok) return "blocked";
+  if (plan === "none") {
+    const internal = await readFirmIsInternal(firmId);
+    if (internal === true) return "internal";
+    if (internal === null) return "blocked";
+  }
   if (state.ok && state.value === plan) return "noop";
   await writeFirmBillingPlanKnown(firmId, plan);
   return state.ok ? "written" : "blocked";
+}
+
+async function keptPlanAfterInternalSkip(firmId: string): Promise<StoredFirmPlan> {
+  const state = await readFirmBillingPlanState(firmId);
+  return state.ok && state.value ? state.value : "entitled";
 }
 
 function entitlingExcept(subs: RankedSubscription[], exceptId: string | null): boolean {
@@ -432,6 +444,9 @@ export async function syncFirmSubscriptionDeleted(
       return kept({ plan: "entitled" });
     }
     const wrote = await applyPlan(firmId, "none");
+    if (wrote === "internal") {
+      return kept({ plan: await keptPlanAfterInternalSkip(firmId), downgraded: false });
+    }
     if (wrote === "blocked") return kept();
     if (wrote === "written") {
       console.info("[stripe] firm plan cleared after subscription deleted", { firmId });
@@ -482,6 +497,13 @@ export async function syncFirmInvoicePaymentFailed(
       return kept({ plan: "entitled", pastDueAt });
     }
     const wrote = await applyPlan(firmId, "none");
+    if (wrote === "internal") {
+      return kept({
+        plan: await keptPlanAfterInternalSkip(firmId),
+        pastDueAt,
+        downgraded: false,
+      });
+    }
     if (wrote === "blocked") return kept({ pastDueAt });
     return kept({ plan: "none", pastDueAt, downgraded: wrote === "written" });
   } catch (err) {
