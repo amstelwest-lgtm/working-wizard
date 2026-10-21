@@ -14,7 +14,9 @@ PUBLIC = ROOT / "public"
 OUT = ROOT / "mobile" / "assets"
 WWW = ROOT / "mobile" / "www"
 
-INK = (10, 10, 10, 255)
+# Brand System v1.1 canvas. The mark is cobalt and navy. Gold stays inside
+# the wordmark file; this script does not paint gold onto the icon.
+CANVAS = (255, 255, 255, 255)
 SIZE = 1024
 SPLASH = 2732
 # Adaptive-icon safe zone is the inner 66%.
@@ -51,14 +53,14 @@ def main() -> None:
     paste_center(foreground, fit(mark, SAFE, SAFE), SIZE // 2, SIZE // 2)
     foreground.save(OUT / "icon-foreground.png")
 
-    background = Image.new("RGBA", (SIZE, SIZE), INK)
+    background = Image.new("RGBA", (SIZE, SIZE), CANVAS)
     background.save(OUT / "icon-background.png")
 
     icon = background.copy()
     icon.alpha_composite(foreground)
     icon.save(OUT / "icon-only.png")
 
-    splash = Image.new("RGBA", (SPLASH, SPLASH), INK)
+    splash = Image.new("RGBA", (SPLASH, SPLASH), CANVAS)
     paste_center(splash, fit(mark, 720, 720), SPLASH // 2, int(SPLASH * 0.42))
     paste_center(splash, fit(word, 1500, 280), SPLASH // 2, int(SPLASH * 0.62))
     splash.save(OUT / "splash.png")
@@ -68,6 +70,8 @@ def main() -> None:
     fitted = fit(mark, 220, 220)
     paste_center(offline, fitted, 128, 128)
     offline.save(WWW / "mark.png")
+    wordmark = fit(word, 640, 160)
+    wordmark.save(WWW / "wordmark.png")
     print("wrote", OUT)
 
 

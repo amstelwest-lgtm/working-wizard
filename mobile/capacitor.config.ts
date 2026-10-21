@@ -9,6 +9,9 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * allowNavigation is milonfinance.com hosts. Stripe, Google, YouTube, and
  * ledger OAuth hosts are intentionally absent — the Android shell opens those
  * in Custom Tabs.
+ *
+ * Shell chrome is Brand System v1.1: white canvas, cobalt #0B5FFF, navy
+ * #102A43. Gold appears only inside the MILŌN wordmark artwork.
  */
 const config: CapacitorConfig = {
   appId: "com.milonfinance.app",
@@ -22,25 +25,29 @@ const config: CapacitorConfig = {
     allowNavigation: ["milonfinance.com", "*.milonfinance.com"],
   },
   android: {
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#FFFFFF",
     allowMixedContent: false,
     captureInput: true,
     webContentsDebuggingEnabled: false,
+  },
+  ios: {
+    backgroundColor: "#FFFFFF",
+    contentInset: "automatic",
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 1200,
       launchAutoHide: true,
-      backgroundColor: "#0a0a0a",
+      backgroundColor: "#FFFFFF",
       androidScaleType: "CENTER",
       showSpinner: false,
       splashFullScreen: true,
       splashImmersive: true,
     },
     StatusBar: {
-      // Capacitor's DARK style is light status-bar content on a dark bar.
-      style: "DARK",
-      backgroundColor: "#0a0a0a",
+      // LIGHT is dark status-bar content on a white bar.
+      style: "LIGHT",
+      backgroundColor: "#FFFFFF",
       overlaysWebView: false,
     },
   },

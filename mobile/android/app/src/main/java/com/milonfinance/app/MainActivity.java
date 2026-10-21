@@ -101,14 +101,14 @@ public class MainActivity extends BridgeActivity {
 
     private void applySystemBars() {
         var window = getWindow();
-        int ink = Color.parseColor("#0a0a0a");
-        window.setStatusBarColor(ink);
-        window.setNavigationBarColor(ink);
+        int canvas = Color.parseColor("#FFFFFF");
+        window.setStatusBarColor(canvas);
+        window.setNavigationBarColor(canvas);
         WindowCompat.setDecorFitsSystemWindows(window, true);
         WindowInsetsControllerCompat insets = WindowCompat.getInsetsController(window, window.getDecorView());
-        // false = light icons on the dark bar
-        insets.setAppearanceLightStatusBars(false);
-        insets.setAppearanceLightNavigationBars(false);
+        // true = dark icons on the white bar
+        insets.setAppearanceLightStatusBars(true);
+        insets.setAppearanceLightNavigationBars(true);
     }
 
     private void acceptCookies(WebView webView) {
