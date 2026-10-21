@@ -9,8 +9,10 @@ import { OPENING_CASH_UNKNOWN, SEEDED_FROM_ACTUALS_LABEL } from "../src/lib/budg
 import { cashEmptyPresentation, cashForecastWeeksFromOutlook } from "../src/lib/cash-forecast-parity.ts";
 import { forecastScreenTiles } from "../src/lib/cash-forecast-view.ts";
 import {
+  assessClientMetrics,
   resolveCashScreenForecast,
   resolveThirteenWeekForecast,
+  RUNWAY_INSUFFICIENT_LABEL,
 } from "../src/lib/client-metrics.ts";
 import { FORECAST_PREVIEW_EMPTY, forecastPreviewGap } from "../src/lib/report-preview.ts";
 
@@ -142,6 +144,30 @@ assert(!aboveFloor.lowestSub.includes("under"), "a point above the floor does no
 assert(aboveFloor.weeksValue === "0 of 13", aboveFloor.weeksValue);
 assert(aboveFloor.weeksSub === "stays above the floor", aboveFloor.weeksSub);
 assert(aboveFloor.weeksAlert === false, "weeks-below agrees the series stays clear");
+
+const onTheFloor = forecastScreenTiles({
+  empty: false,
+  opening: 36923,
+  closings: Array.from({ length: 13 }, () => 36923),
+  floor: 36923,
+  format: (amount) => `$${amount}`,
+});
+assert(onTheFloor.lowestSub === "Opening · at the floor", onTheFloor.lowestSub);
+assert(!onTheFloor.lowestSub.includes("above"), onTheFloor.lowestSub);
+assert(!onTheFloor.lowestSub.includes("$0"), onTheFloor.lowestSub);
+
+const costsOnly = assessClientMetrics({
+  financials: { cash: 46300, cogs: 90000, fixedCosts: 40000, periodMonths: 9 },
+  cashflow: { revenue: [], expenses: [] },
+  now: monday,
+});
+assert(costsOnly.outlook.openingCash === 46300, "opening cash is on file");
+assert(costsOnly.outlook.receiptsWeekly == null, "missing revenue stays null");
+assert(costsOnly.outlook.paymentsWeekly != null, "costs still seed weekly payments");
+assert(
+  costsOnly.runway.weeks === null && costsOnly.runway.label === RUNWAY_INSUFFICIENT_LABEL,
+  `a missing receipt side must not become a burn (${costsOnly.runway.label})`,
+);
 
 const dippedClosings = [40000, 35000, 30000, 36923, ...Array.from({ length: 9 }, () => 42000)];
 const dipped = forecastScreenTiles({

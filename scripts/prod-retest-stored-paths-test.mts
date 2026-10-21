@@ -149,7 +149,7 @@ assert(
   Math.abs(yankeesNet - yankeesPacedNet) < 0.02,
   `Yankees net ${yankeesNet} vs actuals pace ${yankeesPacedNet}`,
 );
-assert(yankeesNet > 10000, `Yankees day-paced net ${yankeesNet}`);
+assert(Math.abs(yankeesNet - 10868) < 1, `Yankees net ${yankeesNet}`);
 assert(
   forecastInTheBlack(
     yankeesStory.assessed.outlook.totalInflow,

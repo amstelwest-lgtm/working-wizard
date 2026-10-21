@@ -161,7 +161,10 @@ export function forecastScreenTiles(input: {
   const low = lowestCashPoint(series);
   const gap = low.balance - floor;
   const under = gap < 0;
-  const relation = `${input.format(Math.abs(gap))} ${under ? "under" : "above"} the floor`;
+  const relation =
+    gap === 0
+      ? "at the floor"
+      : `${input.format(Math.abs(gap))} ${under ? "under" : "above"} the floor`;
   const pos = forecastFloorPosition({
     opening,
     closings: input.closings,
