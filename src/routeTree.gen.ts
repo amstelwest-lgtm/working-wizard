@@ -32,6 +32,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDeskRouteImport } from './routes/_authenticated/desk'
 import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
 import { Route as AuthenticatedPracticeRouteImport } from './routes/_authenticated/practice'
+import { Route as ATokenRouteImport } from './routes/a.$token'
 import { Route as AccessTokenRouteImport } from './routes/access.$token'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
@@ -187,6 +188,11 @@ const AuthenticatedPracticeRoute = AuthenticatedPracticeRouteImport.update({
   id: '/practice',
   path: '/practice',
   getParentRoute: () => AuthenticatedRoute,
+} as any)
+const ATokenRoute = ATokenRouteImport.update({
+  id: '/a/$token',
+  path: '/a/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AccessTokenRoute = AccessTokenRouteImport.update({
   id: '/access/$token',
@@ -434,6 +440,7 @@ export interface FileRoutesByFullPath {
   '/desk': typeof AuthenticatedDeskRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/practice': typeof AuthenticatedPracticeRoute
+  '/a/$token': typeof ATokenRoute
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
@@ -499,6 +506,7 @@ export interface FileRoutesByTo {
   '/desk': typeof AuthenticatedDeskRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/practice': typeof AuthenticatedPracticeRoute
+  '/a/$token': typeof ATokenRoute
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
@@ -566,6 +574,7 @@ export interface FileRoutesById {
   '/_authenticated/desk': typeof AuthenticatedDeskRoute
   '/_authenticated/ops': typeof AuthenticatedOpsRoute
   '/_authenticated/practice': typeof AuthenticatedPracticeRoute
+  '/a/$token': typeof ATokenRoute
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
@@ -633,6 +642,7 @@ export interface FileRouteTypes {
     | '/desk'
     | '/ops'
     | '/practice'
+    | '/a/$token'
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
@@ -698,6 +708,7 @@ export interface FileRouteTypes {
     | '/desk'
     | '/ops'
     | '/practice'
+    | '/a/$token'
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
@@ -764,6 +775,7 @@ export interface FileRouteTypes {
     | '/_authenticated/desk'
     | '/_authenticated/ops'
     | '/_authenticated/practice'
+    | '/a/$token'
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
@@ -827,6 +839,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   TryRoute: typeof TryRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
+  ATokenRoute: typeof ATokenRoute
   AccessTokenRoute: typeof AccessTokenRoute
   AckTokenRoute: typeof AckTokenRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
@@ -1018,6 +1031,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/practice'
       preLoaderRoute: typeof AuthenticatedPracticeRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/a/$token': {
+      id: '/a/$token'
+      path: '/a/$token'
+      fullPath: '/a/$token'
+      preLoaderRoute: typeof ATokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/access/$token': {
       id: '/access/$token'
@@ -1376,6 +1396,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   TryRoute: TryRoute,
   UnsubscribeRoute: UnsubscribeRoute,
+  ATokenRoute: ATokenRoute,
   AccessTokenRoute: AccessTokenRoute,
   AckTokenRoute: AckTokenRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
