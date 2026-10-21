@@ -51,10 +51,11 @@ export type FirmUpgradeAllowance = {
   priceCurrency: "USD" | "zar";
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
-  /** Server-derived. False for every non-SA firm. */
+  /** Practice list is in rand. Not the Checkout charge currency. */
   saDiscount: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   zaPriceLabel?: string | null;
+  checkoutNote?: string | null;
 };
 
 export type FirmClientCreateAllowance = FirmClientCreateDecision & {
@@ -259,6 +260,7 @@ export type FirmPlanDisplay = FirmPlanStatusCopy & {
   saDiscount: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   zaPriceLabel?: string | null;
+  checkoutNote?: string | null;
 };
 
 /** Whole days until `trialEndIso`. 0 when the trial end is now or in the past. */

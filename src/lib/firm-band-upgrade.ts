@@ -77,12 +77,21 @@ export type FirmUpgradeSnapshot = {
   priceCurrency: FirmPriceCurrency;
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, ZarBandAmounts>>;
-  /** Signed-in SA firm only. Public pages never set this. */
+  /**
+   * Practice list is in rand (firm row ZA, or most clients ZA).
+   * This is not the Checkout charge currency.
+   */
   saDiscount: boolean;
-  /** Server-built rand lines for an SA firm. Absent for everyone else. */
+  /** Server-built rand lines when the practice list is in rand. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
-  /** The line Checkout will charge for the current band. */
+  /**
+   * Rand line for a ZA firm row, where Checkout can charge rand.
+   * Null when the list is in rand only because of the client mix:
+   * Checkout still charges USD for a US firm row.
+   */
   zaPriceLabel?: string | null;
+  /** Set when the list is in rand and Checkout would charge USD. */
+  checkoutNote?: string | null;
 };
 
 export function emptyFirmUpgradeSnapshot(): FirmUpgradeSnapshot {
@@ -511,10 +520,14 @@ export function saFirmDisplayPrice(
 }
 
 /**
- * Settings → Plan display. A firm saved as South Africa qualifies.
- * So does a practice whose clients are mostly in South Africa, which is
- * the case when the firm row still says United States. This does not
- * change the currency Checkout charges.
+ * Whether a practice's plan list is in rand. Settings and the Add client
+ * cap snapshot both use this. True when the firm row is South Africa, or
+ * when more clients are in South Africa than in the United States.
+ *
+ * Checkout does not use this. A rand charge still requires a ZA firm row
+ * and a ZA billing country (`priceMarketForFirm`). A US firm row is charged
+ * USD even when this is true. The cap panel says so instead of promising
+ * that Checkout will take rand.
  */
 export function practiceDisplaysZarPlan(input: {
   firmMarket: unknown;
@@ -529,6 +542,19 @@ export function practiceDisplaysZarPlan(input: {
     else if (country === "US") us += 1;
   }
   return za > 0 && za > us;
+}
+
+/** Shown when the list is in rand and Checkout would still charge USD. */
+export const ZAR_DISPLAY_USD_CHECKOUT_NOTE =
+  "Shown in rand for this practice. Checkout charges US dollars while the firm is saved outside South Africa.";
+
+export function zarDisplayCheckoutNote(input: {
+  firmMarket: unknown;
+  clientMarkets?: readonly unknown[] | null;
+}): string | null {
+  if (!practiceDisplaysZarPlan(input)) return null;
+  if (isSaMarketFirm({ market: input.firmMarket })) return null;
+  return ZAR_DISPLAY_USD_CHECKOUT_NOTE;
 }
 
 /** An SA plan hides the US state list and any VAT sentence. */

@@ -383,6 +383,8 @@ function FirmClientCapNotice({
                 clientCount: cap.upgrade.clientCount,
                 usageLabel: cap.upgrade.usageLabel,
                 saDiscount: cap.upgrade.saDiscount,
+                zaLabels: cap.upgrade.zaLabels,
+                checkoutNote: cap.upgrade.checkoutNote,
                 phase: cap.upgrade.phase,
               }
             : null
@@ -447,6 +449,7 @@ function FirmClientCapNotice({
           usageLabel={upgrade.usageLabel}
           saDiscount={upgrade.saDiscount}
           zaLabels={upgrade.zaLabels}
+          checkoutNote={upgrade.checkoutNote}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}
           onValidateVoucher={onValidateVoucher}

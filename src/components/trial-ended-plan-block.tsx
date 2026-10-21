@@ -21,6 +21,7 @@ export type TrialEndedUpgrade = {
   usageLabel?: string | null;
   saDiscount?: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
+  checkoutNote?: string | null;
   /** Live subscription phase. Active / CURRENT is not an ended trial. */
   phase?: FirmSubscriptionPhase | null;
 };
@@ -72,6 +73,7 @@ export function TrialEndedPlanCard({
           usageLabel={upgrade.usageLabel}
           saDiscount={upgrade.saDiscount}
           zaLabels={upgrade.zaLabels}
+          checkoutNote={upgrade.checkoutNote}
           upgrading={upgrading}
           onUpgrade={onUpgrade}
           onValidateVoucher={onValidateVoucher}
@@ -129,6 +131,7 @@ export function TrialEndedPlanBlock({
           clientCount: plan.clientCount,
           usageLabel: plan.usageLabel,
           saDiscount: plan.saDiscount,
+          checkoutNote: plan.checkoutNote,
         });
       })
       .catch(() => {
