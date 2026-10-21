@@ -176,6 +176,7 @@ import {
   resolveWaterfallFigures,
 } from "@/lib/weekly-inputs";
 import {
+  booksPeriodPillLabel,
   figuresPeriodLabelFrom,
   preferStatementPeriod,
   readStatementMeta,
@@ -4123,6 +4124,15 @@ function Index() {
           });
         }}
         onProfile={() => openProfileDialog("retake")}
+        periodLabel={booksPeriodPillLabel(
+          v.periodEnd ?? null,
+          statementSpanLabel({
+            periodStart: v.periodStart,
+            periodEnd: v.periodEnd,
+            periodLabel: readStatementMeta(v, boardMarket).periodLabel,
+            market: boardMarket,
+          }),
+        )}
       >
         <PanelSkeleton rows={4} />
       </OwnerShell>
