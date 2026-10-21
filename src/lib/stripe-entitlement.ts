@@ -1,7 +1,9 @@
 /**
  * Firm-product Stripe entitlement.
  * The live subscription is found by the stored Stripe customer id
- * (`firms.stripe_customer_id`). With no stored id, email is tried first.
+ * (`firms.stripe_customer_id`). That id is the first step. A retrieve that
+ * hangs or errors keeps it, and does not search. With no stored id, email
+ * is tried first.
  * Metadata search (subscription, then customer) runs only when that email
  * misses, for at most FIRM_CUSTOMER_SEARCH_BUDGET_MS, with no Stripe retry.
  * A stored id still beats a different email customer. A mismatch is logged
@@ -56,6 +58,13 @@ export type FirmBillingPathDecision = "allow" | "require_billing";
  * turned off for these calls so a hang cannot become two 8s attempts.
  */
 export const FIRM_CUSTOMER_SEARCH_BUDGET_MS = 4_000;
+
+/**
+ * A stored customer id is the first step. The retrieve that checks it
+ * belongs to this firm is capped here, with no Stripe retry. A hang or
+ * a Stripe error keeps the stored id and does not start a metadata search.
+ */
+export const STORED_CUSTOMER_READ_BUDGET_MS = 1_000;
 
 export type FirmCustomerSearchOptions = {
   maxNetworkRetries?: number;
@@ -489,22 +498,41 @@ async function readStoredCustomer(
   if (!stripe.customers.retrieve) {
     return { state: "trusted", email: null, metadata: null };
   }
-  try {
-    const customer = metadataCustomer(await stripe.customers.retrieve(customerId));
-    if (!customer) return { state: "reject" };
-    if (customer.id && customer.id !== customerId) return { state: "reject" };
-    return {
-      state: "trusted",
-      email: customer.email ?? null,
-      metadata: customer.metadata ?? null,
-    };
-  } catch (err) {
-    console.warn(
-      "[stripe] stored customer retrieve failed",
-      err instanceof Error ? err.message : err,
-    );
-    return { state: "failed" };
-  }
+  const retrieve = stripe.customers.retrieve as (
+    id: string,
+    params?: Record<string, never>,
+    options?: FirmCustomerSearchOptions,
+  ) => Promise<unknown>;
+  const work = retrieve(customerId, {}, {
+    maxNetworkRetries: 0,
+    timeout: STORED_CUSTOMER_READ_BUDGET_MS,
+  }).then(
+    (row) => ({ settled: true as const, row }),
+    (err: unknown) => {
+      console.warn(
+        "[stripe] stored customer retrieve failed",
+        err instanceof Error ? err.message : err,
+      );
+      return { settled: false as const };
+    },
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const raced = await Promise.race([
+    work,
+    new Promise<{ settled: false }>((resolve) => {
+      timer = setTimeout(() => resolve({ settled: false }), STORED_CUSTOMER_READ_BUDGET_MS);
+    }),
+  ]);
+  if (timer) clearTimeout(timer);
+  if (!raced.settled) return { state: "failed" };
+  const customer = metadataCustomer(raced.row);
+  if (!customer) return { state: "reject" };
+  if (customer.id && customer.id !== customerId) return { state: "reject" };
+  return {
+    state: "trusted",
+    email: customer.email ?? null,
+    metadata: customer.metadata ?? null,
+  };
 }
 
 /**
@@ -662,15 +690,15 @@ export async function findFirmCustomerId(
 ): Promise<string | undefined> {
   const email = input.email?.trim() ?? "";
   const stored = stripeCustomerId(input.storedCustomerId);
-  let storedRetrieveFailed = false;
   if (stored) {
     const read = await readStoredCustomer(stripe, stored);
+    // The column is the key. A slow or failed retrieve must not start a search.
+    if (read.state === "failed") return stored;
     if (read.state === "trusted" && !storedCustomerConflicts(read.metadata, input)) {
       noteStripeEmailDiffers(stored, read.email, email, "stored_customer_id");
       void noteDifferentEmailCustomer(stripe, stored, email, "stored_customer_id");
       return stored;
     }
-    if (read.state === "failed") storedRetrieveFailed = true;
   }
 
   // No stored id: the common plan check. Email is one list. Searches wait.
@@ -693,7 +721,6 @@ export async function findFirmCustomerId(
   );
   if (stable) return stable;
 
-  if (stored && storedRetrieveFailed) return stored;
   if (!email) return undefined;
   // Stored id was present but not trusted. Email was not the first step.
   if (stored) return findCustomerIdByEmail(stripe, email);

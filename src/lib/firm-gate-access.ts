@@ -65,6 +65,21 @@ export function surfaceAfterEntitlementFailure(input: {
 }
 
 /**
+ * Deadline or Stripe error. A last known plan for this firm opens the page.
+ * The billing wall is a confirmed unpaid result, not a failed check.
+ * No last known plan keeps the existing surface.
+ */
+export function surfaceAfterBillingCheckFailure(input: {
+  known: KnownFirmEntitlement;
+  pathname: string;
+  firmClientCount: number | null;
+  firstClientId: string | null;
+}): FirmGateFailureSurface {
+  if (input.known === "entitled" || input.known === "unpaid") return "content";
+  return surfaceAfterEntitlementFailure({ ...input, known: "none" });
+}
+
+/**
  * The 8s timer runs once. On Home it leaves the page up, so it used to
  * forget the deadline. A later client file must not sit on the skeleton
  * until Stripe returns: the deadline has already passed.

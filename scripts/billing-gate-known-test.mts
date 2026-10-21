@@ -14,9 +14,13 @@ import {
   entitlementAfterLiveFailure,
   FIRM_BILLING_ENTITLEMENT_SERVER_FN,
 } from "../src/lib/billing-check-failure.ts";
-import { surfaceAfterEntitlementFailure } from "../src/lib/firm-gate-access.ts";
+import {
+  surfaceAfterBillingCheckFailure,
+  surfaceAfterEntitlementFailure,
+} from "../src/lib/firm-gate-access.ts";
 import {
   clearCachedFirmEntitlement,
+  lastKnownEntitlementForFirm,
   lastKnownFirmEntitlement,
   noteFirmEntitlement,
   readCachedFirmEntitlement,
@@ -122,6 +126,33 @@ assert(
   "a stripe_error response does not replace a known entitlement",
 );
 assert(lastKnownFirmEntitlement("user-1", "firm-other") == null, "another firm does not inherit this entitlement");
+assert(
+  lastKnownEntitlementForFirm("user-1", "firm-ben")?.entitled === true,
+  "the same firm id still has its known plan",
+);
+assert(lastKnownEntitlementForFirm("user-1", "firm-other") == null, "fail-open does not use another firm's plan");
+assert(lastKnownEntitlementForFirm("user-1", null) == null, "a missing firm id is not a known plan");
+assert(
+  surfaceAfterBillingCheckFailure({ known: "entitled", ...page }) === "content",
+  "a deadline with a known entitled plan opens the page",
+);
+assert(
+  surfaceAfterBillingCheckFailure({ known: "unpaid", ...page }) === "content",
+  "a deadline with a known unpaid plan does not go to the wall",
+);
+assert(
+  surfaceAfterBillingCheckFailure({ known: "none", ...page }) === "error",
+  "a deadline with no known plan keeps the error screen",
+);
+assert(
+  surfaceAfterBillingCheckFailure({
+    known: "none",
+    pathname: "/dashboard",
+    firmClientCount: 2,
+    firstClientId: first,
+  }) === "content",
+  "a deadline on Home with no known plan stays open",
+);
 await readCachedFirmEntitlement(
   "user-1",
   async () => ({ entitled: false, reason: "no_active_subscription", checkFailed: "timeout" as const }),
@@ -185,7 +216,12 @@ assert(!fn.includes("rememberEntitlement(email, failed)"), "a Stripe error is no
 const gate = readFileSync(new URL("../src/routes/_authenticated.gate.tsx", import.meta.url), "utf8");
 assert(gate.includes("pageWhileEntitlementUnknown"), "unknown entitlement still uses the skeleton decision");
 assert(gate.includes("<FirmShellLoading />"), "a gated page stays on the skeleton until the check settles");
-assert(gate.includes("lastKnownFirmEntitlement"), "the gate reads the tab's last success");
+assert(gate.includes("lastKnownEntitlementForFirm"), "the gate reads the last plan for this firm id");
+assert(
+  gate.includes("surfaceAfterBillingCheckFailure"),
+  "a deadline or Stripe error uses the known plan and not the wall",
+);
+assert(!gate.includes("setShowWall(true)"), "a failed check does not open the billing wall");
 assert(gate.includes("billingCheckRetryDelayMs"), "an entitled failure retries with backoff");
 
 console.log("billing-gate-known ok");

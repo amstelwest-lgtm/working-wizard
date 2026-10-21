@@ -27,6 +27,7 @@ import {
   customerIdFromMetadataSubscriptions,
   emailHasEntitlingSubscription,
   FIRM_CUSTOMER_SEARCH_BUDGET_MS,
+  STORED_CUSTOMER_READ_BUDGET_MS,
   findFirmCustomerId,
   firmCustomerSearchQuery,
   isBillingExemptPath,
@@ -887,6 +888,72 @@ assert(
     missSearchOptions.timeout <= FIRM_CUSTOMER_SEARCH_BUDGET_MS,
   "metadata search timeout stays inside the shared budget",
 );
+
+assert(STORED_CUSTOMER_READ_BUDGET_MS <= 1_000, "a stored customer id is not held on retrieve");
+let storedHangSearches = 0;
+const storedHang: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [{ id: "cus_email" }] }),
+    retrieve: () => new Promise(() => {}),
+    search: () => {
+      storedHangSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: () => {
+      storedHangSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+};
+const storedHangStarted = Date.now();
+const storedHangHit = await Promise.race([
+  findFirmCustomerId(storedHang, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+    storedCustomerId: "cus_stored",
+  }),
+  new Promise<string>((_resolve, reject) => {
+    setTimeout(() => reject(new Error("stored id waited on retrieve")), 5_000);
+  }),
+]);
+const storedHangElapsed = Date.now() - storedHangStarted;
+assert(storedHangHit === "cus_stored", "a hanging retrieve still returns the stored customer id");
+assert(storedHangSearches === 0, "a stored id does not search when retrieve hangs");
+assert(storedHangElapsed < 5_000, "a stored id resolves within 5s when retrieve hangs");
+let storedErrorSearches = 0;
+const storedError: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [] }),
+    retrieve: async () => {
+      throw new Error("stripe down");
+    },
+    search: () => {
+      storedErrorSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: () => {
+      storedErrorSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+};
+assert(
+  (await findFirmCustomerId(storedError, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+    storedCustomerId: "cus_stored",
+  })) === "cus_stored",
+  "a Stripe error on retrieve keeps the stored customer id",
+);
+assert(storedErrorSearches === 0, "a retrieve error does not start a metadata search");
 assert(
   customerIdFromMetadataCustomers(
     [{ id: "cus_meta", metadata: { firm_id: BEN_FIRM, milon_user_id: BEN_OWNER } }],
@@ -1467,6 +1534,10 @@ assert(
 assert(ownerServer.includes("findFirmCustomerId"), "owner billing uses the stable customer lookup");
 const entitlement = readFileSync(resolve("src/lib/stripe-entitlement.ts"), "utf8");
 assert(!entitlement.includes("customers.update"), "entitlement lookup does not write Stripe");
+assert(
+  !entitlement.includes("writeFirmStripeCustomerId"),
+  "a customer lookup does not write firms.stripe_customer_id",
+);
 const migration = readFileSync(
   resolve("supabase/migrations/20261020223000_firm_stripe_customer_id.sql"),
   "utf8",
@@ -1505,5 +1576,9 @@ assert(fns.includes("firmBillingIdsForActor"), "a client firm id is checked agai
 assert(!fns.includes("customerId: z."), "checkout does not take a customer id from the client");
 const capServer = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
 assert(capServer.includes("actorCanUseFirm"), "a named firm is used only when the user belongs to it");
+assert(
+  !capServer.includes("writeFirmStripeCustomerId"),
+  "reading subscription history does not write firms.stripe_customer_id",
+);
 
 console.log("firm-billing-gate ok");
