@@ -7,10 +7,18 @@ import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-sl
 import { useBoundMarketCountry } from "@/contexts/market";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
-import { handoffTriggerLabel } from "@/lib/action-handoff";
-import { agentShortName } from "@/lib/milon-team";
+import { handoffTriggerLabel, moveRowStatus } from "@/lib/action-handoff";
+import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import { assignActionToPerson, commitActionHandoff } from "@/lib/owner-handoff-client";
+import { assignmentForMove, normalizeMoveLabel, type MoveAssignmentRef } from "@/lib/owner-handoff";
+import {
+  ACTION_PLAN_REFRESH_EVENT,
+  assignActionToPerson,
+  commitActionHandoff,
+  invalidateMoveAssignments,
+  loadClientMoveAssignments,
+  type ActionPlanRefreshDetail,
+} from "@/lib/owner-handoff-client";
 
 export type HandToPerson = { id: string; name: string; email: string | null };
 
@@ -253,18 +261,103 @@ export function HandToMenu({
   );
 }
 
-/** Accountant Next move. Creates the plan row if it is not there, then assigns it. */
+const MOVE_STATUS_POLL_MS = 5000;
+
+/** Next move, owner and accountant. Creates the plan row if it is not there, then assigns it. */
 export function MoveHandTo({
   clientId,
   moveKey,
   title,
   outcomeWhy,
+  onOpenDraft,
 }: {
   clientId: string;
   moveKey: string;
   title: string;
   outcomeWhy?: string;
+  onOpenDraft?: (draftId: string) => void;
 }) {
+  const [assignee, setAssignee] = useState<string | null>(null);
+  const [face, setFace] = useState<MoveAssignmentRef | null>(null);
+  const optimistic = useRef(false);
+  const actionId = useRef<string | null>(null);
+  const previous = useRef<string | null>(null);
+  const previousFace = useRef<MoveAssignmentRef | null>(null);
+
+  const applyStored = (match: MoveAssignmentRef | null) => {
+    if (!match) return;
+    actionId.current = match.actionItemId;
+    setFace(match);
+    setAssignee(match.assigneeName);
+    optimistic.current = false;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadClientMoveAssignments(clientId).then((rows) => {
+      if (cancelled || optimistic.current) return;
+      const match = assignmentForMove(rows, moveKey, title);
+      if (!match) return;
+      actionId.current = match.actionItemId;
+      setFace(match);
+      if (match.assigneeName) setAssignee(match.assigneeName);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, moveKey, title]);
+
+  useEffect(() => {
+    const onRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<ActionPlanRefreshDetail>).detail;
+      if (detail?.committed) {
+        invalidateMoveAssignments(clientId);
+        void loadClientMoveAssignments(clientId).then((rows) => {
+          applyStored(assignmentForMove(rows, moveKey, title));
+        });
+        return;
+      }
+      const titleKey = normalizeMoveLabel(detail?.title);
+      const matches =
+        Boolean(detail?.actionItemId && detail.actionItemId === actionId.current) ||
+        Boolean(titleKey && titleKey === normalizeMoveLabel(title)) ||
+        Boolean(titleKey && titleKey === normalizeMoveLabel(moveKey));
+      if (!matches) return;
+      if (detail?.actionItemId) actionId.current = detail.actionItemId;
+      if (detail?.failed) {
+        optimistic.current = false;
+        setAssignee(previous.current);
+        setFace(previousFace.current);
+        return;
+      }
+      if (detail?.assigneeName) {
+        optimistic.current = true;
+        setAssignee(detail.assigneeName);
+      }
+    };
+    window.addEventListener(ACTION_PLAN_REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(ACTION_PLAN_REFRESH_EVENT, onRefresh);
+  }, [clientId, moveKey, title]);
+
+  const rowStatus = moveRowStatus({
+    runStatus: face?.runStatus,
+    draftId: face?.draftId,
+    findingsReady: face?.findingsReady,
+  });
+
+  useEffect(() => {
+    if (rowStatus.phase !== "working") return;
+    const timer = window.setInterval(() => {
+      if (optimistic.current) return;
+      invalidateMoveAssignments(clientId);
+      void loadClientMoveAssignments(clientId).then((rows) => {
+        if (optimistic.current) return;
+        applyStored(assignmentForMove(rows, moveKey, title));
+      });
+    }, MOVE_STATUS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [clientId, moveKey, title, rowStatus.phase]);
+
   const ensure = async () => {
     const item = await ensureStrategicMoveItem({ clientId, moveKey, title, outcomeWhy });
     if (!item.ok) {
@@ -274,39 +367,93 @@ export function MoveHandTo({
     return item.actionItemId;
   };
 
+  const openDraftId = rowStatus.draftId;
+
   return (
-    <HandToMenu
-      clientId={clientId}
-      audience="accountant"
-      onAssignAgent={async (agent) => {
-        const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
-        const actionItemId = await ensure();
-        if (!actionItemId) {
-          toast.dismiss(toastId);
-          return;
-        }
-        const result = await commitActionHandoff({ clientId, actionItemId, title, agent });
-        if (!result.ok) {
-          toast.error(result.error, { id: toastId });
-          return;
-        }
-      }}
-      onAssignPerson={async (person) => {
-        const actionItemId = await ensure();
-        if (!actionItemId) return;
-        const result = await assignActionToPerson({
-          clientId,
-          actionItemId,
-          personId: person.id,
-          personName: person.name,
-          title,
-        });
-        if (!result.ok) {
-          toast.error(result.error);
-          return;
-        }
-        toast.success(`Assigned to ${person.name}`);
-      }}
-    />
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <HandToMenu
+        clientId={clientId}
+        audience="accountant"
+        assignee={assignee}
+        onAssignAgent={async (agent) => {
+          previous.current = assignee;
+          previousFace.current = face;
+          optimistic.current = true;
+          setAssignee(agentDisplayName(agent));
+          setFace({
+            actionItemId: actionId.current ?? "",
+            sourceMoveKey: moveKey,
+            driverKey: moveKey,
+            title,
+            assigneeName: agentDisplayName(agent),
+            runStatus: "queued",
+            draftId: null,
+            findingsReady: true,
+          });
+          const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
+          const actionItemId = await ensure();
+          if (!actionItemId) {
+            optimistic.current = false;
+            setAssignee(previous.current);
+            setFace(previousFace.current);
+            toast.dismiss(toastId);
+            return;
+          }
+          actionId.current = actionItemId;
+          const result = await commitActionHandoff({ clientId, actionItemId, title, agent });
+          if (!result.ok) {
+            optimistic.current = false;
+            setAssignee(previous.current);
+            setFace(previousFace.current);
+            toast.error(result.error, { id: toastId });
+          }
+        }}
+        onAssignPerson={async (person) => {
+          previous.current = assignee;
+          previousFace.current = face;
+          optimistic.current = true;
+          setAssignee(person.name);
+          const actionItemId = await ensure();
+          if (!actionItemId) {
+            optimistic.current = false;
+            setAssignee(previous.current);
+            setFace(previousFace.current);
+            return;
+          }
+          actionId.current = actionItemId;
+          const result = await assignActionToPerson({
+            clientId,
+            actionItemId,
+            personId: person.id,
+            personName: person.name,
+            title,
+          });
+          if (!result.ok) {
+            optimistic.current = false;
+            setAssignee(previous.current);
+            setFace(previousFace.current);
+            toast.error(result.error);
+            return;
+          }
+          toast.success(`Assigned to ${person.name}`);
+        }}
+      />
+      {rowStatus.phase === "working" ? (
+        <span data-move-phase="working" className="text-[12px] font-semibold text-[#0B5FFF]">
+          Working…
+        </span>
+      ) : null}
+      {rowStatus.phase === "draft_ready" && openDraftId ? (
+        <button
+          type="button"
+          data-move-phase="draft-ready"
+          data-open-draft={openDraftId}
+          className="text-[12px] font-semibold text-[#0B5FFF] underline"
+          onClick={() => onOpenDraft?.(openDraftId)}
+        >
+          Draft ready
+        </button>
+      ) : null}
+    </span>
   );
 }

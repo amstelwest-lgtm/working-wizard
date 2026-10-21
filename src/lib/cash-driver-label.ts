@@ -2,7 +2,6 @@ import {
   computedDaysInventory,
   ratiosStatementFigures,
 } from "@/lib/deliverable-input-config";
-import { NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 
 /** Drivers whose row currently prints a 0–100 score under a days name. */
 export const DAY_SCORE_DRIVER_KEYS = [
@@ -21,26 +20,20 @@ export function isDayScoreDriver(key: string): key is DayScoreDriverKey {
 /**
  * Health > Cash (and stock) driver label.
  * Known days: "Debtor Days · 6 days · score 93".
- * Missing days: "Debtor Days · — · Not enough data", with no score.
+ * Missing days stay the title. A score is not printed without a day count,
+ * so a blank receivable does not read as "0 days" or "score 100".
  */
 export function dayScoreDriverLabel(
   name: string,
   days: number | null | undefined,
   score: number,
-  financials?: object | null,
 ): string {
   const title = name.trim();
-  if (renderedMetricMissing({ value: days, name: title, financials })) {
-    return `${title} · — · ${NOT_ENOUGH_DATA}`;
-  }
   const knownDays = typeof days === "number" && Number.isFinite(days);
-  const knownScore = Number.isFinite(score);
-  const dayPart = knownDays ? `${Math.round(days)} days` : null;
-  const scorePart = knownScore ? `score ${Math.round(score)}` : null;
-  if (dayPart && scorePart) return `${title} · ${dayPart} · ${scorePart}`;
-  if (scorePart) return `${title} · ${scorePart}`;
-  if (dayPart) return `${title} · ${dayPart}`;
-  return title;
+  if (!knownDays) return title;
+  const dayPart = `${Math.round(days)} days`;
+  const scorePart = Number.isFinite(score) ? `score ${Math.round(score)}` : null;
+  return scorePart ? `${title} · ${dayPart} · ${scorePart}` : `${title} · ${dayPart}`;
 }
 
 type DayFigures = Parameters<typeof ratiosStatementFigures>[0];
@@ -54,10 +47,14 @@ type DayFigures = Parameters<typeof ratiosStatementFigures>[0];
 export function cashDriverDayFigures(financials: DayFigures): Record<DayScoreDriverKey, number | null> {
   const statement = ratiosStatementFigures(financials);
   const inventoryDays = computedDaysInventory(financials);
+  const debtorDays = statement.debtorDays;
+  const creditorDays = statement.creditorDays;
   const workingCapitalDays =
-    statement.debtorDays != null && statement.creditorDays != null && inventoryDays != null
-      ? Math.round(statement.debtorDays + inventoryDays - statement.creditorDays)
-      : null;
+    debtorDays == null || creditorDays == null || inventoryDays == null
+      ? null
+      : [debtorDays, inventoryDays, creditorDays].every((days) => Number.isFinite(days))
+        ? Math.round(debtorDays + inventoryDays - creditorDays)
+        : Number.NaN;
   return {
     debtorDays: statement.debtorDays,
     creditorDays: statement.creditorDays,

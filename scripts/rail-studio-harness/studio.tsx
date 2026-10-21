@@ -15,6 +15,7 @@ import { SourceDocumentsView } from "@/components/source-documents-panel";
 import type { SourceDocumentsModel } from "@/lib/source-documents-ui";
 import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { ClientFileSettings } from "@/components/client-file-settings";
 import { CollectionsPanel } from "@/components/collections-panel";
 import { PayablesPanel } from "@/components/payables-panel";
 import { finalizeCollections } from "@/lib/collections";
@@ -162,7 +163,7 @@ export function RailStudio() {
       replace: true,
     });
   }, [search.tab, search.section, clientId, navigate]);
-  const pane = legacyPaneForSearch(search) ?? "overview";
+  const pane = search.tab === "settings" ? "settings" : (legacyPaneForSearch(search) ?? "overview");
   useEffect(() => {
     if (pane !== "reports") return;
     const id =
@@ -248,6 +249,15 @@ export function RailStudio() {
             ) : null}
             {pane === "reports" ? (
               <ReportsPane clientId={clientId} packView={search.packView} />
+            ) : null}
+            {pane === "settings" ? (
+              <ClientFileSettings
+                clientName="Harbour Glass"
+                owners={[]}
+                pending={[]}
+                onInvite={() => undefined}
+                onPracticeSettings={() => undefined}
+              />
             ) : null}
           </div>
         </div>

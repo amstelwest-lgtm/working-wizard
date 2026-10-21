@@ -64,10 +64,10 @@ If the signed-in email already has an **active** Stripe subscription, Checkout c
 
 ## New firm signup — 14-day trial
 
-New firms open the practice workspace after `/auth` signup (email confirm and Google included). The default Checkout band is Starter monthly. A card is required at signup. Larger bands stay available when the firm selects them. A legacy $0 Starter subscription is not a new-signup path. The pre-card allowance still lets a firm with no subscription generate one pack, draft one email, and ask the Bot ten times before Checkout. Reports, team and brand settings, the practice dashboard (adding another client), and a later client's file still resume at `/billing/required`.
+New firms open the practice workspace after `/auth` signup (email confirm and Google included). The default Checkout band is Starter monthly. You add a card once you've seen your first result. Larger bands stay available when the firm selects them. A legacy $0 Starter subscription is not a new-signup path. The pre-card allowance still lets a firm with no subscription generate one pack, draft one email, and ask the Bot ten times before Checkout. Reports, team and brand settings, the practice dashboard (adding another client), and a later client's file still resume at `/billing/required`.
 
 - Copy: **14-day free trial · up to 5 clients**. Do not write “3 free clients”, “up to 3 clients”, or “free forever.”
-- Card is required at signup. The trial subscription status is `trialing`, which entitles `/dashboard` and the rest of the firm product.
+- The card is collected at Checkout after the first result, not at account signup. Once a card is on file, the trial subscription status is `trialing`, which entitles `/dashboard` and the rest of the firm product.
 - During the trial the app blocks the 6th client on every band until the subscription is `active` on a band that allows it. The firm owner can end the trial from Add client (“Upgrade to paid plan”), which sets `trial_end: now` and bills the card.
 - Paid Solo+ uses the catalog client limits (Solo 15, Small 25, …).
 - FOUNDING / FOUNDING50 applies to monthly paid Solo+ invoices after the trial. It is not a free-forever coupon.

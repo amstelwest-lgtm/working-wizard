@@ -1,7 +1,7 @@
 import type { SpherePillar } from "@/components/sphere-hero";
 import { dayScoreDriverLabel, isDayScoreDriver } from "@/lib/cash-driver-label";
+import { HEALTH_NOT_ENOUGH_DATA } from "@/lib/health-metric-row";
 import { PILLAR_SHORT_LABELS } from "@/lib/health-score";
-import { balanceSheetDayInputsMissing, NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 import { HEALTH_BAND_TABLE, type HealthTier } from "@/lib/ratios";
 
 /**
@@ -54,7 +54,7 @@ export type BuildSphereArgs = {
   /** pillarHealths object from app.tsx */
   pillarHealths: Record<SpherePillar["id"], number>;
   /** Capped pillar bands from computeOverallHealth. */
-  pillarStatus?: Partial<Record<SpherePillar["id"], HealthTier>>;
+  pillarStatus?: Partial<Record<SpherePillar["id"], HealthTier | null>>;
   /** Unscored reason, such as a missing opening balance. */
   pillarNotes?: Partial<Record<SpherePillar["id"], string | null>>;
   /** per-pillar deltas, if you track them; otherwise omit */
@@ -72,8 +72,6 @@ export type BuildSphereArgs = {
   dayCounts?: Partial<Record<string, number | null>>;
   /** Per-driver note, keyed by ratio key. Replaces the band word on that row. */
   driverNotes?: Partial<Record<string, string>>;
-  /** Source books. Day drivers with no balance sheet are not scored. */
-  financials?: object | null;
 };
 
 export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
@@ -83,30 +81,23 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
       const noStock = k === "inventoryDays" && args.inventoryApplies === false;
       // Each driver uses its own scored ratio. The financing pillar average
       // must not replace Equity Multiplier — the ratio drawer reads that score.
-      const health = noStock
+      const label = ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k;
+      const tracked = isDayScoreDriver(k) && args.dayCounts != null && !noStock;
+      const days = tracked ? (args.dayCounts?.[k] ?? null) : undefined;
+      const daysUnusable = tracked && (days == null || !Number.isFinite(days));
+      const health = noStock || daysUnusable
         ? Number.NaN
         : k in healthMap && Number.isFinite(healthMap[k])
           ? healthMap[k]
           : Number.NaN;
-      const label = ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k;
-      const tracked = isDayScoreDriver(k) && args.dayCounts != null && !noStock;
-      const days = tracked ? (args.dayCounts?.[k] ?? null) : undefined;
-      const dayMissing =
-        isDayScoreDriver(k) &&
-        !noStock &&
-        ((tracked &&
-          renderedMetricMissing({ value: days, name: label, financials: args.financials })) ||
-          balanceSheetDayInputsMissing(args.financials));
-      const reading =
-        tracked && !dayMissing ? dayScoreDriverLabel(label, days, health, args.financials) : undefined;
-      const note = dayMissing
-        ? NOT_ENOUGH_DATA
-        : args.driverNotes?.[k]?.trim() || undefined;
+      const reading = tracked && !daysUnusable ? dayScoreDriverLabel(label, days, health) : undefined;
+      const suppliedNote = args.driverNotes?.[k]?.trim() || undefined;
+      const note = suppliedNote ?? (tracked && days == null ? HEALTH_NOT_ENOUGH_DATA : undefined);
       return {
         key: k,
         label,
         description: ratioMeta[k]?.techName,
-        health: dayMissing ? Number.NaN : health,
+        health,
         na: noStock ? true : undefined,
         reading: reading && reading !== label ? reading : undefined,
         note,

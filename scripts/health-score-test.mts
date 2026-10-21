@@ -340,17 +340,11 @@ assert(
   "stock days use the same label",
 );
 assert(
-  dayScoreDriverLabel("Debtor Days", null, 93) === "Debtor Days · — · Not enough data",
-  "unknown days are missing, with no score",
+  dayScoreDriverLabel("Debtor Days", null, 93) === "Debtor Days",
+  "unknown days drop the score",
 );
-assert(
-  dayScoreDriverLabel("Debtor Days", Number.NaN, 93) === "Debtor Days · — · Not enough data",
-  "a non-number is missing",
-);
-assert(
-  dayScoreDriverLabel("Working Capital Days", null, Number.NaN) === "Working Capital Days · — · Not enough data",
-  "no days and no score stay missing",
-);
+assert(dayScoreDriverLabel("Debtor Days", Number.NaN, 93) === "Debtor Days", "a non-number drops the score");
+assert(dayScoreDriverLabel("Working Capital Days", null, Number.NaN) === "Working Capital Days", "no days and no score stay the name");
 
 const labelled = buildSpherePillars({
   overallHealth: 70,
@@ -370,12 +364,9 @@ const stockCard = labelled.find((pillar) => pillar.id === "assets")?.drivers.fin
 const marginCard = labelled.find((pillar) => pillar.id === "profit")?.drivers.find((driver) => driver.key === "grossMargin");
 assert(debtorCard?.reading === "Debtor Days · 6 days · score 93", debtorCard?.reading ?? "missing debtor label");
 assert(debtorCard?.health === 93, "the debtor score itself stays 93");
-assert(
-  creditorCard?.reading == null &&
-    creditorCard?.note === "Not enough data" &&
-    !Number.isFinite(creditorCard?.health),
-  creditorCard?.reading ?? creditorCard?.note ?? "missing creditor label",
-);
+assert(creditorCard?.reading == null, creditorCard?.reading ?? "creditor days should not invent a score");
+assert(!Number.isFinite(creditorCard?.health), "missing creditor days are not scored");
+assert(creditorCard?.note === "Not enough data", creditorCard?.note ?? "missing creditor note");
 assert(stockCard?.reading === "Inventory Days · 12 days · score 63", stockCard?.reading ?? "missing stock label");
 assert(marginCard?.reading == null && marginCard?.label === "Gross Margin", "a non-day driver keeps its label");
 const noStock = buildSpherePillars({

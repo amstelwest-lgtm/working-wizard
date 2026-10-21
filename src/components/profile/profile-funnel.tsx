@@ -644,7 +644,7 @@ export function ProfileFunnel({
             data-profile-later=""
             onClick={onCancel}
           >
-            {mode === "retake" ? "Cancel" : "Later"}
+            Later
           </Button>
         ) : (
           <span />

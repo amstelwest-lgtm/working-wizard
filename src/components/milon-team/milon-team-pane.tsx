@@ -62,8 +62,10 @@ export function MilonTeamPane({
       market: live.market,
       canonicalRatios,
       liveHealth: feed.healthQuote,
+      writtenAt: newest.created_at,
+      figuresUpdatedAt: feed.figuresUpdatedAt,
     });
-  }, [agent, live.findings, live.market, canonicalRatios, feed.healthQuote]);
+  }, [agent, live.findings, live.market, canonicalRatios, feed.healthQuote, feed.figuresUpdatedAt]);
   const finding = rewriteDraftMonthStamp(
     homeFinding?.trim() || findingFallback?.trim() || filedFinding,
   );

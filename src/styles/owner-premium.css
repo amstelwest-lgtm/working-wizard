@@ -659,28 +659,18 @@ html.dark .owner-door .health-ring-track {
   margin-top: 16px;
   min-height: 40px;
   padding: 0 20px;
-  border: 2px solid transparent;
+  border: 0;
   border-radius: 999px;
   background-color: var(--royal, #2563eb);
-  background-image:
-    linear-gradient(180deg, #2e6bf0, #2056d6),
-    var(--op-gold-gleam);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  background-image: linear-gradient(180deg, #2e6bf0, #2056d6);
   color: #ffffff;
   font-size: 13.5px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 246, 214, 0.55),
-    0 6px 18px rgba(37, 99, 235, 0.26);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.26);
 }
 .owner-door .health-ring-cta:hover {
-  background-image:
-    linear-gradient(180deg, #3b76f2, #2a60e0),
-    var(--op-gold-gleam);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  background-image: linear-gradient(180deg, #3b76f2, #2a60e0);
 }
 .owner-door .health-pillar-kicker {
   margin: 4px 0 0;
@@ -704,7 +694,7 @@ html.dark .owner-door .health-ring-track {
 @media (max-width: 390px) {
   html:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
   .owner-door.accountant-portal:not([data-screen="chat"]) .deliverable-main {
-    padding-right: 28px;
+    padding-right: 64px;
   }
   .notes-fab {
     bottom: max(20px, env(safe-area-inset-bottom)) !important;
@@ -905,45 +895,27 @@ html:not(.dark) .owner-door .owner-btn-secondary:hover {
 html:not(.dark) .owner-door .btn.gold,
 html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold {
   background-color: var(--royal, #2563eb);
-  background-image:
-    linear-gradient(180deg, #2e6bf0, #2056d6),
-    var(--op-gold-gleam);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  background-image: linear-gradient(180deg, #2e6bf0, #2056d6);
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
   border: 2px solid transparent;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 246, 214, 0.55),
-    0 6px 18px rgba(37, 99, 235, 0.26);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.26);
 }
 html:not(.dark) .owner-door .btn.gold:hover,
 html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold:hover {
-  background-image:
-    linear-gradient(180deg, #3b76f2, #2a60e0),
-    var(--op-gold-gleam);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  background-image: linear-gradient(180deg, #3b76f2, #2a60e0);
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
 }
 html.dark .owner-door .btn.gold {
   border: 2px solid transparent;
   background-color: var(--cobalt);
-  background-image:
-    linear-gradient(180deg, var(--cobalt), var(--cobalt)),
-    var(--op-gold-gleam);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  box-shadow: inset 0 1px 0 rgba(255, 246, 214, 0.35);
+  background-image: none;
+  box-shadow: none;
 }
 html.dark .owner-door .btn.gold:hover {
   background-color: var(--royal);
-  background-image:
-    linear-gradient(180deg, var(--royal), var(--royal)),
-    var(--op-gold-gleam);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  background-image: none;
 }
 
 /* Enlarge / download affordances: quiet outline chips. */
@@ -1191,15 +1163,22 @@ html:not(.dark) .premium-shell .accountant-nav .nav-settings[aria-current="page"
   box-shadow: none;
 }
 html:not(.dark) .premium-shell .btn.gold {
-  background-color: #2563eb;
-  background-image:
-    linear-gradient(180deg, #2e6bf0, #2056d6),
-    var(--op-gold-gleam, linear-gradient(115deg, #7a5400, #f6e7a2, #7a5400));
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  background-color: #0b5fff;
+  background-image: linear-gradient(180deg, #2e6bf0, #2056d6);
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
-  border: 2px solid transparent;
+  border: 2px solid #0b5fff;
+  box-shadow: none;
+}
+html:not(.dark) .premium-shell .btn.gold:hover {
+  background-color: #2563eb;
+  background-image: linear-gradient(180deg, #3b76f2, #2a60e0);
+  border-color: #2563eb;
+}
+.premium-shell .btn.gold:focus-visible,
+.premium-shell .btn.ghost:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 3px;
 }
 
 /* Home fills the viewport with the canvas, including the area under the cards. */

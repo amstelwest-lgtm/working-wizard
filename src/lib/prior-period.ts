@@ -206,8 +206,8 @@ export function buildVarianceChips(input: {
 export function withPriorRatioScores<
   T extends {
     ratio_name: string;
-    current_value: number;
-    health_score: number;
+    current_value: number | null;
+    health_score: number | null;
     prior_period_value?: number;
     prior_period_score?: number;
   },

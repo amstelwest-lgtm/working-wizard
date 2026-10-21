@@ -473,6 +473,8 @@ assert(ownerHomeSrc.includes('data-profile-resume=""'), "Home can resume the bus
 assert(ownerHomeSrc.includes("Continue business profile"), "Home names the resume action");
 const profileSrc = readFileSync(resolve("src/components/profile/profile-funnel.tsx"), "utf8");
 assert(profileSrc.includes('data-profile-later=""'), "the profile footer offers Later");
+assert(/data-profile-later=""[\s\S]{0,120}\bLater\b/.test(profileSrc), "retake mode still says Later");
+assert(!profileSrc.includes('? "Cancel"'), "retake mode does not say Cancel");
 const accountantClient = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(accountantClient.includes('modal={false}'), "the accountant profile dialog does not inert the header");
 assert(

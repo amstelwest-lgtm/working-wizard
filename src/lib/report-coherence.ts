@@ -454,7 +454,7 @@ function balanceSheetMakesDayMissing(input: { financials?: object | null }): boo
 /** One presentation for the scorecard row, the DuPont strip, and the asset report. */
 export function presentScorecardRatio(input: {
   name: string;
-  value: number;
+  value: number | null;
   equity?: number | null;
   currency?: string | null;
   periodMonths?: number | null;
@@ -466,6 +466,7 @@ export function presentScorecardRatio(input: {
   /** Source books. A day count of 0 is missing when these have no AR, inventory, or payables. */
   financials?: object | null;
 }): ScorecardPresentation {
+  const grossValue = typeof input.value === "number" ? input.value : Number.NaN;
   if (
     isDayMetricName(input.name) &&
     renderedMetricMissing({
@@ -486,8 +487,8 @@ export function presentScorecardRatio(input: {
   }
   if (
     input.name === "Gross Margin" &&
-    Number.isFinite(input.value) &&
-    grossMarginLooksImplausible(input.value, input.industry)
+    Number.isFinite(grossValue) &&
+    grossMarginLooksImplausible(grossValue, input.industry)
   ) {
     return {
       include: true,
@@ -509,7 +510,7 @@ export function presentScorecardRatio(input: {
   if (input.name === "Return on Equity" || input.name === "Return on Assets") {
     const presented = presentReturn({
       ratioName: input.name,
-      value: input.value,
+      value: input.value ?? Number.NaN,
       equity: input.equity,
       currency: input.currency,
       periodMonths: input.periodMonths,

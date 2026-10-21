@@ -46,12 +46,14 @@ import {
   type FirmInterval,
   type StripePlanMarket,
 } from "@/lib/stripe-plans";
+import { readFirmStripeCustomerId, writeFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
 import {
   assertNoManagedPaymentsOverride,
   firmCheckoutCharge,
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
   firmSetupCheckoutSessionParams,
+  firmStartTrialCheckout,
   firmUpgradeCheckoutSessionParams,
   readFirmSetupUpgrade,
   resolveFirmCatalogPrice,
@@ -81,7 +83,7 @@ import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
   decideFirmBillingEntitlement,
-  findCustomerIdByEmail as findStripeCustomerIdByEmail,
+  findFirmCustomerId,
   type FirmBillingEntitlement,
 } from "@/lib/stripe-entitlement";
 
@@ -104,7 +106,9 @@ type BillingAuthCtx = AuthCtx & {
           column: string,
           value: string,
         ) => {
-          limit: (n: number) => Promise<{ data: Array<{ id?: string }> | null }>;
+          limit: (n: number) => Promise<{
+            data: Array<{ id?: string; owner_user_id?: string | null }> | null;
+          }>;
         };
       };
     };
@@ -122,8 +126,13 @@ async function checkoutActor(context: unknown): Promise<{ userId: string; email:
   return { userId, email };
 }
 
-async function findCustomerIdByEmail(email: string): Promise<string | undefined> {
-  return findStripeCustomerIdByEmail(getStripe(), email);
+async function findBillingCustomerId(input: {
+  email: string;
+  userId?: string | null;
+  firmId?: string | null;
+}): Promise<string | undefined> {
+  const storedCustomerId = input.firmId ? await readFirmStripeCustomerId(input.firmId) : null;
+  return findFirmCustomerId(getStripe(), { ...input, storedCustomerId });
 }
 
 async function customerHasActiveSubscription(customerId: string): Promise<boolean> {
@@ -241,6 +250,43 @@ async function countOwnedFirms(
   return data?.length ?? 0;
 }
 
+async function callerOwnedFirmId(
+  supabase: BillingAuthCtx["supabase"],
+  userId: string,
+): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.from("firms").select("id").eq("owner_user_id", userId).limit(1);
+  const id = data?.[0]?.id;
+  return typeof id === "string" && id ? id : null;
+}
+
+/**
+ * Firm id and the Stripe user id for this actor.
+ * A client-sent firm id is kept only when this signed-in user's row can read
+ * that firm. The Stripe user id is the owner on that row, not the request body.
+ * A firm the user cannot read is dropped.
+ */
+async function firmBillingIdsForActor(
+  supabase: BillingAuthCtx["supabase"],
+  userId: string,
+  requestedFirmId: string | null,
+): Promise<{ firmId: string | null; ownerUserId: string }> {
+  if (!supabase) return { firmId: null, ownerUserId: userId };
+  const requested = requestedFirmId?.trim() ?? "";
+  if (requested) {
+    const { data } = await supabase.from("firms").select("id, owner_user_id").eq("id", requested).limit(1);
+    const row = data?.[0];
+    if (!row?.id) return { firmId: null, ownerUserId: userId };
+    const owner =
+      typeof row.owner_user_id === "string" && row.owner_user_id.trim()
+        ? row.owner_user_id.trim()
+        : userId;
+    return { firmId: String(row.id), ownerUserId: owner };
+  }
+  const owned = await callerOwnedFirmId(supabase, userId);
+  return { firmId: owned, ownerUserId: userId };
+}
+
 async function countFirmMemberships(
   supabase: BillingAuthCtx["supabase"],
   userId: string,
@@ -272,11 +318,16 @@ async function resolveFirmBillingEntitlement(
     if (pending) return pending;
   }
   const work = (async (): Promise<FirmBillingEntitlement> => {
+    const billingIds = await firmBillingIdsForActor(ctx.supabase, userId, firmId);
     try {
       // One isolate-cached Stripe list. The mirror below reads that same
       // entry. It must not be awaited: a second scan used to sit on the response.
       const [history, owned, memberships] = await Promise.all([
-        readFirmSubscriptionHistory(email, { fresh: refresh }),
+        readFirmSubscriptionHistory(email, {
+          fresh: refresh,
+          userId: billingIds.ownerUserId,
+          firmId: billingIds.firmId,
+        }),
         countOwnedFirms(ctx.supabase, userId),
         countFirmMemberships(ctx.supabase, userId),
       ]);
@@ -289,7 +340,7 @@ async function resolveFirmBillingEntitlement(
         }),
         introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
       };
-      rememberEntitlement(email, result, userId, firmId);
+      rememberEntitlement(email, result, userId, billingIds.firmId);
       const mirror = syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
         console.warn(
           "[stripe-entitlement] trial mirror sync failed",
@@ -326,7 +377,10 @@ async function resolveFirmBillingEntitlement(
       });
       // Unknown is not unpaid. Caching this as entitled:false sent the shell
       // to the trial card. A previous success for this user and firm stays.
-      return entitlementAfterLiveFailure(lookupLastFirmEntitlement(userId, email, firmId), kind);
+      return entitlementAfterLiveFailure(
+        lookupLastFirmEntitlement(userId, email, billingIds.firmId),
+        kind,
+      );
     }
   })();
   if (key) {
@@ -380,6 +434,7 @@ async function createPaidCheckoutSession(input: {
   promo?: string | null;
   /** From the firm row. Never the client market flag. */
   zaCouponId?: string | null;
+  firmId?: string | null;
 }): Promise<{ url: string; kind: "checkout" | "portal" }> {
   if (!stripeConfigured()) {
     throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
@@ -389,30 +444,44 @@ async function createPaidCheckoutSession(input: {
 
   const stripe = getStripe();
   const origin = appOrigin();
-  const customerId = await findCustomerIdByEmail(input.email);
-
-  if (customerId && (await customerHasActiveSubscription(customerId))) {
-    return { url: await createPortalUrl(customerId, origin), kind: "portal" };
+  const customerId = await findBillingCustomerId({
+    email: input.email,
+    userId: input.userId,
+    firmId: input.firmId,
+  });
+  if (input.firmId && customerId) {
+    await writeFirmStripeCustomerId(input.firmId, customerId);
   }
 
-  let includeTrial = true;
+  let priorSubscriptionCount = 0;
+  let needsPaymentOnExisting = false;
+  let hasEntitlingSubscription = false;
   if (customerId) {
-    const prior = await stripe.subscriptions.list({
-      customer: customerId,
-      status: "all",
-      limit: 20,
-    });
-    const needsPaymentOnExisting = prior.data.some(
-      (sub) =>
-        sub.status === "past_due" ||
-        sub.status === "unpaid" ||
-        sub.status === "incomplete" ||
-        sub.status === "paused",
-    );
-    if (needsPaymentOnExisting) {
-      return { url: await createPortalUrl(customerId, origin), kind: "portal" };
+    hasEntitlingSubscription = await customerHasActiveSubscription(customerId);
+    if (!hasEntitlingSubscription) {
+      const prior = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 20,
+      });
+      priorSubscriptionCount = prior.data.length;
+      needsPaymentOnExisting = prior.data.some(
+        (sub) =>
+          sub.status === "past_due" ||
+          sub.status === "unpaid" ||
+          sub.status === "incomplete" ||
+          sub.status === "paused",
+      );
     }
-    includeTrial = eligibleForIntroTrial(prior.data.length);
+  }
+  const action = firmStartTrialCheckout({
+    customerId,
+    priorSubscriptionCount,
+    hasEntitlingSubscription,
+    needsPaymentOnExisting,
+  });
+  if (action.kind === "portal") {
+    return { url: await createPortalUrl(action.customerId, origin), kind: "portal" };
   }
 
   const billingCountry = await readStripeCustomerCountry(stripe, customerId);
@@ -449,13 +518,14 @@ async function createPaidCheckoutSession(input: {
     interval: input.interval,
     origin,
     userId: input.userId,
+    firmId: input.firmId,
     email: input.email,
-    customerId,
+    customerId: action.customerId,
     market: charge.firmMarket,
     promotionCodeId,
     billingFallback: charge.billingFallback,
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
-    includeTrial,
+    includeTrial: action.includeTrial,
   });
   assertNoManagedPaymentsOverride(params);
 
@@ -481,9 +551,11 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
     const firmMarket = await loadCallerFirmMarket({ supabase: ctx.supabase, userId });
+    const firmId = await callerOwnedFirmId(ctx.supabase, userId);
     return createPaidCheckoutSession({
       userId,
       email,
+      firmId,
       plan: data.plan as FirmCheckoutBand,
       interval: data.interval as FirmInterval,
       requested: data.market as StripePlanMarket,
@@ -502,8 +574,12 @@ export const createBillingPortalSession = createServerFn({ method: "POST" })
     if (!stripeConfigured()) {
       throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
     }
-    const { email } = await checkoutActor(context);
-    const customerId = await findCustomerIdByEmail(email);
+    const { userId, email } = await checkoutActor(context);
+    const firmId = await callerOwnedFirmId(
+      (context as unknown as BillingAuthCtx).supabase,
+      userId,
+    );
+    const customerId = await findBillingCustomerId({ email, userId, firmId });
     if (!customerId) {
       throw new Error("No Stripe customer yet. Start a firm plan from pricing first.");
     }
@@ -537,8 +613,12 @@ export const endFirmTrialNow = createServerFn({ method: "POST" })
     if (!stripeConfigured()) {
       throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
     }
-    const { email } = await checkoutActor(context);
-    const sub = await findEntitlingFirmSubscription(email);
+    const { userId, email } = await checkoutActor(context);
+    const firmId = await callerOwnedFirmId(
+      (context as unknown as BillingAuthCtx).supabase,
+      userId,
+    );
+    const sub = await findEntitlingFirmSubscription(email, { userId, firmId });
     if (!sub || sub.phase !== "trialing") {
       throw new Error(
         "No trial subscription to upgrade. Open Manage billing if the paid plan is already active.",
@@ -634,7 +714,7 @@ export const validateFirmVoucher = createServerFn({ method: "POST" })
     }
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
-    const { billingEmail } = await assertCallerCanUpgradeFirm({
+    const { billingEmail, ownerUserId } = await assertCallerCanUpgradeFirm({
       supabase: ctx.supabase,
       userId,
       email,
@@ -650,8 +730,14 @@ export const validateFirmVoucher = createServerFn({ method: "POST" })
       typeof price.unit_amount === "number"
         ? price.unit_amount
         : (firmBandListCents(band, interval) ?? 0);
-    const sub = await findEntitlingFirmSubscription(billingEmail);
-    const firmCustomerId = sub?.customerId ?? (await findCustomerIdByEmail(billingEmail)) ?? null;
+    const sub = await findEntitlingFirmSubscription(billingEmail, {
+      userId: ownerUserId,
+      firmId: data.firmId,
+    });
+    const firmCustomerId =
+      sub?.customerId ??
+      (await findBillingCustomerId({ email: billingEmail, userId: ownerUserId, firmId: data.firmId })) ??
+      null;
     const voucher = await resolveFirmVoucher(stripe, {
       code,
       firmCustomerId,
@@ -701,6 +787,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const {
       billingEmail,
       clientCount,
+      ownerUserId,
       market: firmMarket,
     } = await assertCallerCanUpgradeFirm({
       supabase: ctx.supabase,
@@ -712,7 +799,10 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const zaCouponId = saFirm ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
     const band = data.band as FirmCheckoutBand;
     const interval = data.interval as FirmInterval;
-    const sub = await findEntitlingFirmSubscription(billingEmail);
+    const sub = await findEntitlingFirmSubscription(billingEmail, {
+      userId: ownerUserId,
+      firmId: data.firmId,
+    });
     assertUpgradeTarget({
       phase: sub?.phase ?? "none",
       current: sub?.band ?? null,
@@ -721,7 +811,9 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     });
 
     const stripe = getStripe();
-    const countryCustomerId = sub?.customerId ?? (await findCustomerIdByEmail(billingEmail));
+    const countryCustomerId =
+      sub?.customerId ??
+      (await findBillingCustomerId({ email: billingEmail, userId: ownerUserId, firmId: data.firmId }));
     const billingCountry = await readStripeCustomerCountry(stripe, countryCustomerId);
     const priceMarket = priceMarketForFirm({
       firmMarket: saFirm ? "za" : "us",
@@ -739,7 +831,10 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     let voucherPromotionCodeId: string | null = null;
     let voucherPreview: string | null = null;
     if (voucherCode) {
-      const firmCustomerId = sub?.customerId ?? (await findCustomerIdByEmail(billingEmail)) ?? null;
+      const firmCustomerId =
+        sub?.customerId ??
+        (await findBillingCustomerId({ email: billingEmail, userId: ownerUserId, firmId: data.firmId })) ??
+        null;
       const voucher = await resolveFirmVoucher(stripe, {
         code: voucherCode,
         firmCustomerId,
@@ -842,7 +937,12 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       throw new Error(UPGRADE_FAILED_MESSAGE);
     }
 
-    const customerId = await findCustomerIdByEmail(billingEmail);
+    const customerId = await findBillingCustomerId({
+      email: billingEmail,
+      userId: ownerUserId,
+      firmId: data.firmId,
+    });
+    if (customerId) await writeFirmStripeCustomerId(data.firmId, customerId);
     let replacesSubscriptionId: string | undefined;
     if (customerId) {
       try {

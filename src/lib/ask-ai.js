@@ -37,6 +37,7 @@ import {
 } from "./precard-cap.ts";
 import { billingStartPath, peekPendingCheckout } from "./pending-checkout.ts";
 import { firmSignupCheckoutIntent } from "./stripe-plans.ts";
+import { loadStarterMonthlyLabel, starterMonthlyFromQuote } from "./trial-card-price.ts";
 import { botSignoffCtas, botSignoffDestination, botSignoffStateLine } from "./bot-signoff-path.ts";
 import { stripMilonProjection } from "./milon-projection.ts";
 import { supabase } from "../integrations/supabase/client.ts";
@@ -231,6 +232,8 @@ export function mountAskAi(container, options) {
   let history = [];
   let signoffCtas = [];
   let lastQuestion = "";
+  let starterMonthly = "";
+  let starterMonthlyStarted = false;
   let boundClientId = null;
   let boundAgent = "";
   let boundForecastKey = "";
@@ -562,8 +565,10 @@ export function mountAskAi(container, options) {
         const thread = document.createElement("div");
         thread.className = "ask-ai-thread";
         thread.role = "log";
+        let capCard = null;
         shown.forEach((turn, index) => {
           const capLimit = capLimitForTurn(turn);
+          if (capLimit && capCard) return;
           const latest = index === shown.length - 1 && !loading;
           const latestAssistant =
             turn.role === "assistant" && latest && Boolean(answer) && !capLimit;
@@ -576,6 +581,8 @@ export function mountAskAi(container, options) {
                 : "ask-ai-turn ask-ai-answer";
           if (latestAssistant || (turn.role === "assistant" && latest)) bubble.dataset.latest = "1";
           if (capLimit) {
+            capCard = bubble;
+            ensureStarterMonthly();
             bubble.dataset.precardCap = capLimit;
             const reason = document.createElement("p");
             reason.className = "precard-cap-reason";
@@ -583,12 +590,19 @@ export function mountAskAi(container, options) {
             const title = document.createElement("p");
             title.className = "precard-cap-title";
             title.textContent = PRECARD_CAP_MESSAGE;
+            bubble.appendChild(reason);
+            bubble.appendChild(title);
+            if (starterMonthly) {
+              const price = document.createElement("p");
+              price.className = "precard-cap-price";
+              price.dataset.trialPrice = "1";
+              price.textContent = starterMonthly;
+              bubble.appendChild(price);
+            }
             const link = document.createElement("a");
             link.className = "precard-cap-button";
             link.href = billingStartPath(peekPendingCheckout() ?? firmSignupCheckoutIntent());
             link.textContent = "Add a card";
-            bubble.appendChild(reason);
-            bubble.appendChild(title);
             bubble.appendChild(link);
           } else if (turn.role === "user") {
             bubble.textContent = stripMilonProjection(turn.content);
@@ -634,7 +648,11 @@ export function mountAskAi(container, options) {
           thread.appendChild(typing);
         }
         panel.appendChild(thread);
-        thread.scrollTop = thread.scrollHeight;
+        if (capCard && typeof capCard.scrollIntoView === "function") {
+          capCard.scrollIntoView({ block: "nearest" });
+        } else {
+          thread.scrollTop = thread.scrollHeight;
+        }
       }
 
       widget.appendChild(panel);
@@ -828,6 +846,46 @@ export function mountAskAi(container, options) {
     if (typeof turn.content === "string" && turn.content.trim() === PRECARD_CAP_MESSAGE)
       return "bot";
     return null;
+  }
+
+  function oneCapCard(items) {
+    let seen = false;
+    return items.filter((item) => {
+      if (!capLimitForTurn(item)) return true;
+      if (seen) return false;
+      seen = true;
+      return true;
+    });
+  }
+
+  function trimKeepingCap(items) {
+    const tail = items.slice(-16);
+    if (tail.some((item) => capLimitForTurn(item))) return tail;
+    const card = items.find((item) => capLimitForTurn(item));
+    if (!card) return tail;
+    return [card, ...tail.slice(0, 15)];
+  }
+
+  function ensureStarterMonthly() {
+    if (starterMonthly || starterMonthlyStarted) return;
+    const load =
+      options && typeof options.getStarterMonthly === "function"
+        ? options.getStarterMonthly
+        : loadStarterMonthlyLabel;
+    starterMonthlyStarted = true;
+    Promise.resolve()
+      .then(() => load())
+      .then((label) => {
+        const next = typeof label === "string" ? label.trim() : "";
+        if (!next || next === starterMonthly) return;
+        starterMonthly = next;
+        safeRender(lastQuestion);
+      })
+      .catch(() => {
+        if (starterMonthly) return;
+        starterMonthly = starterMonthlyFromQuote({ market: "us", priceLabel: null });
+        safeRender(lastQuestion);
+      });
   }
 
   function newTurnId() {
@@ -1075,22 +1133,20 @@ export function mountAskAi(container, options) {
       answerChips = precardCap ? [] : turn.chips;
       agentRun = turn.run;
       toolHints = turn.tools.map((t) => toolHint(t.name, t.status));
+      const capped = Boolean(turn.precardCap && isPrecardLimitKind(turn.precardCap.limit));
+      const hasCard = history.some((item) => capLimitForTurn(item));
       const assistant = {
         role: "assistant",
         content: answer,
-        ...(turn.precardCap && isPrecardLimitKind(turn.precardCap.limit)
-          ? { precardCap: { limit: turn.precardCap.limit } }
-          : {}),
+        ...(capped ? { precardCap: { limit: turn.precardCap.limit } } : {}),
       };
-      history = [
-        ...history.map((item) =>
-          item.role === "user" && item.turnId === turnId
-            ? { role: "user", content: item.content, turnId }
-            : item,
-        ),
-        assistant,
-      ];
-      if (history.length > 16) history = history.slice(-16);
+      const mapped = history.map((item) =>
+        item.role === "user" && item.turnId === turnId
+          ? { role: "user", content: item.content, turnId }
+          : item,
+      );
+      history = oneCapCard(capped && hasCard ? mapped : [...mapped, assistant]);
+      if (history.length > 16) history = trimKeepingCap(history);
       writeThread(boundClientId || currentClientId(), history);
       signoffCtas = botSignoffCtas({
         tools: turn.tools,

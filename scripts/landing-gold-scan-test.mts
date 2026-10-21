@@ -1,10 +1,12 @@
 /**
  * Computed-style scan of `/`, `/terms`, `/privacy`, and `/join/:token`, plus
- * the accountant harness (`/clients`, client Health, client Reports). Brand
+ * the accountant harness (`/clients`, client Health, client Reports) and the
+ * owner door tabs. Brand
  * gold may remain only on the MILŌN wordmark (header, footer, hero mockup
  * mark, invite shell), the hero trial button, and the 390 sticky trial
- * button. In the accountant app the wordmark stays gold, the one primary pill
- * (`.btn.gold`) stays gold, and the report-card hairline stays. Email the
+ * button. In the accountant app the wordmark stays gold and the report-card
+ * hairline stays. Primary and outline buttons, including focus, are cobalt.
+ * Email the
  * owner must be a cobalt outline, not the gold hairline. The amber "74"
  * status colour is not brand gold. Legal hero sublines must not render
  * "Inc..". The invite page has no gold button.
@@ -147,9 +149,9 @@ type Hit = { path: string; prop: string; sample: string };
 async function scan(
   page: Page,
   label: string,
-  opts?: { accountant?: boolean },
+  opts?: { accountant?: boolean; owner?: boolean },
 ): Promise<{ hits: Hit[]; wordmark: boolean; heroCta: boolean; amber74: boolean }> {
-  return page.evaluate(({ labelIn, accountant }) => {
+  return page.evaluate(({ labelIn, accountant, owner }) => {
     const GOLD: Array<[number, number, number]> = [
       [212, 175, 55],
       [125, 95, 15],
@@ -197,12 +199,12 @@ async function scan(
     };
     const allowed = (el: Element) => {
       if (el.closest("[data-stale-bundle]")) return true;
+      if (owner) {
+        return Boolean(el.closest(".gold-text") || el.closest("[data-status-warn]"));
+      }
       if (accountant) {
         return Boolean(
-          el.closest(".gold-text") ||
-            el.closest(".brand") ||
-            el.closest(".btn.gold") ||
-            el.closest(".report-card__rule"),
+          el.closest(".gold-text") || el.closest(".brand") || el.closest(".report-card__rule"),
         );
       }
       return Boolean(
@@ -297,7 +299,35 @@ async function scan(
       ? colorsIn(getComputedStyle(amber).color).some((c) => Math.min(...AMBER.map((a) => dist(c.rgb, a))) < 12)
       : false;
     return { hits, wordmark, heroCta, amber74 };
-  }, { labelIn: label, accountant: Boolean(opts?.accountant) });
+  }, { labelIn: label, accountant: Boolean(opts?.accountant), owner: Boolean(opts?.owner) });
+}
+
+async function focusButton(page: Page, selector: string) {
+  const loc = page.locator(selector).first();
+  if ((await loc.count()) === 0) return false;
+  await loc.scrollIntoViewIfNeeded();
+  await loc.evaluate((el) => {
+    const probe = document.createElement("span");
+    probe.tabIndex = 0;
+    probe.setAttribute("data-focus-probe", "");
+    probe.style.cssText = "position:fixed;left:4px;top:4px;width:8px;height:8px;";
+    el.parentElement?.insertBefore(probe, el);
+    probe.focus();
+  });
+  await page.keyboard.press("Tab");
+  return loc.evaluate((el) => document.activeElement === el && el.matches(":focus-visible"));
+}
+
+function nearCobalt(color: string) {
+  const match = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(color);
+  if (!match) return false;
+  const rgb = [Number(match[1]), Number(match[2]), Number(match[3])];
+  return (
+    [
+      [11, 95, 255],
+      [37, 99, 235],
+    ] as const
+  ).some((want) => Math.hypot(rgb[0] - want[0], rgb[1] - want[1], rgb[2] - want[2]) <= 24);
 }
 
 async function main() {
@@ -407,6 +437,7 @@ async function main() {
       "/clients",
       "/clients/harness-client?tab=health",
       "/clients/harness-client?tab=reports&section=waterfall",
+      "/clients/harness-client?tab=settings",
     ];
     const cobalt: Record<"light" | "dark", [number, number, number]> = {
       light: [11, 95, 255],
@@ -432,6 +463,32 @@ async function main() {
           }
           const painted = await scan(page, `accountant ${path} ${width} ${theme}`, { accountant: true });
           for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
+          const focusSel =
+            path === "/clients"
+              ? "#wizard-add-client"
+              : path.includes("tab=settings")
+                ? "[data-invite-owner-entry]"
+                : "";
+          if (focusSel) {
+            const focused = await focusButton(page, focusSel);
+            if (!focused) failures.push(`${path} ${width} ${theme}: ${focusSel} did not take a visible focus`);
+            else {
+              const paint = await page.locator(focusSel).evaluate((el) => {
+                const style = getComputedStyle(el);
+                return { outline: style.outlineColor, border: style.borderTopColor };
+              });
+              if (!nearCobalt(paint.outline)) {
+                failures.push(`${path} ${width} ${theme}: focus outline is ${paint.outline}`);
+              }
+              if (theme === "light" && !nearCobalt(paint.border)) {
+                failures.push(`${path} ${width} ${theme}: button border is ${paint.border}`);
+              }
+              const paintedFocus = await scan(page, `accountant ${path} ${width} ${theme} focus ${focusSel}`, {
+                accountant: true,
+              });
+              for (const hit of paintedFocus.hits) failures.push(`${hit.path} ${hit.sample}`);
+            }
+          }
           if (path.includes("tab=health")) {
             const email = page.locator("[data-email-owner]");
             await email.waitFor({ timeout: 15000 });
@@ -446,6 +503,33 @@ async function main() {
               failures.push(`${path} ${width} ${theme}: Email the owner border is ${border}, expected cobalt`);
             }
           }
+          await page.close();
+        }
+      }
+    }
+
+    const ownerViews = ["rest", "health", "cash", "profit", "budget", "moves", "accountant"];
+    for (const view of ownerViews) {
+      for (const width of [1280, 385]) {
+        for (const theme of ["light", "dark"] as const) {
+          const page = await browser.newPage({ viewport: { width, height: 844 } });
+          await page.goto(`${HARNESS}/owner-door?view=${view}`, { waitUntil: "domcontentloaded" });
+          await page.waitForSelector("[data-owner-ready='true']", { timeout: 20000 });
+          await page.evaluate((next) => {
+            document.documentElement.dataset.theme = next;
+            document.documentElement.classList.toggle("dark", next === "dark");
+          }, theme);
+          await page.waitForTimeout(250);
+          const logo = page.locator(".gold-text").first();
+          if ((await logo.count()) === 0) failures.push(`owner ${view} ${width} ${theme}: wordmark missing`);
+          else {
+            const bg = await logo.evaluate((el) => getComputedStyle(el).backgroundImage);
+            if (!bg.includes("212, 175, 55") && !bg.includes("172, 132, 0")) {
+              failures.push(`owner ${view} ${width} ${theme}: wordmark is not gold`);
+            }
+          }
+          const painted = await scan(page, `owner ${view} ${width} ${theme}`, { owner: true });
+          for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
           await page.close();
         }
       }

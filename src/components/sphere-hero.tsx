@@ -60,7 +60,7 @@ export type SpherePillar = {
    * this instead of re-scoring the average (an average must not read Healthy
    * when every component ratio is Watch or Critical).
    */
-  status?: HealthTier;
+  status?: HealthTier | null;
   /** Shown instead of a band when the pillar has no confident score. */
   note?: string | null;
   /** Period-over-period change in score, e.g. +8 / -5. Omit to hide. */
@@ -200,6 +200,27 @@ const PILLAR_ICON: Record<SpherePillar["id"], LucideIcon> = {
 
 function fmtScore(h: number): string {
   return isFinite(h) ? String(Math.round(h)) : "—";
+}
+
+/** Right-hand text on a Health driver row. Missing days are a dash and a note, never a score. */
+export function sphereDriverAsideText(driver: {
+  health: number;
+  reading?: string;
+  note?: string;
+  na?: boolean;
+}): { primary: string; secondary: string | null } {
+  const tier = tierOf(driver.health);
+  if (driver.na) return { primary: "N/A", secondary: null };
+  if (driver.reading) {
+    return { primary: isFinite(driver.health) ? TIER_LABEL[tier] : "—", secondary: null };
+  }
+  if (!isFinite(driver.health)) {
+    return { primary: "—", secondary: driver.note?.trim() || TIER_LABEL[tier] };
+  }
+  return {
+    primary: String(Math.round(driver.health)),
+    secondary: driver.note?.trim() || TIER_LABEL[tier],
+  };
 }
 
 function pillarBandLabel(pillar: SpherePillar, tier: Tier): string {
@@ -382,7 +403,7 @@ function Sphere({
 
 const RING_STROKE: Record<Tier, string> = {
   healthy: "var(--ok, #16845b)",
-  watch: "var(--warn, #b7791f)",
+  watch: "var(--status-warn, #b7791f)",
   critical: "var(--risk, #c43d4b)",
   nodata: "#94a3b8",
 };
@@ -428,6 +449,7 @@ function RingDial({
           cy="100"
           r={radius}
           className="health-ring-arc"
+          data-status-warn={tier === "watch" ? "" : undefined}
           stroke={RING_STROKE[tier]}
           strokeWidth="13"
           strokeLinecap="round"
@@ -939,7 +961,6 @@ export function SphereHero({
             {activePillar.drivers.map((d, i) => {
               const t = tierOf(d.health);
               const pct = isFinite(d.health) ? Math.max(2, Math.min(100, d.health)) : 0;
-              const missingDriver = Boolean(d.note) && !isFinite(d.health);
               const clickable = Boolean(onDriverClick);
               const rowClass = `health-driver-row w-full min-w-0 animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-[#DBEAFE] bg-white p-3 text-left shadow-[0_8px_24px_rgba(16,42,67,0.06)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none ${
                 clickable
@@ -948,6 +969,7 @@ export function SphereHero({
               }`;
               const rowStyle = { animationDelay: `${i * 60}ms`, animationFillMode: "both" as const };
               const title = d.reading ?? d.label;
+              const aside = sphereDriverAsideText(d);
               const body = (
                 <>
                   <div className="flex items-center justify-between gap-3">
@@ -966,32 +988,29 @@ export function SphereHero({
                     </div>
                     <div className="shrink-0 text-right">
                       {d.reading ? (
-                        d.na ? (
-                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>N/A</p>
-                        ) : missingDriver ? (
-                          <p className="text-xs font-semibold text-slate-500">{d.note}</p>
-                        ) : (
-                          <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>
-                            {isFinite(d.health) ? TIER_LABEL[t] : "—"}
-                          </p>
-                        )
+                        <p
+                          className={
+                            d.na
+                              ? `text-lg font-bold leading-none ${TIER_TEXT[t]}`
+                              : `text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`
+                          }
+                        >
+                          {aside.primary}
+                        </p>
                       ) : (
                         <>
-                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>
-                            {d.na ? "N/A" : fmtScore(d.health)}
-                          </p>
-                          {d.na ? null : d.note ? (
+                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>{aside.primary}</p>
+                          {aside.secondary == null ? null : d.note && !d.na ? (
                             <p className="max-w-[11rem] text-right text-[11px] font-semibold leading-snug text-amber-800 dark:text-amber-200">
-                              {d.note}
+                              {aside.secondary}
                             </p>
                           ) : (
-                            <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
+                            <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{aside.secondary}</p>
                           )}
                         </>
                       )}
                     </div>
                   </div>
-                  {missingDriver ? null : (
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                     <div
                       className="h-full rounded-full transition-all duration-700"
@@ -1002,7 +1021,6 @@ export function SphereHero({
                       }}
                     />
                   </div>
-                  )}
                   {clickable ? null : <DigLeaf />}
                 </>
               );

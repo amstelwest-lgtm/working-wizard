@@ -4,7 +4,7 @@
  */
 import { marketingPackForGeo } from "./geo-country.ts";
 import { TAX_TALK, taxFilingAsked } from "./prospect-tax-copy.ts";
-import { prospectSystem } from "./prospect-talk-prompts.ts";
+import { prospectPricingReply, prospectSystem } from "./prospect-talk-prompts.ts";
 import {
   PROSPECT_LEAD_ASK,
   PROSPECT_NO_BOOKS_REPLY,
@@ -15,13 +15,14 @@ import {
   looksLikeInjection,
   mentionsFiling,
   mentionsLiveWrite,
+  methodAsked,
   newProspectToken,
+  plainMethodReply,
   pricingAsked,
   PROSPECT_INJECTION_REPLY,
   PROSPECT_PRICING_HOLD,
   prospectEmailAllowed,
   prospectLeadUtm,
-  prospectPricingReply,
   publicProspectAgent,
   sanitizeProspectUtm,
   sanitizeRef,
@@ -159,8 +160,10 @@ function replyFor(input: {
   const blocked = blockedReply(input.agent, input.message);
   if (blocked) return blocked;
   if (pricingAsked(input.message)) {
-    return input.figures === "allow" ? prospectPricingReply() : PROSPECT_PRICING_HOLD;
+    return input.figures === "allow" ? prospectPricingReply(input.country) : PROSPECT_PRICING_HOLD;
   }
+  if (input.figures === "hold" && methodAsked(input.message))
+    return plainMethodReply(input.message);
   const drafted = input.modelText ?? scriptedProspectReply(input.agent, false);
   return guardProspectReply(drafted, input.country, false, input.figures);
 }
@@ -276,7 +279,8 @@ async function takeTurn(
   } else {
     const figures = hasLead ? "allow" : "hold";
     let modelText: string | null = null;
-    if (!pricingAsked(message)) {
+    const skipModel = pricingAsked(message) || (figures === "hold" && methodAsked(message));
+    if (!skipModel) {
       try {
         modelText = await ctx.model({
           system: prospectSystem(scope.agent.slug, scope.country),
@@ -315,7 +319,7 @@ async function answerPending(
 ): Promise<string> {
   const blocked = blockedReply(agent, pending);
   if (blocked) return blocked;
-  if (pricingAsked(pending)) return prospectPricingReply();
+  if (pricingAsked(pending)) return prospectPricingReply(country);
   let modelText: string | null = null;
   try {
     modelText = await ctx.model({

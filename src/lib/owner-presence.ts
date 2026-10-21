@@ -63,6 +63,7 @@ function sentenceFor(
   finding: AgentFindingRow | null,
   market: AgentActivitySnapshot["market"],
   liveHealth: LiveHealthQuote | null,
+  figuresUpdatedAt?: string | null,
 ): string {
   if (!finding) return "Nothing new from the books.";
   const text = findingSentence({
@@ -72,6 +73,8 @@ function sentenceFor(
     market,
     liveHealth,
     evidence: finding.evidence,
+    writtenAt: finding.created_at,
+    figuresUpdatedAt,
   });
   return text || "Nothing new from the books.";
 }
@@ -160,6 +163,7 @@ export function ownerPresence(
   activity: AgentActivitySnapshot,
   talk: OwnerTalk = null,
   liveHealth: LiveHealthQuote | null = null,
+  figuresUpdatedAt: string | null = null,
 ): OwnerPresence {
   const runs = cardRunsByAgent(activity.runs);
   const newestMessage =
@@ -175,7 +179,7 @@ export function ownerPresence(
   const agents = AGENT_KEYS.map((agent) => {
     const finding = latestFinding(activity.findings, agent);
     let motion = motionFor(runs[agent], finding);
-    let sentence = motion === "working" ? "Working…" : sentenceFor(finding, activity.market, liveHealth);
+    let sentence = motion === "working" ? "Working…" : sentenceFor(finding, activity.market, liveHealth, figuresUpdatedAt);
     let lookAt: AgentKey | null = null;
     if (talk?.agent === agent) {
       motion = talk.mode;
