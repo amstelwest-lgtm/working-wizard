@@ -3,6 +3,7 @@ import { handoffComingOnline } from "@/hooks/owner-agent-ui";
 import { phaseForAction } from "@/lib/action-handoff";
 import { agentActivityUnavailable } from "@/lib/milon-team-activity";
 import {
+  handoffFailureMessage,
   handoffRequestNote,
   moveLoadMayCache,
   personAssignmentNote,
@@ -275,13 +276,14 @@ export async function commitActionHandoff(input: {
   const actorLabel = await signedInActorLabel();
   note.actorLabel = actorLabel;
   const fail = (error: string, comingSoon?: boolean): ActionHandoffCommit => {
-    rejectOptimisticHandoff(input.actionItemId, since, comingSoon ? null : HANDOFF_FAILED_COPY);
+    const shown = comingSoon ? error : handoffFailureMessage(error);
+    rejectOptimisticHandoff(input.actionItemId, since, comingSoon ? null : shown);
     dispatchActionPlanRefresh({
       ...working,
       failed: true,
-      error: comingSoon ? undefined : HANDOFF_FAILED_COPY,
+      error: comingSoon ? undefined : shown,
     });
-    return comingSoon ? { ok: false, error, comingSoon: true } : { ok: false, error };
+    return comingSoon ? { ok: false, error, comingSoon: true } : { ok: false, error: shown };
   };
   let result: Awaited<ReturnType<typeof requestOwnerHandoff>>;
   try {

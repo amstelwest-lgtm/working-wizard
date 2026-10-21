@@ -21,6 +21,28 @@ export function ownerSignoffDate(
   return formatDate(iso, { locale, timezone: market?.timezone ?? timeZone });
 }
 
+export type HomeSignoffRow = {
+  scope?: string | null;
+  signed_off_by_name: string;
+  signed_off_at: string;
+  firm_name?: string | null;
+};
+
+/** Health & ratios is scope `financials`. Sample personas stay off the home line. */
+export function financialsHomeSignoffLine(
+  signoffs: readonly HomeSignoffRow[],
+  market?: { locale?: string; timezone?: string },
+): string | null {
+  const row = signoffs.find((item) => (item.scope ?? "").trim() === "financials");
+  if (!row) return null;
+  if (isSamplePracticeSignoff({ name: row.signed_off_by_name, firmName: row.firm_name ?? null })) return null;
+  const date = row.signed_off_at
+    ? ownerSignoffDate(row.signed_off_at, market?.timezone ?? "Africa/Johannesburg", market)
+    : "";
+  const line = ownerSignoffLine(row.signed_off_by_name, date);
+  return line.trim() ? line : null;
+}
+
 export function ownerSignoffLine(name: string, date: string, scopeLabel?: string | null): string {
   const who = name.trim();
   const when = date.trim();
