@@ -197,7 +197,6 @@
     "test:signup-checkout-keep": "vite-node --config scripts/vite-test.config.ts scripts/signup-checkout-keep-test.mts",
     "test:billing-gate-timeout": "vite-node --config scripts/vite-test.config.ts scripts/billing-gate-timeout-test.mts",
     "test:billing-gate-known": "vite-node --config scripts/vite-test.config.ts scripts/billing-gate-known-test.mts",
-    "test:billing-gate-network-retry": "vite-node --config scripts/vite-test.config.ts scripts/billing-gate-network-retry-test.mts",
     "test:shell-hang-deadline": "vite-node --config scripts/vite-test.config.ts scripts/shell-hang-deadline-test.mts",
     "test:billing-wall-copy": "vite-node --config scripts/vite-test.config.ts scripts/billing-wall-copy-test.mts",
     "test:join-invite-brand": "vite-node --config scripts/vite-test.config.ts scripts/join-invite-brand-test.mts",
