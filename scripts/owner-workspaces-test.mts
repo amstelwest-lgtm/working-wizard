@@ -188,7 +188,10 @@ assert(listSlice.includes("Promise.all"), "owned clients and memberships are rea
 const parallel = listSlice.slice(listSlice.indexOf("Promise.all"), listSlice.indexOf('.in("id"'));
 assert(parallel.includes('from("clients")') && parallel.includes("client_memberships"), "both list reads sit in the same Promise.all");
 assert(listSlice.indexOf('.in("id"') > listSlice.indexOf("Promise.all"), "clients.in stays behind the membership result");
-assert(listSlice.includes("ownedRes.error || memRes.error"), "a PostgREST error is not read as an empty list");
+assert(
+  listSlice.includes("ownedRes.value.error || memRes.value.error"),
+  "a PostgREST error is not read as an empty list",
+);
 assert(!appSrc.includes("setEffectiveClientId(storedClientId)"), "the stored id is not the board client before the list confirms it");
 assert(!appSrc.includes("setEffectiveClientId(readStoredOwnerClientId"), "financials do not start from the stored id");
 assert(appSrc.includes('access.phase === "revoked"'), "revoked access is handled on the board");

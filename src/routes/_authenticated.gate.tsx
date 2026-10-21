@@ -44,6 +44,7 @@ import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { firmBillingClientAbortSignal } from "@/lib/firm-billing-deadline";
 import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
 import {
   lastKnownEntitlementForFirm,
@@ -68,6 +69,7 @@ type GateSnap = {
   navigate: ReturnType<typeof useNavigate>;
   checkEntitlement: (input: {
     data: { refresh?: boolean; firmId?: string | null };
+    signal?: AbortSignal;
   }) => Promise<EntitlementResult>;
   practiceMeta: unknown;
 };
@@ -353,6 +355,8 @@ export function AuthGate() {
               () =>
                 latest.current.checkEntitlement({
                   data: { ...input.data, firmId: latest.current.firmId },
+                  // Fresh 9s abort per attempt. The retry calls this again.
+                  signal: firmBillingClientAbortSignal(),
                 }),
               {
                 onRetry() {
