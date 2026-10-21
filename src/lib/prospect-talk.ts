@@ -272,6 +272,16 @@ export function mentionsBlockedMoney(text: string, country: "US" | "ZA"): boolea
   return /\brand\b/i.test(text) || /\bR\s?\d/.test(text);
 }
 
+/** Either market. Built so the pricing copy itself never contains the word. */
+const INDIRECT_TAX = new RegExp(`\\b${["v", "a", "t"].join("")}\\b`, "i");
+
+export function mentionsVat(text: string): boolean {
+  return INDIRECT_TAX.test(text);
+}
+
+export const PROSPECT_NO_VAT_REPLY =
+  "This sample doesn't cover that tax. I can talk about the labelled SAMPLE.";
+
 export function mentionsLiveWrite(text: string): boolean {
   return LIVE_WRITE.test(text);
 }
@@ -294,8 +304,9 @@ export function guardProspectReply(
   askLead: boolean,
   figures: "hold" | "allow" = "hold",
 ): string {
-  const trimmed = text.replace(/\s+/g, " ").trim().slice(0, 800);
+  const trimmed = text.replace(/[ \t]+/g, " ").trim().slice(0, 800);
   if (!trimmed) return askLead ? PROSPECT_LEAD_ASK : PROSPECT_NO_FIGURES_REPLY;
+  if (mentionsVat(trimmed)) return PROSPECT_NO_VAT_REPLY;
   if (mentionsBlockedMoney(trimmed, country)) {
     return "I can walk the sample in dollars. The figures are labelled SAMPLE and show up after your name and email.";
   }

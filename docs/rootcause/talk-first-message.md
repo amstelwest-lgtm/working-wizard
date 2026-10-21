@@ -28,14 +28,14 @@ The test that was meant to lock this started from `createRoot` on a component th
 
 ## Fix
 
-An inline boot script, in the document head, listens before the bundle. A Send click, a form submit, or Enter (not Shift+Enter) on the composer is cancelled while `data-talk-live` is absent. The text is stored, the textarea is cleared, and a You bubble is painted immediately in a host outside the React tree, so hydration cannot drop it. The button is `type="button"`, so a click cannot navigate even if the script is late.
+Send is server-rendered as `type="button"` and `disabled`, with the label Connecting…. A click in that gap cannot submit the form, so the browser does not reload the page. The textarea is uncontrolled (`defaultValue`, read from a ref).
 
-When React hydrates, a layout effect reads that stored text into the thread, removes the temporary host, marks the form live, and leaves the text on the existing session queue. The passive effect then reads `sessionStorage` and posts. The POST is what creates the session. The bubble does not wait for either step. If hydration retries the tree, the in-flight reply is applied to the tree that stays.
+React 19 assigns `defaultValue` while it hydrates, and that assignment clears a textarea the visitor has already typed in. A short input listener, in the document head, stores the draft in `sessionStorage`. It does not send and it does not paint a bubble. The layout effect puts that draft back when the field is empty, then enables Send.
 
-Shift+Enter is a newline. After the form is live, Enter sends through React the same way.
+Enter does not send until that effect has run. After it has, Enter sends and Shift+Enter inserts a newline. The first click that happens once Send is enabled posts once, shows the You bubble, and creates the session. Nothing is posted before hydration.
 
 ## How to verify
 
 `scripts/prospect-talk-browser-test.mts` is a real browser run, and it is on the blocking `test:ci` list.
 
-It opens `/talk/financial-manager` with the module scripts held, so React has not hydrated and no session exists. It types and clicks Send. The You bubble is visible at once, the URL does not change, and there is no POST. It then releases the scripts. The same text is posted once, the bubble is still there, and the mocked reply renders. A second turn presses Enter to send and Shift+Enter to insert a newline. The prospect-talk POST is mocked. Nothing in this test creates a lead or sends mail.
+It opens `/talk/financial-manager` with the module scripts held, so React has not hydrated and no session exists. It types and clicks Send. The URL does not change, there is no POST, and the text is still in the textarea. It then releases the scripts. Send is enabled, the text is still there, and one click posts that text once. The You bubble appears and the mocked reply renders. A second turn presses Enter to send and Shift+Enter to insert a newline. The prospect-talk POST is mocked. Nothing in this test creates a lead or sends mail.

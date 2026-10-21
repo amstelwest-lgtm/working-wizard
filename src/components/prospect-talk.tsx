@@ -14,10 +14,6 @@ import {
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
 import { TrySchedule, type TryCallResult } from "@/components/try-schedule";
 import { postProspectTalk, type ProspectTalkResponse } from "@/lib/prospect-talk-client";
-
-/** Latest mounted chat. A hydration retry must still receive the in-flight reply. */
-let deliverTalkResult: (result: ProspectTalkResponse | null) => void = () => {};
-let parkedTalkResult: ProspectTalkResponse | null = null;
 import {
   prospectAgentsFor,
   resolveTalkSlug,
@@ -25,12 +21,7 @@ import {
   type ProspectAgentCopy,
   type TalkCopyPack,
 } from "@/lib/prospect-talk";
-import {
-  claimEarlyTalkSends,
-  clearEarlyStorage,
-  shouldDeliverQueued,
-  TALK_DRAFT_STORAGE_KEY,
-} from "@/lib/prospect-talk-early";
+import { TALK_DRAFT_STORAGE_KEY } from "@/lib/prospect-talk-draft";
 import { initialTalkSession, openTalkSession, queueTalkMessage } from "@/lib/prospect-talk-session";
 
 export type TalkMessage = { role: "agent" | "you"; text: string };
@@ -82,9 +73,17 @@ export function TalkIndex({
         {count} agents. Each one walks a labelled SAMPLE. No account and no password.
       </p>
       {priceLine ? (
-        <p className="talk-note" data-talk-price="true">
-          {priceLine}
-        </p>
+        <div data-talk-price="true">
+          {priceLine
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => (
+              <p className="talk-note" key={line}>
+                {line}
+              </p>
+            ))}
+        </div>
       ) : null}
       <AgentList refCode={refCode} agents={agents} />
     </main>
@@ -153,7 +152,6 @@ export function ProspectTalkScreen({
   sessionReady = true,
   onSend,
   onLead,
-  onSkipLead,
   onBookCall,
 }: {
   agent: ProspectAgentCopy;
@@ -165,7 +163,6 @@ export function ProspectTalkScreen({
   sessionReady?: boolean;
   onSend?: (text: string) => void;
   onLead?: (input: { name: string; email: string; consent: boolean; honeypot: string }) => void;
-  onSkipLead?: () => void;
   onBookCall?: (input: {
     name: string;
     email: string;
@@ -175,20 +172,20 @@ export function ProspectTalkScreen({
     timeZone: string;
   }) => Promise<TryCallResult>;
 }) {
-  const [draft, setDraft] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const [live, setLive] = useState(false);
-  const composerRef = useRef<HTMLFormElement>(null);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
   const thread: TalkMessage[] = [{ role: "agent", text: agent.greeting }, ...messages];
   const clip = busy ? "thinking" : askLead ? "waiting" : "idle";
 
-  function sendDraft(text = composerRef.current?.querySelector("textarea")?.value ?? draft) {
+  function sendDraft(text = areaRef.current?.value ?? "") {
+    if (!live || busy) return;
     const trimmed = text.trim();
-    if (!trimmed || busy) return;
-    setDraft("");
+    if (!trimmed) return;
+    if (areaRef.current) areaRef.current.value = "";
     try {
       window.sessionStorage.removeItem(TALK_DRAFT_STORAGE_KEY);
     } catch {
@@ -198,21 +195,23 @@ export function ProspectTalkScreen({
   }
 
   function onComposerKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (!live) return;
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
     event.preventDefault();
     sendDraft(event.currentTarget.value);
   }
 
   useLayoutEffect(() => {
-    setLive(true);
-    setDraft((current) => {
-      if (current) return current;
+    const area = areaRef.current;
+    if (area && !area.value) {
       try {
-        return window.sessionStorage.getItem(TALK_DRAFT_STORAGE_KEY) ?? "";
+        const saved = window.sessionStorage.getItem(TALK_DRAFT_STORAGE_KEY) ?? "";
+        if (saved) area.value = saved;
       } catch {
-        return "";
+        /* ignore */
       }
-    });
+    }
+    setLive(true);
   }, []);
 
   return (
@@ -262,11 +261,16 @@ export function ProspectTalkScreen({
         <form
           className="talk-form"
           data-talk-lead="true"
+          aria-labelledby="talk-lead-label"
           onSubmit={(event: FormEvent) => {
             event.preventDefault();
             onLead?.({ name, email, consent, honeypot });
           }}
         >
+          <p className="talk-lead-label" id="talk-lead-label">
+            Your name and email
+          </p>
+          <p className="talk-note">No password. This continues the sample.</p>
           <label className="talk-field" htmlFor="talk-name">
             Name
             <input
@@ -316,19 +320,10 @@ export function ProspectTalkScreen({
           <button className="talk-step" type="submit" disabled={busy}>
             Continue to the sample
           </button>
-          <button
-            className="talk-skip"
-            type="button"
-            data-talk-skip="true"
-            onClick={() => onSkipLead?.()}
-          >
-            Skip for now
-          </button>
           {error ? <p className="talk-error">{error}</p> : null}
         </form>
       ) : (
         <form
-          ref={composerRef}
           className="talk-composer"
           data-talk-live={live ? "1" : undefined}
           onSubmit={(event: FormEvent) => {
@@ -342,23 +337,31 @@ export function ProspectTalkScreen({
                 key={question}
                 type="button"
                 className="talk-chip"
-                disabled={busy}
-                onClick={() => onSend?.(question)}
+                disabled={!live || busy}
+                onClick={() => {
+                  if (!live || busy) return;
+                  onSend?.(question);
+                }}
               >
                 {question}
               </button>
             ))}
           </div>
           <textarea
+            ref={areaRef}
             aria-label="Message"
             rows={3}
             maxLength={500}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            defaultValue=""
             onKeyDown={onComposerKey}
           />
-          <button className="talk-send" type="button" disabled={busy} onClick={() => sendDraft()}>
-            Send
+          <button
+            className={live ? "talk-send" : "talk-send is-connecting"}
+            type="button"
+            disabled={!live || busy}
+            onClick={() => sendDraft()}
+          >
+            {live ? "Send" : "Connecting…"}
           </button>
           {error ? <p className="talk-error">{error}</p> : null}
         </form>
@@ -426,7 +429,6 @@ export function ProspectTalkLive({
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState("");
   const [sessionReady, setSessionReady] = useState(false);
-  const [leadSkipped, setLeadSkipped] = useState(false);
   const gateRef = useRef(initialTalkSession());
   const slugSeen = useRef<string | null>(null);
   const postRef = useRef<(text: string, sessionToken: string) => void>(() => {});
@@ -437,25 +439,23 @@ export function ProspectTalkLive({
     window.sessionStorage.setItem(`milon-talk:${slug}`, next);
   }
 
-  if (typeof window !== "undefined")
-    deliverTalkResult = (result) => {
-      setBusy(false);
-      if (!result?.ok) {
-        setError(result?.error ?? "The conversation isn't available right now.");
-        return;
-      }
-      parkedTalkResult = result;
-      if (result.sessionToken) remember(result.sessionToken);
-      if (result.reply) {
-        const reply = result.reply;
-        setMessages((current) =>
-          current.some((message) => message.role === "agent" && message.text === reply)
-            ? current
-            : [...current, { role: "agent", text: reply }],
-        );
-      }
-      setAskLead(result.askLead === true);
-    };
+  function applyResult(result: ProspectTalkResponse | null) {
+    setBusy(false);
+    if (!result?.ok) {
+      setError(result?.error ?? "The conversation isn't available right now.");
+      return;
+    }
+    if (result.sessionToken) remember(result.sessionToken);
+    if (result.reply) {
+      const reply = result.reply;
+      setMessages((current) =>
+        current.some((message) => message.role === "agent" && message.text === reply)
+          ? current
+          : [...current, { role: "agent", text: reply }],
+      );
+    }
+    setAskLead(result.askLead === true);
+  }
 
   postRef.current = (text, sessionToken) => {
     setBusy(true);
@@ -469,8 +469,8 @@ export function ProspectTalkLive({
       market: pageMarket(),
       utm: pageUtm(),
     })
-      .then((result) => deliverTalkResult(result))
-      .catch(() => deliverTalkResult(null));
+      .then((result) => applyResult(result))
+      .catch(() => applyResult(null));
   };
 
   useEffect(() => {
@@ -481,7 +481,6 @@ export function ProspectTalkLive({
       gateRef.current = initialTalkSession();
       setMessages([]);
       setAskLead(false);
-      setLeadSkipped(false);
       setLeadReady(false);
       setError(null);
       setSessionReady(false);
@@ -493,11 +492,7 @@ export function ProspectTalkLive({
       gateRef.current = opened.gate;
       setToken(stored);
       setSessionReady(true);
-      for (const text of opened.deliver) {
-        if (!shouldDeliverQueued(text)) continue;
-        postRef.current(text, stored);
-      }
-      clearEarlyStorage();
+      for (const text of opened.deliver) postRef.current(text, stored);
     };
     if (readStoredToken) {
       void readStoredToken().then((stored) => {
@@ -513,40 +508,6 @@ export function ProspectTalkLive({
     };
   }, [slug, readStoredToken]);
 
-  useLayoutEffect(() => {
-    document.getElementById("talk-early-host")?.remove();
-    const early = claimEarlyTalkSends();
-    const parked = parkedTalkResult;
-    if (early.length > 0 || parked?.reply) {
-      setMessages((current) => {
-        const have = new Set(current.map((message) => `${message.role}:${message.text}`));
-        const add = early
-          .filter((text) => !have.has(`you:${text}`))
-          .map((text) => ({ role: "you" as const, text }));
-        let next = add.length ? [...current, ...add] : current;
-        if (
-          parked?.reply &&
-          !next.some((message) => message.role === "agent" && message.text === parked.reply)
-        ) {
-          next = [...next, { role: "agent", text: parked.reply }];
-        }
-        return next;
-      });
-      if (parked?.ok) {
-        if (parked.sessionToken) remember(parked.sessionToken);
-        setAskLead(parked.askLead === true);
-      }
-    }
-    for (const text of early) {
-      const gate = gateRef.current;
-      if (gate.ready) {
-        if (shouldDeliverQueued(text)) postRef.current(text, gate.token);
-        continue;
-      }
-      if (!gate.queued.includes(text)) gateRef.current = queueTalkMessage(gate, text);
-    }
-  }, [slug]);
-
   return (
     <TalkPageView
       slug={slug}
@@ -554,13 +515,12 @@ export function ProspectTalkLive({
       taxAgent={taxAgent}
       refCode={refCode}
       messages={messages}
-      askLead={askLead && !leadSkipped}
+      askLead={askLead}
       leadReady={leadReady}
       sessionReady={sessionReady}
       busy={busy}
       error={error}
       onBookCall={onBookCall}
-      onSkipLead={() => setLeadSkipped(true)}
       onSend={(text) => {
         const trimmed = text.trim();
         if (!trimmed || busy) return;
@@ -620,7 +580,6 @@ export function TalkPageView({
   sessionReady = true,
   onSend,
   onLead,
-  onSkipLead,
   onBookCall,
 }: {
   slug: string;
@@ -635,7 +594,6 @@ export function TalkPageView({
   sessionReady?: boolean;
   onSend?: (text: string) => void;
   onLead?: (input: { name: string; email: string; consent: boolean; honeypot: string }) => void;
-  onSkipLead?: () => void;
   onBookCall?: (input: {
     name: string;
     email: string;
@@ -664,7 +622,6 @@ export function TalkPageView({
       sessionReady={sessionReady}
       onSend={onSend}
       onLead={onLead}
-      onSkipLead={onSkipLead}
       onBookCall={onBookCall}
     />
   );

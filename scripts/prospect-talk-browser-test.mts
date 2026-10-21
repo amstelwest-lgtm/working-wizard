@@ -64,8 +64,8 @@ async function waitForTalk() {
       });
       if (res.status === 200) {
         const text = await res.text();
-        if (text.includes("talk-composer") && text.includes("milon-talk-early")) return;
-        last = "200 without the composer boot script";
+        if (text.includes("talk-composer") && text.includes("Connecting")) return;
+        last = "200 without the connecting composer";
       } else last = String(res.status);
     } catch (err) {
       last = err instanceof Error ? err.message : String(err);
@@ -147,19 +147,39 @@ async function main() {
   });
   await page.locator("textarea").waitFor({ state: "visible", timeout: 20_000 });
   const earlyHtml = await page.content();
-  assert(earlyHtml.includes("milon-talk-early"), "the server HTML includes the boot script");
+  assert(earlyHtml.includes('type="button"'), "Send is not a native submit");
+  assert(earlyHtml.includes("disabled"), "Send is disabled before hydration");
+  assert(earlyHtml.includes("Connecting"), "Send shows Connecting before hydration");
   assert(!earlyHtml.includes('data-talk-live="1"'), "the composer is not live before hydration");
   assert(earlyHtml.includes('data-talk-session="pending"'), "no session is ready before hydration");
   await page.locator("textarea").fill(FIRST);
-  await page.locator(".talk-send").click();
-  await page.locator(".talk-bubble-you").waitFor({ state: "visible", timeout: 5_000 });
-  const immediate = await page.locator(".talk-bubble-you").innerText();
-  assert(immediate.includes(FIRST), "the You bubble is on screen before hydration");
+  await page.locator(".talk-send").click({ force: true });
   assert(page.url().includes("/talk/financial-manager"), "Send does not navigate away");
   assert(!page.url().includes(encodeURIComponent(FIRST)), "the text is not dropped into the query");
   assert(posts.length === 0, "nothing is posted before hydration or a session");
+  assert((await page.locator("textarea").inputValue()) === FIRST, "the typed text stays in the textarea");
 
   release();
+  await page.locator(".talk-send", { hasText: "Send" }).waitFor({ state: "visible", timeout: 20_000 });
+  const after = await page.evaluate(() => {
+    const button = document.querySelector(".talk-send");
+    const area = document.querySelector("textarea");
+    return {
+      buttonText: button?.textContent ?? "",
+      disabled: button instanceof HTMLButtonElement ? button.disabled : null,
+      value: area instanceof HTMLTextAreaElement ? area.value : null,
+      live: document.querySelector("form.talk-composer")?.getAttribute("data-talk-live") ?? "",
+      errors: "",
+    };
+  });
+  if (after.disabled !== false || after.value !== FIRST) {
+    console.error("after hydration", JSON.stringify(after));
+    console.error("pageErrors", pageErrors);
+    throw new Error(
+      `composer after hydration: disabled=${String(after.disabled)} value=${JSON.stringify(after.value)}`,
+    );
+  }
+  await page.locator(".talk-send").click();
   try {
     await page.getByText(REPLY).waitFor({ state: "visible", timeout: 30_000 });
   } catch (err) {
@@ -175,9 +195,9 @@ async function main() {
   const bubbles = await page.locator(".talk-bubble-you").allInnerTexts();
   assert(
     bubbles.some((text) => text.includes(FIRST)),
-    "the You bubble is still there after hydration",
+    "the You bubble appears after the enabled Send",
   );
-  assert(posts.length === 1, "the first message posts once the page is ready");
+  assert(posts.length === 1, "one click posts the message once");
   assert(posts[0]?.action === "turn", "the first send is a turn");
   assert(posts[0]?.message === FIRST, "the posted text is what was typed");
   assert(posts[0]?.agent === "financial-manager", "the post is for the financial manager");
@@ -214,10 +234,13 @@ async function main() {
 
   await page.locator("textarea").fill("Please open the form");
   await page.locator(".talk-send").click();
-  await page.locator("[data-talk-skip]").waitFor({ state: "visible", timeout: 10_000 });
-  await page.locator("[data-talk-skip]").click();
-  await page.locator("textarea").waitFor({ state: "visible", timeout: 5_000 });
-  assert(!posts.some((post) => post.action === "lead"), "skip does not post a lead");
+  await page.locator("[data-talk-lead]").waitFor({ state: "visible", timeout: 10_000 });
+  const gateText = await page.locator("[data-talk-lead]").innerText();
+  assert(gateText.includes("Your name and email"), "the gate is labelled");
+  assert(gateText.includes("No password"), "the gate says there is no password");
+  assert((await page.locator("[data-talk-skip]").count()) === 0, "the gate cannot be skipped");
+  assert((await page.locator('input[type="password"]').count()) === 0, "the gate has no password");
+  assert(!posts.some((post) => post.action === "lead"), "opening the form does not post a lead");
 
   await page.close();
 
@@ -230,7 +253,11 @@ async function main() {
   const zaText = await zaPage.locator("body").innerText();
   assert(zaText.includes("Four agents"), "ZA geo lists four agents");
   assert(zaText.includes("Tax Specialist"), "ZA geo lists the Tax Specialist");
-  assert(/R\s*299/.test(zaText), "ZA geo shows rand pricing");
+  assert(zaText.includes("Accountants:"), "ZA geo labels the accountant plan");
+  assert(zaText.includes("Business owners:"), "ZA geo labels the owner plan");
+  assert(zaText.includes("R299"), "ZA geo shows the rand amount without a space");
+  assert(!zaText.includes("R 299"), "ZA geo does not leave a breakable space in the rand amount");
+  assert(!/\bvat\b/i.test(zaText), "ZA geo does not say VAT");
   assert(!zaText.includes("$39"), "ZA geo does not show the US price");
   await shot(zaPage, "talk-geo-za");
   await zaPage.goto(`${BASE}/talk/tax-specialist`, { waitUntil: "domcontentloaded" });
@@ -246,8 +273,12 @@ async function main() {
   const usText = await usPage.locator("body").innerText();
   assert(usText.includes("Three agents"), "US geo lists three agents");
   assert(!usText.includes("Tax Specialist"), "US geo hides the Tax Specialist");
+  assert(usText.includes("Accountants:"), "US geo labels the accountant plan");
+  assert(usText.includes("Business owners:"), "US geo labels the owner plan");
   assert(usText.includes("$39"), "US geo shows the USD price");
   assert(!/R\s*\d/.test(usText), "US geo shows no rand amount");
+  assert(!usText.includes("ZAR"), "US geo does not say ZAR");
+  assert(!/\bvat\b/i.test(usText), "US geo does not say VAT");
   await shot(usPage, "talk-geo-us");
   await usPage.goto(`${BASE}/talk/tax-specialist`, { waitUntil: "domcontentloaded" });
   await usPage

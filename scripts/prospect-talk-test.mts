@@ -3,7 +3,7 @@
  * chat continues after the form, rate limit, and no new anon SECURITY DEFINER function.
  * Run: pnpm test:prospect-talk
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
@@ -38,17 +38,14 @@ import {
   TAX_SPECIALIST_SYSTEM,
 } from "../src/lib/prospect-talk-prompts";
 import { zaTalkPriceLine } from "../src/lib/pricing/za-talk-price.server";
-import {
-  PRICING_OWNER_BAR_US,
-  PRICING_TRIAL_AFTER,
-  usTalkPriceLine,
-} from "../src/lib/public-pricing-lines";
+import { usTalkPriceLine } from "../src/lib/public-pricing-lines";
 import {
   initialTalkSession,
   openTalkSession,
   queueTalkMessage,
 } from "../src/lib/prospect-talk-session";
-import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "../src/lib/starter-trial-constants";
+import { FIRM_TRIAL_CLIENT_LIMIT, FIRM_TRIAL_DAYS } from "../src/lib/starter-trial-constants";
+import { firmUsdListPrice } from "../src/lib/stripe-plans";
 import { OWNER_MONTHLY_USD_LABEL } from "../src/lib/owner-plan";
 import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { TRIAL_LEADS_PER_EMAIL } from "../src/lib/trial-demo";
@@ -79,18 +76,56 @@ assert(
   "the ZA price line is a dynamic import on the index",
 );
 assert(!indexSrc.includes("?country="), "the index does not add a country query override");
-const earlySrc = readFileSync(
-  new URL("../src/lib/prospect-talk-early.ts", import.meta.url),
-  "utf8",
-);
+assert(!routeSrc.includes("TALK_EARLY_BOOT"), "the agent document has no send-capture boot script");
+assert(!routeSrc.includes("prospect-talk-early"), "the agent route does not load the send-capture script");
+assert(routeSrc.includes("TALK_DRAFT_BOOT"), "the agent document remembers a pre-hydration draft");
+const draftSrc = readFileSync(new URL("../src/lib/prospect-talk-draft.ts", import.meta.url), "utf8");
+assert(draftSrc.includes("sessionStorage.setItem"), "the draft listener stores the textarea");
+assert(!draftSrc.includes("preventDefault"), "the draft listener does not capture Send");
+assert(!draftSrc.includes("talk-early-host"), "the draft listener does not paint a bubble");
+
+/** Static import graph. Dynamic import() is a separate chunk and is not followed. */
+function staticModuleGraph(start: string): string[] {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const seen = new Set<string>();
+  const queue = [start];
+  while (queue.length) {
+    const rel = queue.pop();
+    if (!rel || seen.has(rel)) continue;
+    const abs = resolve(root, rel);
+    if (!existsSync(abs)) continue;
+    seen.add(rel);
+    const text = readFileSync(abs, "utf8");
+    const re = /from\s+["']([^"']+)["']/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text))) {
+      const spec = match[1] ?? "";
+      let next = "";
+      if (spec.startsWith("@/")) next = `src/${spec.slice(2)}`;
+      else if (spec.startsWith(".")) next = resolve(dirname(abs), spec).slice(root.length + 1);
+      else continue;
+      const candidates = /\.(ts|tsx)$/.test(next) ? [next] : [`${next}.ts`, `${next}.tsx`];
+      for (const candidate of candidates) queue.push(candidate);
+    }
+  }
+  return [...seen];
+}
+
+const usPriceGraph = staticModuleGraph("src/lib/public-pricing-lines.ts");
 assert(
-  routeSrc.includes("TALK_EARLY_BOOT"),
-  "the agent document inlines the pre-hydration boot script",
+  !usPriceGraph.some((file) => file.includes("za-ladder") || file.includes("za-talk-price") || file.includes("za-pricing-chunk")),
+  `the US price graph includes a rand module:\n${usPriceGraph.join("\n")}`,
 );
-assert(earlySrc.includes("preventDefault"), "the boot script cancels a native submit");
-assert(earlySrc.includes("talk-composer"), "the boot script watches the composer");
-assert(earlySrc.includes("data-talk-live"), "the boot script steps aside once React is live");
-assert(earlySrc.includes("milon-talk-early"), "the boot script stashes the text for hydration");
+const talkClientGraph = staticModuleGraph("src/components/prospect-talk.tsx");
+assert(
+  !talkClientGraph.some((file) => file.includes("za-ladder") || file.includes("za-pricing")),
+  "the talk client does not statically import the ZA ladder",
+);
+for (const file of usPriceGraph) {
+  const text = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+  assert(!/\bR\s?\d/.test(text), `${file} has a rand amount`);
+  assert(!text.includes("ZAR"), `${file} says ZAR`);
+}
 const agentRoute = routeSrc;
 assert(
   agentRoute.includes('import("@/lib/prospect-tax-copy")') &&
@@ -230,9 +265,11 @@ for (const agent of prospectAgentsFor("us")) {
     `${agent.slug} does not show rand or a return form`,
   );
   assert(
-    html.includes('class="talk-send" type="button"'),
-    `${agent.slug} send is not a native submit`,
+    html.includes("talk-send") && html.includes('type="button"') && html.includes("disabled"),
+    `${agent.slug} send is a disabled button until hydration`,
   );
+  assert(html.includes("Connecting"), `${agent.slug} shows a connecting state before hydration`);
+  assert(!html.includes("value="), `${agent.slug} textarea is uncontrolled so a typed draft survives`);
   assert(html.includes("/avatars/"), `${agent.slug} shows an approved portrait`);
   assert(html.includes("muted"), `${agent.slug} portrait is muted`);
 }
@@ -335,9 +372,12 @@ const leadHtml = renderTalk("financial-manager", "us", { askLead: true });
 assert(leadHtml.includes('data-talk-lead="true"'), "the lead form shows after the exchanges");
 assert(leadHtml.includes("Name"), "the lead form asks for a name");
 assert(leadHtml.includes("Email"), "the lead form asks for an email");
+assert(leadHtml.includes("Your name and email"), "the lead form is labelled");
+assert(leadHtml.includes("No password"), "the lead form says there is no password");
+assert(!leadHtml.includes('type="password"'), "the lead form has no password field");
 assert(!leadHtml.includes('aria-label="Message"'), "the composer waits while the form is open");
-assert(leadHtml.includes("Skip for now"), "the name and email step can be skipped");
-assert(leadHtml.includes('data-talk-skip="true"'), "the skip control is marked");
+assert(!leadHtml.includes("Skip for now"), "the name and email step is not skippable");
+assert(!leadHtml.includes("data-talk-skip"), "there is no skip control");
 assert(!leadHtml.includes("Use sample"), "the deliverable stays behind the lead");
 
 const continued = renderTalk("analyst", "us", {
@@ -472,25 +512,24 @@ const priced = await handleProspectRequest(
   },
   ctx(),
 );
-assert(priced.status === 200 && priced.body.askLead === false, "pricing is not gated");
-assert(priced.body.reply === prospectPricingReply("US"), "pricing uses the published US line");
+assert(priced.status === 200 && priced.body.askLead === true, "after three replies the form is required");
+assert(priced.body.reply === prospectPricingReply("US"), "pricing is answered, not held for the form");
+assert(String(priced.body.reply).includes(usTalkPriceLine()), "pricing uses the two published lines");
 assert(
-  String(priced.body.reply).includes(PRICING_TRIAL_AFTER),
-  "pricing uses the pricing page trial line",
+  String(priced.body.reply).includes("Accountants:"),
+  "the accountant plan is labelled",
 );
 assert(
-  String(priced.body.reply).includes(PRICING_OWNER_BAR_US),
-  "pricing uses the pricing page owner line",
-);
-assert(
-  String(priced.body.reply).includes(FIRM_TRIAL_CARD_NOTE),
-  "pricing states the card line the pricing page states",
+  String(priced.body.reply).includes("Business owners:"),
+  "the owner plan is labelled",
 );
 assert(
   !/after your name and email/i.test(String(priced.body.reply)),
-  "pricing does not ask for a name and email",
+  "the price itself is not withheld for a name and email",
 );
 assert(!/\bR\s?\d/.test(String(priced.body.reply)), "a US pricing reply has no rand amount");
+assert(!String(priced.body.reply).includes("ZAR"), "a US pricing reply does not say ZAR");
+assert(!/\bvat\b/i.test(String(priced.body.reply)), "a US pricing reply does not say VAT");
 assert(modelCalls === PROSPECT_FREE_REPLIES, "the published price does not call the model");
 
 const gated = await handleProspectRequest(
@@ -779,7 +818,7 @@ const taxPrice = await handleProspectRequest(
   },
   ctx({ ip: "203.0.113.14", geoCountry: "ZA" }),
 );
-assert(taxPrice.body.askLead === false, "ZA pricing is not gated");
+assert(taxPrice.body.askLead === true, "ZA pricing is answered and the form is required after three replies");
 assert(
   String(taxPrice.body.reply) === prospectPricingReply("ZA"),
   "ZA pricing uses the published rand line",
@@ -863,6 +902,29 @@ const flood = await handleProspectRequest(
 );
 assert(flood.status === 429, "the handler enforces the IP rate limit");
 
+const leakedMoney = await handleProspectRequest(
+  { action: "turn", agent: "analyst", message: "What does the sample show?" },
+  ctx({
+    ip: "203.0.113.77",
+    geoCountry: "US",
+    model: async () => "It is R 299 ZAR plus VAT.",
+  }),
+);
+const leakedText = String(leakedMoney.body.reply);
+assert(leakedMoney.status === 200, "a non-ZA turn still answers");
+assert(!/\bR\s?\d/.test(leakedText), "a non-ZA response has no rand amount");
+assert(!leakedText.includes("ZAR"), "a non-ZA response does not say ZAR");
+assert(!/\bvat\b/i.test(leakedText), "a non-ZA response does not say VAT");
+const zaTaxWord = await handleProspectRequest(
+  { action: "turn", agent: "analyst", message: "What does the sample show?" },
+  ctx({
+    ip: "203.0.113.78",
+    geoCountry: "ZA",
+    model: async () => "VAT applies to the sample.",
+  }),
+);
+assert(!/\bvat\b/i.test(String(zaTaxWord.body.reply)), "a ZA response does not say VAT");
+
 const clientSrc = readFileSync(
   new URL("../src/components/prospect-talk.tsx", import.meta.url),
   "utf8",
@@ -875,12 +937,23 @@ assert(
   "the pricing sentence is the published owner price",
 );
 assert(
-  prospectPricingReply("US").includes(FIRM_TRIAL_CARD_NOTE),
-  "the US line states the page card note",
+  prospectPricingReply("US").includes("add a card once you've seen your first result"),
+  "the US line states the card timing",
 );
 assert(
-  prospectPricingReply("US").includes(FIRM_TRIAL_SENTENCE),
-  "the US line states the page trial",
+  prospectPricingReply("US").includes(`${FIRM_TRIAL_DAYS}-day free trial`),
+  "the US line states the catalog trial",
+);
+assert(
+  prospectPricingReply("US").includes(`up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`),
+  "the US line states the catalog client cap",
+);
+assert(usTalkPriceLine().split("\n").length === 2, "the US price is two lines");
+const starterUsd = firmUsdListPrice("starter", "month");
+assert(starterUsd != null && usTalkPriceLine().includes(`${starterUsd}/mo`), "the accountant price is the catalog starter price");
+assert(
+  !usTalkPriceLine().includes(`${OWNER_MONTHLY_USD_LABEL}. ${OWNER_MONTHLY_USD_LABEL}`),
+  "the US price is not duplicated in one line",
 );
 assert(!prospectPricingReply("US").includes("ZAR"), "the pricing sentence does not quote rand");
 assert(
@@ -1049,22 +1122,25 @@ assert(
   "turn 4 still answers the method, and the form is the name and email step",
 );
 
-const ownerMonthly = loadSaPricingCopy().ownerMonthly;
-assert(prospectZaOwnerMonthly() === ownerMonthly, "the ZA owner price matches the pricing page");
+const ownerMonthly = loadSaPricingCopy().ownerMonthly.replace(/\s+/g, "");
+assert(prospectZaOwnerMonthly() === ownerMonthly, "the ZA owner price matches the pricing page, without a wrapping space");
+assert(!ownerMonthly.includes(" "), "the talk rand amount has no breakable space");
+assert(/R\d/.test(ownerMonthly), "the talk rand amount keeps the R against the number");
 for (const agent of publicSlugs) {
   const us = prospectSystem(agent, "US");
   const za = prospectSystem(agent, "ZA");
-  assert(us.includes(FIRM_TRIAL_CARD_NOTE), `${agent} US prompt states the page card note`);
-  assert(za.includes(FIRM_TRIAL_CARD_NOTE), `${agent} ZA prompt states the page card note`);
-  assert(us.includes(FIRM_TRIAL_SENTENCE), `${agent} US prompt uses the published trial sentence`);
+  assert(us.includes(usTalkPriceLine()), `${agent} US prompt uses the two published lines`);
   assert(us.includes(OWNER_MONTHLY_USD_LABEL), `${agent} US prompt uses the published owner price`);
-  assert(us.includes(PRICING_TRIAL_AFTER), `${agent} US prompt uses the pricing page trial line`);
+  assert(us.includes(`${FIRM_TRIAL_DAYS}-day free trial`), `${agent} US prompt uses the catalog trial length`);
+  assert(us.includes(`up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`), `${agent} US prompt uses the catalog client cap`);
   assert(!us.includes(ownerMonthly), `${agent} US prompt does not show the rand owner price`);
   assert(!us.includes("ZAR"), `${agent} US prompt does not show ZAR`);
   assert(!/\bR\s?\d/.test(us), `${agent} US prompt has no rand amount`);
-  assert(za.includes(FIRM_TRIAL_SENTENCE), `${agent} ZA prompt uses the published trial sentence`);
+  assert(!/\bvat\b/i.test(us), `${agent} US prompt does not say VAT`);
+  assert(za.includes(zaTalkPriceLine()), `${agent} ZA prompt uses the two published lines`);
   assert(za.includes(ownerMonthly), `${agent} ZA prompt uses the rand owner price`);
   assert(!za.includes(OWNER_MONTHLY_USD_LABEL), `${agent} ZA prompt hides the US owner price`);
+  assert(!/\bvat\b/i.test(za), `${agent} ZA prompt does not say VAT`);
   assert(
     prospectPricingReply("ZA").includes(ownerMonthly),
     "ZA pricing reply uses the rand owner price",
@@ -1081,6 +1157,8 @@ for (const agent of publicSlugs) {
     prospectPricingReply("ZA").includes(zaTalkPriceLine()),
     "ZA pricing reply is the pricing page line",
   );
+  assert(!/\bvat\b/i.test(prospectPricingReply("US")), "US pricing copy has no VAT");
+  assert(!/\bvat\b/i.test(prospectPricingReply("ZA")), "ZA pricing copy has no VAT");
 }
 
 const gross = await handleProspectRequest(
@@ -1099,7 +1177,9 @@ const usIndexPrice = renderToStaticMarkup(
   createElement(TalkIndex, { refCode: null, copyPack: "us", priceLine: usTalkPriceLine() }),
 );
 assert(usIndexPrice.includes('data-talk-price="true"'), "the US index shows the published price");
-assert(usIndexPrice.includes(usTalkPriceLine()), "the US index price is the page line");
+for (const line of usTalkPriceLine().split("\n")) {
+  assert(usIndexPrice.includes(esc(line)), "the US index price is the page line");
+}
 assert(!usIndexPrice.includes("Tax Specialist"), "the priced US index still hides tax");
 assert(
   !/\bR\s?\d/.test(usIndexPrice) && !usIndexPrice.includes("ZAR"),
@@ -1109,11 +1189,11 @@ const zaIndexPrice = renderToStaticMarkup(
   createElement(TalkIndex, { refCode: null, copyPack: "za", priceLine: zaTalkPriceLine() }),
 );
 assert(zaIndexPrice.includes("Tax Specialist"), "the priced ZA index lists the tax specialist");
-assert(zaIndexPrice.includes(zaTalkPriceLine()), "the ZA index price is the page line");
-assert(
-  zaIndexPrice.includes(loadSaPricingCopy().ownerMonthly),
-  "the ZA index shows the rand owner price",
-);
+for (const line of zaTalkPriceLine().split("\n")) {
+  assert(zaIndexPrice.includes(esc(line)), "the ZA index price is the page line");
+}
+assert(zaIndexPrice.includes(ownerMonthly), "the ZA index shows the rand owner price");
+assert(!zaIndexPrice.includes("R 299"), "the ZA index does not leave a breakable space in the rand amount");
 assert(!zaIndexPrice.includes(OWNER_MONTHLY_USD_LABEL), "the ZA index hides the US owner price");
 
 let queued = queueTalkMessage(initialTalkSession(), METHOD_QUESTION);

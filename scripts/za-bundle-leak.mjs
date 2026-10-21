@@ -227,8 +227,11 @@ const talkNeedles = [
   "efiling",
   "rand ",
   "ZAR",
+  "VAT",
   "R799",
   "R299",
+  "R 299",
+  "R 799",
 ];
 const talkHits = [];
 let talkChunks = 0;

@@ -14,7 +14,7 @@
  */
 
 import { isOwnerLookupKey } from "./owner-price.ts";
-import { parseZaLookupKey } from "./pricing/za-ladder.ts";
+import { parseZaLookupKey } from "./pricing/za-lookup.ts";
 
 export {
   FIRM_TRIAL_CARD_LINE,

@@ -12,8 +12,11 @@ import {
   assessProspectTurn,
   guardProspectReply,
   looksLikeInjection,
+  mentionsBlockedMoney,
   mentionsFiling,
   mentionsLiveWrite,
+  mentionsVat,
+  PROSPECT_NO_VAT_REPLY,
   methodAsked,
   newProspectToken,
   plainMethodReply,
@@ -148,6 +151,15 @@ function blockedReply(agent: ProspectAgentCopy, message: string): string | null 
   return null;
 }
 
+/** Last pass on every visitor-facing reply. No indirect-tax word. No rand outside ZA. */
+function forVisitor(text: string, country: ProspectCountry): string {
+  if (mentionsVat(text)) return PROSPECT_NO_VAT_REPLY;
+  if (mentionsBlockedMoney(text, country)) {
+    return "I can walk the sample in dollars. The figures are labelled SAMPLE and show up after your name and email.";
+  }
+  return text;
+}
+
 function replyFor(input: {
   agent: ProspectAgentCopy;
   message: string;
@@ -265,7 +277,9 @@ async function takeTurn(
   const pricing = pricingAsked(message);
   const blocked = blockedReply(scope.agent, message);
   const askLead = shouldAskForLead(visitorTurns, hasLead);
-  const openGate = askLead && !blocked && !pricing;
+  // Pricing and method questions are still answered. After the free replies
+  // the name and email form is required, including on those turns.
+  const openGate = askLead && !blocked;
   let reply: string;
   if (blocked) {
     reply = blocked;
@@ -300,7 +314,7 @@ async function takeTurn(
     body: {
       ok: true,
       sessionToken,
-      reply,
+      reply: forVisitor(reply, scope.country),
       askLead: openGate,
       visitorTurns,
       country: scope.country,
@@ -315,8 +329,8 @@ async function answerPending(
   pending: string,
 ): Promise<string> {
   const blocked = blockedReply(agent, pending);
-  if (blocked) return blocked;
-  if (pricingAsked(pending)) return prospectPricingReply(country);
+  if (blocked) return forVisitor(blocked, country);
+  if (pricingAsked(pending)) return forVisitor(prospectPricingReply(country), country);
   let modelText: string | null = null;
   try {
     modelText = await ctx.model({
@@ -326,13 +340,16 @@ async function answerPending(
   } catch {
     modelText = null;
   }
-  return replyFor({
-    agent,
-    message: pending,
+  return forVisitor(
+    replyFor({
+      agent,
+      message: pending,
+      country,
+      modelText,
+      figures: "allow",
+    }),
     country,
-    modelText,
-    figures: "allow",
-  });
+  );
 }
 
 async function submitLead(
