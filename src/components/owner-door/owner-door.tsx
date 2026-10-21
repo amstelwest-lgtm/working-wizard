@@ -26,6 +26,7 @@ import {
   type OwnerAgentThread,
 } from "@/lib/owner-chat-thread";
 import { latestFiguresStamp } from "@/lib/draft-figures";
+import { booksPeriodPillLabel } from "@/lib/statement-period";
 import { earlierStatementNote } from "@/lib/statement-import-plan";
 import {
   ownerAnswerTiles,
@@ -847,7 +848,7 @@ export function OwnerDoor({
     workingRows,
   );
   const presence = steerOpenHandoffs(
-    ownerPresence({ ...activity, runs: cardRuns }, talk, liveHealth, figuresUpdatedAt),
+    ownerPresence({ ...activity, runs: cardRuns }, talk, liveHealth, figuresUpdatedAt, clientId),
     openAgents,
   );
   const runState = useMemo(() => {
@@ -1064,6 +1065,7 @@ export function OwnerDoor({
       onSignOut={onSignOut}
       onSettings={onSettings}
       onProfile={onProfile}
+      periodLabel={booksPeriodPillLabel(periodEnd, statementSpan)}
     >
       {railScreen === "home" ? (
         <OwnerHome

@@ -2,6 +2,7 @@
  * Staff-invite landing decisions. Pure: no Supabase, no firm signup, no billing.
  * Acceptance itself stays on redeemAccessToken.
  */
+import { canonicalAuthOrigin } from "@/lib/app-origin";
 
 export const STAFF_INVITE_INVALID_MESSAGE =
   "This invite is no longer valid. Ask your firm admin to send a new one.";
@@ -58,7 +59,7 @@ export function staffInviteCallbackPath(token: string): string {
 }
 
 export function staffInviteEmailRedirectTo(origin: string, token: string): string {
-  return `${origin.replace(/\/$/, "")}${staffInviteCallbackPath(token)}`;
+  return `${canonicalAuthOrigin(origin)}${staffInviteCallbackPath(token)}`;
 }
 
 export function staffInviteSignOutLabel(email: string): string {

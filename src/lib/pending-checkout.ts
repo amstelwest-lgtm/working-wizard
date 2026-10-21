@@ -3,7 +3,7 @@
  * Owner Spark is free and never stored here.
  */
 
-import { appRedirectOrigin } from "@/lib/app-origin";
+import { canonicalAuthOrigin } from "@/lib/app-origin";
 import {
   isFirmCheckoutBand,
   isFirmInterval,
@@ -103,7 +103,7 @@ export function checkoutCallbackPath(pending: PendingCheckout): string {
 }
 
 export function checkoutEmailRedirectTo(origin: string, pending: PendingCheckout): string {
-  return `${appRedirectOrigin([origin])}${checkoutCallbackPath(pending)}`;
+  return `${canonicalAuthOrigin(origin)}${checkoutCallbackPath(pending)}`;
 }
 
 export function isBillingStartPath(next: string | undefined): boolean {

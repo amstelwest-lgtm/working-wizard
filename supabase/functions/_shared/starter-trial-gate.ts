@@ -30,7 +30,7 @@ type GateDb = {
 };
 
 function missingMirrorColumn(message: string): boolean {
-  return /starter_trial_enforced|starter_trial_generation_blocked/i.test(message);
+  return /starter_trial_enforced|starter_trial_generation_blocked|precard_cap_applies/i.test(message);
 }
 
 /**
@@ -59,6 +59,35 @@ export async function paidGenerationTrialBlock(input: {
     throw new Error(firm.error.message);
   }
   if (firm.data?.starter_trial_enforced !== true) return null;
+  if (firm.data?.starter_trial_generation_blocked !== true) return null;
+  return { code: STARTER_TRIAL_ENDED_CODE, message: STARTER_TRIAL_ENDED_MESSAGE };
+}
+
+/**
+ * Ask AI and Milōn Bot Q&A after the trial, when this firm has no plan.
+ * A card-on-file trial does not set the pre-card flag, so Q&A stays open
+ * there. A missing column fails open.
+ */
+export async function cardlessTrialAiBlock(input: {
+  db: unknown;
+  clientId: string;
+}): Promise<PaidGenerationBlock | null> {
+  const db = input.db as GateDb;
+  const client = await db.from("clients").select("firm_id").eq("id", input.clientId).maybeSingle();
+  if (client.error) throw new Error(client.error.message);
+  const firmId = client.data?.firm_id;
+  if (typeof firmId !== "string" || !firmId) return null;
+
+  const firm = await db
+    .from("firms")
+    .select("id, precard_cap_applies, starter_trial_generation_blocked")
+    .eq("id", firmId)
+    .maybeSingle();
+  if (firm.error) {
+    if (missingMirrorColumn(firm.error.message)) return null;
+    throw new Error(firm.error.message);
+  }
+  if (firm.data?.precard_cap_applies !== true) return null;
   if (firm.data?.starter_trial_generation_blocked !== true) return null;
   return { code: STARTER_TRIAL_ENDED_CODE, message: STARTER_TRIAL_ENDED_MESSAGE };
 }

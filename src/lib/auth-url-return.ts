@@ -33,6 +33,7 @@ const AUTH_PARAM_KEYS = [
   "error",
   "error_code",
   "error_description",
+  "sb",
 ] as const;
 
 export type AuthUrlSession =

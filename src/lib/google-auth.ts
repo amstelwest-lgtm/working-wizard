@@ -1,4 +1,4 @@
-import { browserAppOrigin } from "@/lib/app-origin";
+import { browserAppOrigin, canonicalAuthOrigin } from "@/lib/app-origin";
 import { supabase } from "@/integrations/supabase/client";
 import { setPortalIntent, type PortalIntent } from "@/lib/user-roles";
 
@@ -33,7 +33,7 @@ export type GoogleOAuthHop = {
 };
 
 export function googleOAuthRedirectTo(origin: string, hop?: GoogleOAuthHop): string {
-  const base = `${origin.replace(/\/$/, "")}${GOOGLE_CALLBACK_PATH}`;
+  const base = `${canonicalAuthOrigin(origin)}${GOOGLE_CALLBACK_PATH}`;
   const q = new URLSearchParams();
   const token = hop?.token?.trim();
   if (token) {
