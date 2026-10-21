@@ -142,6 +142,14 @@ assert(
   "the given name is stored trimmed",
 );
 assert(
+  mintBody.includes("practice_display_name: storedPracticeName"),
+  "a new send stores practice_display_name",
+);
+assert(
+  mintBody.includes("sendPracticeDisplayName(firm.firmId)"),
+  "the stored practice name is the firm override",
+);
+assert(
   mintBody.includes("recipientEmail(data.recipientEmail)"),
   "the address is trimmed on the server",
 );

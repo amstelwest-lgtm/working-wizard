@@ -5,7 +5,6 @@
  */
 import { MONTHS_LONG } from "@/lib/market/date-presets";
 import { formatDate } from "@/lib/market/format";
-import { yearOfAssessmentStart } from "@/lib/tax-specialist/sample-compute";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES, sha256Hex } from "./client-agent-send";
 import { SEND_AGENT_FIRM_ALLOWLIST, sendAgentFirmAllowed } from "./client-agent-send-allowlist";
 
@@ -132,10 +131,20 @@ function februaryYearEnd(year: number): string {
   return `${year}-02-${String(day).padStart(2, "0")}`;
 }
 
-/** 1 March through the last day of February, from the year-of-assessment helper. */
+/**
+ * Day after the previous February year end. 28 February 2026 starts on
+ * 1 March 2025. Kept here so company-tax form names stay out of this bundle.
+ */
+function assessmentWindowStart(yearEnd: string): string {
+  const match = /^(\d{4})-02-\d{2}$/.exec(yearEnd);
+  if (!match) return yearEnd;
+  return `${Number(match[1]) - 1}-03-01`;
+}
+
+/** 1 March through the last day of February for that year of assessment. */
 export function documentYearWindow(year = DOCUMENT_YEAR_OF_ASSESSMENT): string {
   const end = februaryYearEnd(year);
-  const start = yearOfAssessmentStart(end);
+  const start = assessmentWindowStart(end);
   return `${longCalendarDay(start)} to ${longCalendarDay(end)}`;
 }
 

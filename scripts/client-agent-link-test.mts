@@ -470,6 +470,11 @@ assert(
     "All business accounts, 1 March 2025 to 28 February 2026.",
   "bank statements use the 2026 year of assessment",
 );
+const linkRules = read("src/lib/client-agent-link.ts");
+assert(
+  !linkRules.includes("sample-compute"),
+  "the public link does not import company tax copy",
+);
 assert(
   clientAgentItemHelp({ itemKey: "medical_aid_certificate" }) ===
     "Totals only. Do not send a line-by-line breakdown.",
