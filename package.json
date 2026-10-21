@@ -188,6 +188,7 @@
     "test:dark-paywall-contrast": "vite-node --config scripts/vite-test.config.ts scripts/dark-paywall-contrast-test.mts",
     "test:stripe-plans": "vite-node --config scripts/vite-test.config.ts scripts/stripe-plans-test.mts",
     "test:firm-trial-copy": "vite-node --config scripts/vite-test.config.ts scripts/firm-trial-copy-test.mts",
+    "test:signup-form-price": "vite-node --config scripts/vite-test.config.ts scripts/signup-form-price-test.mts",
     "test:trial-card-copy": "vite-node --config scripts/vite-test.config.ts scripts/trial-card-copy-test.mts",
     "test:stripe-checkout": "vite-node --config scripts/vite-test.config.ts scripts/stripe-checkout-test.mts",
     "test:za-pricing": "vite-node --config scripts/vite-test.config.ts scripts/za-pricing-test.mts",

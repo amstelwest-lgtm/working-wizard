@@ -55,10 +55,16 @@ assert(
 );
 
 const reminder = firmSignupTrialReminder("Solo");
+const SIGNUP_TRIAL =
+  "Your first client is free to explore. Add a card to start your 14-day free trial · up to 5 clients.";
+assert(reminder === firmSignupTrialReminder("Solo", "US"), "a missing country stays on the dollar catalog");
+assert(reminder.startsWith(SIGNUP_TRIAL), "signup uses the approved trial line");
+assert(reminder.endsWith("Then $39/mo."), "signup names the Starter dollar price");
+assert(!reminder.includes("You add a card once you have seen your first result."), "signup drops the old card line");
 assert(!reminder.includes("You will start on"), "signup does not say you will start on the selected band");
-assert(reminder.includes("Starter"), "signup names Starter");
 assert(reminder.includes(FIRM_TRIAL_SENTENCE), "signup uses the locked sentence");
 assert(!reminder.toLowerCase().includes("no card"), "signup does not say no card");
+assert(!reminder.toLowerCase().includes("vat"), "signup trial line has no VAT wording");
 
 assert(FIRM_TRIAL_EXPLORE.startsWith(FIRM_TRIAL_SENTENCE), "hero starts with the locked sentence");
 assert(FIRM_TRIAL_EXPLORE.includes("On Starter"), "hero names Starter");
