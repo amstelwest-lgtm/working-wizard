@@ -460,6 +460,10 @@ export function advisoryPackFiguresChanged(
     return true;
   }
   const opening = content.forecast?.openingBalance;
+  // A pack that names a balance, including 0, is stale once cash is no longer on file.
+  if (current.cash == null && opening != null && Number.isFinite(opening)) {
+    return true;
+  }
   if (
     current.cash != null &&
     opening != null &&

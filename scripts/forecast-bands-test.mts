@@ -8,6 +8,7 @@ import {
   plBankDisagreement,
   reanchoredForecastPatch,
   resolveThirteenWeekForecast,
+  SEEDED_FROM_ACTUALS_LABEL,
   rollBankDraftOpening,
   scoreCreditorDays,
   weeklyRunRate,
@@ -240,8 +241,7 @@ const blankWithRevenue = resolveThirteenWeekForecast({
 });
 assert(blankWithRevenue.source === "derived", "zero lines with P&L revenue are seeded");
 assert(
-  blankWithRevenue.estimateLabel ===
-    "Seeded from actuals. Monthly totals are spread evenly across each week.",
+  blankWithRevenue.estimateLabel === SEEDED_FROM_ACTUALS_LABEL,
   blankWithRevenue.estimateLabel ?? "missing estimate label",
 );
 assert(
