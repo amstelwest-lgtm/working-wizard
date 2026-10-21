@@ -33,9 +33,50 @@ function missingMirrorColumn(message: string): boolean {
   return /starter_trial_enforced|starter_trial_generation_blocked|precard_cap_applies/i.test(message);
 }
 
+const ENDED_BLOCK: PaidGenerationBlock = {
+  code: STARTER_TRIAL_ENDED_CODE,
+  message: STARTER_TRIAL_ENDED_MESSAGE,
+};
+
+/** A stored entitled plan, or an exempt firm, stays open. */
+function rowKeepsAiOpen(row: Record<string, unknown> | null): boolean {
+  if (!row) return false;
+  if (row.billing_plan_known === "entitled") return true;
+  return row.starter_trial_enforced === false;
+}
+
+/**
+ * The mirror read failed, or it says the trial ended. Read the stored plan
+ * before refusing. A second failure does not invent a plan.
+ */
+async function knownPlanKeepsAiOpen(db: GateDb, firmId: string): Promise<boolean> {
+  try {
+    const plan = await db
+      .from("firms")
+      .select("id, billing_plan_known, starter_trial_enforced")
+      .eq("id", firmId)
+      .maybeSingle();
+    if (plan.error) {
+      if (!/billing_plan_known/i.test(plan.error.message ?? "")) return false;
+      const legacy = await db
+        .from("firms")
+        .select("id, starter_trial_enforced")
+        .eq("id", firmId)
+        .maybeSingle();
+      if (legacy.error) return false;
+      return legacy.data?.starter_trial_enforced === false;
+    }
+    return rowKeepsAiOpen(plan.data);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Null when the firm may generate. A block when the mirror says the
- * enforced Starter trial has ended. Throws when the row cannot be read.
+ * enforced Starter trial has ended. A stored entitled plan, or an exempt
+ * firm, stays open when that mirror read fails. Throws when neither the
+ * mirror nor the stored plan can be read.
  */
 export async function paidGenerationTrialBlock(input: {
   db: unknown;
@@ -55,12 +96,14 @@ export async function paidGenerationTrialBlock(input: {
     .eq("id", firmId)
     .maybeSingle();
   if (firm.error) {
-    if (missingMirrorColumn(firm.error.message)) return null;
+    if (missingMirrorColumn(firm.error.message ?? "")) return null;
+    if (await knownPlanKeepsAiOpen(db, firmId)) return null;
     throw new Error(firm.error.message);
   }
   if (firm.data?.starter_trial_enforced !== true) return null;
   if (firm.data?.starter_trial_generation_blocked !== true) return null;
-  return { code: STARTER_TRIAL_ENDED_CODE, message: STARTER_TRIAL_ENDED_MESSAGE };
+  if (await knownPlanKeepsAiOpen(db, firmId)) return null;
+  return ENDED_BLOCK;
 }
 
 /**
@@ -84,10 +127,12 @@ export async function cardlessTrialAiBlock(input: {
     .eq("id", firmId)
     .maybeSingle();
   if (firm.error) {
-    if (missingMirrorColumn(firm.error.message)) return null;
+    if (missingMirrorColumn(firm.error.message ?? "")) return null;
+    if (await knownPlanKeepsAiOpen(db, firmId)) return null;
     throw new Error(firm.error.message);
   }
   if (firm.data?.precard_cap_applies !== true) return null;
   if (firm.data?.starter_trial_generation_blocked !== true) return null;
-  return { code: STARTER_TRIAL_ENDED_CODE, message: STARTER_TRIAL_ENDED_MESSAGE };
+  if (await knownPlanKeepsAiOpen(db, firmId)) return null;
+  return ENDED_BLOCK;
 }

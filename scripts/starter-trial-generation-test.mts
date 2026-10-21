@@ -17,7 +17,10 @@ import {
   messageFromUnknown,
   starterTrialBlocksGeneration,
 } from "../src/lib/starter-trial-generation";
-import { paidGenerationTrialBlock } from "../supabase/functions/_shared/starter-trial-gate.ts";
+import {
+  cardlessTrialAiBlock,
+  paidGenerationTrialBlock,
+} from "../supabase/functions/_shared/starter-trial-gate.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -196,6 +199,91 @@ const missingColumn = await paidGenerationTrialBlock({
   clientId: "client_1",
 });
 assert(missingColumn == null, "a missing mirror column fails open");
+
+function selectiveDb(firms: (columns: string) => { data: Record<string, unknown> | null; error: string | null }) {
+  return {
+    from(table: string) {
+      return {
+        select(columns: string) {
+          return {
+            eq() {
+              return {
+                async maybeSingle() {
+                  if (table === "clients") {
+                    return { data: { firm_id: "firm-ben" }, error: null };
+                  }
+                  const row = firms(columns);
+                  return { data: row.data, error: row.error ? { message: row.error } : null };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+const entitledPlan = {
+  data: { id: "firm-ben", billing_plan_known: "entitled", starter_trial_enforced: false },
+  error: null,
+};
+const mirrorDown = { data: null, error: "connection timeout" };
+for (const read of [paidGenerationTrialBlock, cardlessTrialAiBlock] as const) {
+  const open = await read({
+    db: selectiveDb((columns) => (columns.includes("billing_plan_known") ? entitledPlan : mirrorDown)),
+    userId: "user_1",
+    clientId: "client-1",
+  });
+  assert(open == null, "a stored entitled plan stays open when the mirror read fails");
+}
+
+const exemptPlan = {
+  data: { id: "firm-ben", billing_plan_known: null, starter_trial_enforced: false },
+  error: null,
+};
+const exemptOpen = await cardlessTrialAiBlock({
+  db: selectiveDb((columns) => (columns.includes("billing_plan_known") ? exemptPlan : mirrorDown)),
+  clientId: "client-1",
+});
+assert(exemptOpen == null, "an exempt firm stays open when the mirror read fails");
+
+let unknownThrew = false;
+try {
+  await cardlessTrialAiBlock({
+    db: selectiveDb(() => mirrorDown),
+    clientId: "client-1",
+  });
+} catch (err) {
+  unknownThrew = messageFromUnknown(err).includes("connection timeout");
+}
+assert(unknownThrew, "a mirror failure with no stored plan still refuses to generate");
+
+const staleEntitled = await cardlessTrialAiBlock({
+  db: selectiveDb((columns) =>
+    columns.includes("billing_plan_known")
+      ? entitledPlan
+      : {
+          data: { precard_cap_applies: true, starter_trial_generation_blocked: true },
+          error: null,
+        },
+  ),
+  clientId: "client-1",
+});
+assert(staleEntitled == null, "stale trial flags do not block a stored entitled plan");
+
+const cardlessStill = await cardlessTrialAiBlock({
+  db: selectiveDb((columns) =>
+    columns.includes("billing_plan_known")
+      ? { data: { billing_plan_known: "none", starter_trial_enforced: true }, error: null }
+      : {
+          data: { precard_cap_applies: true, starter_trial_generation_blocked: true },
+          error: null,
+        },
+  ),
+  clientId: "client-1",
+});
+assert(cardlessStill?.code === "starter_trial_ended", "a cardless firm with no stored plan is still blocked");
 
 function read(path: string): string {
   return readFileSync(resolve(path), "utf8");
