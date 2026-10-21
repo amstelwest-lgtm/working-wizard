@@ -23,7 +23,7 @@ import { figuresCheckedLine, findingSentence } from "../src/lib/milon-team-activ
 import { presentLiveDraft } from "../src/lib/draft-figures.ts";
 import { ownerPresence } from "../src/lib/owner-presence.ts";
 import { presentHomeDraftTitle } from "../src/lib/owner-needs.ts";
-import { booksPeriodPillLabel } from "../src/lib/statement-period.ts";
+import { booksPeriodPillLabel, ownerBootPeriodPill } from "../src/lib/statement-period.ts";
 import { healthAnswerSentence } from "../src/lib/overview-insights.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
 import { healthNarrative } from "../src/reports/narrative.ts";
@@ -322,7 +322,122 @@ const bumped = findingSentence({
   writtenAt: "2026-10-20T18:00:00.000Z",
   figuresUpdatedAt: "2026-10-20T13:23:11.753Z",
 });
-assertCardNumbers(bumped, "engine bump");
-assert(!bumped.includes("e:1"), bumped);
+assert(bumped.includes("Cash is the weakest pillar at 34"), bumped);
+assert(bumped.includes("overall health score of 63"), bumped);
+assert(!bumped.includes(FIGURES_CHANGED_REGENERATE), `engine prefix is not a cited score: ${bumped}`);
+
+const sameScores: HealthScoreSnapshot = {
+  overall: 75,
+  pillars: [
+    { id: "profit", label: "Profit", score: 58 },
+    { id: "assets", label: "Assets", score: 83 },
+    { id: "financing", label: "Financing", score: 81 },
+    { id: "cash", label: "Cash", score: 78 },
+  ],
+  weakestLabel: "Profit",
+  weakestScore: 58,
+  periodLabel: "Jan 1 – Sep 30, 2026",
+};
+const cited =
+  "Profit is the weakest pillar at 58, against an overall health score of 75. Assets scores 83, Financing 81 and Cash 78.";
+const preEngineHash = "o:75|w:profit:58|p:assets:83,cash:78,financing:81,profit:58|d:jan 1 – sep 30, 2026";
+const hashedMatch = findingSentence({
+  title: cited,
+  evidence: { score_snapshot_hash: preEngineHash },
+  liveHealth: sameScores,
+  writtenAt: "2026-10-20T21:53:09.000Z",
+  figuresUpdatedAt: "2026-10-20T21:40:00.000Z",
+});
+assert(hashedMatch.includes("Profit is the weakest pillar at 58"), hashedMatch);
+assert(hashedMatch.includes("75"), hashedMatch);
+assert(!hashedMatch.includes(FIGURES_CHANGED_REGENERATE), `matching hash scores stay: ${hashedMatch}`);
+const legacyCited = findingSentence({
+  title: "Profit is the weakest pillar at 58, against an overall health score of 75 for 1 Jan – 30 Sep 2026.",
+  evidence: { period_label: "1 Jan – 30 Sep 2026" },
+  liveHealth: sameScores,
+  writtenAt: "2026-10-20T21:59:12.000Z",
+  figuresUpdatedAt: "2026-10-20T21:47:00.000Z",
+});
+assert(legacyCited.includes("overall health score of 75"), legacyCited);
+assert(!legacyCited.includes(FIGURES_CHANGED_REGENERATE), `legacy cited match stays: ${legacyCited}`);
+const legacyDiffer = findingSentence({
+  title: cited,
+  evidence: { period_label: PERIOD },
+  liveHealth: live,
+  writtenAt: "2026-10-20T13:34:11.501Z",
+  figuresUpdatedAt: "2026-10-20T13:23:11.753Z",
+});
+assert(legacyDiffer.includes(FIGURES_CHANGED_REGENERATE), legacyDiffer);
+assert(legacyDiffer.includes("Cash is the weakest pillar at 34"), legacyDiffer);
+assert(!/profit[^.]{0,40}weakest pillar/i.test(legacyDiffer), legacyDiffer);
+
+const owner72: HealthScoreSnapshot = {
+  overall: 72,
+  pillars: [
+    { id: "profit", label: "Profit", score: 58 },
+    { id: "financing", label: "Financing", score: 86 },
+  ],
+  weakestLabel: "Profit",
+  weakestScore: 58,
+  periodLabel: PERIOD,
+};
+const ownerDraft = findingSentence({
+  title: "Profit is the weakest pillar at 58, against an overall health score of 72 for Jan 1 – Sep 30, 2026.",
+  evidence: {
+    score_snapshot_hash: "o:72|w:profit:58|p:financing:86,profit:58|d:jan 1 – sep 30, 2026",
+  },
+  liveHealth: owner72,
+});
+assert(ownerDraft.includes("overall health score of 72"), ownerDraft);
+assert(!ownerDraft.includes(FIGURES_CHANGED_REGENERATE), `owner 72 stays: ${ownerDraft}`);
+
+const mixed = ownerPresence(
+  {
+    runs: [],
+    findings: [
+      {
+        id: "finding-a",
+        agent: "analyst",
+        client_id: "client-a",
+        title: "Cash is the weakest pillar at 34, against an overall health score of 63.",
+        detail: null,
+        evidence: null,
+        as_of: null,
+        created_at: "2026-10-20T13:00:00.000Z",
+      },
+      {
+        id: "finding-b",
+        agent: "analyst",
+        client_id: "client-b",
+        title: "Profit is the weakest pillar at 58, against an overall health score of 75.",
+        detail: null,
+        evidence: null,
+        as_of: null,
+        created_at: "2026-10-21T13:00:00.000Z",
+      },
+    ],
+    messages: [],
+    market: ZA_MARKET,
+  },
+  null,
+  live,
+  null,
+  "client-a",
+);
+const clientA = mixed.agents.find((agent) => agent.agent === "analyst")?.sentence ?? "";
+assert(clientA.includes("Cash is the weakest pillar at 34"), clientA);
+assert(!clientA.includes("75"), `client B must not render on client A: ${clientA}`);
+assert(!clientA.includes("Profit is the weakest"), clientA);
+
+const unknownPeriod = ownerBootPeriodPill({ booksKnown: false, periodEnd: null, periodLabel: null });
+assert(unknownPeriod.pending, "unknown books keep the pill pending");
+assert(unknownPeriod.label == null, "unknown books do not invent a month");
+const knownPeriod = ownerBootPeriodPill({
+  booksKnown: true,
+  periodEnd: "2026-09-30",
+  periodLabel: "Jan 1 – Sep 30, 2026",
+});
+assert(!knownPeriod.pending, "known books are not pending");
+assert(knownPeriod.label === "Sep 2026", knownPeriod.label ?? "missing");
 
 console.log("health-narrative-snapshot ok");

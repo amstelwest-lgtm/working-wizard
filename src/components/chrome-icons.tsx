@@ -130,8 +130,24 @@ export function AgentChipIcon({ agent }: { agent: AgentKey }) {
  * Quiet topbar pill. A client header passes the books' period end
  * ("Sep 2026"). With no books, the pill stays the calendar month.
  */
-export function PeriodPill({ periodLabel }: { periodLabel?: string | null }) {
+export function PeriodPill({
+  periodLabel,
+  pending = false,
+}: {
+  periodLabel?: string | null;
+  /** Books are not loaded yet. Never substitute today's month. */
+  pending?: boolean;
+}) {
   const { market } = useMarketFormat();
+  if (pending) {
+    return (
+      <span className="period-pill" data-period-pending="true" aria-busy="true" title="Figures period">
+        <RailIcon id="calendar" />
+        <span className="period-pill-pending" aria-hidden="true" />
+        <span className="sr-only">Loading period</span>
+      </span>
+    );
+  }
   const books = periodLabel?.trim() || "";
   const label = books || formatMonthYear(new Date(), market.timezone);
   return (

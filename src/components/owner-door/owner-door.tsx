@@ -848,7 +848,7 @@ export function OwnerDoor({
     workingRows,
   );
   const presence = steerOpenHandoffs(
-    ownerPresence({ ...activity, runs: cardRuns }, talk, liveHealth, figuresUpdatedAt),
+    ownerPresence({ ...activity, runs: cardRuns }, talk, liveHealth, figuresUpdatedAt, clientId),
     openAgents,
   );
   const runState = useMemo(() => {
