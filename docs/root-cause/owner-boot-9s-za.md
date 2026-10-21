@@ -67,7 +67,7 @@ A later 40-load sample on the same prod deploy, cold, as this invite owner: 39 O
 
 Supabase logs for that window: in 4 of the 5 flagged 4s aborts, the CORS preflight (OPTIONS) reached Supabase with 200 in 0–16ms, and the GET did not arrive until the retry 4s later, which then ran in about 105ms. The request stalls on the browser or network path after the preflight. It is not slow at the server. The fifth request did arrive. It took 3.1s at the gateway, with PostgREST at 2ms. That is intermittent latency between Supabase's edge and gateway, not the database. No slow SQL and no 499s.
 
-Vercel runtime logs for `dpl_8Gevs4CL` from 09:03:30 to 09:06:00 UTC show zero runtime lines and no Init Duration cold starts, so nothing stalled on the function side. That is the same picture: a stall on the browser or network path after the preflight.
+Per CoS, Vercel runtime logs for `dpl_8Gevs4CL` from 09:03:30 to 09:06:00 UTC show zero runtime lines and no Init Duration cold starts, so nothing stalled on the function side. That is consistent with a stall on the browser or network path after the preflight.
 
 A fixed 4s + 4s retry turns one of those stalls into a hard fail, and it adds about 4s to a slow load that would have completed. The hedged second select starts at 2.5s, while the first request is still in flight.
 
