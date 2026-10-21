@@ -36,6 +36,14 @@ assert(project.includes("PRODUCT_BUNDLE_IDENTIFIER = com.milonfinance.app;"), "b
 assert(!project.includes('TARGETED_DEVICE_FAMILY = "1,2"'), "iPad is not a target");
 assert(project.includes("TARGETED_DEVICE_FAMILY = 1;"), "iPhone is the device family");
 assert(project.includes("PrivacyInfo.xcprivacy in Resources"), "privacy manifest is in the app resources");
+assert(project.includes("MilonShellPlugin.swift in Sources"), "external URL plugin is compiled");
+assert(project.includes("CODE_SIGN_ENTITLEMENTS = App/App.entitlements;"), "associated domains entitlements are wired");
+
+const entitlements = readFileSync(resolve(root, "ios/App/App/App.entitlements"), "utf8");
+assert(entitlements.includes("applinks:www.milonfinance.com"), "www universal links");
+assert(entitlements.includes("applinks:milonfinance.com"), "apex universal links");
+assert(entitlements.includes("webcredentials:www.milonfinance.com"), "www webcredentials");
+assert(entitlements.includes("webcredentials:milonfinance.com"), "apex webcredentials");
 
 const manifest = readFileSync(resolve(root, "android/app/src/main/AndroidManifest.xml"), "utf8");
 assert(manifest.includes('android:largeScreens="false"'), "Android shell is phone-only");
