@@ -267,11 +267,8 @@ export function firmUsdListPrice(band: FirmBandId, interval: FirmInterval): stri
 }
 
 /**
- * USD ladder line. Every band with a client cap includes the per-client
- * clause, using Starter's rounding: monthly dollars divided by the cap,
- * nearest dollar. A yearly line keeps that monthly per-client figure.
- * Enterprise has no cap, so it stays a price only. Rand sentences are not
- * built here.
+ * USD ladder line. Starter includes the per-client clause the rand ladder
+ * uses. Rand sentences are not built here.
  */
 export function firmUsdPublicLine(band: FirmBandId, interval: FirmInterval): string | null {
   const entry = FIRM_BAND_CATALOG[band];
@@ -280,9 +277,8 @@ export function firmUsdPublicLine(band: FirmBandId, interval: FirmInterval): str
   const price = firmUsdListPrice(band, billed);
   if (!price) return null;
   const head = `${price}/${billed === "year" ? "yr" : "mo"}`;
-  if (entry.monthlyUsdCents == null || entry.clientLimit == null) return head;
+  if (band !== "starter" || entry.monthlyUsdCents == null || entry.clientLimit == null) return head;
   const per = Math.round(entry.monthlyUsdCents / 100 / entry.clientLimit);
-  if (per <= 0) return head;
   return `${head} · about $${per} per client`;
 }
 

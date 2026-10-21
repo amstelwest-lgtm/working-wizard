@@ -132,6 +132,29 @@ assert(usSnap.saDiscount === false, "a US firm with US clients stays on USD");
 assert(!hasRandPrice(usHtml), `a US-only cap panel must not show rand, saw ${usHtml}`);
 assert(usHtml.includes("$39"), "a US-only cap panel shows the USD Starter price");
 
+const zaMarkets = Array.from({ length: 3 }, () => ({ country: "ZA" as const, regionCode: "GP" as const }));
+const zaSnap = await buildUpgradeSnapshot({
+  isOwner: true,
+  membershipRole: "owner",
+  market: { country: "ZA", region: "GP", regionCode: "GP" },
+  clientMarkets: zaMarkets,
+  clientCount: zaMarkets.length,
+  sub: null,
+});
+const zaHtml = panel(zaSnap);
+const zaFirmCharge = firmCheckoutCharge({
+  firmMarket: { country: "ZA", regionCode: "GP" },
+  clientMarkets: zaMarkets,
+  requested: "us",
+  billingCountry: "ZA",
+  band: "starter",
+  interval: "month",
+});
+assert(zaSnap.saDiscount === true, "a ZA firm row is a rand list on the cap snapshot");
+assert(/R\s?299/.test(zaHtml), `a ZA firm cap panel should show R299, saw ${zaHtml}`);
+assert(zaFirmCharge.priceMarket === "za", "a ZA firm Checkout with billing country ZA uses the ZAR price");
+assert(!hasRandPrice(usHtml) && usCharge.priceMarket === "us", "a US-only firm is USD on the panel and on Checkout");
+
 const visitor = {
   pack: visitorCopyPack(null),
   prices: LIST_PRICES[visitorCopyPack(null)],

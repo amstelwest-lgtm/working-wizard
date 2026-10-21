@@ -853,6 +853,21 @@ function ClientView() {
     });
   }, [search.qbo, search.xero, search.reason, clientId, navigate]);
 
+  // First-client onboarding: land from dashboard with ?onboard=1 → bank upload nudge
+  useEffect(() => {
+    if (search.onboard !== "1") return;
+    setFirstDataOpen(true);
+    navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: (prev) => {
+        const next = { ...prev };
+        delete next.onboard;
+        return next;
+      },
+      replace: true,
+    });
+  }, [search.onboard, clientId, navigate]);
 
   const [actingAsThisClient, setActingAsThisClient] = useState(false);
   useEffect(() => {
@@ -1260,31 +1275,6 @@ function ClientView() {
   }, [uploadOpen]);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [firstDataOpen, setFirstDataOpen] = useState(false);
-  // ?onboard=1 stays on the address until Step 1 closes, so a refresh
-  // still opens it. #733 lands on tab=home&onboard=1.
-  const firstDataWasOpen = useRef(false);
-  useEffect(() => {
-    if (search.onboard !== "1") return;
-    setFirstDataOpen(true);
-  }, [search.onboard]);
-  useEffect(() => {
-    if (firstDataOpen) {
-      firstDataWasOpen.current = true;
-      return;
-    }
-    if (!firstDataWasOpen.current || search.onboard !== "1") return;
-    firstDataWasOpen.current = false;
-    navigate({
-      to: "/clients/$clientId",
-      params: { clientId },
-      search: (prev) => {
-        const next = { ...prev };
-        delete next.onboard;
-        return next;
-      },
-      replace: true,
-    });
-  }, [firstDataOpen, search.onboard, clientId, navigate]);
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [scoreHistory, setScoreHistory] = useState<{ period_date: string; score: number }[]>([]);
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);

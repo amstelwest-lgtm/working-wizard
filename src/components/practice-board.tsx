@@ -1244,7 +1244,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const finalizeUpgrade = useServerFn(finalizeFirmBandCheckout);
   const loadTrialAllowance = useServerFn(getFirmClientCreateAllowance);
   const [trialAllowance, setTrialAllowance] = useState<FirmClientCreateAllowance | null>(null);
-  const [trialAllowanceReady, setTrialAllowanceReady] = useState(false);
   const [trialNonce, setTrialNonce] = useState(0);
   const upgradeReturnHandled = useRef(false);
   useEffect(() => {
@@ -1301,41 +1300,20 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   useEffect(() => {
     if (!portalReady || !firmId) {
       setTrialAllowance(null);
-      setTrialAllowanceReady(!firmId);
       return;
     }
     let cancelled = false;
-    setTrialAllowanceReady(false);
     void loadTrialAllowance({ data: { firmId } })
       .then((next) => {
         if (!cancelled) setTrialAllowance(next);
       })
       .catch(() => {
         if (!cancelled) setTrialAllowance(null);
-      })
-      .finally(() => {
-        if (!cancelled) setTrialAllowanceReady(true);
       });
     return () => {
       cancelled = true;
     };
   }, [portalReady, firmId, loadTrialAllowance, trialNonce]);
-  const addClientHashSeen = useRef<string | null>(null);
-  useEffect(() => {
-    const id = (practiceHash ?? "").replace(/^#/, "");
-    if (id !== "wizard-add-client") {
-      addClientHashSeen.current = null;
-      return;
-    }
-    if (view !== "clients" || !trialAllowanceReady || addClientHashSeen.current === id) return;
-    addClientHashSeen.current = id;
-    if (trialAllowance && firmAddClientDestination(trialAllowance) === "/billing/required") {
-      openBillingRequired();
-    } else {
-      setAddOpen(true);
-    }
-    void navigate({ to: "/clients", hash: "", replace: true });
-  }, [practiceHash, view, trialAllowance, trialAllowanceReady, navigate]);
   const [firstClientOpen, setFirstClientOpen] = useState(false);
   const [inviteDraft, setInviteDraft] = useState<InviteDraftUi | null>(null);
   const [inviteSending, setInviteSending] = useState(false);
