@@ -3,12 +3,15 @@
  *
  * A ZA March year clips a January–September statement to March–September.
  * A US calendar year keeps January–September whole. The This year card,
- * This year vs last year, and the waterfall quote that same slice.
- * A missing line stays null.
+ * This year vs last year, the waterfall, and the Budget vs actual tiles
+ * quote that same slice. A missing line stays null.
  *
- * Other side? Owner (`src/routes/app.tsx`) and accountant
+ * Other side? Both portals share BudgetPanel, which attaches the firm-year
+ * slice. The owner simplified view and the accountant view draw
+ * BudgetSimpleView. The complex view draws BudgetChartTable with the same
+ * actuals. Owner (`src/routes/app.tsx`) and accountant
  * (`src/routes/_authenticated/clients.$clientId.tsx`) both draw
- * `fiscalWaterfallFallback`. Both portals read the slice from BudgetPanel.
+ * `fiscalWaterfallFallback`.
  *
  * Run: pnpm test:budget-za-period
  */
@@ -19,8 +22,10 @@ import { BudgetVerdictStrip } from "../src/components/budget/budget-verdict";
 import { BudgetYearStrip } from "../src/components/budget/budget-year-strip";
 import { fmtBudgetMoney } from "../src/lib/budget.compute";
 import { yearMoneyFromFiscalSlice } from "../src/lib/budget-year-compare";
+import { budgetRangeTotals, budgetMonthViews } from "../src/lib/budget-chart-table";
 import {
   budgetHeadlineFigures,
+  budgetStatementTiles,
   fiscalStatementSlice,
   fiscalWaterfallFallback,
 } from "../src/lib/budget-period";
@@ -115,7 +120,22 @@ function cardsAgree(
   assert(verdict.includes(sticky(profitText)), `verdict profit ${profitText}: ${verdict}`);
   assert(yearStrip.includes(headline.label), "year strip names the same period");
   assert(yearStrip.includes(revenueText), `year strip revenue ${revenueText}`);
-  return { slice, headline, year, waterfall };
+  const grossAt = yearStrip.indexOf("Gross profit");
+  const operatingAt = yearStrip.indexOf("Operating profit");
+  const netAt = yearStrip.indexOf("Net profit");
+  assert(
+    grossAt >= 0 && operatingAt > grossAt && netAt > operatingAt,
+    "operating profit sits between gross profit and net profit",
+  );
+  assert(yearStrip.includes(profitText), `year strip operating profit ${profitText}`);
+  const tiles = budgetStatementTiles(slice);
+  close(tiles.operatingProfit, headline.operatingProfit, "tile operating profit matches the header");
+  close(tiles.revenue, headline.revenue, "tile revenue matches the header");
+  assert(
+    fmtBudgetMoney(tiles.operatingProfit ?? Number.NaN, market) === profitText,
+    "tile operating profit formats with the header",
+  );
+  return { slice, headline, year, waterfall, tiles };
 }
 
 /** January–September statement. Revenue and operating profit reconcile. */
@@ -170,6 +190,28 @@ const zaHeadline = budgetHeadlineFigures(zaClip.slice, {
 });
 close(zaHeadline.revenue, ZA_CLIP_REVENUE, "card ignores the plan revenue");
 close(zaHeadline.operatingProfit, ZA_CLIP_OPERATING, "card ignores the seeded operating profit");
+assert(
+  zaClip.tiles.operatingProfit === zaHeadline.operatingProfit,
+  "1020F tile operating profit equals the header",
+);
+assert(
+  fmtBudgetMoney(zaClip.tiles.operatingProfit ?? Number.NaN, ZA) === "R 40 444",
+  `1020F tile prints ${fmtBudgetMoney(zaClip.tiles.operatingProfit ?? Number.NaN, ZA)}`,
+);
+const planWindow = budgetRangeTotals(
+  budgetMonthViews(zaSeed, []).filter((row) => (zaVersus!.windowMonths ?? []).includes(row.month)),
+);
+assert(
+  fmtBudgetMoney(planWindow.net, ZA) === "R 40 460",
+  `seeded plan tiles would print ${fmtBudgetMoney(planWindow.net, ZA)}`,
+);
+assert(
+  zaClip.tiles.operatingProfit !== planWindow.net,
+  "the tile is the firm-year clip, not the rounded plan",
+);
+const chart = readFileSync("src/components/budget/budget-chart-table.tsx", "utf8");
+assert(chart.includes("budgetStatementTiles(statementActuals.period)"), "tiles read the firm-year slice");
+assert(chart.includes('amount == null ? "—"'), "a missing tile stays a dash");
 
 // A statement that already sits in the March year is not scaled again.
 const MAR_SEP = {
@@ -250,9 +292,25 @@ const blankProfit = fiscalStatementSlice(
 assert(blankProfit?.operatingProfit == null, "missing operating profit stays null");
 assert(blankProfit?.operatingProfit !== 0, "missing operating profit is not 0");
 const blankYear = yearMoneyFromFiscalSlice(blankProfit);
+assert(blankYear?.operatingProfit == null, "year strip operating profit stays null");
+assert(blankYear?.operatingProfit !== 0, "year strip operating profit is not 0");
 assert(blankYear?.netProfit == null, "year strip does not invent net profit");
 assert(blankYear?.expenses == null, "year strip does not invent expenses");
 assert(blankYear?.cogs == null, "year strip does not invent COGS");
+const blankTiles = budgetStatementTiles(blankProfit);
+assert(blankTiles.operatingProfit == null && blankTiles.expenses == null, "tiles do not invent operating profit");
+const blankStrip = renderToStaticMarkup(
+  createElement(BudgetYearStrip, {
+    thisYear: blankYear,
+    thisMonths: blankProfit?.months,
+    lastYear: null,
+    market: ZA,
+  }),
+);
+const blankOperating = blankStrip.indexOf("Operating profit");
+const blankNet = blankStrip.indexOf("Net profit");
+assert(blankOperating >= 0 && blankNet > blankOperating, "a missing operating line still has a row");
+assert(blankStrip.slice(blankOperating, blankNet).includes("—"), "the missing operating line prints a dash");
 const blankFall = fiscalWaterfallFallback(
   {
     revenue: "1000",
@@ -292,9 +350,11 @@ assert(simple.includes("{money(cell.price)}"), "read-only price goes through fmt
 assert(!/>\s*\{cell\.price\}\s*</.test(simple), "raw price is not printed");
 assert(simple.includes("yearMoneyFromFiscalSlice"), "simple year strip uses the slice");
 assert(simple.includes("budgetHeadlineFigures"), "simple verdict uses the slice");
+assert(simple.includes("statementActuals={compared}"), "owner chart receives the slice");
 
 const workspace = readFileSync("src/components/budget/budget-workspace.tsx", "utf8");
 assert(workspace.includes("budgetHeadlineFigures"), "complex verdict uses the slice");
+assert(workspace.includes("statementActuals={actuals}"), "accountant chart receives the slice");
 const panel = readFileSync("src/components/budget/budget-panel.tsx", "utf8");
 assert(panel.includes("fiscalStatementSlice"), "both portals attach the slice in BudgetPanel");
 
