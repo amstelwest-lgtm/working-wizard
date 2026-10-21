@@ -128,3 +128,62 @@ The header pill for these books is Sep 2026, not the calendar month of the test 
 `liveHealthFromBooks` and `scorecardHealthFromFinancials` were run on these figures after the note. `57f79cb6`, `#692` (`bceba040` and merge `1e80002d`), main at the run (`a1f316c9`, 13:28 UTC), and current main all return overall 63, Profit 75, Assets 63, Financing 81, Cash 34. `#692` does not move Cash here. Debtor Days 59 scores 34, Creditor Days 89 scores 52, Working Capital Days 76 scores 16, and OCF / EBITDA is missing so it is left unscored. The average is 34, not the forecast floor of 25.
 
 The 78 is the deployed `get_health` payload. Its day counts were Debtor 26, Creditor 40, Inventory 47, Working Capital 33. Those are what these stocks produce if the cover is treated as 4 months, and the same `scoreRatio` then returns Cash 78, Profit 58, Assets 83, Financing 81, overall 75. The page uses the stored 9-month cover, and 63 / Cash 34 is the score that cover produces.
+
+## Addendum — AQA retest of #710 at `023c3572` (second fail)
+
+Retest was partial on non-Ben firms. Prod read was read-only on `jxclnsbsqpixxqlbcapl` after `#710` had merged (`f048bfda`, head `ab860b1f`). No code change in this addendum.
+
+### 1. Owner pill first paint
+
+Cause. `/app?tab=health` paints the boot `OwnerShell` in `src/routes/app.tsx` while `ownerBoardReady` is still false. That shell is the only owner header that also renders `PanelSkeleton` ("Loading panel…"). The business name is `ownerWorkspaces` or the fallback "Your business". `#710` passed `booksPeriodPillLabel(v.periodEnd, statementSpan)` into that shell. On the first paint the books are not hydrated, so `v.periodEnd` is empty, the helper returns null, and `PeriodPill` in `src/components/chrome-icons.tsx` substitutes `formatMonthYear(new Date())`. On 21 Oct 2026 that is "Oct 2026". After hydration the ready `OwnerDoor` passes the real period end and the pill becomes "Sep 2026".
+
+There is no second owner header. `isLegacyOwnerBoardTab` does not include `health`, so this URL does take the boot shell. `src/components/owner-door/owner-door.tsx` is the post-ready shell and already passes the books' period. `src/components/accountant-nav.tsx` has no pill. The accountant client header in `src/routes/_authenticated/clients.$clientId.tsx` passes `booksPeriodPillLabel` and AQA saw "Sep 2026" on first load. `settings-shell.tsx` and `practice-board.tsx` use a bare `PeriodPill` for the calendar month. They are not this screen.
+
+Files. `src/routes/app.tsx` (boot `OwnerShell`), `src/components/owner-door/owner-shell.tsx` (`PeriodPill`), `src/components/chrome-icons.tsx` (`PeriodPill` calendar fallback), `src/lib/statement-period.ts` (`booksPeriodPillLabel`).
+
+Why the tests missed it. `booksPeriodPillLabel("2026-09-30", …)` was asserted to be "Sep 2026", and the boot shell was edited to call that helper. Nothing rendered the shell with an empty `periodEnd`, so the calendar fallback never ran in the test.
+
+Verification. With books not yet known, the owner pill must be a neutral skeleton and must not be the calendar month. Once `periodEnd` is `2026-09-30`, the same pill is "Sep 2026" on the first paint that has the books.
+
+### 2. False stale when the cited scores match
+
+Cause. `reconcileStoredHealthNarrative` in `src/lib/health-snapshot.ts` treats any `score_snapshot_hash` as the whole comparison. `healthSnapshotHash` is `e:<SCORE_ENGINE_VERSION>|o:…|w:…|p:…|d:…`. A mismatch, including a missing `e:2|` prefix or a different period string, returns the regenerate line and never looks at the numbers the sentence cites. A row with no hash is compared with `healthSnapshotsDiffer`, which also requires the period strings to match. A legacy row that cites no scores is not what marked these clients stale. These rows have hashes. The hashes disagree with the live hash while the cited scores do not.
+
+Prod rows, all `superseded_by` null, all on their own `client_id`:
+
+| Client | Finding | Hash stored on the row | Cited scores |
+| --- | --- | --- | --- |
+| AQA J2 US 1020E `353f1dbf-a7ba-4092-878d-792223ba3536` | analyst `9159f87e-62cb-43b6-985e-eb45e6881522`, run `cc9c3492-11e1-42c3-836f-d617a65769a3`, created `2026-10-20 21:53:09` | `o:75\|w:profit:58\|p:assets:83,cash:78,financing:81,profit:58\|d:jan 1 – sep 30, 2026` | Profit 58, overall 75, Assets 83, Financing 81, Cash 78 |
+| AQA J2 ZA 1020F `24844299-1aec-449c-ab45-66ca1b97c3ef` | analyst `8fcaf238-92c7-42d5-ac94-37642379f9c0`, run `1cd9be2f-30ca-470c-bb17-f9509a4a2d32`, created `2026-10-20 21:59:12` | `o:75\|w:profit:58\|p:assets:83,cash:78,financing:81,profit:58\|d:1 jan – 30 sep 2026` | same scores, ZA period wording |
+| Owner draft AQA called 1020D. The client row is AQA Throwaway ClR `24149d9c-4e27-4fc2-9b98-1a92767e3bc3` | analyst `af6db887-9d44-41aa-a5a8-a540ac40b762`, run not re-copied here, created `2026-10-20 20:54:11` | `o:72\|w:profit:58\|p:financing:86,profit:58\|d:jan 1 – sep 30, 2026` | overall 72, Profit 58 |
+
+The live hash always starts with `e:2|`. The 1020E period token is already `jan 1 – sep 30, 2026`, so the only difference on that row is the engine prefix. 1020F's period token is the ZA wording `1 jan – 30 sep 2026`, which is a second field beyond the scores. The owner hash also omits Assets and Cash, so a four-pillar live hash differs even when 72 and Profit 58 match. `findingSentence` and `presentLiveDraft` both call this function, so the owner draft and the accountant findings take the same path.
+
+Files. `src/lib/health-snapshot.ts` (`healthSnapshotHash`, `reconcileStoredHealthNarrative`, `healthSnapshotsDiffer`). Callers: `src/lib/milon-team-activity.ts` (`findingSentence`), `src/lib/draft-figures.ts` (`presentLiveDraft`), `src/lib/owner-presence.ts`.
+
+Why the tests missed it. The `#710` engine-bump test built the live hash and replaced `e:2|` with `e:1|`, then asserted that the regenerate line appears. That locked in "prefix differs, so stale" for a sentence whose scores still match. The 1020B fixture cites 75 / Profit 58 against a live card of 63 / Cash 34, so it goes stale for the right reason and never asserts the matching case. No fixture used a pre-`#710` hash of the form `o:75|w:profit:58|…` with a sentence that cites those same numbers.
+
+Verification. A stored sentence whose cited overall and pillar scores equal the live snapshot stays, with or without `score_snapshot_hash`, and with or without the `e:` prefix. A sentence that cites a different overall or pillar score becomes the regenerate line. A legacy row that cites no score is not stale just because the hash is missing.
+
+### 3. 1020E / 1020F versus 1020B's old 75 / Cash 78
+
+Not a cross-client read. 1020E and 1020F are different books from 1020B, and each finding's `client_id` is that client's own id.
+
+| | 1020B | 1020E and 1020F |
+| --- | --- | --- |
+| Revenue / cogs / net | 182000 / 76000 / 37000 | 412000 / 171000 / 38200 |
+| Cash, payables, inventory, equity | 46300, 24700, 29400, 100700 | same stocks |
+| `periodMonths` / `periodEnd` | 9 / 2026-09-30 | 9 / 2026-09-30 |
+| Live score the page should show | 63 / Cash 34 | 75 / Profit 58 / Cash 78 |
+
+1020E's 9-month cover on 412000 of revenue produces Debtor Days about 26 (`38900 / (412000 × 12/9) × 365`). Gross margin `(412000 − 171000) / 412000` is 58.5%, operating margin `52000 / 412000` is 12.6%, net margin `38200 / 412000` is 9.3%. Those are the same ratios the old edge reported for 1020B, where a 4-month cover of 182000 (`182000 × 12/4 = 546000`, against `412000 × 12/9 = 549333`) landed on the same day counts and the same margins. 1020B's page is still the 9-month score, 63 / Cash 34. 1020E and 1020F really do score 75 / Cash 78. The sentences match their own books.
+
+Reads. Accountant feed `src/hooks/use-milon-team-feed.ts` and owner door `src/components/owner-door/owner-door.tsx` both query `agent_findings` with `.eq("client_id", id)`. `ownerPresence` then picks `latestFinding` by `agent` and `created_at` only. It does not look at `client_id` again. A list that already mixed two clients would render the other client's sentence. The production rows above are not mixed. `run_id` is stored on the finding and is not the read key.
+
+Verification. `ownerPresence` for client A, given a finding for A and a newer finding for B, renders A's sentence and does not render B's.
+
+### 4. "Couldn't open your workspace"
+
+That heading is only in `src/routes/app.tsx`. It renders when `ownerBoardReady` has stayed false for `SHELL_GATE_TIMEOUT_MS` (8 seconds, `src/lib/shell-gate.ts`). The body says the books did not finish loading. `#710` did not change this deadline.
+
+It is not the billing gate. `src/routes/_authenticated.gate.tsx` uses the same 8 second constant and records `noteFailure("timeout")`. It does not render this heading. `stripe-entitlement.ts` and `firm-client-cap.server.ts` do not contain this copy. Those three files stay untouched. The flake is the owner boot deadline in Eng1 code: one reload did not hydrate before 8 seconds, the next did. This note does not change that timer.
