@@ -5,16 +5,22 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { buildAdvisoryPack, livePackMetrics } from "../src/lib/advisory-pack.ts";
 import { OPENING_CASH_UNKNOWN, SEEDED_FROM_ACTUALS_LABEL } from "../src/lib/budget.bridges.ts";
 import { cashEmptyPresentation, cashForecastWeeksFromOutlook } from "../src/lib/cash-forecast-parity.ts";
-import { forecastScreenTiles } from "../src/lib/cash-forecast-view.ts";
+import { forecastClosingTile, forecastScreenTiles } from "../src/lib/cash-forecast-view.ts";
 import {
   assessClientMetrics,
   resolveCashScreenForecast,
   resolveThirteenWeekForecast,
+  runwayDisplayLabel,
   RUNWAY_INSUFFICIENT_LABEL,
 } from "../src/lib/client-metrics.ts";
+import { liveHealthFromBooks } from "../src/lib/health-score.ts";
+import { ownerAnswerTiles, type OwnerBooks } from "../src/lib/owner-answers.ts";
 import { FORECAST_PREVIEW_EMPTY, forecastPreviewGap } from "../src/lib/report-preview.ts";
+import { buildOverviewBrief, overviewFactLines } from "../supabase/functions/ask-ai/overview-brief.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -35,6 +41,11 @@ const seeded = resolveCashScreenForecast({
 });
 assert(seeded.seededFromActuals === true, "nine months of actuals seed a baseline");
 assert(seeded.estimateLabel === SEEDED_FROM_ACTUALS_LABEL, seeded.estimateLabel ?? "missing label");
+assert(/estimat/i.test(SEEDED_FROM_ACTUALS_LABEL), SEEDED_FROM_ACTUALS_LABEL);
+assert(
+  !SEEDED_FROM_ACTUALS_LABEL.includes("Monthly totals"),
+  "a day-paced partial month is not a monthly total",
+);
 assert(seeded.openingCash === null, "no balance sheet does not become opening 0");
 assert(seeded.openingNote === OPENING_CASH_UNKNOWN, seeded.openingNote ?? "missing opening note");
 assert(seeded.floor === 0, `a missing opening does not mint a floor (${seeded.floor})`);
@@ -206,5 +217,192 @@ assert(
   accountant.includes("<CashForecastPanel"),
   "the accountant cash screen renders the shared panel",
 );
+const panelSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
+const seedAt = panelSrc.indexOf("data-forecast-seed");
+assert(seedAt > 0, "the shared panel shows the seed label");
+assert(
+  !panelSrc.slice(Math.max(0, seedAt - 500), seedAt).includes("simplified ?"),
+  "the seed label is on the owner and accountant screens",
+);
+assert(panelSrc.includes("forecastClosingTile"), "the closing tile uses the shared readout");
+const pdfSrc = readFileSync(resolve("src/reports/cash-forecast.tsx"), "utf8");
+assert(pdfSrc.includes("seedLabel?.trim()"), "the PDF prints the seed label with the assumptions");
+
+const us = { currency: "USD" as const, locale: "en-US", country: "US" as const, copyPack: "us" as const };
+const assessed = assessClientMetrics({ financials: nineMonths, cashflow: null, now: monday });
+assert(assessed.outlook.openingCash === null && assessed.outlook.cashOnFile === false, "1020E opening is unknown");
+assert(assessed.outlook.seededFromActuals === true, "1020E weeks are seeded");
+assert(assessed.outlook.opening === 0, "the legacy opening field is still 0");
+assert(assessed.runway.weeks == null && assessed.runway.label !== "0 weeks", assessed.runway.label);
+assert(assessed.cash.amount == null, "P&L revenue is not cash");
+
+const health = liveHealthFromBooks({
+  financials: nineMonths,
+  cashflow: null,
+  market: us,
+  now: monday,
+});
+const cashPillar = health.pillars.find((pillar) => pillar.id === "cash");
+assert(cashPillar?.score == null, `health scored missing cash (${cashPillar?.score})`);
+assert(
+  cashPillar?.note === OPENING_CASH_UNKNOWN || cashPillar?.note === "Not enough data",
+  cashPillar?.note ?? "missing cash note",
+);
+assert(!/\$0|under the floor|above the floor/.test(cashPillar?.note ?? ""), cashPillar?.note ?? "");
+
+const live = livePackMetrics({
+  financials: nineMonths,
+  cashflow: null,
+  market: us,
+  now: monday,
+});
+assert(live.openingUnknown === true, "the pack knows the opening is missing");
+assert(live.figures.cash === null, `pack cash was ${live.figures.cash}`);
+assert(live.openingBalance === null, "pack opening is not 0");
+assert(live.closings == null, "zero closings are not a series");
+assert(live.cashRunwayWeeks == null, "runway weeks are not computed from 0");
+const pack = buildAdvisoryPack({
+  clientName: "AQA J2 US 1020E",
+  firmName: null,
+  hasFirm: false,
+  periodLabel: "Sep 2026",
+  priorPeriodLabel: null,
+  figuresAsOf: "2026-09-30",
+  health: live.health,
+  ratios: live.ratios,
+  priorRatios: null,
+  openingBalance: live.openingBalance,
+  closings: live.closings,
+  floor: live.floor,
+  cashRunwayWeeks: live.cashRunwayWeeks,
+  runwayLabel: live.runwayLabel,
+  openingUnknown: live.openingUnknown,
+  recommendations: [],
+  dataRequests: [],
+  openActions: 0,
+  overdueActions: 0,
+  now: "2026-10-05",
+});
+const packText = pack.sections.map((section) => `${section.body} ${(section.bullets ?? []).join(" ")}`).join("\n");
+assert(
+  packText.includes(OPENING_CASH_UNKNOWN) || packText.includes("Not enough data"),
+  packText,
+);
+assert(!packText.includes("$0"), packText);
+assert(!/under the floor|above the floor|starts from zero|0 weeks/.test(packText), packText);
+
+const books = {
+  hasBooks: true,
+  ledger: null,
+  revenue: 412000,
+  priorRevenue: null,
+  cogs: 171000,
+  receivables: null,
+  cashflow: null,
+  hasEvidence: true,
+  cashOnFile: false,
+  openingMissing: false,
+  cashOutlook: null,
+  cashPillarStatus: null,
+  openAction: null,
+  actionsReady: true,
+  signedBy: null,
+  signedOn: null,
+  market: us,
+} satisfies OwnerBooks;
+const ownerSentence = ownerAnswerTiles(books).find((tile) => tile.id === "cash")?.sentence ?? "";
+assert(
+  ownerSentence === OPENING_CASH_UNKNOWN || ownerSentence === "Not enough data",
+  ownerSentence,
+);
+assert(!/\$0|under the floor|above the floor/.test(ownerSentence), ownerSentence);
+
+const brief = buildOverviewBrief({
+  financials: nineMonths,
+  cash: assessed.cash.amount,
+  runwayWeeks: assessed.runway.weeks,
+  runwayLabel: runwayDisplayLabel(assessed.runway),
+  copyPack: "us",
+  cashflow: null,
+  clientName: "AQA J2 US 1020E",
+  openingMissing: false,
+  cashOpening: assessed.outlook.opening,
+  cashClosings: assessed.outlook.closing,
+  cashFloor: assessed.outlook.floor,
+  now: monday,
+});
+const facts = overviewFactLines(brief).join("\n");
+assert(brief.cash == null, `brief cash was ${brief.cash}`);
+assert(brief.runwayWeeks == null, `brief runway was ${brief.runwayWeeks}`);
+assert(facts.includes(OPENING_CASH_UNKNOWN) || facts.includes("Not enough data"), facts);
+assert(!facts.includes("$0"), facts);
+assert(!/0 weeks|under the floor|above the floor/.test(facts), facts);
+const cashPillarOnBrief = brief.pillars.find((pillar) => pillar.id === "cash");
+assert(cashPillarOnBrief?.score == null, `brief scored cash from 0 (${cashPillarOnBrief?.score})`);
+
+const unknownTiles = forecastScreenTiles({
+  empty: false,
+  opening: assessed.outlook.openingCash ?? null,
+  closings: assessed.outlook.closing,
+  floor: assessed.outlook.floor,
+  format: (amount) => `$${amount}`,
+});
+const closingTile = forecastClosingTile({
+  empty: false,
+  opening: assessed.outlook.openingCash ?? null,
+  closing: null,
+  format: (amount) => `$${amount}`,
+});
+const tileText = `${unknownTiles.lowestValue} ${unknownTiles.lowestSub} ${unknownTiles.weeksValue} ${unknownTiles.weeksSub} ${closingTile.value} ${closingTile.sub}`;
+assert(unknownTiles.lowestValue === "—" && closingTile.value === "—", tileText);
+assert(
+  (unknownTiles.lowestSub === OPENING_CASH_UNKNOWN || unknownTiles.lowestSub === "Not enough data") &&
+    (closingTile.sub === OPENING_CASH_UNKNOWN || closingTile.sub === "Not enough data"),
+  tileText,
+);
+assert(!/under the floor|above the floor|\$0/.test(tileText), tileText);
+
+const { renderToBuffer } = await import("@react-pdf/renderer");
+const { getDocumentProxy } = await import("unpdf");
+const { CashForecastPDF } = await import("../src/reports/cash-forecast.tsx");
+const seededWeeks = cashForecastWeeksFromOutlook(assessed.outlook);
+assert(seededWeeks != null, "seeded weeks reach the PDF");
+const pdfBuf = await renderToBuffer(
+  createElement(CashForecastPDF, {
+    smeData: { name: "AQA J2 US 1020E", period: "September 2026" },
+    accountantProfile: {
+      firmName: "Test Accounting Co",
+      logoUrl: null,
+      primaryColor: "#1a1a2e",
+      secondaryColor: "#16213e",
+      accentColor: "#0f3460",
+      accountantName: "Jane Doe",
+      accountantEmail: "jane@testfirm.co.za",
+      tagline: null,
+    },
+    market: { currency: "USD", locale: "en-US", country: "US", copyPack: "us", regionCode: "NY", timezone: "America/New_York" },
+    cashForecast: seededWeeks,
+    scenario: "base",
+    seedLabel: seededWeeks.seedLabel,
+    assumptions: ["Forecast starts 5 October 2026. Opening cash unknown."],
+  }),
+);
+const pdf = await getDocumentProxy(new Uint8Array(pdfBuf));
+const pdfLines: string[] = [];
+for (let n = 1; n <= pdf.numPages; n += 1) {
+  const page = await pdf.getPage(n);
+  const content = await page.getTextContent();
+  for (const item of content.items as Array<{ str?: string }>) {
+    if (item.str?.trim()) pdfLines.push(item.str);
+  }
+}
+const pdfText = pdfLines.join(" ").replace(/\s+/g, " ");
+assert(pdfText.includes(SEEDED_FROM_ACTUALS_LABEL), "the PDF shows the estimate label");
+assert(!pdfText.includes("Monthly totals"), pdfText);
+assert(
+  pdfText.includes(OPENING_CASH_UNKNOWN) || pdfText.includes("Not enough data"),
+  pdfText,
+);
+assert(!pdfText.includes("$0"), pdfText);
 
 console.log("forecast 13w seed ok");

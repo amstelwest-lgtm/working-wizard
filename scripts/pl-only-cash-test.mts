@@ -29,10 +29,9 @@ import {
   needsTrialBalanceRefresh,
   TRIAL_BALANCE_REFRESH_COPY,
 } from "../src/lib/trial-balance-refresh.ts";
-import { assessClientMetrics } from "../src/lib/client-metrics.ts";
+import { assessClientMetrics, OPENING_CASH_UNKNOWN } from "../src/lib/client-metrics.ts";
 import { clientListStatusWord } from "../src/lib/cash-forecast-parity.ts";
 import {
-  CASH_NOT_ON_FILE,
   ownerAnswerTiles,
   ownerCardStatuses,
   ownerHomeLines,
@@ -99,14 +98,13 @@ const books = {
 } satisfies OwnerBooks;
 
 const cashSentence = ownerAnswerTiles(books).find((tile) => tile.id === "cash")?.sentence ?? "";
-assert(cashSentence === CASH_NOT_ON_FILE, cashSentence);
-assert(cashSentence === "Cash not on file yet, upload a balance sheet.", cashSentence);
+assert(cashSentence === OPENING_CASH_UNKNOWN, cashSentence);
 assert(!/\$0|Critical|below your minimum/i.test(cashSentence), cashSentence);
 
 const status = ownerCardStatuses(books);
 assert(status.financial_manager == null, status.financial_manager?.word ?? "chip should be absent");
 const lines = ownerHomeLines(ownerAnswerTiles(books), null);
-assert(lines.financial_manager[0] === CASH_NOT_ON_FILE, lines.financial_manager.join(" | "));
+assert(lines.financial_manager[0] === `${OPENING_CASH_UNKNOWN}.`, lines.financial_manager.join(" | "));
 assert(
   !lines.financial_manager.some((line) => /\$0|Critical|below your/i.test(line)),
   lines.financial_manager.join(" | "),
@@ -171,7 +169,7 @@ const brief = buildFinancialManagerBrief({
   draftsReady: true,
   formatMoney: (amount) => `$${amount}`,
 });
-assert(brief.cashFloorLine === CASH_NOT_ON_FILE, brief.cashFloorLine ?? "missing cash line");
+assert(brief.cashFloorLine === OPENING_CASH_UNKNOWN, brief.cashFloorLine ?? "missing cash line");
 assert(brief.cashFloorChip == null, brief.cashFloorChip ?? "chip");
 assert(brief.healthCue == null, brief.healthCue ?? "strip");
 assert(!brief.actions.some((row) => row.id === "cash-floor"), "no below-minimum action");
@@ -205,7 +203,7 @@ const html = renderToStaticMarkup(
   }),
 );
 assert(
-  html.includes("Cash not on file yet, upload a balance sheet"),
+  html.includes("Opening cash unknown"),
   "home renders the missing-cash line",
 );
 assert(!html.includes("Critical"), "home does not render Critical");

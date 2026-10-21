@@ -76,6 +76,7 @@ import {
   cashGraphWeekTickInterval,
   stableCashChartWidth,
   forecastChipSource,
+  forecastClosingTile,
   forecastScreenTiles,
   hashIsCashDetailAnchor,
   lowestCashPoint,
@@ -2169,12 +2170,16 @@ export function CashForecastPanel({
   const totalOutflow = calc.outflow.reduce((sum, n) => sum + n, 0);
   const baseInflow = baseCalc.inflow.reduce((sum, n) => sum + n, 0);
   const baseOutflow = baseCalc.outflow.reduce((sum, n) => sum + n, 0);
-  const publishedDirection = runwayFromForecastNet({
-    base: screenRunway,
-    opening: baseCalc.opening,
-    totalInflow: baseInflow,
-    totalOutflow: baseOutflow,
-  });
+  // A blank seeded opening is not cash of 0. Do not turn a burn into "0 weeks".
+  const seededOpeningUnknown = seededFromActuals && openingBalance.trim() === "";
+  const publishedDirection = seededOpeningUnknown
+    ? screenRunway
+    : runwayFromForecastNet({
+        base: screenRunway,
+        opening: baseCalc.opening,
+        totalInflow: baseInflow,
+        totalOutflow: baseOutflow,
+      });
   const publishedGenerative =
     publishedDirection.kind === "cash_generative" &&
     forecastIsCashGenerative(baseInflow, baseOutflow);
@@ -2185,12 +2190,14 @@ export function CashForecastPanel({
     runwayLabel: runwayDisplayLabel(publishedDirection),
     cashGenerative: publishedGenerative,
   });
-  const direction = runwayFromForecastNet({
-    base: screenRunway,
-    opening: calc.opening,
-    totalInflow,
-    totalOutflow,
-  });
+  const direction = seededOpeningUnknown
+    ? screenRunway
+    : runwayFromForecastNet({
+        base: screenRunway,
+        opening: calc.opening,
+        totalInflow,
+        totalOutflow,
+      });
   const seriesCashGenerative =
     direction.kind === "cash_generative" && forecastIsCashGenerative(totalInflow, totalOutflow);
   const scenarioLabel = forecastScenarioLabel({
@@ -2709,6 +2716,12 @@ export function CashForecastPanel({
     format: fmtCompact,
     weekDates: weeks,
   });
+  const closingTile = forecastClosingTile({
+    empty: !loaded || forecastEmpty,
+    opening: openingTilesMissing ? null : baseCalc.opening,
+    closing: openingTilesMissing ? null : closingW13,
+    format: fmtCompact,
+  });
   const lowestTileValue = screenTiles.lowestValue;
   const lowestTileSub = screenTiles.lowestSub;
   const lowestPointSub = screenTiles.lowestSub;
@@ -2730,19 +2743,25 @@ export function CashForecastPanel({
         <>
           <Stat
             label="Closing · Week 13"
-            value={openingTilesMissing ? "—" : fmtCompact(closingW13)}
+            value={closingTile.value}
             icon={LineChart}
-            tone={openingTilesMissing ? "neutral" : closingW13 < 0 ? "bad" : "neutral"}
+            tone={
+              openingTilesMissing || forecastEmpty ? "neutral" : closingW13 < 0 ? "bad" : "neutral"
+            }
             sub={
-              <span className="inline-flex items-center gap-1">
-                {trajectory >= 0 ? (
-                  <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
-                ) : (
-                  <TrendingDown className="h-3 w-3 text-[#c0392b]" />
-                )}
-                {trajectory >= 0 ? "+" : ""}
-                {fmtCompact(trajectory)} over 13 weeks
-              </span>
+              openingTilesMissing || forecastEmpty ? (
+                closingTile.sub
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  {trajectory >= 0 ? (
+                    <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 text-[#c0392b]" />
+                  )}
+                  {trajectory >= 0 ? "+" : ""}
+                  {fmtCompact(trajectory)} over 13 weeks
+                </span>
+              )
             }
           />
           <Stat

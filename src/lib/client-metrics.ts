@@ -170,9 +170,12 @@ export function periodOperatingOutflows(
   return total > 0 ? total : null;
 }
 
-/** Honest label for a 13-week baseline spread evenly from monthly actuals. */
+/**
+ * Honest label for a 13-week baseline taken from the statement period.
+ * A partial month is day-paced, so this is not a monthly total.
+ */
 export const SEEDED_FROM_ACTUALS_LABEL =
-  "Seeded from actuals. Monthly totals are spread evenly across each week.";
+  "Estimated from actuals. The period total is spread evenly across each week.";
 
 /** Shown when the forecast has actuals but no balance-sheet or bank opening. */
 export const OPENING_CASH_UNKNOWN = "Opening cash unknown";

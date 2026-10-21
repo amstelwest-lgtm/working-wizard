@@ -190,6 +190,35 @@ export function forecastScreenTiles(input: {
 }
 
 /**
+ * Week-13 closing from the same opening the lowest-point tile uses.
+ * An empty series and a missing opening do not print a $0 change.
+ */
+export function forecastClosingTile(input: {
+  empty: boolean;
+  opening: number | null;
+  closing: number | null;
+  format: (amount: number) => string;
+}): { value: string; sub: string } {
+  if (input.empty) return { value: "—", sub: "Not enough data" };
+  const opening = input.opening;
+  const closing = input.closing;
+  if (
+    opening == null ||
+    closing == null ||
+    !Number.isFinite(opening) ||
+    !Number.isFinite(closing)
+  ) {
+    return { value: "—", sub: "Opening cash unknown" };
+  }
+  const trajectory = closing - opening;
+  const sign = trajectory >= 0 ? "+" : "";
+  return {
+    value: input.format(closing),
+    sub: `${sign}${input.format(trajectory)} over 13 weeks`,
+  };
+}
+
+/**
  * Tick labels for the cash graph. A wide or unmeasured frame shows every
  * point. A narrow frame keeps Now (when present), then W4, W7, W10 and W13.
  */
