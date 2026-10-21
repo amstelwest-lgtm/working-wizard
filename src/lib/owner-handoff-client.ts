@@ -233,7 +233,7 @@ export async function recordHandoffAssignment(input: {
 }
 
 export type ActionHandoffCommit =
-  | { ok: true; noted: boolean }
+  | { ok: true; noted: boolean; reused?: boolean }
   | { ok: false; error: string; comingSoon?: boolean };
 
 /**
@@ -310,7 +310,7 @@ export async function commitActionHandoff(input: {
       runId: result.runId ?? undefined,
       committed: true,
     });
-    return { ok: true, noted: false };
+    return { ok: true, noted: false, reused: true };
   } else if (!result.noted) {
     // The deployed function has not confirmed the note yet. Write it here so
     // reload still sees the assignee. A function that returns noted does this itself.
@@ -600,45 +600,23 @@ function quietTable(name: string): InOrderQuery {
 
 type MoveRunRow = { id: string; actionItemId: string; status: string };
 
-/**
- * Every run for these actions, newest first, and the drafts on those runs.
- * A failed read leaves findingsReady false so the row stays Working instead of dropping the assignee.
- */
-async function loadMoveActivity(actionIds: string[]): Promise<{
-  runs: MoveRunRow[];
-  findings: MoveFindingRow[];
-  findingsReady: boolean;
-}> {
-  const runs: MoveRunRow[] = [];
-  const ids = actionIds.filter(Boolean);
-  if (!ids.length) return { runs, findings: [], findingsReady: true };
-  const runsRes = await quietTable("agent_runs")
-    .select("id, action_item_id, status, queued_at")
-    .in("action_item_id", ids)
-    .order("queued_at", { ascending: false });
-  if (runsRes.error || !Array.isArray(runsRes.data)) {
-    return { runs, findings: [], findingsReady: false };
-  }
-  for (const row of runsRes.data) {
-    if (!row || typeof row !== "object") continue;
-    const record = row as { id?: unknown; action_item_id?: unknown; status?: unknown };
-    const actionId = typeof record.action_item_id === "string" ? record.action_item_id : "";
-    const runId = typeof record.id === "string" ? record.id : "";
-    const status = typeof record.status === "string" ? record.status : "";
-    if (!actionId || !runId) continue;
-    runs.push({ id: runId, actionItemId: actionId, status });
-  }
-  const runIds = runs.map((run) => run.id);
-  if (!runIds.length) return { runs, findings: [], findingsReady: true };
+/** Drafts for these runs. A failed read leaves findingsReady false so the row stays Working. */
+async function loadFindingsForRuns(
+  runIds: string[],
+  runsReady: boolean,
+): Promise<{ findings: MoveFindingRow[]; findingsReady: boolean }> {
+  if (!runsReady) return { findings: [], findingsReady: false };
+  const ids = runIds.filter(Boolean);
+  if (!ids.length) return { findings: [], findingsReady: true };
   const findingsRes = await quietTable("agent_findings")
     .select("id, run_id, status, superseded_by, dismissed_reason, created_at")
     .in("run_id", runIds)
     .order("created_at", { ascending: false });
   if (findingsRes.error) {
-    if (agentActivityUnavailable(findingsRes.error)) return { runs, findings: [], findingsReady: true };
-    return { runs, findings: [], findingsReady: false };
+    if (agentActivityUnavailable(findingsRes.error)) return { findings: [], findingsReady: true };
+    return { findings: [], findingsReady: false };
   }
-  if (!Array.isArray(findingsRes.data)) return { runs, findings: [], findingsReady: false };
+  if (!Array.isArray(findingsRes.data)) return { findings: [], findingsReady: false };
   const findings: MoveFindingRow[] = [];
   for (const row of findingsRes.data) {
     if (!row || typeof row !== "object") continue;
@@ -659,7 +637,7 @@ async function loadMoveActivity(actionIds: string[]): Promise<{
       dismissed_reason: typeof record.dismissed_reason === "string" ? record.dismissed_reason : null,
     });
   }
-  return { runs, findings, findingsReady: true };
+  return { findings, findingsReady: true };
 }
 
 /**
@@ -677,16 +655,47 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
   const startedEpoch = moveAssignmentEpoch.get(id) ?? 0;
   moveAssignmentTokens.set(id, token);
   const load = (async (): Promise<MoveAssignmentRef[]> => {
-    const { data, error } = await supabase
-      .from("action_items")
-      .select("id, title, source_move_key, driver_key")
-      .eq("client_id", id)
-      .order("created_at", { ascending: false })
-      .limit(80);
+    // The assignee only needs the items and their notes. Runs and findings used
+    // to wait behind that, one round trip each, which is the cold-load gap.
+    const [itemsRes, runsRes] = await Promise.all([
+      supabase
+        .from("action_items")
+        .select("id, title, source_move_key, driver_key")
+        .eq("client_id", id)
+        .order("created_at", { ascending: false })
+        .limit(80),
+      supabase
+        .from("agent_runs")
+        .select("id, action_item_id, status, queued_at")
+        .eq("client_id", id)
+        .order("queued_at", { ascending: false }),
+    ]);
+    const data = itemsRes.data;
+    const error = itemsRes.error;
     if (error || !data) return [];
     const ids = data.map((row) => row.id).filter((value): value is string => Boolean(value));
-    const assignments = await loadLatestAssignments(ids);
-    const activity = await loadMoveActivity(ids);
+    const idSet = new Set(ids);
+    const runs: MoveRunRow[] = [];
+    if (!runsRes.error && Array.isArray(runsRes.data)) {
+      for (const row of runsRes.data) {
+        if (!row || typeof row !== "object") continue;
+        const record = row as { id?: unknown; action_item_id?: unknown; status?: unknown };
+        const actionId = typeof record.action_item_id === "string" ? record.action_item_id : "";
+        const runId = typeof record.id === "string" ? record.id : "";
+        const status = typeof record.status === "string" ? record.status : "";
+        if (!actionId || !runId || !idSet.has(actionId)) continue;
+        runs.push({ id: runId, actionItemId: actionId, status });
+      }
+    }
+    const [assignments, findingsBundle] = await Promise.all([
+      loadLatestAssignments(ids),
+      loadFindingsForRuns(runs.map((run) => run.id), runsRes.error ? false : true),
+    ]);
+    const activity = {
+      runs: runsRes.error ? [] : runs,
+      findings: findingsBundle.findings,
+      findingsReady: runsRes.error ? false : findingsBundle.findingsReady,
+    };
     const rows: MoveAssignmentRef[] = data.map((row) => {
       const stored = assignments.get(row.id);
       const runs = activity.runs

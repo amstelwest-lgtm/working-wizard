@@ -51,6 +51,9 @@ export function handoffButtonLabel(agent: AgentKey, assigned: boolean, compact =
  * click paints the new owner. A person, or nobody, stays "Hand to".
  * `compact` uses the short name so a 390px row does not clip the label.
  */
+/** Shown until the stored assignee is known. Not a hand-off control. */
+export const HANDOFF_CHECKING_LABEL = "Checking…";
+
 export function handoffTriggerLabel(assignee: string | null | undefined, compact = false): string {
   const clean = (assignee ?? "").replace(/\s+/g, " ").trim();
   if (!clean) return "Hand to";
