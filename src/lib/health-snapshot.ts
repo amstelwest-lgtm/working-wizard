@@ -577,7 +577,7 @@ export function healthSnapshotFromLegacyEvidence(
     evidence && typeof evidence === "object" && !Array.isArray(evidence)
       ? (evidence as { period_label?: unknown })
       : null;
-  const period = typeof record?.period_label === "string" ? record.period_label.trim() : "";
+  const period = typeof record?.period_label === "string" ? record.period_label.trim() : ""; // date-ok: stored snapshot period, compared not printed
   return {
     overall,
     pillars,
