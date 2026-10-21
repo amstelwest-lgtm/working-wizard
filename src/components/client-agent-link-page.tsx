@@ -93,7 +93,7 @@ export function ClientAgentLinkScreen({
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col gap-4 bg-white px-4 py-6 text-[#102A43]">
       <span
-        className="owner-door inline-flex h-[96px] w-[96px] shrink-0 self-start overflow-hidden min-[761px]:h-[172px] min-[761px]:w-[172px]"
+        className="owner-door -ml-3 inline-flex h-[96px] w-[96px] shrink-0 self-start overflow-hidden min-[761px]:-ml-[21.5px] min-[761px]:h-[172px] min-[761px]:w-[172px]"
         data-client-portrait="tax_specialist"
       >
         <OwnerAvatar

@@ -542,8 +542,9 @@ assert(
 );
 assert(!/#(?:d4a550|c4a35a|b7791f)/i.test(page), "the page has no gold primary");
 const portraitAt = page.indexOf("data-client-portrait");
-const portraitSource = page.slice(portraitAt, page.indexOf("</span>", portraitAt));
+const portraitSource = page.slice(Math.max(0, portraitAt - 240), page.indexOf("</span>", portraitAt));
 assert(!portraitSource.includes("w-full"), "the portrait is not full width");
+assert(portraitSource.includes("-ml-3"), "the portrait circle lines up with the text");
 const avatarCss = read("src/components/owner-door/owner-door.css");
 assert(
   /@media \(max-width: 760px\) \{[\s\S]*\.owner-presence\.is-lg \{\s*width: 96px;\s*height: 96px;/.test(
@@ -599,6 +600,13 @@ assert(
 );
 assert(!/update\s+public\.firms/i.test(practiceSql), "the firm row is not renamed");
 assert(!/alter\s+table\s+public\.firms/i.test(practiceSql), "the firm table is not altered");
+assert(practiceSql.includes("recipient_first_name text"), "the first name column is nullable text");
+assert(
+  /length\(btrim\(recipient_first_name\)\) >= 1[\s\S]*length\(btrim\(recipient_first_name\)\) <= 60/.test(
+    practiceSql,
+  ),
+  "a stored first name is 1 to 60 characters once trimmed",
+);
 const allowlisted = SEND_AGENT_FIRM_ALLOWLIST[0];
 assert(
   practiceDisplayName({
