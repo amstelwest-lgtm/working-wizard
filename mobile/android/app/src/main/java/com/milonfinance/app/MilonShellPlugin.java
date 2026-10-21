@@ -4,11 +4,17 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.provider.MediaStore;
 import androidx.activity.result.ActivityResult;
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.fragment.app.FragmentActivity;
 import com.capacitorjs.plugins.browser.Browser;
 import com.capacitorjs.plugins.browser.BrowserControllerActivity;
 import com.capacitorjs.plugins.browser.BrowserPlugin;
@@ -23,6 +29,7 @@ import com.getcapacitor.annotation.PermissionCallback;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.util.concurrent.Executor;
 
 /**
  * Opens external and OAuth navigations in Chrome Custom Tabs via the
@@ -207,6 +214,94 @@ public class MilonShellPlugin extends Plugin {
         } catch (java.io.IOException ex) {
             call.resolve(MilonPickedFile.error(readError(ex)));
         }
+    }
+
+    private static final String BIOMETRIC_PREFS = "milon_shell";
+    private static final String BIOMETRIC_KEY = "biometric_lock";
+
+    @PluginMethod
+    public void biometricAvailable(PluginCall call) {
+        com.getcapacitor.JSObject result = new com.getcapacitor.JSObject();
+        result.put("available", canUseBiometric());
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void biometricEnabled(PluginCall call) {
+        com.getcapacitor.JSObject result = new com.getcapacitor.JSObject();
+        result.put("enabled", biometricPrefs().getBoolean(BIOMETRIC_KEY, false));
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void setBiometricEnabled(PluginCall call) {
+        boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        if (!canUseBiometric()) {
+            call.resolve(biometricResult(false, "This device has no fingerprint or face unlock."));
+            return;
+        }
+        authenticate(call, enabled);
+    }
+
+    @PluginMethod
+    public void unlockWithBiometric(PluginCall call) {
+        if (!biometricPrefs().getBoolean(BIOMETRIC_KEY, false)) {
+            call.resolve(biometricResult(true, null));
+            return;
+        }
+        if (!canUseBiometric()) {
+            call.resolve(biometricResult(false, "Biometric unlock isn't available on this device."));
+            return;
+        }
+        authenticate(call, null);
+    }
+
+    private void authenticate(PluginCall call, Boolean persistEnabled) {
+        Activity activity = getActivity();
+        if (!(activity instanceof FragmentActivity)) {
+            call.resolve(biometricResult(false, "Biometric unlock isn't available on this device."));
+            return;
+        }
+        Executor executor = ContextCompat.getMainExecutor(activity);
+        BiometricPrompt prompt = new BiometricPrompt((FragmentActivity) activity, executor,
+            new BiometricPrompt.AuthenticationCallback() {
+                @Override
+                public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
+                    if (persistEnabled != null) {
+                        biometricPrefs().edit().putBoolean(BIOMETRIC_KEY, persistEnabled).apply();
+                    }
+                    call.resolve(biometricResult(true, null));
+                }
+
+                @Override
+                public void onAuthenticationError(int errorCode, CharSequence errString) {
+                    call.resolve(biometricResult(false, "That didn't unlock. Try again."));
+                }
+            });
+        BiometricPrompt.PromptInfo info = new BiometricPrompt.PromptInfo.Builder()
+            .setTitle(persistEnabled != null && persistEnabled ? "Lock Milōn" : "Unlock Milōn")
+            .setSubtitle("This stays on the device.")
+            .setNegativeButtonText("Cancel")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+            .build();
+        prompt.authenticate(info);
+    }
+
+    private boolean canUseBiometric() {
+        if (getContext() == null) return false;
+        int can = BiometricManager.from(getContext()).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK);
+        return can == BiometricManager.BIOMETRIC_SUCCESS;
+    }
+
+    private SharedPreferences biometricPrefs() {
+        return getContext().getSharedPreferences(BIOMETRIC_PREFS, Context.MODE_PRIVATE);
+    }
+
+    private static com.getcapacitor.JSObject biometricResult(boolean ok, String message) {
+        com.getcapacitor.JSObject result = new com.getcapacitor.JSObject();
+        result.put("ok", ok);
+        if (message != null) result.put("message", message);
+        return result;
     }
 
     private static String readError(java.io.IOException ex) {
