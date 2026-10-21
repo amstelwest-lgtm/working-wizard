@@ -63,6 +63,7 @@ import {
   pendingAssignmentLanded,
   personOwnedActionIds,
   rowAssignment,
+  visibleHandedAction,
   withPendingAssignment,
   withoutPersonQueuedRuns,
   type RowAssignment,
@@ -80,6 +81,7 @@ import {
   type BooksLink,
   type OwnerActionRow,
 } from "@/lib/owner-needs";
+import { financialsHomeSignoffLine } from "@/components/owner-signoff-mark";
 import { OwnerHome } from "./owner-home";
 import { canonicalOwnerScreen, OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
 import {
@@ -665,13 +667,14 @@ export function OwnerDoor({
         merged = withPendingAssignment(merged, pendingView, pendingStored);
         if (pending.title && !titles.includes(pending.title)) titles.push(pending.title);
       }
-      const firstOpen = merged.find((row) => row.open);
+      const handed = visibleHandedAction(
+        merged,
+        Object.fromEntries(openRows.map((row) => [row.id, row.title])),
+      );
       setActionRows(titles.map((title) => ({ title, email: null })));
       setOpenAction(openRows[0]?.title ?? null);
-      setHandedTitle(
-        firstOpen ? (openRows.find((row) => row.id === firstOpen.id)?.title ?? null) : null,
-      );
-      setAssignedAgent(firstOpen?.agent ?? null);
+      setHandedTitle(handed?.title ?? null);
+      setAssignedAgent(handed?.agent ?? null);
       setAssignmentRows(merged);
       setActionsReady(true);
     });
@@ -787,6 +790,10 @@ export function OwnerDoor({
     market,
   ]);
 
+  const homeSignoffLine = useMemo(
+    () => financialsHomeSignoffLine(signoffs, market),
+    [signoffs, market],
+  );
   const tiles = useMemo(() => ownerAnswerTiles(books), [books]);
   const canonicalRatios = useMemo(
     () => (financials ? scorecardRatiosFromFinancials(financials, { fyStartMonth: market.fyStartMonthDefault }) : null),
@@ -828,6 +835,7 @@ export function OwnerDoor({
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
         statementSpan,
+        signedLine: homeSignoffLine,
       }),
     [
       ownerEmail,
@@ -846,6 +854,7 @@ export function OwnerDoor({
       xeroLink,
       market,
       statementSpan,
+      homeSignoffLine,
     ],
   );
   const settledRows = applyLiveRuns(
@@ -1091,6 +1100,7 @@ export function OwnerDoor({
           variant="character"
           presence={presence}
           lines={ownerHomeLines(tiles, topMove, assignedAgent, handedTitle)}
+          signoffLine={homeSignoffLine}
           status={ownerCardStatuses(books)}
           marketCountry={marketCountry}
           audience="owner"

@@ -64,6 +64,7 @@ import { OwnerBusinessSwitcher } from "@/components/owner-business-switcher";
 import {
   boardRoleForWorkspace,
   canOpenOwnerWorkspace,
+  fallbackOwnerAppRole,
   clearStoredOwnerClientId,
   decideStoredClientAccess,
   mergeOwnerWorkspaces,
@@ -2402,7 +2403,7 @@ function Index() {
               (signal) =>
                 supabase
                   .from("clients")
-                  .select("id, name")
+                  .select("id, name, firm_id")
                   .eq("owner_user_id", u.user.id)
                   .abortSignal(signal),
               { critical: true },
@@ -2425,6 +2426,7 @@ function Index() {
           const ownedRows = (owned ?? []).map((c) => ({
             id: c.id as string,
             name: c.name as string | null,
+            firmId: (c.firm_id as string | null) ?? null,
           }));
           const ownedIds = new Set(ownedRows.map((c) => c.id));
           const extraIds = [
@@ -3132,11 +3134,10 @@ function Index() {
           (signal) =>
             supabase
               .from("clients")
-              .select("id")
+              .select("id, firm_id")
               .eq("owner_user_id", u.id)
-              .limit(1)
-              .abortSignal(signal)
-              .maybeSingle(),
+              .limit(20)
+              .abortSignal(signal),
           { critical: true },
         );
         if (cancelled) return;
@@ -3144,23 +3145,14 @@ function Index() {
           setCriticalBootFailed(true);
           return;
         }
-        const ownedClient = owned.value.error ? null : owned.value.data;
-        if (ownedClient) {
-          // Infer role for this session; do not attempt a DB write — the RLS
-          // hardening migration removed authenticated INSERT on user_roles.
-          // Server-side signup (adminSignUp) is responsible for writing the row.
-          setUserRole("client_owner");
-          return;
-        }
         const memRead = await bootSelect(
           (signal) =>
             supabase
               .from("client_memberships")
-              .select("client_id")
+              .select("client_id, role")
               .eq("user_id", u.id)
-              .limit(1)
-              .abortSignal(signal)
-              .maybeSingle(),
+              .limit(20)
+              .abortSignal(signal),
           { critical: true },
         );
         if (cancelled) return;
@@ -3168,11 +3160,15 @@ function Index() {
           setCriticalBootFailed(true);
           return;
         }
-        const mem = memRead.value.error ? null : memRead.value.data;
-        if (mem) {
-          // Same: infer only, no client-side DB write.
-          setUserRole("client_member");
-        }
+        // Infer only. Do not write user_roles — RLS removed authenticated INSERT.
+        // On a firm file, owner_user_id is the accountant who added the client.
+        const ownedRows = owned.value.error ? [] : (owned.value.data ?? []);
+        const memberships = memRead.value.error ? [] : (memRead.value.data ?? []);
+        const inferred = fallbackOwnerAppRole({
+          hasSelfServeOwned: ownedRows.some((row) => !row.firm_id),
+          membershipRoles: memberships.map((row) => row.role),
+        });
+        if (inferred) setUserRole(inferred);
       } finally {
         if (!cancelled) setRoleResolved(true);
       }
