@@ -178,6 +178,25 @@ assert(
   "card-free enforced trial blocks the 6th client (1020E)",
 );
 assert(
+  noPlanCap.message ===
+    `${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the 5-client trial limit.`,
+  "card-free trial says the practice reached the 5-client limit",
+);
+const noPlanSix = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "none",
+  band: null,
+  clientCount: 6,
+  noPlanTrialEnforced: true,
+});
+assert(
+  !noPlanSix.allowed &&
+    noPlanSix.message === noPlanCap.message &&
+    !/already has \d+ clients/.test(noPlanSix.message),
+  "a practice with 6 clients is not described as already having 5",
+);
+assert(!noPlanSix.message.toLowerCase().includes("vat"), "the trial-limit sentence does not mention VAT");
+assert(
   decideFirmClientCreate({
     stripeConfigured: true,
     phase: "none",

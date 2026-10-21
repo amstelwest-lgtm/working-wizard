@@ -166,7 +166,7 @@ export function decideFirmClientCreate(input: {
         allowed: false,
         code: "trial_client_cap",
         bandName,
-        message: `${FIRM_TRIAL_SENTENCE} on Starter. This practice already has ${trialLimit} clients.`,
+        message: `${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the ${trialLimit}-client trial limit.`,
       };
     }
     return { allowed: true };
