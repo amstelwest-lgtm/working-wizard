@@ -8,18 +8,27 @@
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import type { StoredFirmPlan } from "@/lib/billing-check-failure";
 
-const FIRM_UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const FIRM_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 let planColumnMissing = false;
+let pastDueColumnMissing = false;
 
 export function resetFirmBillingPlanColumnProbe(): void {
   planColumnMissing = false;
+  pastDueColumnMissing = false;
 }
 
 function noteMissingPlanColumn(message: string): boolean {
   if (/billing_plan_known/i.test(message)) {
     planColumnMissing = true;
+    return true;
+  }
+  return false;
+}
+
+function noteMissingPastDueColumn(message: string): boolean {
+  if (/billing_past_due_at/i.test(message)) {
+    pastDueColumnMissing = true;
     return true;
   }
   return false;
@@ -37,6 +46,25 @@ let planReadForTests: FirmPlanRead | null = null;
 
 export function setFirmBillingPlanReadForTests(read: FirmPlanRead | null): void {
   planReadForTests = read;
+}
+
+export type FirmBillingColumnRead<T> = { ok: true; value: T } | { ok: false };
+
+/**
+ * In-memory stand-in for the firm plan columns. Production leaves this unset.
+ * A webhook test uses it so a missing service-role key cannot hide a write.
+ */
+export type FirmBillingWebhookStore = {
+  readPlan: (firmId: string) => Promise<FirmBillingColumnRead<StoredFirmPlan | null>>;
+  writePlan: (firmId: string, plan: StoredFirmPlan) => Promise<void>;
+  readPastDueAt: (firmId: string) => Promise<FirmBillingColumnRead<string | null>>;
+  writePastDueAt: (firmId: string, at: string | null) => Promise<boolean>;
+};
+
+let webhookStore: FirmBillingWebhookStore | null = null;
+
+export function setFirmBillingWebhookStoreForTests(store: FirmBillingWebhookStore | null): void {
+  webhookStore = store;
 }
 
 export async function readFirmBillingPlanKnown(
@@ -69,12 +97,121 @@ export async function readFirmBillingPlanKnown(
   }
 }
 
+/**
+ * Distinguishes a stored plan from a failed read.
+ * A failed read must not be treated as "none".
+ */
+export async function readFirmBillingPlanState(
+  firmId: string | null | undefined,
+): Promise<FirmBillingColumnRead<StoredFirmPlan | null>> {
+  const id = firmId?.trim() ?? "";
+  if (!FIRM_UUID.test(id)) return { ok: false };
+  if (webhookStore) return webhookStore.readPlan(id);
+  if (planColumnMissing) return { ok: false };
+  try {
+    const admin = getSupabaseAdminOrNull();
+    if (!admin) return { ok: false };
+    const { data, error } = await admin
+      .from("firms")
+      .select("billing_plan_known")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      if (!noteMissingPlanColumn(error.message ?? "")) {
+        console.warn("[stripe] firm plan read failed");
+      }
+      return { ok: false };
+    }
+    return { ok: true, value: storedPlan(data?.billing_plan_known) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!noteMissingPlanColumn(message)) {
+      console.warn("[stripe] firm plan read failed");
+    }
+    return { ok: false };
+  }
+}
+
+/** When the invoice failed, and null when the firm is not past due. */
+export async function readFirmBillingPastDueAt(
+  firmId: string | null | undefined,
+): Promise<FirmBillingColumnRead<string | null>> {
+  const id = firmId?.trim() ?? "";
+  if (!FIRM_UUID.test(id)) return { ok: false };
+  if (webhookStore) return webhookStore.readPastDueAt(id);
+  if (pastDueColumnMissing) return { ok: false };
+  try {
+    const admin = getSupabaseAdminOrNull();
+    if (!admin) return { ok: false };
+    const { data, error } = await admin
+      .from("firms")
+      .select("billing_past_due_at")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      if (!noteMissingPastDueColumn(error.message ?? "")) {
+        console.warn("[stripe] firm past-due read failed");
+      }
+      return { ok: false };
+    }
+    const at = data?.billing_past_due_at;
+    return { ok: true, value: typeof at === "string" && at.trim() ? at : null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!noteMissingPastDueColumn(message)) {
+      console.warn("[stripe] firm past-due read failed");
+    }
+    return { ok: false };
+  }
+}
+
+/** Stores the grace start, or clears it. False when the column was not written. */
+export async function writeFirmBillingPastDueAt(
+  firmId: string | null | undefined,
+  at: string | null,
+): Promise<boolean> {
+  const id = firmId?.trim() ?? "";
+  if (!FIRM_UUID.test(id)) return false;
+  if (webhookStore) return webhookStore.writePastDueAt(id, at);
+  if (pastDueColumnMissing) return false;
+  try {
+    const admin = getSupabaseAdminOrNull();
+    if (!admin) return false;
+    const { error } = await admin.from("firms").update({ billing_past_due_at: at }).eq("id", id);
+    if (error) {
+      if (!noteMissingPastDueColumn(error.message ?? "")) {
+        console.warn("[stripe] firm past-due write failed");
+      }
+      return false;
+    }
+    return true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!noteMissingPastDueColumn(message)) {
+      console.warn("[stripe] firm past-due write failed");
+    }
+    return false;
+  }
+}
+
+/** Clears a past-due marker. A missing marker or a failed read does not write. */
+export async function clearFirmBillingPastDueAt(firmId: string | null | undefined): Promise<void> {
+  const current = await readFirmBillingPastDueAt(firmId);
+  if (!current.ok || current.value == null) return;
+  await writeFirmBillingPastDueAt(firmId, null);
+}
+
 export async function writeFirmBillingPlanKnown(
   firmId: string | null | undefined,
   plan: StoredFirmPlan,
 ): Promise<void> {
   const id = firmId?.trim() ?? "";
-  if (!FIRM_UUID.test(id) || planColumnMissing) return;
+  if (!FIRM_UUID.test(id)) return;
+  if (webhookStore) {
+    await webhookStore.writePlan(id, plan);
+    return;
+  }
+  if (planColumnMissing) return;
   try {
     const admin = getSupabaseAdminOrNull();
     if (!admin) return;

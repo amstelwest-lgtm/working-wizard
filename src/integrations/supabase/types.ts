@@ -2140,6 +2140,7 @@ export type Database = {
           precard_cap_applies: boolean | null
           stripe_customer_id: string | null
           billing_plan_known: string | null
+          billing_past_due_at: string | null
           trial_clock_start_override: string | null
         }
         Insert: {
@@ -2165,6 +2166,7 @@ export type Database = {
           precard_cap_applies?: boolean | null
           stripe_customer_id?: string | null
           billing_plan_known?: string | null
+          billing_past_due_at?: string | null
           trial_clock_start_override?: string | null
         }
         Update: {
@@ -2190,6 +2192,7 @@ export type Database = {
           precard_cap_applies?: boolean | null
           stripe_customer_id?: string | null
           billing_plan_known?: string | null
+          billing_past_due_at?: string | null
           trial_clock_start_override?: string | null
         }
         Relationships: []

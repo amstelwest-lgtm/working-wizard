@@ -3,8 +3,13 @@
  *
  * Endpoint: POST /api/stripe/webhook
  * Events: checkout.session.completed, customer.subscription.created,
- *         customer.subscription.updated, and customer.subscription.deleted
- *         for the owner plan. Firm bands ignore subscription.deleted.
+ *         customer.subscription.updated, customer.subscription.deleted,
+ *         invoice.paid, and invoice.payment_failed.
+ *         customer.subscription.deleted for the owner plan still updates
+ *         owner_subscriptions. A firm deletion clears the stored plan only
+ *         when that customer has no other active or trialing firm
+ *         subscription. A failed firm invoice keeps the firm entitled
+ *         through a short grace.
  *
  * Verifies Stripe-Signature with STRIPE_WEBHOOK_SECRET, then writes
  * milon_plan from the catalog lookup_key and cancels a replaced subscription
@@ -25,6 +30,13 @@ import { previousPriceIdFromSubscriptionEvent } from "@/lib/firm-band-upgrade";
 import { readFirmSetupUpgrade } from "@/lib/stripe-checkout.core";
 import { recordPaidZarInvoice } from "@/lib/pricing/za-revenue.server";
 import {
+  syncFirmInvoicePaid,
+  syncFirmInvoicePaymentFailed,
+  syncFirmSubscriptionDeleted,
+  type FirmBillingWebhookOutcome,
+  type FirmSubscriptionLister,
+} from "@/lib/firm-billing-webhook.server";
+import {
   completeFirmSetupUpgrade,
   constructFirmBillingEvent,
   enforceZaCheckoutBillingCountry,
@@ -35,6 +47,21 @@ import {
   syncOwnerBillingEvent,
 } from "@/lib/stripe-billing-sync.server";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
+
+function firmWebhookResponse(
+  result: FirmBillingWebhookOutcome,
+  extra?: Record<string, unknown>,
+): Response {
+  if (result.stripeUnreachable) {
+    return Response.json({ error: "Sync failed" }, { status: 500 });
+  }
+  return Response.json({
+    received: true,
+    handled: result.handled,
+    downgraded: result.downgraded,
+    ...extra,
+  });
+}
 
 export const Route = createFileRoute("/api/stripe/webhook")({
   server: {
@@ -75,6 +102,7 @@ export const Route = createFileRoute("/api/stripe/webhook")({
         if (!isFirmBillingWebhookEvent(event.type)) {
           return Response.json({ received: true, ignored: event.type });
         }
+        const stripe = getStripe() as unknown as FirmSubscriptionLister;
         if (event.type === "invoice.paid") {
           try {
             await recordPaidZarInvoice(
@@ -92,7 +120,40 @@ export const Route = createFileRoute("/api/stripe/webhook")({
               err instanceof Error ? err.message : err,
             );
           }
-          return Response.json({ received: true, recorded: true });
+          try {
+            const result = await syncFirmInvoicePaid(event.data?.object, stripe);
+            return firmWebhookResponse(result, { recorded: true });
+          } catch (err) {
+            console.error(
+              "[stripe-webhook] sync failed",
+              err instanceof Error ? err.name : "Error",
+            );
+            return Response.json({ error: "Sync failed" }, { status: 500 });
+          }
+        }
+        if (event.type === "invoice.payment_failed") {
+          try {
+            const result = await syncFirmInvoicePaymentFailed(event.data?.object, stripe);
+            return firmWebhookResponse(result);
+          } catch (err) {
+            console.error(
+              "[stripe-webhook] sync failed",
+              err instanceof Error ? err.name : "Error",
+            );
+            return Response.json({ error: "Sync failed" }, { status: 500 });
+          }
+        }
+        if (event.type === "customer.subscription.deleted") {
+          try {
+            const result = await syncFirmSubscriptionDeleted(event.data?.object, stripe);
+            return firmWebhookResponse(result);
+          } catch (err) {
+            console.error(
+              "[stripe-webhook] sync failed",
+              err instanceof Error ? err.name : "Error",
+            );
+            return Response.json({ error: "Sync failed" }, { status: 500 });
+          }
         }
         if (event.type === "checkout.session.completed") {
           const session = event.data?.object as {
