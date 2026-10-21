@@ -35,6 +35,7 @@ import {
   FIRM_CUSTOMER_SEARCH_BUDGET_MS,
   STORED_CUSTOMER_READ_BUDGET_MS,
   findFirmCustomerId,
+  FirmCustomerLookupUnknown,
   firmCustomerSearchQuery,
   isBillingExemptPath,
   isFirmProductPath,
@@ -822,9 +823,13 @@ assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS === 4_000, "metadata search shares a 4s bu
 assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS < 5_000, "the search budget is inside a 5s entitlement check");
 
 let emailHitSearches = 0;
+let emailListOptions: { maxNetworkRetries?: number; timeout?: number } | undefined;
 const emailHitHang: StripeCustomerSubscriptionReader = {
   customers: {
-    list: async () => ({ data: [{ id: "cus_email" }] }),
+    list: async (_params, options) => {
+      emailListOptions = options;
+      return { data: [{ id: "cus_email" }] };
+    },
     search: () => {
       emailHitSearches += 1;
       return new Promise(() => {});
@@ -852,6 +857,12 @@ const emailHit = await Promise.race([
 assert(emailHit === "cus_email", "an email hit resolves without metadata search");
 assert(emailHitSearches === 0, "the email-hit path makes no search calls");
 assert(Date.now() - emailHitStarted < 5_000, "an email hit finishes within 5s");
+assert(emailListOptions?.maxNetworkRetries === 0, "the email list does not ask Stripe to retry");
+assert(
+  typeof emailListOptions?.timeout === "number" &&
+    emailListOptions.timeout <= FIRM_CUSTOMER_SEARCH_BUDGET_MS,
+  "the email list timeout stays inside the shared budget",
+);
 
 let missSearchOptions: { maxNetworkRetries?: number; timeout?: number } | undefined;
 let missSearches = 0;
@@ -874,18 +885,26 @@ const missHang: StripeCustomerSubscriptionReader = {
   },
 };
 const missStarted = Date.now();
-const missed = await Promise.race([
-  findFirmCustomerId(missHang, {
-    email: "team@trymilon.com",
-    userId: BEN_OWNER,
-    firmId: BEN_FIRM,
-  }),
-  new Promise<string>((_resolve, reject) => {
-    setTimeout(() => reject(new Error("hung metadata search exceeded 5s")), 5_000);
-  }),
-]);
+let missUnknown: unknown;
+try {
+  await Promise.race([
+    findFirmCustomerId(missHang, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+    }),
+    new Promise<string>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("hung metadata search exceeded 5s")), 5_000);
+    }),
+  ]);
+} catch (err) {
+  missUnknown = err;
+}
 const missElapsed = Date.now() - missStarted;
-assert(missed === undefined, "hung metadata searches fail closed");
+assert(
+  missUnknown instanceof FirmCustomerLookupUnknown && missUnknown.kind === "timeout",
+  "a hung metadata search is unknown, not no customer",
+);
 assert(missElapsed < 5_000, "hung metadata searches give up within 5s");
 assert(missSearches >= 1, "an email miss still searches");
 const storedPlanOpen = entitlementForFailedCheck("entitled", "timeout");
@@ -898,8 +917,112 @@ assert(
   "a metadata search timeout with a stored plan keeps the client file open",
 );
 assert(
-  missed === undefined && firmFileOnBillingResult(storedPlanOpen) === "open",
+  missUnknown instanceof FirmCustomerLookupUnknown &&
+    firmFileOnBillingResult(storedPlanOpen) === "open",
   "Ben's email miss and slow metadata search keep the file open when a stored plan exists",
+);
+assert(
+  entitlementForFailedCheck(null, "timeout").reason !== "no_active_subscription",
+  "a lookup timeout is not an unpaid firm",
+);
+const completedEmpty: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [] }),
+    search: async () => ({ data: [] }),
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: async () => ({ data: [] }),
+  },
+};
+assert(
+  (await findFirmCustomerId(completedEmpty, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+  })) === undefined,
+  "a completed email list and metadata search with zero results is no customer",
+);
+let listHangSearches = 0;
+let listHangOptions: { maxNetworkRetries?: number; timeout?: number } | undefined;
+const listHang: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: (_params, options) => {
+      listHangOptions = options;
+      return new Promise(() => {});
+    },
+    search: () => {
+      listHangSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: () => {
+      listHangSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+};
+const listHangStarted = Date.now();
+let listHangUnknown: unknown;
+try {
+  await Promise.race([
+    findFirmCustomerId(listHang, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+    }),
+    new Promise<string>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("hung email list exceeded 5s")), 5_000);
+    }),
+  ]);
+} catch (err) {
+  listHangUnknown = err;
+}
+assert(
+  listHangUnknown instanceof FirmCustomerLookupUnknown && listHangUnknown.kind === "timeout",
+  "a hung email list is unknown, not no customer",
+);
+assert(Date.now() - listHangStarted < 5_000, "a hung email list stays inside the shared deadline");
+assert(listHangSearches === 0, "an email list timeout does not start a metadata search");
+assert(listHangOptions?.maxNetworkRetries === 0, "the email list turns Stripe retries off");
+assert(
+  typeof listHangOptions?.timeout === "number" &&
+    listHangOptions.timeout <= FIRM_CUSTOMER_SEARCH_BUDGET_MS,
+  "the email list timeout is capped by the shared budget",
+);
+let sharedListTimeout = 0;
+let sharedSearchTimeout = 0;
+const sharedBudget: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: (_params, options) =>
+      new Promise((resolve) => {
+        sharedListTimeout = options?.timeout ?? 0;
+        setTimeout(() => resolve({ data: [] }), 300);
+      }),
+    search: async () => ({ data: [] }),
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: (_params, options) => {
+      sharedSearchTimeout = options?.timeout ?? 0;
+      return Promise.resolve({ data: [] });
+    },
+  },
+};
+assert(
+  (await findFirmCustomerId(sharedBudget, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+  })) === undefined,
+  "a slow completed email miss still counts as no customer when metadata is empty",
+);
+assert(sharedListTimeout <= FIRM_CUSTOMER_SEARCH_BUDGET_MS, "the email list starts inside the shared budget");
+assert(
+  sharedSearchTimeout > 0 && sharedSearchTimeout < sharedListTimeout,
+  "metadata search is capped by the budget remaining after the email list",
 );
 assert(
   firmFileOnBillingResult({ entitled: false, reason: "no_active_subscription" }) === "closed",

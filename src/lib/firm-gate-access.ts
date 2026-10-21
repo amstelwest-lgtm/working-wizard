@@ -65,6 +65,20 @@ export function surfaceAfterEntitlementFailure(input: {
 }
 
 /**
+ * A result that arrives after Retry or the shell timer still belongs to this
+ * firm. A different user or firm does not receive it.
+ */
+export function billingResultStillApplies(input: {
+  attemptUserId: string;
+  attemptFirmId: string | null;
+  currentUserId: string | null;
+  currentFirmId: string | null;
+}): boolean {
+  if (!input.currentUserId || input.attemptUserId !== input.currentUserId) return false;
+  return (input.attemptFirmId ?? "") === (input.currentFirmId ?? "");
+}
+
+/**
  * A confirmed unpaid result closes the file. A failed check closes nothing:
  * a stored entitled plan keeps it open, and no stored plan stays on Retry.
  */

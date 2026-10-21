@@ -15,6 +15,7 @@ import {
   FIRM_BILLING_ENTITLEMENT_SERVER_FN,
 } from "../src/lib/billing-check-failure.ts";
 import {
+  billingResultStillApplies,
   surfaceAfterBillingCheckFailure,
   surfaceAfterEntitlementFailure,
 } from "../src/lib/firm-gate-access.ts";
@@ -24,6 +25,7 @@ import {
   lastKnownFirmEntitlement,
   noteFirmEntitlement,
   readCachedFirmEntitlement,
+  releaseFirmEntitlementForRetry,
 } from "../src/lib/firm-entitlement-client.ts";
 
 function assert(cond: boolean, msg: string) {
@@ -225,5 +227,66 @@ assert(!gate.includes("setShowWall(true)"), "a failed check does not open the bi
 assert(gate.includes("billingCheckRetryDelayMs"), "an entitled failure retries with backoff");
 assert(gate.includes("firmFileOnBillingResult"), "a stored plan opens the file when the check fails");
 assert(gate.includes('file === "open"'), "the gate does not leave a stored plan on the retry card");
+assert(gate.includes("billingResultStillApplies"), "a late result still applies for the same firm");
+assert(gate.includes("releaseFirmEntitlementForRetry"), "Retry keeps the in-flight entitlement read");
+assert(
+  billingResultStillApplies({
+    attemptUserId: "user-1",
+    attemptFirmId: "firm-ben",
+    currentUserId: "user-1",
+    currentFirmId: "firm-ben",
+  }),
+  "the shell timer does not drop a result for the same firm",
+);
+assert(
+  !billingResultStillApplies({
+    attemptUserId: "user-1",
+    attemptFirmId: "firm-ben",
+    currentUserId: "user-2",
+    currentFirmId: "firm-ben",
+  }),
+  "a different user does not receive the late result",
+);
+assert(
+  !billingResultStillApplies({
+    attemptUserId: "user-1",
+    attemptFirmId: "firm-a",
+    currentUserId: "user-1",
+    currentFirmId: "firm-b",
+  }),
+  "a different firm does not receive the late result",
+);
+
+clearCachedFirmEntitlement();
+let retryLoads = 0;
+let resolveRetry: (value: { entitled: boolean; reason: string }) => void = () => {};
+const firstRetryRead = readCachedFirmEntitlement(
+  "user-1",
+  () => {
+    retryLoads += 1;
+    return new Promise((resolve) => {
+      resolveRetry = resolve;
+    });
+  },
+  false,
+  "firm-ben",
+);
+releaseFirmEntitlementForRetry();
+const retryRead = readCachedFirmEntitlement(
+  "user-1",
+  () => {
+    retryLoads += 1;
+    return Promise.resolve({ entitled: false, reason: "no_active_subscription" });
+  },
+  true,
+  "firm-ben",
+);
+assert(retryLoads === 1, "Retry reuses the in-flight entitlement read");
+resolveRetry({ entitled: true, reason: "active_subscription" });
+const lateSuccess = await retryRead;
+assert(lateSuccess.entitled === true, "a late success still applies after Retry");
+assert(lateSuccess.reason === "active_subscription", "the late success is the in-flight result");
+await firstRetryRead;
+clearCachedFirmEntitlement();
 
 console.log("billing-gate-known ok");

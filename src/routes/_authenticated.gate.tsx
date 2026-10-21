@@ -17,6 +17,7 @@ import { decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entit
 import {
   pageWhileEntitlementUnknown,
   skeletonAfterBillingDeadline,
+  billingResultStillApplies,
   firmFileOnBillingResult,
   surfaceAfterBillingCheckFailure,
 } from "@/lib/firm-gate-access";
@@ -42,9 +43,9 @@ import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
 import {
-  clearCachedFirmEntitlement,
   lastKnownEntitlementForFirm,
   readCachedFirmEntitlement,
+  releaseFirmEntitlementForRetry,
 } from "@/lib/firm-entitlement-client";
 
 type EntitlementResult = {
@@ -54,6 +55,7 @@ type EntitlementResult = {
 };
 
 type GateSnap = {
+  userId: string | null;
   firmId: string | null;
   firmMarket: unknown;
   hasFirm: boolean;
@@ -118,7 +120,9 @@ export function AuthGate() {
   // Session restore replaces the user object. Keying the check on the id
   // keeps that identity change from cancelling the in-flight read.
   const firmCount = firms.length;
+  const userId = user?.id ?? null;
   const latest = useRef<GateSnap>({
+    userId,
     firmId,
     firmMarket,
     hasFirm,
@@ -130,6 +134,7 @@ export function AuthGate() {
     practiceMeta: user?.user_metadata,
   });
   latest.current = {
+    userId,
     firmId,
     firmMarket,
     hasFirm,
@@ -140,7 +145,6 @@ export function AuthGate() {
     checkEntitlement,
     practiceMeta: user?.user_metadata,
   };
-  const userId = user?.id ?? null;
   const [firmEntitled, setFirmEntitled] = useState<boolean | null>(null);
   const [billingUnknown, setBillingUnknown] = useState(false);
   /** The 8s check already gave up. A later walled page must not wait on Stripe. */
@@ -219,6 +223,8 @@ export function AuthGate() {
   useEffect(() => {
     if (loading || !userId) return;
     let cancelled = false;
+    const attemptUserId = userId;
+    const attemptFirmId = latest.current.firmId;
     settledRef.current = null;
     setClientGate(null);
     setBillingDeadlinePassed(false);
@@ -355,7 +361,18 @@ export function AuthGate() {
           return;
         }
         const [clients, result] = await Promise.all([clientsPromise, entitlementPromise]);
-        if (cancelled) return;
+        // Retry and the 8s timer leave this effect. The result still applies
+        // when it is for the same firm. A different user or firm does not.
+        if (
+          !billingResultStillApplies({
+            attemptUserId,
+            attemptFirmId,
+            currentUserId: latest.current.userId,
+            currentFirmId: latest.current.firmId,
+          })
+        ) {
+          return;
+        }
         window.clearTimeout(timer);
         clientGateRef.current = clients;
         const reason =
@@ -455,7 +472,7 @@ export function AuthGate() {
       <FirmBillingGateView
         surface="error"
         onRetry={() => {
-          clearCachedFirmEntitlement();
+          releaseFirmEntitlementForRetry();
           setBillingUnknown(false);
           setBillingDeadlinePassed(false);
           setGateAttempt((n) => n + 1);
