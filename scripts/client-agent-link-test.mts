@@ -477,8 +477,8 @@ assert(
 );
 assert(
   clientAgentItemHelp({ itemKey: "medical_aid_certificate" }) ===
-    "Totals only. Do not send a line-by-line breakdown.",
-  "medical aid stays totals only",
+    "The annual tax certificate from your medical aid.",
+  "medical aid help does not repeat totals only",
 );
 assert(!clientAgentItemHelp({ itemKey: "irp5" }).includes("PDF"), "a row does not list file types");
 assert(!/\b(stupid|idiot|asap|illegal|failure)\b/i.test(copy), "copy stays polite");
@@ -724,6 +724,14 @@ assert((checklistHtml.match(/data-upload-tick/g) ?? []).length === 1, "one uploa
 assert(
   checklistHtml.includes("I don&#x27;t have this") || checklistHtml.includes("I don't have this"),
   "the skip link renders",
+);
+assert(
+  checklistHtml.includes("The annual tax certificate from your medical aid."),
+  "the medical row help is the certificate line",
+);
+assert(
+  (checklistHtml.match(/totals only/gi) ?? []).length === 1,
+  "totals only stays in the medical label only",
 );
 assert(checklistHtml.includes("data-missing-note"), "the optional note renders");
 assert(checklistHtml.includes("Only upload what you have"), "the checklist intro renders");
