@@ -206,6 +206,9 @@ import { agentDisplayName } from "@/lib/milon-team";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
+import { ConnectBooksHomeCard } from "@/components/connect-books-card";
+import { useHomeLedgerConnect } from "@/components/use-home-ledger-connect";
+import { XERO_BANK_RECONNECT, connectBooksHomeVisible } from "@/lib/connect-books-copy";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { StatementArApTiles, statementArApMoney } from "@/components/statement-arap-fallback";
@@ -213,6 +216,7 @@ import { hasStatementWorkingCapital } from "@/lib/collections";
 import { SageConnectCard } from "@/components/sage-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
+import { getSageStatus, type SageStatus } from "@/lib/sage.functions";
 import { formatDateRange } from "@/lib/market/format";
 import {
   booksPeriodPillLabel,
@@ -818,6 +822,7 @@ function ClientView() {
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showXeroDialog, setShowXeroDialog] = useState(false);
   const [showSageDialog, setShowSageDialog] = useState(false);
+  const ledgerConnect = useHomeLedgerConnect(clientId);
 
   // QBO / Xero OAuth return — callbacks land here for accountants.
   // Open the connect dialog so Sync is on screen; the inline cards sit on
@@ -1145,7 +1150,9 @@ function ClientView() {
   const [qboChecked, setQboChecked] = useState(false);
   const [qboRefresh, setQboRefresh] = useState(0);
   const [sageRefresh, setSageRefresh] = useState(0);
+  const [sageLink, setSageLink] = useState<SageStatus>(null);
   const fetchQboLink = useServerFn(getQboStatus);
+  const fetchSageLink = useServerFn(getSageStatus);
   const [debtSchedule, setDebtSchedule] = useState<DebtSchedule>(emptyDebtSchedule());
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>(emptyWeeklyInputs);
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
@@ -1197,6 +1204,23 @@ function ClientView() {
     // fetchQboLink identity is not stable; clientId + refresh token are the triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, qboRefresh]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    void fetchSageLink({ data: { clientId } })
+      .then((status) => {
+        if (!cancelled) setSageLink(status);
+      })
+      .catch(() => {
+        if (!cancelled) setSageLink(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // fetchSageLink identity is not stable; clientId + refresh token are the triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, sageRefresh]);
   const debtScheduleRef = useRef(debtSchedule);
   debtScheduleRef.current = debtSchedule;
   const weeklyInputsRef = useRef(weeklyInputs);
@@ -4328,6 +4352,15 @@ function ClientView() {
                       {implausibleSampleNote(clientMarket)}
                     </p>
                   ) : null}
+                  {connectBooksHomeVisible({ xero: xeroLink, qbo: qboLink, sage: sageLink }) ? (
+                    <ConnectBooksHomeCard
+                      busy={ledgerConnect.busy}
+                      showSage={!isUsCopy(gateMarket)}
+                      onXero={ledgerConnect.startXero}
+                      onQuickBooks={ledgerConnect.startQuickBooks}
+                      onSage={() => setShowSageDialog(true)}
+                    />
+                  ) : null}
                   <FinancialManagerBrief
                     brief={homeBrief}
                     clientId={clientId}
@@ -6039,8 +6072,7 @@ function ClientView() {
                 </DialogTitle>
                 <DialogDescription className="text-xs text-[#3D5270] dark:text-[#C5D4E4]">
                   Connect a Xero organisation to pull P&amp;L, the balance sheet and bank
-                  balances into this client&apos;s figures. Existing connections need a reconnect
-                  once the bank summary scope is enabled.
+                  balances into this client&apos;s figures. {XERO_BANK_RECONNECT}
                 </DialogDescription>
               </DialogHeader>
               <XeroConnectCard

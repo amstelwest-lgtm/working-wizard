@@ -348,6 +348,7 @@ import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-d
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { SageConnectCard } from "@/components/sage-connect";
+import { QBO_CONNECT_SUBCOPY, XERO_BANK_RECONNECT } from "@/lib/connect-books-copy";
 import { Button } from "@/components/ui/button";
 import { HEALTH_RING_CAPTION, SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
@@ -6797,7 +6798,7 @@ function Index() {
                   <span className="text-xs text-slate-600 dark:text-slate-400">
                     {isUsCopy(boardMarket)
                       ? "Live sync from your books once QBO is switched on for this workspace. Until then, export a P&L and balance sheet and upload them below."
-                      : "Sync live accounting data when QBO is configured for this workspace."}
+                      : QBO_CONNECT_SUBCOPY}
                   </span>
                 </button>
                 <button
@@ -7533,8 +7534,8 @@ function Index() {
                   Xero Integration
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400">
-                  Connect a Xero organisation to pull P&amp;L, the balance sheet and bank balances.
-                  Existing connections need a reconnect once the bank summary scope is enabled.
+                  Connect a Xero organisation to pull P&amp;L, the balance sheet and bank balances.{" "}
+                  {XERO_BANK_RECONNECT}
                 </DialogDescription>
               </DialogHeader>
               <XeroConnectCard

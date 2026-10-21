@@ -84,6 +84,8 @@ import {
   snapshotFigure,
   storedAmountFigure,
 } from "@/lib/overview-moves-copy";
+import { ConnectBooksHomeCard } from "@/components/connect-books-card";
+import { connectBooksHomeVisible } from "@/lib/connect-books-copy";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { ownerPresence } from "@/lib/owner-presence";
@@ -465,9 +467,21 @@ function BriefingPane() {
       search: section ? { tab, section } : { tab },
     });
   };
+  const ledgerOn = new URLSearchParams(window.location.search).get("ledger") === "1";
   return (
     <div className="tabpane on" id="pane-overview">
       <div className="owner-door" data-client-home="true">
+        {connectBooksHomeVisible({
+          xero: ledgerOn ? { connected: true } : null,
+          qbo: null,
+          sage: null,
+        }) ? (
+          <ConnectBooksHomeCard
+            onXero={() => undefined}
+            onQuickBooks={() => undefined}
+            onSage={() => undefined}
+          />
+        ) : null}
         <OwnerHome
           title="Your whole finance team"
           variant="character"
