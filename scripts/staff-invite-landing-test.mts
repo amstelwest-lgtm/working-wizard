@@ -122,8 +122,8 @@ assert(
   "Google return URL carries the staff invite",
 );
 assert(
-  googleOAuthRedirectTo("https://milonfinance.com") === "https://milonfinance.com/auth/callback",
-  "Google redirect without a hop is unchanged",
+  googleOAuthRedirectTo("https://milonfinance.com") === "https://www.milonfinance.com/auth/callback",
+  "an apex Google redirect returns on www",
 );
 
 const page = readFileSync(resolve("src/routes/access.$token.tsx"), "utf8");

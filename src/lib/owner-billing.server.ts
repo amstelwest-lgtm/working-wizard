@@ -32,10 +32,15 @@ import {
   type StartOwnerCheckoutResult,
 } from "@/lib/owner-billing";
 import { readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
-import { readFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
+import {
+  installMetadataFirmCustomerWrite,
+  readFirmStripeCustomerId,
+} from "@/lib/firm-stripe-customer.server";
 import { findFirmCustomerId } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import type { FirmInterval, StripePlanMarket } from "@/lib/stripe-plans";
+
+installMetadataFirmCustomerWrite();
 
 type OwnerRow = {
   user_id: string;

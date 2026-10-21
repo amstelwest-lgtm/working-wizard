@@ -126,12 +126,32 @@ export function AgentChipIcon({ agent }: { agent: AgentKey }) {
   return <Svg>{AGENT_PATHS[agent]}</Svg>;
 }
 
-/** Current period as a quiet topbar pill. Real date, no fake affordance. */
-export function PeriodPill() {
+/**
+ * Quiet topbar pill. A client header passes the books' period end
+ * ("Sep 2026"). With no books, the pill stays the calendar month.
+ */
+export function PeriodPill({
+  periodLabel,
+  pending = false,
+}: {
+  periodLabel?: string | null;
+  /** Books are not loaded yet. Never substitute today's month. */
+  pending?: boolean;
+}) {
   const { market } = useMarketFormat();
-  const label = formatMonthYear(new Date(), market.timezone);
+  if (pending) {
+    return (
+      <span className="period-pill" data-period-pending="true" aria-busy="true" title="Figures period">
+        <RailIcon id="calendar" />
+        <span className="period-pill-pending" aria-hidden="true" />
+        <span className="sr-only">Loading period</span>
+      </span>
+    );
+  }
+  const books = periodLabel?.trim() || "";
+  const label = books || formatMonthYear(new Date(), market.timezone);
   return (
-    <span className="period-pill" title="Current period">
+    <span className="period-pill" title={books ? "Figures period" : "Current period"}>
       <RailIcon id="calendar" />
       {label}
     </span>

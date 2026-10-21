@@ -12,7 +12,7 @@ import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayPar
 import { canonicalScoreProse, type LiveHealthQuote } from "./score-prose";
 import {
   badgeMonthFromPeriod,
-  presentHealthNarrative,
+  reconcileStoredHealthNarrative,
   readStoredHealthSnapshot,
   snapshotFromLiveQuote,
   type HealthScoreSnapshot,
@@ -630,7 +630,7 @@ export function findingSentence(input: {
   evidence?: unknown;
   /** When this draft was saved. */
   writtenAt?: string | null;
-  /** Latest upload or ledger sync. A draft at or after this clock stays as written. */
+  /** Latest upload or ledger sync. It does not decide the health sentence. Cited scores do. */
   figuresUpdatedAt?: string | null;
 }): string {
   const market = input.market ?? ZA_MARKET;
@@ -643,11 +643,14 @@ export function findingSentence(input: {
   const formatted = formatFindingProse(text, input.figures ?? {}, market, input.canonicalRatios);
   const scored = quoteLiveScoreOnly(formatted, input.liveHealth?.overall);
   const live = narrativeSnapshot(input.liveHealth);
-  const moved = figuresMovedAfterDraft(input.writtenAt, input.figuresUpdatedAt);
-  text =
-    moved === false
-      ? scored
-      : presentHealthNarrative(scored, live, readStoredHealthSnapshot(input.evidence)).text;
+  const moved = figuresMovedAfterDraft(input.writtenAt, input.figuresUpdatedAt) === true;
+  text = reconcileStoredHealthNarrative({
+    text: scored,
+    live,
+    evidence: input.evidence,
+    figures: input.figures,
+    forceStale: moved,
+  }).text;
   if (!text) return "";
   if (!/[.!?]$/.test(text)) text = `${text}.`;
   return text;
@@ -742,11 +745,12 @@ export function handoffLine(
   if (!parts) return null;
   const named = canonicalScoreProse(parts.text);
   const quoted = quoteLiveScoreOnly(named, live?.overall ?? null);
-  const prose = presentHealthNarrative(
-    quoted,
-    narrativeSnapshot(live),
-    readStoredHealthSnapshot(row.payload),
-  ).text;
+  const prose = reconcileStoredHealthNarrative({
+    text: quoted,
+    live: narrativeSnapshot(live),
+    evidence: row.payload,
+    storedHealth: readStoredHealthSnapshot(row.payload),
+  }).text;
   return `${shortName(parts.from)} → ${shortName(parts.to)}: ${prose}`;
 }
 

@@ -89,9 +89,15 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+let releaseReads: (() => void) | null = null;
+const readGate = new Promise<void>((resolve) => {
+  releaseReads = resolve;
+});
+
 const realFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (url.includes("/rest/")) await readGate;
   if (url.includes("/functions/v1/owner-handoff")) return handoffGate;
   if (url.includes("/rest/v1/action_plans")) return json([{ id: "plan-1" }]);
   if (url.includes("/rest/v1/action_items")) {
@@ -177,6 +183,44 @@ function triggerLabel(): string {
   assert(button instanceof HTMLButtonElement, "the Hand to button is on the page");
   return button.getAttribute("aria-label") ?? "";
 }
+
+function assertChecking(where: string) {
+  assert(!document.querySelector("[data-hand-to-trigger]"), `${where}: Hand to is rendered before the read resolves`);
+  const pending = document.querySelector("[data-hand-to-pending]");
+  assert(pending instanceof HTMLElement, `${where}: the row has no checking state`);
+  assert(pending.getAttribute("aria-disabled") === "true" || pending.querySelector("[aria-disabled='true']"), `${where}: checking can be clicked`);
+  assert(!(pending instanceof HTMLButtonElement), `${where}: checking is a button`);
+  assert((pending.textContent ?? "").includes("Checking"), `${where}: label was ${pending.textContent}`);
+}
+
+const { MoveHandTo: ColdMove } = await import("../src/components/hand-to-menu.tsx?reload=cold");
+const cold = await mount(
+  createElement(ColdMove, {
+    clientId: CLIENT,
+    moveKey: "revenueGrowth",
+    title: TITLE,
+  }),
+);
+await tick();
+assertChecking("cold load");
+await cold();
+
+const { MoveHandTo: ColdAgain } = await import("../src/components/hand-to-menu.tsx?reload=cold-2");
+const coldAgain = await mount(
+  createElement(ColdAgain, {
+    clientId: CLIENT,
+    moveKey: "revenueGrowth",
+    title: TITLE,
+  }),
+);
+await tick();
+assertChecking("remount while the read is held");
+assert(releaseReads, "the assignment read is held");
+releaseReads();
+await tick();
+await tick();
+assert(triggerLabel() === "Handed to Milōn Financial Manager", `after the read, the label was ${triggerLabel()}`);
+await coldAgain();
 
 const { MoveHandTo: FirstMove } = await import("../src/components/hand-to-menu.tsx?reload=1");
 

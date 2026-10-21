@@ -31,10 +31,10 @@ No app code changes are required. Env vars flip only after the custom hostname i
 |------|-------------|
 | Client Supabase URL at build | [`vite.config.ts`](../vite.config.ts) — `define` maps `process.env.SUPABASE_URL` → `import.meta.env.VITE_SUPABASE_URL` |
 | Supabase client | [`src/integrations/supabase/client.ts`](../src/integrations/supabase/client.ts) — reads `VITE_SUPABASE_URL` (client) or `SUPABASE_URL` (SSR fallback) |
-| Google OAuth start | [`src/lib/google-auth.ts`](../src/lib/google-auth.ts) — `startGoogleSignIn()` → `signInWithOAuth({ redirectTo: …/auth/callback })` on **`milonfinance.com`**; **no change** for custom auth domain |
+| Google OAuth start | [`src/lib/google-auth.ts`](../src/lib/google-auth.ts) — `startGoogleSignIn()` → `signInWithOAuth({ redirectTo: …/auth/callback })` on **`www.milonfinance.com`**; **no change** for custom auth domain |
 | Google provider credentials | **Supabase Dashboard** → Authentication → Providers → Google — **not** [`supabase/config.toml`](../supabase/config.toml) (repo file covers email templates only) |
 
-Google’s consent screen shows the **Supabase Auth host** (`auth.milonfinance.com` after cutover), not the app’s `redirectTo`. The app callback stays `https://milonfinance.com/auth/callback`.
+Google’s consent screen shows the **Supabase Auth host** (`auth.milonfinance.com` after cutover), not the app’s `redirectTo`. The app callback stays `https://www.milonfinance.com/auth/callback`.
 
 ---
 
@@ -86,7 +86,7 @@ Google Cloud → **Google Auth Platform → Branding**:
 |-------|--------|
 | App name | **Milōn** |
 | Logo | Milōn mark |
-| Application home page | `https://milonfinance.com` |
+| Application home page | `https://www.milonfinance.com` |
 | Privacy / Terms | Production URLs on `milonfinance.com` |
 
 Submit **Verify branding** if prompted. Verification is **not** instant — plan for **days** ([brand verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification)). Until verified, users may still see domain-only text on the consent screen.
@@ -95,13 +95,14 @@ Submit **Verify branding** if prompted. Verification is **not** instant — plan
 
 Supabase Dashboard → **Authentication → URL Configuration**:
 
-- **Site URL:** `https://milonfinance.com`
-- **Redirect URLs** (allowlist) — include production app paths, e.g.:
-  - `https://milonfinance.com/auth/callback`
-  - `https://milonfinance.com/auth/verified`
-  - `https://milonfinance.com/app`
-  - `https://milonfinance.com/dashboard`
+- **Site URL:** `https://www.milonfinance.com`
+- **Redirect URLs** (allowlist) — include the www paths the app now sends:
+  - `https://www.milonfinance.com/auth/callback`
+  - `https://www.milonfinance.com/auth/verified`
+  - `https://www.milonfinance.com/**`
   - `http://localhost:5000/**` (local dev)
+
+  Apex entries (`https://milonfinance.com/auth/callback` and the rest) can stay until the apex 308 is confirmed. A `redirect_to` that is not on this list is replaced by the Site URL.
 
 Paid firm-band signup confirmation uses `/auth/callback?checkout=&interval=&market=` (already allowlisted). Do not add `/billing/start` as `emailRedirectTo`.
 
@@ -131,7 +132,7 @@ VITE_SUPABASE_URL=https://auth.milonfinance.com
 
 **Redeploy** after changing build env — `vite.config.ts` inlines the URL into the client bundle at build time.
 
-**No change** to OAuth app callback: [`src/lib/google-auth.ts`](../src/lib/google-auth.ts) keeps `redirectTo` at `https://milonfinance.com/auth/callback`.
+OAuth `redirectTo` is `https://www.milonfinance.com/auth/callback` ([`src/lib/google-auth.ts`](../src/lib/google-auth.ts)). An apex page host is canonicalized to www before the link is built.
 
 Supabase **Edge Functions** receive `SUPABASE_URL` from the Supabase runtime automatically; no separate secret for the public URL. Client-side calls use the Vercel-injected `VITE_SUPABASE_URL`.
 

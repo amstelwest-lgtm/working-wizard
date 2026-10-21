@@ -2,7 +2,8 @@
  * Which generation entry points an ended Starter trial blocks.
  * The live check is still `assertStarterTrialAllowsNewWork` (app server)
  * or `paidGenerationTrialBlock` (edge). This list is the decision those
- * call sites must follow. Milōn Bot Q&A stays open.
+ * call sites must follow. Milōn Bot Q&A and Ask AI stay off this list.
+ * After the trial, a firm with no card is stopped by cardlessTrialAiBlock.
  */
 
 import {

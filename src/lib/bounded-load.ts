@@ -55,20 +55,33 @@ export function settleWithin<T>(work: PromiseLike<T>, timeoutMs: number): Promis
   });
 }
 
-export type PracticeClientsPhase = "loading" | "error" | "empty" | "ready";
+export type PracticeClientsPhase = "loading" | "error" | "empty" | "ready" | "partial";
 
 /**
- * Clients list. A timeout wins over a spinner, including when the book flag
- * is still true because a parent hydrate has not finished.
+ * Books merge on the clients table. Pending is the shell: names may paint,
+ * numeric cells stay a skeleton. The table is ready only after the merge.
+ */
+export type PracticeFiguresPhase = "pending" | "merged" | "failed";
+
+/**
+ * Clients list. A timeout wins over a spinner when nothing has arrived.
+ * A shell with rows is not ready: a timeout, or a books merge that has not
+ * landed, must not look like a finished table of dashes.
  */
 export function practiceClientsPhase(input: {
   loading: boolean;
   timedOut: boolean;
   rowCount: number;
+  /** Omitted only for a caller that has no separate books read. */
+  figures?: PracticeFiguresPhase;
 }): PracticeClientsPhase {
+  const figures = input.figures ?? "merged";
   if (input.timedOut && input.rowCount === 0) return "error";
-  if (input.loading) return "loading";
+  if (figures === "failed") return "error";
+  if (input.timedOut && figures !== "merged") return "error";
+  if (input.loading && input.rowCount === 0) return "loading";
   if (input.rowCount === 0) return "empty";
+  if (figures === "pending" || input.loading) return "partial";
   return "ready";
 }
 
@@ -91,4 +104,5 @@ export function openQueriesPhase(input: {
 }
 
 export const CLIENTS_LOAD_ERROR = "Couldn't load clients. Refresh to try again.";
+export const FIGURES_LOAD_ERROR = "Couldn't load figures. Retry.";
 export const OPEN_QUERIES_LOAD_ERROR = "Couldn't load open queries. Refresh to try again.";

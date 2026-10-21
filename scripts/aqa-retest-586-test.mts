@@ -420,8 +420,12 @@ assert(statusColumnNeedsAttention("Healthy") === false, "Healthy is not attentio
 assert(statusColumnNeedsAttention(NEEDS_DATA_OPENING) === true, "needs data is attention");
 assert(statusColumnNeedsAttention("Critical: cash below floor") === true, "critical is attention");
 const board = src("src/components/practice-board.tsx");
+const listRows = src("src/lib/practice-client-row.ts");
 assert(board.includes("statusColumnNeedsAttention"), "home counts the status column");
-assert(board.includes('statusWord.startsWith("Needs data")'), "the list prints the needs-data word");
+assert(
+  board.includes("toClientRow") && listRows.includes('statusWord.startsWith("Needs data")'),
+  "the list prints the needs-data word",
+);
 
 const draft = alignBrainFigureCopy("See the full Sep 2026 statement and the Sep 2026 books.", {});
 assert(draft.includes(FULL_YEAR_ON_FILE), draft);

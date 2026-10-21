@@ -15,6 +15,7 @@ import {
   handoffFinding,
   handoffInputs,
   handoffNeedsFreshRun,
+  handoffRunToKeep,
   planHandoffRun,
   handoffRequestNote,
   handoffResultNote,
@@ -118,7 +119,7 @@ assert(finding?.severity === "act" && finding.evidence.status === "critical", "c
 
 const fn = readFileSync("supabase/functions/owner-handoff/index.ts", "utf8");
 const decideAt = fn.indexOf("handoffDecision");
-const insertAt = fn.indexOf('.from("agent_runs")');
+const insertAt = fn.indexOf('.from("agent_runs")\n    .insert');
 const enabledAt = fn.indexOf("if (!runnerEnabled");
 assert(decideAt > 0 && enabledAt > decideAt && insertAt > enabledAt, "a missing or disabled runner returns before a run is inserted");
 assert(fn.includes("owner_user_id") && fn.includes("client_memberships"), "the function checks the owner and the workspace");
@@ -164,6 +165,39 @@ assert(
 assert(
   fn.indexOf('error: "runner_not_triggered"', invokeAt) > invokeAt,
   "a failed agent call still marks the run failed and leaves the note in place",
+);
+const keepAt = fn.indexOf("handoffRunToKeep");
+assert(
+  keepAt > 0 && keepAt < noteAt && keepAt < invokeAt,
+  "an open or recent run is returned before a new note or agent call",
+);
+assert(fn.includes("handoff_already_started"), "a second insert stands down and does not invoke");
+const nowMs = Date.parse("2026-10-21T00:32:20.000Z");
+assert(
+  handoffRunToKeep([{ id: "advisor-run", status: "queued", queuedAt: "2026-10-21T00:32:10.000Z" }], nowMs)?.id ===
+    "advisor-run",
+  "an open run on the action blocks another invoke",
+);
+assert(
+  handoffRunToKeep(
+    [{ id: "just-finished", status: "succeeded", queuedAt: "2026-10-21T00:31:30.000Z" }],
+    nowMs,
+  )?.id === "just-finished",
+  "a run started within 60 seconds blocks another invoke",
+);
+assert(
+  handoffRunToKeep([{ id: "old", status: "succeeded", queuedAt: "2026-10-21T00:00:00.000Z" }], nowMs) === null,
+  "a finished run older than 60 seconds does not block",
+);
+assert(
+  handoffRunToKeep(
+    [
+      { id: "later", status: "queued", queuedAt: "2026-10-21T00:32:15.000Z" },
+      { id: "earlier", status: "running", queuedAt: "2026-10-21T00:32:00.000Z" },
+    ],
+    nowMs,
+  )?.id === "earlier",
+  "the earliest run in the window is the one that is kept",
 );
 assert(fn.includes("noted: true"), "the client can tell the note was stored");
 assert(fn.includes("personId"), "a person hand-off uses the same function");

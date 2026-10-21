@@ -53,6 +53,8 @@ import {
   type FirmBandId,
 } from "@/lib/stripe-plans";
 import { firmIdForOwnerUser, writeFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
+import { writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
+import { ENTITLING_SUBSCRIPTION_STATUSES } from "@/lib/stripe-entitlement";
 import { getStripe } from "@/lib/stripe.server";
 
 type RetrievedSubscription = {
@@ -226,6 +228,9 @@ async function rememberFirmStripeCustomer(sub: RetrievedSubscription): Promise<v
     }
     if (!FIRM_UUID.test(firmId)) return;
     await writeFirmStripeCustomerId(firmId, customerId);
+    if ((ENTITLING_SUBSCRIPTION_STATUSES as readonly string[]).includes(sub.status)) {
+      await writeFirmBillingPlanKnown(firmId, "entitled");
+    }
   } catch (err) {
     console.warn(
       "[stripe] firm customer id was not stored",
@@ -426,6 +431,11 @@ export async function completeFirmSetupUpgrade(
   if (!intent) return null;
   const customerId = idOfStripeRef(session.customer);
   if (!customerId) throw new Error("Setup Checkout has no customer.");
+  const metaFirmId = (session.metadata?.firm_id ?? "").trim();
+  const setupFirmId = FIRM_UUID.test(metaFirmId)
+    ? metaFirmId
+    : await firmIdForOwnerUser(intent.userId);
+  if (setupFirmId) await writeFirmStripeCustomerId(setupFirmId, customerId);
 
   let paymentMethod: string | null = null;
   if (session.setup_intent && typeof session.setup_intent === "object") {

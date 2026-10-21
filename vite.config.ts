@@ -72,6 +72,9 @@ export default defineConfig({
       port: 5000,
       host: "0.0.0.0",
       allowedHosts: true,
+      // The browser test opts out. A route-tree rewrite otherwise reloads the
+      // page mid-assertion and drops the send that was just clicked.
+      hmr: process.env.MILON_DISABLE_HMR === "1" ? false : undefined,
     },
     build: {
       rollupOptions: {
