@@ -101,6 +101,21 @@ export function lastKnownFirmEntitlement(
   return lastKnown.value;
 }
 
+/**
+ * Last success only when it was stored for this firm id.
+ * A missing id, or another firm's id, is not a plan we can open.
+ */
+export function lastKnownEntitlementForFirm(
+  userId: string,
+  firmId: string | null | undefined,
+): CachedFirmEntitlement | null {
+  const id = firmId?.trim() ?? "";
+  if (!userId || !id || !lastKnown || lastKnown.userId !== userId || lastKnown.firmId !== id) {
+    return null;
+  }
+  return lastKnown.value;
+}
+
 /** A refresh that learned the firm is paid replaces any unpaid tab result. */
 export function noteFirmEntitlement(
   userId: string,
