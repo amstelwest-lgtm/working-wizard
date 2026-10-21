@@ -11,6 +11,7 @@ import { SourceDocumentsPanel } from "@/components/source-documents-panel";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { ownerRunPhase, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { supabase } from "@/integrations/supabase/client";
+import { bootSelect } from "@/lib/boot-read";
 import { formatDate } from "@/lib/market/format";
 import { visitorCopyPack } from "@/lib/market/marketing";
 import { readVisitorDraft } from "@/lib/market/storage";
@@ -291,6 +292,7 @@ export function OwnerDoor({
   const [actionsUnavailable, setActionsUnavailable] = useState(false);
   const [deliverableCount, setDeliverableCount] = useState<number | null>(null);
   const [deliverablesUnavailable, setDeliverablesUnavailable] = useState(false);
+  const [deliverableAttempt, setDeliverableAttempt] = useState(0);
   const [quickBooks, setQuickBooks] = useState<BooksLink>({ state: "unknown" });
   const [xeroLink, setXeroLink] = useState<BooksLink>({ state: "unknown" });
   const [openAction, setOpenAction] = useState<string | null>(null);
@@ -541,7 +543,6 @@ export function OwnerDoor({
     setActionRows([]);
     setActionsUnavailable(false);
     setDeliverableCount(null);
-    setDeliverablesUnavailable(false);
     setQuickBooks({ state: "unknown" });
     setXeroLink({ state: "unknown" });
     if (!clientId) {
@@ -683,26 +684,31 @@ export function OwnerDoor({
   useEffect(() => {
     if (!clientId || !storedDeliverablesOpen) return;
     let cancelled = false;
-    void supabase
-      .from("deliverable_drafts")
-      .select("id")
-      .eq("client_id", clientId)
-      .in("status", ["draft", "ready"])
-      .limit(20)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          setDeliverablesUnavailable(true);
-          setDeliverableCount(0);
-          return;
-        }
-        setDeliverablesUnavailable(false);
-        setDeliverableCount(data?.length ?? 0);
-      });
+    void (async () => {
+      const read = await bootSelect(
+        (signal) =>
+          supabase
+            .from("deliverable_drafts")
+            .select("id")
+            .eq("client_id", clientId)
+            .in("status", ["draft", "ready"])
+            .limit(20)
+            .abortSignal(signal),
+        { critical: false },
+      );
+      if (cancelled) return;
+      if (!read.ok || read.value.error) {
+        setDeliverablesUnavailable(true);
+        setDeliverableCount(0);
+        return;
+      }
+      setDeliverablesUnavailable(false);
+      setDeliverableCount(read.value.data?.length ?? 0);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [clientId, storedDeliverablesOpen]);
+  }, [clientId, storedDeliverablesOpen, deliverableAttempt]);
 
   useEffect(() => {
     setFirmName(null);
@@ -1154,6 +1160,15 @@ export function OwnerDoor({
           }}
           onBack={closeChat}
         />
+      ) : null}
+      {railScreen === "accountant" && deliverablesUnavailable ? (
+        <button
+          type="button"
+          data-section-retry="deliverables"
+          onClick={() => setDeliverableAttempt((n) => n + 1)}
+        >
+          Retry
+        </button>
       ) : null}
       {railScreen === "accountant" ? (
         <OwnerAccountant
