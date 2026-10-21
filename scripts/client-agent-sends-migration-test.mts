@@ -53,6 +53,11 @@ for (const needle of [
   "image/png",
   "image/heic",
   "20971520",
+  "bank_statements",
+  "travel_logbook",
+  "client_agent_sends.firm_id",
+  "client_agent_send_item_touch",
+  "item_key <> 'other'",
   "consent_required",
   "firm_client_mismatch",
   "revoke all on table public.client_agent_sends from public, anon, authenticated",
@@ -73,5 +78,11 @@ assert(tests.includes("anon must have no table privileges"), "sql test covers an
 assert(tests.includes("a file before consent must be refused"), "sql test covers consent");
 assert(tests.includes("default expiry must be 14 days"), "sql test covers expiry");
 assert(tests.includes("medical item must be totals only"), "sql test covers medical totals");
+assert(
+  tests.includes("a member of a different firm must not read the send"),
+  "sql test covers a moved client",
+);
+assert(tests.includes("other without label or explanation must be refused"), "sql test covers other");
+assert(tests.includes("touch trigger must refresh updated_at"), "sql test covers updated_at");
 
 console.log("client_agent_sends migration test ok");

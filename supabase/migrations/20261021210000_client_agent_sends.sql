@@ -61,8 +61,12 @@ CREATE TABLE IF NOT EXISTS public.client_agent_send_items (
     'medical_aid_certificate',
     'ra_contribution_certificate',
     'it3b',
-    'practice_income_expenses'
+    'practice_income_expenses',
+    'bank_statements',
+    'travel_logbook',
+    'other'
   )),
+  label text,
   totals_only boolean NOT NULL DEFAULT false,
   status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'received')),
   quality text CHECK (quality IS NULL OR quality IN ('usable', 'incomplete', 'poor')),
@@ -108,6 +112,16 @@ CREATE TABLE IF NOT EXISTS public.client_agent_send_items (
   ),
   CONSTRAINT client_agent_send_items_path_needs_file CHECK (
     storage_path IS NULL OR (mime IS NOT NULL AND size_bytes IS NOT NULL)
+  ),
+  CONSTRAINT client_agent_send_items_label_len CHECK (
+    label IS NULL OR (length(btrim(label)) > 0 AND length(label) <= 200)
+  ),
+  CONSTRAINT client_agent_send_items_other_text CHECK (
+    item_key <> 'other'
+    OR (
+      (label IS NOT NULL AND length(btrim(label)) > 0)
+      OR (explanation IS NOT NULL AND length(btrim(explanation)) > 0)
+    )
   )
 );
 
@@ -116,6 +130,12 @@ CREATE INDEX IF NOT EXISTS client_agent_send_items_send_idx
 
 COMMENT ON COLUMN public.client_agent_send_items.totals_only IS
   'Medical aid tax certificate stores totals only. The check forces that item on and every other item off.';
+
+COMMENT ON COLUMN public.client_agent_send_items.label IS
+  'Name for an other item. other requires a non-empty label or explanation.';
+
+COMMENT ON COLUMN public.client_agent_send_items.updated_at IS
+  'Set on insert and touched again on every update.';
 
 COMMENT ON COLUMN public.client_agent_send_items.size_bytes IS
   'File size in bytes. Cap is 20 MiB. PDF, JPEG, PNG, and HEIC only.';
@@ -201,6 +221,18 @@ BEGIN
 END;
 $$;
 
+-- Touches updated_at. Not security definer.
+CREATE OR REPLACE FUNCTION public.client_agent_send_item_touch()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
 DROP TRIGGER IF EXISTS client_agent_send_guard_firm ON public.client_agent_sends;
 CREATE TRIGGER client_agent_send_guard_firm
   BEFORE INSERT OR UPDATE ON public.client_agent_sends
@@ -213,10 +245,18 @@ CREATE TRIGGER client_agent_send_item_guard_consent
   FOR EACH ROW
   EXECUTE FUNCTION public.client_agent_send_item_guard_consent();
 
+DROP TRIGGER IF EXISTS client_agent_send_item_touch ON public.client_agent_send_items;
+CREATE TRIGGER client_agent_send_item_touch
+  BEFORE UPDATE ON public.client_agent_send_items
+  FOR EACH ROW
+  EXECUTE FUNCTION public.client_agent_send_item_touch();
+
 REVOKE ALL ON FUNCTION public.client_agent_send_guard_firm() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.client_agent_send_item_guard_consent() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.client_agent_send_item_touch() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.client_agent_send_guard_firm() TO service_role;
 GRANT EXECUTE ON FUNCTION public.client_agent_send_item_guard_consent() TO service_role;
+GRANT EXECUTE ON FUNCTION public.client_agent_send_item_touch() TO service_role;
 
 ALTER TABLE public.client_agent_sends ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.client_agent_send_items ENABLE ROW LEVEL SECURITY;
@@ -243,8 +283,8 @@ CREATE POLICY client_agent_sends_firm_read
     AND EXISTS (
       SELECT 1
       FROM public.clients c
-      WHERE c.id = client_id
-        AND c.firm_id = firm_id
+      WHERE c.id = client_agent_sends.client_id
+        AND c.firm_id = client_agent_sends.firm_id
     )
   );
 

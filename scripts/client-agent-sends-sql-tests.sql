@@ -19,6 +19,7 @@ DECLARE
   v_send uuid := '88888888-8888-4888-8888-888888888888';
   v_hash text := repeat('ab', 32);
   v_expires timestamptz;
+  v_touched timestamptz;
   v_count int;
   v_definer boolean;
 BEGIN
@@ -35,7 +36,11 @@ BEGIN
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
-    AND p.proname IN ('client_agent_send_guard_firm', 'client_agent_send_item_guard_consent');
+    AND p.proname IN (
+      'client_agent_send_guard_firm',
+      'client_agent_send_item_guard_consent',
+      'client_agent_send_item_touch'
+    );
   IF v_definer IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'guard functions must not be security definer';
   END IF;
@@ -62,7 +67,9 @@ BEGIN
   IF has_function_privilege('anon', 'public.client_agent_send_guard_firm()', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.client_agent_send_guard_firm()', 'EXECUTE')
      OR has_function_privilege('anon', 'public.client_agent_send_item_guard_consent()', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.client_agent_send_item_guard_consent()', 'EXECUTE') THEN
+     OR has_function_privilege('authenticated', 'public.client_agent_send_item_guard_consent()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.client_agent_send_item_touch()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.client_agent_send_item_touch()', 'EXECUTE') THEN
     RAISE EXCEPTION 'guard functions must not be executable without the service role';
   END IF;
 
@@ -211,6 +218,42 @@ BEGIN
     SET status = 'received', quality = 'poor', explanation = 'The scan is cut off. This is all they have.'
     WHERE send_id = v_send AND item_key = 'it3b';
 
+  BEGIN
+    INSERT INTO public.client_agent_send_items (send_id, item_key, totals_only)
+    VALUES (v_send, 'other', false);
+    RAISE EXCEPTION 'other without label or explanation must be refused';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.client_agent_send_items (send_id, item_key, totals_only, label)
+    VALUES (v_send, 'other', false, '   ');
+    RAISE EXCEPTION 'blank other label must be refused';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  INSERT INTO public.client_agent_send_items (send_id, item_key, totals_only, label) VALUES
+    (v_send, 'bank_statements', false, NULL),
+    (v_send, 'travel_logbook', false, NULL),
+    (v_send, 'other', false, 'Extra certificate');
+  DELETE FROM public.client_agent_send_items
+  WHERE send_id = v_send AND item_key IN ('bank_statements', 'travel_logbook', 'other');
+
+  INSERT INTO public.client_agent_send_items (send_id, item_key, totals_only, explanation)
+  VALUES (v_send, 'other', false, 'This is the extra document.');
+  DELETE FROM public.client_agent_send_items
+  WHERE send_id = v_send AND item_key = 'other';
+
+  UPDATE public.client_agent_send_items
+    SET updated_at = timestamptz '2000-01-01'
+    WHERE send_id = v_send AND item_key = 'irp5'
+    RETURNING updated_at INTO v_touched;
+  IF v_touched < timestamptz '2020-01-01' THEN
+    RAISE EXCEPTION 'touch trigger must refresh updated_at, got %', v_touched;
+  END IF;
+
   UPDATE public.client_agent_sends SET revoked_at = now() WHERE id = v_send;
   IF NOT EXISTS (
     SELECT 1 FROM public.client_agent_sends WHERE id = v_send AND revoked_at IS NOT NULL
@@ -261,6 +304,30 @@ BEGIN
   SELECT count(*) INTO v_count FROM public.client_agent_sends WHERE id = v_send;
   IF v_count <> 0 THEN
     RAISE EXCEPTION 'another firm must not read the send';
+  END IF;
+  EXECUTE 'RESET ROLE';
+
+  -- The client now belongs to a different firm from the send. The policy must
+  -- compare client_agent_sends.firm_id, not the clients row's own firm_id.
+  UPDATE public.clients SET firm_id = v_other_firm WHERE id = v_client;
+
+  PERFORM set_config('request.jwt.claim.sub', v_member::text, true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  SELECT count(*) INTO v_count FROM public.client_agent_sends WHERE id = v_send;
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'a member of a different firm must not read the send, saw %', v_count;
+  END IF;
+  SELECT count(*) INTO v_count FROM public.client_agent_send_items WHERE send_id = v_send;
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'a member of a different firm must not read the items, saw %', v_count;
+  END IF;
+  EXECUTE 'RESET ROLE';
+
+  PERFORM set_config('request.jwt.claim.sub', v_other::text, true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  SELECT count(*) INTO v_count FROM public.client_agent_sends WHERE id = v_send;
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'the client''s new firm must not read the old send, saw %', v_count;
   END IF;
   EXECUTE 'RESET ROLE';
 
