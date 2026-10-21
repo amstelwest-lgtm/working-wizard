@@ -16,9 +16,13 @@ export function isPublicMarketingPath(pathname: string): boolean {
   return (PUBLIC_MARKETING_PATHS as readonly string[]).includes(path);
 }
 
-/** Public pages that paint their own sheet and skip app chrome. */
+/**
+ * Public pages that paint their own sheet and skip app chrome.
+ * /talk is included because the signed-in shell arrives late and wraps the
+ * outlet, which remounts the conversation and drops the messages on screen.
+ */
 export function isBarePublicPath(pathname: string): boolean {
   let path = pathname || "/";
   if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
-  return path === "/try";
+  return path === "/try" || path === "/talk" || path.startsWith("/talk/");
 }

@@ -5,7 +5,9 @@
  *
  * Sends wait until the composer is hydrated (Send enabled, not "Connecting…")
  * and until the mocked POST responds. Enter and click do nothing while the
- * previous reply is still in flight. HMR is off so a route-tree rewrite
+ * previous reply is still in flight. /talk skips the signed-in shell, so a
+ * late chrome load cannot remount the conversation. The thread and the unsent
+ * draft survive a same-document remount. HMR is off so a route-tree rewrite
  * cannot reload the page between those waits.
  *
  *   pnpm test:prospect-talk-browser
@@ -110,17 +112,34 @@ async function shot(page: Page, name: string) {
 }
 
 /** Send is enabled and no longer the pre-hydration "Connecting…" label. */
-async function waitComposerReady(page: Page) {
-  await page.waitForFunction(
-    () => {
-      const button = document.querySelector("button.talk-send");
-      if (!(button instanceof HTMLButtonElement)) return false;
-      const label = (button.textContent ?? "").replace(/\s+/g, " ").trim();
-      return button.disabled === false && label === "Send";
-    },
-    undefined,
-    { timeout: STEP_MS },
-  );
+async function waitComposerReady(page: Page, timeout = STEP_MS) {
+  try {
+    await page.waitForFunction(
+      () => {
+        const button = document.querySelector("button.talk-send");
+        if (!(button instanceof HTMLButtonElement)) return false;
+        const label = (button.textContent ?? "").replace(/\s+/g, " ").trim();
+        return button.disabled === false && label === "Send";
+      },
+      undefined,
+      { timeout },
+    );
+  } catch (err) {
+    const snap = await page
+      .evaluate(() => {
+        const button = document.querySelector("button.talk-send");
+        return {
+          label: button?.textContent ?? null,
+          disabled: button instanceof HTMLButtonElement ? button.disabled : null,
+          className: button instanceof HTMLButtonElement ? button.className : null,
+          live: document.querySelector("form.talk-composer")?.getAttribute("data-talk-live") ?? "",
+          ready: document.readyState,
+        };
+      })
+      .catch(() => null);
+    console.error("composer not ready", JSON.stringify(snap));
+    throw err;
+  }
 }
 
 /**
@@ -198,7 +217,13 @@ async function main() {
   assert((await page.locator("textarea").inputValue()) === FIRST, "the typed text stays in the textarea");
 
   release();
-  await waitComposerReady(page);
+  // The first client compile is the cold start. 30s was not enough on a busy CI runner.
+  try {
+    await waitComposerReady(page, 90_000);
+  } catch (err) {
+    console.error("pageErrors", pageErrors);
+    throw err;
+  }
   const after = await page.evaluate(() => {
     const button = document.querySelector(".talk-send");
     const area = document.querySelector("textarea");
@@ -259,13 +284,23 @@ async function main() {
   );
   const beforeShift = posts.length;
   await waitComposerReady(page);
-  await page.locator("textarea").click();
-  await page.keyboard.type("ShiftKeep");
-  await page.keyboard.press("Shift+Enter");
-  await page.keyboard.type("SecondLine");
-  const shifted = await page.locator("textarea").inputValue();
+  const area = page.locator("textarea");
+  await area.click();
+  await area.pressSequentially("ShiftKeep");
+  await area.press("Shift+Enter");
+  await area.pressSequentially("SecondLine");
+  const shifted = await area.inputValue();
   assert(shifted === "ShiftKeep\nSecondLine", "Shift+Enter inserts a newline");
   assert(posts.length === beforeShift, "Shift+Enter does not send");
+  const stillThere = await page.locator(".talk-bubble-you").allInnerTexts();
+  assert(
+    stillThere.some((text) => text.includes(FIRST)),
+    "the first message stays on screen while the next one is typed",
+  );
+  assert(
+    stillThere.some((text) => text.includes("Enter sends this")),
+    "the Enter message stays on screen while the next one is typed",
+  );
   await sendAndWait(page, () => page.locator(".talk-send").click());
   await page.locator(".talk-bubble-you", { hasText: "SecondLine" }).waitFor({
     state: "visible",

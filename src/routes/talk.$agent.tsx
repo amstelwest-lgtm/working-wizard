@@ -9,6 +9,11 @@ import tryCss from "../styles/try.css?inline";
 import talkCss from "../styles/prospect-talk.css?inline";
 
 export const Route = createFileRoute("/talk/$agent")({
+  // Geo is fixed for the visit. A refetch, including a preload, goes pending
+  // and unmounts the conversation, which drops the messages already on screen.
+  staleTime: Number.POSITIVE_INFINITY,
+  preloadStaleTime: Number.POSITIVE_INFINITY,
+  shouldReload: false,
   loader: async () => {
     const visitor = await readMarketingVisitor();
     if (visitor.copyPack !== "za") return { copyPack: visitor.copyPack, taxAgent: null };
