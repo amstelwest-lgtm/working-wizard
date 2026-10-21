@@ -6,6 +6,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { decideAccountantAuthLanding, safeAccountantRedirect } from "../src/lib/auth-landing";
 import {
+  entitlementForFailedCheck,
+  FIRM_BILLING_PLAN_FALLBACK_MS,
+} from "../src/lib/billing-check-failure";
+import { firmFileOnBillingResult } from "../src/lib/firm-gate-access";
+import { SHELL_GATE_TIMEOUT_MS } from "../src/lib/shell-gate";
+import {
   firmStripeCustomerColumnProbes,
   noteMissingFirmStripeCustomerColumn,
   readFirmStripeCustomerId,
@@ -882,6 +888,44 @@ const missElapsed = Date.now() - missStarted;
 assert(missed === undefined, "hung metadata searches fail closed");
 assert(missElapsed < 5_000, "hung metadata searches give up within 5s");
 assert(missSearches >= 1, "an email miss still searches");
+const storedPlanOpen = entitlementForFailedCheck("entitled", "timeout");
+assert(
+  storedPlanOpen.entitled === true && storedPlanOpen.checkFailed === "timeout",
+  "a stored entitled plan stays entitled when the check times out",
+);
+assert(
+  firmFileOnBillingResult(storedPlanOpen) === "open",
+  "a metadata search timeout with a stored plan keeps the client file open",
+);
+assert(
+  missed === undefined && firmFileOnBillingResult(storedPlanOpen) === "open",
+  "Ben's email miss and slow metadata search keep the file open when a stored plan exists",
+);
+assert(
+  firmFileOnBillingResult({ entitled: false, reason: "no_active_subscription" }) === "closed",
+  "a confirmed no active plan closes the client file",
+);
+assert(
+  firmFileOnBillingResult({
+    entitled: false,
+    reason: "no_active_subscription",
+    checkFailed: "timeout",
+  }) === "retry",
+  "a failed check does not close the file on an unpaid echo",
+);
+assert(
+  firmFileOnBillingResult(entitlementForFailedCheck("none", "timeout")) === "retry",
+  "a timeout does not treat a stored none as a confirmed close",
+);
+assert(
+  firmFileOnBillingResult(entitlementForFailedCheck(null, "network")) === "retry",
+  "a failed check with no stored plan stays on retry",
+);
+assert(
+  FIRM_BILLING_PLAN_FALLBACK_MS < SHELL_GATE_TIMEOUT_MS,
+  "a stored plan answers before the shell gate closes the file",
+);
+assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS === 4_000, "the metadata search budget stays 4s");
 assert(missSearchOptions?.maxNetworkRetries === 0, "metadata search does not ask Stripe to retry");
 assert(
   typeof missSearchOptions?.timeout === "number" &&
@@ -1580,5 +1624,46 @@ assert(
   !capServer.includes("writeFirmStripeCustomerId"),
   "reading subscription history does not write firms.stripe_customer_id",
 );
+const planMigration = readFileSync(
+  resolve("supabase/migrations/20261021040000_firm_billing_plan_known.sql"),
+  "utf8",
+);
+assert(
+  planMigration.includes("ADD COLUMN IF NOT EXISTS billing_plan_known"),
+  "migration adds firms.billing_plan_known",
+);
+assert(!/UPDATE\s+public\.firms/i.test(planMigration), "the plan migration does not backfill firm rows");
+assert(
+  planMigration.includes("IS DISTINCT FROM 'authenticated'"),
+  "signed-in users cannot set the stored plan",
+);
+assert(fns.includes("readFirmBillingPlanKnown"), "a slow check reads the stored firm plan");
+assert(fns.includes("FIRM_BILLING_PLAN_FALLBACK_MS"), "a stored entitled plan is returned before the gate");
+assert(fns.includes("rememberConfirmedFirmPlan"), "a finished check stores the firm plan");
+assert(fns.includes('writeFirmBillingPlanKnown(firmId, "none")'), "only a confirmed no-plan stores none");
+const portalStart = fns.indexOf("export const createBillingPortalSession");
+const portalEnd = fns.indexOf("export const getCheckoutSessionStatus");
+assert(
+  portalStart !== -1 &&
+    portalEnd > portalStart &&
+    fns.slice(portalStart, portalEnd).includes("writeFirmStripeCustomerId"),
+  "opening the billing portal stores firms.stripe_customer_id",
+);
+const setupStart = billingSync.indexOf("export async function completeFirmSetupUpgrade");
+const setupEnd = billingSync.indexOf("export async function", setupStart + 40);
+assert(
+  setupStart !== -1 &&
+    setupEnd > setupStart &&
+    billingSync.slice(setupStart, setupEnd).includes("writeFirmStripeCustomerId"),
+  "setup Checkout stores firms.stripe_customer_id",
+);
+const rememberStart = billingSync.indexOf("async function rememberFirmStripeCustomer");
+const rememberEnd = billingSync.indexOf("export async function syncFirmSubscriptionBand");
+const rememberFn = billingSync.slice(rememberStart, rememberEnd);
+assert(rememberFn.includes("writeFirmStripeCustomerId"), "subscription sync stores the firm customer id");
+assert(rememberFn.includes("writeFirmBillingPlanKnown"), "an entitling subscription stores the firm plan");
+assert(!rememberFn.includes('"none"'), "a subscription webhook does not store a confirmed no-plan");
+assert(gate.includes("firmFileOnBillingResult"), "the gate opens a stored plan after a failed check");
+assert(gate.includes('file === "open"'), "a failed check with a stored plan does not stay on Retry");
 
 console.log("firm-billing-gate ok");

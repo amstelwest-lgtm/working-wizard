@@ -17,6 +17,7 @@ import { decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entit
 import {
   pageWhileEntitlementUnknown,
   skeletonAfterBillingDeadline,
+  firmFileOnBillingResult,
   surfaceAfterBillingCheckFailure,
 } from "@/lib/firm-gate-access";
 import {
@@ -364,6 +365,28 @@ export function AuthGate() {
               ? "active_subscription"
               : "no_active_subscription";
         const failed = reason === "stripe_error" || Boolean(result.checkFailed);
+        const file = firmFileOnBillingResult({
+          entitled: result.entitled === true,
+          reason,
+          checkFailed: failed,
+        });
+        if (failed && file === "open") {
+          reported = true;
+          pendingWallRef.current = false;
+          setShowWall(false);
+          setBillingUnknown(false);
+          setBillingDeadlinePassed(false);
+          setFirmEntitled(true);
+          settledRef.current = { entitled: true, reason, clients };
+          failuresRef.current += 1;
+          setCheckNotice(billingCheckNoticeVisible(failuresRef.current));
+          if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = window.setTimeout(() => {
+            retryTimerRef.current = null;
+            setQuietAttempt((n) => n + 1);
+          }, billingCheckRetryDelayMs(failuresRef.current));
+          return;
+        }
         if (failed) {
           noteFailure(result.checkFailed ?? classifyBillingCheckFailure(result));
           return;

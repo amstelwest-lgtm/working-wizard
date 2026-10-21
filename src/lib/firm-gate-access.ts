@@ -65,6 +65,20 @@ export function surfaceAfterEntitlementFailure(input: {
 }
 
 /**
+ * A confirmed unpaid result closes the file. A failed check closes nothing:
+ * a stored entitled plan keeps it open, and no stored plan stays on Retry.
+ */
+export function firmFileOnBillingResult(input: {
+  entitled: boolean;
+  reason?: string;
+  checkFailed?: boolean | string;
+}): "open" | "closed" | "retry" {
+  const failed = Boolean(input.checkFailed) || input.reason === "stripe_error";
+  if (failed) return input.entitled ? "open" : "retry";
+  return input.entitled ? "open" : "closed";
+}
+
+/**
  * Deadline or Stripe error. A last known plan for this firm opens the page.
  * The billing wall is a confirmed unpaid result, not a failed check.
  * No last known plan keeps the existing surface.

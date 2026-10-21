@@ -67,6 +67,31 @@ export function logBillingCheckFailure(
 }
 
 /**
+ * When a stored entitled plan exists, answer with it before the shell's 8s
+ * gate closes the file. This does not lengthen the metadata search.
+ */
+export const FIRM_BILLING_PLAN_FALLBACK_MS = 6_000;
+
+export type StoredFirmPlan = "entitled" | "none";
+
+/**
+ * A timed-out or failed check. A stored entitled plan stays entitled.
+ * Anything else stays unknown, which is not a confirmed "no plan".
+ */
+export function entitlementForFailedCheck(
+  storedPlan: StoredFirmPlan | null,
+  kind: BillingCheckFailureKind,
+): FirmBillingEntitlement {
+  if (storedPlan === "entitled") {
+    return entitlementAfterLiveFailure(
+      { entitled: true, reason: "active_subscription" },
+      kind,
+    );
+  }
+  return entitlementAfterLiveFailure(null, kind);
+}
+
+/**
  * A live Stripe failure keeps the last successful decision when this isolate
  * still has one. No last success stays unknown (`stripe_error`), which is not
  * an unpaid firm.
