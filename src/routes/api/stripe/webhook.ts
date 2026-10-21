@@ -143,7 +143,13 @@ export const Route = createFileRoute("/api/stripe/webhook")({
             return Response.json({ error: "Sync failed" }, { status: 500 });
           }
         }
-        if (event.type === "customer.subscription.deleted") {
+        if (
+          event.type === "customer.subscription.deleted" ||
+          (event.type === "customer.subscription.updated" &&
+            ["canceled", "unpaid", "incomplete_expired"].includes(
+              (event.data?.object as { status?: string } | undefined)?.status ?? "",
+            ))
+        ) {
           try {
             const result = await syncFirmSubscriptionDeleted(event.data?.object, stripe);
             return firmWebhookResponse(result);

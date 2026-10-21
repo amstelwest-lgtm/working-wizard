@@ -443,7 +443,7 @@ export function FirmStartHereLoader({ firmId = null }: { firmId?: string | null 
   const [band, setBand] = useState<FirmBandId | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !firmId) return;
     let cancelled = false;
     setBand(undefined);
     void readFirmBillingOpen(

@@ -29,8 +29,7 @@ export function CheckoutAfterInsight({ priceLabel }: { priceLabel?: string | nul
   const [loadedPrice, setLoadedPrice] = useState<string | null>(priceLabel ?? null);
 
   useEffect(() => {
-    if (!user?.id) return;
-    if (profile && !firmId) return;
+    if (!user?.id || !firmId) return;
     let cancelled = false;
     void readCachedFirmEntitlement(
       user.id,

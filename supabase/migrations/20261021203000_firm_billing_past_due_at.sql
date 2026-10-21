@@ -1,7 +1,8 @@
 -- Grace start for a failed firm subscription invoice.
 -- Null until invoice.payment_failed. Cleared on invoice.paid or when the
 -- subscription is active again. No backfill. Signed-in users cannot set it.
--- Apply with CoS's OK before the column is read in production.
+-- CoS already applied this in production (deploy 21). The column and the
+-- protect function are live. IF NOT EXISTS makes a replay add nothing.
 
 ALTER TABLE public.firms
   ADD COLUMN IF NOT EXISTS billing_past_due_at timestamptz;

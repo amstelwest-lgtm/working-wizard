@@ -184,6 +184,19 @@ try {
   );
   assert(deletedOnly.plan === "none", "the stored plan is none after the only sub is deleted");
 
+  for (const status of ["canceled", "unpaid", "incomplete_expired"] as const) {
+    const updated = memory("entitled");
+    useStore(updated);
+    const updatedResult = await syncFirmSubscriptionDeleted(
+      firmSub("sub_status", status),
+      lister([firmSub("sub_status", status)]),
+    );
+    assert(
+      updatedResult.plan === "none" && updated.plan === "none",
+      `subscription.updated ${status} with no other sub sets none`,
+    );
+  }
+
   const kept = memory("entitled");
   useStore(kept);
   const keptResult = await syncFirmSubscriptionDeleted(
@@ -443,6 +456,12 @@ try {
   assert(
     syncSrc.includes('"customer.subscription.deleted"'),
     "firm webhooks accept subscription.deleted",
+  );
+  assert(
+    webhookSrc.includes('"canceled"') &&
+      webhookSrc.includes('"unpaid"') &&
+      webhookSrc.includes('"incomplete_expired"'),
+    "subscription.updated writes none for canceled, unpaid, and incomplete_expired",
   );
   assert(
     syncSrc.includes('"invoice.payment_failed"'),
