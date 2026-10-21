@@ -63,3 +63,16 @@ export function surfaceAfterEntitlementFailure(input: {
   if (input.known === "unpaid") return page === "wall" ? "wall" : "content";
   return page === "wall" ? "error" : "content";
 }
+
+/**
+ * The 8s timer runs once. On Home it leaves the page up, so it used to
+ * forget the deadline. A later client file must not sit on the skeleton
+ * until Stripe returns: the deadline has already passed.
+ */
+export function skeletonAfterBillingDeadline(input: {
+  deadlinePassed: boolean;
+  firmEntitled: boolean | null;
+  unknownPage: UnknownEntitlementAccess;
+}): boolean {
+  return input.deadlinePassed && input.firmEntitled !== true && input.unknownPage === "wall";
+}

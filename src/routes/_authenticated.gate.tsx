@@ -14,7 +14,11 @@ import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import { loadFirmClientGateContext, type FirmClientGateContext } from "@/lib/firm-client-gate";
 import { decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entitlement";
-import { pageWhileEntitlementUnknown, surfaceAfterEntitlementFailure } from "@/lib/firm-gate-access";
+import {
+  pageWhileEntitlementUnknown,
+  skeletonAfterBillingDeadline,
+  surfaceAfterEntitlementFailure,
+} from "@/lib/firm-gate-access";
 import {
   billingCheckNoticeVisible,
   billingCheckRetryDelayMs,
@@ -138,6 +142,8 @@ export function AuthGate() {
   const userId = user?.id ?? null;
   const [firmEntitled, setFirmEntitled] = useState<boolean | null>(null);
   const [billingUnknown, setBillingUnknown] = useState(false);
+  /** The 8s check already gave up. A later walled page must not wait on Stripe. */
+  const [billingDeadlinePassed, setBillingDeadlinePassed] = useState(false);
   const [checkNotice, setCheckNotice] = useState(false);
   const [showWall, setShowWall] = useState(false);
   const [clientGate, setClientGate] = useState<FirmClientGateContext | null>(null);
@@ -184,6 +190,7 @@ export function AuthGate() {
     pendingWallRef.current = false;
     clientGateRef.current = null;
     settledRef.current = null;
+    setBillingDeadlinePassed(false);
     setFirmEntitled(null);
     setBillingUnknown(false);
     setCheckNotice(false);
@@ -213,6 +220,7 @@ export function AuthGate() {
     let cancelled = false;
     settledRef.current = null;
     setClientGate(null);
+    setBillingDeadlinePassed(false);
 
     const knownKind = () => {
       const known = lastKnownFirmEntitlement(userId, latest.current.firmId);
@@ -228,6 +236,9 @@ export function AuthGate() {
       logBillingCheckFailure(kind, { known, path });
       if (reported) return;
       reported = true;
+      // Remember the deadline even when this pathname is Home. Opening a
+      // later client file must show Retry, not sit on the skeleton.
+      setBillingDeadlinePassed(true);
       const clients = clientGateRef.current;
       const surface = surfaceAfterEntitlementFailure({
         known,
@@ -374,6 +385,7 @@ export function AuthGate() {
         reported = true;
         settledRef.current = { entitled: result.entitled === true, reason, clients };
         setBillingUnknown(false);
+        setBillingDeadlinePassed(false);
         if (result.entitled === true) {
           setFirmEntitled(true);
           return;
@@ -416,13 +428,19 @@ export function AuthGate() {
         firstClientId: clientGate?.firstClientId ?? null,
       })
     : null;
-  if (failureSurface === "error") {
+  const deadlineHoldsRetry = skeletonAfterBillingDeadline({
+    deadlinePassed: billingDeadlinePassed,
+    firmEntitled,
+    unknownPage,
+  });
+  if (failureSurface === "error" || deadlineHoldsRetry) {
     return (
       <FirmBillingGateView
         surface="error"
         onRetry={() => {
           clearCachedFirmEntitlement();
           setBillingUnknown(false);
+          setBillingDeadlinePassed(false);
           setGateAttempt((n) => n + 1);
         }}
       />
