@@ -594,10 +594,67 @@ export type ReconciledHealthNarrative = {
 };
 
 /**
- * The upload clock can force this stale. It cannot vouch a stored sentence.
- * A hash compares engine version, overall, weakest, pillars, and period.
- * No hash falls back to metrics and figures, then a stored snapshot object.
- * A mismatch is the page's lead plus the regenerate action.
+ * What the sentence itself names. Null when it names no score.
+ * True when a named overall, pillar, or weakest score is not the live one.
+ * The engine prefix, the period string, and a missing hash are not scores.
+ */
+export function citedHealthDisagreement(
+  text: string,
+  live: HealthScoreSnapshot,
+): boolean | null {
+  let claims = 0;
+  let differ = false;
+  const claim = (ok: boolean) => {
+    claims += 1;
+    if (!ok) differ = true;
+  };
+  const weakestAt = new RegExp(
+    `\\b(${PILLAR_ALT})\\b,?\\s+(?:is\\s+)?the weakest pillar at\\s+(\\d{1,3})\\b`,
+    "gi",
+  );
+  const withWeak = new RegExp(`\\bwith\\s+(${PILLAR_ALT})\\s+weakest at\\s+(\\d{1,3})\\b`, "gi");
+  for (const pattern of [weakestAt, withWeak]) {
+    for (const match of text.matchAll(pattern)) {
+      const label = pillarLabelFromWord(match[1] ?? "");
+      const score = Number(match[2]);
+      claim(Boolean(label) && label!.toLowerCase() === live.weakestLabel.toLowerCase() && score === live.weakestScore);
+    }
+  }
+  const overallOf = /\boverall(?:\s+health)?\s+score\s+of\s+(\d{1,3})\b/gi;
+  for (const match of text.matchAll(overallOf)) claim(Number(match[1]) === live.overall);
+  const healthIs = /\bHealth is\s+(\d{1,3})\b/gi;
+  for (const match of text.matchAll(healthIs)) claim(Number(match[1]) === live.overall);
+  const band = /\bscores\s+(\d{1,3})\s*\((?:critical|watch|healthy)\)/gi;
+  for (const match of text.matchAll(band)) claim(Number(match[1]) === live.overall);
+  const pillarNum = new RegExp(`\\b(${PILLAR_ALT})\\s+(?:scores?\\s+|at\\s+)?(\\d{1,3})\\b`, "gi");
+  for (const match of text.matchAll(pillarNum)) {
+    const label = pillarLabelFromWord(match[1] ?? "");
+    const score = Number(match[2]);
+    if (!label) continue;
+    const liveScore = pillarScore(live, label);
+    claim(liveScore != null && liveScore === score);
+  }
+  const paren = new RegExp(`\\b(?:Weakest:\\s*)?(${PILLAR_ALT})\\s*\\((\\d{1,3})\\)`, "gi");
+  for (const match of text.matchAll(paren)) {
+    const label = pillarLabelFromWord(match[1] ?? "");
+    const score = Number(match[2]);
+    if (!label) continue;
+    const liveScore = pillarScore(live, label);
+    claim(liveScore != null && liveScore === score);
+  }
+  const pulls = new RegExp(`\\b(${PILLAR_ALT})\\s+pulls\\s+the\\s+(?:overall\\s+)?score\\s+down\\b`, "gi");
+  for (const match of text.matchAll(pulls)) {
+    const label = pillarLabelFromWord(match[1] ?? "");
+    claim(Boolean(label) && label!.toLowerCase() === live.weakestLabel.toLowerCase());
+  }
+  if (claims === 0) return freeFormStaleScore(text, live) ? true : null;
+  return differ;
+}
+
+/**
+ * Stale only when the sentence cites a score the live snapshot does not have.
+ * A missing hash, an engine prefix, or a period string cannot force it.
+ * A sentence that cites no score stays as stored.
  */
 export function reconcileStoredHealthNarrative(input: {
   text: string;
@@ -611,33 +668,12 @@ export function reconcileStoredHealthNarrative(input: {
   const text = input.text.replace(/\s+/g, " ").trim();
   if (!text) return { text: "", stale: false, regenerate: false };
   const live = input.live ?? null;
-  const force = input.forceStale === true;
   if (!live) return { text, stale: false, regenerate: false };
   if (isHistoricalScoreNote(text) && !healthClaimsDisagree(text, live)) {
     return { text, stale: false, regenerate: false };
   }
-  const hash = input.storedHash?.trim() || readStoredScoreSnapshotHash(input.evidence) || "";
-  const claimed = hash
-    ? null
-    : healthSnapshotFromLegacyEvidence(input.evidence, input.figures) ?? input.storedHealth ?? null;
-  const aligned =
-    claimed && !claimed.periodLabel && live.periodLabel ? { ...claimed, periodLabel: live.periodLabel } : claimed;
-  const textDisagrees = healthClaimsDisagree(text, live) || freeFormStaleScore(text, live);
-  let comparable = false;
-  let mismatch = false;
-  if (hash) {
-    comparable = true;
-    mismatch = hash !== healthSnapshotHash(live);
-  } else if (aligned) {
-    comparable = true;
-    mismatch = healthSnapshotsDiffer(aligned, live);
-  } else if (textDisagrees) {
-    comparable = true;
-    mismatch = true;
-  }
-  if (comparable && (mismatch || force)) {
-    return { text: staleHealthNarrative(live), stale: true, regenerate: true };
-  }
+  const cited = citedHealthDisagreement(text, live);
+  if (cited === true) return { text: staleHealthNarrative(live), stale: true, regenerate: true };
   return { text, stale: false, regenerate: false };
 }
 

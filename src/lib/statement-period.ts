@@ -377,6 +377,21 @@ PILL_MONTH.sept = 8;
  * A statement label is the fallback. Null when there are no books, so the
  * pill can use the calendar month.
  */
+/**
+ * Owner header pill before the board is ready.
+ * Unknown books stay pending so the pill cannot show today's month.
+ * Once the books are known, the label is the statement period end, or null
+ * when that client has no period on file.
+ */
+export function ownerBootPeriodPill(input: {
+  booksKnown: boolean;
+  periodEnd?: string | null;
+  periodLabel?: string | null;
+}): { pending: boolean; label: string | null } {
+  if (!input.booksKnown) return { pending: true, label: null };
+  return { pending: false, label: booksPeriodPillLabel(input.periodEnd, input.periodLabel) };
+}
+
 export function booksPeriodPillLabel(
   periodEnd?: string | null,
   periodLabel?: string | null,

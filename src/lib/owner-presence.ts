@@ -47,13 +47,25 @@ function stamp(value: string | null | undefined): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
+function belongsToClient(
+  rowClientId: string | null | undefined,
+  clientId: string,
+  allowBlank: boolean,
+): boolean {
+  const row = (rowClientId ?? "").trim();
+  if (!row) return allowBlank;
+  return row === clientId;
+}
+
 function latestFinding(
   findings: readonly AgentFindingRow[],
   agent: AgentKey,
+  clientId: string,
 ): AgentFindingRow | null {
   let best: AgentFindingRow | null = null;
   for (const row of findings) {
     if (row.agent !== agent) continue;
+    if (clientId && !belongsToClient(row.client_id, clientId, false)) continue;
     if (!best || stamp(row.created_at) > stamp(best.created_at)) best = row;
   }
   return best;
@@ -164,10 +176,21 @@ export function ownerPresence(
   talk: OwnerTalk = null,
   liveHealth: LiveHealthQuote | null = null,
   figuresUpdatedAt: string | null = null,
+  clientId: string | null = null,
 ): OwnerPresence {
-  const runs = cardRunsByAgent(activity.runs);
+  const viewing = clientId?.trim() ?? "";
+  const findings = viewing
+    ? activity.findings.filter((row) => belongsToClient(row.client_id, viewing, false))
+    : activity.findings;
+  const runs = viewing
+    ? activity.runs.filter((row) => belongsToClient(row.client_id, viewing, true))
+    : activity.runs;
+  const messages = viewing
+    ? activity.messages.filter((row) => belongsToClient(row.client_id, viewing, false))
+    : activity.messages;
+  const cardRuns = cardRunsByAgent(runs);
   const newestMessage =
-    [...activity.messages]
+    [...messages]
       .filter((row) => handoffLine(row, agentShortName))
       .sort((a, b) => stamp(b.created_at) - stamp(a.created_at))[0] ?? null;
   const handoffText = newestMessage ? handoffLine(newestMessage, agentShortName, liveHealth) : null;
@@ -177,8 +200,8 @@ export function ownerPresence(
       : null;
 
   const agents = AGENT_KEYS.map((agent) => {
-    const finding = latestFinding(activity.findings, agent);
-    let motion = motionFor(runs[agent], finding);
+    const finding = latestFinding(findings, agent, viewing);
+    let motion = motionFor(cardRuns[agent], finding);
     let sentence = motion === "working" ? "Working…" : sentenceFor(finding, activity.market, liveHealth, figuresUpdatedAt);
     let lookAt: AgentKey | null = null;
     if (talk?.agent === agent) {
@@ -194,7 +217,7 @@ export function ownerPresence(
     }
     const fmClip = fmAvatarClip({
       talk: talk?.agent === agent ? talk.mode : null,
-      run: runs[agent] ?? null,
+      run: cardRuns[agent] ?? null,
       finding,
       handoff:
         handoff && newestMessage && (agent === handoff.from || agent === handoff.to)

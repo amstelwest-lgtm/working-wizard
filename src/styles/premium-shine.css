@@ -601,6 +601,14 @@ html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold:
   display: block;
   opacity: 0.8;
 }
+.accountant-portal .topbar .period-pill[data-period-pending="true"] .period-pill-pending {
+  display: inline-block;
+  width: 4.5rem;
+  height: 0.7em;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.35;
+}
 @media (max-width: 860px) {
   .accountant-portal .topbar .period-pill {
     display: none;

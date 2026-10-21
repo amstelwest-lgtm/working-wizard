@@ -46,6 +46,8 @@ export function OwnerShell({
   onProfile,
   /** Books period end, already "Sep 2026". Omitted when the client has no books. */
   periodLabel,
+  /** True while the books' period end is still unknown. The pill stays blank. */
+  periodPending = false,
   children,
 }: {
   screen: OwnerScreen;
@@ -59,6 +61,7 @@ export function OwnerShell({
   onSettings: () => void;
   onProfile: () => void;
   periodLabel?: string | null;
+  periodPending?: boolean;
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -133,7 +136,7 @@ export function OwnerShell({
             </span>
             <b>{businessName}</b>
           </span>
-          <PeriodPill periodLabel={periodLabel} />
+          <PeriodPill periodLabel={periodLabel} pending={periodPending} />
         </div>
         <span className="spacer" />
         <div className="owner-tools">

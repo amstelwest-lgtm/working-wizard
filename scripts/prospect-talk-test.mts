@@ -51,6 +51,7 @@ import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { TRIAL_LEADS_PER_EMAIL } from "../src/lib/trial-demo";
 import { TEAM_ALERT_TO, type Mail } from "../src/lib/trial-lead-alert";
 import { trialSignupHref } from "../src/lib/trial-public";
+import { isBarePublicPath } from "../src/lib/public-marketing";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -79,8 +80,25 @@ assert(!indexSrc.includes("?country="), "the index does not add a country query 
 assert(!routeSrc.includes("TALK_EARLY_BOOT"), "the agent document has no send-capture boot script");
 assert(!routeSrc.includes("prospect-talk-early"), "the agent route does not load the send-capture script");
 assert(routeSrc.includes("TALK_DRAFT_BOOT"), "the agent document remembers a pre-hydration draft");
+assert(
+  routeSrc.includes("shouldReload: false"),
+  "a fresh loader cannot unmount the live conversation",
+);
+assert(
+  indexSrc.includes("shouldReload: false"),
+  "a fresh loader cannot replace the talk index mid-visit",
+);
+assert(
+  isBarePublicPath("/talk") && isBarePublicPath("/talk/financial-manager"),
+  "talk skips the signed-in shell so a late chrome load cannot remount the conversation",
+);
+assert(!isBarePublicPath("/talking"), "only the talk routes skip the shell");
 const draftSrc = readFileSync(new URL("../src/lib/prospect-talk-draft.ts", import.meta.url), "utf8");
 assert(draftSrc.includes("sessionStorage.setItem"), "the draft listener stores the textarea");
+assert(
+  !draftSrc.includes("data-talk-live"),
+  "the draft listener keeps text typed after hydration",
+);
 assert(!draftSrc.includes("preventDefault"), "the draft listener does not capture Send");
 assert(!draftSrc.includes("talk-early-host"), "the draft listener does not paint a bubble");
 
@@ -1321,6 +1339,39 @@ for (const agent of publicSlugs) {
     root.unmount();
   });
   host.remove();
+
+  if (agent === "financial-manager") {
+    const againHost = document.createElement("div");
+    document.body.appendChild(againHost);
+    const again = createRoot(againHost);
+    let extra = 0;
+    await act(async () => {
+      again.render(
+        createElement(ProspectTalkLive, {
+          slug: agent,
+          copyPack: "us",
+          readStoredToken: async () => "stored-token",
+          sendTurn: async () => {
+            extra += 1;
+            return { ok: true, reply: "again", sessionToken: "stored-token", askLead: false };
+          },
+        }),
+      );
+    });
+    assert(
+      document.body.textContent?.includes(METHOD_QUESTION),
+      "a remount keeps the question on screen",
+    );
+    assert(
+      document.body.textContent?.includes(PROSPECT_RUNWAY_METHOD),
+      "a remount keeps the reply on screen",
+    );
+    assert(extra === 0, "a remount does not send the thread again");
+    await act(async () => {
+      again.unmount();
+    });
+    againHost.remove();
+  }
 }
 
 console.log("prospect-talk: ok");

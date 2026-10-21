@@ -26,6 +26,74 @@ import { initialTalkSession, openTalkSession, queueTalkMessage } from "@/lib/pro
 
 export type TalkMessage = { role: "agent" | "you"; text: string };
 
+type TalkSnapshot = {
+  messages: TalkMessage[];
+  askLead: boolean;
+  leadReady: boolean;
+  /** Messages shown but not posted yet, because the session token was still loading. */
+  queued: string[];
+};
+
+const talkSnapshots = new Map<string, TalkSnapshot>();
+const talkListeners = new Map<string, Set<(snapshot: TalkSnapshot) => void>>();
+
+function emptySnapshot(): TalkSnapshot {
+  return { messages: [], askLead: false, leadReady: false, queued: [] };
+}
+
+function threadStorageKey(slug: string): string {
+  return `milon-talk-thread:${slug}`;
+}
+
+function readSnapshot(slug: string): TalkSnapshot {
+  return talkSnapshots.get(slug) ?? emptySnapshot();
+}
+
+function isTalkMessage(value: unknown): value is TalkMessage {
+  if (!value || typeof value !== "object") return false;
+  const message = value as TalkMessage;
+  return (message.role === "you" || message.role === "agent") && typeof message.text === "string";
+}
+
+/** Same-tab copy of the thread. The module map is what a remount reads synchronously. */
+function rememberStoredThread(slug: string): TalkSnapshot | null {
+  const cached = talkSnapshots.get(slug);
+  if (cached) return cached;
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(threadStorageKey(slug));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TalkSnapshot>;
+    if (!parsed || !Array.isArray(parsed.messages)) return null;
+    const snapshot: TalkSnapshot = {
+      messages: parsed.messages.filter(isTalkMessage),
+      askLead: parsed.askLead === true,
+      leadReady: parsed.leadReady === true,
+      queued: Array.isArray(parsed.queued)
+        ? parsed.queued.filter((text): text is string => typeof text === "string" && text.trim().length > 0)
+        : [],
+    };
+    talkSnapshots.set(slug, snapshot);
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+function publishSnapshot(slug: string, recipe: (current: TalkSnapshot) => TalkSnapshot) {
+  const next = recipe(readSnapshot(slug));
+  talkSnapshots.set(slug, next);
+  try {
+    const empty =
+      next.messages.length === 0 && next.queued.length === 0 && !next.askLead && !next.leadReady;
+    if (empty) window.sessionStorage.removeItem(threadStorageKey(slug));
+    else window.sessionStorage.setItem(threadStorageKey(slug), JSON.stringify(next));
+  } catch {
+    /* private mode */
+  }
+  for (const listener of talkListeners.get(slug) ?? []) listener(next);
+}
+
 function packOf(copyPack: TalkCopyPack): "za" | "us" {
   return copyPack === "za" ? "za" : "us";
 }
@@ -422,9 +490,8 @@ export function ProspectTalkLive({
   sendTurn?: (body: Record<string, unknown>) => Promise<ProspectTalkResponse>;
 }) {
   const [refCode, setRefCode] = useState<string | null>(null);
-  const [messages, setMessages] = useState<TalkMessage[]>([]);
-  const [askLead, setAskLead] = useState(false);
-  const [leadReady, setLeadReady] = useState(false);
+  const [snapshot, setSnapshot] = useState<TalkSnapshot>(() => readSnapshot(slug));
+  const { messages, askLead, leadReady } = snapshot;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState("");
@@ -432,6 +499,27 @@ export function ProspectTalkLive({
   const gateRef = useRef(initialTalkSession());
   const slugSeen = useRef<string | null>(null);
   const postRef = useRef<(text: string, sessionToken: string) => void>(() => {});
+
+  function updateSnapshot(recipe: (current: TalkSnapshot) => TalkSnapshot) {
+    publishSnapshot(slug, recipe);
+  }
+
+  useLayoutEffect(() => {
+    const stored = rememberStoredThread(slug);
+    if (stored) setSnapshot(stored);
+  }, [slug]);
+
+  useEffect(() => {
+    const listener = (next: TalkSnapshot) => setSnapshot(next);
+    const listeners = talkListeners.get(slug) ?? new Set<(snapshot: TalkSnapshot) => void>();
+    talkListeners.set(slug, listeners);
+    listeners.add(listener);
+    const stored = rememberStoredThread(slug);
+    if (stored) setSnapshot(stored);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, [slug]);
 
   function remember(next: string) {
     setToken(next);
@@ -446,15 +534,15 @@ export function ProspectTalkLive({
       return;
     }
     if (result.sessionToken) remember(result.sessionToken);
-    if (result.reply) {
-      const reply = result.reply;
-      setMessages((current) =>
-        current.some((message) => message.role === "agent" && message.text === reply)
-          ? current
-          : [...current, { role: "agent", text: reply }],
-      );
-    }
-    setAskLead(result.askLead === true);
+    const reply = result.reply;
+    updateSnapshot((current) => {
+      const messages = reply
+        ? current.messages.some((message) => message.role === "agent" && message.text === reply)
+          ? current.messages
+          : [...current.messages, { role: "agent", text: reply }]
+        : current.messages;
+      return { ...current, messages, askLead: result.askLead === true };
+    });
   }
 
   postRef.current = (text, sessionToken) => {
@@ -479,19 +567,23 @@ export function ProspectTalkLive({
     slugSeen.current = slug;
     if (switched) {
       gateRef.current = initialTalkSession();
-      setMessages([]);
-      setAskLead(false);
-      setLeadReady(false);
       setError(null);
       setSessionReady(false);
     }
     setRefCode(pageRef());
     const apply = (stored: string) => {
       if (cancelled) return;
+      if (!gateRef.current.ready && gateRef.current.queued.length === 0) {
+        const queued = readSnapshot(slug).queued;
+        if (queued.length > 0) gateRef.current = { ...gateRef.current, queued: [...queued] };
+      }
       const opened = openTalkSession(gateRef.current, stored);
       gateRef.current = opened.gate;
       setToken(stored);
       setSessionReady(true);
+      if (readSnapshot(slug).queued.length > 0) {
+        updateSnapshot((current) => ({ ...current, queued: [] }));
+      }
       for (const text of opened.deliver) postRef.current(text, stored);
     };
     if (readStoredToken) {
@@ -525,10 +617,15 @@ export function ProspectTalkLive({
         const trimmed = text.trim();
         if (!trimmed || busy) return;
         setError(null);
-        setMessages((current) => [...current, { role: "you", text: trimmed }]);
+        updateSnapshot((current) => ({
+          ...current,
+          messages: [...current.messages, { role: "you", text: trimmed }],
+        }));
         const gate = gateRef.current;
         if (!gate.ready) {
           gateRef.current = queueTalkMessage(gate, trimmed);
+          const queued = gateRef.current.queued;
+          updateSnapshot((current) => ({ ...current, queued }));
           return;
         }
         postRef.current(trimmed, gate.token);
@@ -554,11 +651,15 @@ export function ProspectTalkLive({
               setError(result.error ?? "The sample isn't available right now.");
               return;
             }
-            setAskLead(false);
-            setLeadReady(true);
-            if (result.reply) {
-              setMessages((current) => [...current, { role: "agent", text: result.reply ?? "" }]);
-            }
+            const reply = result.reply;
+            updateSnapshot((current) => ({
+              ...current,
+              askLead: false,
+              leadReady: true,
+              messages: reply
+                ? [...current.messages, { role: "agent", text: reply }]
+                : current.messages,
+            }));
           })
           .catch(() => setError("The sample isn't available right now."))
           .finally(() => setBusy(false));
