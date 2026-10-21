@@ -180,6 +180,7 @@ export function ProspectTalkScreen({
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const thread: TalkMessage[] = [{ role: "agent", text: agent.greeting }, ...messages];
   const clip = busy ? "thinking" : askLead ? "waiting" : "idle";
+  const visitorHasSpoken = messages.some((message) => message.role === "you");
 
   function sendDraft(text = areaRef.current?.value ?? "") {
     if (!live || busy) return;
@@ -331,22 +332,24 @@ export function ProspectTalkScreen({
             sendDraft();
           }}
         >
-          <div className="talk-chips">
-            {agent.questions.map((question) => (
-              <button
-                key={question}
-                type="button"
-                className="talk-chip"
-                disabled={!live || busy}
-                onClick={() => {
-                  if (!live || busy) return;
-                  onSend?.(question);
-                }}
-              >
-                {question}
-              </button>
-            ))}
-          </div>
+          {visitorHasSpoken ? null : (
+            <div className="talk-chips">
+              {agent.questions.map((question) => (
+                <button
+                  key={question}
+                  type="button"
+                  className="talk-chip"
+                  disabled={!live || busy}
+                  onClick={() => {
+                    if (!live || busy) return;
+                    onSend?.(question);
+                  }}
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             ref={areaRef}
             aria-label="Message"

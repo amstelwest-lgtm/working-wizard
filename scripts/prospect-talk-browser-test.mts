@@ -351,10 +351,20 @@ async function main() {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
   });
+  await zaPage.locator(".talk-chip").first().waitFor({ timeout: 20_000 });
   const zaChat = await askPrice(zaPage, "R299/mo");
   assert(zaChat.includes("R299/mo"), "ZA chat prices the starter plan in rand");
   assert(!zaChat.includes("$"), "ZA chat price has no dollar sign");
   assert(!/\bvat\b/i.test(zaChat), "ZA chat price does not say VAT");
+  assert(
+    (await zaPage.locator(".talk-chip").count()) === 0,
+    "starter chips hide after the visitor sends",
+  );
+  const zaOffered = await zaPage.locator(".talk-questions").innerText();
+  assert(
+    zaOffered.includes("What does the business do?"),
+    "the greeting still lists the starter questions once",
+  );
   await shot(zaPage, "talk-za-price-chat");
   await zaPage.goto(`${BASE}/talk/tax-specialist`, { waitUntil: "domcontentloaded" });
   await zaPage.locator("textarea").waitFor({ timeout: 15_000 });
@@ -383,6 +393,10 @@ async function main() {
   });
   const usChat = await askPrice(usPage, "$39/mo");
   assert(usChat.includes("$39/mo"), "US chat prices the starter plan in dollars");
+  assert(
+    (await usPage.locator(".talk-chip").count()) === 0,
+    "starter chips hide after the visitor sends",
+  );
   assert(!/\brand\b/i.test(usChat), "US chat price does not say rand");
   assert(!/R\s*\d/.test(usChat), "US chat price has no rand amount");
   assert(!usChat.includes("ZAR"), "US chat price does not say ZAR");
