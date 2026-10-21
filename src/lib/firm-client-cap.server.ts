@@ -33,7 +33,6 @@ import {
   pickEntitlingFirmSubscription,
   practiceDisplaysZarPlan,
   readSubscriptionPrice,
-  zarDisplayCheckoutNote,
   type FirmUpgradeSnapshot,
 } from "@/lib/firm-band-upgrade";
 import { isOwnerCatalogPrice } from "@/lib/owner-price";
@@ -835,7 +834,6 @@ export async function loadFirmPlanDisplay(input: {
     saDiscount: upgrade.saDiscount,
     zaLabels: upgrade.zaLabels ?? null,
     zaPriceLabel: upgrade.zaPriceLabel ?? null,
-    checkoutNote: upgrade.checkoutNote ?? null,
   };
 }
 
@@ -966,9 +964,5 @@ export async function buildUpgradeSnapshot(input: {
     saDiscount: showZar,
     zaLabels,
     zaPriceLabel,
-    checkoutNote: zarDisplayCheckoutNote({
-      firmMarket: input.market,
-      clientMarkets: input.clientMarkets,
-    }),
   };
 }

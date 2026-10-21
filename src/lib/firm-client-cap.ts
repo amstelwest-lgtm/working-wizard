@@ -55,7 +55,6 @@ export type FirmUpgradeAllowance = {
   saDiscount: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   zaPriceLabel?: string | null;
-  checkoutNote?: string | null;
 };
 
 export type FirmClientCreateAllowance = FirmClientCreateDecision & {
@@ -260,7 +259,6 @@ export type FirmPlanDisplay = FirmPlanStatusCopy & {
   saDiscount: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   zaPriceLabel?: string | null;
-  checkoutNote?: string | null;
 };
 
 /** Whole days until `trialEndIso`. 0 when the trial end is now or in the past. */

@@ -9,10 +9,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
-import {
-  ZAR_DISPLAY_USD_CHECKOUT_NOTE,
-  practiceDisplaysZarPlan,
-} from "../src/lib/firm-band-upgrade";
+import { practiceDisplaysZarPlan } from "../src/lib/firm-band-upgrade";
 import { buildUpgradeSnapshot } from "../src/lib/firm-client-cap.server";
 import { LIST_PRICES, visitorCopyPack } from "../src/lib/market/marketing";
 import { priceMarketForFirm } from "../src/lib/pricing/za-checkout";
@@ -38,7 +35,6 @@ function panel(snapshot: Awaited<ReturnType<typeof buildUpgradeSnapshot>>): stri
       clientCount: snapshot.clientCount,
       saDiscount: snapshot.saDiscount,
       zaLabels: snapshot.zaLabels,
-      checkoutNote: snapshot.checkoutNote,
       onUpgrade: () => undefined,
     }),
   );
@@ -71,10 +67,7 @@ assert(
 );
 assert(practiceHtml.includes("Starter"), "the cap panel names Starter");
 assert(/R\s?299/.test(practiceHtml), `the cap panel should show R299, saw ${practiceHtml}`);
-assert(
-  practiceHtml.includes(ZAR_DISPLAY_USD_CHECKOUT_NOTE),
-  "the panel tells a US firm row that Checkout charges US dollars",
-);
+assert(!/Shown in rand/.test(practiceHtml), "the panel does not add a checkout sentence");
 assert(practiceSnap.zaPriceLabel == null, "the checkout charge line stays empty when the firm row is US");
 
 const charge = firmCheckoutCharge({
@@ -84,7 +77,10 @@ const charge = firmCheckoutCharge({
   band: "starter",
   interval: "month",
 });
-assert(charge.priceMarket === "us", "Checkout keeps a US firm row on USD even when the billing country is ZA");
+assert(
+  charge.priceMarket === "us",
+  "My practice Checkout stays USD: the firm row is US, and priceMarketForFirm ignores the client mix",
+);
 assert(
   priceMarketForFirm({ firmMarket: "za", billingCountry: "ZA" }) === "za",
   "a ZA firm with a ZA billing country still gets a rand Checkout price",
@@ -109,7 +105,6 @@ const usSnap = await buildUpgradeSnapshot({
 });
 const usHtml = panel(usSnap);
 assert(usSnap.saDiscount === false, "a US firm with US clients stays on USD");
-assert(usSnap.checkoutNote == null, "a US-only firm has no rand checkout note");
 assert(!hasRandPrice(usHtml), `a US-only cap panel must not show rand, saw ${usHtml}`);
 assert(usHtml.includes("$39"), "a US-only cap panel shows the USD Starter price");
 
@@ -133,7 +128,6 @@ const loggedOutHtml = panel(loggedOutSnap);
 const loggedOutPrices = [
   loggedOutSnap.priceCurrency,
   loggedOutSnap.zaPriceLabel ?? "",
-  loggedOutSnap.checkoutNote ?? "",
   JSON.stringify(loggedOutSnap.zaLabels ?? null),
 ].join(" ");
 assert(!hasRandPrice(loggedOutPrices), `a logged-out snapshot must not price in rand, saw ${loggedOutPrices}`);

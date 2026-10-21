@@ -86,12 +86,10 @@ export type FirmUpgradeSnapshot = {
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /**
    * Rand line for a ZA firm row, where Checkout can charge rand.
-   * Null when the list is in rand only because of the client mix:
-   * Checkout still charges USD for a US firm row.
+   * Null when the list is in rand only because of the client mix.
+   * Checkout still prices from the firm row (`priceMarketForFirm`).
    */
   zaPriceLabel?: string | null;
-  /** Set when the list is in rand and Checkout would charge USD. */
-  checkoutNote?: string | null;
 };
 
 export function emptyFirmUpgradeSnapshot(): FirmUpgradeSnapshot {
@@ -524,10 +522,10 @@ export function saFirmDisplayPrice(
  * cap snapshot both use this. True when the firm row is South Africa, or
  * when more clients are in South Africa than in the United States.
  *
- * Checkout does not use this. A rand charge still requires a ZA firm row
- * and a ZA billing country (`priceMarketForFirm`). A US firm row is charged
- * USD even when this is true. The cap panel says so instead of promising
- * that Checkout will take rand.
+ * Checkout does not use this. `firmCheckoutCharge` and `priceMarketForFirm`
+ * still start from the firm row. A US firm row stays on the USD price,
+ * including when the Checkout billing country is ZA. A ZA firm row uses
+ * the ZAR price only when that billing country is ZA or still unknown.
  */
 export function practiceDisplaysZarPlan(input: {
   firmMarket: unknown;
@@ -542,19 +540,6 @@ export function practiceDisplaysZarPlan(input: {
     else if (country === "US") us += 1;
   }
   return za > 0 && za > us;
-}
-
-/** Shown when the list is in rand and Checkout would still charge USD. */
-export const ZAR_DISPLAY_USD_CHECKOUT_NOTE =
-  "Shown in rand for this practice. Checkout charges US dollars while the firm is saved outside South Africa.";
-
-export function zarDisplayCheckoutNote(input: {
-  firmMarket: unknown;
-  clientMarkets?: readonly unknown[] | null;
-}): string | null {
-  if (!practiceDisplaysZarPlan(input)) return null;
-  if (isSaMarketFirm({ market: input.firmMarket })) return null;
-  return ZAR_DISPLAY_USD_CHECKOUT_NOTE;
 }
 
 /** An SA plan hides the US state list and any VAT sentence. */
