@@ -30,87 +30,32 @@ function storedPlan(value: unknown): StoredFirmPlan | null {
   return null;
 }
 
-type FirmPlanRead = (firmId: string | null) => Promise<StoredFirmPlan | null>;
-
-/** Tests replace the column read. Production leaves this unset. */
-let planReadOverride: FirmPlanRead | null = null;
-
-export function setFirmBillingPlanReadForTests(read: FirmPlanRead | null): void {
-  planReadOverride = read;
-}
-
-async function loadFirmBillingPlanKnown(
+export async function readFirmBillingPlanKnown(
   firmId: string | null | undefined,
 ): Promise<StoredFirmPlan | null> {
   const id = firmId?.trim() ?? "";
   if (!FIRM_UUID.test(id) || planColumnMissing) return null;
-  const admin = getSupabaseAdminOrNull();
-  if (!admin) return null;
-  const { data, error } = await admin
-    .from("firms")
-    .select("billing_plan_known")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) {
-    if (noteMissingPlanColumn(error.message ?? "")) return null;
-    throw new Error(error.message);
-  }
-  return storedPlan(data?.billing_plan_known);
-}
-
-export async function readFirmBillingPlanKnown(
-  firmId: string | null | undefined,
-): Promise<StoredFirmPlan | null> {
   try {
-    return await loadFirmBillingPlanKnown(firmId);
+    const admin = getSupabaseAdminOrNull();
+    if (!admin) return null;
+    const { data, error } = await admin
+      .from("firms")
+      .select("billing_plan_known")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      if (!noteMissingPlanColumn(error.message ?? "")) {
+        console.warn("[stripe] firm plan read failed", error.message);
+      }
+      return null;
+    }
+    return storedPlan(data?.billing_plan_known);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (!noteMissingPlanColumn(message)) {
       console.warn("[stripe] firm plan read failed", message);
     }
     return null;
-  }
-}
-
-/**
- * The stored-plan read on its own short clock. A timeout or a query error
- * rejects. A missing column or a null value resolves null.
- */
-export async function readFirmBillingPlanKnownWithin(
-  firmId: string | null | undefined,
-  budgetMs: number,
-  signal?: AbortSignal,
-): Promise<StoredFirmPlan | null> {
-  if (signal?.aborted) {
-    throw Object.assign(new Error("firm plan read aborted"), { name: "AbortError" });
-  }
-  const budget = Math.max(1, Math.floor(budgetMs));
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await new Promise((resolve, reject) => {
-      const abort = () => {
-        reject(Object.assign(new Error("firm plan read aborted"), { name: "AbortError" }));
-      };
-      signal?.addEventListener("abort", abort, { once: true });
-      timer = setTimeout(() => {
-        reject(Object.assign(new Error("firm plan read timeout"), { name: "TimeoutError" }));
-      }, budget);
-      const read = planReadOverride
-        ? planReadOverride(firmId ?? null)
-        : loadFirmBillingPlanKnown(firmId);
-      read.then(
-        (plan) => {
-          signal?.removeEventListener("abort", abort);
-          resolve(plan);
-        },
-        (err: unknown) => {
-          signal?.removeEventListener("abort", abort);
-          reject(err);
-        },
-      );
-    });
-  } finally {
-    if (timer) clearTimeout(timer);
   }
 }
 
