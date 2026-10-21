@@ -221,16 +221,16 @@ export function budgetPeriodTotalCell(
   label: string,
   higherIsBetter: boolean,
 ): BudgetTableCell {
-  let budget = 0;
+  let budget: number | null = null;
   let actual = 0;
   let budgetCompared = 0;
   let hasActual = false;
   for (const item of cells) {
-    budget += item.budget;
+    if (item.budget != null) budget = (budget ?? 0) + item.budget;
     if (item.actual != null) {
       hasActual = true;
       actual += item.actual;
-      budgetCompared += item.budget;
+      budgetCompared += item.budget ?? 0;
     }
   }
   if (!hasActual) return { budget, actual: null, variance: null };
@@ -244,7 +244,8 @@ export function budgetPeriodTotalCell(
 export type BudgetTableKind = "line" | "subtotal" | "total";
 
 export type BudgetTableCell = {
-  budget: number;
+  /** Null when that month was never budgeted. A typed zero stays zero. */
+  budget: number | null;
   actual: number | null;
   variance: VarianceLine | null;
 };
@@ -257,14 +258,21 @@ export type BudgetTableRow = {
   cells: BudgetTableCell[];
 };
 
+/** A seeded stream with no volume and no price is not a budget of zero. */
+function enteredRevenue(cell: { volume: number; price: number } | undefined): number | null {
+  if (!cell) return null;
+  if (cell.volume === 0 && cell.price === 0) return null;
+  return cell.volume * cell.price;
+}
+
 function cell(
-  budget: number,
+  budget: number | null,
   actual: number | null,
   key: VarianceLine["key"],
   label: string,
   higherIsBetter: boolean,
 ): BudgetTableCell {
-  if (actual == null) return { budget, actual: null, variance: null };
+  if (budget == null || actual == null) return { budget, actual, variance: null };
   return {
     budget,
     actual,
@@ -293,10 +301,9 @@ export function budgetTableRows(
       label,
       kind: "line" as const,
       higherIsBetter: true,
-      cells: ordered.map((row) => {
-        const raw = line.months[row.month] ?? { volume: 0, price: 0 };
-        return cell(raw.volume * raw.price, null, "revenue", line.name, true);
-      }),
+      cells: ordered.map((row) =>
+        cell(enteredRevenue(line.months[row.month]), null, "revenue", line.name, true),
+      ),
     }];
   });
 

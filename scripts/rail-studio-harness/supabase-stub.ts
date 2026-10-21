@@ -329,18 +329,27 @@ function harnessBudget(priced: boolean) {
     fyStart: "2026-03",
   });
   if (!priced) return doc;
+  const pricedMonths = Object.fromEntries(
+    Object.keys(doc.revenueLines[0]?.months ?? {}).map((month) => [month, { volume: 100, price: 700 }]),
+  );
+  const blankMonths = Object.fromEntries(
+    Object.keys(pricedMonths).map((month) => [month, { volume: 0, price: 0 }]),
+  );
+  const primary = doc.revenueLines[0]
+    ? { ...doc.revenueLines[0], months: pricedMonths }
+    : null;
+  const secondary = {
+    id: "rev_secondary",
+    driverKey: "secondary_stream",
+    name: "Secondary stream",
+    kind: primary?.kind ?? "units_price",
+    volumeLabel: "Volume",
+    priceLabel: "Price / fee",
+    months: blankMonths,
+  };
   return {
     ...doc,
-    revenueLines: doc.revenueLines.map((line, index) =>
-      index === 0
-        ? {
-            ...line,
-            months: Object.fromEntries(
-              Object.keys(line.months).map((month) => [month, { volume: 100, price: 700 }]),
-            ),
-          }
-        : line,
-    ),
+    revenueLines: primary ? [primary, secondary, ...doc.revenueLines.slice(1)] : [secondary],
   };
 }
 
