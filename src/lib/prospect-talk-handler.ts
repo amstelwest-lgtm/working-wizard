@@ -4,6 +4,7 @@
  */
 import { marketingPackForGeo } from "./geo-country.ts";
 import { TAX_TALK, taxFilingAsked } from "./prospect-tax-copy.ts";
+import { messageNamesMethod, plainMethodReply } from "./prospect-talk-methods.ts";
 import { prospectPricingReply, prospectSystem } from "./prospect-talk-prompts.ts";
 import {
   PROSPECT_NO_BOOKS_REPLY,
@@ -19,7 +20,6 @@ import {
   PROSPECT_NO_VAT_REPLY,
   methodAsked,
   newProspectToken,
-  plainMethodReply,
   pricingAsked,
   PROSPECT_INJECTION_REPLY,
   prospectEmailAllowed,
@@ -169,9 +169,9 @@ function replyFor(input: {
 }): string {
   const blocked = blockedReply(input.agent, input.message);
   if (blocked) return blocked;
-  if (pricingAsked(input.message)) return prospectPricingReply(input.country);
-  if (input.figures === "hold" && methodAsked(input.message))
+  if (messageNamesMethod(input.message) || methodAsked(input.message))
     return plainMethodReply(input.message);
+  if (pricingAsked(input.message)) return prospectPricingReply(input.country);
   const drafted = input.modelText ?? scriptedProspectReply(input.agent, false);
   return guardProspectReply(drafted, input.country, false, input.figures);
 }
@@ -286,7 +286,7 @@ async function takeTurn(
   } else {
     const figures = hasLead ? "allow" : "hold";
     let modelText: string | null = null;
-    const skipModel = pricing || (figures === "hold" && methodAsked(message));
+    const skipModel = messageNamesMethod(message) || methodAsked(message) || pricing;
     if (!skipModel) {
       try {
         modelText = await ctx.model({
@@ -330,6 +330,8 @@ async function answerPending(
 ): Promise<string> {
   const blocked = blockedReply(agent, pending);
   if (blocked) return forVisitor(blocked, country);
+  if (messageNamesMethod(pending) || methodAsked(pending))
+    return forVisitor(plainMethodReply(pending), country);
   if (pricingAsked(pending)) return forVisitor(prospectPricingReply(country), country);
   let modelText: string | null = null;
   try {

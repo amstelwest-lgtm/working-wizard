@@ -214,20 +214,6 @@ export function methodAsked(message: string): boolean {
   return METHOD_ASK.some((pattern) => pattern.test(message));
 }
 
-/** Weeks of cash at the current pace of spending. No amounts and no week count. */
-export const PROSPECT_RUNWAY_METHOD =
-  "Cash runway is how long the cash on hand would last at the pace the business spends it. Compare the cash held with the cash used up, and read the result as weeks.";
-
-/** Sales minus direct cost, divided by sales. No sample figures. */
-export const PROSPECT_GROSS_MARGIN_METHOD =
-  "Gross margin is the share of sales left after the direct cost of those sales. Subtract that cost from sales, then divide by sales. The result is the portion of each sale that is not spent on the direct cost.";
-
-export function plainMethodReply(message: string): string {
-  if (/\brunway\b/i.test(message)) return PROSPECT_RUNWAY_METHOD;
-  if (/\bgross margin\b/i.test(message)) return PROSPECT_GROSS_MARGIN_METHOD;
-  return "I can explain the method without quoting the sample. Say which line you mean, and I will walk the steps in plain words.";
-}
-
 const INJECTION = [
   /ignore (all |any |the )?(previous|prior|above) (instructions|rules|prompts)/i,
   /system prompt/i,
@@ -298,13 +284,24 @@ export function hasPrematureFigure(text: string): boolean {
 export const PROSPECT_NO_FIGURES_REPLY =
   "I'll open the labelled SAMPLE after your name and email. I won't quote figures before that.";
 
+/** Drop markdown emphasis so a reply shows the words, not the marks. */
+export function stripMarkdownEmphasis(text: string): string {
+  return text
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "")
+    .replace(/\*\*([\s\S]*?)\*\*/g, "$1")
+    .replace(/__([\s\S]*?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/(^|[\s([{])\*([^*\n]+)\*(?=$|[\s)\].,;:!?])/g, "$1$2")
+    .replace(/(^|[\s([{])_([^_\n]+)_(?=$|[\s)\].,;:!?])/g, "$1$2");
+}
+
 export function guardProspectReply(
   text: string,
   country: "US" | "ZA",
   askLead: boolean,
   figures: "hold" | "allow" = "hold",
 ): string {
-  const trimmed = text.replace(/[ \t]+/g, " ").trim().slice(0, 800);
+  const trimmed = stripMarkdownEmphasis(text).replace(/[ \t]+/g, " ").trim().slice(0, 800);
   if (!trimmed) return askLead ? PROSPECT_LEAD_ASK : PROSPECT_NO_FIGURES_REPLY;
   if (mentionsVat(trimmed)) return PROSPECT_NO_VAT_REPLY;
   if (mentionsBlockedMoney(trimmed, country)) {
