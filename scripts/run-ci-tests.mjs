@@ -2,7 +2,7 @@
 // database, sequentially, and fails if any fail. Used by CI and handy locally:
 //   pnpm test:ci
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 
 // These talk to Supabase and need SUPABASE_URL + keys; run them by hand.
 const NEEDS_DB = new Set([
@@ -17,10 +17,54 @@ const scripts = Object.keys(pkg.scripts)
   .filter((s) => s.startsWith("test:") && !NEEDS_DB.has(s))
   .sort();
 
+// A blocked child (for example a synchronous browser download) never reaches
+// its own timer. Kill the process group from here so one script cannot hold
+// the job open. The slowest current script is the landing scan, under 3 min.
+const TEST_TIMEOUT_MS = 8 * 60 * 1000;
+
+function runScript(name) {
+  return new Promise((resolve) => {
+    const child = spawn("pnpm", ["run", "-s", name], {
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const keep = (prev, chunk) => {
+      const next = prev + String(chunk);
+      return next.length > 200_000 ? next.slice(-100_000) : next;
+    };
+    child.stdout?.on("data", (chunk) => {
+      stdout = keep(stdout, chunk);
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr = keep(stderr, chunk);
+    });
+    const timer = setTimeout(() => {
+      stderr += `\n${name} timed out after ${TEST_TIMEOUT_MS}ms`;
+      if (child.pid) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          child.kill("SIGKILL");
+        }
+      }
+    }, TEST_TIMEOUT_MS);
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ status: code ?? 1, stdout, stderr });
+    });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      resolve({ status: 1, stdout, stderr: `${stderr}\n${err.message}` });
+    });
+  });
+}
+
 const failed = [];
 for (const name of scripts) {
   const started = Date.now();
-  const res = spawnSync("pnpm", ["run", "-s", name], { encoding: "utf8" });
+  const res = await runScript(name);
   const ok = res.status === 0;
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}  (${secs}s)`);

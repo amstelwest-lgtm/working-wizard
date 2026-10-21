@@ -108,28 +108,57 @@ function specSupabaseAuthStorageKey(supabaseUrl: string): string {
 function specTabAuthStorage(): Storage | undefined {
   if (typeof window === "undefined") return undefined;
   try {
-    return window.sessionStorage;
+    const local = window.localStorage;
+    const session = window.sessionStorage;
+    return {
+      get length() {
+        return local.length;
+      },
+      clear() {},
+      key: (index) => local.key(index),
+      getItem: (key) =>
+        key.startsWith("sb-") && key.endsWith("-auth-token")
+          ? (local.getItem(key) ?? session.getItem(key))
+          : session.getItem(key),
+      setItem: (key, value) => {
+        if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+          local.setItem(key, value);
+          session.setItem(key, value);
+          return;
+        }
+        session.setItem(key, value);
+      },
+      removeItem: (key) => {
+        if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+          local.removeItem(key);
+          session.removeItem(key);
+          return;
+        }
+        session.removeItem(key);
+      },
+    };
   } catch {
     return undefined;
   }
 }
 
-function specMoveItem(from: Storage, to: Storage, key: string): void {
-  const value = from.getItem(key);
-  if (value == null) return;
-  if (to.getItem(key) == null) to.setItem(key, value);
-  from.removeItem(key);
-}
-
-function specAdoptSharedAuthSession(storageKey: string): void {
+function specShareAuthSession(storageKey: string): void {
   if (typeof window === "undefined") return;
   try {
     const local = window.localStorage;
     const session = window.sessionStorage;
-    specMoveItem(local, session, storageKey);
-    specMoveItem(local, session, `${storageKey}-code-verifier`);
+    const chosen = session.getItem(storageKey) ?? local.getItem(storageKey);
+    if (chosen) {
+      local.setItem(storageKey, chosen);
+      session.setItem(storageKey, chosen);
+    }
+    const verifierKey = `${storageKey}-code-verifier`;
+    if (!session.getItem(verifierKey) && local.getItem(verifierKey)) {
+      session.setItem(verifierKey, local.getItem(verifierKey)!);
+    }
+    local.removeItem(verifierKey);
   } catch {
-    /* private mode / blocked storage */
+    /* private mode */
   }
 }
 
@@ -148,7 +177,7 @@ function specWithoutAuthBroadcast<T>(create: () => T): T {
 type TabAuthModule = {
   supabaseAuthStorageKey: (url: string) => string;
   tabAuthStorage: () => Storage | undefined;
-  adoptSharedAuthSession: (key: string) => void;
+  shareAuthSession: (key: string) => void;
   withoutAuthBroadcast: <T>(create: () => T) => T;
 };
 
@@ -165,21 +194,24 @@ async function runTabAuthUnitTests(label: string, mod: TabAuthModule) {
   const prevWindow = (globalThis as { window?: unknown }).window;
   g.window = { localStorage: local, sessionStorage: session };
 
-  assert(mod.tabAuthStorage() === session, `${label}: auth storage is sessionStorage`);
+  const storage = mod.tabAuthStorage();
+  assert(storage !== undefined && storage !== session, `${label}: auth storage is the shared adapter`);
 
   const key = "sb-proj-auth-token";
-  local.setItem(key, '{"access_token":"shared"}');
+  const shared = '{"access_token":"shared","refresh_token":"r","user":{"id":"u"}}';
+  local.setItem(key, shared);
   local.setItem(`${key}-code-verifier`, "pkce");
-  mod.adoptSharedAuthSession(key);
-  assert(session.getItem(key) === '{"access_token":"shared"}', `${label}: tab adopts shared session once`);
-  assert(local.getItem(key) === null, `${label}: shared localStorage session removed`);
-  assert(local.getItem(`${key}-code-verifier`) === null, `${label}: shared PKCE verifier removed`);
+  assert(storage!.getItem(key) === shared, `${label}: a new tab reads the localStorage session`);
+  mod.shareAuthSession(key);
+  assert(local.getItem(key) === shared, `${label}: shared localStorage session is kept`);
+  assert(session.getItem(key) === shared, `${label}: this tab mirrors the shared session`);
+  assert(session.getItem(`${key}-code-verifier`) === "pkce", `${label}: PKCE verifier stays on this tab`);
+  assert(local.getItem(`${key}-code-verifier`) === null, `${label}: PKCE verifier is not shared`);
 
-  session.setItem(key, '{"access_token":"mine"}');
-  local.setItem(key, '{"access_token":"stale"}');
-  mod.adoptSharedAuthSession(key);
-  assert(session.getItem(key) === '{"access_token":"mine"}', `${label}: does not overwrite tab session`);
-  assert(local.getItem(key) === null, `${label}: stale shared copy cleared`);
+  local.removeItem(key);
+  session.setItem(key, shared);
+  mod.shareAuthSession(key);
+  assert(local.getItem(key) === shared, `${label}: an open tab publishes its session for a new tab`);
 
   if (prevWindow === undefined) delete (globalThis as { window?: unknown }).window;
   else (globalThis as { window: unknown }).window = prevWindow;
@@ -361,7 +393,7 @@ assert(
 await runTabAuthUnitTests("tab-auth-spec", {
   supabaseAuthStorageKey: specSupabaseAuthStorageKey,
   tabAuthStorage: specTabAuthStorage,
-  adoptSharedAuthSession: specAdoptSharedAuthSession,
+  shareAuthSession: specShareAuthSession,
   withoutAuthBroadcast: specWithoutAuthBroadcast,
 });
 
@@ -370,16 +402,20 @@ if (existsSync(tabAuthPath)) {
   await runTabAuthUnitTests("tab-auth-prod", {
     supabaseAuthStorageKey: prod.supabaseAuthStorageKey,
     tabAuthStorage: prod.tabAuthStorage,
-    adoptSharedAuthSession: prod.adoptSharedAuthSession,
+    shareAuthSession: prod.shareAuthSession,
     withoutAuthBroadcast: prod.withoutAuthBroadcast,
   });
 
-  assert(clientSrc.includes("tabAuthStorage()"), "#140: browser client persists auth in sessionStorage");
+  assert(clientSrc.includes("tabAuthStorage()"), "browser client uses the shared auth storage");
+  assert(clientSrc.includes("shareAuthSession"), "an open tab publishes its session before the client reads it");
   assert(clientSrc.includes("withoutAuthBroadcast"), "#140: client suppresses auth BroadcastChannel during createClient");
-  assert(clientSrc.includes("adoptSharedAuthSession"), "#140: client migrates legacy localStorage once");
   assert(
     !/storage:\s*typeof window !== 'undefined' \? localStorage/.test(clientSrc),
-    "#140: must not persist session in shared localStorage",
+    "client does not pass the raw localStorage object to GoTrue",
+  );
+  assert(
+    readFileSync(tabAuthPath, "utf8").includes("createSharedAuthStorage"),
+    "the auth token is read from localStorage",
   );
   assert(
     authHookSrc.includes('signOut({ scope: "local" })'),
