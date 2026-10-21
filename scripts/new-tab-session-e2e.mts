@@ -183,11 +183,19 @@ async function main() {
     const tab1Path = new URL(tab1.url()).pathname;
     assert(tab1Path.startsWith("/clients"), `tab 1 left the client for ${tab1Path}`);
     console.log("new-tab-session-e2e: ok");
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
   } finally {
     clearTimeout(killer);
-    await browser?.close().catch(() => undefined);
-    server.kill("SIGTERM");
+    const closing = browser?.close().catch(() => undefined);
+    server.kill("SIGKILL");
+    await Promise.race([
+      closing ?? Promise.resolve(),
+      new Promise((resolve) => setTimeout(resolve, 3_000)),
+    ]);
   }
+  process.exit(process.exitCode ?? 0);
 }
 
 main().catch((error) => {
