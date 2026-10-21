@@ -334,7 +334,39 @@ function rememberConfirmedFirmPlan(
   }
 }
 
-async function resolveFirmBillingEntitlement(
+function storedPlanValue(value: unknown): "entitled" | "none" | null {
+  if (value === "entitled" || value === "none") return value;
+  return null;
+}
+
+/**
+ * The caller's firm row, when this client can read billing_plan_known.
+ * A miss falls through to the service-role read. Tests pass the fixture
+ * rows on this client instead of replacing the plan reader.
+ */
+async function readStoredPlanFromClient(
+  supabase: BillingAuthCtx["supabase"],
+  firmId: string | null,
+): Promise<"entitled" | "none" | null> {
+  const id = firmId?.trim() ?? "";
+  if (!id || !supabase) return null;
+  try {
+    const query = supabase.from("firms").select("billing_plan_known").eq("id", id) as {
+      maybeSingle?: () => Promise<{
+        data: { billing_plan_known?: unknown } | null;
+        error: { message?: string } | null;
+      }>;
+    };
+    if (!query.maybeSingle) return null;
+    const { data, error } = await query.maybeSingle();
+    if (error) return null;
+    return storedPlanValue(data?.billing_plan_known);
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveFirmBillingEntitlement(
   context: unknown,
   refresh: boolean,
   firmId: string | null = null,
@@ -353,7 +385,8 @@ async function resolveFirmBillingEntitlement(
   }
   const work = (async (): Promise<FirmBillingEntitlement> => {
     const billingIds = await firmBillingIdsForActor(ctx.supabase, userId, firmId);
-    const storedPlan = await readFirmBillingPlanKnown(billingIds.firmId);
+    const actorPlan = await readStoredPlanFromClient(ctx.supabase, billingIds.firmId);
+    const storedPlan = actorPlan ?? (await readFirmBillingPlanKnown(billingIds.firmId));
     let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
     const live = (async (): Promise<FirmBillingEntitlement> => {
     try {
@@ -423,6 +456,7 @@ async function resolveFirmBillingEntitlement(
     }
     })();
     if (storedPlan !== "entitled") return live;
+    console.warn(`[stripe-entitlement] stored plan entitled firm=${billingIds.firmId ?? ""}`);
     try {
       return await Promise.race([
         live,
