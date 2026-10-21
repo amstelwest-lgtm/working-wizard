@@ -6,6 +6,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { decideAccountantAuthLanding, safeAccountantRedirect } from "../src/lib/auth-landing";
 import {
+  firmStripeCustomerColumnProbes,
+  noteMissingFirmStripeCustomerColumn,
+  readFirmStripeCustomerId,
+  resetFirmStripeCustomerColumnProbe,
+} from "../src/lib/firm-stripe-customer.server";
+import {
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
   firmStartTrialCheckout,
@@ -20,6 +26,8 @@ import {
   customerIdFromMetadataCustomers,
   customerIdFromMetadataSubscriptions,
   emailHasEntitlingSubscription,
+  FIRM_CUSTOMER_SEARCH_BUDGET_MS,
+  STORED_CUSTOMER_READ_BUDGET_MS,
   findFirmCustomerId,
   firmCustomerSearchQuery,
   isBillingExemptPath,
@@ -625,9 +633,15 @@ assert(
   "that customer still has an entitling Starter subscription",
 );
 
+let splitLists = 0;
 const emptyNewCustomer: StripeCustomerSubscriptionReader = {
   customers: {
-    list: async () => ({ data: [{ id: "cus_new_empty" }] }),
+    list: async () => {
+      splitLists += 1;
+      // The lookup misses. The later comparison sees a different customer.
+      if (splitLists === 1) return { data: [] };
+      return { data: [{ id: "cus_new_empty" }] };
+    },
   },
   subscriptions: {
     list: async () => ({ data: [] }),
@@ -647,6 +661,7 @@ try {
       userId: BEN_OWNER,
       firmId: BEN_FIRM,
     })) ?? "";
+  await new Promise((resolve) => setTimeout(resolve, 0));
 } finally {
   console.warn = warnSplit;
 }
@@ -772,7 +787,7 @@ assert(
 
 const customerOnly: StripeCustomerSubscriptionReader = {
   customers: {
-    list: async () => ({ data: [{ id: "cus_new_empty" }] }),
+    list: async () => ({ data: [] }),
     search: async () => ({
       data: [
         {
@@ -796,6 +811,149 @@ assert(
   })) === "cus_meta",
   "customer metadata finds the firm when the subscription search is empty",
 );
+
+assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS === 4_000, "metadata search shares a 4s budget");
+assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS < 5_000, "the search budget is inside a 5s entitlement check");
+
+let emailHitSearches = 0;
+const emailHitHang: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [{ id: "cus_email" }] }),
+    search: () => {
+      emailHitSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: () => {
+      emailHitSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+};
+const emailHitStarted = Date.now();
+const emailHit = await Promise.race([
+  findFirmCustomerId(emailHitHang, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+  }),
+  new Promise<string>((_resolve, reject) => {
+    setTimeout(() => reject(new Error("email hit waited on search")), 5_000);
+  }),
+]);
+assert(emailHit === "cus_email", "an email hit resolves without metadata search");
+assert(emailHitSearches === 0, "the email-hit path makes no search calls");
+assert(Date.now() - emailHitStarted < 5_000, "an email hit finishes within 5s");
+
+let missSearchOptions: { maxNetworkRetries?: number; timeout?: number } | undefined;
+let missSearches = 0;
+const missHang: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [] }),
+    search: (_params, options) => {
+      missSearches += 1;
+      missSearchOptions = options;
+      return new Promise(() => {});
+    },
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: (_params, options) => {
+      missSearches += 1;
+      missSearchOptions = options;
+      return new Promise(() => {});
+    },
+  },
+};
+const missStarted = Date.now();
+const missed = await Promise.race([
+  findFirmCustomerId(missHang, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+  }),
+  new Promise<string>((_resolve, reject) => {
+    setTimeout(() => reject(new Error("hung metadata search exceeded 5s")), 5_000);
+  }),
+]);
+const missElapsed = Date.now() - missStarted;
+assert(missed === undefined, "hung metadata searches fail closed");
+assert(missElapsed < 5_000, "hung metadata searches give up within 5s");
+assert(missSearches >= 1, "an email miss still searches");
+assert(missSearchOptions?.maxNetworkRetries === 0, "metadata search does not ask Stripe to retry");
+assert(
+  typeof missSearchOptions?.timeout === "number" &&
+    missSearchOptions.timeout <= FIRM_CUSTOMER_SEARCH_BUDGET_MS,
+  "metadata search timeout stays inside the shared budget",
+);
+
+assert(STORED_CUSTOMER_READ_BUDGET_MS <= 1_000, "a stored customer id is not held on retrieve");
+let storedHangSearches = 0;
+const storedHang: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [{ id: "cus_email" }] }),
+    retrieve: () => new Promise(() => {}),
+    search: () => {
+      storedHangSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: () => {
+      storedHangSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+};
+const storedHangStarted = Date.now();
+const storedHangHit = await Promise.race([
+  findFirmCustomerId(storedHang, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+    storedCustomerId: "cus_stored",
+  }),
+  new Promise<string>((_resolve, reject) => {
+    setTimeout(() => reject(new Error("stored id waited on retrieve")), 5_000);
+  }),
+]);
+const storedHangElapsed = Date.now() - storedHangStarted;
+assert(storedHangHit === "cus_stored", "a hanging retrieve still returns the stored customer id");
+assert(storedHangSearches === 0, "a stored id does not search when retrieve hangs");
+assert(storedHangElapsed < 5_000, "a stored id resolves within 5s when retrieve hangs");
+let storedErrorSearches = 0;
+const storedError: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [] }),
+    retrieve: async () => {
+      throw new Error("stripe down");
+    },
+    search: () => {
+      storedErrorSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: () => {
+      storedErrorSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+};
+assert(
+  (await findFirmCustomerId(storedError, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+    storedCustomerId: "cus_stored",
+  })) === "cus_stored",
+  "a Stripe error on retrieve keeps the stored customer id",
+);
+assert(storedErrorSearches === 0, "a retrieve error does not start a metadata search");
 assert(
   customerIdFromMetadataCustomers(
     [{ id: "cus_meta", metadata: { firm_id: BEN_FIRM, milon_user_id: BEN_OWNER } }],
@@ -1376,6 +1534,10 @@ assert(
 assert(ownerServer.includes("findFirmCustomerId"), "owner billing uses the stable customer lookup");
 const entitlement = readFileSync(resolve("src/lib/stripe-entitlement.ts"), "utf8");
 assert(!entitlement.includes("customers.update"), "entitlement lookup does not write Stripe");
+assert(
+  !entitlement.includes("writeFirmStripeCustomerId"),
+  "a customer lookup does not write firms.stripe_customer_id",
+);
 const migration = readFileSync(
   resolve("supabase/migrations/20261020223000_firm_stripe_customer_id.sql"),
   "utf8",
@@ -1386,6 +1548,20 @@ assert(
 );
 assert(!/UPDATE\s+public\.firms/i.test(migration), "migration does not backfill firm rows");
 assert(migration.includes("authenticated"), "signed-in owners cannot set the customer id");
+resetFirmStripeCustomerColumnProbe();
+await readFirmStripeCustomerId(BEN_FIRM);
+const probesAfterSelect = firmStripeCustomerColumnProbes();
+assert(probesAfterSelect === 1, "the first check selects firms.stripe_customer_id");
+assert(
+  noteMissingFirmStripeCustomerColumn("column firms.stripe_customer_id does not exist"),
+  "a missing stripe_customer_id column is recognized",
+);
+await readFirmStripeCustomerId(BEN_FIRM);
+assert(
+  firmStripeCustomerColumnProbes() === probesAfterSelect,
+  "a missing firms.stripe_customer_id column is not selected again",
+);
+resetFirmStripeCustomerColumnProbe();
 const billingSync = readFileSync(resolve("src/lib/stripe-billing-sync.server.ts"), "utf8");
 assert(
   billingSync.includes("writeFirmStripeCustomerId"),
@@ -1400,5 +1576,9 @@ assert(fns.includes("firmBillingIdsForActor"), "a client firm id is checked agai
 assert(!fns.includes("customerId: z."), "checkout does not take a customer id from the client");
 const capServer = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
 assert(capServer.includes("actorCanUseFirm"), "a named firm is used only when the user belongs to it");
+assert(
+  !capServer.includes("writeFirmStripeCustomerId"),
+  "reading subscription history does not write firms.stripe_customer_id",
+);
 
 console.log("firm-billing-gate ok");
