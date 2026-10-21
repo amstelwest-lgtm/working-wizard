@@ -402,13 +402,13 @@ export function MoveHandTo({
     optimistic.current = true;
     setHandoffError(null);
     setAssignee(`Handing to ${agentShortName(agent)}…`);
-    const ensured = await ensure();
-    if ("error" in ensured) {
-      revertPending(ensured.error);
+    const actionItemId = await ensure();
+    if ("error" in actionItemId) {
+      revertPending(actionItemId.error);
       return;
     }
-    actionId.current = ensured.id;
-    const result = await commitActionHandoff({ clientId, actionItemId: ensured.id, title, agent });
+    actionId.current = actionItemId.id;
+    const result = await commitActionHandoff({ clientId, actionItemId: actionItemId.id, title, agent });
     if (result.ok && result.reused) {
       optimistic.current = false;
       setHandoffError(null);
