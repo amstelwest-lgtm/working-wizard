@@ -20,6 +20,10 @@ import {
   clientNavSearch,
   clientRailSelection,
 } from "../src/lib/client-route-search.ts";
+import {
+  SEND_AGENT_FIRM_ALLOWLIST,
+  sendAgentFirmAllowed,
+} from "../src/lib/client-agent-send-allowlist.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -67,9 +71,36 @@ assert(/does not log into SARS/i.test(copy), "copy says she does not log into SA
 assert(/does not make a SARS claim/i.test(copy), "copy says she makes no SARS claim");
 assert(/Nothing is emailed/i.test(copy), "copy says nothing is emailed");
 
+const myPractice = "fca0f102-a597-4ec6-8f45-825c57f78797";
+assert(SEND_AGENT_FIRM_ALLOWLIST.length === 1, "only one firm is allowlisted");
+assert(SEND_AGENT_FIRM_ALLOWLIST[0] === myPractice, "the allowlist is My practice");
+assert(sendAgentFirmAllowed(myPractice), "My practice may send an agent");
+assert(!sendAgentFirmAllowed("fca0f102"), "a prefix is not the firm id");
+assert(
+  !sendAgentFirmAllowed("00000000-0000-4000-8000-000000000001"),
+  "another firm is refused",
+);
+assert(!sendAgentFirmAllowed(null) && !sendAgentFirmAllowed(undefined), "a missing firm is refused");
+
 const fn = read("src/lib/client-agent-send.functions.ts");
+assert(fn.split("sendAgentFirmAllowed").length - 1 >= 3, "list, mint, and revoke check the allowlist");
+const mintBody = fn.slice(fn.indexOf("export const mintClientAgentSend"), fn.indexOf("export const revokeClientAgentSend"));
+assert(
+  mintBody.indexOf("sendAgentFirmAllowed") < mintBody.indexOf(".insert("),
+  "mint refuses a firm before it writes",
+);
+const revokeBody = fn.slice(fn.indexOf("export const revokeClientAgentSend"));
+assert(
+  revokeBody.indexOf("sendAgentFirmAllowed") < revokeBody.indexOf(".update("),
+  "revoke refuses a firm before it writes",
+);
 const panel = read("src/components/send-agent-panel.tsx");
 const route = read("src/routes/_authenticated/clients.$clientId.tsx");
+assert(route.includes("sendAgentFirmAllowed(client.firm_id)"), "the client file hides the action");
+assert(
+  route.includes("showSendAgent={sendAgentFirmAllowed(client.firm_id)}"),
+  "the rail hides the action",
+);
 for (const source of [fn, panel]) {
   assert(!/whatsapp/i.test(source), "no WhatsApp in the send-an-agent sources");
   assert(!/from ["']@\/lib\/prospect-talk/.test(source), "does not import the /talk sample");

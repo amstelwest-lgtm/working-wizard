@@ -31,6 +31,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const revoke = useServerFn(revokeClientAgentSend);
   const [sends, setSends] = useState<AgentSendRow[]>([]);
   const [ready, setReady] = useState(false);
+  const [allowed, setAllowed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [fresh, setFresh] = useState<FreshLink | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,8 +39,9 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
 
   const reload = useCallback(async () => {
     const result = await list({ data: { clientId } });
-    setSends(result.migrated ? result.sends : []);
-    setReady(result.migrated);
+    setSends(result.allowed ? result.sends : []);
+    setAllowed(result.allowed);
+    setReady(result.migrated && result.allowed);
     setLoaded(true);
   }, [clientId, list]);
 
@@ -48,8 +50,9 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     void list({ data: { clientId } })
       .then((result) => {
         if (!alive) return;
-        setSends(result.migrated ? result.sends : []);
-        setReady(result.migrated);
+        setSends(result.allowed ? result.sends : []);
+        setAllowed(result.allowed);
+        setReady(result.migrated && result.allowed);
         setLoaded(true);
       })
       .catch(() => {
@@ -70,6 +73,11 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     setNotice(null);
     try {
       const result = await mint({ data: { clientId } });
+      if (!result.ok && result.reason === "not_allowed") {
+        setAllowed(false);
+        setReady(false);
+        return;
+      }
       if (!result.ok && result.reason === "already_open") {
         setNotice(
           `A link is already active until ${formatDate(result.expiresAt, market)}. Revoke it before creating another.`,
@@ -118,6 +126,8 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
       setNotice("Select the link and copy it.");
     }
   };
+
+  if (!allowed) return null;
 
   return (
     <section

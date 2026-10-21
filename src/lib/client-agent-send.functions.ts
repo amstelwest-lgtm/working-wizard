@@ -17,6 +17,7 @@ import {
   sendStillOpen,
   sha256Hex,
 } from "@/lib/client-agent-send";
+import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   isSupabaseAdminConfigured,
@@ -127,11 +128,14 @@ function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
 export const listClientAgentSends = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
-  .handler(async ({ data, context }): Promise<{ migrated: boolean; sends: AgentSendRow[] }> => {
-    if (!isSupabaseAdminConfigured()) return { migrated: false, sends: [] };
+  .handler(async ({ data, context }): Promise<{ migrated: boolean; allowed: boolean; sends: AgentSendRow[] }> => {
+    if (!isSupabaseAdminConfigured()) return { migrated: false, allowed: false, sends: [] };
     const firm = await firmOfClient(data.clientId);
-    if (!firm.ok) return { migrated: firm.reason !== "unavailable", sends: [] };
-    if (!(await isFirmMember(context.userId, firm.firmId))) return { migrated: true, sends: [] };
+    if (!firm.ok) return { migrated: firm.reason !== "unavailable", allowed: false, sends: [] };
+    if (!sendAgentFirmAllowed(firm.firmId)) return { migrated: true, allowed: false, sends: [] };
+    if (!(await isFirmMember(context.userId, firm.firmId))) {
+      return { migrated: true, allowed: false, sends: [] };
+    }
 
     const listed = await table("client_agent_sends")
       .select("id, expires_at, revoked_at, consent_at, created_at")
@@ -139,19 +143,19 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
       .eq("firm_id", firm.firmId)
       .order("created_at", { ascending: false });
     if (listed.error) {
-      if (missingTable(listed.error)) return { migrated: false, sends: [] };
+      if (missingTable(listed.error)) return { migrated: false, allowed: false, sends: [] };
       throw new Error(listed.error.message);
     }
     const now = new Date();
     const sends = rows(listed.data).map((row) => parseSend(row, now));
-    if (sends.length === 0) return { migrated: true, sends };
+    if (sends.length === 0) return { migrated: true, allowed: true, sends };
 
     for (const send of sends) {
       const found = await table("client_agent_send_items")
         .select("item_key, totals_only, status, quality")
         .eq("send_id", send.id);
       if (found.error) {
-        if (missingTable(found.error)) return { migrated: false, sends: [] };
+        if (missingTable(found.error)) return { migrated: false, allowed: false, sends: [] };
         throw new Error(found.error.message);
       }
       send.items = rows(found.data).map((row) => ({
@@ -161,13 +165,13 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
         quality: typeof row.quality === "string" ? row.quality : null,
       }));
     }
-    return { migrated: true, sends };
+    return { migrated: true, allowed: true, sends };
   });
 
 export type MintAgentSendResult =
   | { ok: true; sendId: string; url: string; expiresAt: string }
   | { ok: false; reason: "already_open"; sendId: string; expiresAt: string }
-  | { ok: false; reason: "not_on_firm" | "unavailable" | "forbidden" };
+  | { ok: false; reason: "not_on_firm" | "unavailable" | "forbidden" | "not_allowed" };
 
 export const mintClientAgentSend = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -176,6 +180,7 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
     if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
     const firm = await firmOfClient(data.clientId);
     if (!firm.ok) return { ok: false, reason: firm.reason };
+    if (!sendAgentFirmAllowed(firm.firmId)) return { ok: false, reason: "not_allowed" };
     if (!(await isFirmMember(context.userId, firm.firmId))) {
       return { ok: false, reason: "forbidden" };
     }
@@ -238,7 +243,7 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
 
 export type RevokeAgentSendResult =
   | { ok: true; revokedAt: string }
-  | { ok: false; reason: "not_found" | "forbidden" | "unavailable" | "not_on_firm" };
+  | { ok: false; reason: "not_found" | "forbidden" | "unavailable" | "not_on_firm" | "not_allowed" };
 
 export const revokeClientAgentSend = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -249,6 +254,7 @@ export const revokeClientAgentSend = createServerFn({ method: "POST" })
     if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
     const firm = await firmOfClient(data.clientId);
     if (!firm.ok) return { ok: false, reason: firm.reason };
+    if (!sendAgentFirmAllowed(firm.firmId)) return { ok: false, reason: "not_allowed" };
     if (!(await isFirmMember(context.userId, firm.firmId))) {
       return { ok: false, reason: "forbidden" };
     }

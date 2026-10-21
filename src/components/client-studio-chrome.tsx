@@ -27,7 +27,7 @@ const AGENTS = [
   { id: "advisor" as const, label: agentDisplayName("advisor") },
 ];
 
-function clientSections(clientId: string): NavSection[] {
+function clientSections(clientId: string, showSendAgent: boolean): NavSection[] {
   const go = (headingId: string, subId?: string | null): NavDestination => ({
     to: "/clients/$clientId",
     params: { clientId },
@@ -142,11 +142,14 @@ function clientSections(clientId: string): NavSection[] {
           id: "books",
           label: "Books",
           to: go("books"),
-          items: subs("books", [
-            { id: "documents", label: "Documents" },
-            { id: "connections", label: "Connections" },
-            { id: "send-agent", label: "Send an agent" },
-          ]),
+          items: subs(
+            "books",
+            [
+              { id: "documents", label: "Documents" },
+              { id: "connections", label: "Connections" },
+              ...(showSendAgent ? [{ id: "send-agent", label: "Send an agent" }] : []),
+            ],
+          ),
         },
       ],
     },
@@ -166,10 +169,12 @@ type ClientSearch = {
 export function ClientRail({
   clientId,
   search,
+  showSendAgent = false,
   onNavigate,
 }: {
   clientId: string;
   search: ClientSearch;
+  showSendAgent?: boolean;
   onNavigate?: () => void;
 }) {
   const selection = clientRailSelection(search);
@@ -177,7 +182,7 @@ export function ClientRail({
   return (
     <AccountantNav
       label="Client workspace"
-      sections={clientSections(clientId)}
+      sections={clientSections(clientId, showSendAgent)}
       selection={selection}
       storageKey={CLIENT_NAV_OPEN_KEY}
       settingsActive={onClientSettings}

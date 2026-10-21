@@ -282,6 +282,7 @@ import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { SendAgentPanel } from "@/components/send-agent-panel";
+import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
@@ -4264,6 +4265,7 @@ function ClientView() {
               <ClientRail
                 clientId={clientId}
                 search={search}
+                showSendAgent={sendAgentFirmAllowed(client.firm_id)}
                 onNavigate={() => setMobileNavOpen(false)}
               />
               <div className="deliverable-main">
@@ -4354,12 +4356,16 @@ function ClientView() {
                   {activeTab === "summary" &&
                   search.section !== "documents" &&
                   search.section !== "connections" &&
-                  search.section !== "send-agent" ? (
+                  (search.section !== "send-agent" || !sendAgentFirmAllowed(client.firm_id)) ? (
                     <ClientSectionOverview
                       clientId={clientId}
                       eyebrow="File"
                       title="Books"
-                      subtitle="Documents, connections, and Send an agent each have their own page."
+                      subtitle={
+                        sendAgentFirmAllowed(client.firm_id)
+                          ? "Documents, connections, and Send an agent each have their own page."
+                          : "Documents and connections each have their own page."
+                      }
                       links={[
                         {
                           id: "documents",
@@ -4373,16 +4379,23 @@ function ClientView() {
                           detail: "Xero, QuickBooks, and Sage.",
                           search: (prev) => accountantClientTabSearch(prev, "portal", { section: "connections" }),
                         },
-                        {
-                          id: "send-agent",
-                          label: "Send an agent",
-                          detail: "A Tax Specialist link for this client. Nothing is emailed.",
-                          search: (prev) => accountantClientTabSearch(prev, "portal", { section: "send-agent" }),
-                        },
+                        ...(sendAgentFirmAllowed(client.firm_id)
+                          ? [
+                              {
+                                id: "send-agent",
+                                label: "Send an agent",
+                                detail: "A Tax Specialist link for this client. Nothing is emailed.",
+                                search: (prev: Record<string, unknown>) =>
+                                  accountantClientTabSearch(prev, "portal", { section: "send-agent" }),
+                              },
+                            ]
+                          : []),
                       ]}
                     />
                   ) : null}
-                  {activeTab === "summary" && search.section === "send-agent" ? (
+                  {activeTab === "summary" &&
+                  search.section === "send-agent" &&
+                  sendAgentFirmAllowed(client.firm_id) ? (
                     <ClientSubpageFrame
                       id="send-agent"
                       eyebrow="Books"
