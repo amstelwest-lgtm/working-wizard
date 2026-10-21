@@ -7,7 +7,7 @@ ALTER TABLE public.firms
   ADD COLUMN IF NOT EXISTS trial_clock_start_override timestamptz;
 
 COMMENT ON COLUMN public.firms.trial_clock_start_override IS
-  'QA-only start of the no-plan 14-day clock. Null uses max(created_at, the cutover). Signed-in users cannot set it.';
+  'QA-only start of the no-plan 14-day clock. Null uses max(created_at, the cutover). Signed-in users cannot set it. trial_clock_start_override is a QA-only tool: it is only ever set (by service role/SQL, with CoS approval) on AQA throwaway firms, never on real customer firms.';
 
 CREATE OR REPLACE FUNCTION public.protect_firm_stripe_customer_id()
 RETURNS trigger

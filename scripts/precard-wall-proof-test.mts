@@ -531,6 +531,12 @@ assert(
   "migration adds the nullable QA clock start",
 );
 assert(
+  clockMigration.includes(
+    "trial_clock_start_override is a QA-only tool: it is only ever set (by service role/SQL, with CoS approval) on AQA throwaway firms, never on real customer firms.",
+  ),
+  "the column comment limits the override to AQA throwaway firms",
+);
+assert(
   clockMigration.includes("NEW.trial_clock_start_override := NULL") &&
     clockMigration.includes("NEW.trial_clock_start_override := OLD.trial_clock_start_override"),
   "signed-in users cannot set the QA clock start",
