@@ -33,6 +33,7 @@ import {
   firmCheckoutCharge,
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
+  firmStartTrialCheckout,
   firmUpgradeCheckoutSessionParams,
   foundingRejectedOnYearly,
   findOwnerCatalogPrice,
@@ -133,7 +134,7 @@ assert(
 assert(!("automatic_tax" in monthly) || monthly.automatic_tax == null, "automatic_tax omitted");
 assert(monthly.billing_address_collection === "required", "billing address required");
 assert(monthly.allow_promotion_codes === true, "monthly paid allows FOUNDING box");
-assert(monthly.payment_method_collection === "always", "card on file at signup");
+assert(monthly.payment_method_collection === "always", "Checkout collects a card");
 assert(monthly.subscription_data?.trial_period_days === 14, "first subscription is a 14-day trial");
 assert(monthly.mode === "subscription", "subscription mode");
 assert(monthly.integration_identifier === "milon-solo-month-abcdefgh", "integration_identifier");
@@ -177,6 +178,45 @@ assert(
   resumed.subscription_data?.trial_period_days == null,
   "a prior subscription does not get another trial",
 );
+
+const startTrial = firmStartTrialCheckout({
+  customerId: "cus_old",
+  priorSubscriptionCount: 1,
+  hasEntitlingSubscription: false,
+  needsPaymentOnExisting: false,
+});
+assert(startTrial.kind === "checkout", "Start trial stays on Checkout when the old plan is not live");
+assert(
+  startTrial.kind === "checkout" && startTrial.customerId === "cus_old" && startTrial.includeTrial === false,
+  "Start trial attaches the existing customer and does not start a second trial",
+);
+const reused = firmCheckoutSessionParams({
+  priceId: "price_test_starter_month",
+  lookupKey: "milon_starter_monthly",
+  band: "starter",
+  interval: "month",
+  origin: "https://milonfinance.com",
+  userId: "d55084b0-43fe-417b-970b-37f22cee84f3",
+  firmId: "e8f7a440-a541-422c-8e4f-82ba33dd0604",
+  email: "team@trymilon.com",
+  customerId: startTrial.kind === "checkout" ? startTrial.customerId : undefined,
+  market: "us",
+  integrationIdentifier: firmIntegrationIdentifier("starter", "month", "abcdefgh"),
+  includeTrial: startTrial.kind === "checkout" ? startTrial.includeTrial : false,
+});
+assert(reused.customer === "cus_old", "Start trial does not create a second Stripe customer");
+assert(reused.customer_email == null, "Start trial does not key the session on the new email");
+assert(
+  reused.subscription_data?.trial_period_days == null,
+  "Start trial does not add a second 14-day trial",
+);
+const livePlan = firmStartTrialCheckout({
+  customerId: "cus_old",
+  priorSubscriptionCount: 1,
+  hasEntitlingSubscription: true,
+  needsPaymentOnExisting: false,
+});
+assert(livePlan.kind === "portal", "a live plan opens the portal instead of a second Checkout");
 
 assert(
   parsePendingCheckout({ plan: "solo", interval: "year", market: "us" })?.plan === "solo",
@@ -501,7 +541,7 @@ assert(
 );
 assert(!heroCta.includes("__mq_start"), "hero primary does not launch the quiz");
 assert(
-  landing.includes("FIRM_CARD_TIMING"),
+  landing.includes("firmSignupTrialReminder"),
   "landing states when the first figures and the card happen",
 );
 assert(

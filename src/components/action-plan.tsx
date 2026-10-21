@@ -46,7 +46,7 @@ import {
   stripSuppressedNotes,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
-import { displayedHandoffRun, latestStoredAssignment, withPendingNote } from "@/lib/open-plan-home";
+import { displayedAssignee, displayedHandoffRun, latestStoredAssignment, withPendingNote } from "@/lib/open-plan-home";
 import { type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -320,6 +320,8 @@ interface Props {
   canonicalRatios?: Record<string, number> | null;
   /** Live pillars, overall, weakest, and statement period. */
   healthSnapshot?: HealthScoreSnapshot | null;
+  /** Latest upload or ledger sync. A draft written after this is not stale. */
+  figuresUpdatedAt?: string | null;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -622,6 +624,7 @@ export default function ActionPlanPanel({
   cashBelowFloor = false,
   canonicalRatios = null,
   healthSnapshot = null,
+  figuresUpdatedAt = null,
   onOpenDraft,
   focusDraftId = null,
 }: Props) {
@@ -1988,6 +1991,7 @@ export default function ActionPlanPanel({
                 row={row}
                 canonicalRatios={canonicalRatios}
                 health={healthSnapshot}
+                figuresUpdatedAt={figuresUpdatedAt}
                 primary={index === 0}
                 onOpen={onOpenApproved}
                 onInvite={onInviteAccountant}
@@ -2016,6 +2020,7 @@ export default function ActionPlanPanel({
                     moveKey={move.key}
                     title={move.title}
                     outcomeWhy={move.impactLine}
+                    onOpenDraft={onOpenDraft}
                   />
                   <AddToPlanButton
                     clientId={clientId}
@@ -2778,11 +2783,7 @@ function ItemRow({
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
               <Mail className="h-3 w-3" /> Sent
             </span>
-          ) : phaseLabel ? (
-            <span className="text-[10px] font-semibold text-[#0B5FFF]" data-handoff-phase={phaseLabel}>
-              {phaseLabel}
-            </span>
-          ) : !lastFailed ? (
+          ) : !lastFailed && !phaseLabel ? (
             <span className="text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500">
               Not sent
             </span>
@@ -2812,7 +2813,7 @@ function ItemRow({
           {onHandOff ? (
             <HandToMenu
               employees={employees}
-              assignee={item.owner_name}
+              assignee={displayedAssignee(item.owner_name, notes)}
               comingSoon={comingSoon}
               audience={isOwner ? "owner" : "accountant"}
               onAssignAgent={onHandOff}

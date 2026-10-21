@@ -9,12 +9,12 @@
  *
  * Owner Spark stays free and does not create a Checkout Session.
  *
- * Signup Checkout is Starter monthly: a 14-day trial, a card on file, and
+ * Checkout after the first result is Starter monthly: a 14-day trial and
  * Starter's client cap. Paid Solo and the bands above keep their own caps.
  */
 
-import { isOwnerLookupKey } from "@/lib/owner-price";
-import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
+import { isOwnerLookupKey } from "./owner-price.ts";
+import { parseZaLookupKey } from "./pricing/za-lookup.ts";
 
 export {
   FIRM_TRIAL_CARD_LINE,
@@ -22,7 +22,7 @@ export {
   FIRM_TRIAL_CLIENT_LIMIT,
   FIRM_TRIAL_DAYS,
   FIRM_TRIAL_SENTENCE,
-} from "./starter-trial-constants";
+} from "./starter-trial-constants.ts";
 
 export const STRIPE_SAAS_BUSINESS_TAX_CODE = "txcd_10103001";
 

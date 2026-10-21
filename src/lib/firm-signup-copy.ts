@@ -1,19 +1,26 @@
 import { COMPANY_ADDRESS, LEGAL_ENTITY } from "@/lib/legal";
-import { FIRM_TRIAL_CARD_LINE, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import {
+  FIRM_TRIAL_CARD_LINE,
+  FIRM_TRIAL_CARD_NOTE,
+  FIRM_TRIAL_SENTENCE,
+  firmUsdListPrice,
+  type FirmCheckoutBand,
+  type FirmInterval,
+} from "@/lib/stripe-plans";
 
 /**
- * Card at signup, then the Starter trial. Keep this sentence on landing,
- * register, pricing, and the firm form. It does not name a rand amount.
+ * Card after the first result, then the Starter price. Keep this sentence on
+ * landing, register, pricing, and the firm form. It does not name a rand amount.
  */
 export const FIRM_CARD_TIMING = FIRM_TRIAL_CARD_LINE;
 
 /**
  * Paid-plan sentence on the homepage #register firm form.
  * Auth Create Firm must use this helper so the two surfaces cannot drift.
- * The trial is Starter even when a larger band is selected for after day 14.
+ * The trial is Starter. The dollar price is the US catalog only.
  */
 export function firmSignupTrialReminder(_planLabel: string): string {
-  return `Starter. ${FIRM_CARD_TIMING} After day 14 the paid band bills automatically.`;
+  return `Starter. ${FIRM_TRIAL_SENTENCE}. ${FIRM_TRIAL_CARD_NOTE} Then ${firmUsdListPrice("starter", "month")}/mo.`;
 }
 
 /** Accountant nav / hero label. Firms need a card, so this is not "Start free". */

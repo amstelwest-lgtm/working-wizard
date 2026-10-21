@@ -5,6 +5,8 @@
  */
 import { TAX_SPECIALIST_SYSTEM } from "../../supabase/functions/_shared/agent-prompts/tax-specialist.ts";
 import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
+import { zaOwnerMonthlyLabel, zaTalkPriceLine } from "./pricing/za-talk-price.server.ts";
+import { usTalkPriceLine } from "./public-pricing-lines.ts";
 import type { ProspectSlug } from "./prospect-talk.ts";
 
 export { TAX_SPECIALIST_SYSTEM };
@@ -25,13 +27,36 @@ const ROLE: Record<ProspectSlug, string> = {
   "tax-specialist": TAX_SPECIALIST_SYSTEM,
 };
 
+/**
+ * Owner monthly for a ZA visitor. Same string the pricing page renders.
+ * A US prompt must not call this.
+ */
+export function prospectZaOwnerMonthly(): string {
+  return zaOwnerMonthlyLabel();
+}
+
+/**
+ * The public pricing page's line for this market. Trial length and the card
+ * sentence are included only because that page states them. No hand-written
+ * price.
+ */
+export function prospectPricingReply(country: "US" | "ZA"): string {
+  const published = country === "ZA" ? zaTalkPriceLine() : usTalkPriceLine();
+  return `${published} This page is a labelled SAMPLE.`;
+}
+
+function prospectPricingPrompt(country: "US" | "ZA"): string {
+  return `When the visitor asks the price, answer immediately with this published line and no other price. Do not ask for a name or an email first.\n${prospectPricingReply(country)}`;
+}
+
 export function prospectSystem(agent: ProspectSlug, country: "US" | "ZA"): string {
   const market =
     country === "ZA"
-      ? "The visitor is in South Africa. Rand amounts are allowed only inside the labelled SAMPLE, and not before they give a name and email."
+      ? "The visitor is in South Africa. Quote the published price as soon as they ask. Other rand amounts belong only in the labelled SAMPLE, after a name and email."
       : "The visitor is outside South Africa. Use dollars if you must mention money. Never use rand.";
+  const pricing = prospectPricingPrompt(country);
   if (agent === "tax-specialist") {
-    return `${TAX_SPECIALIST_SYSTEM}\n\n${market}`;
+    return `${TAX_SPECIALIST_SYSTEM}\n\n${market}\n\n${pricing}`;
   }
-  return `${ROLE[agent]}\n\n${SHARED}\n\n${market}`;
+  return `${ROLE[agent]}\n\n${SHARED}\n\n${market}\n\n${pricing}`;
 }

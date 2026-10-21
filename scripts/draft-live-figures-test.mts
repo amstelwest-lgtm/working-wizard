@@ -13,7 +13,9 @@ import {
 } from "../src/lib/draft-figures.ts";
 import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief.ts";
 import type { AgentFindingRow } from "../src/lib/milon-team-activity.ts";
+import { findingSentence } from "../src/lib/milon-team-activity.ts";
 import { ownerDraftPresentations, presentHomeDraftBody, presentHomeDraftTitle } from "../src/lib/owner-needs.ts";
+import { FIGURES_CHANGED_REGENERATE } from "../src/lib/health-snapshot.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -122,5 +124,60 @@ const ownerHome = readFileSync(resolve("src/components/owner-door/owner-home.tsx
 const accountantBrief = readFileSync(resolve("src/components/financial-manager-brief.tsx"), "utf8");
 assert(ownerHome.includes("DRAFT_OUT_OF_DATE"), "the owner home shows the out-of-date state");
 assert(accountantBrief.includes("DRAFT_OUT_OF_DATE"), "Drafts ready to review shows the out-of-date state");
+
+const handoffCopy =
+  "Hand-off: Move fixed contracts to variable / usage-based pricing. Cash is 12 and health is 40.";
+const writtenAfterUpload = {
+  overall: 67,
+  storedHash: staleHash,
+  writtenAt: "2026-10-20T18:00:00.000Z",
+  figuresUpdatedAt: "2026-10-20T08:00:00.000Z",
+};
+const freshTitle = presentHomeDraftTitle(handoffCopy, liveRatios, writtenAfterUpload);
+assert(freshTitle.text.includes("Hand-off"), `a fresh hand-off keeps its title (${freshTitle.text})`);
+assert(!freshTitle.stale && !freshTitle.refresh, "a draft created after the latest upload is not stale");
+assert(!freshTitle.text.includes(FIGURES_CHANGED_REGENERATE), freshTitle.text);
+
+const movedBooks = presentHomeDraftTitle(handoffCopy, liveRatios, {
+  overall: 67,
+  storedHash: staleHash,
+  writtenAt: "2026-10-01T18:00:00.000Z",
+  figuresUpdatedAt: "2026-10-20T08:00:00.000Z",
+});
+assert(movedBooks.stale || movedBooks.refresh, "figures that moved after the draft stay stale");
+
+const freshSentence = findingSentence({
+  title: "Hand-off: Move fixed contracts to variable / usage-based pricing",
+  detail: "Cash is 12 and health is 40.",
+  writtenAt: "2026-10-20T18:00:00.000Z",
+  figuresUpdatedAt: "2026-10-20T08:00:00.000Z",
+  liveHealth: { overall: 67, weakestLabel: null, weakestScore: null },
+});
+assert(freshSentence.includes("Hand-off"), freshSentence);
+assert(!freshSentence.includes(FIGURES_CHANGED_REGENERATE), freshSentence);
+
+const freshBrief = buildFinancialManagerBrief({
+  clientName: "QA US Test LLC",
+  currentFinancials: { revenue: 120000, cash: 40000, netIncome: 8000 },
+  currentPeriodEnd: "2026-09-30",
+  snapshots: [],
+  figuresUpdatedAt: "2026-10-20T08:00:00.000Z",
+  drafts: [
+    {
+      id: "d-fresh",
+      title: handoffCopy,
+      detail: handoffCopy,
+      figuresHash: staleHash,
+      createdAt: "2026-10-20T18:00:00.000Z",
+    },
+  ],
+  canonicalRatios: liveRatios,
+  healthOverall: 67,
+  draftsReady: true,
+  formatMoney: (amount) => `$${amount}`,
+});
+assert(freshBrief.drafts.length === 1, "a fresh hand-off draft stays on the brief");
+assert(freshBrief.drafts[0]!.title.includes("Hand-off"), freshBrief.drafts[0]!.title);
+assert(!freshBrief.drafts[0]!.refresh, "a draft created after the latest upload is not marked regenerate");
 
 console.log("draft-live-figures ok");

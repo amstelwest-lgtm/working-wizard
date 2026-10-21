@@ -31,6 +31,7 @@ import {
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { formatMoneyUnit, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { cashCycleStory } from "@/lib/report-coherence";
+import { NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -73,6 +74,8 @@ export type CashCyclePDFProps = {
   sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
+  /** Source books. Day tiles stay blank when these have no balance sheet. */
+  financials?: object | null;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -163,8 +166,23 @@ const tl = StyleSheet.create({
   },
 });
 
-function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string }) {
+function CycleTimeline({
+  d,
+  accent,
+  missing = false,
+}: {
+  d: WorkingCapitalData;
+  accent: string;
+  missing?: boolean;
+}) {
   const market = usePdfMarket();
+  if (missing) {
+    return (
+      <View style={tl.wrap}>
+        <Text style={tl.legendNote}>{NOT_ENOUGH_DATA}</Text>
+      </View>
+    );
+  }
   const receivables = t("receivables", market);
   const payables = t("payables", market);
   const opDays = d.inventory_days + d.wip_days + d.debtor_days; // operating cycle length
@@ -315,14 +333,25 @@ export function CashCyclePDF({
   reviewSignoff,
   operatingProfile,
   market,
+  financials,
 }: CashCyclePDFProps) {
   const theme = resolveTheme(accountantProfile);
   const m = market ?? ZA_MARKET;
   const dso = t("dso", m);
   const dpo = t("dpo", m);
+  const dayMissing = (name: string, value: number) =>
+    renderedMetricMissing({ value, name, financials });
+  const missing =
+    dayMissing("Debtor Days", d.debtor_days) &&
+    dayMissing("Inventory Days", d.inventory_days) &&
+    dayMissing("Creditor Days", d.creditor_days);
+  const dayText = (name: string, value: number) =>
+    dayMissing(name, value) ? "—" : `${Math.round(value)} d`;
   const hs = d.health_scores ?? {};
   const dailyRevenue = d.annual_revenue / 365;
-  const story = cashCycleStory({
+  const story = missing
+    ? null
+    : cashCycleStory({
     ccc: d.cash_conversion_cycle,
     dailyRevenue,
     formatMoney: (n) => fmtRandCompact(n, m),
@@ -331,7 +360,14 @@ export function CashCyclePDF({
 
   const cccDelta = d.ccc_prior !== undefined ? d.cash_conversion_cycle - d.ccc_prior : undefined;
 
-  const figures: HeadlineFigure[] = [
+  const figures: HeadlineFigure[] = story == null
+    ? [
+        { label: "Cash Conversion Cycle", value: "—", note: NOT_ENOUGH_DATA },
+        { label: "Cash Trapped", value: "—", note: NOT_ENOUGH_DATA },
+        { label: dso, value: "—", note: NOT_ENOUGH_DATA },
+        { label: "1-Day Improvement", value: "—", note: NOT_ENOUGH_DATA },
+      ]
+    : [
     {
       label: "Cash Conversion Cycle",
       value: `${Math.round(d.cash_conversion_cycle)} d`,
@@ -371,22 +407,34 @@ export function CashCyclePDF({
     },
   ];
 
-  const narrative = cashCycleNarrative(
-    {
-      ccc: Math.round(d.cash_conversion_cycle),
-      cccPrior: d.ccc_prior !== undefined ? Math.round(d.ccc_prior) : undefined,
-      cashTrapped: d.cash_trapped_rands,
-      dailyRevenue,
-    },
-    operatingProfile,
-    m,
-  );
+  const narrative = missing
+    ? ""
+    : cashCycleNarrative(
+        {
+          ccc: Math.round(d.cash_conversion_cycle),
+          cccPrior: d.ccc_prior !== undefined ? Math.round(d.ccc_prior) : undefined,
+          cashTrapped: d.cash_trapped_rands,
+          dailyRevenue,
+        },
+        operatingProfile,
+        m,
+      );
 
-  const ratioRows = [
+  const ratioRows = missing
+    ? [
+        { name: dso, value: "—", score: 0, unscored: true },
+        { name: "Inventory Days", value: "—", score: 0, unscored: true },
+        { name: dpo, value: "—", score: 0, unscored: true },
+        { name: "Working Capital Days", value: "—", score: 0, unscored: true },
+        { name: "WC Funding Intensity", value: "—", score: 0, unscored: true },
+        { name: "WC Utilization", value: "—", score: 0, unscored: true },
+      ]
+    : [
     {
       name: dso,
       value: `${Math.round(d.debtor_days)} d`,
       score: scored(hs.debtor_days, scoreLowerIsBetterDays(d.debtor_days)),
+      unscored: false,
     },
     {
       name: "Inventory Days",
@@ -451,12 +499,12 @@ export function CashCyclePDF({
 
       <ReportSection
         heading={<SectionHeader title="Conversion Cycle Timeline" color={theme.accent} />}
-        lead={<CycleTimeline d={d} accent={theme.accent} />}
+        lead={<CycleTimeline d={d} accent={theme.accent} missing={missing} />}
       >
       <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
         <MetricBox
           label="Inventory Days"
-          value={`${Math.round(d.inventory_days)} d`}
+          value={dayText("Inventory Days", d.inventory_days)}
           change={
             d.inventory_days_prior !== undefined && d.inventory_days_prior !== 0
               ? ((d.inventory_days - d.inventory_days_prior) / d.inventory_days_prior) * 100
@@ -467,7 +515,7 @@ export function CashCyclePDF({
         />
         <MetricBox
           label={dso}
-          value={`${Math.round(d.debtor_days)} d`}
+          value={dayText(dso, d.debtor_days)}
           change={
             d.debtor_days_prior !== undefined && d.debtor_days_prior !== 0
               ? ((d.debtor_days - d.debtor_days_prior) / d.debtor_days_prior) * 100
@@ -478,7 +526,7 @@ export function CashCyclePDF({
         />
         <MetricBox
           label={dpo}
-          value={`${Math.round(d.creditor_days)} d`}
+          value={dayText(dpo, d.creditor_days)}
           change={
             d.creditor_days_prior !== undefined && d.creditor_days_prior !== 0
               ? ((d.creditor_days - d.creditor_days_prior) / d.creditor_days_prior) * 100
@@ -488,7 +536,7 @@ export function CashCyclePDF({
         />
         <MetricBox
           label="Cycle"
-          value={`${Math.round(d.cash_conversion_cycle)} d`}
+          value={dayText("Working Capital Days", d.cash_conversion_cycle)}
           change={
             d.ccc_prior !== undefined && d.ccc_prior !== 0
               ? ((d.cash_conversion_cycle - d.ccc_prior) / d.ccc_prior) * 100
@@ -527,10 +575,12 @@ export function CashCyclePDF({
               marginBottom: 4,
             }}
           >
-            {story.supplierFunded ? "None" : fmtRand(story.trapped, m)}
+            {missing || !story ? "—" : story.supplierFunded ? "None" : fmtRand(story.trapped, m)}
           </Text>
           <Text style={{ fontSize: 8.5, fontFamily: "Helvetica", color: C.body, lineHeight: 1.55 }}>
-            {story.supplierFunded
+            {missing || !story
+              ? NOT_ENOUGH_DATA
+              : story.supplierFunded
               ? "Nothing is trapped in the cycle. Suppliers fund the business, so there is no gap to shorten and no cash to release."
               : `is locked up funding the ${Math.round(d.cash_conversion_cycle)}-day gap. Shortening the cycle by one day releases ${fmtRand(story.dayRelease ?? 0, m)}.`}
           </Text>
@@ -547,6 +597,8 @@ export function CashCyclePDF({
               formattedValue={r.value}
               healthScore={r.score}
               healthTier={scoreTier(r.score)}
+              unscored={"unscored" in r && r.unscored}
+              statusLabel={"unscored" in r && r.unscored ? NOT_ENOUGH_DATA : undefined}
               isAlternate={i % 2 === 1}
             />
           ))}
@@ -558,6 +610,8 @@ export function CashCyclePDF({
               formattedValue={r.value}
               healthScore={r.score}
               healthTier={scoreTier(r.score)}
+              unscored={"unscored" in r && r.unscored}
+              statusLabel={"unscored" in r && r.unscored ? NOT_ENOUGH_DATA : undefined}
               isAlternate={(i + 2) % 2 === 1}
             />
           ))}

@@ -4,6 +4,7 @@
  */
 
 import { formatMoneyCompact, ZA_MARKET, type MoneyMarket } from "@/lib/market";
+import { NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 import { formatQuotedDays, healthBandLabel, scoreTier } from "@/lib/ratios";
 
 export function pct(x: number) {
@@ -16,7 +17,9 @@ export function formatVal(
   f: "x" | "pct" | "days" | "money",
   market: MoneyMarket = ZA_MARKET,
   ratioName?: string,
+  financials?: object | null,
 ) {
+  if (renderedMetricMissing({ value: v, name: ratioName, financials })) return "—";
   if (!isFinite(v)) return "—";
   if (f === "pct") return pct(v);
   if (f === "days") {
@@ -58,7 +61,20 @@ export function tierColor(h: number) {
 }
 
 /** Same words as Overview and Health: Healthy / Watch / Critical. */
-export function tierLabel(h: number) {
+export function tierLabel(
+  h: number,
+  context?: { name?: string; value?: unknown; financials?: object | null },
+) {
+  if (
+    context &&
+    renderedMetricMissing({
+      value: context.value,
+      name: context.name,
+      financials: context.financials,
+    })
+  ) {
+    return NOT_ENOUGH_DATA;
+  }
   if (!isFinite(h)) return "—";
   return healthBandLabel(scoreTier(h));
 }

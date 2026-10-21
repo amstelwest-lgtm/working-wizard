@@ -15,12 +15,14 @@ import { SourceDocumentsView } from "@/components/source-documents-panel";
 import type { SourceDocumentsModel } from "@/lib/source-documents-ui";
 import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { ClientFileSettings } from "@/components/client-file-settings";
 import { CollectionsPanel } from "@/components/collections-panel";
 import { PayablesPanel } from "@/components/payables-panel";
 import { finalizeCollections } from "@/lib/collections";
 import { finalizePayables } from "@/lib/payables";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { BudgetActualMonth } from "@/lib/budget-chart-table";
+import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { DataUpToDate } from "@/components/data-up-to-date";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
@@ -161,7 +163,7 @@ export function RailStudio() {
       replace: true,
     });
   }, [search.tab, search.section, clientId, navigate]);
-  const pane = legacyPaneForSearch(search) ?? "overview";
+  const pane = search.tab === "settings" ? "settings" : (legacyPaneForSearch(search) ?? "overview");
   useEffect(() => {
     if (pane !== "reports") return;
     const id =
@@ -247,6 +249,15 @@ export function RailStudio() {
             ) : null}
             {pane === "reports" ? (
               <ReportsPane clientId={clientId} packView={search.packView} />
+            ) : null}
+            {pane === "settings" ? (
+              <ClientFileSettings
+                clientName="Harbour Glass"
+                owners={[]}
+                pending={[]}
+                onInvite={() => undefined}
+                onPracticeSettings={() => undefined}
+              />
             ) : null}
           </div>
         </div>
@@ -584,6 +595,12 @@ function HealthPane({ clientId }: { clientId: string }) {
                 search: (prev) => accountantClientTabSearch(prev, "health", { section: "pillars" }),
               },
             ]}
+          />
+          <DataRequestsPanel
+            className="mb-4"
+            clientId={clientId}
+            audience="accountant"
+            financials={healthFinancials}
           />
           <ReviewInputsDrawer hint={deliverableDrawerHint("ratios", { financials: HARNESS_FINANCIALS })}>
             <DeliverableInputConfig

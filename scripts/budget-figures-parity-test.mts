@@ -170,7 +170,7 @@ assert(
 const pdfActual = budgetActualFromFinancials(us, US_MARKET);
 const pdf = buildBudgetPdfModel(published, pdfActual ? [pdfActual] : [], US_MARKET);
 const pdfRevenue = pdf.summary.find((row) => row.label === "Revenue");
-const pdfProfit = pdf.summary.find((row) => row.label === "Profit");
+const pdfProfit = pdf.summary.find((row) => row.label === "Operating profit");
 assert(pdf.hasActuals, "the PDF does not say no month actuals when the statement has revenue");
 assert(!/No month actuals/i.test(pdf.headline), pdf.headline);
 assert(Math.abs((pdfRevenue?.actual ?? 0) - 700000) < 1, `PDF actual revenue ${pdfRevenue?.actual}`);

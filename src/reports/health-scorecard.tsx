@@ -12,6 +12,7 @@ import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { C, TIER_META, scoreColor } from "@/components/pdf/theme";
+import { NOT_ENOUGH_DATA } from "@/lib/missing-metrics";
 import { HEALTH_BAND_TABLE, healthBandLabel, scoreTier } from "@/lib/ratios";
 import { pickPillarExtreme, scorecardCountCopy } from "@/lib/report-coherence";
 import { HealthScoreGauge } from "@/components/pdf/health-score-gauge";
@@ -453,19 +454,33 @@ export function HealthScorecardPDF({
         const rendered = ratios.map((r, i) => {
           const spelled = spellLabor(r.ratio_name, market ?? ZA_MARKET);
           const percent = r.formatted_value.split(" · ")[0] ?? r.formatted_value;
-          const ratioName = r.unscored
-            ? `${spelled} — ${r.formatted_value}`
-            : r.annotation
-              ? `${spelled} · ${r.annotation}`
-              : spelled;
+          const missingFigure =
+            r.unscored &&
+            (r.annotation === NOT_ENOUGH_DATA ||
+              r.formatted_value === "—" ||
+              r.formatted_value === NOT_ENOUGH_DATA);
+          const ratioName = missingFigure
+            ? spelled
+            : r.unscored
+              ? `${spelled} — ${r.formatted_value}`
+              : r.annotation
+                ? `${spelled} · ${r.annotation}`
+                : spelled;
           return (
             <RatioRow
               key={r.ratio_key}
               ratioName={ratioName}
-              formattedValue={r.unscored && r.formatted_value.startsWith("n/a") ? "n/a" : percent}
+              formattedValue={
+                missingFigure
+                  ? "—"
+                  : r.unscored && r.formatted_value.startsWith("n/a")
+                    ? "n/a"
+                    : percent
+              }
               healthScore={r.health_score}
               healthTier={r.health_tier}
               unscored={r.unscored}
+              statusLabel={missingFigure ? NOT_ENOUGH_DATA : undefined}
               priorScore={r.prior_period_score}
               isAlternate={i % 2 === 1}
             />

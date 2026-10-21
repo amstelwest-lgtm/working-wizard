@@ -1916,6 +1916,9 @@ function LandingPage() {
               setRegisterReady(true);
               document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
             }}
+            onEmailSignedIn={() => {
+              setSigninOpen(false);
+            }}
           />
         </Suspense>
       )}

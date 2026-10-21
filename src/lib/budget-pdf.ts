@@ -38,7 +38,7 @@ import {
   STATEMENT_PERIOD_OUTSIDE_NOTE,
   STATEMENT_PERIOD_UNKNOWN_NOTE,
 } from "@/lib/budget.bridges";
-import { periodProfitBridge } from "@/lib/period-profit";
+import { periodProfitBridge, statementNetProfit } from "@/lib/period-profit";
 import { inAppAccountantSignoffLine } from "@/lib/review-signoff-stamp";
 import { signoffStatusLine } from "@/lib/signoff-status";
 import { formatReviewDateTime } from "@/lib/market";
@@ -67,6 +67,8 @@ export type BudgetPdfActual = {
   interest?: number;
   /** Tax between profit before tax and net profit. */
   tax?: number;
+  /** Canonical net profit. Not operating profit. */
+  netProfit?: number | null;
   /**
    * The statement gave one operating-expense total and no People / Premises /
    * Operations / Sales split. Do not book that total as Other.
@@ -87,6 +89,8 @@ export type BudgetPdfRow = {
   /** Material and adverse — the row the PDF tints. */
   material: boolean;
   emphasis: boolean;
+  /** The plan stops at operating profit, so this row has no budget column. */
+  hideBudget?: boolean;
 };
 
 export type BudgetPdfSection = {
@@ -126,7 +130,7 @@ const DISPLAY_LABEL: Partial<Record<VarianceTaxonomyKey, string>> = {
   gross_profit: "Gross profit",
   overheads_total: "Operating expenses",
   depreciation: "Depreciation",
-  ebit: "Profit",
+  ebit: "Operating profit",
 };
 
 const BUCKET_ORDER: BudgetOverheadLine["bucket"][] = [
@@ -430,6 +434,7 @@ export function budgetActualFromFinancials(
     },
     interest: bridge.interest,
     tax: bridge.tax,
+    netProfit: statementNetProfit(fin),
     overheadsUnsplit: true,
     ...statementCoverFields(fin),
   };
@@ -670,10 +675,18 @@ export function buildBudgetPdfModel(
       interest += row?.interest ?? 0;
       tax += row?.tax ?? 0;
     }
-    if (Math.abs(interest) >= 1 || Math.abs(tax) >= 1) {
-      const profit = pnlRows.find((row) => row.label === DISPLAY_LABEL.ebit);
-      const profitBudget = profit?.budget ?? budgetSum.ebit;
-      const profitActual = profit?.actual ?? actualSum.ebit;
+    const statedNets = comparedMonths
+      .map((month) => actualByMonth.get(month)?.netProfit)
+      .filter((amount): amount is number => amount != null && Number.isFinite(amount));
+    const profit = pnlRows.find((row) => row.label === DISPLAY_LABEL.ebit);
+    const profitActual = profit?.actual ?? actualSum.ebit;
+    const walkedNet = profitActual - interest - tax;
+    const statedNet = statedNets.length > 0 ? statedNets.reduce((sum, amount) => sum + amount, 0) : null;
+    const netActual = statedNet ?? (Math.abs(interest) >= 1 || Math.abs(tax) >= 1 ? walkedNet : null);
+    const showNet =
+      netActual != null &&
+      (Math.abs(interest) >= 1 || Math.abs(tax) >= 1 || Math.abs(netActual - profitActual) >= 1);
+    if (showNet && netActual != null) {
       if (Math.abs(interest) >= 1) {
         pnlRows.push(
           fromVariance(varianceLine("unmapped", "Interest", 0, interest, false), "Interest"),
@@ -682,19 +695,18 @@ export function buildBudgetPdfModel(
       if (Math.abs(tax) >= 1) {
         pnlRows.push(fromVariance(varianceLine("unmapped", "Tax", 0, tax, false), "Tax"));
       }
-      pnlRows.push(
-        fromVariance(
-          varianceLine(
-            "ebit",
-            "Net profit",
-            profitBudget,
-            profitActual - interest - tax,
-            true,
-          ),
-          "Net profit",
-          true,
-        ),
-      );
+      pnlRows.push({
+        label: "Net profit",
+        budget: 0,
+        actual: netActual,
+        delta: null,
+        deltaPct: null,
+        deltaPctNote: null,
+        signal: null,
+        material: false,
+        emphasis: true,
+        hideBudget: true,
+      });
     }
   }
 

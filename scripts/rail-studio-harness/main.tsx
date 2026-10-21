@@ -291,23 +291,27 @@ const ownerDoorRoute = createRoute({
               : "today";
     return (
       <MarketProvider selection={{ country: "ZA", regionCode: null }}>
-        <OwnerDoorPreview
-          view={search.view ?? "rest"}
-          bot={search.bot ?? null}
-          budgetCase={search.budgetCase ?? "ready"}
-          bill={search.bill}
-          onBot={(next, mode) => {
-            void navigate({
-              to: "/owner-door",
-              search: (prev) => {
-                const view = prev.view ?? "rest";
-                if (next) return { view, bot: next };
-                return { view };
-              },
-              replace: mode === "replace",
-            });
-          }}
-        />
+        <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+          <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
+            <OwnerDoorPreview
+              view={search.view ?? "rest"}
+              bot={search.bot ?? null}
+              budgetCase={search.budgetCase ?? "ready"}
+              bill={search.bill}
+              onBot={(next, mode) => {
+                void navigate({
+                  to: "/owner-door",
+                  search: (prev) => {
+                    const view = prev.view ?? "rest";
+                    if (next) return { view, bot: next };
+                    return { view };
+                  },
+                  replace: mode === "replace",
+                });
+              }}
+            />
+          </div>
+        </main>
         <NoteLayer
           clientId="harness-client"
           tab={noteTab}

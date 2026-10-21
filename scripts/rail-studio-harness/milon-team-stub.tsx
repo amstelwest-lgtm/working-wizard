@@ -310,7 +310,7 @@ export function useMilonTeamFeedStub(clientId: string): MilonTeamFeedApi {
         return {
           ok: false,
           reason: "precard_cap",
-          message: "A card is required at signup. 14-day free trial · up to 5 clients on Starter.",
+          message: "14-day free trial · up to 5 clients on Starter. You add a card once you have seen your first result.",
         };
       }
       const href = `#draft-${id}`;

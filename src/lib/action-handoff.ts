@@ -36,9 +36,28 @@ export function agentPosterSrc(agent: AgentKey): string {
   return POSTER[agent];
 }
 
-export function handoffButtonLabel(agent: AgentKey, assigned: boolean): string {
+function oneSpace(text: string): string {
+  return text.replace(/[ \t]{2,}/g, " ").trim();
+}
+
+export function handoffButtonLabel(agent: AgentKey, assigned: boolean, compact = false): string {
   if (assigned) return `Assigned to ${agentShortName(agent)} ✓`;
-  return `Hand to ${AGENT_DISPLAY_NAME[agent]}`;
+  const name = compact ? agentShortName(agent) : AGENT_DISPLAY_NAME[agent];
+  return oneSpace(`Hand to ${name}`);
+}
+
+/**
+ * Closed Hand to control. A bot assignee reads "Handed to <agent>" so the
+ * click paints the new owner. A person, or nobody, stays "Hand to".
+ * `compact` uses the short name so a 390px row does not clip the label.
+ */
+export function handoffTriggerLabel(assignee: string | null | undefined, compact = false): string {
+  const clean = (assignee ?? "").replace(/\s+/g, " ").trim();
+  if (!clean) return "Hand to";
+  const agent = agentKeyFromAssignee(clean);
+  const shown = compact && agent ? agentShortName(agent) : clean;
+  const verb = agent ? "Handed to" : "Hand to";
+  return oneSpace(`${verb} ${shown}`);
 }
 
 type HandoffMarket = DateMarket;
@@ -257,6 +276,25 @@ export function handoffPhaseFor(input: {
   if (input.finding) return "draft_ready";
   if (!input.findingsReady && status !== "failed" && status !== "dead") return "working";
   return "failed";
+}
+
+/**
+ * Next moves status beside Hand to.
+ * An open run with no draft yet is Working. A saved draft is Draft ready.
+ */
+export function moveRowStatus(input: {
+  runStatus?: string | null;
+  draftId?: string | null;
+  findingsReady?: boolean;
+}): { phase: "working" | "draft_ready" | null; label: string | null; draftId: string | null } {
+  const draftId = input.draftId?.trim() || null;
+  if (draftId) return { phase: "draft_ready", label: "Draft ready", draftId };
+  const status = input.runStatus ?? "";
+  if (status === "queued" || status === "running") return { phase: "working", label: "Working…", draftId: null };
+  if ((status === "succeeded" || status === "partial") && input.findingsReady === false) {
+    return { phase: "working", label: "Working…", draftId: null };
+  }
+  return { phase: null, label: null, draftId: null };
 }
 
 /** Hide a finish note that claims drafts were recorded when this action has no finding id. */

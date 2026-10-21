@@ -3,7 +3,7 @@
  * Counts come from the caller. Empty stays empty. Nothing here is invented.
  */
 import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
-import { repairDraftMetricUnits } from "@/lib/agent-bus";
+import { repairDraftMetricUnits, stripRatioDumpLines } from "@/lib/agent-bus";
 import {
   draftStoredFiguresHash,
   draftStoredHealth,
@@ -94,6 +94,10 @@ export type HomeDraftLive = {
   storedHash?: string | null;
   health?: HealthScoreSnapshot | null;
   storedHealth?: HealthScoreSnapshot | null;
+  /** When this draft was saved. */
+  writtenAt?: string | null;
+  /** Latest upload or ledger sync. */
+  figuresUpdatedAt?: string | null;
 };
 
 /**
@@ -124,7 +128,9 @@ function presentStoredDraft(
   canonicalRatios?: Record<string, number> | null,
   live?: HomeDraftLive | null,
 ): { text: string; stale: boolean; refresh: boolean; regenerate?: boolean } {
-  const base = repairDraftMetricUnits(canonicalScoreProse(rewriteDraftMonthStamp(raw.trim())));
+  const base = repairDraftMetricUnits(
+    canonicalScoreProse(rewriteDraftMonthStamp(stripRatioDumpLines(raw).trim())),
+  );
   if (!base) return { text: "", stale: false, refresh: false };
   const figures: DraftLiveFigures = {
     ratios: canonicalRatios,
@@ -132,6 +138,8 @@ function presentStoredDraft(
     storedHash: live?.storedHash,
     health: live?.health,
     storedHealth: live?.storedHealth,
+    writtenAt: live?.writtenAt,
+    figuresUpdatedAt: live?.figuresUpdatedAt,
   };
   const presented = presentLiveDraft(base, figures);
   return {
@@ -188,6 +196,8 @@ function presentFindingDraft(
     storedHash: draftStoredFiguresHash(row.evidence),
     health: live?.health,
     storedHealth: draftStoredHealth(row.evidence),
+    writtenAt: row.created_at,
+    figuresUpdatedAt: live?.figuresUpdatedAt,
   };
   const title = presentHomeDraftTitle(row.title, canonicalRatios, quote);
   const body = row.detail?.trim() ? presentHomeDraftBody(row.detail, canonicalRatios, quote) : null;

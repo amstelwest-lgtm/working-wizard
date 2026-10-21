@@ -19,12 +19,23 @@ import { toast } from "sonner";
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
+import { NOT_ENOUGH_DATA, renderedMetricMissing } from "@/lib/missing-metrics";
 import { computeRatios, formatQuotedDays, healthBandLabel, scoreTier } from "@/lib/ratios";
 import { liveHealthFromBooks } from "@/lib/health-score";
 import { statementKindFromMetadata } from "@/lib/statement-parse";
-import { planStatementImport, statementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
+import { confirmUploadedStatement, liveStatementSpan, type PeriodChoice } from "@/lib/statement-import-plan";
 import { PDFUploadZone } from "@/components/pdf-upload-zone";
 import { ExtractionReviewModal } from "@/components/extraction-review-modal";
+import { StatementCurrencyNotice } from "@/components/statement-currency-notice";
+import {
+  currencyChoiceAllowsImport,
+  currencyImportRefusal,
+  currencyLabelConfirmFromGate,
+  statementCurrencyGate,
+  withCurrencyLabelConfirm,
+  type CurrencyChoice,
+  type CurrencyGate,
+} from "@/lib/statement-currency";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
 import type { MappedInputs } from "@/components/extraction-review-modal";
 import { useMarketFormat } from "@/contexts/market";
@@ -136,8 +147,15 @@ type RatioRow = {
   nextSteps: string[];
 };
 
-function fmt(v: number, f: RatioRow["format"], market: MoneyMarket = ZA_MARKET, ratioName?: string) {
-  if (!isFinite(v)) return "Not enough data";
+function fmt(
+  v: number,
+  f: RatioRow["format"],
+  market: MoneyMarket = ZA_MARKET,
+  ratioName?: string,
+  financials?: object | null,
+) {
+  if (renderedMetricMissing({ value: v, name: ratioName, financials })) return "—";
+  if (!isFinite(v)) return "—";
   switch (f) {
     case "pct":
       return `${(v * 100).toFixed(1)}%`;
@@ -151,15 +169,15 @@ function fmt(v: number, f: RatioRow["format"], market: MoneyMarket = ZA_MARKET, 
   }
 }
 
-function healthCls(h: number) {
-  if (!isFinite(h)) return "bg-slate-500 text-white";
+function healthCls(h: number, missing = false) {
+  if (missing || !isFinite(h)) return "bg-slate-500 text-white";
   const tier = scoreTier(h);
   if (tier === "healthy") return "bg-emerald-600 text-white";
   if (tier === "at_risk") return "bg-amber-500 text-white";
   return "bg-rose-600 text-white";
 }
-function healthLabel(h: number) {
-  if (!isFinite(h)) return "No data";
+function healthLabel(h: number, missing = false) {
+  if (missing || !isFinite(h)) return NOT_ENOUGH_DATA;
   return healthBandLabel(scoreTier(h));
 }
 
@@ -188,6 +206,19 @@ export function AccountantRatiosPanel({
   const [uploadOpen, setUploadOpen] = useState(false);
   const [pendingExtraction, setPendingExtraction] = useState<MergedExtractionResult | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [storedClientMarket, setStoredClientMarket] = useState<unknown>(null);
+  const [currencyHold, setCurrencyHold] = useState<{
+    extracted: Record<string, string>;
+    statement: {
+      kind?: string;
+      periodStart?: string | null;
+      periodEnd?: string | null;
+      periodMonths?: number | null;
+      currency?: unknown;
+    } | null;
+    gate: CurrencyGate;
+  } | null>(null);
+  const [currencyChoice, setCurrencyChoice] = useState<CurrencyChoice | null>(null);
   // Guards against the autosave effect firing the instant hydration finishes —
   // otherwise merely opening this panel bumps financials_updated_at and falsely
   // invalidates an accountant's sign-off with no real data change.
@@ -209,11 +240,13 @@ export function AccountantRatiosPanel({
       statement?.kind === "mixed"
         ? statement.kind
         : "unknown";
-    return planStatementImport({
+    return confirmUploadedStatement({
       existing: v as unknown as Record<string, unknown>,
       incoming: extracted,
       kind,
-      span: statementSpan(statement?.periodStart, statement?.periodEnd, statement?.periodMonths ?? null),
+      periodStart: statement?.periodStart,
+      periodEnd: statement?.periodEnd,
+      periodMonths: statement?.periodMonths ?? null,
       choice: choice ?? null,
       pillarsBefore: liveHealthFromBooks({
         financials: v as unknown as Record<string, unknown>,
@@ -235,6 +268,37 @@ export function AccountantRatiosPanel({
     }) as Inputs);
   };
 
+  const finishParsed = (
+    extracted: Record<string, string>,
+    statement: {
+      kind?: string;
+      periodStart?: string | null;
+      periodEnd?: string | null;
+      periodMonths?: number | null;
+      currency?: unknown;
+    } | null,
+    confirm: ReturnType<typeof currencyLabelConfirmFromGate> = null,
+  ) => {
+    const gate = statementCurrencyGate({
+      storedMarket: storedClientMarket,
+      extraction: { currency: statement?.currency },
+    });
+    if (currencyImportRefusal(gate, confirm)) {
+      setCurrencyChoice(null);
+      setCurrencyHold({ extracted, statement, gate });
+      toast.message(gate.notice ?? "This file's currency does not match this client.");
+      return;
+    }
+    setCurrencyHold(null);
+    setCurrencyChoice(null);
+    const planned = planParsedImport(extracted, statement);
+    if (planned.action === "choose") toast.message(planned.message);
+    else if (planned.action === "live") {
+      applyPlannedLive(confirm ? withCurrencyLabelConfirm(planned.live ?? {}, confirm) : planned.live);
+      toast.success(planned.message);
+    } else toast.message(planned.message);
+  };
+
   const onUpload = async (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     if (ext === "csv" || file.type === "text/csv" || ext === "txt") {
@@ -251,15 +315,10 @@ export function AccountantRatiosPanel({
         if (filledKeys.length === 0) {
           toast.warning("Couldn't extract any figures from that file.");
         } else {
-          const planned = planParsedImport(
+          finishParsed(
             extracted,
-            (result as { statement?: { kind?: string; periodStart?: string | null; periodEnd?: string | null; periodMonths?: number | null } }).statement ?? null,
+            (result as { statement?: { kind?: string; periodStart?: string | null; periodEnd?: string | null; periodMonths?: number | null; currency?: unknown } }).statement ?? null,
           );
-          if (planned.action === "choose") toast.message(planned.message);
-          else if (planned.action === "live") {
-            applyPlannedLive(planned.live);
-            toast.success(planned.message);
-          } else toast.message(planned.message);
         }
       } catch (e) {
         toast.error(`Upload failed: ${(e as Error).message}`);
@@ -286,15 +345,10 @@ export function AccountantRatiosPanel({
         if (filledKeys.length === 0) {
           toast.warning("Couldn't extract any figures from that file.");
         } else {
-          const planned = planParsedImport(
+          finishParsed(
             extracted,
-            (result as { statement?: { kind?: string; periodStart?: string | null; periodEnd?: string | null; periodMonths?: number | null } }).statement ?? null,
+            (result as { statement?: { kind?: string; periodStart?: string | null; periodEnd?: string | null; periodMonths?: number | null; currency?: unknown } }).statement ?? null,
           );
-          if (planned.action === "choose") toast.message(planned.message);
-          else if (planned.action === "live") {
-            applyPlannedLive(planned.live);
-            toast.success(planned.message);
-          } else toast.message(planned.message);
         }
       } catch (e) {
         toast.error(`Upload failed: ${(e as Error).message}`);
@@ -308,8 +362,18 @@ export function AccountantRatiosPanel({
     inputs: MappedInputs,
     _prefs?: unknown,
     choice?: PeriodChoice | null,
+    period?: { periodStart: string; periodEnd: string; periodMonths: number } | null,
   ) => {
     const meta = pendingExtraction?.document_metadata;
+    const currencyGate = statementCurrencyGate({
+      storedMarket: storedClientMarket,
+      extraction: pendingExtraction,
+    });
+    const labelConfirm = pendingExtraction?.currency_label_confirm ?? null;
+    const currencyRefusal = currencyImportRefusal(currencyGate, labelConfirm);
+    if (currencyRefusal) {
+      return { ok: false as const, message: currencyRefusal };
+    }
     const incoming: Record<string, string> = {};
     for (const [key, val] of Object.entries(inputs)) {
       if (typeof val === "string" && val.trim()) incoming[key] = val;
@@ -318,9 +382,9 @@ export function AccountantRatiosPanel({
       incoming,
       {
         kind: statementKindFromMetadata(meta),
-        periodStart: meta?.period_start_date ?? null,
-        periodEnd: meta?.period_end_date ?? null,
-        periodMonths: meta?.period_months ?? null,
+        periodStart: period?.periodStart ?? meta?.period_start_date ?? null,
+        periodEnd: period?.periodEnd ?? meta?.period_end_date ?? null,
+        periodMonths: period?.periodMonths ?? meta?.period_months ?? null,
       },
       choice ?? null,
     );
@@ -334,20 +398,24 @@ export function AccountantRatiosPanel({
         choice: { replaceLabel: planned.replaceLabel, addLabel: planned.addLabel },
       };
     }
-    if (planned.action === "live") applyPlannedLive(planned.live);
+    const stampedLive = planned.live
+      ? withCurrencyLabelConfirm(planned.live, labelConfirm)
+      : null;
+    if (planned.action === "live") applyPlannedLive(stampedLive);
     setUploadOpen(false);
-    const savedBody = planned.action === "history" ? planned.history : planned.live;
-    if (savedBody && planned.periodLabel) {
+    const savedBody = planned.action === "history" ? planned.history : stampedLive;
+    const stampedBody = savedBody ? withCurrencyLabelConfirm(savedBody, labelConfirm) : null;
+    if (stampedBody && planned.periodLabel) {
       const periodDate =
-        typeof savedBody.periodEnd === "string" && savedBody.periodEnd
-          ? savedBody.periodEnd
+        typeof stampedBody.periodEnd === "string" && stampedBody.periodEnd
+          ? stampedBody.periodEnd
           : new Date().toISOString().slice(0, 10);
-      const ratios = computeRatios(savedBody as never);
+      const ratios = computeRatios(stampedBody as never);
       const { error: snapErr } = await supabase.from("client_financial_snapshots").insert({
         client_id: clientId,
         period_label: planned.periodLabel,
         period_date: periodDate,
-        financials: savedBody as never,
+        financials: stampedBody as never,
         ratios: ratios as never,
         source: "pdf_upload",
       });
@@ -397,10 +465,11 @@ export function AccountantRatiosPanel({
   useEffect(() => {
     supabase
       .from("clients")
-      .select("financials, contact_email, contact_phone, business_type")
+      .select("financials, contact_email, contact_phone, business_type, market")
       .eq("id", clientId)
       .maybeSingle()
       .then(({ data }) => {
+        setStoredClientMarket(data?.market ?? null);
         if (data?.financials) setV({ ...DEFAULTS, ...(data.financials as Partial<Inputs>) });
         setContact({ email: data?.contact_email ?? "", phone: data?.contact_phone ?? "" });
         skipNextAutosave.current = true;
@@ -802,7 +871,12 @@ export function AccountantRatiosPanel({
     ];
   }, [v, market]);
 
-  const sorted = useMemo(() => [...rows].sort((a, b) => a.health - b.health), [rows]);
+  const rowMissing = (r: RatioRow) =>
+    renderedMetricMissing({ value: r.value, name: r.technical, financials: v });
+  const sorted = useMemo(
+    () => [...rows].filter((r) => !renderedMetricMissing({ value: r.value, name: r.technical, financials: v })).sort((a, b) => a.health - b.health),
+    [rows, v],
+  );
   const worst3 = sorted.slice(0, 3);
   const best1 = sorted[sorted.length - 1];
 
@@ -826,11 +900,11 @@ export function AccountantRatiosPanel({
     const lows = worst3
       .map(
         (r, i) =>
-          `${i + 1}. ${r.friendly} (${localizeCopy(r.technical, market)}): ${fmt(r.value, r.format, market, r.technical)} — benchmark ${r.benchmark}\n   Suggested next step: ${localizeCopy(r.nextSteps[0], market)}`,
+          `${i + 1}. ${r.friendly} (${localizeCopy(r.technical, market)}): ${fmt(r.value, r.format, market, r.technical, v)} — benchmark ${r.benchmark}\n   Suggested next step: ${localizeCopy(r.nextSteps[0], market)}`,
       )
       .join("\n\n");
     const high = best1
-      ? `${best1.friendly}: ${fmt(best1.value, best1.format, market, best1.technical)} (benchmark ${best1.benchmark})`
+      ? `${best1.friendly}: ${fmt(best1.value, best1.format, market, best1.technical, v)} (benchmark ${best1.benchmark})`
       : "—";
     const subject = `${clientName} — financial health update & 3 priority actions`;
     const body = `Hi ${clientName},
@@ -853,10 +927,10 @@ Your Milōn accountant`;
   const buildWhatsapp = () => {
     const w = worst3[0];
     const wTxt = w
-      ? `${w.friendly} is at ${fmt(w.value, w.format, market, w.technical)} (benchmark ${w.benchmark}) — worth a closer look.`
+      ? `${w.friendly} is at ${fmt(w.value, w.format, market, w.technical, v)} (benchmark ${w.benchmark}) — worth a closer look.`
       : "";
     const bTxt = best1
-      ? `Good news: ${best1.friendly} is healthy at ${fmt(best1.value, best1.format, market, best1.technical)}.`
+      ? `Good news: ${best1.friendly} is healthy at ${fmt(best1.value, best1.format, market, best1.technical, v)}.`
       : "";
     return `Hi ${clientName}, quick Milōn update.\n\n${bTxt}\n${wTxt}\n\nWant to set up a short call to discuss ${w?.friendly ?? "your numbers"}?`;
   };
@@ -889,15 +963,14 @@ Your Milōn accountant`;
       pdf.text(`Generated: ${date}`, 14, 25);
 
       const tableRows = rows.map((r) => {
-        const health = !isFinite(r.health)
-          ? "—"
-          : healthLabel(r.health);
+        const missing = rowMissing(r);
+        const health = healthLabel(r.health, missing);
         return [
           r.friendly,
           localizeCopy(r.technical, market),
-          fmt(r.value, r.format, market, r.technical),
+          fmt(r.value, r.format, market, r.technical, v),
           r.benchmark,
-          isFinite(r.health) ? `${Math.round(r.health)}%` : "—",
+          missing || !isFinite(r.health) ? "—" : `${Math.round(r.health)}%`,
           health,
         ];
       });
@@ -982,6 +1055,29 @@ Your Milōn accountant`;
           </div>
         </CardHeader>
         <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {currencyHold ? (
+            <div className="col-span-full space-y-2">
+              <StatementCurrencyNotice
+                gate={currencyHold.gate}
+                choice={currencyChoice}
+                onChoice={setCurrencyChoice}
+              />
+              <Button
+                size="sm"
+                data-currency-block={
+                  currencyChoiceAllowsImport(currencyHold.gate, currencyChoice) ? "0" : "1"
+                }
+                disabled={!currencyChoiceAllowsImport(currencyHold.gate, currencyChoice)}
+                onClick={() => {
+                  const confirm = currencyLabelConfirmFromGate(currencyHold.gate);
+                  if (!confirm) return;
+                  finishParsed(currencyHold.extracted, currencyHold.statement, confirm);
+                }}
+              >
+                Import these figures
+              </Button>
+            </div>
+          ) : null}
           {FIELD_LABELS.map((f) => (
             <div key={f.key}>
               <Label className="text-xs text-muted-foreground">
@@ -1039,7 +1135,7 @@ Your Milōn accountant`;
                         {localizeCopy(r.formula, market)}
                       </td>
                       <td className="p-3 text-right font-semibold tabular-nums r">
-                        {fmt(r.value, r.format, market, r.technical)}
+                        {fmt(r.value, r.format, market, r.technical, v)}
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">
@@ -1084,7 +1180,9 @@ Your Milōn accountant`;
                         })()}
                       </td>
                       <td className="p-3">
-                        <Badge className={healthCls(r.health)}>{healthLabel(r.health)}</Badge>
+                        <Badge className={healthCls(r.health, rowMissing(r))}>
+                          {healthLabel(r.health, rowMissing(r))}
+                        </Badge>
                       </td>
                     </tr>
                   );
@@ -1101,7 +1199,7 @@ Your Milōn accountant`;
             <DialogTitle>{openRow?.friendly}</DialogTitle>
             <DialogDescription>
               {openRow ? localizeCopy(openRow.technical, market) : ""} ·{" "}
-              {openRow ? fmt(openRow.value, openRow.format, market, openRow.technical) : ""} · benchmark{" "}
+              {openRow ? fmt(openRow.value, openRow.format, market, openRow.technical, v) : ""} · benchmark{" "}
               {openRow?.benchmark}
             </DialogDescription>
           </DialogHeader>
@@ -1164,6 +1262,8 @@ Your Milōn accountant`;
         <ExtractionReviewModal
           result={pendingExtraction}
           open={reviewOpen}
+          booksHaveSpan={Boolean(liveStatementSpan(v))}
+          storedMarket={storedClientMarket}
           onClose={() => {
             setReviewOpen(false);
             setPendingExtraction(null);

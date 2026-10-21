@@ -2138,6 +2138,7 @@ export type Database = {
           precard_email_drafts: number
           precard_bot_messages: number
           precard_cap_applies: boolean | null
+          stripe_customer_id: string | null
         }
         Insert: {
           created_at?: string
@@ -2160,6 +2161,7 @@ export type Database = {
           precard_email_drafts?: number
           precard_bot_messages?: number
           precard_cap_applies?: boolean | null
+          stripe_customer_id?: string | null
         }
         Update: {
           created_at?: string
@@ -2182,6 +2184,7 @@ export type Database = {
           precard_email_drafts?: number
           precard_bot_messages?: number
           precard_cap_applies?: boolean | null
+          stripe_customer_id?: string | null
         }
         Relationships: []
       }

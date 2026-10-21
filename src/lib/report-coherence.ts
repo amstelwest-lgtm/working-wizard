@@ -10,6 +10,12 @@
 import { GROSS_MARGIN_MAPPING_NOTE, grossMarginLooksImplausible, scoreRatio } from "@/lib/health-score";
 import { formatReportAmount } from "@/lib/market/format";
 import {
+  balanceSheetDayInputsMissing,
+  isDayMetricName,
+  NOT_ENOUGH_DATA,
+  renderedMetricMissing,
+} from "@/lib/missing-metrics";
+import {
   equityMultiplierRatio,
   healthBandLabel,
   interestBurdenRatio,
@@ -441,10 +447,14 @@ export type ScorecardPresentation = {
   unscored: boolean;
 };
 
+function balanceSheetMakesDayMissing(input: { financials?: object | null }): boolean {
+  return balanceSheetDayInputsMissing(input.financials);
+}
+
 /** One presentation for the scorecard row, the DuPont strip, and the asset report. */
 export function presentScorecardRatio(input: {
   name: string;
-  value: number;
+  value: number | null;
   equity?: number | null;
   currency?: string | null;
   periodMonths?: number | null;
@@ -453,11 +463,32 @@ export function presentScorecardRatio(input: {
   cashFlowKnown?: boolean;
   /** Industry label. An implausible gross margin is not scored Healthy. */
   industry?: string | null;
+  /** Source books. A day count of 0 is missing when these have no AR, inventory, or payables. */
+  financials?: object | null;
 }): ScorecardPresentation {
+  const grossValue = typeof input.value === "number" ? input.value : Number.NaN;
+  if (
+    isDayMetricName(input.name) &&
+    renderedMetricMissing({
+      value: input.value,
+      name: input.name,
+      financials: input.financials,
+    }) &&
+    (balanceSheetMakesDayMissing(input) || !DAYS_NOT_MEANINGFUL_ROWS.has(input.name))
+  ) {
+    return {
+      include: true,
+      text: "—",
+      headline: "—",
+      scoredValue: null,
+      note: NOT_ENOUGH_DATA,
+      unscored: true,
+    };
+  }
   if (
     input.name === "Gross Margin" &&
-    Number.isFinite(input.value) &&
-    grossMarginLooksImplausible(input.value, input.industry)
+    Number.isFinite(grossValue) &&
+    grossMarginLooksImplausible(grossValue, input.industry)
   ) {
     return {
       include: true,
@@ -479,7 +510,7 @@ export function presentScorecardRatio(input: {
   if (input.name === "Return on Equity" || input.name === "Return on Assets") {
     const presented = presentReturn({
       ratioName: input.name,
-      value: input.value,
+      value: input.value ?? Number.NaN,
       equity: input.equity,
       currency: input.currency,
       periodMonths: input.periodMonths,

@@ -32,7 +32,8 @@ import {
   type StartOwnerCheckoutResult,
 } from "@/lib/owner-billing";
 import { readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
-import { findCustomerIdByEmail } from "@/lib/stripe-entitlement";
+import { readFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
+import { findFirmCustomerId } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import type { FirmInterval, StripePlanMarket } from "@/lib/stripe-plans";
 
@@ -370,9 +371,14 @@ export async function findOwnerFirmCoverage(
   for (const firm of data) {
     const ownerUserId = firm.owner_user_id;
     if (!ownerUserId) continue;
-    const email = await firmOwnerEmail(ownerUserId);
-    if (!email) continue;
-    const customerId = await findCustomerIdByEmail(stripe, email);
+    const email = (await firmOwnerEmail(ownerUserId)) ?? "";
+    const storedCustomerId = await readFirmStripeCustomerId(firm.id);
+    const customerId = await findFirmCustomerId(stripe, {
+      email,
+      userId: ownerUserId,
+      firmId: firm.id,
+      storedCustomerId,
+    });
     if (!customerId) continue;
     const listed = await stripe.subscriptions.list({
       customer: customerId,
@@ -468,7 +474,13 @@ export async function startOwnerCheckoutForUser(input: {
   }
 
   const stripe = getStripe();
-  const customerId = input.email ? await findCustomerIdByEmail(stripe, input.email) : undefined;
+  const existingOwner = await readOwnerSubscriptionRow(input.userId);
+  const customerId = await findFirmCustomerId(stripe, {
+    email: input.email,
+    userId: input.userId,
+    storedCustomerId: existingOwner?.stripe_customer_id,
+    preferOwnerPlan: true,
+  });
   if (customerId && (await customerHasLiveOwnerSubscription(stripe, customerId))) {
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,

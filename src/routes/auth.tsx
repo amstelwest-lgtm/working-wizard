@@ -69,6 +69,7 @@ import {
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import { PasswordWithShow } from "@/components/show-password";
 import { PasswordResetRequest } from "@/components/password-reset-request";
+import { EmailSignInOption } from "@/components/email-sign-in-option";
 import { MarketPicker } from "@/components/market-picker";
 import {
   AuthEntryCard,
@@ -456,7 +457,9 @@ function AuthPage() {
     try {
       if (mode === "signup") {
         if (!market) {
-          toast.error("Choose a practice location first. A United States practice also needs a state.");
+          toast.error(
+            "Choose a practice location first. A United States practice also needs a state.",
+          );
           return;
         }
         const pending = pendingForSignup(market.country);
@@ -518,8 +521,7 @@ function AuthPage() {
           knownMetaRef.current =
             (data.user.user_metadata as Record<string, unknown> | undefined) ?? {};
           await landAfterAccountantAuth(data.user.id, "signup", hadFirmBefore);
-        }
-        else navigate({ to: afterAuthPath as "/dashboard" });
+        } else navigate({ to: afterAuthPath as "/dashboard" });
       } else {
         if (!isBillingStartPath(next)) clearPendingCheckout();
         // `{ error }` is the failure channel. A 400 invalid_credentials does not throw.
@@ -697,9 +699,9 @@ function AuthPage() {
                     id="auth-full-name"
                     value={fullName}
                     onChange={(e) => {
-                  authFieldDraft = { ...authFieldDraft, fullName: e.target.value };
-                  setFullName(e.target.value);
-                }}
+                      authFieldDraft = { ...authFieldDraft, fullName: e.target.value };
+                      setFullName(e.target.value);
+                    }}
                     required
                   />
                   <AuthEntryFieldLabel htmlFor="auth-firm-name">Firm name</AuthEntryFieldLabel>
@@ -707,9 +709,9 @@ function AuthPage() {
                     id="auth-firm-name"
                     value={firmName}
                     onChange={(e) => {
-                  authFieldDraft = { ...authFieldDraft, firmName: e.target.value };
-                  setFirmName(e.target.value);
-                }}
+                      authFieldDraft = { ...authFieldDraft, firmName: e.target.value };
+                      setFirmName(e.target.value);
+                    }}
                     placeholder="Acme & Partners"
                     required
                   />
@@ -878,6 +880,15 @@ function AuthPage() {
                 </AuthEntryFootnote>
               )}
             </form>
+            {mode === "signin" ? (
+              <EmailSignInOption
+                email={email}
+                door="accountant"
+                tone="entry"
+                disabled={busy}
+                next={next}
+              />
+            ) : null}
           </>
         ) : null}
       </AuthEntryCard>

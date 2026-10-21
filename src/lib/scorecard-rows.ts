@@ -13,18 +13,18 @@
  */
 import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { reportScalarInputs } from "@/lib/equity-coherence";
-import { PILLAR_RATIO_NAMES, pillarForRatioName, scoreRatio, type HealthPillarId } from "@/lib/health-score";
+import { PILLAR_RATIO_NAMES, pillarForRatioName, scoreAndBand, type HealthPillarId } from "@/lib/health-score";
 import { formatReportAmount, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
-import { computeRatios, periodMonthsOf, scoreTier, type HealthTier, type RatioInputs } from "@/lib/ratios";
+import { computeRatios, periodMonthsOf, type HealthTier, type RatioInputs } from "@/lib/ratios";
 import { presentScorecardRatio } from "@/lib/report-coherence";
 
 export type ScorecardRatioRow = {
   ratio_key: string;
   ratio_name: string;
   pillar: "profit" | "assets" | "financing" | "cash";
-  current_value: number;
-  health_score: number;
-  health_tier: HealthTier;
+  current_value: number | null;
+  health_score: number | null;
+  health_tier: HealthTier | null;
   unscored?: boolean;
   formatted_value: string;
   annotation?: string | null;
@@ -54,7 +54,7 @@ function fmtRatioVal(name: string, val: number): string {
 export function scorecardRatiosFromFinancials(
   financials: Record<string, unknown> | null | undefined,
   opts?: { fyStartMonth?: number | null },
-): Record<string, number> {
+): Record<string, number | null> {
   const raw = financials ?? {};
   const fin = reportScalarInputs(raw, opts);
   const ratioInputs: RatioInputs = {
@@ -83,7 +83,7 @@ export function scorecardRatiosFromFinancials(
 }
 
 export function buildScorecardRatioResults(
-  rawRatios: Record<string, number>,
+  rawRatios: Record<string, number | null>,
   market: ResolvedMarket = ZA_MARKET,
   context?: {
     equity?: number | null;
@@ -91,23 +91,25 @@ export function buildScorecardRatioResults(
     partMonth?: boolean;
     cashFlowKnown?: boolean;
     industry?: string | null;
+    financials?: object | null;
   },
 ): ScorecardRatioRow[] {
   const rows: ScorecardRatioRow[] = [];
-  const pushRow = (name: string, val: number, presented: ReturnType<typeof presentScorecardRatio>) => {
+  const pushRow = (name: string, val: number | null, presented: ReturnType<typeof presentScorecardRatio>) => {
     const scoredValue = presented.scoredValue;
-    const score =
+    const band =
       presented.unscored || scoredValue == null
-        ? 0
-        : Math.round(scoreRatio(name, scoredValue, market));
+        ? { score: null, tier: null }
+        : scoreAndBand(name, scoredValue, market);
+    const finiteVal = typeof val === "number" && Number.isFinite(val) ? val : null;
     rows.push({
       ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
       ratio_name: name,
       pillar: pillarForRatioName(name),
-      current_value: scoredValue ?? (Number.isFinite(val) ? val : Number.NaN),
-      health_score: score,
-      health_tier: presented.unscored ? "at_risk" : scoreTier(score),
-      formatted_value: presented.text ?? fmtRatioVal(name, scoredValue ?? val),
+      current_value: scoredValue ?? finiteVal,
+      health_score: band.score,
+      health_tier: band.tier,
+      formatted_value: presented.text ?? fmtRatioVal(name, scoredValue ?? finiteVal ?? Number.NaN),
       annotation: presented.note,
       unscored: presented.unscored || undefined,
     });
@@ -122,6 +124,7 @@ export function buildScorecardRatioResults(
       partMonth: context?.partMonth,
       cashFlowKnown: context?.cashFlowKnown,
       industry: context?.industry,
+      financials: context?.financials,
     });
     if (!presented.include) continue;
     pushRow(name, val, presented);

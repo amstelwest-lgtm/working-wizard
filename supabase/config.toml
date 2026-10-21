@@ -8,11 +8,16 @@ project_id = "jxclnsbsqpixxqlbcapl"
 enable_confirmations = false
 
 # Branded auth emails. Hosted projects do not read these from the repo: paste
-# each file into Dashboard → Authentication → Email Templates. The verify
-# banner sends a magic link, so that template is the one every new owner sees.
+# each file into Dashboard → Authentication → Email Templates.
+# Sign-in links use magic_link.html. The board's "verify later" copy is
+# verify.html — a different file, so the two mails do not share wording.
 [auth.email.template.magic_link]
-subject = "Verify your Milōn email"
+subject = "Sign in to Milōn"
 content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.verify]
+subject = "Verify your Milōn email"
+content_path = "./supabase/templates/verify.html"
 
 [auth.email.template.recovery]
 subject = "Reset your Milōn password"

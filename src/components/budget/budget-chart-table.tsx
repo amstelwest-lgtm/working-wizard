@@ -186,7 +186,7 @@ export function BudgetChartTable({
             {sentence}
           </p>
           {uniformNote ? (
-            <p className="mt-1 text-[13px] leading-snug text-[#8A5A12] dark:text-[#F0D59A]" data-budget-uniform>
+            <p className="mt-1 text-[13px] leading-snug text-[#102A43] dark:text-[#93c5fd]" data-budget-uniform>
               {uniformNote}
             </p>
           ) : null}
@@ -233,7 +233,7 @@ function BudgetRangeTotalsRow({
   const items = [
     ["Revenue", totals.revenue],
     ["Expenses", totals.expenses],
-    ["Net", totals.net],
+    ["Operating profit", totals.net],
   ] as const;
   return (
     <div
@@ -485,7 +485,7 @@ function BudgetMonthTable({
           <tfoot>
             <tr data-budget-totals-row="" className="budget-grid__total">
               <th className="budget-grid__line px-3 py-2 text-left font-semibold" colSpan={1 + months.length * 3 + 3}>
-                Period total · Revenue {money(totals.revenue)} · Expenses {money(totals.expenses)} · Net {money(totals.net)}
+                Period total · Revenue {money(totals.revenue)} · Expenses {money(totals.expenses)} · Operating profit {money(totals.net)}
               </th>
             </tr>
           </tfoot>

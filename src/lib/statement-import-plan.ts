@@ -11,6 +11,9 @@ export const SHEET_PILLARS_HELD_KEY = "sheetPillarsHeld";
 
 export const BALANCE_SHEET_NEXT_ACTION = "Upload a balance sheet to keep cash current.";
 
+/** Shown on the upload panels and at the end of the unreadable-period block. */
+export const SET_PERIOD_DATES = "Set the start and end dates before importing.";
+
 export type PeriodChoice = "replace_ytd" | "add_period";
 
 export type StatementSpan = {
@@ -310,6 +313,104 @@ function withSpan(fields: Record<string, unknown>, span: StatementSpan | null): 
 }
 
 /**
+ * A balance sheet must not replace the income statement's window.
+ * When the books already have a span, the as-of date is not written onto it.
+ * When they do not, only the as-of end is stored. No start and no month count.
+ */
+function balanceSheetIncoming(
+  incoming: Record<string, unknown>,
+  liveSpan: StatementSpan | null,
+  fileSpan: StatementSpan | null,
+): Record<string, unknown> {
+  const next = { ...incoming };
+  delete next.periodStart;
+  delete next.periodMonths;
+  if (liveSpan) {
+    delete next.periodEnd;
+    return next;
+  }
+  const asOf = iso(next.periodEnd) ?? fileSpan?.periodEnd ?? null;
+  if (asOf) next.periodEnd = asOf;
+  else delete next.periodEnd;
+  return next;
+}
+
+export type ConfirmedStatement = ImportPlan & {
+  span: StatementSpan | null;
+  /** Figures the confirm may merge, with only the period it is allowed to stamp. */
+  stamped: Record<string, unknown>;
+};
+
+/**
+ * One confirm for the accountant page, the owner review, and the ratios panel.
+ * A balance sheet skips the range block. Every other kind uses the same
+ * coverage rule: financial-year expansion only when the books have no span.
+ */
+export function confirmUploadedStatement(input: {
+  existing: object | null | undefined;
+  incoming: Record<string, unknown>;
+  kind: StatementKind;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  periodMonths?: number | null;
+  choice?: PeriodChoice | null;
+  market: DateMarket;
+  fyStartMonth?: number | null;
+  preClose?: boolean;
+  pillarsBefore?: readonly HealthPillarSnapshot[] | null;
+}): ConfirmedStatement {
+  if (input.kind === "balance_sheet") {
+    const asOf = iso(input.periodEnd) ?? iso(input.incoming.periodEnd);
+    const incoming = balanceSheetIncoming(
+      asOf ? { ...input.incoming, periodEnd: asOf } : input.incoming,
+      liveStatementSpan(input.existing),
+      null,
+    );
+    const planned = planStatementImport({
+      existing: input.existing,
+      incoming,
+      kind: "balance_sheet",
+      span: null,
+      choice: null,
+      pillarsBefore: input.pillarsBefore,
+      market: input.market,
+    });
+    return { ...planned, span: null, stamped: incoming };
+  }
+  const covered = liveCoverageForImport({
+    existing: input.existing,
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
+    periodMonths: input.periodMonths,
+    fyStartMonth: input.fyStartMonth,
+    preClose: input.preClose,
+  });
+  const incoming = {
+    ...input.incoming,
+    ...(covered.months != null ? { periodMonths: String(covered.months) } : {}),
+    ...(covered.periodEnd ? { periodEnd: covered.periodEnd } : {}),
+    ...(covered.periodStart ? { periodStart: covered.periodStart } : {}),
+  };
+  const planned = planStatementImport({
+    existing: input.existing,
+    incoming,
+    kind: input.kind,
+    span: covered.span,
+    choice: input.choice ?? null,
+    pillarsBefore: input.pillarsBefore,
+    market: input.market,
+  });
+  return { ...planned, span: covered.span, stamped: incoming };
+}
+
+/** Forwards the replace / add choice. A 3-argument adapter drops it and the question loops. */
+export function passStatementChoice<A, B, C, R>(
+  confirm: (result: A, prefs: B, period: C, choice?: PeriodChoice | null) => R,
+): (result: A, prefs: B, period: C, choice?: PeriodChoice | null) => R {
+  return (result, prefs, period, choice) => confirm(result, prefs, period, choice ?? null);
+}
+
+/**
  * Decide what a confirm is allowed to write.
  * `choice` is null until the person picks replace or add.
  */
@@ -325,18 +426,21 @@ export function planStatementImport(input: {
   const existing = (input.existing ?? {}) as Record<string, unknown>;
   const liveSpan = liveStatementSpan(existing);
   const fileSpan = input.span;
+  const pointInTime = input.kind === "balance_sheet";
   const quarter = fileSpan ? quarterTag(fileSpan) : null;
   const replaceLabel = "Replace year-to-date";
   const addLabel = quarter ? `Add as ${quarter}` : "Add as its own period";
   const periodLabel = fileSpan ? spanLabel(fileSpan, input.market) : null;
   const mismatch = Boolean(liveSpan && fileSpan && !spansMatch(liveSpan, fileSpan));
 
-  // An unreadable file must not land on the books' span, and a chosen
+  // A balance sheet is one date. Its as-of parse has no start, so the P&L
+  // range guard must not treat that as an unreadable period.
+  // An unreadable income file must not land on the books' span, and a chosen
   // replace does not invent that span from the financial year.
-  if (!fileSpan && liveSpan) {
+  if (!pointInTime && !fileSpan && liveSpan) {
     return {
       action: "block",
-      message: `Couldn't read the period in this file. The books show ${spanLabel(liveSpan, input.market)}. Set the start and end dates before importing.`,
+      message: `Couldn't read the period in this file. The books show ${spanLabel(liveSpan, input.market)}. ${SET_PERIOD_DATES}`,
       replaceLabel,
       addLabel,
       live: null,
@@ -345,7 +449,7 @@ export function planStatementImport(input: {
     };
   }
 
-  if (mismatch && fileSpan && liveSpan && !input.choice) {
+  if (!pointInTime && mismatch && fileSpan && liveSpan && !input.choice) {
     const copy = choiceCopy(liveSpan, fileSpan, input.market);
     return {
       action: "choose",
@@ -358,11 +462,15 @@ export function planStatementImport(input: {
     };
   }
 
-  const incoming = withSpan(input.incoming, fileSpan);
+  const incoming = pointInTime
+    ? balanceSheetIncoming(input.incoming, liveSpan, fileSpan)
+    : withSpan(input.incoming, fileSpan);
   const missingBalanceSheet = input.kind === "income_statement";
   const keepSheet = missingBalanceSheet && hasSheetPosition(existing);
 
-  if (input.choice === "add_period" && fileSpan) {
+  // A balance sheet always updates the live position. It is not a quarter
+  // that can be filed beside the year-to-date income statement.
+  if (!pointInTime && input.choice === "add_period" && fileSpan) {
     const history = mergeStatementFinancials(null, incoming, input.kind);
     const note = keepSheet ? earlierStatementNote(stampHeld(existing, input.pillarsBefore), input.market) : null;
     return {
@@ -428,6 +536,23 @@ function stampHeld(
     ...existing,
     [SHEET_PILLARS_HELD_KEY]: encodeSheetPillarsHeld(sheetPillarsFromHealth(pillars, asOf)),
   };
+}
+
+/**
+ * The stored row whose own start and end match the file. Add-as-period uses
+ * this. Callers must not reuse the name `statementSpan` for a label: that
+ * hides this function and the lookup throws.
+ */
+export function snapshotCoveringSpan<T extends { financials?: unknown }>(
+  rows: readonly T[] | null | undefined,
+  fileSpan: StatementSpan | null,
+): T | undefined {
+  if (!fileSpan) return undefined;
+  return (rows ?? []).find((row) => {
+    const financials = row.financials as { periodStart?: string; periodEnd?: string } | null;
+    const stored = statementSpan(financials?.periodStart, financials?.periodEnd);
+    return Boolean(stored && stored.periodStart === fileSpan.periodStart && stored.periodEnd === fileSpan.periodEnd);
+  });
 }
 
 /** Prefer the snapshot that matches the live span when several share an end date. */

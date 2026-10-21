@@ -314,9 +314,9 @@ html:not(.dark) .accountant-nav .nav-heading.is-page > .nav-row .nav-label {
 html:not(.dark) .accountant-nav .nav-heading.is-page > .nav-row .nav-chev {
   color: #d8c89a;
 }
-/* Group holding the current page (header itself not the page). */
+/* Group holding the current page (header itself not the page). Cobalt bar. */
 html:not(.dark) .accountant-nav .nav-heading.is-current > .nav-row .nav-label {
-  box-shadow: inset 2px 0 0 rgba(212, 175, 55, 0.55);
+  box-shadow: inset 2px 0 0 #0b5fff;
   color: var(--pp-frame-ink);
 }
 /* Gold marks: the bot-primary dot and the star. */
@@ -367,12 +367,11 @@ html:not(.dark) .accountant-portal .deliverable-main {
     padding: 16px 14px 24px;
   }
 }
-/* At 390 the pencil sits in the right corner. The 16px inset let the next
-   card's last line run under it. */
+/* At 390 the pencil is 40px wide with a 12px inset. Keep at least 52px clear. */
 @media (max-width: 390px) {
   html:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
   html:not(.dark) .owner-door:not([data-screen="chat"]) .deliverable-main {
-    padding-right: 28px;
+    padding-right: 64px;
   }
 }
 
@@ -397,7 +396,7 @@ html:not(.dark) .reports-studio .report-card__rule {
     transparent
   );
 }
-html:not(.dark) .accountant-portal [class*="bg-gradient-to-r"][class*="from-[#2563EB]"] {
+html:not(.dark) .accountant-portal:not(.owner-door) [class*="bg-gradient-to-r"][class*="from-[#2563EB]"] {
   height: 2px;
   background-image: linear-gradient(
     90deg,
@@ -411,6 +410,14 @@ html:not(.dark) .accountant-portal [class*="bg-gradient-to-r"][class*="from-[#25
 html:not(.dark) .accountant-portal [class*="border-[#DBEAFE]"],
 html:not(.dark) .accountant-portal [class*="border-[#dbeafe]"] {
   border-color: var(--pp-gold-line);
+}
+/* Email the owner is a quiet outline. The pale-blue rewrite above must not
+   paint it gold. Cobalt in the light theme, royal blue on the dark canvas. */
+html:not(.dark) .accountant-portal [data-email-owner] {
+  border-color: #0b5fff;
+}
+html.dark .accountant-portal [data-email-owner] {
+  border-color: #60a5fa;
 }
 /* Inner stat tiles stay neutral (quieter than the card edge). */
 html:not(.dark) .accountant-portal [class*="border-amber"] {
@@ -691,7 +698,7 @@ html:not(.dark) .accountant-nav .nav-heading.is-current > .nav-row .nav-ic {
 }
 html:not(.dark) .accountant-portal .deliverable-rail .tab.on .tab-ic,
 html:not(.dark) .accountant-nav .nav-heading.is-page .nav-ic {
-  color: #e0c25f;
+  color: #93c5fd;
 }
 
 /* --- topbar pills on charcoal --- */

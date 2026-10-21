@@ -1,5 +1,6 @@
 import type { SpherePillar } from "@/components/sphere-hero";
 import { dayScoreDriverLabel, isDayScoreDriver } from "@/lib/cash-driver-label";
+import { HEALTH_NOT_ENOUGH_DATA } from "@/lib/health-metric-row";
 import { PILLAR_SHORT_LABELS } from "@/lib/health-score";
 import { HEALTH_BAND_TABLE, type HealthTier } from "@/lib/ratios";
 
@@ -53,7 +54,7 @@ export type BuildSphereArgs = {
   /** pillarHealths object from app.tsx */
   pillarHealths: Record<SpherePillar["id"], number>;
   /** Capped pillar bands from computeOverallHealth. */
-  pillarStatus?: Partial<Record<SpherePillar["id"], HealthTier>>;
+  pillarStatus?: Partial<Record<SpherePillar["id"], HealthTier | null>>;
   /** Unscored reason, such as a missing opening balance. */
   pillarNotes?: Partial<Record<SpherePillar["id"], string | null>>;
   /** per-pillar deltas, if you track them; otherwise omit */
@@ -80,16 +81,18 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
       const noStock = k === "inventoryDays" && args.inventoryApplies === false;
       // Each driver uses its own scored ratio. The financing pillar average
       // must not replace Equity Multiplier — the ratio drawer reads that score.
-      const health = noStock
+      const label = ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k;
+      const tracked = isDayScoreDriver(k) && args.dayCounts != null && !noStock;
+      const days = tracked ? (args.dayCounts?.[k] ?? null) : undefined;
+      const daysUnusable = tracked && (days == null || !Number.isFinite(days));
+      const health = noStock || daysUnusable
         ? Number.NaN
         : k in healthMap && Number.isFinite(healthMap[k])
           ? healthMap[k]
           : Number.NaN;
-      const label = ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k;
-      const tracked = isDayScoreDriver(k) && args.dayCounts != null && !noStock;
-      const days = tracked ? (args.dayCounts?.[k] ?? null) : undefined;
-      const reading = tracked ? dayScoreDriverLabel(label, days, health) : undefined;
-      const note = args.driverNotes?.[k]?.trim() || undefined;
+      const reading = tracked && !daysUnusable ? dayScoreDriverLabel(label, days, health) : undefined;
+      const suppliedNote = args.driverNotes?.[k]?.trim() || undefined;
+      const note = suppliedNote ?? (tracked && days == null ? HEALTH_NOT_ENOUGH_DATA : undefined);
       return {
         key: k,
         label,

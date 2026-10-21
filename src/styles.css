@@ -567,6 +567,30 @@ html:not(.dark) [class*="rounded-"][class*="border"] {
   background-color: #ffffff !important;
 }
 
+/* Sonner success and error stay readable. The rule above would paint a
+   rounded bordered toast white. The Hand to menu sits at z-index 80. */
+html:not(.dark) [data-sonner-toast][data-type="success"],
+html:not(.dark) [data-sonner-toast][data-type="success"][class*="rounded-"][class*="border"] {
+  background-color: #047857 !important;
+  color: #ffffff !important;
+  border-color: #065f46 !important;
+}
+html:not(.dark) [data-sonner-toast][data-type="error"],
+html:not(.dark) [data-sonner-toast][data-type="error"][class*="rounded-"][class*="border"] {
+  background-color: #b91c1c !important;
+  color: #ffffff !important;
+  border-color: #7f1d1d !important;
+}
+html:not(.dark) [data-sonner-toast][data-type="success"] [data-title],
+html:not(.dark) [data-sonner-toast][data-type="success"] [data-description],
+html:not(.dark) [data-sonner-toast][data-type="error"] [data-title],
+html:not(.dark) [data-sonner-toast][data-type="error"] [data-description] {
+  color: #ffffff !important;
+}
+[data-sonner-toaster] {
+  z-index: 200 !important;
+}
+
 /* Inputs always white */
 html:not(.dark) input, html:not(.dark) textarea, html:not(.dark) select {
   background-color: #ffffff !important;
@@ -894,6 +918,27 @@ html:not(.dark) button[data-hand-to-trigger][class*="rounded-"]:hover,
 html.dark button[data-hand-to-trigger]:hover {
   background-color: #2563eb !important;
   border-color: #2563eb !important;
+}
+button[data-hand-to-trigger],
+button[data-handoff-agent] {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  line-height: 1.25;
+}
+button[data-hand-to-trigger] .hand-to-short,
+button[data-handoff-agent] .hand-to-short {
+  display: none;
+}
+@media (max-width: 420px) {
+  button[data-hand-to-trigger] .hand-to-full,
+  button[data-handoff-agent] .hand-to-full {
+    display: none;
+  }
+  button[data-hand-to-trigger] .hand-to-short,
+  button[data-handoff-agent] .hand-to-short {
+    display: inline;
+  }
 }
 .dig-leaf {
   display: flex;
@@ -1655,6 +1700,7 @@ html[data-theme="light"] .firm-band-upgrade .firm-voucher-input:focus {
 }
 .precard-cap-reason { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
 .precard-cap-title { margin: 0; font-size: 15px; line-height: 1.45; font-weight: 650; }
+.precard-cap-price { margin: 8px 0 0; font-size: 15px; line-height: 1.45; font-weight: 650; }
 .precard-cap-button {
   display: inline-flex;
   margin-top: 12px;

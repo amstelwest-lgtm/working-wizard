@@ -31,15 +31,20 @@ export function ActionHandoffButtons({
             data-handoff-agent={agent}
             className={
               waiting
-                ? "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#0B5FFF] bg-white px-2.5 py-2 text-[12px] font-semibold text-[#0B5FFF] disabled:cursor-default disabled:opacity-80 dark:bg-transparent sm:w-auto"
-                : "inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#0B5FFF] px-2.5 py-2 text-[12px] font-semibold text-white hover:bg-[#2563EB] sm:w-auto"
+                ? "inline-flex h-auto w-full max-w-full items-center justify-center gap-1.5 whitespace-normal rounded-lg border border-[#0B5FFF] bg-white px-2.5 py-2 text-left text-[12px] font-semibold leading-snug text-[#0B5FFF] disabled:cursor-default disabled:opacity-80 dark:bg-transparent sm:w-auto"
+                : "inline-flex h-auto w-full max-w-full items-center justify-center gap-1.5 whitespace-normal rounded-lg bg-[#0B5FFF] px-2.5 py-2 text-left text-[12px] font-semibold leading-snug text-white hover:bg-[#2563EB] sm:w-auto"
             }
             onClick={() => {
               if (!waiting) onHandOff(agent);
             }}
           >
-            <img src={agentPosterSrc(agent)} alt="" className="h-5 w-5 rounded-full object-cover" />
-            {waiting ? "Coming online soon" : handoffButtonLabel(agent, assigned)}
+            <img src={agentPosterSrc(agent)} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+            <span className="hand-to-full">
+              {waiting ? "Coming online soon" : handoffButtonLabel(agent, assigned)}
+            </span>
+            <span className="hand-to-short">
+              {waiting ? "Coming online soon" : handoffButtonLabel(agent, assigned, true)}
+            </span>
           </button>
         );
       })}

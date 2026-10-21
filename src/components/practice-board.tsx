@@ -39,6 +39,7 @@ import {
   firmOpenQueriesDestination,
   firstNameOf,
   practiceGreeting,
+  timeGreeting,
   needsAttentionView,
   practiceNeedsAttention,
   portfolioSummaryLine,
@@ -1272,7 +1273,7 @@ function practiceSectionSubtitle(view: PracticeSection): string {
 const accountantPortalStay = new Set<string>();
 
 export function PracticeBoard({ view }: { view: PracticeView }) {
-  const { user } = useAuth();
+  const { user, restoreFailed } = useAuth();
   const navigate = useNavigate();
   const practiceHash = useRouterState({ select: (s) => s.location.hash });
   const practiceAgent = askAgentFromHash(practiceHash);
@@ -1288,7 +1289,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   useEffect(() => {
-    if (!portalUserId) return;
+    if (restoreFailed || !portalUserId) return;
     if (accountantPortalStay.has(portalUserId)) {
       setPortalReady(true);
       return;
@@ -1323,9 +1324,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [portalUserId]);
+  }, [portalUserId, restoreFailed]);
 
-  const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, firmMarket } =
+  const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, headerName, firmMarket } =
     useAccountantProfile();
   const firm: Firm | null =
     firms.find((f) => f.id === firmId) ??
@@ -1886,8 +1887,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     : null;
   const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
   const queriesDestination = firmOpenQueriesDestination(clientRows);
-  const greetName = firstNameOf(greetingSource);
-  const greeting = practiceGreeting(greetingSource);
+  const headerPending = brandLoading && !headerName.trim();
+  const greetName = headerName ? firstNameOf(headerName) : "";
+  const greeting = headerName ? practiceGreeting(headerName) : `${timeGreeting()}.`;
   const bookLoading = loading;
   const clientsPhase = practiceClientsPhase({
     loading: bookLoading || clientsOutcome === "pending",
@@ -2172,10 +2174,18 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               void navigate({ to: "/settings", hash: "firm-billing" });
             }}
           />
-          <span className="profile-chip topbar-profile" title={greetingSource || user?.email || ""}>
-            <span className="av">{profileInitials || "·"}</span>
-            <span className="profile-name">{greetName}</span>
-          </span>
+          {headerPending ? (
+            <span className="profile-chip topbar-profile profile-chip--pending" aria-busy="true">
+              <span className="av milon-skeleton milon-skeleton--circle" />
+              <span className="milon-skeleton profile-name-skeleton" />
+              <span className="sr-only">Loading profile</span>
+            </span>
+          ) : (
+            <span className="profile-chip topbar-profile" title={headerName || profile.firmName || ""}>
+              <span className="av">{profileInitials || "·"}</span>
+              {greetName ? <span className="profile-name">{greetName}</span> : null}
+            </span>
+          )}
           <span className="topbar-theme">
             <ThemeToggle />
           </span>
@@ -2277,7 +2287,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         <PageHeader
           compact
           className="dash-hero"
-          title={greeting}
+          title={
+            headerPending ? (
+              <span className="milon-skeleton dash-greeting-skeleton" aria-hidden="true" />
+            ) : (
+              greeting
+            )
+          }
           subtitle={summaryLine}
           meta={
             <div className="dash-asof">
@@ -2289,6 +2305,16 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             </div>
           }
         />
+        {!bookLoading && clientsPhase === "empty" ? (
+          <button
+            id="wizard-first-client"
+            className="btn gold"
+            type="button"
+            onClick={() => setFirstClientOpen(true)}
+          >
+            Add your first client
+          </button>
+        ) : null}
 
         {/* ===== STATS STRIP ===== */}
         <div className="stats-strip" id="wizard-practice-board">
@@ -2652,7 +2678,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               title="Your book is empty — add the first client"
               description="Add one client. The next step on their page is the one upload or sync that fills Health, Profit, Cash and Budget."
               action={
-                <button className="btn gold" type="button" onClick={() => setFirstClientOpen(true)}>
+                <button id="wizard-first-client" className="btn gold" type="button" onClick={() => setFirstClientOpen(true)}>
                   Add your first client
                 </button>
               }

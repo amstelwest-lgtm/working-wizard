@@ -233,7 +233,11 @@ assert(!Number.isFinite(ratios["Debtor Days"]), `debtor days ${ratios["Debtor Da
 assert(Number.isFinite(ratios["Gross Margin"]), "gross margin still uses this statement");
 for (const name of ["Fixed Cost Ratio", "Tax Burden", "Debtor Days"] as const) {
   const shown = presentScorecardRatio({ name, value: ratios[name], periodMonths: 3 });
-  assert(shown.text === "Not enough data", `${name} shows ${shown.text}`);
+  if (name === "Debtor Days") {
+    assert(shown.text === "—" && shown.note === "Not enough data" && shown.unscored, `${name} shows ${shown.text}`);
+  } else {
+    assert(shown.text === "Not enough data", `${name} shows ${shown.text}`);
+  }
 }
 
 const added = planStatementImport({
@@ -287,9 +291,7 @@ assert(Math.abs(chart.revenue - versus!.budgetRevenue) < 1, `chart revenue ${cha
 assert(Math.abs(chart.net - versus!.budgetEbit) < 1, `chart net ${chart.net} vs ${versus!.budgetEbit}`);
 assert(Math.abs(chart.revenue - 242667) > 1000, "the chart is not the quarter annualised as nine months");
 const year = ownerYearFromStatement(versus);
-const tableNet =
-  year && versus!.chip === "Estimated from statement pace" ? versus!.budgetEbit : year?.netProfit;
-assert(tableNet != null && Math.abs(tableNet - versus!.budgetEbit) < 1, `year net ${tableNet} vs ${versus!.budgetEbit}`);
+assert(year?.netProfit == null, `a quarter with no net income does not borrow operating profit ${year?.netProfit}`);
 assert(!hasPriorYearFigures(null), "no prior year");
 assert(!ownerBudgetHowBuilt(false).includes("last year"), ownerBudgetHowBuilt(false));
 assert(ownerBudgetHowBuilt(true).includes("last year's actuals"), "a real prior year still says so");
@@ -309,7 +311,7 @@ const verdict = renderToStaticMarkup(
 );
 const yearStrip = renderToStaticMarkup(
   createElement(BudgetYearStrip, {
-    thisYear: year ? { ...year, netProfit: tableNet ?? year.netProfit } : null,
+    thisYear: year,
     thisMonths: versus!.periodMonths,
     lastYear: null,
     market: US,
@@ -319,7 +321,8 @@ const yearStrip = renderToStaticMarkup(
 assert(verdict.includes("Revenue vs budget"), "owner verdict names revenue");
 assert(verdict.includes(money(versus!.budgetRevenue)), "verdict revenue is the quarter's plan");
 assert(yearStrip.includes("No prior year on file."), yearStrip);
-assert(yearStrip.includes(money(versus!.budgetEbit)), "the table net profit is the verdict profit");
+assert(yearStrip.includes("Net profit"), "the year table names net profit");
+assert(!yearStrip.includes(money(versus!.budgetEbit)), "operating profit is not shown as net profit");
 assert(!yearStrip.includes("52,000"), "the previous operating income is not the table");
 assert(!verdict.includes("242,667"), "the verdict is not the nine-month annualisation");
 
