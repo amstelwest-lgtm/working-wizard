@@ -1,7 +1,7 @@
 import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { HOMEPAGE_FAQ_ITEMS, HOMEPAGE_OWNER_COST_US } from "@/lib/marketing-faq";
 import type { FaqItem } from "@/lib/seo";
-import { FIRM_TRIAL_SENTENCE, firmUsdListPrice } from "@/lib/stripe-plans";
+import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE, firmUsdListPrice } from "@/lib/stripe-plans";
 
 /** Empty unless VITE_WALKTHROUGH_URL is set. The hero slot stays unrendered. */
 export const WALKTHROUGH_URL = String(import.meta.env.VITE_WALKTHROUGH_URL ?? "").trim();
@@ -15,7 +15,7 @@ export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
 /** Hero note. The pricing bar leads with FIRM_TRIAL_SENTENCE and uses the shorter line under it. */
 const FIRM_TRIAL_THEN_US = `Then ${firmUsdListPrice("starter", "month")}/mo.`;
-export const PRICING_TRIAL_AFTER = `On Starter. A card is required at signup. ${FIRM_TRIAL_THEN_US}`;
+export const PRICING_TRIAL_AFTER = `On Starter. ${FIRM_TRIAL_CARD_NOTE} ${FIRM_TRIAL_THEN_US}`;
 export const FIRM_TRIAL_EXPLORE = `${FIRM_TRIAL_SENTENCE}. ${PRICING_TRIAL_AFTER}`;
 export const HERO_CTA_NOTE = FIRM_TRIAL_EXPLORE;
 export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
@@ -142,9 +142,8 @@ export const PRICING_H2_USD = "Flat USD pricing by active clients, Starter to Sc
 export const PRICING_INTRO =
   "One monthly price, set by how many clients you actively advise. Start on Starter and move up a band as your client list grows.";
 /**
- * VERIFY-2 confirmed. Checkout creates a subscription on the chosen band price
- * (`firmCheckoutSessionParams`: `trial_period_days` 14, `payment_method_collection: "always"`).
- * The paid band bills that price when the trial ends and a card is on file.
+ * Checkout opens after the first result. It collects a card and starts the
+ * 14-day Starter trial. The paid price starts when that trial ends.
  */
 export const PRICING_OWNER_BAR_US = "$39/mo · free when your accountant is on Milōn";
 export const OWNER_OFFER_LABEL = "For business owners";

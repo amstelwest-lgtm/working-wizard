@@ -141,12 +141,16 @@ export function shapeSnapshot(input: {
 }
 
 export function shapeHealth(
-  rawRatios: Record<string, number>,
+  rawRatios: Record<string, number | null>,
   runwayWeeks: number | null,
   copyPack: OverviewCopyPack = "za",
   weakestPillar: string | null = null,
 ): Record<string, unknown> {
-  const display = toDisplayRatios(rawRatios);
+  const finiteRatios: Record<string, number> = {};
+  for (const [key, val] of Object.entries(rawRatios)) {
+    if (typeof val === "number" && Number.isFinite(val)) finiteRatios[key] = val;
+  }
+  const display = toDisplayRatios(finiteRatios);
   const brief = buildOverviewBrief({
     ratios: display,
     runwayWeeks,
@@ -160,7 +164,7 @@ export function shapeHealth(
   const overall = brief.health;
   const weakest = brief.weakest;
   const rows: RatioRow[] = [];
-  for (const [key, val] of Object.entries(rawRatios)) {
+  for (const [key, val] of Object.entries(finiteRatios)) {
     const camel = toCamelKey(key);
     if (!camel || !Number.isFinite(val)) continue;
     rows.push({

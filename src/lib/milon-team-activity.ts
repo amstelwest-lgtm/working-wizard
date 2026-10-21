@@ -3,8 +3,8 @@
  * Numbers are formatted here. Raw decimals never reach the screen.
  */
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "./advisory-narrative";
-import { draftMetricUnit, repairDraftMetricUnits } from "./agent-bus";
-import { formatMoney, type MoneyMarket } from "./market/format";
+import { draftMetricUnit, repairDraftMetricUnits, stripRatioDumpLines } from "./agent-bus";
+import { formatDate, formatMoney, type DateMarket, type MoneyMarket } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
@@ -17,7 +17,7 @@ import {
   snapshotFromLiveQuote,
   type HealthScoreSnapshot,
 } from "./health-snapshot";
-import { quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
+import { figuresMovedAfterDraft, quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
 import { offsetInsideCalendarSpan, repairCalendarFigureLeaks, rewriteDraftMonthStamp } from "./statement-period";
 
 export const TODAY_RATIO_CAP = 3;
@@ -61,6 +61,8 @@ export type AgentFindingRow = {
   evidence: unknown;
   as_of: string | null;
   created_at: string;
+  /** Dedupe clock. Newer than created_at once the same finding is seen again. */
+  last_seen?: string | null;
   /** Null while a draft is waiting. Approved rows stay visible. */
   status?: string | null;
   approved_by?: string | null;
@@ -411,17 +413,35 @@ function tidyRatioPercent(text: string): string {
   return text.replace(/(\d+)\.0%/g, "$1%");
 }
 
-/** Title or detail, with the finding's own figures. 0.6 on a margin becomes 60%. */
+/** Created, and Updated when last_seen is at least a minute later. Market day order. */
+export function draftWhenLabel(
+  createdAt: string | null | undefined,
+  updatedAt: string | null | undefined,
+  market: DateMarket,
+): string | null {
+  const created = (createdAt ?? "").trim();
+  if (!created || Number.isNaN(Date.parse(created))) return null;
+  const createdLabel = formatDate(created, market);
+  const updated = (updatedAt ?? "").trim();
+  const updatedMs = Date.parse(updated);
+  const createdMs = Date.parse(created);
+  if (!updated || Number.isNaN(updatedMs) || updatedMs < createdMs + 60_000) {
+    return `Created ${createdLabel}`;
+  }
+  return `Created ${createdLabel} · Updated ${formatDate(updated, market)}`;
+}
+
 export function formatFindingProse(
   text: string,
   figures?: Record<string, number> | readonly { key: string; value: number }[] | null,
   market: MoneyMarket = ZA_MARKET,
   canonicalRatios?: Record<string, number> | null,
 ): string {
+  const source = stripRatioDumpLines(text);
   const corrected = correctQuotedFigures(withCanonicalRatioFigures(figureEntries(figures), canonicalRatios));
   const formatted = canonicalScoreProse(
     rewriteDraftMonthStamp(
-      stripDoubleCurrency(stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(text, corrected, market))))
+      stripDoubleCurrency(stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(source, corrected, market))))
         .replace(/\s+/g, " ")
         .trim(),
     ),
@@ -608,6 +628,10 @@ export function findingSentence(input: {
   /** When set, a current-state health sentence is checked against this snapshot. */
   liveHealth?: LiveHealthQuote | HealthScoreSnapshot | null;
   evidence?: unknown;
+  /** When this draft was saved. */
+  writtenAt?: string | null;
+  /** Latest upload or ledger sync. A draft at or after this clock stays as written. */
+  figuresUpdatedAt?: string | null;
 }): string {
   const market = input.market ?? ZA_MARKET;
   const title = input.title.replace(/\s+/g, " ").trim();
@@ -619,7 +643,11 @@ export function findingSentence(input: {
   const formatted = formatFindingProse(text, input.figures ?? {}, market, input.canonicalRatios);
   const scored = quoteLiveScoreOnly(formatted, input.liveHealth?.overall);
   const live = narrativeSnapshot(input.liveHealth);
-  text = presentHealthNarrative(scored, live, readStoredHealthSnapshot(input.evidence)).text;
+  const moved = figuresMovedAfterDraft(input.writtenAt, input.figuresUpdatedAt);
+  text =
+    moved === false
+      ? scored
+      : presentHealthNarrative(scored, live, readStoredHealthSnapshot(input.evidence)).text;
   if (!text) return "";
   if (!/[.!?]$/.test(text)) text = `${text}.`;
   return text;

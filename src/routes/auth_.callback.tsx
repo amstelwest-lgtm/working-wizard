@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { acceptOwnerInvite, ensurePracticePortalAccess } from "@/lib/auth.functions";
@@ -88,6 +89,13 @@ import {
 } from "@/lib/landing-sign-in-destination";
 import { shouldCallEnsureOwnClient } from "@/lib/ensure-own-client-choice";
 import {
+  destinationAfterEmailSignIn,
+  EMAIL_SIGN_IN_LINK_FAILED,
+  parseEmailSignInCallback,
+  restoreEmailCodeVerifier,
+  type EmailSignInCallback,
+} from "@/lib/email-sign-in";
+import {
   AuthEntryCard,
   AuthEntryEyebrow,
   AuthEntryShell,
@@ -142,12 +150,68 @@ function AuthCallbackPage() {
   const [practiceError, setPracticeError] = useState("");
   const practiceGateArmed = useRef(false);
   const cancelledRef = useRef(false);
+  const [emailReturn] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      parseEmailSignInCallback(window.location.search, window.location.hash) != null,
+  );
 
   useEffect(() => {
     if (practiceGateArmed.current) return;
     let cancelled = false;
     cancelledRef.current = false;
     const work = (async () => {
+      const emailHop = parseEmailSignInCallback(window.location.search, window.location.hash);
+      if (emailHop) {
+        restoreEmailCodeVerifier();
+        let emailUser: {
+          id: string;
+          user_metadata?: Record<string, unknown>;
+        } | null = null;
+        if (emailHop.method === "verifyOtp") {
+          const verified = await supabase.auth.verifyOtp({
+            token_hash: emailHop.tokenHash,
+            type: emailHop.otpType,
+          });
+          if (verified.error || !verified.data.user) {
+            if (!cancelled) {
+              setWorking(false);
+              setError(EMAIL_SIGN_IN_LINK_FAILED);
+            }
+            return;
+          }
+          emailUser = verified.data.user;
+        } else if (emailHop.method === "exchangeCodeForSession") {
+          const exchanged = await supabase.auth.exchangeCodeForSession(emailHop.code);
+          let sessionUser = exchanged.data.session?.user ?? exchanged.data.user ?? null;
+          if (!sessionUser) {
+            const { data } = await supabase.auth.getSession();
+            sessionUser = data.session?.user ?? null;
+          }
+          if (!sessionUser) {
+            if (!cancelled) {
+              setWorking(false);
+              setError(EMAIL_SIGN_IN_LINK_FAILED);
+            }
+            return;
+          }
+          emailUser = sessionUser;
+        } else {
+          const established = await establishSessionFromOAuthCallback();
+          if (established.error || !established.user) {
+            if (!cancelled) {
+              setWorking(false);
+              setError(EMAIL_SIGN_IN_LINK_FAILED);
+            }
+            return;
+          }
+          emailUser = established.user;
+        }
+        if (cancelled || !emailUser) return;
+        await landEmailUser(emailUser, emailHop);
+        return;
+      }
+
       const established = await establishSessionFromOAuthCallback();
       if (cancelled) return;
       if (established.error) {
@@ -512,6 +576,42 @@ function AuthCallbackPage() {
     setWorking(false);
   }
 
+  async function landEmailUser(
+    user: { id: string; user_metadata?: Record<string, unknown> },
+    hop: EmailSignInCallback,
+  ) {
+    if (cancelledRef.current) return;
+    const next = hop.next ?? undefined;
+    if (isOpsNext(next)) {
+      const tab = lighthouseTabFromOpsNext(next);
+      if (!cancelledRef.current) {
+        void navigate({ to: "/ops", search: tab ? { tab } : {}, replace: true });
+      }
+      return;
+    }
+    const accessTok = accessTokenFromNext(next);
+    if (accessTok) {
+      if (!cancelledRef.current) {
+        void navigate({ to: "/access/$token", params: { token: accessTok }, replace: true });
+      }
+      return;
+    }
+    if (isSmartLandingNext(next)) {
+      if (!cancelledRef.current) void navigate({ to: SMART_LANDING_PATH, replace: true });
+      return;
+    }
+    const path = await destinationAfterEmailSignIn({
+      userId: user.id,
+      door: hop.door,
+      knownMeta: user.user_metadata ?? {},
+    });
+    if (cancelledRef.current) return;
+    if (hop.door === "accountant" && path === "/app") {
+      toast.message("This sign-in is for accounting firms. Opening the business board instead.");
+    }
+    void navigate({ to: path, replace: true });
+  }
+
   async function landGoogleUser(input: {
     user: User;
     intent: "owner" | "accountant" | null;
@@ -701,7 +801,11 @@ function AuthCallbackPage() {
         <OwnerInviteShell>
           <OwnerInviteEyebrow>{inviteContinue ? "Invitation" : "Sign in"}</OwnerInviteEyebrow>
           <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-[#102A43]">
-            {inviteContinue ? "Could not accept invitation" : "Could not sign in with Google"}
+            {inviteContinue
+              ? "Could not accept invitation"
+              : emailReturn
+                ? "Could not sign in"
+                : "Could not sign in with Google"}
           </h1>
           <OwnerInviteCard className="mt-6 text-center">
             <p className="text-sm leading-relaxed text-[#3D5270]">{error}</p>
@@ -744,7 +848,9 @@ function AuthCallbackPage() {
     return (
       <AuthEntryShell>
         <AuthEntryEyebrow>Sign in</AuthEntryEyebrow>
-        <AuthEntryTitle>Could not sign in with Google</AuthEntryTitle>
+        <AuthEntryTitle>
+          {emailReturn ? "Could not sign in" : "Could not sign in with Google"}
+        </AuthEntryTitle>
         <AuthEntryCard className="mt-6 text-center">
           <p className="text-sm leading-relaxed text-[#3D5270]">{error}</p>
           <div className="mt-6 flex flex-col gap-3">
@@ -791,5 +897,10 @@ function AuthCallbackPage() {
     );
   }
 
-  return <AuthEntryShell loading loadingMessage="Signing you in with Google…" />;
+  return (
+    <AuthEntryShell
+      loading
+      loadingMessage={emailReturn ? "Signing you in…" : "Signing you in with Google…"}
+    />
+  );
 }

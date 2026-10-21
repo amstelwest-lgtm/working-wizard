@@ -1,5 +1,10 @@
 /**
- * Firm-product Stripe entitlement (live API by customer email).
+ * Firm-product Stripe entitlement.
+ * The live subscription is found by the stored Stripe customer id
+ * (`firms.stripe_customer_id`), then by firm_id or the owner user id on the
+ * Stripe subscription or customer (`milon_user_id`), then by customer id.
+ * The signed-in email is only a fallback: changing it must not look like
+ * "no plan". A mismatch is logged. This module does not update Stripe.
  * Stripe Dashboard is source of truth until a webhook writes a local row.
  *
  * Owner Spark and invited firm staff (non-owners) are not billed on their
@@ -48,6 +53,10 @@ export type FirmBillingPathDecision = "allow" | "require_billing";
 export type StripeCustomerSubscriptionReader = {
   customers: {
     list: (params: { email: string; limit: number }) => Promise<{ data: Array<{ id: string }> }>;
+    retrieve?: (id: string) => Promise<unknown>;
+    search?: (params: { query: string; limit: number }) => Promise<{
+      data: Array<unknown>;
+    }>;
   };
   subscriptions: {
     list: (params: {
@@ -59,7 +68,39 @@ export type StripeCustomerSubscriptionReader = {
       data: Array<{
         id: string;
         status?: string;
-        metadata?: { milon_plan?: string | null; milon_lookup_key?: string | null } | null;
+        metadata?: {
+          milon_plan?: string | null;
+          milon_lookup_key?: string | null;
+          milon_user_id?: string | null;
+          firm_id?: string | null;
+        } | null;
+        items?: {
+          data?: Array<{
+            price?:
+              | string
+              | {
+                  lookup_key?: string | null;
+                  product?:
+                    | string
+                    | { metadata?: { plan?: string | null; band?: string | null } | null }
+                    | null;
+                }
+              | null;
+          }>;
+        } | null;
+      }>;
+    }>;
+    search?: (params: { query: string; limit: number }) => Promise<{
+      data: Array<{
+        id: string;
+        status?: string;
+        customer?: string | { id?: string | null } | null;
+        metadata?: {
+          milon_plan?: string | null;
+          milon_lookup_key?: string | null;
+          milon_user_id?: string | null;
+          firm_id?: string | null;
+        } | null;
         items?: {
           data?: Array<{
             price?:
@@ -226,6 +267,339 @@ export async function findCustomerIdByEmail(
   if (!trimmed) return undefined;
   const listed = await stripe.customers.list({ email: trimmed, limit: 1 });
   return listed.data[0]?.id;
+}
+
+/** Stripe metadata values we will interpolate into a search query. */
+const STRIPE_METADATA_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export type FirmCustomerLookup = {
+  email?: string | null;
+  /** Owner user id, stored on Checkout as metadata milon_user_id. */
+  userId?: string | null;
+  /** Firm id, stored on Checkout as metadata firm_id when the firm already exists. */
+  firmId?: string | null;
+  /** firms.stripe_customer_id, or owner_subscriptions.stripe_customer_id for Spark. */
+  storedCustomerId?: string | null;
+  /** Owner Checkout prefers the Spark subscription when both share milon_user_id. */
+  preferOwnerPlan?: boolean;
+};
+
+/**
+ * Search query for the firm's Stripe subscription. Email is not part of it.
+ * Returns null when neither id is a uuid, so a bad value cannot be interpolated.
+ */
+export function firmCustomerSearchQuery(input: FirmCustomerLookup): string | null {
+  const parts: string[] = [];
+  const firmId = input.firmId?.trim() ?? "";
+  const userId = input.userId?.trim() ?? "";
+  if (STRIPE_METADATA_ID.test(firmId)) parts.push(`metadata['firm_id']:'${firmId}'`);
+  if (STRIPE_METADATA_ID.test(userId)) parts.push(`metadata['milon_user_id']:'${userId}'`);
+  if (!parts.length) return null;
+  return parts.join(" OR ");
+}
+
+function stripeCustomerId(customer: unknown): string | undefined {
+  if (typeof customer === "string" && customer.startsWith("cus_")) return customer;
+  if (customer && typeof customer === "object" && "id" in customer) {
+    const id = (customer as { id?: unknown }).id;
+    if (typeof id === "string" && id.startsWith("cus_")) return id;
+  }
+  return undefined;
+}
+
+type MetadataSubscription = {
+  status?: string;
+  customer?: string | { id?: string | null } | null;
+  metadata?: {
+    milon_plan?: string | null;
+    milon_lookup_key?: string | null;
+    milon_user_id?: string | null;
+    firm_id?: string | null;
+  } | null;
+  items?: {
+    data?: Array<{
+      price?:
+        | string
+        | {
+            lookup_key?: string | null;
+            product?:
+              | string
+              | { metadata?: { plan?: string | null; band?: string | null } | null }
+              | null;
+          }
+        | null;
+    }>;
+  } | null;
+};
+
+/**
+ * A metadata row belongs to this lookup only when its user id matches.
+ * Naming another firm's id does not hand over that firm's customer.
+ */
+function metadataHit(
+  meta: { firm_id?: string | null; milon_user_id?: string | null } | null | undefined,
+  input: FirmCustomerLookup,
+): { firmHit: boolean; userHit: boolean } | null {
+  const firmId = input.firmId?.trim() ?? "";
+  const userId = input.userId?.trim() ?? "";
+  const metaFirm = meta?.firm_id?.trim() ?? "";
+  const metaUser = meta?.milon_user_id?.trim() ?? "";
+  if (metaUser && userId && metaUser !== userId) return null;
+  if (metaFirm && firmId && metaFirm !== firmId) return null;
+  const firmHit = Boolean(firmId) && metaFirm === firmId;
+  const userHit = Boolean(userId) && metaUser === userId;
+  if (!firmHit && !userHit) return null;
+  return { firmHit, userHit };
+}
+
+/**
+ * Customer id from subscriptions that already carry this firm or owner id.
+ * An entitling firm subscription outranks an owner-plan or canceled row.
+ * The signed-in email is not consulted. Another user's id never matches.
+ */
+export function customerIdFromMetadataSubscriptions(
+  subs: MetadataSubscription[],
+  input: FirmCustomerLookup,
+): string | undefined {
+  const ranked = subs.flatMap((sub) => {
+    const hit = metadataHit(sub.metadata, input);
+    if (!hit) return [];
+    const { firmHit } = hit;
+    const customerId = stripeCustomerId(sub.customer);
+    if (!customerId) return [];
+    const owner = subscriptionIsOwnerPlan(sub);
+    const entitling = subscriptionStatusEntitles(sub.status) && !owner;
+    let rank = (firmHit ? 2 : 0) + (entitling ? 1 : 0);
+    if (input.preferOwnerPlan && owner) rank += 4;
+    return [{ customerId, rank }];
+  });
+  ranked.sort((a, b) => b.rank - a.rank);
+  return ranked[0]?.customerId;
+}
+
+type MetadataCustomer = {
+  id?: string;
+  email?: string | null;
+  metadata?: {
+    milon_user_id?: string | null;
+    firm_id?: string | null;
+  } | null;
+};
+
+function metadataCustomer(value: unknown): MetadataCustomer | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as {
+    id?: unknown;
+    email?: unknown;
+    deleted?: unknown;
+    metadata?: unknown;
+  };
+  if (row.deleted === true) return null;
+  const metadata =
+    row.metadata && typeof row.metadata === "object"
+      ? (row.metadata as { milon_user_id?: string | null; firm_id?: string | null })
+      : null;
+  return {
+    id: typeof row.id === "string" ? row.id : undefined,
+    email: typeof row.email === "string" ? row.email : null,
+    metadata,
+  };
+}
+
+/** Customer id from customers.search rows that carry this firm or owner id. */
+export function customerIdFromMetadataCustomers(
+  customers: MetadataCustomer[],
+  input: FirmCustomerLookup,
+): string | undefined {
+  const ranked = customers.flatMap((customer) => {
+    const hit = metadataHit(customer.metadata, input);
+    if (!hit) return [];
+    const { firmHit } = hit;
+    const customerId = stripeCustomerId(customer.id);
+    if (!customerId) return [];
+    return [{ customerId, rank: firmHit ? 2 : 1 }];
+  });
+  ranked.sort((a, b) => b.rank - a.rank);
+  return ranked[0]?.customerId;
+}
+
+function storedCustomerConflicts(
+  metadata: { firm_id?: string | null; milon_user_id?: string | null } | null | undefined,
+  input: FirmCustomerLookup,
+): boolean {
+  const metaFirm = metadata?.firm_id?.trim() ?? "";
+  const metaUser = metadata?.milon_user_id?.trim() ?? "";
+  const firmId = input.firmId?.trim() ?? "";
+  const userId = input.userId?.trim() ?? "";
+  if (metaFirm && firmId && metaFirm !== firmId) return true;
+  if (metaUser && userId && metaUser !== userId) return true;
+  return false;
+}
+
+/**
+ * The signed-in email moved. Leave the Stripe customer as it is.
+ * A later Checkout still attaches this customer id, so no second customer.
+ */
+function noteStripeEmailDiffers(
+  customerId: string,
+  stripeEmail: string | null | undefined,
+  authEmail: string,
+  via: "stored_customer_id" | "subscription_metadata" | "customer_metadata",
+): void {
+  const stripe = (stripeEmail ?? "").trim().toLowerCase();
+  const auth = authEmail.trim().toLowerCase();
+  if (!stripe || !auth || stripe === auth) return;
+  console.warn(
+    "[stripe] customer email differs from the signed-in email; leaving Stripe unchanged",
+    { customerId, via, stripeEmail: stripe, authEmail: auth },
+  );
+}
+
+async function readStoredCustomer(
+  stripe: StripeCustomerSubscriptionReader,
+  customerId: string,
+): Promise<
+  | {
+      state: "trusted";
+      email: string | null;
+      metadata: { firm_id?: string | null; milon_user_id?: string | null } | null;
+    }
+  | { state: "reject" }
+  | { state: "failed" }
+> {
+  if (!stripe.customers.retrieve) {
+    return { state: "trusted", email: null, metadata: null };
+  }
+  try {
+    const customer = metadataCustomer(await stripe.customers.retrieve(customerId));
+    if (!customer) return { state: "reject" };
+    if (customer.id && customer.id !== customerId) return { state: "reject" };
+    return {
+      state: "trusted",
+      email: customer.email ?? null,
+      metadata: customer.metadata ?? null,
+    };
+  } catch (err) {
+    console.warn(
+      "[stripe] stored customer retrieve failed",
+      err instanceof Error ? err.message : err,
+    );
+    return { state: "failed" };
+  }
+}
+
+/**
+ * The email list found a different customer. Keep the stable one.
+ * Checkout must attach that id so Stripe does not create another customer.
+ */
+async function noteDifferentEmailCustomer(
+  stripe: StripeCustomerSubscriptionReader,
+  stableId: string,
+  email: string,
+  via: "stored_customer_id" | "subscription_metadata" | "customer_metadata",
+): Promise<void> {
+  if (!email) return;
+  let byEmail: string | undefined;
+  try {
+    byEmail = await findCustomerIdByEmail(stripe, email);
+  } catch (err) {
+    console.warn(
+      "[stripe] email customer lookup failed",
+      err instanceof Error ? err.message : err,
+    );
+    return;
+  }
+  if (!byEmail || byEmail === stableId) return;
+  console.warn(
+    "[stripe] stable customer differs from the email customer; keeping the stable customer",
+    { customerId: stableId, emailCustomerId: byEmail, via },
+  );
+}
+
+async function stripeCustomerEmail(
+  stripe: StripeCustomerSubscriptionReader,
+  customerId: string,
+): Promise<string | null> {
+  if (!stripe.customers.retrieve) return null;
+  try {
+    const customer = metadataCustomer(await stripe.customers.retrieve(customerId));
+    return customer?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Firm customer for entitlement, Checkout, and the pre-card mirror.
+ * Stored customer id, then subscription metadata, then customer metadata.
+ * Email is the fallback for a subscription created before milon_user_id
+ * was stamped, and only when that email still matches.
+ */
+export async function findFirmCustomerId(
+  stripe: StripeCustomerSubscriptionReader,
+  input: FirmCustomerLookup,
+): Promise<string | undefined> {
+  const email = input.email?.trim() ?? "";
+  const stored = stripeCustomerId(input.storedCustomerId);
+  let storedRetrieveFailed = false;
+  if (stored) {
+    const read = await readStoredCustomer(stripe, stored);
+    if (read.state === "trusted" && !storedCustomerConflicts(read.metadata, input)) {
+      noteStripeEmailDiffers(stored, read.email, email, "stored_customer_id");
+      await noteDifferentEmailCustomer(stripe, stored, email, "stored_customer_id");
+      return stored;
+    }
+    if (read.state === "failed") storedRetrieveFailed = true;
+  }
+
+  const query = firmCustomerSearchQuery(input);
+  if (query && stripe.subscriptions.search) {
+    try {
+      const found = await stripe.subscriptions.search({ query, limit: 20 });
+      const stable = customerIdFromMetadataSubscriptions(found.data, input);
+      if (stable) {
+        noteStripeEmailDiffers(
+          stable,
+          await stripeCustomerEmail(stripe, stable),
+          email,
+          "subscription_metadata",
+        );
+        await noteDifferentEmailCustomer(stripe, stable, email, "subscription_metadata");
+        return stable;
+      }
+    } catch (err) {
+      console.warn(
+        "[stripe] firm customer metadata search failed",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  if (query && stripe.customers.search) {
+    try {
+      const found = await stripe.customers.search({ query, limit: 20 });
+      const rows = found.data.flatMap((row) => {
+        const customer = metadataCustomer(row);
+        return customer ? [customer] : [];
+      });
+      const stable = customerIdFromMetadataCustomers(rows, input);
+      if (stable) {
+        const row = rows.find((customer) => customer.id === stable);
+        noteStripeEmailDiffers(stable, row?.email, email, "customer_metadata");
+        await noteDifferentEmailCustomer(stripe, stable, email, "customer_metadata");
+        return stable;
+      }
+    } catch (err) {
+      console.warn(
+        "[stripe] firm customer search failed",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  if (stored && storedRetrieveFailed) return stored;
+  if (!email) return undefined;
+  return findCustomerIdByEmail(stripe, email);
 }
 
 export async function emailHasEntitlingSubscription(

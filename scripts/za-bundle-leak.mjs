@@ -9,6 +9,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const root = resolve("dist/client");
+// Tax Specialist is ZA-only on /talk. IRP6, ITR14, SARS, and eFiling stay
+// out of the non-ZA talk path. The server prompt may still name them.
 const needles = [
   "R799",
   "R299",
@@ -19,7 +21,6 @@ const needles = [
   "50%",
   "ITR14",
   "IRP6",
-  "Tax Specialist",
 ];
 const allow = /za-pricing/;
 
@@ -112,6 +113,14 @@ function randInsideWord(text, at) {
   return /[A-Za-z]/.test(text[at - 1]);
 }
 
+/** "R299" inside a content hash (DR299tJa) is not the Starter price. */
+function randPriceToken(text, at, needle) {
+  if (needle !== "R299") return true;
+  const before = at > 0 ? text[at - 1] : "";
+  const after = text[at + needle.length] ?? "";
+  return !/[A-Za-z0-9]/.test(before) && !/[A-Za-z0-9]/.test(after);
+}
+
 const hits = [];
 for (const path of scanned) {
   if (allow.test(path)) continue;
@@ -124,6 +133,7 @@ for (const path of scanned) {
       from = at + needle.length;
       if (needle === "50%" && cssPercent(text, at)) continue;
       if (needle === "rand " && randInsideWord(text, at)) continue;
+      if (!randPriceToken(text, at, needle)) continue;
       const line = text.slice(0, at).split("\n").length;
       const excerpt = text
         .slice(Math.max(0, at - 40), at + needle.length + 40)
@@ -150,8 +160,7 @@ if (hits.length) {
  */
 function minifiedStaticImports(code) {
   const specs = [];
-  const re =
-    /\b(?:import|export)(?!\()(?:[\s\S]*?\bfrom\s*)?["'](\.[^"']+)["']/g;
+  const re = /\b(?:import|export)(?!\()(?:[\s\S]*?\bfrom\s*)?["'](\.[^"']+)["']/g;
   let match;
   while ((match = re.exec(code))) {
     if (match[1]) specs.push(match[1]);
@@ -178,9 +187,7 @@ while (staticQueue.length) {
     if (next && !staticReach.has(next)) staticQueue.push(next);
   }
 }
-const taxReachable = taxChunks.filter(
-  (path) => reachable.has(path) || staticReach.has(path),
-);
+const taxReachable = taxChunks.filter((path) => reachable.has(path) || staticReach.has(path));
 const htmlTax = html.filter((path) => readFileSync(path, "utf8").includes("za-tax-specialist"));
 const entryStatic = [];
 for (const path of seeds) {
@@ -205,4 +212,50 @@ if (taxReachable.length || htmlTax.length || entryStatic.length) {
   process.exit(1);
 }
 console.log(`za-bundle-leak: tax specialist chunk isolated (${taxChunks.length} file(s))`);
+
+/**
+ * Non-ZA /talk ships in the route chunks that render data-talk-view.
+ * Those chunks must not carry rand amounts or SARS terms. The ZA card
+ * is a separate dynamic import and does not render that marker.
+ */
+const talkNeedles = [
+  "SARS",
+  "IRP6",
+  "ITR14",
+  "eFiling",
+  "e-filing",
+  "efiling",
+  "rand ",
+  "ZAR",
+  "R799",
+  "R299",
+];
+const talkHits = [];
+let talkChunks = 0;
+for (const path of js) {
+  const base = path.split("/").pop() ?? "";
+  const named =
+    base.startsWith("talk.") || base.startsWith("prospect-talk-") || base.startsWith("talk-");
+  const text = readFileSync(path, "utf8");
+  if (!named && !text.includes("data-talk-view")) continue;
+  talkChunks += 1;
+  const lower = text.toLowerCase();
+  for (const needle of talkNeedles) {
+    const at =
+      needle === needle.toLowerCase() ? lower.indexOf(needle.toLowerCase()) : text.indexOf(needle);
+    if (at === -1) continue;
+    const excerpt = text.slice(Math.max(0, at - 40), at + needle.length + 40).replace(/\s+/g, " ");
+    talkHits.push(`${path}: ${JSON.stringify(needle)} ${excerpt}`);
+  }
+}
+if (talkChunks === 0) {
+  console.error("za-bundle-leak: expected a non-ZA /talk chunk");
+  process.exit(1);
+}
+if (talkHits.length) {
+  console.log(talkHits.join("\n"));
+  console.error(`za-bundle-leak: ${talkHits.length} SARS or rand hit(s) on the non-ZA /talk path`);
+  process.exit(1);
+}
+console.log(`za-bundle-leak: non-ZA /talk path has no SARS terms (${talkChunks} chunk(s))`);
 console.log("za-bundle-leak: no SA pricing strings in US-reachable assets");

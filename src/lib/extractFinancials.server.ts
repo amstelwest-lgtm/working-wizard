@@ -20,6 +20,7 @@ import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
 import { CONTRA_ASSET_EXTRACTION_RULE, reconcileExtractionResult } from "@/lib/contra-assets";
+import { stampPrintedFields } from "@/lib/statement-currency";
 
 const EXTRACTION_PROMPT = `
 You are extracting figures from a South African financial statement PDF for an
@@ -43,6 +44,10 @@ accounting platform. Follow these rules exactly:
    Do not name any vendor or model.
 8. ${CONTRA_ASSET_EXTRACTION_RULE} This is the one total you may compute from
    two printed lines. Every other figure stays as printed.
+9. Set "currency" to the code printed on the statement. Do not substitute
+   another currency and do not convert the figures. If that code differs from
+   the region named in these instructions, add one extraction_notes bullet:
+   "Currency is <code> as printed, although the document is described as a <region> statement".
 
 Return ONLY valid JSON matching this shape (no markdown, no prose):
 {
@@ -254,6 +259,17 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
       extracted = reconcileExtractionResult(extracted, sourceText);
       extracted = overlayParsedStatement(extracted, sourceText, market);
     }
+    const stamped = stampPrintedFields({
+      currency: extracted.currency,
+      notes: extracted.extraction_notes,
+      text: trustText ? sourceText : null,
+      describedCurrency: market.currency,
+    });
+    extracted = {
+      ...extracted,
+      currency: stamped.currency,
+      extraction_notes: stamped.notes,
+    };
     extracted = applyBalanceSheetTotals(extracted);
     const issues = validateFigures(extracted.current_period.figures);
     assertUsable(assessPortalFigures(extracted.current_period.figures));

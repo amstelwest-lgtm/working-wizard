@@ -3,6 +3,7 @@ import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-but
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import { isTextEntry, overlayMayHandleKey } from "@/lib/dialog-focus";
 import { PasswordWithShow } from "@/components/show-password";
+import { EmailSignInOption } from "@/components/email-sign-in-option";
 import { t, type VisitorCopyPack } from "@/lib/market";
 import { billingStartPath, peekPendingCheckout } from "@/lib/pending-checkout";
 import { readInsightSeen } from "@/lib/funnel-timing";
@@ -38,6 +39,7 @@ export function LandingSignInModal({
   onBackToSignIn,
   onResend,
   onCreateAccount,
+  onEmailSignedIn,
 }: {
   fpMode: boolean;
   fpDone: boolean;
@@ -66,6 +68,11 @@ export function LandingSignInModal({
   onBackToSignIn: () => void;
   onResend: () => void;
   onCreateAccount: () => void;
+  /** 6-digit code established a session. The caller lands it the same way as a password grant. */
+  onEmailSignedIn?: (user: {
+    id: string;
+    user_metadata: Record<string, unknown>;
+  }) => void | Promise<void>;
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -84,7 +91,8 @@ export function LandingSignInModal({
 
   useEffect(() => {
     const root = dialogRef.current;
-    restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    restoreRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusables = () =>
       root
         ? [
@@ -178,8 +186,8 @@ export function LandingSignInModal({
         </div>
         {!fpMode && peekPendingCheckout() ? (
           <p style={{ fontSize: 13, color: "var(--ink-dim)", marginBottom: 18, lineHeight: 1.5 }}>
-            Sign in with this email to resume Stripe Checkout for your firm. Abandoned Checkout
-            does not unlock the accountant workspace.
+            Sign in with this email to resume Stripe Checkout for your firm. Abandoned Checkout does
+            not unlock the accountant workspace.
           </p>
         ) : null}
 
@@ -305,7 +313,16 @@ export function LandingSignInModal({
                 </button>
               ) : null}
             </form>
-            <p style={{ marginTop: 18, fontSize: 12, color: "var(--ink-dim)", textAlign: "center" }}>
+            <EmailSignInOption
+              email={siEmail}
+              door="owner"
+              tone="landing"
+              disabled={siBusy}
+              onSignedIn={onEmailSignedIn}
+            />
+            <p
+              style={{ marginTop: 18, fontSize: 12, color: "var(--ink-dim)", textAlign: "center" }}
+            >
               Accountant?{" "}
               <a href="/auth" style={{ color: "var(--gold-ink)" }}>
                 Sign in to the accountant portal →

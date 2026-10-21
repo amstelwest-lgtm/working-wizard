@@ -31,6 +31,7 @@ import {
   type OverallHealth,
   type ScoreMarket,
   liveHealthFromBooks,
+  numberRatioRecord,
   overviewRatios,
   pillarForRatioName,
   scoreRatio,
@@ -122,7 +123,7 @@ export type PackHealthBlock = {
   overall: number | null;
   status: string;
   label: string;
-  pillars: Array<{ id: HealthPillarId; label: string; score: number | null; status: string }>;
+  pillars: Array<{ id: HealthPillarId; label: string; score: number | null; status: string | null }>;
   weakest: string | null;
 };
 
@@ -562,10 +563,12 @@ export function livePackMetrics(input: {
   const periodMonths = periodMonthsOf(
     (input.financials ?? null) as Record<string, unknown> | null,
   );
-  const ratios = overviewRatios(input.financials, {
-    fyStartMonth: input.fyStartMonth,
-    periodMonths,
-  });
+  const ratios = numberRatioRecord(
+    overviewRatios(input.financials, {
+      fyStartMonth: input.fyStartMonth,
+      periodMonths,
+    }),
+  );
   const health = liveHealthFromBooks({
     financials: input.financials,
     cashflow: input.cashflow,

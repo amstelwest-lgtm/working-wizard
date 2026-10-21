@@ -383,10 +383,9 @@ assert(picker.includes("FUNNEL_SOLO_FIRST"), "plan picker marks Solo when it lea
 assert(picker.includes("Start here"), "plan picker says Solo is where to start");
 assert(!pricing.includes("SA_FIRM_DISCOUNT") || pricing.includes("showSaPricing"), "SA discount stays behind the geo flag");
 assert(prompt.includes(`data-funnel={FUNNEL_CHECKOUT_AFTER_INSIGHT}`), "checkout prompt is the after-insight marker");
-assert(
-  prompt.includes("FIRM_TRIAL_CARD_LINE"),
-  "one card action after the figures uses the locked trial line",
-);
+assert(prompt.includes("TrialCardSentence"), "Health uses the shared trial sentence");
+const sentence = read("src/components/trial-card-sentence.tsx");
+assert(sentence.includes("PRECARD_CAP_MESSAGE"), "the shared sentence is the locked trial line");
 assert(client.includes("<CheckoutAfterInsight />"), "client studio offers Checkout after figures");
 assert(
   client.includes('if (hasFigures && (activeTab === "ask" || activeTab === "overview")) markInsightSeen(firmId)'),

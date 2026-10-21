@@ -208,7 +208,7 @@ export async function buildContext(
   let rankingRatios: RatioRow[] = [];
   let snapPeriod: string | null = null;
   let snapDate: string | null = null;
-  let fallbackRatios: Record<string, number> | null = null;
+  let fallbackRatios: Record<string, number | null> | null = null;
   if (tier !== "none") {
     const { data: snap } = await supabase
       .from("client_financial_snapshots")

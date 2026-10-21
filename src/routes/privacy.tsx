@@ -13,7 +13,7 @@ import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { LANDING_FONT_CSS } from "@/lib/landing-assets";
-import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/privacy")({
@@ -157,9 +157,8 @@ function PrivacyPage() {
       <ul className="mk-list">
         <li>We do not sell your figures, your email list, or your client book.</li>
         <li>
-          We do not store card details. Card numbers are collected by Stripe. Accounting firms put a
-          card on file at signup. {FIRM_TRIAL_SENTENCE} on Starter, then billing runs through Stripe.
-          Milōn never stores the card number.
+          We do not store card details. Card numbers are collected by Stripe. {FIRM_TRIAL_SENTENCE}{" "}
+          on Starter. {FIRM_TRIAL_CARD_NOTE} Milōn never stores the card number.
         </li>
         <li>We do not use your financials to train a public model of our own.</li>
       </ul>

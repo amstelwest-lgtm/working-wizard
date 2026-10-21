@@ -4,7 +4,7 @@
  */
 import { marketingPackForGeo } from "./geo-country.ts";
 import { TAX_TALK, taxFilingAsked } from "./prospect-tax-copy.ts";
-import { prospectSystem } from "./prospect-talk-prompts.ts";
+import { prospectPricingReply, prospectSystem } from "./prospect-talk-prompts.ts";
 import {
   PROSPECT_LEAD_ASK,
   PROSPECT_NO_BOOKS_REPLY,
@@ -15,7 +15,12 @@ import {
   looksLikeInjection,
   mentionsFiling,
   mentionsLiveWrite,
+  methodAsked,
   newProspectToken,
+  plainMethodReply,
+  pricingAsked,
+  PROSPECT_INJECTION_REPLY,
+  PROSPECT_PRICING_HOLD,
   prospectEmailAllowed,
   prospectLeadUtm,
   publicProspectAgent,
@@ -41,6 +46,7 @@ export type ProspectSession = {
   ref: string | null;
   visitorTurns: number;
   leadEmail: string | null;
+  pendingMessage: string | null;
   sampleNonce: string | null;
   createdAt: string;
   expiresAt: string;
@@ -63,6 +69,7 @@ export type ProspectStore = {
   insertSession(row: ProspectSession): Promise<boolean>;
   getSession(tokenHash: string, nowIso: string): Promise<ProspectSession | null>;
   bumpTurn(sessionId: string, ipHash: string, fromTurns: number, atIso: string): Promise<boolean>;
+  setPending(sessionId: string, message: string | null): Promise<void>;
   markLead(sessionId: string, email: string, sampleNonce: string): Promise<void>;
   countLeads(email: string): Promise<number>;
   insertLead(row: ProspectLeadRow): Promise<boolean>;
@@ -103,43 +110,71 @@ function countryOf(geo: string | null, requested: unknown): ProspectCountry {
   return marketingPackForGeo((geo ?? "").trim().toUpperCase(), asked) === "za" ? "ZA" : "US";
 }
 
+/** Shown when a non-ZA visit asks for the Tax Specialist. No SARS form names. */
+export const PROSPECT_TAX_CLOSED_ERROR = "The Tax Specialist covers South African tax.";
+
+/**
+ * Non-ZA geo, a missing country, or a ZA visitor who opted into the US
+ * pack cannot open the tax agent. Returns before any store or model work.
+ */
+export function closedTaxTalk(
+  body: unknown,
+  geoCountry: string | null,
+): { status: 404; error: string } | null {
+  const raw = asRecord(body);
+  const slug = typeof raw.agent === "string" ? raw.agent.trim().toLowerCase() : "";
+  if (slug !== PROSPECT_TAX_SLUG) return null;
+  if (countryOf(geoCountry, raw.market) === "ZA") return null;
+  return { status: 404, error: PROSPECT_TAX_CLOSED_ERROR };
+}
+
 async function agentOf(
   raw: unknown,
   country: ProspectCountry,
 ): Promise<{ ok: true; agent: ProspectAgentCopy } | { ok: false; status: number; error: string }> {
   const slug = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  const agent = publicProspectAgent(slug);
-  if (agent) return { ok: true, agent };
   if (slug === PROSPECT_TAX_SLUG) {
-    if (country !== "ZA") {
-      return { ok: false, status: 404, error: "That agent isn't available." };
-    }
+    if (country !== "ZA") return { ok: false, status: 404, error: PROSPECT_TAX_CLOSED_ERROR };
     return { ok: true, agent: TAX_TALK };
   }
+  const agent = publicProspectAgent(slug);
+  if (agent) return { ok: true, agent };
   return { ok: false, status: 404, error: "That link doesn't match an agent." };
+}
+
+function blockedReply(agent: ProspectAgentCopy, message: string): string | null {
+  if (agent.slug === PROSPECT_TAX_SLUG && taxFilingAsked(message)) return TAX_TALK.filingReply;
+  if (mentionsFiling(message)) return PROSPECT_NO_FILING_REPLY;
+  if (mentionsLiveWrite(message)) return PROSPECT_NO_BOOKS_REPLY;
+  if (looksLikeInjection(message)) return PROSPECT_INJECTION_REPLY;
+  return null;
 }
 
 function replyFor(input: {
   agent: ProspectAgentCopy;
   message: string;
   country: ProspectCountry;
-  askLead: boolean;
   modelText: string | null;
+  figures: "hold" | "allow";
 }): string {
-  if (input.agent.slug === PROSPECT_TAX_SLUG && taxFilingAsked(input.message)) {
-    return TAX_TALK.filingReply;
+  const blocked = blockedReply(input.agent, input.message);
+  if (blocked) return blocked;
+  if (pricingAsked(input.message)) {
+    return input.figures === "allow" ? prospectPricingReply(input.country) : PROSPECT_PRICING_HOLD;
   }
-  if (mentionsFiling(input.message)) return PROSPECT_NO_FILING_REPLY;
-  if (mentionsLiveWrite(input.message)) return PROSPECT_NO_BOOKS_REPLY;
-  if (input.askLead) return PROSPECT_LEAD_ASK;
+  if (input.figures === "hold" && methodAsked(input.message))
+    return plainMethodReply(input.message);
   const drafted = input.modelText ?? scriptedProspectReply(input.agent, false);
-  return guardProspectReply(drafted, input.country, false);
+  return guardProspectReply(drafted, input.country, false, input.figures);
 }
 
 export async function handleProspectRequest(
   body: unknown,
   ctx: ProspectHandlerCtx,
 ): Promise<ProspectHttp> {
+  const closed = closedTaxTalk(body, ctx.geoCountry);
+  if (closed) return { status: closed.status, body: { ok: false, error: closed.error } };
+
   const raw = asRecord(body);
   const action = raw.action === "lead" ? "lead" : raw.action === "turn" ? "turn" : "";
   if (!action) return { status: 400, body: { ok: false, error: "Send a message." } };
@@ -205,6 +240,7 @@ async function takeTurn(
       ref: scope.ref,
       visitorTurns: 0,
       leadEmail: null,
+      pendingMessage: null,
       sampleNonce: null,
       createdAt,
       expiresAt: new Date(ctx.now.getTime() + DAY_MS).toISOString(),
@@ -229,54 +265,77 @@ async function takeTurn(
     return { status: 429, body: { ok: false, error: "Send that once more." } };
   }
   const visitorTurns = fromTurns + 1;
-  const askLead = shouldAskForLead(visitorTurns);
-  const injected = looksLikeInjection(message);
-  let modelText: string | null = null;
-  if (!askLead && !injected && scope.agent.slug !== PROSPECT_TAX_SLUG) {
-    try {
-      modelText = await ctx.model({
-        system: prospectSystem(scope.agent.slug, scope.country),
-        user: message,
-      });
-    } catch {
-      modelText = null;
+  const hasLead = Boolean(active.leadEmail);
+  const askLead = shouldAskForLead(visitorTurns, hasLead);
+  const blocked = blockedReply(scope.agent, message);
+  const openGate = askLead && !blocked;
+  let reply: string;
+  if (blocked) {
+    reply = blocked;
+  } else if (openGate) {
+    await ctx.store.setPending(active.id, message);
+    active.pendingMessage = message;
+    reply = PROSPECT_LEAD_ASK;
+  } else {
+    const figures = hasLead ? "allow" : "hold";
+    let modelText: string | null = null;
+    const skipModel = pricingAsked(message) || (figures === "hold" && methodAsked(message));
+    if (!skipModel) {
+      try {
+        modelText = await ctx.model({
+          system: prospectSystem(scope.agent.slug, scope.country),
+          user: message,
+        });
+      } catch {
+        modelText = null;
+      }
     }
+    reply = replyFor({
+      agent: scope.agent,
+      message,
+      country: scope.country,
+      modelText,
+      figures,
+    });
   }
-  if (!askLead && !injected && scope.agent.slug === PROSPECT_TAX_SLUG && !taxFilingAsked(message)) {
-    try {
-      modelText = await ctx.model({
-        system: prospectSystem(PROSPECT_TAX_SLUG, scope.country),
-        user: message,
-      });
-    } catch {
-      modelText = null;
-    }
-  }
-  const reply = injected
-    ? guardProspectReply("I can only talk about the sample on this page.", scope.country, false)
-    : replyFor({
-        agent: scope.agent,
-        message,
-        country: scope.country,
-        askLead,
-        modelText,
-      });
-  const refusal =
-    reply === PROSPECT_NO_FILING_REPLY ||
-    reply === PROSPECT_NO_BOOKS_REPLY ||
-    reply === TAX_TALK.filingReply;
-  const spoken = askLead && !injected && !refusal ? PROSPECT_LEAD_ASK : reply;
   return {
     status: 200,
     body: {
       ok: true,
       sessionToken,
-      reply: spoken,
-      askLead,
+      reply,
+      askLead: openGate,
       visitorTurns,
       country: scope.country,
     },
   };
+}
+
+async function answerPending(
+  ctx: ProspectHandlerCtx,
+  agent: ProspectAgentCopy,
+  country: ProspectCountry,
+  pending: string,
+): Promise<string> {
+  const blocked = blockedReply(agent, pending);
+  if (blocked) return blocked;
+  if (pricingAsked(pending)) return prospectPricingReply(country);
+  let modelText: string | null = null;
+  try {
+    modelText = await ctx.model({
+      system: prospectSystem(agent.slug, country),
+      user: pending,
+    });
+  } catch {
+    modelText = null;
+  }
+  return replyFor({
+    agent,
+    message: pending,
+    country,
+    modelText,
+    figures: "allow",
+  });
 }
 
 async function submitLead(
@@ -298,7 +357,10 @@ async function submitLead(
     return { status: 400, body: { ok: false, error: "Tell me a little more first." } };
   }
   if (session.leadEmail) {
-    return { status: 200, body: { ok: true, already: true, sampleNonce: session.sampleNonce } };
+    return {
+      status: 200,
+      body: { ok: true, already: true, sampleNonce: session.sampleNonce, continueChat: true },
+    };
   }
 
   const gate = validateProspectLead({
@@ -337,6 +399,13 @@ async function submitLead(
     return { status: 503, body: { ok: false, error: "The sample isn't available right now." } };
   }
   await ctx.store.markLead(session.id, gate.email, sampleNonce);
+  session.leadEmail = gate.email;
+  const pending = session.pendingMessage;
+  await ctx.store.setPending(session.id, null);
+  session.pendingMessage = null;
+  const reply = pending
+    ? await answerPending(ctx, scope.agent, session.country, pending)
+    : "Ask me about the sample on this page.";
   try {
     const mail = trialStartMail({
       name: gate.name,
@@ -361,7 +430,7 @@ async function submitLead(
   } catch {
     /* The sample still opens when the alert cannot be sent. */
   }
-  return { status: 200, body: { ok: true, sampleNonce } };
+  return { status: 200, body: { ok: true, sampleNonce, reply, continueChat: true } };
 }
 
 export function createMemoryProspectStore(): {
@@ -395,6 +464,10 @@ export function createMemoryProspectStore(): {
       row.visitorTurns += 1;
       turns.push({ sessionId, ipHash, createdAt: atIso });
       return true;
+    },
+    async setPending(sessionId, message) {
+      const row = sessions.find((item) => item.id === sessionId);
+      if (row) row.pendingMessage = message;
     },
     async markLead(sessionId, email, sampleNonce) {
       const row = sessions.find((item) => item.id === sessionId);

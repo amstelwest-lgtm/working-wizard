@@ -1273,7 +1273,7 @@ function practiceSectionSubtitle(view: PracticeSection): string {
 const accountantPortalStay = new Set<string>();
 
 export function PracticeBoard({ view }: { view: PracticeView }) {
-  const { user } = useAuth();
+  const { user, restoreFailed } = useAuth();
   const navigate = useNavigate();
   const practiceHash = useRouterState({ select: (s) => s.location.hash });
   const practiceAgent = askAgentFromHash(practiceHash);
@@ -1289,7 +1289,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   useEffect(() => {
-    if (!portalUserId) return;
+    if (restoreFailed || !portalUserId) return;
     if (accountantPortalStay.has(portalUserId)) {
       setPortalReady(true);
       return;
@@ -1324,7 +1324,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [portalUserId]);
+  }, [portalUserId, restoreFailed]);
 
   const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, headerName, firmMarket } =
     useAccountantProfile();

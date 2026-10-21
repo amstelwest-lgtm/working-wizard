@@ -38,7 +38,7 @@ import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { profitStepBand } from "@/lib/health-score";
 import { estimatedTaxNote } from "@/lib/estimated-tax-note";
 import { ownerOutflow } from "@/lib/owner-money";
-import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
+import { periodProfitBridge, statementNetProfit, statementNetProfitFromSteps } from "@/lib/period-profit";
 import { FULL_YEAR_ON_FILE } from "@/lib/statement-period";
 import "./profitability-waterfall.css";
 
@@ -627,13 +627,13 @@ export function priorMarginsFromFinancials(
     statedNetRaw == null || String(statedNetRaw).trim() === ""
       ? null
       : Number(String(statedNetRaw).replace(/,/g, ""));
-  const statedUsable =
-    statedNet != null && Number.isFinite(statedNet) && statedNetIsUsable(bridge.ebit, statedNet);
-  const net = statedUsable
-    ? statedNet
-    : bridge.interestIsFact && bridge.taxIsFact
-      ? bridge.ebit - bridge.interest - bridge.tax
-      : bridge.ebit;
+  const quotedNet = statementNetProfit(fin);
+  const net =
+    quotedNet != null
+      ? quotedNet
+      : bridge.interestIsFact && bridge.taxIsFact
+        ? bridge.ebit - bridge.interest - bridge.tax
+        : bridge.ebit;
   return {
     gross: bridge.grossProfit / bridge.revenue,
     operating: bridge.ebit / bridge.revenue,
@@ -890,12 +890,13 @@ export function ProfitabilityWaterfall({
   const afterOverheads = grossProfit - fixedCosts;
   const operatingProfit = afterOverheads - depreciation;
   const ebt = operatingProfit - interest;
-  const computedNet = ebt - tax;
   const statedNet = figures.statedNetIncome;
-  const netProfit =
-    (!interestIsFact || !taxIsFact) && statedNetIsUsable(operatingProfit, statedNet)
-      ? statedNet!
-      : computedNet;
+  const netProfit = statementNetProfitFromSteps({
+    operatingProfit,
+    interest,
+    tax,
+    statedNetIncome: statedNet,
+  });
   const taxNote = estimatedTaxNote({ clientName, tax, operatingProfit });
   const showDepreciation = Math.abs(depreciation) >= 0.5;
 
@@ -1193,7 +1194,7 @@ export function ProfitabilityWaterfall({
               aria-expanded={detailsOpen}
               onClick={() => setDetailsOpen((open) => !open)}
             >
-              <span className="pw-cell-ic" data-gold="true">
+              <span className="pw-cell-ic">
                 <Sparkles aria-hidden />
               </span>
               <span className="min-w-0">

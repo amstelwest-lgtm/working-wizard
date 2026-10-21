@@ -47,7 +47,7 @@
 .profit-lead-period svg {
   width: 14px;
   height: 14px;
-  color: var(--gold-deep, #ac8400);
+  color: var(--cobalt, #0b5fff);
 }
 
 .dark .profit-lead-sub {
@@ -348,17 +348,6 @@
 .pw-cell-ic svg {
   width: 15px;
   height: 15px;
-}
-
-/* Thin gold accent, used once on the key-insight cell. */
-.pw-cell-ic[data-gold="true"] {
-  background: rgba(212, 175, 55, 0.16);
-  color: var(--gold-deep, #ac8400);
-}
-
-.dark .pw-cell-ic[data-gold="true"] {
-  background: rgba(212, 175, 55, 0.2);
-  color: #e1b85e;
 }
 
 .pw-cell-label {

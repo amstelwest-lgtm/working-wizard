@@ -176,4 +176,15 @@ export interface MergedExtractionResult extends RawExtraction {
   file_names: string[];
   /** Paths such as income_statement.ebitda that were calculated, not printed. */
   derived_fields?: string[];
+  /**
+   * Set only after the person confirms the printed currency label is wrong.
+   * Amounts stay as printed. There is no conversion.
+   */
+  currency_label_confirm?: {
+    fileCurrency: string;
+    clientCurrency: string;
+    choice: "label_wrong";
+    statement: string;
+    at: string;
+  } | null;
 }

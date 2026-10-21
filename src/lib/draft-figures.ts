@@ -26,7 +26,59 @@ export type DraftLiveFigures = {
   health?: HealthScoreSnapshot | null;
   /** Snapshot stored on the draft when it was written. */
   storedHealth?: HealthScoreSnapshot | null;
+  /** When this draft was saved. */
+  writtenAt?: string | null;
+  /** Latest upload or ledger sync. Compared with writtenAt. */
+  figuresUpdatedAt?: string | null;
 };
+
+/** Uploads and ledger syncs. An autosave is not a new set of figures. */
+const FIGURE_SOURCES = new Set([
+  "upload",
+  "pdf_upload",
+  "pdf",
+  "financial_statement",
+  "statement",
+  "xero",
+  "qbo",
+  "sage",
+]);
+
+/**
+ * Newest upload or ledger sync. A row with no source is kept, so an upload
+ * artifact still counts. Autosave and other non-figure rows are left out.
+ */
+export function latestFiguresStamp(
+  rows: readonly { at?: string | null; source?: string | null }[],
+): string | null {
+  let best: string | null = null;
+  let bestMs = Number.NEGATIVE_INFINITY;
+  for (const row of rows) {
+    const source = row.source?.trim().toLowerCase() ?? "";
+    if (source && !FIGURE_SOURCES.has(source)) continue;
+    const at = row.at ?? "";
+    const ms = Date.parse(at);
+    if (!Number.isFinite(ms) || ms <= bestMs) continue;
+    bestMs = ms;
+    best = at;
+  }
+  return best;
+}
+
+/**
+ * Whether the books moved after the draft was written.
+ * Null when either clock is missing, so a move is not invented.
+ * The same clock means the draft was written against the figures on file.
+ */
+export function figuresMovedAfterDraft(
+  writtenAt: string | null | undefined,
+  figuresUpdatedAt: string | null | undefined,
+): boolean | null {
+  const written = Date.parse(writtenAt ?? "");
+  const figures = Date.parse(figuresUpdatedAt ?? "");
+  if (!Number.isFinite(written) || !Number.isFinite(figures)) return null;
+  return figures > written;
+}
 
 /** Stable hash of the live margins and, when known, the live overall. */
 export function draftFiguresHash(input: {
@@ -157,6 +209,11 @@ export type PresentedDraft = {
 export function presentLiveDraft(base: string, live?: DraftLiveFigures | null): PresentedDraft {
   const trimmed = base.trim();
   if (!trimmed) return { text: "", stale: false, refresh: false };
+  // A hash or a quoted score can disagree when write and read round differently.
+  // That is not a figures change. Stale only if the books moved after the draft.
+  if (figuresMovedAfterDraft(live?.writtenAt, live?.figuresUpdatedAt) === false) {
+    return { text: trimmed, stale: false, refresh: false, regenerate: false };
+  }
   const ratios = live?.ratios ?? null;
   const overall = live?.overall ?? null;
   const hasRatios = Boolean(

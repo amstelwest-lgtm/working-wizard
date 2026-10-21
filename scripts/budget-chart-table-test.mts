@@ -104,7 +104,7 @@ assert(later.actual == null, "a month after the window is not in this year");
 const rows = budgetTableRows(doc, views);
 assert(rows.some((row) => row.kind === "subtotal" && row.id === "revenue"), "revenue is a subtotal");
 assert(rows.some((row) => row.kind === "subtotal" && row.id === "overheads"), "overheads are a subtotal");
-assert(rows.some((row) => row.kind === "total" && row.label === "Profit"), "profit is the grand total");
+assert(rows.some((row) => row.kind === "total" && row.label === "Operating profit"), "operating profit is the grand total");
 const march = views.findIndex((row) => row.month === "2026-03");
 const revenue = rows.find((row) => row.id === "revenue")?.cells[march];
 const cogs = rows.find((row) => row.id === "cogs")?.cells[march];

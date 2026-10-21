@@ -221,9 +221,9 @@ const revenueRow = row("Revenue");
 const cogsRow = row("COGS");
 const opexRow = row("Operating expenses");
 const dep = row("Depreciation");
-const profit = row("Profit");
+const profit = row("Operating profit");
 assert(dep?.actual === 9000, `depreciation actual is 9k, got ${dep?.actual}`);
-assert(profit?.actual === 60000, `profit actual is EBIT 60k, got ${profit?.actual}`);
+assert(profit?.actual === 60000, `operating profit actual is EBIT 60k, got ${profit?.actual}`);
 assert(opexRow?.actual === 351000, `operating expenses actual stays 351k, got ${opexRow?.actual}`);
 const actualBridge =
   (revenueRow?.actual ?? 0) -

@@ -52,6 +52,7 @@ import {
   intervalFromLookupKey,
   type FirmBandId,
 } from "@/lib/stripe-plans";
+import { firmIdForOwnerUser, writeFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
 import { getStripe } from "@/lib/stripe.server";
 
 type RetrievedSubscription = {
@@ -209,6 +210,30 @@ async function retrieveFirmSubscription(
   }
 }
 
+const FIRM_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Store the firm customer id after a successful subscription sync. Does not update Stripe. */
+async function rememberFirmStripeCustomer(sub: RetrievedSubscription): Promise<void> {
+  try {
+    const customerId = idOfStripeRef(sub.customer);
+    if (!customerId?.startsWith("cus_")) return;
+    const meta = sub.metadata ?? {};
+    let firmId = (meta.firm_id ?? "").trim();
+    const userId = (meta.milon_user_id ?? "").trim();
+    if (!FIRM_UUID.test(firmId) && FIRM_UUID.test(userId)) {
+      firmId = (await firmIdForOwnerUser(userId)) ?? "";
+    }
+    if (!FIRM_UUID.test(firmId)) return;
+    await writeFirmStripeCustomerId(firmId, customerId);
+  } catch (err) {
+    console.warn(
+      "[stripe] firm customer id was not stored",
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
 export async function syncFirmSubscriptionBand(
   subscriptionId: string,
   stripe: StripeLike = getStripe() as unknown as StripeLike,
@@ -237,6 +262,7 @@ export async function syncFirmSubscriptionBand(
     });
     return { band: null, cancelledReplaced: false, downgradeBlocked: false };
   }
+  await rememberFirmStripeCustomer(sub);
   const replacesFromSession = options?.replacesSubscriptionId?.trim();
   if (replacesFromSession && !metadata.milon_replaces_subscription) {
     metadata.milon_replaces_subscription = replacesFromSession;

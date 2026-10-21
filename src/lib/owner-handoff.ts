@@ -122,7 +122,8 @@ export function handoffAssigneeName(note: string | null | undefined): string | n
 }
 
 export function handoffRequestNote(displayName: string): string {
-  return `Handed to ${displayName}.`;
+  const name = displayName.replace(/\s+/g, " ").trim();
+  return `Handed to ${name}.`;
 }
 
 /** A person on the Hand to menu. The assignee is in the text. The author is the signed-in actor. */
@@ -135,6 +136,91 @@ export function personAssignmentName(note: string | null | undefined): string | 
   const rest = note.slice("Assigned to ".length).trim();
   const name = rest.split(/[.\n]/)[0]?.trim() ?? "";
   return name || null;
+}
+
+/** Compare a Next moves row with the action it created. Prefix and spacing do not matter. */
+export function normalizeMoveLabel(value: string | null | undefined): string {
+  return (value ?? "")
+    .replace(/^hand-off:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * The hand-off is stored on the action, not on the move key.
+ * Match the move key first, then the title with the Hand-off prefix removed.
+ */
+export function moveRowMatches(input: {
+  moveKey: string;
+  title: string;
+  sourceMoveKey?: string | null;
+  driverKey?: string | null;
+  actionTitle?: string | null;
+}): boolean {
+  const key = normalizeMoveLabel(input.moveKey);
+  const title = normalizeMoveLabel(input.title);
+  const source = normalizeMoveLabel(input.sourceMoveKey);
+  const driver = normalizeMoveLabel(input.driverKey);
+  const action = normalizeMoveLabel(input.actionTitle);
+  if (key && (source === key || driver === key)) return true;
+  if (title && action === title) return true;
+  return false;
+}
+
+export type MoveAssignmentRef = {
+  actionItemId: string;
+  sourceMoveKey: string | null;
+  driverKey: string | null;
+  title: string;
+  assigneeName: string | null;
+  /** When the stored hand-off note was written. A blank newer row does not replace it. */
+  assignedAt?: string | null;
+  runStatus?: string | null;
+  draftId?: string | null;
+  findingsReady?: boolean;
+};
+
+function assignmentStamp(row: MoveAssignmentRef): number {
+  if (!row.assigneeName) return Number.NEGATIVE_INFINITY;
+  const at = Date.parse(row.assignedAt ?? "");
+  return Number.isFinite(at) ? at : 0;
+}
+
+/**
+ * The action this Next moves row already created, when one is on file.
+ * A newer row with no hand-off note does not hide the row that has one.
+ * Two noted rows: the later note wins, so a reassign survives an immediate reload.
+ */
+export function assignmentForMove(
+  rows: readonly MoveAssignmentRef[],
+  moveKey: string,
+  title: string,
+): MoveAssignmentRef | null {
+  const key = normalizeMoveLabel(moveKey);
+  const matches = rows.filter((row) =>
+    moveRowMatches({
+      moveKey,
+      title,
+      sourceMoveKey: row.sourceMoveKey,
+      driverKey: row.driverKey,
+      actionTitle: row.title,
+    }),
+  );
+  const exact = matches.filter(
+    (row) => normalizeMoveLabel(row.sourceMoveKey) === key || normalizeMoveLabel(row.driverKey) === key,
+  );
+  const pool = exact.length > 0 ? exact : matches;
+  if (pool.length === 0) return null;
+  const noted = pool.filter((row) => row.assigneeName);
+  const ranked = (noted.length > 0 ? noted : pool).slice();
+  ranked.sort((a, b) => assignmentStamp(b) - assignmentStamp(a));
+  return ranked[0] ?? null;
+}
+
+/** A move-list read may be cached only when it started after the latest committed hand-off. */
+export function moveLoadMayCache(startedEpoch: number, currentEpoch: number): boolean {
+  return startedEpoch === currentEpoch;
 }
 
 /** The draft a finished hand-off may leave for a person. The action title is the label. */
