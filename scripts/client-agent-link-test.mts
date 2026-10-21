@@ -4,9 +4,12 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { SEND_AGENT_FIRM_ALLOWLIST } from "../src/lib/client-agent-send-allowlist.ts";
 import { SEND_FILE_MAX_BYTES } from "../src/lib/client-agent-send.ts";
 import { isBarePublicPath } from "../src/lib/public-marketing.ts";
+import { ClientAgentLinkScreen } from "../src/components/client-agent-link-page.tsx";
 import {
   CONSENT_LINK_BODY,
   FILE_LINK_BODY,
@@ -28,7 +31,9 @@ import {
   mimeAllowed,
   openLinkView,
   pathBelongsToSend,
+  practiceDisplayName,
   resolvePresentedLink,
+  sendPracticeDisplayName,
   sendAttemptLimited,
   sendLinkLogLine,
   sendStoragePath,
@@ -296,6 +301,10 @@ const checklist = toPublicChecklist(
 );
 const checklistJson = JSON.stringify(checklist);
 assert(checklist.length === 1 && checklist[0].itemKey === "irp5", "only her send is on the page");
+assert(
+  checklist[0].label === "IRP5 (only if you had a salaried job)",
+  "an empty IRP5 label uses the salaried-job wording",
+);
 assert(!checklistJson.includes(firm), "the firm id is not on the page");
 assert(
   !checklistJson.includes("salary.pdf") && !checklistJson.includes("other.pdf"),
@@ -473,11 +482,34 @@ assert(
   server.includes("linkPrivacyHeaders") && server.includes("linkLogPath"),
   "the server sets privacy headers and redacts the path",
 );
-assert(page.includes("SilentAgentPortrait"), "the portrait is silent");
-assert(page.includes('face="tax_specialist"'), "Tax Specialist face");
+assert(!page.includes("SilentAgentPortrait"), "the stacked talk portrait is gone");
+assert((page.match(/<OwnerAvatar/g) ?? []).length === 1, "exactly one portrait");
+assert(page.includes('agent="tax_specialist"'), "Tax Specialist face");
+assert(page.includes('size="lg"'), "the portrait uses the agent card size");
+assert(page.includes('variant="character"'), "the portrait is the round character");
+assert(
+  !page.includes("<video") && !page.includes("<audio") && !page.includes("autoPlay"),
+  "the page adds no audio or autoplay",
+);
+assert(!/#(?:d4a550|c4a35a|b7791f)/i.test(page), "the page has no gold primary");
+const portraitAt = page.indexOf("data-client-portrait");
+const portraitSource = page.slice(portraitAt, page.indexOf("</span>", portraitAt));
+assert(!portraitSource.includes("w-full"), "the portrait is not full width");
+const avatarCss = read("src/components/owner-door/owner-door.css");
+assert(
+  /@media \(max-width: 760px\) \{[\s\S]*\.owner-presence\.is-lg \{\s*width: 96px;\s*height: 96px;/.test(
+    avatarCss,
+  ),
+  "the agent card portrait is 96px on a narrow screen",
+);
 assert(!page.includes("flex-row"), "the page stacks vertically");
 assert(page.includes("I agree"), "consent comes first");
-assert(page.includes("This is all I have"), "the client can say that is all they have");
+assert(page.includes("I don't have this"), "the client can skip an item");
+assert(page.includes("Only upload what you have"), "the list says to upload only what they have");
+assert(/>\s*Upload\s*</.test(page), "each item has an upload button");
+assert(page.includes("min-h-11"), "tap targets are at least 44px");
+assert(page.includes('data-upload-tick="true"'), "an uploaded item shows a tick");
+assert(!page.includes("This is all I have"), "the old skip label is gone");
 assert(page.includes("uploadClientAgentFile"), "the page sends the file to the server");
 assert(route.includes('createFileRoute("/a/$token")'), "the public path is /a/<token>");
 assert(isBarePublicPath("/a/abc"), "the link page skips the signed-in shell");
@@ -502,5 +534,134 @@ assert(
   "the proof fails when authenticated can read",
 );
 assert(ci.includes("apply-client-agent-send-storage-sql.sh"), "CI runs the bucket proof");
+
+const practiceSql = read("supabase/migrations/20261022143000_client_agent_send_practice_name.sql");
+assert(
+  practiceSql.includes("practice_display_name text"),
+  "the practice name column is nullable text",
+);
+assert(
+  practiceSql.includes("ADD COLUMN IF NOT EXISTS practice_display_name"),
+  "the column is added on the send",
+);
+assert(
+  practiceSql.includes("Theo''s practice"),
+  "existing sends for this firm show Theo's practice",
+);
+assert(!/update\s+public\.firms/i.test(practiceSql), "the firm row is not renamed");
+assert(!/alter\s+table\s+public\.firms/i.test(practiceSql), "the firm table is not altered");
+const allowlisted = SEND_AGENT_FIRM_ALLOWLIST[0];
+assert(
+  practiceDisplayName({
+    firmId: allowlisted,
+    practiceDisplayName: null,
+    firmName: "My practice",
+  }) === "Theo's practice",
+  "an empty display name still shows Theo's practice",
+);
+assert(
+  practiceDisplayName({
+    firmId: allowlisted,
+    practiceDisplayName: "Harbour Books",
+    firmName: "My practice",
+  }) === "Harbour Books",
+  "a stored practice name wins over the firm name",
+);
+assert(
+  practiceDisplayName({
+    firmId: "00000000-0000-4000-8000-000000000001",
+    practiceDisplayName: null,
+    firmName: "My practice",
+  }) === "My practice",
+  "another firm falls back to its firm name",
+);
+assert(
+  sendPracticeDisplayName(allowlisted) === "Theo's practice",
+  "a new send stores Theo's practice",
+);
+assert(fn.includes("practice_display_name"), "the public lookup reads the practice name");
+assert(fn.includes("practiceDisplayName"), "the page name falls back in one place");
+
+const consentHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: {
+      ok: true,
+      practiceName: "Theo's practice",
+      consented: false,
+      notice: SEND_CONSENT_NOTICE,
+      items: [],
+    },
+    busy: false,
+    notice: null,
+    noteFor: null,
+    explanation: "",
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+  }),
+);
+assert(
+  (consentHtml.match(/data-client-portrait="tax_specialist"/g) ?? []).length === 1,
+  "one portrait renders",
+);
+assert(
+  (consentHtml.match(/data-agent="tax_specialist"/g) ?? []).length === 1,
+  "one agent face renders",
+);
+assert(
+  !consentHtml.includes("<video") && !consentHtml.includes("<audio"),
+  "the still portrait has no media element",
+);
+assert(
+  consentHtml.includes("Theo&#x27;s practice") || consentHtml.includes("Theo's practice"),
+  "the consent page shows the practice",
+);
+assert(consentHtml.includes("I agree"), "consent renders the agreement button");
+const checklistHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: {
+      ok: true,
+      practiceName: "Theo's practice",
+      consented: true,
+      notice: SEND_CONSENT_NOTICE,
+      items: [
+        {
+          itemKey: "practice_income_expenses",
+          label: "Practice income and expenses",
+          totalsOnly: false,
+          status: "received",
+          quality: "usable",
+          hasFile: true,
+        },
+        {
+          itemKey: "medical_aid_certificate",
+          label: "Medical aid tax certificate (totals only)",
+          totalsOnly: true,
+          status: "open",
+          quality: null,
+          hasFile: false,
+        },
+      ],
+    },
+    busy: false,
+    notice: null,
+    noteFor: "medical_aid_certificate",
+    explanation: "",
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+  }),
+);
+assert((checklistHtml.match(/data-upload-tick/g) ?? []).length === 1, "one uploaded tick renders");
+assert(
+  checklistHtml.includes("I don&#x27;t have this") || checklistHtml.includes("I don't have this"),
+  "the skip link renders",
+);
+assert(checklistHtml.includes("data-missing-note"), "the optional note renders");
+assert(checklistHtml.includes("Only upload what you have"), "the checklist intro renders");
 
 console.log("client agent link test ok");

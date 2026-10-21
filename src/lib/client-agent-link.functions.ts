@@ -23,6 +23,7 @@ import {
   hashPresentedToken,
   openLinkView,
   pathBelongsToSend,
+  practiceDisplayName,
   resolvePresentedLink,
   sendAttemptLimited,
   sendLinkLogLine,
@@ -45,6 +46,7 @@ type SendRow = {
   expires_at: string;
   revoked_at: string | null;
   consent_at: string | null;
+  practice_display_name: string | null;
 };
 
 type ItemRow = {
@@ -59,7 +61,13 @@ type ItemRow = {
 export type PublicItem = PublicChecklistItem;
 
 export type OpenLinkResult =
-  | { ok: true; consented: boolean; notice: string; items: PublicItem[] }
+  | {
+      ok: true;
+      practiceName: string;
+      consented: boolean;
+      notice: string;
+      items: PublicItem[];
+    }
   | ReturnType<typeof closedLink>;
 
 const tokenInput = z.object({
@@ -142,6 +150,36 @@ async function recordAttempt(row: {
 }
 
 async function loadSend(tokenHash: string): Promise<SendRow | null> {
+  const query = (columns: string) =>
+    (
+      supabaseAdmin as unknown as {
+        from: (name: string) => {
+          select: (cols: string) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              maybeSingle: () => Promise<{ data: SendRow | null; error: DbError }>;
+            };
+          };
+        };
+      }
+    )
+      .from("client_agent_sends")
+      .select(columns)
+      .eq("token_hash", tokenHash)
+      .maybeSingle();
+  const wide = await query(
+    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
+  );
+  if (!wide.error) return wide.data;
+  const plain = await query("id, firm_id, expires_at, revoked_at, consent_at");
+  if (plain.error) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
+  if (!plain.data) return null;
+  return { ...plain.data, practice_display_name: null };
+}
+
+async function loadFirmName(firmId: string): Promise<string | null> {
   const { data, error } = await (
     supabaseAdmin as unknown as {
       from: (name: string) => {
@@ -150,18 +188,18 @@ async function loadSend(tokenHash: string): Promise<SendRow | null> {
             column: string,
             value: string,
           ) => {
-            maybeSingle: () => Promise<{ data: SendRow | null; error: DbError }>;
+            maybeSingle: () => Promise<{ data: { name: string | null } | null; error: DbError }>;
           };
         };
       };
     }
   )
-    .from("client_agent_sends")
-    .select("id, firm_id, expires_at, revoked_at, consent_at")
-    .eq("token_hash", tokenHash)
+    .from("firms")
+    .select("name")
+    .eq("id", firmId)
     .maybeSingle();
-  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
-  return data;
+  if (error || !data?.name) return null;
+  return data.name;
 }
 
 async function loadItems(sendId: string): Promise<PublicItem[]> {
@@ -267,9 +305,14 @@ async function resolveToken(token: string): Promise<Resolved> {
   return { ok: true, send, tokenHash, ipHash };
 }
 
-function present(send: SendRow, items: PublicItem[]): OpenLinkResult {
+async function present(send: SendRow, items: PublicItem[]): Promise<OpenLinkResult> {
   return {
     ok: true,
+    practiceName: practiceDisplayName({
+      firmId: send.firm_id,
+      practiceDisplayName: send.practice_display_name,
+      firmName: await loadFirmName(send.firm_id),
+    }),
     ...openLinkView({
       consented: consentReady(send.consent_at),
       notice: SEND_CONSENT_NOTICE,
@@ -283,7 +326,7 @@ export const openClientAgentLink = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<OpenLinkResult> => {
     const resolved = await resolveToken(data.token);
     if (!resolved.ok) return resolved;
-    return present(resolved.send, await loadItems(resolved.send.id));
+    return await present(resolved.send, await loadItems(resolved.send.id));
   });
 
 export const consentClientAgentLink = createServerFn({ method: "POST" })
@@ -307,7 +350,7 @@ export const consentClientAgentLink = createServerFn({ method: "POST" })
       if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "consent" }));
       resolved.send.consent_at = new Date().toISOString();
     }
-    return present(resolved.send, await loadItems(resolved.send.id));
+    return await present(resolved.send, await loadItems(resolved.send.id));
   });
 
 const finishInput = z.object({

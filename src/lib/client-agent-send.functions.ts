@@ -7,6 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { CANONICAL_APP_ORIGIN, canonicalAuthOrigin } from "@/lib/app-origin";
+import { sendPracticeDisplayName } from "@/lib/client-agent-link";
 import {
   PHYSIO_ITEMS,
   SEND_AGENT_SLUG,
@@ -19,10 +20,7 @@ import {
 } from "@/lib/client-agent-send";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import {
-  isSupabaseAdminConfigured,
-  supabaseAdmin,
-} from "@/integrations/supabase/client.server";
+import { isSupabaseAdminConfigured, supabaseAdmin } from "@/integrations/supabase/client.server";
 
 type DbError = { message: string; code?: string } | null;
 
@@ -47,7 +45,10 @@ function rows(data: unknown): Record<string, unknown>[] {
 
 function missingTable(error: DbError): boolean {
   const message = error?.message ?? "";
-  return /client_agent_sends/.test(message) && /does not exist|schema cache|could not find/i.test(message);
+  return (
+    /client_agent_sends/.test(message) &&
+    /does not exist|schema cache|could not find/i.test(message)
+  );
 }
 
 function linkOrigin(): string {
@@ -59,10 +60,9 @@ function linkOrigin(): string {
   }
 }
 
-async function firmOfClient(clientId: string): Promise<
-  | { ok: true; firmId: string }
-  | { ok: false; reason: "not_on_firm" | "unavailable" }
-> {
+async function firmOfClient(
+  clientId: string,
+): Promise<{ ok: true; firmId: string } | { ok: false; reason: "not_on_firm" | "unavailable" }> {
   const { data, error } = await supabaseAdmin
     .from("clients")
     .select("firm_id")
@@ -128,45 +128,50 @@ function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
 export const listClientAgentSends = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
-  .handler(async ({ data, context }): Promise<{ migrated: boolean; allowed: boolean; sends: AgentSendRow[] }> => {
-    if (!isSupabaseAdminConfigured()) return { migrated: false, allowed: false, sends: [] };
-    const firm = await firmOfClient(data.clientId);
-    if (!firm.ok) return { migrated: firm.reason !== "unavailable", allowed: false, sends: [] };
-    if (!sendAgentFirmAllowed(firm.firmId)) return { migrated: true, allowed: false, sends: [] };
-    if (!(await isFirmMember(context.userId, firm.firmId))) {
-      return { migrated: true, allowed: false, sends: [] };
-    }
-
-    const listed = await table("client_agent_sends")
-      .select("id, expires_at, revoked_at, consent_at, created_at")
-      .eq("client_id", data.clientId)
-      .eq("firm_id", firm.firmId)
-      .order("created_at", { ascending: false });
-    if (listed.error) {
-      if (missingTable(listed.error)) return { migrated: false, allowed: false, sends: [] };
-      throw new Error(listed.error.message);
-    }
-    const now = new Date();
-    const sends = rows(listed.data).map((row) => parseSend(row, now));
-    if (sends.length === 0) return { migrated: true, allowed: true, sends };
-
-    for (const send of sends) {
-      const found = await table("client_agent_send_items")
-        .select("item_key, totals_only, status, quality")
-        .eq("send_id", send.id);
-      if (found.error) {
-        if (missingTable(found.error)) return { migrated: false, allowed: false, sends: [] };
-        throw new Error(found.error.message);
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ migrated: boolean; allowed: boolean; sends: AgentSendRow[] }> => {
+      if (!isSupabaseAdminConfigured()) return { migrated: false, allowed: false, sends: [] };
+      const firm = await firmOfClient(data.clientId);
+      if (!firm.ok) return { migrated: firm.reason !== "unavailable", allowed: false, sends: [] };
+      if (!sendAgentFirmAllowed(firm.firmId)) return { migrated: true, allowed: false, sends: [] };
+      if (!(await isFirmMember(context.userId, firm.firmId))) {
+        return { migrated: true, allowed: false, sends: [] };
       }
-      send.items = rows(found.data).map((row) => ({
-        itemKey: String(row.item_key ?? ""),
-        totalsOnly: row.totals_only === true,
-        status: String(row.status ?? "open"),
-        quality: typeof row.quality === "string" ? row.quality : null,
-      }));
-    }
-    return { migrated: true, allowed: true, sends };
-  });
+
+      const listed = await table("client_agent_sends")
+        .select("id, expires_at, revoked_at, consent_at, created_at")
+        .eq("client_id", data.clientId)
+        .eq("firm_id", firm.firmId)
+        .order("created_at", { ascending: false });
+      if (listed.error) {
+        if (missingTable(listed.error)) return { migrated: false, allowed: false, sends: [] };
+        throw new Error(listed.error.message);
+      }
+      const now = new Date();
+      const sends = rows(listed.data).map((row) => parseSend(row, now));
+      if (sends.length === 0) return { migrated: true, allowed: true, sends };
+
+      for (const send of sends) {
+        const found = await table("client_agent_send_items")
+          .select("item_key, totals_only, status, quality")
+          .eq("send_id", send.id);
+        if (found.error) {
+          if (missingTable(found.error)) return { migrated: false, allowed: false, sends: [] };
+          throw new Error(found.error.message);
+        }
+        send.items = rows(found.data).map((row) => ({
+          itemKey: String(row.item_key ?? ""),
+          totalsOnly: row.totals_only === true,
+          status: String(row.status ?? "open"),
+          quality: typeof row.quality === "string" ? row.quality : null,
+        }));
+      }
+      return { migrated: true, allowed: true, sends };
+    },
+  );
 
 export type MintAgentSendResult =
   | { ok: true; sendId: string; url: string; expiresAt: string }
@@ -200,23 +205,39 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
     const open = rows(existing.data)
       .map((row) => parseSend(row, now))
       .find((row) => row.open);
-    if (open) return { ok: false, reason: "already_open", sendId: open.id, expiresAt: open.expiresAt };
+    if (open)
+      return { ok: false, reason: "already_open", sendId: open.id, expiresAt: open.expiresAt };
 
     const token = newSendToken();
     const tokenHash = await sha256Hex(token);
     const expiresAt = sendExpiresAt(now).toISOString();
-    const inserted = await table("client_agent_sends")
-      .insert({
-        firm_id: firm.firmId,
-        client_id: data.clientId,
-        agent: SEND_AGENT_SLUG,
-        checklist_key: SEND_CHECKLIST_KEY,
-        token_hash: tokenHash,
-        sent_by: context.userId,
-        expires_at: expiresAt,
-      })
+    const practiceDisplayName = sendPracticeDisplayName(firm.firmId);
+    const sendRow = {
+      firm_id: firm.firmId,
+      client_id: data.clientId,
+      agent: SEND_AGENT_SLUG,
+      checklist_key: SEND_CHECKLIST_KEY,
+      token_hash: tokenHash,
+      sent_by: context.userId,
+      expires_at: expiresAt,
+      ...(practiceDisplayName ? { practice_display_name: practiceDisplayName } : {}),
+    };
+    let inserted = await table("client_agent_sends")
+      .insert(sendRow)
       .select("id, expires_at")
       .maybeSingle();
+    if (
+      inserted.error &&
+      practiceDisplayName &&
+      (inserted.error.message ?? "").includes("practice_display_name")
+    ) {
+      const withoutName = { ...sendRow };
+      delete withoutName.practice_display_name;
+      inserted = await table("client_agent_sends")
+        .insert(withoutName)
+        .select("id, expires_at")
+        .maybeSingle();
+    }
     if (inserted.error || !inserted.data?.id) {
       if (missingTable(inserted.error)) return { ok: false, reason: "unavailable" };
       throw new Error(inserted.error?.message || "The link could not be created.");
@@ -243,7 +264,10 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
 
 export type RevokeAgentSendResult =
   | { ok: true; revokedAt: string }
-  | { ok: false; reason: "not_found" | "forbidden" | "unavailable" | "not_on_firm" | "not_allowed" };
+  | {
+      ok: false;
+      reason: "not_found" | "forbidden" | "unavailable" | "not_on_firm" | "not_allowed";
+    };
 
 export const revokeClientAgentSend = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

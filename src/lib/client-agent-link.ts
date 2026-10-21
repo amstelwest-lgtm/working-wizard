@@ -3,8 +3,8 @@
  * The Tax Specialist collects documents. She does not fill in a form
  * or make a SARS claim.
  */
-import { PHYSIO_ITEMS, SEND_FILE_MAX_BYTES, SEND_FILE_MIMES, sha256Hex } from "./client-agent-send";
-import { sendAgentFirmAllowed } from "./client-agent-send-allowlist";
+import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES, sha256Hex } from "./client-agent-send";
+import { SEND_AGENT_FIRM_ALLOWLIST, sendAgentFirmAllowed } from "./client-agent-send-allowlist";
 
 export const SEND_CONSENT_VERSION = "popia-client-agent-1";
 
@@ -18,10 +18,35 @@ export const SEND_ATTEMPT_LIMIT = 30;
 export const SEND_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 export const SEND_STORAGE_BUCKET = "client-agent-sends";
 
-const EXTRA_LABELS: Record<string, string> = {
+/**
+ * Client-facing practice name for the one allowlisted firm.
+ * firms.name stays "My practice" for QA. This does not rename that row.
+ */
+export const SEND_PRACTICE_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  [SEND_AGENT_FIRM_ALLOWLIST[0]]: "Theo's practice",
+};
+
+const PUBLIC_LABELS: Record<string, string> = {
+  practice_income_expenses: "Practice income and expenses",
   bank_statements: "Bank statements",
   travel_logbook: "Travel logbook",
+  medical_aid_certificate: "Medical aid tax certificate (totals only)",
+  ra_contribution_certificate: "Retirement annuity contribution certificate",
+  irp5: "IRP5 (only if you had a salaried job)",
+  it3b: "IT3(b)",
+  other: "Divorce or maintenance order, plus proof of payments received",
 };
+
+const PUBLIC_ITEM_ORDER = [
+  "practice_income_expenses",
+  "bank_statements",
+  "travel_logbook",
+  "medical_aid_certificate",
+  "ra_contribution_certificate",
+  "irp5",
+  "it3b",
+  "other",
+];
 
 export type SendGate = "ok" | "unavailable" | "expired" | "revoked" | "limited";
 export type SendLinkReason = "unavailable" | "limited" | "consent" | "mime" | "size";
@@ -64,12 +89,38 @@ export async function hashClientAddress(address: string): Promise<string> {
   return sha256Hex(`client-agent-send-ip-v1|${address}`);
 }
 
+function cleanPracticeName(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Name on the client page. A stored practice_display_name wins.
+ * The allowlisted firm otherwise uses its client-facing name, not firms.name.
+ * Every other firm falls back to the firm name.
+ */
+export function practiceDisplayName(input: {
+  firmId?: string | null;
+  practiceDisplayName?: string | null;
+  firmName?: string | null;
+}): string {
+  const custom = cleanPracticeName(input.practiceDisplayName);
+  if (custom) return custom.slice(0, 120);
+  const known = input.firmId ? SEND_PRACTICE_DISPLAY_NAMES[input.firmId] : undefined;
+  if (known) return known;
+  const firm = cleanPracticeName(input.firmName);
+  if (firm) return firm.slice(0, 120);
+  return "Your accountant";
+}
+
+/** Value stored on a new send. Null when this firm has no client-facing override. */
+export function sendPracticeDisplayName(firmId: string): string | null {
+  return SEND_PRACTICE_DISPLAY_NAMES[firmId] ?? null;
+}
+
 export function itemLabel(itemKey: string, storedLabel: string | null): string {
   const custom = storedLabel?.trim();
   if (custom) return custom;
-  const known = PHYSIO_ITEMS.find((item) => item.itemKey === itemKey);
-  if (known) return known.label;
-  return EXTRA_LABELS[itemKey] ?? "Document";
+  return PUBLIC_LABELS[itemKey] ?? "Document";
 }
 
 /** A presented token can open the page only when the send's firm is allowlisted. */
@@ -242,7 +293,14 @@ export function toPublicChecklist(rows: ChecklistRow[], sendId: string): PublicC
       status: row.status,
       quality: row.quality,
       hasFile: typeof row.storagePath === "string" && row.storagePath.length > 0,
-    }));
+    }))
+    .sort((a, b) => {
+      const ai = PUBLIC_ITEM_ORDER.indexOf(a.itemKey);
+      const bi = PUBLIC_ITEM_ORDER.indexOf(b.itemKey);
+      return (
+        (ai === -1 ? PUBLIC_ITEM_ORDER.length : ai) - (bi === -1 ? PUBLIC_ITEM_ORDER.length : bi)
+      );
+    });
 }
 
 /** The checklist is empty until consent is stored. */
