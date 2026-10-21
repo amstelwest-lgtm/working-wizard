@@ -1,0 +1,33 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["APPLE_TEAM_ID.com.milonfinance.app"],
+        "components": [
+          { "/": "/talk" },
+          { "/": "/talk/*", "comment": "firm-sent agent links, including /talk/financial-manager" },
+          { "/": "/a" },
+          { "/": "/a/*", "comment": "future firm token links /a/:token" },
+          { "/": "/try" },
+          { "/": "/try/*" },
+          { "/": "/auth" },
+          { "/": "/auth/*" },
+          { "/": "/billing" },
+          { "/": "/billing/*" },
+          { "/": "/join/*" },
+          { "/": "/access/*" },
+          { "/": "/api/qbo/callback" },
+          { "/": "/api/xero/callback" },
+          { "/": "/app" },
+          { "/": "/app/*" },
+          { "/": "/settings" },
+          { "/": "/settings/*" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["APPLE_TEAM_ID.com.milonfinance.app"]
+  }
+}
