@@ -5,7 +5,7 @@ import { setMonitoringUser } from "@/lib/monitoring";
 import { isBarePublicPath, isPublicMarketingPath } from "@/lib/public-marketing";
 import { clearLegacyInsightSeen } from "@/lib/funnel-timing";
 import { restoreSession } from "@/integrations/supabase/session-deadline";
-import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { markAuthReady, SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { decideAuthStateChange, resolveConfirmedSignOut } from "@/lib/auth-session-guard";
 import { readStoredAuthSession, type StoredAuthSession } from "@/lib/stored-auth-session";
 
@@ -287,6 +287,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       />
     );
   }
+
+  if (!loading && session?.user) markAuthReady();
 
   return (
     <Ctx.Provider

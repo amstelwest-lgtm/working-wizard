@@ -209,6 +209,7 @@
     "test:billing-gate-known": "vite-node --config scripts/vite-test.config.ts scripts/billing-gate-known-test.mts",
     "test:billing-open-calls": "vite-node --config scripts/vite-test.config.ts scripts/billing-open-calls-test.mts",
     "test:firm-load-retry": "vite-node --config scripts/vite-firm-load-retry.config.ts scripts/firm-load-retry-test.mts",
+    "test:boot-timing": "vite-node --config scripts/vite-boot-timing.config.ts scripts/boot-timing-test.mts",
     "test:strike7-gate": "vite-node --config scripts/vite-strike7-gate.config.ts scripts/strike7-gate-test.mts",
     "test:strike7-entitlement": "vite-node --config scripts/vite-test.config.ts scripts/strike7-entitlement-test.mts",
     "test:strike7-cap": "vite-node --config scripts/vite-test.config.ts scripts/strike7-cap-test.mts",
