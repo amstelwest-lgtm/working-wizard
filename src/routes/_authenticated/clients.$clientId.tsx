@@ -281,6 +281,7 @@ import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
+import { SendAgentPanel } from "@/components/send-agent-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
@@ -645,6 +646,7 @@ function crumbSectionLabel(tab: string, section: string): string {
     all: "All reports",
     documents: "Documents",
     connections: "Connections",
+    "send-agent": "Send an agent",
   };
   return labels[section] ?? section;
 }
@@ -4349,12 +4351,15 @@ function ClientView() {
 
                 {/* ===== SUMMARY TAB ===== */}
                 <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
-                  {activeTab === "summary" && search.section !== "documents" && search.section !== "connections" ? (
+                  {activeTab === "summary" &&
+                  search.section !== "documents" &&
+                  search.section !== "connections" &&
+                  search.section !== "send-agent" ? (
                     <ClientSectionOverview
                       clientId={clientId}
                       eyebrow="File"
                       title="Books"
-                      subtitle="Documents and connections each have their own page."
+                      subtitle="Documents, connections, and Send an agent each have their own page."
                       links={[
                         {
                           id: "documents",
@@ -4368,8 +4373,24 @@ function ClientView() {
                           detail: "Xero, QuickBooks, and Sage.",
                           search: (prev) => accountantClientTabSearch(prev, "portal", { section: "connections" }),
                         },
+                        {
+                          id: "send-agent",
+                          label: "Send an agent",
+                          detail: "A Tax Specialist link for this client. Nothing is emailed.",
+                          search: (prev) => accountantClientTabSearch(prev, "portal", { section: "send-agent" }),
+                        },
                       ]}
                     />
+                  ) : null}
+                  {activeTab === "summary" && search.section === "send-agent" ? (
+                    <ClientSubpageFrame
+                      id="send-agent"
+                      eyebrow="Books"
+                      title="Send an agent"
+                      subtitle="A link for the Tax Specialist. Nothing is emailed."
+                    >
+                      <SendAgentPanel clientId={client.id} />
+                    </ClientSubpageFrame>
                   ) : null}
                   {activeTab === "summary" && search.section === "documents" ? (
                     <ClientSubpageFrame

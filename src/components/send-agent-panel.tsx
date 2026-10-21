@@ -1,0 +1,202 @@
+/**
+ * Accountant action: mint a Tax Specialist link and show it once.
+ * Revoke sits with the link. Nothing is emailed.
+ */
+import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
+import {
+  PHYSIO_ITEMS,
+  SEND_AGENT_BODY,
+  SEND_AGENT_ONCE,
+} from "@/lib/client-agent-send";
+import {
+  listClientAgentSends,
+  mintClientAgentSend,
+  revokeClientAgentSend,
+  type AgentSendRow,
+} from "@/lib/client-agent-send.functions";
+
+type FreshLink = { sendId: string; url: string; expiresAt: string };
+
+const PRIMARY =
+  "inline-flex min-h-11 items-center justify-center rounded-full bg-[#0B5FFF] px-4 text-sm font-semibold text-white hover:bg-[#2563EB] disabled:opacity-60";
+const SECONDARY =
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-[#0B5FFF] bg-white px-4 text-sm font-semibold text-[#102A43] hover:bg-[#F4F8FF] disabled:opacity-60";
+
+function when(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
+}
+
+export function SendAgentPanel({ clientId }: { clientId: string }) {
+  const list = useServerFn(listClientAgentSends);
+  const mint = useServerFn(mintClientAgentSend);
+  const revoke = useServerFn(revokeClientAgentSend);
+  const [sends, setSends] = useState<AgentSendRow[]>([]);
+  const [ready, setReady] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [fresh, setFresh] = useState<FreshLink | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    const result = await list({ data: { clientId } });
+    setSends(result.migrated ? result.sends : []);
+    setReady(result.migrated);
+    setLoaded(true);
+  }, [clientId, list]);
+
+  useEffect(() => {
+    let alive = true;
+    void list({ data: { clientId } })
+      .then((result) => {
+        if (!alive) return;
+        setSends(result.migrated ? result.sends : []);
+        setReady(result.migrated);
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setReady(false);
+        setLoaded(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [clientId, list]);
+
+  const open = sends.find((send) => send.open) ?? null;
+  const shownId = fresh?.sendId ?? open?.id ?? null;
+
+  const onMint = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await mint({ data: { clientId } });
+      if (!result.ok && result.reason === "already_open") {
+        setNotice(`A link is already active until ${when(result.expiresAt)}. Revoke it before creating another.`);
+        await reload();
+        return;
+      }
+      if (!result.ok) {
+        setNotice("The link could not be created.");
+        return;
+      }
+      setFresh({ sendId: result.sendId, url: result.url, expiresAt: result.expiresAt });
+      await reload();
+    } catch {
+      setNotice("The link could not be created.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRevoke = async () => {
+    if (!shownId) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await revoke({ data: { clientId, sendId: shownId } });
+      if (!result.ok) {
+        setNotice("The link could not be revoked.");
+        return;
+      }
+      setFresh(null);
+      await reload();
+    } catch {
+      setNotice("The link could not be revoked.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onCopy = async () => {
+    if (!fresh) return;
+    try {
+      await navigator.clipboard.writeText(fresh.url);
+      setNotice("Link copied.");
+    } catch {
+      setNotice("Select the link and copy it.");
+    }
+  };
+
+  return (
+    <section
+      className="flex flex-col gap-4 rounded-2xl border border-[#DBEAFE] bg-white p-4 text-[#102A43]"
+      data-send-agent=""
+      aria-labelledby="send-agent-title"
+    >
+      <SilentAgentPortrait face="tax_specialist" label="Tax Specialist" />
+      <div className="flex flex-col gap-2">
+        <h2 id="send-agent-title" className="text-lg font-semibold">
+          Tax Specialist
+        </h2>
+        <p className="text-sm leading-6 text-[#3D5270]">{SEND_AGENT_BODY}</p>
+      </div>
+      <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
+        {PHYSIO_ITEMS.map((item) => (
+          <li key={item.itemKey} data-send-item={item.itemKey}>
+            {item.label}
+          </li>
+        ))}
+      </ul>
+      {fresh ? (
+        <div className="flex flex-col gap-3" data-send-agent-link="">
+          <p className="text-sm leading-6 text-[#3D5270]">{SEND_AGENT_ONCE}</p>
+          <p className="text-sm">Active until {when(fresh.expiresAt)}.</p>
+          <input
+            readOnly
+            value={fresh.url}
+            aria-label="Agent link"
+            className="w-full rounded-xl border border-[#DBEAFE] bg-white px-3 py-2 text-sm text-[#102A43]"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+          <div className="flex flex-col gap-2">
+            <button type="button" className={SECONDARY} onClick={() => void onCopy()}>
+              Copy link
+            </button>
+            <button
+              type="button"
+              className={SECONDARY}
+              data-send-agent-revoke=""
+              disabled={busy}
+              onClick={() => void onRevoke()}
+            >
+              Revoke
+            </button>
+          </div>
+        </div>
+      ) : open ? (
+        <div className="flex flex-col gap-3" data-send-agent-open="">
+          <p className="text-sm leading-6">
+            A link is active until {when(open.expiresAt)}. The address was shown once when it was
+            created.
+          </p>
+          <button
+            type="button"
+            className={SECONDARY}
+            data-send-agent-revoke=""
+            disabled={busy}
+            onClick={() => void onRevoke()}
+          >
+            Revoke
+          </button>
+        </div>
+      ) : (
+        <button type="button" className={PRIMARY} disabled={!ready || busy} onClick={() => void onMint()}>
+          Send an agent
+        </button>
+      )}
+      {loaded && !ready ? (
+        <p className="text-sm text-[#3D5270]">This is not available on this file yet.</p>
+      ) : null}
+      {notice ? (
+        <p className="text-sm" role="status">
+          {notice}
+        </p>
+      ) : null}
+    </section>
+  );
+}

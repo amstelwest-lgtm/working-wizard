@@ -145,6 +145,7 @@ function clientSections(clientId: string): NavSection[] {
           items: subs("books", [
             { id: "documents", label: "Documents" },
             { id: "connections", label: "Connections" },
+            { id: "send-agent", label: "Send an agent" },
           ]),
         },
       ],
