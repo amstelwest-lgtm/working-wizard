@@ -91,6 +91,7 @@ export function buildScorecardRatioResults(
     partMonth?: boolean;
     cashFlowKnown?: boolean;
     industry?: string | null;
+    financials?: object | null;
   },
 ): ScorecardRatioRow[] {
   const rows: ScorecardRatioRow[] = [];
@@ -123,6 +124,7 @@ export function buildScorecardRatioResults(
       partMonth: context?.partMonth,
       cashFlowKnown: context?.cashFlowKnown,
       industry: context?.industry,
+      financials: context?.financials,
     });
     if (!presented.include) continue;
     pushRow(name, val, presented);

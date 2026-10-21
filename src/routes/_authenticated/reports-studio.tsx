@@ -59,6 +59,11 @@ import {
   taxBurdenRatio,
 } from "@/lib/ratios";
 import { benchmarkEmptyCopy } from "@/lib/benchmark-empty";
+import {
+  balanceSheetDayInputsMissing,
+  benchmarkCardNote,
+  CYCLE_REPORT_NEEDS,
+} from "@/lib/missing-metrics";
 import { benchmarkSectorForClient } from "@/lib/benchmark-sector";
 import {
   ASSET_REPORT_NEEDS,
@@ -1439,7 +1444,7 @@ function closestSnapshot(
   return best;
 }
 
-function buildMovementRows(
+export function buildMovementRows(
   rawRatios: Record<string, number | null>,
   snapshots: DatedSnapshot[],
   refDate: Date,
@@ -1485,14 +1490,14 @@ function buildMovementRows(
   return { rows, labels };
 }
 
-function buildWorkingCapitalData(
+export function buildWorkingCapitalData(
   fin: Record<string, string>,
   rawRatios: Record<string, number | null>,
 ): WorkingCapitalData | null {
   return buildWorkingCapitalSlice(fin, rawRatios) as WorkingCapitalData | null;
 }
 
-function buildProfitabilityData(
+export function buildProfitabilityData(
   fin: Record<string, string>,
   priorFin?: Record<string, string> | null,
 ): ProfitabilityData | null {
@@ -1603,7 +1608,7 @@ function buildProfitabilityData(
   return { ...current, prior_period };
 }
 
-function buildLeverageData(
+export function buildLeverageData(
   fin: Record<string, string>,
   rawRatios: Record<string, number | null>,
   priorEquityFromSnapshot?: number | null,
@@ -1692,7 +1697,7 @@ function buildLeverageData(
   };
 }
 
-function buildAssetData(
+export function buildAssetData(
   rawRatios: Record<string, number | null>,
   context?: {
     equity?: number | null;
@@ -1758,7 +1763,7 @@ function buildAssetData(
   };
 }
 
-function buildLaborData(
+export function buildLaborData(
   fin: Record<string, string>,
   _rawRatios: Record<string, number | null>,
   priorFin?: Record<string, string> | null,
@@ -1881,7 +1886,7 @@ function buildCashForecastFromSavedCashflow(
 
 // Build real interventions from the playbook-data.json filtered by the
 // client's actual at-risk/critical ratios (camelCase ratio_key format).
-async function buildInterventions(
+export async function buildInterventions(
   ratioResults: RatioResult[],
   profile?: ClientOperatingProfile | null,
   figures?: {
@@ -2296,6 +2301,7 @@ async function loadClientReportData(
     partMonth,
     cashFlowKnown: cashFlowKnown(fin),
     industry: reportIndustry,
+    financials: fin,
   });
   ratioResults = withPriorRatioScores(ratioResults, priorSnap?.ratios ?? null);
 
@@ -2705,6 +2711,7 @@ function buildGEN(
         reviewSignoff: null,
         operatingProfile,
         market,
+        financials: isDemo ? null : cd?.financials,
       });
     },
     waterfall: async (s, p) => {
@@ -2816,6 +2823,7 @@ function buildGEN(
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
+        financials: isDemo ? null : cd?.financials,
       });
     },
     benchmark: async (s, p) => {
@@ -2827,19 +2835,13 @@ function buildGEN(
         : (INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0]);
       if (cd && cd.benchmark.length === 0) {
         const studio = INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0];
-        const empty = benchmarkEmptyCopy({
+        const note = benchmarkCardNote({
+          rows: cd.benchmark,
           profileSectorName: cd.benchmarkSector?.name ?? null,
           studioSectorName: studio.name,
         });
-        const error = new Error(empty.message) as Error & {
-          offerSetBusinessType?: boolean;
-          emptyCta?: string;
-        };
-        // A named sector with no rows still links to the profile so the
-        // accountant can review the type. The helper does not invent rows.
-        error.offerSetBusinessType = empty.offerSetBusinessType;
-        error.emptyCta = empty.cta;
-        throw error;
+        // The card is already disabled with this note. Do not toast Generation failed.
+        return new Blob([note ?? ""], { type: "text/plain" });
       }
       if (sample && !cd) {
         throw new Error(
@@ -3702,10 +3704,20 @@ export function ReportsStudio({
     const ready = reportReady(key, {
       leverageReady: Boolean(clientData.leverage),
       assetReady: Boolean(clientData.assets),
+      cycleReady: !balanceSheetDayInputsMissing(clientData.financials),
     });
+    if (ready && key === "benchmark" && clientData.benchmark.length === 0) {
+      const studio = INDUSTRIES.find((i) => i.code === settings.industryCode) ?? INDUSTRIES[0];
+      return benchmarkCardNote({
+        rows: clientData.benchmark,
+        profileSectorName: clientData.benchmarkSector?.name ?? null,
+        studioSectorName: studio.name,
+      });
+    }
     if (ready) return null;
     if (key === "leverage") return LEVERAGE_REPORT_NEEDS;
     if (key === "assets") return ASSET_REPORT_NEEDS;
+    if (key === "cycle") return CYCLE_REPORT_NEEDS;
     return null;
   };
   const studioBusy = dataLoading || resolvingClient;
@@ -3904,6 +3916,8 @@ export function ReportsStudio({
         }
         return;
       }
+      const unavailable = unavailableFor(report.key);
+      if (unavailable) return;
       const blob = await GEN[report.key](settings, profile);
       const copy = reportCopy(report, clientData?.market ?? ZA_MARKET);
       triggerDownload(blob, makeSafeFilename(settings, copy.filename, clientData?.dataPeriodLabel));
@@ -3928,6 +3942,28 @@ export function ReportsStudio({
 
   async function handlePreview(report: ReportMeta): Promise<boolean> {
     if (!assertCanGenerate()) return false;
+    const unavailable = unavailableFor(report.key);
+    if (unavailable) {
+      const studioIndustry = INDUSTRIES.find((i) => i.code === settings.industryCode) ?? INDUSTRIES[0];
+      const empty =
+        report.key === "benchmark"
+          ? benchmarkEmptyCopy({
+              profileSectorName: clientData?.benchmarkSector?.name ?? null,
+              studioSectorName: studioIndustry.name,
+            })
+          : null;
+      setPreviewKey(report.key);
+      setPreviewState({
+        key: report.key,
+        name: reportCopy(report, clientData?.market ?? ZA_MARKET).name,
+        blobUrl: null,
+        loading: false,
+        emptyMessage: unavailable,
+        offerSetBusinessType: empty?.offerSetBusinessType === true,
+        emptyCta: empty?.cta,
+      });
+      return true;
+    }
     if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
     setPreviewKey(report.key);
     setPreviewState({
