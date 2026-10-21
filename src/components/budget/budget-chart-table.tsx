@@ -514,7 +514,9 @@ function MonthCells({
 }) {
   return (
     <>
-      <td className="budget-grid__money px-2 py-1.5 text-right tabular-nums">{money(item.budget)}</td>
+      <td className="budget-grid__money px-2 py-1.5 text-right tabular-nums">
+        {item.budget == null ? "—" : money(item.budget)}
+      </td>
       <td className="budget-grid__money px-2 py-1.5 text-right tabular-nums">
         {item.actual == null ? "—" : money(item.actual)}
       </td>

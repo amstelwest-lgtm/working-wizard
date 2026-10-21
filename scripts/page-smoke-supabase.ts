@@ -2,14 +2,28 @@
  * In-memory Supabase client for the page-render smoke test.
  * `loading` never resolves a clients read, so the first paint stays on the
  * shell. `null` resolves an empty book. `loaded` resolves one workspace.
+ * `revoked` keeps that workspace but answers a stored stale id with a
+ * different name, so a premature by-id read would flash it. `error` fails
+ * the owner workspace list (clients by owner, memberships by user).
  */
 
-export type SmokeMode = "null" | "loading" | "loaded";
+export type SmokeMode = "null" | "loading" | "loaded" | "revoked" | "error";
 
 export const SMOKE_USER_ID = "11111111-1111-4111-8111-111111111111";
 export const SMOKE_CLIENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+export const STALE_CLIENT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+export const STALE_CLIENT_NAME = "Revoked & Co";
 
 let mode: SmokeMode = "null";
+const rpcLog: string[] = [];
+
+export function resetSmokeRpcLog() {
+  rpcLog.length = 0;
+}
+
+export function smokeRpcLog(): readonly string[] {
+  return rpcLog;
+}
 
 export function setSmokeMode(next: SmokeMode) {
   mode = next;
@@ -57,28 +71,67 @@ const clientRow = {
   financial_year_start_month: 3,
 };
 
+const staleRow = {
+  ...clientRow,
+  id: STALE_CLIENT_ID,
+  name: STALE_CLIENT_NAME,
+  owner_user_id: "22222222-2222-4222-8222-222222222222",
+};
+
+type QueryFilter = { column: string; value: unknown };
+
 function empty(kind: "list" | "single") {
   return Promise.resolve(kind === "list" ? { data: [], error: null } : { data: null, error: null });
 }
 
-function settle(table: string, kind: "list" | "single"): Promise<{ data: unknown; error: null }> {
-  if (mode === "loading" && table === "clients") return new Promise(() => {});
-  if (mode !== "loaded" || table !== "clients") return empty(kind);
-  if (kind === "single") return Promise.resolve({ data: clientRow, error: null });
+function eqValue(filters: QueryFilter[], column: string): unknown {
+  const hit = [...filters].reverse().find((row) => row.column === column);
+  return hit?.value;
+}
+
+function includesId(filters: QueryFilter[], id: string): boolean {
+  return filters.some(
+    (row) => row.column === "id" && Array.isArray(row.value) && row.value.some((value) => value === id),
+  );
+}
+
+function clientPayload(row: typeof clientRow, kind: "list" | "single") {
+  if (kind === "single") return Promise.resolve({ data: row, error: null });
   return Promise.resolve({
-    data: [{ id: clientRow.id, name: clientRow.name, owner_user_id: SMOKE_USER_ID }],
+    data: [{ id: row.id, name: row.name, owner_user_id: row.owner_user_id }],
     error: null,
   });
 }
 
+function settle(
+  table: string,
+  kind: "list" | "single",
+  eqs: QueryFilter[],
+  ins: QueryFilter[],
+): Promise<{ data: unknown; error: { message: string } | null }> {
+  if (mode === "loading" && table === "clients") return new Promise(() => {});
+  if (mode === "error") {
+    const workspaceList =
+      (table === "clients" && eqValue(eqs, "owner_user_id") === SMOKE_USER_ID) ||
+      (table === "client_memberships" && eqValue(eqs, "user_id") === SMOKE_USER_ID);
+    if (workspaceList) return Promise.resolve({ data: null, error: { message: "boom" } });
+  }
+  if (mode === "revoked" && table === "clients") {
+    const stale = eqValue(eqs, "id") === STALE_CLIENT_ID || includesId(ins, STALE_CLIENT_ID);
+    return clientPayload(stale ? staleRow : clientRow, kind);
+  }
+  if (mode !== "loaded" || table !== "clients") return empty(kind);
+  return clientPayload(clientRow, kind);
+}
+
 function builder(table: string) {
+  const eqs: QueryFilter[] = [];
+  const ins: QueryFilter[] = [];
   const self: Record<string, unknown> = {};
   const chain = () => self;
   for (const name of [
     "select",
-    "eq",
     "neq",
-    "in",
     "is",
     "not",
     "or",
@@ -105,10 +158,19 @@ function builder(table: string) {
   ]) {
     self[name] = chain;
   }
-  self.maybeSingle = () => settle(table, "single");
-  self.single = () => settle(table, "single");
+  self.eq = (column: string, value: unknown) => {
+    eqs.push({ column, value });
+    return self;
+  };
+  self.in = (column: string, value: unknown) => {
+    ins.push({ column, value });
+    return self;
+  };
+  const run = (kind: "list" | "single") => settle(table, kind, eqs, ins);
+  self.maybeSingle = () => run("single");
+  self.single = () => run("single");
   self.then = (onFulfilled?: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) =>
-    settle(table, "list").then(onFulfilled, onRejected);
+    run("list").then(onFulfilled, onRejected);
   return self;
 }
 
@@ -169,6 +231,7 @@ export const supabase = {
     return builder(table);
   },
   rpc(name: string) {
+    rpcLog.push(name);
     if (name === "is_milon_it_member") return Promise.resolve({ data: false, error: null });
     if (name === "ensure_own_client" && mode === "loaded") {
       return Promise.resolve({ data: SMOKE_CLIENT_ID, error: null });

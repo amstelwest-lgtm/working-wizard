@@ -1,6 +1,7 @@
 import { processLock } from "@supabase/auth-js";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { createSharedAuthStorage, shareAuthToken } from "@/lib/stored-auth-session";
+import { sessionRestoreSignal } from "./session-deadline";
 import { createRefreshCoordinator, refreshTokenFromRequest, type RefreshBus } from "./refresh-flight";
 
 /**
@@ -158,9 +159,26 @@ function browserRefreshBus(): RefreshBus {
  * through. The channel opens on the first refresh, not during createClient,
  * so GoTrue's own BroadcastChannel stays suppressed.
  */
+function withSessionRestoreSignal(init?: RequestInit): RequestInit | undefined {
+  const restore = sessionRestoreSignal();
+  if (!restore) return init;
+  if (!init?.signal) return { ...init, signal: restore };
+  if (restore.aborted || init.signal.aborted) {
+    const aborted = new AbortController();
+    aborted.abort();
+    return { ...init, signal: aborted.signal };
+  }
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  restore.addEventListener("abort", abort, { once: true });
+  init.signal.addEventListener("abort", abort, { once: true });
+  return { ...init, signal: controller.signal };
+}
+
 export function coordinatedAuthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const token = refreshTokenFromRequest(input, init);
   if (!token || typeof window === "undefined") return fetch(input, init);
+  const nextInit = withSessionRestoreSignal(init);
   if (!refreshFlight) {
     refreshFlight = createRefreshCoordinator({
       tabId: browserTabId(),
@@ -169,7 +187,7 @@ export function coordinatedAuthFetch(input: RequestInfo | URL, init?: RequestIni
       lock: (name, fn) => tabAuthLock(name, -1, fn),
     });
   }
-  return refreshFlight.refresh(token, () => fetch(input, init));
+  return refreshFlight.refresh(token, () => fetch(input, nextInit));
 }
 
 /**

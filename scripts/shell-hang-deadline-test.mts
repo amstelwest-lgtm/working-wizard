@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Worker } from "node:worker_threads";
-import { accessTokenWithin, restoreSession } from "../src/integrations/supabase/session-deadline.ts";
+import { accessTokenWithin, restoreSession, sessionRestoreSignal } from "../src/integrations/supabase/session-deadline.ts";
 import {
   concurrentRefreshKeepsSession,
   REFRESH_TOKEN_REUSE_INTERVAL_MS,
@@ -87,6 +87,41 @@ const restored = await restoreSession(() => never<{ data: { session: null } }>()
 assert(restored.ok === false, "a hung session restore fails closed");
 const token = await accessTokenWithin(() => never(), 20);
 assert(token === null, "a hung getSession does not hold a server function auth read");
+
+let restoreAborted = false;
+const timedOut = await restoreSession(
+  () =>
+    tabAuthLock(
+      "restore-release",
+      -1,
+      () =>
+        new Promise<string>((resolve, reject) => {
+          const signal = sessionRestoreSignal();
+          if (!signal) {
+            reject(new Error("missing restore signal"));
+            return;
+          }
+          signal.addEventListener("abort", () => {
+            restoreAborted = true;
+            resolve("aborted");
+          });
+        }),
+    ),
+  40,
+);
+assert(restoreAborted, "a timed-out restore aborts the in-flight session read");
+assert(timedOut.ok === false, "a timed-out restore still fails closed");
+const freed = await Promise.race([
+  tabAuthLock("restore-release", -1, async () => "free" as const),
+  new Promise<never>((_resolve, reject) => {
+    setTimeout(() => reject(new Error("auth lock still held after restore timeout")), 500);
+  }),
+]);
+assert(freed === "free", "restore timeout releases the auth lock");
+const finished = await restoreSession(async () => "done", 200);
+assert(finished.ok === true && finished.value === "done", "a finished restore returns the session");
+assert(sessionRestoreSignal() === null, "a finished restore does not abort later fetches");
+assert(SHELL_GATE_TIMEOUT_MS === 8_000, "the shell deadline stays 8 seconds");
 
 let clientReads = 0;
 const retried = await readWithOneRetry(async (): Promise<Settled<string>> => {

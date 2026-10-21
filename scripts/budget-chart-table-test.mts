@@ -102,6 +102,13 @@ const later = revenueYtd(views, "2026-02");
 assert(later.actual == null, "a month after the window is not in this year");
 
 const rows = budgetTableRows(doc, views);
+const unpriced = rows.find((row) => row.kind === "line" && row.id.startsWith("rev-"));
+assert(
+  unpriced != null && unpriced.cells.every((item) => item.budget == null && item.actual == null),
+  "a stream with no budget is a dash in every month",
+);
+const unpricedTotal = budgetPeriodTotalCell(unpriced?.cells ?? [], "revenue", "Secondary stream", true);
+assert(unpricedTotal.budget == null && unpricedTotal.actual == null, "the unpriced period total is a dash");
 assert(rows.some((row) => row.kind === "subtotal" && row.id === "revenue"), "revenue is a subtotal");
 assert(rows.some((row) => row.kind === "subtotal" && row.id === "overheads"), "overheads are a subtotal");
 assert(rows.some((row) => row.kind === "total" && row.label === "Operating profit"), "operating profit is the grand total");
