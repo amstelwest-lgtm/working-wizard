@@ -17,7 +17,9 @@ export type SmokeMode =
   | "hang-twice"
   | "critical-down"
   | "section-down"
-  | "client-hang-twice";
+  | "client-hang-twice"
+  | "invite-roles-hang"
+  | "invite-slow-chain";
 
 export const SMOKE_USER_ID = "11111111-1111-4111-8111-111111111111";
 export const SMOKE_CLIENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -27,6 +29,21 @@ export const STALE_CLIENT_NAME = "Revoked & Co";
 let mode: SmokeMode = "null";
 const rpcLog: string[] = [];
 const hangAttempts = new Map<string, number>();
+const roleReads: { at: number; signal: boolean; stack?: string }[] = [];
+let bootStartedAt = Date.now();
+
+export function resetSmokeRoleReads() {
+  roleReads.length = 0;
+  bootStartedAt = Date.now();
+}
+
+export function smokeRoleReads(): readonly { at: number; signal: boolean; stack?: string }[] {
+  return roleReads.map((row) => ({
+    at: row.at - bootStartedAt,
+    signal: row.signal,
+    stack: row.stack,
+  }));
+}
 
 export function resetSmokeRpcLog() {
   rpcLog.length = 0;
@@ -39,6 +56,7 @@ export function smokeRpcLog(): readonly string[] {
 export function setSmokeMode(next: SmokeMode) {
   mode = next;
   hangAttempts.clear();
+  resetSmokeRoleReads();
 }
 
 export function smokeMode(): SmokeMode {
@@ -143,6 +161,7 @@ function settle(
   eqs: QueryFilter[],
   ins: QueryFilter[],
   signal: AbortSignal | undefined,
+  callerStack: string,
 ): Promise<{ data: unknown; error: { message: string } | null }> {
   const workspaceList = isWorkspaceList(table, eqs);
   if (mode === "loading" && table === "clients") return new Promise(() => {});
@@ -175,6 +194,53 @@ function settle(
     hangAttempts.set(key, attempt);
     if (attempt <= 2) return hangUntilAbort(signal);
   }
+  if (table === "user_roles" && (mode === "invite-roles-hang" || mode === "invite-slow-chain")) {
+    roleReads.push({ at: Date.now(), signal: Boolean(signal), stack: callerStack });
+    // listAppRoles does not pass an AbortSignal. The role effect's bootSelect does.
+    if (mode === "invite-roles-hang" && !signal) return new Promise(() => {});
+    if (mode === "invite-slow-chain" && !signal) {
+      return Promise.resolve({
+        data: null,
+        error: { message: "TypeError: Failed to fetch (example.supabase.co)" },
+      });
+    }
+    return Promise.resolve({ data: [], error: null });
+  }
+  if (mode === "invite-roles-hang" && table === "client_memberships") {
+    const row = { client_id: SMOKE_CLIENT_ID, role: "client_owner" };
+    return kind === "single"
+      ? Promise.resolve({ data: row, error: null })
+      : Promise.resolve({ data: [row], error: null });
+  }
+  if (mode === "invite-slow-chain" && (table === "clients" || table === "client_memberships")) {
+    const inviteRead =
+      isWorkspaceList(table, eqs) ||
+      (table === "clients" && eqValue(eqs, "id") === SMOKE_CLIENT_ID) ||
+      (table === "client_memberships" && eqValue(eqs, "client_id") === SMOKE_CLIENT_ID);
+    // Under the 4s boot abort. Three of these in series still cross the 8s backstop.
+    const STEP_MS = 3_200;
+    if (inviteRead) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          if (table === "client_memberships") {
+            const row = { client_id: SMOKE_CLIENT_ID, role: "client_owner" };
+            resolve(kind === "single" ? { data: row, error: null } : { data: [row], error: null });
+            return;
+          }
+          resolve(
+            kind === "single"
+              ? { data: { id: SMOKE_CLIENT_ID }, error: null }
+              : {
+                  data: [
+                    { id: SMOKE_CLIENT_ID, name: clientRow.name, owner_user_id: SMOKE_USER_ID },
+                  ],
+                  error: null,
+                },
+          );
+        }, STEP_MS);
+      });
+    }
+  }
   if (mode === "section-down" && table === "deliverable_drafts") {
     return Promise.reject(new TypeError("Failed to fetch"));
   }
@@ -188,12 +254,13 @@ function settle(
     mode === "hang-twice" ||
     mode === "section-down" ||
     mode === "critical-down" ||
-    mode === "client-hang-twice";
+    mode === "client-hang-twice" ||
+    mode === "invite-roles-hang";
   if (!likeLoaded || table !== "clients") return empty(kind);
   return clientPayload(clientRow, kind);
 }
 
-function builder(table: string) {
+function builder(table: string, callerStack: string) {
   const eqs: QueryFilter[] = [];
   const ins: QueryFilter[] = [];
   let signal: AbortSignal | undefined;
@@ -239,7 +306,7 @@ function builder(table: string) {
     ins.push({ column, value });
     return self;
   };
-  const run = (kind: "list" | "single") => settle(table, kind, eqs, ins, signal);
+  const run = (kind: "list" | "single") => settle(table, kind, eqs, ins, signal, callerStack);
   self.maybeSingle = () => run("single");
   self.single = () => run("single");
   self.then = (
@@ -260,7 +327,14 @@ function session() {
       aud: "authenticated",
       created_at: "2026-01-01T00:00:00.000Z",
       app_metadata: { provider: "email" },
-      user_metadata: { full_name: "Ada Owner", signup_type: "customer" },
+      user_metadata:
+        mode === "invite-roles-hang" || mode === "invite-slow-chain"
+          ? {
+              full_name: "Zanele",
+              signup_type: "customer",
+              invite_client_id: SMOKE_CLIENT_ID,
+            }
+          : { full_name: "Ada Owner", signup_type: "customer" },
       identities: [{ provider: "email" }],
     },
   };
@@ -303,7 +377,12 @@ const auth = {
 
 export const supabase = {
   from(table: string) {
-    return builder(table);
+    const callerStack = (new Error().stack ?? "")
+      .split("\n")
+      .filter((line) => /\/src\/|\/scripts\//.test(line) && !/page-smoke-supabase/.test(line))
+      .slice(0, 4)
+      .join(" | ");
+    return builder(table, callerStack);
   },
   rpc(name: string) {
     rpcLog.push(name);

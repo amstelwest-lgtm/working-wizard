@@ -14,6 +14,7 @@ import { Window } from "happy-dom";
 import {
   resetSmokeRpcLog,
   setSmokeMode,
+  smokeRoleReads,
   smokeRpcLog,
   SMOKE_CLIENT_ID,
   SMOKE_USER_ID,
@@ -261,6 +262,8 @@ type PageCase = {
   expectFrames?: (frames: string[]) => void;
   /** Runs while the page is still mounted, after `expect`. */
   after?: (host: HTMLElement) => Promise<void>;
+  /** Override the paint budget. The default /app budget is 4s. */
+  waitMs?: number;
 };
 
 function htmlHasStaleClient(html: string): boolean {
@@ -505,7 +508,7 @@ async function paint(page: PageCase) {
     };
     let html = host.innerHTML;
     note(html);
-    const budget = page.url === "/app" ? 100 : 60;
+    const budget = page.waitMs ? Math.ceil(page.waitMs / 40) : page.url === "/app" ? 100 : 60;
     for (let i = 0; i < budget && !page.ready(html); i++) {
       const crashed = boundaryHit(html);
       if (crashed) break;
@@ -694,6 +697,84 @@ cases.push({
       (next) => next.includes("Harbour Books") && !next.includes('data-client-boot="load-error"'),
     );
     assert(html.includes("Harbour Books"), "Retry opens the client that loaded");
+  },
+});
+
+cases.push({
+  label: "invite owner hung user_roles",
+  mode: "invite-roles-hang",
+  url: "/app",
+  prepare: () => {
+    resetSmokeRpcLog();
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    localStorage.removeItem(key);
+    localStorage.removeItem(`${key}:name`);
+  },
+  ready: (html) => html.includes('data-owner-ready="true"') && html.includes('id="board-pack"'),
+  expect: (html) => {
+    assert(html.includes('id="board-pack"'), "a hung role list still opens the invited workspace");
+    assert(html.includes("Harbour Books"), "the invited workspace keeps its name");
+    assert(
+      !html.includes("Couldn't open your workspace"),
+      "a hung role list is not the 8s hard fail",
+    );
+    assert(
+      !html.includes("Couldn't load your workspace"),
+      "a hung role list is not the load error",
+    );
+    const unwrapped = smokeRoleReads().filter((row) => !row.signal);
+    assert(unwrapped.length > 0, "listAppRoles reads user_roles with no abort signal");
+    assert(
+      unwrapped.every((row) => row.stack?.includes("listAppRoles")),
+      "the unwrapped user_roles read is listAppRoles",
+    );
+  },
+});
+
+cases.push({
+  label: "invite owner slow chain",
+  mode: "invite-slow-chain",
+  url: "/app",
+  waitMs: 12_000,
+  prepare: () => {
+    resetSmokeRpcLog();
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    localStorage.removeItem(key);
+    localStorage.removeItem(`${key}:name`);
+  },
+  ready: (html) =>
+    html.includes('data-owner-boot="timeout"') ||
+    html.includes('data-owner-boot="load-error"') ||
+    (html.includes('data-owner-ready="true"') && html.includes('id="board-pack"')),
+  expect: (html) => {
+    const late = smokeRoleReads().filter((row) => row.at >= 6_500);
+    assert(late.length > 0, "user_roles is read again when the boot deadline fires");
+    assert(
+      late.every((row) => !row.signal && row.stack?.includes("listAppRoles")),
+      "the deadline user_roles read is listAppRoles and is not aborted",
+    );
+    assert(
+      late.some((row) => row.stack?.includes("shouldBounceFromOwnerApp")),
+      "that read is the practice bounce, which starts after the gate settles",
+    );
+    // EXPECTED FAIL on prod base 5f8e3725 (a7920c89). Each invite read in this
+    // fixture settles in 3.2s, under the 4s boot abort, and none is user_roles.
+    // The attempt still dies on the 8s shell backstop. The next fix has to make
+    // the assertion below stop throwing; until then the throw is the repro.
+    let expectedFail: string | null = null;
+    try {
+      assert(
+        !html.includes("Couldn't open your workspace") &&
+          !html.includes('data-owner-boot="timeout"'),
+        "invite reads under 4s must not reach the 8s backstop",
+      );
+    } catch (error) {
+      expectedFail = error instanceof Error ? error.message : String(error);
+    }
+    assert(Boolean(expectedFail), "the 8s backstop repro no longer fails on this base");
+    assert(html.includes('data-owner-boot="timeout"'), "the deadline screen is the shell backstop");
+    assert(!html.includes('data-owner-boot="load-error"'), "the deadline is not a failed 4s retry");
+    console.log(`EXPECTED FAIL on base 5f8e3725: ${expectedFail}`);
   },
 });
 
