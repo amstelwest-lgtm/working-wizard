@@ -65,7 +65,7 @@ export type CashForecastWeek = {
   net_movement: number;
   closing_balance: number;
   scenario: "critical" | "moderate" | "growth";
-  runway_weeks: number;
+  runway_weeks: number | null;
 };
 
 export type CashForecastPDFProps = {

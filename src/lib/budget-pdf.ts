@@ -313,7 +313,7 @@ function revenueDriverBudget(doc: BudgetDocument, months: string[], lineId: stri
   return entered;
 }
 
-function headlineFor(
+export function headlineFor(
   summary: BudgetPdfRow[],
   hasActuals: boolean,
   includesDraft: boolean,
@@ -324,15 +324,19 @@ function headlineFor(
     return "No monthly management accounts uploaded yet. The figures are the saved budget. Variance fills in after management accounts are uploaded on the Budget tab.";
   }
   const adverse = summary
-    .filter((r) => r.signal === "adverse" && r.delta != null)
-    .sort((a, b) => Math.abs(b.delta ?? 0) - Math.abs(a.delta ?? 0));
+    .filter((r) => r.signal === "adverse" && r.delta != null && Number.isFinite(r.delta))
+    .sort((a, b) => Math.abs(b.delta as number) - Math.abs(a.delta as number));
   if (adverse.length === 0) {
+    if (summary.some((r) => r.signal === "adverse" && (r.delta == null || !Number.isFinite(r.delta)))) {
+      return "Not enough data";
+    }
     return `${draftBit}Trading is broadly in line with budget for the months compared.`;
   }
   const top = adverse[0];
-  const dir = (top.delta ?? 0) > 0 ? "over" : "under";
+  const delta = top.delta as number;
+  const dir = delta > 0 ? "over" : "under";
   const pct = formatVariancePct(top.deltaPct, top.deltaPctNote);
-  return `${draftBit}${top.label} is ${dir} budget by ${money(Math.abs(top.delta ?? 0), market)} (${pct}).`;
+  return `${draftBit}${top.label} is ${dir} budget by ${money(Math.abs(delta), market)} (${pct}).`;
 }
 
 function finiteField(fin: Record<string, unknown>, key: string): number | null {

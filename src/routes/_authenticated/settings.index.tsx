@@ -518,6 +518,11 @@ function SettingsPage() {
                   saDiscount={Boolean(plan.saDiscount) || zarPlan}
                   zaLabels={plan.zaLabels}
                   introTrialEligible={plan.introTrialEligible}
+                  cardFree={
+                    plan.phase === "none" &&
+                    plan.starterTrial?.enforced === true &&
+                    plan.starterTrial.expired !== true
+                  }
                   upgrading={upgrading}
                   onValidateVoucher={onValidateVoucher}
                   onUpgrade={handlePlanUpgrade}

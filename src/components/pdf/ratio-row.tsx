@@ -15,7 +15,8 @@ import { Sparkline } from "./sparkline";
 type Props = {
   ratioName: string;
   formattedValue: string;
-  healthScore: number;
+  /** Null when the ratio was not scored. A real 0 still draws. */
+  healthScore: number | null;
   healthTier: Tier;
   /** Missing inputs — no gauge, no fake Critical score. */
   unscored?: boolean;
@@ -70,11 +71,12 @@ export function RatioRow({
   isAlternate = false,
 }: Props) {
   const tier = TIER_META[healthTier] ?? TIER_META.at_risk;
-  const rounded = Math.round(healthScore || 0);
+  const missing = Boolean(unscored) || healthScore == null || !Number.isFinite(healthScore);
+  const rounded = missing ? null : Math.round(healthScore);
 
   let movement: { dir: ArrowDir; color: string } | null = null;
-  if (priorScore !== undefined) {
-    const delta = healthScore - priorScore;
+  if (!missing && priorScore !== undefined && rounded != null) {
+    const delta = rounded - priorScore;
     if (delta > 2) movement = { dir: "up", color: C.green };
     else if (delta < -2) movement = { dir: "down", color: C.red };
     else movement = { dir: "flat", color: C.faint };
@@ -92,7 +94,7 @@ export function RatioRow({
       <Text style={styles.value}>{formattedValue}</Text>
 
       <View style={styles.gaugeWrap}>
-        {unscored ? null : <HealthScoreGauge score={healthScore} height={5} />}
+        {missing || rounded == null ? null : <HealthScoreGauge score={rounded} height={5} />}
       </View>
 
       {trend && trend.filter((t) => t != null).length >= 2 ? (
@@ -101,13 +103,13 @@ export function RatioRow({
         </View>
       ) : null}
 
-      <Text style={[styles.scoreNum, { color: unscored ? C.faint : tier.color }]}>
-        {unscored ? "—" : rounded}
+      <Text style={[styles.scoreNum, { color: missing ? C.faint : tier.color }]}>
+        {missing ? "—" : rounded}
       </Text>
 
-      <View style={[styles.tierChip, { backgroundColor: unscored ? C.soft : tier.soft }]}>
-        <Text style={[styles.tierText, { color: unscored ? C.muted : tier.deep }]}>
-          {unscored ? (statusLabel ?? NOT_SCORED) : tier.label}
+      <View style={[styles.tierChip, { backgroundColor: missing ? C.soft : tier.soft }]}>
+        <Text style={[styles.tierText, { color: missing ? C.muted : tier.deep }]}>
+          {missing ? (statusLabel ?? NOT_SCORED) : tier.label}
         </Text>
       </View>
 

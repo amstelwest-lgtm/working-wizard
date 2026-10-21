@@ -1,5 +1,6 @@
 import type { FirmUpgradeAllowance } from "@/lib/firm-client-cap";
 import { firmStarterTrialCountdownCopy, type StarterTrialBanner } from "@/lib/firm-starter-trial";
+import { CARD_FREE_TRIAL_LINE } from "@/lib/starter-trial-constants";
 
 /**
  * Practice-dashboard trial countdown (from day 10).
@@ -16,11 +17,17 @@ export function FirmStarterTrialBanner({
   onUpgraded?: () => void;
 }) {
   const countdown = firmStarterTrialCountdownCopy(trial);
-  if (trial.expired || !countdown) return null;
+  const explore = trial.cardFree && !trial.expired ? CARD_FREE_TRIAL_LINE : null;
+  if (trial.expired || (!countdown && !explore)) return null;
 
   return (
     <section className="trial-ended-block bg-card text-foreground" role="status" aria-label="Trial">
-      <p className="trial-ended-title text-foreground">{countdown}</p>
+      {explore ? (
+        <p className="trial-ended-title text-foreground" data-card-free-trial="">
+          {explore}
+        </p>
+      ) : null}
+      {countdown ? <p className="trial-ended-note text-muted-foreground">{countdown}</p> : null}
       {upgrade?.zaPriceLabel ? (
         <p className="trial-ended-note text-muted-foreground">{upgrade.zaPriceLabel}</p>
       ) : null}

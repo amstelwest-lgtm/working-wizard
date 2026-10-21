@@ -80,11 +80,9 @@ import {
 } from "@/lib/stripe-billing-sync.server";
 import {
   classifyBillingCheckFailure,
-  entitlementForFailedCheck,
   entitlementWhenBillingCheckFails,
   restoreLastFirmSuccess,
   FIRM_BILLING_ENTITLEMENT_SERVER_FN,
-  FIRM_BILLING_PLAN_FALLBACK_MS,
 } from "@/lib/billing-check-failure";
 import { readFirmBillingPlanKnown, writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
 import {
@@ -334,7 +332,7 @@ function rememberConfirmedFirmPlan(
   }
 }
 
-async function resolveFirmBillingEntitlement(
+export async function resolveFirmBillingEntitlement(
   context: unknown,
   refresh: boolean,
   firmId: string | null = null,
@@ -354,7 +352,6 @@ async function resolveFirmBillingEntitlement(
   const work = (async (): Promise<FirmBillingEntitlement> => {
     const billingIds = await firmBillingIdsForActor(ctx.supabase, userId, firmId);
     const storedPlan = await readFirmBillingPlanKnown(billingIds.firmId);
-    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
     const live = (async (): Promise<FirmBillingEntitlement> => {
     try {
       // One isolate-cached Stripe list. The mirror below reads that same
@@ -423,18 +420,21 @@ async function resolveFirmBillingEntitlement(
     }
     })();
     if (storedPlan !== "entitled") return live;
-    try {
-      return await Promise.race([
-        live,
-        new Promise<FirmBillingEntitlement>((resolve) => {
-          fallbackTimer = setTimeout(() => {
-            resolve(entitlementForFailedCheck("entitled", "timeout"));
-          }, FIRM_BILLING_PLAN_FALLBACK_MS);
-        }),
-      ]);
-    } finally {
-      if (fallbackTimer) clearTimeout(fallbackTimer);
-    }
+    // A known entitled plan is the answer. The Stripe list refreshes behind
+    // it. waitUntil is a no-op in api/server.js, so this must not be awaited,
+    // and a rejection must not escape the request.
+    void live.catch((err) => {
+      console.warn(
+        "[stripe-entitlement] stored-plan refresh failed",
+        err instanceof Error ? err.message : err,
+      );
+    });
+    const stored: FirmBillingEntitlement = {
+      entitled: true,
+      reason: "active_subscription",
+    };
+    rememberEntitlement(email, stored, userId, billingIds.firmId);
+    return stored;
   })();
   if (key) {
     entitlementInflight.set(key, work);

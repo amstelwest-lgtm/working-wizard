@@ -1,7 +1,11 @@
 import { COMPANY_ADDRESS, LEGAL_ENTITY } from "@/lib/legal";
+import { formatMoney } from "@/lib/market/format";
+import { ZA_MARKET } from "@/lib/market/resolve";
+import { OWNER_MONTHLY_USD_LABEL } from "@/lib/owner-plan";
+import { ZA_MONTHLY_RANDS } from "@/lib/pricing/za-ladder";
+import { OWNER_MONTHLY_ZA_CENTS } from "@/lib/stripe-checkout.core";
 import {
   FIRM_TRIAL_CARD_LINE,
-  FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_SENTENCE,
   firmUsdListPrice,
   type FirmCheckoutBand,
@@ -9,18 +13,47 @@ import {
 } from "@/lib/stripe-plans";
 
 /**
- * Card after the first result, then the Starter price. Keep this sentence on
- * landing, register, pricing, and the firm form. It does not name a rand amount.
+ * Card after the first result, then the Starter price. Shared by the trial
+ * banner, the add-client card, and the billing wall. The signup form does
+ * not use this sentence.
  */
 export const FIRM_CARD_TIMING = FIRM_TRIAL_CARD_LINE;
 
 /**
- * Paid-plan sentence on the homepage #register firm form.
- * Auth Create Firm must use this helper so the two surfaces cannot drift.
- * The trial is Starter. The dollar price is the US catalog only.
+ * Catalog monthly label. Rand comes from the published amounts and is joined
+ * at runtime so the client bundle does not contain a rand price literal.
+ * South Africa is the only rand country. Every other value, including a
+ * missing country, stays on the dollar catalog.
  */
-export function firmSignupTrialReminder(_planLabel: string): string {
-  return `Starter. ${FIRM_TRIAL_SENTENCE}. ${FIRM_TRIAL_CARD_NOTE} Then ${firmUsdListPrice("starter", "month")}/mo.`;
+function randMonthly(rands: number): string {
+  const amount = formatMoney(rands, ZA_MARKET).replace(/\s+/g, "");
+  return `${amount}/mo`;
+}
+
+export function firmSignupStarterMonthly(country: string | null | undefined): string {
+  if (country === "ZA") return randMonthly(ZA_MONTHLY_RANDS.starter);
+  const usd = firmUsdListPrice("starter", "month");
+  if (!usd) throw new Error("Starter has no published monthly price.");
+  return `${usd}/mo`;
+}
+
+export function firmSignupOwnerMonthly(country: string | null | undefined): string {
+  if (country === "ZA") return randMonthly(OWNER_MONTHLY_ZA_CENTS / 100);
+  return OWNER_MONTHLY_USD_LABEL;
+}
+
+/** Owner price under the accountant signup form. No VAT wording. */
+export function firmSignupOwnerPayLine(country: string | null | undefined): string {
+  return `Business owners pay ${firmSignupOwnerMonthly(country)}, or nothing when their accountant is on Milōn.`;
+}
+
+/**
+ * Trial line on the homepage #register firm form and /auth Create Firm.
+ * The price follows the country select. Auth and the homepage share this
+ * helper so the two surfaces cannot drift.
+ */
+export function firmSignupTrialReminder(_planLabel: string, country?: string | null): string {
+  return `Your first client is free to explore. Add a card to start your ${FIRM_TRIAL_SENTENCE}. Then ${firmSignupStarterMonthly(country)}.`;
 }
 
 /** Accountant nav / hero label. Firms need a card, so this is not "Start free". */

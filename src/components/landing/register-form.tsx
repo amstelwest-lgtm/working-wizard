@@ -250,6 +250,7 @@ export function LandingRegisterForm({
                   showRole={false}
                   plan={paidPlanFromRegisterLabel(regPlan) ?? "starter"}
                   interval={firmInterval}
+                  country={draftMarket.country}
                   onPlanChange={(nextPlan) => {
                     setRegPlan(registerLabelForPlan(nextPlan));
                     stashPendingCheckout({
@@ -376,8 +377,9 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  {firmSignupTrialReminder("Starter")} The AI team prepares the analysis and you
-                  review and approve it. By creating an account you agree to the <a href="/terms">Terms</a>.
+                  {firmSignupTrialReminder("Starter", draftMarket.country)} The AI team prepares the
+                  analysis and you review and approve it. By creating an account you agree to the{" "}
+                  <a href="/terms">Terms</a>.
                 </p>
                 <p style={{ textAlign: "center", marginTop: 16 }}>
                   <button type="button" className="reg-owner-link" onClick={goToOwnerSpark}>
@@ -489,8 +491,8 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  {ownerNote} Accounting firms: {firmSignupTrialReminder("Starter")} By creating an
-                  account you agree to the <a href="/terms">Terms</a>.
+                  {ownerNote} Accounting firms: {firmSignupTrialReminder("Starter", draftMarket.country)}{" "}
+                  By creating an account you agree to the <a href="/terms">Terms</a>.
                 </p>
               </>
             )}
