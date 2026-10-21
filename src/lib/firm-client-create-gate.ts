@@ -22,6 +22,16 @@ export type StoredCreateEntitlement = {
    * True means the trial-ended gate is on.
    */
   trialBlocked: boolean | null;
+  /**
+   * firms.precard_cap_applies. Only a strict false may skip Stripe.
+   * Null has not been written. True means the pre-card cap is on.
+   */
+  precardCapApplies: boolean | null;
+  /**
+   * firms.starter_trial_enforced. Only a strict false may skip Stripe.
+   * Null is unknown. True means the 14-day work gate can apply.
+   */
+  starterTrialEnforced: boolean | null;
 };
 
 export type LiveCreateCap = {
@@ -41,6 +51,8 @@ export type CreateCapDecision =
  *   that has not been written yet.
  * - The trial mirror must be an explicit false. Null is unsynced. True is the
  *   trial-ended block (no new clients), which the live check must confirm.
+ * - `precard_cap_applies` and `starter_trial_enforced` must each be an
+ *   explicit false. Null and true both run the live check.
  * - The count must be under the tightest cap. At that cap or above, the band
  *   is not on the row, so Stripe still decides.
  */
@@ -52,6 +64,8 @@ export function storedEntitlementSkipsLiveCap(input: {
   const count = input.clientCount;
   if (!stored || stored.plan !== "entitled") return false;
   if (stored.trialBlocked !== false) return false;
+  if (stored.precardCapApplies !== false) return false;
+  if (stored.starterTrialEnforced !== false) return false;
   if (count == null || !Number.isFinite(count) || count < 0) return false;
   return count < TIGHTEST_FIRM_CLIENT_CAP;
 }

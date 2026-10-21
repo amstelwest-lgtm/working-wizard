@@ -13,6 +13,8 @@ const FIRM_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 type FirmPlanRow = {
   billing_plan_known?: string | null;
   starter_trial_generation_blocked?: boolean | null;
+  precard_cap_applies?: boolean | null;
+  starter_trial_enforced?: boolean | null;
 };
 
 /**
@@ -42,15 +44,22 @@ export async function readStoredCreateEntitlement(
   const admin = getSupabaseAdminOrNull();
   if (!admin) return null;
   const { data, error } = await (admin.from("firms") as unknown as FirmPlanQuery)
-    .select("billing_plan_known, starter_trial_generation_blocked")
+    .select(
+      "billing_plan_known, starter_trial_generation_blocked, precard_cap_applies, starter_trial_enforced",
+    )
     .eq("id", id)
     .maybeSingle();
   if (error || !data) return null;
   const rawPlan = data.billing_plan_known;
   const plan = rawPlan === "entitled" || rawPlan === "none" ? rawPlan : null;
-  const rawTrial = data.starter_trial_generation_blocked;
-  const trialBlocked = typeof rawTrial === "boolean" ? rawTrial : null;
-  return { plan, trialBlocked };
+  const trialBlocked = strictBool(data.starter_trial_generation_blocked);
+  const precardCapApplies = strictBool(data.precard_cap_applies);
+  const starterTrialEnforced = strictBool(data.starter_trial_enforced);
+  return { plan, trialBlocked, precardCapApplies, starterTrialEnforced };
+}
+
+function strictBool(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
 }
 
 /**

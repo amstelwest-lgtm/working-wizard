@@ -29,7 +29,17 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const FRESH: StoredCreateEntitlement = { plan: "entitled", trialBlocked: false };
+/** Entitled, trial open, pre-card cap off, trial not enforced. */
+const FRESH: StoredCreateEntitlement = {
+  plan: "entitled",
+  trialBlocked: false,
+  precardCapApplies: false,
+  starterTrialEnforced: false,
+};
+
+function entitled(overrides: Partial<StoredCreateEntitlement>): StoredCreateEntitlement {
+  return { ...FRESH, ...overrides };
+}
 
 async function parallelReadsSkipStripe() {
   let inFlight = 0;
@@ -104,10 +114,14 @@ async function nearCapUsesLiveStripeAndDoesNotCreate() {
 async function unsyncedOrBlockedPlanDoesNotSkip() {
   const cases: Array<StoredCreateEntitlement | null> = [
     null,
-    { plan: "none", trialBlocked: false },
-    { plan: "entitled", trialBlocked: null },
-    { plan: "entitled", trialBlocked: true },
-    { plan: null, trialBlocked: false },
+    entitled({ plan: "none" }),
+    entitled({ trialBlocked: null }),
+    entitled({ trialBlocked: true }),
+    entitled({ plan: null }),
+    entitled({ precardCapApplies: true }),
+    entitled({ starterTrialEnforced: true }),
+    entitled({ precardCapApplies: null }),
+    entitled({ starterTrialEnforced: null }),
   ];
   for (const stored of cases) {
     let liveCalls = 0;
@@ -122,6 +136,42 @@ async function unsyncedOrBlockedPlanDoesNotSkip() {
     assert(liveCalls === 1, `expected live Stripe for ${JSON.stringify(stored)}`);
     assert(decision.allowed && decision.source === "live", "fallback is the live allowance");
   }
+}
+
+async function eng2MirrorRows() {
+  const live = async (stored: StoredCreateEntitlement | null, count: number, label: string) => {
+    let liveCalls = 0;
+    const decision = await resolveFirmClientCreateGate({
+      readStoredEntitlement: async () => stored,
+      countClients: async () => count,
+      loadLiveAllowance: async () => {
+        liveCalls += 1;
+        return { allowed: true };
+      },
+    });
+    assert(liveCalls === 1, `${label} runs the live check`);
+    assert(decision.source === "live", `${label} does not skip Stripe`);
+  };
+  const skip = async (stored: StoredCreateEntitlement, count: number, label: string) => {
+    let liveCalls = 0;
+    const decision = await resolveFirmClientCreateGate({
+      readStoredEntitlement: async () => stored,
+      countClients: async () => count,
+      loadLiveAllowance: async () => {
+        liveCalls += 1;
+        return { allowed: true };
+      },
+    });
+    assert(liveCalls === 0, `${label} skips the live check`);
+    assert(decision.source === "stored" && decision.allowed, `${label} uses the stored plan`);
+  };
+
+  await live(entitled({ precardCapApplies: true }), 0, "precard_cap_applies true");
+  await live(entitled({ starterTrialEnforced: true }), 0, "starter_trial_enforced true");
+  await live(entitled({ precardCapApplies: null }), 0, "null precard_cap_applies");
+  await live(entitled({ plan: null }), 0, "null billing_plan_known");
+  await skip(FRESH, 2, "entitled non-enforced non-precard count 2");
+  await live(FRESH, 3, "count 3");
 }
 
 async function failedReadsFallBackToLive() {
@@ -181,6 +231,7 @@ function navigationOpensClientHome() {
 await parallelReadsSkipStripe();
 await nearCapUsesLiveStripeAndDoesNotCreate();
 await unsyncedOrBlockedPlanDoesNotSkip();
+await eng2MirrorRows();
 await failedReadsFallBackToLive();
 navigationOpensClientHome();
 console.log("add-client-save: ok");

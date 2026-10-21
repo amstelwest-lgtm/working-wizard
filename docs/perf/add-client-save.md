@@ -17,20 +17,22 @@ The 8–9s is one server call, `createFirmClient`, waiting on a live Stripe cap 
 
 `resolveFirmClientCreateGate` (`src/lib/firm-client-create-gate.ts`) `Promise.all`s:
 
-| Read | Where | Store |
-| --- | --- | --- |
-| `readStoredCreateEntitlement` | `src/lib/firm-client-create.server.ts` | Postgres `firms.billing_plan_known`, `firms.starter_trial_generation_blocked` |
-| `countFirmClientsForCreate` | same file | Postgres `clients` (non-demo, same collapse as the live cap) |
+| Read                          | Where                                  | Store                                                                                                                                      |
+| ----------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `readStoredCreateEntitlement` | `src/lib/firm-client-create.server.ts` | Postgres `firms.billing_plan_known`, `firms.starter_trial_generation_blocked`, `firms.precard_cap_applies`, `firms.starter_trial_enforced` |
+| `countFirmClientsForCreate`   | same file                              | Postgres `clients` (non-demo, same collapse as the live cap)                                                                               |
 
 A thrown read is treated as “not fresh” and does not fail the save.
 
 Stored rows skip live Stripe only when all of these hold (`storedEntitlementSkipsLiveCap`):
 
-- `billing_plan_known` is `entitled` (a finished check wrote it; `none` and null do not grant a cap)
+- `billing_plan_known` is `entitled` (a finished check wrote it; `none` and null do not grant a cap, and a null or unknown plan runs the live check)
 - `starter_trial_generation_blocked` is `false` (a sync wrote “not blocked”; null is unsynced; true is the trial-ended block)
+- `precard_cap_applies` is strictly `false` (null or true runs the live check)
+- `starter_trial_enforced` is strictly `false` (null or true runs the live check)
 - the active client count is **under 3** (`LEGACY_FREE_STARTER_CLIENT_LIMIT` in `src/lib/stripe-plans.ts`)
 
-3 is the tightest published cap (legacy $0 Starter). Trial and paid Starter are 5; every larger band is higher. A firm under 3 cannot be over any band. At 3 or above, the band is not stored on the row, so the live check still runs. There is no `checked_at` on the firm row, so “fresh” here means both mirrors have been written, not a clock. See Eng2 follow-up.
+3 is the tightest published cap (legacy $0 Starter). Trial and paid Starter are 5; every larger band is higher. A firm under 3 cannot be over any band. At 3 or above, the band is not stored on the row, so the live check still runs. A pre-card cap or an enforced Starter trial can block a new client even under that count, so those flags have to be an explicit false before Stripe is skipped. There is no `checked_at` on the firm row. See Eng2 follow-up.
 
 US and ZA use the same rule. The shortcut does not read prices and does not render currency. Success copy does not say ZAR or rand. The client Home Step 1 dialog already picks USD or ZAR from the client market (`isUsCopy` in `src/routes/_authenticated/clients.$clientId.tsx`).
 
@@ -38,15 +40,15 @@ US and ZA use the same rule. The shortcut does not read prices and does not rend
 
 When the shortcut does not apply, `loadFirmClientCreateAllowance` (`src/lib/firm-client-cap.server.ts`) runs to completion before the insert. Order:
 
-| Step | Kind | Notes |
-| --- | --- | --- |
-| Optional `auth.getUser` | DB / Auth | Only when the caller email is empty |
-| `loadFirm` | DB | `firms` select, then `firm_memberships` when the actor is not the owner (`actorCanUseFirm`) |
-| `countFirmClients`, `billingEmailForFirm`, `loadMembershipRole` | DB | Already `Promise.all`. Owner email is local. A different owner’s email is `auth.admin.getUserById` |
-| `findEntitlingFirmSubscription` → `readFirmSubscriptionHistory` | DB then Stripe | `storedCustomerId` is not passed, so this awaits `readFirmStripeCustomerId` (another `firms` select) before Stripe. Isolate cache is 45s and misses on a new instance |
-| `buildUpgradeSnapshot` | Stripe, ZA only | `loadZarCatalogAmounts` when the billing currency is `zar` |
-| `writeStarterTrialGenerationBlock`, then `writePrecardCapApplies` | DB | Two awaited writes. They do not change the allow/deny result |
-| `decideFirmClientCreate` | CPU | `src/lib/firm-client-cap.ts` |
+| Step                                                              | Kind            | Notes                                                                                                                                                                 |
+| ----------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Optional `auth.getUser`                                           | DB / Auth       | Only when the caller email is empty                                                                                                                                   |
+| `loadFirm`                                                        | DB              | `firms` select, then `firm_memberships` when the actor is not the owner (`actorCanUseFirm`)                                                                           |
+| `countFirmClients`, `billingEmailForFirm`, `loadMembershipRole`   | DB              | Already `Promise.all`. Owner email is local. A different owner’s email is `auth.admin.getUserById`                                                                    |
+| `findEntitlingFirmSubscription` → `readFirmSubscriptionHistory`   | DB then Stripe  | `storedCustomerId` is not passed, so this awaits `readFirmStripeCustomerId` (another `firms` select) before Stripe. Isolate cache is 45s and misses on a new instance |
+| `buildUpgradeSnapshot`                                            | Stripe, ZA only | `loadZarCatalogAmounts` when the billing currency is `zar`                                                                                                            |
+| `writeStarterTrialGenerationBlock`, then `writePrecardCapApplies` | DB              | Two awaited writes. They do not change the allow/deny result                                                                                                          |
+| `decideFirmClientCreate`                                          | CPU             | `src/lib/firm-client-cap.ts`                                                                                                                                          |
 
 `create_firm_client` (`supabase/migrations/20261013160000_link_client_firm_execute_lock.sql`) then runs in one RPC: auth, optional `ensure_practice_firm` (that function inserts `firm_memberships` / `user_roles` when it has to provision a firm), firm membership check, market check, `generate_client_code()` (`supabase/migrations/20260824120000_client_code_ensure_firm.sql`, `MLN-` plus 6 chars, uniqueness loop), and one `clients` insert. The insert sets `owner_user_id` to the accountant, `firm_id`, market, financial-year start (month 1 for US, month 3 for ZA), and the firm-link timestamps. It does not seed financials and it does not insert a separate client-membership row.
 
@@ -56,12 +58,12 @@ No step in the RPC calls Stripe.
 
 From `src/lib/stripe-entitlement.ts` and `listCustomerSubscriptions` in `src/lib/firm-client-cap.server.ts`:
 
-| Call | Cap | Retries |
-| --- | --- | --- |
-| `customers.retrieve` for `firms.stripe_customer_id` | `STORED_CUSTOMER_READ_BUDGET_MS` = **1s** | 0. A timeout keeps the stored id and does not search |
-| Email `customers.list` plus subscription and customer metadata search, when there is no trusted stored id | One shared `FIRM_CUSTOMER_SEARCH_BUDGET_MS` = **4s** | 0 |
-| `subscriptions.list` with `expand: ["data.items.data.price"]` | `SUBSCRIPTION_LIST_BUDGET_MS` = **3s**, and `maxNetworkRetries: 0` | 0 |
-| Second `subscriptions.list` without expand | Another **3s**, same options | 0. Started only when the expand call fails for a reason other than timeout. A timeout throws `FirmCustomerLookupUnknown` and does not start the second list |
+| Call                                                                                                      | Cap                                                                | Retries                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `customers.retrieve` for `firms.stripe_customer_id`                                                       | `STORED_CUSTOMER_READ_BUDGET_MS` = **1s**                          | 0. A timeout keeps the stored id and does not search                                                                                                        |
+| Email `customers.list` plus subscription and customer metadata search, when there is no trusted stored id | One shared `FIRM_CUSTOMER_SEARCH_BUDGET_MS` = **4s**               | 0                                                                                                                                                           |
+| `subscriptions.list` with `expand: ["data.items.data.price"]`                                             | `SUBSCRIPTION_LIST_BUDGET_MS` = **3s**, and `maxNetworkRetries: 0` | 0                                                                                                                                                           |
+| Second `subscriptions.list` without expand                                                                | Another **3s**, same options                                       | 0. Started only when the expand call fails for a reason other than timeout. A timeout throws `FirmCustomerLookupUnknown` and does not start the second list |
 
 `findFirmCustomerId` is the customer step. `listCustomerSubscriptions` is the one or two lists. They are not parallel. A slow expand that errors just inside the first 3s, then a second list that uses its own 3s, is **2 × 3s** on top of the customer lookup.
 
@@ -91,7 +93,7 @@ The old client then closed the drawer and stayed on `/clients#wizard-add-client`
 - The button moves through “Checking your plan…”, “Creating the client…”, and “Opening their Home…”.
 - Every successful create navigates to that client’s Home with `onboard=1`, which opens Step 1 (upload or connect). The toast names the client and that next step, and it does not name a currency.
 
-Firms with 3 or more active clients, a missing plan, an unsynced trial mirror, or a trial-ended mirror still pay the live Stripe check.
+Firms with 3 or more active clients, a missing or unknown plan, an unsynced or ended trial mirror, `precard_cap_applies` null or true, or `starter_trial_enforced` null or true still pay the live Stripe check.
 
 ## Eng2 follow-up
 
