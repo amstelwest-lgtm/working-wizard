@@ -1,6 +1,9 @@
 import AuthenticationServices
+import AVFoundation
 import Capacitor
 import SafariServices
+import UIKit
+import UniformTypeIdentifiers
 import WebKit
 
 /**
@@ -15,10 +18,15 @@ import WebKit
 public class MilonShellPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPresentationContextProviding {
     public let identifier = "MilonShellPlugin"
     public let jsName = "MilonShell"
-    public let pluginMethods: [CAPPluginMethod] = []
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "takePhoto", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pickDocument", returnType: CAPPluginReturnPromise),
+    ]
 
     private var session: ASWebAuthenticationSession?
     private var safari: SFSafariViewController?
+    private var photoCall: CAPPluginCall?
+    private var documentCall: CAPPluginCall?
 
     public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         return bridge?.webView?.window ?? ASPresentationAnchor()
@@ -84,6 +92,158 @@ public class MilonShellPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationP
         controller.dismissButtonStyle = .close
         safari = controller
         bridge?.viewController?.present(controller, animated: true)
+    }
+
+    @objc func takePhoto(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { self.beginPhoto(call) }
+    }
+
+    @objc func pickDocument(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { self.beginDocument(call) }
+    }
+
+    private func beginPhoto(_ call: CAPPluginCall) {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            call.reject("Camera is not available")
+            return
+        }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            presentCamera(call)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        self.presentCamera(call)
+                    } else {
+                        call.reject("Camera permission was denied")
+                    }
+                }
+            }
+        default:
+            call.reject("Camera permission was denied")
+        }
+    }
+
+    private func presentCamera(_ call: CAPPluginCall) {
+        guard let host = bridge?.viewController else {
+            call.reject("Camera is not available")
+            return
+        }
+        photoCall?.resolve(["cancelled": true])
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.cameraCaptureMode = .photo
+        picker.delegate = self
+        photoCall = call
+        host.present(picker, animated: true)
+    }
+
+    private func beginDocument(_ call: CAPPluginCall) {
+        guard let host = bridge?.viewController else {
+            call.reject("Document picker is not available")
+            return
+        }
+        documentCall?.resolve(["cancelled": true])
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: Self.documentTypes, asCopy: true)
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        documentCall = call
+        host.present(picker, animated: true)
+    }
+
+    private static let documentTypes: [UTType] = [.pdf, .jpeg, .png, .webP, .heic, .heif]
+    private static let maxBytes = 20 * 1024 * 1024
+
+    fileprivate func finishPhoto(image: UIImage?, cancelled: Bool) {
+        guard let call = photoCall else { return }
+        photoCall = nil
+        if cancelled || image == nil {
+            call.resolve(["cancelled": true])
+            return
+        }
+        guard let data = image?.jpegData(compressionQuality: 0.85) else {
+            call.resolve(["cancelled": false, "error": "The photo could not be read."])
+            return
+        }
+        if data.count > Self.maxBytes {
+            call.resolve(["cancelled": false, "error": "This file is over 20 MB."])
+            return
+        }
+        call.resolve([
+            "cancelled": false,
+            "name": "receipt-\(Int(Date().timeIntervalSince1970)).jpg",
+            "mime": "image/jpeg",
+            "base64": data.base64EncodedString(),
+        ])
+    }
+
+    fileprivate func finishDocument(url: URL?, cancelled: Bool) {
+        guard let call = documentCall else { return }
+        documentCall = nil
+        guard let url, !cancelled else {
+            call.resolve(["cancelled": true])
+            return
+        }
+        let allowed = ["pdf", "jpg", "jpeg", "png", "webp", "heic", "heif"]
+        let ext = url.pathExtension.lowercased()
+        guard allowed.contains(ext) else {
+            call.resolve(["cancelled": false, "error": "Use a PDF or a photo (JPEG, PNG, WebP, or HEIC)."])
+            return
+        }
+        do {
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            let values = try url.resourceValues(forKeys: [.fileSizeKey])
+            if let size = values.fileSize, size > Self.maxBytes {
+                call.resolve(["cancelled": false, "error": "This file is over 20 MB."])
+                return
+            }
+            let data = try Data(contentsOf: url)
+            if data.count > Self.maxBytes {
+                call.resolve(["cancelled": false, "error": "This file is over 20 MB."])
+                return
+            }
+            if data.isEmpty {
+                call.resolve(["cancelled": false, "error": "This file is empty."])
+                return
+            }
+            let mime = UTType(filenameExtension: ext)?.preferredMIMEType ?? ""
+            call.resolve([
+                "cancelled": false,
+                "name": url.lastPathComponent,
+                "mime": mime,
+                "base64": data.base64EncodedString(),
+            ])
+        } catch {
+            call.resolve(["cancelled": false, "error": "The file could not be opened."])
+        }
+    }
+}
+
+extension MilonShellPlugin: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+        finishPhoto(image: nil, cancelled: true)
+    }
+
+    public func imagePickerController(
+        _ picker: UIImagePickerController,
+        didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+    ) {
+        let image = info[.originalImage] as? UIImage
+        picker.dismiss(animated: true)
+        finishPhoto(image: image, cancelled: false)
+    }
+}
+
+extension MilonShellPlugin: UIDocumentPickerDelegate {
+    public func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        finishDocument(url: nil, cancelled: true)
+    }
+
+    public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        finishDocument(url: urls.first, cancelled: false)
     }
 }
 
