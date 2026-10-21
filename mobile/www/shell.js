@@ -5,13 +5,14 @@
  * Cookies and localStorage are left alone. Nothing here clears them.
  */
 (function () {
-  if (window.__MILON_ANDROID_SHELL__) return;
+  if (window.__MILON_NATIVE_SHELL__ || window.__MILON_ANDROID_SHELL__) return;
   var host = (location.hostname || "").toLowerCase();
   var onMilon =
     host === "milonfinance.com" ||
     host.endsWith(".milonfinance.com") ||
     host === "localhost";
   if (!onMilon) return;
+  window.__MILON_NATIVE_SHELL__ = true;
   window.__MILON_ANDROID_SHELL__ = true;
 
   var CANVAS = "#FFFFFF";
