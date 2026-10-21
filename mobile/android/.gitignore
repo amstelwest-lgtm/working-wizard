@@ -61,7 +61,7 @@ keystore.properties
 .externalNativeBuild
 .cxx/
 
-# Google Services (e.g. APIs or Firebase). Push is not configured.
+# Firebase config. Keep this on the signing machine. Never commit it.
 google-services.json
 
 # Freeline
