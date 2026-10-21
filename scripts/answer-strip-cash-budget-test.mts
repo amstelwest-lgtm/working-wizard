@@ -79,7 +79,11 @@ assert(count(cash, "13-week cash forecast") === 1, "cash keeps one strip heading
 assert(!cash.includes("13-Week Cash Forecast"), "the inner cash title is gone");
 assert(cash.includes('hint="Inputs, what-ifs"'), "cash drawer names its contents");
 assert(cash.includes("answer-strip__secondary"), "upload sits on the strip as a secondary");
-assert(cash.includes('aria-label="Export PDF"'), "cash export is an icon on the strip");
+assert(cash.includes('className="answer-strip__icon"'), "cash export is an icon on the strip");
+assert(
+  cash.includes(': "Export PDF"'),
+  "cash export is labelled Export PDF when a forecast is on file",
+);
 assert(cash.includes("answer-strip__actions"), "the primary sits on the strip row");
 assert(budgetVerdict.includes("answer-strip__actions"), "budget primary sits on the strip row");
 assert(budgetVerdict.includes("extraActions"), "budget export joins the strip row");

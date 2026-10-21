@@ -55,6 +55,7 @@
     "test:cash-once-off-save": "vite-node --config scripts/vite-test.config.ts scripts/cash-once-off-save-test.mts",
     "test:cash-once-off-suggest": "vite-node --config scripts/vite-test.config.ts scripts/cash-once-off-suggest-test.mts",
     "test:cash-from-banks-workspace": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-workspace-test.mts",
+    "test:cash-pdf-empty": "vite-node --config scripts/vite-test.config.ts scripts/cash-pdf-empty-test.mts",
     "test:portal-routing": "vite-node --config scripts/vite-test.config.ts scripts/portal-routing-test.mts",
     "test:action-plan-tab": "vite-node --config scripts/vite-test.config.ts scripts/action-plan-tab-test.mts",
     "test:action-plan-automation": "vite-node --config scripts/vite-test.config.ts scripts/action-plan-automation-test.mts",
