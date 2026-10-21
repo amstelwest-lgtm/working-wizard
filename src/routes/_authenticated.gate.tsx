@@ -22,14 +22,11 @@ import {
   surfaceAfterBillingCheckFailure,
 } from "@/lib/firm-gate-access";
 import {
-  BILLING_GATE_QUIET_DEADLINES,
   billingCheckNoticeVisible,
   billingCheckRetryDelayMs,
   classifyBillingCheckFailure,
   type BillingCheckFailureKind,
   logBillingCheckFailure,
-  resolveClientBillingGateCheck,
-  shellDeadlineAfterQuietWait,
 } from "@/lib/billing-check-failure";
 import { FirmBillingGateView } from "@/components/firm-billing-gate-view";
 import { readInsightSeen } from "@/lib/funnel-timing";
@@ -44,7 +41,6 @@ import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
-import { firmBillingClientAbortSignal } from "@/lib/firm-billing-deadline";
 import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
 import {
   lastKnownEntitlementForFirm,
@@ -69,7 +65,6 @@ type GateSnap = {
   navigate: ReturnType<typeof useNavigate>;
   checkEntitlement: (input: {
     data: { refresh?: boolean; firmId?: string | null };
-    signal?: AbortSignal;
   }) => Promise<EntitlementResult>;
   practiceMeta: unknown;
 };
@@ -295,23 +290,7 @@ export function AuthGate() {
       setCheckNotice(false);
     };
 
-    // Interim: a cold read can fail as network or timeout after the first 8s
-    // mark. Stay on the skeleton (still checking) so that failure can retry
-    // the same server fn once before the Couldn't check billing card.
-    let quietDeadlines = 0;
-    let timer = 0;
-    const armShellDeadline = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        if (shellDeadlineAfterQuietWait(quietDeadlines) === "wait") {
-          quietDeadlines += 1;
-          armShellDeadline();
-          return;
-        }
-        noteFailure("timeout");
-      }, SHELL_GATE_TIMEOUT_MS);
-    };
-    armShellDeadline();
+    const timer = window.setTimeout(() => noteFailure("timeout"), SHELL_GATE_TIMEOUT_MS);
 
     void (async () => {
       try {
@@ -351,30 +330,8 @@ export function AuthGate() {
         const entitlementPromise = readCachedFirmEntitlement(
           userId,
           (input) =>
-            resolveClientBillingGateCheck(
-              () =>
-                latest.current.checkEntitlement({
-                  data: { ...input.data, firmId: latest.current.firmId },
-                  // Fresh 9s abort per attempt. The retry calls this again.
-                  signal: firmBillingClientAbortSignal(),
-                }),
-              {
-                onRetry() {
-                  if (cancelled) return;
-                  // The retry is the same check. Keep the skeleton up for it.
-                  quietDeadlines = BILLING_GATE_QUIET_DEADLINES;
-                  armShellDeadline();
-                },
-              },
-            ).then((decision) => {
-              if (decision.outcome === "card") {
-                return {
-                  entitled: false,
-                  reason: "stripe_error" as const,
-                  checkFailed: decision.kind,
-                };
-              }
-              return decision.value;
+            latest.current.checkEntitlement({
+              data: { ...input.data, firmId: latest.current.firmId },
             }),
           gateAttempt > 0 || quietAttempt > 0,
           latest.current.firmId,
@@ -490,8 +447,6 @@ export function AuthGate() {
   // list, settings, and billing stay open. The first client file may mount
   // once the count is known. A later file stays on the skeleton until Stripe
   // confirms a redirect, or until the check times out onto the Retry card.
-  // A network or timeout failure retries once first. The skeleton stays up
-  // during that retry.
   const unknownPage = pageWhileEntitlementUnknown({
     pathname,
     firmClientCount: clientGate?.firmClientCount ?? null,

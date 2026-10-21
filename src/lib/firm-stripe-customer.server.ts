@@ -10,7 +10,6 @@
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import { registerMetadataFirmCustomerWrite } from "@/lib/stripe-entitlement";
 import { writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
-import { logFirmBillingDeadline } from "@/lib/firm-billing-deadline";
 
 const FIRM_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -145,7 +144,7 @@ async function persistMetadataFirmCustomer(input: {
   customerId: string | null;
   plan: "entitled" | null;
   metadataCustomerId: string;
-}): Promise<boolean> {
+}): Promise<void> {
   try {
     let storedCustomerId: string | null = null;
     if (input.customerId) {
@@ -161,91 +160,12 @@ async function persistMetadataFirmCustomer(input: {
       plan: input.plan,
       metadataCustomerId: input.metadataCustomerId,
     });
-    return !input.customerId || storedCustomerId != null;
   } catch (err) {
     console.warn(
       "[stripe] metadata firm customer was not stored",
       err instanceof Error ? err.message : err,
     );
-    return false;
   }
-}
-
-type MetadataWriteStore = {
-  run<T>(store: Promise<boolean>[], fn: () => T): T;
-  getStore(): Promise<boolean>[] | undefined;
-};
-
-/**
- * Node's AsyncLocalStorage, loaded without a static import. This module is
- * also in the client graph (checkout installs the writer at load), and a
- * static `node:async_hooks` import fails the browser bundle.
- */
-function metadataWrites(): MetadataWriteStore {
-  const existing = metadataWriteStore;
-  if (existing) return existing;
-  const builtin = (
-    globalThis as {
-      process?: {
-        getBuiltinModule?: (id: string) => { AsyncLocalStorage?: new () => MetadataWriteStore };
-      };
-    }
-  ).process?.getBuiltinModule?.("node:async_hooks");
-  const Als = builtin?.AsyncLocalStorage;
-  if (Als) {
-    metadataWriteStore = new Als();
-    return metadataWriteStore;
-  }
-  let current: Promise<boolean>[] | undefined;
-  metadataWriteStore = {
-    run(store, fn) {
-      const prev = current;
-      current = store;
-      try {
-        return fn();
-      } finally {
-        current = prev;
-      }
-    },
-    getStore() {
-      return current;
-    },
-  };
-  return metadataWriteStore;
-}
-
-let metadataWriteStore: MetadataWriteStore | null = null;
-
-/** The billing deadline awaits writes started on this async path. */
-export function trackMetadataFirmCustomerWrites<T>(fn: () => Promise<T>): Promise<T> {
-  return metadataWrites().run([], fn);
-}
-
-/**
- * Wait for a metadata customer-id write only until `deadlineAt`.
- * A write that misses the clock is logged and does not hold the response.
- */
-export async function finishMetadataFirmCustomerWrites(deadlineAt: number): Promise<void> {
-  const bucket = metadataWrites().getStore();
-  if (!bucket || bucket.length === 0) return;
-  const pending = bucket.splice(0, bucket.length);
-  const remaining = deadlineAt - Date.now();
-  if (remaining <= 0) {
-    logFirmBillingDeadline("metadata-write-fail");
-    void Promise.all(pending).catch(() => {});
-    return;
-  }
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), remaining);
-  });
-  const done = Promise.all(pending).then((flags): "ok" | "fail" =>
-    flags.every(Boolean) ? "ok" : "fail",
-  );
-  const outcome = await Promise.race([done, timeout]);
-  if (timer) clearTimeout(timer);
-  if (outcome === "timeout") void done.catch(() => {});
-  logFirmBillingDeadline(outcome === "ok" ? "metadata-write-ok" : "metadata-write-fail");
 }
 
 let metadataFirmWriteInstalled = false;
@@ -255,8 +175,7 @@ export function installMetadataFirmCustomerWrite(): void {
   if (metadataFirmWriteInstalled) return;
   metadataFirmWriteInstalled = true;
   registerMetadataFirmCustomerWrite((input) => {
-    const pending = persistMetadataFirmCustomer(input);
-    metadataWrites().getStore()?.push(pending);
+    void persistMetadataFirmCustomer(input);
   });
 }
 
