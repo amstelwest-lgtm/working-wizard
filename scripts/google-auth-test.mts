@@ -94,7 +94,11 @@ assert(
   humanizeOAuthError("Unsupported provider: provider is not enabled").includes("not enabled"),
   "provider disabled",
 );
-assert(humanizeOAuthError("access_denied") === "Google sign-in was cancelled.", "cancelled");
+assert(humanizeOAuthError("access_denied") === "Sign-in was cancelled.", "cancelled");
+assert(
+  humanizeOAuthError("access_denied", "Google") === "Google sign-in was cancelled.",
+  "named provider stays on the cancel message",
+);
 assert(humanizeOAuthError("Nope") === "Nope", "passthrough");
 
 // ── Door survives the Google round trip via a domain-wide cookie ─────────────
@@ -590,8 +594,8 @@ assert(
   "Create firm Google carries firm name + market",
 );
 assert(
-  (authPage.match(/GoogleSignInButton/g) ?? []).length >= 2,
-  "Create firm and Sign in both have a Google button",
+  (authPage.match(/AccountProviderButtons/g) ?? []).length >= 2,
+  "Create firm and Sign in both offer Apple and Google",
 );
 
 console.log("google-auth-test: ok");

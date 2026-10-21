@@ -62,6 +62,8 @@ const java = readFileSync(
 const swift = readFileSync(resolve("mobile/ios/App/App/MilonShellPlugin.swift"), "utf8");
 for (const host of [
   "accounts.google.com",
+  "appleid.apple.com",
+  "idmsa.apple.com",
   "checkout.stripe.com",
   "login.xero.com",
   "accounts.intuit.com",

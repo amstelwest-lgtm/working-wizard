@@ -133,13 +133,23 @@ export function parseOAuthCallbackParams(
   };
 }
 
-export function humanizeOAuthError(raw: string): string {
+export const OAUTH_SIGN_IN_INCOMPLETE = "Sign-in did not complete. Please try again.";
+
+/**
+ * Shared by Google and Apple. The callback does not know which button was
+ * clicked, so a missing provider name stays neutral.
+ */
+export function humanizeOAuthError(raw: string, provider?: "Google" | "Apple"): string {
   const s = raw.toLowerCase();
+  const named = provider ?? (s.includes("apple") ? "Apple" : s.includes("google") ? "Google" : null);
+  const label = named ? `${named} sign-in` : "Sign-in";
   if (s.includes("not enabled") || s.includes("unsupported provider")) {
-    return "Google sign-in is not enabled yet. Turn on the Google provider in Supabase Auth.";
+    return named
+      ? `${named} sign-in is not enabled yet. Turn on the ${named} provider in Supabase Auth.`
+      : "This sign-in option is not enabled yet. Turn it on in Supabase Auth.";
   }
-  if (s.includes("access_denied") || s.includes("user cancelled") || s.includes("denied")) {
-    return "Google sign-in was cancelled.";
+  if (s.includes("access_denied") || s.includes("cancel") || s.includes("denied")) {
+    return `${label} was cancelled.`;
   }
   if (s.includes("already registered") || s.includes("identity is already linked")) {
     return "This email already has a Milōn password account. Sign in with email instead.";
@@ -266,14 +276,36 @@ export function inferGoogleIntentFromRoles(d: {
   return "owner";
 }
 
-export async function startGoogleSignIn(opts: {
+export type SocialSignInOptions = {
   intent: GoogleAuthIntent;
   next?: string;
-  /** Owner-invite in flight — survive the OAuth hop and redeem after Google. */
+  /** Owner-invite in flight — survive the OAuth hop and redeem after sign-in. */
   ownerInvite?: { token: string; clientCode?: string | null };
-  /** Owner→accountant invite — return to /join/:token after Google. */
+  /** Owner→accountant invite — return to /join/:token after sign-in. */
   accountantJoin?: { token: string };
-}): Promise<{ error?: string }> {
+};
+
+export async function startGoogleSignIn(opts: SocialSignInOptions): Promise<{ error?: string }> {
+  const { redirectTo } = await prepareSocialSignIn(opts);
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+      queryParams: {
+        access_type: "offline",
+        prompt: "select_account",
+      },
+    },
+  });
+  if (error) return { error: humanizeOAuthError(error.message, "Google") };
+  return {};
+}
+
+/**
+ * Door, invite, and checkout hop shared by Google and Sign in with Apple.
+ * The PKCE verifier is created in this WebView. The foreign host opens outside it.
+ */
+export async function prepareSocialSignIn(opts: SocialSignInOptions): Promise<{ redirectTo: string }> {
   let next = opts.next;
   const hop: GoogleOAuthHop = {};
   if (opts.ownerInvite?.token) {
@@ -300,18 +332,7 @@ export async function startGoogleSignIn(opts: {
     }
   }
   stashGoogleAuthIntent(opts.intent, next);
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: googleOAuthRedirectTo(browserAppOrigin(), hop),
-      queryParams: {
-        access_type: "offline",
-        prompt: "select_account",
-      },
-    },
-  });
-  if (error) return { error: humanizeOAuthError(error.message) };
-  return {};
+  return { redirectTo: googleOAuthRedirectTo(browserAppOrigin(), hop) };
 }
 
 export async function establishSessionFromOAuthCallback(): Promise<{
@@ -335,5 +356,5 @@ export async function establishSessionFromOAuthCallback(): Promise<{
     if (data.session?.user) return { user: data.session.user };
     await new Promise((r) => setTimeout(r, 80));
   }
-  return { error: "Google sign-in did not complete. Please try again." };
+  return { error: OAUTH_SIGN_IN_INCOMPLETE };
 }
