@@ -38,6 +38,81 @@ export const PHYSIO_ITEMS = [
 
 export type PhysioItemKey = (typeof PHYSIO_ITEMS)[number]["itemKey"];
 
+/** Every item_key the send-items check allows, in checklist order. */
+export const SEND_ITEM_KEYS = [
+  "practice_income_expenses",
+  "bank_statements",
+  "travel_logbook",
+  "medical_aid_certificate",
+  "ra_contribution_certificate",
+  "irp5",
+  "it3b",
+  "other",
+] as const;
+
+export type SendItemKey = (typeof SEND_ITEM_KEYS)[number];
+
+/** Plain names on the accountant picker and, except for "other", on the client page. */
+export const SEND_ITEM_LABELS: Record<SendItemKey, string> = {
+  practice_income_expenses: "Practice income and expenses",
+  bank_statements: "Bank statements",
+  travel_logbook: "Travel logbook",
+  medical_aid_certificate: "Medical aid tax certificate (totals only)",
+  ra_contribution_certificate: "Retirement annuity contribution certificate",
+  irp5: "IRP5 (only if you had a salaried job)",
+  it3b: "IT3(b)",
+  other: "Something else",
+};
+
+/** The five documents a new send used before the picker. They start ticked. */
+export const SEND_DEFAULT_ITEM_KEYS: readonly PhysioItemKey[] = PHYSIO_ITEMS.map(
+  (item) => item.itemKey,
+);
+
+/** Matches client_agent_send_items.label: trimmed, at most 200 characters. */
+export const SEND_OTHER_LABEL_MAX = 200;
+
+export type ChosenSendItem = {
+  itemKey: SendItemKey;
+  label: string;
+  totalsOnly: boolean;
+};
+
+function cleanItemLabel(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The documents for one new send. Unknown keys, duplicates, an empty list,
+ * and a ticked "other" without a label are refused. Medical aid stays totals-only.
+ */
+export function chooseSendItems(
+  input: readonly { itemKey?: string | null; label?: string | null }[] | null | undefined,
+): { ok: true; items: ChosenSendItem[] } | { ok: false; reason: "empty" | "items" | "other" } {
+  if (!input || input.length === 0) return { ok: false, reason: "empty" };
+  const allowed = new Set<string>(SEND_ITEM_KEYS);
+  const seen = new Set<string>();
+  const items: ChosenSendItem[] = [];
+  for (const row of input) {
+    const itemKey = row?.itemKey ?? "";
+    if (!allowed.has(itemKey) || seen.has(itemKey)) return { ok: false, reason: "items" };
+    seen.add(itemKey);
+    if (itemKey === "other") {
+      const label = cleanItemLabel(row.label);
+      if (!label || label.length > SEND_OTHER_LABEL_MAX) return { ok: false, reason: "other" };
+      items.push({ itemKey, label, totalsOnly: false });
+      continue;
+    }
+    const key = itemKey as SendItemKey;
+    items.push({
+      itemKey: key,
+      label: SEND_ITEM_LABELS[key],
+      totalsOnly: key === "medical_aid_certificate",
+    });
+  }
+  return { ok: true, items };
+}
+
 /**
  * Shown on the accountant's client file. She collects documents.
  * She does not fill in a form or make a SARS claim.

@@ -10,10 +10,10 @@ import { CANONICAL_APP_ORIGIN, canonicalAuthOrigin } from "@/lib/app-origin";
 import { practiceDisplayName, sendPracticeDisplayName } from "@/lib/client-agent-link";
 import { sendClientAgentInvite } from "@/lib/client-agent-invite-mail";
 import {
-  PHYSIO_ITEMS,
   SEND_AGENT_SLUG,
   SEND_CHECKLIST_KEY,
   agentLink,
+  chooseSendItems,
   newSendToken,
   recipientEmail,
   recipientFirstName,
@@ -230,6 +230,9 @@ export type MintAgentSendResult =
         | "not_allowed"
         | "address"
         | "name"
+        | "empty"
+        | "items"
+        | "other"
         | "email";
     };
 
@@ -241,6 +244,14 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
         clientId: z.string().uuid(),
         recipientEmail: z.string().max(200),
         recipientFirstName: z.string().max(80).optional(),
+        items: z
+          .array(
+            z.object({
+              itemKey: z.string().max(80),
+              label: z.string().max(240).optional(),
+            }),
+          )
+          .max(16),
       })
       .parse(input),
   )
@@ -275,6 +286,8 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
     if (!to) return { ok: false, reason: "address" };
     const firstName = recipientFirstName(data.recipientFirstName);
     if (!firstName.ok) return { ok: false, reason: "name" };
+    const chosen = chooseSendItems(data.items);
+    if (!chosen.ok) return { ok: false, reason: chosen.reason };
 
     const token = newSendToken();
     const tokenHash = await sha256Hex(token);
@@ -316,9 +329,10 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
       throw new Error("The link could not be created.");
     }
     const sendId = String(inserted.data.id);
-    const itemRows = PHYSIO_ITEMS.map((item) => ({
+    const itemRows = chosen.items.map((item) => ({
       send_id: sendId,
       item_key: item.itemKey,
+      label: item.label,
       totals_only: item.totalsOnly,
       status: "open",
     }));
