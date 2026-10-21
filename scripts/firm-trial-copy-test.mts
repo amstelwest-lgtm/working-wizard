@@ -91,12 +91,34 @@ for (const band of ["starter", "solo", "small", "scale"] as const) {
   });
   assert(!blocked.allowed && blocked.code === "trial_client_cap", `${band} trial stops at 5`);
   assert(
-    !blocked.allowed && blocked.message === `${FIRM_TRIAL_SENTENCE} on Starter. This practice already has 5 clients.`,
-    `${band} trial block uses the locked sentence`,
+    !blocked.allowed &&
+      blocked.message ===
+        `${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the ${FIRM_TRIAL_CLIENT_LIMIT}-client trial limit.`,
+    `${band} trial block uses the locked sentence and names the trial limit`,
   );
+  assert(!blocked.message.toLowerCase().includes("vat"), `${band} trial block does not mention VAT`);
   assert(
     formatFirmPlanStatus({ phase: "trialing", band }).detail === `Starter · ${FIRM_TRIAL_SENTENCE}`,
     `${band} trial status names Starter and the locked sentence`,
+  );
+}
+
+for (const clientCount of [5, 6]) {
+  const over = decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "trialing",
+    band: "starter",
+    clientCount,
+  });
+  assert(!over.allowed, `a Starter trial at ${clientCount} is blocked`);
+  const claims = [...over.message.matchAll(/already has (\d+) clients/gi)].map((match) => Number(match[1]));
+  assert(
+    claims.every((count) => count === clientCount),
+    `trial copy must not state a client count other than ${clientCount}`,
+  );
+  assert(
+    over.message.includes(`reached the ${FIRM_TRIAL_CLIENT_LIMIT}-client trial limit`),
+    "trial copy names the trial limit rather than a stale active count",
   );
 }
 
