@@ -219,7 +219,7 @@ public class MilonWebViewClient extends BridgeWebViewClient {
         try {
             ViewParent parent = view.getParent();
             if (parent instanceof ViewGroup group) {
-                group.setBackgroundColor(Color.parseColor("#0a0a0a"));
+                group.setBackgroundColor(Color.parseColor("#FFFFFF"));
                 group.removeView(view);
             }
             view.destroy();

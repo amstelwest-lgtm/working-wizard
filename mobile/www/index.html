@@ -3,23 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light" />
     <title>Milōn</title>
     <style>
       :root {
-        color-scheme: dark;
-        --bg: #0a0a0a;
-        --gold: #d4af37;
-        --ink: #f4efe4;
-        --dim: #b7ad9a;
+        color-scheme: light;
+        --canvas: #ffffff;
+        --ink: #102a43;
+        --cobalt: #0b5fff;
       }
       * { box-sizing: border-box; }
       html, body {
         margin: 0;
         min-height: 100%;
-        background: var(--bg);
+        background: var(--canvas);
         color: var(--ink);
-        font-family: Georgia, "Times New Roman", serif;
+        font-family: system-ui, sans-serif;
       }
       body {
         min-height: 100dvh;
@@ -31,44 +30,43 @@
         width: min(420px, 100%);
         text-align: center;
       }
-      img {
+      .mark {
         width: 88px;
         height: 88px;
         display: block;
-        margin: 0 auto 20px;
+        margin: 0 auto 16px;
       }
-      h1 {
-        margin: 0 0 8px;
-        font-weight: 500;
-        font-size: 32px;
-        letter-spacing: 0.04em;
-        color: var(--gold);
+      .wordmark {
+        width: min(240px, 70%);
+        height: auto;
+        display: block;
+        margin: 0 auto 20px;
       }
       p {
         margin: 0 0 24px;
-        font-family: system-ui, sans-serif;
         font-size: 16px;
         line-height: 1.45;
-        color: var(--dim);
+        color: var(--ink);
       }
       button {
         appearance: none;
-        border: 1px solid var(--gold);
-        background: transparent;
-        color: var(--gold);
-        font-family: system-ui, sans-serif;
+        border: 0;
+        background: var(--cobalt);
+        color: #ffffff;
+        font: inherit;
         font-size: 15px;
+        font-weight: 700;
         letter-spacing: 0.04em;
         padding: 12px 22px;
         border-radius: 999px;
       }
-      button:active { background: rgba(212, 175, 55, 0.12); }
+      button:active { background: #0847c2; }
     </style>
   </head>
   <body>
     <main>
-      <img src="mark.png" alt="" width="88" height="88" />
-      <h1>Milōn</h1>
+      <img class="mark" src="mark.png" alt="" width="88" height="88" />
+      <img class="wordmark" src="wordmark.png" alt="MILŌN" />
       <p id="message">Milōn could not open this page. Check the connection and try again.</p>
       <button type="button" id="retry">Try again</button>
     </main>
