@@ -537,15 +537,15 @@ export function assessClientMetrics(input: {
   const hasSeries =
     outlook.totalInflow > 0.5 || outlook.totalOutflow > 0.5 || outlook.source === "stored";
   const forecastNet = hasSeries ? outlook.totalInflow - outlook.totalOutflow : null;
-  // A missing receipt or payment side is not a zero. Treating it as 0
-  // turned "revenue not on file" into a burn and a week count.
-  const seededSideMissing =
-    outlook.seededFromActuals === true &&
+  // Seeded weeks count toward runway only when both sides are numbers.
+  // A missing receipt side is not inflow 0 — that invented a burn. The
+  // runway already on file stays (Not enough data, or weeks from a booked loss).
+  const bothSides = outlook.receiptsWeekly != null && outlook.paymentsWeekly != null;
+  if (
+    hasSeries &&
     outlook.openingCash !== null &&
-    (outlook.receiptsWeekly == null || outlook.paymentsWeekly == null);
-  if (seededSideMissing) {
-    runway = { weeks: null, kind: "unknown", label: RUNWAY_INSUFFICIENT_LABEL };
-  } else if (hasSeries && outlook.openingCash !== null) {
+    (outlook.seededFromActuals !== true || bothSides)
+  ) {
     runway = runwayFromForecastNet({
       base: runway,
       opening: outlook.openingCash ?? outlook.opening,
