@@ -124,7 +124,7 @@ assert(!usCost!.answer.includes("R299") && !usCost!.answer.includes("R799"), "US
 assert(zaCost!.answer.includes("Business owners pay R 299/mo"), "SA owners see the rand price");
 assert(!zaCost!.answer.includes("Business owners pay $39/mo"), "SA owners do not see the dollar owner price");
 assert(
-  PRICING_TRIAL_AFTER === "On Starter. A card is required at signup. Then $39/mo.",
+  PRICING_TRIAL_AFTER === "On Starter. You add a card once you have seen your first result. Then $39/mo.",
   "VERIFY-2 trial sentence lives on the pricing section",
 );
 assert(FIRM_TRIAL_SENTENCE === "14-day free trial · up to 5 clients", "trial sentence is the Starter cap");

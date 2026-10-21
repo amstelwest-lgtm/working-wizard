@@ -177,8 +177,10 @@ assert(wall.includes("FIRM_WALL_BACK_LABEL"), "wall offers a way back to the cli
 assert(wall.includes("loadFirstFirmClient"), "wall looks up the open client");
 assert(wall.includes("firmWallWhyLine"), "wall says why the first client stays open");
 assert(
-  readFileSync(resolve("src/lib/billing-wall.ts"), "utf8").includes("figures stay open"),
-  "wall still says the figures stay",
+  readFileSync(resolve("src/lib/billing-wall.ts"), "utf8").includes(
+    "Your first client and its numbers stay open",
+  ),
+  "wall names the open file in accountant terms",
 );
 assert(
   wall.includes("FIRM_WALL_START_LABEL"),

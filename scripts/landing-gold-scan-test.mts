@@ -4,8 +4,9 @@
  * owner door tabs. Brand
  * gold may remain only on the MILŌN wordmark (header, footer, hero mockup
  * mark, invite shell), the hero trial button, and the 390 sticky trial
- * button. In the accountant app the wordmark stays gold, the one primary pill
- * (`.btn.gold`) stays gold, and the report-card hairline stays. Email the
+ * button. In the accountant app the wordmark stays gold and the report-card
+ * hairline stays. Primary and outline buttons, including focus, are cobalt.
+ * Email the
  * owner must be a cobalt outline, not the gold hairline. The amber "74"
  * status colour is not brand gold. Legal hero sublines must not render
  * "Inc..". The invite page has no gold button.
@@ -203,10 +204,7 @@ async function scan(
       }
       if (accountant) {
         return Boolean(
-          el.closest(".gold-text") ||
-            el.closest(".brand") ||
-            el.closest(".btn.gold") ||
-            el.closest(".report-card__rule"),
+          el.closest(".gold-text") || el.closest(".brand") || el.closest(".report-card__rule"),
         );
       }
       return Boolean(
@@ -302,6 +300,34 @@ async function scan(
       : false;
     return { hits, wordmark, heroCta, amber74 };
   }, { labelIn: label, accountant: Boolean(opts?.accountant), owner: Boolean(opts?.owner) });
+}
+
+async function focusButton(page: Page, selector: string) {
+  const loc = page.locator(selector).first();
+  if ((await loc.count()) === 0) return false;
+  await loc.scrollIntoViewIfNeeded();
+  await loc.evaluate((el) => {
+    const probe = document.createElement("span");
+    probe.tabIndex = 0;
+    probe.setAttribute("data-focus-probe", "");
+    probe.style.cssText = "position:fixed;left:4px;top:4px;width:8px;height:8px;";
+    el.parentElement?.insertBefore(probe, el);
+    probe.focus();
+  });
+  await page.keyboard.press("Tab");
+  return loc.evaluate((el) => document.activeElement === el && el.matches(":focus-visible"));
+}
+
+function nearCobalt(color: string) {
+  const match = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(color);
+  if (!match) return false;
+  const rgb = [Number(match[1]), Number(match[2]), Number(match[3])];
+  return (
+    [
+      [11, 95, 255],
+      [37, 99, 235],
+    ] as const
+  ).some((want) => Math.hypot(rgb[0] - want[0], rgb[1] - want[1], rgb[2] - want[2]) <= 24);
 }
 
 async function main() {
@@ -411,6 +437,7 @@ async function main() {
       "/clients",
       "/clients/harness-client?tab=health",
       "/clients/harness-client?tab=reports&section=waterfall",
+      "/clients/harness-client?tab=settings",
     ];
     const cobalt: Record<"light" | "dark", [number, number, number]> = {
       light: [11, 95, 255],
@@ -436,6 +463,32 @@ async function main() {
           }
           const painted = await scan(page, `accountant ${path} ${width} ${theme}`, { accountant: true });
           for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
+          const focusSel =
+            path === "/clients"
+              ? "#wizard-add-client"
+              : path.includes("tab=settings")
+                ? "[data-invite-owner-entry]"
+                : "";
+          if (focusSel) {
+            const focused = await focusButton(page, focusSel);
+            if (!focused) failures.push(`${path} ${width} ${theme}: ${focusSel} did not take a visible focus`);
+            else {
+              const paint = await page.locator(focusSel).evaluate((el) => {
+                const style = getComputedStyle(el);
+                return { outline: style.outlineColor, border: style.borderTopColor };
+              });
+              if (!nearCobalt(paint.outline)) {
+                failures.push(`${path} ${width} ${theme}: focus outline is ${paint.outline}`);
+              }
+              if (theme === "light" && !nearCobalt(paint.border)) {
+                failures.push(`${path} ${width} ${theme}: button border is ${paint.border}`);
+              }
+              const paintedFocus = await scan(page, `accountant ${path} ${width} ${theme} focus ${focusSel}`, {
+                accountant: true,
+              });
+              for (const hit of paintedFocus.hits) failures.push(`${hit.path} ${hit.sample}`);
+            }
+          }
           if (path.includes("tab=health")) {
             const email = page.locator("[data-email-owner]");
             await email.waitFor({ timeout: 15000 });

@@ -2,7 +2,7 @@ import { formatMoney } from "../market/format.ts";
 import { ZA_MARKET } from "../market/resolve.ts";
 import { perClientRands, ZA_CHECKOUT_BANDS, ZA_MONTHLY_RANDS } from "./za-ladder.ts";
 import { zaBandAmountCents } from "./za-ladder-amounts.ts";
-import { FIRM_BAND_CATALOG, FIRM_TRIAL_SENTENCE } from "../stripe-plans.ts";
+import { FIRM_BAND_CATALOG, FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "../stripe-plans.ts";
 
 export type ZaBandPriceLabel = { month: string; year: string };
 
@@ -58,8 +58,8 @@ export function loadSaPricingCopy(): SaPricingCopy {
   }
   return {
     heading: "Pricing in rand",
-    heroNote: `${FIRM_TRIAL_SENTENCE} on Starter. A card is required at signup. Then ${rand(299)}/mo.`,
-    trialAfter: `On Starter. A card is required at signup. Then ${rand(299)}/mo.`,
+    heroNote: `${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then ${rand(299)}/mo.`,
+    trialAfter: `On Starter. ${FIRM_TRIAL_CARD_NOTE} Then ${rand(299)}/mo.`,
     accountantsIntro:
       "Pricing in rand. One monthly price, set by how many clients you actively advise.",
     accountantsLead:

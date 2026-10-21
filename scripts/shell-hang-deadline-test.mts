@@ -245,8 +245,11 @@ assert(sync.includes("await syncStarterTrialMirrorForActor"), "billing sync stil
 
 const wall = src("src/routes/billing.required.tsx");
 const wallCopy = src("src/lib/billing-wall.ts");
+const trialCopy = src("src/lib/starter-trial-constants.ts");
 assert(
-  wall.includes("FIRM_WALL_TRIAL_LINE") && wallCopy.includes("card at signup"),
+  wall.includes("FIRM_WALL_TRIAL_LINE") &&
+    wallCopy.includes("FIRM_TRIAL_CARD_LINE") &&
+    trialCopy.includes("seen your first result"),
   "the wall shows the trial line once, on the body",
 );
 assert(

@@ -20,6 +20,7 @@ import { needsBalanceSheetPrompt } from "@/lib/balance-sheet-prompt";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
+import { loadStarterMonthlyLabel } from "@/lib/trial-card-price";
 import { FirmDashboardCrumb, firmDashboardCrumbIsLink } from "@/components/firm-dashboard-crumb";
 import { useFirmBillingEntitled } from "@/contexts/firm-billing-access";
 import { markInsightSeen } from "@/lib/funnel-timing";
@@ -2368,6 +2369,7 @@ function ClientView() {
             const { data } = await supabase.auth.getSession();
             return data.session?.access_token ?? null;
           },
+          getStarterMonthly: () => loadStarterMonthlyLabel(),
         });
       })
       .catch(() => {
@@ -4455,6 +4457,7 @@ function ClientView() {
                         setPlanFocusMove(moveKey);
                         openHomeSection("plan", "open");
                       }}
+                      onOpenDraft={openDraft}
                     />
                   )}
                 </div>

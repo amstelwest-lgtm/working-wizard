@@ -9,7 +9,7 @@
  *
  * Owner Spark stays free and does not create a Checkout Session.
  *
- * Signup Checkout is Starter monthly: a 14-day trial, a card on file, and
+ * Checkout after the first result is Starter monthly: a 14-day trial and
  * Starter's client cap. Paid Solo and the bands above keep their own caps.
  */
 

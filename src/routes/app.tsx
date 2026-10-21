@@ -4519,6 +4519,10 @@ function Index() {
                               ),
                             )}
                             onViewAnalysis={() => go("health")}
+                            onOpenDraft={(id) => {
+                              const node = document.querySelector(`[data-draft="${CSS.escape(id)}"]`);
+                              if (node instanceof HTMLElement) node.scrollIntoView({ block: "center" });
+                            }}
                           />
                         ) : (
                           <p className="owner-lede">Your accountant sets this up</p>
@@ -6324,6 +6328,10 @@ function Index() {
                             onViewAnalysis={() => {
                               setViewMode("complex");
                               setActiveTab("today");
+                            }}
+                            onOpenDraft={(id) => {
+                              const node = document.querySelector(`[data-draft="${CSS.escape(id)}"]`);
+                              if (node instanceof HTMLElement) node.scrollIntoView({ block: "center" });
                             }}
                             focusMoveKey={planFocusKey}
                             onFocusHandled={() => setPlanFocusKey(null)}

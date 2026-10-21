@@ -142,10 +142,9 @@ export const PRICING_H2_USD = "Flat USD pricing by active clients, Starter to Sc
 export const PRICING_INTRO =
   "One monthly price, set by how many clients you actively advise. Start on Starter and move up a band as your client list grows.";
 /**
- * VERIFY-2 confirmed. Checkout creates a subscription on the chosen band price
- * (`firmCheckoutSessionParams`: `trial_period_days` 14, `payment_method_collection: "always"`).
- * The paid band bills that price when the trial ends and a card is on file.
- * PRICING_OWNER_BAR_US is re-exported from public-pricing-lines.
+ * Checkout opens after the first result. It collects a card and starts the
+ * 14-day Starter trial. The paid price starts when that trial ends.
+ * PRICING_OWNER_BAR_US and PRICING_TRIAL_AFTER are re-exported from public-pricing-lines.
  */
 export const OWNER_OFFER_LABEL = "For business owners";
 export const PRICING_OWNER_CTA = OWNER_SIGNUP_LINK;

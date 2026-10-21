@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AgentStage } from "@/components/milon-team/agent-stage";
 import { portalButtonClass } from "@/lib/client-chrome";
 import { supabase } from "@/integrations/supabase/client";
+import { loadStarterMonthlyLabel } from "@/lib/trial-card-price";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import "./milon-team/milon-team-desk.css";
@@ -72,6 +73,7 @@ export function PracticeAgentThread({
             const { data } = await supabase.auth.refreshSession();
             return data.session?.access_token ?? null;
           },
+          getStarterMonthly: () => loadStarterMonthlyLabel(),
         });
       })
       .catch(() => {
