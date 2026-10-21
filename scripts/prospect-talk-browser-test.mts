@@ -8,12 +8,14 @@
  * previous reply is still in flight. /talk skips the signed-in shell, so a
  * late chrome load cannot remount the conversation. The thread and the unsent
  * draft survive a same-document remount. HMR is off so a route-tree rewrite
- * cannot reload the page between those waits.
+ * cannot reload the page between those waits. A cold Vite start may
+ * re-optimize dependencies once; the test reloads after that, because HMR
+ * is off and will not.
  *
  *   pnpm test:prospect-talk-browser
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, openSync } from "node:fs";
+import { mkdirSync, openSync, readFileSync } from "node:fs";
 import { chromium, type Browser, type Page, type Response } from "playwright";
 
 const PORT = 5211;
@@ -109,6 +111,25 @@ async function launch(): Promise<Browser> {
 async function shot(page: Page, name: string) {
   mkdirSync(ARTIFACTS, { recursive: true });
   await page.screenshot({ path: `${ARTIFACTS}/${name}.png`, fullPage: true });
+}
+
+/**
+ * Cold Vite rewrites its prebundle while the first page is open. HMR is off,
+ * so that rewrite cannot reload the page, and the open page keeps two copies
+ * of React. Hydration then crashes in useServerFn and Send stays "Connecting…".
+ */
+async function waitForViteReoptimize(timeout: number): Promise<boolean> {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    try {
+      const log = readFileSync("/tmp/prospect-talk-browser-vite.log", "utf8");
+      if (log.includes("optimized dependencies changed")) return true;
+    } catch {
+      /* log not created yet */
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return false;
 }
 
 /** Send is enabled and no longer the pre-hydration "Connecting…" label. */
@@ -218,11 +239,22 @@ async function main() {
 
   release();
   // The first client compile is the cold start. 30s was not enough on a busy CI runner.
-  try {
+  const reoptimized = waitForViteReoptimize(90_000);
+  const ready = waitComposerReady(page, 90_000).then(
+    () => "ready" as const,
+    () => "timeout" as const,
+  );
+  const first = await Promise.race([
+    ready,
+    reoptimized.then((changed) => (changed ? ("reoptimize" as const) : ("quiet" as const))),
+  ]);
+  if (first === "reoptimize") {
+    pageErrors.length = 0;
+    await page.reload({ waitUntil: "domcontentloaded", timeout: STEP_MS });
     await waitComposerReady(page, 90_000);
-  } catch (err) {
+  } else if (first !== "ready") {
     console.error("pageErrors", pageErrors);
-    throw err;
+    throw new Error("composer did not hydrate");
   }
   const after = await page.evaluate(() => {
     const button = document.querySelector(".talk-send");
