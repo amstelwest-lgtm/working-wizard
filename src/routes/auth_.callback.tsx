@@ -8,6 +8,7 @@ import {
   consumeAccountantGoogleSignup,
   consumeGoogleAuthIntent,
   establishSessionFromOAuthCallback,
+  OAUTH_SIGN_IN_INCOMPLETE,
   googleDisplayName,
   inferGoogleIntentFromRoles,
   isFreshAuthUser,
@@ -227,7 +228,7 @@ function AuthCallbackPage() {
       }
       if (!user) {
         setWorking(false);
-        setError("Google sign-in did not complete. Please try again.");
+        setError(OAUTH_SIGN_IN_INCOMPLETE);
         return;
       }
 

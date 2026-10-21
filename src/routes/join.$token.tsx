@@ -19,7 +19,7 @@ import {
   OwnerInvitePrimaryButton,
   OwnerInviteShell,
 } from "@/components/owner-invite-shell";
-import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { AuthDivider, AccountProviderButtons } from "@/components/google-sign-in-button";
 import { PasswordWithShow } from "@/components/show-password";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { accountantInviteLead, inviteJoinHidesSignup } from "@/lib/invite-claim";
@@ -272,7 +272,7 @@ function AccountantJoinPage() {
             <>
               {!sameAccount ? (
                 <div className="mb-1">
-                  <GoogleSignInButton
+                  <AccountProviderButtons
                     intent="accountant"
                     tone="portal"
                     label={signInMode ? "Sign in with Google" : "Continue with Google"}

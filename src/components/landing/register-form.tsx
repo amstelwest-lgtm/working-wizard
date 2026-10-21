@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { AuthDivider, AccountProviderButtons } from "@/components/google-sign-in-button";
 import { FirmSignupTerms } from "@/components/firm-signup-terms";
 import { MarketPicker } from "@/components/market-picker";
 import { firmSignupTrialReminder, practiceLocationHint } from "@/lib/firm-signup-copy";
@@ -155,7 +155,7 @@ export function LandingRegisterForm({
               </>
             ) : null}
             <div style={{ margin: "18px 0 8px" }}>
-              <GoogleSignInButton
+              <AccountProviderButtons
                 intent="owner"
                 tone="landing"
                 label="Continue with Google"
@@ -274,7 +274,7 @@ export function LandingRegisterForm({
                     </p>
                   ) : null}
                 </div>
-                <GoogleSignInButton
+                <AccountProviderButtons
                   intent="accountant"
                   tone="landing"
                   label="Continue with Google"
@@ -396,7 +396,7 @@ export function LandingRegisterForm({
                     taxWording={draftMarket.country === "US"}
                   />
                 </div>
-                <GoogleSignInButton
+                <AccountProviderButtons
                   intent="owner"
                   tone="landing"
                   label="Continue with Google"

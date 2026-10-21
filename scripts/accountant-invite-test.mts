@@ -125,7 +125,7 @@ assert(!mintOwner.includes("accountant_link"), "owner mint helper stays owner-on
 const joinPage = readFileSync(resolve("src/routes/join.$token.tsx"), "utf8");
 assert(joinPage.includes("forcePortal(\"accountant\")"), "join page forces accountant portal");
 assert(joinPage.includes('to: "/dashboard"'), "join page lands on practice portal");
-assert(joinPage.includes("GoogleSignInButton"), "accountant invite can be accepted with Google");
+assert(joinPage.includes("AccountProviderButtons"), "accountant invite can be accepted with Apple or Google");
 assert(joinPage.includes("accountantJoin"), "join Google hop carries the invite token");
 
 const card = readFileSync(resolve("src/components/invite-accountant-card.tsx"), "utf8");

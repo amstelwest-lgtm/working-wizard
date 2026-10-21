@@ -58,7 +58,7 @@ import {
   type FirmInterval,
 } from "@/lib/stripe-plans";
 import { accessTokenFromNext } from "@/lib/practice-access";
-import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { AuthDivider, AccountProviderButtons } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { signupLooksAlreadyRegistered } from "@/lib/invite-handoff";
 import {
@@ -681,7 +681,7 @@ function AuthPage() {
           <>
             {mode === "signin" && (
               <div>
-                <GoogleSignInButton
+                <AccountProviderButtons
                   intent="accountant"
                   next={googleNext ?? afterAuthPath}
                   tone="entry"
@@ -731,7 +731,7 @@ function AuthPage() {
                     ) : null}
                   </div>
                   <div className="mt-5">
-                    <GoogleSignInButton
+                    <AccountProviderButtons
                       intent="accountant"
                       next={googleNext ?? afterAuthPath}
                       tone="entry"
