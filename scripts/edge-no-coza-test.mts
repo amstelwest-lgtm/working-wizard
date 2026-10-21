@@ -109,8 +109,8 @@ assert(
   "www.milonfinance.com stays",
 );
 assert(
-  transactionalSiteUrl("https://milonfinance.com/app") === "https://milonfinance.com",
-  "the apex host stays",
+  transactionalSiteUrl("https://milonfinance.com/app") === CANONICAL_APP_ORIGIN,
+  "the apex host becomes www",
 );
 assert(
   transactionalSiteUrl(null) === CANONICAL_APP_ORIGIN,

@@ -4,7 +4,7 @@
  */
 
 import { getRequest } from "@tanstack/react-start/server";
-import { appRedirectOrigin } from "@/lib/app-origin";
+import { CANONICAL_APP_ORIGIN, canonicalAuthOrigin } from "@/lib/app-origin";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 import { redactForModel, rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { inviteDraftPrompt, resolvePromptMarket } from "@/lib/market";
@@ -25,6 +25,16 @@ export type InviteDraft = {
   draftedBy: "claude" | "template";
 };
 
+function loopbackOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+/** Origin written into invite and join links. Apex and www both become www. */
 export function inviteSiteUrl(): string {
   const candidates: Array<string | null | undefined> = [];
   try {
@@ -32,10 +42,17 @@ export function inviteSiteUrl(): string {
     candidates.push(req.headers.get("origin"));
     candidates.push(new URL(req.url).origin);
   } catch {
-    // Cron and scripts have no request. Env is used only when it is allowlisted.
+    // Cron and scripts have no request.
   }
   candidates.push(process.env.SITE_URL, process.env.VITE_APP_URL);
-  return appRedirectOrigin(candidates);
+  for (const raw of candidates) {
+    const trimmed = (raw ?? "").trim();
+    if (!trimmed) continue;
+    const origin = canonicalAuthOrigin(trimmed);
+    if (loopbackOrigin(origin)) continue;
+    return origin;
+  }
+  return CANONICAL_APP_ORIGIN;
 }
 
 export function invitePasteText(subject: string, body: string): string {

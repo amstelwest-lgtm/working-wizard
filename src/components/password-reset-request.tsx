@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { browserAppUrl } from "@/lib/app-origin";
+import { canonicalAuthUrl } from "@/lib/app-origin";
 import { supabase } from "@/integrations/supabase/client";
 import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
@@ -41,7 +41,7 @@ export function PasswordResetRequest({
     setError("");
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: browserAppUrl("/reset-password"),
+        redirectTo: canonicalAuthUrl("/reset-password"),
       });
       if (resetError) {
         setError(explainPasswordSignInFailure(resetError).message);
