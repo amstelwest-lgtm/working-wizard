@@ -394,7 +394,7 @@ html.dark .milon-status-pill--sample,
 }
 
 .accountant-portal .milon-metric-tile__label svg {
-  stroke: var(--gold);
+  stroke: var(--cobalt, #0b5fff);
 }
 
 .accountant-portal .milon-metric-tile__value {

@@ -152,7 +152,7 @@ const ACCOUNTANT_DASH_EMPTY_STEPS: Step[] = [
     body: "Every client you add lands here — health, runway and who needs attention. The book is empty until you add the first one. Same loop after that: add a client, upload their figures, review what Milōn drafts, sign off, deliver.",
   },
   {
-    targetId: "wizard-add-client",
+    targetId: "wizard-first-client",
     section: "First client",
     title: "Step 2 of 2 · Add your first client",
     body: "Start with a real client whose statements you have to hand, or a sandbox client to learn the loop. After you add them, Milōn will ask for about 3 months of bank statements or a P&L and balance sheet — one upload drafts Profit, Cash and Budget for you to sign off.",
@@ -372,7 +372,9 @@ function remembersOnShow(variant: WalkthroughVariant): boolean {
 /** Menu, the rail or drawer, and Ask stay clickable for the whole accountant tour. */
 function protectedSelectors(variant: WalkthroughVariant): string[] {
   if (!isAccountantTour(variant)) return [];
-  return ["#accountant-menu", "#accountant-nav", "[data-ask]"];
+  const selectors = ["#accountant-menu", "#accountant-nav", "[data-ask]"];
+  if (variant === "accountant-dashboard-empty") selectors.push("#wizard-first-client");
+  return selectors;
 }
 
 function spotsForSelectors(selectors: readonly string[]): SpotBox[] {
@@ -399,6 +401,36 @@ function topbarClearance(): number {
   return rect.bottom + 8;
 }
 
+/**
+ * The empty-practice card is centered, so it used to sit on top of
+ * "Add your first client". Move it clear of that button.
+ */
+function clearOfFirstClient(pos: { top: number; maxHeight: number }): { top: number; maxHeight: number } {
+  const el = document.getElementById("wizard-first-client");
+  if (!(el instanceof HTMLElement)) return pos;
+  const rect = el.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return pos;
+  const margin = 12;
+  const gap = 16;
+  const vh = window.innerHeight;
+  const cardWidth = Math.min(560, window.innerWidth - 24);
+  const cardLeft = (window.innerWidth - cardWidth) / 2;
+  const cardRight = cardLeft + cardWidth;
+  if (cardRight <= rect.left || cardLeft >= rect.right) return pos;
+  const cardBottom = pos.top + pos.maxHeight;
+  if (cardBottom <= rect.top || pos.top >= rect.bottom) return pos;
+  const below = rect.bottom + gap;
+  const spaceBelow = vh - below - margin;
+  if (spaceBelow >= 160) {
+    return { top: below, maxHeight: Math.min(pos.maxHeight, spaceBelow) };
+  }
+  const spaceAbove = rect.top - gap - margin;
+  if (spaceAbove >= 160) {
+    return { top: Math.max(margin, rect.top - gap - Math.min(pos.maxHeight, spaceAbove)), maxHeight: Math.min(pos.maxHeight, spaceAbove) };
+  }
+  return { top: below, maxHeight: Math.max(120, spaceBelow) };
+}
+
 /** Keep the card under the top bar and above the Ask buttons. */
 function settleTourCard(
   pos: { top: number; maxHeight: number },
@@ -415,7 +447,9 @@ function settleTourCard(
       maxHeight = Math.min(maxHeight, rect.top - top - 12);
     }
   });
-  return { top, maxHeight: Math.max(140, maxHeight) };
+  const settled = { top, maxHeight: Math.max(140, maxHeight) };
+  if (variant !== "accountant-dashboard-empty") return settled;
+  return clearOfFirstClient(settled);
 }
 
 /** Lit feature, plus any extra controls that must stay clickable during the tour. */

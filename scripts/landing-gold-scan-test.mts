@@ -1,12 +1,13 @@
 /**
  * Computed-style scan of `/`, `/terms`, `/privacy`, and `/join/:token`, plus
- * the accountant harness (`/clients`, client Health, client Reports) and the
- * owner door tabs. Brand
+ * the accountant practice first-run (`/practice?firstRun=1` and the empty
+ * clients list), the accountant harness (`/clients`, client Health, client
+ * Reports, and the Settings Owner card) and the owner door tabs. Brand
  * gold may remain only on the MILŌN wordmark (header, footer, hero mockup
  * mark, invite shell), the hero trial button, and the 390 sticky trial
- * button. In the accountant app the wordmark stays gold and the report-card
- * hairline stays. Primary and outline buttons, including focus, are cobalt.
- * Email the
+ * button. On the practice first-run the wordmark stays gold. In the
+ * accountant app the wordmark stays gold and the report-card hairline stays.
+ * Primary and outline buttons, including focus, are cobalt. Email the
  * owner must be a cobalt outline, not the gold hairline. The amber "74"
  * status colour is not brand gold. Legal hero sublines must not render
  * "Inc..". The invite page has no gold button.
@@ -149,9 +150,9 @@ type Hit = { path: string; prop: string; sample: string };
 async function scan(
   page: Page,
   label: string,
-  opts?: { accountant?: boolean; owner?: boolean },
+  opts?: { practice?: boolean; accountant?: boolean; owner?: boolean },
 ): Promise<{ hits: Hit[]; wordmark: boolean; heroCta: boolean; amber74: boolean }> {
-  return page.evaluate(({ labelIn, accountant, owner }) => {
+  return page.evaluate(({ labelIn, practice, accountant, owner }) => {
     const GOLD: Array<[number, number, number]> = [
       [212, 175, 55],
       [125, 95, 15],
@@ -207,6 +208,7 @@ async function scan(
           el.closest(".gold-text") || el.closest(".brand") || el.closest(".report-card__rule"),
         );
       }
+      if (practice) return Boolean(el.closest(".gold-text"));
       return Boolean(
         el.closest(".logo-word") ||
           el.closest(".dash-top .brand") ||
@@ -299,7 +301,7 @@ async function scan(
       ? colorsIn(getComputedStyle(amber).color).some((c) => Math.min(...AMBER.map((a) => dist(c.rgb, a))) < 12)
       : false;
     return { hits, wordmark, heroCta, amber74 };
-  }, { labelIn: label, accountant: Boolean(opts?.accountant), owner: Boolean(opts?.owner) });
+  }, { labelIn: label, practice: Boolean(opts?.practice), accountant: Boolean(opts?.accountant), owner: Boolean(opts?.owner) });
 }
 
 async function focusButton(page: Page, selector: string) {
@@ -433,6 +435,29 @@ async function main() {
 
     if (HARNESS_OWNED) startHarness();
     await waitForHarness();
+    const practicePaths = ["/practice?firstRun=1", "/clients?firstRun=1"];
+    for (const path of practicePaths) {
+      for (const width of [1280, 390]) {
+        for (const theme of ["light", "dark"] as const) {
+          const page = await browser.newPage({ viewport: { width, height: 900 } });
+          await page.goto(`${HARNESS}${path}`, { waitUntil: "domcontentloaded" });
+          const logo = page.locator(".gold-text:visible").first();
+          await logo.waitFor({ timeout: 60000 });
+          await page.waitForTimeout(500);
+          await page.evaluate((next) => {
+            document.documentElement.dataset.theme = next;
+            document.documentElement.classList.toggle("dark", next === "dark");
+          }, theme);
+          const bg = await logo.evaluate((el) => getComputedStyle(el).backgroundImage);
+          if (!bg.includes("212, 175, 55") && !bg.includes("172, 132, 0")) {
+            failures.push(`${path} ${width} ${theme}: practice wordmark is not gold`);
+          }
+          const painted = await scan(page, `practice ${path} ${width} ${theme}`, { practice: true });
+          for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
+          await page.close();
+        }
+      }
+    }
     const accountantPaths = [
       "/clients",
       "/clients/harness-client?tab=health",

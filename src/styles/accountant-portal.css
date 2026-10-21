@@ -1603,6 +1603,23 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
 .accountant-portal ::selection{background:rgba(11,95,255,.22)}
 #atmos .g1{background:radial-gradient(circle,rgba(11,95,255,.16),transparent 65%)}
 #atmos .g2{background:radial-gradient(circle,rgba(56,189,248,.12),transparent 60%)}
+html:not(.dark) .accountant-portal.premium-shell #wizard-first-client.btn.gold,
+html:not(.dark) .accountant-portal.premium-shell #wizard-first-client.btn.gold:hover,
+html.dark .accountant-portal.premium-shell #wizard-first-client.btn.gold,
+html.dark .accountant-portal.premium-shell #wizard-first-client.btn.gold:hover{
+  background-color:#0b5fff;
+  background-image:none;
+  border:0;
+  color:#ffffff;
+  -webkit-text-fill-color:#ffffff;
+  box-shadow:none;
+}
+html:not(.dark) .accountant-portal.premium-shell #wizard-first-client.btn.gold:hover,
+html.dark .accountant-portal.premium-shell #wizard-first-client.btn.gold:hover{background-color:#2563eb}
+.accountant-portal .firm-chip--pending{min-width:8.5rem;letter-spacing:0;gap:0}
+.accountant-portal .firm-chip__skeleton{display:block;width:7.5rem;height:.75rem;border-radius:99px}
+.accountant-portal .profile-chip--pending .profile-name-skeleton{display:block;width:4.5rem;height:.75rem;border-radius:99px}
+.accountant-portal .dash-greeting-skeleton{display:block;width:12rem;height:1.35rem;border-radius:8px;max-width:70%}
 .accountant-portal .tb-btn.gold,
 .accountant-portal .btn.gold,
 .ask-ai-handoff{
