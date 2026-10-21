@@ -137,8 +137,9 @@ export function decideFirmClientCreate(input: {
    */
   starterTrialExpired?: boolean;
   /**
-   * firms.starter_trial_enforced. A card-free (phase none) enforced trial
-   * gets the same trial client cap as a Stripe trial.
+   * firms.starter_trial_enforced. A card-free (phase none) enforced firm
+   * may add the first client, then must start a trial before the next one.
+   * A Stripe trial still uses the 5-client cap.
    */
   noPlanTrialEnforced?: boolean;
 }): FirmClientCreateDecision {

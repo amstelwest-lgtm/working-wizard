@@ -127,10 +127,17 @@ for (const market of ["za", "us"] as const) {
         clientCount,
         noPlanTrialEnforced: currentBand == null,
       });
-      assert(
-        !decision.allowed && decision.code === "trial_client_cap",
-        `${market} at ${clientCount} on ${currentBand ?? "no plan"} is at the trial cap`,
-      );
+      if (currentBand == null) {
+        assert(
+          !decision.allowed && decision.code === "billing_required",
+          `${market} at ${clientCount} on no plan routes to billing_required`,
+        );
+      } else {
+        assert(
+          !decision.allowed && decision.code === "trial_client_cap",
+          `${market} at ${clientCount} on ${currentBand} is at the trial cap`,
+        );
+      }
       const usageLabel = formatFirmClientUsage(
         clientCount,
         FIRM_TRIAL_CLIENT_LIMIT,
@@ -169,8 +176,12 @@ for (const market of ["za", "us"] as const) {
       const visible = `${decision.message}\n${usageLabel}`;
       assert(
         decision.message ===
-          `${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the ${FIRM_TRIAL_CLIENT_LIMIT}-client trial limit.`,
-        `${label} uses the trial-limit sentence`,
+          (currentBand == null
+            ? "Start a trial before adding another client."
+            : `${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the ${FIRM_TRIAL_CLIENT_LIMIT}-client trial limit.`),
+        currentBand == null
+          ? `${label} sends the practice to start a trial`
+          : `${label} uses the trial-limit sentence`,
       );
       assert(usageLabel.startsWith(`${clientCount} active client`), `${label} usage names the real count`);
       const claims = practiceCountClaims(visible);

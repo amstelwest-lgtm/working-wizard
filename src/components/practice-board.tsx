@@ -71,6 +71,12 @@ import {
   showStarterTrialEndedCopy,
   type FirmClientCreateAllowance,
 } from "@/lib/firm-client-cap";
+import { firmBillingResumeIntent } from "@/lib/billing-market";
+import {
+  billingStartSearch,
+  peekPendingCheckout,
+  stashPendingCheckout,
+} from "@/lib/pending-checkout";
 import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade, FirmStartHereBadge } from "@/components/firm-band-upgrade";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
@@ -1192,6 +1198,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, headerName, firmMarket } =
     useAccountantProfile();
+  const openBillingRequired = () => {
+    const pending = firmBillingResumeIntent(firmMarket, peekPendingCheckout());
+    stashPendingCheckout(pending);
+    void navigate({
+      to: "/billing/required",
+      search: billingStartSearch(pending),
+    });
+  };
   const firm: Firm | null =
     firms.find((f) => f.id === firmId) ??
     (firms[0]
@@ -2555,7 +2569,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             className={clientRows.length === 0 ? "btn ghost mini" : "btn gold mini"}
             onClick={() => {
               if (trialAllowance && firmAddClientDestination(trialAllowance) === "/billing/required") {
-                void navigate({ to: "/billing/required" });
+                openBillingRequired();
                 return;
               }
               setAddOpen(true);
@@ -2761,7 +2775,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
               setFirstClientOpen(false);
             }
-            void navigate({ to: "/billing/required" });
+            openBillingRequired();
           }}
           onAdded={(created) => {
             markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);

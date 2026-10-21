@@ -197,7 +197,7 @@ assert(
 );
 const practiceBoard = readFileSync(new URL("../src/components/practice-board.tsx", import.meta.url), "utf8");
 assert(
-  practiceBoard.includes("firmAddClientDestination"),
+  practiceBoard.includes("firmAddClientDestination") && practiceBoard.includes("billingStartSearch"),
   "the practice board Add client follows the billing_required decision",
 );
 // 1020E shape: starter_trial_enforced true, precard_cap_applies true, no Stripe customer.
