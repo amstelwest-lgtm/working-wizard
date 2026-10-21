@@ -7,7 +7,7 @@ import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-sl
 import { useBoundMarketCountry } from "@/contexts/market";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
-import { handoffTriggerLabel, moveRowStatus } from "@/lib/action-handoff";
+import { handoffTriggerLabel } from "@/lib/action-handoff";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { assignmentForMove, normalizeMoveLabel, type MoveAssignmentRef } from "@/lib/owner-handoff";
@@ -330,23 +330,13 @@ export function MoveHandTo({
         setFace(previousFace.current);
         return;
       }
-      if (detail?.assigneeName) {
-        optimistic.current = true;
-        setAssignee(detail.assigneeName);
-      }
     };
     window.addEventListener(ACTION_PLAN_REFRESH_EVENT, onRefresh);
     return () => window.removeEventListener(ACTION_PLAN_REFRESH_EVENT, onRefresh);
   }, [clientId, moveKey, title]);
 
-  const rowStatus = moveRowStatus({
-    runStatus: face?.runStatus,
-    draftId: face?.draftId,
-    findingsReady: face?.findingsReady,
-  });
-
   useEffect(() => {
-    if (rowStatus.phase !== "working") return;
+    if (face?.phase !== "working") return;
     const timer = window.setInterval(() => {
       if (optimistic.current) return;
       invalidateMoveAssignments(clientId);
@@ -356,7 +346,7 @@ export function MoveHandTo({
       });
     }, MOVE_STATUS_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [clientId, moveKey, title, rowStatus.phase]);
+  }, [clientId, moveKey, title, face?.phase]);
 
   const ensure = async () => {
     const item = await ensureStrategicMoveItem({ clientId, moveKey, title, outcomeWhy });
@@ -367,7 +357,7 @@ export function MoveHandTo({
     return item.actionItemId;
   };
 
-  const openDraftId = rowStatus.draftId;
+  const openDraftId = face?.phase === "draft_ready" ? face.draftId : null;
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
@@ -379,34 +369,27 @@ export function MoveHandTo({
           previous.current = assignee;
           previousFace.current = face;
           optimistic.current = true;
-          setAssignee(agentDisplayName(agent));
-          setFace({
-            actionItemId: actionId.current ?? "",
-            sourceMoveKey: moveKey,
-            driverKey: moveKey,
-            title,
-            assigneeName: agentDisplayName(agent),
-            runStatus: "queued",
-            draftId: null,
-            findingsReady: true,
-          });
-          const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
+          setAssignee(`Handing to ${agentShortName(agent)}…`);
           const actionItemId = await ensure();
           if (!actionItemId) {
             optimistic.current = false;
             setAssignee(previous.current);
             setFace(previousFace.current);
-            toast.dismiss(toastId);
+            toast.error("Couldn't hand this over");
             return;
           }
           actionId.current = actionItemId;
           const result = await commitActionHandoff({ clientId, actionItemId, title, agent });
-          if (!result.ok) {
+          if (!result.ok || result.noted !== true) {
             optimistic.current = false;
             setAssignee(previous.current);
             setFace(previousFace.current);
-            toast.error(result.error, { id: toastId });
+            toast.error(result.ok ? "Couldn't hand this over" : result.error);
+            return;
           }
+          optimistic.current = false;
+          setAssignee(agentDisplayName(agent));
+          toast.success(`Handed to ${agentShortName(agent)}`);
         }}
         onAssignPerson={async (person) => {
           previous.current = assignee;
@@ -438,12 +421,12 @@ export function MoveHandTo({
           toast.success(`Assigned to ${person.name}`);
         }}
       />
-      {rowStatus.phase === "working" ? (
+      {face?.phase === "working" ? (
         <span data-move-phase="working" className="text-[12px] font-semibold text-[#0B5FFF]">
-          Working…
+          {face.phaseLabel}
         </span>
       ) : null}
-      {rowStatus.phase === "draft_ready" && openDraftId ? (
+      {face?.phase === "draft_ready" && openDraftId ? (
         <button
           type="button"
           data-move-phase="draft-ready"
@@ -451,7 +434,7 @@ export function MoveHandTo({
           className="text-[12px] font-semibold text-[#0B5FFF] underline"
           onClick={() => onOpenDraft?.(openDraftId)}
         >
-          Draft ready
+          {face.phaseLabel}
         </button>
       ) : null}
     </span>
