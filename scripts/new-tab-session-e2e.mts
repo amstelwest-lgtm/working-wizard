@@ -3,7 +3,8 @@
  * Run: pnpm test:new-tab-session-e2e
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { chromium, type Browser, type Page } from "playwright";
+import { readdirSync, readFileSync } from "node:fs";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 const PORT = 4191;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -74,6 +75,7 @@ function startDevServer(): ChildProcess {
     ["exec", "vite", "dev", "--host", "127.0.0.1", "--port", String(PORT), "--strictPort"],
     {
       cwd: process.cwd(),
+      detached: true,
       env: {
         ...process.env,
         VITE_SUPABASE_URL: "https://example.supabase.co",
@@ -84,6 +86,53 @@ function startDevServer(): ChildProcess {
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
+}
+
+/** `detached: true` makes this pid the process-group leader, so Vite dies with pnpm. */
+function killGroup(child: ChildProcess | undefined): void {
+  const pid = child?.pid;
+  if (!pid) return;
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+function killPid(pid: number): void {
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+/** Chrome is a child of this process. Close can hang, so the leftover tree is killed too. */
+function killDirectChildren(parentPid: number): void {
+  let entries: string[] = [];
+  try {
+    entries = readdirSync("/proc").filter((name) => /^\d+$/.test(name));
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    try {
+      const stat = readFileSync(`/proc/${entry}/stat`, "utf8");
+      const rest = stat.slice(stat.lastIndexOf(")") + 2);
+      const ppid = Number(rest.split(" ")[1]);
+      if (ppid === parentPid) killPid(Number(entry));
+    } catch {
+      /* process exited while we were reading */
+    }
+  }
 }
 
 async function waitForServer(child: ChildProcess): Promise<void> {
@@ -132,16 +181,39 @@ async function staySignedIn(page: Page, label: string): Promise<void> {
 
 async function main() {
   const server = startDevServer();
-  const killer = setTimeout(() => {
-    console.error("new-tab-session-e2e: timed out");
-    server.kill("SIGKILL");
-    process.exit(1);
-  }, 240_000);
   let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
+  let killer: ReturnType<typeof setTimeout> | undefined;
+  let shuttingDown = false;
+
+  async function shutdown(code: number): Promise<void> {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    if (killer) clearTimeout(killer);
+    try {
+      await Promise.race([
+        (async () => {
+          await context?.close().catch(() => undefined);
+          await browser?.close().catch(() => undefined);
+        })(),
+        new Promise((resolve) => setTimeout(resolve, 2_000)),
+      ]);
+    } finally {
+      killGroup(server);
+      killDirectChildren(process.pid);
+      process.exit(code);
+    }
+  }
+
+  killer = setTimeout(() => {
+    console.error("new-tab-session-e2e: timed out");
+    void shutdown(1);
+  }, 240_000);
+
   try {
     await waitForServer(server);
     browser = await launchBrowser();
-    const context = await browser.newContext();
+    context = await browser.newContext();
     await context.route(/supabase\.co/, (route) => route.abort());
 
     const tab1 = await context.newPage();
@@ -187,15 +259,8 @@ async function main() {
     console.error(error);
     process.exitCode = 1;
   } finally {
-    clearTimeout(killer);
-    const closing = browser?.close().catch(() => undefined);
-    server.kill("SIGKILL");
-    await Promise.race([
-      closing ?? Promise.resolve(),
-      new Promise((resolve) => setTimeout(resolve, 3_000)),
-    ]);
+    await shutdown(process.exitCode === 1 ? 1 : 0);
   }
-  process.exit(process.exitCode ?? 0);
 }
 
 main().catch((error) => {
