@@ -132,6 +132,7 @@
     "test:settings-theme": "vite-node --config scripts/vite-test.config.ts scripts/settings-theme-test.mts",
     "test:settings-menu": "vite-node --config scripts/vite-test.config.ts scripts/settings-menu-test.mts",
     "test:ci": "node scripts/run-ci-tests.mjs",
+    "test:page-render-smoke": "vite-node --config scripts/vite-page-smoke.config.ts scripts/page-render-smoke-test.mts",
     "test:google-auth": "vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts",
     "test:email-sign-in": "vite-node --config scripts/vite-test.config.ts scripts/email-sign-in-test.mts",
     "test:auth-url-return": "vite-node --config scripts/vite-test.config.ts scripts/auth-url-return-test.mts",
