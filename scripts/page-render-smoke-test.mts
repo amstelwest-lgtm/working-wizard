@@ -820,12 +820,13 @@ cases.push({
     localStorage.removeItem(key);
     localStorage.removeItem(`${key}:name`);
   },
-  ready: (html) => html.includes('data-owner-boot="timeout"'),
+  ready: (html) => html.includes('data-owner-boot="load-error"'),
   expect: (html) => {
-    assert(html.includes('data-owner-boot="timeout"'), "the ceiling paints the shell backstop");
-    assert(html.includes("Couldn't open your workspace"), "the ceiling says Couldn't open");
-    assert(!html.includes('data-owner-boot="load-error"'), "the ceiling is not a failed retry");
-    assert(!html.includes("Couldn't load your workspace"), "the ceiling is not Couldn't load");
+    assert(html.includes('data-owner-boot="load-error"'), "the ceiling paints Couldn't load");
+    assert(html.includes("Couldn't load your workspace"), "the ceiling says Couldn't load");
+    assert(html.includes("Retry"), "the ceiling offers Retry");
+    assert(!html.includes('data-owner-boot="timeout"'), "the ceiling is not the idle backstop");
+    assert(!html.includes("Couldn't open your workspace"), "the ceiling is not Couldn't open");
   },
 });
 

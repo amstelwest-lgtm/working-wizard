@@ -4303,7 +4303,10 @@ function Index() {
       setOwnerBootTimedOut(false);
       return;
     }
-    return bindShellBackstop(() => setOwnerBootTimedOut(true));
+    return bindShellBackstop((reason) => {
+      if (reason === "ceiling") setCriticalBootFailed(true);
+      else setOwnerBootTimedOut(true);
+    });
   }, [authLoading, user?.id, boardReady, ownerBootAttempt, criticalBootFailed]);
   if (user && (workspaceLoadFailed || criticalBootFailed)) {
     return (

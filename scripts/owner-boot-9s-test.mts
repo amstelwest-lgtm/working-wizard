@@ -61,6 +61,12 @@ assert(
   "the membership upsert is not retried",
 );
 assert(appSrc.includes("bindShellBackstop("), "the owner shell uses the shared backstop");
+assert(
+  appSrc.includes('reason === "ceiling"') &&
+    appSrc.includes("setCriticalBootFailed(true)") &&
+    appSrc.includes('data-owner-boot="load-error"'),
+  "the ceiling shows Couldn't load",
+);
 assert(clientSrc.includes("bindShellBackstop("), "the accountant client uses the shared backstop");
 assert(
   bootSrc.includes("bootCriticalRetryFailed"),
@@ -191,8 +197,8 @@ resetBootReadForTests();
     "an in-flight retry holds the original backstop",
   );
   assert(
-    !shellBackstopDue(backstopAt + 5_000, backstopAt, backstopAt),
-    "an in-flight retry holds the ceiling too",
+    shellBackstopDue(backstopAt + 5_000, backstopAt, backstopAt),
+    "the ceiling fires while a retry is in flight",
   );
   assert(backstopAt === 10_000, "starting a retry does not move the backstop timestamp");
   await pending;
@@ -318,6 +324,54 @@ resetBootReadForTests();
   }
   assert(due, "a chain that keeps finishing still hits the ceiling");
   assert(Date.now() - started < 300, "the ceiling does not wait out the idle window");
+  unbind();
+}
+
+resetBootReadForTests();
+
+{
+  setShellBackstopForTests({ idleMs: 60_000, ceilingMs: SHELL_BOOT_CEILING_MS });
+  const started = Date.now();
+  let reason = "";
+  let firedAt = 0;
+  const unbind = bindShellBackstop((next) => {
+    if (firedAt) return;
+    reason = next;
+    firedAt = Date.now();
+  });
+  await new Promise((resolve) => setTimeout(resolve, Math.max(0, started + 9_400 - Date.now())));
+  const readAt = Date.now();
+  let calls = 0;
+  const pending = bootSelect(
+    (signal) => {
+      calls += 1;
+      return new Promise((resolve) => {
+        signal.addEventListener(
+          "abort",
+          () =>
+            resolve({
+              data: null,
+              error: { message: "AbortError: The operation was aborted." },
+            }),
+          { once: true },
+        );
+      });
+    },
+    { critical: true },
+  );
+  const result = await pending;
+  if (!firedAt) {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  }
+  const elapsed = firedAt - started;
+  assert(readAt - started < 9_600, `the hung read starts near 9.4s, saw ${readAt - started}ms`);
+  assert(reason === "ceiling", "a hung read at 9.4s ends on the ceiling, not a blank boot");
+  assert(
+    Math.abs(elapsed - SHELL_BOOT_CEILING_MS) <= 50,
+    `the error screen is 12s ± 50ms, saw ${elapsed}ms`,
+  );
+  assert(!result.ok && result.retryable, "the hung read does not open the workspace");
+  assert(calls === 1, `no hedge starts with under 500ms left, saw ${calls}`);
   unbind();
 }
 
