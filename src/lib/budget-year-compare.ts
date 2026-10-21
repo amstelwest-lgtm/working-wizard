@@ -43,10 +43,7 @@ function directionOf(change: number | null): "up" | "down" | "flat" {
   return change > 0 ? "up" : "down";
 }
 
-function yearChangeSignal(
-  key: BudgetYearKey,
-  direction: "up" | "down" | "flat",
-): BudgetYearSignal {
+function yearChangeSignal(key: BudgetYearKey, direction: "up" | "down" | "flat"): BudgetYearSignal {
   if (key !== "cogs" && key !== "expenses") return null;
   if (direction === "down") return "favourable";
   if (direction === "up") return "adverse";
@@ -104,16 +101,46 @@ function hasMeasuredFigures(money: BudgetYearMoney | null | undefined): money is
   });
 }
 
+/**
+ * This year on the year strip. Uses the firm-year slice, not the raw
+ * statement and not the seeded plan. Missing lines stay null.
+ */
+export function yearMoneyFromFiscalSlice(
+  slice: {
+    revenue: number | null;
+    cogs: number | null;
+    grossProfit: number | null;
+    operatingExpenses: number | null;
+    netProfit: number | null;
+  } | null,
+): BudgetYearMoney | null {
+  if (!slice) return null;
+  const revenue = finite(slice.revenue) ? slice.revenue : null;
+  const cogs = finite(slice.cogs) ? slice.cogs : null;
+  const expenses = finite(slice.operatingExpenses) ? slice.operatingExpenses : null;
+  const netProfit = finite(slice.netProfit) ? slice.netProfit : null;
+  const grossProfit = finite(slice.grossProfit)
+    ? slice.grossProfit
+    : revenue != null && cogs != null
+      ? revenue - cogs
+      : null;
+  const money = { revenue, cogs, grossProfit, netProfit, expenses };
+  return hasMeasuredFigures(money) ? money : null;
+}
+
 /** Statement window the header already scored. A $0 plan is not this year. */
 export function ownerYearFromStatement(
-  actuals: {
-    revenue: number;
-    cogs: number;
-    fixedCosts: number;
-    ebit?: number | null;
-    /** Canonical net profit. Operating profit is not a stand-in. */
-    netProfit?: number | null;
-  } | null | undefined,
+  actuals:
+    | {
+        revenue: number;
+        cogs: number;
+        fixedCosts: number;
+        ebit?: number | null;
+        /** Canonical net profit. Operating profit is not a stand-in. */
+        netProfit?: number | null;
+      }
+    | null
+    | undefined,
 ): BudgetYearMoney | null {
   if (!actuals) return null;
   const revenue = finite(actuals.revenue) ? actuals.revenue : null;
@@ -167,12 +194,22 @@ export function compareOwnerYear(
     return { empty: true, mode: "empty", summary: NO_FIGURES_THIS_YEAR, rows: blankRows(thisYear) };
   }
   if (!hasMeasuredFigures(lastYear)) {
-    return { empty: true, mode: "empty", summary: "No prior year on file.", rows: blankRows(thisYear) };
+    return {
+      empty: true,
+      mode: "empty",
+      summary: "No prior year on file.",
+      rows: blankRows(thisYear),
+    };
   }
   const currentMonths = monthCount(thisMonths);
   const priorMonths = monthCount(lastMonths);
   if (currentMonths == null || priorMonths == null || currentMonths !== priorMonths) {
-    return { empty: false, mode: "partial", summary: YEAR_MONTHS_DIFFER, rows: blankRows(thisYear) };
+    return {
+      empty: false,
+      mode: "partial",
+      summary: YEAR_MONTHS_DIFFER,
+      rows: blankRows(thisYear),
+    };
   }
   return { ...budgetYearCompare(thisYear, lastYear), mode: "compared" };
 }
@@ -187,7 +224,9 @@ export function budgetYearCompare(
     if (line.key === "expenses" && current == null && prior == null) return [];
     const change = current != null && prior != null ? current - prior : null;
     const changePct =
-      change != null && prior != null && Math.abs(prior) >= 1 ? (change / Math.abs(prior)) * 100 : null;
+      change != null && prior != null && Math.abs(prior) >= 1
+        ? (change / Math.abs(prior)) * 100
+        : null;
     return [
       {
         key: line.key,
