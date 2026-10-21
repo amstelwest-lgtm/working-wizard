@@ -140,7 +140,10 @@ const zaClip = cardsAgree(JAN_SEP, 3, ZA, ZA_CLIP_REVENUE, ZA_CLIP_OPERATING, [
   "prorated",
 ]);
 assert(zaClip.year?.revenue !== 412_000, "year strip must not keep the 9-month statement revenue");
-assert(zaClip.waterfall.operatingProfit !== 52_000, "waterfall must not keep the 9-month operating profit");
+assert(
+  zaClip.waterfall.operatingProfit !== 52_000,
+  "waterfall must not keep the 9-month operating profit",
+);
 assert(!zaClip.headline.label?.includes("Jan"), zaClip.headline.label ?? "");
 
 const zaSeed = seedBudgetFromFinancials(
@@ -227,7 +230,10 @@ close(
 // No dates: do not invent a March clip. Missing lines stay null, never 0.
 const stored = fiscalStatementSlice({ revenue: "412000", ebit: "52000", periodMonths: "9" }, 3);
 assert(stored?.revenue === 412_000, `stored cover revenue ${stored?.revenue}`);
-assert(stored?.operatingProfit === 52_000, `stored cover operating profit ${stored?.operatingProfit}`);
+assert(
+  stored?.operatingProfit === 52_000,
+  `stored cover operating profit ${stored?.operatingProfit}`,
+);
 assert(stored?.label == null, "an undated cover has no invented month label");
 assert(stored?.cogs == null, "missing COGS stays null");
 assert(stored?.netProfit == null, "missing net profit stays null");
@@ -259,7 +265,10 @@ const blankFall = fiscalWaterfallFallback(
 assert(blankFall?.operatingProfit == null, "waterfall operating profit stays null without EBIT");
 const blankHeadline = budgetHeadlineFigures(blankProfit, { revenue: 0, operatingProfit: 0 });
 assert(blankHeadline.revenue === 1000, "a present revenue is not replaced by 0");
-assert(blankHeadline.operatingProfit == null, "a missing operating profit is not replaced by the plan's 0");
+assert(
+  blankHeadline.operatingProfit == null,
+  "a missing operating profit is not replaced by the plan's 0",
+);
 
 const blankRevenue = fiscalStatementSlice(
   {
@@ -292,7 +301,10 @@ assert(panel.includes("fiscalStatementSlice"), "both portals attach the slice in
 const owner = readFileSync("src/routes/app.tsx", "utf8");
 const accountant = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 assert(owner.includes("fiscalWaterfallFallback("), "owner waterfall uses the firm-year slice");
-assert(accountant.includes("fiscalWaterfallFallback("), "accountant waterfall uses the firm-year slice");
+assert(
+  accountant.includes("fiscalWaterfallFallback("),
+  "accountant waterfall uses the firm-year slice",
+);
 assert(!/^export (?!const Route\b)/m.test(owner), "owner route exports only Route");
 assert(!/^export (?!const Route\b)/m.test(accountant), "accountant route exports only Route");
 

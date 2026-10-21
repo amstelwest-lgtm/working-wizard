@@ -37,7 +37,7 @@ The Month engine drew the currency symbol next to `cell.price` (45 777.78, the a
 
 ## Fix
 
-`fiscalStatementSlice` (`src/lib/budget-period.ts:77-143`) is the overlap. `BudgetPanel` attaches it for both portals (`src/components/budget/budget-panel.tsx:458-465`).
+`fiscalStatementSlice` (`src/lib/budget-period.ts:77-143`) is the overlap. `BudgetPanel` attaches it for both portals (`src/components/budget/budget-panel.tsx:458-470`).
 
 - This year, simple and complex, uses `budgetHeadlineFigures` (`src/components/budget/budget-simple-view.tsx:262-280`, `src/components/budget/budget-workspace.tsx:414-431`).
 - This year vs last year uses `yearMoneyFromFiscalSlice` when the slice is present (`src/components/budget/budget-simple-view.tsx:266-271`) and prints the same period caption.

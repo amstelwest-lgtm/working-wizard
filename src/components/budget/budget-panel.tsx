@@ -455,15 +455,19 @@ export function BudgetPanel({
   const presented = statementView
     ? presentBudgetOnStatementWindow(statementView.doc, figureSource as Record<string, unknown> | null, market, statementView.fromStatement)
     : null;
-  const actuals = presented
-    ? {
-        ...budgetVersusStatement(presented.doc, figureSource as Record<string, unknown> | null, market),
-        period: fiscalStatementSlice(
-          figureSource as Record<string, unknown> | null,
-          presented.doc.fyStartMonth,
-        ),
-      }
+  const versus = presented
+    ? budgetVersusStatement(presented.doc, figureSource as Record<string, unknown> | null, market)
     : null;
+  const actuals =
+    presented && versus
+      ? {
+          ...versus,
+          period: fiscalStatementSlice(
+            figureSource as Record<string, unknown> | null,
+            presented.doc.fyStartMonth,
+          ),
+        }
+      : null;
 
   const startFresh = useCallback(
     (args: {
