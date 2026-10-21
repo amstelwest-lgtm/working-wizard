@@ -76,6 +76,7 @@ import {
   FIRM_CHECKOUT_BANDS,
   FIRM_TRIAL_CARD_LINE,
   FIRM_TRIAL_CARD_NOTE,
+  FIRM_TRIAL_CLIENT_LIMIT,
   FIRM_TRIAL_SENTENCE,
 } from "../src/lib/stripe-plans";
 
@@ -87,10 +88,100 @@ assert(nextBandUp("starter") === "solo", "starter's next band is Solo");
 assert(nextBandUp("solo") === "small", "solo's next band is Small");
 assert(nextBandUp("scale") === null, "scale has no self-serve band above it");
 assert(nextBandUp(null) === "starter", "no band preselects Starter");
+assert(nextBandUp(null, 0) === "starter", "an empty practice still starts on Starter");
+assert(nextBandUp(null, 4) === "starter", "under the trial cap still starts on Starter");
+assert(nextBandUp(null, 5) === "solo", "at 5 clients the default is Solo, not full Starter");
+assert(nextBandUp(null, 6) === "solo", "at 6 clients the default is Solo");
+assert(nextBandUp("starter", 5) === "solo", "Starter at 5 clients defaults to Solo");
+assert(nextBandUp("starter", 6) === "solo", "Starter at 6 clients defaults to Solo");
 assert(
   nextBandUp("starter", 20) === "small",
   "a starter practice with 20 clients skips Solo 15",
 );
+
+function checkedUpgradeBand(html: string): string | null {
+  const inputs = html.match(/<input\b[^>]*>/g) ?? [];
+  for (const input of inputs) {
+    if (!/\bchecked(?:="[^"]*")?(?=[\s/>])/.test(input)) continue;
+    const value = input.match(/\bvalue="([^"]+)"/);
+    if (value) return value[1];
+  }
+  return null;
+}
+
+function practiceCountClaims(text: string): number[] {
+  const claims: number[] = [];
+  for (const match of text.matchAll(/already has (\d+) clients/gi)) claims.push(Number(match[1]));
+  for (const match of text.matchAll(/(?:^|\n|>)(\d+) active clients/g)) claims.push(Number(match[1]));
+  return claims;
+}
+
+for (const market of ["za", "us"] as const) {
+  for (const clientCount of [5, 6]) {
+    for (const currentBand of [null, "starter"] as const) {
+      const za = market === "za";
+      const decision = decideFirmClientCreate({
+        stripeConfigured: true,
+        phase: currentBand ? "trialing" : "none",
+        band: currentBand,
+        clientCount,
+        noPlanTrialEnforced: currentBand == null,
+      });
+      assert(
+        !decision.allowed && decision.code === "trial_client_cap",
+        `${market} at ${clientCount} on ${currentBand ?? "no plan"} is at the trial cap`,
+      );
+      const usageLabel = formatFirmClientUsage(
+        clientCount,
+        FIRM_TRIAL_CLIENT_LIMIT,
+        currentBand ? "Starter" : null,
+      );
+      const html = renderToStaticMarkup(
+        createElement(FirmBandUpgrade, {
+          currentBand,
+          interval: "month",
+          priceCurrency: za ? "zar" : "USD",
+          canUpgrade: true,
+          clientCount,
+          usageLabel,
+          saDiscount: za,
+          onUpgrade: () => undefined,
+        }),
+      );
+      const label = `${market} ${currentBand ?? "no plan"} at ${clientCount}`;
+      assert(checkedUpgradeBand(html) === "solo", `${label} defaults to Solo`);
+      assert(
+        html.includes(`Upgrade to Solo (up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients)`),
+        `${label} primary action is Solo`,
+      );
+      assert(!html.includes("Upgrade to Starter"), `${label} does not offer a full Starter upgrade`);
+      assert(html.includes("Starter"), `${label} still lists Starter`);
+      if (clientCount === 5 && currentBand == null) {
+        assert(html.includes('value="starter"'), `${label} keeps Starter selectable at the cap`);
+      }
+      if (za) {
+        assert(/R\s?799/.test(html), `${label} shows the Solo rand price`);
+        assert(!html.toLowerCase().includes("vat"), `${label} does not mention VAT`);
+      } else {
+        assert(html.includes("$99"), `${label} shows the Solo dollar price`);
+        assert(!/R\s?799/.test(html), `${label} does not show the rand price`);
+      }
+      const visible = `${decision.message}\n${usageLabel}`;
+      assert(
+        decision.message ===
+          `${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the ${FIRM_TRIAL_CLIENT_LIMIT}-client trial limit.`,
+        `${label} uses the trial-limit sentence`,
+      );
+      assert(usageLabel.startsWith(`${clientCount} active client`), `${label} usage names the real count`);
+      const claims = practiceCountClaims(visible);
+      assert(
+        claims.length > 0 && claims.every((count) => count === clientCount),
+        `${label} copy must not state a client count other than ${clientCount} (saw ${claims.join(", ") || "none"})`,
+      );
+      assert(!visible.toLowerCase().includes("vat"), `${label} copy does not mention VAT`);
+    }
+  }
+}
 
 assert(firmBandPriceLabel("starter", "month", "USD") === "$39", "starter monthly is $39");
 assert(firmBandPriceLabel("solo", "month", "USD") === "$99", "solo monthly is the catalog $99");

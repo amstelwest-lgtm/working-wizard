@@ -176,7 +176,27 @@ export function downgradeDropsBelowUsage(
   return limit < clientCount;
 }
 
-/** Next self-serve band above the current one that still covers current clients. */
+/**
+ * True when this band cannot take another client. A limit equal to the
+ * active count is full. Unlimited is never full. An unknown count is not
+ * treated as full, so a new practice still starts on Starter.
+ */
+function bandIsFull(
+  band: FirmBandId,
+  clientCount: number | null | undefined,
+): boolean {
+  if (clientCount == null || !Number.isFinite(clientCount)) return false;
+  const limit = FIRM_BAND_CATALOG[band].clientLimit;
+  if (limit == null) return false;
+  return limit <= clientCount;
+}
+
+/**
+ * Default upgrade: the smallest self-serve band above the current one whose
+ * client limit is above the active count. A full plan (limit <= count) is
+ * never the default. With no current band, the search starts at Starter.
+ * Starter can still be chosen in the list when its limit equals the count.
+ */
 export function nextBandUp(
   current: FirmBandId | null,
   clientCount?: number | null,
@@ -185,7 +205,7 @@ export function nextBandUp(
   for (let i = Math.max(start, 0); i < FIRM_BAND_IDS.length; i += 1) {
     const id = FIRM_BAND_IDS[i];
     if (!isFirmCheckoutBand(id)) continue;
-    if (downgradeDropsBelowUsage(id, clientCount)) continue;
+    if (bandIsFull(id, clientCount)) continue;
     return id;
   }
   return null;

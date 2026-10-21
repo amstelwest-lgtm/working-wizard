@@ -8,9 +8,10 @@
  * database (P0.1/P0.2 columns absent → count 0, state derived), so the
  * dashboard never dead-ends.
  *
- * Audience defaults to the seat the caller occupies: the client's
- * `owner_user_id` is the owner; anyone else with `has_client_access` is
- * treated as the accountant seat.
+ * Audience defaults to the seat the caller occupies. A `client_owner`
+ * membership is the business owner. On a practice file, `owner_user_id` is
+ * the accountant who added the client. A self-serve file (no firm) still
+ * treats `owner_user_id` as the owner.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -26,6 +27,7 @@ import {
   type NextStepFacts,
 } from "@/lib/next-step";
 import { isMissingRecommendationRelation } from "@/lib/recommendations";
+import { isBusinessOwnerSeat } from "@/lib/owner-workspaces";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type LooseQuery = any;
@@ -225,8 +227,28 @@ export const getNextStep = createServerFn({ method: "GET" })
     } | null;
     if (!client) throw new Error("Client not found");
 
+    let membershipRole: string | null = null;
+    const membershipRes = await sb
+      .from("client_memberships")
+      .select("role")
+      .eq("client_id", data.clientId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!membershipRes.error && membershipRes.data) {
+      const role = (membershipRes.data as { role?: string | null }).role;
+      membershipRole = typeof role === "string" ? role : null;
+    }
+
     const audience: NextStepAudience =
-      data.audience ?? (client.owner_user_id === context.userId ? "owner" : "accountant");
+      data.audience ??
+      (isBusinessOwnerSeat({
+        userId: context.userId,
+        ownerUserId: client.owner_user_id,
+        firmId: client.firm_id,
+        membershipRole,
+      })
+        ? "owner"
+        : "accountant");
     const questionAudiences = audience === "owner" ? ["owner", "both"] : ["accountant", "both"];
 
     const [
