@@ -168,6 +168,7 @@ import {
   resolveWaterfallFigures,
   hasWeeklyProfitFigures,
 } from "@/lib/weekly-inputs";
+import { fiscalWaterfallFallback } from "@/lib/budget-period";
 import { emptyProductMix, type ProductMix, hasProductMixAnswer } from "@/lib/product-mix";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
@@ -2323,7 +2324,10 @@ function ClientView() {
     return () => window.removeEventListener("milon-starter-trial-ended", onTrialEnded);
   }, []);
 
-  const waterfallFallback = derivePeriodWaterfallFallback(financials);
+  const accountantProfitPeriod = fiscalWaterfallFallback(financials, fyStartMonth);
+  const waterfallFallback =
+    accountantProfitPeriod?.fallback ?? derivePeriodWaterfallFallback(financials);
+  const profitPeriodLabel = accountantProfitPeriod?.slice.label ?? figuresPeriodLabel;
 
   // ── Milōn Bot widget mount (same widget the owner app uses) ─────────────
   useEffect(() => {
@@ -5065,12 +5069,14 @@ function ClientView() {
                     heading="Profitability"
                     sentence={profitAnswerSentence({
                       currency: currencySymbol(gateMarket),
-                      periodLabel: figuresPeriodLabel,
+                      periodLabel: profitPeriodLabel,
                       preferPeriod: statementDated,
                       revenueText:
-                        Number(financials.revenue) > 0
-                          ? formatMoneyCompact(Number(financials.revenue), gateMarket)
-                          : null,
+                        accountantProfitPeriod?.slice.revenue != null
+                          ? formatMoneyCompact(accountantProfitPeriod.slice.revenue, gateMarket)
+                          : Number(financials.revenue) > 0
+                            ? formatMoneyCompact(Number(financials.revenue), gateMarket)
+                            : null,
                       netMarginPct:
                         typeof ratios["Net Margin"] === "number" && Number.isFinite(ratios["Net Margin"])
                           ? ratios["Net Margin"] * 100
@@ -5132,7 +5138,7 @@ function ClientView() {
                       fallback={waterfallFallback}
                       clientName={client?.name}
                       clientId={client?.id}
-                      periodLabel={figuresPeriodLabel}
+                      periodLabel={profitPeriodLabel}
                       preferPeriod={statementDated}
                       yearToDate={statementYearLine(financials, clientMarket)}
                       statementSource={figureSource}
