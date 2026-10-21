@@ -10,6 +10,7 @@ import {
   SEND_AGENT_BODY,
   SEND_AGENT_ONCE,
 } from "@/lib/client-agent-send";
+import { formatDate, type DateMarket } from "@/lib/market";
 import {
   listClientAgentSends,
   mintClientAgentSend,
@@ -24,13 +25,7 @@ const PRIMARY =
 const SECONDARY =
   "inline-flex min-h-11 items-center justify-center rounded-full border border-[#0B5FFF] bg-white px-4 text-sm font-semibold text-[#102A43] hover:bg-[#F4F8FF] disabled:opacity-60";
 
-function when(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
-}
-
-export function SendAgentPanel({ clientId }: { clientId: string }) {
+export function SendAgentPanel({ clientId, market }: { clientId: string; market: DateMarket }) {
   const list = useServerFn(listClientAgentSends);
   const mint = useServerFn(mintClientAgentSend);
   const revoke = useServerFn(revokeClientAgentSend);
@@ -76,7 +71,9 @@ export function SendAgentPanel({ clientId }: { clientId: string }) {
     try {
       const result = await mint({ data: { clientId } });
       if (!result.ok && result.reason === "already_open") {
-        setNotice(`A link is already active until ${when(result.expiresAt)}. Revoke it before creating another.`);
+        setNotice(
+          `A link is already active until ${formatDate(result.expiresAt, market)}. Revoke it before creating another.`,
+        );
         await reload();
         return;
       }
@@ -145,7 +142,7 @@ export function SendAgentPanel({ clientId }: { clientId: string }) {
       {fresh ? (
         <div className="flex flex-col gap-3" data-send-agent-link="">
           <p className="text-sm leading-6 text-[#3D5270]">{SEND_AGENT_ONCE}</p>
-          <p className="text-sm">Active until {when(fresh.expiresAt)}.</p>
+          <p className="text-sm">Active until {formatDate(fresh.expiresAt, market)}.</p>
           <input
             readOnly
             value={fresh.url}
@@ -171,7 +168,7 @@ export function SendAgentPanel({ clientId }: { clientId: string }) {
       ) : open ? (
         <div className="flex flex-col gap-3" data-send-agent-open="">
           <p className="text-sm leading-6">
-            A link is active until {when(open.expiresAt)}. The address was shown once when it was
+            A link is active until {formatDate(open.expiresAt, market)}. The address was shown once when it was
             created.
           </p>
           <button

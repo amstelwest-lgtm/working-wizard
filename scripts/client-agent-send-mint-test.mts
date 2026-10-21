@@ -76,6 +76,9 @@ for (const source of [fn, panel]) {
   assert(!/resend|sendAccessEmail|nodemailer|sendTeamMail/i.test(source), "no mail sender");
 }
 assert(route.includes("<SendAgentPanel"), "the client file mounts the panel");
+assert(route.includes("market={clientMarket}"), "the expiry uses the client market");
+assert(panel.includes("formatDate("), "expiry uses the shared date formatter");
+assert(!panel.includes("toLocaleDateString"), "expiry is not formatted by locale");
 assert(
   route.includes('detail: "A Tax Specialist link for this client. Nothing is emailed."'),
   "the Books link does not offer mail",

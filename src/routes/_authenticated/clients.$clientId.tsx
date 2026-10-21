@@ -4389,7 +4389,7 @@ function ClientView() {
                       title="Send an agent"
                       subtitle="A link for the Tax Specialist. Nothing is emailed."
                     >
-                      <SendAgentPanel clientId={client.id} />
+                      <SendAgentPanel clientId={client.id} market={clientMarket} />
                     </ClientSubpageFrame>
                   ) : null}
                   {activeTab === "summary" && search.section === "documents" ? (
