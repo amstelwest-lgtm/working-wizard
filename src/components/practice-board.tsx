@@ -59,6 +59,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import {
+  ADD_CLIENT_CREATING_AFTER_MS,
+  addClientButtonLabel,
+  firmClientAddedToast,
+  firmClientCreatedNavigation,
+  type AddClientSavePhase,
+} from "@/lib/firm-client-created";
+import {
   idleStarterTrialBanner,
   showStarterTrialEndedCopy,
   type FirmClientCreateAllowance,
@@ -488,6 +495,7 @@ function AddClientDialog({
   const [newType, setNewType] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savePhase, setSavePhase] = useState<AddClientSavePhase | null>(null);
   const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
     clientMarketDraftFromFirm(firmMarket),
   );
@@ -581,6 +589,9 @@ function AddClientDialog({
       return;
     }
     setSaving(true);
+    setSavePhase("checking");
+    const creatingTimer = setTimeout(() => setSavePhase("creating"), ADD_CLIENT_CREATING_AFTER_MS);
+    let opened = false;
     try {
       const created = await createClient({
         data: {
@@ -591,9 +602,7 @@ function AddClientDialog({
           marketRegion: market.regionCode,
         },
       });
-      let inviteNote = created.client_code
-        ? `Client added · ${created.client_code}`
-        : "Client added";
+      let inviteDetail: string | null = null;
       if (email) {
         try {
           const inv = await inviteOwner({
@@ -601,18 +610,27 @@ function AddClientDialog({
           });
           await navigator.clipboard?.writeText(inv.pasteText);
           if (inv.emailed) {
-            inviteNote = `${inviteNote} · invite emailed to ${inv.email}`;
+            inviteDetail = `Invite emailed to ${inv.email}.`;
           } else if (inv.sendError) {
-            inviteNote = `${inviteNote} · invite copied (email not sent)`;
+            inviteDetail = "Invite copied (email not sent).";
             toast.error(inv.sendError);
           } else {
-            inviteNote = `${inviteNote} · invite message copied`;
+            inviteDetail = "Invite message copied.";
           }
         } catch (invErr) {
           toast.error(invErr instanceof Error ? invErr.message : "Client added, but invite failed");
         }
       }
-      toast.success(inviteNote);
+      setSavePhase("opening");
+      opened = true;
+      toast.success(
+        firmClientAddedToast({
+          name: created.name,
+          clientCode: created.client_code,
+          inviteDetail,
+        }),
+        { duration: 6000 },
+      );
       onAdded({
         id: created.id,
         name: created.name,
@@ -664,7 +682,11 @@ function AddClientDialog({
       }
       toast.error(message);
     } finally {
-      setSaving(false);
+      clearTimeout(creatingTimer);
+      if (!opened) {
+        setSaving(false);
+        setSavePhase(null);
+      }
     }
   };
 
@@ -913,7 +935,7 @@ function AddClientDialog({
                   disabled={saving || !newName.trim() || !isDraftComplete(draftMarket)}
                   style={{ flex: 1 }}
                 >
-                  {saving ? "Saving…" : "Add client"}
+                  {addClientButtonLabel(savePhase)}
                 </button>
               </div>
             </>
@@ -2716,7 +2738,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           }}
           onAdded={(created) => {
             markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
-            const wasFirst = firstClientOpen;
             setFirstClientOpen(false);
             setAddOpen(false);
             forgetPaintedBook(user.id, firm?.id ?? firmId);
@@ -2725,12 +2746,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               await refreshFirms();
               void load(created.firm_id ?? firmId, user.id, greetingSource);
             })();
-            if (wasFirst && created.id) {
-              navigate({
-                to: "/clients/$clientId",
-                params: { clientId: created.id },
-                search: { onboard: "1" },
-              });
+            if (created.id) {
+              navigate(firmClientCreatedNavigation(created.id));
             }
           }}
           firmId={firm?.id ?? firmId}
