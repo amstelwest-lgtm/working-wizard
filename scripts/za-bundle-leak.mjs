@@ -113,9 +113,11 @@ function randInsideWord(text, at) {
   return /[A-Za-z]/.test(text[at - 1]);
 }
 
-/** "R299" inside a content hash (DR299tJa) is not the Starter price. */
+/** "R299" inside a content hash (DR299tJa) is not the Starter price.
+ *  "ZAR" inside a content hash (BZARq9iQ) is not the currency code.
+ */
 function randPriceToken(text, at, needle) {
-  if (needle !== "R299") return true;
+  if (needle !== "R299" && needle !== "ZAR") return true;
   const before = at > 0 ? text[at - 1] : "";
   const after = text[at + needle.length] ?? "";
   return !/[A-Za-z0-9]/.test(before) && !/[A-Za-z0-9]/.test(after);

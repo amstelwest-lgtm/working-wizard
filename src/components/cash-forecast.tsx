@@ -1900,6 +1900,7 @@ export function CashForecastPanel({
       }
       const [{ pdf }, { CashForecastPDF }] = pdfModules;
 
+      const derivedRunway = forecastExportRunwayWeeks(screenRunway.weeks, 0);
       const openingKnown = openingBalance.trim() !== "" && Number.isFinite(Number(openingBalance));
       const amountPresent = (lines: LineItem[]) =>
         lines.some((line) => {
