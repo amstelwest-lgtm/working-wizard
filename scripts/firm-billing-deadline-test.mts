@@ -215,7 +215,7 @@ assert(
   "unknown shows the retry card",
 );
 assert(codes.includes("plan-read-error"), "a plan-read error logs plan-read-error");
-assert(codes.includes("deadline-hit"), "the hard deadline logs deadline-hit");
+assert(codes.includes("stripe-timeout"), "the bind-fix list budget returns before the hard deadline");
 const retryHtml = await renderSurface("error", "Client file");
 assert(retryHtml.includes("check billing"), "unknown renders the retry card");
 assert(retryHtml.includes("Retry"), "the card can be retried");
@@ -232,6 +232,7 @@ const hangingSupabase = {
   }),
 };
 setFirmBillingPlanReadForTests(async () => "entitled");
+codes.length = 0;
 started = Date.now();
 result = await resolveFirmBillingEntitlement(
   actor("firm-ids@example.com", hangingSupabase),
@@ -241,6 +242,7 @@ result = await resolveFirmBillingEntitlement(
 timings.firmIdsMs = Date.now() - started;
 assert(timings.firmIdsMs < 7_000, `hung firm-id read resolved in ${timings.firmIdsMs}ms`);
 assert(result.reason === "stripe_error" && result.entitled === false, "a hung firm-id read is unknown");
+assert(codes.includes("deadline-hit"), "the hard deadline logs deadline-hit");
 resetStubs();
 
 setFirmBillingPlanReadForTests(async () => null);
