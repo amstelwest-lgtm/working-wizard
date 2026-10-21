@@ -1055,25 +1055,38 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   } else {
     stateLines.push(`${name} has no scorable figures yet, so the health score is not available.`);
   }
-  const cashStory = forecast
+  const openingForStory =
+    input.openingBalance != null && Number.isFinite(input.openingBalance) && input.openingBalance !== 0
+      ? input.openingBalance
+      : null;
+  const cashStory = forecast && openingForStory != null
     ? forecastRunwayHeadlineShared({
-        opening: input.openingBalance ?? 0,
+        opening: openingForStory,
         closings: input.closings ?? [],
         floor: comfort,
         runwayLabel: input.runwayLabel,
       })
     : null;
-  const cashStatus = forecast
+  const cashStatus = forecast && openingForStory != null
     ? forecastStatusSentence({
-        opening: input.openingBalance ?? 0,
+        opening: openingForStory,
         closings: input.closings ?? [],
         floor: comfort,
         floorText: compact(comfort),
         runwayLabel: input.runwayLabel,
       })
     : null;
-  if (forecast && cashStatus) {
-    const lowText = forecastLowPhrase(forecast.lowestClosing ?? 0, forecast.lowestWeek, compact);
+  if (forecast && openingForStory == null) {
+    stateLines.push(
+      "Not enough data. The forecast has no opening bank balance, so runway is not stated.",
+    );
+  } else if (
+    forecast &&
+    cashStatus &&
+    forecast.lowestClosing != null &&
+    Number.isFinite(forecast.lowestClosing)
+  ) {
+    const lowText = forecastLowPhrase(forecast.lowestClosing, forecast.lowestWeek, compact);
     stateLines.push(`${cashStatus} Lowest point ${lowText}.`);
   }
   if (input.openActions > 0) {
@@ -1131,19 +1144,21 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
 
   const runwayHeadline = cashStory?.headline?.trim() ?? "";
   const runwayClause = runwayHeadline ? ` ${runwayHeadline}.` : "";
+  const lowestKnown =
+    forecast != null && forecast.lowestClosing != null && Number.isFinite(forecast.lowestClosing);
   const forecastBody = !forecast
     ? "No 13-week cash forecast has been published yet, so this pack cannot say when cash gets tight. Publishing one is the fastest way to sharpen every recommendation."
     : forecast.openingBalance === null || forecast.openingBalance === 0
-      ? `The forecast has no opening bank balance, so its runway starts from zero and the ${
-          forecast.lowestWeek == null ? "opening" : `week-${forecast.lowestWeek}`
-        } low of ${compact(forecast.lowestClosing ?? 0)} is understated by whatever is actually in the bank.${runwayClause}${
-          cashStatus ? ` ${cashStatus}` : ""
+      ? `The forecast has no opening bank balance, so runway is not stated. Not enough data.${
+          lowestKnown
+            ? ` Lowest point ${forecastLowPhrase(forecast.lowestClosing as number, forecast.lowestWeek, compact)}.`
+            : ""
         }`
-      : `Opening balance ${money(forecast.openingBalance)}; lowest point ${forecastLowPhrase(
-          forecast.lowestClosing ?? 0,
-          forecast.lowestWeek,
-          compact,
-        )}${
+      : `Opening balance ${money(forecast.openingBalance)}; lowest point ${
+          lowestKnown
+            ? forecastLowPhrase(forecast.lowestClosing as number, forecast.lowestWeek, compact)
+            : "—"
+        }${
           forecast.lowestWeek == null
             ? `, across ${forecast.horizonWeeks} weeks`
             : ` of ${forecast.horizonWeeks}`

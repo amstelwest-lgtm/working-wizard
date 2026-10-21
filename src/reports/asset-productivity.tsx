@@ -360,7 +360,7 @@ export function AssetProductivityPDF({
             key={r.name}
             ratioName={r.name}
             formattedValue={r.value}
-            healthScore={r.score ?? 0}
+            healthScore={r.score}
             healthTier={scoreTier(r.score)}
             unscored={r.unscored}
             isAlternate={i % 2 === 1}
@@ -372,7 +372,7 @@ export function AssetProductivityPDF({
             key={r.name}
             ratioName={r.name}
             formattedValue={r.value}
-            healthScore={r.score ?? 0}
+            healthScore={r.score}
             healthTier={scoreTier(r.score)}
             unscored={r.unscored}
             isAlternate={(i + 2) % 2 === 1}

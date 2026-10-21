@@ -561,7 +561,7 @@ export function detectDataGaps(f: DataGapFacts): DataRequestDraft[] {
       kind: "bank_balance",
       title: "Current bank balance",
       reason:
-        "The 13-week cash forecast has no opening balance, so its runway starts from zero. One number fixes every week of it.",
+        "The 13-week cash forecast has no opening balance, so runway is not stated. Not enough data until that balance is on file.",
       severity: "critical",
     });
   }

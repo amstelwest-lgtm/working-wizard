@@ -131,12 +131,18 @@ const brStyles = StyleSheet.create({
   legendText: { fontSize: 6.5, color: C.muted, fontFamily: "Helvetica" },
 });
 
+/** A missing depreciation figure is not a zero bar. A stored 0 stays 0. */
+export function statedDepreciation(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Math.max(0, value);
+}
+
 function BridgeChart({ d, accent }: { d: ProfitabilityData; accent: string }) {
   const market = usePdfMarket();
   const cogs = d.revenue - d.gross_profit;
-  const statedDep = Math.max(0, d.depreciation ?? 0);
-  const opexIfSplit = d.gross_profit - d.operating_profit - statedDep;
-  const depreciation = opexIfSplit >= -1 ? statedDep : 0;
+  const statedDep = statedDepreciation(d.depreciation);
+  const opexIfSplit = statedDep == null ? null : d.gross_profit - d.operating_profit - statedDep;
+  const depreciation = statedDep != null && opexIfSplit != null && opexIfSplit >= -1 ? statedDep : 0;
   const opex = d.gross_profit - d.operating_profit - depreciation;
   const afterOpex = d.gross_profit - opex;
   const interest = d.operating_profit - d.ebt;
@@ -530,19 +536,19 @@ export function ProfitabilityWaterfallPDF({
     {
       name: "Gross Margin",
       value: fmtPct(d.gross_margin_pct),
-      score: d.gross_margin_score ?? 60,
+      score: d.gross_margin_score ?? null,
       prior: prior?.gross_margin_score,
     },
     {
       name: "Operating Margin",
       value: fmtPct(d.operating_margin_pct),
-      score: d.operating_margin_score ?? 65,
+      score: d.operating_margin_score ?? null,
       prior: prior?.operating_margin_score,
     },
     {
       name: "Net Margin",
       value: fmtPct(d.net_margin_pct),
-      score: d.net_margin_score ?? 62,
+      score: d.net_margin_score ?? null,
       prior: prior?.net_margin_score,
     },
     {
@@ -661,7 +667,7 @@ export function ProfitabilityWaterfallPDF({
               key={r.name}
               ratioName={r.name}
               formattedValue={r.value}
-              healthScore={r.score ?? 0}
+              healthScore={r.score}
               healthTier={scoreTier(r.score)}
               unscored={"unscored" in r && Boolean(r.unscored)}
               priorScore={r.prior}
@@ -674,7 +680,7 @@ export function ProfitabilityWaterfallPDF({
               key={r.name}
               ratioName={r.name}
               formattedValue={r.value}
-              healthScore={r.score ?? 0}
+              healthScore={r.score}
               healthTier={scoreTier(r.score)}
               unscored={"unscored" in r && Boolean(r.unscored)}
               priorScore={r.prior}
