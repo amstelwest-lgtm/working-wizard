@@ -228,7 +228,16 @@ assert(
 assert(
   !read("supabase/functions/ask-ai/index.ts").includes("paidGenerationTrialBlock") &&
     !read("supabase/functions/ask-ai/index.ts").includes("assertStarterTrialAllowsNewWork"),
-  "Ask AI Q&A is not gated",
+  "Ask AI Q&A is not on the paid-generation gate",
+);
+assert(
+  read("supabase/functions/ask-ai/index.ts").includes("cardlessTrialAiBlock"),
+  "Ask AI stops after the trial when the firm has no card",
+);
+assert(
+  read("supabase/functions/milon-bot/index.ts").includes("cardlessTrialAiBlock") &&
+    !read("supabase/functions/milon-bot/index.ts").includes("paidGenerationTrialBlock"),
+  "Milōn Bot Q&A stops after the trial when the firm has no card",
 );
 assert(
   read("src/components/client-brain-summary.tsx").includes("TrialEndedActionNotice"),

@@ -17,6 +17,7 @@ import {
   recordPrecardUse,
 } from "../_shared/precard-cap-gate.ts";
 import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE, normalizePrecardTurnId } from "../../../src/lib/precard-cap.ts";
+import { cardlessTrialAiBlock } from "../_shared/starter-trial-gate.ts";
 import { forecastPlFingerprint } from "../../../src/lib/cash-forecast-rows.ts";
 import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 
@@ -137,6 +138,17 @@ async function handleAskAi(req: Request): Promise<Response> {
   }
   if (!hasAccess) {
     return respond({ error: "Client not accessible" }, 403);
+  }
+
+  let aiBlock;
+  try {
+    aiBlock = await cardlessTrialAiBlock({ db: adminClient, clientId });
+  } catch (err) {
+    console.error("trial check failed", err instanceof Error ? err.message : err);
+    return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
+  }
+  if (aiBlock) {
+    return respond({ error: aiBlock.message, code: aiBlock.code }, 403);
   }
 
   let precard;

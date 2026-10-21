@@ -40,7 +40,21 @@ function sameFirm(slot: Slot | null, userId: string, firmId?: string | null): sl
   return true;
 }
 
+/** An entitled slot is only that firm. A missing firm id does not cover another firm. */
+function entitledSlotMatches(slot: Slot | null, userId: string, firmId?: string | null): boolean {
+  return Boolean(
+    slot &&
+      slot.userId === userId &&
+      slot.value.entitled === true &&
+      firmId &&
+      slot.firmId &&
+      slot.firmId === firmId,
+  );
+}
+
 function fresh(userId: string, firmId?: string | null): boolean {
+  if (!cached || cached.userId !== userId) return false;
+  if (cached.value.entitled && !entitledSlotMatches(cached, userId, firmId)) return false;
   return sameFirm(cached, userId, firmId) && Date.now() - cached.at < ttlFor(cached.value);
 }
 
@@ -97,6 +111,10 @@ export function lastKnownFirmEntitlement(
   userId: string,
   firmId?: string | null,
 ): CachedFirmEntitlement | null {
+  if (!lastKnown || lastKnown.userId !== userId) return null;
+  if (lastKnown.value.entitled) {
+    return entitledSlotMatches(lastKnown, userId, firmId) ? lastKnown.value : null;
+  }
   if (!sameFirm(lastKnown, userId, firmId)) return null;
   return lastKnown.value;
 }
@@ -126,13 +144,7 @@ export function noteFirmEntitlement(
   // Unknown is not a result. Leave the previous success in place.
   if (value.reason === "stripe_error") return;
   // A failed recheck must not downgrade a firm this tab already knows is entitled.
-  if (
-    value.checkFailed &&
-    !value.entitled &&
-    lastKnown?.userId === userId &&
-    lastKnown.value.entitled &&
-    (!firmId || !lastKnown.firmId || lastKnown.firmId === firmId)
-  ) {
+  if (value.checkFailed && !value.entitled && entitledSlotMatches(lastKnown, userId, firmId)) {
     return;
   }
   const nextFirm =
