@@ -62,6 +62,7 @@ export const RAIL_SUBSECTIONS = [
   "all",
   "documents",
   "connections",
+  "send-agent",
 ] as const;
 
 export type RailSubsection = (typeof RAIL_SUBSECTIONS)[number];
@@ -180,6 +181,7 @@ function destinationForSection(
   if (section === "scorecard") return { tab: "reports", section: "scorecard" };
   if (section === "all") return { tab: "reports", section: "all" };
   if (section === "documents") return { tab: "portal", section: "documents" };
+  if (section === "send-agent") return { tab: "portal", section: "send-agent" };
   if (section === "sent") return { tab: "reports", section: "sent" };
   if (section === "connections") return { tab: "portal", section: "connections" };
   if (section === "moves" || section === "strategic-moves") return { tab: "moves" };
@@ -266,6 +268,7 @@ function explicitRail(
   if (tab === "portal") {
     if (section === "connections") return { tab: "portal", section: "connections" };
     if (section === "documents") return { tab: "portal", section: "documents" };
+    if (section === "send-agent") return { tab: "portal", section: "send-agent" };
     return { tab: "portal" };
   }
   return { tab };
@@ -291,6 +294,7 @@ const VIEW_SECTION_ALIAS: Record<string, RailSubsection> = {
   all: "all",
   documents: "documents",
   connections: "connections",
+  "send-agent": "send-agent",
 };
 
 /** `?view=` values that name a sub-page. `13week` is the cash forecast lens. */
@@ -362,6 +366,7 @@ export function canonicalizeAccountantSearch(input: {
   if (tab === "books") {
     if (section === "connections") return finish({ tab: "portal", section: "connections" });
     if (section === "documents") return finish({ tab: "portal", section: "documents" });
+    if (section === "send-agent") return finish({ tab: "portal", section: "send-agent" });
     return finish({ tab: "portal" });
   }
 
@@ -614,6 +619,7 @@ export function clientRailSelection(input: {
     case "portal":
       if (section === "connections") return { headingId: "books", subId: "connections" };
       if (section === "documents") return { headingId: "books", subId: "documents" };
+      if (section === "send-agent") return { headingId: "books", subId: "send-agent" };
       return { headingId: "books", subId: null };
     case "settings":
       return { headingId: "settings", subId: null };
@@ -704,7 +710,7 @@ export function clientNavSearch<T extends object>(
     return next as T;
   }
   if (headingId === "books") {
-    if (sub === "connections" || sub === "documents") {
+    if (sub === "connections" || sub === "documents" || sub === "send-agent") {
       return accountantClientTabSearch(prev, "portal", { section: sub });
     }
     return accountantClientTabSearch(prev, "portal");
