@@ -61,6 +61,7 @@ import {
 } from "../supabase/functions/_shared/app-origin.ts";
 import { checkoutEmailRedirectTo } from "../src/lib/pending-checkout";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
+import { FirmStarterTrialBanner } from "../src/components/firm-starter-trial-banner";
 import {
   decideFirmClientCreate,
   eligibleForIntroTrial,
@@ -68,14 +69,17 @@ import {
   starterTrialForPlanState,
 } from "../src/lib/firm-client-cap";
 import {
+  noPlanTrialClock,
   STARTER_TRIAL_ENDED_MESSAGE,
   starterTrialClock,
 } from "../src/lib/firm-starter-trial";
 import {
+  CARD_FREE_TRIAL_LINE,
   FIRM_BAND_CATALOG,
   FIRM_CHECKOUT_BANDS,
   FIRM_TRIAL_CARD_LINE,
   FIRM_TRIAL_CARD_NOTE,
+  FIRM_TRIAL_CLIENT_LIMIT,
   FIRM_TRIAL_SENTENCE,
 } from "../src/lib/stripe-plans";
 
@@ -87,10 +91,111 @@ assert(nextBandUp("starter") === "solo", "starter's next band is Solo");
 assert(nextBandUp("solo") === "small", "solo's next band is Small");
 assert(nextBandUp("scale") === null, "scale has no self-serve band above it");
 assert(nextBandUp(null) === "starter", "no band preselects Starter");
+assert(nextBandUp(null, 0) === "starter", "an empty practice still starts on Starter");
+assert(nextBandUp(null, 4) === "starter", "under the trial cap still starts on Starter");
+assert(nextBandUp(null, 5) === "solo", "at 5 clients the default is Solo, not full Starter");
+assert(nextBandUp(null, 6) === "solo", "at 6 clients the default is Solo");
+assert(nextBandUp("starter", 5) === "solo", "Starter at 5 clients defaults to Solo");
+assert(nextBandUp("starter", 6) === "solo", "Starter at 6 clients defaults to Solo");
 assert(
   nextBandUp("starter", 20) === "small",
   "a starter practice with 20 clients skips Solo 15",
 );
+
+function checkedUpgradeBand(html: string): string | null {
+  const inputs = html.match(/<input\b[^>]*>/g) ?? [];
+  for (const input of inputs) {
+    if (!/\bchecked(?:="[^"]*")?(?=[\s/>])/.test(input)) continue;
+    const value = input.match(/\bvalue="([^"]+)"/);
+    if (value) return value[1];
+  }
+  return null;
+}
+
+function practiceCountClaims(text: string): number[] {
+  const claims: number[] = [];
+  for (const match of text.matchAll(/already has (\d+) clients/gi)) claims.push(Number(match[1]));
+  for (const match of text.matchAll(/(?:^|\n|>)(\d+) active clients/g)) claims.push(Number(match[1]));
+  return claims;
+}
+
+for (const market of ["za", "us"] as const) {
+  for (const clientCount of [5, 6]) {
+    for (const currentBand of [null, "starter"] as const) {
+      const za = market === "za";
+      const decision = decideFirmClientCreate({
+        stripeConfigured: true,
+        phase: currentBand ? "trialing" : "none",
+        band: currentBand,
+        clientCount,
+        noPlanTrialEnforced: currentBand == null,
+      });
+      if (currentBand == null) {
+        assert(
+          !decision.allowed && decision.code === "billing_required",
+          `${market} at ${clientCount} on no plan routes to billing_required`,
+        );
+      } else {
+        assert(
+          !decision.allowed && decision.code === "trial_client_cap",
+          `${market} at ${clientCount} on ${currentBand} is at the trial cap`,
+        );
+      }
+      const usageLabel = formatFirmClientUsage(
+        clientCount,
+        FIRM_TRIAL_CLIENT_LIMIT,
+        currentBand ? "Starter" : null,
+      );
+      const html = renderToStaticMarkup(
+        createElement(FirmBandUpgrade, {
+          currentBand,
+          interval: "month",
+          priceCurrency: za ? "zar" : "USD",
+          canUpgrade: true,
+          clientCount,
+          usageLabel,
+          saDiscount: za,
+          onUpgrade: () => undefined,
+        }),
+      );
+      const label = `${market} ${currentBand ?? "no plan"} at ${clientCount}`;
+      assert(checkedUpgradeBand(html) === "solo", `${label} defaults to Solo`);
+      assert(
+        html.includes(`Upgrade to Solo (up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients)`),
+        `${label} primary action is Solo`,
+      );
+      assert(!html.includes("Upgrade to Starter"), `${label} does not offer a full Starter upgrade`);
+      assert(html.includes("Starter"), `${label} still lists Starter`);
+      if (clientCount === 5 && currentBand == null) {
+        assert(html.includes('value="starter"'), `${label} keeps Starter selectable at the cap`);
+      }
+      if (za) {
+        assert(/R\s?799/.test(html), `${label} shows the Solo rand price`);
+        assert(!html.toLowerCase().includes("vat"), `${label} does not mention VAT`);
+      } else {
+        assert(html.includes("$99"), `${label} shows the Solo dollar price`);
+        assert(!/R\s?799/.test(html), `${label} does not show the rand price`);
+      }
+      const visible = `${decision.message}\n${usageLabel}`;
+      assert(
+        decision.message ===
+          (currentBand == null
+            ? "Start a trial before adding another client."
+            : `${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the ${FIRM_TRIAL_CLIENT_LIMIT}-client trial limit.`),
+        currentBand == null
+          ? `${label} sends the practice to start a trial`
+          : `${label} uses the trial-limit sentence`,
+      );
+      assert(usageLabel.startsWith(`${clientCount} active client`), `${label} usage names the real count`);
+      const claims = practiceCountClaims(visible);
+      assert(
+        claims.length > 0 && claims.every((count) => count === clientCount),
+        `${label} copy must not state a client count other than ${clientCount} (saw ${claims.join(", ") || "none"})`,
+      );
+      assert(!visible.toLowerCase().includes("vat"), `${label} copy does not mention VAT`);
+    }
+  }
+}
 
 assert(firmBandPriceLabel("starter", "month", "USD") === "$39", "starter monthly is $39");
 assert(firmBandPriceLabel("solo", "month", "USD") === "$99", "solo monthly is the catalog $99");
@@ -809,6 +914,10 @@ assert(
   settings.includes("introTrialEligible={plan.introTrialEligible}"),
   "settings shows the Starter trial lines from the plan flag",
 );
+assert(
+  settings.includes("plan.phase === \"none\"") && settings.includes("plan.starterTrial?.enforced === true"),
+  "settings uses the card-free sentence only for an enforced firm with no subscription",
+);
 const capServer = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
 assert(
   capServer.includes("eligibleForIntroTrial(history.priorSubscriptionCount)"),
@@ -1153,6 +1262,80 @@ const usedTrial = renderToStaticMarkup(
 );
 assert(!usedTrial.includes(FIRM_TRIAL_SENTENCE), "a used trial hides the signup sentence");
 assert(!usedTrial.includes(FIRM_TRIAL_CARD_LINE), "a used trial hides the card line");
+assert(!usedTrial.includes(CARD_FREE_TRIAL_LINE), "a trialing firm does not see the card-free sentence");
+
+const OLD_CARD_FREE_LINE = "14-day free trial · up to 5 clients on Starter";
+for (const [label, props] of [
+  ["US", { priceCurrency: "USD" as const, saDiscount: false, price: "$39" }],
+  [
+    "SA",
+    {
+      priceCurrency: "zar" as const,
+      saDiscount: true,
+      price: "R299/mo · about R60 per client",
+      zaLabels: {
+        starter: { month: "R299/mo · about R60 per client", year: "R2,837/yr · about R60 per client" },
+        solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
+      },
+    },
+  ],
+] as const) {
+  const html = renderToStaticMarkup(
+    createElement(FirmBandUpgrade, {
+      currentBand: null,
+      interval: "month",
+      priceCurrency: props.priceCurrency,
+      canUpgrade: true,
+      clientCount: 0,
+      cardFree: true,
+      saDiscount: props.saDiscount,
+      zaLabels: "zaLabels" in props ? props.zaLabels : null,
+      onUpgrade: () => undefined,
+    }),
+  );
+  assert(html.includes(CARD_FREE_TRIAL_LINE), `${label} Add client card uses the card-free sentence`);
+  assert(!html.includes(OLD_CARD_FREE_LINE), `${label} Add client card drops the old Starter line`);
+  assert(!html.includes(FIRM_TRIAL_CARD_NOTE), `${label} Add client card drops the old card note`);
+  assert(html.includes(props.price), `${label} Add client card keeps the Starter price`);
+  assert(!html.toLowerCase().includes("vat"), `${label} Add client card has no VAT wording`);
+}
+
+const cardFreeBanner = renderToStaticMarkup(
+  createElement(FirmStarterTrialBanner, {
+    trial: noPlanTrialClock({
+      enforced: true,
+      noPlan: true,
+      startedAt: "2026-10-18T12:00:00.000Z",
+      now: new Date("2026-10-19T12:00:00.000Z"),
+    }),
+    firmId: "firm",
+  }),
+);
+assert(cardFreeBanner.includes(CARD_FREE_TRIAL_LINE), "the card-free trial banner uses the explore sentence");
+assert(!cardFreeBanner.includes(OLD_CARD_FREE_LINE), "the card-free trial banner drops the old Starter line");
+assert(!cardFreeBanner.toLowerCase().includes("vat"), "the card-free trial banner has no VAT wording");
+
+const trialingBanner = renderToStaticMarkup(
+  createElement(FirmStarterTrialBanner, {
+    trial: starterTrialClock({
+      enforced: true,
+      band: "starter",
+      startedAt: "2026-09-26T12:00:00.000Z",
+      now: new Date("2026-10-05T12:00:00.000Z"),
+    }),
+    firmId: "firm",
+  }),
+);
+assert(!trialingBanner.includes(CARD_FREE_TRIAL_LINE), "a trialing banner keeps its countdown copy");
+assert(!trialingBanner.includes(OLD_CARD_FREE_LINE), "a trialing banner does not pick up the old card-free line");
+assert(trialingBanner.includes("Trial day 10 of 14"), "a trialing banner still counts the trial");
+
+const practiceBoard = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
+assert(practiceBoard.includes("CARD_FREE_TRIAL_LINE"), "Add client shows the card-free sentence");
+assert(
+  practiceBoard.includes("cap.starterTrial.cardFree"),
+  "Add client shows that sentence only for a card-free firm",
+);
 
 for (const publicFile of [
   "src/components/firm-band-pricing.tsx",

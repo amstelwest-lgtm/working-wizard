@@ -16,6 +16,11 @@ export type OwnerWorkspace = {
 export type OwnedClientRow = {
   id: string;
   name?: string | null;
+  /**
+   * Set on a practice file. `clients.owner_user_id` there is the accountant
+   * who added the client, not the business owner.
+   */
+  firmId?: string | null;
 };
 
 export type MembershipClientRow = {
@@ -37,6 +42,36 @@ function membershipIsOwner(role: string | null | undefined): boolean {
   return role === "client_owner";
 }
 
+/**
+ * Business-owner seat. A `client_owner` membership is the business owner.
+ * On a practice file, `owner_user_id` is the accountant who added the client,
+ * so that match is not the owner. A self-serve file (no firm) still treats
+ * `owner_user_id` as the owner.
+ */
+export function isBusinessOwnerSeat(input: {
+  userId: string;
+  ownerUserId: string | null;
+  firmId: string | null;
+  membershipRole: string | null;
+}): boolean {
+  if ((input.membershipRole ?? "").trim() === "client_owner") return true;
+  if (input.firmId) return false;
+  const userId = input.userId.trim();
+  return Boolean(userId) && userId === (input.ownerUserId ?? "");
+}
+
+/** Role inferred when `user_roles` has no row. A firm file's owner_user_id is not the business owner. */
+export function fallbackOwnerAppRole(input: {
+  hasSelfServeOwned: boolean;
+  membershipRoles: readonly (string | null | undefined)[];
+}): "client_owner" | "client_member" | null {
+  if (input.membershipRoles.some((role) => (role ?? "").trim() === "client_owner"))
+    return "client_owner";
+  if (input.hasSelfServeOwned) return "client_owner";
+  if (input.membershipRoles.some((role) => Boolean((role ?? "").trim()))) return "client_member";
+  return null;
+}
+
 export function mergeOwnerWorkspaces(
   owned: OwnedClientRow[] | null | undefined,
   memberships: MembershipClientRow[] | null | undefined,
@@ -46,6 +81,7 @@ export function mergeOwnerWorkspaces(
   for (const row of owned ?? []) {
     const id = row.id?.trim();
     if (!id) continue;
+    if (row.firmId) continue;
     map.set(id, {
       clientId: id,
       name: workspaceDisplayName(row.name),
@@ -200,6 +236,20 @@ export function nextWorkspaceListStep(input: {
 
 export function boardRoleForWorkspace(role: OwnerWorkspaceRole): "client_owner" | "client_member" {
   return role === "owner" ? "client_owner" : "client_member";
+}
+
+/**
+ * An invite stamp for a workspace this login already owns.
+ * Owned rows and client_owner memberships are role "owner".
+ * A member-only row still goes through openInvitedClient.
+ */
+export function inviteWorkspaceAlreadyKnown(
+  workspaces: readonly { clientId: string; role: OwnerWorkspaceRole }[],
+  inviteClientId: string | null | undefined,
+): boolean {
+  const id = inviteClientId?.trim() ?? "";
+  if (!id) return false;
+  return workspaces.some((row) => row.clientId === id && row.role === "owner");
 }
 
 /** Only IDs already on this login’s workspace list can become the active board. */

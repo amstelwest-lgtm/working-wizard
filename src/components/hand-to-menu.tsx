@@ -10,7 +10,12 @@ import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
 import { HANDOFF_CHECKING_LABEL, handoffTriggerLabel } from "@/lib/action-handoff";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import { assignmentForMove, normalizeMoveLabel, type MoveAssignmentRef } from "@/lib/owner-handoff";
+import {
+  assignmentForMove,
+  handoffFailureMessage,
+  normalizeMoveLabel,
+  type MoveAssignmentRef,
+} from "@/lib/owner-handoff";
 import {
   ACTION_PLAN_REFRESH_EVENT,
   assignActionToPerson,
@@ -301,6 +306,8 @@ export function MoveHandTo({
   const actionId = useRef<string | null>(null);
   const previous = useRef<string | null>(null);
   const previousFace = useRef<MoveAssignmentRef | null>(null);
+  const lastAgent = useRef<AgentKey | null>(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
 
   const applyStored = (match: MoveAssignmentRef | null) => {
     if (!match) return;
@@ -314,6 +321,7 @@ export function MoveHandTo({
   useEffect(() => {
     let cancelled = false;
     setReady(false);
+    setHandoffError(null);
     void loadClientMoveAssignments(clientId).then((rows) => {
       if (cancelled || optimistic.current) return;
       setReady(true);
@@ -332,6 +340,7 @@ export function MoveHandTo({
     const onRefresh = (event: Event) => {
       const detail = (event as CustomEvent<ActionPlanRefreshDetail>).detail;
       if (detail?.committed) {
+        setHandoffError(null);
         invalidateMoveAssignments(clientId);
         void loadClientMoveAssignments(clientId).then((rows) => {
           applyStored(assignmentForMove(rows, moveKey, title));
@@ -349,6 +358,7 @@ export function MoveHandTo({
         optimistic.current = false;
         setAssignee(previous.current);
         setFace(previousFace.current);
+        if (detail.error?.trim()) setHandoffError(detail.error.trim());
         return;
       }
     };
@@ -369,13 +379,59 @@ export function MoveHandTo({
     return () => window.clearInterval(timer);
   }, [clientId, moveKey, title, face?.phase]);
 
-  const ensure = async () => {
+  const ensure = async (): Promise<{ id: string } | { error: string }> => {
     const item = await ensureStrategicMoveItem({ clientId, moveKey, title, outcomeWhy });
-    if (!item.ok) {
-      toast.error(item.error);
-      return null;
+    if (!item.ok) return { error: item.error };
+    return { id: item.actionItemId };
+  };
+
+  const revertPending = (message: string | null) => {
+    optimistic.current = false;
+    setAssignee(previous.current);
+    setFace(previousFace.current);
+    if (message) {
+      setHandoffError(message);
+      toast.error(message);
     }
-    return item.actionItemId;
+  };
+
+  const handToAgent = async (agent: AgentKey) => {
+    lastAgent.current = agent;
+    previous.current = assignee;
+    previousFace.current = face;
+    optimistic.current = true;
+    setHandoffError(null);
+    setAssignee(`Handing to ${agentShortName(agent)}…`);
+    const actionItemId = await ensure();
+    if ("error" in actionItemId) {
+      revertPending(actionItemId.error);
+      return;
+    }
+    actionId.current = actionItemId.id;
+    const result = await commitActionHandoff({ clientId, actionItemId: actionItemId.id, title, agent });
+    if (result.ok && result.reused) {
+      optimistic.current = false;
+      setHandoffError(null);
+      setReady(false);
+      const rows = await loadClientMoveAssignments(clientId);
+      applyStored(assignmentForMove(rows, moveKey, title));
+      setReady(true);
+      return;
+    }
+    if (!result.ok && result.comingSoon) {
+      optimistic.current = false;
+      setAssignee(previous.current);
+      setFace(previousFace.current);
+      return;
+    }
+    if (!result.ok || result.noted !== true) {
+      revertPending(result.ok ? "Couldn't hand this over" : handoffFailureMessage(result.error));
+      return;
+    }
+    optimistic.current = false;
+    setHandoffError(null);
+    setAssignee(agentDisplayName(agent));
+    toast.success(`Handed to ${agentShortName(agent)}`);
   };
 
   const openDraftId = face?.phase === "draft_ready" ? face.draftId : null;
@@ -387,70 +443,52 @@ export function MoveHandTo({
         audience="accountant"
         assignee={assignee}
         pending={!ready}
-        onAssignAgent={async (agent) => {
-          previous.current = assignee;
-          previousFace.current = face;
-          optimistic.current = true;
-          setAssignee(`Handing to ${agentShortName(agent)}…`);
-          const actionItemId = await ensure();
-          if (!actionItemId) {
-            optimistic.current = false;
-            setAssignee(previous.current);
-            setFace(previousFace.current);
-            toast.error("Couldn't hand this over");
-            return;
-          }
-          actionId.current = actionItemId;
-          const result = await commitActionHandoff({ clientId, actionItemId, title, agent });
-          if (result.ok && result.reused) {
-            optimistic.current = false;
-            setReady(false);
-            const rows = await loadClientMoveAssignments(clientId);
-            applyStored(assignmentForMove(rows, moveKey, title));
-            setReady(true);
-            return;
-          }
-          if (!result.ok || result.noted !== true) {
-            optimistic.current = false;
-            setAssignee(previous.current);
-            setFace(previousFace.current);
-            toast.error(result.ok ? "Couldn't hand this over" : result.error);
-            return;
-          }
-          optimistic.current = false;
-          setAssignee(agentDisplayName(agent));
-          toast.success(`Handed to ${agentShortName(agent)}`);
+        onAssignAgent={(agent) => {
+          void handToAgent(agent);
         }}
         onAssignPerson={async (person) => {
           previous.current = assignee;
           previousFace.current = face;
           optimistic.current = true;
+          setHandoffError(null);
           setAssignee(person.name);
-          const actionItemId = await ensure();
-          if (!actionItemId) {
-            optimistic.current = false;
-            setAssignee(previous.current);
-            setFace(previousFace.current);
+          const ensured = await ensure();
+          if ("error" in ensured) {
+            revertPending(ensured.error);
             return;
           }
-          actionId.current = actionItemId;
+          actionId.current = ensured.id;
           const result = await assignActionToPerson({
             clientId,
-            actionItemId,
+            actionItemId: ensured.id,
             personId: person.id,
             personName: person.name,
             title,
           });
           if (!result.ok) {
-            optimistic.current = false;
-            setAssignee(previous.current);
-            setFace(previousFace.current);
-            toast.error(result.error);
+            revertPending(handoffFailureMessage(result.error));
             return;
           }
+          setHandoffError(null);
           toast.success(`Assigned to ${person.name}`);
         }}
       />
+      {handoffError ? (
+        <span data-move-handoff-error className="text-[12px] font-semibold text-[#B42318]">
+          {handoffError} ·{" "}
+          <button
+            type="button"
+            data-handoff-retry
+            className="underline"
+            onClick={() => {
+              const agent = lastAgent.current;
+              if (agent) void handToAgent(agent);
+            }}
+          >
+            Retry
+          </button>
+        </span>
+      ) : null}
       {face?.phase === "working" ? (
         <span data-move-phase="working" className="text-[12px] font-semibold text-[#0B5FFF]">
           {face.phaseLabel}

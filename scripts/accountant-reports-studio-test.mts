@@ -5,8 +5,19 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { reportDeepLinkAction, ReportsStudio } from "../src/routes/_authenticated/reports-studio";
-import { FORECAST_PREVIEW_EMPTY, forecastPreviewGap } from "../src/lib/report-preview";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import {
+  ForecastPreviewEmptyCopy,
+  reportDeepLinkAction,
+  ReportsStudio,
+} from "../src/routes/_authenticated/reports-studio";
+import {
+  FORECAST_PREVIEW_EMPTY,
+  forecastPreviewButtonDisabled,
+  forecastPreviewGap,
+  forecastPreviewMessage,
+} from "../src/lib/report-preview";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -24,6 +35,67 @@ assert(
   FORECAST_PREVIEW_EMPTY.includes("The 13-week chart appears once a forecast line is entered."),
   "the preview uses the same sentence as the cash screen",
 );
+assert(!/vat/i.test(FORECAST_PREVIEW_EMPTY), "the empty forecast sentence has no VAT wording");
+
+const emptyClientMessage = forecastPreviewMessage({
+  emptyClient: true,
+  hasStatementData: false,
+  cashForecast: null,
+});
+assert(emptyClientMessage === FORECAST_PREVIEW_EMPTY, "an empty client uses the existing not-enough-data sentence");
+assert(
+  forecastPreviewButtonDisabled({
+    gateDisabled: true,
+    emptyClient: true,
+    loading: false,
+    previewing: false,
+  }) === false,
+  "empty-client 13-week Preview stays enabled",
+);
+assert(
+  forecastPreviewButtonDisabled({
+    gateDisabled: true,
+    emptyClient: true,
+    loading: true,
+    previewing: false,
+  }) === true,
+  "Preview stays disabled while the empty client is still loading",
+);
+assert(
+  forecastPreviewButtonDisabled({
+    gateDisabled: true,
+    emptyClient: false,
+    loading: false,
+    previewing: false,
+  }) === true,
+  "a blocked report that is not the empty 13-week preview stays disabled",
+);
+assert(
+  forecastPreviewMessage({
+    emptyClient: false,
+    hasStatementData: true,
+    cashForecast: [{ period_label: "Week 1" }],
+  }) === null,
+  "a week on file does not show the empty sentence",
+);
+assert(
+  forecastPreviewMessage({
+    emptyClient: false,
+    hasStatementData: false,
+    cashForecast: null,
+  }) === null,
+  "a demo with no client still previews instead of the empty-client sentence",
+);
+const emptyHtml = renderToStaticMarkup(
+  createElement(ForecastPreviewEmptyCopy, { message: emptyClientMessage ?? "" }),
+);
+assert(
+  emptyHtml.includes("Not enough data. The 13-week chart appears once a forecast line is entered."),
+  "the empty-client message is visible",
+);
+assert(emptyHtml.includes("data-forecast-preview-empty"), "the empty sentence is marked in the preview");
+assert(emptyHtml.includes("#102A43"), "the empty sentence is navy on the white preview card");
+assert(!/vat/i.test(emptyHtml), "the visible empty-client message has no VAT wording");
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes("ReportsStudioPanel"), "client Reports tab mounts ReportsStudio");
@@ -59,8 +131,13 @@ assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) ch
     studioSrc.indexOf("async function handlePreview"),
     studioSrc.indexOf("function clearDeepLinkSearch"),
   );
-  const gapAt = previewFn.indexOf("forecastGapMessage");
+  const gapAt = previewFn.indexOf("forecastPreviewMessage");
+  const guardAt = previewFn.indexOf("assertCanGenerate");
   const genAt = previewFn.indexOf("await GEN[report.key]");
+  assert(
+    gapAt !== -1 && guardAt !== -1 && gapAt < guardAt,
+    "an empty client is explained before the upload block",
+  );
   assert(gapAt !== -1 && genAt !== -1 && gapAt < genAt, "an empty forecast is explained before a PDF is built");
   assert(
     previewFn.includes('message.startsWith("No cash forecast saved")') &&
@@ -71,6 +148,18 @@ assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) ch
   const dismissAt = previewFn.lastIndexOf("setPreviewState(null)");
   const thrownAt = previewFn.indexOf('message.startsWith("No cash forecast saved")');
   assert(thrownAt !== -1 && dismissAt !== -1 && thrownAt < dismissAt, "the missing-forecast path returns before the modal is cleared");
+  assert(previewFn.includes("showForecastGap(report)"), "the empty-client preview opens the existing message");
+}
+{
+  const card = studioSrc.slice(studioSrc.indexOf("function ReportCard"), studioSrc.indexOf("function SettingsPanel"));
+  assert(card.includes("forecastPreviewButtonDisabled"), "the 13-week card uses the empty-client preview gate");
+  assert(card.includes('report.key === "forecast"'), "only the 13-week card keeps Preview enabled when the client is empty");
+  assert(card.includes("disabled={gate.disabled || isGenerating}"), "Download stays disabled on an empty client");
+  const blockedLink = studioSrc.slice(studioSrc.lastIndexOf("if (blockedForClient)"), studioSrc.lastIndexOf("if (blockedForClient)") + 420);
+  assert(
+    blockedLink.includes('deepLinkReport.key === "forecast"') && blockedLink.includes("showForecastGap(deepLinkReport)"),
+    "an empty-client forecast preview link still opens the message",
+  );
 }
 assert(studioSrc.includes("REPORT_SIGNOFF_SCOPE"), "each report card maps to a deliverable sign-off");
 assert(studioSrc.includes("report-card__rule"), "studio cards keep the gold hairline");

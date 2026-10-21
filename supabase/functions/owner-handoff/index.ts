@@ -1,6 +1,8 @@
 /**
  * Owner hands one action to a bot.
- * The caller must own the client or belong to that client's workspace.
+ * The caller must own the client, belong to that client's workspace, or be a
+ * practice editor (`is_client_writer`). `owner_user_id` on a firm file is the
+ * accountant who added the client, so a colleague with edit access is allowed.
  * The queued agent_runs row is written with the service role.
  * Each bot has a runner. A runner whose agent_settings flag is false does not start.
  * The assignment is still recorded. This function never posts to a ledger.
@@ -10,6 +12,7 @@ import { agentIdempotencyKey, agentInputHash } from "../../../src/lib/agent-bus.
 import {
   HANDOFF_TRIGGER,
   callerMayHandOff,
+  handoffFailureMessage,
   handoffCollisionResult,
   handoffDecision,
   HANDOFF_OPEN_WINDOW_MS,
@@ -157,14 +160,20 @@ Deno.serve(async (req) => {
     .eq("user_id", user.id)
     .maybeSingle();
   if (memberError) return json({ error: "access_check_failed" }, 500);
+  const { data: writer, error: writerError } = await admin.rpc("is_client_writer", {
+    _user_id: user.id,
+    _client_id: clientId,
+  });
+  if (writerError) return json({ error: "access_check_failed" }, 500);
   if (
     !callerMayHandOff({
       userId: user.id,
       ownerUserId: (client.owner_user_id as string | null) ?? null,
       isWorkspaceMember: Boolean(membership?.user_id),
+      isPracticeEditor: writer === true,
     })
   ) {
-    return json({ error: "forbidden" }, 403);
+    return json({ error: "forbidden", missing: handoffFailureMessage("forbidden") }, 403);
   }
 
   const { data: action, error: actionError } = await admin

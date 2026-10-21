@@ -47,10 +47,8 @@ import {
   type StripePlanMarket,
 } from "@/lib/stripe-plans";
 import {
-  finishMetadataFirmCustomerWrites,
   installMetadataFirmCustomerWrite,
   readFirmStripeCustomerId,
-  trackMetadataFirmCustomerWrites,
   writeFirmStripeCustomerId,
 } from "@/lib/firm-stripe-customer.server";
 import {
@@ -85,10 +83,8 @@ import {
   entitlementWhenBillingCheckFails,
   restoreLastFirmSuccess,
   FIRM_BILLING_ENTITLEMENT_SERVER_FN,
-  FIRM_BILLING_PLAN_FALLBACK_MS,
 } from "@/lib/billing-check-failure";
-import { readFirmBillingPlanKnownWithin, writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
-import { settleFirmBillingCheck, isFirmBillingAbort } from "@/lib/firm-billing-deadline";
+import { readFirmBillingPlanKnown, writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
 import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
@@ -345,106 +341,108 @@ export async function resolveFirmBillingEntitlement(
     return { entitled: true, reason: "stripe_unconfigured" };
   }
   const ctx = context as BillingAuthCtx;
-  let actor: { userId: string; email: string } | null = null;
-  let billingIds: { firmId: string | null; ownerUserId: string } | null = null;
-  // waitUntil is a no-op unless the Vercel request context symbol is set.
-  // This server fn's fetch adapter does not set it, so the customer-id write
-  // stays inside the deadline via finishMetadataFirmCustomerWrites.
-  const shared: { current: Promise<FirmBillingEntitlement> | null } = { current: null };
-  shared.current = trackMetadataFirmCustomerWrites(() =>
-    settleFirmBillingCheck({
-      deadlineMs: FIRM_BILLING_PLAN_FALLBACK_MS,
-      whenLiveFails: entitlementWhenBillingCheckFails,
-      finishMetadata: finishMetadataFirmCustomerWrites,
-      readFirmIds: async () => {
-        actor = await checkoutActor(ctx);
-        const key = actor.email.trim().toLowerCase();
-        if (!refresh && key) {
-          const cached = cachedEntitlement(actor.email);
-          if (cached) return { firmId: null, early: cached };
-          const pending = entitlementInflight.get(key);
-          const current = shared.current;
-          if (pending && current && pending !== current) return { firmId: null, early: pending };
-          if (current) {
-            entitlementInflight.set(key, current);
-            void current.finally(() => {
-              if (entitlementInflight.get(key) === current) entitlementInflight.delete(key);
-            });
-          }
-        }
-        billingIds = await firmBillingIdsForActor(ctx.supabase, actor.userId, firmId);
-        return { firmId: billingIds.firmId };
-      },
-      readPlan: (id, budgetMs, signal) => readFirmBillingPlanKnownWithin(id, budgetMs, signal),
-      prior: (id) => (actor ? lookupLastFirmEntitlement(actor.userId, actor.email, id) : null),
-      readLive: async () => {
-        if (!actor || !billingIds) throw new Error("firm billing actor missing");
-        const { userId, email } = actor;
-        const ids = billingIds;
-        try {
-          // One isolate-cached Stripe list. The mirror below reads that same
-          // entry. It must not be awaited: a second scan used to sit on the response.
-          const [history, owned, memberships] = await Promise.all([
-            readFirmSubscriptionHistory(email, {
-              fresh: refresh,
-              userId: ids.ownerUserId,
-              firmId: ids.firmId,
-            }),
-            countOwnedFirms(ctx.supabase, userId),
-            countFirmMemberships(ctx.supabase, userId),
-          ]);
-          const result: FirmBillingEntitlement = {
-            ...decideFirmBillingEntitlement({
-              stripeConfigured: true,
-              hasEntitlingSubscription: history.entitling != null,
-              ownsFirm: owned > 0,
-              isFirmMember: memberships > 0,
-            }),
-            introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
-          };
-          rememberEntitlement(email, result, userId, ids.firmId);
-          rememberConfirmedFirmPlan(ids.firmId, result);
-          const mirror = syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
-            console.warn(
-              "[stripe-entitlement] trial mirror sync failed",
-              err instanceof Error ? err.message : err,
-            );
-          });
-          // waitUntil keeps the mirror alive after the response. The 3s race
-          // stops a hung Stripe scan from holding the isolate open.
-          const bounded = Promise.race([
-            mirror,
-            new Promise<void>((resolve) => {
-              setTimeout(resolve, 3_000);
-            }),
-          ]);
-          try {
-            waitUntil(bounded);
-          } catch (err) {
-            console.warn(
-              "[stripe-entitlement] waitUntil unavailable",
-              err instanceof Error ? err.message : err,
-            );
-            void bounded;
-          }
-          return result;
-        } catch (err) {
-          if (!isFirmBillingAbort(err)) {
-            const kind = classifyBillingCheckFailure(err);
-            // A 5xx is Stripe or this server function itself. The deadline
-            // above this call is what answers when the list outlives 6s.
-            console.warn("[stripe-entitlement] live check failed", {
-              kind,
-              serverFn: FIRM_BILLING_ENTITLEMENT_SERVER_FN,
-              message: err instanceof Error ? err.message : err,
-            });
-          }
-          throw err;
-        }
-      },
-    }),
-  );
-  return shared.current;
+  const { userId, email } = await checkoutActor(ctx);
+  const key = email.trim().toLowerCase();
+  if (!refresh && key) {
+    const cached = cachedEntitlement(email);
+    if (cached) return cached;
+    const pending = entitlementInflight.get(key);
+    if (pending) return pending;
+  }
+  const work = (async (): Promise<FirmBillingEntitlement> => {
+    const billingIds = await firmBillingIdsForActor(ctx.supabase, userId, firmId);
+    const storedPlan = await readFirmBillingPlanKnown(billingIds.firmId);
+    const live = (async (): Promise<FirmBillingEntitlement> => {
+    try {
+      // One isolate-cached Stripe list. The mirror below reads that same
+      // entry. It must not be awaited: a second scan used to sit on the response.
+      const [history, owned, memberships] = await Promise.all([
+        readFirmSubscriptionHistory(email, {
+          fresh: refresh,
+          userId: billingIds.ownerUserId,
+          firmId: billingIds.firmId,
+        }),
+        countOwnedFirms(ctx.supabase, userId),
+        countFirmMemberships(ctx.supabase, userId),
+      ]);
+      const result: FirmBillingEntitlement = {
+        ...decideFirmBillingEntitlement({
+          stripeConfigured: true,
+          hasEntitlingSubscription: history.entitling != null,
+          ownsFirm: owned > 0,
+          isFirmMember: memberships > 0,
+        }),
+        introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
+      };
+      rememberEntitlement(email, result, userId, billingIds.firmId);
+      rememberConfirmedFirmPlan(billingIds.firmId, result);
+      const mirror = syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
+        console.warn(
+          "[stripe-entitlement] trial mirror sync failed",
+          err instanceof Error ? err.message : err,
+        );
+      });
+      // waitUntil keeps the mirror alive after the response. The 3s race
+      // stops a hung Stripe scan from holding the isolate open.
+      const bounded = Promise.race([
+        mirror,
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 3_000);
+        }),
+      ]);
+      try {
+        waitUntil(bounded);
+      } catch (err) {
+        console.warn(
+          "[stripe-entitlement] waitUntil unavailable",
+          err instanceof Error ? err.message : err,
+        );
+        void bounded;
+      }
+      return result;
+    } catch (err) {
+      const kind = classifyBillingCheckFailure(err);
+      // Stripe's client times out at 8s and retries once, so one list can
+      // outlive the shell's 8s gate. dub1 calling the US Stripe API is the
+      // usual timeout. A 5xx is Stripe or this server function itself.
+      console.warn("[stripe-entitlement] live check failed", {
+        kind,
+        serverFn: FIRM_BILLING_ENTITLEMENT_SERVER_FN,
+        message: err instanceof Error ? err.message : err,
+      });
+      // Unknown is not unpaid. Caching this as entitled:false sent the shell
+      // to the trial card. A previous success for this user and firm stays.
+      return entitlementWhenBillingCheckFails({
+        storedPlan,
+        prior: lookupLastFirmEntitlement(userId, email, billingIds.firmId),
+        kind,
+      });
+    }
+    })();
+    if (storedPlan !== "entitled") return live;
+    // A known entitled plan is the answer. The Stripe list refreshes behind
+    // it. waitUntil is a no-op in api/server.js, so this must not be awaited,
+    // and a rejection must not escape the request.
+    void live.catch((err) => {
+      console.warn(
+        "[stripe-entitlement] stored-plan refresh failed",
+        err instanceof Error ? err.message : err,
+      );
+    });
+    const stored: FirmBillingEntitlement = {
+      entitled: true,
+      reason: "active_subscription",
+    };
+    rememberEntitlement(email, stored, userId, billingIds.firmId);
+    return stored;
+  })();
+  if (key) {
+    entitlementInflight.set(key, work);
+    void work.finally(() => {
+      if (entitlementInflight.get(key) === work) entitlementInflight.delete(key);
+    });
+  }
+  return work;
 }
 
 async function resolveFoundingPromotionCodeId(promo?: string | null): Promise<string | undefined> {

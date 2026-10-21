@@ -2,7 +2,13 @@
  * Firm-band catalog lookup keys and USD list amounts.
  * Run: pnpm test:stripe-plans
  */
-import { decideFirmClientCreate, eligibleForIntroTrial, formatFirmPlanStatus } from "../src/lib/firm-client-cap";
+import { readFileSync } from "node:fs";
+import {
+  decideFirmClientCreate,
+  eligibleForIntroTrial,
+  firmAddClientDestination,
+  formatFirmPlanStatus,
+} from "../src/lib/firm-client-cap";
 import {
   ALL_FIRM_LOOKUP_KEYS,
   FIRM_BAND_CATALOG,
@@ -33,7 +39,10 @@ assert(firmLookupKey("scale", "year") === "milon_scale_yearly", "scale yearly ke
 
 assert(FIRM_BAND_CATALOG.starter.clientLimit === 5, "Starter covers 5 active clients");
 assert(FIRM_BAND_CATALOG.starter.monthlyUsdCents === 3_900, "Starter monthly is $39");
-assert(FIRM_BAND_CATALOG.starter.yearlyUsdCents === 37_000, "Starter yearly is the live $370 price");
+assert(
+  FIRM_BAND_CATALOG.starter.yearlyUsdCents === 37_000,
+  "Starter yearly is the live $370 price",
+);
 assert(isFirmCheckoutBand("starter"), "Starter is a Checkout band");
 assert(
   (FIRM_CHECKOUT_BANDS as readonly string[])[0] === "starter" &&
@@ -42,11 +51,17 @@ assert(
 );
 assert(starterClientLimit(0) === 3, "a $0 price id keeps the legacy 3-client cap");
 assert(starterClientLimit(3_900) === 5, "the paid Starter price caps at 5");
-assert(firmUsdPublicLine("starter", "month") === "$39/mo · about $8 per client", "starter per-client line");
+assert(
+  firmUsdPublicLine("starter", "month") === "$39/mo · about $8 per client",
+  "starter per-client line",
+);
 assert(firmSignupCheckoutIntent().plan === "starter", "signup Checkout defaults to Starter");
 assert(firmSignupCheckoutIntent().interval === "month", "signup Checkout is monthly");
 assert(FIRM_TRIAL_SENTENCE === "14-day free trial · up to 5 clients", "locked trial sentence");
-assert(FIRM_TRIAL_SENTENCE.includes(String(FIRM_BAND_CATALOG.starter.clientLimit)), "trial cap is Starter's cap");
+assert(
+  FIRM_TRIAL_SENTENCE.includes(String(FIRM_BAND_CATALOG.starter.clientLimit)),
+  "trial cap is Starter's cap",
+);
 assert(!FIRM_TRIAL_SENTENCE.toLowerCase().includes("3 free"), "never say 3 free clients");
 assert(FIRM_BAND_CATALOG.solo.monthlyUsdCents === 9_900, "Solo monthly is $99");
 assert(FIRM_BAND_CATALOG.solo.yearlyUsdCents === 95_000, "Solo yearly is $950");
@@ -112,7 +127,10 @@ const trialBlock = decideFirmClientCreate({
   band: "solo",
   clientCount: 5,
 });
-assert(!trialBlock.allowed && trialBlock.code === "trial_client_cap", "trial blocks the 6th client");
+assert(
+  !trialBlock.allowed && trialBlock.code === "trial_client_cap",
+  "trial blocks the 6th client",
+);
 assert(
   !trialBlock.allowed &&
     trialBlock.message.includes(FIRM_TRIAL_SENTENCE) &&
@@ -145,6 +163,97 @@ assert(
     clientCount: 3,
   }).allowed,
   "paid Solo allows more than 3",
+);
+// Card-free enforced firm: the first client can be created. A second one
+// does not. Add client goes to the Start trial wall.
+const cardFreeSecond = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "none",
+  band: null,
+  clientCount: 1,
+  noPlanTrialEnforced: true,
+});
+assert(
+  !cardFreeSecond.allowed && cardFreeSecond.code === "billing_required",
+  "enforced, no subscription, 1 client routes to billing_required",
+);
+assert(
+  firmAddClientDestination(cardFreeSecond) === "/billing/required",
+  "Add client follows billing_required to /billing/required",
+);
+assert(
+  decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "none",
+    band: null,
+    clientCount: 0,
+    noPlanTrialEnforced: true,
+  }).allowed,
+  "enforced, no subscription, 0 clients is allowed",
+);
+assert(
+  FIRM_TRIAL_SENTENCE === "14-day free trial · up to 5 clients",
+  "trialing firms keep the short trial sentence",
+);
+const practiceBoard = readFileSync(new URL("../src/components/practice-board.tsx", import.meta.url), "utf8");
+assert(
+  practiceBoard.includes("firmAddClientDestination") && practiceBoard.includes("billingStartSearch"),
+  "the practice board Add client follows the billing_required decision",
+);
+// 1020E shape: starter_trial_enforced true, precard_cap_applies true, no Stripe customer.
+const noPlanCap = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "none",
+  band: null,
+  clientCount: 5,
+  starterTrialExpired: false,
+  noPlanTrialEnforced: true,
+});
+assert(
+  !noPlanCap.allowed && noPlanCap.code === "billing_required",
+  "a card-free enforced firm with 5 clients still does not create another",
+);
+const noPlanSix = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "none",
+  band: null,
+  clientCount: 6,
+  noPlanTrialEnforced: true,
+});
+assert(
+  !noPlanSix.allowed && noPlanSix.code === "billing_required",
+  "a card-free enforced firm with 6 clients still routes to billing",
+);
+assert(
+  !decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "none",
+    band: null,
+    clientCount: 4,
+    noPlanTrialEnforced: true,
+  }).allowed,
+  "card-free enforced trial does not allow a 5th client before a subscription",
+);
+assert(!trialBlock.message.toLowerCase().includes("vat"), "the trial-limit sentence does not mention VAT");
+assert(
+  decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "none",
+    band: null,
+    clientCount: 9,
+    noPlanTrialEnforced: false,
+  }).allowed,
+  "an exempt no-plan firm is not capped",
+);
+assert(
+  !decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "active",
+    band: null,
+    clientCount: 5,
+    noPlanTrialEnforced: true,
+  }).allowed,
+  "an enforced firm whose band could not be read fails closed at 5",
 );
 const soloCap = decideFirmClientCreate({
   stripeConfigured: true,

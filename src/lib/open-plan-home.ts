@@ -149,6 +149,8 @@ export type RowAssignment = {
   open: boolean;
   /** Click time. A live run from before this click does not clear Working. */
   openedAt?: string;
+  /** When the assignment note was stored. A finished run still carries this. */
+  assignedAt?: string;
   /** The run this click is waiting on. Another action's run does not settle it. */
   runId?: string;
 };
@@ -180,8 +182,39 @@ export function rowAssignment(input: {
     agent: stored.agent,
     open,
     openedAt: open ? stored.at : undefined,
+    assignedAt: stored.at,
     runId: open && matched?.id ? matched.id : undefined,
   };
+}
+
+/**
+ * The hand-off Home should name. An open analyst or advisor run wins.
+ * A finished run still names the action, so the owner sees what was handed
+ * after Working ends.
+ */
+export function visibleHandedAction(
+  rows: readonly RowAssignment[],
+  titles: Readonly<Record<string, string>>,
+): { id: string; title: string; agent: AgentKey } | null {
+  const bots = rows.filter((row) => {
+    if (!row.agent || row.agent === "financial_manager") return false;
+    return Boolean((titles[row.id] ?? "").trim());
+  });
+  if (!bots.length) return null;
+  const open = bots.find((row) => row.open);
+  const pick =
+    open ??
+    [...bots].sort((a, b) => {
+      const delta = (b.assignedAt ?? "").localeCompare(a.assignedAt ?? "");
+      if (delta !== 0) return delta;
+      if (a.id < b.id) return -1;
+      if (a.id > b.id) return 1;
+      return 0;
+    })[0];
+  if (!pick?.agent) return null;
+  const title = (titles[pick.id] ?? "").trim();
+  if (!title) return null;
+  return { id: pick.id, title, agent: pick.agent };
 }
 
 export type LiveHandoffRun = {

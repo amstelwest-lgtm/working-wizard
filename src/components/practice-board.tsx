@@ -56,13 +56,27 @@ import {
   type StoredScorePoint,
 } from "@/lib/practice-client-row";
 import { useServerFn } from "@tanstack/react-start";
-import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+import { CARD_FREE_TRIAL_LINE, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import {
+  ADD_CLIENT_CREATING_AFTER_MS,
+  addClientButtonLabel,
+  firmClientAddedToast,
+  firmClientCreatedNavigation,
+  type AddClientSavePhase,
+} from "@/lib/firm-client-created";
+import {
+  firmAddClientDestination,
   idleStarterTrialBanner,
   showStarterTrialEndedCopy,
   type FirmClientCreateAllowance,
 } from "@/lib/firm-client-cap";
+import { firmBillingResumeIntent } from "@/lib/billing-market";
+import {
+  billingStartSearch,
+  peekPendingCheckout,
+  stashPendingCheckout,
+} from "@/lib/pending-checkout";
 import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade, FirmStartHereBadge } from "@/components/firm-band-upgrade";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
@@ -440,6 +454,7 @@ function FirmClientCapNotice({
           usageLabel={upgrade.usageLabel}
           saDiscount={upgrade.saDiscount}
           zaLabels={upgrade.zaLabels}
+          cardFree={cap.starterTrial.cardFree === true && !cap.starterTrial.expired}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}
           onValidateVoucher={onValidateVoucher}
@@ -464,9 +479,12 @@ function AddClientDialog({
   heading = "Add a client",
   blurb,
   sandboxName,
+  onBillingRequired,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Card-free firm that already has a client. Opens the Start trial wall. */
+  onBillingRequired?: () => void;
   onAdded: (created: {
     id: string;
     name: string;
@@ -488,6 +506,7 @@ function AddClientDialog({
   const [newType, setNewType] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savePhase, setSavePhase] = useState<AddClientSavePhase | null>(null);
   const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
     clientMarketDraftFromFirm(firmMarket),
   );
@@ -498,6 +517,7 @@ function AddClientDialog({
   const endTrial = useServerFn(endFirmTrialNow);
   const upgradeBand = useServerFn(upgradeFirmBand);
   const [cap, setCap] = useState<FirmClientCreateAllowance | null>(null);
+  const billedRef = useRef(false);
   const [confirmUpgrade, setConfirmUpgrade] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const closeDrawer = useOverlayHistory(open, onClose);
@@ -530,6 +550,7 @@ function AddClientDialog({
 
   useEffect(() => {
     if (!open) {
+      billedRef.current = false;
       setCap(null);
       setConfirmUpgrade(false);
       return;
@@ -553,6 +574,13 @@ function AddClientDialog({
       cancelled = true;
     };
   }, [open, firmId, checkCap]);
+
+  useEffect(() => {
+    if (!open || !cap || cap.allowed || billedRef.current) return;
+    if (firmAddClientDestination(cap) !== "/billing/required") return;
+    billedRef.current = true;
+    onBillingRequired?.();
+  }, [open, cap, onBillingRequired]);
 
   const refreshCap = async () => {
     if (!firmId) {
@@ -581,6 +609,9 @@ function AddClientDialog({
       return;
     }
     setSaving(true);
+    setSavePhase("checking");
+    const creatingTimer = setTimeout(() => setSavePhase("creating"), ADD_CLIENT_CREATING_AFTER_MS);
+    let opened = false;
     try {
       const created = await createClient({
         data: {
@@ -591,9 +622,7 @@ function AddClientDialog({
           marketRegion: market.regionCode,
         },
       });
-      let inviteNote = created.client_code
-        ? `Client added · ${created.client_code}`
-        : "Client added";
+      let inviteDetail: string | null = null;
       if (email) {
         try {
           const inv = await inviteOwner({
@@ -601,18 +630,27 @@ function AddClientDialog({
           });
           await navigator.clipboard?.writeText(inv.pasteText);
           if (inv.emailed) {
-            inviteNote = `${inviteNote} · invite emailed to ${inv.email}`;
+            inviteDetail = `Invite emailed to ${inv.email}.`;
           } else if (inv.sendError) {
-            inviteNote = `${inviteNote} · invite copied (email not sent)`;
+            inviteDetail = "Invite copied (email not sent).";
             toast.error(inv.sendError);
           } else {
-            inviteNote = `${inviteNote} · invite message copied`;
+            inviteDetail = "Invite message copied.";
           }
         } catch (invErr) {
           toast.error(invErr instanceof Error ? invErr.message : "Client added, but invite failed");
         }
       }
-      toast.success(inviteNote);
+      setSavePhase("opening");
+      opened = true;
+      toast.success(
+        firmClientAddedToast({
+          name: created.name,
+          clientCode: created.client_code,
+          inviteDetail,
+        }),
+        { duration: 6000 },
+      );
       onAdded({
         id: created.id,
         name: created.name,
@@ -664,7 +702,11 @@ function AddClientDialog({
       }
       toast.error(message);
     } finally {
-      setSaving(false);
+      clearTimeout(creatingTimer);
+      if (!opened) {
+        setSaving(false);
+        setSavePhase(null);
+      }
     }
   };
 
@@ -731,6 +773,14 @@ function AddClientDialog({
             />
           ) : (
             <>
+              {cap?.starterTrial.cardFree && !cap.starterTrial.expired ? (
+                <p
+                  data-card-free-trial=""
+                  style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}
+                >
+                  {CARD_FREE_TRIAL_LINE}
+                </p>
+              ) : null}
               {cap?.upgrade?.usageLabel ? (
                 <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)" }}>
                   {cap.upgrade.usageLabel}
@@ -913,7 +963,7 @@ function AddClientDialog({
                   disabled={saving || !newName.trim() || !isDraftComplete(draftMarket)}
                   style={{ flex: 1 }}
                 >
-                  {saving ? "Saving…" : "Add client"}
+                  {addClientButtonLabel(savePhase)}
                 </button>
               </div>
             </>
@@ -1157,6 +1207,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, headerName, firmMarket } =
     useAccountantProfile();
+  const openBillingRequired = () => {
+    const pending = firmBillingResumeIntent(firmMarket, peekPendingCheckout());
+    stashPendingCheckout(pending);
+    void navigate({
+      to: "/billing/required",
+      search: billingStartSearch(pending),
+    });
+  };
   const firm: Firm | null =
     firms.find((f) => f.id === firmId) ??
     (firms[0]
@@ -2518,7 +2576,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <button
             id="wizard-add-client"
             className={clientRows.length === 0 ? "btn ghost mini" : "btn gold mini"}
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              if (trialAllowance && firmAddClientDestination(trialAllowance) === "/billing/required") {
+                openBillingRequired();
+                return;
+              }
+              setAddOpen(true);
+            }}
           >
             <svg viewBox="0 0 24 24">
               <path d="M12 5v14M5 12h14" />
@@ -2714,9 +2778,16 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               setFirstClientOpen(false);
             }
           }}
+          onBillingRequired={() => {
+            setAddOpen(false);
+            if (firstClientOpen) {
+              markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
+              setFirstClientOpen(false);
+            }
+            openBillingRequired();
+          }}
           onAdded={(created) => {
             markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
-            const wasFirst = firstClientOpen;
             setFirstClientOpen(false);
             setAddOpen(false);
             forgetPaintedBook(user.id, firm?.id ?? firmId);
@@ -2725,12 +2796,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               await refreshFirms();
               void load(created.firm_id ?? firmId, user.id, greetingSource);
             })();
-            if (wasFirst && created.id) {
-              navigate({
-                to: "/clients/$clientId",
-                params: { clientId: created.id },
-                search: { onboard: "1" },
-              });
+            if (created.id) {
+              navigate(firmClientCreatedNavigation(created.id));
             }
           }}
           firmId={firm?.id ?? firmId}

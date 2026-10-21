@@ -48,7 +48,6 @@ import {
   readWithinBudget,
   SUBSCRIPTION_LIST_BUDGET_MS,
   type FirmCustomerLookup,
-  type StripeCustomerSubscriptionReader,
 } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
@@ -89,6 +88,8 @@ type FirmRow = {
   market?: unknown;
   starter_trial_enforced?: boolean | null;
   created_at?: string | null;
+  /** QA clock start. Null keeps max(created_at, cutover). */
+  trial_clock_start_override?: string | null;
 };
 
 type LoadedFirm = {
@@ -99,13 +100,24 @@ type LoadedFirm = {
   starterTrialEnforced: boolean;
   /** Firm row created_at. Null on the legacy select, which does not start a clock. */
   createdAt: string | null;
+  /** QA start. Null when the column is missing or empty, so the real clock stays. */
+  trialClockStartOverride: string | null;
 };
 
 const FIRM_SELECT = "id, owner_user_id, market, starter_trial_enforced, created_at";
+const FIRM_SELECT_CLOCK = `${FIRM_SELECT}, trial_clock_start_override`;
 const FIRM_SELECT_LEGACY = "id, owner_user_id, market";
 
 function isMissingTrialColumn(message: string): boolean {
   return /starter_trial_enforced/i.test(message);
+}
+
+function isMissingClockOverrideColumn(message: string): boolean {
+  return /trial_clock_start_override/i.test(message);
+}
+
+function clockOverrideFromRow(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function toLoadedFirm(row: FirmRow, enforced: boolean): LoadedFirm | null {
@@ -116,6 +128,7 @@ function toLoadedFirm(row: FirmRow, enforced: boolean): LoadedFirm | null {
     market: row.market ?? null,
     starterTrialEnforced: enforced,
     createdAt: typeof row.created_at === "string" ? row.created_at : null,
+    trialClockStartOverride: clockOverrideFromRow(row.trial_clock_start_override),
   };
 }
 
@@ -177,24 +190,9 @@ type ListedSubscription = Record<string, unknown> & {
   created?: number;
 };
 
-/** Tests inject a Stripe reader. Production leaves this unset. */
-let subscriptionReaderForTests: StripeCustomerSubscriptionReader | null = null;
-
-export function setFirmSubscriptionReaderForTests(
-  reader: StripeCustomerSubscriptionReader | null,
-): void {
-  subscriptionReaderForTests = reader;
-}
-
-export function clearFirmSubscriptionHistoryCache(): void {
-  stripeHistoryCache.clear();
-  stripeHistoryInflight.clear();
-}
-
 /**
  * Same Stripe list Checkout uses for eligibleForIntroTrial.
  * No customer means zero prior subscriptions.
- * Both lists use the bind-fix budget: no retry, 3s, and a timeout throws.
  */
 async function listCustomerSubscriptions(
   email: string,
@@ -203,13 +201,13 @@ async function listCustomerSubscriptions(
   customerId: string | null;
   data: ListedSubscription[];
 }> {
-  if (!subscriptionReaderForTests && !stripeConfigured()) return { customerId: null, data: [] };
+  if (!stripeConfigured()) return { customerId: null, data: [] };
   const trimmed = email.trim();
   const userId = ids?.userId?.trim() ?? "";
   const firmId = ids?.firmId?.trim() ?? "";
   const storedCustomerId = ids?.storedCustomerId?.trim() ?? "";
   if (!trimmed && !userId && !firmId && !storedCustomerId) return { customerId: null, data: [] };
-  const stripe = (subscriptionReaderForTests ?? getStripe()) as StripeCustomerSubscriptionReader;
+  const stripe = getStripe();
   const customerId = await findFirmCustomerId(stripe, {
     email: trimmed,
     userId,
@@ -418,7 +416,10 @@ async function loadFirm(
   userId: string,
 ): Promise<LoadedFirm | null> {
   if (firmId) {
-    const selected = await db.from("firms").select(FIRM_SELECT).eq("id", firmId).maybeSingle();
+    let selected = await db.from("firms").select(FIRM_SELECT_CLOCK).eq("id", firmId).maybeSingle();
+    if (selected.error && isMissingClockOverrideColumn(selected.error.message)) {
+      selected = await db.from("firms").select(FIRM_SELECT).eq("id", firmId).maybeSingle();
+    }
     if (selected.error && isMissingTrialColumn(selected.error.message)) {
       const legacy = await db
         .from("firms")
@@ -437,7 +438,10 @@ async function loadFirm(
     }
     return null;
   }
-  const listed = await db.from("firms").select(FIRM_SELECT).eq("owner_user_id", userId).limit(1);
+  let listed = await db.from("firms").select(FIRM_SELECT_CLOCK).eq("owner_user_id", userId).limit(1);
+  if (listed.error && isMissingClockOverrideColumn(listed.error.message)) {
+    listed = await db.from("firms").select(FIRM_SELECT).eq("owner_user_id", userId).limit(1);
+  }
   if (listed.error && isMissingTrialColumn(listed.error.message)) {
     const legacy = await db
       .from("firms")
@@ -503,6 +507,7 @@ function trialBannerFor(
         enforced: firm.starterTrialEnforced,
         noPlan: true,
         startedAt: firm.createdAt,
+        startOverride: firm.trialClockStartOverride,
       }),
     );
   }
@@ -679,11 +684,14 @@ export async function loadFirmClientCreateAllowance(input: {
     clientCount,
     unitAmount: sub?.unitAmount,
     starterTrialExpired: starterTrial.expired,
+    noPlanTrialEnforced: firm.starterTrialEnforced,
   });
   if (decision.allowed) return { allowed: true, canEndTrial: false, upgrade, starterTrial };
   return {
     ...decision,
-    canEndTrial: decision.code === "trial_client_cap" && billing.actorIsBillingCustomer,
+    // No Stripe trial to end on a card-free trial; the band list carries Checkout.
+    canEndTrial:
+      decision.code === "trial_client_cap" && Boolean(sub) && billing.actorIsBillingCustomer,
     upgrade,
     starterTrial,
   };
@@ -817,7 +825,9 @@ export async function loadFirmPlanDisplay(input: {
 /**
  * Refresh the edge mirror from the live entitling subscription.
  * Checkout return, the billing webhook, and entitlement resolve call this.
- * A failed lookup does not write, so an unsynced firm stays fail-open.
+ * The no-plan clock includes trial_clock_start_override, so the generation
+ * flag the edge reads follows that QA start. A failed lookup does not write,
+ * so an unsynced firm stays fail-open.
  */
 export async function syncStarterTrialMirrorForActor(input: {
   supabase: unknown;

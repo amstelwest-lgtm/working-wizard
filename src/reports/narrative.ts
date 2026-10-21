@@ -183,10 +183,13 @@ export function cashForecastNarrative(
     firstBreachWeek?: number | null;
     /** Opening itself is under the floor. Closings may still clear it. */
     opensBelow?: boolean;
+    /** No entered forecast. Do not describe a flat zero series as runway. */
+    empty?: boolean;
   },
   profile?: NarrativeProfile,
   market: MoneyMarket = ZA_MARKET,
 ): string {
+  if (d.empty) return "Not enough data";
   const floor = fmtRandCompact(d.threshold, market);
   const trough = fmtRandCompact(d.minBalance, market);
   const closingDip = d.weeksBelow > 0 && d.firstBreachWeek != null;

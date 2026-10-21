@@ -8,17 +8,15 @@
  */
 
 import { FIRM_TRIAL_DAYS, type FirmBandId } from "./stripe-plans";
+import {
+  noPlanTrialEndMs,
+  noPlanTrialStartMs,
+  TRIAL_CLOCK_CUTOVER,
+} from "./starter-trial-constants.ts";
 
-export { STARTER_TRIAL_ENDED_MESSAGE } from "./starter-trial-constants.ts";
+export { STARTER_TRIAL_ENDED_MESSAGE, TRIAL_CLOCK_CUTOVER } from "./starter-trial-constants.ts";
 
 const MS_DAY = 86_400_000;
-
-/**
- * Deploy date for the no-plan 14-day clock. Firms created before this get a
- * fresh 14 days from here. Firms created after it run from signup. Change
- * this one string to move the cutover.
- */
-export const TRIAL_CLOCK_CUTOVER = "2026-10-21";
 
 /** Countdown banner starts on this day of the trial (1-based). */
 export const STARTER_TRIAL_COUNTDOWN_FROM_DAY = 10;
@@ -31,6 +29,8 @@ export type StarterTrialBanner = {
   showCountdown: boolean;
   dayOfTrial: number | null;
   daysLeft: number | null;
+  /** Enforced firm with no Stripe subscription. Trialing firms leave this unset. */
+  cardFree?: boolean;
 };
 
 export function idleStarterTrialBanner(): StarterTrialBanner {
@@ -59,17 +59,15 @@ function parseInstant(value: string | number | null | undefined): number | null 
 /**
  * When a no-plan trial starts. Later of the firm row and the deploy cutover,
  * so a firm that already existed is not locked out on the day this ships.
- * A missing created_at does not invent a start.
+ * A QA `startOverride` replaces that pair. A missing created_at does not
+ * invent a start when the override is empty.
  */
 export function noPlanTrialStart(
   createdAt: string | number | null | undefined,
   cutover: string = TRIAL_CLOCK_CUTOVER,
+  startOverride?: string | number | null,
 ): number | null {
-  const created = parseInstant(createdAt);
-  if (created == null) return null;
-  const cutoverMs = parseInstant(cutover);
-  if (cutoverMs == null) return created;
-  return Math.max(created, cutoverMs);
+  return noPlanTrialStartMs(createdAt, cutover, startOverride);
 }
 
 /**
@@ -81,17 +79,25 @@ export function noPlanTrialClock(input: {
   enforced: boolean;
   /** True only when Stripe has no entitling subscription. */
   noPlan: boolean;
-  /** Firm row created_at. Not a Stripe subscription start. */
+  /** Firm row created_at. Not a subscription start. */
   startedAt?: string | number | null;
+  /**
+   * QA clock start (`firms.trial_clock_start_override`). When set, this
+   * replaces max(created_at, cutover). Null keeps the real clock.
+   */
+  startOverride?: string | number | null;
   now?: Date;
 }): StarterTrialBanner {
   if (!input.enforced || !input.noPlan) return idleStarterTrialBanner();
-  return starterTrialClock({
-    enforced: true,
-    band: "starter",
-    startedAt: noPlanTrialStart(input.startedAt),
-    now: input.now,
-  });
+  return {
+    ...starterTrialClock({
+      enforced: true,
+      band: "starter",
+      startedAt: noPlanTrialStart(input.startedAt, TRIAL_CLOCK_CUTOVER, input.startOverride),
+      now: input.now,
+    }),
+    cardFree: true,
+  };
 }
 
 /**
@@ -112,7 +118,7 @@ export function starterTrialClock(input: {
   const now = (input.now ?? new Date()).getTime();
   const startedMs = parseInstant(input.startedAt);
   const stripeEndMs = parseInstant(input.stripeTrialEnd);
-  const endMs = stripeEndMs ?? (startedMs == null ? null : startedMs + FIRM_TRIAL_DAYS * MS_DAY);
+  const endMs = stripeEndMs ?? (startedMs == null ? null : noPlanTrialEndMs(startedMs));
   if (endMs == null) {
     return {
       enforced: true,

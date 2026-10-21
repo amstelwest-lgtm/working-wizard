@@ -10,6 +10,7 @@ import {
   clearStoredOwnerClientId,
   confirmedOwnerClientId,
   decideStoredClientAccess,
+  inviteWorkspaceAlreadyKnown,
   mergeOwnerWorkspaces,
   nextWorkspaceListStep,
   ownerActiveClientStorageKey,
@@ -183,12 +184,25 @@ assert(nextWorkspaceListStep({ inviting: true, outcome: "error", attempt: 0, max
 assert(nextWorkspaceListStep({ inviting: false, outcome: "error", attempt: 0, maxAttempts: 1 }) === "error", "a failed read is not treated as no workspace");
 assert(nextWorkspaceListStep({ inviting: false, outcome: "rows", attempt: 0, maxAttempts: 1 }) === "apply", "rows apply on the first read");
 
+assert(
+  inviteWorkspaceAlreadyKnown([{ clientId: first, role: "owner" }], first),
+  "an owned or client_owner workspace is already known",
+);
+assert(
+  !inviteWorkspaceAlreadyKnown([{ clientId: first, role: "member" }], first),
+  "a member-only invite still opens",
+);
+assert(!inviteWorkspaceAlreadyKnown([], first), "no workspace yet still opens the invite");
+
 const listSlice = appSrc.slice(appSrc.indexOf("const listWorkspaces"), appSrc.indexOf("const openInvitedClient"));
 assert(listSlice.includes("Promise.all"), "owned clients and memberships are read together");
 const parallel = listSlice.slice(listSlice.indexOf("Promise.all"), listSlice.indexOf('.in("id"'));
 assert(parallel.includes('from("clients")') && parallel.includes("client_memberships"), "both list reads sit in the same Promise.all");
 assert(listSlice.indexOf('.in("id"') > listSlice.indexOf("Promise.all"), "clients.in stays behind the membership result");
-assert(listSlice.includes("ownedRes.error || memRes.error"), "a PostgREST error is not read as an empty list");
+assert(
+  listSlice.includes("ownedRes.value.error || memRes.value.error"),
+  "a PostgREST error is not read as an empty list",
+);
 assert(!appSrc.includes("setEffectiveClientId(storedClientId)"), "the stored id is not the board client before the list confirms it");
 assert(!appSrc.includes("setEffectiveClientId(readStoredOwnerClientId"), "financials do not start from the stored id");
 assert(appSrc.includes('access.phase === "revoked"'), "revoked access is handled on the board");

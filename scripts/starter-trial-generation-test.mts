@@ -224,6 +224,15 @@ function selectiveDb(firms: (columns: string) => { data: Record<string, unknown>
   };
 }
 
+/** The follow-up plan read. The gate select also names billing_plan_known. */
+function planFollowUp(columns: string): boolean {
+  return (
+    columns.includes("billing_plan_known") &&
+    !columns.includes("starter_trial_generation_blocked") &&
+    !columns.includes("precard_cap_applies")
+  );
+}
+
 const entitledPlan = {
   data: { id: "firm-ben", billing_plan_known: "entitled", starter_trial_enforced: false },
   error: null,
@@ -231,7 +240,7 @@ const entitledPlan = {
 const mirrorDown = { data: null, error: "connection timeout" };
 for (const read of [paidGenerationTrialBlock, cardlessTrialAiBlock] as const) {
   const open = await read({
-    db: selectiveDb((columns) => (columns.includes("billing_plan_known") ? entitledPlan : mirrorDown)),
+    db: selectiveDb((columns) => (planFollowUp(columns) ? entitledPlan : mirrorDown)),
     userId: "user_1",
     clientId: "client-1",
   });
@@ -243,7 +252,7 @@ const exemptPlan = {
   error: null,
 };
 const exemptOpen = await cardlessTrialAiBlock({
-  db: selectiveDb((columns) => (columns.includes("billing_plan_known") ? exemptPlan : mirrorDown)),
+  db: selectiveDb((columns) => (planFollowUp(columns) ? exemptPlan : mirrorDown)),
   clientId: "client-1",
 });
 assert(exemptOpen == null, "an exempt firm stays open when the mirror read fails");
@@ -261,7 +270,7 @@ assert(unknownThrew, "a mirror failure with no stored plan still refuses to gene
 
 const staleEntitled = await cardlessTrialAiBlock({
   db: selectiveDb((columns) =>
-    columns.includes("billing_plan_known")
+    planFollowUp(columns)
       ? entitledPlan
       : {
           data: { precard_cap_applies: true, starter_trial_generation_blocked: true },
@@ -274,7 +283,7 @@ assert(staleEntitled == null, "stale trial flags do not block a stored entitled 
 
 const cardlessStill = await cardlessTrialAiBlock({
   db: selectiveDb((columns) =>
-    columns.includes("billing_plan_known")
+    planFollowUp(columns)
       ? { data: { billing_plan_known: "none", starter_trial_enforced: true }, error: null }
       : {
           data: { precard_cap_applies: true, starter_trial_generation_blocked: true },

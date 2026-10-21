@@ -275,6 +275,8 @@ export function ownerNeedsView(input: {
   nextAction?: string | null;
   /** Statement dates already on the client. Same sentence as the accountant Home. */
   statementSpan?: string | null;
+  /** Health & ratios sign-off. Shown with the deliverable the owner is reviewing. */
+  signedLine?: string | null;
 }): OwnerNeedsView {
   const assigned = openPlanTitles(input.actions);
   const shownActions = assigned.slice(0, HOME_ACTION_PREVIEW);
@@ -340,7 +342,7 @@ export function ownerNeedsView(input: {
       : deliverableTotal
         ? countPhrase(deliverableTotal, "deliverable awaiting review", "deliverables awaiting review")
         : "Deliverables";
-  const deliverableLines = !input.deliverablesReady || !input.draftsReady
+  const baseDeliverableLines = !input.deliverablesReady || !input.draftsReady
     ? ["Checking deliverables."]
     : input.deliverablesUnavailable && input.draftsUnavailable
       ? ["Deliverables aren't available yet."]
@@ -349,6 +351,11 @@ export function ownerNeedsView(input: {
         : storedChecked
           ? ["No deliverables awaiting review."]
           : ["Stored deliverables load in Accountant portal."];
+  const signed = input.signedLine?.trim() ?? "";
+  const deliverableLines =
+    signed && input.deliverablesReady && input.draftsReady && !baseDeliverableLines.includes(signed)
+      ? [signed, ...baseDeliverableLines].slice(0, 3)
+      : baseDeliverableLines;
 
   const sync = booksSyncCopy({
     quickBooks: input.quickBooks,

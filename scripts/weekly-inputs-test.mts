@@ -78,7 +78,11 @@ assert(
   "owner hydrates weeks even without period P&L keys",
 );
 assert(ownerSrc.includes("overlayWeeklyInputs"), "owner persists weeks without wiping period P&L");
-assert(ownerSrc.includes("derivePeriodWaterfallFallback(v)"), "owner waterfall uses shared period fallback");
+assert(ownerSrc.includes("fiscalWaterfallFallback("), "owner waterfall uses the firm-year slice");
+assert(
+  ownerSrc.includes("fallback={ownerWaterfallFallback}"),
+  "owner waterfall draws the same slice as the Budget cards",
+);
 
 const accountantSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(
@@ -110,8 +114,12 @@ assert(
 assert(accountantSrc.includes("FinancialInputsContext.Provider"), "accountant portal provides weekly context for waterfall");
 assert(accountantSrc.includes("weeklyInputs: weeks"), "accountant load splits weeklyInputs from the blob");
 assert(
-  accountantSrc.includes("derivePeriodWaterfallFallback(financials)"),
-  "accountant waterfall uses shared period fallback",
+  accountantSrc.includes("fiscalWaterfallFallback("),
+  "accountant waterfall uses the firm-year slice",
+);
+assert(
+  accountantSrc.includes("fallback={waterfallFallback}"),
+  "accountant waterfall draws the same slice as the Budget cards",
 );
 
 const period = derivePeriodWaterfallFallback({

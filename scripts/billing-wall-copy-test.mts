@@ -57,6 +57,15 @@ for (const variant of [
   const html = card({ priceLabel: variant.price });
   assert(count(html, variant.price) === 1, `${variant.market} price renders once`);
   assert(count(html, FIRM_WALL_TRIAL_LINE) === 1, `${variant.market} trial line renders once`);
+  assert(
+    FIRM_WALL_TRIAL_LINE ===
+      "Your first client is free to explore. Add a card to start your 14-day free trial · up to 5 clients.",
+    `${variant.market} wall uses the card-free sentence`,
+  );
+  assert(
+    !html.includes("14-day free trial · up to 5 clients on Starter"),
+    `${variant.market} wall does not use the old Starter line`,
+  );
   assert(!html.includes("Owner plan"), `${variant.market} wall does not pitch the Owner plan`);
   assert(!html.includes("VAT"), `${variant.market} wall has no VAT wording`);
   assert(!html.includes("Retry"), `${variant.market} confirmed unpaid wall hides Retry`);

@@ -11,6 +11,7 @@ import { SourceDocumentsPanel } from "@/components/source-documents-panel";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { ownerRunPhase, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { supabase } from "@/integrations/supabase/client";
+import { bootSelect } from "@/lib/boot-read";
 import { formatDate } from "@/lib/market/format";
 import { visitorCopyPack } from "@/lib/market/marketing";
 import { readVisitorDraft } from "@/lib/market/storage";
@@ -62,6 +63,7 @@ import {
   pendingAssignmentLanded,
   personOwnedActionIds,
   rowAssignment,
+  visibleHandedAction,
   withPendingAssignment,
   withoutPersonQueuedRuns,
   type RowAssignment,
@@ -79,6 +81,7 @@ import {
   type BooksLink,
   type OwnerActionRow,
 } from "@/lib/owner-needs";
+import { financialsHomeSignoffLine } from "@/components/owner-signoff-mark";
 import { OwnerHome } from "./owner-home";
 import { canonicalOwnerScreen, OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
 import {
@@ -291,6 +294,7 @@ export function OwnerDoor({
   const [actionsUnavailable, setActionsUnavailable] = useState(false);
   const [deliverableCount, setDeliverableCount] = useState<number | null>(null);
   const [deliverablesUnavailable, setDeliverablesUnavailable] = useState(false);
+  const [deliverableAttempt, setDeliverableAttempt] = useState(0);
   const [quickBooks, setQuickBooks] = useState<BooksLink>({ state: "unknown" });
   const [xeroLink, setXeroLink] = useState<BooksLink>({ state: "unknown" });
   const [openAction, setOpenAction] = useState<string | null>(null);
@@ -541,7 +545,6 @@ export function OwnerDoor({
     setActionRows([]);
     setActionsUnavailable(false);
     setDeliverableCount(null);
-    setDeliverablesUnavailable(false);
     setQuickBooks({ state: "unknown" });
     setXeroLink({ state: "unknown" });
     if (!clientId) {
@@ -664,13 +667,14 @@ export function OwnerDoor({
         merged = withPendingAssignment(merged, pendingView, pendingStored);
         if (pending.title && !titles.includes(pending.title)) titles.push(pending.title);
       }
-      const firstOpen = merged.find((row) => row.open);
+      const handed = visibleHandedAction(
+        merged,
+        Object.fromEntries(openRows.map((row) => [row.id, row.title])),
+      );
       setActionRows(titles.map((title) => ({ title, email: null })));
       setOpenAction(openRows[0]?.title ?? null);
-      setHandedTitle(
-        firstOpen ? (openRows.find((row) => row.id === firstOpen.id)?.title ?? null) : null,
-      );
-      setAssignedAgent(firstOpen?.agent ?? null);
+      setHandedTitle(handed?.title ?? null);
+      setAssignedAgent(handed?.agent ?? null);
       setAssignmentRows(merged);
       setActionsReady(true);
     });
@@ -683,26 +687,31 @@ export function OwnerDoor({
   useEffect(() => {
     if (!clientId || !storedDeliverablesOpen) return;
     let cancelled = false;
-    void supabase
-      .from("deliverable_drafts")
-      .select("id")
-      .eq("client_id", clientId)
-      .in("status", ["draft", "ready"])
-      .limit(20)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          setDeliverablesUnavailable(true);
-          setDeliverableCount(0);
-          return;
-        }
-        setDeliverablesUnavailable(false);
-        setDeliverableCount(data?.length ?? 0);
-      });
+    void (async () => {
+      const read = await bootSelect(
+        (signal) =>
+          supabase
+            .from("deliverable_drafts")
+            .select("id")
+            .eq("client_id", clientId)
+            .in("status", ["draft", "ready"])
+            .limit(20)
+            .abortSignal(signal),
+        { critical: false },
+      );
+      if (cancelled) return;
+      if (!read.ok || read.value.error) {
+        setDeliverablesUnavailable(true);
+        setDeliverableCount(0);
+        return;
+      }
+      setDeliverablesUnavailable(false);
+      setDeliverableCount(read.value.data?.length ?? 0);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [clientId, storedDeliverablesOpen]);
+  }, [clientId, storedDeliverablesOpen, deliverableAttempt]);
 
   useEffect(() => {
     setFirmName(null);
@@ -781,6 +790,10 @@ export function OwnerDoor({
     market,
   ]);
 
+  const homeSignoffLine = useMemo(
+    () => financialsHomeSignoffLine(signoffs, market),
+    [signoffs, market],
+  );
   const tiles = useMemo(() => ownerAnswerTiles(books), [books]);
   const canonicalRatios = useMemo(
     () => (financials ? scorecardRatiosFromFinancials(financials, { fyStartMonth: market.fyStartMonthDefault }) : null),
@@ -822,6 +835,7 @@ export function OwnerDoor({
         xero: xeroLink,
         when: (iso) => formatDate(iso, market),
         statementSpan,
+        signedLine: homeSignoffLine,
       }),
     [
       ownerEmail,
@@ -840,6 +854,7 @@ export function OwnerDoor({
       xeroLink,
       market,
       statementSpan,
+      homeSignoffLine,
     ],
   );
   const settledRows = applyLiveRuns(
@@ -1085,6 +1100,7 @@ export function OwnerDoor({
           variant="character"
           presence={presence}
           lines={ownerHomeLines(tiles, topMove, assignedAgent, handedTitle)}
+          signoffLine={homeSignoffLine}
           status={ownerCardStatuses(books)}
           marketCountry={marketCountry}
           audience="owner"
@@ -1154,6 +1170,15 @@ export function OwnerDoor({
           }}
           onBack={closeChat}
         />
+      ) : null}
+      {railScreen === "accountant" && deliverablesUnavailable ? (
+        <button
+          type="button"
+          data-section-retry="deliverables"
+          onClick={() => setDeliverableAttempt((n) => n + 1)}
+        >
+          Retry
+        </button>
       ) : null}
       {railScreen === "accountant" ? (
         <OwnerAccountant

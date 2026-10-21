@@ -35,6 +35,28 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+/** A manufactured zero series is not a forecast. Rounding matches the PDF's dash rule. */
+export function cashForecastSeriesBlank(
+  weeks: readonly {
+    opening_balance?: number | null;
+    total_receipts?: number | null;
+    total_payments?: number | null;
+    net_movement?: number | null;
+    closing_balance?: number | null;
+  }[],
+): boolean {
+  if (weeks.length === 0) return true;
+  return weeks.every((week) =>
+    [
+      week.opening_balance,
+      week.total_receipts,
+      week.total_payments,
+      week.net_movement,
+      week.closing_balance,
+    ].every((value) => value == null || !Number.isFinite(value) || Math.round(value) === 0),
+  );
+}
+
 export type CashForecastWeek = {
   period_label: string;
   opening_balance: number;
@@ -43,7 +65,7 @@ export type CashForecastWeek = {
   net_movement: number;
   closing_balance: number;
   scenario: "critical" | "moderate" | "growth";
-  runway_weeks: number;
+  runway_weeks: number | null;
 };
 
 export type CashForecastPDFProps = {
@@ -376,7 +398,10 @@ export function CashForecastPDF({
   const m = market ?? ZA_MARKET;
   const weeks = cashForecast;
   const scenarioMeta = SCENARIO_META[scenario] ?? SCENARIO_META.base;
-  const resolvedAssumptions = [...assumptions, ...profileCashAssumptions(operatingProfile)];
+  const seriesBlank = cashForecastSeriesBlank(weeks);
+  const resolvedAssumptions = seriesBlank
+    ? []
+    : [...assumptions, ...profileCashAssumptions(operatingProfile)];
 
   const closings = weeks.map((w) => w.closing_balance);
   const startBalance = weeks[0]?.opening_balance ?? 0;
@@ -387,7 +412,9 @@ export function CashForecastPDF({
     closings,
     floor: minimumThreshold,
   });
-  const weeksReadout = forecastWeeksBelowReadout(floorPos);
+  const weeksReadout = seriesBlank
+    ? { value: "—", note: "Not enough data", clear: false }
+    : forecastWeeksBelowReadout(floorPos);
   const totalReceipts = weeks.reduce((s, w) => s + w.total_receipts, 0);
   const totalPayments = weeks.reduce((s, w) => s + Math.abs(w.total_payments), 0);
   const endBalance = weeks[weeks.length - 1]?.closing_balance ?? 0;
@@ -402,50 +429,64 @@ export function CashForecastPDF({
     runwayLabel,
     cashGenerative: generative && floorPos.staysAbove,
   });
-  const runwayValue = sharedRunway.headline;
+  const runwayValue = seriesBlank ? "Not enough data" : sharedRunway.headline;
   const runwayWeeks = floorPos.firstDipWeek == null ? weeks.length : floorPos.firstDipWeek - 1;
-  const figures: HeadlineFigure[] = [
-    {
-      label: "Runway",
-      value: runwayValue,
-      good: sharedRunway.note === "above the floor",
-      direction: sharedRunway.note === "above the floor" ? "up" : "down",
-      note: sharedRunway.note,
-    },
-    {
-      label: "Lowest Balance",
-      value: fmtRandCompact(minBalance, m),
-      good: minBalance >= minimumThreshold,
-      note: lowestPoint.isOpening ? "opening balance" : "projected trough",
-    },
-    {
-      label: "Closing Position",
-      value: fmtRandCompact(endBalance, m),
-      direction: endBalance >= startBalance ? "up" : "down",
-      good: endBalance >= startBalance,
-      note: "end of horizon",
-    },
-    {
-      label: "Net Flow",
-      value: fmtRandCompact(totalReceipts - totalPayments, m),
-      good: netFlow > 0,
-      note: "over 13 weeks",
-    },
-  ];
+  const blankFigure = {
+    value: "—",
+    note: "Not enough data",
+  };
+  const figures: HeadlineFigure[] = seriesBlank
+    ? [
+        { label: "Runway", value: "Not enough data", note: "Not enough data" },
+        { label: "Lowest Balance", ...blankFigure },
+        { label: "Closing Position", ...blankFigure },
+        { label: "Net Flow", ...blankFigure },
+      ]
+    : [
+        {
+          label: "Runway",
+          value: runwayValue,
+          good: sharedRunway.note === "above the floor",
+          direction: sharedRunway.note === "above the floor" ? "up" : "down",
+          note: sharedRunway.note,
+        },
+        {
+          label: "Lowest Balance",
+          value: fmtRandCompact(minBalance, m),
+          good: minBalance >= minimumThreshold,
+          note: lowestPoint.isOpening ? "opening balance" : "projected trough",
+        },
+        {
+          label: "Closing Position",
+          value: fmtRandCompact(endBalance, m),
+          direction: endBalance >= startBalance ? "up" : "down",
+          good: endBalance >= startBalance,
+          note: "end of horizon",
+        },
+        {
+          label: "Net Flow",
+          value: fmtRandCompact(totalReceipts - totalPayments, m),
+          good: netFlow > 0,
+          note: "over 13 weeks",
+        },
+      ];
 
-  const narrative = cashForecastNarrative(
-    {
-      runwayWeeks: generative && floorPos.staysAbove ? null : runwayWeeks,
-      cashGenerative: generative && floorPos.staysAbove,
-      minBalance,
-      threshold: minimumThreshold,
-      weeksBelow: floorPos.weeksBelow,
-      firstBreachWeek: floorPos.firstDipWeek,
-      opensBelow: floorPos.opensBelow,
-    },
-    operatingProfile,
-    m,
-  );
+  const narrative = seriesBlank
+    ? "Not enough data"
+    : cashForecastNarrative(
+        {
+          runwayWeeks: generative && floorPos.staysAbove ? null : runwayWeeks,
+          cashGenerative: generative && floorPos.staysAbove,
+          minBalance,
+          threshold: minimumThreshold,
+          weeksBelow: floorPos.weeksBelow,
+          firstBreachWeek: floorPos.firstDipWeek,
+          opensBelow: floorPos.opensBelow,
+          empty: false,
+        },
+        operatingProfile,
+        m,
+      );
 
   return (
     <PDFDocument
@@ -471,7 +512,15 @@ export function CashForecastPDF({
 
       <ReportSection
         heading={<SectionHeader title="Projected Closing Balance by Week" color={theme.accent} />}
-        lead={<RunwayChart weeks={weeks} threshold={minimumThreshold} accent={theme.accent} />}
+        lead={
+          seriesBlank ? (
+            <Text style={{ fontSize: 9, fontFamily: "Helvetica", color: C.body }}>
+              Not enough data
+            </Text>
+          ) : (
+            <RunwayChart weeks={weeks} threshold={minimumThreshold} accent={theme.accent} />
+          )
+        }
       >
       <View style={{ flexDirection: "row", gap: 10 }}>
         <MetricBox

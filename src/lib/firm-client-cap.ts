@@ -27,7 +27,8 @@ export type FirmSubscriptionPhase = "trialing" | "active" | "none";
 export type FirmClientCreateBlockCode =
   | "trial_client_cap"
   | "band_client_cap"
-  | "starter_trial_ended";
+  | "starter_trial_ended"
+  | "billing_required";
 
 export { idleStarterTrialBanner, type StarterTrialBanner };
 
@@ -135,6 +136,12 @@ export function decideFirmClientCreate(input: {
    * Ignored when `phase` is active: that subscription is the current plan.
    */
   starterTrialExpired?: boolean;
+  /**
+   * firms.starter_trial_enforced. A card-free (phase none) enforced firm
+   * may add the first client, then must start a trial before the next one.
+   * A Stripe trial still uses the 5-client cap.
+   */
+  noPlanTrialEnforced?: boolean;
 }): FirmClientCreateDecision {
   if (!input.stripeConfigured) return { allowed: true };
 
@@ -147,7 +154,27 @@ export function decideFirmClientCreate(input: {
     };
   }
 
-  if (input.phase === "trialing") {
+  // Card-free enforced firm: the first client can be created. Another one
+  // goes to the Start trial wall instead of inserting a row.
+  if (input.noPlanTrialEnforced === true && input.phase === "none") {
+    if (input.clientCount >= 1) {
+      return {
+        allowed: false,
+        code: "billing_required",
+        bandName: "Starter",
+        message: "Start a trial before adding another client.",
+      };
+    }
+    return { allowed: true };
+  }
+
+  // Fail closed on an enforced firm whose band could not be read. A Stripe
+  // trial keeps the 5-client cap.
+  const enforcedUnknownPlan =
+    input.noPlanTrialEnforced === true &&
+    input.phase === "active" &&
+    !(input.band && isFirmBandId(input.band));
+  if (input.phase === "trialing" || enforcedUnknownPlan) {
     const trialLimit = FIRM_TRIAL_CLIENT_LIMIT;
     if (input.clientCount >= trialLimit) {
       const bandName = input.band ? FIRM_BAND_CATALOG[input.band].name : "Starter";
@@ -155,7 +182,7 @@ export function decideFirmClientCreate(input: {
         allowed: false,
         code: "trial_client_cap",
         bandName,
-        message: `${FIRM_TRIAL_SENTENCE} on Starter. This practice already has ${trialLimit} clients.`,
+        message: `${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the ${trialLimit}-client trial limit.`,
       };
     }
     return { allowed: true };
@@ -177,6 +204,14 @@ export function decideFirmClientCreate(input: {
   }
 
   return { allowed: true };
+}
+
+/** Add client leaves the drawer for the Start trial wall. Other blocks stay on the cap card. */
+export function firmAddClientDestination(
+  decision: FirmClientCreateDecision,
+): "/billing/required" | null {
+  if (decision.allowed || decision.code !== "billing_required") return null;
+  return "/billing/required";
 }
 
 export type FirmPlanStatusCopy = {

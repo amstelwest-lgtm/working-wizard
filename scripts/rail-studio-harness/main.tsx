@@ -412,6 +412,7 @@ const reportsRoute = createRoute({
     clientId: typeof search.clientId === "string" ? search.clientId : undefined,
     report: typeof search.report === "string" ? search.report : undefined,
     action: search.action === "preview" || search.action === "download" ? search.action : undefined,
+    emptyClient: search.emptyClient === "1" || search.emptyClient === 1 ? "1" : undefined,
   }),
   component: function ReportsHarness() {
     const search = useSearch({ strict: false }) as {
@@ -419,16 +420,23 @@ const reportsRoute = createRoute({
       clientId?: string;
       report?: string;
       action?: "preview" | "download";
+      emptyClient?: "1";
     };
+    const emptyForecast = search.emptyClient === "1" && search.report === "forecast";
     return (
       <MarketProvider selection={{ country: "ZA", regionCode: null }}>
-        <div className="accountant-portal practice-home">
+        <div
+          className="accountant-portal practice-home"
+          style={emptyForecast ? { background: "#ffffff", minHeight: "100vh" } : undefined}
+        >
           <div className="shell">
             <ReportsStudio
               client={search.client}
               clientId={search.clientId}
               report={search.report}
               action={search.action}
+              embedded={emptyForecast || undefined}
+              onlyKeys={emptyForecast ? ["forecast"] : undefined}
             />
           </div>
         </div>

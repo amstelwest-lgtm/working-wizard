@@ -12,6 +12,7 @@ import {
   type MoneyMarket,
 } from "./agent-bus.ts";
 import { agentDisplayNameFromKey } from "./milon-team-names.ts";
+import { STARTER_TRIAL_ENDED_CODE, STARTER_TRIAL_ENDED_MESSAGE } from "./starter-trial-constants.ts";
 
 export const HANDOFF_TRIGGER = "on_demand";
 
@@ -62,9 +63,36 @@ export function callerMayHandOff(input: {
   userId: string;
   ownerUserId: string | null;
   isWorkspaceMember: boolean;
+  /**
+   * Practice editor from `is_client_writer`: an active practice assignment
+   * whose classification can edit. A read-only seat stays false.
+   * `owner_user_id` on a firm file is the accountant who added the client,
+   * so a colleague on the same file is allowed through this flag.
+   */
+  isPracticeEditor?: boolean;
 }): boolean {
   if (!input.userId) return false;
-  return input.userId === input.ownerUserId || input.isWorkspaceMember;
+  return input.userId === input.ownerUserId || input.isWorkspaceMember || input.isPracticeEditor === true;
+}
+
+/** Shown when the hand-off is refused. The raw word "forbidden" is an access miss, not a plan. */
+export const HANDOFF_FORBIDDEN_COPY =
+  "This login can't hand work over on this file. Open it from the practice, or ask the accountant who added the client.";
+
+const HANDOFF_FAILED_PLAIN = "Couldn't hand this over";
+
+/**
+ * A sentence for the toast and the inline Retry line.
+ * `forbidden` is the owner-handoff access check. Trial copy is used only when
+ * the server actually returns the trial code or the trial sentence.
+ */
+export function handoffFailureMessage(error: string | null | undefined): string {
+  const raw = (error ?? "").trim();
+  if (!raw || raw === HANDOFF_FAILED_PLAIN) return HANDOFF_FAILED_PLAIN;
+  if (raw === "forbidden") return HANDOFF_FORBIDDEN_COPY;
+  if (raw === STARTER_TRIAL_ENDED_CODE || raw === STARTER_TRIAL_ENDED_MESSAGE) return STARTER_TRIAL_ENDED_MESSAGE;
+  if (/^[a-z0-9_]+$/.test(raw)) return HANDOFF_FAILED_PLAIN;
+  return raw;
 }
 
 export function handoffInputs(actionItemId: string): string {

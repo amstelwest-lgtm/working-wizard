@@ -6,6 +6,12 @@
 /** How long a cold load may show a spinner before the shell opens anyway. */
 export const SHELL_GATE_TIMEOUT_MS = 8_000;
 
+/**
+ * Hard stop for one owner or client boot, measured from auth.
+ * Completed boot reads reset the idle window. They do not move this.
+ */
+export const SHELL_BOOT_CEILING_MS = 12_000;
+
 export function shellGateRemaining(
   startedAtMs: number,
   nowMs: number,

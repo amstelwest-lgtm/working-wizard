@@ -36,15 +36,37 @@ export const SETTINGS_RETURN_KEY = "milon_settings_return";
 export type SettingsReturn = "/app" | "/dashboard";
 export type SettingsView = "owner" | "practice";
 
-export async function listAppRoles(userId: string): Promise<AppRole[]> {
-  const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  if (error) {
-    console.warn("[user-roles] list failed", error.message);
+function roleListAborted(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  const message =
+    error instanceof Error
+      ? `${error.name} ${error.message}`
+      : error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : "";
+  const text = message.toLowerCase();
+  return text.includes("aborterror") || text.includes("aborted");
+}
+
+export async function listAppRoles(userId: string, signal?: AbortSignal): Promise<AppRole[]> {
+  if (signal?.aborted) return [];
+  try {
+    const query = supabase.from("user_roles").select("role").eq("user_id", userId);
+    const { data, error } = signal ? await query.abortSignal(signal) : await query;
+    if (signal?.aborted || (error && roleListAborted(error, signal))) return [];
+    if (error) {
+      console.warn("[user-roles] list failed", error.message);
+      return [];
+    }
+    return (data ?? [])
+      .map((r) => r.role as AppRole)
+      .filter((r): r is AppRole => Boolean(r));
+  } catch (error) {
+    if (roleListAborted(error, signal)) return [];
+    const message = error instanceof Error ? error.message : "unknown";
+    console.warn("[user-roles] list failed", message);
     return [];
   }
-  return (data ?? [])
-    .map((r) => r.role as AppRole)
-    .filter((r): r is AppRole => Boolean(r));
 }
 
 export function summarizeRoles(roles: AppRole[]): PortalRoles {
@@ -61,8 +83,11 @@ export function summarizeRoles(roles: AppRole[]): PortalRoles {
   return { roles, hasPracticeRole, hasClientRole, primaryRole };
 }
 
-export async function resolvePortalRoles(userId: string): Promise<PortalRoles> {
-  return summarizeRoles(await listAppRoles(userId));
+export async function resolvePortalRoles(
+  userId: string,
+  signal?: AbortSignal,
+): Promise<PortalRoles> {
+  return summarizeRoles(await listAppRoles(userId, signal));
 }
 
 function readStorage(storage: Storage | undefined, key: string): string | null {
@@ -398,11 +423,12 @@ export async function resolvePostLoginPath(userId: string): Promise<"/dashboard"
 export async function shouldBounceFromOwnerApp(
   userId: string,
   actingAsClient: boolean,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   if (actingAsClient) return false;
   const force = peekForcePortal();
   const [portal, practiceSignup] = await Promise.all([
-    resolvePortalRoles(userId),
+    resolvePortalRoles(userId, signal),
     readPracticeSignup(),
   ]);
   const hasFirm = await firmRowForRouting(userId, portal.hasPracticeRole);
@@ -455,9 +481,9 @@ export function isMilonItMember(userId: string): Promise<boolean> {
  * IT-only accounts (on the team list, no practice role or firm) should land
  * on the Milōn IT section of Lighthouse rather than the firm dashboard.
  */
-export async function shouldOpenItInbox(userId: string): Promise<boolean> {
+export async function shouldOpenItInbox(userId: string, signal?: AbortSignal): Promise<boolean> {
   if (!(await isMilonItMember(userId))) return false;
-  const portal = await resolvePortalRoles(userId);
+  const portal = await resolvePortalRoles(userId, signal);
   if (portal.hasPracticeRole) return false;
   const firms = await listUserFirms(userId);
   return firms.length === 0;

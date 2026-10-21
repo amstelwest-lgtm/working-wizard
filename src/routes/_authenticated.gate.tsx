@@ -13,7 +13,7 @@ import {
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import { loadFirmClientGateContext, type FirmClientGateContext } from "@/lib/firm-client-gate";
-import { decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entitlement";
+import { clientIdFromFirmPath, decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entitlement";
 import {
   pageWhileEntitlementUnknown,
   skeletonAfterBillingDeadline,
@@ -22,14 +22,10 @@ import {
   surfaceAfterBillingCheckFailure,
 } from "@/lib/firm-gate-access";
 import {
-  BILLING_GATE_QUIET_DEADLINES,
   billingCheckNoticeVisible,
-  billingCheckRetryDelayMs,
   classifyBillingCheckFailure,
   type BillingCheckFailureKind,
   logBillingCheckFailure,
-  resolveClientBillingGateCheck,
-  shellDeadlineAfterQuietWait,
 } from "@/lib/billing-check-failure";
 import { FirmBillingGateView } from "@/components/firm-billing-gate-view";
 import { readInsightSeen } from "@/lib/funnel-timing";
@@ -44,7 +40,6 @@ import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
-import { firmBillingClientAbortSignal } from "@/lib/firm-billing-deadline";
 import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
 import {
   lastKnownEntitlementForFirm,
@@ -69,10 +64,18 @@ type GateSnap = {
   navigate: ReturnType<typeof useNavigate>;
   checkEntitlement: (input: {
     data: { refresh?: boolean; firmId?: string | null };
-    signal?: AbortSignal;
   }) => Promise<EntitlementResult>;
   practiceMeta: unknown;
 };
+
+/** Tests replace the entitlement server fn. Production leaves this unset. */
+let firmBillingGateCheckForTests: GateSnap["checkEntitlement"] | null = null;
+
+export function setFirmBillingGateCheckForTests(
+  check: GateSnap["checkEntitlement"] | null,
+): void {
+  firmBillingGateCheckForTests = check;
+}
 
 type SettledEntitlement = {
   entitled: boolean;
@@ -118,7 +121,8 @@ export function AuthGate() {
   const { track } = useAnalytics();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const checkEntitlement = useServerFn(getFirmBillingEntitlement);
+  const serverCheck = useServerFn(getFirmBillingEntitlement);
+  const checkEntitlement = firmBillingGateCheckForTests ?? serverCheck;
   const settledRef = useRef<SettledEntitlement | null>(null);
   const trackRef = useRef(track);
   trackRef.current = track;
@@ -158,9 +162,7 @@ export function AuthGate() {
   const [showWall, setShowWall] = useState(false);
   const [clientGate, setClientGate] = useState<FirmClientGateContext | null>(null);
   const [gateAttempt, setGateAttempt] = useState(0);
-  const [quietAttempt, setQuietAttempt] = useState(0);
   const failuresRef = useRef(0);
-  const retryTimerRef = useRef<number | null>(null);
   const clientGateRef = useRef<FirmClientGateContext | null>(null);
   const pendingWallRef = useRef(false);
 
@@ -193,10 +195,6 @@ export function AuthGate() {
 
   // The previous account's entitlement must not paint the next sign-in.
   useEffect(() => {
-    if (retryTimerRef.current != null) {
-      window.clearTimeout(retryTimerRef.current);
-      retryTimerRef.current = null;
-    }
     pendingWallRef.current = false;
     clientGateRef.current = null;
     settledRef.current = null;
@@ -219,6 +217,30 @@ export function AuthGate() {
   }, [userId, firmId]);
 
   // Known unpaid: correct the route the moment they open a gated client file.
+  // The count from shell mount is stale once a client is added in this session,
+  // so a client file reads it again before deciding the first-client exception.
+  useEffect(() => {
+    if (loading || !userId) return;
+    if (!clientIdFromFirmPath(pathname)) return;
+    let cancelled = false;
+    void loadFirmClientGateContext()
+      .then((clients) => {
+        if (cancelled) return;
+        clientGateRef.current = clients;
+        setClientGate(clients);
+        const settled = settledRef.current;
+        if (!settled || settled.entitled || settled.reason !== "no_active_subscription") return;
+        settledRef.current = { ...settled, clients };
+        resumeUnpaidFirm(latest.current, clients);
+      })
+      .catch(() => {
+        // A failed recount leaves the count already on screen.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, userId, pathname]);
+
   useEffect(() => {
     const settled = settledRef.current;
     if (!settled || settled.entitled || settled.reason !== "no_active_subscription") return;
@@ -259,18 +281,22 @@ export function AuthGate() {
         firmClientCount: clients?.firmClientCount ?? null,
         firstClientId: clients?.firstClientId ?? null,
       });
-      // A known plan for this firm opens the page. A failed check is not the wall.
-      if (surface === "content" && known !== "none") {
+      // A known entitled plan opens the page. A known unpaid firm keeps the
+      // wall. A failed check does not turn an unpaid firm into an entitled one.
+      if (surface === "content" && known === "entitled") {
         setFirmEntitled(true);
         setBillingUnknown(false);
         setShowWall(false);
         failuresRef.current += 1;
         setCheckNotice(billingCheckNoticeVisible(failuresRef.current));
-        if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current);
-        retryTimerRef.current = window.setTimeout(() => {
-          retryTimerRef.current = null;
-          setQuietAttempt((n) => n + 1);
-        }, billingCheckRetryDelayMs(failuresRef.current));
+        return;
+      }
+      if (surface === "wall") {
+        setBillingDeadlinePassed(false);
+        setFirmEntitled(false);
+        setBillingUnknown(true);
+        setShowWall(false);
+        setCheckNotice(false);
         return;
       }
       if (surface === "content") {
@@ -295,23 +321,7 @@ export function AuthGate() {
       setCheckNotice(false);
     };
 
-    // Interim: a cold read can fail as network or timeout after the first 8s
-    // mark. Stay on the skeleton (still checking) so that failure can retry
-    // the same server fn once before the Couldn't check billing card.
-    let quietDeadlines = 0;
-    let timer = 0;
-    const armShellDeadline = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        if (shellDeadlineAfterQuietWait(quietDeadlines) === "wait") {
-          quietDeadlines += 1;
-          armShellDeadline();
-          return;
-        }
-        noteFailure("timeout");
-      }, SHELL_GATE_TIMEOUT_MS);
-    };
-    armShellDeadline();
+    const timer = window.setTimeout(() => noteFailure("timeout"), SHELL_GATE_TIMEOUT_MS);
 
     void (async () => {
       try {
@@ -351,32 +361,10 @@ export function AuthGate() {
         const entitlementPromise = readCachedFirmEntitlement(
           userId,
           (input) =>
-            resolveClientBillingGateCheck(
-              () =>
-                latest.current.checkEntitlement({
-                  data: { ...input.data, firmId: latest.current.firmId },
-                  // Fresh 9s abort per attempt. The retry calls this again.
-                  signal: firmBillingClientAbortSignal(),
-                }),
-              {
-                onRetry() {
-                  if (cancelled) return;
-                  // The retry is the same check. Keep the skeleton up for it.
-                  quietDeadlines = BILLING_GATE_QUIET_DEADLINES;
-                  armShellDeadline();
-                },
-              },
-            ).then((decision) => {
-              if (decision.outcome === "card") {
-                return {
-                  entitled: false,
-                  reason: "stripe_error" as const,
-                  checkFailed: decision.kind,
-                };
-              }
-              return decision.value;
+            latest.current.checkEntitlement({
+              data: { ...input.data, firmId: latest.current.firmId },
             }),
-          gateAttempt > 0 || quietAttempt > 0,
+          gateAttempt > 0,
           latest.current.firmId,
         );
         const itPromise = isMilonItMember(userId);
@@ -440,20 +428,11 @@ export function AuthGate() {
           settledRef.current = { entitled: true, reason, clients };
           failuresRef.current += 1;
           setCheckNotice(billingCheckNoticeVisible(failuresRef.current));
-          if (retryTimerRef.current != null) window.clearTimeout(retryTimerRef.current);
-          retryTimerRef.current = window.setTimeout(() => {
-            retryTimerRef.current = null;
-            setQuietAttempt((n) => n + 1);
-          }, billingCheckRetryDelayMs(failuresRef.current));
           return;
         }
         if (failed) {
           noteFailure(result.checkFailed ?? classifyBillingCheckFailure(result));
           return;
-        }
-        if (retryTimerRef.current != null) {
-          window.clearTimeout(retryTimerRef.current);
-          retryTimerRef.current = null;
         }
         pendingWallRef.current = false;
         setShowWall(false);
@@ -480,7 +459,7 @@ export function AuthGate() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [userId, loading, gateAttempt, quietAttempt]);
+  }, [userId, loading, gateAttempt]);
 
   if (loading) {
     return <FirmShellLoading />;
@@ -490,8 +469,6 @@ export function AuthGate() {
   // list, settings, and billing stay open. The first client file may mount
   // once the count is known. A later file stays on the skeleton until Stripe
   // confirms a redirect, or until the check times out onto the Retry card.
-  // A network or timeout failure retries once first. The skeleton stays up
-  // during that retry.
   const unknownPage = pageWhileEntitlementUnknown({
     pathname,
     firmClientCount: clientGate?.firmClientCount ?? null,

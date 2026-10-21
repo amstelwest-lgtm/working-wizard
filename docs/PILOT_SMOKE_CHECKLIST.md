@@ -20,9 +20,10 @@ note route, role, browser, and whether the migrations below were applied. Fix be
 - URL Configuration → Site URL = production domain; Redirect URLs include
   `/auth/verified`, `/auth/callback`, `/app`, `/dashboard` (production + `http://localhost:5000`)
 - Custom auth domain (`auth.milonfinance.com`, Google consent screen): see [`docs/AUTH_CUSTOM_DOMAIN.md`](./AUTH_CUSTOM_DOMAIN.md)
-- Email Templates → paste `supabase/templates/magic_link.html` (subject: *Verify your Milōn
-  email*), `recovery.html`, `confirmation.html`. The magic-link template is the one every new
-  owner sees.
+- Email Templates → Magic Link: paste `supabase/templates/magic_link.html` (subject:
+  *Sign in to Milōn*). Owners and accountants share this sign-in mail. Do not paste
+  `verify.html` into that slot. Also paste `recovery.html` and `confirmation.html` into
+  their own slots.
 
 **Supabase → Edge Functions → Secrets:** `ANTHROPIC_API_KEY` (Ask AI runs there).
 

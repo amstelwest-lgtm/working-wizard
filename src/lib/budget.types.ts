@@ -2,6 +2,8 @@
  * Budget document types — living FY budget shared by owner + accountant.
  */
 
+import type { FiscalStatementSlice } from "@/lib/budget-period-types";
+
 export type BudgetScenarioId = "base" | "upside" | "downside";
 
 export type BudgetDriverKind =
@@ -277,6 +279,11 @@ export type BudgetActuals = {
   seededFromActuals?: boolean;
   /** The statement's months are not in this budget year. */
   outsidePlan?: boolean;
+  /**
+   * Firm-year overlap of the statement. Headline cards quote this slice.
+   * A missing line stays null.
+   */
+  period?: FiscalStatementSlice | null;
 };
 
 export type UnmappedDriver = {

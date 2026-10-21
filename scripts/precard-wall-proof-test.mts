@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { restoreLastFirmSuccess } from "../src/lib/billing-check-failure.ts";
-import { decideFirmClientCreate } from "../src/lib/firm-client-cap.ts";
+import { decideFirmClientCreate, showStarterTrialEndedCopy } from "../src/lib/firm-client-cap.ts";
 import { decideFirmUpgradeRoute, upgradeButtonLabel } from "../src/lib/firm-band-upgrade.ts";
 import { surfaceAfterEntitlementFailure } from "../src/lib/firm-gate-access.ts";
 import { TRIAL_CLOCK_CUTOVER, noPlanTrialClock } from "../src/lib/firm-starter-trial.ts";
@@ -30,7 +30,10 @@ import {
   decideFirmBillingPathGate,
   decidePostLoginBillingResume,
 } from "../src/lib/stripe-entitlement.ts";
-import { cardlessTrialAiBlock } from "../supabase/functions/_shared/starter-trial-gate.ts";
+import {
+  cardlessTrialAiBlock,
+  paidGenerationTrialBlock,
+} from "../supabase/functions/_shared/starter-trial-gate.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -248,6 +251,59 @@ assert(
   "a firm with a plan is not on the no-plan clock",
 );
 
+const qaNow = new Date(cutoverMs + day);
+const overrideFifteen = new Date(qaNow.getTime() - 15 * day).toISOString();
+const overridden = noPlanTrialClock({
+  enforced: true,
+  noPlan: true,
+  startedAt: oldFirmCreated,
+  startOverride: overrideFifteen,
+  now: qaNow,
+});
+assert(overridden.expired && overridden.daysLeft === 0, "an override 15 days ago has no days left");
+const overrideWall = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "none",
+  band: null,
+  clientCount: 1,
+  starterTrialExpired: overridden.expired,
+});
+assert(
+  !overrideWall.allowed && overrideWall.code === "starter_trial_ended",
+  "an override 15 days ago shows the day-14 wall",
+);
+assert(
+  showStarterTrialEndedCopy("none", overridden.expired),
+  "an override 15 days ago shows the trial-ended copy",
+);
+assert(
+  starterTrialBlocksGeneration("generate_advisory_pack", overridden.expired) &&
+    starterTrialBlocksGeneration("brain_propose", overridden.expired) &&
+    starterTrialBlocksGeneration("brain_deliverable_draft", overridden.expired),
+  "an override 15 days ago blocks generation",
+);
+const nullOverride = noPlanTrialClock({
+  enforced: true,
+  noPlan: true,
+  startedAt: oldFirmCreated,
+  startOverride: null,
+  now: qaNow,
+});
+assert(
+  !nullOverride.expired && nullOverride.daysLeft === dayAfterCutover.daysLeft,
+  "a null override keeps the cutover clock",
+);
+assert(
+  !noPlanTrialClock({
+    enforced: false,
+    noPlan: true,
+    startedAt: oldFirmCreated,
+    startOverride: overrideFifteen,
+    now: qaNow,
+  }).expired,
+  "an exempt firm stays open with an override",
+);
+
 const paidAgents = GENERATION_ENTRIES.filter((entry) => entry.paid);
 assert(paidAgents.length > 0, "agents that create work are listed");
 for (const entry of paidAgents) {
@@ -401,6 +457,56 @@ const cardOnFile = await cardlessTrialAiBlock({
 });
 assert(cardOnFile == null, "a firm that is not pre-card is not stopped by this gate");
 
+const qaOverride = new Date(Date.now() - 15 * 86_400_000).toISOString();
+const qaFirm = {
+  precard_cap_applies: true,
+  starter_trial_generation_blocked: false,
+  starter_trial_enforced: true,
+  billing_plan_known: null,
+  created_at: oldFirmCreated,
+  trial_clock_start_override: qaOverride,
+};
+const qaBlocked = await cardlessTrialAiBlock({
+  db: fakeDb({
+    clients: { data: { firm_id: "firm-qa" }, error: null },
+    firms: { data: qaFirm, error: null },
+  }),
+  clientId: "client-1",
+});
+assert(qaBlocked?.code === "starter_trial_ended", "Ask AI blocks when the QA clock is 15 days ago");
+const qaPaid = await paidGenerationTrialBlock({
+  db: fakeDb({
+    clients: { data: { firm_id: "firm-qa" }, error: null },
+    firms: { data: qaFirm, error: null },
+  }),
+  userId: "user-1",
+  clientId: "client-1",
+});
+assert(qaPaid?.code === "starter_trial_ended", "paid generation blocks when the QA clock is 15 days ago");
+const qaNull = await cardlessTrialAiBlock({
+  db: fakeDb({
+    clients: { data: { firm_id: "firm-qa" }, error: null },
+    firms: {
+      data: { ...qaFirm, trial_clock_start_override: null },
+      error: null,
+    },
+  }),
+  clientId: "client-1",
+});
+assert(qaNull == null, "a null override leaves the Q&A gate on the mirror");
+const qaEntitled = await paidGenerationTrialBlock({
+  db: fakeDb({
+    clients: { data: { firm_id: "firm-ben" }, error: null },
+    firms: {
+      data: { ...qaFirm, billing_plan_known: "entitled" },
+      error: null,
+    },
+  }),
+  userId: "user-1",
+  clientId: "client-1",
+});
+assert(qaEntitled == null, "a stored entitled plan stays open when a QA override is set");
+
 function read(path: string): string {
   return readFileSync(resolve(path), "utf8");
 }
@@ -411,6 +517,32 @@ assert(
   capServer.includes("created_at"),
   "the no-plan clock reads the firm row start",
 );
+assert(
+  capServer.includes("startOverride: firm.trialClockStartOverride"),
+  "the live clock and the mirror sync use the QA start",
+);
+assert(
+  capServer.includes("writeStarterTrialGenerationBlock"),
+  "the mirror sync writes the generation flag from that clock",
+);
+const clockMigration = read("supabase/migrations/20261021180000_firm_trial_clock_start_override.sql");
+assert(
+  clockMigration.includes("ADD COLUMN IF NOT EXISTS trial_clock_start_override timestamptz"),
+  "migration adds the nullable QA clock start",
+);
+assert(
+  clockMigration.includes(
+    "trial_clock_start_override is a QA-only tool: it is only ever set (by service role/SQL, with CoS approval) on AQA throwaway firms, never on real customer firms.",
+  ),
+  "the column comment limits the override to AQA throwaway firms",
+);
+assert(
+  clockMigration.includes("NEW.trial_clock_start_override := NULL") &&
+    clockMigration.includes("NEW.trial_clock_start_override := OLD.trial_clock_start_override"),
+  "signed-in users cannot set the QA clock start",
+);
+assert(!/\bGRANT\b/i.test(clockMigration), "the migration grants nothing new");
+assert(!/UPDATE\s+public\.firms/i.test(clockMigration), "the migration does not backfill firm rows");
 const clientFile = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert(
   clientFile.includes("hasFigures") && clientFile.includes("CheckoutAfterInsight"),

@@ -8,15 +8,30 @@ import { CLIENT_HOME_CHECKING, CLIENT_HOME_LOAD_ERROR } from "@/lib/client-home-
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { ownerPresence } from "@/lib/owner-presence";
 
-export function ClientAgentStandby({ timedOut }: { timedOut: boolean }) {
+export function ClientAgentStandby({
+  timedOut,
+  onRetry,
+}: {
+  timedOut: boolean;
+  onRetry?: () => void;
+}) {
   const phase = agentCardPhase({ pending: true, timedOut });
   const lede = timedOut ? CLIENT_HOME_LOAD_ERROR : CLIENT_HOME_CHECKING;
   return (
-    <div className="accountant-portal premium-shell" data-client-agents={phase}>
+    <div
+      className="accountant-portal premium-shell"
+      data-client-agents={phase}
+      data-client-boot={timedOut ? "load-error" : "pending"}
+    >
       <div className="shell">
         <p className="owner-lede" role="status">
           {lede}
         </p>
+        {timedOut && onRetry ? (
+          <button type="button" onClick={onRetry}>
+            Retry
+          </button>
+        ) : null}
         <OwnerHome
           title="Your whole finance team"
           variant="character"
