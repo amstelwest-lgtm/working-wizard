@@ -10,8 +10,9 @@ export function FirmSwitcher({ className }: { className?: string }) {
 
   if (brandLoading && firms.length === 0) {
     return (
-      <span className={`firm-chip ${className ?? ""}`.trim()}>
-        Practice · <b>…</b>
+      <span className={`firm-chip firm-chip--pending ${className ?? ""}`.trim()} aria-busy="true">
+        <span className="milon-skeleton firm-chip__skeleton" />
+        <span className="sr-only">Loading practice</span>
       </span>
     );
   }

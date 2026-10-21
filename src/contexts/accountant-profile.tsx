@@ -28,6 +28,7 @@ import { marketForFirm } from "@/lib/market/scope";
 import {
   authDisplayName,
   practiceGreetingName,
+  practiceHeaderName,
   resolvePersistedAccountantIdentity,
   type PersistedNameChain,
 } from "@/lib/accountant-identity";
@@ -112,6 +113,8 @@ type AccountantProfileContextValue = {
   saveProfile: () => Promise<{ ok: boolean; error?: string }>;
   /** Greeting name: firm contact, profile full name, auth full name, then email. */
   greetingSource: string;
+  /** Header name. Never the email address. Empty until a real name has loaded. */
+  headerName: string;
 };
 
 const AccountantProfileContext = createContext<AccountantProfileContextValue | null>(null);
@@ -499,6 +502,11 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
     authFullName: nameChain.authFullName,
     email: user?.email,
   });
+  const headerName = practiceHeaderName({
+    accountantName: profile.accountantName,
+    profileFullName: nameChain.profileFullName,
+    authFullName: nameChain.authFullName,
+  });
 
   return (
     <AccountantProfileContext.Provider
@@ -517,6 +525,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         refreshFirms,
         saveProfile,
         greetingSource,
+        headerName,
       }}
     >
       {children}

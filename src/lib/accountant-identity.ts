@@ -45,6 +45,19 @@ export function resolvePersistedAccountantIdentity(input: {
   return { firmName, accountantName };
 }
 
+/** Person name safe to paint in the practice header. An email address is not a name. */
+export function practiceHeaderName(input: {
+  accountantName?: string | null;
+  profileFullName?: string | null;
+  authFullName?: string | null;
+}): string {
+  return (
+    withoutSamplePersona(trimmed(input.accountantName)) ||
+    trimmed(input.profileFullName) ||
+    withoutSamplePersona(trimmed(input.authFullName))
+  );
+}
+
 /**
  * Greeting source. The persisted name chain wins. The email local-part is only
  * used when every name in that chain is blank. A cached "A. Sample" is skipped.
@@ -55,10 +68,7 @@ export function practiceGreetingName(input: {
   authFullName?: string | null;
   email?: string | null;
 }): string {
-  const named =
-    withoutSamplePersona(trimmed(input.accountantName)) ||
-    trimmed(input.profileFullName) ||
-    withoutSamplePersona(trimmed(input.authFullName));
+  const named = practiceHeaderName(input);
   if (named) return named;
   const local = trimmed((input.email ?? "").split("@")[0]);
   return local;

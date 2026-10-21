@@ -314,7 +314,7 @@ html:not(.dark) .accountant-nav .nav-heading.is-page > .nav-row .nav-label {
 html:not(.dark) .accountant-nav .nav-heading.is-page > .nav-row .nav-chev {
   color: #d8c89a;
 }
-/* Group holding the current page (header itself not the page). */
+/* Group holding the current page (header itself not the page). Cobalt bar. */
 html:not(.dark) .accountant-nav .nav-heading.is-current > .nav-row .nav-label {
   box-shadow: inset 2px 0 0 #0b5fff;
   color: var(--pp-frame-ink);
@@ -698,7 +698,7 @@ html:not(.dark) .accountant-nav .nav-heading.is-current > .nav-row .nav-ic {
 }
 html:not(.dark) .accountant-portal .deliverable-rail .tab.on .tab-ic,
 html:not(.dark) .accountant-nav .nav-heading.is-page .nav-ic {
-  color: #e0c25f;
+  color: #93c5fd;
 }
 
 /* --- topbar pills on charcoal --- */
