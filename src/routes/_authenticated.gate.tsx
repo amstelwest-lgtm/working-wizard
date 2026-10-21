@@ -233,8 +233,14 @@ export function AuthGate() {
   useEffect(() => {
     if (loading || !userId) return;
     // Cold tab: auth finishes before the firm row. Do not arm the 8s timer
-    // or call the server until this render has a firm id. An owner with no
-    // practice firm, and a signup with an empty firm list, still leave.
+    // or call the server until this render has a firm id. A no-plan answer
+    // in that window still applies (null firm id matches null) and
+    // resumeUnpaidFirm would send the shell to /billing/required. That is
+    // the 1020E Add client miss: the first click left for the wall, and the
+    // clients list then showed "Couldn't load figures". Waiting for the firm
+    // id stops that check. Once the row is loaded, a card-free enforced firm
+    // with clients still follows billing_required. An owner with no practice
+    // firm, and a signup with an empty firm list, still leave.
     const startFirmId = firmId?.trim() ?? "";
     if (!firmsLoaded || !startFirmId) {
       let cancelled = false;

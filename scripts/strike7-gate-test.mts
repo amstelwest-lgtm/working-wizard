@@ -4,6 +4,11 @@
  * At 8.5s the page must still be the client file, not "Couldn't check billing".
  * Unmount clears the 8s timer.
  *
+ * AQA on 032024b3: 8 of 8 new-tab cold opens showed the card after the
+ * skeleton (about 5–15s), on My practice client 660f2396 and Ben client
+ * 8836b9f8. The check must not start during the null firmId window. A
+ * no-plan firm (1020E) took the same window to /billing/required.
+ *
  * Run: pnpm test:strike7-gate
  */
 import { Window } from "happy-dom";
@@ -190,9 +195,17 @@ for (const firm of firms) {
   warns.length = 0;
   clearCachedFirmEntitlement();
   setStrike7FirmPick(firm.pick);
-  setFirmBillingGateCheckForTests(async () => entitledAt200ms());
+  let checks = 0;
+  setFirmBillingGateCheckForTests(async () => {
+    checks += 1;
+    return entitledAt200ms();
+  });
   const armedBefore = clock.armed8s();
   await mountGate();
+  assert(
+    checks === 0 && !html().includes("/billing/required"),
+    `${firm.name} must not check billing or leave for /billing/required before the firm row loads`,
+  );
   assert(
     !html().includes("Couldn't check billing"),
     `${firm.name} must not show the billing card before the firm row loads`,
