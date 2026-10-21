@@ -286,6 +286,16 @@ html.dark .mk .milon-signin-box {
   border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
+.mk .milon-signin-box .btn-apple {
+  width: 100%;
+  justify-content: center;
+  min-height: 44px;
+  background: #000;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  border: 1px solid #000;
+}
+
 .mk .milon-signin-box .milon-auth-divider {
   display: flex;
   align-items: center;

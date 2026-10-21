@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { startGoogleSignIn, type GoogleAuthIntent } from "@/lib/google-auth";
+import { AppleSignInButton } from "@/components/apple-sign-in-button";
+import { startGoogleSignIn, type SocialSignInOptions } from "@/lib/google-auth";
 
 function GoogleMark() {
   return (
@@ -24,19 +25,27 @@ function GoogleMark() {
   );
 }
 
-type Props = {
-  intent: GoogleAuthIntent;
-  next?: string;
-  ownerInvite?: { token: string; clientCode?: string | null };
-  accountantJoin?: { token: string };
+type Props = SocialSignInOptions & {
   label?: string;
-  /** Landing modal uses gold-ghost chrome; entry matches dark auth shell; portal uses shadcn outline. */
+  /** Landing modal uses gold-ghost chrome; entry matches the auth card; portal uses the light outline. */
   tone?: "landing" | "entry" | "portal";
   disabled?: boolean;
   /** Return false to abort (e.g. market not picked on Create firm). */
   onBeforeStart?: () => boolean | Promise<boolean>;
   onError?: (message: string) => void;
 };
+
+/** Apple sits above Google and is at least as prominent (guideline 4.8). */
+export function AccountProviderButtons(props: Props) {
+  const googleLabel = props.label ?? "Sign in with Google";
+  const appleLabel = googleLabel.replaceAll("Google", "Apple");
+  return (
+    <div className="milon-social-stack">
+      <AppleSignInButton {...props} label={appleLabel} />
+      <GoogleSignInButton {...props} label={googleLabel} />
+    </div>
+  );
+}
 
 export function GoogleSignInButton({
   intent,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { AuthDivider, AccountProviderButtons } from "@/components/google-sign-in-button";
 import { PasswordResetRequest } from "@/components/password-reset-request";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import { PasswordWithShow } from "@/components/show-password";
@@ -184,7 +184,7 @@ export function StaffInviteLanding({
                       : "Use the password for this email. Accepting opens the firm workspace."}
                   </OwnerInviteNote>
                   <div className="mt-5">
-                    <GoogleSignInButton
+                    <AccountProviderButtons
                       intent="accountant"
                       tone="portal"
                       label={phase === "create" ? "Continue with Google" : "Sign in with Google"}

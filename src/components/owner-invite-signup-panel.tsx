@@ -1,4 +1,4 @@
-import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { AuthDivider, AccountProviderButtons } from "@/components/google-sign-in-button";
 import {
   OwnerInviteCard,
   OwnerInviteEyebrow,
@@ -135,7 +135,7 @@ export function OwnerInviteSignupPanel({
         ) : null}
 
         <div className="mt-5">
-          <GoogleSignInButton
+          <AccountProviderButtons
             intent="owner"
             tone="portal"
             label="Continue with Google"

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useId, useRef, type FormEvent } from "react";
-import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { AuthDivider, AccountProviderButtons } from "@/components/google-sign-in-button";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import { isTextEntry, overlayMayHandleKey } from "@/lib/dialog-focus";
 import { PasswordWithShow } from "@/components/show-password";
@@ -206,7 +206,7 @@ export function LandingSignInModal({
           </Suspense>
         ) : (
           <>
-            <GoogleSignInButton
+            <AccountProviderButtons
               intent="owner"
               tone="landing"
               disabled={siBusy}

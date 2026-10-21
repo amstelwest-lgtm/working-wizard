@@ -267,6 +267,12 @@ html[data-landing="1"] .reg-shell .btn-google{margin-top:18px}
 html[data-landing="1"] .btn-google:hover{transform:translateY(-2px);border-color:rgba(0,0,0,.2);box-shadow:0 6px 20px rgba(0,0,0,.12)}
 html[data-landing="1"] .btn-google:disabled{opacity:.65;cursor:not-allowed;transform:none}
 html[data-landing="1"][data-theme="dark"] .btn-google{background:#fff;color:#1f1f1f}
+html[data-landing="1"] .milon-social-stack{display:flex;flex-direction:column;gap:10px;width:100%}
+html[data-landing="1"] .milon-social-stack .btn-google,html[data-landing="1"] .reg-shell .milon-social-stack .btn-google{margin-top:0}
+html[data-landing="1"] .btn-apple{width:100%;justify-content:center;min-height:44px;background:#000;color:#fff;-webkit-text-fill-color:#fff;border:1px solid #000}
+html[data-landing="1"] .btn-apple:hover{transform:translateY(-2px);background:#1a1a1a;color:#fff;-webkit-text-fill-color:#fff}
+html[data-landing="1"] .btn-apple:disabled{opacity:.65;cursor:not-allowed;transform:none}
+html[data-landing="1"][data-theme="dark"] .btn-apple{background:#fff;color:#000;-webkit-text-fill-color:#000;border-color:#fff}
 html[data-landing="1"] .milon-auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--ink-dim);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
 html[data-landing="1"] .milon-auth-divider::before,html[data-landing="1"] .milon-auth-divider::after{content:"";flex:1;height:1px;background:var(--line)}
 html[data-landing="1"] .milon-auth-divider span{flex:none}

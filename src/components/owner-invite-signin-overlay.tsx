@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { AuthDivider, AccountProviderButtons } from "@/components/google-sign-in-button";
 import { PasswordResetRequest } from "@/components/password-reset-request";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import { PasswordWithShow } from "@/components/show-password";
@@ -87,7 +87,7 @@ export function OwnerInviteSigninOverlay({
             />
           ) : (
             <>
-              <GoogleSignInButton
+              <AccountProviderButtons
                 intent="owner"
                 tone="portal"
                 label="Continue with Google"

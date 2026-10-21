@@ -985,6 +985,36 @@ html[data-theme="light"] .accountant-portal .crumb a:hover {
 }
 .milon-google-btn:hover { background: #f7f7f7; }
 .milon-google-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.milon-social-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.milon-apple-btn,
+.milon-apple-btn-entry {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  border-radius: 0.5rem;
+  border: 1px solid #000;
+  background: #000;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.milon-apple-btn-entry {
+  height: 2.75rem;
+  border-radius: 0.75rem;
+}
+.milon-apple-btn:hover,
+.milon-apple-btn-entry:hover { background: #1a1a1a; }
+.milon-apple-btn:disabled,
+.milon-apple-btn-entry:disabled { opacity: 0.6; cursor: not-allowed; }
 .milon-auth-divider {
   display: flex;
   align-items: center;
@@ -1211,6 +1241,11 @@ html.dark .invite-ink h2 {
   border-color: #dbeafe;
   color: #102a43;
   background: #ffffff;
+}
+.invite-ink .milon-apple-btn {
+  background: #000;
+  color: #fff;
+  border-color: #000;
 }
 .invite-ink .show-password label {
   color: #3d5270;
