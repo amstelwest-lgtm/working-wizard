@@ -17,13 +17,14 @@ import {
   handoffIsSlow,
   handoffProgressCaption,
   handoffTriggerLabel,
+  moveRowStatus,
 } from "../src/lib/action-handoff.ts";
 import { agentDisplayName, agentShortName } from "../src/lib/milon-team.ts";
 import { AGENT_KEYS } from "../src/lib/milon-team-feed.ts";
 import { HANDOFF_RUN_WAIT_MS, pollAfterTick } from "../src/lib/agent-activity-poll.ts";
 import { deskSignoffText } from "../src/lib/milon-team-activity.ts";
-import { assignmentForMove, moveRowMatches } from "../src/lib/owner-handoff.ts";
-import { displayedAssignee } from "../src/lib/open-plan-home.ts";
+import { assignmentForMove, moveLoadMayCache, moveRowMatches } from "../src/lib/owner-handoff.ts";
+import { displayedAssignee, latestStoredAssignment } from "../src/lib/open-plan-home.ts";
 
 function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
@@ -486,5 +487,105 @@ assert(plan.includes("displayedAssignee(item.owner_name, notes)"), "the action r
 const feedHook = readFileSync("src/hooks/use-milon-team-feed.ts", "utf8");
 assert(feedHook.includes("action_updates"), "the team activity reads hand-off notes");
 assert(feedHook.includes("ACTION_PLAN_REFRESH_EVENT"), "the activity list refetches after Hand to");
+
+const blankThenNoted = assignmentForMove(
+  [
+    {
+      actionItemId: "newer-blank",
+      sourceMoveKey: "fixedCostRatio",
+      driverKey: "fixedCostRatio",
+      title: moveTitle,
+      assigneeName: null,
+      assignedAt: null,
+    },
+    {
+      actionItemId: "original",
+      sourceMoveKey: "fixedCostRatio",
+      driverKey: "fixedCostRatio",
+      title: moveTitle,
+      assigneeName: "Milōn Analyst",
+      assignedAt: "2026-10-20T18:05:00.000Z",
+    },
+  ],
+  "fixedCostRatio",
+  moveTitle,
+);
+assert(
+  blankThenNoted?.actionItemId === "original" && blankThenNoted.assigneeName === "Milōn Analyst",
+  "an immediate reload keeps the noted reassign, not a newer row with no hand-off",
+);
+const reassigned = assignmentForMove(
+  [
+    {
+      actionItemId: "fm-row",
+      sourceMoveKey: "fixedCostRatio",
+      driverKey: "fixedCostRatio",
+      title: moveTitle,
+      assigneeName: "Milōn Financial Manager",
+      assignedAt: "2026-10-20T18:00:00.000Z",
+    },
+    {
+      actionItemId: "analyst-row",
+      sourceMoveKey: "fixedCostRatio",
+      driverKey: "fixedCostRatio",
+      title: moveTitle,
+      assigneeName: "Milōn Analyst",
+      assignedAt: "2026-10-20T18:05:00.000Z",
+    },
+  ],
+  "fixedCostRatio",
+  moveTitle,
+);
+assert(reassigned?.assigneeName === "Milōn Analyst", "a later hand-off note wins on the immediate refetch");
+assert(
+  latestStoredAssignment([
+    { note: "Handed to Milōn Financial Manager.", at: "2026-10-20T18:00:00.000Z" },
+    { note: "Handed to Milōn Analyst.", at: "2026-10-20T18:05:00.000Z" },
+  ])?.name === "Milōn Analyst",
+  "the newest note on one action is the reassign, not the earlier Financial Manager",
+);
+assert(moveLoadMayCache(1, 2) === false, "a read started before the commit is not cached");
+assert(moveLoadMayCache(2, 2) === true, "a read started after the commit may be cached");
+const working = moveRowStatus({ runStatus: "running" });
+assert(working.phase === "working" && working.label === "Working…", "an open run shows Working on the move row");
+const ready = moveRowStatus({ runStatus: "succeeded", draftId: "d1" });
+assert(
+  ready.phase === "draft_ready" && ready.label === "Draft ready" && ready.draftId === "d1",
+  "a saved draft shows Draft ready",
+);
+const draftWins = moveRowStatus({ runStatus: "queued", draftId: "d1" });
+assert(draftWins.phase === "draft_ready" && draftWins.draftId === "d1", "a draft wins over a still-queued run");
+
+const ensure = readFileSync("src/lib/ensure-plan-item.ts", "utf8");
+const keyLookup = ensure.indexOf('eq("source_move_key", input.moveKey)');
+const itemInsert = ensure.lastIndexOf(".insert({");
+assert(
+  ensure.includes('.eq("client_id", input.clientId)') && keyLookup >= 0 && keyLookup < itemInsert,
+  "a reassign reuses the client's original move before inserting another action",
+);
+const committedBranch = menu.slice(menu.indexOf("if (detail?.committed)"));
+assert(
+  committedBranch.startsWith("if (detail?.committed)") &&
+    committedBranch.includes("invalidateMoveAssignments") &&
+    committedBranch.indexOf("invalidateMoveAssignments") < committedBranch.indexOf("loadClientMoveAssignments"),
+  "Next moves drops the cache and refetches only after the hand-off is committed",
+);
+assert(menu.includes('data-move-phase="working"') && menu.includes("Working…"), "the move row shows Working");
+assert(menu.includes('data-move-phase="draft-ready"'), "the move row links Draft ready");
+const awaited = handoffClient.indexOf("await requestOwnerHandoff");
+const committedFlag = handoffClient.indexOf("committed: true");
+assert(
+  awaited >= 0 && committedFlag > awaited && handoffClient.includes("moveLoadMayCache"),
+  "the refresh is marked committed only after the hand-off write, and an earlier read is not cached",
+);
+const moveBlock = plan.slice(plan.indexOf("<MoveHandTo"));
+assert(moveBlock.includes("onOpenDraft={onOpenDraft}"), "owner Next moves can open the draft");
+const movesPanel = readFileSync("src/components/strategic-moves-panel.tsx", "utf8");
+assert(movesPanel.includes("onOpenDraft={onOpenDraft}"), "accountant Next moves can open the draft");
+const accountant = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
+const movesCall = accountant.slice(accountant.indexOf("<StrategicMovesPanel"));
+assert(movesCall.includes("onOpenDraft={openDraft}"), "the accountant Moves tab opens the draft");
+const ownerShell = readFileSync("src/routes/app.tsx", "utf8");
+assert(ownerShell.includes("onOpenDraft="), "the owner action plan opens the draft");
 
 console.log("action-handoff ok");

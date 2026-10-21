@@ -278,6 +278,25 @@ export function handoffPhaseFor(input: {
   return "failed";
 }
 
+/**
+ * Next moves status beside Hand to.
+ * An open run with no draft yet is Working. A saved draft is Draft ready.
+ */
+export function moveRowStatus(input: {
+  runStatus?: string | null;
+  draftId?: string | null;
+  findingsReady?: boolean;
+}): { phase: "working" | "draft_ready" | null; label: string | null; draftId: string | null } {
+  const draftId = input.draftId?.trim() || null;
+  if (draftId) return { phase: "draft_ready", label: "Draft ready", draftId };
+  const status = input.runStatus ?? "";
+  if (status === "queued" || status === "running") return { phase: "working", label: "Working…", draftId: null };
+  if ((status === "succeeded" || status === "partial") && input.findingsReady === false) {
+    return { phase: "working", label: "Working…", draftId: null };
+  }
+  return { phase: null, label: null, draftId: null };
+}
+
 /** Hide a finish note that claims drafts were recorded when this action has no finding id. */
 export function assignmentNotesForDraft<T extends { note: string | null }>(
   notes: readonly T[],

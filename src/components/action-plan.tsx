@@ -2020,6 +2020,7 @@ export default function ActionPlanPanel({
                     moveKey={move.key}
                     title={move.title}
                     outcomeWhy={move.impactLine}
+                    onOpenDraft={onOpenDraft}
                   />
                   <AddToPlanButton
                     clientId={clientId}
