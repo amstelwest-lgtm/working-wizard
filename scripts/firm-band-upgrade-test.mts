@@ -1311,14 +1311,7 @@ const cardFreeBanner = renderToStaticMarkup(
     firmId: "firm",
   }),
 );
-assert(
-  cardFreeBanner.includes("Add a card to start your 14-day free trial · up to 5 clients."),
-  "a card-free banner with no client count uses the 2–4 line",
-);
-assert(
-  !cardFreeBanner.toLowerCase().includes("first client"),
-  "a card-free banner with no client count does not say first client",
-);
+assert(cardFreeBanner.includes(CARD_FREE_TRIAL_LINE), "the card-free trial banner uses the explore sentence");
 assert(!cardFreeBanner.includes(OLD_CARD_FREE_LINE), "the card-free trial banner drops the old Starter line");
 assert(!cardFreeBanner.toLowerCase().includes("vat"), "the card-free trial banner has no VAT wording");
 
@@ -1338,7 +1331,7 @@ assert(!trialingBanner.includes(OLD_CARD_FREE_LINE), "a trialing banner does not
 assert(trialingBanner.includes("Trial day 10 of 14"), "a trialing banner still counts the trial");
 
 const practiceBoard = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
-assert(practiceBoard.includes("cardFreeTrialLine("), "Add client shows the card-free sentence for the client count");
+assert(practiceBoard.includes("CARD_FREE_TRIAL_LINE"), "Add client shows the card-free sentence");
 assert(
   practiceBoard.includes("cap.starterTrial.cardFree"),
   "Add client shows that sentence only for a card-free firm",

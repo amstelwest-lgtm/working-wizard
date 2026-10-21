@@ -222,7 +222,7 @@ for (const rel of cardFreeSurfaces) {
   assert(!text.includes(oldCardFreeLine), `${rel} still shows the old card-free line`);
 }
 const board = readFileSync(resolve(root, "src/components/practice-board.tsx"), "utf8");
-assert(board.includes("cardFreeTrialLine("), "Add client renders the card-free sentence for the client count");
+assert(board.includes("CARD_FREE_TRIAL_LINE"), "Add client renders the card-free sentence");
 assert(
   readFileSync(resolve(root, "src/lib/firm-client-cap.ts"), "utf8").includes(
     "`${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the ${trialLimit}-client trial limit.`",

@@ -85,10 +85,9 @@ export type FirmUpgradeSnapshot = {
   /** Server-built rand lines when the practice list is in rand. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /**
-   * Charge line for the current band. A firm with no subscription uses
-   * Starter, the same plan as the Start trial wall. Set only when Checkout
-   * would charge ZAR for this billing country (`firmCheckoutCharge`). A
-   * client-mix firm leaves it empty until the billing country is known to be ZA.
+   * Charge line for the current band. Set only when Checkout would charge
+   * ZAR for this billing country (`firmCheckoutCharge`). A client-mix firm
+   * leaves it empty until the billing country is known to be ZA.
    */
   zaPriceLabel?: string | null;
 };

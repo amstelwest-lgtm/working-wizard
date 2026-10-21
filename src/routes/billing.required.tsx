@@ -5,7 +5,6 @@ import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
 import { billingIntentForResolvedMarket } from "@/lib/billing-market";
 import { loadFirstFirmClient, type FirstFirmClient } from "@/lib/firm-client-gate";
-import { readFirmWallClientCount } from "@/lib/firm-wall-client-count.functions";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { noteFirmEntitlement } from "@/lib/firm-entitlement-client";
 import { readFirmBillingQuote, type FirmBillingQuote } from "@/lib/pricing/za-pricing.functions";
@@ -28,8 +27,7 @@ import {
   FIRM_WALL_BACK_LABEL,
   FIRM_WALL_START_LABEL,
   FIRM_WALL_TRIAL_ENDED_LINE,
-  cardFreeTrialLine,
-  cardFreeTrialPrice,
+  FIRM_WALL_TRIAL_LINE,
   firmWallBackTarget,
   firmWallOffersRetry,
   firmWallWhyLine,
@@ -73,7 +71,6 @@ export function BillingRequiredCard({
   planName,
   priceLabel,
   clientName,
-  clientCount = null,
   checkout,
   onRetry,
   backHref = FIRM_WALL_BACK_HREF,
@@ -83,8 +80,6 @@ export function BillingRequiredCard({
   planName: string;
   priceLabel: string | null;
   clientName?: string | null;
-  /** Firm client count from the cap. Null is unknown and does not say "first client". */
-  clientCount?: number | null;
   checkout: PendingCheckout;
   onRetry?: () => void;
   backHref?: string;
@@ -97,20 +92,15 @@ export function BillingRequiredCard({
     "inline-flex h-10 items-center rounded-full border border-[#0B5FFF] bg-transparent px-4 text-xs font-bold uppercase tracking-wider text-[#0B5FFF]";
   const price = priceLabel?.trim() ?? "";
   return (
-    <div
-      className="grid min-h-screen place-items-center bg-white px-4 text-[#102A43]"
-      data-billing-wall="card"
-    >
+    <div className="grid min-h-screen place-items-center bg-white px-4 text-[#102A43]" data-billing-wall="card">
       <div className="w-full max-w-md rounded-2xl border border-[#DBEAFE] bg-white p-6 shadow-[0_8px_24px_rgba(16,42,67,0.06)]">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#0B5FFF]">Billing</p>
-        <h1 className="mt-2 text-xl font-semibold text-[#102A43]">
-          Continue on {planName} to keep this practice
-        </h1>
+        <h1 className="mt-2 text-xl font-semibold text-[#102A43]">Continue on {planName} to keep this practice</h1>
         <p className="mt-2 text-sm text-[#102A43]" data-billing-why>
-          {firmWallWhyLine(clientName, clientCount)}
+          {firmWallWhyLine(clientName)}
         </p>
         <p className="mt-2 text-sm text-[#102A43]" data-billing-trial>
-          {cardFreeTrialLine(clientCount)}
+          {FIRM_WALL_TRIAL_LINE}
         </p>
         {price ? (
           <p className="mt-2 text-sm font-semibold text-[#102A43]" data-billing-price>
@@ -149,27 +139,25 @@ function BillingRequiredPage() {
   const navigate = useNavigate();
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   const fetchQuote = useServerFn(readFirmBillingQuote);
-  const fetchClientCount = useServerFn(readFirmWallClientCount);
   const [checking, setChecking] = useState(true);
   const [returnClient, setReturnClient] = useState<FirstFirmClient | null | undefined>(undefined);
-  const [clientCount, setClientCount] = useState<number | null>(null);
   const [quote, setQuote] = useState<FirmBillingQuote | null>(loadedQuote);
   const [quoteError, setQuoteError] = useState("");
   const [wallAttempt, setWallAttempt] = useState(0);
-  const [entitlementOutcome, setEntitlementOutcome] =
-    useState<FirmWallEntitlementOutcome>("failed");
+  const [entitlementOutcome, setEntitlementOutcome] = useState<FirmWallEntitlementOutcome>("failed");
   const [trialEnded, setTrialEnded] = useState(false);
   const [backHref, setBackHref] = useState(FIRM_WALL_BACK_HREF);
   const retryWall = () => {
     setChecking(true);
     setReturnClient(undefined);
-    setClientCount(null);
     setQuote(null);
     setQuoteError("");
     setWallAttempt((n) => n + 1);
   };
 
-  const priced = quote ? billingIntentForResolvedMarket(quote.market, pending) : null;
+  const priced = quote
+    ? billingIntentForResolvedMarket(quote.market, pending)
+    : null;
 
   useEffect(() => {
     if (priced) stashPendingCheckout(priced);
@@ -209,7 +197,6 @@ function BillingRequiredPage() {
     const interval = pending.interval;
     void resolveBillingWall({
       client: loadFirstFirmClient(),
-      clientCount: fetchClientCount({ data: {} }),
       entitlement: checkEntitlement({ data: { refresh: true } }).then((result) => {
         if (user?.id) noteFirmEntitlement(user.id, result);
         return result;
@@ -221,7 +208,6 @@ function BillingRequiredPage() {
     }).then((result) => {
       if (cancelled) return;
       setReturnClient(result.returnClient);
-      setClientCount(result.clientCount);
       if (result.quote) setQuote(result.quote);
       if (result.quoteError) setQuoteError(result.quoteError);
       setEntitlementOutcome(result.entitlementOutcome);
@@ -235,17 +221,7 @@ function BillingRequiredPage() {
     return () => {
       cancelled = true;
     };
-  }, [
-    loading,
-    user,
-    pending.plan,
-    pending.interval,
-    navigate,
-    checkEntitlement,
-    fetchQuote,
-    fetchClientCount,
-    wallAttempt,
-  ]);
+  }, [loading, user, pending.plan, pending.interval, navigate, checkEntitlement, fetchQuote, wallAttempt]);
 
   const checkout = priced ?? pending;
   const planName = registerLabelForPlan(checkout.plan);
@@ -255,24 +231,16 @@ function BillingRequiredPage() {
       : quote?.market === "us"
         ? usdPriceLabel(checkout.plan, checkout.interval)
         : null;
-  // Card-free firms open on Starter monthly. That price is the same helper
-  // the practice home uses. A missing quote is not ZA. A ZA quote with a
-  // null price stays unresolved.
+  // A missing quote is not ZA. A ZA quote with a null price stays unresolved.
   const shownPrice =
-    checkout.plan === "starter" && checkout.interval === "month"
-      ? cardFreeTrialPrice({
-          market: quote?.market ?? null,
-          zaPriceLabel: quote?.market === "za" ? (quote.priceLabel ?? null) : null,
-        })
-      : priceLabel ||
-        (quote?.market === "za" ? null : usdPriceLabel(checkout.plan, checkout.interval));
+    priceLabel ||
+    (quote?.market === "za"
+      ? null
+      : usdPriceLabel(checkout.plan, checkout.interval));
 
   if (loading || checking || !user || returnClient === undefined) {
     return (
-      <div
-        className="grid min-h-screen place-items-center bg-white px-4 text-[#102A43]"
-        data-billing-wall="checking"
-      >
+      <div className="grid min-h-screen place-items-center bg-white px-4 text-[#102A43]" data-billing-wall="checking">
         <div className="w-full max-w-md rounded-2xl border border-[#DBEAFE] bg-white p-6 shadow-[0_8px_24px_rgba(16,42,67,0.06)]">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#0B5FFF]">Billing</p>
           <h1 className="mt-2 text-xl font-semibold text-[#102A43]">Checking firm billing…</h1>
@@ -286,7 +254,6 @@ function BillingRequiredPage() {
       planName={planName}
       priceLabel={shownPrice}
       clientName={returnClient?.name}
-      clientCount={clientCount}
       checkout={checkout}
       onRetry={firmWallOffersRetry(entitlementOutcome) ? retryWall : undefined}
       backHref={backHref}

@@ -18,7 +18,7 @@ import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_BAND_IDS,
-  cardFreeTrialLine,
+  CARD_FREE_TRIAL_LINE,
   FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_SENTENCE,
   firmClientLimitLabel,
@@ -290,7 +290,7 @@ export function FirmBandUpgrade({
                     data-card-free-trial=""
                     style={{ display: "block", fontSize: 12 }}
                   >
-                    {cardFreeTrialLine(clientCount)}
+                    {CARD_FREE_TRIAL_LINE}
                   </span>
                 ) : band.id === "starter" && introTrialEligible ? (
                   <>
