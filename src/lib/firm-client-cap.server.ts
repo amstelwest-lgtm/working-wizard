@@ -544,6 +544,29 @@ async function loadMembershipRole(
   return data?.role ?? null;
 }
 
+/**
+ * Client count the cap uses: non-demo rows, empty same-name shells collapsed.
+ * Null when the firm is missing or the read failed. Callers must not treat
+ * that as zero, or a card-free wall will say the first client is free.
+ */
+export async function loadFirmClientCount(input: {
+  supabase: unknown;
+  userId: string;
+  firmId?: string | null;
+}): Promise<number | null> {
+  try {
+    const userId = input.userId.trim();
+    if (!userId) return null;
+    const admin = getSupabaseAdminOrNull();
+    const db = admin ? asCapDb(admin) : asCapDb(input.supabase);
+    const firm = await loadFirm(db, input.firmId?.trim() || null, userId);
+    if (!firm) return null;
+    return await countFirmClients(db, firm.id);
+  } catch {
+    return null;
+  }
+}
+
 async function countFirmClients(db: CapDb, firmId: string): Promise<number> {
   // One book is one client. Demo rows are left out. Empty shells that share a
   // name collapse to the oldest, the same set the Clients list shows.

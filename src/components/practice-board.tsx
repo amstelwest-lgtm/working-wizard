@@ -56,7 +56,7 @@ import {
   type StoredScorePoint,
 } from "@/lib/practice-client-row";
 import { useServerFn } from "@tanstack/react-start";
-import { CARD_FREE_TRIAL_LINE, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+import { FIRM_TRIAL_SENTENCE, cardFreeTrialLine } from "@/lib/stripe-plans";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import {
   ADD_CLIENT_CREATING_AFTER_MS,
@@ -778,7 +778,7 @@ function AddClientDialog({
                   data-card-free-trial=""
                   style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}
                 >
-                  {CARD_FREE_TRIAL_LINE}
+                  {cardFreeTrialLine(cap.upgrade?.clientCount)}
                 </p>
               ) : null}
               {cap?.upgrade?.usageLabel ? (

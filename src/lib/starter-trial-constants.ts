@@ -11,12 +11,34 @@ export const FIRM_TRIAL_SENTENCE = `${FIRM_TRIAL_DAYS}-day free trial · up to $
 export const FIRM_TRIAL_CARD_NOTE = "You add a card once you have seen your first result.";
 export const FIRM_TRIAL_CARD_LINE = `${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE}`;
 /**
- * Card-free enforced firm (no Stripe subscription). Replaces
- * FIRM_TRIAL_CARD_LINE on that firm's banner, Add client card, and wall.
- * A trialing subscription keeps FIRM_TRIAL_CARD_LINE.
+ * Card-free enforced firm (no Stripe subscription), 0 or 1 client.
+ * Replaces FIRM_TRIAL_CARD_LINE on that firm's banner. A trialing
+ * subscription keeps FIRM_TRIAL_CARD_LINE. Other counts use cardFreeTrialLine.
  */
 export const CARD_FREE_TRIAL_LINE =
   "Your first client is free to explore. Add a card to start your 14-day free trial · up to 5 clients.";
+
+const CARD_FREE_TRIAL_FEW_LINE = "Add a card to start your 14-day free trial · up to 5 clients.";
+
+const CARD_FREE_TRIAL_AT_LIMIT_LINE =
+  "You've reached the 5 clients included in the free trial. Add a card to start your 14-day free trial.";
+
+/**
+ * Card-free trial sentence for this firm's client count.
+ * 0 or 1 keeps the explore line. 2–4 drops it. 5 names the trial cap.
+ * Above 5 names the real count and Solo. An unknown count uses the 2–4
+ * line and never the first-client line.
+ */
+export function cardFreeTrialLine(clientCount: number | null | undefined): string {
+  if (typeof clientCount !== "number" || !Number.isFinite(clientCount) || clientCount < 0) {
+    return CARD_FREE_TRIAL_FEW_LINE;
+  }
+  const count = Math.floor(clientCount);
+  if (count <= 1) return CARD_FREE_TRIAL_LINE;
+  if (count < FIRM_TRIAL_CLIENT_LIMIT) return CARD_FREE_TRIAL_FEW_LINE;
+  if (count === FIRM_TRIAL_CLIENT_LIMIT) return CARD_FREE_TRIAL_AT_LIMIT_LINE;
+  return `This practice has ${count} clients. The free trial covers up to ${FIRM_TRIAL_CLIENT_LIMIT}. Add a card to start your trial; more than ${FIRM_TRIAL_CLIENT_LIMIT} clients needs Solo.`;
+}
 
 export const STARTER_TRIAL_ENDED_MESSAGE = "Your trial has ended, choose a plan";
 
