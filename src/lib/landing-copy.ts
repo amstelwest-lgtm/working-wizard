@@ -1,7 +1,10 @@
 import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { HOMEPAGE_FAQ_ITEMS, HOMEPAGE_OWNER_COST_US } from "@/lib/marketing-faq";
 import type { FaqItem } from "@/lib/seo";
-import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE, firmUsdListPrice } from "@/lib/stripe-plans";
+import { PRICING_OWNER_BAR_US, PRICING_TRIAL_AFTER } from "@/lib/public-pricing-lines";
+import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+
+export { PRICING_OWNER_BAR_US, PRICING_TRIAL_AFTER };
 
 /** Empty unless VITE_WALKTHROUGH_URL is set. The hero slot stays unrendered. */
 export const WALKTHROUGH_URL = String(import.meta.env.VITE_WALKTHROUGH_URL ?? "").trim();
@@ -14,8 +17,6 @@ export const HERO_LEDE =
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
 /** Hero note. The pricing bar leads with FIRM_TRIAL_SENTENCE and uses the shorter line under it. */
-const FIRM_TRIAL_THEN_US = `Then ${firmUsdListPrice("starter", "month")}/mo.`;
-export const PRICING_TRIAL_AFTER = `On Starter. ${FIRM_TRIAL_CARD_NOTE} ${FIRM_TRIAL_THEN_US}`;
 export const FIRM_TRIAL_EXPLORE = `${FIRM_TRIAL_SENTENCE}. ${PRICING_TRIAL_AFTER}`;
 export const HERO_CTA_NOTE = FIRM_TRIAL_EXPLORE;
 export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
@@ -47,8 +48,7 @@ export const TRUST_PREP =
   "Less time on each client. The finance team prepares the file before you sit down.";
 export const TRUST_HANDOFF =
   "The AI team prepares the work and your accountant reviews and approves it, so the client gets advice they can trust and the firm keeps control.";
-export const TRUST_FEE =
-  "A Financial Manager, an Analyst and an Advisor, for a small monthly fee.";
+export const TRUST_FEE = "A Financial Manager, an Analyst and an Advisor, for a small monthly fee.";
 export const TRUST_BOOKS =
   "QuickBooks and Xero stay the books. Sage is coming soon. Invoices, bills and receipts post only after a named person approves.";
 
@@ -144,8 +144,8 @@ export const PRICING_INTRO =
 /**
  * Checkout opens after the first result. It collects a card and starts the
  * 14-day Starter trial. The paid price starts when that trial ends.
+ * PRICING_OWNER_BAR_US and PRICING_TRIAL_AFTER are re-exported from public-pricing-lines.
  */
-export const PRICING_OWNER_BAR_US = "$39/mo · free when your accountant is on Milōn";
 export const OWNER_OFFER_LABEL = "For business owners";
 export const PRICING_OWNER_CTA = OWNER_SIGNUP_LINK;
 export const SOLO_TRIAL_BUTTON = "Start my 14-day free trial";

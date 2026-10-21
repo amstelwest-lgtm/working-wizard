@@ -3,18 +3,25 @@
  * Name and email come after three useful replies. The chat stays open
  * after the form. Schedule a call is an optional disclosure.
  */
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
 import { TrySchedule, type TryCallResult } from "@/components/try-schedule";
 import { postProspectTalk, type ProspectTalkResponse } from "@/lib/prospect-talk-client";
 import {
-  PROSPECT_FM_SLUG,
   prospectAgentsFor,
   resolveTalkSlug,
   sanitizeRef,
   type ProspectAgentCopy,
   type TalkCopyPack,
 } from "@/lib/prospect-talk";
+import { TALK_DRAFT_STORAGE_KEY } from "@/lib/prospect-talk-draft";
 import { initialTalkSession, openTalkSession, queueTalkMessage } from "@/lib/prospect-talk-session";
 
 export type TalkMessage = { role: "agent" | "you"; text: string };
@@ -45,9 +52,11 @@ function AgentList({
 export function TalkIndex({
   refCode,
   copyPack,
+  priceLine,
 }: {
   refCode: string | null;
   copyPack?: TalkCopyPack;
+  priceLine?: string;
 }) {
   const agents = prospectAgentsFor(copyPack);
   const count = agents.length === 4 ? "Four" : "Three";
@@ -63,6 +72,19 @@ export function TalkIndex({
       <p className="talk-note">
         {count} agents. Each one walks a labelled SAMPLE. No account and no password.
       </p>
+      {priceLine ? (
+        <div data-talk-price="true">
+          {priceLine
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => (
+              <p className="talk-note" key={line}>
+                {line}
+              </p>
+            ))}
+        </div>
+      ) : null}
       <AgentList refCode={refCode} agents={agents} />
     </main>
   );
@@ -70,6 +92,7 @@ export function TalkIndex({
 
 export function TaxSpecialistElsewhere({ refCode }: { refCode: string | null }) {
   const query = refCode ? `?ref=${encodeURIComponent(refCode)}` : "";
+  const others = prospectAgentsFor("us");
   return (
     <main className="talk-page" data-talk-view="tax-elsewhere">
       <div className="talk-top">
@@ -80,9 +103,13 @@ export function TaxSpecialistElsewhere({ refCode }: { refCode: string | null }) 
       </div>
       <h1 className="talk-title">Tax Specialist</h1>
       <p className="talk-note">The Tax Specialist covers South African tax.</p>
-      <a className="talk-next" href={`/talk/${PROSPECT_FM_SLUG}${query}`}>
-        Talk to the Financial Manager
-      </a>
+      <ul className="talk-picks">
+        {others.map((agent) => (
+          <li className="talk-pick" key={agent.slug}>
+            <a href={`/talk/${agent.slug}${query}`}>Talk to the {agent.role}</a>
+          </li>
+        ))}
+      </ul>
     </main>
   );
 }
@@ -145,13 +172,47 @@ export function ProspectTalkScreen({
     timeZone: string;
   }) => Promise<TryCallResult>;
 }) {
-  const [draft, setDraft] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
   const [honeypot, setHoneypot] = useState("");
+  const [live, setLive] = useState(false);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
   const thread: TalkMessage[] = [{ role: "agent", text: agent.greeting }, ...messages];
   const clip = busy ? "thinking" : askLead ? "waiting" : "idle";
+
+  function sendDraft(text = areaRef.current?.value ?? "") {
+    if (!live || busy) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (areaRef.current) areaRef.current.value = "";
+    try {
+      window.sessionStorage.removeItem(TALK_DRAFT_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    onSend?.(trimmed);
+  }
+
+  function onComposerKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (!live) return;
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    sendDraft(event.currentTarget.value);
+  }
+
+  useLayoutEffect(() => {
+    const area = areaRef.current;
+    if (area && !area.value) {
+      try {
+        const saved = window.sessionStorage.getItem(TALK_DRAFT_STORAGE_KEY) ?? "";
+        if (saved) area.value = saved;
+      } catch {
+        /* ignore */
+      }
+    }
+    setLive(true);
+  }, []);
 
   return (
     <main
@@ -200,11 +261,16 @@ export function ProspectTalkScreen({
         <form
           className="talk-form"
           data-talk-lead="true"
+          aria-labelledby="talk-lead-label"
           onSubmit={(event: FormEvent) => {
             event.preventDefault();
             onLead?.({ name, email, consent, honeypot });
           }}
         >
+          <p className="talk-lead-label" id="talk-lead-label">
+            Your name and email
+          </p>
+          <p className="talk-note">No password. This continues the sample.</p>
           <label className="talk-field" htmlFor="talk-name">
             Name
             <input
@@ -259,12 +325,10 @@ export function ProspectTalkScreen({
       ) : (
         <form
           className="talk-composer"
+          data-talk-live={live ? "1" : undefined}
           onSubmit={(event: FormEvent) => {
             event.preventDefault();
-            const text = draft.trim();
-            if (!text) return;
-            setDraft("");
-            onSend?.(text);
+            sendDraft();
           }}
         >
           <div className="talk-chips">
@@ -273,22 +337,31 @@ export function ProspectTalkScreen({
                 key={question}
                 type="button"
                 className="talk-chip"
-                disabled={busy}
-                onClick={() => onSend?.(question)}
+                disabled={!live || busy}
+                onClick={() => {
+                  if (!live || busy) return;
+                  onSend?.(question);
+                }}
               >
                 {question}
               </button>
             ))}
           </div>
           <textarea
+            ref={areaRef}
             aria-label="Message"
             rows={3}
             maxLength={500}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            defaultValue=""
+            onKeyDown={onComposerKey}
           />
-          <button className="talk-send" type="submit" disabled={busy}>
-            Send
+          <button
+            className={live ? "talk-send" : "talk-send is-connecting"}
+            type="button"
+            disabled={!live || busy}
+            onClick={() => sendDraft()}
+          >
+            {live ? "Send" : "Connecting…"}
           </button>
           {error ? <p className="talk-error">{error}</p> : null}
         </form>
@@ -366,6 +439,24 @@ export function ProspectTalkLive({
     window.sessionStorage.setItem(`milon-talk:${slug}`, next);
   }
 
+  function applyResult(result: ProspectTalkResponse | null) {
+    setBusy(false);
+    if (!result?.ok) {
+      setError(result?.error ?? "The conversation isn't available right now.");
+      return;
+    }
+    if (result.sessionToken) remember(result.sessionToken);
+    if (result.reply) {
+      const reply = result.reply;
+      setMessages((current) =>
+        current.some((message) => message.role === "agent" && message.text === reply)
+          ? current
+          : [...current, { role: "agent", text: reply }],
+      );
+    }
+    setAskLead(result.askLead === true);
+  }
+
   postRef.current = (text, sessionToken) => {
     setBusy(true);
     setError(null);
@@ -378,19 +469,8 @@ export function ProspectTalkLive({
       market: pageMarket(),
       utm: pageUtm(),
     })
-      .then((result) => {
-        if (!result.ok) {
-          setError(result.error ?? "The conversation isn't available right now.");
-          return;
-        }
-        if (result.sessionToken) remember(result.sessionToken);
-        if (result.reply) {
-          setMessages((current) => [...current, { role: "agent", text: result.reply ?? "" }]);
-        }
-        setAskLead(result.askLead === true);
-      })
-      .catch(() => setError("The conversation isn't available right now."))
-      .finally(() => setBusy(false));
+      .then((result) => applyResult(result))
+      .catch(() => applyResult(null));
   };
 
   useEffect(() => {

@@ -6,21 +6,22 @@ import { marketingPackForGeo } from "./geo-country.ts";
 import { TAX_TALK, taxFilingAsked } from "./prospect-tax-copy.ts";
 import { prospectPricingReply, prospectSystem } from "./prospect-talk-prompts.ts";
 import {
-  PROSPECT_LEAD_ASK,
   PROSPECT_NO_BOOKS_REPLY,
   PROSPECT_NO_FILING_REPLY,
   PROSPECT_TAX_SLUG,
   assessProspectTurn,
   guardProspectReply,
   looksLikeInjection,
+  mentionsBlockedMoney,
   mentionsFiling,
   mentionsLiveWrite,
+  mentionsVat,
+  PROSPECT_NO_VAT_REPLY,
   methodAsked,
   newProspectToken,
   plainMethodReply,
   pricingAsked,
   PROSPECT_INJECTION_REPLY,
-  PROSPECT_PRICING_HOLD,
   prospectEmailAllowed,
   prospectLeadUtm,
   publicProspectAgent,
@@ -150,6 +151,15 @@ function blockedReply(agent: ProspectAgentCopy, message: string): string | null 
   return null;
 }
 
+/** Last pass on every visitor-facing reply. No indirect-tax word. No rand outside ZA. */
+function forVisitor(text: string, country: ProspectCountry): string {
+  if (mentionsVat(text)) return PROSPECT_NO_VAT_REPLY;
+  if (mentionsBlockedMoney(text, country)) {
+    return "I can walk the sample in dollars. The figures are labelled SAMPLE and show up after your name and email.";
+  }
+  return text;
+}
+
 function replyFor(input: {
   agent: ProspectAgentCopy;
   message: string;
@@ -159,9 +169,7 @@ function replyFor(input: {
 }): string {
   const blocked = blockedReply(input.agent, input.message);
   if (blocked) return blocked;
-  if (pricingAsked(input.message)) {
-    return input.figures === "allow" ? prospectPricingReply(input.country) : PROSPECT_PRICING_HOLD;
-  }
+  if (pricingAsked(input.message)) return prospectPricingReply(input.country);
   if (input.figures === "hold" && methodAsked(input.message))
     return plainMethodReply(input.message);
   const drafted = input.modelText ?? scriptedProspectReply(input.agent, false);
@@ -266,20 +274,19 @@ async function takeTurn(
   }
   const visitorTurns = fromTurns + 1;
   const hasLead = Boolean(active.leadEmail);
-  const askLead = shouldAskForLead(visitorTurns, hasLead);
+  const pricing = pricingAsked(message);
   const blocked = blockedReply(scope.agent, message);
+  const askLead = shouldAskForLead(visitorTurns, hasLead);
+  // Pricing and method questions are still answered. After the free replies
+  // the name and email form is required, including on those turns.
   const openGate = askLead && !blocked;
   let reply: string;
   if (blocked) {
     reply = blocked;
-  } else if (openGate) {
-    await ctx.store.setPending(active.id, message);
-    active.pendingMessage = message;
-    reply = PROSPECT_LEAD_ASK;
   } else {
     const figures = hasLead ? "allow" : "hold";
     let modelText: string | null = null;
-    const skipModel = pricingAsked(message) || (figures === "hold" && methodAsked(message));
+    const skipModel = pricing || (figures === "hold" && methodAsked(message));
     if (!skipModel) {
       try {
         modelText = await ctx.model({
@@ -297,13 +304,17 @@ async function takeTurn(
       modelText,
       figures,
     });
+    if (openGate) {
+      await ctx.store.setPending(active.id, message);
+      active.pendingMessage = message;
+    }
   }
   return {
     status: 200,
     body: {
       ok: true,
       sessionToken,
-      reply,
+      reply: forVisitor(reply, scope.country),
       askLead: openGate,
       visitorTurns,
       country: scope.country,
@@ -318,8 +329,8 @@ async function answerPending(
   pending: string,
 ): Promise<string> {
   const blocked = blockedReply(agent, pending);
-  if (blocked) return blocked;
-  if (pricingAsked(pending)) return prospectPricingReply(country);
+  if (blocked) return forVisitor(blocked, country);
+  if (pricingAsked(pending)) return forVisitor(prospectPricingReply(country), country);
   let modelText: string | null = null;
   try {
     modelText = await ctx.model({
@@ -329,13 +340,16 @@ async function answerPending(
   } catch {
     modelText = null;
   }
-  return replyFor({
-    agent,
-    message: pending,
+  return forVisitor(
+    replyFor({
+      agent,
+      message: pending,
+      country,
+      modelText,
+      figures: "allow",
+    }),
     country,
-    modelText,
-    figures: "allow",
-  });
+  );
 }
 
 async function submitLead(

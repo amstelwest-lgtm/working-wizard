@@ -3,8 +3,8 @@ import {
   FIRM_CHECKOUT_BANDS,
   type FirmCheckoutBand,
   type FirmInterval,
-} from "@/lib/stripe-plans";
-import { annualZarCents, ZA_MONTHLY_CENTS, zaLookupKey } from "@/lib/pricing/za-ladder";
+} from "../stripe-plans.ts";
+import { annualZarCents, ZA_MONTHLY_CENTS, zaLookupKey } from "./za-ladder.ts";
 
 export type ZaCatalogEntry = {
   band: FirmCheckoutBand;
