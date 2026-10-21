@@ -1,3 +1,5 @@
+process.env.NODE_ENV = "test";
+
 /**
  * Billing wall, one deadline.
  * (a) A hung getFirmBillingEntitlement settles the gate by 8s.
@@ -43,13 +45,23 @@ const dom = new Window({
   },
 });
 
-for (const key of ["window", "document", "navigator", "HTMLElement", "Node", "Element", "Document"] as const) {
+for (const key of ["window", "document", "navigator", "localStorage", "HTMLElement", "Node", "Element", "Document"] as const) {
   Object.defineProperty(globalThis, key, {
     configurable: true,
     writable: true,
     value: dom[key as keyof Window],
   });
 }
+Object.defineProperty(globalThis, "scrollTo", {
+  configurable: true,
+  writable: true,
+  value: () => {},
+});
+Object.defineProperty(globalThis, "self", {
+  configurable: true,
+  writable: true,
+  value: dom,
+});
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
   configurable: true,
   writable: true,
@@ -123,6 +135,8 @@ const { clearCachedFirmEntitlement, noteFirmEntitlement } = await import(
 );
 const { BILLING_DEADLINE_USER_ID } = await import("./billing-deadline-auth.ts");
 const { BILLING_DEADLINE_FIRM_ID } = await import("./billing-deadline-profile.ts");
+const { setBillingDeadlineClientGate } = await import("@/lib/firm-client-gate");
+const { markInsightSeen } = await import("../src/lib/funnel-timing.ts");
 const { setAuthGetClaimsForTests, requireSupabaseAuth } = await import(
   "../src/integrations/supabase/auth-middleware.ts"
 );
@@ -146,7 +160,9 @@ function html() {
   return document.body.innerHTML;
 }
 
-function settledSurface(markup: string): "card" | "content" | "skeleton" {
+function settledSurface(markup: string): "card" | "content" | "skeleton" | "wall" | "billing" {
+  if (markup.includes("Billing required")) return "billing";
+  if (markup.includes("This firm needs a plan")) return "wall";
   if (markup.includes("Couldn't check billing")) return "card";
   if (markup.includes("Client file")) return "content";
   return "skeleton";
@@ -160,17 +176,27 @@ const clientRoute = createRoute({
   path: "/clients/$clientId",
   component: () => createElement("p", null, "Client file"),
 });
-const router = createRouter({
-  routeTree: rootRoute.addChildren([clientRoute]),
-  history: createMemoryHistory({ initialEntries: ["/clients/second-file"] }),
+const billingRequiredRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/billing/required",
+  component: () => createElement("p", null, "Billing required"),
 });
+const router = createRouter({
+  routeTree: rootRoute.addChildren([clientRoute, billingRequiredRoute]),
+  history: createMemoryHistory({ initialEntries: ["/clients/second-file"] }),
+  isServer: false,
+} as never);
 
 const host = document.createElement("div");
 document.body.appendChild(host);
 const root = createRoot(host);
 
+let routerLoaded = false;
 async function mountGate() {
-  await router.load();
+  if (!routerLoaded) {
+    await router.load();
+    routerLoaded = true;
+  }
   (router as { isServer?: boolean }).isServer = false;
   (router as { _rendered?: unknown[] })._rendered = [];
   await act(async () => {
@@ -483,6 +509,118 @@ await check("(c) a failed Stripe refresh does not reject the stored plan", async
   } finally {
     setStripeClientForTests(null);
     setFirmBillingPlanReadForTests(null);
+  }
+});
+
+await check("(B) a client added after mount walls the second file", async () => {
+  clearCachedFirmEntitlement();
+  markInsightSeen(BILLING_DEADLINE_FIRM_ID);
+  setBillingDeadlineClientGate({ firmClientCount: 1, firstClientId: "first-client" });
+  setFirmBillingGateCheckForTests(async () => ({
+    entitled: false,
+    reason: "no_active_subscription",
+  }));
+  try {
+    await mountGate();
+    await router.navigate({
+      to: "/clients/$clientId",
+      params: { clientId: "first-client" },
+    });
+    await flush();
+    await flush();
+    assert(
+      router.state.location.pathname === "/clients/first-client" && settledSurface(html()) === "content",
+      `the first client stays open, saw ${settledSurface(html())} at ${router.state.location.pathname}`,
+    );
+    setBillingDeadlineClientGate({ firmClientCount: 2, firstClientId: "first-client" });
+    await act(async () => {
+      await router.navigate({ to: "/clients/$clientId", params: { clientId: "second-file" } });
+    });
+    await flush();
+    await flush();
+    const surface = settledSurface(html());
+    assert(
+      surface === "billing",
+      `opening the 2nd client with an insight seen and no subscription must require_billing, saw ${surface} at ${router.state.location.pathname}`,
+    );
+  } finally {
+    setBillingDeadlineClientGate({ firmClientCount: 2, firstClientId: "first-client" });
+    setFirmBillingGateCheckForTests(null);
+    clearCachedFirmEntitlement();
+    await unmountGate();
+    await router.navigate({ to: "/clients/$clientId", params: { clientId: "second-file" } });
+  }
+});
+
+await check("(C) unpaid + failed check keeps the wall", async () => {
+  clearCachedFirmEntitlement();
+  noteFirmEntitlement(
+    BILLING_DEADLINE_USER_ID,
+    { entitled: false, reason: "no_active_subscription", checkFailed: "timeout" },
+    BILLING_DEADLINE_FIRM_ID,
+  );
+  setBillingDeadlineClientGate({ firmClientCount: 2, firstClientId: "first-client" });
+  setFirmBillingGateCheckForTests(async () => {
+    throw new Error("auth-timeout");
+  });
+  try {
+    await router.navigate({ to: "/clients/$clientId", params: { clientId: "second-file" } });
+    await mountGate();
+    await flush();
+    const surface = settledSurface(html());
+    assert(surface === "wall", `an unpaid firm must keep the wall when the check fails, saw ${surface}`);
+    assert(!html().includes("Client file"), "a failed check must not open a later file for an unpaid firm");
+  } finally {
+    await unmountGate();
+    setFirmBillingGateCheckForTests(null);
+    clearCachedFirmEntitlement();
+  }
+});
+
+await check("(C) entitled stored plan + hang does not wall, and settles by 8s", async () => {
+  clearCachedFirmEntitlement();
+  noteFirmEntitlement(
+    BILLING_DEADLINE_USER_ID,
+    { entitled: true, reason: "active_subscription", checkFailed: "timeout" },
+    BILLING_DEADLINE_FIRM_ID,
+  );
+  setFirmBillingGateCheckForTests(async () => hangCheck() as never);
+  const before = windowClock.shellDeadlines();
+  try {
+    await router.navigate({ to: "/clients/$clientId", params: { clientId: "second-file" } });
+    await mountGate();
+    await windowClock.advance(8_500, fire);
+    const surface = settledSurface(html());
+    assert(surface === "content", `a known entitled plan stays open when the check hangs, saw ${surface}`);
+    assert(!html().includes("This firm needs a plan"), "an entitled firm must not see the wall");
+    assert(
+      windowClock.shellDeadlines() - before === 1,
+      "an entitled hang still has one 8s deadline",
+    );
+  } finally {
+    await unmountGate();
+    setFirmBillingGateCheckForTests(null);
+    clearCachedFirmEntitlement();
+  }
+});
+
+await check("(C) unknown + failed check is the Retry card, not the wall", async () => {
+  clearCachedFirmEntitlement();
+  setBillingDeadlineClientGate({ firmClientCount: 2, firstClientId: "first-client" });
+  setFirmBillingGateCheckForTests(async () => {
+    throw new Error("auth-timeout");
+  });
+  try {
+    await router.navigate({ to: "/clients/$clientId", params: { clientId: "second-file" } });
+    await mountGate();
+    await flush();
+    const surface = settledSurface(html());
+    assert(surface === "card", `an unknown firm shows the Retry card, saw ${surface}`);
+    assert(!html().includes("This firm needs a plan"), "an unknown failure is not the wall");
+  } finally {
+    await unmountGate();
+    setFirmBillingGateCheckForTests(null);
+    clearCachedFirmEntitlement();
   }
 });
 

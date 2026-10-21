@@ -2,9 +2,11 @@
  * Firm-band catalog lookup keys and USD list amounts.
  * Run: pnpm test:stripe-plans
  */
+import { readFileSync } from "node:fs";
 import {
   decideFirmClientCreate,
   eligibleForIntroTrial,
+  firmAddClientDestination,
   formatFirmPlanStatus,
 } from "../src/lib/firm-client-cap";
 import {
@@ -162,6 +164,42 @@ assert(
   }).allowed,
   "paid Solo allows more than 3",
 );
+// Card-free enforced firm: the first client can be created. A second one
+// does not. Add client goes to the Start trial wall.
+const cardFreeSecond = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "none",
+  band: null,
+  clientCount: 1,
+  noPlanTrialEnforced: true,
+});
+assert(
+  !cardFreeSecond.allowed && cardFreeSecond.code === "billing_required",
+  "enforced, no subscription, 1 client routes to billing_required",
+);
+assert(
+  firmAddClientDestination(cardFreeSecond) === "/billing/required",
+  "Add client follows billing_required to /billing/required",
+);
+assert(
+  decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "none",
+    band: null,
+    clientCount: 0,
+    noPlanTrialEnforced: true,
+  }).allowed,
+  "enforced, no subscription, 0 clients is allowed",
+);
+assert(
+  FIRM_TRIAL_SENTENCE === "14-day free trial · up to 5 clients",
+  "the wall CTA keeps the approved trial copy",
+);
+const practiceBoard = readFileSync(new URL("../src/components/practice-board.tsx", import.meta.url), "utf8");
+assert(
+  practiceBoard.includes("firmAddClientDestination"),
+  "the practice board Add client follows the billing_required decision",
+);
 // 1020E shape: starter_trial_enforced true, precard_cap_applies true, no Stripe customer.
 const noPlanCap = decideFirmClientCreate({
   stripeConfigured: true,
@@ -172,15 +210,8 @@ const noPlanCap = decideFirmClientCreate({
   noPlanTrialEnforced: true,
 });
 assert(
-  !noPlanCap.allowed &&
-    noPlanCap.code === "trial_client_cap" &&
-    noPlanCap.message.includes(FIRM_TRIAL_SENTENCE),
-  "card-free enforced trial blocks the 6th client (1020E)",
-);
-assert(
-  noPlanCap.message ===
-    `${FIRM_TRIAL_SENTENCE} on Starter. This practice has reached the 5-client trial limit.`,
-  "card-free trial says the practice reached the 5-client limit",
+  !noPlanCap.allowed && noPlanCap.code === "billing_required",
+  "a card-free enforced firm with 5 clients still does not create another",
 );
 const noPlanSix = decideFirmClientCreate({
   stripeConfigured: true,
@@ -190,22 +221,20 @@ const noPlanSix = decideFirmClientCreate({
   noPlanTrialEnforced: true,
 });
 assert(
-  !noPlanSix.allowed &&
-    noPlanSix.message === noPlanCap.message &&
-    !/already has \d+ clients/.test(noPlanSix.message),
-  "a practice with 6 clients is not described as already having 5",
+  !noPlanSix.allowed && noPlanSix.code === "billing_required",
+  "a card-free enforced firm with 6 clients still routes to billing",
 );
-assert(!noPlanSix.message.toLowerCase().includes("vat"), "the trial-limit sentence does not mention VAT");
 assert(
-  decideFirmClientCreate({
+  !decideFirmClientCreate({
     stripeConfigured: true,
     phase: "none",
     band: null,
     clientCount: 4,
     noPlanTrialEnforced: true,
   }).allowed,
-  "card-free enforced trial allows the 5th client",
+  "card-free enforced trial does not allow a 5th client before a subscription",
 );
+assert(!trialBlock.message.toLowerCase().includes("vat"), "the trial-limit sentence does not mention VAT");
 assert(
   decideFirmClientCreate({
     stripeConfigured: true,

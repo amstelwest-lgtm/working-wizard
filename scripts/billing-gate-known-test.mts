@@ -142,8 +142,17 @@ assert(
   "a deadline with a known entitled plan opens the page",
 );
 assert(
-  surfaceAfterBillingCheckFailure({ known: "unpaid", ...page }) === "content",
-  "a deadline with a known unpaid plan does not go to the wall",
+  surfaceAfterBillingCheckFailure({ known: "unpaid", ...page }) === "wall",
+  "a deadline with a known unpaid plan keeps the wall on a later file",
+);
+assert(
+  surfaceAfterBillingCheckFailure({
+    known: "unpaid",
+    pathname: "/dashboard",
+    firmClientCount: 2,
+    firstClientId: first,
+  }) === "content",
+  "a known unpaid firm keeps Home open when the check fails",
 );
 assert(
   surfaceAfterBillingCheckFailure({ known: "none", ...page }) === "error",

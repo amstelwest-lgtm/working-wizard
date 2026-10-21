@@ -66,6 +66,7 @@ import {
   type AddClientSavePhase,
 } from "@/lib/firm-client-created";
 import {
+  firmAddClientDestination,
   idleStarterTrialBanner,
   showStarterTrialEndedCopy,
   type FirmClientCreateAllowance,
@@ -471,9 +472,12 @@ function AddClientDialog({
   heading = "Add a client",
   blurb,
   sandboxName,
+  onBillingRequired,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Card-free firm that already has a client. Opens the Start trial wall. */
+  onBillingRequired?: () => void;
   onAdded: (created: {
     id: string;
     name: string;
@@ -506,6 +510,7 @@ function AddClientDialog({
   const endTrial = useServerFn(endFirmTrialNow);
   const upgradeBand = useServerFn(upgradeFirmBand);
   const [cap, setCap] = useState<FirmClientCreateAllowance | null>(null);
+  const billedRef = useRef(false);
   const [confirmUpgrade, setConfirmUpgrade] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const closeDrawer = useOverlayHistory(open, onClose);
@@ -538,6 +543,7 @@ function AddClientDialog({
 
   useEffect(() => {
     if (!open) {
+      billedRef.current = false;
       setCap(null);
       setConfirmUpgrade(false);
       return;
@@ -561,6 +567,13 @@ function AddClientDialog({
       cancelled = true;
     };
   }, [open, firmId, checkCap]);
+
+  useEffect(() => {
+    if (!open || !cap || cap.allowed || billedRef.current) return;
+    if (firmAddClientDestination(cap) !== "/billing/required") return;
+    billedRef.current = true;
+    onBillingRequired?.();
+  }, [open, cap, onBillingRequired]);
 
   const refreshCap = async () => {
     if (!firmId) {
@@ -2540,7 +2553,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <button
             id="wizard-add-client"
             className={clientRows.length === 0 ? "btn ghost mini" : "btn gold mini"}
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              if (trialAllowance && firmAddClientDestination(trialAllowance) === "/billing/required") {
+                void navigate({ to: "/billing/required" });
+                return;
+              }
+              setAddOpen(true);
+            }}
           >
             <svg viewBox="0 0 24 24">
               <path d="M12 5v14M5 12h14" />
@@ -2735,6 +2754,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
               setFirstClientOpen(false);
             }
+          }}
+          onBillingRequired={() => {
+            setAddOpen(false);
+            if (firstClientOpen) {
+              markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
+              setFirstClientOpen(false);
+            }
+            void navigate({ to: "/billing/required" });
           }}
           onAdded={(created) => {
             markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);

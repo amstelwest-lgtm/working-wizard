@@ -13,7 +13,7 @@ import {
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import { loadFirmClientGateContext, type FirmClientGateContext } from "@/lib/firm-client-gate";
-import { decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entitlement";
+import { clientIdFromFirmPath, decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entitlement";
 import {
   pageWhileEntitlementUnknown,
   skeletonAfterBillingDeadline,
@@ -217,6 +217,30 @@ export function AuthGate() {
   }, [userId, firmId]);
 
   // Known unpaid: correct the route the moment they open a gated client file.
+  // The count from shell mount is stale once a client is added in this session,
+  // so a client file reads it again before deciding the first-client exception.
+  useEffect(() => {
+    if (loading || !userId) return;
+    if (!clientIdFromFirmPath(pathname)) return;
+    let cancelled = false;
+    void loadFirmClientGateContext()
+      .then((clients) => {
+        if (cancelled) return;
+        clientGateRef.current = clients;
+        setClientGate(clients);
+        const settled = settledRef.current;
+        if (!settled || settled.entitled || settled.reason !== "no_active_subscription") return;
+        settledRef.current = { ...settled, clients };
+        resumeUnpaidFirm(latest.current, clients);
+      })
+      .catch(() => {
+        // A failed recount leaves the count already on screen.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, userId, pathname]);
+
   useEffect(() => {
     const settled = settledRef.current;
     if (!settled || settled.entitled || settled.reason !== "no_active_subscription") return;
@@ -257,13 +281,22 @@ export function AuthGate() {
         firmClientCount: clients?.firmClientCount ?? null,
         firstClientId: clients?.firstClientId ?? null,
       });
-      // A known plan for this firm opens the page. A failed check is not the wall.
-      if (surface === "content" && known !== "none") {
+      // A known entitled plan opens the page. A known unpaid firm keeps the
+      // wall. A failed check does not turn an unpaid firm into an entitled one.
+      if (surface === "content" && known === "entitled") {
         setFirmEntitled(true);
         setBillingUnknown(false);
         setShowWall(false);
         failuresRef.current += 1;
         setCheckNotice(billingCheckNoticeVisible(failuresRef.current));
+        return;
+      }
+      if (surface === "wall") {
+        setBillingDeadlinePassed(false);
+        setFirmEntitled(false);
+        setBillingUnknown(true);
+        setShowWall(false);
+        setCheckNotice(false);
         return;
       }
       if (surface === "content") {
