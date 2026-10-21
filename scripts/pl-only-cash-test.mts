@@ -61,9 +61,22 @@ const plOnly = {
 const assessed = assessClientMetrics({ financials: plOnly, cashflow: null });
 assert(assessed.cash.amount == null, "P&L revenue is not a cash balance");
 assert(assessed.outlook.cashOnFile === false, "the forecast marks cash as missing");
-assert(assessed.outlook.floor === 0, `the minimum was derived from missing cash (${assessed.outlook.floor})`);
+assert(
+  assessed.outlook.floor === 0,
+  `the minimum was derived from missing cash (${assessed.outlook.floor})`,
+);
 assert(assessed.outlook.dipsBelowFloorWeek == null, "a missing balance does not dip under a floor");
-assert(assessed.outlook.totalOutflow === 0, "the P&L was not turned into a cash series");
+assert(assessed.outlook.totalOutflow > 0, "nine-plus months of costs seed weekly payments");
+assert(assessed.outlook.openingCash === null, "a missing balance is not stored as zero");
+assert(
+  assessed.outlook.openingNote === "Opening cash unknown",
+  assessed.outlook.openingNote ?? "missing note",
+);
+assert(
+  assessed.outlook.closing.every((n) => n === 0),
+  "closings are not rolled from a missing opening",
+);
+assert(assessed.outlook.seededFromActuals === true, "the P&L actuals still seed the weeks");
 
 const books = {
   hasBooks: true,
@@ -94,7 +107,10 @@ const status = ownerCardStatuses(books);
 assert(status.financial_manager == null, status.financial_manager?.word ?? "chip should be absent");
 const lines = ownerHomeLines(ownerAnswerTiles(books), null);
 assert(lines.financial_manager[0] === CASH_NOT_ON_FILE, lines.financial_manager.join(" | "));
-assert(!lines.financial_manager.some((line) => /\$0|Critical|below your/i.test(line)), lines.financial_manager.join(" | "));
+assert(
+  !lines.financial_manager.some((line) => /\$0|Critical|below your/i.test(line)),
+  lines.financial_manager.join(" | "),
+);
 
 const health = cashPillarFollowsForecast(
   scorecardHealthFromFinancials({
@@ -113,7 +129,10 @@ const health = cashPillarFollowsForecast(
 );
 const cashPillar = health.pillars.find((pillar) => pillar.id === "cash");
 assert(cashPillar?.score == null, `cash pillar was scored (${cashPillar?.score})`);
-assert(!health.pillars.some((pillar) => pillar.id === "cash" && pillar.score != null), "cash with no data is not in the score");
+assert(
+  !health.pillars.some((pillar) => pillar.id === "cash" && pillar.score != null),
+  "cash with no data is not in the score",
+);
 
 const live = liveHealthFromBooks({
   financials: plOnly,
@@ -185,7 +204,10 @@ const html = renderToStaticMarkup(
     onDeliverables: () => undefined,
   }),
 );
-assert(html.includes("Cash not on file yet, upload a balance sheet"), "home renders the missing-cash line");
+assert(
+  html.includes("Cash not on file yet, upload a balance sheet"),
+  "home renders the missing-cash line",
+);
 assert(!html.includes("Critical"), "home does not render Critical");
 assert(!/below your minimum/i.test(html), "home does not render the minimum strip");
 assert(!html.includes("$0"), "home does not render $0");
@@ -207,19 +229,31 @@ assert(realZero.outlook.floor > 0, "a real zero can still sit under a minimum");
 
 const plRatios = overviewRatios(plOnly);
 for (const name of ["Debtor Days", "Creditor Days", "Inventory Days", "Working Capital Days"]) {
-  assert(plRatios[name] == null, `${name} is null on a P&L with no balance sheet (${plRatios[name]})`);
+  assert(
+    plRatios[name] == null,
+    `${name} is null on a P&L with no balance sheet (${plRatios[name]})`,
+  );
 }
 const blankScore = scoreAndBand("Debtor Days", null, us);
-assert(blankScore.score == null && blankScore.tier == null, "a null day count has no score and no band");
+assert(
+  blankScore.score == null && blankScore.tier == null,
+  "a null day count has no score and no band",
+);
 const plHealthMap = healthMapFromRatios(plRatios, us);
-assert(plHealthMap.debtorDays == null && plHealthMap.creditorDays == null, "null days stay out of the health map");
+assert(
+  plHealthMap.debtorDays == null && plHealthMap.creditorDays == null,
+  "null days stay out of the health map",
+);
 assert(
   !health.pillars.some((pillar) => pillar.id === "cash" && pillar.score != null),
   "the cash pillar does not keep a score from blank day metrics",
 );
 
 const dayCounts = cashDriverDayFigures(plOnly);
-assert(dayCounts.debtorDays == null && dayCounts.creditorDays == null, "statement day figures stay null");
+assert(
+  dayCounts.debtorDays == null && dayCounts.creditorDays == null,
+  "statement day figures stay null",
+);
 const pillarHealths = {
   profit: health.pillars.find((pillar) => pillar.id === "profit")?.score ?? Number.NaN,
   assets: health.pillars.find((pillar) => pillar.id === "assets")?.score ?? Number.NaN,
@@ -248,14 +282,22 @@ const accountantDays = buildSpherePillars({
 });
 const ownerCash = ownerDays.find((pillar) => pillar.id === "cash")?.drivers ?? [];
 const accountantCash = accountantDays.find((pillar) => pillar.id === "cash")?.drivers ?? [];
-for (const driver of [...ownerCash, ...accountantCash].filter((row) => row.key === "debtorDays" || row.key === "creditorDays")) {
+for (const driver of [...ownerCash, ...accountantCash].filter(
+  (row) => row.key === "debtorDays" || row.key === "creditorDays",
+)) {
   const aside = sphereDriverAsideText(driver);
   assert(driver.reading == null, `${driver.label} must not print a day count (${driver.reading})`);
   assert(!Number.isFinite(driver.health), `${driver.label} must not keep a score`);
   assert(driver.note === HEALTH_NOT_ENOUGH_DATA, `${driver.label} note was ${driver.note}`);
   assert(aside.primary === HEALTH_MISSING_MARK, `${driver.label} prints ${aside.primary}`);
-  assert(aside.secondary === HEALTH_NOT_ENOUGH_DATA, `${driver.label} secondary was ${aside.secondary}`);
-  assert(!/score\s+\d+|HEALTHY|0 days/i.test(`${driver.label} ${aside.primary} ${aside.secondary}`), driver.label);
+  assert(
+    aside.secondary === HEALTH_NOT_ENOUGH_DATA,
+    `${driver.label} secondary was ${aside.secondary}`,
+  );
+  assert(
+    !/score\s+\d+|HEALTHY|0 days/i.test(`${driver.label} ${aside.primary} ${aside.secondary}`),
+    driver.label,
+  );
 }
 assert(
   accountantCash.find((row) => row.key === "debtorDays")?.label === "Days sales outstanding",
@@ -267,8 +309,14 @@ assert(
 );
 const dsoRow = healthDayRowPresentation(dayCounts.debtorDays, plHealthMap.debtorDays);
 const dpoRow = healthDayRowPresentation(dayCounts.creditorDays, plHealthMap.creditorDays);
-assert(dsoRow.figure === "—" && dsoRow.note === "Not enough data" && dsoRow.score == null, "DSO row");
-assert(dpoRow.figure === "—" && dpoRow.note === "Not enough data" && dpoRow.score == null, "DPO row");
+assert(
+  dsoRow.figure === "—" && dsoRow.note === "Not enough data" && dsoRow.score == null,
+  "DSO row",
+);
+assert(
+  dpoRow.figure === "—" && dpoRow.note === "Not enough data" && dpoRow.score == null,
+  "DPO row",
+);
 
 const plSnapshot = {
   source: "pdf_upload",
@@ -293,7 +341,8 @@ assert(
   "a stale balance sheet still asks for a re-import",
 );
 assert(
-  TRIAL_BALANCE_REFRESH_COPY === "Re-import the trial balance to refresh operating profit and runway",
+  TRIAL_BALANCE_REFRESH_COPY ===
+    "Re-import the trial balance to refresh operating profit and runway",
   "the re-import sentence stays the shared copy",
 );
 
@@ -315,7 +364,10 @@ assert(fullRatios["Debtor Days"] === 44, `full-sheet DSO ${fullRatios["Debtor Da
 assert(fullRatios["Creditor Days"] === 73, `full-sheet DPO ${fullRatios["Creditor Days"]}`);
 assert(fullRatios["Inventory Days"] === 37, `full-sheet DIO ${fullRatios["Inventory Days"]}`);
 const storedZero = overviewRatios({ ...fullSheet, receivables: "0" });
-assert(storedZero["Debtor Days"] === 0, `a stored zero stays 0 days (${storedZero["Debtor Days"]})`);
+assert(
+  storedZero["Debtor Days"] === 0,
+  `a stored zero stays 0 days (${storedZero["Debtor Days"]})`,
+);
 const zeroScore = scoreAndBand("Debtor Days", storedZero["Debtor Days"], us);
 assert(zeroScore.score === 100 && zeroScore.tier === "healthy", "an entered zero still scores");
 

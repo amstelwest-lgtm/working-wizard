@@ -8,7 +8,11 @@ import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compu
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
 import { periodProfitBridge, statementNetProfit } from "@/lib/period-profit";
-import { assessClientMetrics, storedOpeningIsMissing } from "@/lib/client-metrics";
+import {
+  assessClientMetrics,
+  periodOperatingOutflows,
+  storedOpeningIsMissing,
+} from "@/lib/client-metrics";
 import {
   DAYS_REVIEW_LIMIT,
   computedDaysAp,
@@ -253,7 +257,10 @@ export type BudgetActualsChip =
   | "None";
 
 /** One actuals chip. Statement pace is not "None". */
-export function budgetActualsBadge(importedMonths: number, statementPace: boolean): BudgetActualsChip {
+export function budgetActualsBadge(
+  importedMonths: number,
+  statementPace: boolean,
+): BudgetActualsChip {
   if (importedMonths > 0) return "From this month's actuals";
   if (statementPace) return "Estimated from statement pace";
   return "None";
@@ -363,7 +370,9 @@ export function statementBudgetRead(
         const targets = keys.length > 0 ? keys : months;
         return {
           ...line,
-          months: Object.fromEntries(targets.map((month) => [month, { volume: 1, price: monthlyRevenue }])),
+          months: Object.fromEntries(
+            targets.map((month) => [month, { volume: 1, price: monthlyRevenue }]),
+          ),
         };
       }),
       overheads: doc.overheads.map((line) => {
@@ -857,7 +866,10 @@ export function budgetPlanSnapshot(doc: BudgetDocument): unknown {
       creditorDays: doc.wc?.creditorDays ?? 0,
       inventoryDays: doc.wc?.inventoryDays ?? 0,
     },
-    revenueLines: (doc.revenueLines ?? []).map((line) => ({ name: line.name, months: line.months })),
+    revenueLines: (doc.revenueLines ?? []).map((line) => ({
+      name: line.name,
+      months: line.months,
+    })),
     overheads: (doc.overheads ?? []).map((line) => ({ name: line.name, months: line.months })),
     capex: (doc.capex ?? []).map((line) => ({ amount: line.amount, month: line.month })),
   };
@@ -1039,7 +1051,9 @@ export function presentBudgetOnStatementWindow(
     moved = true;
   }
   const shown = fyMonths(next.fyStart);
-  const overlap = statementMonths ? statementMonths.filter((month) => shown.includes(month)) : shown;
+  const overlap = statementMonths
+    ? statementMonths.filter((month) => shown.includes(month))
+    : shown;
   const windowsMatch =
     !statementMonths ||
     (statementMonths.length === shown.length &&
@@ -1105,6 +1119,60 @@ export function statementPeriodBasis(
   return { kind: "unknown" };
 }
 
+/** Honest label for a 13-week baseline spread evenly from monthly actuals. */
+export const SEEDED_FROM_ACTUALS_LABEL =
+  "Seeded from actuals. Monthly totals are spread evenly across each week.";
+
+/** Shown when the forecast has actuals but no balance-sheet or bank opening. */
+export const OPENING_CASH_UNKNOWN = "Opening cash unknown";
+
+export type WeeklyActualsBaseline = {
+  months: number;
+  /** Null when revenue is not on the actuals. A stored zero stays zero. */
+  weeklyReceipts: number | null;
+  /** Null when costs are not on the actuals. A stored zero stays zero. */
+  weeklyPayments: number | null;
+  label: string;
+};
+
+const ACTUALS_COST_FIELDS = ["cogs", "fixedCosts", "ebit", "ebitda", "laborCost"] as const;
+
+/**
+ * Weekly receipts and payments from the same actuals Budget seeds from.
+ * Month cover is {@link statementCoverMonthCount} (unknown is null, not 12).
+ * The pace is {@link annualiseBudgetFinancials}, then ÷ 52, which is the
+ * monthly average spread evenly across the weeks (× 12/52). A missing
+ * revenue or cost line stays null. It is not turned into 0.
+ */
+export function weeklyBaselineFromActuals(
+  financials: Record<string, unknown> | null | undefined,
+): WeeklyActualsBaseline | null {
+  if (!financials) return null;
+  const aliased = withCostAliases(
+    financials as Record<string, string | number | null | undefined>,
+  ) as Record<string, unknown>;
+  const months = statementCoverMonthCount(aliased);
+  if (months == null || months < 1) return null;
+  const annual = annualiseBudgetFinancials(aliased);
+  const revenue = presentNumber(annual.revenue as string | number | null | undefined);
+  const weeklyReceipts = revenue == null ? null : revenue / 52;
+  const costsOnFile = ACTUALS_COST_FIELDS.some(
+    (key) => presentNumber(aliased[key] as string | number | null | undefined) != null,
+  );
+  let weeklyPayments: number | null = null;
+  if (costsOnFile) {
+    const operating = periodOperatingOutflows(annual);
+    weeklyPayments = operating == null ? 0 : operating / 52;
+  }
+  if (weeklyReceipts == null && weeklyPayments == null) return null;
+  return {
+    months,
+    weeklyReceipts,
+    weeklyPayments,
+    label: SEEDED_FROM_ACTUALS_LABEL,
+  };
+}
+
 /** Month count for a comparison. Null when the period is not on file — not 12. */
 export function statementCoverMonthCount(
   fin: Record<string, unknown> | null | undefined,
@@ -1152,19 +1220,23 @@ export function budgetCoverWindowLabel(months: string[]): string {
 
 /** A statement comparison that is the seed itself is not a performance verdict. */
 export function budgetSeededFromStatement(
-  actuals: {
-    chip?: string | null;
-    revenue: number;
-    budgetRevenue?: number;
-    ebit?: number;
-    budgetEbit?: number;
-    seededFromActuals?: boolean;
-  } | null | undefined,
+  actuals:
+    | {
+        chip?: string | null;
+        revenue: number;
+        budgetRevenue?: number;
+        ebit?: number;
+        budgetEbit?: number;
+        seededFromActuals?: boolean;
+      }
+    | null
+    | undefined,
 ): boolean {
   if (!actuals) return false;
   if (actuals.seededFromActuals) return true;
   if (actuals.chip !== "Estimated from statement pace") return false;
-  if (actuals.budgetRevenue == null || actuals.ebit == null || actuals.budgetEbit == null) return false;
+  if (actuals.budgetRevenue == null || actuals.ebit == null || actuals.budgetEbit == null)
+    return false;
   return statementSeedAmountsMatch(
     actuals.revenue,
     actuals.budgetRevenue,
@@ -1175,16 +1247,19 @@ export function budgetSeededFromStatement(
 
 /** Sentence for a comparison that is not a result. Null when the variance is real. */
 export function budgetComparisonNote(
-  actuals: {
-    chip?: string | null;
-    revenue?: number;
-    budgetRevenue?: number;
-    ebit?: number;
-    budgetEbit?: number;
-    periodKnown?: boolean;
-    seededFromActuals?: boolean;
-    outsidePlan?: boolean;
-  } | null | undefined,
+  actuals:
+    | {
+        chip?: string | null;
+        revenue?: number;
+        budgetRevenue?: number;
+        ebit?: number;
+        budgetEbit?: number;
+        periodKnown?: boolean;
+        seededFromActuals?: boolean;
+        outsidePlan?: boolean;
+      }
+    | null
+    | undefined,
 ): string | null {
   if (!actuals) return null;
   if (actuals.outsidePlan) return STATEMENT_PERIOD_OUTSIDE_NOTE;
@@ -1257,20 +1332,22 @@ export function budgetVersusStatement(
   doc: BudgetDocument,
   periodFinancials: Record<string, unknown> | null | undefined,
   market: DateMarket,
-): (BudgetActuals & {
-  chip: BudgetActualsChip;
-  budgetRevenue?: number;
-  budgetCogs?: number;
-  budgetOverheads?: number;
-  ebit: number;
-  budgetEbit?: number;
-  netProfit: number | null;
-  periodMonths?: number;
-  periodKnown: boolean;
-  seededFromActuals: boolean;
-  outsidePlan?: boolean;
-  windowMonths: string[];
-}) | null {
+):
+  | (BudgetActuals & {
+      chip: BudgetActualsChip;
+      budgetRevenue?: number;
+      budgetCogs?: number;
+      budgetOverheads?: number;
+      ebit: number;
+      budgetEbit?: number;
+      netProfit: number | null;
+      periodMonths?: number;
+      periodKnown: boolean;
+      seededFromActuals: boolean;
+      outsidePlan?: boolean;
+      windowMonths: string[];
+    })
+  | null {
   if (!periodFinancials) return null;
   const aliased = withCostAliases(
     periodFinancials as Record<string, string | number | null | undefined>,
@@ -1336,9 +1413,7 @@ export function budgetVersusStatement(
     budgetEbit += row.ebit * scale;
   }
   const dated = window.dayFraction != null ? meta.periodLabel?.trim() : "";
-  const label = dated
-    ? `${dated}, prorated`
-    : `${budgetCoverWindowLabel(window.keys)}, prorated`;
+  const label = dated ? `${dated}, prorated` : `${budgetCoverWindowLabel(window.keys)}, prorated`;
   const seeded =
     budgetMonthsAreUniform(doc) &&
     statementSeedAmountsMatch(bridge.revenue, budgetRevenue, bridge.ebit, budgetEbit);

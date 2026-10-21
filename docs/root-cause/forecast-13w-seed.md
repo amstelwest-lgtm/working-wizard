@@ -1,0 +1,32 @@
+# 13-week forecast stays on "Not enough data" after monthly actuals are imported
+
+Client AQA J2 US 1020E (US) has about nine months of P&L actuals imported (January–September 2026). Budget builds a plan from that period. The 13-week cash forecast stayed on "Not enough data" until someone typed a line. The balance sheet for that client was not on file, so there was no opening cash either.
+
+## Cause
+
+Two gates refused the same actuals Budget already reads. Either one is enough to keep the chart and the PDF empty.
+
+1. Missing opening cash returned an empty series before the P&L was read. On `ef4dcd63` (main before this change) `resolveThirteenWeekForecast` did this at `src/lib/client-metrics.ts:1495`:
+
+```ts
+if (!resolvedOpening.onFile) return missingCashForecast(anchor, weeks);
+```
+
+`missingCashForecast` (`src/lib/client-metrics.ts:1463`) is thirteen zeros, `cashOnFile: false`, and no lines. A P&L is not a cash balance (`resolveForecastOpening`, same file), so nine months of revenue never reached the forecast when `financials.cash` and the bank opening were blank. That is the 1020E file: the P&L imported, the balance sheet did not.
+
+2. When an opening was on file, the engine still did not publish a forecast. It built a hidden sketch: `source: "derived"`, `estimateLabel` `PL_ESTIMATE_LABEL` (`src/lib/client-metrics.ts:853`), line ids `derived-collections` and `derived-operating` (`derivedLines`, `src/lib/client-metrics.ts:1388`), and amounts landed only on the monthly cadence weeks (`landMonthlyRunRate`, `src/lib/client-metrics.ts:1380`). The cash tab and the PDF both require an entered line:
+
+- `forecastWeeksAreEntered` (`src/lib/cash-forecast-parity.ts:49-57`) was `source === "stored" && !estimateLabel`. A derived sketch failed it, so `cashForecastWeeksFromOutlook` returned null.
+- `forecastLineIsDerived` (`src/lib/cash-forecast-parity.ts:59-66`) drops `derived-*` ids and the monthly collection / operating-payment names. `forecastLinesBlank` then says there is nothing to chart.
+- The cash tab throws that sketch away on hydrate when `replaceStored && !enteredForecast` (`src/components/cash-forecast.tsx:1074`).
+- The preview copy is `FORECAST_PREVIEW_EMPTY` (`src/lib/report-preview.ts:2`): "Not enough data. The 13-week chart appears once a forecast line is entered." The same sentence is the cash-tab empty state (`src/components/cash-forecast.tsx:2364`).
+
+Budget does not use either gate. `seedBudgetFromFinancials` (`src/lib/budget.bridges.ts:463`) annualises the statement with `annualiseBudgetFinancials` and reads the month count from `statementCoverMonthCount` (`src/lib/budget.bridges.ts:1177`). Unknown cover is null, not twelve months. `periodMonthsOf` (`src/lib/ratios.ts:461-464`) is the other reader, and a missing length there becomes 12. The forecast was using that default only inside the hidden sketch, and only after an opening existed. It never treated "months on file, no typed line" as a forecast.
+
+## What changed
+
+`weeklyBaselineFromActuals` (`src/lib/budget.bridges.ts:1147`) uses Budget's cover reader and the same annualise step, then divides by 52. That is the monthly average spread evenly across every week. A missing revenue or cost line stays null. A stored zero stays zero.
+
+`resolveThirteenWeekForecast` (`src/lib/client-metrics.ts:1618`) no longer returns the empty series first. A typed line still wins. Otherwise a known month cover seeds receipts and payments (`seededForecast`, `src/lib/client-metrics.ts:1544`) with the label "Seeded from actuals. Monthly totals are spread evenly across each week." Opening cash is the balance sheet or bank balance when one is on file. When it is missing, the weeks still publish, closings stay unset, and the note is "Opening cash unknown". No number is invented for that opening. `forecastWeeksAreEntered` publishes the seeded series (`src/lib/cash-forecast-parity.ts:55`). The old lumpy sketch remains only when the month cover itself is unknown, so zero months still shows "Not enough data".
+
+Owner and accountant both render `CashForecastPanel`. That panel reads `resolveCashScreenForecast`, which calls this engine. One series, both sides.

@@ -31,10 +31,10 @@ export function canonicalForecastFloor(input: {
  * is not a trough under the floor — the lowest-point tile stays blank until
  * an opening balance is entered.
  */
-export function cashEmptyPresentation(input: {
-  opening: number;
-  linesBlank: boolean;
-}): { showChart: boolean; lowestBlank: boolean } {
+export function cashEmptyPresentation(input: { opening: number; linesBlank: boolean }): {
+  showChart: boolean;
+  lowestBlank: boolean;
+} {
   const hasOpening = Number.isFinite(input.opening) && input.opening !== 0;
   return {
     showChart: !input.linesBlank,
@@ -49,14 +49,21 @@ export function cashEmptyPresentation(input: {
 export function forecastWeeksAreEntered(outlook: {
   source: string;
   estimateLabel?: string | null;
+  /** An even spread of monthly actuals is a forecast. A lumpy P&L sketch is not. */
+  seededFromActuals?: boolean;
 }): boolean {
+  if (outlook.seededFromActuals) return true;
   return outlook.source === "stored" && !outlook.estimateLabel;
 }
 
 export function forecastLineIsDerived(line: { id?: string | null; name?: string | null }): boolean {
   const id = typeof line.id === "string" ? line.id : "";
   const name = typeof line.name === "string" ? line.name : "";
-  return id.startsWith("derived-") || /collections \(monthly/i.test(name) || /operating payments \(monthly/i.test(name);
+  return (
+    id.startsWith("derived-") ||
+    /collections \(monthly/i.test(name) ||
+    /operating payments \(monthly/i.test(name)
+  );
 }
 
 /** True when this line is an amount the owner or accountant entered. */
@@ -69,7 +76,8 @@ export function forecastLineCountsAsEntered(
   opts?: { includeDerived?: boolean },
 ): boolean {
   if (!opts?.includeDerived && forecastLineIsDerived(line)) return false;
-  const amount = typeof line.amount === "number" ? line.amount : parseFloat(String(line.amount ?? ""));
+  const amount =
+    typeof line.amount === "number" ? line.amount : parseFloat(String(line.amount ?? ""));
   return Number.isFinite(amount) && Math.abs(amount) >= 0.5;
 }
 
@@ -93,49 +101,71 @@ export function cashForecastWeekRowLabel(periodLabel: string): string {
 
 export type EnteredForecastWeek = {
   period_label: string;
-  opening_balance: number;
-  total_receipts: number;
-  total_payments: number;
-  net_movement: number;
-  closing_balance: number;
+  opening_balance: number | null;
+  total_receipts: number | null;
+  total_payments: number | null;
+  net_movement: number | null;
+  closing_balance: number | null;
   scenario: "moderate";
   runway_weeks: number;
 };
 
+export type EnteredForecastWeeks = EnteredForecastWeek[] & { seedLabel?: string | null };
+
 /**
  * Week rows for the 13-week PDF. Null when the cash tab has no entered line,
  * including a P&L run-rate sketch (weeks 1, 5 and 9).
+ * A series seeded from actuals is published. A missing opening or a missing
+ * flow side stays null. It is not printed as 0.
  */
 export function cashForecastWeeksFromOutlook(outlook: {
   source: string;
   estimateLabel?: string | null;
+  seededFromActuals?: boolean;
   opening: number;
+  openingCash?: number | null;
+  receiptsWeekly?: number | null;
+  paymentsWeekly?: number | null;
   inflow: readonly number[];
   outflow: readonly number[];
   closing: readonly number[];
-}): EnteredForecastWeek[] | null {
+}): EnteredForecastWeeks | null {
   if (!forecastWeeksAreEntered(outlook)) return null;
   const empty =
     outlook.opening === 0 &&
+    outlook.openingCash !== 0 &&
     outlook.inflow.every((n) => n === 0) &&
-    outlook.outflow.every((n) => n === 0);
+    outlook.outflow.every((n) => n === 0) &&
+    outlook.receiptsWeekly == null &&
+    outlook.paymentsWeekly == null;
   if (empty) return null;
-  return outlook.inflow.map((inflow, i) => {
-    const receipts = Math.round(inflow);
-    const payments = Math.round(outlook.outflow[i] ?? 0);
-    const opening = i === 0 ? outlook.opening : outlook.closing[i - 1] ?? outlook.opening;
-    const closing = outlook.closing[i] ?? opening;
+  const receiptsKnown = outlook.receiptsWeekly !== null;
+  const paymentsKnown = outlook.paymentsWeekly !== null;
+  const openingKnown = outlook.openingCash !== null;
+  const balancesKnown = openingKnown && receiptsKnown && paymentsKnown;
+  const rows: EnteredForecastWeeks = outlook.inflow.map((inflow, i) => {
+    const receipts = receiptsKnown ? Math.round(inflow) : null;
+    const payments = paymentsKnown ? Math.round(outlook.outflow[i] ?? 0) : null;
+    const net = receipts != null && payments != null ? receipts - payments : null;
+    const opening = balancesKnown
+      ? i === 0
+        ? (outlook.openingCash ?? outlook.opening)
+        : (outlook.closing[i - 1] ?? outlook.opening)
+      : null;
+    const closing = balancesKnown ? (outlook.closing[i] ?? opening) : null;
     return {
       period_label: `Week ${i + 1}`,
-      opening_balance: Math.round(opening),
+      opening_balance: opening == null ? null : Math.round(opening),
       total_receipts: receipts,
       total_payments: payments,
-      net_movement: receipts - payments,
-      closing_balance: Math.round(closing),
+      net_movement: net,
+      closing_balance: closing == null ? null : Math.round(closing),
       scenario: "moderate" as const,
       runway_weeks: 0,
     };
   });
+  if (outlook.seededFromActuals && outlook.estimateLabel) rows.seedLabel = outlook.estimateLabel;
+  return rows;
 }
 
 /**
@@ -152,11 +182,12 @@ export function forecastChatFacts(input: {
   weeksBelowFloor: number;
   shortfall: boolean;
 } {
-  const negativeWeeks = input.closings.filter((value) => Number.isFinite(value) && value < 0).length;
-  const weeksBelowFloor =
-    Number.isFinite(input.floor)
-      ? input.closings.filter((value) => Number.isFinite(value) && value < input.floor).length
-      : 0;
+  const negativeWeeks = input.closings.filter(
+    (value) => Number.isFinite(value) && value < 0,
+  ).length;
+  const weeksBelowFloor = Number.isFinite(input.floor)
+    ? input.closings.filter((value) => Number.isFinite(value) && value < input.floor).length
+    : 0;
   const dipped = negativeWeeks > 0 || weeksBelowFloor > 0;
   return {
     cashGenerative: input.plCashGenerative === true && !dipped,
@@ -242,15 +273,20 @@ export function forecastOpeningColumnTotal(openings: readonly number[], fallback
  * Same Critical check as the Financial Manager card: opening under the floor,
  * or any closing under it.
  */
-export function cashOutlookIsCritical(input: {
-  opening: number;
-  floor: number;
-  dipsBelowFloorWeek?: number | null;
-  /** Blank or zero opening with no source. Not a real balance under the floor. */
-  openingMissing?: boolean;
-  /** False when the cash balance was not read. Not a balance under the floor. */
-  cashOnFile?: boolean;
-} | null | undefined): boolean {
+export function cashOutlookIsCritical(
+  input:
+    | {
+        opening: number;
+        floor: number;
+        dipsBelowFloorWeek?: number | null;
+        /** Blank or zero opening with no source. Not a real balance under the floor. */
+        openingMissing?: boolean;
+        /** False when the cash balance was not read. Not a balance under the floor. */
+        cashOnFile?: boolean;
+      }
+    | null
+    | undefined,
+): boolean {
   if (!input || input.openingMissing || input.cashOnFile === false) return false;
   if (!Number.isFinite(input.opening) || !Number.isFinite(input.floor)) return false;
   return input.opening < input.floor || input.dipsBelowFloorWeek != null;
@@ -276,11 +312,7 @@ export function clientListRunwayHeadline(input: {
 }): string {
   if (input.openingMissing) return OPENING_BALANCE_MISSING;
   const unscoredSketch = input.source !== "stored" && input.healthOverall == null;
-  if (
-    unscoredSketch ||
-    !forecastHasCashEvidence(input) ||
-    input.closings.length === 0
-  ) {
+  if (unscoredSketch || !forecastHasCashEvidence(input) || input.closings.length === 0) {
     return "—";
   }
   if (firstClosingBelow(input.closings, 0) === 1) return "Below zero now";
@@ -350,7 +382,8 @@ export function clientListStatusWord(input: {
     return input.healthLabel;
   }
   if (input.healthOverall == null) return "—";
-  if (forecastHasCashEvidence(input) && cashOutlookIsCritical(input)) return CASH_BELOW_FLOOR_STATUS;
+  if (forecastHasCashEvidence(input) && cashOutlookIsCritical(input))
+    return CASH_BELOW_FLOOR_STATUS;
   return input.healthLabel;
 }
 
@@ -478,7 +511,8 @@ export function forecastRunwayHeadlineShared(input: {
   cashGenerative?: boolean;
   openingMissing?: boolean;
 }): { headline: string; note: string } {
-  if (input.openingMissing) return { headline: OPENING_BALANCE_MISSING, note: "opening balance missing" };
+  if (input.openingMissing)
+    return { headline: OPENING_BALANCE_MISSING, note: "opening balance missing" };
   const pos = forecastFloorPosition(input);
   if (!pos.staysAbove) {
     if (pos.firstDipWeek != null) {
@@ -548,7 +582,8 @@ export function forecastWeeksBelowReadout(pos: {
   staysAbove: boolean;
 }): { value: string; note: string; clear: boolean } {
   if (pos.staysAbove) return { value: "0", note: "none projected", clear: true };
-  if (pos.weeksBelow > 0) return { value: String(pos.weeksBelow), note: "action required", clear: false };
+  if (pos.weeksBelow > 0)
+    return { value: String(pos.weeksBelow), note: "action required", clear: false };
   return { value: "Below floor", note: "opening is under the floor", clear: false };
 }
 
