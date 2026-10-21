@@ -4,6 +4,7 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { flushServerErrors, reportServerError } from "./lib/monitoring.server";
 import { ownerDeliverablesRedirectTarget } from "./lib/owner-nav";
+import { linkLogPath, linkPrivacyHeaders } from "./lib/client-agent-link";
 import { retiredCoZaRedirect } from "./lib/retired-coza-host";
 
 type ServerEntry = {
@@ -84,6 +85,19 @@ const GEO_VARY_PATHS = new Set([
   "/billing/start",
 ]);
 
+/** The public link must not be indexed and must not send a referrer. */
+function withLinkPrivacy(request: Request, response: Response): Response {
+  const extra = linkPrivacyHeaders(new URL(request.url).pathname);
+  if (!extra) return response;
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(extra)) headers.set(name, value);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 /** Pricing HTML differs by country. Don't let a shared cache mix ZA and US. */
 function withGeoVary(request: Request, response: Response): Response {
   const path = new URL(request.url).pathname.replace(/\/$/, "") || "/";
@@ -117,12 +131,15 @@ export default {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return withGeoVary(request, await normalizeCatastrophicSsrResponse(response));
+      return withLinkPrivacy(
+        request,
+        withGeoVary(request, await normalizeCatastrophicSsrResponse(response)),
+      );
     } catch (error) {
       console.error(error);
       await reportServerError(error, {
         source: "request",
-        extra: { method: request.method, path: new URL(request.url).pathname },
+        extra: { method: request.method, path: linkLogPath(new URL(request.url).pathname) },
       });
       await flushServerErrors();
       return brandedErrorResponse();
