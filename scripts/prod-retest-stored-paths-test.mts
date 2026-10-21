@@ -11,6 +11,7 @@ import {
   assessClientMetrics,
   forecastInTheBlack,
   resolveThirteenWeekForecast,
+  weeklyBaselineFromActuals,
 } from "../src/lib/client-metrics";
 import {
   ADVISORY_PACK_STALE_NOTE,
@@ -138,7 +139,17 @@ assert(
   yankeesStory.assessed.runway.label === "Cash generative",
   `Yankees runway ${yankeesStory.assessed.runway.label}, not the stored 4 weeks`,
 );
-assert(yankeesNet > 7000 && yankeesNet < 8000, `Yankees net ${yankeesNet}`);
+// 1–21 Sep is 21 days labelled as one month. Budget annualises that span by
+// 365/21, then the forecast spreads the pace evenly (÷ 52 × 13). The old
+// 7–8k band was the periodMonths scale, which ignored those dates.
+const yankeesPace = weeklyBaselineFromActuals(yankees.financials);
+const yankeesPacedNet =
+  ((yankeesPace?.weeklyReceipts ?? 0) - (yankeesPace?.weeklyPayments ?? 0)) * 13;
+assert(
+  Math.abs(yankeesNet - yankeesPacedNet) < 0.02,
+  `Yankees net ${yankeesNet} vs actuals pace ${yankeesPacedNet}`,
+);
+assert(Math.abs(yankeesNet - 10868) < 1, `Yankees net ${yankeesNet}`);
 assert(
   forecastInTheBlack(
     yankeesStory.assessed.outlook.totalInflow,

@@ -22,6 +22,7 @@ import { ratiosStatementFigures } from "./deliverable-input-config.ts";
 import type { Json } from "../integrations/supabase/types.ts";
 import {
   assessClientMetrics,
+  OPENING_CASH_UNKNOWN,
   RUNWAY_INSUFFICIENT_LABEL,
   RUNWAY_PROFITABLE_LABEL,
   runwayDisplayLabel,
@@ -459,6 +460,10 @@ export function advisoryPackFiguresChanged(
     return true;
   }
   const opening = content.forecast?.openingBalance;
+  // A pack that names a balance, including 0, is stale once cash is no longer on file.
+  if (current.cash == null && opening != null && Number.isFinite(opening)) {
+    return true;
+  }
   if (
     current.cash != null &&
     opening != null &&
@@ -525,6 +530,11 @@ export type LivePackMetrics = {
   runwayLabel: string | null;
   /** `forecastMinimumCash` for this series. The pack quotes this, not a fixed comfort line. */
   floor: number;
+  /**
+   * True when the forecast has weeks but no balance-sheet or bank opening.
+   * Cash and closings stay null. A stored 0 is not this case.
+   */
+  openingUnknown: boolean;
 };
 
 /**
@@ -580,7 +590,10 @@ export function livePackMetrics(input: {
     timeZone: input.timeZone,
     now: input.now,
   });
-  const opening = assessed.outlook.opening;
+  // A missing opening is stored as 0 on the legacy field. Do not quote it.
+  const openingUnknown =
+    assessed.outlook.cashOnFile === false || assessed.outlook.openingCash === null;
+  const opening = openingUnknown ? null : assessed.outlook.opening;
   const runwayLabel = runwayDisplayLabel(assessed.runway);
   return {
     figures: {
@@ -592,7 +605,8 @@ export function livePackMetrics(input: {
     health,
     cashRunwayWeeks: runwayWeeks,
     openingBalance: opening !== null && Number.isFinite(opening) ? opening : null,
-    closings: assessed.outlook.closing,
+    closings: openingUnknown ? null : assessed.outlook.closing,
+    openingUnknown,
     runwayLabel,
     floor: assessed.outlook.floor,
   };
@@ -652,6 +666,11 @@ export type PackInputs = {
   cashRunwayWeeks: number | null;
   /** Same label Overview prints. Weeks are null when the business is cash generative. */
   runwayLabel?: string | null;
+  /**
+   * Seeded weeks with no opening. The pack must not score closings of 0
+   * or say the runway starts from zero.
+   */
+  openingUnknown?: boolean;
   recommendations: Recommendation[];
   dataRequests: DataRequest[];
   openActions: number;
@@ -976,7 +995,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   let forecast: PackForecastBlock | null = null;
-  if (input.closings && input.closings.length > 0) {
+  if (input.closings && input.closings.length > 0 && !input.openingUnknown) {
     const low = forecastLowPoint(input.openingBalance, input.closings);
     if (low) {
       forecast = {
@@ -1147,7 +1166,9 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   const lowestKnown =
     forecast != null && forecast.lowestClosing != null && Number.isFinite(forecast.lowestClosing);
   const forecastBody = !forecast
-    ? "No 13-week cash forecast has been published yet, so this pack cannot say when cash gets tight. Publishing one is the fastest way to sharpen every recommendation."
+    ? input.openingUnknown
+      ? `${OPENING_CASH_UNKNOWN}. Not enough data to name a lowest point.`
+      : "No 13-week cash forecast has been published yet, so this pack cannot say when cash gets tight. Publishing one is the fastest way to sharpen every recommendation."
     : forecast.openingBalance === null || forecast.openingBalance === 0
       ? `The forecast has no opening bank balance, so runway is not stated. Not enough data.${
           lowestKnown

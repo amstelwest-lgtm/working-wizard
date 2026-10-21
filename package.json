@@ -297,6 +297,7 @@
     "test:dmmt-polish": "vite-node --config scripts/vite-test.config.ts scripts/dmmt-polish-test.mts",
     "test:dmmt-chrome": "vite-node --config scripts/vite-test.config.ts scripts/dmmt-chrome-test.mts",
     "test:forecast-bands": "vite-node --config scripts/vite-test.config.ts scripts/forecast-bands-test.mts",
+    "test:forecast-13w-seed": "vite-node --config scripts/vite-test.config.ts scripts/forecast-13w-seed-test.mts",
     "test:report-direction": "vite-node --config scripts/vite-test.config.ts scripts/report-direction-test.mts",
     "test:report-coherence": "vite-node --config scripts/vite-test.config.ts scripts/report-coherence-test.mts",
     "test:empty-client-cards": "vite-node --config scripts/vite-test.config.ts scripts/empty-client-cards-test.mts",

@@ -59,11 +59,11 @@ export function cashForecastSeriesBlank(
 
 export type CashForecastWeek = {
   period_label: string;
-  opening_balance: number;
-  total_receipts: number;
-  total_payments: number;
-  net_movement: number;
-  closing_balance: number;
+  opening_balance: number | null;
+  total_receipts: number | null;
+  total_payments: number | null;
+  net_movement: number | null;
+  closing_balance: number | null;
   scenario: "critical" | "moderate" | "growth";
   runway_weeks: number | null;
 };
@@ -81,6 +81,8 @@ export type CashForecastPDFProps = {
   runwayLabel?: string | null;
   cashGenerative?: boolean;
   assumptions?: string[];
+  /** Honest label when the weeks were spread from monthly actuals. */
+  seedLabel?: string | null;
   isDemo?: boolean;
   /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
   sample?: boolean;
@@ -158,6 +160,20 @@ const ch = StyleSheet.create({
   legendText: { fontSize: 6.5, color: C.muted, fontFamily: "Helvetica" },
 });
 
+function finiteCash(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function pdfAmount(value: number | null | undefined, market: ResolvedMarket): string {
+  if (!finiteCash(value)) return "—";
+  return fmtRand(value, market);
+}
+
+function sumFinite(values: readonly (number | null | undefined)[]): number | null {
+  if (values.length === 0 || values.some((value) => !finiteCash(value))) return null;
+  return values.reduce<number>((sum, value) => sum + (value as number), 0);
+}
+
 function RunwayChart({
   weeks,
   threshold,
@@ -169,8 +185,16 @@ function RunwayChart({
 }) {
   const market = usePdfMarket();
   const values = weeks.map((w) => w.closing_balance);
-  const maxVal = Math.max(...values, threshold, 1);
-  const minVal = Math.min(...values, 0);
+  if (values.some((value) => !finiteCash(value))) {
+    return (
+      <Text style={{ fontSize: 9, fontFamily: "Helvetica", color: C.body }}>
+        Opening cash unknown
+      </Text>
+    );
+  }
+  const closings = values as number[];
+  const maxVal = Math.max(...closings, threshold, 1);
+  const minVal = Math.min(...closings, 0);
   const range = maxVal - minVal || 1;
   const y = (v: number) => ((v - minVal) / range) * CHART_H;
 
@@ -191,7 +215,7 @@ function RunwayChart({
 
         {/* bars */}
         {weeks.map((w, i) => {
-          const v = w.closing_balance;
+          const v = w.closing_balance as number;
           const below = v < threshold;
           const zero = y(Math.max(0, minVal < 0 ? 0 : minVal));
           const top = y(Math.max(v, minVal < 0 ? 0 : minVal));
@@ -298,68 +322,68 @@ function WeekTable({
     { label: "Closing", flex: 1.4, right: true },
   ];
   const header = (
-      <View style={[tbl.headerRow, { backgroundColor: accent }]}>
-        {cols.map((c, i) => (
-          <Text
-            key={i}
-            style={[tbl.headerCell, { flex: c.flex, textAlign: c.right ? "right" : "left" }]}
-          >
-            {c.label}
-          </Text>
-        ))}
-      </View>
+    <View style={[tbl.headerRow, { backgroundColor: accent }]}>
+      {cols.map((c, i) => (
+        <Text
+          key={i}
+          style={[tbl.headerCell, { flex: c.flex, textAlign: c.right ? "right" : "left" }]}
+        >
+          {c.label}
+        </Text>
+      ))}
+    </View>
   );
   const rowNodes = weeks.map((w, i) => {
-        const danger = w.closing_balance < threshold;
-        return (
-          <View
-            key={i}
-            style={[
-              tbl.row,
-              { backgroundColor: danger ? C.redSoft : i % 2 === 1 ? C.soft : C.white },
-            ]}
-          >
-            <Text style={[tbl.cell, { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink }]}>
-              {
-                cashForecastWeekRowLabel(w.period_label) // date-ok: week row label, not a calendar span
-              }
-            </Text>
-            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right" }]}>
-              {fmtRand(w.opening_balance, market)}
-            </Text>
-            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.greenDeep }]}>
-              {fmtRand(w.total_receipts, market)}
-            </Text>
-            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.redDeep }]}>
-              {formatReportAmount(w.total_payments, market, { sign: "parens" })}
-            </Text>
-            <Text
-              style={[
-                tbl.cell,
-                {
-                  flex: 1.3,
-                  textAlign: "right",
-                  color: w.net_movement >= 0 ? C.greenDeep : C.redDeep,
-                },
-              ]}
-            >
-              {fmtRand(w.net_movement, market)}
-            </Text>
-            <Text
-              style={[
-                tbl.cell,
-                {
-                  flex: 1.4,
-                  textAlign: "right",
-                  fontFamily: "Helvetica-Bold",
-                  color: danger ? C.redDeep : C.ink,
-                },
-              ]}
-            >
-              {fmtRand(w.closing_balance, market)}
-            </Text>
-          </View>
-        );
+    const danger = finiteCash(w.closing_balance) && w.closing_balance < threshold;
+    const netUp = finiteCash(w.net_movement) && w.net_movement >= 0;
+    return (
+      <View
+        key={i}
+        style={[tbl.row, { backgroundColor: danger ? C.redSoft : i % 2 === 1 ? C.soft : C.white }]}
+      >
+        <Text style={[tbl.cell, { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink }]}>
+          {
+            cashForecastWeekRowLabel(w.period_label) // date-ok: week row label, not a calendar span
+          }
+        </Text>
+        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right" }]}>
+          {pdfAmount(w.opening_balance, market)}
+        </Text>
+        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.greenDeep }]}>
+          {pdfAmount(w.total_receipts, market)}
+        </Text>
+        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.redDeep }]}>
+          {finiteCash(w.total_payments)
+            ? formatReportAmount(w.total_payments, market, { sign: "parens" })
+            : "—"}
+        </Text>
+        <Text
+          style={[
+            tbl.cell,
+            {
+              flex: 1.3,
+              textAlign: "right",
+              color: netUp ? C.greenDeep : C.redDeep,
+            },
+          ]}
+        >
+          {pdfAmount(w.net_movement, market)}
+        </Text>
+        <Text
+          style={[
+            tbl.cell,
+            {
+              flex: 1.4,
+              textAlign: "right",
+              fontFamily: "Helvetica-Bold",
+              color: danger ? C.redDeep : C.ink,
+            },
+          ]}
+        >
+          {pdfAmount(w.closing_balance, market)}
+        </Text>
+      </View>
+    );
   });
   const rest = rowNodes.slice(1);
   return (
@@ -388,6 +412,7 @@ export function CashForecastPDF({
   runwayLabel = null,
   cashGenerative = false,
   assumptions = DEFAULT_ASSUMPTIONS,
+  seedLabel = null,
   isDemo,
   sample,
   reviewSignoff,
@@ -399,94 +424,123 @@ export function CashForecastPDF({
   const weeks = cashForecast;
   const scenarioMeta = SCENARIO_META[scenario] ?? SCENARIO_META.base;
   const seriesBlank = cashForecastSeriesBlank(weeks);
+  const labelledAssumptions = seedLabel?.trim() ? [seedLabel.trim(), ...assumptions] : assumptions;
   const resolvedAssumptions = seriesBlank
     ? []
-    : [...assumptions, ...profileCashAssumptions(operatingProfile)];
+    : [...labelledAssumptions, ...profileCashAssumptions(operatingProfile)];
 
-  const closings = weeks.map((w) => w.closing_balance);
-  const startBalance = weeks[0]?.opening_balance ?? 0;
-  const lowestPoint = forecastLowestPoint(startBalance, closings);
-  const minBalance = lowestPoint.amount;
-  const floorPos = forecastFloorPosition({
-    opening: startBalance,
-    closings,
-    floor: minimumThreshold,
-  });
+  const openingRaw = weeks[0]?.opening_balance;
+  const startBalance = finiteCash(openingRaw) ? openingRaw : null;
+  const balancesKnown =
+    startBalance != null && weeks.every((week) => finiteCash(week.closing_balance));
+  const closings = balancesKnown ? weeks.map((week) => week.closing_balance as number) : [];
+  const lowestPoint = balancesKnown ? forecastLowestPoint(startBalance, closings) : null;
+  const minBalance = lowestPoint?.amount ?? null;
+  const floorPos = balancesKnown
+    ? forecastFloorPosition({
+        opening: startBalance,
+        closings,
+        floor: minimumThreshold,
+      })
+    : null;
   const weeksReadout = seriesBlank
     ? { value: "—", note: "Not enough data", clear: false }
-    : forecastWeeksBelowReadout(floorPos);
-  const totalReceipts = weeks.reduce((s, w) => s + w.total_receipts, 0);
-  const totalPayments = weeks.reduce((s, w) => s + Math.abs(w.total_payments), 0);
-  const endBalance = weeks[weeks.length - 1]?.closing_balance ?? 0;
+    : floorPos
+      ? forecastWeeksBelowReadout(floorPos)
+      : { value: "—", note: "Opening cash unknown", clear: false };
+  const totalReceipts = sumFinite(weeks.map((week) => week.total_receipts));
+  const totalPayments = sumFinite(weeks.map((week) => week.total_payments));
+  const endRaw = weeks[weeks.length - 1]?.closing_balance;
+  const endBalance = finiteCash(endRaw) ? endRaw : null;
 
-  const netFlow = totalReceipts - totalPayments;
+  const netFlow =
+    totalReceipts != null && totalPayments != null ? totalReceipts - totalPayments : null;
   const generative =
-    Boolean(cashGenerative) && forecastIsCashGenerative(totalReceipts, totalPayments);
-  const sharedRunway = forecastRunwayHeadlineShared({
-    opening: startBalance,
-    closings,
-    floor: minimumThreshold,
-    runwayLabel,
-    cashGenerative: generative && floorPos.staysAbove,
-  });
-  const runwayValue = seriesBlank ? "Not enough data" : sharedRunway.headline;
-  const runwayWeeks = floorPos.firstDipWeek == null ? weeks.length : floorPos.firstDipWeek - 1;
+    balancesKnown &&
+    totalReceipts != null &&
+    totalPayments != null &&
+    Boolean(cashGenerative) &&
+    forecastIsCashGenerative(totalReceipts, totalPayments);
+  const sharedRunway = balancesKnown
+    ? forecastRunwayHeadlineShared({
+        opening: startBalance,
+        closings,
+        floor: minimumThreshold,
+        runwayLabel,
+        cashGenerative: generative && floorPos?.staysAbove === true,
+      })
+    : null;
+  const runwayValue = seriesBlank
+    ? "Not enough data"
+    : sharedRunway
+      ? sharedRunway.headline
+      : "Opening cash unknown";
+  const runwayWeeks =
+    floorPos == null || floorPos.firstDipWeek == null ? weeks.length : floorPos.firstDipWeek - 1;
   const blankFigure = {
     value: "—",
-    note: "Not enough data",
+    note: seriesBlank ? "Not enough data" : "Opening cash unknown",
   };
-  const figures: HeadlineFigure[] = seriesBlank
-    ? [
-        { label: "Runway", value: "Not enough data", note: "Not enough data" },
-        { label: "Lowest Balance", ...blankFigure },
-        { label: "Closing Position", ...blankFigure },
-        { label: "Net Flow", ...blankFigure },
-      ]
-    : [
-        {
-          label: "Runway",
-          value: runwayValue,
-          good: sharedRunway.note === "above the floor",
-          direction: sharedRunway.note === "above the floor" ? "up" : "down",
-          note: sharedRunway.note,
-        },
-        {
-          label: "Lowest Balance",
-          value: fmtRandCompact(minBalance, m),
-          good: minBalance >= minimumThreshold,
-          note: lowestPoint.isOpening ? "opening balance" : "projected trough",
-        },
-        {
-          label: "Closing Position",
-          value: fmtRandCompact(endBalance, m),
-          direction: endBalance >= startBalance ? "up" : "down",
-          good: endBalance >= startBalance,
-          note: "end of horizon",
-        },
-        {
-          label: "Net Flow",
-          value: fmtRandCompact(totalReceipts - totalPayments, m),
-          good: netFlow > 0,
-          note: "over 13 weeks",
-        },
-      ];
+  const figures: HeadlineFigure[] =
+    seriesBlank || !balancesKnown || minBalance == null || endBalance == null
+      ? [
+          { label: "Runway", value: runwayValue, note: blankFigure.note },
+          { label: "Lowest Balance", ...blankFigure },
+          { label: "Closing Position", ...blankFigure },
+          {
+            label: "Net Flow",
+            value: netFlow == null ? "—" : fmtRandCompact(netFlow, m),
+            good: netFlow != null && netFlow > 0,
+            note: seriesBlank ? "Not enough data" : "over 13 weeks",
+          },
+        ]
+      : [
+          {
+            label: "Runway",
+            value: runwayValue,
+            good: sharedRunway?.note === "above the floor",
+            direction: sharedRunway?.note === "above the floor" ? "up" : "down",
+            note: sharedRunway?.note,
+          },
+          {
+            label: "Lowest Balance",
+            value: fmtRandCompact(minBalance, m),
+            good: minBalance >= minimumThreshold,
+            note: lowestPoint?.isOpening ? "opening balance" : "projected trough",
+          },
+          {
+            label: "Closing Position",
+            value: fmtRandCompact(endBalance, m),
+            direction: endBalance >= startBalance ? "up" : "down",
+            good: endBalance >= startBalance,
+            note: "end of horizon",
+          },
+          {
+            label: "Net Flow",
+            value: netFlow == null ? "—" : fmtRandCompact(netFlow, m),
+            good: netFlow != null && netFlow > 0,
+            note: "over 13 weeks",
+          },
+        ];
 
   const narrative = seriesBlank
     ? "Not enough data"
-    : cashForecastNarrative(
-        {
-          runwayWeeks: generative && floorPos.staysAbove ? null : runwayWeeks,
-          cashGenerative: generative && floorPos.staysAbove,
-          minBalance,
-          threshold: minimumThreshold,
-          weeksBelow: floorPos.weeksBelow,
-          firstBreachWeek: floorPos.firstDipWeek,
-          opensBelow: floorPos.opensBelow,
-          empty: false,
-        },
-        operatingProfile,
-        m,
-      );
+    : !balancesKnown || minBalance == null || floorPos == null
+      ? "Opening cash unknown"
+      : cashForecastNarrative(
+          {
+            runwayWeeks: generative && floorPos.staysAbove ? null : runwayWeeks,
+            cashGenerative: generative && floorPos.staysAbove,
+            minBalance,
+            threshold: minimumThreshold,
+            weeksBelow: floorPos.weeksBelow,
+            firstBreachWeek: floorPos.firstDipWeek,
+            opensBelow: floorPos.opensBelow,
+            empty: false,
+          },
+          operatingProfile,
+          m,
+        );
 
   return (
     <PDFDocument
@@ -517,31 +571,35 @@ export function CashForecastPDF({
             <Text style={{ fontSize: 9, fontFamily: "Helvetica", color: C.body }}>
               Not enough data
             </Text>
+          ) : !balancesKnown ? (
+            <Text style={{ fontSize: 9, fontFamily: "Helvetica", color: C.body }}>
+              Opening cash unknown
+            </Text>
           ) : (
             <RunwayChart weeks={weeks} threshold={minimumThreshold} accent={theme.accent} />
           )
         }
       >
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <MetricBox
-          label="Total Receipts"
-          value={fmtRand(totalReceipts, m)}
-          accentColor={C.green}
-          note="13-week inflows"
-        />
-        <MetricBox
-          label="Total Payments"
-          value={fmtRand(totalPayments, m)}
-          accentColor={C.red}
-          note="13-week outflows"
-        />
-        <MetricBox
-          label="Weeks Below Minimum"
-          value={weeksReadout.value}
-          accentColor={weeksReadout.clear ? C.green : C.red}
-          note={weeksReadout.note}
-        />
-      </View>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <MetricBox
+            label="Total Receipts"
+            value={totalReceipts == null ? "—" : fmtRand(totalReceipts, m)}
+            accentColor={C.green}
+            note="13-week inflows"
+          />
+          <MetricBox
+            label="Total Payments"
+            value={totalPayments == null ? "—" : fmtRand(totalPayments, m)}
+            accentColor={C.red}
+            note="13-week outflows"
+          />
+          <MetricBox
+            label="Weeks Below Minimum"
+            value={weeksReadout.value}
+            accentColor={weeksReadout.clear ? C.green : C.red}
+            note={weeksReadout.note}
+          />
+        </View>
       </ReportSection>
 
       {/* ── PAGE 2 ── */}
@@ -554,43 +612,43 @@ export function CashForecastPDF({
         />
 
         {resolvedAssumptions.length > 0 ? (
-        <ReportSection
-          heading={<SectionHeader title="Forecast Assumptions" color={theme.accent} />}
-          lead={
-        <View
-          style={{
-            backgroundColor: C.soft,
-            borderRadius: 5,
-            borderWidth: 0.75,
-            borderColor: C.line,
-            padding: 12,
-          }}
-        >
-          {resolvedAssumptions.map((a, i) => (
-            <View
-              key={i}
-              style={{
-                flexDirection: "row",
-                marginBottom: i < resolvedAssumptions.length - 1 ? 6 : 0,
-              }}
-            >
-              <Text style={{ fontSize: 8, color: C.faint, width: 12 }}>•</Text>
-              <Text
+          <ReportSection
+            heading={<SectionHeader title="Forecast Assumptions" color={theme.accent} />}
+            lead={
+              <View
                 style={{
-                  fontSize: 8,
-                  color: C.body,
-                  fontFamily: "Helvetica",
-                  lineHeight: 1.5,
-                  flex: 1,
+                  backgroundColor: C.soft,
+                  borderRadius: 5,
+                  borderWidth: 0.75,
+                  borderColor: C.line,
+                  padding: 12,
                 }}
               >
-                {a}
-              </Text>
-            </View>
-          ))}
-        </View>
-          }
-        />
+                {resolvedAssumptions.map((a, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      flexDirection: "row",
+                      marginBottom: i < resolvedAssumptions.length - 1 ? 6 : 0,
+                    }}
+                  >
+                    <Text style={{ fontSize: 8, color: C.faint, width: 12 }}>•</Text>
+                    <Text
+                      style={{
+                        fontSize: 8,
+                        color: C.body,
+                        fontFamily: "Helvetica",
+                        lineHeight: 1.5,
+                        flex: 1,
+                      }}
+                    >
+                      {a}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            }
+          />
         ) : null}
       </View>
     </PDFDocument>

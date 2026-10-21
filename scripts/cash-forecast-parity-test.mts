@@ -167,13 +167,17 @@ assert(
 const blank = cashEmptyPresentation({ opening: 0, linesBlank: true });
 assert(blank.showChart === false && blank.lowestBlank, "empty cash hides the chart and the $0 trough");
 const openingOnly = cashEmptyPresentation({ opening: 128450, linesBlank: true });
-assert(openingOnly.showChart === false && openingOnly.lowestBlank === false, "an opening is a real low, still no chart");
+assert(
+  openingOnly.showChart === false && openingOnly.lowestBlank === true,
+  "an opening is not a lowest point when nothing is forecast",
+);
 const populated = cashEmptyPresentation({ opening: 128450, linesBlank: false });
 assert(populated.showChart && populated.lowestBlank === false, "lines draw the chart");
 
 const cashTab = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
-const nothingPhrases = cashTab.split("Nothing is forecast yet").length - 1;
-assert(nothingPhrases === 1, `empty copy is said once, found ${nothingPhrases}`);
+assert(!cashTab.includes("Nothing is forecast yet"), "an empty forecast does not say nothing is forecast");
+assert(!cashTab.includes("stay at"), "an empty forecast does not claim the figures stay at 0");
+assert(cashTab.includes("FORECAST_PREVIEW_EMPTY"), "the empty banner uses the Not enough data line");
 assert(cashTab.includes("cashEmptyPresentation"), "the tab uses the empty-state helper");
 assert(cashTab.includes("data-cash-grid-loading"), "the week grid waits on a skeleton until the forecast loads");
 assert(

@@ -15,6 +15,7 @@ import { OPENING_BALANCE_MISSING, forecastLowestPoint } from "@/lib/cash-forecas
 import {
   connectBooksHeadline,
   forecastHasRealLines,
+  OPENING_CASH_UNKNOWN,
   storedSeriesReading,
 } from "@/lib/client-metrics";
 import { periodProfitBridge, statementNetProfit, statedNetIsUsable } from "@/lib/period-profit";
@@ -278,9 +279,6 @@ export type OwnerCardStatus = {
  * (Watch, Healthy), so this chip does not say Critical.
  */
 export const CASH_FLOOR_ALERT = "Below your minimum";
-
-/** P&L is on file and the cash line is not. Same shape as the debtor empty line. */
-export const CASH_NOT_ON_FILE = "Cash not on file yet, upload a balance sheet.";
 
 /**
  * The Financial Manager chip follows the cash pillar.
@@ -636,7 +634,7 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
   if (books.cashOnFile === false) {
     return {
       ...base,
-      sentence: CASH_NOT_ON_FILE,
+      sentence: OPENING_CASH_UNKNOWN,
       source: "No balance sheet on file",
       step: "Upload a balance sheet",
       signed: false,

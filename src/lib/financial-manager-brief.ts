@@ -12,9 +12,10 @@ import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
 import {
   forecastHasRealLines,
   hasFinancialEvidence,
+  OPENING_CASH_UNKNOWN,
   storedSeriesReading,
 } from "./client-metrics.ts";
-import { CASH_NOT_ON_FILE, cashFloorCopy } from "./owner-answers.ts";
+import { cashFloorCopy } from "./owner-answers.ts";
 import { presentHomeDraftBody, presentHomeDraftTitle } from "./owner-needs.ts";
 import { renderHealthNarrative, type HealthScoreSnapshot } from "./health-snapshot.ts";
 import type { SavedCashflowLike } from "./cash-runway.ts";
@@ -319,7 +320,7 @@ export function buildFinancialManagerBrief(input: {
     : input.openingMissing
       ? `${OPENING_BALANCE_MISSING}.`
       : cashMissing
-        ? CASH_NOT_ON_FILE
+        ? OPENING_CASH_UNKNOWN
         : input.cashStrainLine
           ? input.cashStrainLine
           : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
