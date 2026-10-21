@@ -16,6 +16,32 @@ import { STARTER_TRIAL_ENDED_CODE, STARTER_TRIAL_ENDED_MESSAGE } from "./starter
 
 export const HANDOFF_TRIGGER = "on_demand";
 
+function skipSampleAuthName(value: string): string {
+  if (/^a\.?\s*sample\b/i.test(value)) return "";
+  return value;
+}
+
+/**
+ * Who a hand-off note says "by". Same order as a sign-off name:
+ * profiles.full_name, then auth full_name, then auth name, then the email
+ * local part. A sample auth persona is skipped. "Accountant" is the last resort.
+ */
+export function handoffAuthorName(input: {
+  profileFullName?: string | null;
+  authFullName?: string | null;
+  authName?: string | null;
+  email?: string | null;
+}): string {
+  const profile = (input.profileFullName ?? "").trim();
+  if (profile) return profile;
+  const authFull = skipSampleAuthName((input.authFullName ?? "").trim());
+  if (authFull) return authFull;
+  const authName = skipSampleAuthName((input.authName ?? "").trim());
+  if (authName) return authName;
+  const local = (input.email ?? "").split("@")[0]?.trim() ?? "";
+  return local || "Accountant";
+}
+
 /** Stored when a run stops so it does not spend another model call. The row does not show this raw. */
 export const HANDOFF_COST_STOP = "Stopped before another model call so the run stays within its cost ceiling.";
 export const ANALYST_RUNNER = "agent-analyst";
