@@ -771,7 +771,11 @@ const storedIdStripe: StripeCustomerSubscriptionReader = {
 const emailDiffWarnings: string[] = [];
 const warnBefore = console.warn;
 console.warn = (...args: unknown[]) => {
-  emailDiffWarnings.push(args.map((part) => String(part)).join(" "));
+  emailDiffWarnings.push(
+    args
+      .map((part) => (part && typeof part === "object" ? JSON.stringify(part) : String(part)))
+      .join(" "),
+  );
 };
 let storedHit = "";
 try {
@@ -782,16 +786,31 @@ try {
       firmId: BEN_FIRM,
       storedCustomerId: "cus_stored",
     })) ?? "";
+  await findFirmCustomerId(storedIdStripe, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+    storedCustomerId: "cus_stored",
+  });
 } finally {
   console.warn = warnBefore;
 }
 assert(storedHit === "cus_stored", "a stored customer id beats an email miss");
-assert(storedListCalls === 1, "an id hit still compares the email customer");
+assert(storedListCalls === 2, "an id hit still compares the email customer");
 assert(storedSearchCalls === 0, "an id hit does not search when the stored customer is present");
 assert(storedUpdateCalls === 0, "an email mismatch does not update Stripe");
+const emailDiffLine = emailDiffWarnings.find((line) => line.includes("leaving Stripe unchanged"));
+assert(Boolean(emailDiffLine), "an email mismatch is logged and Stripe is left unchanged");
+assert(emailDiffLine!.includes(BEN_FIRM), "the email-diff log names the firm");
 assert(
-  emailDiffWarnings.some((line) => line.includes("leaving Stripe unchanged")),
-  "an email mismatch is logged and Stripe is left unchanged",
+  emailDiffLine!.includes("signed_in_email_differs"),
+  "the email-diff log uses a fixed reason",
+);
+assert(!emailDiffLine!.includes("@"), "the email-diff log contains no email address");
+assert(!emailDiffLine!.includes("cus_stored"), "the email-diff log drops the Stripe customer id");
+assert(
+  emailDiffWarnings.filter((line) => line.includes("leaving Stripe unchanged")).length === 1,
+  "the email-diff log fires once per firm",
 );
 
 const customerOnly: StripeCustomerSubscriptionReader = {

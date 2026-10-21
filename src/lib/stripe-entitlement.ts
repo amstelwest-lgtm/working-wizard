@@ -608,21 +608,33 @@ function storedCustomerConflicts(
 }
 
 /**
+ * One line per firm for this server process. A cold open hits entitlement
+ * and plan display, and both would otherwise print the same mismatch.
+ */
+const loggedEmailDiffFirms = new Set<string>();
+
+/** Fixed reason. The log never includes an email or a Stripe customer id. */
+const STRIPE_EMAIL_DIFF_REASON = "signed_in_email_differs";
+
+/**
  * The signed-in email moved. Leave the Stripe customer as it is.
  * A later Checkout still attaches this customer id, so no second customer.
+ * The warning is the firm id and a fixed reason, once per firm.
  */
 function noteStripeEmailDiffers(
-  customerId: string,
+  firmId: string | null | undefined,
   stripeEmail: string | null | undefined,
   authEmail: string,
-  via: "stored_customer_id" | "subscription_metadata" | "customer_metadata",
 ): void {
   const stripe = (stripeEmail ?? "").trim().toLowerCase();
   const auth = authEmail.trim().toLowerCase();
   if (!stripe || !auth || stripe === auth) return;
+  const id = firmId?.trim() ?? "";
+  if (!id || loggedEmailDiffFirms.has(id)) return;
+  loggedEmailDiffFirms.add(id);
   console.warn(
     "[stripe] customer email differs from the signed-in email; leaving Stripe unchanged",
-    { customerId, via, stripeEmail: stripe, authEmail: auth },
+    { firmId: id, reason: STRIPE_EMAIL_DIFF_REASON },
   );
 }
 
@@ -810,10 +822,9 @@ async function metadataCustomerWithinBudget(
       noteSubscriptionMetadataCustomer(found.data, input);
       void (async () => {
         noteStripeEmailDiffers(
-          stable,
+          input.firmId,
           await stripeCustomerEmail(stripe, stable),
           input.email?.trim() ?? "",
-          "subscription_metadata",
         );
         await noteDifferentEmailCustomer(
           stripe,
@@ -841,7 +852,7 @@ async function metadataCustomerWithinBudget(
     const stable = customerIdFromMetadataCustomers(rows, input);
     if (stable) {
       const row = rows.find((customer) => customer.id === stable);
-      noteStripeEmailDiffers(stable, row?.email, input.email?.trim() ?? "", "customer_metadata");
+      noteStripeEmailDiffers(input.firmId, row?.email, input.email?.trim() ?? "");
       void noteDifferentEmailCustomer(
         stripe,
         stable,
@@ -873,7 +884,7 @@ export async function findFirmCustomerId(
     // The column is the key. A slow or failed retrieve must not start a search.
     if (read.state === "failed") return stored;
     if (read.state === "trusted" && !storedCustomerConflicts(read.metadata, input)) {
-      noteStripeEmailDiffers(stored, read.email, email, "stored_customer_id");
+      noteStripeEmailDiffers(input.firmId, read.email, email);
       void noteDifferentEmailCustomer(stripe, stored, email, "stored_customer_id");
       return stored;
     }
