@@ -3,19 +3,26 @@
  * exists. The prospect-talk POST is mocked, so this does not create a lead
  * or send mail.
  *
+ * Sends wait until the composer is hydrated (Send enabled, not "Connecting…")
+ * and until the mocked POST responds. Enter and click do nothing while the
+ * previous reply is still in flight. HMR is off so a route-tree rewrite
+ * cannot reload the page between those waits.
+ *
  *   pnpm test:prospect-talk-browser
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
-import { chromium, type Browser, type Page } from "playwright";
+import { chromium, type Browser, type Page, type Response } from "playwright";
 
 const PORT = 5211;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ARTIFACTS = "/opt/cursor/artifacts";
 const FIRST = "Cash before the page is ready";
 const REPLY = "The queued reply is on the page.";
+const STEP_MS = 30_000;
 
 let server: ChildProcess | null = null;
+let browser: Browser | null = null;
 let releaseScripts: (() => void) | null = null;
 
 function assert(cond: boolean, msg: string) {
@@ -23,17 +30,18 @@ function assert(cond: boolean, msg: string) {
 }
 
 function stopServer() {
-  if (!server?.pid) return;
+  const child = server;
+  server = null;
+  if (!child?.pid) return;
   try {
-    process.kill(-server.pid, "SIGTERM");
+    process.kill(-child.pid, "SIGKILL");
   } catch {
     try {
-      server.kill("SIGTERM");
+      child.kill("SIGKILL");
     } catch {
       /* already gone */
     }
   }
-  server = null;
 }
 
 function startServer() {
@@ -41,6 +49,7 @@ function startServer() {
   const env = {
     ...process.env,
     MILON_DEV_GEO: "",
+    MILON_DISABLE_HMR: "1",
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
     VITE_SUPABASE_URL: "https://example.supabase.co",
@@ -100,10 +109,39 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `${ARTIFACTS}/${name}.png`, fullPage: true });
 }
 
+/** Send is enabled and no longer the pre-hydration "Connecting…" label. */
+async function waitComposerReady(page: Page) {
+  await page.waitForFunction(
+    () => {
+      const button = document.querySelector("button.talk-send");
+      if (!(button instanceof HTMLButtonElement)) return false;
+      const label = (button.textContent ?? "").replace(/\s+/g, " ").trim();
+      return button.disabled === false && label === "Send";
+    },
+    undefined,
+    { timeout: STEP_MS },
+  );
+}
+
+/**
+ * Arm the response wait before the click or key, then perform it.
+ * Playwright matches the next POST, so this must run only after the previous
+ * mocked reply has already been awaited.
+ */
+async function sendAndWait(page: Page, trigger: () => Promise<unknown>): Promise<Response> {
+  const response = page.waitForResponse(
+    (res) =>
+      res.url().includes("/functions/v1/prospect-talk") && res.request().method() === "POST",
+    { timeout: STEP_MS },
+  );
+  await trigger();
+  return response;
+}
+
 async function main() {
   startServer();
   await waitForTalk();
-  const browser = await launch();
+  browser = await launch();
   const posts: Record<string, unknown>[] = [];
   let release!: () => void;
   const scripts = new Promise<void>((resolve) => {
@@ -143,9 +181,9 @@ async function main() {
 
   await page.goto(`${BASE}/talk/financial-manager`, {
     waitUntil: "commit",
-    timeout: 30_000,
+    timeout: STEP_MS,
   });
-  await page.locator("textarea").waitFor({ state: "visible", timeout: 20_000 });
+  await page.locator("textarea").waitFor({ state: "visible", timeout: STEP_MS });
   const earlyHtml = await page.content();
   assert(earlyHtml.includes('type="button"'), "Send is not a native submit");
   assert(earlyHtml.includes("disabled"), "Send is disabled before hydration");
@@ -160,7 +198,7 @@ async function main() {
   assert((await page.locator("textarea").inputValue()) === FIRST, "the typed text stays in the textarea");
 
   release();
-  await page.locator(".talk-send", { hasText: "Send" }).waitFor({ state: "visible", timeout: 20_000 });
+  await waitComposerReady(page);
   const after = await page.evaluate(() => {
     const button = document.querySelector(".talk-send");
     const area = document.querySelector("textarea");
@@ -172,16 +210,17 @@ async function main() {
       errors: "",
     };
   });
-  if (after.disabled !== false || after.value !== FIRST) {
+  if (after.disabled !== false || after.value !== FIRST || !after.buttonText?.includes("Send")) {
     console.error("after hydration", JSON.stringify(after));
     console.error("pageErrors", pageErrors);
     throw new Error(
-      `composer after hydration: disabled=${String(after.disabled)} value=${JSON.stringify(after.value)}`,
+      `composer after hydration: disabled=${String(after.disabled)} value=${JSON.stringify(after.value)} label=${JSON.stringify(after.buttonText)}`,
     );
   }
-  await page.locator(".talk-send").click();
+  assert(!after.buttonText.includes("Connecting"), "Send is still connecting after hydration");
   try {
-    await page.getByText(REPLY).waitFor({ state: "visible", timeout: 30_000 });
+    await sendAndWait(page, () => page.locator(".talk-send").click());
+    await page.getByText(REPLY).waitFor({ state: "visible", timeout: STEP_MS });
   } catch (err) {
     const text = await page
       .locator("body")
@@ -206,18 +245,20 @@ async function main() {
     `hydration mismatch:\n${pageErrors.join("\n")}`,
   );
 
-  await page.locator('form.talk-composer[data-talk-live="1"]').waitFor({ timeout: 15_000 });
+  await waitComposerReady(page);
+  await page.locator('form.talk-composer[data-talk-live="1"]').waitFor({ timeout: STEP_MS });
   await page.locator("textarea").fill("Enter sends this");
-  await page.locator("textarea").press("Enter");
+  await sendAndWait(page, () => page.locator("textarea").press("Enter"));
   await page.locator(".talk-bubble-you", { hasText: "Enter sends this" }).waitFor({
     state: "visible",
-    timeout: 10_000,
+    timeout: STEP_MS,
   });
   assert(
     posts.some((post) => post.message === "Enter sends this"),
     "Enter sends the message",
   );
   const beforeShift = posts.length;
+  await waitComposerReady(page);
   await page.locator("textarea").click();
   await page.keyboard.type("ShiftKeep");
   await page.keyboard.press("Shift+Enter");
@@ -225,16 +266,20 @@ async function main() {
   const shifted = await page.locator("textarea").inputValue();
   assert(shifted === "ShiftKeep\nSecondLine", "Shift+Enter inserts a newline");
   assert(posts.length === beforeShift, "Shift+Enter does not send");
-  await page.locator(".talk-send").click();
-  await page.locator(".talk-bubble-you", { hasText: "SecondLine" }).waitFor({ timeout: 10_000 });
+  await sendAndWait(page, () => page.locator(".talk-send").click());
+  await page.locator(".talk-bubble-you", { hasText: "SecondLine" }).waitFor({
+    state: "visible",
+    timeout: STEP_MS,
+  });
   assert(
     posts.some((post) => post.message === "ShiftKeep\nSecondLine"),
     "the newline message sends on click",
   );
 
+  await waitComposerReady(page);
   await page.locator("textarea").fill("Please open the form");
-  await page.locator(".talk-send").click();
-  await page.locator("[data-talk-lead]").waitFor({ state: "visible", timeout: 10_000 });
+  await sendAndWait(page, () => page.locator(".talk-send").click());
+  await page.locator("[data-talk-lead]").waitFor({ state: "visible", timeout: STEP_MS });
   const gateText = await page.locator("[data-talk-lead]").innerText();
   assert(gateText.includes("Your name and email"), "the gate is labelled");
   assert(gateText.includes("No password"), "the gate says there is no password");
@@ -248,8 +293,8 @@ async function main() {
     extraHTTPHeaders: { "x-vercel-ip-country": "ZA" },
   });
   const zaPage = await za.newPage();
-  await zaPage.goto(`${BASE}/talk/`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-  await zaPage.getByText("Tax Specialist").waitFor({ timeout: 15_000 });
+  await zaPage.goto(`${BASE}/talk/`, { waitUntil: "domcontentloaded", timeout: STEP_MS });
+  await zaPage.getByText("Tax Specialist").waitFor({ timeout: STEP_MS });
   const zaText = await zaPage.locator("body").innerText();
   assert(zaText.includes("Four agents"), "ZA geo lists four agents");
   assert(zaText.includes("Tax Specialist"), "ZA geo lists the Tax Specialist");
@@ -260,16 +305,19 @@ async function main() {
   assert(!/\bvat\b/i.test(zaText), "ZA geo does not say VAT");
   assert(!zaText.includes("$39"), "ZA geo does not show the US price");
   await shot(zaPage, "talk-geo-za");
-  await zaPage.goto(`${BASE}/talk/tax-specialist`, { waitUntil: "domcontentloaded" });
-  await zaPage.locator("textarea").waitFor({ timeout: 15_000 });
+  await zaPage.goto(`${BASE}/talk/tax-specialist`, {
+    waitUntil: "domcontentloaded",
+    timeout: STEP_MS,
+  });
+  await zaPage.locator("textarea").waitFor({ timeout: STEP_MS });
   await za.close();
 
   const us = await browser.newContext({
     extraHTTPHeaders: { "x-vercel-ip-country": "US" },
   });
   const usPage = await us.newPage();
-  await usPage.goto(`${BASE}/talk/`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-  await usPage.getByText("Three agents").waitFor({ timeout: 15_000 });
+  await usPage.goto(`${BASE}/talk/`, { waitUntil: "domcontentloaded", timeout: STEP_MS });
+  await usPage.getByText("Three agents").waitFor({ timeout: STEP_MS });
   const usText = await usPage.locator("body").innerText();
   assert(usText.includes("Three agents"), "US geo lists three agents");
   assert(!usText.includes("Tax Specialist"), "US geo hides the Tax Specialist");
@@ -280,10 +328,13 @@ async function main() {
   assert(!usText.includes("ZAR"), "US geo does not say ZAR");
   assert(!/\bvat\b/i.test(usText), "US geo does not say VAT");
   await shot(usPage, "talk-geo-us");
-  await usPage.goto(`${BASE}/talk/tax-specialist`, { waitUntil: "domcontentloaded" });
+  await usPage.goto(`${BASE}/talk/tax-specialist`, {
+    waitUntil: "domcontentloaded",
+    timeout: STEP_MS,
+  });
   await usPage
     .getByText("The Tax Specialist covers South African tax")
-    .waitFor({ timeout: 15_000 });
+    .waitFor({ timeout: STEP_MS });
   const closed = await usPage.locator("body").innerText();
   assert(
     closed.includes("Talk to the Financial Manager"),
@@ -297,15 +348,23 @@ async function main() {
   );
   assert(!/SARS|IRP6|ITR14/i.test(closed), "the closed page has no SARS terms");
   await us.close();
-
-  await browser.close();
-  stopServer();
-  console.log("prospect-talk-browser: ok");
 }
 
-main().catch(async (err) => {
-  console.error(err);
-  releaseScripts?.();
-  stopServer();
-  process.exit(1);
-});
+main()
+  .then(() => {
+    console.log("prospect-talk-browser: ok");
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    releaseScripts?.();
+    await Promise.race([
+      browser?.close().catch(() => {}) ?? Promise.resolve(),
+      new Promise((resolve) => setTimeout(resolve, 5_000)),
+    ]);
+    browser = null;
+    stopServer();
+    process.exit(process.exitCode ?? 0);
+  });
