@@ -663,11 +663,14 @@ export async function loadFirmClientCreateAllowance(input: {
     clientCount,
     unitAmount: sub?.unitAmount,
     starterTrialExpired: starterTrial.expired,
+    noPlanTrialEnforced: firm.starterTrialEnforced,
   });
   if (decision.allowed) return { allowed: true, canEndTrial: false, upgrade, starterTrial };
   return {
     ...decision,
-    canEndTrial: decision.code === "trial_client_cap" && billing.actorIsBillingCustomer,
+    // No Stripe trial to end on a card-free trial; the band list carries Checkout.
+    canEndTrial:
+      decision.code === "trial_client_cap" && Boolean(sub) && billing.actorIsBillingCustomer,
     upgrade,
     starterTrial,
   };

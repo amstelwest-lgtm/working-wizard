@@ -135,6 +135,11 @@ export function decideFirmClientCreate(input: {
    * Ignored when `phase` is active: that subscription is the current plan.
    */
   starterTrialExpired?: boolean;
+  /**
+   * firms.starter_trial_enforced. A card-free (phase none) enforced trial
+   * gets the same trial client cap as a Stripe trial.
+   */
+  noPlanTrialEnforced?: boolean;
 }): FirmClientCreateDecision {
   if (!input.stripeConfigured) return { allowed: true };
 
@@ -147,7 +152,13 @@ export function decideFirmClientCreate(input: {
     };
   }
 
-  if (input.phase === "trialing") {
+  // Fail closed on an enforced firm: no subscription (card-free trial) or a
+  // subscription whose band could not be read gets the trial cap.
+  const enforcedUnknownPlan =
+    input.noPlanTrialEnforced === true &&
+    (input.phase === "none" ||
+      (input.phase === "active" && !(input.band && isFirmBandId(input.band))));
+  if (input.phase === "trialing" || enforcedUnknownPlan) {
     const trialLimit = FIRM_TRIAL_CLIENT_LIMIT;
     if (input.clientCount >= trialLimit) {
       const bandName = input.band ? FIRM_BAND_CATALOG[input.band].name : "Starter";
