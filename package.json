@@ -138,6 +138,7 @@
     "test:apple-auth": "vite-node --config scripts/vite-test.config.ts scripts/apple-auth-test.mts",
     "test:native-document-picker": "vite-node --config scripts/vite-test.config.ts scripts/native-document-picker-test.mts",
     "test:biometric-lock": "vite-node --config scripts/vite-test.config.ts scripts/biometric-lock-test.mts",
+    "test:push-shell": "node scripts/push-shell-test.mjs",
     "test:email-sign-in": "vite-node --config scripts/vite-test.config.ts scripts/email-sign-in-test.mts",
     "test:auth-url-return": "vite-node --config scripts/vite-test.config.ts scripts/auth-url-return-test.mts",
     "test:owner-workspaces": "vite-node --config scripts/vite-test.config.ts scripts/owner-workspaces-test.mts",

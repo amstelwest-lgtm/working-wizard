@@ -121,6 +121,38 @@
     return true;
   }
 
+  function milonUrl(value) {
+    if (!value) return "";
+    var raw = String(value).trim();
+    if (raw.charAt(0) === "/" && raw.charAt(1) !== "/") {
+      return "https://www.milonfinance.com" + raw;
+    }
+    return raw;
+  }
+
+  function installPush() {
+    if (window.__MILON_PUSH_WIRED__) return true;
+    var shell = plugin("MilonShell");
+    var Push = plugin("PushNotifications");
+    if (!shell || !Push || typeof shell.pushConfigured !== "function" || typeof Push.addListener !== "function") {
+      return false;
+    }
+    window.__MILON_PUSH_WIRED__ = true;
+    shell.pushConfigured().then(function (res) {
+      if (!res || !res.configured) return;
+      Push.addListener("pushNotificationActionPerformed", function (action) {
+        var data = action && action.notification && action.notification.data;
+        var url = data && (data.url || data.link);
+        handleReturn(milonUrl(url), plugin("Browser"));
+      });
+      return Push.requestPermissions().then(function (perm) {
+        if (!perm || perm.receive !== "granted") return;
+        return Push.register();
+      });
+    }).catch(function () {});
+    return true;
+  }
+
   function boot() {
     var App = plugin("App");
     var Browser = plugin("Browser");
@@ -160,30 +192,6 @@
       }).catch(function () {});
     });
 
-    /*
-     * Push is not wired. No FCM project, no google-services.json.
-     * When Theo is ready:
-     *   1. npm install @capacitor/push-notifications
-     *   2. Place google-services.json only on the signing machine (gitignored).
-     *   3. npx cap sync android
-     *   4. Uncomment the block below.
-     *
-     * var Push = plugin("PushNotifications");
-     * if (Push) {
-     *   Push.requestPermissions().then(function (perm) {
-     *     if (perm.receive === "granted") return Push.register();
-     *   });
-     *   Push.addListener("registration", function (token) {
-     *     // send token.token to the Milōn API
-     *   });
-     *   Push.addListener("pushNotificationReceived", function () {});
-     *   Push.addListener("pushNotificationActionPerformed", function (action) {
-     *     var url = action && action.notification && action.notification.data && action.notification.data.url;
-     *     if (url) handleReturn(url, Browser);
-     *   });
-     * }
-     */
-
     if (window.__MILON_LAUNCH_URL__) {
       handleReturn(window.__MILON_LAUNCH_URL__, Browser);
     }
@@ -193,11 +201,13 @@
   var appReady = false;
   var pickerReady = false;
   var biometricReady = false;
+  var pushReady = false;
   function tick() {
     if (!appReady) appReady = boot();
     if (!pickerReady) pickerReady = installNativePicker();
     if (!biometricReady) biometricReady = installBiometric();
-    return appReady && pickerReady && biometricReady;
+    if (!pushReady) pushReady = installPush();
+    return appReady && pickerReady && biometricReady && pushReady;
   }
   if (!tick()) {
     var tries = 0;

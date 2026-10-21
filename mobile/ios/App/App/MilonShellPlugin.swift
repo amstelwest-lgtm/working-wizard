@@ -26,6 +26,7 @@ public class MilonShellPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationP
         CAPPluginMethod(name: "biometricEnabled", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setBiometricEnabled", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "unlockWithBiometric", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pushConfigured", returnType: CAPPluginReturnPromise),
     ]
 
     private var session: ASWebAuthenticationSession?
@@ -244,6 +245,11 @@ extension MilonShellPlugin: UIImagePickerControllerDelegate, UINavigationControl
 
 extension MilonShellPlugin {
     private static let biometricKey = "milon_biometric_lock"
+
+    @objc func pushConfigured(_ call: CAPPluginCall) {
+        let configured = Bundle.main.object(forInfoDictionaryKey: "MilonPushConfigured") as? Bool ?? false
+        call.resolve(["configured": configured])
+    }
 
     @objc func biometricAvailable(_ call: CAPPluginCall) {
         call.resolve(["available": canUseBiometric()])

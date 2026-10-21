@@ -220,6 +220,13 @@ public class MilonShellPlugin extends Plugin {
     private static final String BIOMETRIC_KEY = "biometric_lock";
 
     @PluginMethod
+    public void pushConfigured(PluginCall call) {
+        com.getcapacitor.JSObject result = new com.getcapacitor.JSObject();
+        result.put("configured", MilonApplication.firebaseReady(getContext()));
+        call.resolve(result);
+    }
+
+    @PluginMethod
     public void biometricAvailable(PluginCall call) {
         com.getcapacitor.JSObject result = new com.getcapacitor.JSObject();
         result.put("available", canUseBiometric());
