@@ -223,6 +223,13 @@ import {
   statementYearLine,
 } from "@/lib/statement-period";
 import { clientHomePhase } from "@/lib/client-home-phase";
+import {
+  bootCriticalRetryFailed,
+  bootRetryInFlight,
+  bootSelect,
+  shellBackstopDue,
+  subscribeBootRetry,
+} from "@/lib/boot-read";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
   assessClientMetrics,
@@ -868,6 +875,7 @@ function ClientView() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadTimedOut, setLoadTimedOut] = useState(false);
+  const [clientLoadAttempt, setClientLoadAttempt] = useState(0);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     () => resolveAccountantTab(search) ?? "overview",
   );
@@ -2392,21 +2400,46 @@ function ClientView() {
     let cancelled = false;
     setLoading(true);
     setLoadTimedOut(false);
-    const timer = window.setTimeout(() => {
+    const backstopAt = Date.now() + SHELL_GATE_TIMEOUT_MS;
+    let timer = 0;
+    const arm = () => {
+      window.clearTimeout(timer);
       if (cancelled) return;
+      if (!shellBackstopDue(Date.now(), backstopAt)) {
+        // A retry still running, or one that already failed, stays on the
+        // recoverable "Couldn't load" screen. The backstop does not replace it.
+        if (bootRetryInFlight() || bootCriticalRetryFailed()) return;
+        timer = window.setTimeout(arm, Math.max(0, backstopAt - Date.now()));
+        return;
+      }
       setLoadTimedOut(true);
       setLoading(false);
-    }, SHELL_GATE_TIMEOUT_MS);
+    };
+    arm();
+    const unsubscribe = subscribeBootRetry(arm);
     (async () => {
+      let gaveUp = false;
       try {
-        // Defensive query: reports_issued_count may not exist yet
-        const { data, error } = await supabase
-          .from("clients")
-          .select(
-            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id, is_demo, budget",
-          )
-          .eq("id", clientId)
-          .maybeSingle();
+        // Defensive query: reports_issued_count may not exist yet.
+        // A missing column is a different select, not a second try of this one.
+        const first = await bootSelect(
+          (signal) =>
+            supabase
+              .from("clients")
+              .select(
+                "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id, is_demo, budget",
+              )
+              .eq("id", clientId)
+              .abortSignal(signal)
+              .maybeSingle(),
+          { critical: true },
+        );
+        if (!first.ok) {
+          gaveUp = true;
+          if (!cancelled) setLoadTimedOut(true);
+          return;
+        }
+        const { data, error } = first.value;
 
         if (error) {
           const msg = error.message ?? "";
@@ -2501,18 +2534,20 @@ function ClientView() {
         }
       } finally {
         window.clearTimeout(timer);
+        unsubscribe();
         if (!cancelled) {
-          setLoadTimedOut(false);
           setLoading(false);
+          if (!gaveUp) setLoadTimedOut(false);
         }
       }
     })();
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
+  }, [clientId, clientLoadAttempt]);
 
   useEffect(() => {
     if (!client?.id) return;
@@ -4070,7 +4105,20 @@ function ClientView() {
     hasClient: Boolean(client),
   });
   if (homePhase === "loading" || homePhase === "error") {
-    return <ClientAgentStandby timedOut={homePhase === "error"} />;
+    return (
+      <ClientAgentStandby
+        timedOut={homePhase === "error"}
+        onRetry={
+          homePhase === "error"
+            ? () => {
+                setLoadTimedOut(false);
+                setLoading(true);
+                setClientLoadAttempt((n) => n + 1);
+              }
+            : undefined
+        }
+      />
+    );
   }
 
   if (!client) {

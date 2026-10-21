@@ -25,6 +25,7 @@ import {
   type NoteMention,
   type NoteReply,
 } from "@/lib/notes.functions";
+import { bootSelect } from "@/lib/boot-read";
 import { noteTabsMatch, type NotesWorkspace } from "@/lib/notes-tabs";
 
 export type { ClientNote as Note, NoteReply as Reply, NoteCollaborator, NoteMention };
@@ -44,6 +45,7 @@ type NotesCtx = {
   notes: ClientNote[];
   collaborators: NoteCollaborator[];
   loading: boolean;
+  loadError: boolean;
   pinMode: boolean;
   setPinMode: (v: boolean) => void;
   refresh: () => Promise<void>;
@@ -122,6 +124,7 @@ export function NotesProvider({
   const [collaborators, setCollaborators] = useState<NoteCollaborator[]>([]);
   const [clientName, setClientName] = useState("Client");
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [pinMode, setPinMode] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveFilter, setArchiveFilter] = useState<"open" | "resolved">("open");
@@ -176,33 +179,43 @@ export function NotesProvider({
     if (previewNotesRef.current) {
       setNotes(previewNotesRef.current);
       setCollaborators([]);
+      setLoadError(false);
       setLoading(false);
       return;
     }
     if (!surface?.clientId) {
       setNotes([]);
       setCollaborators([]);
+      setLoadError(false);
       return;
     }
     setLoading(true);
-    try {
-      const [notesRes, collabRes] = await Promise.all([
-        fetchNotes({ data: { clientId: surface.clientId } }),
-        fetchCollaborators({ data: { clientId: surface.clientId } }),
-      ]);
-      setNotes(notesRes.notes ?? []);
-      setCollaborators(collabRes.collaborators ?? []);
-      setClientName(collabRes.clientName ?? surface.clientName ?? "Client");
-    } catch (e) {
-      console.error("Failed to load notes", e);
-      const msg = e instanceof Error ? e.message : "Failed to load notes";
+    const read = await bootSelect(
+      () =>
+        Promise.all([
+          fetchNotes({ data: { clientId: surface.clientId } }),
+          fetchCollaborators({ data: { clientId: surface.clientId } }),
+        ]),
+      { critical: false },
+    );
+    if (!read.ok) {
+      console.error("Failed to load notes", read.error);
+      setLoadError(true);
+      const msg = read.error instanceof Error ? read.error.message : "Failed to load notes";
+      // A network miss stays on the section Retry. Other failures still toast.
       // Lovable Cloud often lacks a service-role key — don't toast that as a user error.
-      if (!/SUPABASE_SERVICE_ROLE_KEY|Connect Supabase in Lovable/i.test(msg)) {
+      if (!read.retryable && !/SUPABASE_SERVICE_ROLE_KEY|Connect Supabase in Lovable/i.test(msg)) {
         toast.error(msg);
       }
-    } finally {
       setLoading(false);
+      return;
     }
+    const [notesRes, collabRes] = read.value;
+    setNotes(notesRes.notes ?? []);
+    setCollaborators(collabRes.collaborators ?? []);
+    setClientName(collabRes.clientName ?? surface.clientName ?? "Client");
+    setLoadError(false);
+    setLoading(false);
   }, [surface?.clientId, surface?.clientName, fetchNotes, fetchCollaborators]);
 
   useEffect(() => {
@@ -389,6 +402,7 @@ export function NotesProvider({
       notes,
       collaborators,
       loading,
+      loadError,
       pinMode,
       setPinMode,
       refresh,
@@ -413,6 +427,7 @@ export function NotesProvider({
       notes,
       collaborators,
       loading,
+      loadError,
       pinMode,
       refresh,
       addNote,
