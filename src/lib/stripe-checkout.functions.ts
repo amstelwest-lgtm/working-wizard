@@ -72,10 +72,11 @@ import {
   UPGRADE_FAILED_MESSAGE,
 } from "@/lib/firm-band-upgrade";
 import { requestAppOrigin } from "@/lib/app-origin";
-import { priceMarketForFirm, readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
+import { readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
 import {
   completeFirmSetupUpgrade,
   enforceZaCheckoutBillingCountry,
+  loadFirmClientMarkets,
   syncCheckoutSessionSubscription,
 } from "@/lib/stripe-billing-sync.server";
 import {
@@ -85,6 +86,12 @@ import {
   FIRM_BILLING_ENTITLEMENT_SERVER_FN,
 } from "@/lib/billing-check-failure";
 import { readFirmBillingPlanKnown, writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
+import {
+  entitlementFromStoredPlan,
+  firmBillingStripeRefreshDue,
+  noteFirmBillingStripeRefresh,
+  type FirmBillingOpenResult,
+} from "@/lib/firm-billing-open.server";
 import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
@@ -149,7 +156,7 @@ async function customerHasActiveSubscription(customerId: string): Promise<boolea
 
 const ENTITLEMENT_CACHE_TTL_MS = 60_000;
 const NEGATIVE_ENTITLEMENT_TTL_MS = 5_000;
-const entitlementCache = new Map<string, { value: FirmBillingEntitlement; at: number; ttl: number }>();
+const entitlementCache = new Map<string, { value: FirmBillingOpenResult; at: number; ttl: number }>();
 const entitlementInflight = new Map<string, Promise<FirmBillingEntitlement>>();
 type EntitlementLastSuccess = {
   userId: string;
@@ -170,7 +177,7 @@ const planDisplayInflight = new Map<
   Promise<Awaited<ReturnType<typeof loadFirmPlanDisplay>>>
 >();
 
-function cachedEntitlement(email: string): FirmBillingEntitlement | undefined {
+function cachedEntitlement(email: string): FirmBillingOpenResult | undefined {
   const key = email.trim().toLowerCase();
   if (!key) return undefined;
   const hit = entitlementCache.get(key);
@@ -245,7 +252,7 @@ function lookupLastFirmEntitlement(
 
 function rememberEntitlement(
   email: string,
-  value: FirmBillingEntitlement,
+  value: FirmBillingOpenResult,
   userId = "",
   firmId: string | null = null,
 ): void {
@@ -332,11 +339,43 @@ function rememberConfirmedFirmPlan(
   }
 }
 
+function storedPlanValue(value: unknown): "entitled" | "none" | null {
+  if (value === "entitled" || value === "none") return value;
+  return null;
+}
+
+/**
+ * The caller's firm row, when this client can read billing_plan_known.
+ * A miss falls through to the service-role read. Tests pass the fixture
+ * rows on this client instead of replacing the plan reader.
+ */
+async function readStoredPlanFromClient(
+  supabase: BillingAuthCtx["supabase"],
+  firmId: string | null,
+): Promise<"entitled" | "none" | null> {
+  const id = firmId?.trim() ?? "";
+  if (!id || !supabase) return null;
+  try {
+    const query = supabase.from("firms").select("billing_plan_known").eq("id", id) as {
+      maybeSingle?: () => Promise<{
+        data: { billing_plan_known?: unknown } | null;
+        error: { message?: string } | null;
+      }>;
+    };
+    if (!query.maybeSingle) return null;
+    const { data, error } = await query.maybeSingle();
+    if (error) return null;
+    return storedPlanValue(data?.billing_plan_known);
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveFirmBillingEntitlement(
   context: unknown,
   refresh: boolean,
   firmId: string | null = null,
-): Promise<FirmBillingEntitlement> {
+): Promise<FirmBillingOpenResult> {
   if (!stripeConfigured()) {
     return { entitled: true, reason: "stripe_unconfigured" };
   }
@@ -351,8 +390,27 @@ export async function resolveFirmBillingEntitlement(
   }
   const work = (async (): Promise<FirmBillingEntitlement> => {
     const billingIds = await firmBillingIdsForActor(ctx.supabase, userId, firmId);
-    const storedPlan = await readFirmBillingPlanKnown(billingIds.firmId);
-    const live = (async (): Promise<FirmBillingEntitlement> => {
+    const actorPlan = await readStoredPlanFromClient(ctx.supabase, billingIds.firmId);
+    const storedPlan = actorPlan ?? (await readFirmBillingPlanKnown(billingIds.firmId));
+    const firmKey = billingIds.firmId;
+    // A stored plan answers the open. Creating `live` starts Stripe immediately,
+    // so this return stays above that function. Checkout and the webhook still
+    // refresh, and a stamp older than the window may refresh once.
+    if (
+      !refresh &&
+      storedPlan &&
+      firmKey &&
+      !firmBillingStripeRefreshDue(firmKey)
+    ) {
+      noteFirmBillingStripeRefresh(firmKey);
+      const stored = entitlementFromStoredPlan(storedPlan);
+      rememberEntitlement(email, stored, userId, firmKey);
+      console.warn(`[stripe-entitlement] stored plan ${storedPlan} firm=${firmKey}`);
+      return stored;
+    }
+    const refreshStored = !refresh && Boolean(storedPlan && firmKey && firmBillingStripeRefreshDue(firmKey));
+    if (refreshStored && firmKey) noteFirmBillingStripeRefresh(firmKey);
+    const live = (async (): Promise<FirmBillingOpenResult> => {
     try {
       // One isolate-cached Stripe list. The mirror below reads that same
       // entry. It must not be awaited: a second scan used to sit on the response.
@@ -419,7 +477,11 @@ export async function resolveFirmBillingEntitlement(
       });
     }
     })();
-    if (storedPlan !== "entitled") return live;
+    // Open already returned above when the stored plan is inside the window.
+    // A due stamp awaits one refresh. Checkout (`refresh`) still returns the
+    // stored entitled plan and lets the list finish behind the response.
+    if (refreshStored || storedPlan !== "entitled") return live;
+    console.warn(`[stripe-entitlement] stored plan entitled firm=${billingIds.firmId ?? ""}`);
     // A known entitled plan is the answer. The Stripe list refreshes behind
     // it. waitUntil is a no-op in api/server.js, so this must not be awaited,
     // and a rejection must not escape the request.
@@ -470,8 +532,8 @@ async function createPortalUrl(customerId: string, origin: string): Promise<stri
   return session.url;
 }
 
-function zaCouponIdForMarket(market: unknown): string | null {
-  if (!isSaMarketFirm({ market })) return null;
+function zaCouponIdForMarket(charge: { zaCoupon: boolean }): string | null {
+  if (!charge.zaCoupon) return null;
   return stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID);
 }
 
@@ -485,9 +547,9 @@ async function createPaidCheckoutSession(input: {
   /** Raw firms.market. Null when this user has no firm yet. */
   firmMarket: unknown;
   promo?: string | null;
-  /** From the firm row. Never the client market flag. */
-  zaCouponId?: string | null;
   firmId?: string | null;
+  /** Client market JSON. The practice helper uses this for the ZAR price. */
+  clientMarkets?: readonly unknown[] | null;
 }): Promise<{ url: string; kind: "checkout" | "portal" }> {
   if (!stripeConfigured()) {
     throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
@@ -549,12 +611,14 @@ async function createPaidCheckoutSession(input: {
   }
   const charge = firmCheckoutCharge({
     firmMarket: input.firmMarket,
+    clientMarkets: input.clientMarkets,
     requested: input.requested,
     billingCountry,
     geoCountry,
     band: input.plan,
     interval: input.interval,
   });
+  const zaCouponId = zaCouponIdForMarket(charge);
   const { price, lookupKey } = await resolveFirmCatalogPrice(
     stripe,
     input.plan,
@@ -576,6 +640,7 @@ async function createPaidCheckoutSession(input: {
     customerId: action.customerId,
     market: charge.firmMarket,
     promotionCodeId,
+    zaCouponId,
     billingFallback: charge.billingFallback,
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
     includeTrial: action.includeTrial,
@@ -605,16 +670,17 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
     const { userId, email } = await checkoutActor(ctx);
     const firmMarket = await loadCallerFirmMarket({ supabase: ctx.supabase, userId });
     const firmId = await callerOwnedFirmId(ctx.supabase, userId);
+    const clientMarkets = await loadFirmClientMarkets(ctx.supabase, firmId);
     return createPaidCheckoutSession({
       userId,
       email,
       firmId,
+      clientMarkets,
       plan: data.plan as FirmCheckoutBand,
       interval: data.interval as FirmInterval,
       requested: data.market as StripePlanMarket,
       firmMarket,
       promo: data.promo,
-      zaCouponId: zaCouponIdForMarket(firmMarket),
     });
   });
 
@@ -850,7 +916,6 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       firmId: data.firmId,
     });
     const saFirm = isSaMarketFirm({ market: firmMarket });
-    const zaCouponId = saFirm ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
     const band = data.band as FirmCheckoutBand;
     const interval = data.interval as FirmInterval;
     const sub = await findEntitlingFirmSubscription(billingEmail, {
@@ -869,10 +934,17 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       sub?.customerId ??
       (await findBillingCustomerId({ email: billingEmail, userId: ownerUserId, firmId: data.firmId }));
     const billingCountry = await readStripeCustomerCountry(stripe, countryCustomerId);
-    const priceMarket = priceMarketForFirm({
-      firmMarket: saFirm ? "za" : "us",
+    const clientMarkets = await loadFirmClientMarkets(ctx.supabase, data.firmId);
+    const charge = firmCheckoutCharge({
+      firmMarket,
+      clientMarkets,
+      requested: saFirm ? "za" : "us",
       billingCountry,
+      band,
+      interval,
     });
+    const priceMarket = charge.priceMarket;
+    const zaCouponId = charge.zaCoupon ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
     const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, band, interval, priceMarket);
     const voucherCode = normalizeVoucherCode(data.voucherCode);
     if (data.voucherCode?.trim() && !voucherCode) {
@@ -970,7 +1042,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         band,
         interval,
         price,
-        saMarket: isSaMarketFirm({ market: firmMarket }) && !voucherPromotionCodeId,
+        saMarket: charge.zaCoupon && !voucherPromotionCodeId,
         promotionCodeId: voucherPromotionCodeId,
         promotionCode: voucherPromotionCodeId ? voucherCode : null,
         voucherPreview,
@@ -1029,7 +1101,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       includeTrial: false,
       replacesSubscriptionId,
       promotionCodeId: voucherPromotionCodeId,
-      billingFallback: saFirm && priceMarket === "us",
+      billingFallback: charge.billingFallback,
     });
     assertNoManagedPaymentsOverride(params);
     let session: { url: string | null };

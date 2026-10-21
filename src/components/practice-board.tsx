@@ -92,8 +92,10 @@ import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 import {
   endFirmTrialNow,
   finalizeFirmBandCheckout,
+  getFirmBillingEntitlement,
   upgradeFirmBand,
 } from "@/lib/stripe-checkout.functions";
+import { readFirmBillingOpen } from "@/lib/firm-entitlement-client";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
 import { clientListRunwayCell, statusColumnNeedsAttention } from "@/lib/cash-forecast-parity";
 import { revealPracticeHash } from "@/lib/practice-section-hash";
@@ -390,6 +392,7 @@ function FirmClientCapNotice({
                 clientCount: cap.upgrade.clientCount,
                 usageLabel: cap.upgrade.usageLabel,
                 saDiscount: cap.upgrade.saDiscount,
+                zaLabels: cap.upgrade.zaLabels,
                 phase: cap.upgrade.phase,
               }
             : null
@@ -1241,7 +1244,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const finalizeUpgrade = useServerFn(finalizeFirmBandCheckout);
-  const loadTrialAllowance = useServerFn(getFirmClientCreateAllowance);
+  const loadOpenBilling = useServerFn(getFirmBillingEntitlement);
   const [trialAllowance, setTrialAllowance] = useState<FirmClientCreateAllowance | null>(null);
   const [trialNonce, setTrialNonce] = useState(0);
   const upgradeReturnHandled = useRef(false);
@@ -1297,14 +1300,19 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     openForm();
   }, [user, finalizeUpgrade]);
   useEffect(() => {
-    if (!portalReady || !firmId) {
+    if (!portalReady || !firmId || !user?.id) {
       setTrialAllowance(null);
       return;
     }
     let cancelled = false;
-    void loadTrialAllowance({ data: { firmId } })
+    void readFirmBillingOpen(
+      user.id,
+      (input) => loadOpenBilling({ data: { refresh: input.data.refresh, firmId } }),
+      trialNonce > 0,
+      firmId,
+    )
       .then((next) => {
-        if (!cancelled) setTrialAllowance(next);
+        if (!cancelled) setTrialAllowance(next.allowance ?? null);
       })
       .catch(() => {
         if (!cancelled) setTrialAllowance(null);
@@ -1312,7 +1320,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     return () => {
       cancelled = true;
     };
-  }, [portalReady, firmId, loadTrialAllowance, trialNonce]);
+  }, [portalReady, firmId, loadOpenBilling, trialNonce, user?.id]);
   const [firstClientOpen, setFirstClientOpen] = useState(false);
   const [inviteDraft, setInviteDraft] = useState<InviteDraftUi | null>(null);
   const [inviteSending, setInviteSending] = useState(false);
@@ -2172,6 +2180,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             <>
             <OwnerHome
               title="Your whole finance team"
+              firmId={firmId}
               showInvite={false}
               variant="character"
               audience="accountant"
@@ -2210,7 +2219,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         {/* ===== GREETING ===== */}
         <FirmStartHereBadge
           band={trialAllowance?.upgrade?.band ?? null}
-          pending={trialAllowance == null}
+          pending={
+            trialAllowance == null ||
+            (trialAllowance.upgrade?.phase === "active" && trialAllowance.upgrade.band == null)
+          }
         />
         <PageHeader
           compact

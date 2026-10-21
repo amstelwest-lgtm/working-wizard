@@ -7,7 +7,7 @@ import type Stripe from "stripe";
 import { appRedirectOrigin } from "@/lib/app-origin";
 import { formatMoney } from "@/lib/market/format";
 import { ZA_MARKET } from "@/lib/market/resolve";
-import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
+import { firmUpgradeReturnPath, practiceDisplaysZarPlan } from "@/lib/firm-band-upgrade";
 import { isSaMarketFirm } from "@/lib/firm-sa-market";
 import { resolveOwnerCheckoutMarket } from "@/lib/billing-market";
 import { isZaCatalogLookup, priceMarketForFirm } from "@/lib/pricing/za-checkout";
@@ -165,12 +165,17 @@ export function resolveFirmCheckoutMarket(
 }
 
 /**
- * Currency for one Checkout. The firm row wins over the URL market.
- * A US firm stays on the USD lookup even when the billing country is ZA.
- * A ZA firm with a known non-ZA billing country falls back to USD.
+ * Currency for one Checkout, and the ZA coupon that goes with that charge.
+ * A South Africa firm row pays ZAR unless the billing country is known and
+ * is not ZA. Unknown still starts on rand, because Checkout collects the
+ * address. A non-ZA firm row pays ZAR only when the practice list is rand
+ * (more ZA clients than US clients) and the billing country is known to be
+ * ZA. Unknown, or any other country, is USD. A US firm with no ZA majority
+ * stays USD. `zaCoupon` is that same choice: on only when the charge is ZAR.
  */
 export function firmCheckoutCharge(input: {
   firmMarket: unknown;
+  clientMarkets?: readonly unknown[] | null;
   requested: StripePlanMarket;
   billingCountry?: string | null;
   geoCountry?: string | null;
@@ -181,12 +186,23 @@ export function firmCheckoutCharge(input: {
   priceMarket: StripePlanMarket;
   lookupKey: string;
   billingFallback: boolean;
+  zaCoupon: boolean;
 } {
   const firmMarket = resolveFirmCheckoutMarket(input.firmMarket, input.requested, input.geoCountry);
-  const priceMarket = priceMarketForFirm({
-    firmMarket,
-    billingCountry: input.billingCountry,
-  });
+  const country = (input.billingCountry ?? "").trim().toUpperCase();
+  const knownCountry = country.length > 0;
+  const mixZar =
+    firmMarket !== "za" &&
+    practiceDisplaysZarPlan({
+      firmMarket: input.firmMarket,
+      clientMarkets: input.clientMarkets,
+    });
+  const priceMarket =
+    firmMarket === "za"
+      ? priceMarketForFirm({ firmMarket: "za", billingCountry: input.billingCountry })
+      : mixZar && country === "ZA"
+        ? "za"
+        : "us";
   const lookupKey =
     priceMarket === "za"
       ? zaLookupKey(input.band, input.interval)
@@ -195,7 +211,9 @@ export function firmCheckoutCharge(input: {
     firmMarket,
     priceMarket,
     lookupKey,
-    billingFallback: firmMarket === "za" && priceMarket === "us",
+    billingFallback:
+      priceMarket === "us" && knownCountry && country !== "ZA" && (firmMarket === "za" || mixZar),
+    zaCoupon: priceMarket === "za",
   };
 }
 

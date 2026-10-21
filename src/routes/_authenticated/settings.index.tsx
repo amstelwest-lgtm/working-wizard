@@ -27,7 +27,11 @@ import { firmStarterTrialCountdownCopy } from "@/lib/firm-starter-trial";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
-import { formatFirmOverLimitNote, practiceDisplaysZarPlan, UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
+import {
+  formatFirmOverLimitNote,
+  practiceDisplaysZarPlan,
+  UPGRADE_FAILED_MESSAGE,
+} from "@/lib/firm-band-upgrade";
 import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 import {
   createBillingPortalSession,

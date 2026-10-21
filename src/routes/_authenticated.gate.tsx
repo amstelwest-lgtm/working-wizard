@@ -115,6 +115,25 @@ function resumeUnpaidFirm(snap: GateSnap, clients: FirmClientGateContext) {
   });
 }
 
+const billingWallWarned = new Set<string>();
+
+/** One wall line per firm for this tab. A later open of the same firm stays quiet. */
+function warnBillingWall(firmId: string, reason: string): void {
+  const id = firmId.trim();
+  if (!id || billingWallWarned.has(id)) return;
+  billingWallWarned.add(id);
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      const key = `billing-gate-wall:${id}`;
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    }
+  } catch {
+    // The set above already limits this page load.
+  }
+  console.warn("[billing-gate] wall", { firmId: id, reason });
+}
+
 export function AuthGate() {
   const { user, loading, restoreFailed } = useAuth();
   const { firmId, firmMarket, hasFirm, firms, firmsLoaded } = useAccountantProfile();
@@ -249,9 +268,49 @@ export function AuthGate() {
 
   useEffect(() => {
     if (loading || !userId) return;
+    // Cold tab: auth finishes before the firm row. Do not arm the 8s timer
+    // or call the server until this render has a firm id. A no-plan answer
+    // in that window still applies (null firm id matches null) and
+    // resumeUnpaidFirm would send the shell to /billing/required. That is
+    // the 1020E Add client miss: the first click left for the wall, and the
+    // clients list then showed "Couldn't load figures". Waiting for the firm
+    // id stops that check. Once the row is loaded, a card-free enforced firm
+    // with clients still follows billing_required. An owner with no practice
+    // firm, and a signup with an empty firm list, still leave.
+    const startFirmId = firmId?.trim() ?? "";
+    if (!firmsLoaded || !startFirmId) {
+      let cancelled = false;
+      void (async () => {
+        const practiceMeta = latest.current.practiceMeta as
+          | { signup_type?: string; firm_name?: string }
+          | undefined;
+        if (
+          redirectAccountantWithoutFirm({
+            firmsLoaded: latest.current.firmsLoaded,
+            signupType: practiceMeta?.signup_type,
+            firmName: practiceMeta?.firm_name,
+            firmCount: latest.current.firmCount,
+          })
+        ) {
+          if (cancelled) return;
+          latest.current.navigate({ to: "/auth/callback", replace: true });
+          return;
+        }
+        const stay = await shouldStayOnAccountantPortal(userId);
+        if (cancelled) return;
+        if (!stay) {
+          clearForcePortal();
+          setPortalIntent("owner");
+          latest.current.navigate({ to: "/app" });
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
     let cancelled = false;
     const attemptUserId = userId;
-    const attemptFirmId = latest.current.firmId;
+    const attemptFirmId = startFirmId;
     settledRef.current = null;
     setClientGate(null);
     setBillingDeadlinePassed(false);
@@ -267,6 +326,10 @@ export function AuthGate() {
       if (cancelled || settledRef.current) return;
       const path = latest.current.pathname;
       const known = knownKind();
+      console.warn(`[billing-gate] ${kind === "timeout" ? "timeout" : "error"}`, {
+        firmId: attemptFirmId,
+        reason: kind,
+      });
       logBillingCheckFailure(kind, { known, path });
       if (reported) return;
       reported = true;
@@ -305,7 +368,7 @@ export function AuthGate() {
       }
       console.warn(
         "[billing-gate] couldn't check billing. Gated client pages show Retry. Home stays open.",
-        { reason: kind, path },
+        { reason: kind, firmId: attemptFirmId },
       );
       reportClientError(new Error(`billing gate ${kind}`), {
         source: "billing-gate",
@@ -322,6 +385,12 @@ export function AuthGate() {
     };
 
     const timer = window.setTimeout(() => noteFailure("timeout"), SHELL_GATE_TIMEOUT_MS);
+    let timerCleared = false;
+    const clearTimer = () => {
+      if (timerCleared) return;
+      timerCleared = true;
+      window.clearTimeout(timer);
+    };
 
     void (async () => {
       try {
@@ -336,7 +405,6 @@ export function AuthGate() {
             firmCount: latest.current.firmCount,
           })
         ) {
-          window.clearTimeout(timer);
           latest.current.navigate({ to: "/auth/callback", replace: true });
           return;
         }
@@ -362,16 +430,15 @@ export function AuthGate() {
           userId,
           (input) =>
             latest.current.checkEntitlement({
-              data: { ...input.data, firmId: latest.current.firmId },
+              data: { ...input.data, firmId: attemptFirmId },
             }),
           gateAttempt > 0,
-          latest.current.firmId,
+          attemptFirmId,
         );
         const itPromise = isMilonItMember(userId);
         const stay = await stayPromise;
         if (cancelled) return;
         if (!stay) {
-          window.clearTimeout(timer);
           clearForcePortal();
           setPortalIntent("owner");
           latest.current.navigate({ to: "/app" });
@@ -379,7 +446,6 @@ export function AuthGate() {
         }
         if (await itPromise) {
           if (cancelled) return;
-          window.clearTimeout(timer);
           settledRef.current = {
             entitled: true,
             reason: "it",
@@ -402,8 +468,13 @@ export function AuthGate() {
             currentFirmId: latest.current.firmId,
           })
         ) {
+          console.warn("[billing-gate] dropped stale result", {
+            firmId: attemptFirmId,
+            reason: "stale",
+          });
           return;
         }
+        if (cancelled) return;
         window.clearTimeout(timer);
         clientGateRef.current = clients;
         const reason =
@@ -446,20 +517,22 @@ export function AuthGate() {
           setFirmEntitled(true);
           return;
         }
+        warnBillingWall(attemptFirmId, reason);
         setFirmEntitled(false);
         resumeUnpaidFirm(latest.current, clients);
       } catch (err) {
         if (cancelled) return;
-        window.clearTimeout(timer);
         noteFailure(classifyBillingCheckFailure(err));
+      } finally {
+        clearTimer();
       }
     })();
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      clearTimer();
     };
-  }, [userId, loading, gateAttempt]);
+  }, [userId, loading, gateAttempt, firmId, firmsLoaded]);
 
   if (loading) {
     return <FirmShellLoading />;
