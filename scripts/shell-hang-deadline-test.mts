@@ -21,6 +21,7 @@ import {
 import {
   accessWhileEntitlementUnknown,
   pageWhileEntitlementUnknown,
+  skeletonAfterBillingDeadline,
 } from "../src/lib/firm-gate-access.ts";
 import { SHELL_GATE_TIMEOUT_MS } from "../src/lib/shell-gate.ts";
 import { readWithOneRetry, type Settled } from "../src/lib/bounded-load.ts";
@@ -140,6 +141,38 @@ assert(
   }) === "wall",
   "a later client stays on the skeleton while entitlement is unknown",
 );
+assert(
+  skeletonAfterBillingDeadline({
+    deadlinePassed: true,
+    firmEntitled: null,
+    unknownPage: "wall",
+  }),
+  "a deadline that passed on Home replaces the skeleton on a later client file",
+);
+assert(
+  !skeletonAfterBillingDeadline({
+    deadlinePassed: false,
+    firmEntitled: null,
+    unknownPage: "wall",
+  }),
+  "before the deadline a later client file stays on the skeleton",
+);
+assert(
+  !skeletonAfterBillingDeadline({
+    deadlinePassed: true,
+    firmEntitled: null,
+    unknownPage: "allow",
+  }),
+  "Home stays open after the deadline",
+);
+assert(
+  !skeletonAfterBillingDeadline({
+    deadlinePassed: true,
+    firmEntitled: true,
+    unknownPage: "wall",
+  }),
+  "a resolved entitlement does not turn into the retry card",
+);
 
 clearCachedFirmEntitlement();
 let entitlementCalls = 0;
@@ -208,6 +241,13 @@ assert(
   "a rejected client count is not an unhandled rejection",
 );
 assert(gate.includes("<FirmShellLoading />"), "a walled page shows a skeleton while entitlement is unknown");
+assert(gate.includes("setBillingDeadlinePassed(true)"), "a timeout remembers that the 8s deadline passed");
+const deadlineAt = gate.indexOf("skeletonAfterBillingDeadline");
+const holdAt = gate.indexOf("const holdGatedPage");
+assert(
+  deadlineAt !== -1 && holdAt !== -1 && deadlineAt < holdAt,
+  "a passed deadline shows Retry before the skeleton",
+);
 assert(gate.includes("<Outlet />"), "an allowed page still mounts the outlet");
 assert(gateView.includes('to="/dashboard"'), "Back is a router link");
 assert(!gate.includes('href="/dashboard"') && !gateView.includes('href="/dashboard"'), "Back is not a full page navigation");
