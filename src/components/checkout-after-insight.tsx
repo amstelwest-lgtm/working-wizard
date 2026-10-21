@@ -22,14 +22,22 @@ import { TrialCardSentence } from "@/components/trial-card-sentence";
  */
 export function CheckoutAfterInsight({ priceLabel }: { priceLabel?: string | null } = {}) {
   const { user } = useAuth();
+  const profile = useOptionalAccountantProfile();
+  const firmId = profile?.firmId ?? null;
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   const [unpaid, setUnpaid] = useState(false);
   const [loadedPrice, setLoadedPrice] = useState<string | null>(priceLabel ?? null);
 
   useEffect(() => {
     if (!user?.id) return;
+    if (profile && !firmId) return;
     let cancelled = false;
-    void readCachedFirmEntitlement(user.id, (input) => checkEntitlement(input))
+    void readCachedFirmEntitlement(
+      user.id,
+      (input) => checkEntitlement({ data: { ...input.data, firmId } }),
+      false,
+      firmId,
+    )
       .then((result) => {
         if (!cancelled) setUnpaid(!result.entitled);
       })
@@ -39,7 +47,7 @@ export function CheckoutAfterInsight({ priceLabel }: { priceLabel?: string | nul
     return () => {
       cancelled = true;
     };
-  }, [checkEntitlement, user?.id]);
+  }, [checkEntitlement, user?.id, firmId, profile]);
 
   useEffect(() => {
     if (priceLabel != null) return;
@@ -51,8 +59,6 @@ export function CheckoutAfterInsight({ priceLabel }: { priceLabel?: string | nul
       cancelled = true;
     };
   }, [priceLabel]);
-
-  const profile = useOptionalAccountantProfile();
 
   if (!unpaid) return null;
 
