@@ -7,10 +7,11 @@ project_id = "jxclnsbsqpixxqlbcapl"
 [auth.email]
 enable_confirmations = false
 
-# Branded auth emails. Hosted projects do not read these from the repo: paste
-# each file into Dashboard → Authentication → Email Templates.
-# Sign-in links use magic_link.html. The board's "verify later" copy is
-# verify.html — a different file, so the two mails do not share wording.
+# Branded auth emails. Hosted projects do not read these from the repo.
+# Dashboard → Authentication → Email Templates → Magic Link:
+# subject "Sign in to Milōn", body = magic_link.html.
+# Owners and accountants share that sign-in mail. Do not paste verify.html
+# into the Magic Link slot — that file is the board's "verify later" copy.
 [auth.email.template.magic_link]
 subject = "Sign in to Milōn"
 content_path = "./supabase/templates/magic_link.html"

@@ -151,14 +151,36 @@ assert(pickup.includes('to="/auth"'), "the expired banner can send a new link");
 const magic = read("supabase/templates/magic_link.html");
 const verify = read("supabase/templates/verify.html");
 const config = read("supabase/config.toml");
+const magicFold = magic.toLowerCase();
 assert(magic.includes("Sign in to Milōn"), "the magic-link template is the sign-in mail");
+assert(
+  magic.includes("Use the button below to sign in. The link expires soon and works once."),
+  "the sign-in mail has its own short line and does not invent an expiry duration",
+);
 assert(magic.includes("{{ .ConfirmationURL }}"), "the sign-in button uses ConfirmationURL");
 assert(magic.includes("{{ .Token }}"), "the sign-in mail shows the 6-digit code");
 assert(magic.includes("#0B5FFF") && magic.includes("#102A43") && magic.includes("#DBEAFE"), "sign-in mail uses brand v1.1");
+assert(magic.includes("background:#ffffff"), "sign-in mail uses a white canvas");
 assert(magic.includes("#d4af37"), "gold is on the wordmark");
 assert(!magic.includes("#c9962b"), "the sign-in button is not gold");
+assert(!magic.includes("#f4f1ea"), "the sign-in mail is not on the cream canvas");
+assert(!magicFold.includes("verify your email"), "the sign-in mail has no verify-email heading");
+assert(!magicFold.includes("your board is already open"), "the sign-in mail has no verify-email body");
+assert(!magicFold.includes("confirms the address"), "the sign-in mail does not reuse the verify sentence");
+assert(!magicFold.includes("verify and go to my board"), "the sign-in button is not the verify button");
 assert(verify.includes("Verify your email"), "the verify template stays separate");
+assert(
+  verify.includes(
+    "Your board is already open — this just confirms the address it belongs to. Tap the button and you'll land straight back on it, verified. The link expires in one hour.",
+  ),
+  "the verify template keeps its wording",
+);
+assert(verify.includes("Verify and go to my board"), "the verify button label stays");
 assert(verify.includes("{{ .ConfirmationURL }}"), "the verify template keeps its own link");
+assert(verify.includes("#0B5FFF") && verify.includes("#102A43") && verify.includes("#DBEAFE"), "verify mail uses brand v1.1");
+assert(verify.includes("#d4af37"), "verify gold stays on the wordmark");
+assert(!verify.includes("#c9962b"), "the verify button is not the old gold");
+assert(!verify.includes("#f4f1ea"), "the verify mail is not on the cream canvas");
 assert(config.includes('content_path = "./supabase/templates/magic_link.html"'), "config points at the sign-in template");
 assert(config.includes('content_path = "./supabase/templates/verify.html"'), "config points at the verify template");
 assert(
