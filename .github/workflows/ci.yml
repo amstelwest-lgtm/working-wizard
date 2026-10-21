@@ -105,7 +105,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:ci
 
-  # Blocking: apply the source-document migration on a fresh database. Postgres
+  # Blocking: clients RLS initplan check, then the source-document migration on a
+  # fresh database. Postgres
   # checks SQL function bodies at CREATE time, so a function that names a table
   # created later in the same file fails here. The older migration files are
   # not replayed; 20260522100000 references clients.accountant_id, which the
@@ -137,6 +138,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+          bash scripts/clients-rls-initplan-check.sh
           bash scripts/apply-source-documents-sql.sh
 
   # Reporting for the existing typing and Prettier backlog, except undefined
