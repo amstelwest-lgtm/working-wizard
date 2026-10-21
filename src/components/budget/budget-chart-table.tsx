@@ -12,6 +12,8 @@ import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { ViewToggle } from "@/components/ui/view-toggle";
 import { hotelLineDisplayName } from "@/lib/budget-industry";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
+import { budgetStatementTiles } from "@/lib/budget-period";
+import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import type { BudgetTemplateId } from "@/lib/budget.types";
 import { ownerMinus } from "@/lib/owner-money";
 import {
@@ -47,6 +49,10 @@ function tone(signal: VarianceSignal | null): string {
   return "text-slate-500";
 }
 
+function tileText(amount: number | null, money: (n: number) => string): string {
+  return amount == null ? "—" : money(amount);
+}
+
 function shortMonth(ym: string): string {
   const month = Number(ym.split("-")[1]);
   return MONTHS[month - 1] ?? ym;
@@ -72,8 +78,13 @@ export function BudgetChartTable({
   onLensChange?: (next: BudgetLens) => void;
   /** Harness preview. Production leaves this empty and reads stored month actuals. */
   actualMonths?: readonly BudgetActualMonth[];
-  /** Statement comparison already on the verdict strip. Used when month rows are empty. */
-  statementActuals?: { chip?: string | null; revenue?: number | null; budgetRevenue?: number | null } | null;
+  /** Statement comparison already on the verdict strip. The firm-year slice, when present, is what the tiles show. */
+  statementActuals?: {
+    chip?: string | null;
+    revenue?: number | null;
+    budgetRevenue?: number | null;
+    period?: FiscalStatementSlice | null;
+  } | null;
   /** Owner view hides a $0 draft instead of drawing an empty axis. */
   readOnly?: boolean;
   /** Owner door uses one unicode minus. The accountant table keeps its formatter. */
@@ -146,7 +157,15 @@ export function BudgetChartTable({
     const scoped = views.filter((row) => wanted.includes(row.month));
     return scoped.length ? scoped : views;
   }, [views, windowMonths]);
-  const totals = useMemo(() => budgetRangeTotals(scopedViews), [scopedViews]);
+  const planTotals = useMemo(() => budgetRangeTotals(scopedViews), [scopedViews]);
+  const totals = useMemo(() => {
+    if (statementActuals?.period) return budgetStatementTiles(statementActuals.period);
+    return {
+      revenue: planTotals.revenue,
+      expenses: planTotals.expenses,
+      operatingProfit: planTotals.net,
+    };
+  }, [statementActuals, planTotals]);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const through = currentBudgetMonth(months);
   const ytd = budgetYtdWithStatement(revenueYtd(scopedViews, through), statementActuals);
@@ -227,13 +246,13 @@ function BudgetRangeTotalsRow({
   totals,
   money,
 }: {
-  totals: { revenue: number; expenses: number; net: number };
+  totals: { revenue: number | null; expenses: number | null; operatingProfit: number | null };
   money: (n: number) => string;
 }) {
   const items = [
     ["Revenue", totals.revenue],
     ["Expenses", totals.expenses],
-    ["Operating profit", totals.net],
+    ["Operating profit", totals.operatingProfit],
   ] as const;
   return (
     <div
@@ -241,12 +260,12 @@ function BudgetRangeTotalsRow({
       data-budget-totals=""
     >
       {items.map(([label, amount]) => (
-        <div key={label} className="min-w-0">
+        <div key={label} className="min-w-0" data-budget-tile={label}>
           <div className="text-[11px] font-semibold uppercase tracking-wide text-[#3D5270] dark:text-slate-400">
             {label}
           </div>
           <div className="truncate text-sm font-semibold tabular-nums text-[#102A43] dark:text-slate-100">
-            {money(amount)}
+            {tileText(amount, money)}
           </div>
         </div>
       ))}
@@ -434,7 +453,7 @@ function BudgetMonthTable({
 }: {
   doc: BudgetDocument;
   views: BudgetMonthView[];
-  totals: { revenue: number; expenses: number; net: number };
+  totals: { revenue: number | null; expenses: number | null; operatingProfit: number | null };
   money: (n: number) => string;
   market: Parameters<typeof formatBudgetMonthYear>[1];
   displayTemplateId?: BudgetTemplateId | null;
@@ -443,6 +462,11 @@ function BudgetMonthTable({
     hotelLineDisplayName(displayTemplateId, name, index),
   );
   const months = views.map((row) => row.month);
+  const periodTotal = [
+    `Revenue ${tileText(totals.revenue, money)}`,
+    `Expenses ${tileText(totals.expenses, money)}`,
+    `Operating profit ${tileText(totals.operatingProfit, money)}`,
+  ].join(" · ");
   return (
     <div className="mt-4 min-w-0">
       <ScrollableTable hint="Swipe sideways to see every month." fadeEdge={false}>
@@ -485,7 +509,7 @@ function BudgetMonthTable({
           <tfoot>
             <tr data-budget-totals-row="" className="budget-grid__total">
               <th className="budget-grid__line px-3 py-2 text-left font-semibold" colSpan={1 + months.length * 3 + 3}>
-                Period total · Revenue {money(totals.revenue)} · Expenses {money(totals.expenses)} · Operating profit {money(totals.net)}
+                Period total · {periodTotal}
               </th>
             </tr>
           </tfoot>

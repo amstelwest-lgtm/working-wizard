@@ -322,7 +322,12 @@ assert(verdict.includes("Revenue vs budget"), "owner verdict names revenue");
 assert(verdict.includes(money(versus!.budgetRevenue)), "verdict revenue is the quarter's plan");
 assert(yearStrip.includes("No prior year on file."), yearStrip);
 assert(yearStrip.includes("Net profit"), "the year table names net profit");
-assert(!yearStrip.includes(money(versus!.budgetEbit)), "operating profit is not shown as net profit");
+const operatingAt = yearStrip.indexOf("Operating profit");
+const netAt = yearStrip.indexOf("Net profit");
+assert(operatingAt >= 0 && netAt > operatingAt, "operating profit sits above net profit");
+const netCell = yearStrip.slice(netAt, yearStrip.indexOf("</tr>", netAt));
+assert(netCell.includes("—"), "net profit stays blank when the line is missing");
+assert(!netCell.includes(money(versus!.budgetEbit)), "operating profit is not shown as net profit");
 assert(!yearStrip.includes("52,000"), "the previous operating income is not the table");
 assert(!verdict.includes("242,667"), "the verdict is not the nine-month annualisation");
 

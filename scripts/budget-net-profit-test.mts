@@ -171,7 +171,30 @@ const yearStrip = renderToStaticMarkup(
 );
 assert(yearStrip.includes("Net profit"), yearStrip);
 assert(yearStrip.includes(money(NET)), "year-over-year shows net profit");
-assert(!yearStrip.includes(money(OPERATING)), "year-over-year does not show operating profit as net profit");
+const operatingAt = yearStrip.indexOf("Operating profit");
+const netAt = yearStrip.indexOf("Net profit");
+assert(operatingAt >= 0 && netAt > operatingAt, "operating profit sits above net profit");
+const thisYearCells = (label: string) => {
+  const cells: string[] = [];
+  let from = 0;
+  while (from < yearStrip.length) {
+    const at = yearStrip.indexOf(`>${label}<`, from);
+    if (at < 0) break;
+    const next = yearStrip.slice(at, at + 500);
+    const cell = next.match(/<(?:dd|td)[^>]*>([^<]*)</);
+    cells.push(cell?.[1]?.trim() ?? "");
+    from = at + label.length;
+  }
+  return cells;
+};
+assert(
+  thisYearCells("Operating profit").every((cell) => cell === money(OPERATING)),
+  `operating profit row ${thisYearCells("Operating profit").join(" | ")}`,
+);
+assert(
+  thisYearCells("Net profit").every((cell) => cell === money(NET)),
+  `net profit row ${thisYearCells("Net profit").join(" | ")}`,
+);
 
 const rows = budgetTableRows(seeded, budgetMonthViews(seeded, []));
 assert(rows.some((row) => row.label === "Operating profit"), "the plan total is operating profit");
