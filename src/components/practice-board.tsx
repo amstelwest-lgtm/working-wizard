@@ -1759,9 +1759,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     ? Math.round(scoredRows.reduce((s, c) => s + (c.score as number), 0) / scoredRows.length)
     : null;
   const openQueriesTotal = clientRows.reduce((s, c) => s + (c.openQueries ?? 0), 0);
-  const queriesDestination = firmOpenQueriesDestination(
-    clientRows.map((row) => ({ id: row.id, name: row.name, openQueries: row.openQueries ?? 0 })),
-  );
+  const queriesDestination = firmOpenQueriesDestination(clientRows);
   const headerPending = brandLoading && !headerName.trim();
   const greetName = headerName ? firstNameOf(headerName) : "";
   const greeting = headerName ? practiceGreeting(headerName) : `${timeGreeting()}.`;

@@ -485,18 +485,19 @@ export function todayAttentionAction(
  * Several clients: the most unresolved notes wins, then the name.
  */
 export function firmOpenQueriesClient(
-  rows: readonly { id: string; name?: string | null; openQueries: number }[],
+  rows: readonly { id: string; name?: string | null; openQueries: number | null }[],
 ): string | null {
   let best: { id: string; name: string; openQueries: number } | null = null;
   for (const row of rows) {
-    if (!row.id || row.openQueries <= 0) continue;
+    const openQueries = row.openQueries ?? 0;
+    if (!row.id || openQueries <= 0) continue;
     const name = row.name?.trim() ?? "";
     if (
       !best ||
-      row.openQueries > best.openQueries ||
-      (row.openQueries === best.openQueries && name.localeCompare(best.name) < 0)
+      openQueries > best.openQueries ||
+      (openQueries === best.openQueries && name.localeCompare(best.name) < 0)
     ) {
-      best = { id: row.id, name, openQueries: row.openQueries };
+      best = { id: row.id, name, openQueries };
     }
   }
   return best?.id ?? null;
@@ -508,7 +509,7 @@ export function firmOpenQueriesClient(
  * open a client file.
  */
 export function firmOpenQueriesDestination(
-  rows: readonly { id: string; name?: string | null; openQueries: number }[],
+  rows: readonly { id: string; name?: string | null; openQueries: number | null }[],
 ): { to: "/clients/queries" } | null {
   if (!firmOpenQueriesClient(rows)) return null;
   return { to: "/clients/queries" };
