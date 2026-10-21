@@ -323,7 +323,7 @@ assert(menu.includes("handoffTriggerLabel"), "the trigger is one collapsed strin
 assert(menu.includes("hand-to-short"), "a narrow screen can show the short name");
 const labels = readFileSync("src/lib/action-handoff.ts", "utf8");
 assert(labels.includes("Hand to ${name}") && labels.includes('"Hand to"'), "the button says Hand to");
-const phaseMarks = plan.match(/data-handoff-phase=\{phaseLabel/g) ?? [];
+const phaseMarks = plan.match(/data-handoff-phase=\{/g) ?? [];
 assert(phaseMarks.length === 1, "Draft ready is one badge per item");
 const toastCss = readFileSync("src/styles.css", "utf8");
 assert(toastCss.includes('[data-sonner-toast][data-type="success"]'), "a hand-off success toast stays readable");
@@ -338,6 +338,16 @@ assert(runBody.includes("setOpen(false)"), "the menu closes on the click");
 assert(runBody.includes("void work()"), "the button does not wait on the request");
 assert(!runBody.includes("await work()"), "Assigning is not held for the request");
 assert(menu.includes("MoveHandTo"), "a Next move can be handed off");
+const pendingAt = menu.indexOf("if (pending) {");
+const pendingMenu = menu.slice(pendingAt, menu.indexOf("data-hand-to-trigger", pendingAt));
+assert(
+  pendingMenu.includes("data-hand-to-pending") && !pendingMenu.includes("data-hand-to-trigger"),
+  "Checking is not a Hand to button",
+);
+assert(menu.includes("pending={!ready}") && menu.includes("setReady(false)"), "Next moves stay on Checking until the read resolves");
+assert(plan.includes("handoffPending={!notesReady}"), "the action row stays off Hand to until notes resolve");
+assert(plan.includes('data-handoff-phase={phasePending ? "checking"'), "the action chip says Checking while hand-off state loads");
+assert(handoffClient.includes("Promise.all"), "the assignment read does not wait on each query in turn");
 const moves = readFileSync("src/components/strategic-moves-panel.tsx", "utf8");
 assert(moves.includes("MoveHandTo"), "accountant Next moves include Hand to");
 assert(
@@ -359,7 +369,7 @@ assert(buttons.includes("data-bot-handoff"), "the controls stay on the action ro
 const fn = readFileSync("supabase/functions/owner-handoff/index.ts", "utf8");
 const disabledAt = fn.indexOf("if (!runnerEnabled");
 const assignedAt = fn.indexOf('status: "assigned"');
-const runAt = fn.indexOf('.from("agent_runs")');
+const runAt = fn.indexOf('.from("agent_runs")\n    .insert');
 assert(
   disabledAt > 0 && assignedAt > disabledAt && runAt > assignedAt,
   "a switched-off runner assigns before any run",
