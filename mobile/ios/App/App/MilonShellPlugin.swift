@@ -1,6 +1,7 @@
 import AuthenticationServices
 import AVFoundation
 import Capacitor
+import LocalAuthentication
 import SafariServices
 import UIKit
 import UniformTypeIdentifiers
@@ -21,6 +22,10 @@ public class MilonShellPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationP
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "takePhoto", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pickDocument", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "biometricAvailable", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "biometricEnabled", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setBiometricEnabled", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "unlockWithBiometric", returnType: CAPPluginReturnPromise),
     ]
 
     private var session: ASWebAuthenticationSession?
@@ -234,6 +239,63 @@ extension MilonShellPlugin: UIImagePickerControllerDelegate, UINavigationControl
         let image = info[.originalImage] as? UIImage
         picker.dismiss(animated: true)
         finishPhoto(image: image, cancelled: false)
+    }
+}
+
+extension MilonShellPlugin {
+    private static let biometricKey = "milon_biometric_lock"
+
+    @objc func biometricAvailable(_ call: CAPPluginCall) {
+        call.resolve(["available": canUseBiometric()])
+    }
+
+    @objc func biometricEnabled(_ call: CAPPluginCall) {
+        call.resolve(["enabled": UserDefaults.standard.bool(forKey: Self.biometricKey)])
+    }
+
+    @objc func setBiometricEnabled(_ call: CAPPluginCall) {
+        let enabled = call.getBool("enabled") ?? false
+        guard canUseBiometric() else {
+            call.resolve(["ok": false, "message": "This device has no Face ID or Touch ID."])
+            return
+        }
+        evaluateBiometric(reason: enabled ? "Lock Milōn on this device." : "Unlock Milōn on this device.") { success in
+            if success {
+                UserDefaults.standard.set(enabled, forKey: Self.biometricKey)
+            }
+            call.resolve(success
+                ? ["ok": true]
+                : ["ok": false, "message": "That didn't unlock. Try again."])
+        }
+    }
+
+    @objc func unlockWithBiometric(_ call: CAPPluginCall) {
+        guard UserDefaults.standard.bool(forKey: Self.biometricKey) else {
+            call.resolve(["ok": true])
+            return
+        }
+        guard canUseBiometric() else {
+            call.resolve(["ok": false, "message": "Biometric unlock isn't available on this device."])
+            return
+        }
+        evaluateBiometric(reason: "Unlock Milōn on this device.") { success in
+            call.resolve(success
+                ? ["ok": true]
+                : ["ok": false, "message": "That didn't unlock. Try again."])
+        }
+    }
+
+    private func canUseBiometric() -> Bool {
+        let context = LAContext()
+        var error: NSError?
+        return context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+    }
+
+    private func evaluateBiometric(reason: String, done: @escaping (Bool) -> Void) {
+        let context = LAContext()
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, _ in
+            DispatchQueue.main.async { done(success) }
+        }
     }
 }
 
