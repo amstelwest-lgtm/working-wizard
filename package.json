@@ -197,6 +197,7 @@
     "stripe:za-prices": "vite-node --config scripts/vite-test.config.ts scripts/stripe-create-za-prices.mts",
     "test:add-client-save": "vite-node --config scripts/vite-test.config.ts scripts/add-client-save-test.mts",
     "test:firm-billing-gate": "vite-node --config scripts/vite-test.config.ts scripts/firm-billing-gate-test.mts",
+    "test:firm-billing-webhook": "vite-node --config scripts/vite-test.config.ts scripts/firm-billing-webhook-test.mts",
     "test:stripe-resource-this": "vite-node --config scripts/vite-stripe-resource-this.config.ts scripts/stripe-resource-this-test.mts",
     "test:signup-checkout-keep": "vite-node --config scripts/vite-test.config.ts scripts/signup-checkout-keep-test.mts",
     "test:billing-gate-single-deadline": "vite-node --config scripts/vite-billing-deadline.config.ts scripts/billing-gate-single-deadline-test.mts",

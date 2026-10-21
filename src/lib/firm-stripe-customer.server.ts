@@ -11,8 +11,7 @@ import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import { registerMetadataFirmCustomerWrite } from "@/lib/stripe-entitlement";
 import { writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
 
-const FIRM_UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const FIRM_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** This process already saw firms.stripe_customer_id missing (42703). */
 let stripeCustomerColumnMissing = false;
@@ -71,6 +70,37 @@ export async function readFirmStripeCustomerId(
     const message = err instanceof Error ? err.message : String(err);
     if (!noteMissingFirmStripeCustomerColumn(message)) {
       console.warn("[stripe] firm customer id read failed", message);
+    }
+    return null;
+  }
+}
+
+/** Firm that already stores this Stripe customer. Null when none does. */
+export async function firmIdForStripeCustomer(
+  customerId: string | null | undefined,
+): Promise<string | null> {
+  const customer = customerId?.trim() ?? "";
+  if (!isStripeCustomerId(customer) || stripeCustomerColumnMissing) return null;
+  try {
+    const admin = getSupabaseAdminOrNull();
+    if (!admin) return null;
+    const { data, error } = await admin
+      .from("firms")
+      .select("id")
+      .eq("stripe_customer_id", customer)
+      .maybeSingle();
+    if (error) {
+      if (!noteMissingFirmStripeCustomerColumn(error.message ?? "")) {
+        console.warn("[stripe] firm customer lookup failed");
+      }
+      return null;
+    }
+    const firmId = data?.id;
+    return typeof firmId === "string" && FIRM_UUID.test(firmId) ? firmId : null;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!noteMissingFirmStripeCustomerColumn(message)) {
+      console.warn("[stripe] firm customer lookup failed");
     }
     return null;
   }
@@ -180,17 +210,15 @@ export function installMetadataFirmCustomerWrite(): void {
 }
 
 /** Firm owned by this user, when subscription metadata has no firm_id yet. */
-export async function firmIdForOwnerUser(userId: string | null | undefined): Promise<string | null> {
+export async function firmIdForOwnerUser(
+  userId: string | null | undefined,
+): Promise<string | null> {
   const id = userId?.trim() ?? "";
   if (!FIRM_UUID.test(id)) return null;
   try {
     const admin = getSupabaseAdminOrNull();
     if (!admin) return null;
-    const { data, error } = await admin
-      .from("firms")
-      .select("id")
-      .eq("owner_user_id", id)
-      .limit(1);
+    const { data, error } = await admin.from("firms").select("id").eq("owner_user_id", id).limit(1);
     if (error) return null;
     const firmId = data?.[0]?.id;
     return typeof firmId === "string" && FIRM_UUID.test(firmId) ? firmId : null;

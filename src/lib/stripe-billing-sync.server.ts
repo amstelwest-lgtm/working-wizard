@@ -53,7 +53,10 @@ import {
   type FirmBandId,
 } from "@/lib/stripe-plans";
 import { firmIdForOwnerUser, writeFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
-import { writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
+import {
+  clearFirmBillingPastDueAt,
+  writeFirmBillingPlanKnown,
+} from "@/lib/firm-billing-plan.server";
 import { ENTITLING_SUBSCRIPTION_STATUSES } from "@/lib/stripe-entitlement";
 import { getStripe } from "@/lib/stripe.server";
 
@@ -212,8 +215,7 @@ async function retrieveFirmSubscription(
   }
 }
 
-const FIRM_UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const FIRM_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Store the firm customer id after a successful subscription sync. Does not update Stripe. */
 async function rememberFirmStripeCustomer(sub: RetrievedSubscription): Promise<void> {
@@ -230,6 +232,9 @@ async function rememberFirmStripeCustomer(sub: RetrievedSubscription): Promise<v
     await writeFirmStripeCustomerId(firmId, customerId);
     if ((ENTITLING_SUBSCRIPTION_STATUSES as readonly string[]).includes(sub.status)) {
       await writeFirmBillingPlanKnown(firmId, "entitled");
+    }
+    if (sub.status === "active") {
+      await clearFirmBillingPastDueAt(firmId);
     }
   } catch (err) {
     console.warn(
@@ -692,7 +697,9 @@ export const FIRM_BILLING_WEBHOOK_EVENTS = [
   "checkout.session.completed",
   "customer.subscription.created",
   "customer.subscription.updated",
+  "customer.subscription.deleted",
   "invoice.paid",
+  "invoice.payment_failed",
 ] as const;
 
 export function isFirmBillingWebhookEvent(type: string | undefined): boolean {
