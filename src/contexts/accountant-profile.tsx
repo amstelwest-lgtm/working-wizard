@@ -7,6 +7,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -21,8 +22,9 @@ import {
 } from "@/lib/firm-brand";
 import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
 import { reportClientError } from "@/lib/monitoring";
+import { FIRM_LOAD_RETRY_BACKOFF_MS } from "@/lib/bounded-load";
 import { firmsAfterAccountChange, firmsAfterLoadTimeout } from "@/lib/post-auth-landing";
-import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { bootRouteBucket, SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { useOwnerBoardGate } from "@/contexts/owner-board-gate";
 import { marketToJson, parseMarketSelection } from "@/lib/market";
 import { marketForFirm } from "@/lib/market/scope";
@@ -36,6 +38,32 @@ import {
 
 function firmTimeZoneFromMarket(market: unknown): string {
   return marketForFirm({ market }).timezone;
+}
+
+function waitForFirmRetry(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** Timeout or failure of the firm list. No email, name, or user id. */
+function warnFirmLoad(
+  kind: "timeout" | "error",
+  attempt: number,
+  pathname: string,
+  firmId: string | null,
+): void {
+  const detail: { attempt: number; routeBucket: string; firmId?: string } = {
+    attempt,
+    routeBucket: bootRouteBucket(pathname),
+  };
+  const id = firmId?.trim() ?? "";
+  if (id) detail.firmId = id;
+  console.warn(`[firm-load] ${kind}`, detail);
+}
+
+function firmLoadKind(error: string): "timeout" | "error" {
+  return error === "timeout" ? "timeout" : "error";
 }
 
 function pickLoadedFirm(
@@ -102,6 +130,11 @@ type AccountantProfileContextValue = {
    * read leaves this false even when `firms` is empty.
    */
   firmsLoaded: boolean;
+  /**
+   * The firm read timed out or failed, including its one automatic retry.
+   * `firmsLoaded` stays false. The gate shows Retry instead of the skeleton.
+   */
+  firmsLoadFailed: boolean;
   /** Switch active firm (G27). Re-hydrates brand from the chosen firm. */
   setActiveFirm: (firmId: string) => Promise<void>;
   /** True when the signed-in user owns the firm (can UPDATE brand). */
@@ -219,6 +252,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
   const [firm, setFirm] = useState<FirmBrandRow | null>(null);
   const [firms, setFirms] = useState<FirmBrandRow[]>([]);
   const [firmsLoaded, setFirmsLoaded] = useState(false);
+  const [firmsLoadFailed, setFirmsLoadFailed] = useState(false);
   const [brandLoading, setBrandLoading] = useState(true);
   const hydratedRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
@@ -230,6 +264,9 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
   });
   const userId = user?.id ?? null;
   userIdRef.current = userId;
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
 
   useEffect(() => {
     let cancelled = false;
@@ -256,6 +293,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
       if (cleared.length === 0) setFirms([]);
       setFirm(null);
       setFirmsLoaded(false);
+      setFirmsLoadFailed(false);
       setProfile(DEFAULT_PROFILE);
       setNameChain({ profileFullName: "", authFullName: "" });
       hydratedRef.current = false;
@@ -272,6 +310,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
           setFirm(null);
           setFirms([]);
           setFirmsLoaded(false);
+          setFirmsLoadFailed(false);
           setProfile(DEFAULT_PROFILE);
           setNameChain({ profileFullName: "", authFullName: "" });
           setBrandLoading(false);
@@ -300,6 +339,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
 
       setBrandLoading(true);
       setFirmsLoaded(false);
+      setFirmsLoadFailed(false);
       // Soft cache for this user only — never cross-account.
       // Drop unsaved firm/name edits before paint so a sample draft cannot flash.
       const cachedRaw = loadFromStorage(signedIn.id);
@@ -315,10 +355,19 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
 
       try {
         const preferred = readActiveFirmId(signedIn.id);
-        const [listed, identity] = await Promise.all([
-          readUserFirms(signedIn.id),
-          readPersistedNameChain(signedIn),
-        ]);
+        const identityPromise = readPersistedNameChain(signedIn);
+        let listed = await readUserFirms(signedIn.id);
+        if (cancelled) return;
+        if (listed.error) {
+          warnFirmLoad(firmLoadKind(listed.error), 1, pathnameRef.current, preferred);
+          await waitForFirmRetry(FIRM_LOAD_RETRY_BACKOFF_MS);
+          if (cancelled) return;
+          listed = await readUserFirms(signedIn.id, { fresh: true });
+          if (listed.error) {
+            warnFirmLoad(firmLoadKind(listed.error), 2, pathnameRef.current, preferred);
+          }
+        }
+        const identity = await identityPromise;
         if (cancelled) return;
 
         let all = listed.error ? [] : listed.firms;
@@ -357,6 +406,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
                 const again = await readUserFirms(signedIn.id, { fresh: true });
                 if (again.error) {
                   firmListOk = false;
+                  warnFirmLoad(firmLoadKind(again.error), 1, pathnameRef.current, preferred);
                 } else {
                   all = again.firms;
                   row = pickLoadedFirm(all, preferred);
@@ -373,10 +423,13 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
           setFirms(all);
           setFirm(row);
           setFirmsLoaded(true);
+          setFirmsLoadFailed(false);
           if (row) {
             writeActiveFirmId(signedIn.id, row.id);
             setProfile(applyFirmToProfile(row, signedIn.id, cached, identity));
           }
+        } else {
+          setFirmsLoadFailed(true);
         }
       } finally {
         window.clearTimeout(timer);
@@ -412,14 +465,20 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
 
   const refreshFirms = useCallback(async () => {
     if (!user) return;
+    setFirmsLoadFailed(false);
     const preferred = readActiveFirmId(user.id);
     const listed = await readUserFirms(user.id, { fresh: true });
-    if (listed.error) return;
+    if (listed.error) {
+      warnFirmLoad(firmLoadKind(listed.error), 1, pathnameRef.current, preferred);
+      setFirmsLoadFailed(true);
+      return;
+    }
     const all = listed.firms;
     const row = pickLoadedFirm(all, preferred);
     setFirms(all);
     setFirm(row);
     setFirmsLoaded(true);
+    setFirmsLoadFailed(false);
     if (row) {
       writeActiveFirmId(user.id, row.id);
       const identity = await readPersistedNameChain(user);
@@ -526,6 +585,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         hasFirm: Boolean(firm),
         firms,
         firmsLoaded,
+        firmsLoadFailed,
         setActiveFirm,
         canEditBrand,
         brandLoading,
