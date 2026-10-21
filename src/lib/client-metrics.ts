@@ -13,10 +13,11 @@ import { periodProfitBridge } from "./period-profit.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
 import { isQboBalanceSheetHoldNote } from "./xero-opening.ts";
 import {
-  OPENING_CASH_UNKNOWN,
-  SEEDED_FROM_ACTUALS_LABEL,
-  weeklyBaselineFromActuals,
-} from "./budget.bridges.ts";
+  annualiseBudgetFinancials,
+  presentNumber,
+  statementCoverMonthCount,
+  withCostAliases,
+} from "./statement-cover.ts";
 import { computeRatios, metricDirection, periodMonthsOf, type RatioInputs } from "./ratios.ts";
 
 export type CashSource = "bank" | "period" | "none";
@@ -167,6 +168,60 @@ export function periodOperatingOutflows(
   const bridge = periodProfitBridge(fin);
   const total = bridge.cogs + bridge.operatingExpenses + bridge.depreciation;
   return total > 0 ? total : null;
+}
+
+/** Honest label for a 13-week baseline spread evenly from monthly actuals. */
+export const SEEDED_FROM_ACTUALS_LABEL =
+  "Seeded from actuals. Monthly totals are spread evenly across each week.";
+
+/** Shown when the forecast has actuals but no balance-sheet or bank opening. */
+export const OPENING_CASH_UNKNOWN = "Opening cash unknown";
+
+export type WeeklyActualsBaseline = {
+  months: number;
+  /** Null when revenue is not on the actuals. A stored zero stays zero. */
+  weeklyReceipts: number | null;
+  /** Null when costs are not on the actuals. A stored zero stays zero. */
+  weeklyPayments: number | null;
+  label: string;
+};
+
+const ACTUALS_COST_FIELDS = ["cogs", "fixedCosts", "ebit", "ebitda", "laborCost"] as const;
+
+/**
+ * Weekly receipts and payments from the same actuals Budget seeds from.
+ * Month cover is {@link statementCoverMonthCount} (unknown is null, not 12).
+ * The pace is {@link annualiseBudgetFinancials}, then ÷ 52, which is the
+ * monthly average spread evenly across the weeks (× 12/52). A missing
+ * revenue or cost line stays null. It is not turned into 0.
+ */
+export function weeklyBaselineFromActuals(
+  financials: Record<string, unknown> | null | undefined,
+): WeeklyActualsBaseline | null {
+  if (!financials) return null;
+  const aliased = withCostAliases(
+    financials as Record<string, string | number | null | undefined>,
+  ) as Record<string, unknown>;
+  const months = statementCoverMonthCount(aliased);
+  if (months == null || months < 1) return null;
+  const annual = annualiseBudgetFinancials(aliased);
+  const revenue = presentNumber(annual.revenue as string | number | null | undefined);
+  const weeklyReceipts = revenue == null ? null : revenue / 52;
+  const costsOnFile = ACTUALS_COST_FIELDS.some(
+    (key) => presentNumber(aliased[key] as string | number | null | undefined) != null,
+  );
+  let weeklyPayments: number | null = null;
+  if (costsOnFile) {
+    const operating = periodOperatingOutflows(annual);
+    weeklyPayments = operating == null ? 0 : operating / 52;
+  }
+  if (weeklyReceipts == null && weeklyPayments == null) return null;
+  return {
+    months,
+    weeklyReceipts,
+    weeklyPayments,
+    label: SEEDED_FROM_ACTUALS_LABEL,
+  };
 }
 
 /**
