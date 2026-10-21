@@ -7,9 +7,11 @@
  * This module does not update Stripe.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import { registerMetadataFirmCustomerWrite } from "@/lib/stripe-entitlement";
 import { writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
+import { logFirmBillingDeadline } from "@/lib/firm-billing-deadline";
 
 const FIRM_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -144,7 +146,7 @@ async function persistMetadataFirmCustomer(input: {
   customerId: string | null;
   plan: "entitled" | null;
   metadataCustomerId: string;
-}): Promise<void> {
+}): Promise<boolean> {
   try {
     let storedCustomerId: string | null = null;
     if (input.customerId) {
@@ -160,12 +162,48 @@ async function persistMetadataFirmCustomer(input: {
       plan: input.plan,
       metadataCustomerId: input.metadataCustomerId,
     });
+    return !input.customerId || storedCustomerId != null;
   } catch (err) {
     console.warn(
       "[stripe] metadata firm customer was not stored",
       err instanceof Error ? err.message : err,
     );
+    return false;
   }
+}
+
+const metadataWriteBucket = new AsyncLocalStorage<Promise<boolean>[]>();
+
+/** The billing deadline awaits writes started on this async path. */
+export function trackMetadataFirmCustomerWrites<T>(fn: () => Promise<T>): Promise<T> {
+  return metadataWriteBucket.run([], fn);
+}
+
+/**
+ * Wait for a metadata customer-id write only until `deadlineAt`.
+ * A write that misses the clock is logged and does not hold the response.
+ */
+export async function finishMetadataFirmCustomerWrites(deadlineAt: number): Promise<void> {
+  const bucket = metadataWriteBucket.getStore();
+  if (!bucket || bucket.length === 0) return;
+  const pending = bucket.splice(0, bucket.length);
+  const remaining = deadlineAt - Date.now();
+  if (remaining <= 0) {
+    logFirmBillingDeadline("metadata-write-fail");
+    void Promise.all(pending).catch(() => {});
+    return;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), remaining);
+  });
+  const done = Promise.all(pending).then((flags): "ok" | "fail" =>
+    flags.every(Boolean) ? "ok" : "fail",
+  );
+  const outcome = await Promise.race([done, timeout]);
+  if (timer) clearTimeout(timer);
+  if (outcome === "timeout") void done.catch(() => {});
+  logFirmBillingDeadline(outcome === "ok" ? "metadata-write-ok" : "metadata-write-fail");
 }
 
 let metadataFirmWriteInstalled = false;
@@ -175,7 +213,8 @@ export function installMetadataFirmCustomerWrite(): void {
   if (metadataFirmWriteInstalled) return;
   metadataFirmWriteInstalled = true;
   registerMetadataFirmCustomerWrite((input) => {
-    void persistMetadataFirmCustomer(input);
+    const pending = persistMetadataFirmCustomer(input);
+    metadataWriteBucket.getStore()?.push(pending);
   });
 }
 
