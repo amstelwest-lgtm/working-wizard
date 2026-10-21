@@ -23,11 +23,14 @@ import { TrialCardSentence } from "@/components/trial-card-sentence";
  */
 export function CheckoutAfterInsight({
   priceLabel,
-  clientCount = null,
+  clientCount,
   quote,
 }: {
   priceLabel?: string | null;
-  /** Firm client count. The sentence follows the same bands as the wall. */
+  /**
+   * Firm client count for the practice home. Omit it and the sentence stays
+   * the locked one-client line used on a client file.
+   */
   clientCount?: number | null;
   /** Firm billing quote. Omit it and this block loads the wall's quote. */
   quote?: { market?: string | null; priceLabel?: string | null } | null;
@@ -91,7 +94,7 @@ export function CheckoutAfterInsight({
       <h3>The figures stay on this client.</h3>
       <TrialCardSentence
         priceLabel={priceLabel ?? loadedPrice}
-        line={cardFreeTrialLine(clientCount)}
+        line={clientCount === undefined ? undefined : cardFreeTrialLine(clientCount)}
       />
       <Link to="/billing/start" search={billingStartSearch(pending)} className="btn gold">
         Add a card

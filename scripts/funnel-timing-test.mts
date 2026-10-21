@@ -406,7 +406,10 @@ assert(
   "the studio tour opens Health and Home",
 );
 assert(client.includes("Other ways"), "upload/sync alternatives are folded");
-assert(dash.includes("<CheckoutAfterInsight />"), "a scored book offers Checkout");
+assert(
+  dash.includes("<CheckoutAfterInsight clientCount={trialAllowance?.upgrade?.clientCount"),
+  "a scored book offers Checkout",
+);
 assert(dash.includes("markInsightSeen(firmId)"), "a scored book marks this firm's insight");
 assert(
   !dash.includes('id="wizard-dash-reports"') && !dash.includes("Reports studio"),
