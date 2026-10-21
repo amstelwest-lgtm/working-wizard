@@ -546,7 +546,7 @@ export function practiceDisplaysZarPlan(input: {
 
 /** Shown when the list is in rand and Checkout would still charge USD. */
 export const ZAR_DISPLAY_USD_CHECKOUT_NOTE =
-  "Shown in rand for this practice. Checkout charges US dollars while the firm is saved outside South Africa.";
+  "Shown in rands for this practice. Checkout charges US dollars while the firm is saved outside ZA.";
 
 export function zarDisplayCheckoutNote(input: {
   firmMarket: unknown;
