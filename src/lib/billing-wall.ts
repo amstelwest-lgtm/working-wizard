@@ -11,6 +11,7 @@ import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { CARD_FREE_TRIAL_LINE, cardFreeTrialLine } from "@/lib/starter-trial-constants";
 import {
   FIRM_BAND_CATALOG,
+  firmSignupCheckoutIntent,
   firmUsdListPrice,
   type FirmCheckoutBand,
   type FirmInterval,
@@ -54,6 +55,24 @@ export function firmWallDisplayPrice(input: {
   const usd = firmUsdListPrice(input.plan, input.interval);
   if (!usd) return null;
   return input.interval === "year" ? `${usd}/yr` : `${usd}/mo`;
+}
+
+/**
+ * Price under the card-free trial line. Starter monthly, the same plan
+ * Checkout opens for a firm with no subscription. A ZA label is the
+ * server's Starter line. Every other market uses the USD catalog.
+ */
+export function cardFreeTrialPrice(input: {
+  market: "za" | "us" | null;
+  zaPriceLabel: string | null;
+}): string | null {
+  const intent = firmSignupCheckoutIntent(input.market === "za" ? "za" : "us");
+  return firmWallDisplayPrice({
+    market: input.market,
+    zaPriceLabel: input.zaPriceLabel,
+    plan: intent.plan,
+    interval: intent.interval,
+  });
 }
 
 export function firmWallTrialDetail(priceLabel: string | null): string {
@@ -179,12 +198,17 @@ export async function resolveBillingWall(input: {
   const nextQuote = quote.status === "value" ? quote.value : null;
   let quoteError = "";
   if (!nextQuote) quoteError = BILLING_WALL_QUOTE_ERROR;
-  const priceLabel = firmWallDisplayPrice({
-    market: nextQuote?.market ?? null,
-    zaPriceLabel: nextQuote?.market === "za" ? nextQuote.priceLabel : null,
-    plan: input.plan,
-    interval: input.interval,
-  });
+  const signup = firmSignupCheckoutIntent();
+  const zaPriceLabel = nextQuote?.market === "za" ? nextQuote.priceLabel : null;
+  const priceLabel =
+    input.plan === signup.plan && input.interval === signup.interval
+      ? cardFreeTrialPrice({ market: nextQuote?.market ?? null, zaPriceLabel })
+      : firmWallDisplayPrice({
+          market: nextQuote?.market ?? null,
+          zaPriceLabel,
+          plan: input.plan,
+          interval: input.interval,
+        });
   if (nextQuote?.market === "za" && !nextQuote.priceLabel?.trim()) {
     quoteError = quoteError || BILLING_WALL_QUOTE_ERROR;
   }

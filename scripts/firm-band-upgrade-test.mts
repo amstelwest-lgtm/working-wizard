@@ -1311,7 +1311,14 @@ const cardFreeBanner = renderToStaticMarkup(
     firmId: "firm",
   }),
 );
-assert(cardFreeBanner.includes(CARD_FREE_TRIAL_LINE), "the card-free trial banner uses the explore sentence");
+assert(
+  cardFreeBanner.includes("Add a card to start your 14-day free trial · up to 5 clients."),
+  "a card-free banner with no client count uses the 2–4 line",
+);
+assert(
+  !cardFreeBanner.toLowerCase().includes("first client"),
+  "a card-free banner with no client count does not say first client",
+);
 assert(!cardFreeBanner.includes(OLD_CARD_FREE_LINE), "the card-free trial banner drops the old Starter line");
 assert(!cardFreeBanner.toLowerCase().includes("vat"), "the card-free trial banner has no VAT wording");
 

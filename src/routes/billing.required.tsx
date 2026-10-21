@@ -29,6 +29,7 @@ import {
   FIRM_WALL_START_LABEL,
   FIRM_WALL_TRIAL_ENDED_LINE,
   cardFreeTrialLine,
+  cardFreeTrialPrice,
   firmWallBackTarget,
   firmWallOffersRetry,
   firmWallWhyLine,
@@ -254,9 +255,17 @@ function BillingRequiredPage() {
       : quote?.market === "us"
         ? usdPriceLabel(checkout.plan, checkout.interval)
         : null;
-  // A missing quote is not ZA. A ZA quote with a null price stays unresolved.
+  // Card-free firms open on Starter monthly. That price is the same helper
+  // the practice home uses. A missing quote is not ZA. A ZA quote with a
+  // null price stays unresolved.
   const shownPrice =
-    priceLabel || (quote?.market === "za" ? null : usdPriceLabel(checkout.plan, checkout.interval));
+    checkout.plan === "starter" && checkout.interval === "month"
+      ? cardFreeTrialPrice({
+          market: quote?.market ?? null,
+          zaPriceLabel: quote?.market === "za" ? (quote.priceLabel ?? null) : null,
+        })
+      : priceLabel ||
+        (quote?.market === "za" ? null : usdPriceLabel(checkout.plan, checkout.interval));
 
   if (loading || checking || !user || returnClient === undefined) {
     return (

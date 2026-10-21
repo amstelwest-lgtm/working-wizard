@@ -7,10 +7,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { BillingRequiredCard } from "../src/routes/billing.required.tsx";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade.tsx";
+import { FirmStarterTrialBanner } from "../src/components/firm-starter-trial-banner.tsx";
+import { buildUpgradeSnapshot } from "../src/lib/firm-client-cap.server.ts";
+import { noPlanTrialClock } from "../src/lib/firm-starter-trial.ts";
+import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server.ts";
 import { cardFreeTrialLine } from "../src/lib/starter-trial-constants.ts";
 import {
   FIRM_WALL_TRIAL_ENDED_LINE,
   FIRM_WALL_TRIAL_LINE,
+  cardFreeTrialPrice,
   firmWallBackTarget,
   firmWallOffersRetry,
   firmWallWhyLine,
@@ -300,5 +305,110 @@ const failed = await resolveBillingWall({
 });
 assert(failed.entitlementOutcome === "failed", "a thrown entitlement check can retry");
 assert(failed.trialEnded === false, "a failed check does not invent an ended trial");
+
+function marked(html: string, attr: string): string {
+  const at = html.indexOf(`data-${attr}=""`);
+  if (at < 0) return "";
+  const start = html.indexOf(">", at);
+  const end = html.indexOf("<", start + 1);
+  return start < 0 || end < 0 ? "" : html.slice(start + 1, end);
+}
+
+const cardFreeTrial = noPlanTrialClock({
+  enforced: true,
+  noPlan: true,
+  startedAt: "2026-10-18T12:00:00.000Z",
+  now: new Date("2026-10-19T12:00:00.000Z"),
+});
+const zaCopy = loadSaPricingCopy();
+const zaMarket = { country: "ZA" as const, region: "GP", regionCode: "GP" as const };
+const zaClients = [
+  { country: "ZA" as const, regionCode: "GP" as const },
+  { country: "ZA" as const, regionCode: "GP" as const },
+];
+const zaSnap = await buildUpgradeSnapshot({
+  isOwner: true,
+  membershipRole: "owner",
+  market: zaMarket,
+  clientMarkets: zaClients,
+  clientCount: 2,
+  sub: null,
+});
+const soloSnap = await buildUpgradeSnapshot({
+  isOwner: true,
+  membershipRole: "owner",
+  market: zaMarket,
+  clientMarkets: zaClients,
+  clientCount: 2,
+  sub: {
+    phase: "active",
+    band: "solo",
+    interval: "month",
+    currency: "zar",
+    unitAmount: 79_900,
+  } as NonNullable<Parameters<typeof buildUpgradeSnapshot>[0]["sub"]>,
+});
+assert(
+  zaSnap.zaPriceLabel === zaCopy.labels.starter.month,
+  `a card-free ZA firm is priced as Starter, saw ${zaSnap.zaPriceLabel}`,
+);
+assert(
+  soloSnap.zaPriceLabel === zaCopy.labels.solo.month,
+  `a Solo subscription keeps the Solo line, saw ${soloSnap.zaPriceLabel}`,
+);
+
+const usMarket = { country: "US" as const, region: "NY", regionCode: "NY" as const };
+const usClients = [
+  { country: "US" as const, regionCode: "NY" as const },
+  { country: "US" as const, regionCode: "NY" as const },
+];
+const usSnap = await buildUpgradeSnapshot({
+  isOwner: true,
+  membershipRole: "owner",
+  market: usMarket,
+  clientMarkets: usClients,
+  clientCount: 2,
+  sub: null,
+});
+assert(usSnap.zaPriceLabel == null, "a US firm does not carry a rand charge line");
+
+for (const variant of [
+  {
+    market: "za" as const,
+    upgrade: zaSnap,
+    wallPrice: cardFreeTrialPrice({ market: "za", zaPriceLabel: zaCopy.labels.starter.month }),
+  },
+  {
+    market: "us" as const,
+    upgrade: usSnap,
+    wallPrice: cardFreeTrialPrice({ market: "us", zaPriceLabel: null }),
+  },
+]) {
+  const home = renderToStaticMarkup(
+    createElement(FirmStarterTrialBanner, {
+      trial: cardFreeTrial,
+      upgrade: variant.upgrade,
+      firmId: "firm",
+    }),
+  );
+  const wall = card({ priceLabel: variant.wallPrice, clientCount: 2 });
+  const homePrice = marked(home, "trial-price");
+  assert(
+    Boolean(variant.wallPrice) &&
+      homePrice === variant.wallPrice &&
+      wall.includes(variant.wallPrice),
+    `${variant.market} home price ${homePrice} matches the wall ${variant.wallPrice}`,
+  );
+  assert(!home.includes("799"), `${variant.market} home does not price Solo`);
+  assert(
+    !home.toLowerCase().includes("first client"),
+    `${variant.market} home does not say first client`,
+  );
+  assert(!home.toLowerCase().includes("vat"), `${variant.market} home has no VAT wording`);
+  assert(
+    variant.market === "us" ? homePrice === "$39/mo" : homePrice.includes("R 299"),
+    `${variant.market} home uses Starter`,
+  );
+}
 
 console.log("billing-wall-copy: ok");

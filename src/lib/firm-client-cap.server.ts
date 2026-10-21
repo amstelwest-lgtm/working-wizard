@@ -39,7 +39,7 @@ import { readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
 import { firmCheckoutCharge } from "@/lib/stripe-checkout.core";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
-import { FIRM_BAND_CATALOG, isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
+import { FIRM_BAND_CATALOG, firmSignupCheckoutIntent, isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
 import {
   installMetadataFirmCustomerWrite,
   readFirmStripeCustomerId,
@@ -953,12 +953,15 @@ export async function buildUpgradeSnapshot(input: {
     firmMarket: input.market,
     clientMarkets: input.clientMarkets,
   });
+  // A firm with no subscription is priced as Starter, the Checkout default.
+  // Solo is only the charge line when that is the current band.
+  const pricedBand = band && isFirmCheckoutBand(band) ? band : firmSignupCheckoutIntent().plan;
   const charge = firmCheckoutCharge({
     firmMarket: input.market,
     clientMarkets: input.clientMarkets,
     requested: "us",
     billingCountry: input.billingCountry,
-    band: band && isFirmCheckoutBand(band) ? band : "starter",
+    band: pricedBand,
     interval,
   });
   let zarByBand: FirmUpgradeSnapshot["zarByBand"] = {};
@@ -969,11 +972,10 @@ export async function buildUpgradeSnapshot(input: {
       const { loadSaPricingCopy } = await import("@/lib/pricing/za-pricing-chunk.server");
       const copy = loadSaPricingCopy();
       zaLabels = copy.labels;
-      // Same choice as Checkout and the ZA coupon. The list above can still
+      // Same band as Checkout and the ZA coupon. The list above can still
       // be rand for a client mix whose billing country is not yet ZA.
       if (charge.priceMarket === "za") {
-        const key = band && isFirmCheckoutBand(band) ? band : "solo";
-        zaPriceLabel = copy.labels[key][interval];
+        zaPriceLabel = copy.labels[pricedBand][interval];
       }
     } catch (err) {
       console.warn(
