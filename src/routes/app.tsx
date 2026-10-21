@@ -377,6 +377,7 @@ import {
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import {
+  bootCriticalRetryFailed,
   bootRetryInFlight,
   bootSelect,
   shellBackstopDue,
@@ -2359,6 +2360,7 @@ function Index() {
     setClientLinkResolved(false);
     setWorkspaceLoadFailed(false);
     setCriticalBootFailed(false);
+    setOwnerBootTimedOut(false);
     (async () => {
       try {
         if (actingClientId) {
@@ -4292,7 +4294,9 @@ function Index() {
       window.clearTimeout(timer);
       if (stopped) return;
       if (!shellBackstopDue(Date.now(), backstopAt)) {
-        if (bootRetryInFlight()) return;
+        // A retry still running, or one that already failed, must not be
+        // replaced by the hard fail. A failed retry has its own screen.
+        if (bootRetryInFlight() || bootCriticalRetryFailed()) return;
         timer = window.setTimeout(arm, Math.max(0, backstopAt - Date.now()));
         return;
       }
@@ -4306,7 +4310,7 @@ function Index() {
       unsubscribe();
     };
   }, [authLoading, user?.id, boardReady, ownerBootAttempt, criticalBootFailed]);
-  if (user && workspaceLoadFailed) {
+  if (user && (workspaceLoadFailed || criticalBootFailed)) {
     return (
       <div
         className="grid min-h-screen place-items-center bg-background px-4 text-foreground"
@@ -4315,9 +4319,7 @@ function Index() {
       >
         <div className="w-full max-w-md">
           <h1 className="text-xl font-semibold">Couldn't load your workspace</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            The workspace list didn't load. Retry.
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">The books didn't load. Retry.</p>
           <div className="mt-5 flex flex-wrap gap-2">
             <button
               type="button"
@@ -4339,7 +4341,7 @@ function Index() {
       </div>
     );
   }
-  if (user && !authLoading && (criticalBootFailed || (!boardReady && ownerBootTimedOut))) {
+  if (user && !authLoading && !boardReady && ownerBootTimedOut) {
     return (
       <div
         className="grid min-h-screen place-items-center bg-background px-4 text-foreground"

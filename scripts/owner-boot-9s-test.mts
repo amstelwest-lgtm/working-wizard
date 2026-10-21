@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { tabAuthLock } from "@/integrations/supabase/tab-auth";
 import {
+  bootCriticalRetryFailed,
   bootRetryInFlight,
   bootSelect,
   resetBootReadForTests,
@@ -20,10 +21,20 @@ function assert(cond: unknown, message: string): asserts cond {
 const root = resolve(import.meta.dirname, "..");
 const bootSrc = readFileSync(resolve(root, "src/lib/boot-read.ts"), "utf8");
 const appSrc = readFileSync(resolve(root, "src/routes/app.tsx"), "utf8");
+const clientSrc = readFileSync(
+  resolve(root, "src/routes/_authenticated/clients.$clientId.tsx"),
+  "utf8",
+);
 
-assert(!/getSession|refreshSession|onAuthStateChange|tabAuthLock/.test(bootSrc), "boot reads stay outside the auth lock");
+assert(
+  !/getSession|refreshSession|onAuthStateChange|tabAuthLock/.test(bootSrc),
+  "boot reads stay outside the auth lock",
+);
 assert(!bootSrc.includes("supabase"), "boot reads do not call the client");
-assert(!/\.rpc\s*\(|\.upsert\s*\(|\.insert\s*\(|\.update\s*\(/.test(bootSrc), "boot reads do not issue writes or RPCs");
+assert(
+  !/\.rpc\s*\(|\.upsert\s*\(|\.insert\s*\(|\.update\s*\(/.test(bootSrc),
+  "boot reads do not issue writes or RPCs",
+);
 
 function beforeCall(source: string, needle: string, window: number): string {
   const at = source.indexOf(needle);
@@ -46,6 +57,25 @@ assert(
 assert(
   appSrc.includes("const backstopAt = Date.now() + SHELL_GATE_TIMEOUT_MS"),
   "the shell backstop keeps one timestamp",
+);
+assert(
+  appSrc.includes("bootCriticalRetryFailed()"),
+  "a failed critical retry does not release the owner backstop",
+);
+assert(
+  clientSrc.includes("bootCriticalRetryFailed()"),
+  "a failed critical retry does not release the accountant backstop",
+);
+const loadErrorAt = appSrc.indexOf('data-owner-boot="load-error"');
+const timeoutAt = appSrc.indexOf('data-owner-boot="timeout"');
+assert(loadErrorAt > 0 && timeoutAt > loadErrorAt, "Couldn't load is checked before the hard fail");
+assert(
+  appSrc.includes("if (user && (workspaceLoadFailed || criticalBootFailed))"),
+  "a failed critical read uses the recoverable load screen",
+);
+assert(
+  appSrc.includes("if (user && !authLoading && !boardReady && ownerBootTimedOut)"),
+  "the hard fail is only the backstop, after the load screen",
 );
 
 resetBootReadForTests();
@@ -72,7 +102,10 @@ resetBootReadForTests();
       }),
     { critical: true, timeoutMs: 30 },
   );
-  assert(result.ok && result.value.data?.[0]?.id === "harbour", "a hang then a success returns the row");
+  assert(
+    result.ok && result.value.data?.[0]?.id === "harbour",
+    "a hang then a success returns the row",
+  );
   assert(calls === 2, `a critical hang retries once, saw ${calls}`);
   assert(!bootRetryInFlight(), "the retry window closes");
 }
@@ -133,7 +166,8 @@ resetBootReadForTests();
       new Promise((resolve) => {
         signal.addEventListener(
           "abort",
-          () => resolve({ data: null, error: { message: "AbortError: The operation was aborted." } }),
+          () =>
+            resolve({ data: null, error: { message: "AbortError: The operation was aborted." } }),
           { once: true },
         );
       }),
@@ -144,10 +178,32 @@ resetBootReadForTests();
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   assert(bootRetryInFlight(), "the second attempt is the retry window");
-  assert(!shellBackstopDue(backstopAt + 5_000, backstopAt), "an in-flight retry holds the original backstop");
+  assert(
+    !shellBackstopDue(backstopAt + 5_000, backstopAt),
+    "an in-flight retry holds the original backstop",
+  );
   assert(backstopAt === 10_000, "starting a retry does not move the backstop timestamp");
   await pending;
-  assert(shellBackstopDue(backstopAt, backstopAt), "the same timestamp is due once the retry settles");
+  assert(bootCriticalRetryFailed(), "a retry that also fails is recorded");
+  assert(
+    !shellBackstopDue(backstopAt, backstopAt),
+    "a failed retry does not release the original backstop",
+  );
+  assert(
+    !shellBackstopDue(backstopAt + 5_000, backstopAt),
+    "a failed retry stays off the backstop after the deadline",
+  );
+  assert(backstopAt === 10_000, "a failed retry does not move the backstop timestamp");
+  const recovered = await bootSelect(async () => ({ data: [{ id: "harbour" }], error: null }), {
+    critical: true,
+    timeoutMs: 20,
+  });
+  assert(recovered.ok, "the next critical read clears the failed retry");
+  assert(!bootCriticalRetryFailed(), "Retry starts a fresh read");
+  assert(
+    shellBackstopDue(backstopAt, backstopAt),
+    "the same timestamp is due once a later read starts",
+  );
 }
 
 resetBootReadForTests();
@@ -158,7 +214,8 @@ resetBootReadForTests();
       new Promise((resolve) => {
         signal.addEventListener(
           "abort",
-          () => resolve({ data: null, error: { message: "AbortError: The operation was aborted." } }),
+          () =>
+            resolve({ data: null, error: { message: "AbortError: The operation was aborted." } }),
           { once: true },
         );
       }),

@@ -65,6 +65,11 @@ function postgrestError(value: unknown): unknown | null {
 }
 
 let retryCount = 0;
+/**
+ * The critical read's one retry has failed. The shell must show the
+ * recoverable load state. The 8s backstop must not take that screen.
+ */
+let criticalRetryFailed = false;
 const retryListeners = new Set<() => void>();
 
 function notifyRetry(): void {
@@ -86,6 +91,14 @@ export function bootRetryInFlight(): boolean {
   return retryCount > 0;
 }
 
+/**
+ * True after a critical read's single retry failed with a network error
+ * or an abort. Cleared when the next critical read starts (Retry).
+ */
+export function bootCriticalRetryFailed(): boolean {
+  return criticalRetryFailed;
+}
+
 export function subscribeBootRetry(listener: () => void): () => void {
   retryListeners.add(listener);
   return () => {
@@ -94,16 +107,20 @@ export function subscribeBootRetry(listener: () => void): () => void {
 }
 
 /**
- * The 8s shell backstop may fire only when a critical retry is not in flight.
- * `backstopAtMs` is the original deadline. Starting a retry does not move it.
+ * The 8s shell backstop may fire only when a critical retry is not in flight
+ * and that retry has not already failed. `backstopAtMs` is the original
+ * deadline. Starting a retry does not move it. A failed retry does not
+ * release it: the caller shows "Couldn't load" instead.
  */
 export function shellBackstopDue(nowMs: number, backstopAtMs: number): boolean {
   if (bootRetryInFlight()) return false;
+  if (criticalRetryFailed) return false;
   return nowMs >= backstopAtMs;
 }
 
 export function resetBootReadForTests(): void {
   retryCount = 0;
+  criticalRetryFailed = false;
   timeoutOverride = null;
 }
 
@@ -146,11 +163,17 @@ export async function bootSelect<T>(
   opts: { critical: boolean; timeoutMs?: number },
 ): Promise<BootRead<T>> {
   const timeoutMs = opts.timeoutMs ?? bootReadTimeoutMs();
+  if (opts.critical && criticalRetryFailed) {
+    criticalRetryFailed = false;
+    notifyRetry();
+  }
   const first = await oneAttempt(run, timeoutMs);
   if (first.ok || !opts.critical || !first.retryable) return first;
   beginRetry();
   try {
-    return await oneAttempt(run, timeoutMs);
+    const second = await oneAttempt(run, timeoutMs);
+    if (!second.ok && second.retryable) criticalRetryFailed = true;
+    return second;
   } finally {
     endRetry();
   }

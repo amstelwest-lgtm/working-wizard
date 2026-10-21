@@ -224,6 +224,7 @@ import {
 } from "@/lib/statement-period";
 import { clientHomePhase } from "@/lib/client-home-phase";
 import {
+  bootCriticalRetryFailed,
   bootRetryInFlight,
   bootSelect,
   shellBackstopDue,
@@ -2405,7 +2406,9 @@ function ClientView() {
       window.clearTimeout(timer);
       if (cancelled) return;
       if (!shellBackstopDue(Date.now(), backstopAt)) {
-        if (bootRetryInFlight()) return;
+        // A retry still running, or one that already failed, stays on the
+        // recoverable "Couldn't load" screen. The backstop does not replace it.
+        if (bootRetryInFlight() || bootCriticalRetryFailed()) return;
         timer = window.setTimeout(arm, Math.max(0, backstopAt - Date.now()));
         return;
       }

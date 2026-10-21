@@ -18,7 +18,11 @@ export function ClientAgentStandby({
   const phase = agentCardPhase({ pending: true, timedOut });
   const lede = timedOut ? CLIENT_HOME_LOAD_ERROR : CLIENT_HOME_CHECKING;
   return (
-    <div className="accountant-portal premium-shell" data-client-agents={phase}>
+    <div
+      className="accountant-portal premium-shell"
+      data-client-agents={phase}
+      data-client-boot={timedOut ? "load-error" : "pending"}
+    >
       <div className="shell">
         <p className="owner-lede" role="status">
           {lede}

@@ -14,8 +14,10 @@ export type SmokeMode =
   | "revoked"
   | "error"
   | "hang-once"
+  | "hang-twice"
   | "critical-down"
-  | "section-down";
+  | "section-down"
+  | "client-hang-twice";
 
 export const SMOKE_USER_ID = "11111111-1111-4111-8111-111111111111";
 export const SMOKE_CLIENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -156,6 +158,23 @@ function settle(
     hangAttempts.set(key, attempt);
     if (attempt === 1) return hangUntilAbort(signal);
   }
+  if (mode === "hang-twice" && signal && workspaceList) {
+    const key = `${table}:${String(eqValue(eqs, table === "clients" ? "owner_user_id" : "user_id"))}`;
+    const attempt = (hangAttempts.get(key) ?? 0) + 1;
+    hangAttempts.set(key, attempt);
+    if (attempt <= 2) return hangUntilAbort(signal);
+  }
+  if (
+    mode === "client-hang-twice" &&
+    signal &&
+    table === "clients" &&
+    eqValue(eqs, "id") === SMOKE_CLIENT_ID
+  ) {
+    const key = `client-row:${SMOKE_CLIENT_ID}`;
+    const attempt = (hangAttempts.get(key) ?? 0) + 1;
+    hangAttempts.set(key, attempt);
+    if (attempt <= 2) return hangUntilAbort(signal);
+  }
   if (mode === "section-down" && table === "deliverable_drafts") {
     return Promise.reject(new TypeError("Failed to fetch"));
   }
@@ -166,8 +185,10 @@ function settle(
   const likeLoaded =
     mode === "loaded" ||
     mode === "hang-once" ||
+    mode === "hang-twice" ||
     mode === "section-down" ||
-    mode === "critical-down";
+    mode === "critical-down" ||
+    mode === "client-hang-twice";
   if (!likeLoaded || table !== "clients") return empty(kind);
   return clientPayload(clientRow, kind);
 }

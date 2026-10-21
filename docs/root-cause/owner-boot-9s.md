@@ -53,9 +53,19 @@ A single hung critical select is enough. The other reads can be slow or can fail
 ## Constraints on the fix
 
 1. Retry only idempotent reads (`GET` / `select`). One retry after a network error or a timeout, for the critical selects only (workspace, client, membership, and role when the board cannot render without it). Never retry a write or an RPC with side effects. `ensure_own_client` (`src/routes/app.tsx` around the provision RPC) and the `client_memberships` upsert on the invite path are not retried. A non-retryable error (permission, missing column) is not a network retry; the workspace list still uses "Couldn't load".
-2. A hung data fetch must not hold the Supabase auth lock. The per-request `AbortController` is passed only to the PostgREST builder, which applies it to the HTTP `fetch` after `fetchWithAuth` has already released the lock. No boot timeout and no retry wraps or runs inside `getSession`, a refresh, or an `onAuthStateChange` callback. The session read must not wait behind a stalled data fetch. The 8s backstop stays. After this change it is armed at `src/routes/app.tsx:4288` (`const backstopAt = Date.now() + SHELL_GATE_TIMEOUT_MS`). While one critical retry is still in flight it does not fire; the retry is a single capped attempt, and that original timestamp is not extended.
+2. A hung data fetch must not hold the Supabase auth lock. The per-request `AbortController` is passed only to the PostgREST builder, which applies it to the HTTP `fetch` after `fetchWithAuth` has already released the lock. No boot timeout and no retry wraps or runs inside `getSession`, a refresh, or an `onAuthStateChange` callback. The session read must not wait behind a stalled data fetch. The 8s backstop stays. It is armed once per attempt (`const backstopAt = Date.now() + SHELL_GATE_TIMEOUT_MS`). While one critical retry is still in flight it does not fire, and a retry that has already failed does not release it onto "Couldn't open". That original timestamp is not extended.
 
-Non-critical reads (notes, `deliverable_drafts`, and `user_roles` when an active workspace already supplied the board role) never fail the boot. The shell renders, and that section shows its own Retry. "Couldn't open" is only for a critical read that fails after its one retry, or for the backstop once nothing is still in flight that would finish under it.
+Non-critical reads (notes, `deliverable_drafts`, and `user_roles` when an active workspace already supplied the board role) never fail the boot. The shell renders, and that section shows its own Retry.
+
+## When the retry also fails
+
+A critical select that fails twice (the attempt and the one retry, each an abort or a network error) must not fall through to "Couldn't open your workspace". That heading is the hard backstop (`data-owner-boot="timeout"`). The failed retry renders the in-place load state instead: `data-owner-boot="load-error"`, the heading "Couldn't load your workspace", and Retry.
+
+Retry bumps `ownerBootAttempt` and re-runs the critical selects (workspace list, client row, financials, and the role read when the board still needs it). It does not reload the page. The same `ownerBootAttempt` dependency already restarts role resolution.
+
+The 8s backstop must not take this case. `shellBackstopDue` stays false after the critical retry fails, and the owner arm returns without scheduling another tick while `bootCriticalRetryFailed()` is set. The original `backstopAt` timestamp is not moved. The load-error screen is what renders, including when the clock is already past that timestamp. "Couldn't open your workspace" stays only for a stall that never settled a critical select, such as a hung `ensure_own_client`, which is not retried.
+
+The accountant client page has the same critical select. `clients.$clientId.tsx` reads the client row through `bootSelect({ critical: true })`. When that retry fails, `ClientAgentStandby` shows "Couldn't load this client" (`data-client-boot="load-error"`) and Retry. Retry bumps `clientLoadAttempt`, which re-runs that select, and does not reload. Its 8s arm uses the same `bootCriticalRetryFailed()` hold, so the backstop does not replace that screen.
 
 ## How it is verified
 
@@ -63,6 +73,8 @@ Scratch only. Nothing is applied to production.
 
 - A fake fetch that hangs once, then succeeds, opens the workspace and does not show "Couldn't open".
 - A non-critical read that rejects with `TypeError("Failed to fetch")` still opens the workspace and shows that section's Retry.
-- A critical read that fails twice shows "Couldn't open" and Retry.
+- A critical read whose first attempt hangs and whose retry hangs or fails renders "Couldn't load" and Retry, not "Couldn't open your workspace". Clicking Retry, with the next fetch succeeding, opens the board in the same document.
+- The same hang-then-fail, then Retry, opens the accountant client page without a reload.
+- After that failed retry, the original backstop timestamp is not due. The next critical read clears the hold.
 - While a data read is hung, taking the auth lock the way a session read does resolves immediately (well under 200ms), and the boot-read helper does not call into the auth lock.
 - `SHELL_GATE_TIMEOUT_MS` stays `8_000`.
