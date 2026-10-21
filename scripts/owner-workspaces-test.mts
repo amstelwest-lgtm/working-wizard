@@ -10,6 +10,7 @@ import {
   clearStoredOwnerClientId,
   confirmedOwnerClientId,
   decideStoredClientAccess,
+  inviteWorkspaceAlreadyKnown,
   mergeOwnerWorkspaces,
   nextWorkspaceListStep,
   ownerActiveClientStorageKey,
@@ -182,6 +183,16 @@ assert(nextWorkspaceListStep({ inviting: false, outcome: "empty", attempt: 0, ma
 assert(nextWorkspaceListStep({ inviting: true, outcome: "error", attempt: 0, maxAttempts: 5 }) === "error", "an invite does not retry a failed read");
 assert(nextWorkspaceListStep({ inviting: false, outcome: "error", attempt: 0, maxAttempts: 1 }) === "error", "a failed read is not treated as no workspace");
 assert(nextWorkspaceListStep({ inviting: false, outcome: "rows", attempt: 0, maxAttempts: 1 }) === "apply", "rows apply on the first read");
+
+assert(
+  inviteWorkspaceAlreadyKnown([{ clientId: first, role: "owner" }], first),
+  "an owned or client_owner workspace is already known",
+);
+assert(
+  !inviteWorkspaceAlreadyKnown([{ clientId: first, role: "member" }], first),
+  "a member-only invite still opens",
+);
+assert(!inviteWorkspaceAlreadyKnown([], first), "no workspace yet still opens the invite");
 
 const listSlice = appSrc.slice(appSrc.indexOf("const listWorkspaces"), appSrc.indexOf("const openInvitedClient"));
 assert(listSlice.includes("Promise.all"), "owned clients and memberships are read together");
