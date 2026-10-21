@@ -32,14 +32,40 @@ function sessionJson(): string {
   });
 }
 
+function installChromium(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("pnpm", ["exec", "playwright", "install", "chromium"], {
+      stdio: "inherit",
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("playwright install timed out"));
+    }, 180_000);
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`playwright install exited ${code}`));
+    });
+  });
+}
+
 async function launchBrowser(): Promise<Browser> {
+  try {
+    return await chromium.launch({ channel: "chrome", headless: true });
+  } catch {
+    /* system Chrome is not on every image */
+  }
   try {
     return await chromium.launch({ headless: true });
   } catch {
-    const { execSync } = await import("node:child_process");
-    execSync("pnpm exec playwright install chromium", { stdio: "inherit" });
-    return chromium.launch({ headless: true });
+    /* bundled browser not installed yet */
   }
+  await installChromium();
+  return chromium.launch({ headless: true });
 }
 
 function startDevServer(): ChildProcess {
