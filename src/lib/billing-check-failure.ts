@@ -67,6 +67,14 @@ export function logBillingCheckFailure(
 }
 
 /**
+ * When a stored entitled plan exists, answer with it before the shell's 8s
+ * gate closes the file. This does not lengthen the metadata search.
+ */
+export const FIRM_BILLING_PLAN_FALLBACK_MS = 6_000;
+
+export type StoredFirmPlan = "entitled" | "none";
+
+/**
  * Last success may restore a previously entitled result only for the firm
  * id it was recorded against. A no-plan result stays unpaid. It is never
  * turned into an entitlement, including when the intro-trial flag is set.
@@ -117,4 +125,43 @@ export function entitlementAfterLiveFailure(
     };
   }
   return { entitled: false, reason: "stripe_error", checkFailed: kind };
+}
+
+/**
+ * A timed-out or failed check. A stored entitled plan stays entitled.
+ * Anything else stays unknown, which is not a confirmed "no plan".
+ */
+export function entitlementForFailedCheck(
+  storedPlan: StoredFirmPlan | null,
+  kind: BillingCheckFailureKind,
+): FirmBillingEntitlement {
+  if (storedPlan === "entitled") {
+    return entitlementAfterLiveFailure(
+      { entitled: true, reason: "active_subscription" },
+      kind,
+    );
+  }
+  return entitlementAfterLiveFailure(null, kind);
+}
+
+/**
+ * Stored `entitled` is a known plan, so a failed check may stay open on it.
+ * `none` does not grant a plan. A null column uses the same-firm last success,
+ * and a timeout with neither is unknown rather than unpaid.
+ */
+export function entitlementWhenBillingCheckFails(input: {
+  storedPlan: StoredFirmPlan | null;
+  prior: FirmBillingEntitlement | null;
+  kind: BillingCheckFailureKind;
+}): FirmBillingEntitlement {
+  if (input.storedPlan === "entitled") {
+    return entitlementForFailedCheck("entitled", input.kind);
+  }
+  if (input.prior && input.prior.reason !== "stripe_error") {
+    if (input.storedPlan === "none" && input.prior.entitled === true) {
+      return entitlementForFailedCheck("none", input.kind);
+    }
+    return entitlementAfterLiveFailure(input.prior, input.kind);
+  }
+  return entitlementForFailedCheck(input.storedPlan, input.kind);
 }

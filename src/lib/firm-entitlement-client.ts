@@ -77,7 +77,8 @@ export function readCachedFirmEntitlement<T extends CachedFirmEntitlement>(
   if (!refresh && fresh(userId, firmId)) {
     return Promise.resolve(cached!.value as T);
   }
-  if (!refresh && sameInflight(userId, firmId)) return inflight as Promise<T>;
+  // Retry and the quiet recheck wait on the read that is already running.
+  if (sameInflight(userId, firmId)) return inflight as Promise<T>;
   const pending = load({ data: refresh ? { refresh: true } : {} }).then(
     (value) => {
       noteFirmEntitlement(userId, value, firmId);
@@ -170,4 +171,10 @@ export function clearCachedFirmEntitlement(): void {
   inflight = null;
   inflightUser = null;
   inflightFirm = null;
+}
+
+/** Drop the settled plan. The in-flight read stays, so Retry can apply it. */
+export function releaseFirmEntitlementForRetry(): void {
+  cached = null;
+  lastKnown = null;
 }

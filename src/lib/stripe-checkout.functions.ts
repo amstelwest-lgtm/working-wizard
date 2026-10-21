@@ -46,7 +46,11 @@ import {
   type FirmInterval,
   type StripePlanMarket,
 } from "@/lib/stripe-plans";
-import { readFirmStripeCustomerId, writeFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
+import {
+  installMetadataFirmCustomerWrite,
+  readFirmStripeCustomerId,
+  writeFirmStripeCustomerId,
+} from "@/lib/firm-stripe-customer.server";
 import {
   assertNoManagedPaymentsOverride,
   firmCheckoutCharge,
@@ -76,10 +80,13 @@ import {
 } from "@/lib/stripe-billing-sync.server";
 import {
   classifyBillingCheckFailure,
-  entitlementAfterLiveFailure,
+  entitlementForFailedCheck,
+  entitlementWhenBillingCheckFails,
   restoreLastFirmSuccess,
   FIRM_BILLING_ENTITLEMENT_SERVER_FN,
+  FIRM_BILLING_PLAN_FALLBACK_MS,
 } from "@/lib/billing-check-failure";
+import { readFirmBillingPlanKnown, writeFirmBillingPlanKnown } from "@/lib/firm-billing-plan.server";
 import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
@@ -87,6 +94,8 @@ import {
   findFirmCustomerId,
   type FirmBillingEntitlement,
 } from "@/lib/stripe-entitlement";
+
+installMetadataFirmCustomerWrite();
 
 function appOrigin(): string {
   try {
@@ -310,6 +319,21 @@ async function countFirmMemberships(
   return data?.length ?? 0;
 }
 
+/** A finished check only. A timeout must not write "none". */
+function rememberConfirmedFirmPlan(
+  firmId: string | null,
+  result: FirmBillingEntitlement,
+): void {
+  if (!firmId || result.checkFailed || result.reason === "stripe_error") return;
+  if (result.reason === "active_subscription") {
+    void writeFirmBillingPlanKnown(firmId, "entitled");
+    return;
+  }
+  if (result.reason === "no_active_subscription") {
+    void writeFirmBillingPlanKnown(firmId, "none");
+  }
+}
+
 async function resolveFirmBillingEntitlement(
   context: unknown,
   refresh: boolean,
@@ -329,6 +353,9 @@ async function resolveFirmBillingEntitlement(
   }
   const work = (async (): Promise<FirmBillingEntitlement> => {
     const billingIds = await firmBillingIdsForActor(ctx.supabase, userId, firmId);
+    const storedPlan = await readFirmBillingPlanKnown(billingIds.firmId);
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+    const live = (async (): Promise<FirmBillingEntitlement> => {
     try {
       // One isolate-cached Stripe list. The mirror below reads that same
       // entry. It must not be awaited: a second scan used to sit on the response.
@@ -351,6 +378,7 @@ async function resolveFirmBillingEntitlement(
         introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
       };
       rememberEntitlement(email, result, userId, billingIds.firmId);
+      rememberConfirmedFirmPlan(billingIds.firmId, result);
       const mirror = syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email }).catch((err) => {
         console.warn(
           "[stripe-entitlement] trial mirror sync failed",
@@ -387,10 +415,25 @@ async function resolveFirmBillingEntitlement(
       });
       // Unknown is not unpaid. Caching this as entitled:false sent the shell
       // to the trial card. A previous success for this user and firm stays.
-      return entitlementAfterLiveFailure(
-        lookupLastFirmEntitlement(userId, email, billingIds.firmId),
+      return entitlementWhenBillingCheckFails({
+        storedPlan,
+        prior: lookupLastFirmEntitlement(userId, email, billingIds.firmId),
         kind,
-      );
+      });
+    }
+    })();
+    if (storedPlan !== "entitled") return live;
+    try {
+      return await Promise.race([
+        live,
+        new Promise<FirmBillingEntitlement>((resolve) => {
+          fallbackTimer = setTimeout(() => {
+            resolve(entitlementForFailedCheck("entitled", "timeout"));
+          }, FIRM_BILLING_PLAN_FALLBACK_MS);
+        }),
+      ]);
+    } finally {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
     }
   })();
   if (key) {
@@ -593,6 +636,7 @@ export const createBillingPortalSession = createServerFn({ method: "POST" })
     if (!customerId) {
       throw new Error("No Stripe customer yet. Start a firm plan from pricing first.");
     }
+    if (firmId) await writeFirmStripeCustomerId(firmId, customerId);
     return { url: await createPortalUrl(customerId, appOrigin()) };
   });
 

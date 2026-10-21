@@ -6,6 +6,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { decideAccountantAuthLanding, safeAccountantRedirect } from "../src/lib/auth-landing";
 import {
+  entitlementForFailedCheck,
+  FIRM_BILLING_PLAN_FALLBACK_MS,
+} from "../src/lib/billing-check-failure";
+import { firmFileOnBillingResult } from "../src/lib/firm-gate-access";
+import { SHELL_GATE_TIMEOUT_MS } from "../src/lib/shell-gate";
+import {
   firmStripeCustomerColumnProbes,
   noteMissingFirmStripeCustomerColumn,
   readFirmStripeCustomerId,
@@ -29,6 +35,9 @@ import {
   FIRM_CUSTOMER_SEARCH_BUDGET_MS,
   STORED_CUSTOMER_READ_BUDGET_MS,
   findFirmCustomerId,
+  FirmCustomerLookupUnknown,
+  metadataFirmCustomerStore,
+  setMetadataFirmCustomerWriteListener,
   firmCustomerSearchQuery,
   isBillingExemptPath,
   isFirmProductPath,
@@ -812,13 +821,173 @@ assert(
   "customer metadata finds the firm when the subscription search is empty",
 );
 
+const metadataWrite = metadataFirmCustomerStore({
+  firmId: BEN_FIRM,
+  customerId: "cus_meta",
+  storedCustomerId: null,
+  metadataFirmId: BEN_FIRM,
+  metadataUserId: BEN_OWNER,
+  lookupUserId: BEN_OWNER,
+  status: "active",
+  ownerPlan: false,
+});
+assert(
+  metadataWrite.customerId === "cus_meta" && metadataWrite.plan === "entitled",
+  "a metadata hit writes the customer id and entitled",
+);
+const metadataKept = metadataFirmCustomerStore({
+  firmId: BEN_FIRM,
+  customerId: "cus_meta",
+  storedCustomerId: "cus_kept",
+  metadataFirmId: BEN_FIRM,
+  metadataUserId: BEN_OWNER,
+  lookupUserId: BEN_OWNER,
+  status: "trialing",
+  ownerPlan: false,
+});
+assert(metadataKept.customerId === null, "a different stored customer id is not overwritten");
+assert(metadataKept.plan === "entitled", "a metadata hit still stores the entitled plan");
+assert(
+  metadataFirmCustomerStore({
+    firmId: BEN_FIRM,
+    customerId: "cus_other",
+    storedCustomerId: null,
+    metadataFirmId: "44444444-4444-4444-8444-444444444444",
+    metadataUserId: "22222222-2222-4222-8222-222222222222",
+    lookupUserId: BEN_OWNER,
+    status: "active",
+    ownerPlan: false,
+  }).plan === null,
+  "a cross-firm metadata hit does not write",
+);
+assert(
+  metadataFirmCustomerStore({
+    firmId: BEN_FIRM,
+    customerId: "cus_meta",
+    storedCustomerId: null,
+    metadataFirmId: BEN_FIRM,
+    metadataUserId: BEN_OWNER,
+    lookupUserId: BEN_OWNER,
+    status: "canceled",
+    ownerPlan: false,
+  }).plan === null,
+  "a canceled subscription does not store entitled",
+);
+
+const metadataWrites: Array<{ customerId: string | null; plan: "entitled" | null }> = [];
+setMetadataFirmCustomerWriteListener((decision) => {
+  metadataWrites.push(decision);
+});
+const subscriptionHit: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [] }),
+    search: async () => ({ data: [] }),
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: async () => ({
+      data: [
+        {
+          id: "sub_ben",
+          status: "active",
+          customer: "cus_meta",
+          metadata: {
+            milon_plan: "starter",
+            milon_user_id: BEN_OWNER,
+            firm_id: BEN_FIRM,
+          },
+        },
+      ],
+    }),
+  },
+};
+try {
+  assert(
+    (await findFirmCustomerId(subscriptionHit, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+    })) === "cus_meta",
+    "subscription metadata resolves the firm customer",
+  );
+  assert(
+    metadataWrites.length === 1 &&
+      metadataWrites[0]?.customerId === "cus_meta" &&
+      metadataWrites[0]?.plan === "entitled",
+    "a metadata hit writes the customer id and the entitled plan",
+  );
+  metadataWrites.length = 0;
+  const emailOnly: StripeCustomerSubscriptionReader = {
+    customers: {
+      list: async () => ({ data: [{ id: "cus_email" }] }),
+      search: () => new Promise(() => {}),
+    },
+    subscriptions: {
+      list: async () => ({ data: [] }),
+      search: () => new Promise(() => {}),
+    },
+  };
+  assert(
+    (await findFirmCustomerId(emailOnly, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+    })) === "cus_email",
+    "an email hit still resolves",
+  );
+  assert(metadataWrites.length === 0, "an email-only match does not write the firm customer");
+  metadataWrites.length = 0;
+  const keptStripe: StripeCustomerSubscriptionReader = {
+    customers: {
+      list: async () => ({ data: [] }),
+      retrieve: async () => ({
+        id: "cus_kept",
+        email: "team@trymilon.co.za",
+        metadata: { milon_user_id: BEN_OWNER, firm_id: BEN_FIRM },
+      }),
+      search: async () => ({
+        data: [{ id: "cus_meta", metadata: { firm_id: BEN_FIRM, milon_user_id: BEN_OWNER } }],
+      }),
+    },
+    subscriptions: {
+      list: async () => ({ data: [] }),
+      search: async () => ({
+        data: [
+          {
+            id: "sub_ben",
+            status: "active",
+            customer: "cus_meta",
+            metadata: { milon_plan: "starter", milon_user_id: BEN_OWNER, firm_id: BEN_FIRM },
+          },
+        ],
+      }),
+    },
+  };
+  assert(
+    (await findFirmCustomerId(keptStripe, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+      storedCustomerId: "cus_kept",
+    })) === "cus_kept",
+    "a stored customer id still wins",
+  );
+  assert(metadataWrites.length === 0, "a different stored customer id is not overwritten");
+} finally {
+  setMetadataFirmCustomerWriteListener(null);
+}
+
 assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS === 4_000, "metadata search shares a 4s budget");
 assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS < 5_000, "the search budget is inside a 5s entitlement check");
 
 let emailHitSearches = 0;
+let emailListOptions: { maxNetworkRetries?: number; timeout?: number } | undefined;
 const emailHitHang: StripeCustomerSubscriptionReader = {
   customers: {
-    list: async () => ({ data: [{ id: "cus_email" }] }),
+    list: async (_params, options) => {
+      emailListOptions = options;
+      return { data: [{ id: "cus_email" }] };
+    },
     search: () => {
       emailHitSearches += 1;
       return new Promise(() => {});
@@ -846,6 +1015,12 @@ const emailHit = await Promise.race([
 assert(emailHit === "cus_email", "an email hit resolves without metadata search");
 assert(emailHitSearches === 0, "the email-hit path makes no search calls");
 assert(Date.now() - emailHitStarted < 5_000, "an email hit finishes within 5s");
+assert(emailListOptions?.maxNetworkRetries === 0, "the email list does not ask Stripe to retry");
+assert(
+  typeof emailListOptions?.timeout === "number" &&
+    emailListOptions.timeout <= FIRM_CUSTOMER_SEARCH_BUDGET_MS,
+  "the email list timeout stays inside the shared budget",
+);
 
 let missSearchOptions: { maxNetworkRetries?: number; timeout?: number } | undefined;
 let missSearches = 0;
@@ -868,20 +1043,170 @@ const missHang: StripeCustomerSubscriptionReader = {
   },
 };
 const missStarted = Date.now();
-const missed = await Promise.race([
-  findFirmCustomerId(missHang, {
+let missUnknown: unknown;
+try {
+  await Promise.race([
+    findFirmCustomerId(missHang, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+    }),
+    new Promise<string>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("hung metadata search exceeded 5s")), 5_000);
+    }),
+  ]);
+} catch (err) {
+  missUnknown = err;
+}
+const missElapsed = Date.now() - missStarted;
+assert(
+  missUnknown instanceof FirmCustomerLookupUnknown && missUnknown.kind === "timeout",
+  "a hung metadata search is unknown, not no customer",
+);
+assert(missElapsed < 5_000, "hung metadata searches give up within 5s");
+assert(missSearches >= 1, "an email miss still searches");
+const storedPlanOpen = entitlementForFailedCheck("entitled", "timeout");
+assert(
+  storedPlanOpen.entitled === true && storedPlanOpen.checkFailed === "timeout",
+  "a stored entitled plan stays entitled when the check times out",
+);
+assert(
+  firmFileOnBillingResult(storedPlanOpen) === "open",
+  "a metadata search timeout with a stored plan keeps the client file open",
+);
+assert(
+  missUnknown instanceof FirmCustomerLookupUnknown &&
+    firmFileOnBillingResult(storedPlanOpen) === "open",
+  "Ben's email miss and slow metadata search keep the file open when a stored plan exists",
+);
+assert(
+  entitlementForFailedCheck(null, "timeout").reason !== "no_active_subscription",
+  "a lookup timeout is not an unpaid firm",
+);
+const completedEmpty: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [] }),
+    search: async () => ({ data: [] }),
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: async () => ({ data: [] }),
+  },
+};
+assert(
+  (await findFirmCustomerId(completedEmpty, {
     email: "team@trymilon.com",
     userId: BEN_OWNER,
     firmId: BEN_FIRM,
-  }),
-  new Promise<string>((_resolve, reject) => {
-    setTimeout(() => reject(new Error("hung metadata search exceeded 5s")), 5_000);
-  }),
-]);
-const missElapsed = Date.now() - missStarted;
-assert(missed === undefined, "hung metadata searches fail closed");
-assert(missElapsed < 5_000, "hung metadata searches give up within 5s");
-assert(missSearches >= 1, "an email miss still searches");
+  })) === undefined,
+  "a completed email list and metadata search with zero results is no customer",
+);
+let listHangSearches = 0;
+let listHangOptions: { maxNetworkRetries?: number; timeout?: number } | undefined;
+const listHang: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: (_params, options) => {
+      listHangOptions = options;
+      return new Promise(() => {});
+    },
+    search: () => {
+      listHangSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: () => {
+      listHangSearches += 1;
+      return new Promise(() => {});
+    },
+  },
+};
+const listHangStarted = Date.now();
+let listHangUnknown: unknown;
+try {
+  await Promise.race([
+    findFirmCustomerId(listHang, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+    }),
+    new Promise<string>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("hung email list exceeded 5s")), 5_000);
+    }),
+  ]);
+} catch (err) {
+  listHangUnknown = err;
+}
+assert(
+  listHangUnknown instanceof FirmCustomerLookupUnknown && listHangUnknown.kind === "timeout",
+  "a hung email list is unknown, not no customer",
+);
+assert(Date.now() - listHangStarted < 5_000, "a hung email list stays inside the shared deadline");
+assert(listHangSearches === 0, "an email list timeout does not start a metadata search");
+assert(listHangOptions?.maxNetworkRetries === 0, "the email list turns Stripe retries off");
+assert(
+  typeof listHangOptions?.timeout === "number" &&
+    listHangOptions.timeout <= FIRM_CUSTOMER_SEARCH_BUDGET_MS,
+  "the email list timeout is capped by the shared budget",
+);
+let sharedListTimeout = 0;
+let sharedSearchTimeout = 0;
+const sharedBudget: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: (_params, options) =>
+      new Promise((resolve) => {
+        sharedListTimeout = options?.timeout ?? 0;
+        setTimeout(() => resolve({ data: [] }), 300);
+      }),
+    search: async () => ({ data: [] }),
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: (_params, options) => {
+      sharedSearchTimeout = options?.timeout ?? 0;
+      return Promise.resolve({ data: [] });
+    },
+  },
+};
+assert(
+  (await findFirmCustomerId(sharedBudget, {
+    email: "team@trymilon.com",
+    userId: BEN_OWNER,
+    firmId: BEN_FIRM,
+  })) === undefined,
+  "a slow completed email miss still counts as no customer when metadata is empty",
+);
+assert(sharedListTimeout <= FIRM_CUSTOMER_SEARCH_BUDGET_MS, "the email list starts inside the shared budget");
+assert(
+  sharedSearchTimeout > 0 && sharedSearchTimeout < sharedListTimeout,
+  "metadata search is capped by the budget remaining after the email list",
+);
+assert(
+  firmFileOnBillingResult({ entitled: false, reason: "no_active_subscription" }) === "closed",
+  "a confirmed no active plan closes the client file",
+);
+assert(
+  firmFileOnBillingResult({
+    entitled: false,
+    reason: "no_active_subscription",
+    checkFailed: "timeout",
+  }) === "retry",
+  "a failed check does not close the file on an unpaid echo",
+);
+assert(
+  firmFileOnBillingResult(entitlementForFailedCheck("none", "timeout")) === "retry",
+  "a timeout does not treat a stored none as a confirmed close",
+);
+assert(
+  firmFileOnBillingResult(entitlementForFailedCheck(null, "network")) === "retry",
+  "a failed check with no stored plan stays on retry",
+);
+assert(
+  FIRM_BILLING_PLAN_FALLBACK_MS < SHELL_GATE_TIMEOUT_MS,
+  "a stored plan answers before the shell gate closes the file",
+);
+assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS === 4_000, "the metadata search budget stays 4s");
 assert(missSearchOptions?.maxNetworkRetries === 0, "metadata search does not ask Stripe to retry");
 assert(
   typeof missSearchOptions?.timeout === "number" &&
@@ -1532,11 +1857,27 @@ assert(
   "owner billing does not look the customer up by email only",
 );
 assert(ownerServer.includes("findFirmCustomerId"), "owner billing uses the stable customer lookup");
+assert(
+  ownerServer.includes("installMetadataFirmCustomerWrite"),
+  "owner billing installs the metadata customer write",
+);
 const entitlement = readFileSync(resolve("src/lib/stripe-entitlement.ts"), "utf8");
 assert(!entitlement.includes("customers.update"), "entitlement lookup does not write Stripe");
 assert(
+  !entitlement.includes("firm-stripe-customer.server"),
+  "the entitlement module does not import the service-role writer",
+);
+assert(
+  entitlement.includes("metadataFirmCustomerStore"),
+  "a subscription metadata hit decides the firm customer write",
+);
+assert(
+  entitlement.includes("noteSubscriptionMetadataCustomer"),
+  "only a subscription metadata hit stores the firm customer",
+);
+assert(
   !entitlement.includes("writeFirmStripeCustomerId"),
-  "a customer lookup does not write firms.stripe_customer_id",
+  "the entitlement module does not overwrite firms.stripe_customer_id itself",
 );
 const migration = readFileSync(
   resolve("supabase/migrations/20261020223000_firm_stripe_customer_id.sql"),
@@ -1575,10 +1916,62 @@ assert(fns.includes("firmStartTrialCheckout"), "Start trial reuses the resolved 
 assert(fns.includes("firmBillingIdsForActor"), "a client firm id is checked against the signed-in user");
 assert(!fns.includes("customerId: z."), "checkout does not take a customer id from the client");
 const capServer = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
+assert(capServer.includes("installMetadataFirmCustomerWrite"), "subscription history installs the metadata customer write");
 assert(capServer.includes("actorCanUseFirm"), "a named firm is used only when the user belongs to it");
 assert(
   !capServer.includes("writeFirmStripeCustomerId"),
   "reading subscription history does not write firms.stripe_customer_id",
 );
+const planMigration = readFileSync(
+  resolve("supabase/migrations/20261021040000_firm_billing_plan_known.sql"),
+  "utf8",
+);
+assert(
+  planMigration.includes("ADD COLUMN IF NOT EXISTS billing_plan_known"),
+  "migration adds firms.billing_plan_known",
+);
+assert(!/UPDATE\s+public\.firms/i.test(planMigration), "the plan migration does not backfill firm rows");
+const customerServer = readFileSync(resolve("src/lib/firm-stripe-customer.server.ts"), "utf8");
+assert(
+  customerServer.includes('.is("stripe_customer_id", null)'),
+  "a metadata hit fills a null customer id and does not overwrite one",
+);
+assert(
+  customerServer.includes("subscription metadata stored the firm plan"),
+  "a metadata hit logs the firm plan write",
+);
+assert(
+  planMigration.includes("IS DISTINCT FROM 'authenticated'"),
+  "signed-in users cannot set the stored plan",
+);
+assert(fns.includes("installMetadataFirmCustomerWrite"), "checkout installs the metadata customer write");
+assert(fns.includes("readFirmBillingPlanKnown"), "a slow check reads the stored firm plan");
+assert(fns.includes("FIRM_BILLING_PLAN_FALLBACK_MS"), "a stored entitled plan is returned before the gate");
+assert(fns.includes("rememberConfirmedFirmPlan"), "a finished check stores the firm plan");
+assert(fns.includes('writeFirmBillingPlanKnown(firmId, "none")'), "only a confirmed no-plan stores none");
+const portalStart = fns.indexOf("export const createBillingPortalSession");
+const portalEnd = fns.indexOf("export const getCheckoutSessionStatus");
+assert(
+  portalStart !== -1 &&
+    portalEnd > portalStart &&
+    fns.slice(portalStart, portalEnd).includes("writeFirmStripeCustomerId"),
+  "opening the billing portal stores firms.stripe_customer_id",
+);
+const setupStart = billingSync.indexOf("export async function completeFirmSetupUpgrade");
+const setupEnd = billingSync.indexOf("export async function", setupStart + 40);
+assert(
+  setupStart !== -1 &&
+    setupEnd > setupStart &&
+    billingSync.slice(setupStart, setupEnd).includes("writeFirmStripeCustomerId"),
+  "setup Checkout stores firms.stripe_customer_id",
+);
+const rememberStart = billingSync.indexOf("async function rememberFirmStripeCustomer");
+const rememberEnd = billingSync.indexOf("export async function syncFirmSubscriptionBand");
+const rememberFn = billingSync.slice(rememberStart, rememberEnd);
+assert(rememberFn.includes("writeFirmStripeCustomerId"), "subscription sync stores the firm customer id");
+assert(rememberFn.includes("writeFirmBillingPlanKnown"), "an entitling subscription stores the firm plan");
+assert(!rememberFn.includes('"none"'), "a subscription webhook does not store a confirmed no-plan");
+assert(gate.includes("firmFileOnBillingResult"), "the gate opens a stored plan after a failed check");
+assert(gate.includes('file === "open"'), "a failed check with a stored plan does not stay on Retry");
 
 console.log("firm-billing-gate ok");
