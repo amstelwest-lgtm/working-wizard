@@ -3683,10 +3683,10 @@ function ClientView() {
   const homePresence = useMemo(
     () =>
       steerOpenHandoffs(
-        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, liveScoreSnapshot, figuresUpdatedAt, client.id),
+        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, liveScoreSnapshot, figuresUpdatedAt, client?.id ?? null),
         openAgents,
       ),
-    [homeActivity, homeCardRuns, openAgents, overallHealth, figuresUpdatedAt, client.id],
+    [homeActivity, homeCardRuns, openAgents, overallHealth, figuresUpdatedAt, client?.id],
   );
   const shownHandoffs = useMemo(
     () =>
