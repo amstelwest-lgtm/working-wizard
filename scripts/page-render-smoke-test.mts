@@ -165,7 +165,7 @@ const {
   RouterProvider,
 } = await import("@tanstack/react-router");
 const { Route: ClientRouteImport } = await import("../src/routes/_authenticated/clients.$clientId.tsx");
-const { Index: OwnerBoard, Route: AppRouteImport } = await import("../src/routes/app.tsx");
+const { Route: AppRouteImport } = await import("../src/routes/app.tsx");
 const { AuthProvider } = await import("../src/hooks/use-auth.tsx");
 const { AppChrome } = await import("../src/components/app-chrome.tsx");
 const { FirmBillingAccessProvider } = await import("../src/contexts/firm-billing-access.tsx");
@@ -215,11 +215,11 @@ const appRoute = AppRouteImport.update({
   path: "/app",
   getParentRoute: () => rootRoute,
   errorComponent: PageError,
-  // /app is ssr:false and wrapped in ClientOnly. This runner is a server
-  // snapshot, so that wrapper never mounts the board. Render Index directly.
+  // ssr:false makes the router wrap the match in ClientOnly, which never
+  // mounts here. The component itself is Route.options.component.
   ssr: undefined,
   pendingComponent: undefined,
-  component: () => createElement(OwnerBoard),
+  component: AppRouteImport.options.component,
 } as never);
 
 function stub(path: string) {

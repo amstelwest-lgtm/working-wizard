@@ -2102,7 +2102,7 @@ function flatExtractionToMergedResult(
   };
 }
 
-export function Index() {
+function Index() {
   const { viewMode, setViewMode } = useViewMode();
   const { user, loading: authLoading, signOut, restoreFailed } = useAuth();
   const navigate = useNavigate();

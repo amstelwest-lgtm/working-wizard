@@ -10,8 +10,31 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
+/**
+ * /app wraps the board in ClientOnly, which stays on the server snapshot in
+ * this runner. Unwrap that one call so Route.options.component mounts the
+ * board. Production builds do not use this config.
+ */
+function mountOwnerBoard() {
+  return {
+    name: "page-smoke-owner-board",
+    enforce: "pre" as const,
+    transform(code: string, id: string) {
+      if (!id.replaceAll("\\", "/").endsWith("/src/routes/app.tsx")) return null;
+      const next = code.replace(
+        /<ClientOnly fallback={<AppBootSpinner \/>}>\s*<Index \/>\s*<\/ClientOnly>/,
+        "<Index />",
+      );
+      if (next === code) {
+        throw new Error("page-smoke: ClientOnly wrapper around Index was not found");
+      }
+      return next;
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [mountOwnerBoard(), react()],
   resolve: {
     alias: [
       {
