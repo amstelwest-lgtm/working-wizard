@@ -23,6 +23,7 @@ import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-r
 import { reportClientError } from "@/lib/monitoring";
 import { firmsAfterAccountChange, firmsAfterLoadTimeout } from "@/lib/post-auth-landing";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { useOwnerBoardGate } from "@/contexts/owner-board-gate";
 import { marketToJson, parseMarketSelection } from "@/lib/market";
 import { marketForFirm } from "@/lib/market/scope";
 import {
@@ -211,6 +212,7 @@ async function readPersistedNameChain(user: {
 
 export function AccountantProfileProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
+  const { deferSideReads } = useOwnerBoardGate();
   // Stay on DEFAULT until the signed-in user is known — never paint another
   // browser tab's / previous user's brand (N8).
   const [profile, setProfile] = useState<AccountantProfile>(DEFAULT_PROFILE);
@@ -260,6 +262,9 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
     }
 
     async function hydrate() {
+      // /app holds profiles and firm_memberships until the owner board is ready.
+      // Practice routes never set deferSideReads, so their brand still loads now.
+      if (deferSideReads) return;
       if (authLoading) return;
       if (!signedIn) {
         if (!cancelled) {
@@ -388,7 +393,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
     };
     // user object identity changes on every session restore. Depend on the id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, authLoading]);
+  }, [userId, authLoading, deferSideReads]);
 
   const updateProfile = useCallback((partial: Partial<AccountantProfile>) => {
     setProfile((prev) => {
