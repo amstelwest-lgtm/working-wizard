@@ -93,6 +93,34 @@
     return true;
   }
 
+  function installBiometric() {
+    if (window.__MILON_BIOMETRIC__) return true;
+    var shell = plugin("MilonShell");
+    if (!shell || typeof shell.unlockWithBiometric !== "function") return false;
+    function resultOf(res) {
+      return { ok: !!(res && res.ok), message: res && res.message ? String(res.message) : undefined };
+    }
+    window.__MILON_BIOMETRIC__ = {
+      available: function () {
+        return Promise.resolve(shell.biometricAvailable()).then(function (res) {
+          return !!(res && res.available);
+        });
+      },
+      enabled: function () {
+        return Promise.resolve(shell.biometricEnabled()).then(function (res) {
+          return !!(res && res.enabled);
+        });
+      },
+      setEnabled: function (enabled) {
+        return Promise.resolve(shell.setBiometricEnabled({ enabled: !!enabled })).then(resultOf);
+      },
+      unlock: function () {
+        return Promise.resolve(shell.unlockWithBiometric()).then(resultOf);
+      },
+    };
+    return true;
+  }
+
   function boot() {
     var App = plugin("App");
     var Browser = plugin("Browser");
@@ -120,6 +148,16 @@
 
     App.addListener("appUrlOpen", function (event) {
       handleReturn(event && event.url, Browser);
+    });
+
+    App.addListener("appStateChange", function (state) {
+      if (!state || state.isActive !== false) return;
+      var bio = window.__MILON_BIOMETRIC__;
+      if (!bio || typeof bio.enabled !== "function") return;
+      bio.enabled().then(function (on) {
+        if (!on) return;
+        window.dispatchEvent(new Event("milon-biometric-lock"));
+      }).catch(function () {});
     });
 
     /*
@@ -154,10 +192,12 @@
 
   var appReady = false;
   var pickerReady = false;
+  var biometricReady = false;
   function tick() {
     if (!appReady) appReady = boot();
     if (!pickerReady) pickerReady = installNativePicker();
-    return appReady && pickerReady;
+    if (!biometricReady) biometricReady = installBiometric();
+    return appReady && pickerReady && biometricReady;
   }
   if (!tick()) {
     var tries = 0;

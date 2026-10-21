@@ -49,6 +49,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BiometricLockSetting } from "@/components/biometric-lock";
 import { MarketSettingsCard } from "@/components/market-settings-card";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { listUserFirms } from "@/lib/firm-brand";
@@ -393,6 +394,8 @@ function SettingsPage() {
       ) : null}
 
       {view === "owner" ? <OwnerPracticeAccessCard /> : null}
+
+      <BiometricLockSetting />
 
       <MarketSettingsCard
         kind={isPractice ? "firm" : "client"}

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type ComponentType } from "react";
+import { BiometricLockGate } from "@/components/biometric-lock";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { useAppChromeReady } from "@/contexts/app-chrome-ready";
 import { authenticatedLayoutLinks } from "@/styles/app-route-styles";
@@ -37,5 +38,10 @@ function AuthenticatedShell() {
   }, [chromeReady]);
 
   if (!Gate) return <FirmShellLoading />;
-  return <Gate />;
+  return (
+    <>
+      <Gate />
+      <BiometricLockGate />
+    </>
+  );
 }

@@ -27,6 +27,7 @@ assert(
   plist.includes("photograph a receipt"),
   "camera usage string says the photo is a receipt the person attaches",
 );
+assert(plist.includes("<key>NSFaceIDUsageDescription</key>"), "Face ID usage string is set");
 
 const privacy = readFileSync(resolve(root, "ios/App/App/PrivacyInfo.xcprivacy"), "utf8");
 assert(privacy.includes("<key>NSPrivacyTracking</key>"), "privacy manifest tracks the tracking flag");
