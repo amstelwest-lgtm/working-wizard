@@ -66,6 +66,33 @@
     window.location.replace(url);
   }
 
+  function installNativePicker() {
+    if (window.__MILON_NATIVE_PICKER__) return true;
+    var shell = plugin("MilonShell");
+    if (!shell || typeof shell.takePhoto !== "function" || typeof shell.pickDocument !== "function") {
+      return false;
+    }
+    function unwrap(result) {
+      if (!result || result.cancelled) return null;
+      if (result.error) throw new Error(String(result.error));
+      if (!result.base64) return null;
+      return {
+        name: String(result.name || "upload"),
+        mime: String(result.mime || ""),
+        base64: String(result.base64),
+      };
+    }
+    window.__MILON_NATIVE_PICKER__ = {
+      takePhoto: function () {
+        return Promise.resolve(shell.takePhoto()).then(unwrap);
+      },
+      pickDocument: function () {
+        return Promise.resolve(shell.pickDocument()).then(unwrap);
+      },
+    };
+    return true;
+  }
+
   function boot() {
     var App = plugin("App");
     var Browser = plugin("Browser");
@@ -125,11 +152,18 @@
     return true;
   }
 
-  if (!boot()) {
+  var appReady = false;
+  var pickerReady = false;
+  function tick() {
+    if (!appReady) appReady = boot();
+    if (!pickerReady) pickerReady = installNativePicker();
+    return appReady && pickerReady;
+  }
+  if (!tick()) {
     var tries = 0;
     var timer = setInterval(function () {
       tries += 1;
-      if (boot() || tries > 40) clearInterval(timer);
+      if (tick() || tries > 40) clearInterval(timer);
     }, 50);
   }
 })();
