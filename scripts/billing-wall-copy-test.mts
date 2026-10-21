@@ -3,11 +3,14 @@
  * after a failed check, and Back to the client list.
  * Run: pnpm test:billing-wall-copy
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { BillingRequiredCard } from "../src/routes/billing.required.tsx";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade.tsx";
 import { FirmStarterTrialBanner } from "../src/components/firm-starter-trial-banner.tsx";
+import { TrialCardSentence } from "../src/components/trial-card-sentence.tsx";
 import { buildUpgradeSnapshot } from "../src/lib/firm-client-cap.server.ts";
 import { noPlanTrialClock } from "../src/lib/firm-starter-trial.ts";
 import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server.ts";
@@ -16,6 +19,7 @@ import {
   FIRM_WALL_TRIAL_ENDED_LINE,
   FIRM_WALL_TRIAL_LINE,
   cardFreeTrialPrice,
+  cardFreeTrialPriceFromQuote,
   firmWallBackTarget,
   firmWallOffersRetry,
   firmWallWhyLine,
@@ -306,6 +310,10 @@ const failed = await resolveBillingWall({
 assert(failed.entitlementOutcome === "failed", "a thrown entitlement check can retry");
 assert(failed.trialEnded === false, "a failed check does not invent an ended trial");
 
+function hasLine(html: string, line: string): boolean {
+  return html.includes(line) || html.includes(line.replaceAll("'", "&#x27;"));
+}
+
 function marked(html: string, attr: string): string {
   const at = html.indexOf(`data-${attr}=""`);
   if (at < 0) return "";
@@ -382,6 +390,7 @@ for (const variant of [
     market: "us" as const,
     upgrade: usSnap,
     wallPrice: cardFreeTrialPrice({ market: "us", zaPriceLabel: null }),
+    quote: { market: "us" as const, priceLabel: null },
   },
 ]) {
   const home = renderToStaticMarkup(
@@ -389,6 +398,7 @@ for (const variant of [
       trial: cardFreeTrial,
       upgrade: variant.upgrade,
       firmId: "firm",
+      ...("quote" in variant ? { quote: variant.quote } : {}),
     }),
   );
   const wall = card({ priceLabel: variant.wallPrice, clientCount: 2 });
@@ -410,5 +420,99 @@ for (const variant of [
     `${variant.market} home uses Starter`,
   );
 }
+
+const ZA_HOME_LINE = "R 299/mo · about R 60 per client";
+const zaQuote = { market: "za" as const, priceLabel: ZA_HOME_LINE };
+const usQuote = { market: "us" as const, priceLabel: null };
+
+function openPathUpgrade(clientCount: number) {
+  return {
+    canUpgrade: false,
+    band: null,
+    phase: "none" as const,
+    clientCount,
+    clientLimit: null,
+    usageLabel: `${clientCount} active clients`,
+    priceCurrency: "USD" as const,
+    interval: "month" as const,
+    zarByBand: {},
+    saDiscount: false,
+    zaLabels: null,
+    zaPriceLabel: null,
+  };
+}
+
+function openHome(clientCount: number, quote: { market: "za" | "us"; priceLabel: string | null }) {
+  return renderToStaticMarkup(
+    createElement(FirmStarterTrialBanner, {
+      trial: cardFreeTrial,
+      upgrade: openPathUpgrade(clientCount),
+      firmId: "firm",
+      quote,
+    }),
+  );
+}
+
+function nextSentence(
+  clientCount: number,
+  quote: { market: "za" | "us"; priceLabel: string | null },
+) {
+  return renderToStaticMarkup(
+    createElement(TrialCardSentence, {
+      priceLabel: cardFreeTrialPriceFromQuote(quote),
+      line: cardFreeTrialLine(clientCount),
+    }),
+  );
+}
+
+for (const count of [2, 5]) {
+  const home = openHome(count, zaQuote);
+  const price = marked(home, "trial-price");
+  assert(price === ZA_HOME_LINE, `ZA ${count}-client home banner price is the Starter line, saw ${price}`);
+  assert(!home.includes("$"), `ZA ${count}-client home banner never shows a dollar price`);
+  assert(price === marked(nextSentence(count, zaQuote), "trial-price"), `ZA ${count}-client banner and Next prices match`);
+}
+
+const usHome = openHome(2, usQuote);
+assert(marked(usHome, "trial-price") === "$39/mo", "a US home banner shows $39/mo");
+assert(!usHome.includes("R 299"), "a US home banner does not show the rand price");
+assert(
+  marked(usHome, "trial-price") === marked(nextSentence(2, usQuote), "trial-price"),
+  "a US home banner and Next prices match",
+);
+
+for (const band of [
+  { count: 1, line: FIRST_CLIENT_LINE },
+  { count: 3, line: FEW_CLIENTS_LINE },
+  { count: 5, line: AT_FIVE_LINE },
+  { count: 6, line: overLimitLine(6) },
+]) {
+  const banner = openHome(band.count, zaQuote);
+  const next = nextSentence(band.count, zaQuote);
+  assert(hasLine(banner, band.line), `ZA home banner for ${band.count} clients uses the wall sentence`);
+  assert(hasLine(next, band.line), `Next block for ${band.count} clients uses the wall sentence`);
+  assert(
+    marked(banner, "trial-price") === marked(next, "trial-price"),
+    `banner and Next prices match at ${band.count} clients`,
+  );
+  if (band.count > 1) {
+    assert(!next.toLowerCase().includes("first client"), `Next at ${band.count} clients does not say first client`);
+  }
+}
+
+const root = resolve(import.meta.dirname, "..");
+const wallSrc = readFileSync(resolve(root, "src/routes/billing.required.tsx"), "utf8");
+const countSrc = readFileSync(resolve(root, "src/lib/firm-wall-client-count.functions.ts"), "utf8");
+const whySrc = readFileSync(resolve(root, "src/lib/billing-wall.ts"), "utf8");
+const nextSrc = readFileSync(resolve(root, "src/components/checkout-after-insight.tsx"), "utf8");
+assert(wallSrc.includes("fetchClientCount({ data: { firmId } })"), "the wall passes the firm id into the client-count read");
+assert(countSrc.includes("firmId"), "the client-count read accepts a firm id");
+assert(!whySrc.includes("earliest client file"), "the wall does not use the unapproved earliest-file sentence");
+assert(
+  !firmWallWhyLine("New York Test company", 6).includes("earliest"),
+  "a 6-client why line does not say earliest",
+);
+assert(nextSrc.includes("cardFreeTrialLine(clientCount)"), "Next uses the count-aware trial line");
+assert(nextSrc.includes("loadCardFreeTrialPriceLabel"), "Next loads the same price as the wall");
 
 console.log("billing-wall-copy: ok");

@@ -75,6 +75,22 @@ export function cardFreeTrialPrice(input: {
   });
 }
 
+/**
+ * Starter monthly label for a firm quote. The same market split the
+ * Start trial wall uses: a ZA quote keeps the server line, including the
+ * per-client clause. A US quote is the USD catalog. Any other quote is
+ * not treated as South Africa.
+ */
+export function cardFreeTrialPriceFromQuote(
+  quote: { market?: string | null; priceLabel?: string | null } | null | undefined,
+): string | null {
+  const market = quote?.market === "za" ? "za" : quote?.market === "us" ? "us" : null;
+  return cardFreeTrialPrice({
+    market,
+    zaPriceLabel: market === "za" ? (quote?.priceLabel ?? null) : null,
+  });
+}
+
 export function firmWallTrialDetail(priceLabel: string | null): string {
   const limit = FIRM_BAND_CATALOG.starter.clientLimit;
   const head = `Starter, up to ${limit} clients`;
@@ -93,9 +109,9 @@ export function firmWallTrialDetail(priceLabel: string | null): string {
 const FIRM_WALL_WHY_FIRST =
   "This firm has no plan yet. Your first client and its numbers stay open. Reports and a later client need Starter.";
 
-/** More than one client: the earliest file still stays open, without saying "first client". */
+/** More than one client. Does not name a first or earliest file. */
 const FIRM_WALL_WHY_LATER =
-  "This firm has no plan yet. The earliest client file and its numbers stay open. Reports and a later client need Starter.";
+  "This firm has no plan yet. Reports and a later client need Starter.";
 
 export function firmWallWhyLine(
   _clientName: string | null | undefined,

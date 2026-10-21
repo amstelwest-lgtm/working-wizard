@@ -1,6 +1,8 @@
-import { cardFreeTrialLine, cardFreeTrialPrice } from "@/lib/billing-wall";
+import { useEffect, useState } from "react";
+import { cardFreeTrialLine, cardFreeTrialPrice, cardFreeTrialPriceFromQuote } from "@/lib/billing-wall";
 import type { FirmUpgradeAllowance } from "@/lib/firm-client-cap";
 import { firmStarterTrialCountdownCopy, type StarterTrialBanner } from "@/lib/firm-starter-trial";
+import { loadCardFreeTrialPriceLabel } from "@/lib/trial-card-price";
 
 /**
  * Practice-dashboard trial countdown (from day 10).
@@ -10,21 +12,39 @@ import { firmStarterTrialCountdownCopy, type StarterTrialBanner } from "@/lib/fi
 export function FirmStarterTrialBanner({
   trial,
   upgrade,
+  quote,
 }: {
   trial: StarterTrialBanner;
   upgrade?: FirmUpgradeAllowance;
   firmId: string | null;
   onUpgraded?: () => void;
+  /**
+   * Firm billing quote. The same object the Start trial wall prices.
+   * Omit it and the banner loads that quote. A missing label is not USD.
+   */
+  quote?: { market?: string | null; priceLabel?: string | null } | null;
 }) {
+  const [fetched, setFetched] = useState<string | null>(null);
+  useEffect(() => {
+    if (quote !== undefined || upgrade?.zaPriceLabel) return;
+    let cancelled = false;
+    void loadCardFreeTrialPriceLabel().then((label) => {
+      if (!cancelled) setFetched(label);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [quote, upgrade?.zaPriceLabel]);
   const countdown = firmStarterTrialCountdownCopy(trial);
   const explore = trial.cardFree && !trial.expired ? cardFreeTrialLine(upgrade?.clientCount) : null;
+  const quoted = quote !== undefined ? cardFreeTrialPriceFromQuote(quote) : null;
+  const fromSnapshot = upgrade?.zaPriceLabel
+    ? cardFreeTrialPrice({ market: "za", zaPriceLabel: upgrade.zaPriceLabel })
+    : null;
   const price = explore
-    ? upgrade
-      ? cardFreeTrialPrice({
-          market: upgrade.saDiscount || upgrade.zaPriceLabel ? "za" : "us",
-          zaPriceLabel: upgrade.zaPriceLabel ?? null,
-        })
-      : null
+    ? quote !== undefined
+      ? quoted
+      : (fromSnapshot ?? fetched)
     : (upgrade?.zaPriceLabel ?? null);
   if (trial.expired || (!countdown && !explore)) return null;
 
