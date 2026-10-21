@@ -131,6 +131,7 @@
     "test:statement-text-layer": "vite-node --config scripts/vite-test.config.ts scripts/statement-text-layer-test.mts",
     "test:auto-populate": "vite-node --config scripts/vite-test.config.ts scripts/auto-populate-test.mts",
     "test:client-briefing": "vite-node --config scripts/vite-test.config.ts scripts/client-briefing-test.mts",
+    "test:connect-books-home": "vite-node --config scripts/vite-test.config.ts scripts/connect-books-home-test.mts",
     "test:settings-theme": "vite-node --config scripts/vite-test.config.ts scripts/settings-theme-test.mts",
     "test:settings-menu": "vite-node --config scripts/vite-test.config.ts scripts/settings-menu-test.mts",
     "test:ci": "node scripts/run-ci-tests.mjs",
