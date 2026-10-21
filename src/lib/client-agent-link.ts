@@ -3,12 +3,7 @@
  * The Tax Specialist collects documents. She does not fill in a form
  * or make a SARS claim.
  */
-import {
-  PHYSIO_ITEMS,
-  SEND_FILE_MAX_BYTES,
-  SEND_FILE_MIMES,
-  sha256Hex,
-} from "./client-agent-send";
+import { PHYSIO_ITEMS, SEND_FILE_MAX_BYTES, SEND_FILE_MIMES, sha256Hex } from "./client-agent-send";
 import { sendAgentFirmAllowed } from "./client-agent-send-allowlist";
 
 export const SEND_CONSENT_VERSION = "popia-client-agent-1";
@@ -92,6 +87,28 @@ export function mimeAllowed(mime: string): boolean {
 
 export function sizeAllowed(size: number): boolean {
   return Number.isInteger(size) && size > 0 && size <= SEND_FILE_MAX_BYTES;
+}
+
+export const SEND_FILE_BASE64_MAX = 4 * Math.ceil(SEND_FILE_MAX_BYTES / 3);
+
+/** Standard base64 of a file the browser hands to the server. No storage path. */
+export function bytesFromBase64(value: string): Uint8Array | null {
+  if (value.length < 4 || value.length % 4 !== 0 || value.length > SEND_FILE_BASE64_MAX)
+    return null;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  const expected = (value.length / 4) * 3 - padding;
+  if (expected < 1 || expected > SEND_FILE_MAX_BYTES) return null;
+  let binary: string;
+  try {
+    binary = atob(value);
+  } catch {
+    return null;
+  }
+  if (binary.length !== expected) return null;
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
 /** Metadata from storage may be empty or a generic type. A gif is never kept. */

@@ -6,12 +6,17 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES } from "@/lib/client-agent-send";
-import { SEND_LINK_BODY, mimeAllowed, sizeAllowed, type ItemQuality } from "@/lib/client-agent-link";
+import {
+  SEND_LINK_BODY,
+  mimeAllowed,
+  sizeAllowed,
+  type ItemQuality,
+} from "@/lib/client-agent-link";
 import {
   consentClientAgentLink,
   finishClientAgentItem,
   openClientAgentLink,
-  prepareClientAgentUpload,
+  uploadClientAgentFile,
   type OpenLinkResult,
   type PublicItem,
 } from "@/lib/client-agent-link.functions";
@@ -29,6 +34,18 @@ const CLOSED: Record<string, string> = {
   consent: "Agree at the start of the page before sending a document.",
 };
 
+function fileBase64(file: File): Promise<string> {
+  return file.arrayBuffer().then((buffer) => {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  });
+}
+
 function fileMime(file: File): string {
   if (mimeAllowed(file.type)) return file.type;
   const name = file.name.toLowerCase();
@@ -42,7 +59,7 @@ function fileMime(file: File): string {
 export function ClientAgentLinkPage({ token }: { token: string }) {
   const open = useServerFn(openClientAgentLink);
   const agree = useServerFn(consentClientAgentLink);
-  const prepare = useServerFn(prepareClientAgentUpload);
+  const uploadFile = useServerFn(uploadClientAgentFile);
   const finish = useServerFn(finishClientAgentItem);
   const [view, setView] = useState<OpenLinkResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -80,7 +97,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     }
   };
 
-  const upload = async (item: PublicItem, file: File, quality: ItemQuality, note: string) => {
+  const upload = async (item: PublicItem, file: File) => {
     const mime = fileMime(file);
     if (!mimeAllowed(mime) || !sizeAllowed(file.size)) {
       setNotice("Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
@@ -89,35 +106,16 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     setBusy(true);
     setNotice(null);
     try {
-      const prepared = await prepare({
-        data: { token, itemKey: item.itemKey, mime, sizeBytes: file.size },
-      });
-      if (!prepared.ok) {
-        setNotice(CLOSED[prepared.reason] ?? "The document could not be saved.");
-        return;
-      }
-      const put = await fetch(prepared.uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": mime },
-      });
-      if (!put.ok) {
-        setNotice("The document could not be saved.");
-        return;
-      }
-      const saved = await finish({
-        data: {
-          token,
-          itemKey: item.itemKey,
-          quality,
-          explanation: note,
-          path: prepared.path,
-          mime,
-          sizeBytes: file.size,
-        },
+      const base64 = await fileBase64(file);
+      const saved = await uploadFile({
+        data: { token, itemKey: item.itemKey, mime, base64 },
       });
       if (!saved.ok) {
-        setNotice(CLOSED[saved.reason] ?? "The document could not be saved.");
+        setNotice(
+          saved.reason === "mime" || saved.reason === "size"
+            ? "Use a PDF, JPG, PNG, or HEIC up to 20 MB."
+            : (CLOSED[saved.reason] ?? "The document could not be saved."),
+        );
         return;
       }
       setNoteFor(null);
@@ -184,7 +182,9 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
             >
               <p className="font-semibold">{item.label}</p>
               {item.totalsOnly ? (
-                <p className="text-sm text-[#3D5270]">Totals only. Do not send a line-by-line breakdown.</p>
+                <p className="text-sm text-[#3D5270]">
+                  Totals only. Do not send a line-by-line breakdown.
+                </p>
               ) : null}
               <p className="text-sm text-[#3D5270]">
                 {item.hasFile ? "A file is on this item." : "No file yet."}
@@ -207,7 +207,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
                       setNotice("Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
                       return;
                     }
-                    void upload(item, file, "usable", "");
+                    void upload(item, file);
                   }}
                 />
               </label>
