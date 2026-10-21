@@ -11,24 +11,29 @@ import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import {
   SEND_ATTEMPT_WINDOW_MS,
   SEND_CONSENT_NOTICE,
-  SEND_CONSENT_VERSION,
   SEND_STORAGE_BUCKET,
   SEND_FILE_BASE64_MAX,
+  acceptClientFile,
   bytesFromBase64,
+  closedLink,
   consentReady,
+  consentWrite,
   finishItem,
-  gatePresentedSend,
   hashClientAddress,
   hashPresentedToken,
-  itemLabel,
-  mimeAllowed,
+  openLinkView,
   pathBelongsToSend,
+  resolvePresentedLink,
   sendAttemptLimited,
+  sendLinkLogLine,
   sendStoragePath,
   sizeAllowed,
-  storedMimeAllowed,
+  sniffDocumentMime,
+  storeAcceptedFile,
+  toPublicChecklist,
+  type AttemptOutcome,
   type ItemQuality,
-  type SendLinkReason,
+  type PublicChecklistItem,
 } from "@/lib/client-agent-link";
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -51,18 +56,11 @@ type ItemRow = {
   storage_path: string | null;
 };
 
-export type PublicItem = {
-  itemKey: string;
-  label: string;
-  totalsOnly: boolean;
-  status: string;
-  quality: string | null;
-  hasFile: boolean;
-};
+export type PublicItem = PublicChecklistItem;
 
 export type OpenLinkResult =
   | { ok: true; consented: boolean; notice: string; items: PublicItem[] }
-  | { ok: false; reason: SendLinkReason };
+  | ReturnType<typeof closedLink>;
 
 const tokenInput = z.object({
   token: z
@@ -87,7 +85,7 @@ function clientAddress(): string {
   }
 }
 
-async function recentAttempts(ipHash: string): Promise<number> {
+async function countAttempts(column: "ip_hash" | "send_id", value: string): Promise<number> {
   const since = new Date(Date.now() - SEND_ATTEMPT_WINDOW_MS).toISOString();
   const { count, error } = await (
     supabaseAdmin as unknown as {
@@ -111,10 +109,18 @@ async function recentAttempts(ipHash: string): Promise<number> {
   )
     .from("client_agent_send_attempts")
     .select("id", { count: "exact", head: true })
-    .eq("ip_hash", ipHash)
+    .eq(column, value)
     .gte("created_at", since);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "count" }));
   return count ?? 0;
+}
+
+function recentAttempts(ipHash: string): Promise<number> {
+  return countAttempts("ip_hash", ipHash);
+}
+
+function recentSendAttempts(sendId: string): Promise<number> {
+  return countAttempts("send_id", sendId);
 }
 
 async function recordAttempt(row: {
@@ -132,7 +138,7 @@ async function recordAttempt(row: {
   )
     .from("client_agent_send_attempts")
     .insert(row);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "attempt" }));
 }
 
 async function loadSend(tokenHash: string): Promise<SendRow | null> {
@@ -154,7 +160,7 @@ async function loadSend(tokenHash: string): Promise<SendRow | null> {
     .select("id, firm_id, expires_at, revoked_at, consent_at")
     .eq("token_hash", tokenHash)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
   return data;
 }
 
@@ -174,67 +180,101 @@ async function loadItems(sendId: string): Promise<PublicItem[]> {
     .from("client_agent_send_items")
     .select("item_key, label, totals_only, status, quality, storage_path")
     .eq("send_id", sendId);
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
-    itemKey: row.item_key,
-    label: itemLabel(row.item_key, row.label),
-    totalsOnly: row.totals_only === true,
-    status: row.status,
-    quality: row.quality,
-    hasFile: typeof row.storage_path === "string" && row.storage_path.length > 0,
-  }));
+  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "items" }));
+  return toPublicChecklist(
+    (data ?? []).map((row) => ({
+      sendId,
+      itemKey: row.item_key,
+      label: row.label,
+      totalsOnly: row.totals_only === true,
+      status: row.status,
+      quality: row.quality,
+      storagePath: row.storage_path,
+    })),
+    sendId,
+  );
 }
 
 type Resolved =
   | { ok: true; send: SendRow; tokenHash: string; ipHash: string }
-  | { ok: false; reason: SendLinkReason };
+  | ReturnType<typeof closedLink>;
+
+function attemptSendId(send: SendRow | null, outcome: AttemptOutcome): string | null {
+  if (!send || outcome === "unknown" || !sendAgentFirmAllowed(send.firm_id)) return null;
+  return send.id;
+}
 
 async function resolveToken(token: string): Promise<Resolved> {
-  if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
+  if (!isSupabaseAdminConfigured()) return closedLink("unavailable");
   const ipHash = await hashClientAddress(clientAddress());
-  const limited = sendAttemptLimited(await recentAttempts(ipHash));
   const tokenHash = await hashPresentedToken(token);
-  if (limited) {
+  const now = new Date();
+  const ipCount = await recentAttempts(ipHash);
+  if (sendAttemptLimited(ipCount)) {
     await recordAttempt({
       send_id: null,
       token_hash: tokenHash,
       ip_hash: ipHash,
       outcome: "limited",
     });
-    return { ok: false, reason: "limited" };
+    const limited = resolvePresentedLink({
+      ipCount,
+      sendCount: null,
+      found: false,
+      firmId: null,
+      revokedAt: null,
+      expiresAt: "",
+      now,
+    }).public;
+    return limited.ok ? closedLink("limited") : limited;
   }
   const send = await loadSend(tokenHash);
-  const decision = gatePresentedSend({
-    limited: false,
+  const opened = resolvePresentedLink({
+    ipCount,
+    sendCount: null,
     found: Boolean(send),
     firmId: send?.firm_id ?? null,
     revokedAt: send?.revoked_at ?? null,
     expiresAt: send?.expires_at ?? "",
-    now: new Date(),
+    now,
   });
-  if (!send || decision !== "ok") {
-    const outcome =
-      decision === "expired" || decision === "revoked" || decision === "limited"
-        ? decision
-        : "unknown";
+  if (!opened.public.ok || !send) {
     await recordAttempt({
-      send_id: send && sendAgentFirmAllowed(send.firm_id) ? send.id : null,
+      send_id: attemptSendId(send, opened.outcome),
       token_hash: tokenHash,
       ip_hash: ipHash,
-      outcome,
+      outcome: opened.outcome,
     });
-    return { ok: false, reason: decision === "ok" ? "unavailable" : decision };
+    return opened.public.ok ? closedLink("unavailable") : opened.public;
   }
-  await recordAttempt({ send_id: send.id, token_hash: tokenHash, ip_hash: ipHash, outcome: "ok" });
+  const sendCount = await recentSendAttempts(send.id);
+  const decision = resolvePresentedLink({
+    ipCount,
+    sendCount,
+    found: true,
+    firmId: send.firm_id,
+    revokedAt: send.revoked_at,
+    expiresAt: send.expires_at,
+    now,
+  });
+  await recordAttempt({
+    send_id: attemptSendId(send, decision.outcome),
+    token_hash: tokenHash,
+    ip_hash: ipHash,
+    outcome: decision.outcome,
+  });
+  if (!decision.public.ok) return decision.public;
   return { ok: true, send, tokenHash, ipHash };
 }
 
 function present(send: SendRow, items: PublicItem[]): OpenLinkResult {
   return {
     ok: true,
-    consented: consentReady(send.consent_at),
-    notice: SEND_CONSENT_NOTICE,
-    items,
+    ...openLinkView({
+      consented: consentReady(send.consent_at),
+      notice: SEND_CONSENT_NOTICE,
+      items,
+    }),
   };
 }
 
@@ -262,12 +302,9 @@ export const consentClientAgentLink = createServerFn({ method: "POST" })
         }
       )
         .from("client_agent_sends")
-        .update({
-          consent_at: new Date().toISOString(),
-          consent_notice_version: SEND_CONSENT_VERSION,
-        })
+        .update(consentWrite(new Date()))
         .eq("id", resolved.send.id);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "consent" }));
       resolved.send.consent_at = new Date().toISOString();
     }
     return present(resolved.send, await loadItems(resolved.send.id));
@@ -332,7 +369,7 @@ async function loadStoredPath(sendId: string, itemKey: string): Promise<string |
     .eq("send_id", sendId)
     .eq("item_key", itemKey)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "path" }));
   return data?.storage_path ?? null;
 }
 
@@ -355,7 +392,7 @@ async function updateItem(sendId: string, itemKey: string, patch: Record<string,
     .update(patch)
     .eq("send_id", sendId)
     .eq("item_key", itemKey);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "save" }));
 }
 
 export const uploadClientAgentFile = createServerFn({ method: "POST" })
@@ -363,93 +400,107 @@ export const uploadClientAgentFile = createServerFn({ method: "POST" })
     tokenInput
       .extend({
         itemKey: z.string().regex(/^[a-z0-9_]+$/),
-        mime: z.string().max(80),
         base64: z.string().min(4).max(SEND_FILE_BASE64_MAX),
       })
       .parse(input),
   )
-  .handler(
-    async ({
-      data,
-    }): Promise<{ ok: true } | { ok: false; reason: SendLinkReason | "mime" | "size" }> => {
-      const resolved = await resolveToken(data.token);
-      if (!resolved.ok) return resolved;
-      if (!consentReady(resolved.send.consent_at)) return { ok: false, reason: "consent" };
-      if (!mimeAllowed(data.mime)) return { ok: false, reason: "mime" };
-      const bytes = bytesFromBase64(data.base64);
-      if (!bytes || !sizeAllowed(bytes.byteLength)) return { ok: false, reason: "size" };
-      const items = await loadItems(resolved.send.id);
-      if (!items.some((item) => item.itemKey === data.itemKey))
-        return { ok: false, reason: "unavailable" };
+  .handler(async ({ data }): Promise<{ ok: true } | ReturnType<typeof closedLink>> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return resolved;
+    const items = await loadItems(resolved.send.id);
+    if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
 
-      const path = sendStoragePath(resolved.send.id, data.itemKey, crypto.randomUUID());
+    const decision = acceptClientFile({
+      consented: consentReady(resolved.send.consent_at),
+      bytes: bytesFromBase64(data.base64),
+    });
+    const path = sendStoragePath(resolved.send.id, data.itemKey, crypto.randomUUID());
+    const stored = await storeAcceptedFile(decision, async (file) => {
       const storage = objectStorage();
-      const uploaded = await storage.upload(path, bytes, { contentType: data.mime, upsert: false });
-      if (uploaded.error) return { ok: false, reason: "unavailable" };
-
+      const uploaded = await storage.upload(path, file.bytes, {
+        contentType: file.mime,
+        upsert: false,
+      });
+      if (uploaded.error) {
+        throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
+      }
       const downloaded = await storage.download(path);
-      const stored = downloaded.data;
-      if (downloaded.error || !stored) {
+      const object = downloaded.data;
+      if (downloaded.error || !object) {
         await storage.remove([path]);
-        return { ok: false, reason: "unavailable" };
+        return null;
       }
-      const storedBytes = new Uint8Array(await stored.arrayBuffer());
-      const storedType = stored.type || null;
+      const storedBytes = new Uint8Array(await object.arrayBuffer());
+      const sniffed = sniffDocumentMime(storedBytes);
       if (
-        storedBytes.byteLength !== bytes.byteLength ||
+        storedBytes.byteLength !== file.bytes.byteLength ||
         !sizeAllowed(storedBytes.byteLength) ||
-        !storedMimeAllowed(data.mime, storedType)
+        sniffed !== file.mime
       ) {
         await storage.remove([path]);
-        return {
-          ok: false,
-          reason: storedType && !storedMimeAllowed(data.mime, storedType) ? "mime" : "size",
-        };
+        return null;
       }
+      return { mime: sniffed, size: storedBytes.byteLength };
+    });
+    if (!stored.ok) return stored;
+    if (!stored.value) return closedLink("mime");
 
-      const previous = await loadStoredPath(resolved.send.id, data.itemKey);
-      try {
-        await updateItem(resolved.send.id, data.itemKey, {
-          status: "received",
-          quality: "usable",
-          explanation: null,
-          mime: data.mime,
-          size_bytes: storedBytes.byteLength,
-          storage_path: path,
-        });
-      } catch (error) {
-        await storage.remove([path]);
-        throw error;
-      }
-      if (
-        previous &&
-        previous !== path &&
-        pathBelongsToSend(previous, resolved.send.id, data.itemKey)
-      ) {
-        await storage.remove([previous]);
-      }
-      return { ok: true };
-    },
-  );
+    const previous = await loadStoredPath(resolved.send.id, data.itemKey);
+    try {
+      await updateItem(resolved.send.id, data.itemKey, {
+        status: "received",
+        quality: "usable",
+        explanation: null,
+        mime: stored.value.mime,
+        size_bytes: stored.value.size,
+        storage_path: path,
+      });
+    } catch (error) {
+      await objectStorage().remove([path]);
+      throw error;
+    }
+    if (
+      previous &&
+      previous !== path &&
+      pathBelongsToSend(previous, resolved.send.id, data.itemKey)
+    ) {
+      await objectStorage().remove([previous]);
+    }
+    return { ok: true };
+  });
 
 export const finishClientAgentItem = createServerFn({ method: "POST" })
   .inputValidator((input) => finishInput.parse(input))
   .handler(
     async ({
       data,
-    }): Promise<{ ok: true } | { ok: false; reason: SendLinkReason | "explanation" | "empty" }> => {
+    }): Promise<
+      | { ok: true }
+      | ReturnType<typeof closedLink>
+      | { ok: false; status: 200; reason: "explanation" | "empty"; body: string }
+    > => {
       const resolved = await resolveToken(data.token);
       if (!resolved.ok) return resolved;
-      if (!consentReady(resolved.send.consent_at)) return { ok: false, reason: "consent" };
+      if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
       const items = await loadItems(resolved.send.id);
       const item = items.find((row) => row.itemKey === data.itemKey);
-      if (!item) return { ok: false, reason: "unavailable" };
+      if (!item) return closedLink("unavailable");
       const decision = finishItem({
         quality: data.quality,
         explanation: data.explanation ?? null,
         hasFile: item.hasFile,
       });
-      if (!decision.ok) return decision;
+      if (!decision.ok) {
+        return {
+          ok: false,
+          status: 200,
+          reason: decision.reason,
+          body:
+            decision.reason === "explanation"
+              ? "Add a short explanation."
+              : "Add a file, or say what is missing.",
+        };
+      }
 
       await updateItem(resolved.send.id, data.itemKey, {
         status: "received",

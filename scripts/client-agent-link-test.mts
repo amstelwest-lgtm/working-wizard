@@ -5,20 +5,37 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { SEND_AGENT_FIRM_ALLOWLIST } from "../src/lib/client-agent-send-allowlist.ts";
+import { SEND_FILE_MAX_BYTES } from "../src/lib/client-agent-send.ts";
 import { isBarePublicPath } from "../src/lib/public-marketing.ts";
 import {
+  CONSENT_LINK_BODY,
+  FILE_LINK_BODY,
+  GENERIC_LINK_BODY,
+  LIMITED_LINK_BODY,
   SEND_CONSENT_NOTICE,
+  SEND_CONSENT_VERSION,
   SEND_LINK_BODY,
+  SEND_LINK_META,
+  acceptClientFile,
   bytesFromBase64,
   consentReady,
+  consentWrite,
   finishItem,
   gatePresentedSend,
+  hashPresentedToken,
+  linkLogPath,
+  linkPrivacyHeaders,
   mimeAllowed,
+  openLinkView,
   pathBelongsToSend,
+  resolvePresentedLink,
   sendAttemptLimited,
+  sendLinkLogLine,
   sendStoragePath,
   sizeAllowed,
-  storedMimeAllowed,
+  storeAcceptedFile,
+  toPublicChecklist,
+  type PublicChecklistItem,
 } from "../src/lib/client-agent-link.ts";
 
 function assert(cond: boolean, msg: string) {
@@ -119,12 +136,267 @@ const decoded = bytesFromBase64(btoa("a"));
 assert(decoded?.length === 1 && decoded[0] === 97, "file bytes decode from base64");
 assert(bytesFromBase64("YQ") === null, "base64 needs padding");
 assert(bytesFromBase64("!!!!") === null, "base64 stays in the standard alphabet");
-assert(
-  storedMimeAllowed("image/heic", "application/octet-stream"),
-  "a generic stored type can be HEIC",
-);
-assert(!storedMimeAllowed("image/jpeg", "image/gif"), "a gif object is refused");
 assert(!consentReady(null) && consentReady("2026-10-21T12:00:00.000Z"), "consent is a timestamp");
+
+const rawToken = "raw-token-value-not-stored-0123456789abcd";
+const tokenHash = await hashPresentedToken(rawToken);
+assert(
+  tokenHash !== rawToken && /^[0-9a-f]{64}$/.test(tokenHash),
+  "the lookup key is a hash, not the token",
+);
+assert((await hashPresentedToken(rawToken)) === tokenHash, "the same token hashes the same way");
+assert(
+  (await hashPresentedToken(`${rawToken}x`)) !== tokenHash,
+  "a different token hashes differently",
+);
+
+function presented(overrides: {
+  ipCount?: number;
+  sendCount?: number | null;
+  found?: boolean;
+  firmId?: string | null;
+  revokedAt?: string | null;
+  expiresAt?: string;
+}) {
+  return resolvePresentedLink({
+    ipCount: overrides.ipCount ?? 0,
+    sendCount: overrides.sendCount === undefined ? 0 : overrides.sendCount,
+    found: overrides.found ?? true,
+    firmId: overrides.firmId === undefined ? firm : overrides.firmId,
+    revokedAt: overrides.revokedAt ?? null,
+    expiresAt: overrides.expiresAt ?? later.toISOString(),
+    now,
+  });
+}
+
+const unknownLink = presented({ found: false, firmId: null, sendCount: null, expiresAt: "" });
+const expiredLink = presented({ expiresAt: now.toISOString() });
+const revokedLink = presented({ revokedAt: now.toISOString() });
+const otherFirmLink = presented({ firmId: "00000000-0000-4000-8000-000000000001" });
+const closedBody = JSON.stringify(unknownLink.public);
+assert(
+  closedBody === JSON.stringify(expiredLink.public),
+  "an expired token matches the unknown page",
+);
+assert(
+  closedBody === JSON.stringify(revokedLink.public),
+  "a revoked token matches the unknown page",
+);
+assert(
+  closedBody === JSON.stringify(otherFirmLink.public),
+  "another firm matches the unknown page",
+);
+assert(
+  !unknownLink.public.ok && unknownLink.public.status === 200,
+  "the closed page status is 200",
+);
+assert(unknownLink.public.body === GENERIC_LINK_BODY, "the closed page has one body");
+assert(
+  expiredLink.outcome === "expired" && revokedLink.outcome === "revoked",
+  "the log outcome stays specific",
+);
+assert(
+  unknownLink.outcome === "unknown" && otherFirmLink.outcome === "unknown",
+  "another firm is recorded as unknown",
+);
+
+const ipKnown = presented({ ipCount: 30, sendCount: 0 });
+const ipUnknown = presented({
+  ipCount: 30,
+  found: false,
+  firmId: null,
+  sendCount: null,
+  expiresAt: "",
+});
+assert(
+  JSON.stringify(ipKnown.public) === JSON.stringify(ipUnknown.public),
+  "the IP limit looks the same for a known and an unknown token",
+);
+assert(
+  !ipKnown.public.ok && ipKnown.public.body === LIMITED_LINK_BODY,
+  "the IP limit has its own body",
+);
+assert(
+  ipKnown.outcome === "limited" && ipUnknown.outcome === "limited",
+  "both IP limits are recorded as limited",
+);
+const sendLimited = presented({ sendCount: 30 });
+assert(sendLimited.outcome === "limited", "thirty attempts on one send is limited");
+assert(JSON.stringify(sendLimited.public) === closedBody, "a per-send limit uses the generic page");
+assert(
+  presented({ ipCount: 29, sendCount: 29 }).outcome === "ok",
+  "twenty-nine attempts are still allowed",
+);
+
+const consentRow = consentWrite(now);
+assert(
+  consentRow.consent_notice_version === SEND_CONSENT_VERSION &&
+    consentRow.consent_at === now.toISOString(),
+  "consent stores the notice version with the timestamp",
+);
+
+const ownItem: PublicChecklistItem = {
+  itemKey: "irp5",
+  label: "IRP5",
+  totalsOnly: false,
+  status: "received",
+  quality: "incomplete",
+  hasFile: true,
+};
+const beforeConsent = openLinkView({
+  consented: false,
+  notice: SEND_CONSENT_NOTICE,
+  items: [ownItem],
+});
+assert(
+  beforeConsent.consented === false && beforeConsent.items.length === 0,
+  "consent comes before the checklist",
+);
+const afterConsent = openLinkView({
+  consented: true,
+  notice: SEND_CONSENT_NOTICE,
+  items: [ownItem],
+});
+assert(
+  afterConsent.items.length === 1 &&
+    afterConsent.items[0].status === "received" &&
+    afterConsent.items[0].hasFile,
+  "a re-open shows her own checklist status",
+);
+
+const otherSend = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const pdfBytes = new TextEncoder().encode("%PDF-1.7\n");
+const checklist = toPublicChecklist(
+  [
+    {
+      sendId,
+      itemKey: "irp5",
+      label: null,
+      totalsOnly: false,
+      status: "received",
+      quality: "usable",
+      storagePath: `${sendId}/irp5/${objectId}`,
+      firmId: firm,
+      fileName: "salary.pdf",
+      bytes: pdfBytes,
+    },
+    {
+      sendId: otherSend,
+      itemKey: "it3b",
+      label: "Other client",
+      totalsOnly: false,
+      status: "received",
+      quality: "poor",
+      storagePath: `${otherSend}/it3b/${objectId}`,
+      firmId: firm,
+      fileName: "other.pdf",
+    },
+  ],
+  sendId,
+);
+const checklistJson = JSON.stringify(checklist);
+assert(checklist.length === 1 && checklist[0].itemKey === "irp5", "only her send is on the page");
+assert(!checklistJson.includes(firm), "the firm id is not on the page");
+assert(
+  !checklistJson.includes("salary.pdf") && !checklistJson.includes("other.pdf"),
+  "file names are not on the page",
+);
+assert(
+  !checklistJson.includes("it3b") && !checklistJson.includes(otherSend),
+  "another send is not on the page",
+);
+assert(
+  !checklistJson.includes("storagePath") && !("bytes" in checklist[0]),
+  "file bytes are not on the page",
+);
+
+const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+const heic = Uint8Array.from([
+  0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63, 0x00, 0x00, 0x00, 0x00,
+]);
+const avif = Uint8Array.from([
+  0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66, 0x00, 0x00, 0x00, 0x00,
+]);
+const gif = new TextEncoder().encode("GIF89a-not-a-photo");
+assert(acceptClientFile({ consented: true, bytes: pdfBytes }).ok, "PDF magic bytes are accepted");
+const jpegFile = acceptClientFile({ consented: true, bytes: jpeg });
+assert(jpegFile.ok && jpegFile.mime === "image/jpeg", "JPEG bytes are accepted with no file name");
+const pngFile = acceptClientFile({ consented: true, bytes: png });
+assert(pngFile.ok && pngFile.mime === "image/png", "PNG magic bytes are accepted");
+const heicFile = acceptClientFile({ consented: true, bytes: heic });
+assert(heicFile.ok && heicFile.mime === "image/heic", "HEIC magic bytes are accepted");
+assert(!acceptClientFile({ consented: true, bytes: gif }).ok, "GIF bytes are refused");
+assert(!acceptClientFile({ consented: true, bytes: avif }).ok, "AVIF bytes are refused");
+const tooBig = new Uint8Array(SEND_FILE_MAX_BYTES + 1);
+tooBig.set(pdfBytes);
+const oversized = acceptClientFile({ consented: true, bytes: tooBig });
+assert(!oversized.ok && oversized.reason === "size", "size is refused before a write");
+const noConsent = acceptClientFile({ consented: false, bytes: pdfBytes });
+assert(!noConsent.ok && noConsent.reason === "consent", "a file before consent is refused");
+let writes = 0;
+const refused = await storeAcceptedFile(oversized, async () => {
+  writes += 1;
+  return "stored";
+});
+assert(!refused.ok && writes === 0, "an oversized file is not written to storage");
+const held = await storeAcceptedFile(noConsent, async () => {
+  writes += 1;
+  return "stored";
+});
+assert(!held.ok && writes === 0, "a file before consent is not written to storage");
+const badType = acceptClientFile({ consented: true, bytes: gif });
+const skipped = await storeAcceptedFile(badType, async () => {
+  writes += 1;
+  return "stored";
+});
+assert(!skipped.ok && writes === 0, "a file with the wrong magic bytes is not written");
+const kept = await storeAcceptedFile(
+  acceptClientFile({ consented: true, bytes: pdfBytes }),
+  async (file) => {
+    writes += 1;
+    return file.mime;
+  },
+);
+assert(
+  kept.ok && kept.value === "application/pdf" && writes === 1,
+  "an accepted PDF is the first write",
+);
+
+const leaked = sendLinkLogLine({
+  event: "link",
+  reason: "save",
+  token: rawToken,
+  fileName: "salary.pdf",
+  explanation: "My practice income was R50000",
+  firmId: firm,
+});
+assert(!leaked.includes(rawToken), "a log line drops the raw token");
+assert(!leaked.includes("salary.pdf"), "a log line drops the file name");
+assert(
+  !leaked.includes("R50000") && !leaked.includes(firm),
+  "a log line drops client text and the firm id",
+);
+assert(linkLogPath(`/a/${rawToken}`) === "/a/[token]", "an access log drops the token in the path");
+assert(!linkLogPath(`/a/${rawToken}`).includes(rawToken), "the redacted path has no token");
+assert(linkLogPath("/clients/123") === "/clients/123", "other paths stay as they are");
+
+const privacy = linkPrivacyHeaders(`/a/${rawToken}`);
+assert(privacy?.["Referrer-Policy"] === "no-referrer", "the link response sends no referrer");
+assert(privacy?.["X-Robots-Tag"] === "noindex, nofollow", "the link response is noindex");
+assert(linkPrivacyHeaders("/talk/tax-specialist") === null, "other pages keep their own headers");
+assert(
+  SEND_LINK_META.some(
+    (entry) => "name" in entry && entry.name === "robots" && entry.content.includes("noindex"),
+  ),
+  "the page meta is noindex",
+);
+assert(
+  SEND_LINK_META.some(
+    (entry) => "name" in entry && entry.name === "referrer" && entry.content === "no-referrer",
+  ),
+  "the page meta sends no referrer",
+);
 assert(
   finishItem({ quality: "incomplete", explanation: "   ", hasFile: true }).ok === false,
   "incomplete needs an explanation",
@@ -138,24 +410,46 @@ assert(
   "usable without a file is empty",
 );
 
-const copy = `${SEND_CONSENT_NOTICE}\n${SEND_LINK_BODY}`;
+const copy = [
+  SEND_CONSENT_NOTICE,
+  SEND_LINK_BODY,
+  GENERIC_LINK_BODY,
+  LIMITED_LINK_BODY,
+  CONSENT_LINK_BODY,
+  FILE_LINK_BODY,
+].join("\n");
 assert(/does not fill in a form/i.test(copy), "copy says she does not fill in a form");
 assert(/does not send a form back/i.test(copy), "copy says she does not return a form");
 assert(/does not log into SARS/i.test(copy), "copy says she does not log into SARS");
 assert(/does not make a SARS claim/i.test(copy), "copy says she makes no SARS claim");
+assert(
+  !/completed form|form is ready|return is ready|we will claim/i.test(copy),
+  "copy promises no completed form",
+);
+assert(!/\b(stupid|idiot|asap|illegal|failure)\b/i.test(copy), "copy stays polite");
 assert(!/whatsapp/i.test(copy), "copy does not mention WhatsApp");
 
 const fn = read("src/lib/client-agent-link.functions.ts");
 const page = read("src/components/client-agent-link-page.tsx");
 const route = read("src/routes/a.$token.tsx");
+const server = read("src/server.ts");
 const sql = read("supabase/migrations/20261022120000_client_agent_send_storage.sql");
 const proof = read("scripts/client-agent-send-storage-sql-tests.sql");
 const ci = read(".github/workflows/ci.yml");
+assert(fn.includes("resolvePresentedLink"), "the server uses the public link decision");
+assert(fn.includes("sendAgentFirmAllowed"), "the server gates the firm");
 assert(
-  fn.includes("sendAgentFirmAllowed") || fn.includes("gatePresentedSend"),
-  "the server gates the firm",
+  fn.includes("recentAttempts") && fn.includes("recentSendAttempts"),
+  "rate limits count IP and send attempts",
 );
 assert(fn.includes("client_agent_send_attempts"), "attempts are recorded");
+assert(
+  fn.includes("acceptClientFile") && fn.includes("storeAcceptedFile"),
+  "storage waits for the file decision",
+);
+assert(fn.includes("consentWrite"), "consent writes the notice version");
+assert(!fn.includes("error.message"), "database errors are not copied into logs");
+assert(!fn.includes("data.mime"), "declared MIME is not the file check");
 assert(fn.includes("sendStoragePath"), "the object path is built on the server");
 assert(fn.includes("bytesFromBase64"), "the server accepts file bytes");
 assert(fn.includes(".upload("), "uploads go through the service role");
@@ -172,6 +466,13 @@ assert(
   "no mail, extraction, or ledger",
 );
 assert(!/whatsapp/i.test(page + route), "the page does not mention WhatsApp");
+assert(!/has expired|been revoked/i.test(page), "the page has one closed sentence");
+assert(!page.includes("file.name"), "the page does not read the file name");
+assert(route.includes("SEND_LINK_META"), "the route uses the noindex meta");
+assert(
+  server.includes("linkPrivacyHeaders") && server.includes("linkLogPath"),
+  "the server sets privacy headers and redacts the path",
+);
 assert(page.includes("SilentAgentPortrait"), "the portrait is silent");
 assert(page.includes('face="tax_specialist"'), "Tax Specialist face");
 assert(!page.includes("flex-row"), "the page stacks vertically");

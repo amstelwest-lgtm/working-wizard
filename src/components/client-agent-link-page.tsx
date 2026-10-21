@@ -6,12 +6,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES } from "@/lib/client-agent-send";
-import {
-  SEND_LINK_BODY,
-  mimeAllowed,
-  sizeAllowed,
-  type ItemQuality,
-} from "@/lib/client-agent-link";
+import { SEND_LINK_BODY, closedLink, sizeAllowed, type ItemQuality } from "@/lib/client-agent-link";
 import {
   consentClientAgentLink,
   finishClientAgentItem,
@@ -26,14 +21,6 @@ const PRIMARY =
 const SECONDARY =
   "inline-flex min-h-11 items-center justify-center rounded-full border border-[#0B5FFF] bg-white px-4 text-sm font-semibold text-[#102A43] hover:bg-[#F4F8FF] disabled:opacity-60";
 
-const CLOSED: Record<string, string> = {
-  expired: "This link has expired.",
-  revoked: "This link has been revoked.",
-  limited: "Too many attempts. Wait a little, then try again.",
-  unavailable: "This link is not available.",
-  consent: "Agree at the start of the page before sending a document.",
-};
-
 function fileBase64(file: File): Promise<string> {
   return file.arrayBuffer().then((buffer) => {
     const bytes = new Uint8Array(buffer);
@@ -44,16 +31,6 @@ function fileBase64(file: File): Promise<string> {
     }
     return btoa(binary);
   });
-}
-
-function fileMime(file: File): string {
-  if (mimeAllowed(file.type)) return file.type;
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".pdf")) return "application/pdf";
-  if (name.endsWith(".png")) return "image/png";
-  if (name.endsWith(".heic")) return "image/heic";
-  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
-  return file.type;
 }
 
 export function ClientAgentLinkPage({ token }: { token: string }) {
@@ -75,7 +52,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         if (alive) setView(result);
       })
       .catch(() => {
-        if (alive) setView({ ok: false, reason: "unavailable" });
+        if (alive) setView(closedLink("unavailable"));
       })
       .finally(() => {
         if (alive) setBusy(false);
@@ -98,8 +75,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   };
 
   const upload = async (item: PublicItem, file: File) => {
-    const mime = fileMime(file);
-    if (!mimeAllowed(mime) || !sizeAllowed(file.size)) {
+    if (!sizeAllowed(file.size)) {
       setNotice("Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
       return;
     }
@@ -108,14 +84,10 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     try {
       const base64 = await fileBase64(file);
       const saved = await uploadFile({
-        data: { token, itemKey: item.itemKey, mime, base64 },
+        data: { token, itemKey: item.itemKey, base64 },
       });
       if (!saved.ok) {
-        setNotice(
-          saved.reason === "mime" || saved.reason === "size"
-            ? "Use a PDF, JPG, PNG, or HEIC up to 20 MB."
-            : (CLOSED[saved.reason] ?? "The document could not be saved."),
-        );
+        setNotice(saved.body);
         return;
       }
       setNoteFor(null);
@@ -136,11 +108,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         data: { token, itemKey: item.itemKey, quality, explanation },
       });
       if (!saved.ok) {
-        setNotice(
-          saved.reason === "explanation"
-            ? "Add a short explanation."
-            : (CLOSED[saved.reason] ?? "That could not be saved."),
-        );
+        setNotice(saved.body);
         return;
       }
       setNoteFor(null);
@@ -162,7 +130,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         Tax Specialist
       </h1>
       {!view ? <p className="text-sm text-[#3D5270]">Opening this link.</p> : null}
-      {view && !view.ok ? <p className="text-sm">{CLOSED[view.reason]}</p> : null}
+      {view && !view.ok ? <p className="text-sm">{view.body}</p> : null}
       {openView && !openView.consented ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm leading-6 text-[#3D5270]">{SEND_LINK_BODY}</p>
