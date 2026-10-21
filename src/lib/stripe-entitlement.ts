@@ -9,8 +9,8 @@
  * is unknown. Only a completed search with zero results is no customer.
  * A stored id still beats a different email customer. A mismatch is logged
  * and is not awaited. This module does not update Stripe and does not
- * create a customer. Stripe Dashboard is source of truth until a webhook
- * writes a local row.
+ * create a customer. A subscription metadata hit for this firm can store
+ * the customer id, off this path, and only when the column is null.
  *
  * Owner Spark and invited firm staff (non-owners) are not billed on their
  * own email. The firm owner must complete Checkout. A trialing subscription
@@ -457,6 +457,111 @@ function metadataCustomer(value: unknown): MetadataCustomer | null {
   };
 }
 
+export type MetadataFirmCustomerDecision = {
+  customerId: string | null;
+  plan: "entitled" | null;
+};
+
+/**
+ * What a subscription metadata hit may store for this firm.
+ * Active or trialing only. firm_id or milon_user_id must match this firm.
+ * A different stored customer id is left alone. Email is not a match.
+ */
+export function metadataFirmCustomerStore(input: {
+  firmId: string;
+  customerId: string;
+  storedCustomerId: string | null;
+  metadataFirmId: string | null;
+  metadataUserId: string | null;
+  lookupUserId: string | null;
+  status: string;
+  ownerPlan: boolean;
+}): MetadataFirmCustomerDecision {
+  const none: MetadataFirmCustomerDecision = { customerId: null, plan: null };
+  if (input.ownerPlan || !subscriptionStatusEntitles(input.status)) return none;
+  if (!/^cus_[A-Za-z0-9]+$/.test(input.customerId)) return none;
+  const firmId = input.firmId.trim();
+  if (!STRIPE_METADATA_ID.test(firmId)) return none;
+  const metaFirm = input.metadataFirmId?.trim() ?? "";
+  const metaUser = input.metadataUserId?.trim() ?? "";
+  const lookupUser = input.lookupUserId?.trim() ?? "";
+  if (metaFirm && metaFirm !== firmId) return none;
+  if (metaUser && lookupUser && metaUser !== lookupUser) return none;
+  const firmHit = metaFirm === firmId;
+  const userHit = Boolean(lookupUser) && metaUser === lookupUser;
+  if (!firmHit && !userHit) return none;
+  const stored = input.storedCustomerId?.trim() ?? "";
+  return {
+    customerId: stored ? null : input.customerId,
+    plan: "entitled",
+  };
+}
+
+type MetadataFirmCustomerWrite = (input: {
+  firmId: string;
+  customerId: string | null;
+  plan: "entitled" | null;
+  metadataCustomerId: string;
+}) => void;
+
+let metadataFirmWrite: MetadataFirmCustomerWrite | null = null;
+let metadataWriteListener: ((decision: MetadataFirmCustomerDecision) => void) | null = null;
+
+/** Server registers the service-role write. The client bundle does not. */
+export function registerMetadataFirmCustomerWrite(write: MetadataFirmCustomerWrite): void {
+  metadataFirmWrite = write;
+}
+
+export function setMetadataFirmCustomerWriteListener(
+  listener: ((decision: MetadataFirmCustomerDecision) => void) | null,
+): void {
+  metadataWriteListener = listener;
+}
+
+function noteSubscriptionMetadataCustomer(
+  subs: MetadataSubscription[],
+  input: FirmCustomerLookup,
+): void {
+  const firmId = input.firmId?.trim() ?? "";
+  for (const sub of subs) {
+    if (!subscriptionStatusEntitles(sub.status) || subscriptionIsOwnerPlan(sub)) continue;
+    const hit = metadataHit(sub.metadata, input);
+    if (!hit) continue;
+    const customerId = stripeCustomerId(sub.customer);
+    if (!customerId) continue;
+    const decision = metadataFirmCustomerStore({
+      firmId,
+      customerId,
+      storedCustomerId: stripeCustomerId(input.storedCustomerId) ?? null,
+      metadataFirmId: sub.metadata?.firm_id ?? null,
+      metadataUserId: sub.metadata?.milon_user_id ?? null,
+      lookupUserId: input.userId ?? null,
+      status: sub.status ?? "",
+      ownerPlan: false,
+    });
+    if (!decision.customerId && !decision.plan) continue;
+    try {
+      metadataWriteListener?.(decision);
+    } catch {
+      // A test listener cannot change the lookup result.
+    }
+    try {
+      metadataFirmWrite?.({
+        firmId,
+        customerId: decision.customerId,
+        plan: decision.plan,
+        metadataCustomerId: customerId,
+      });
+    } catch (err) {
+      console.warn(
+        "[stripe] metadata firm customer was not stored",
+        err instanceof Error ? err.message : err,
+      );
+    }
+    return;
+  }
+}
+
 /** Customer id from customers.search rows that carry this firm or owner id. */
 export function customerIdFromMetadataCustomers(
   customers: MetadataCustomer[],
@@ -681,6 +786,7 @@ async function metadataCustomerWithinBudget(
       ? customerIdFromMetadataSubscriptions(found.data, input)
       : undefined;
     if (stable) {
+      noteSubscriptionMetadataCustomer(found.data, input);
       void (async () => {
         noteStripeEmailDiffers(
           stable,

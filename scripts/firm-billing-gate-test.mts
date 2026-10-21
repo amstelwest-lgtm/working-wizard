@@ -36,6 +36,8 @@ import {
   STORED_CUSTOMER_READ_BUDGET_MS,
   findFirmCustomerId,
   FirmCustomerLookupUnknown,
+  metadataFirmCustomerStore,
+  setMetadataFirmCustomerWriteListener,
   firmCustomerSearchQuery,
   isBillingExemptPath,
   isFirmProductPath,
@@ -818,6 +820,162 @@ assert(
   })) === "cus_meta",
   "customer metadata finds the firm when the subscription search is empty",
 );
+
+const metadataWrite = metadataFirmCustomerStore({
+  firmId: BEN_FIRM,
+  customerId: "cus_meta",
+  storedCustomerId: null,
+  metadataFirmId: BEN_FIRM,
+  metadataUserId: BEN_OWNER,
+  lookupUserId: BEN_OWNER,
+  status: "active",
+  ownerPlan: false,
+});
+assert(
+  metadataWrite.customerId === "cus_meta" && metadataWrite.plan === "entitled",
+  "a metadata hit writes the customer id and entitled",
+);
+const metadataKept = metadataFirmCustomerStore({
+  firmId: BEN_FIRM,
+  customerId: "cus_meta",
+  storedCustomerId: "cus_kept",
+  metadataFirmId: BEN_FIRM,
+  metadataUserId: BEN_OWNER,
+  lookupUserId: BEN_OWNER,
+  status: "trialing",
+  ownerPlan: false,
+});
+assert(metadataKept.customerId === null, "a different stored customer id is not overwritten");
+assert(metadataKept.plan === "entitled", "a metadata hit still stores the entitled plan");
+assert(
+  metadataFirmCustomerStore({
+    firmId: BEN_FIRM,
+    customerId: "cus_other",
+    storedCustomerId: null,
+    metadataFirmId: "44444444-4444-4444-8444-444444444444",
+    metadataUserId: "22222222-2222-4222-8222-222222222222",
+    lookupUserId: BEN_OWNER,
+    status: "active",
+    ownerPlan: false,
+  }).plan === null,
+  "a cross-firm metadata hit does not write",
+);
+assert(
+  metadataFirmCustomerStore({
+    firmId: BEN_FIRM,
+    customerId: "cus_meta",
+    storedCustomerId: null,
+    metadataFirmId: BEN_FIRM,
+    metadataUserId: BEN_OWNER,
+    lookupUserId: BEN_OWNER,
+    status: "canceled",
+    ownerPlan: false,
+  }).plan === null,
+  "a canceled subscription does not store entitled",
+);
+
+const metadataWrites: Array<{ customerId: string | null; plan: "entitled" | null }> = [];
+setMetadataFirmCustomerWriteListener((decision) => {
+  metadataWrites.push(decision);
+});
+const subscriptionHit: StripeCustomerSubscriptionReader = {
+  customers: {
+    list: async () => ({ data: [] }),
+    search: async () => ({ data: [] }),
+  },
+  subscriptions: {
+    list: async () => ({ data: [] }),
+    search: async () => ({
+      data: [
+        {
+          id: "sub_ben",
+          status: "active",
+          customer: "cus_meta",
+          metadata: {
+            milon_plan: "starter",
+            milon_user_id: BEN_OWNER,
+            firm_id: BEN_FIRM,
+          },
+        },
+      ],
+    }),
+  },
+};
+try {
+  assert(
+    (await findFirmCustomerId(subscriptionHit, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+    })) === "cus_meta",
+    "subscription metadata resolves the firm customer",
+  );
+  assert(
+    metadataWrites.length === 1 &&
+      metadataWrites[0]?.customerId === "cus_meta" &&
+      metadataWrites[0]?.plan === "entitled",
+    "a metadata hit writes the customer id and the entitled plan",
+  );
+  metadataWrites.length = 0;
+  const emailOnly: StripeCustomerSubscriptionReader = {
+    customers: {
+      list: async () => ({ data: [{ id: "cus_email" }] }),
+      search: () => new Promise(() => {}),
+    },
+    subscriptions: {
+      list: async () => ({ data: [] }),
+      search: () => new Promise(() => {}),
+    },
+  };
+  assert(
+    (await findFirmCustomerId(emailOnly, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+    })) === "cus_email",
+    "an email hit still resolves",
+  );
+  assert(metadataWrites.length === 0, "an email-only match does not write the firm customer");
+  metadataWrites.length = 0;
+  const keptStripe: StripeCustomerSubscriptionReader = {
+    customers: {
+      list: async () => ({ data: [] }),
+      retrieve: async () => ({
+        id: "cus_kept",
+        email: "team@trymilon.co.za",
+        metadata: { milon_user_id: BEN_OWNER, firm_id: BEN_FIRM },
+      }),
+      search: async () => ({
+        data: [{ id: "cus_meta", metadata: { firm_id: BEN_FIRM, milon_user_id: BEN_OWNER } }],
+      }),
+    },
+    subscriptions: {
+      list: async () => ({ data: [] }),
+      search: async () => ({
+        data: [
+          {
+            id: "sub_ben",
+            status: "active",
+            customer: "cus_meta",
+            metadata: { milon_plan: "starter", milon_user_id: BEN_OWNER, firm_id: BEN_FIRM },
+          },
+        ],
+      }),
+    },
+  };
+  assert(
+    (await findFirmCustomerId(keptStripe, {
+      email: "team@trymilon.com",
+      userId: BEN_OWNER,
+      firmId: BEN_FIRM,
+      storedCustomerId: "cus_kept",
+    })) === "cus_kept",
+    "a stored customer id still wins",
+  );
+  assert(metadataWrites.length === 0, "a different stored customer id is not overwritten");
+} finally {
+  setMetadataFirmCustomerWriteListener(null);
+}
 
 assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS === 4_000, "metadata search shares a 4s budget");
 assert(FIRM_CUSTOMER_SEARCH_BUDGET_MS < 5_000, "the search budget is inside a 5s entitlement check");
@@ -1699,11 +1857,27 @@ assert(
   "owner billing does not look the customer up by email only",
 );
 assert(ownerServer.includes("findFirmCustomerId"), "owner billing uses the stable customer lookup");
+assert(
+  ownerServer.includes("installMetadataFirmCustomerWrite"),
+  "owner billing installs the metadata customer write",
+);
 const entitlement = readFileSync(resolve("src/lib/stripe-entitlement.ts"), "utf8");
 assert(!entitlement.includes("customers.update"), "entitlement lookup does not write Stripe");
 assert(
+  !entitlement.includes("firm-stripe-customer.server"),
+  "the entitlement module does not import the service-role writer",
+);
+assert(
+  entitlement.includes("metadataFirmCustomerStore"),
+  "a subscription metadata hit decides the firm customer write",
+);
+assert(
+  entitlement.includes("noteSubscriptionMetadataCustomer"),
+  "only a subscription metadata hit stores the firm customer",
+);
+assert(
   !entitlement.includes("writeFirmStripeCustomerId"),
-  "a customer lookup does not write firms.stripe_customer_id",
+  "the entitlement module does not overwrite firms.stripe_customer_id itself",
 );
 const migration = readFileSync(
   resolve("supabase/migrations/20261020223000_firm_stripe_customer_id.sql"),
@@ -1742,6 +1916,7 @@ assert(fns.includes("firmStartTrialCheckout"), "Start trial reuses the resolved 
 assert(fns.includes("firmBillingIdsForActor"), "a client firm id is checked against the signed-in user");
 assert(!fns.includes("customerId: z."), "checkout does not take a customer id from the client");
 const capServer = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
+assert(capServer.includes("installMetadataFirmCustomerWrite"), "subscription history installs the metadata customer write");
 assert(capServer.includes("actorCanUseFirm"), "a named firm is used only when the user belongs to it");
 assert(
   !capServer.includes("writeFirmStripeCustomerId"),
@@ -1756,10 +1931,20 @@ assert(
   "migration adds firms.billing_plan_known",
 );
 assert(!/UPDATE\s+public\.firms/i.test(planMigration), "the plan migration does not backfill firm rows");
+const customerServer = readFileSync(resolve("src/lib/firm-stripe-customer.server.ts"), "utf8");
+assert(
+  customerServer.includes('.is("stripe_customer_id", null)'),
+  "a metadata hit fills a null customer id and does not overwrite one",
+);
+assert(
+  customerServer.includes("subscription metadata stored the firm plan"),
+  "a metadata hit logs the firm plan write",
+);
 assert(
   planMigration.includes("IS DISTINCT FROM 'authenticated'"),
   "signed-in users cannot set the stored plan",
 );
+assert(fns.includes("installMetadataFirmCustomerWrite"), "checkout installs the metadata customer write");
 assert(fns.includes("readFirmBillingPlanKnown"), "a slow check reads the stored firm plan");
 assert(fns.includes("FIRM_BILLING_PLAN_FALLBACK_MS"), "a stored entitled plan is returned before the gate");
 assert(fns.includes("rememberConfirmedFirmPlan"), "a finished check stores the firm plan");

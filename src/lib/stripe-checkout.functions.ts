@@ -46,7 +46,11 @@ import {
   type FirmInterval,
   type StripePlanMarket,
 } from "@/lib/stripe-plans";
-import { readFirmStripeCustomerId, writeFirmStripeCustomerId } from "@/lib/firm-stripe-customer.server";
+import {
+  installMetadataFirmCustomerWrite,
+  readFirmStripeCustomerId,
+  writeFirmStripeCustomerId,
+} from "@/lib/firm-stripe-customer.server";
 import {
   assertNoManagedPaymentsOverride,
   firmCheckoutCharge,
@@ -89,6 +93,8 @@ import {
   findFirmCustomerId,
   type FirmBillingEntitlement,
 } from "@/lib/stripe-entitlement";
+
+installMetadataFirmCustomerWrite();
 
 function appOrigin(): string {
   try {
