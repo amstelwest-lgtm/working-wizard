@@ -34,10 +34,17 @@ function ttlFor(value: CachedFirmEntitlement): number {
   return value.entitled ? FIRM_ENTITLEMENT_TTL_MS : FIRM_ENTITLEMENT_NEGATIVE_TTL_MS;
 }
 
+function firmKey(firmId?: string | null): string {
+  return firmId?.trim() ?? "";
+}
+
+/** A result is only that firm. A missing id matches only another missing id. */
 function sameFirm(slot: Slot | null, userId: string, firmId?: string | null): slot is Slot {
   if (!slot || slot.userId !== userId) return false;
-  if (firmId && slot.firmId && slot.firmId !== firmId) return false;
-  return true;
+  const id = firmKey(firmId);
+  const slotId = slot.firmId?.trim() ?? "";
+  if (!id || !slotId) return id === slotId;
+  return slotId === id;
 }
 
 /** An entitled slot is only that firm. A missing firm id does not cover another firm. */
@@ -60,8 +67,10 @@ function fresh(userId: string, firmId?: string | null): boolean {
 
 function sameInflight(userId: string, firmId?: string | null): boolean {
   if (!inflight || inflightUser !== userId) return false;
-  if (firmId && inflightFirm && inflightFirm !== firmId) return false;
-  return true;
+  const id = firmKey(firmId);
+  const current = inflightFirm ?? "";
+  if (!id || !current) return id === current;
+  return current === id;
 }
 
 function liveFailure(value: CachedFirmEntitlement): boolean {
@@ -82,7 +91,7 @@ export function readCachedFirmEntitlement<T extends CachedFirmEntitlement>(
   const pending = load({ data: refresh ? { refresh: true } : {} }).then(
     (value) => {
       noteFirmEntitlement(userId, value, firmId);
-      if (inflightUser === userId) {
+      if (inflightUser === userId && inflightFirm === (firmKey(firmId) || null)) {
         inflight = null;
         inflightUser = null;
         inflightFirm = null;
@@ -90,7 +99,7 @@ export function readCachedFirmEntitlement<T extends CachedFirmEntitlement>(
       return value;
     },
     (err: unknown) => {
-      if (inflightUser === userId) {
+      if (inflightUser === userId && inflightFirm === (firmKey(firmId) || null)) {
         inflight = null;
         inflightUser = null;
         inflightFirm = null;
@@ -99,7 +108,7 @@ export function readCachedFirmEntitlement<T extends CachedFirmEntitlement>(
     },
   );
   inflightUser = userId;
-  inflightFirm = firmId ?? null;
+  inflightFirm = firmKey(firmId) || null;
   inflight = pending;
   return pending;
 }
@@ -144,16 +153,17 @@ export function noteFirmEntitlement(
   if (!userId) return;
   // Unknown is not a result. Leave the previous success in place.
   if (value.reason === "stripe_error") return;
+  const id = firmKey(firmId);
+  // A missing firm id is not another firm's plan, and it must not erase one.
+  if (!id && lastKnown && lastKnown.userId === userId && lastKnown.firmId) return;
   // A failed recheck must not downgrade a firm this tab already knows is entitled.
-  if (value.checkFailed && !value.entitled && entitledSlotMatches(lastKnown, userId, firmId)) {
+  if (value.checkFailed && !value.entitled && entitledSlotMatches(lastKnown, userId, id)) {
     return;
   }
-  const nextFirm =
-    firmId ?? (lastKnown && lastKnown.userId === userId ? lastKnown.firmId : null);
   const slot: Slot = {
     at: Date.now(),
     userId,
-    firmId: nextFirm,
+    firmId: id,
     value: {
       entitled: value.entitled === true,
       reason: value.reason,

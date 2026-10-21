@@ -46,7 +46,7 @@ type Props = {
   upgrading?: boolean;
   /** Server says this signed-in firm is SA. Never set from a public page. */
   saDiscount?: boolean;
-  /** Server-built rand lines. When set, these are the prices Checkout charges. */
+  /** Server-built rand lines for the practice list. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /**
    * From eligibleForIntroTrial. Starter shows the signup trial lines only

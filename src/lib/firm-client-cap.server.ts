@@ -16,7 +16,6 @@ import {
   type FirmSubscriptionPhase,
 } from "@/lib/firm-client-cap";
 import {
-  isSaMarketFirm,
   readSubscriptionDiscountRefs,
   type StoredDiscountRef,
 } from "@/lib/firm-sa-market";
@@ -31,10 +30,13 @@ import {
   firmUsageLimit,
   formatFirmClientUsage,
   pickEntitlingFirmSubscription,
+  practiceDisplaysZarPlan,
   readSubscriptionPrice,
   type FirmUpgradeSnapshot,
 } from "@/lib/firm-band-upgrade";
 import { isOwnerCatalogPrice } from "@/lib/owner-price";
+import { readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
+import { firmCheckoutCharge } from "@/lib/stripe-checkout.core";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
 import { FIRM_BAND_CATALOG, isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
@@ -55,6 +57,23 @@ import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.ser
 import { collapseDuplicateClientShells } from "@/lib/client-display-name";
 
 installMetadataFirmCustomerWrite();
+
+/** Stripe address country for the charge line. A miss leaves the country unknown. */
+async function checkoutBillingCountry(customerId: string | null | undefined): Promise<string | null> {
+  const id = customerId?.trim() ?? "";
+  if (!id || !stripeConfigured()) return null;
+  try {
+    return await readWithinBudget(
+      readStripeCustomerCountry(
+        getStripe() as Parameters<typeof readStripeCustomerCountry>[0],
+        id,
+      ),
+      1_000,
+    );
+  } catch {
+    return null;
+  }
+}
 
 export type EntitlingFirmSubscription = {
   id: string;
@@ -544,6 +563,16 @@ async function loadMembershipRole(
   return data?.role ?? null;
 }
 
+async function listFirmClientMarkets(db: CapDb, firmId: string): Promise<unknown[]> {
+  try {
+    const { data, error } = await db.from("clients").select("market").eq("firm_id", firmId);
+    if (error) return [];
+    return (data ?? []).map((row) => (row as { market?: unknown } | null)?.market ?? null);
+  } catch {
+    return [];
+  }
+}
+
 async function countFirmClients(db: CapDb, firmId: string): Promise<number> {
   // One book is one client. Demo rows are left out. Empty shells that share a
   // name collapse to the oldest, the same set the Clients list shows.
@@ -658,10 +687,11 @@ export async function loadFirmClientCreateAllowance(input: {
     };
   }
 
-  const [clientCount, billing, role] = await Promise.all([
+  const [clientCount, billing, role, clientMarkets] = await Promise.all([
     countFirmClients(db, firm.id),
     billingEmailForFirm(input.userId, email, firm.ownerUserId),
     loadMembershipRole(db, firm.id, input.userId),
+    listFirmClientMarkets(db, firm.id),
   ]);
   const sub = await findEntitlingFirmSubscription(billing.email, {
     userId: firm.ownerUserId,
@@ -671,8 +701,10 @@ export async function loadFirmClientCreateAllowance(input: {
     isOwner: Boolean(firm.ownerUserId && firm.ownerUserId === input.userId),
     membershipRole: role,
     market: firm.market,
+    clientMarkets,
     clientCount,
     sub,
+    billingCountry: await checkoutBillingCountry(sub?.customerId),
   });
   const starterTrial = trialBannerFor(firm, sub);
   await writeStarterTrialGenerationBlock(firm.id, starterTrial.expired);
@@ -776,10 +808,11 @@ export async function loadFirmPlanDisplay(input: {
     };
   }
 
-  const [billing, role, clientCount] = await Promise.all([
+  const [billing, role, clientCount, clientMarkets] = await Promise.all([
     billingEmailForFirm(input.userId, email, firm.ownerUserId),
     loadMembershipRole(db, firm.id, input.userId),
     countFirmClients(db, firm.id),
+    listFirmClientMarkets(db, firm.id),
   ]);
   const history = await readFirmSubscriptionHistory(billing.email, {
     userId: firm.ownerUserId,
@@ -790,8 +823,10 @@ export async function loadFirmPlanDisplay(input: {
     isOwner: Boolean(firm.ownerUserId && firm.ownerUserId === input.userId),
     membershipRole: role,
     market: firm.market,
+    clientMarkets,
     clientCount,
     sub,
+    billingCountry: await checkoutBillingCountry(sub?.customerId),
   });
   const starterTrial = trialBannerFor(firm, sub);
   await writeStarterTrialGenerationBlock(firm.id, starterTrial.expired);
@@ -872,10 +907,13 @@ export async function syncStarterTrialMirrorForActor(input: {
   }
 }
 
-async function buildUpgradeSnapshot(input: {
+export async function buildUpgradeSnapshot(input: {
   isOwner: boolean;
   membershipRole: string | null;
   market: unknown;
+  clientMarkets?: readonly unknown[] | null;
+  /** Checkout billing country. Omitted means still unknown. */
+  billingCountry?: string | null;
   clientCount: number;
   sub: EntitlingFirmSubscription | null;
 }): Promise<FirmUpgradeSnapshot> {
@@ -888,16 +926,32 @@ async function buildUpgradeSnapshot(input: {
     stripeCurrency: input.sub?.currency,
     marketCountry,
   });
+  const showZar = practiceDisplaysZarPlan({
+    firmMarket: input.market,
+    clientMarkets: input.clientMarkets,
+  });
+  const charge = firmCheckoutCharge({
+    firmMarket: input.market,
+    clientMarkets: input.clientMarkets,
+    requested: "us",
+    billingCountry: input.billingCountry,
+    band: band && isFirmCheckoutBand(band) ? band : "starter",
+    interval,
+  });
   let zarByBand: FirmUpgradeSnapshot["zarByBand"] = {};
   let zaLabels: FirmUpgradeSnapshot["zaLabels"] = null;
   let zaPriceLabel: string | null = null;
-  if (isSaMarketFirm({ market: input.market })) {
+  if (showZar) {
     try {
       const { loadSaPricingCopy } = await import("@/lib/pricing/za-pricing-chunk.server");
       const copy = loadSaPricingCopy();
       zaLabels = copy.labels;
-      const key = band && isFirmCheckoutBand(band) ? band : "solo";
-      zaPriceLabel = copy.labels[key][interval];
+      // Same choice as Checkout and the ZA coupon. The list above can still
+      // be rand for a client mix whose billing country is not yet ZA.
+      if (charge.priceMarket === "za") {
+        const key = band && isFirmCheckoutBand(band) ? band : "solo";
+        zaPriceLabel = copy.labels[key][interval];
+      }
     } catch (err) {
       console.warn(
         "[stripe] local price labels unavailable",
@@ -937,7 +991,7 @@ async function buildUpgradeSnapshot(input: {
     }),
     interval,
     zarByBand,
-    saDiscount: isSaMarketFirm({ market: input.market }),
+    saDiscount: showZar,
     zaLabels,
     zaPriceLabel,
   };

@@ -20,12 +20,12 @@ import {
 } from "@/lib/firm-band-upgrade";
 import { isOwnerCatalogPrice } from "@/lib/owner-price";
 import {
+  firmCheckoutCharge,
   isOwnerLookupKey,
   readFirmSetupUpgrade,
   resolveFirmCatalogPrice,
 } from "@/lib/stripe-checkout.core";
 import {
-  priceMarketForFirm,
   readStripeCustomerCountry,
   zarBillingCountryOk,
 } from "@/lib/pricing/za-checkout";
@@ -353,6 +353,35 @@ export async function syncFirmSubscriptionBand(
   return { band, cancelledReplaced, downgradeBlocked };
 }
 
+/** Client market JSON for one firm. Empty when the book cannot be read. */
+export async function loadFirmClientMarkets(
+  db: unknown,
+  firmId: string | null | undefined,
+): Promise<unknown[]> {
+  const id = firmId?.trim() ?? "";
+  const client = db as {
+    from?: (table: string) => {
+      select: (columns: string) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => PromiseLike<{
+          data: Array<{ market?: unknown } | null> | null;
+          error: { message?: string } | null;
+        }>;
+      };
+    };
+  } | null;
+  if (!client?.from || !id) return [];
+  try {
+    const { data, error } = await client.from("clients").select("market").eq("firm_id", id);
+    if (error) return [];
+    return (data ?? []).map((row) => row?.market ?? null);
+  } catch {
+    return [];
+  }
+}
+
 /** Firm market JSON for the billing user. Null when the row cannot be read. */
 async function firmMarketForBillingUser(userId: string | null | undefined): Promise<unknown> {
   const id = userId?.trim() ?? "";
@@ -387,6 +416,8 @@ async function firmMarketForBillingUser(userId: string | null | undefined): Prom
 export type FirmSetupUpgradeOptions = {
   /** When set, skips the firms.market read. Tests pass the firm market here. */
   firmMarket?: unknown;
+  /** When set, skips the client-market read. Tests pass the book here. */
+  clientMarkets?: readonly unknown[] | null;
 };
 
 function updateAcceptance(updated: RetrievedSubscription, expectedLookupKey: string) {
@@ -464,13 +495,25 @@ export async function completeFirmSetupUpgrade(
     options && "firmMarket" in options
       ? options.firmMarket
       : await firmMarketForBillingUser(intent.userId);
+  const clientMarkets =
+    options && "clientMarkets" in options
+      ? (options.clientMarkets ?? [])
+      : await (async () => {
+          const { getSupabaseAdminOrNull } = await import("@/integrations/supabase/client.server");
+          return loadFirmClientMarkets(getSupabaseAdminOrNull(), setupFirmId);
+        })();
   const saFirm = isSaMarketFirm({ market: firmMarket });
-  const zaCouponId = saFirm ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
   const billingCountry = await readStripeCustomerCountry(stripe, customerId);
-  const priceMarket = priceMarketForFirm({
-    firmMarket: saFirm ? "za" : "us",
+  const charge = firmCheckoutCharge({
+    firmMarket,
+    clientMarkets,
+    requested: saFirm ? "za" : "us",
     billingCountry,
+    band: intent.band,
+    interval: intent.interval,
   });
+  const priceMarket = charge.priceMarket;
+  const zaCouponId = charge.zaCoupon ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
   const { price, lookupKey } = await resolveFirmCatalogPrice(
     stripe as unknown as Parameters<typeof resolveFirmCatalogPrice>[0],
     intent.band,
