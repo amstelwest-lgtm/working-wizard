@@ -13,6 +13,13 @@ export { STARTER_TRIAL_ENDED_MESSAGE } from "./starter-trial-constants.ts";
 
 const MS_DAY = 86_400_000;
 
+/**
+ * Deploy date for the no-plan 14-day clock. Firms created before this get a
+ * fresh 14 days from here. Firms created after it run from signup. Change
+ * this one string to move the cutover.
+ */
+export const TRIAL_CLOCK_CUTOVER = "2026-10-21";
+
 /** Countdown banner starts on this day of the trial (1-based). */
 export const STARTER_TRIAL_COUNTDOWN_FROM_DAY = 10;
 
@@ -47,6 +54,44 @@ function parseInstant(value: string | number | null | undefined): number | null 
     return Number.isFinite(ms) ? ms : null;
   }
   return null;
+}
+
+/**
+ * When a no-plan trial starts. Later of the firm row and the deploy cutover,
+ * so a firm that already existed is not locked out on the day this ships.
+ * A missing created_at does not invent a start.
+ */
+export function noPlanTrialStart(
+  createdAt: string | number | null | undefined,
+  cutover: string = TRIAL_CLOCK_CUTOVER,
+): number | null {
+  const created = parseInstant(createdAt);
+  if (created == null) return null;
+  const cutoverMs = parseInstant(cutover);
+  if (cutoverMs == null) return created;
+  return Math.max(created, cutoverMs);
+}
+
+/**
+ * 14-day clock for a firm that has not started a subscription.
+ * Exempt firms stay open. A firm that already has a plan uses
+ * `starterTrialClock` instead. An unknown start does not invent a block.
+ */
+export function noPlanTrialClock(input: {
+  enforced: boolean;
+  /** True only when Stripe has no entitling subscription. */
+  noPlan: boolean;
+  /** Firm row created_at. Not a Stripe subscription start. */
+  startedAt?: string | number | null;
+  now?: Date;
+}): StarterTrialBanner {
+  if (!input.enforced || !input.noPlan) return idleStarterTrialBanner();
+  return starterTrialClock({
+    enforced: true,
+    band: "starter",
+    startedAt: noPlanTrialStart(input.startedAt),
+    now: input.now,
+  });
 }
 
 /**

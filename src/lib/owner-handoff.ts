@@ -76,6 +76,43 @@ export function handoffNeedsFreshRun(status: string | null | undefined): boolean
   return status !== "queued" && status !== "running";
 }
 
+/** A second hand-off for the same action inside this window does not start another run. */
+export const HANDOFF_OPEN_WINDOW_MS = 60_000;
+
+export type HandoffActionRun = { id: string; status: string; queuedAt: string };
+
+/** An open run, or one whose start is still inside the window. */
+export function handoffRunInWindow(
+  run: HandoffActionRun,
+  nowMs: number,
+  windowMs = HANDOFF_OPEN_WINDOW_MS,
+): boolean {
+  if (!run.id) return false;
+  if (run.status === "queued" || run.status === "running") return true;
+  const at = Date.parse(run.queuedAt);
+  return Number.isFinite(at) && nowMs >= at && nowMs - at < windowMs;
+}
+
+/**
+ * The run a new hand-off must keep. The earliest start inside the window wins,
+ * so a second click does not replace the one already underway.
+ */
+export function handoffRunToKeep(
+  runs: readonly HandoffActionRun[],
+  nowMs: number,
+  windowMs = HANDOFF_OPEN_WINDOW_MS,
+): HandoffActionRun | null {
+  const live = runs.filter((run) => handoffRunInWindow(run, nowMs, windowMs));
+  if (!live.length) return null;
+  return [...live].sort((a, b) => {
+    const delta = Date.parse(a.queuedAt) - Date.parse(b.queuedAt);
+    if (delta !== 0) return delta;
+    if (a.id < b.id) return -1;
+    if (a.id > b.id) return 1;
+    return 0;
+  })[0] ?? null;
+}
+
 /**
  * Idempotency material for handing the same action to the same bot again.
  * The previous run id keeps a double-click on an open re-queue from starting two.

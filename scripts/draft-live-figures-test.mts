@@ -135,8 +135,19 @@ const writtenAfterUpload = {
 };
 const freshTitle = presentHomeDraftTitle(handoffCopy, liveRatios, writtenAfterUpload);
 assert(freshTitle.text.includes("Hand-off"), `a fresh hand-off keeps its title (${freshTitle.text})`);
-assert(!freshTitle.stale && !freshTitle.refresh, "a draft created after the latest upload is not stale");
+assert(freshTitle.stale || freshTitle.refresh, "a drifting figures hash stays stale when the draft is newer than the upload");
 assert(!freshTitle.text.includes(FIGURES_CHANGED_REGENERATE), freshTitle.text);
+const matchedAfterUpload = presentHomeDraftTitle(
+  "Hand-off: Move fixed contracts to variable / usage-based pricing.",
+  liveRatios,
+  {
+    overall: 67,
+    storedHash: liveHash,
+    writtenAt: "2026-10-20T18:00:00.000Z",
+    figuresUpdatedAt: "2026-10-20T08:00:00.000Z",
+  },
+);
+assert(!matchedAfterUpload.stale && !matchedAfterUpload.refresh, "a matching figures hash is not stale");
 
 const movedBooks = presentHomeDraftTitle(handoffCopy, liveRatios, {
   overall: 67,
@@ -178,6 +189,6 @@ const freshBrief = buildFinancialManagerBrief({
 });
 assert(freshBrief.drafts.length === 1, "a fresh hand-off draft stays on the brief");
 assert(freshBrief.drafts[0]!.title.includes("Hand-off"), freshBrief.drafts[0]!.title);
-assert(!freshBrief.drafts[0]!.refresh, "a draft created after the latest upload is not marked regenerate");
+assert(freshBrief.drafts[0]!.refresh, "a drifting figures hash stays stale when the draft is newer than the upload");
 
 console.log("draft-live-figures ok");

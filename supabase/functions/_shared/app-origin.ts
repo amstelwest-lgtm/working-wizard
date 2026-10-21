@@ -26,6 +26,29 @@ export function allowedAppOrigin(raw: string | null | undefined): string | null 
   return url.origin;
 }
 
+/** Same rule as src/lib/app-origin.ts canonicalAuthOrigin. */
+export function canonicalAuthOrigin(raw?: string | null): string {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return CANONICAL_APP_ORIGIN;
+  let url: URL;
+  try {
+    url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+  } catch {
+    return CANONICAL_APP_ORIGIN;
+  }
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return url.origin;
+  if (
+    host.endsWith(".vercel.app") &&
+    host.length > ".vercel.app".length &&
+    url.protocol === "https:"
+  ) {
+    return url.origin;
+  }
+  if (host === "milonfinance.com" || host === "www.milonfinance.com") return CANONICAL_APP_ORIGIN;
+  return CANONICAL_APP_ORIGIN;
+}
+
 export function appRedirectOrigin(candidates: Array<string | null | undefined> = []): string {
   for (const raw of candidates) {
     const origin = allowedAppOrigin(raw);

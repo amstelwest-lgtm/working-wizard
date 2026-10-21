@@ -3,6 +3,7 @@
  * signInWithOtp must pass shouldCreateUser: false. A missing account, a
  * disabled signup, and a successful send all surface the same sentence.
  */
+import { canonicalAuthOrigin } from "@/lib/app-origin";
 import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
 import { intentCookieDomain } from "@/lib/google-auth";
 import { supabaseAuthStorageKey } from "@/integrations/supabase/tab-auth";
@@ -42,7 +43,7 @@ export function emailSignInRedirectTo(
   door: EmailSignInDoor,
   next?: string | null,
 ): string {
-  const url = new URL("/auth/callback", origin.endsWith("/") ? origin : `${origin}/`);
+  const url = new URL("/auth/callback", `${canonicalAuthOrigin(origin)}/`);
   url.search = "";
   url.hash = "";
   url.searchParams.set("door", door);

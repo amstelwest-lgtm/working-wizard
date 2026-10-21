@@ -177,6 +177,7 @@ import {
 } from "@/lib/weekly-inputs";
 import {
   figuresPeriodLabelFrom,
+  ownerBootPeriodPill,
   preferStatementPeriod,
   readStatementMeta,
   statementSpanLabel,
@@ -4096,6 +4097,16 @@ function Index() {
         .map((part) => part[0] ?? "")
         .join("")
         .toUpperCase() || "OW";
+    const bootPeriod = ownerBootPeriodPill({
+      booksKnown: !!effectiveClientId && hydratedClientId === effectiveClientId,
+      periodEnd: v.periodEnd ?? null,
+      periodLabel: statementSpanLabel({
+        periodStart: v.periodStart,
+        periodEnd: v.periodEnd,
+        periodLabel: readStatementMeta(v, boardMarket).periodLabel,
+        market: boardMarket,
+      }),
+    });
     return (
       <OwnerShell
         screen={shellScreen}
@@ -4123,6 +4134,8 @@ function Index() {
           });
         }}
         onProfile={() => openProfileDialog("retake")}
+        periodPending={bootPeriod.pending}
+        periodLabel={bootPeriod.label}
       >
         <PanelSkeleton rows={4} />
       </OwnerShell>

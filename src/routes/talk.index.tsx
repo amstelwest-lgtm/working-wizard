@@ -6,6 +6,10 @@ import { sanitizeRef } from "@/lib/prospect-talk";
 import talkCss from "../styles/prospect-talk.css?inline";
 
 export const Route = createFileRoute("/talk/")({
+  // Same as the agent page: one geo read per visit, so the price lines stay put.
+  staleTime: Number.POSITIVE_INFINITY,
+  preloadStaleTime: Number.POSITIVE_INFINITY,
+  shouldReload: false,
   loader: async () => {
     const visitor = await readMarketingVisitor();
     if (visitor.copyPack === "za") {

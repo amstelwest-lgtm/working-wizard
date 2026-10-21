@@ -7,7 +7,7 @@ import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-sl
 import { useBoundMarketCountry } from "@/contexts/market";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
-import { handoffTriggerLabel } from "@/lib/action-handoff";
+import { HANDOFF_CHECKING_LABEL, handoffTriggerLabel } from "@/lib/action-handoff";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { assignmentForMove, normalizeMoveLabel, type MoveAssignmentRef } from "@/lib/owner-handoff";
@@ -73,6 +73,7 @@ export function HandToMenu({
   comingSoon,
   marketCountry,
   audience = "owner",
+  pending = false,
   onAssignAgent,
   onAssignPerson,
 }: {
@@ -82,6 +83,8 @@ export function HandToMenu({
   comingSoon?: Partial<Record<AgentKey, true>>;
   marketCountry?: string | null;
   audience?: "owner" | "accountant";
+  /** The stored assignee is not known yet. Do not offer Hand to. */
+  pending?: boolean;
   onAssignAgent: (agent: AgentKey) => void | Promise<void>;
   onAssignPerson: (person: HandToPerson) => void | Promise<void>;
 }) {
@@ -181,6 +184,20 @@ export function HandToMenu({
   const fullLabel = handoffTriggerLabel(assignee);
   const shortLabel = handoffTriggerLabel(assignee, true);
 
+  if (pending) {
+    return (
+      <div className="relative" data-hand-to="true" data-hand-to-pending="">
+        <span
+          className="inline-flex h-auto max-w-full items-center rounded-lg border border-[#DBEAFE] bg-white px-2.5 py-1.5 text-left text-[12px] font-semibold leading-tight text-slate-500 dark:border-slate-700 dark:bg-transparent dark:text-slate-400"
+          aria-disabled="true"
+          aria-label={HANDOFF_CHECKING_LABEL}
+        >
+          {HANDOFF_CHECKING_LABEL}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={rootRef}
@@ -278,6 +295,7 @@ export function MoveHandTo({
   onOpenDraft?: (draftId: string) => void;
 }) {
   const [assignee, setAssignee] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
   const [face, setFace] = useState<MoveAssignmentRef | null>(null);
   const optimistic = useRef(false);
   const actionId = useRef<string | null>(null);
@@ -289,13 +307,16 @@ export function MoveHandTo({
     actionId.current = match.actionItemId;
     setFace(match);
     setAssignee(match.assigneeName);
+    setReady(true);
     optimistic.current = false;
   };
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
     void loadClientMoveAssignments(clientId).then((rows) => {
       if (cancelled || optimistic.current) return;
+      setReady(true);
       const match = assignmentForMove(rows, moveKey, title);
       if (!match) return;
       actionId.current = match.actionItemId;
@@ -365,6 +386,7 @@ export function MoveHandTo({
         clientId={clientId}
         audience="accountant"
         assignee={assignee}
+        pending={!ready}
         onAssignAgent={async (agent) => {
           previous.current = assignee;
           previousFace.current = face;
@@ -380,6 +402,14 @@ export function MoveHandTo({
           }
           actionId.current = actionItemId;
           const result = await commitActionHandoff({ clientId, actionItemId, title, agent });
+          if (result.ok && result.reused) {
+            optimistic.current = false;
+            setReady(false);
+            const rows = await loadClientMoveAssignments(clientId);
+            applyStored(assignmentForMove(rows, moveKey, title));
+            setReady(true);
+            return;
+          }
           if (!result.ok || result.noted !== true) {
             optimistic.current = false;
             setAssignee(previous.current);

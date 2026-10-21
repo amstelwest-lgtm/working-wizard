@@ -4,12 +4,13 @@
  * (`firms.stripe_customer_id`). That id is the first step. A retrieve that
  * hangs or errors keeps it, and does not search. With no stored id, email
  * is tried first.
- * Metadata search (subscription, then customer) runs only when that email
- * misses, for at most FIRM_CUSTOMER_SEARCH_BUDGET_MS, with no Stripe retry.
+ * That customers.list and the metadata searches share one deadline,
+ * FIRM_CUSTOMER_SEARCH_BUDGET_MS, with no Stripe retry. A timeout or error
+ * is unknown. Only a completed search with zero results is no customer.
  * A stored id still beats a different email customer. A mismatch is logged
  * and is not awaited. This module does not update Stripe and does not
- * create a customer. Stripe Dashboard is source of truth until a webhook
- * writes a local row.
+ * create a customer. A subscription metadata hit for this firm can store
+ * the customer id, off this path, and only when the column is null.
  *
  * Owner Spark and invited firm staff (non-owners) are not billed on their
  * own email. The firm owner must complete Checkout. A trialing subscription
@@ -54,10 +55,22 @@ export type FirmBillingEntitlement = {
 export type FirmBillingPathDecision = "allow" | "require_billing";
 
 /**
- * One shared cap for both metadata searches. Stripe's client retry is
- * turned off for these calls so a hang cannot become two 8s attempts.
+ * One shared cap for the email customers.list and both metadata searches.
+ * Stripe's client retry is off, and each call's timeout is the time left,
+ * so a hang cannot become two 8s attempts.
  */
 export const FIRM_CUSTOMER_SEARCH_BUDGET_MS = 4_000;
+
+/** A list or search that did not finish. This is not "no customer". */
+export class FirmCustomerLookupUnknown extends Error {
+  readonly kind: "timeout" | "error";
+
+  constructor(kind: "timeout" | "error") {
+    super(kind === "timeout" ? "firm customer lookup timeout" : "firm customer lookup failed");
+    this.name = "FirmCustomerLookupUnknown";
+    this.kind = kind;
+  }
+}
 
 /**
  * A stored customer id is the first step. The retrieve that checks it
@@ -74,7 +87,10 @@ export type FirmCustomerSearchOptions = {
 /** Stripe-like subset used by tests — no secret key, no SDK import. */
 export type StripeCustomerSubscriptionReader = {
   customers: {
-    list: (params: { email: string; limit: number }) => Promise<{ data: Array<{ id: string }> }>;
+    list: (
+      params: { email: string; limit: number },
+      options?: FirmCustomerSearchOptions,
+    ) => Promise<{ data: Array<{ id: string }> }>;
     retrieve?: (id: string) => Promise<unknown>;
     search?: (
       params: { query: string; limit: number },
@@ -290,10 +306,17 @@ export async function customerHasEntitlingSubscription(
 export async function findCustomerIdByEmail(
   stripe: StripeCustomerSubscriptionReader,
   email: string,
+  options?: FirmCustomerSearchOptions,
 ): Promise<string | undefined> {
   const trimmed = email.trim();
   if (!trimmed) return undefined;
-  const listed = await stripe.customers.list({ email: trimmed, limit: 1 });
+  const listed = await stripe.customers.list(
+    { email: trimmed, limit: 1 },
+    {
+      maxNetworkRetries: 0,
+      timeout: options?.timeout ?? FIRM_CUSTOMER_SEARCH_BUDGET_MS,
+    },
+  );
   return listed.data[0]?.id;
 }
 
@@ -432,6 +455,111 @@ function metadataCustomer(value: unknown): MetadataCustomer | null {
     email: typeof row.email === "string" ? row.email : null,
     metadata,
   };
+}
+
+export type MetadataFirmCustomerDecision = {
+  customerId: string | null;
+  plan: "entitled" | null;
+};
+
+/**
+ * What a subscription metadata hit may store for this firm.
+ * Active or trialing only. firm_id or milon_user_id must match this firm.
+ * A different stored customer id is left alone. Email is not a match.
+ */
+export function metadataFirmCustomerStore(input: {
+  firmId: string;
+  customerId: string;
+  storedCustomerId: string | null;
+  metadataFirmId: string | null;
+  metadataUserId: string | null;
+  lookupUserId: string | null;
+  status: string;
+  ownerPlan: boolean;
+}): MetadataFirmCustomerDecision {
+  const none: MetadataFirmCustomerDecision = { customerId: null, plan: null };
+  if (input.ownerPlan || !subscriptionStatusEntitles(input.status)) return none;
+  if (!/^cus_[A-Za-z0-9]+$/.test(input.customerId)) return none;
+  const firmId = input.firmId.trim();
+  if (!STRIPE_METADATA_ID.test(firmId)) return none;
+  const metaFirm = input.metadataFirmId?.trim() ?? "";
+  const metaUser = input.metadataUserId?.trim() ?? "";
+  const lookupUser = input.lookupUserId?.trim() ?? "";
+  if (metaFirm && metaFirm !== firmId) return none;
+  if (metaUser && lookupUser && metaUser !== lookupUser) return none;
+  const firmHit = metaFirm === firmId;
+  const userHit = Boolean(lookupUser) && metaUser === lookupUser;
+  if (!firmHit && !userHit) return none;
+  const stored = input.storedCustomerId?.trim() ?? "";
+  return {
+    customerId: stored ? null : input.customerId,
+    plan: "entitled",
+  };
+}
+
+type MetadataFirmCustomerWrite = (input: {
+  firmId: string;
+  customerId: string | null;
+  plan: "entitled" | null;
+  metadataCustomerId: string;
+}) => void;
+
+let metadataFirmWrite: MetadataFirmCustomerWrite | null = null;
+let metadataWriteListener: ((decision: MetadataFirmCustomerDecision) => void) | null = null;
+
+/** Server registers the service-role write. The client bundle does not. */
+export function registerMetadataFirmCustomerWrite(write: MetadataFirmCustomerWrite): void {
+  metadataFirmWrite = write;
+}
+
+export function setMetadataFirmCustomerWriteListener(
+  listener: ((decision: MetadataFirmCustomerDecision) => void) | null,
+): void {
+  metadataWriteListener = listener;
+}
+
+function noteSubscriptionMetadataCustomer(
+  subs: MetadataSubscription[],
+  input: FirmCustomerLookup,
+): void {
+  const firmId = input.firmId?.trim() ?? "";
+  for (const sub of subs) {
+    if (!subscriptionStatusEntitles(sub.status) || subscriptionIsOwnerPlan(sub)) continue;
+    const hit = metadataHit(sub.metadata, input);
+    if (!hit) continue;
+    const customerId = stripeCustomerId(sub.customer);
+    if (!customerId) continue;
+    const decision = metadataFirmCustomerStore({
+      firmId,
+      customerId,
+      storedCustomerId: stripeCustomerId(input.storedCustomerId) ?? null,
+      metadataFirmId: sub.metadata?.firm_id ?? null,
+      metadataUserId: sub.metadata?.milon_user_id ?? null,
+      lookupUserId: input.userId ?? null,
+      status: sub.status ?? "",
+      ownerPlan: false,
+    });
+    if (!decision.customerId && !decision.plan) continue;
+    try {
+      metadataWriteListener?.(decision);
+    } catch {
+      // A test listener cannot change the lookup result.
+    }
+    try {
+      metadataFirmWrite?.({
+        firmId,
+        customerId: decision.customerId,
+        plan: decision.plan,
+        metadataCustomerId: customerId,
+      });
+    } catch (err) {
+      console.warn(
+        "[stripe] metadata firm customer was not stored",
+        err instanceof Error ? err.message : err,
+      );
+    }
+    return;
+  }
 }
 
 /** Customer id from customers.search rows that carry this firm or owner id. */
@@ -585,27 +713,50 @@ function warnMetadataSearch(err: unknown): void {
 }
 
 /**
- * Resolves with the search result, or undefined when the budget expires
- * or the search throws. The Stripe call is not cancelled; it is not awaited
- * past `ms`, and it is invoked with no SDK retry.
+ * The Stripe call is not cancelled. It is not awaited past `ms`.
+ * A timeout or a thrown call is unknown, not an empty result.
  */
-async function settleSearch<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
+async function settleWithin<T>(work: Promise<T>, ms: number): Promise<T> {
   void work.catch(() => {});
-  if (ms <= 0) return undefined;
+  if (ms <= 0) throw new FirmCustomerLookupUnknown("timeout");
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      work.catch((err: unknown) => {
-        warnMetadataSearch(err);
-        return undefined;
-      }),
-      new Promise<undefined>((resolve) => {
-        timer = setTimeout(() => resolve(undefined), ms);
+      work.then(
+        (value) => value,
+        (err: unknown) => {
+          warnMetadataSearch(err);
+          const message = err instanceof Error ? err.message : String(err);
+          throw new FirmCustomerLookupUnknown(
+            /timeout|timed out|etimedout/i.test(message) ? "timeout" : "error",
+          );
+        },
+      ),
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new FirmCustomerLookupUnknown("timeout")), ms);
       }),
     ]);
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+async function customerIdByEmailWithinBudget(
+  stripe: StripeCustomerSubscriptionReader,
+  email: string,
+  ms: number,
+): Promise<string | undefined> {
+  const trimmed = email.trim();
+  if (!trimmed) return undefined;
+  if (ms <= 0) throw new FirmCustomerLookupUnknown("timeout");
+  const listed = await settleWithin(
+    stripe.customers.list(
+      { email: trimmed, limit: 1 },
+      { maxNetworkRetries: 0, timeout: ms },
+    ),
+    ms,
+  );
+  return listed.data[0]?.id;
 }
 
 /**
@@ -618,24 +769,24 @@ async function metadataCustomerWithinBudget(
   budgetMs: number,
 ): Promise<string | undefined> {
   const query = firmCustomerSearchQuery(input);
-  if (!query || budgetMs <= 0) return undefined;
+  if (!query) return undefined;
+  if (budgetMs <= 0) throw new FirmCustomerLookupUnknown("timeout");
   const started = Date.now();
   const left = () => Math.max(0, budgetMs - (Date.now() - started));
-  const options = (): FirmCustomerSearchOptions => ({
-    maxNetworkRetries: 0,
-    timeout: left(),
-  });
 
   const subscriptionSearch = stripe.subscriptions.search;
-  if (subscriptionSearch && left() > 0) {
-    const found = await settleSearch(
-      subscriptionSearch({ query, limit: 20 }, options()),
-      left(),
+  if (subscriptionSearch) {
+    const ms = left();
+    if (ms <= 0) throw new FirmCustomerLookupUnknown("timeout");
+    const found = await settleWithin(
+      subscriptionSearch({ query, limit: 20 }, { maxNetworkRetries: 0, timeout: ms }),
+      ms,
     );
     const stable = found
       ? customerIdFromMetadataSubscriptions(found.data, input)
       : undefined;
     if (stable) {
+      noteSubscriptionMetadataCustomer(found.data, input);
       void (async () => {
         noteStripeEmailDiffers(
           stable,
@@ -655,8 +806,13 @@ async function metadataCustomerWithinBudget(
   }
 
   const customerSearch = stripe.customers.search;
-  if (customerSearch && left() > 0) {
-    const found = await settleSearch(customerSearch({ query, limit: 20 }, options()), left());
+  if (customerSearch) {
+    const ms = left();
+    if (ms <= 0) throw new FirmCustomerLookupUnknown("timeout");
+    const found = await settleWithin(
+      customerSearch({ query, limit: 20 }, { maxNetworkRetries: 0, timeout: ms }),
+      ms,
+    );
     const rows = (found?.data ?? []).flatMap((row) => {
       const customer = metadataCustomer(row);
       return customer ? [customer] : [];
@@ -680,9 +836,10 @@ async function metadataCustomerWithinBudget(
 /**
  * Firm customer for entitlement, Checkout, and the pre-card mirror.
  * A stored customer id wins, including when the signed-in email points
- * somewhere else. With no stored id, email is first. Metadata search runs
- * only after that email misses, under one shared deadline, and does not
- * create a customer.
+ * somewhere else. With no stored id, email is first. That list and the
+ * metadata searches share one deadline. A timeout or error throws
+ * FirmCustomerLookupUnknown. A completed search with zero results returns
+ * undefined. This does not create a customer.
  */
 export async function findFirmCustomerId(
   stripe: StripeCustomerSubscriptionReader,
@@ -701,29 +858,23 @@ export async function findFirmCustomerId(
     }
   }
 
-  // No stored id: the common plan check. Email is one list. Searches wait.
+  const started = Date.now();
+  const left = () => Math.max(0, FIRM_CUSTOMER_SEARCH_BUDGET_MS - (Date.now() - started));
+  // No stored id: email uses the shared deadline, then metadata uses what is left.
   if (!stored && email) {
-    try {
-      const byEmail = await findCustomerIdByEmail(stripe, email);
-      if (byEmail) return byEmail;
-    } catch (err) {
-      console.warn(
-        "[stripe] email customer lookup failed",
-        err instanceof Error ? err.message : err,
-      );
-    }
+    const byEmail = await customerIdByEmailWithinBudget(stripe, email, left());
+    if (byEmail) return byEmail;
   }
 
-  const stable = await metadataCustomerWithinBudget(
-    stripe,
-    input,
-    FIRM_CUSTOMER_SEARCH_BUDGET_MS,
-  );
+  const stable = await metadataCustomerWithinBudget(stripe, input, left());
   if (stable) return stable;
 
   if (!email) return undefined;
   // Stored id was present but not trusted. Email was not the first step.
-  if (stored) return findCustomerIdByEmail(stripe, email);
+  if (stored) {
+    const byEmail = await customerIdByEmailWithinBudget(stripe, email, left());
+    if (byEmail) return byEmail;
+  }
   return undefined;
 }
 

@@ -45,26 +45,26 @@ assert(
   googleOAuthRedirectTo("https://milonfinance.com", {
     token: "tok123",
     clientCode: "MLN-AB12",
-  }) === "https://milonfinance.com/auth/callback?invite=tok123&cc=MLN-AB12",
-  "redirectTo carries invite + client code (never `code`, which is PKCE)",
+  }) === "https://www.milonfinance.com/auth/callback?invite=tok123&cc=MLN-AB12",
+  "apex origin still carries invite + client code on www",
 );
 assert(
   googleOAuthRedirectTo("https://milonfinance.com", { token: "tok123" }) ===
-    "https://milonfinance.com/auth/callback?invite=tok123",
-  "redirectTo carries invite without a client code",
+    "https://www.milonfinance.com/auth/callback?invite=tok123",
+  "apex origin still carries invite without a client code on www",
 );
 assert(
   googleOAuthRedirectTo("https://milonfinance.com", { join: "joinTok" }) ===
-    "https://milonfinance.com/auth/callback?join=joinTok",
-  "redirectTo carries accountant join (never `invite`, which is owner-handoff)",
+    "https://www.milonfinance.com/auth/callback?join=joinTok",
+  "apex origin still carries accountant join on www",
 );
 assert(
   googleOAuthRedirectTo("https://milonfinance.com", {
     checkout: "solo",
     interval: "month",
     market: "us",
-  }) === "https://milonfinance.com/auth/callback?checkout=solo&interval=month&market=us",
-  "redirectTo carries paid Checkout so an origin hop cannot drop the plan",
+  }) === "https://www.milonfinance.com/auth/callback?checkout=solo&interval=month&market=us",
+  "apex origin still carries paid Checkout on www",
 );
 
 assert(

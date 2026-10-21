@@ -7,7 +7,7 @@
  *
  * The suffix is joined at runtime so this directory does not embed the literal.
  */
-import { appRedirectOrigin, CANONICAL_APP_ORIGIN } from "./app-origin.ts";
+import { canonicalAuthOrigin, CANONICAL_APP_ORIGIN } from "./app-origin.ts";
 
 /** Display name uses U+014D, matching the product From header. */
 export const TRANSACTIONAL_FROM = "Milōn <noreply@milonfinance.com>";
@@ -30,9 +30,9 @@ export function transactionalFrom(raw: string | null | undefined): string {
 /**
  * Link origin for mail. A retired-zone SITE_URL is dropped whole, including
  * when the suffix only appears in a path or query on an allowlisted host.
- * Anything else goes through the app host allowlist.
+ * Anything else uses the canonical auth origin, so the apex becomes www.
  */
 export function transactionalSiteUrl(raw: string | null | undefined): string {
   if (containsRetiredPublicSuffix(raw)) return CANONICAL_APP_ORIGIN;
-  return appRedirectOrigin([raw]);
+  return canonicalAuthOrigin(raw);
 }

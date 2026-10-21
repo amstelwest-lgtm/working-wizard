@@ -68,6 +68,10 @@ export type BriefDraft = {
   figuresHash?: string | null;
   /** Score snapshot stored with the draft. A mismatch suppresses the sentence. */
   storedHealth?: HealthScoreSnapshot | null;
+  /** score_snapshot_hash stored with the draft, including the engine version. */
+  storedScoreHash?: string | null;
+  /** Finding evidence. Legacy rows with no hash are read from metrics and figures. */
+  evidence?: unknown;
   /** When this draft was saved. Compared with the latest upload. */
   createdAt?: string | null;
   /** True when the stored sentence or its hash no longer matches the live books. */
@@ -203,7 +207,7 @@ export function buildFinancialManagerBrief(input: {
   balanceSheetNote?: string | null;
   receivables?: number | null;
   drafts?: readonly BriefDraft[];
-  /** Latest upload or ledger sync. A draft written after this is not stale. */
+  /** Latest upload or ledger sync. A later clock forces stale. It never vouches the stored sentence. */
   figuresUpdatedAt?: string | null;
   /** Live scorecard ratios. Draft titles are re-read from these, not the stored sentence. */
   canonicalRatios?: Record<string, number> | null;
@@ -355,6 +359,8 @@ export function buildFinancialManagerBrief(input: {
       storedHash: row.figuresHash,
       health: input.healthSnapshot,
       storedHealth: row.storedHealth ?? null,
+      storedScoreHash: row.storedScoreHash,
+      evidence: row.evidence,
       writtenAt: row.createdAt,
       figuresUpdatedAt: input.figuresUpdatedAt,
     };

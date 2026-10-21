@@ -62,6 +62,7 @@ export function MilonTeamPane({
       market: live.market,
       canonicalRatios,
       liveHealth: feed.healthQuote,
+      evidence: newest.evidence,
       writtenAt: newest.created_at,
       figuresUpdatedAt: feed.figuresUpdatedAt,
     });
