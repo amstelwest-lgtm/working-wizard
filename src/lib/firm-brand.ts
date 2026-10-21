@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { settleWithin } from "@/lib/bounded-load";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 
 /** Brand shape used by PDF theme + Brand Settings (mirrors AccountantProfile). */
 export type FirmBrandProfile = {
@@ -104,13 +106,22 @@ export async function readUserFirms(
     const pending = firmListInflight.get(userId);
     if (pending) return pending;
   }
-  const work = readUserFirmsNow(userId).then((result) => {
-    firmListInflight.delete(userId);
-    if (!result.error) firmListCache.set(userId, { at: Date.now(), value: result });
-    return result;
+  // The in-flight entry is this promise, not the raw read. A hang used to
+  // leave that entry in place, so the next call waited on the same promise.
+  const tracked = (async () => {
+    const settled = await settleWithin(readUserFirmsNow(userId), SHELL_GATE_TIMEOUT_MS);
+    if (settled.status === "value") {
+      if (!settled.value.error) firmListCache.set(userId, { at: Date.now(), value: settled.value });
+      return settled.value;
+    }
+    if (settled.status === "timeout") return { firms: [], error: "timeout" };
+    const message = settled.error instanceof Error ? settled.error.message : "firm list failed";
+    return { firms: [], error: message || "firm list failed" };
+  })().finally(() => {
+    if (firmListInflight.get(userId) === tracked) firmListInflight.delete(userId);
   });
-  firmListInflight.set(userId, work);
-  return work;
+  firmListInflight.set(userId, tracked);
+  return tracked;
 }
 
 async function readUserFirmsNow(userId: string): Promise<{

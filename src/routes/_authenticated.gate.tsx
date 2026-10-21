@@ -136,7 +136,8 @@ function warnBillingWall(firmId: string, reason: string): void {
 
 export function AuthGate() {
   const { user, loading, restoreFailed } = useAuth();
-  const { firmId, firmMarket, hasFirm, firms, firmsLoaded } = useAccountantProfile();
+  const { firmId, firmMarket, hasFirm, firms, firmsLoaded, firmsLoadFailed, refreshFirms } =
+    useAccountantProfile();
   const { track } = useAnalytics();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -534,14 +535,11 @@ export function AuthGate() {
     };
   }, [userId, loading, gateAttempt, firmId, firmsLoaded]);
 
-  if (loading) {
-    return <FirmShellLoading />;
-  }
-  if (!user) return null;
   // Unknown entitlement does not mount a gated client file. Home, the client
   // list, settings, and billing stay open. The first client file may mount
   // once the count is known. A later file stays on the skeleton until Stripe
   // confirms a redirect, or until the check times out onto the Retry card.
+  // A failed firm load uses that same card and does not start the billing check.
   const unknownPage = pageWhileEntitlementUnknown({
     pathname,
     firmClientCount: clientGate?.firmClientCount ?? null,
@@ -562,11 +560,21 @@ export function AuthGate() {
     firmEntitled,
     unknownPage,
   });
-  if (failureSurface === "error" || deadlineHoldsRetry) {
+  const holdGatedPage = firmEntitled !== true && unknownPage === "wall";
+  const firmLoadHoldsRetry = Boolean(firmsLoadFailed) && holdGatedPage;
+  if (loading) {
+    return <FirmShellLoading />;
+  }
+  if (!user) return null;
+  if (failureSurface === "error" || deadlineHoldsRetry || firmLoadHoldsRetry) {
     return (
       <FirmBillingGateView
         surface="error"
         onRetry={() => {
+          if (firmsLoadFailed) {
+            void refreshFirms();
+            return;
+          }
           releaseFirmEntitlementForRetry();
           setBillingUnknown(false);
           setBillingDeadlinePassed(false);
@@ -578,11 +586,8 @@ export function AuthGate() {
   if (failureSurface === "wall" || showWall) {
     return <FirmBillingGateView surface="wall" />;
   }
-  const holdGatedPage = firmEntitled !== true && unknownPage === "wall";
   if (holdGatedPage) {
-    return (
-      <FirmShellLoading />
-    );
+    return <FirmShellLoading />;
   }
   return (
     <FirmBillingAccessProvider entitled={firmEntitled}>

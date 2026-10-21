@@ -10,6 +10,9 @@ export type Settled<T> =
 /** One quiet retry after a timed-out or failed client read, before the error card. */
 export const CLIENTS_LOAD_RETRY_BACKOFF_MS = 600;
 
+/** One automatic retry after a timed-out or failed firm list, before Retry. */
+export const FIRM_LOAD_RETRY_BACKOFF_MS = 1_000;
+
 /**
  * Runs `read` once. A timeout or a thrown read waits `backoffMs`, then runs
  * once more. A value is returned as-is. The second result is final.
