@@ -10,7 +10,7 @@ import {
   presentLiveDraft,
   type DraftLiveFigures,
 } from "@/lib/draft-figures";
-import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
+import { readStoredScoreSnapshotHash, type HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { homeStatementsLine } from "@/lib/books-answer";
 import { canonicalScoreProse } from "@/lib/score-prose";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
@@ -94,9 +94,13 @@ export type HomeDraftLive = {
   storedHash?: string | null;
   health?: HealthScoreSnapshot | null;
   storedHealth?: HealthScoreSnapshot | null;
+  /** score_snapshot_hash from the draft, including the engine version. */
+  storedScoreHash?: string | null;
+  /** Finding evidence. A row with no hash is read from metrics and figures. */
+  evidence?: unknown;
   /** When this draft was saved. */
   writtenAt?: string | null;
-  /** Latest upload or ledger sync. */
+  /** Latest upload or ledger sync. A later clock forces stale. It never vouches the stored sentence. */
   figuresUpdatedAt?: string | null;
 };
 
@@ -138,6 +142,8 @@ function presentStoredDraft(
     storedHash: live?.storedHash,
     health: live?.health,
     storedHealth: live?.storedHealth,
+    storedScoreHash: live?.storedScoreHash,
+    evidence: live?.evidence,
     writtenAt: live?.writtenAt,
     figuresUpdatedAt: live?.figuresUpdatedAt,
   };
@@ -196,6 +202,8 @@ function presentFindingDraft(
     storedHash: draftStoredFiguresHash(row.evidence),
     health: live?.health,
     storedHealth: draftStoredHealth(row.evidence),
+    storedScoreHash: readStoredScoreSnapshotHash(row.evidence),
+    evidence: row.evidence,
     writtenAt: row.created_at,
     figuresUpdatedAt: live?.figuresUpdatedAt,
   };

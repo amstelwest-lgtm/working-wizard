@@ -126,12 +126,16 @@ export function AgentChipIcon({ agent }: { agent: AgentKey }) {
   return <Svg>{AGENT_PATHS[agent]}</Svg>;
 }
 
-/** Current period as a quiet topbar pill. Real date, no fake affordance. */
-export function PeriodPill() {
+/**
+ * Quiet topbar pill. A client header passes the books' period end
+ * ("Sep 2026"). With no books, the pill stays the calendar month.
+ */
+export function PeriodPill({ periodLabel }: { periodLabel?: string | null }) {
   const { market } = useMarketFormat();
-  const label = formatMonthYear(new Date(), market.timezone);
+  const books = periodLabel?.trim() || "";
+  const label = books || formatMonthYear(new Date(), market.timezone);
   return (
-    <span className="period-pill" title="Current period">
+    <span className="period-pill" title={books ? "Figures period" : "Current period"}>
       <RailIcon id="calendar" />
       {label}
     </span>

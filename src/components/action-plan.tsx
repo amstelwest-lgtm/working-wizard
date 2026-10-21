@@ -659,8 +659,10 @@ export default function ActionPlanPanel({
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const [comingSoon, setComingSoon] = useState<Record<string, Partial<Record<AgentKey, true>>>>({});
+  const [liveHandoff, setLiveHandoff] = useState<Record<string, string>>({});
   const [pickups, setPickups] = useState<Record<string, { id?: string; agent: AgentKey; status: string; at: string }>>({});
   const [itemNotes, setItemNotes] = useState<Record<string, AssignmentNoteRow[]>>({});
+  const [notesReady, setNotesReady] = useState(false);
   const draftActivity = useAgentActivity(clientId);
   const draftFindings = useMemo(
     () => draftActivity.findings.filter((row) => row.status === "approved" || draftFindingLabel(row) != null),
@@ -802,17 +804,21 @@ export default function ActionPlanPanel({
       setItems(list);
       setEmployees(mergeActionPlanTeam((empsRes.data ?? []) as Employee[], practice));
       setLoading(false);
+      if (!list.length) setNotesReady(true);
       let shown = list;
       let loadedNotes: Record<string, AssignmentNoteRow[]> = {};
+      let loadedPickups: Record<string, PlanPickup> = {};
       if (list.length) {
-        const { data: notes } = await supabase
-          .from("action_updates")
-          .select("action_item_id,note,created_at,actor_label,actor_type")
-          .in(
-            "action_item_id",
-            list.map((item) => item.id),
-          )
-          .order("created_at", { ascending: false });
+        const ids = list.map((item) => item.id);
+        const [notesRes, runs] = await Promise.all([
+          supabase
+            .from("action_updates")
+            .select("action_item_id,note,created_at,actor_label,actor_type")
+            .in("action_item_id", ids)
+            .order("created_at", { ascending: false }),
+          loadActionHandoffRuns(ids),
+        ]);
+        const { data: notes, error: notesError } = notesRes;
         const grouped = new Map<string, AssignmentNoteRow[]>();
         for (const row of (notes ?? []) as {
           action_item_id?: string;
@@ -843,10 +849,7 @@ export default function ActionPlanPanel({
         const noteState: Record<string, AssignmentNoteRow[]> = {};
         for (const [id, notes] of grouped) noteState[id] = notes;
         loadedNotes = noteState;
-      }
-      let loadedPickups: Record<string, PlanPickup> = {};
-      if (list.length) {
-        const runs = await loadActionHandoffRuns(list.map((item) => item.id));
+        if (!notesError) setNotesReady(true);
         const next: Record<string, PlanPickup> = {};
         for (const [id, run] of runs) next[id] = run;
         loadedPickups = next;
@@ -906,32 +909,58 @@ export default function ActionPlanPanel({
         owner_name: item.owner_name ?? null,
         owner_email: item.owner_email ?? null,
       };
-      const name = agentDisplayName(agent);
+      const pending = `Handing to ${agentShortName(agent)}…`;
+      setLiveHandoff((current) => ({ ...current, [item.id]: pending }));
       setItems((current) =>
         current.map((row) =>
-          row.id === item.id ? { ...row, owner_id: null, owner_name: name, owner_email: null } : row,
+          row.id === item.id
+            ? { ...row, owner_id: null, owner_name: pending, owner_email: null }
+            : row,
         ),
       );
-      const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
       const result = await commitActionHandoff({
         clientId,
         actionItemId: item.id,
         title: item.title,
         agent,
       });
-      if (!result.ok) {
+      if (result.ok && result.reused) {
+        setLiveHandoff((current) => {
+          const next = { ...current };
+          delete next[item.id];
+          return next;
+        });
         setItems((current) =>
           current.map((row) => (row.id === item.id ? { ...row, ...previous } : row)),
         );
-        if (result.comingSoon) {
+        return;
+      }
+      if (!result.ok || result.noted !== true) {
+        setLiveHandoff((current) => {
+          const next = { ...current };
+          delete next[item.id];
+          return next;
+        });
+        setItems((current) =>
+          current.map((row) => (row.id === item.id ? { ...row, ...previous } : row)),
+        );
+        if (!result.ok && result.comingSoon) {
           setComingSoon((current) => ({
             ...current,
             [item.id]: { ...current[item.id], [agent]: true },
           }));
         }
-        toast.error(result.error, { id: toastId });
+        toast.error(result.ok ? "Couldn't hand this over" : result.error);
         return;
       }
+      const handed = agentDisplayName(agent);
+      setLiveHandoff((current) => ({ ...current, [item.id]: handed }));
+      setItems((current) =>
+        current.map((row) =>
+          row.id === item.id ? { ...row, owner_name: handed } : row,
+        ),
+      );
+      toast.success(`Handed to ${agentShortName(agent)}`);
       void refresh();
     },
     [clientId, refresh],
@@ -940,6 +969,7 @@ export default function ActionPlanPanel({
   useEffect(() => {
     let live = true;
     setLoading(true);
+    setNotesReady(false);
     setLoadTimedOut(false);
     const timer = window.setTimeout(() => {
       if (!live) return;
@@ -1931,6 +1961,9 @@ export default function ActionPlanPanel({
                 }}
                 comingSoon={comingSoon[it.id]}
                 notes={handoffByItem.get(it.id)?.notes ?? itemNotes[it.id] ?? []}
+                assigneeOverride={liveHandoff[it.id] ?? null}
+                handoffPending={!notesReady}
+                phasePending={!notesReady || draftActivity.loading}
                 phaseLabel={handoffByItem.get(it.id)?.phaseLabel ?? null}
                 draftId={handoffByItem.get(it.id)?.draftId ?? null}
                 onOpenDraft={onOpenDraft}
@@ -1941,14 +1974,17 @@ export default function ActionPlanPanel({
                   const agent = handoffErrors[it.id]?.agent ?? pickups[it.id]?.agent ?? handoffByItem.get(it.id)?.run?.agent;
                   if (!agent) return undefined;
                   return () => {
-                    const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
                     void commitActionHandoff({
                       clientId,
                       actionItemId: it.id,
                       title: it.title,
                       agent,
                     }).then((result) => {
-                      if (!result.ok) toast.error(result.error, { id: toastId });
+                      if (!result.ok || result.noted !== true) {
+                        toast.error(result.ok ? "Couldn't hand this over" : result.error);
+                        return;
+                      }
+                      toast.success(`Handed to ${agentShortName(agent)}`);
                     });
                   };
                 })()}
@@ -2504,6 +2540,9 @@ function ItemRow({
   handoffError = null,
   onRetry,
   notes = [],
+  assigneeOverride = null,
+  handoffPending = false,
+  phasePending = false,
   phaseLabel = null,
   draftId = null,
   onOpenDraft,
@@ -2538,6 +2577,12 @@ function ItemRow({
   handoffError?: string | null;
   onRetry?: () => void;
   notes?: readonly AssignmentNoteRow[];
+  /** Pending "Handing to …" or the name confirmed once noted is true. Beats a stale note. */
+  assigneeOverride?: string | null;
+  /** The assignment note has not been read yet. Hand to stays off. */
+  handoffPending?: boolean;
+  /** Notes or the run list are still loading. The chip says Checking. */
+  phasePending?: boolean;
   /** Working, Draft ready, Approved, Sent, or Couldn't draft. Replaces Not started / Not sent. */
   phaseLabel?: string | null;
   draftId?: string | null;
@@ -2800,10 +2845,10 @@ function ItemRow({
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0">
         <span
           className="rounded-md px-2.5 py-1 text-[11px] font-bold"
-          style={{ color: phaseLabel ? "#0B5FFF" : h.color, background: phaseLabel ? "rgba(11,95,255,0.12)" : h.bg }}
-          data-handoff-phase={phaseLabel ?? undefined}
+          style={{ color: phasePending || phaseLabel ? "#0B5FFF" : h.color, background: phasePending || phaseLabel ? "rgba(11,95,255,0.12)" : h.bg }}
+          data-handoff-phase={phasePending ? "checking" : phaseLabel ?? undefined}
         >
-          {phaseLabel ?? h.label}
+          {phasePending ? "Checking…" : phaseLabel ?? h.label}
         </span>
         <ChevronRight className="h-3.5 w-3.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600" />
       </div>
@@ -2813,8 +2858,9 @@ function ItemRow({
           {onHandOff ? (
             <HandToMenu
               employees={employees}
-              assignee={displayedAssignee(item.owner_name, notes)}
+              assignee={assigneeOverride ?? displayedAssignee(item.owner_name, notes)}
               comingSoon={comingSoon}
+              pending={handoffPending}
               audience={isOwner ? "owner" : "accountant"}
               onAssignAgent={onHandOff}
               onAssignPerson={(person) => {

@@ -12,10 +12,13 @@ import {
   callerMayHandOff,
   handoffCollisionResult,
   handoffDecision,
+  HANDOFF_OPEN_WINDOW_MS,
   handoffRequestNote,
+  handoffRunToKeep,
   personAssignmentNote,
   planHandoffRun,
   runnerEnabled,
+  type HandoffActionRun,
 } from "../../../src/lib/owner-handoff.ts";
 
 const CORS = {
@@ -33,6 +36,33 @@ function json(body: unknown, status = 200) {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function recentActionRuns(
+  admin: AdminClient,
+  actionItemId: string,
+): Promise<{ runs: HandoffActionRun[] } | { error: string }> {
+  const since = new Date(Date.now() - HANDOFF_OPEN_WINDOW_MS).toISOString();
+  const { data, error } = await admin
+    .from("agent_runs")
+    .select("id, status, queued_at")
+    .eq("action_item_id", actionItemId)
+    .or(`status.eq.queued,status.eq.running,queued_at.gte.${since}`)
+    .order("queued_at", { ascending: true })
+    .limit(20);
+  if (error) return { error: "run_lookup_failed" };
+  const runs: HandoffActionRun[] = [];
+  for (const row of data ?? []) {
+    const id = typeof row.id === "string" ? row.id : "";
+    const queuedAt = typeof row.queued_at === "string" ? row.queued_at : "";
+    if (!id || !queuedAt) continue;
+    runs.push({
+      id,
+      status: typeof row.status === "string" ? row.status : "",
+      queuedAt,
+    });
+  }
+  return { runs };
 }
 
 type AdminClient = SupabaseClient<any, "public", any>;
@@ -201,6 +231,20 @@ Deno.serve(async (req) => {
     });
   }
 
+  const prior = await recentActionRuns(admin, actionItemId);
+  if ("error" in prior) return json({ error: prior.error }, 500);
+  const already = handoffRunToKeep(prior.runs, Date.now());
+  if (already) {
+    return json({
+      ok: true,
+      reused: true,
+      noted: false,
+      runId: already.id,
+      status: already.status,
+      runner: decision.runner,
+    });
+  }
+
   const { data: newestRows, error: newestError } = await admin
     .from("agent_runs")
     .select("id, status")
@@ -272,6 +316,41 @@ Deno.serve(async (req) => {
   const runId = inserted?.id as string | undefined;
   if (!runId) return json({ error: "run_insert_failed" }, 500);
 
+  const again = await recentActionRuns(admin, actionItemId);
+  if ("error" in again) return json({ error: again.error, runId }, 500);
+  const keeper = handoffRunToKeep(again.runs, Date.now());
+  if (keeper && keeper.id !== runId) {
+    await admin
+      .from("agent_runs")
+      .update({
+        status: "failed",
+        error: "handoff_already_started",
+        finished_at: new Date().toISOString(),
+      })
+      .eq("id", runId);
+    return json({
+      ok: true,
+      reused: true,
+      noted: false,
+      runId: keeper.id,
+      status: keeper.status,
+      runner: decision.runner,
+    });
+  }
+
+  // Commit the assignee before the slow agent call. A reload during agent_invoke
+  // already sees this note. If the call fails, the note stays and the run is
+  // marked failed below.
+  const failed = await writeAssignment(admin, {
+    clientId,
+    actionItemId,
+    ownerId: null,
+    actorType: "owner_app",
+    actorLabel: handoffActor,
+    note: handoffRequestNote(decision.displayName),
+  });
+  if (failed) return json({ error: failed, runId }, 500);
+
   const { error: invokeError } = await admin.rpc("agent_invoke", {
     p_function: decision.runner,
     p_body: {
@@ -290,18 +369,8 @@ Deno.serve(async (req) => {
         finished_at: new Date().toISOString(),
       })
       .eq("id", runId);
-    return json({ error: "runner_not_triggered", missing: invokeError.message }, 502);
+    return json({ error: "runner_not_triggered", missing: invokeError.message, noted: true, runId }, 502);
   }
-
-  const failed = await writeAssignment(admin, {
-    clientId,
-    actionItemId,
-    ownerId: null,
-    actorType: "owner_app",
-    actorLabel: handoffActor,
-    note: handoffRequestNote(decision.displayName),
-  });
-  if (failed) return json({ error: failed, runId }, 500);
 
   return json({ ok: true, noted: true, runId, status: "queued", runner: decision.runner });
 });

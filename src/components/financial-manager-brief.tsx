@@ -11,6 +11,7 @@ import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
 import { HandToMenu } from "@/components/hand-to-menu";
 import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { DRAFT_OUT_OF_DATE } from "@/lib/draft-figures";
+import { FIGURES_CHANGED_REGENERATE, splitRegenerateNarrative } from "@/lib/health-snapshot";
 import { actionPreviewLine } from "@/lib/owner-needs";
 import { useMarketFormat } from "@/contexts/market";
 import { assignmentNotesForDraft, botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
@@ -143,12 +144,18 @@ function BriefHandControl({
 
 function DraftTitle({ draft }: { draft: FinancialManagerBrief["drafts"][number] }) {
   const [title, setTitle] = useState(draft.title);
+  const parts = splitRegenerateNarrative(title);
   return (
     <>
-      <span>{title}</span>
+      <span>{parts.action ? parts.lead || FIGURES_CHANGED_REGENERATE : title}</span>
       {draft.liveSentence && title !== draft.liveSentence ? (
-        <button type="button" className="btn ghost mini" data-health-regenerate onClick={() => setTitle(draft.liveSentence ?? title)}>
-          Regenerate
+        <button
+          type="button"
+          className="btn ghost mini"
+          data-health-regenerate
+          onClick={() => setTitle(draft.liveSentence ?? title)}
+        >
+          {FIGURES_CHANGED_REGENERATE}
         </button>
       ) : null}
     </>
