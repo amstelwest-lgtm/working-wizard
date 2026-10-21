@@ -13,7 +13,10 @@
 import { budgetCoverWindowLabel, statementPeriodBasis } from "@/lib/budget.bridges";
 import { firmFyContaining, fyMonths } from "@/lib/budget.months";
 import { statementNetProfit } from "@/lib/period-profit";
+import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { derivePeriodWaterfallFallback, type WaterfallFallback } from "@/lib/weekly-inputs";
+
+export type { FiscalStatementSlice };
 
 const SCALE_KEYS = [
   "revenue",
@@ -34,21 +37,6 @@ const SCALE_KEYS = [
   "otherIncome",
   "depreciation",
 ] as const;
-
-export type FiscalStatementSlice = {
-  /** "Mar 2026 – Sep 2026, prorated". Null when the statement has no months. */
-  label: string | null;
-  /** True when the statement was scaled onto a shorter firm-year overlap. */
-  prorated: boolean;
-  /** Months of the firm year the statement covers. */
-  months: number | null;
-  revenue: number | null;
-  cogs: number | null;
-  grossProfit: number | null;
-  operatingExpenses: number | null;
-  operatingProfit: number | null;
-  netProfit: number | null;
-};
 
 function clampFy(fyStartMonth: number): number {
   if (!Number.isFinite(fyStartMonth)) return 1;

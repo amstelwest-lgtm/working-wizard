@@ -61,10 +61,6 @@ The Month engine read-only price is `money(cell.price)` (`src/components/budget/
 - An undated stored cover is not clipped to March. Missing revenue, COGS, operating profit, and net profit stay null.
 - `fmtBudgetMoney(45777.78, ZA)` is `R 45 778`.
 
-## Other side?
-
-Both sides. Owner and accountant share `BudgetPanel`, so both Budget tabs get the slice. The owner waterfall is `src/routes/app.tsx`. The accountant waterfall is `src/routes/_authenticated/clients.$clientId.tsx`. Both call `fiscalWaterfallFallback`.
-
 ## Eng2 follow-up
 
 None of `missing-metrics.ts`, `health-metric-row.ts`, `stripe-entitlement.ts`, `firm-client-cap*.ts`, or `_authenticated.gate.tsx` needed a change.
@@ -80,3 +76,11 @@ No edge function imports `budget-period.ts`. These still quote the unclipped sta
 - `supabase/functions/milon-bot/` quotes that overview brief
 
 `brain-propose` and `brain-deliverable-draft` do not import the budget period engine.
+
+`ask-ai` already type-checks `budget.types` through `deliverable-input-config`. The slice type lives in `src/lib/budget-period-types.ts` so that path does not load `budget-period.ts`, `budget.months`, or the market barrel (`zod`).
+
+## Other side?
+
+Both sides of the Budget cards and the waterfall. Owner and accountant share `BudgetPanel`. The owner waterfall is `src/routes/app.tsx`. The accountant waterfall is `src/routes/_authenticated/clients.$clientId.tsx`. Both call `fiscalWaterfallFallback`.
+
+Other side: N/A — the tax-specialist owner door and home do not draw these cards. The owner waterfall is `app.tsx`, updated with the accountant client route.
