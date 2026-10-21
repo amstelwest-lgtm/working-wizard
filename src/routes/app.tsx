@@ -376,6 +376,12 @@ import {
   computeWeekChanges,
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
+import {
+  bootRetryInFlight,
+  bootSelect,
+  shellBackstopDue,
+  subscribeBootRetry,
+} from "@/lib/boot-read";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { isOwnerDeliverablesRequest, ownerDeliverablesRedirectTarget } from "@/lib/owner-nav";
 
@@ -2114,6 +2120,7 @@ function Index() {
   const navigate = useNavigate();
   const [ownerBootTimedOut, setOwnerBootTimedOut] = useState(false);
   const [ownerBootAttempt, setOwnerBootAttempt] = useState(0);
+  const [criticalBootFailed, setCriticalBootFailed] = useState(false);
   const [workspaceLoadFailed, setWorkspaceLoadFailed] = useState(false);
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
   const [storedClientMarket, setStoredClientMarket] = useState<unknown>(null);
@@ -2351,6 +2358,7 @@ function Index() {
     let cancelled = false;
     setClientLinkResolved(false);
     setWorkspaceLoadFailed(false);
+    setCriticalBootFailed(false);
     (async () => {
       try {
         if (actingClientId) {
@@ -2378,19 +2386,40 @@ function Index() {
         const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
         const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
 
+        const giveUp = (retryable: boolean) => {
+          if (cancelled) return;
+          if (retryable) setCriticalBootFailed(true);
+          else setWorkspaceLoadFailed(true);
+        };
+
         const listWorkspaces = async (): Promise<
-          { ok: true; workspaces: OwnerWorkspace[] } | { ok: false }
+          { ok: true; workspaces: OwnerWorkspace[] } | { ok: false; retryable: boolean }
         > => {
           const [ownedRes, memRes] = await Promise.all([
-            supabase.from("clients").select("id, name").eq("owner_user_id", u.user.id),
-            supabase
-              .from("client_memberships")
-              .select("client_id, role")
-              .eq("user_id", u.user.id),
+            bootSelect(
+              (signal) =>
+                supabase
+                  .from("clients")
+                  .select("id, name")
+                  .eq("owner_user_id", u.user.id)
+                  .abortSignal(signal),
+              { critical: true },
+            ),
+            bootSelect(
+              (signal) =>
+                supabase
+                  .from("client_memberships")
+                  .select("client_id, role")
+                  .eq("user_id", u.user.id)
+                  .abortSignal(signal),
+              { critical: true },
+            ),
           ]);
-          if (ownedRes.error || memRes.error) return { ok: false };
-          const owned = ownedRes.data;
-          const mems = memRes.data;
+          if (!ownedRes.ok) return { ok: false, retryable: ownedRes.retryable };
+          if (!memRes.ok) return { ok: false, retryable: memRes.retryable };
+          if (ownedRes.value.error || memRes.value.error) return { ok: false, retryable: false };
+          const owned = ownedRes.value.data;
+          const mems = memRes.value.data;
           const ownedRows = (owned ?? []).map((c) => ({
             id: c.id as string,
             name: c.name as string | null,
@@ -2405,12 +2434,14 @@ function Index() {
           ];
           const extraNames = new Map<string, string | null>();
           if (extraIds.length) {
-            const { data: extra, error: extraError } = await supabase
-              .from("clients")
-              .select("id, name")
-              .in("id", extraIds);
-            if (extraError) return { ok: false };
-            for (const row of extra ?? [])
+            const extraRes = await bootSelect(
+              (signal) =>
+                supabase.from("clients").select("id, name").in("id", extraIds).abortSignal(signal),
+              { critical: true },
+            );
+            if (!extraRes.ok) return { ok: false, retryable: extraRes.retryable };
+            if (extraRes.value.error) return { ok: false, retryable: false };
+            for (const row of extraRes.value.data ?? [])
               extraNames.set(row.id as string, row.name as string | null);
           }
           return {
@@ -2431,29 +2462,38 @@ function Index() {
 
         const openInvitedClient = async (
           clientId: string,
-        ): Promise<{ ok: true; id: string | null } | { ok: false }> => {
-          const claimed = await supabase
-            .from("clients")
-            .select("id")
-            .eq("id", clientId)
-            .eq("owner_user_id", u.user.id)
-            .maybeSingle();
-          if (claimed.error) return { ok: false };
-          if (claimed.data?.id) return { ok: true, id: claimed.data.id };
-          const existingMem = await supabase
-            .from("client_memberships")
-            .select("client_id, role")
-            .eq("client_id", clientId)
-            .eq("user_id", u.user.id)
-            .maybeSingle();
-          if (existingMem.error) return { ok: false };
-          return { ok: true, id: existingMem.data?.client_id ?? null };
+        ): Promise<{ ok: true; id: string | null } | { ok: false; retryable: boolean }> => {
+          const claimed = await bootSelect(
+            (signal) =>
+              supabase
+                .from("clients")
+                .select("id")
+                .eq("id", clientId)
+                .eq("owner_user_id", u.user.id)
+                .abortSignal(signal)
+                .maybeSingle(),
+            { critical: true },
+          );
+          if (!claimed.ok) return { ok: false, retryable: claimed.retryable };
+          if (claimed.value.error) return { ok: false, retryable: false };
+          if (claimed.value.data?.id) return { ok: true, id: claimed.value.data.id };
+          const existingMem = await bootSelect(
+            (signal) =>
+              supabase
+                .from("client_memberships")
+                .select("client_id, role")
+                .eq("client_id", clientId)
+                .eq("user_id", u.user.id)
+                .abortSignal(signal)
+                .maybeSingle(),
+            { critical: true },
+          );
+          if (!existingMem.ok) return { ok: false, retryable: existingMem.retryable };
+          if (existingMem.value.error) return { ok: false, retryable: false };
+          return { ok: true, id: existingMem.value.data?.client_id ?? null };
         };
 
         const storedClientId = readStoredOwnerClientId(u.user.id);
-        const failWorkspaceLoad = () => {
-          if (!cancelled) setWorkspaceLoadFailed(true);
-        };
         const applyWorkspaces = (workspaces: OwnerWorkspace[], preferInvite?: string | null) => {
           const access = decideStoredClientAccess({
             storedClientId,
@@ -2489,7 +2529,7 @@ function Index() {
           for (let i = 0; i < WORKSPACE_LIST_ATTEMPTS; i++) {
             const opened = await openInvitedClient(inviteClientId);
             if (!opened.ok) {
-              failWorkspaceLoad();
+              giveUp(opened.retryable);
               return;
             }
             if (!opened.id) {
@@ -2507,7 +2547,7 @@ function Index() {
             }
             const listed = await listWorkspaces();
             if (!listed.ok) {
-              failWorkspaceLoad();
+              giveUp(listed.retryable);
               return;
             }
             const step = nextWorkspaceListStep({
@@ -2535,7 +2575,7 @@ function Index() {
         {
           const listed = await listWorkspaces();
           if (!listed.ok) {
-            failWorkspaceLoad();
+            giveUp(listed.retryable);
             return;
           }
           const step = nextWorkspaceListStep({
@@ -2545,7 +2585,7 @@ function Index() {
             maxAttempts: 1,
           });
           if (step === "error") {
-            failWorkspaceLoad();
+            giveUp(false);
             return;
           }
           if (step === "apply") {
@@ -2568,16 +2608,26 @@ function Index() {
         if (inviteClientId) {
           // Staff invite / legacy path — membership only. Never upsert client_member
           // over an existing client_owner membership row.
-          const { data: existingMem, error: existingMemError } = await supabase
-            .from("client_memberships")
-            .select("client_id, role")
-            .eq("client_id", inviteClientId)
-            .eq("user_id", u.user.id)
-            .maybeSingle();
-          if (existingMemError) {
-            failWorkspaceLoad();
+          const existingMemRead = await bootSelect(
+            (signal) =>
+              supabase
+                .from("client_memberships")
+                .select("client_id, role")
+                .eq("client_id", inviteClientId)
+                .eq("user_id", u.user.id)
+                .abortSignal(signal)
+                .maybeSingle(),
+            { critical: true },
+          );
+          if (!existingMemRead.ok) {
+            giveUp(existingMemRead.retryable);
             return;
           }
+          if (existingMemRead.value.error) {
+            giveUp(false);
+            return;
+          }
+          const existingMem = existingMemRead.value.data;
           if (!existingMem) {
             await supabase
               .from("client_memberships")
@@ -2589,7 +2639,7 @@ function Index() {
           localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
           const listed = await listWorkspaces();
           if (!listed.ok) {
-            failWorkspaceLoad();
+            giveUp(listed.retryable);
             return;
           }
           if (!cancelled) setInvitedOwnerEntry(true);
@@ -2629,10 +2679,18 @@ function Index() {
           signup_type?: string;
           firm_name?: string;
         } | null;
-        const { data: roleRows } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", u.user.id);
+        const roleRead = await bootSelect(
+          (signal) =>
+            supabase.from("user_roles").select("role").eq("user_id", u.user.id).abortSignal(signal),
+          { critical: true },
+        );
+        if (!roleRead.ok) {
+          if (roleRead.retryable) {
+            giveUp(true);
+            return;
+          }
+        }
+        const roleRows = roleRead.ok && !roleRead.value.error ? roleRead.value.data : null;
         const roles = (roleRows ?? []).map((r) => r.role as string);
         const hasPracticeRole = roles.includes("firm_admin") || roles.includes("accountant");
         const isGoogleIdentity =
@@ -2854,19 +2912,45 @@ function Index() {
         "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market, firm_id, is_demo";
       const legacySelect =
         "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, firm_id, is_demo";
-      let res = await supabase
-        .from("clients")
-        .select(fullSelect)
-        .eq("id", effectiveClientId)
-        .maybeSingle();
+      const full = await bootSelect(
+        (signal) =>
+          supabase
+            .from("clients")
+            .select(fullSelect)
+            .eq("id", effectiveClientId)
+            .abortSignal(signal)
+            .maybeSingle(),
+        { critical: true },
+      );
+      if (!full.ok) {
+        if (!cancelled) {
+          setCriticalBootFailed(true);
+          setOnboardingGateReady(false);
+        }
+        return;
+      }
+      let res = full.value;
       let marketColumnMissing = false;
       if (res.error && isMissingMarketSupport(res.error)) {
         marketColumnMissing = true;
-        res = await supabase
-          .from("clients")
-          .select(legacySelect)
-          .eq("id", effectiveClientId)
-          .maybeSingle();
+        const legacy = await bootSelect(
+          (signal) =>
+            supabase
+              .from("clients")
+              .select(legacySelect)
+              .eq("id", effectiveClientId)
+              .abortSignal(signal)
+              .maybeSingle(),
+          { critical: true },
+        );
+        if (!legacy.ok) {
+          if (!cancelled) {
+            setCriticalBootFailed(true);
+            setOnboardingGateReady(false);
+          }
+          return;
+        }
+        res = legacy.value;
       }
       if (cancelled) return;
       try {
@@ -2949,6 +3033,7 @@ function Index() {
     roleResolved,
     invitedOwnerEntry,
     hasRealFinancials,
+    ownerBootAttempt,
   ]);
 
   // Returning invite accept: user_metadata still points at the invited workspace.
@@ -3004,10 +3089,31 @@ function Index() {
           setUserRole(boardRoleForWorkspace(activeWs.role));
           return;
         }
-        const { resolvePortalRoles, ownerBoardRole, peekForcePortal, getPortalIntent } =
+        const { summarizeRoles, ownerBoardRole, peekForcePortal, getPortalIntent } =
           await import("@/lib/user-roles");
-        const portal = await resolvePortalRoles(u.id);
+        const listed = await bootSelect(
+          (signal) =>
+            supabase.from("user_roles").select("role").eq("user_id", u.id).abortSignal(signal),
+          { critical: true },
+        );
         if (cancelled) return;
+        if (!listed.ok) {
+          setCriticalBootFailed(true);
+          return;
+        }
+        if (listed.value.error) {
+          console.warn("[user-roles] list failed", listed.value.error.message);
+        }
+        const roles = (listed.value.error ? [] : (listed.value.data ?? []))
+          .map((row) => row.role)
+          .filter(
+            (role): role is "accountant" | "firm_admin" | "client_owner" | "client_member" =>
+              role === "accountant" ||
+              role === "firm_admin" ||
+              role === "client_owner" ||
+              role === "client_member",
+          );
+        const portal = summarizeRoles(roles);
         const boardRole = ownerBoardRole({
           roles: portal.roles,
           force: peekForcePortal(),
@@ -3020,13 +3126,23 @@ function Index() {
 
         // Fallback for existing users who predate the role-normalisation migration:
         // infer the app role from ownership / membership tables.
-        const { data: ownedClient } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("owner_user_id", u.id)
-          .limit(1)
-          .maybeSingle();
+        const owned = await bootSelect(
+          (signal) =>
+            supabase
+              .from("clients")
+              .select("id")
+              .eq("owner_user_id", u.id)
+              .limit(1)
+              .abortSignal(signal)
+              .maybeSingle(),
+          { critical: true },
+        );
         if (cancelled) return;
+        if (!owned.ok) {
+          setCriticalBootFailed(true);
+          return;
+        }
+        const ownedClient = owned.value.error ? null : owned.value.data;
         if (ownedClient) {
           // Infer role for this session; do not attempt a DB write — the RLS
           // hardening migration removed authenticated INSERT on user_roles.
@@ -3034,13 +3150,23 @@ function Index() {
           setUserRole("client_owner");
           return;
         }
-        const { data: mem } = await supabase
-          .from("client_memberships")
-          .select("client_id")
-          .eq("user_id", u.id)
-          .limit(1)
-          .maybeSingle();
+        const memRead = await bootSelect(
+          (signal) =>
+            supabase
+              .from("client_memberships")
+              .select("client_id")
+              .eq("user_id", u.id)
+              .limit(1)
+              .abortSignal(signal)
+              .maybeSingle(),
+          { critical: true },
+        );
         if (cancelled) return;
+        if (!memRead.ok) {
+          setCriticalBootFailed(true);
+          return;
+        }
+        const mem = memRead.value.error ? null : memRead.value.data;
         if (mem) {
           // Same: infer only, no client-side DB write.
           setUserRole("client_member");
@@ -3092,16 +3218,30 @@ function Index() {
   // Load financials for whoever is the effective client (owner or impersonation)
   useEffect(() => {
     if (!effectiveClientId) return;
+    const clientId = effectiveClientId;
+    let cancelled = false;
     setHasRealFinancials(false); // reset on client switch until confirmed
     setV(defaults); // reset inputs so no previous client's data bleeds through
     setWeeklyInputs({ weeks: {} });
     setProductMix(emptyProductMix());
-    supabase
-      .from("clients")
-      .select("financials")
-      .eq("id", effectiveClientId)
-      .maybeSingle()
-      .then(({ data }) => {
+    void (async () => {
+      const read = await bootSelect(
+        (signal) =>
+          supabase
+            .from("clients")
+            .select("financials")
+            .eq("id", clientId)
+            .abortSignal(signal)
+            .maybeSingle(),
+        { critical: true },
+      );
+      if (cancelled) return;
+      if (!read.ok) {
+        setCriticalBootFailed(true);
+        return;
+      }
+      const data = read.value.error ? null : read.value.data;
+      try {
         if (data?.financials) {
           const fin = data.financials as Partial<Inputs> & {
             weeklyInputs?: WeeklyInputs;
@@ -3139,13 +3279,16 @@ function Index() {
           }
           // else: keep defaults + hasRealFinancials=false (unscored empty state)
         }
-        setHydratedClientId(effectiveClientId);
-      })
-      .catch(() => {
-        setHydratedClientId(effectiveClientId);
-      });
+      } catch {
+        /* a settled row still opens the board; a hang does not */
+      }
+      if (!cancelled) setHydratedClientId(clientId);
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveClientId]);
+  }, [effectiveClientId, ownerBootAttempt]);
 
   // Debounced autosave — fires for both owners and firm impersonation.
   // Period P&L is gated on hasRealFinancials so demo defaults are never written.
@@ -4101,10 +4244,11 @@ function Index() {
     profileFunnelOpen: showOnboarding || firstRunStep === "pick-type",
     financialsHydrated: !!effectiveClientId && hydratedClientId === effectiveClientId,
   });
-  const ownerGateSettled = boardReady || ownerBootTimedOut || workspaceLoadFailed;
+  const ownerGateSettled =
+    boardReady || ownerBootTimedOut || workspaceLoadFailed || criticalBootFailed;
   useEffect(() => {
-    reportOwnerBoardReady(boardReady && !workspaceLoadFailed);
-  }, [boardReady, workspaceLoadFailed, reportOwnerBoardReady]);
+    reportOwnerBoardReady(boardReady && !workspaceLoadFailed && !criticalBootFailed);
+  }, [boardReady, workspaceLoadFailed, criticalBootFailed, reportOwnerBoardReady]);
   // Role guard — a real firm membership belongs on My practice, not the owner app.
   // An invite redeem (owner force) and impersonating a client stay on /app.
   // user_roles and firm_memberships wait until this gate has settled.
@@ -4136,13 +4280,32 @@ function Index() {
     };
   }, [user, actingClientId, navigate, ownerGateSettled]);
   useEffect(() => {
-    if (authLoading || !user?.id || boardReady) {
+    if (authLoading || !user?.id || boardReady || criticalBootFailed) {
       setOwnerBootTimedOut(false);
       return;
     }
-    const timer = window.setTimeout(() => setOwnerBootTimedOut(true), SHELL_GATE_TIMEOUT_MS);
-    return () => window.clearTimeout(timer);
-  }, [authLoading, user?.id, boardReady, ownerBootAttempt]);
+    // One timestamp for this attempt. A retry must not start another 8s.
+    const backstopAt = Date.now() + SHELL_GATE_TIMEOUT_MS;
+    let timer = 0;
+    let stopped = false;
+    const arm = () => {
+      window.clearTimeout(timer);
+      if (stopped) return;
+      if (!shellBackstopDue(Date.now(), backstopAt)) {
+        if (bootRetryInFlight()) return;
+        timer = window.setTimeout(arm, Math.max(0, backstopAt - Date.now()));
+        return;
+      }
+      setOwnerBootTimedOut(true);
+    };
+    arm();
+    const unsubscribe = subscribeBootRetry(arm);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [authLoading, user?.id, boardReady, ownerBootAttempt, criticalBootFailed]);
   if (user && workspaceLoadFailed) {
     return (
       <div
@@ -4160,6 +4323,7 @@ function Index() {
               type="button"
               onClick={() => {
                 setWorkspaceLoadFailed(false);
+                setCriticalBootFailed(false);
                 setOwnerBootTimedOut(false);
                 setOwnerBootAttempt((n) => n + 1);
               }}
@@ -4175,7 +4339,7 @@ function Index() {
       </div>
     );
   }
-  if (user && !authLoading && !boardReady && ownerBootTimedOut) {
+  if (user && !authLoading && (criticalBootFailed || (!boardReady && ownerBootTimedOut))) {
     return (
       <div
         className="grid min-h-screen place-items-center bg-background px-4 text-foreground"
@@ -4191,6 +4355,7 @@ function Index() {
             <button
               type="button"
               onClick={() => {
+                setCriticalBootFailed(false);
                 setOwnerBootTimedOut(false);
                 setOwnerBootAttempt((n) => n + 1);
               }}

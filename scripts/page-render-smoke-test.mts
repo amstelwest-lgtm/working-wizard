@@ -21,6 +21,7 @@ import {
   STALE_CLIENT_NAME,
   type SmokeMode,
 } from "./page-smoke-supabase.ts";
+import { setBootReadTimeoutMsForTests } from "@/lib/boot-read";
 import { ownerActiveClientStorageKey } from "../src/lib/owner-workspaces.ts";
 import {
   ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY,
@@ -400,6 +401,7 @@ await router.load();
 
 async function paint(page: PageCase) {
   caught.length = 0;
+  setBootReadTimeoutMsForTests(null);
   setSmokeMode(page.mode);
   suppressTours();
   page.prepare?.();
@@ -474,6 +476,59 @@ for (const mode of ["null", "loading", "loaded"] as const) {
   cases.push(clientHome(mode), clientHealth(mode), owner(mode));
 }
 cases.push(owner("revoked"), owner("error"));
+
+function bootCase(mode: "hang-once" | "critical-down" | "section-down"): PageCase {
+  return {
+    label: `owner board ${mode}`,
+    mode,
+    url: mode === "section-down" ? "/app?screen=accountant" : "/app",
+    prepare: () => {
+      resetSmokeRpcLog();
+      setBootReadTimeoutMsForTests(mode === "hang-once" ? 40 : null);
+      const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+      localStorage.removeItem(key);
+      localStorage.removeItem(`${key}:name`);
+    },
+    ready: (html) => {
+      if (mode === "critical-down") {
+        return html.includes("Couldn't open your workspace") && html.includes("Retry");
+      }
+      if (!html.includes('data-owner-ready="true"')) return false;
+      if (!html.includes('id="board-pack"') || !html.includes("Harbour Books")) return false;
+      if (mode === "section-down") return html.includes('data-section-retry="deliverables"');
+      return !html.includes("Couldn't open your workspace");
+    },
+    expect: (html) => {
+      if (mode === "hang-once") {
+        assert(html.includes('id="board-pack"'), "a fetch that hangs once still opens the workspace");
+        assert(html.includes("Harbour Books"), "the recovered workspace keeps its name");
+        assert(!html.includes("Couldn't open your workspace"), "one hang is not the boot error");
+        assert(!html.includes("Couldn't load your workspace"), "one hang is not the list error");
+        assert(!smokeRpcLog().includes("ensure_own_client"), "a recovered list does not provision");
+        return;
+      }
+      if (mode === "critical-down") {
+        assert(html.includes('data-owner-boot="timeout"'), "two critical failures use the open-workspace screen");
+        assert(html.includes("Couldn't open your workspace"), "two critical failures name the open failure");
+        assert(html.includes("Retry"), "two critical failures offer Retry");
+        assert(!html.includes("Couldn't load your workspace"), "a network miss is not the settled list error");
+        assert(!html.includes('id="board-pack"'), "two critical failures do not open the board");
+        assert(!smokeRpcLog().includes("ensure_own_client"), "a failed list does not provision a client");
+        return;
+      }
+      assert(html.includes('id="board-pack"'), "a failed deliverable read still opens the workspace");
+      assert(html.includes("Harbour Books"), "the workspace name stays on screen");
+      assert(
+        html.includes('data-section-retry="deliverables"'),
+        "deliverables reject with Failed to fetch and offer Retry",
+      );
+      assert(!html.includes("Couldn't open your workspace"), "a non-critical failure is not the boot error");
+      assert(!html.includes("Couldn't load your workspace"), "a non-critical failure is not the list error");
+    },
+  };
+}
+
+cases.push(bootCase("hang-once"), bootCase("critical-down"), bootCase("section-down"));
 
 try {
   for (const page of cases) {
