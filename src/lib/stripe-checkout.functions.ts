@@ -72,10 +72,11 @@ import {
   UPGRADE_FAILED_MESSAGE,
 } from "@/lib/firm-band-upgrade";
 import { requestAppOrigin } from "@/lib/app-origin";
-import { priceMarketForFirm, readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
+import { readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
 import {
   completeFirmSetupUpgrade,
   enforceZaCheckoutBillingCountry,
+  loadFirmClientMarkets,
   syncCheckoutSessionSubscription,
 } from "@/lib/stripe-billing-sync.server";
 import {
@@ -522,6 +523,8 @@ async function createPaidCheckoutSession(input: {
   /** From the firm row. Never the client market flag. */
   zaCouponId?: string | null;
   firmId?: string | null;
+  /** Client market JSON. The practice helper uses this for the ZAR price. */
+  clientMarkets?: readonly unknown[] | null;
 }): Promise<{ url: string; kind: "checkout" | "portal" }> {
   if (!stripeConfigured()) {
     throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
@@ -583,6 +586,7 @@ async function createPaidCheckoutSession(input: {
   }
   const charge = firmCheckoutCharge({
     firmMarket: input.firmMarket,
+    clientMarkets: input.clientMarkets,
     requested: input.requested,
     billingCountry,
     geoCountry,
@@ -639,10 +643,12 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
     const { userId, email } = await checkoutActor(ctx);
     const firmMarket = await loadCallerFirmMarket({ supabase: ctx.supabase, userId });
     const firmId = await callerOwnedFirmId(ctx.supabase, userId);
+    const clientMarkets = await loadFirmClientMarkets(ctx.supabase, firmId);
     return createPaidCheckoutSession({
       userId,
       email,
       firmId,
+      clientMarkets,
       plan: data.plan as FirmCheckoutBand,
       interval: data.interval as FirmInterval,
       requested: data.market as StripePlanMarket,
@@ -903,10 +909,15 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       sub?.customerId ??
       (await findBillingCustomerId({ email: billingEmail, userId: ownerUserId, firmId: data.firmId }));
     const billingCountry = await readStripeCustomerCountry(stripe, countryCustomerId);
-    const priceMarket = priceMarketForFirm({
-      firmMarket: saFirm ? "za" : "us",
+    const clientMarkets = await loadFirmClientMarkets(ctx.supabase, data.firmId);
+    const priceMarket = firmCheckoutCharge({
+      firmMarket,
+      clientMarkets,
+      requested: saFirm ? "za" : "us",
       billingCountry,
-    });
+      band,
+      interval,
+    }).priceMarket;
     const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, band, interval, priceMarket);
     const voucherCode = normalizeVoucherCode(data.voucherCode);
     if (data.voucherCode?.trim() && !voucherCode) {

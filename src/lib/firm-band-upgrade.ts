@@ -522,10 +522,9 @@ export function saFirmDisplayPrice(
  * cap snapshot both use this. True when the firm row is South Africa, or
  * when more clients are in South Africa than in the United States.
  *
- * Checkout does not use this. `firmCheckoutCharge` and `priceMarketForFirm`
- * still start from the firm row. A US firm row stays on the USD price,
- * including when the Checkout billing country is ZA. A ZA firm row uses
- * the ZAR price only when that billing country is ZA or still unknown.
+ * Checkout uses this for the price. `firmCheckoutCharge` asks this helper
+ * first, then `priceMarketForFirm` keeps rand only when the Checkout billing
+ * country is ZA or still unknown. A known non-ZA billing country is USD.
  */
 export function practiceDisplaysZarPlan(input: {
   firmMarket: unknown;

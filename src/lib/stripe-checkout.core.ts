@@ -7,7 +7,7 @@ import type Stripe from "stripe";
 import { appRedirectOrigin } from "@/lib/app-origin";
 import { formatMoney } from "@/lib/market/format";
 import { ZA_MARKET } from "@/lib/market/resolve";
-import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
+import { firmUpgradeReturnPath, practiceDisplaysZarPlan } from "@/lib/firm-band-upgrade";
 import { isSaMarketFirm } from "@/lib/firm-sa-market";
 import { resolveOwnerCheckoutMarket } from "@/lib/billing-market";
 import { isZaCatalogLookup, priceMarketForFirm } from "@/lib/pricing/za-checkout";
@@ -165,12 +165,15 @@ export function resolveFirmCheckoutMarket(
 }
 
 /**
- * Currency for one Checkout. The firm row wins over the URL market.
- * A US firm stays on the USD lookup even when the billing country is ZA.
- * A ZA firm with a known non-ZA billing country falls back to USD.
+ * Currency for one Checkout. The shared practice helper decides whether a
+ * rand price is even eligible: a South Africa firm row, or more ZA clients
+ * than US clients. `priceMarketForFirm` still keeps rand only when the
+ * Checkout billing country is ZA, or still unknown at session creation.
+ * A known non-ZA billing country falls back to USD.
  */
 export function firmCheckoutCharge(input: {
   firmMarket: unknown;
+  clientMarkets?: readonly unknown[] | null;
   requested: StripePlanMarket;
   billingCountry?: string | null;
   geoCountry?: string | null;
@@ -183,8 +186,12 @@ export function firmCheckoutCharge(input: {
   billingFallback: boolean;
 } {
   const firmMarket = resolveFirmCheckoutMarket(input.firmMarket, input.requested, input.geoCountry);
+  const wantsZar = practiceDisplaysZarPlan({
+    firmMarket: input.firmMarket,
+    clientMarkets: input.clientMarkets,
+  });
   const priceMarket = priceMarketForFirm({
-    firmMarket,
+    firmMarket: wantsZar ? "za" : firmMarket,
     billingCountry: input.billingCountry,
   });
   const lookupKey =
@@ -195,7 +202,7 @@ export function firmCheckoutCharge(input: {
     firmMarket,
     priceMarket,
     lookupKey,
-    billingFallback: firmMarket === "za" && priceMarket === "us",
+    billingFallback: wantsZar && priceMarket === "us",
   };
 }
 

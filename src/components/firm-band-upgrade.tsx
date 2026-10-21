@@ -252,31 +252,13 @@ export function FirmBandUpgrade({
                 />
               ) : null}
               <span className="firm-band-row__copy">
-                <strong>{band.name}</strong>
-                {isCurrent ? (
-                  <span
-                    style={{
-                      marginLeft: 8,
-                      fontSize: 11,
-                      letterSpacing: ".08em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Current
-                  </span>
-                ) : null}
-                {band.id === startHereBand ? (
-                  <span
-                    style={{
-                      marginLeft: 8,
-                      fontSize: 11,
-                      letterSpacing: ".08em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Start here
-                  </span>
-                ) : null}
+                <span className="firm-band-row__title">
+                  <strong>{band.name}</strong>
+                  {isCurrent ? <span className="firm-band-row__tag">Current</span> : null}
+                  {band.id === startHereBand ? (
+                    <span className="firm-band-row__tag">Start here</span>
+                  ) : null}
+                </span>
                 <span className="text-muted-foreground" style={{ display: "block", fontSize: 12 }}>
                   {band.clientLimit == null
                     ? "Unlimited active clients"

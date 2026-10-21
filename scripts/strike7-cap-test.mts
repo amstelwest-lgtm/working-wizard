@@ -1,8 +1,9 @@
 /**
  * Cap snapshot currency. My practice is a US firm row with 5 ZA clients
  * and 1 US client, so the list is rand. A US book stays USD. A logged-out
- * visitor never sees a rand price. Checkout still charges USD for a US firm
- * row, including when the billing country is ZA.
+ * visitor never sees a rand price. Checkout follows the same helper:
+ * My practice (US row, mostly ZA clients) uses the ZAR price when the
+ * billing country is ZA, and USD when it is US. A US-only firm stays USD.
  *
  * Run: pnpm test:strike7-cap
  */
@@ -70,16 +71,30 @@ assert(/R\s?299/.test(practiceHtml), `the cap panel should show R299, saw ${prac
 assert(!/Shown in rand/.test(practiceHtml), "the panel does not add a checkout sentence");
 assert(practiceSnap.zaPriceLabel == null, "the checkout charge line stays empty when the firm row is US");
 
-const charge = firmCheckoutCharge({
+const practiceMarkets = practice.clients.map((client) => client.market);
+const chargeZa = firmCheckoutCharge({
   firmMarket: practice.market,
+  clientMarkets: practiceMarkets,
   requested: "za",
   billingCountry: "ZA",
   band: "starter",
   interval: "month",
 });
 assert(
-  charge.priceMarket === "us",
-  "My practice Checkout stays USD: the firm row is US, and priceMarketForFirm ignores the client mix",
+  chargeZa.priceMarket === "za",
+  "My practice Checkout uses the ZAR price when the billing country is ZA",
+);
+const chargeUs = firmCheckoutCharge({
+  firmMarket: practice.market,
+  clientMarkets: practiceMarkets,
+  requested: "za",
+  billingCountry: "US",
+  band: "starter",
+  interval: "month",
+});
+assert(
+  chargeUs.priceMarket === "us",
+  "My practice Checkout stays USD when the billing country is not ZA",
 );
 assert(
   priceMarketForFirm({ firmMarket: "za", billingCountry: "ZA" }) === "za",
@@ -104,6 +119,15 @@ const usSnap = await buildUpgradeSnapshot({
   sub: null,
 });
 const usHtml = panel(usSnap);
+const usCharge = firmCheckoutCharge({
+  firmMarket: { country: "US", regionCode: "NY" },
+  clientMarkets: usMarkets,
+  requested: "za",
+  billingCountry: "ZA",
+  band: "starter",
+  interval: "month",
+});
+assert(usCharge.priceMarket === "us", "a US-only firm stays on the USD Checkout price");
 assert(usSnap.saDiscount === false, "a US firm with US clients stays on USD");
 assert(!hasRandPrice(usHtml), `a US-only cap panel must not show rand, saw ${usHtml}`);
 assert(usHtml.includes("$39"), "a US-only cap panel shows the USD Starter price");

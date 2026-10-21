@@ -1612,6 +1612,20 @@ html[data-theme="light"] .accountant-portal .firm-band-upgrade .text-muted-foreg
   overflow-wrap: break-word;
   word-break: normal;
 }
+.firm-band-row__title {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.firm-band-row__tag {
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .firm-band-row__price {
   text-align: right;
 }
