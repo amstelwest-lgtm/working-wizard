@@ -223,14 +223,7 @@ import {
   statementYearLine,
 } from "@/lib/statement-period";
 import { clientHomePhase } from "@/lib/client-home-phase";
-import {
-  bootCriticalRetryFailed,
-  bootRetryInFlight,
-  bootSelect,
-  shellBackstopDue,
-  subscribeBootRetry,
-} from "@/lib/boot-read";
-import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
 import {
   assessClientMetrics,
   forecastHasRealLines,
@@ -2400,23 +2393,11 @@ function ClientView() {
     let cancelled = false;
     setLoading(true);
     setLoadTimedOut(false);
-    const backstopAt = Date.now() + SHELL_GATE_TIMEOUT_MS;
-    let timer = 0;
-    const arm = () => {
-      window.clearTimeout(timer);
+    const unbind = bindShellBackstop(() => {
       if (cancelled) return;
-      if (!shellBackstopDue(Date.now(), backstopAt)) {
-        // A retry still running, or one that already failed, stays on the
-        // recoverable "Couldn't load" screen. The backstop does not replace it.
-        if (bootRetryInFlight() || bootCriticalRetryFailed()) return;
-        timer = window.setTimeout(arm, Math.max(0, backstopAt - Date.now()));
-        return;
-      }
       setLoadTimedOut(true);
       setLoading(false);
-    };
-    arm();
-    const unsubscribe = subscribeBootRetry(arm);
+    });
     (async () => {
       let gaveUp = false;
       try {
@@ -2533,8 +2514,7 @@ function ClientView() {
           decideLandingTab(scalars);
         }
       } finally {
-        window.clearTimeout(timer);
-        unsubscribe();
+        unbind();
         if (!cancelled) {
           setLoading(false);
           if (!gaveUp) setLoadTimedOut(false);
@@ -2543,8 +2523,7 @@ function ClientView() {
     })();
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
-      unsubscribe();
+      unbind();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, clientLoadAttempt]);

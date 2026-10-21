@@ -2,7 +2,7 @@
 
 Prod deploy `5f8e3725` includes #732 (`a7920c89`). US owner AQA Throwaway CIR: 80/80, cold and reload p95 2.0–3.2s. ZA owner Zanele, invite-joined `client_owner` on firm 1020F, repeat strike 3: one hard fail (cold error at 8.86s, Retry still not open at 30s) and two recoveries (error 9.02s then board 13.88s; error 8.84s then board 15.54s). Cold p95 13.88s, reload p95 4.65s. Console on ZA, lining up with every error: `[user-roles] list failed TypeError: Failed to fetch` several times per run, and `Failed to load notes TypeError: Failed to fetch` once per run. On the US owner both lines appeared once, on a load that still opened at 5.41s. Prod `user_roles` RLS is one policy, `user_id = auth.uid()`. `Failed to fetch` is a browser network rejection, not an `AbortError` and not a PostgREST body.
 
-No product change in this note. The render repro is in `scripts/page-render-smoke-test.mts` (`invite owner hung user_roles`, `invite owner slow chain`).
+The render repro is in `scripts/page-render-smoke-test.mts` (`invite owner hung user_roles`, `invite owner slow chain`). The fix is on the same branch.
 
 ## Why the screen is ~8.9s and not 4s
 
@@ -61,8 +61,18 @@ She has no firm membership. `readUserFirms` returns `[]`, and once the board is 
 
 Notes are the same class of miss, and they are not this deadline. `src/contexts/notes.tsx` calls `bootSelect` with `critical: false` and ignores the signal. The server function is `listClientNotes`, which imports `ratio-queries`. `NoteLayer` registers the surface only after the board is ready. A run that never opens the board does not emit "Failed to load notes". The US success emitted it once. It does not feed `ownerBoardReady`.
 
-## What proves the next fix
+## Logs 09:03–09:06 UTC
 
-`pnpm test:page-render-smoke`, case `invite owner slow chain`. On this base it prints `EXPECTED FAIL on base 5f8e3725: invite reads under 4s must not reach the 8s backstop`, the screen is `data-owner-boot="timeout"`, and the `user_roles` read at that moment is `listAppRoles` with no abort signal. The fix has to make "invite reads under 4s must not reach the 8s backstop" stop throwing. The paired case `invite owner hung user_roles` must keep opening the board: hanging `listAppRoles` is not the gate, and a fix aimed only at that function will not move the deadline.
+A later 40-load sample on the same prod deploy, cold, as this invite owner: 39 OK, 1 error, p50 1.73s, p95 6.68s. The error (#9) aborted `rest/v1/clients` at exactly 4.00s (status 0), then aborted the retry at 4.00s, and showed "Couldn't load your workspace" at 8.93s. Three slow loads aborted one `clients` or `client_memberships` read at 4.00s and recovered on the retry (5.7–8.7s). `user_roles` did not fail. Two of those reads were canceled on iframe teardown.
 
-Do not use a single hung workspace-list `bootSelect` as the stand-in. That path already becomes "Couldn't load" at two 4s attempts and does not reproduce this account.
+Supabase logs for that window: in 4 of the 5 flagged 4s aborts, the CORS preflight (OPTIONS) reached Supabase with 200 in 0–16ms, and the GET did not arrive until the retry 4s later, which then ran in about 105ms. The request stalls on the browser or network path after the preflight. It is not slow at the server. The fifth request did arrive. It took 3.1s at the gateway, with PostgREST at 2ms. That is intermittent latency between Supabase's edge and gateway, not the database. No slow SQL and no 499s.
+
+Vercel runtime logs for `dpl_8Gevs4CL` from 09:03:30 to 09:06:00 UTC show zero runtime lines and no Init Duration cold starts, so nothing stalled on the function side. That is the same picture: a stall on the browser or network path after the preflight.
+
+A fixed 4s + 4s retry turns one of those stalls into a hard fail, and it adds about 4s to a slow load that would have completed. The hedged second select starts at 2.5s, while the first request is still in flight.
+
+## Fix
+
+A known `client_owner` or owned workspace skips `openInvitedClient`, so this account's cold boot is one workspace list, like the US owner. An invite with no membership yet still uses `openInvitedClient`. The shell backstop resets its 8s idle window on each completed boot read and keeps a 12s ceiling from auth. The same arm is on the accountant client page. A critical select starts a second identical read at 2.5s if the first has not resolved, lets that retry run for 6s, and takes whichever returns first. The loser is aborted. A true hang still ends on "Couldn't load" with Retry. `listAppRoles` takes an abort signal and drops a rejection after the bounce or profile effect unmounts.
+
+`invite owner slow chain` has to open the board. `first attempt hangs past 4s and the retry returns at 5s` has to open with no error screen. Hanging `listAppRoles` on its own still must not be the gate.

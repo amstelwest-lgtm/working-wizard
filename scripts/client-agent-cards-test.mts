@@ -261,7 +261,7 @@ assert(
 
 const page = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 assert(page.includes("clientHomePhase("), "the client page uses the home phase");
-assert(page.includes("SHELL_GATE_TIMEOUT_MS"), "the client row read has the 8s deadline");
+assert(page.includes("bindShellBackstop("), "the client row read uses the shared shell backstop");
 assert(page.includes("setLoadTimedOut(true)"), "a hung row leaves the skeleton");
 assert(page.includes("<ClientAgentStandby"), "the team renders before the row arrives");
 assert(page.includes('cardPhase="ready"'), "a settled client file uses the shared card phase");

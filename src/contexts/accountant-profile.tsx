@@ -234,6 +234,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
   useEffect(() => {
     let cancelled = false;
     let timer = 0;
+    const rolesAbort = new AbortController();
     // `user` is the object from the render that changed the id. A later
     // setSession with the same id must not cancel this hydrate. The shell
     // paints the neutral brand while this runs; a cancelled hydrate used
@@ -325,7 +326,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         let firmListOk = listed.error == null;
 
         if (listed.error == null && all.length === 0) {
-          const roles = summarizeRoles(await listAppRoles(signedIn.id));
+          const roles = summarizeRoles(await listAppRoles(signedIn.id, rolesAbort.signal));
           const meta = signedIn.user_metadata as Record<string, unknown> | undefined;
           const practiceSignup = isPracticeSignupMeta(meta);
           const customerSignup = meta?.signup_type === "customer";
@@ -389,6 +390,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
     void hydrate();
     return () => {
       cancelled = true;
+      rolesAbort.abort();
       window.clearTimeout(timer);
     };
     // user object identity changes on every session restore. Depend on the id.
