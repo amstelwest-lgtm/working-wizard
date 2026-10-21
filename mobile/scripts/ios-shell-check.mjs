@@ -28,6 +28,7 @@ assert(
   "camera usage string says the photo is a receipt the person attaches",
 );
 assert(plist.includes("<key>NSFaceIDUsageDescription</key>"), "Face ID usage string is set");
+assert(/<key>MilonPushConfigured<\/key>\s*<false\/>/.test(plist), "push stays off until Theo sets the flag");
 
 const privacy = readFileSync(resolve(root, "ios/App/App/PrivacyInfo.xcprivacy"), "utf8");
 assert(privacy.includes("<key>NSPrivacyTracking</key>"), "privacy manifest tracks the tracking flag");

@@ -74,5 +74,7 @@
 	<string>Milōn uses the camera to photograph a receipt, invoice, or statement you choose to attach.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Milōn uses Face ID to unlock the app on this device. The biometric stays on this device.</string>
+	<key>MilonPushConfigured</key>
+	<false/>
 </dict>
 </plist>
