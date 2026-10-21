@@ -367,11 +367,11 @@ html:not(.dark) .accountant-portal .deliverable-main {
     padding: 16px 14px 24px;
   }
 }
-/* At 390 the pencil is 40px wide with a 12px inset. Keep at least 52px clear. */
+/* At 390 the pencil is 40px wide with a 12px inset. The card ends on that edge. */
 @media (max-width: 390px) {
   html:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
   html:not(.dark) .owner-door:not([data-screen="chat"]) .deliverable-main {
-    padding-right: 64px;
+    padding-right: calc(40px + max(12px, env(safe-area-inset-right, 0px)));
   }
 }
 

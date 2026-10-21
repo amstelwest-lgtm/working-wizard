@@ -79,6 +79,12 @@ export class FirmCustomerLookupUnknown extends Error {
  */
 export const STORED_CUSTOMER_READ_BUDGET_MS = 1_000;
 
+/**
+ * Each subscriptions.list (active, then trialing).
+ * The client timeout is 8s with one retry, about 16.5s.
+ */
+export const SUBSCRIPTION_LIST_BUDGET_MS = 3_000;
+
 export type FirmCustomerSearchOptions = {
   maxNetworkRetries?: number;
   timeout?: number;
@@ -100,12 +106,15 @@ export type StripeCustomerSubscriptionReader = {
     }>;
   };
   subscriptions: {
-    list: (params: {
-      customer: string;
-      status: string;
-      limit: number;
-      expand?: string[];
-    }) => Promise<{
+    list: (
+      params: {
+        customer: string;
+        status: string;
+        limit: number;
+        expand?: string[];
+      },
+      options?: FirmCustomerSearchOptions,
+    ) => Promise<{
       data: Array<{
         id: string;
         status?: string;
@@ -292,12 +301,18 @@ export async function customerHasEntitlingSubscription(
   customerId: string,
 ): Promise<boolean> {
   for (const status of ENTITLING_SUBSCRIPTION_STATUSES) {
-    const listed = await stripe.subscriptions.list({
-      customer: customerId,
-      status,
-      limit: 20,
-      expand: ["data.items.data.price"],
-    });
+    const listed = await settleWithin(
+      stripe.subscriptions.list(
+        {
+          customer: customerId,
+          status,
+          limit: 20,
+          expand: ["data.items.data.price"],
+        },
+        { maxNetworkRetries: 0, timeout: SUBSCRIPTION_LIST_BUDGET_MS },
+      ),
+      SUBSCRIPTION_LIST_BUDGET_MS,
+    );
     if (listed.data.some((sub) => !subscriptionIsOwnerPlan(sub))) return true;
   }
   return false;
@@ -626,11 +641,13 @@ async function readStoredCustomer(
   if (!stripe.customers.retrieve) {
     return { state: "trusted", email: null, metadata: null };
   }
-  const retrieve = stripe.customers.retrieve as (
-    id: string,
-    params?: Record<string, never>,
-    options?: FirmCustomerSearchOptions,
-  ) => Promise<unknown>;
+  const retrieve = (
+    stripe.customers.retrieve as (
+      id: string,
+      params?: Record<string, never>,
+      options?: FirmCustomerSearchOptions,
+    ) => Promise<unknown>
+  ).bind(stripe.customers);
   const work = retrieve(customerId, {}, {
     maxNetworkRetries: 0,
     timeout: STORED_CUSTOMER_READ_BUDGET_MS,
@@ -707,7 +724,7 @@ async function stripeCustomerEmail(
 
 function warnMetadataSearch(err: unknown): void {
   console.warn(
-    "[stripe] firm customer metadata search failed",
+    "[stripe] firm customer lookup failed",
     err instanceof Error ? err.message : err,
   );
 }
@@ -739,6 +756,10 @@ async function settleWithin<T>(work: Promise<T>, ms: number): Promise<T> {
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+export function readWithinBudget<T>(work: Promise<T>, ms: number): Promise<T> {
+  return settleWithin(work, ms);
 }
 
 async function customerIdByEmailWithinBudget(
@@ -774,7 +795,7 @@ async function metadataCustomerWithinBudget(
   const started = Date.now();
   const left = () => Math.max(0, budgetMs - (Date.now() - started));
 
-  const subscriptionSearch = stripe.subscriptions.search;
+  const subscriptionSearch = stripe.subscriptions.search?.bind(stripe.subscriptions);
   if (subscriptionSearch) {
     const ms = left();
     if (ms <= 0) throw new FirmCustomerLookupUnknown("timeout");
@@ -805,7 +826,7 @@ async function metadataCustomerWithinBudget(
     }
   }
 
-  const customerSearch = stripe.customers.search;
+  const customerSearch = stripe.customers.search?.bind(stripe.customers);
   if (customerSearch) {
     const ms = left();
     if (ms <= 0) throw new FirmCustomerLookupUnknown("timeout");
