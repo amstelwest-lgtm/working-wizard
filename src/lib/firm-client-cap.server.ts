@@ -20,7 +20,7 @@ import {
   readSubscriptionDiscountRefs,
   type StoredDiscountRef,
 } from "@/lib/firm-sa-market";
-import { starterTrialClock, type StarterTrialBanner } from "@/lib/firm-starter-trial";
+import { noPlanTrialClock, starterTrialClock, type StarterTrialBanner } from "@/lib/firm-starter-trial";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
   bandFromSubscriptionSnapshot,
@@ -81,6 +81,7 @@ type FirmRow = {
   owner_user_id?: string | null;
   market?: unknown;
   starter_trial_enforced?: boolean | null;
+  created_at?: string | null;
 };
 
 type LoadedFirm = {
@@ -89,9 +90,11 @@ type LoadedFirm = {
   market: unknown;
   /** False when the column is missing or the firm is exempt. */
   starterTrialEnforced: boolean;
+  /** Firm row created_at. Null on the legacy select, which does not start a clock. */
+  createdAt: string | null;
 };
 
-const FIRM_SELECT = "id, owner_user_id, market, starter_trial_enforced";
+const FIRM_SELECT = "id, owner_user_id, market, starter_trial_enforced, created_at";
 const FIRM_SELECT_LEGACY = "id, owner_user_id, market";
 
 function isMissingTrialColumn(message: string): boolean {
@@ -105,6 +108,7 @@ function toLoadedFirm(row: FirmRow, enforced: boolean): LoadedFirm | null {
     ownerUserId: row.owner_user_id ?? null,
     market: row.market ?? null,
     starterTrialEnforced: enforced,
+    createdAt: typeof row.created_at === "string" ? row.created_at : null,
   };
 }
 
@@ -455,13 +459,24 @@ function trialBannerFor(
   sub: EntitlingFirmSubscription | null,
 ): StarterTrialBanner {
   if (!firm) return idleStarterTrialBanner();
+  const phase = sub?.phase ?? "none";
+  if (!sub || phase === "none") {
+    return starterTrialForPlanState(
+      "none",
+      noPlanTrialClock({
+        enforced: firm.starterTrialEnforced,
+        noPlan: true,
+        startedAt: firm.createdAt,
+      }),
+    );
+  }
   return starterTrialForPlanState(
-    sub?.phase ?? "none",
+    phase,
     starterTrialClock({
       enforced: firm.starterTrialEnforced,
-      band: sub?.band ?? null,
-      stripeTrialEnd: sub?.trialEnd,
-      startedAt: sub?.startedAt,
+      band: sub.band ?? null,
+      stripeTrialEnd: sub.trialEnd,
+      startedAt: sub.startedAt,
     }),
   );
 }

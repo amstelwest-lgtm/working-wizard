@@ -80,8 +80,9 @@ import {
 } from "@/lib/stripe-billing-sync.server";
 import {
   classifyBillingCheckFailure,
-  entitlementAfterLiveFailure,
   entitlementForFailedCheck,
+  entitlementWhenBillingCheckFails,
+  restoreLastFirmSuccess,
   FIRM_BILLING_ENTITLEMENT_SERVER_FN,
   FIRM_BILLING_PLAN_FALLBACK_MS,
 } from "@/lib/billing-check-failure";
@@ -226,13 +227,22 @@ function lookupLastFirmEntitlement(
 ): FirmBillingEntitlement | null {
   if (userId && firmId) {
     const exact = lastSuccessByFirm.get(`${userId}:${firmId}`);
-    if (exact) return exact.value;
+    if (exact) {
+      return restoreLastFirmSuccess({
+        requestedFirmId: firmId,
+        storedFirmId: exact.firmId,
+        prior: exact.value,
+      });
+    }
   }
   const key = email.trim().toLowerCase();
   const byEmail = key ? lastSuccessByEmail.get(key) : undefined;
   if (!byEmail || byEmail.userId !== userId) return null;
-  if (firmId && byEmail.firmId && byEmail.firmId !== firmId) return null;
-  return byEmail.value;
+  return restoreLastFirmSuccess({
+    requestedFirmId: firmId,
+    storedFirmId: byEmail.firmId,
+    prior: byEmail.value,
+  });
 }
 
 function rememberEntitlement(
@@ -405,11 +415,11 @@ async function resolveFirmBillingEntitlement(
       });
       // Unknown is not unpaid. Caching this as entitled:false sent the shell
       // to the trial card. A previous success for this user and firm stays.
-      const prior = lookupLastFirmEntitlement(userId, email, billingIds.firmId);
-      if (prior && prior.reason !== "stripe_error") {
-        return entitlementAfterLiveFailure(prior, kind);
-      }
-      return entitlementForFailedCheck(storedPlan, kind);
+      return entitlementWhenBillingCheckFails({
+        storedPlan,
+        prior: lookupLastFirmEntitlement(userId, email, billingIds.firmId),
+        kind,
+      });
     }
     })();
     if (storedPlan !== "entitled") return live;
