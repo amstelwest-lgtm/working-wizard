@@ -4,6 +4,7 @@
  * (sha256 of src/lib/stripe-checkout.functions.ts--getFirmBillingEntitlement_createServerFn_handler).
  */
 
+import { firmFileOnBillingResult } from "@/lib/firm-gate-access";
 import type { FirmBillingEntitlement } from "@/lib/stripe-entitlement";
 
 export type BillingCheckFailureKind = "timeout" | "network" | "http_5xx";
@@ -64,6 +65,103 @@ export function logBillingCheckFailure(
     serverFn: FIRM_BILLING_ENTITLEMENT_SERVER_FN,
     ...extra,
   });
+}
+
+/**
+ * Interim client mitigation. A cold entitlement read can fail once as
+ * `network` or `timeout` and then succeed. Retry that same check once
+ * before the "Couldn't check billing" card. This is not the root-cause fix.
+ */
+function billingFailureRetriesOnce(kind: BillingCheckFailureKind): boolean {
+  return kind === "network" || kind === "timeout";
+}
+
+/**
+ * Quiet shell deadlines before a still-pending read may show the card.
+ * Prod failures have been returning at 13–20s, after one 8s deadline.
+ */
+export const BILLING_GATE_QUIET_DEADLINES = 2;
+
+export function shellDeadlineAfterQuietWait(elapsedQuiet: number): "wait" | "card" {
+  return elapsedQuiet < BILLING_GATE_QUIET_DEADLINES ? "wait" : "card";
+}
+
+export type ClientBillingGateValue = {
+  entitled: boolean;
+  reason?: string;
+  checkFailed?: BillingCheckFailureKind;
+};
+
+export type ClientBillingGateDecision<T extends ClientBillingGateValue> =
+  | { outcome: "open"; value: T; calls: number }
+  | { outcome: "closed"; value: T; calls: number }
+  | { outcome: "card"; kind: BillingCheckFailureKind; calls: number };
+
+function billingResultFailureKind(value: ClientBillingGateValue): BillingCheckFailureKind | null {
+  if (value.checkFailed) return value.checkFailed;
+  if (value.reason === "stripe_error") return classifyBillingCheckFailure(value);
+  return null;
+}
+
+function decisionForBillingValue<T extends ClientBillingGateValue>(
+  value: T,
+  calls: number,
+): ClientBillingGateDecision<T> | null {
+  const kind = billingResultFailureKind(value);
+  const file = firmFileOnBillingResult({
+    entitled: value.entitled === true,
+    reason: value.reason,
+    checkFailed: kind != null,
+  });
+  if (file === "open") return { outcome: "open", value, calls };
+  if (file === "closed") return { outcome: "closed", value, calls };
+  return null;
+}
+
+/**
+ * One server-fn check, then the same check once more when the failure is
+ * network or timeout. A definite no-plan answer is not retried. The caller
+ * keeps the still-checking skeleton up until this settles.
+ */
+export async function resolveClientBillingGateCheck<T extends ClientBillingGateValue>(
+  check: () => Promise<T>,
+  options?: { onRetry?: () => void },
+): Promise<ClientBillingGateDecision<T>> {
+  let calls = 0;
+  const attempt = async (): Promise<
+    { ok: true; value: T } | { ok: false; kind: BillingCheckFailureKind }
+  > => {
+    calls += 1;
+    try {
+      return { ok: true, value: await check() };
+    } catch (err) {
+      return { ok: false, kind: classifyBillingCheckFailure(err) };
+    }
+  };
+
+  const retryOnce = async (kind: BillingCheckFailureKind): Promise<ClientBillingGateDecision<T>> => {
+    options?.onRetry?.();
+    const second = await attempt();
+    if (!second.ok) return { outcome: "card", kind: second.kind, calls };
+    return (
+      decisionForBillingValue(second.value, calls) ?? {
+        outcome: "card",
+        kind: billingResultFailureKind(second.value) ?? kind,
+        calls,
+      }
+    );
+  };
+
+  const first = await attempt();
+  if (!first.ok) {
+    if (!billingFailureRetriesOnce(first.kind)) return { outcome: "card", kind: first.kind, calls };
+    return retryOnce(first.kind);
+  }
+  const decided = decisionForBillingValue(first.value, calls);
+  if (decided) return decided;
+  const kind = billingResultFailureKind(first.value) ?? "network";
+  if (!billingFailureRetriesOnce(kind)) return { outcome: "card", kind, calls };
+  return retryOnce(kind);
 }
 
 /**

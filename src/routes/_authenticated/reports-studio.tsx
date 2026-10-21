@@ -33,7 +33,11 @@ import {
   reportsAnswerSentence,
   reportsPrimaryLabel,
 } from "@/lib/reports-drafter-copy";
-import { reportLinkOpensPreview } from "@/lib/report-preview";
+import {
+  FORECAST_PREVIEW_EMPTY,
+  forecastPreviewGap,
+  reportLinkOpensPreview,
+} from "@/lib/report-preview";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -3109,6 +3113,8 @@ type PreviewState = {
   offerSetBusinessType?: boolean;
   /** Profile link. Shown whether or not a business type is already set. */
   emptyCta?: string;
+  /** Cash tab, when the gap is a missing forecast rather than a missing sector. */
+  emptyHref?: "profile" | "cash";
 };
 
 /** Card title and ZIP stem. Labor/Labour comes from the firm locale, in one place. */
@@ -3513,7 +3519,16 @@ function PreviewModal({
                   text-foreground is cream and disappears on this card. */}
               <div className="max-w-md rounded-lg border border-slate-300 bg-white px-6 py-5 text-center shadow-sm">
                 <p className="text-sm leading-relaxed text-slate-800">{state.emptyMessage}</p>
-                {clientId ? (
+                {clientId && state?.emptyHref === "cash" ? (
+                  <Link
+                    to="/clients/$clientId"
+                    params={{ clientId }}
+                    search={{ tab: "cash", section: "forecast" }}
+                    className="mt-3 inline-block text-sm font-medium text-sky-900 underline underline-offset-2"
+                  >
+                    {state.emptyCta || "Enter a forecast line"}
+                  </Link>
+                ) : clientId ? (
                   <Link
                     to="/clients/$clientId"
                     params={{ clientId }}
@@ -3902,6 +3917,25 @@ export function ReportsStudio({
     setPendingKeys(next);
   }
 
+  function forecastGapMessage(): string | null {
+    if (!clientData?.hasData) return null;
+    return forecastPreviewGap(clientData.cashForecast);
+  }
+
+  function showForecastGap(report: ReportMeta) {
+    if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
+    setPreviewKey(report.key);
+    setPreviewState({
+      key: report.key,
+      name: reportCopy(report, clientData?.market ?? ZA_MARKET).name,
+      blobUrl: null,
+      loading: false,
+      emptyMessage: FORECAST_PREVIEW_EMPTY,
+      emptyCta: "Enter a forecast line",
+      emptyHref: "cash",
+    });
+  }
+
   async function handleGenerate(report: ReportMeta) {
     const start = startReportDownload(pendingDownloads.current, report.key);
     if (!start.started) {
@@ -3918,6 +3952,10 @@ export function ReportsStudio({
       }
       const unavailable = unavailableFor(report.key);
       if (unavailable) return;
+      if (report.key === "forecast" && forecastGapMessage()) {
+        showForecastGap(report);
+        return;
+      }
       const blob = await GEN[report.key](settings, profile);
       const copy = reportCopy(report, clientData?.market ?? ZA_MARKET);
       triggerDownload(blob, makeSafeFilename(settings, copy.filename, clientData?.dataPeriodLabel));
@@ -3931,7 +3969,12 @@ export function ReportsStudio({
       await recordReportIssued(clientId);
       await logReportDelivery(report.key, blob);
     } catch (err) {
-      toast.error(`Generation failed: ${(err as Error).message}`);
+      const message = (err as Error).message ?? "";
+      if (report.key === "forecast" && message.startsWith("No cash forecast saved")) {
+        showForecastGap(report);
+        return;
+      }
+      toast.error(`Generation failed: ${message}`);
       console.error(err);
     } finally {
       publishPending(finishReportDownload(pendingDownloads.current, report.key));
@@ -3964,6 +4007,10 @@ export function ReportsStudio({
       });
       return true;
     }
+    if (report.key === "forecast" && forecastGapMessage()) {
+      showForecastGap(report);
+      return true;
+    }
     if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
     setPreviewKey(report.key);
     setPreviewState({
@@ -3991,6 +4038,10 @@ export function ReportsStudio({
     } catch (err) {
       const message = (err as Error).message;
       const tagged = err as Error & { offerSetBusinessType?: boolean; emptyCta?: string };
+      if (message.startsWith("No cash forecast saved")) {
+        showForecastGap(report);
+        return true;
+      }
       if (message.startsWith("No benchmarks yet for ") || message === BENCHMARK_EMPTY_MESSAGE) {
         setPreviewState({
           key: report.key,

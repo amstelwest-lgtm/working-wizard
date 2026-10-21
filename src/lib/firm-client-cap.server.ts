@@ -42,7 +42,14 @@ import {
   installMetadataFirmCustomerWrite,
   readFirmStripeCustomerId,
 } from "@/lib/firm-stripe-customer.server";
-import { findFirmCustomerId, type FirmCustomerLookup } from "@/lib/stripe-entitlement";
+import {
+  findFirmCustomerId,
+  FirmCustomerLookupUnknown,
+  readWithinBudget,
+  SUBSCRIPTION_LIST_BUDGET_MS,
+  type FirmCustomerLookup,
+  type StripeCustomerSubscriptionReader,
+} from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
 import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.server";
@@ -170,9 +177,24 @@ type ListedSubscription = Record<string, unknown> & {
   created?: number;
 };
 
+/** Tests inject a Stripe reader. Production leaves this unset. */
+let subscriptionReaderForTests: StripeCustomerSubscriptionReader | null = null;
+
+export function setFirmSubscriptionReaderForTests(
+  reader: StripeCustomerSubscriptionReader | null,
+): void {
+  subscriptionReaderForTests = reader;
+}
+
+export function clearFirmSubscriptionHistoryCache(): void {
+  stripeHistoryCache.clear();
+  stripeHistoryInflight.clear();
+}
+
 /**
  * Same Stripe list Checkout uses for eligibleForIntroTrial.
  * No customer means zero prior subscriptions.
+ * Both lists use the bind-fix budget: no retry, 3s, and a timeout throws.
  */
 async function listCustomerSubscriptions(
   email: string,
@@ -181,13 +203,13 @@ async function listCustomerSubscriptions(
   customerId: string | null;
   data: ListedSubscription[];
 }> {
-  if (!stripeConfigured()) return { customerId: null, data: [] };
+  if (!subscriptionReaderForTests && !stripeConfigured()) return { customerId: null, data: [] };
   const trimmed = email.trim();
   const userId = ids?.userId?.trim() ?? "";
   const firmId = ids?.firmId?.trim() ?? "";
   const storedCustomerId = ids?.storedCustomerId?.trim() ?? "";
   if (!trimmed && !userId && !firmId && !storedCustomerId) return { customerId: null, data: [] };
-  const stripe = getStripe();
+  const stripe = (subscriptionReaderForTests ?? getStripe()) as StripeCustomerSubscriptionReader;
   const customerId = await findFirmCustomerId(stripe, {
     email: trimmed,
     userId,
@@ -195,24 +217,38 @@ async function listCustomerSubscriptions(
     storedCustomerId,
   });
   if (!customerId) return { customerId: null, data: [] };
+  const listOptions = { maxNetworkRetries: 0, timeout: SUBSCRIPTION_LIST_BUDGET_MS };
   let listed: { data: ListedSubscription[] };
   try {
-    listed = (await stripe.subscriptions.list({
-      customer: customerId,
-      status: "all",
-      limit: 20,
-      expand: ["data.items.data.price"],
-    })) as unknown as typeof listed;
+    listed = await readWithinBudget(
+      stripe.subscriptions.list(
+        {
+          customer: customerId,
+          status: "all",
+          limit: 20,
+          expand: ["data.items.data.price"],
+        },
+        listOptions,
+      ) as unknown as Promise<{ data: ListedSubscription[] }>,
+      SUBSCRIPTION_LIST_BUDGET_MS,
+    );
   } catch (err) {
+    if (err instanceof FirmCustomerLookupUnknown && err.kind === "timeout") throw err;
     console.warn(
       "[stripe] subscription price expand failed",
       err instanceof Error ? err.message : err,
     );
-    listed = (await stripe.subscriptions.list({
-      customer: customerId,
-      status: "all",
-      limit: 20,
-    })) as unknown as typeof listed;
+    listed = await readWithinBudget(
+      stripe.subscriptions.list(
+        {
+          customer: customerId,
+          status: "all",
+          limit: 20,
+        },
+        listOptions,
+      ) as unknown as Promise<{ data: ListedSubscription[] }>,
+      SUBSCRIPTION_LIST_BUDGET_MS,
+    );
   }
   return { customerId, data: listed.data };
 }

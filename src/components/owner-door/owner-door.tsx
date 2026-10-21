@@ -289,7 +289,7 @@ export function OwnerDoor({
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
   const [actionRows, setActionRows] = useState<OwnerActionRow[]>([]);
   const [actionsUnavailable, setActionsUnavailable] = useState(false);
-  const [deliverableCount, setDeliverableCount] = useState(0);
+  const [deliverableCount, setDeliverableCount] = useState<number | null>(null);
   const [deliverablesUnavailable, setDeliverablesUnavailable] = useState(false);
   const [quickBooks, setQuickBooks] = useState<BooksLink>({ state: "unknown" });
   const [xeroLink, setXeroLink] = useState<BooksLink>({ state: "unknown" });
@@ -540,12 +540,13 @@ export function OwnerDoor({
     setActionsReady(false);
     setActionRows([]);
     setActionsUnavailable(false);
-    setDeliverableCount(0);
+    setDeliverableCount(null);
     setDeliverablesUnavailable(false);
     setQuickBooks({ state: "unknown" });
     setXeroLink({ state: "unknown" });
     if (!clientId) {
       setActionsReady(true);
+      setDeliverableCount(0);
       setQuickBooks({ state: "absent" });
       setXeroLink({ state: "absent" });
       return;
@@ -569,13 +570,7 @@ export function OwnerDoor({
         .neq("status", "done")
         .order("seq", { ascending: true })
         .limit(20),
-      supabase
-        .from("deliverable_drafts")
-        .select("id")
-        .eq("client_id", clientId)
-        .in("status", ["draft", "ready"])
-        .limit(20),
-    ]).then(async ([qbo, xero, actions, drafts]) => {
+    ]).then(async ([qbo, xero, actions]) => {
       if (cancelled) return;
       const qboRow = qbo.error ? null : (qbo.data?.[0] ?? null);
       const xeroRow = xero.error ? null : (xero.data?.[0] ?? null);
@@ -596,13 +591,6 @@ export function OwnerDoor({
             ? { state: "linked", at: xeroRow.last_synced_at }
             : { state: "absent" },
       );
-      if (drafts.error) {
-        setDeliverablesUnavailable(true);
-        setDeliverableCount(0);
-      } else {
-        setDeliverablesUnavailable(false);
-        setDeliverableCount(drafts.data?.length ?? 0);
-      }
       if (actions.error) {
         setOpenAction(null);
         setAssignedAgent(null);
@@ -690,6 +678,31 @@ export function OwnerDoor({
       cancelled = true;
     };
   }, [clientId, market, planTick]);
+
+  const storedDeliverablesOpen = canonicalOwnerScreen(screen) === "accountant";
+  useEffect(() => {
+    if (!clientId || !storedDeliverablesOpen) return;
+    let cancelled = false;
+    void supabase
+      .from("deliverable_drafts")
+      .select("id")
+      .eq("client_id", clientId)
+      .in("status", ["draft", "ready"])
+      .limit(20)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setDeliverablesUnavailable(true);
+          setDeliverableCount(0);
+          return;
+        }
+        setDeliverablesUnavailable(false);
+        setDeliverableCount(data?.length ?? 0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, storedDeliverablesOpen]);
 
   useEffect(() => {
     setFirmName(null);
