@@ -128,9 +128,12 @@ for (const firm of ["ZA", "US", null] as const) {
 }
 
 assert(resolveFirmBootMarket({ country: "ZA" }) === "za", "boot reads stored ZA");
+assert(resolveFirmBootMarket({ country: "za" }) === "za", "boot uppercases a stored za");
+assert(resolveFirmBootMarket({ country: "  us " }) === "us", "boot trims a stored us");
 assert(resolveFirmBootMarket({ country: "US" }) === "us", "boot reads stored US");
 assert(resolveFirmBootMarket(null) === "unknown", "boot waits when the firm market has not loaded");
-assert(resolveFirmBootMarket({ country: "za" }) === "unknown", "boot does not treat a loose country as a price");
+assert(resolveFirmBootMarket({ country: "GB" }) === "unknown", "boot waits on a country that is not ZA or US");
+assert(resolveFirmBootMarket("ZA") === "unknown", "boot does not treat a bare string as a loaded market");
 assert(resolveFirmPriceCurrency({ country: "ZA" }) === "zar", "ZA firm price currency is zar");
 assert(resolveFirmPriceCurrency(null) === "USD", "a missing firm price currency is USD");
 assert(resolveFirmPriceCurrency({ country: "US" }) === "USD", "US firm price currency is USD");

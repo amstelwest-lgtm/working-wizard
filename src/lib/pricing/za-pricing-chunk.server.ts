@@ -44,8 +44,16 @@ function priceLine(
   return `${amount}/${unit} · about ${rand(per)} per client`;
 }
 
+let saPricingCopyOverride: (() => SaPricingCopy) | null = null;
+
+/** Tests only. Pass a throw to simulate a failed rand quote. */
+export function setSaPricingCopyForTests(loader: (() => SaPricingCopy) | null): void {
+  saPricingCopyOverride = loader;
+}
+
 /** All visitor-facing rand sentences. Import only from server code. */
 export function loadSaPricingCopy(): SaPricingCopy {
+  if (saPricingCopyOverride) return saPricingCopyOverride();
   const labels = {} as SaPricingCopy["labels"];
   for (const band of ZA_CHECKOUT_BANDS) {
     const monthly = ZA_MONTHLY_RANDS[band];

@@ -501,6 +501,7 @@ function SettingsPage() {
                     clientCount: plan.clientCount,
                     usageLabel: plan.usageLabel,
                     zaLabels: plan.zaLabels,
+                    zarPlan,
                     phase: plan.phase,
                   }}
                   onUpgrade={handlePlanUpgrade}
@@ -519,6 +520,7 @@ function SettingsPage() {
                   canUpgrade={plan.canUpgrade}
                   clientCount={plan.clientCount}
                   zaLabels={plan.zaLabels}
+                  zarPlan={zarPlan}
                   introTrialEligible={plan.introTrialEligible}
                   cardFree={
                     plan.phase === "none" &&

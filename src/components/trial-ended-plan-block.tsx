@@ -20,6 +20,8 @@ export type TrialEndedUpgrade = {
   clientCount?: number | null;
   usageLabel?: string | null;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
+  /** Stored firm market is ZA, or the client list is ZA-heavy. */
+  zarPlan?: boolean;
   /** Live subscription phase. Active / CURRENT is not an ended trial. */
   phase?: FirmSubscriptionPhase | null;
 };
@@ -70,6 +72,7 @@ export function TrialEndedPlanCard({
           clientCount={upgrade.clientCount}
           usageLabel={upgrade.usageLabel}
           zaLabels={upgrade.zaLabels}
+          zarPlan={upgrade.zarPlan}
           upgrading={upgrading}
           onUpgrade={onUpgrade}
           onValidateVoucher={onValidateVoucher}

@@ -95,13 +95,13 @@ export function resolveFirmPriceCurrency(firmMarket: unknown): "USD" | "zar" {
 }
 
 /**
- * Boot-timing label. Exact stored "ZA" or "US" only. Anything else, including
- * a firm row that has not loaded, stays unknown so the shell can wait.
+ * Boot-timing label. Same trim and uppercase as resolveFirmMarket, so a
+ * stored "za" logs as za. ZA and US are known. Anything else, including a
+ * firm row that has not loaded, stays unknown so the shell can wait.
  * This is not a price. Prices use resolveFirmMarket, where unknown is US.
  */
 export function resolveFirmBootMarket(firmMarket: unknown): "za" | "us" | "unknown" {
-  if (!firmMarket || typeof firmMarket !== "object" || Array.isArray(firmMarket)) return "unknown";
-  const country = (firmMarket as { country?: unknown }).country;
+  const country = storedCountry(firmMarket);
   if (country === "ZA") return "za";
   if (country === "US") return "us";
   return "unknown";

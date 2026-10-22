@@ -33,6 +33,7 @@ import {
   shouldCancelReplacedSubscription,
   shouldRevertBlockedDowngrade,
   currentPlanLabel,
+  practiceDisplaysZarPlan,
   upgradeButtonLabel,
   upgradeSuccessMessage,
 } from "../src/lib/firm-band-upgrade";
@@ -906,6 +907,7 @@ assert(
   settings.includes("introTrialEligible={plan.introTrialEligible}"),
   "settings shows the Starter trial lines from the plan flag",
 );
+assert(settings.includes("zarPlan={zarPlan}"), "settings keeps the rand list when the quote fails");
 assert(
   settings.includes("plan.phase === \"none\"") && settings.includes("plan.starterTrial?.enforced === true"),
   "settings uses the card-free sentence only for an enforced firm with no subscription",
@@ -1465,5 +1467,46 @@ assert(
   brain.includes("assertFirmCanGenerateDeliverable"),
   "a new brain deliverable checks the trial before the edge function",
 );
+
+const { buildUpgradeSnapshot } = await import("../src/lib/firm-client-cap.server");
+const { setSaPricingCopyForTests } = await import("../src/lib/pricing/za-pricing-chunk.server");
+setSaPricingCopyForTests(() => {
+  throw new Error("quote failed");
+});
+let failedSnap: Awaited<ReturnType<typeof buildUpgradeSnapshot>>;
+try {
+  failedSnap = await buildUpgradeSnapshot({
+    isOwner: true,
+    membershipRole: "owner",
+    market: { country: "ZA" },
+    clientMarkets: [],
+    clientCount: 1,
+    sub: null,
+  });
+} finally {
+  setSaPricingCopyForTests(null);
+}
+assert(failedSnap.zaLabels == null, "a failed rand quote leaves labels empty");
+assert(failedSnap.priceCurrency !== "zar", `a failed rand quote has no ZAR currency, saw ${failedSnap.priceCurrency}`);
+const failedZarPlan = practiceDisplaysZarPlan({
+  firmMarket: { country: "ZA" },
+  clientMarkets: [],
+});
+assert(failedZarPlan, "a ZA firm still has a rand plan list");
+const failedHtml = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: failedSnap.band,
+    interval: failedSnap.interval,
+    priceCurrency: failedSnap.priceCurrency,
+    zarByBand: failedSnap.zarByBand,
+    canUpgrade: failedSnap.canUpgrade,
+    clientCount: failedSnap.clientCount,
+    zaLabels: failedSnap.zaLabels,
+    zarPlan: failedZarPlan,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(!failedHtml.includes("$"), `a ZA firm with a failed quote shows no dollar amounts, saw ${failedHtml.slice(0, 400)}`);
+assert(/R\s?299/.test(failedHtml), `a ZA firm with a failed quote falls back to the rand ladder, saw ${failedHtml.slice(0, 400)}`);
 
 console.log("firm-band-upgrade ok");
