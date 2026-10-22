@@ -6,9 +6,9 @@ import { groundAdvisoryNarrative } from "./advisory-narrative.ts";
 import { liveOverallFromRecord, quoteLiveScoreOnly } from "./draft-figures.ts";
 import { cashComfortThreshold } from "./cash-runway.ts";
 import { formatMoney, type MoneyMarket } from "./market/format.ts";
+import { promptMoneyMarket } from "./prompt-money.ts";
 import { offsetInsideCalendarSpan, repairCalendarFigureLeaks, statementSpanLabel } from "./statement-period.ts";
 export type { MoneyMarket };
-import { coerceMarketSelection } from "./market/parse.ts";
 
 export const AGENT_KEYS = ["financial_manager", "analyst", "advisor"] as const;
 export type AgentKey = (typeof AGENT_KEYS)[number];
@@ -1105,11 +1105,9 @@ export type EvidenceMetric = {
   count?: number;
 };
 
-/** South Africa when the client market is missing. United States when the row says US. */
+/** ZA only when the stored firm country is ZA. Null and every other country are US dollars. */
 export function moneyMarketFromClient(raw: unknown): MoneyMarket {
-  const sel = coerceMarketSelection(raw);
-  if (sel.country === "US") return { currency: "USD", locale: "en-US" };
-  return { currency: "ZAR", locale: "en-ZA" };
+  return promptMoneyMarket(raw);
 }
 
 export const AGENT_COPY_GUIDE = `How to write a title, detail, or summary:

@@ -16,9 +16,13 @@ import {
 } from "../_shared/redact-identifiers.ts";
 
 /** Duplicated from src/lib/market/prompt.ts — Deno edge cannot import @/lib. */
-function askAiSystemBase(copyPack: "za" | "us", audience: "owner" | "accountant"): string {
+function askAiSystemBase(
+  copyPack: "za" | "us",
+  audience: "owner" | "accountant",
+  moneyPack: "za" | "us" = copyPack,
+): string {
   const taxWord = copyPack === "us" ? "EIN / tax IDs" : "VAT numbers";
-  const currencyWord = copyPack === "us" ? "dollar/currency amounts" : "rand/currency amounts";
+  const currencyWord = moneyPack === "us" ? "dollar/currency amounts" : "rand/currency amounts";
   const locale =
     copyPack === "us"
       ? "- US English. Sales tax is not income tax. Do not assume VAT or SARS."
@@ -43,7 +47,7 @@ Rules:
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
 - Do not invent statement line items. Quote Net profit, Gross profit, Operating profit, Profit before tax, Inventory, and Current ratio when OVERVIEW FIGURES lists them. Do not multiply a margin by revenue in their place. Raw income-statement and balance-sheet lines other than those listed headlines are not provided — use the outputs above.
 ${locale}
-${chatReplyFormatRules(copyPack)}
+${chatReplyFormatRules(copyPack, moneyPack)}
 
 ${productFactsBlock(audience)}`;
 }
@@ -123,7 +127,8 @@ export function buildPrompt(
 ): { system: string; user: string } {
   const lines: string[] = [];
   const copyPack = ctx.copyPack ?? "za";
-  let system = askAiSystemBase(copyPack, audience);
+  const moneyPack = ctx.moneyPack ?? copyPack;
+  let system = askAiSystemBase(copyPack, audience, moneyPack);
   if (agent) {
     system += `\n- ${askAiAgentPersona(agent, audience)} Use only the tools and figures already in this prompt. Earlier chats with the other agents are not part of this conversation.`;
   }
@@ -245,7 +250,7 @@ export function buildPrompt(
     lines.push(
       `\nProfitability waterfall (${ctx.waterfall.source} figures, % of revenue). Not a substitute for Operating margin or Net margin:`,
     );
-    const firmYearQuote = slicedWaterfallQuote(ctx.waterfall, copyPack);
+    const firmYearQuote = slicedWaterfallQuote(ctx.waterfall, moneyPack);
     if (firmYearQuote) lines.push(`  ${firmYearQuote}`);
     for (const step of ctx.waterfall.steps) {
       if (step.label === "EBIT" && ctx.overview?.operatingMargin != null) {

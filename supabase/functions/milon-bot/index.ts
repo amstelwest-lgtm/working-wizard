@@ -460,6 +460,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
   let overviewBlock = "";
   let clientName: string | null = null;
   let replyPack: "za" | "us" = "za";
+  let moneyPack: "za" | "us" = "us";
   if (!createIntent) {
     try {
       const brief = await loadOverviewBrief(userClient, clientId);
@@ -467,6 +468,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
         overviewBlock = formatOverviewForPrompt(brief, audience);
         clientName = brief.clientName;
         replyPack = brief.copyPack === "us" ? "us" : "za";
+        moneyPack = brief.moneyPack;
       }
     } catch (e) {
       console.warn("overview brief:", (e as Error).message);
@@ -588,7 +590,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
     }));
 
   const sealedChat = buildMilonBotChatPayload({
-    system: botSystem(replyPack),
+    system: botSystem(replyPack, moneyPack),
     overviewBlock,
     history,
     message,

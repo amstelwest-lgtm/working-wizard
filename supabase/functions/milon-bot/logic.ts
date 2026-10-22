@@ -197,7 +197,7 @@ export function buildBrainAnswer(input: {
   };
 }
 
-function botSystemBody(copyPack: "za" | "us"): string {
+function botSystemBody(copyPack: "za" | "us", moneyPack: "za" | "us" = copyPack): string {
   return `You are Milōn Bot — the in-app copilot for this client's numbers and Client Brain.
 You help the accountant or owner act on what is already on file for THIS client only.
 You are not Lighthouse (founder outreach). Do not pretend to send email or run founder outreach.
@@ -224,13 +224,13 @@ Rules:
 - Quote a stored total liabilities figure. Do not replace it with assets minus equity. A total liabilities line marked (derived) is an estimate.
 - "Cash generative" is a valid cash runway. Report it as written. It is not zero weeks and it is not a missing figure.
 
-${chatReplyFormatRules(copyPack)}`;
+${chatReplyFormatRules(copyPack, moneyPack)}`;
 }
 
 /** ZA prompt. US callers use botSystem("us") so the money example stays in dollars. */
 export const BOT_SYSTEM = botSystemBody("za");
 
-/** Same system prompt, with the money and calendar-day examples for the client's market. */
-export function botSystem(copyPack: "za" | "us" = "za"): string {
-  return botSystemBody(copyPack);
+/** Dates follow copyPack. Money follows moneyPack, which defaults to the copy pack. */
+export function botSystem(copyPack: "za" | "us" = "za", moneyPack?: "za" | "us"): string {
+  return botSystemBody(copyPack, moneyPack ?? copyPack);
 }

@@ -125,8 +125,15 @@ assert(
   "rules name the shape",
 );
 assert(
-  rules.includes("R4,200,000") && chatReplyFormatRules("us").includes("$4,200,000"),
+  rules.includes("R 187 444") && chatReplyFormatRules("us").includes("$187,444"),
   "rules use the market currency",
+);
+assert(!chatReplyFormatRules("us").includes("ZAR"), "US rules never contain ZAR");
+assert(
+  chatReplyFormatRules("za", "us").includes("8 Sep 2026") &&
+    chatReplyFormatRules("za", "us").includes("$187,444") &&
+    !chatReplyFormatRules("za", "us").includes("R 187 444"),
+  "dates stay on the copy pack when money is dollars",
 );
 assert(BOT_SYSTEM.includes("**Next actions**"), "milon-bot carries the reply format");
 assert(

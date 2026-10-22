@@ -53,11 +53,10 @@ jobs:
 
   # Blocking: ask-ai, milon-bot, brain-propose, and brain-deliverable-draft
   # prod are one-liners that import these entries from raw.githubusercontent.com
-  # at a pinned commit. That runtime resolves the graph with Deno defaults —
-  # explicit extensions, no import map, no sloppy imports, and no repo
-  # deno.lock — so this job uses the same rules. A bare `@/` or an
-  # extensionless relative import fails here, the same way the redeploy would.
-  # --no-lock keeps the root deno.lock from pinning esm.sh.
+  # at a pinned commit. --no-lock keeps the root deno.lock from pinning esm.sh.
+  # This job still runs inside the checkout, where package.json turns on the
+  # tsconfig `@/*` paths, so a bare `@/` can type-check here and still fail
+  # the raw deploy. edge-function-resolution is the gate for that.
   ask-ai-deno:
     name: ask-ai Deno check
     runs-on: ubuntu-latest
@@ -90,6 +89,21 @@ jobs:
         run: deno check --no-lock supabase/functions/extract-source-document/index.ts
       - name: deno check prospect-talk
         run: deno check --no-lock supabase/functions/prospect-talk/index.ts
+
+  # Blocking: prod deploys these entries with Deno defaults and no package.json,
+  # so tsconfig `@/*` paths are not available. Copy supabase/ and src/ to a
+  # temp dir outside the repo and `deno bundle` each function (not _shared),
+  # then import-boot it until Deno.serve is listening.
+  edge-function-resolution:
+    name: Edge function bundle (no package.json)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.7
+      - name: Bundle and boot every edge function
+        run: bash scripts/edge-function-resolution.sh
 
   # Blocking: every test:* script that runs without a database.
   tests:

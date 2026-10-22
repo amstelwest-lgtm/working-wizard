@@ -200,9 +200,9 @@ const zaSealed = redactForModel(formatOverviewForPrompt(zaOverview, "owner"), {
   clientName: CLIENT,
 });
 assert(!zaSealed.text.includes("Harbour"), "ZA overview still has the client");
-assert(zaSealed.text.includes("Total equity: R90,000"), "redaction dropped the rand equity");
-assert(zaSealed.text.includes("Total assets: R1,250,000"), "redaction dropped the rand assets");
-assert(zaSealed.text.includes("Total liabilities: R184,320"), "redaction dropped the rand liabilities");
+assert(zaSealed.text.includes("Total equity: R 90 000"), "redaction dropped the rand equity");
+assert(zaSealed.text.includes("Total assets: R 1 250 000"), "redaction dropped the rand assets");
+assert(zaSealed.text.includes("Total liabilities: R 184 320"), "redaction dropped the rand liabilities");
 
 const botOverview = buildMilonBotChatPayload({
   system: "You help with this client. Debtor Days stay numeric.",

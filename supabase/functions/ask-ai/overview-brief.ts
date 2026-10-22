@@ -37,6 +37,7 @@ import {
 } from "../../../src/lib/statement-period.ts";
 import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
 import { formatMoney as formatCardMoney, type DateMarket } from "../../../src/lib/market/format.ts";
+import { formatPromptMoney, promptMoneyPack } from "../../../src/lib/prompt-money.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 
 export type OverviewCopyPack = "za" | "us";
@@ -53,6 +54,8 @@ export type OverviewBrief = {
   periodLabel: string | null;
   figuresAsOf: string | null;
   copyPack: OverviewCopyPack;
+  /** Stored firm country. ZA prints rand. Anything else, including null, prints dollars. */
+  moneyPack: OverviewCopyPack;
   health: number | null;
   healthStatus: "healthy" | "at_risk" | "critical" | null;
   healthLabel: "Healthy" | "Watch" | "Critical" | null;
@@ -204,29 +207,32 @@ function resolvedFyStart(copyPack: OverviewCopyPack, explicit?: number | null): 
   return copyPack === "us" ? 1 : 3;
 }
 
-function money(n: number, copyPack: OverviewCopyPack): string {
-  const symbol = copyPack === "us" ? "$" : "R";
+function money(n: number, pack: OverviewCopyPack): string {
   const abs = Math.abs(n);
   const digits = abs >= 100 ? 0 : 2;
-  const formatted = abs.toLocaleString("en-US", {
+  return formatPromptMoney(n, pack, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
-  return `${n < 0 ? "-" : ""}${symbol}${formatted}`;
 }
 
 /** Same whole-unit print as the Budget cards. A US figure stays `$241,000`. */
-function cardMoney(n: number, copyPack: OverviewCopyPack): string {
+function cardMoney(n: number, pack: OverviewCopyPack): string {
   return formatCardMoney(
     n,
-    copyPack === "us"
+    pack === "us"
       ? { currency: "USD" as const, locale: "en-US" as const }
       : { currency: "ZAR" as const, locale: "en-ZA" as const },
   );
 }
 
+function briefMoneyPack(brief: OverviewBrief): OverviewCopyPack {
+  return brief.moneyPack ?? brief.copyPack;
+}
+
 function flowMoney(n: number, brief: OverviewBrief): string {
-  return brief.estimateLabel ? cardMoney(n, brief.copyPack) : money(n, brief.copyPack);
+  const pack = briefMoneyPack(brief);
+  return brief.estimateLabel ? cardMoney(n, pack) : money(n, pack);
 }
 
 export function formatMoney(n: number, copyPack: OverviewCopyPack): string {
@@ -323,6 +329,11 @@ export function buildOverviewBrief(input: {
   /** Resolved cash (bank, then period). When set, wins over financials.cash. */
   cash?: number | null;
   copyPack?: OverviewCopyPack;
+  /**
+   * Stored firm market. Country ZA prints rand. Null and every other country
+   * print dollars. Omit this and money follows copyPack.
+   */
+  storedMarket?: unknown;
   /** Operating-profile year start. Omitted uses January for US and March for ZA. */
   fyStartMonth?: number | null;
   /** First forecast week below zero. Week 1 cannot display Healthy. */
@@ -350,6 +361,7 @@ export function buildOverviewBrief(input: {
   now?: Date;
 }): OverviewBrief {
   const copyPack = input.copyPack ?? "za";
+  const moneyPack = input.storedMarket !== undefined ? promptMoneyPack(input.storedMarket) : copyPack;
   const market = input.market ?? marketFromCopyPack(copyPack);
   const dateMarket =
     input.dateMarket ??
@@ -464,6 +476,7 @@ export function buildOverviewBrief(input: {
     estimateLabel,
     figuresAsOf: input.figuresAsOf ?? null,
     copyPack,
+    moneyPack,
     health,
     healthStatus,
     healthLabel: healthStatus ? chipLabel(healthStatus) : null,
@@ -518,23 +531,23 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   if (brief.health != null && brief.healthLabel) {
     lines.push(`Health: ${brief.health} (${brief.healthLabel})`);
   }
-  if (brief.cash != null) lines.push(`Cash on file: ${money(brief.cash, brief.copyPack)}`);
+  if (brief.cash != null) lines.push(`Cash on file: ${money(brief.cash, briefMoneyPack(brief))}`);
   else if (brief.revenue != null || brief.health != null) lines.push("Opening cash unknown");
   if (brief.totalAssets != null) {
-    lines.push(`Total assets: ${money(brief.totalAssets, brief.copyPack)}`);
+    lines.push(`Total assets: ${money(brief.totalAssets, briefMoneyPack(brief))}`);
   }
   if (brief.totalLiabilities != null) {
     const label = brief.totalLiabilitiesDerived ? "Total liabilities (derived)" : "Total liabilities";
-    lines.push(`${label}: ${money(brief.totalLiabilities, brief.copyPack)}`);
+    lines.push(`${label}: ${money(brief.totalLiabilities, briefMoneyPack(brief))}`);
   }
-  if (brief.equity != null) lines.push(`Total equity: ${money(brief.equity, brief.copyPack)}`);
+  if (brief.equity != null) lines.push(`Total equity: ${money(brief.equity, briefMoneyPack(brief))}`);
   if (brief.revenue != null) {
     const ytd = brief.yearToDateEnd ? ` (year to date to ${brief.yearToDateEnd})` : "";
     const clip = brief.estimateLabel ? ` (${brief.estimateLabel})` : "";
     lines.push(`Revenue for the period on file: ${flowMoney(brief.revenue, brief)}${ytd}${clip}`);
   }
   if (brief.inventory != null) {
-    lines.push(`Inventory: ${money(brief.inventory, brief.copyPack)} (stored balance)`);
+    lines.push(`Inventory: ${money(brief.inventory, briefMoneyPack(brief))} (stored balance)`);
   }
   if (brief.grossProfit != null) {
     lines.push(`Gross profit: ${flowMoney(brief.grossProfit, brief)} (${note("stored")})`);
@@ -549,7 +562,7 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
     lines.push(
       brief.estimateLabel
         ? `Net profit: ${flowMoney(brief.netProfit, brief)} (${brief.estimateLabel})`
-        : `Net profit: ${money(brief.netProfit, brief.copyPack)} (stored net income — quote this amount; do not multiply net margin by revenue)`,
+        : `Net profit: ${money(brief.netProfit, briefMoneyPack(brief))} (stored net income — quote this amount; do not multiply net margin by revenue)`,
     );
   }
   const runwayFact = overviewRunwayFact(brief);
@@ -592,12 +605,12 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
     lines.push("Working Capital Days: not meaningful");
   }
   if (brief.currentRatio != null) {
-    lines.push(formatOverviewRatio("Current Ratio", brief.currentRatio, brief.copyPack));
+    lines.push(formatOverviewRatio("Current Ratio", brief.currentRatio, briefMoneyPack(brief)));
   }
   for (const name of OVERVIEW_RATIO_NAMES) {
     const value = brief.ratioValues[name];
     if (!Number.isFinite(value)) continue;
-    lines.push(formatOverviewRatio(name, value, brief.copyPack));
+    lines.push(formatOverviewRatio(name, value, briefMoneyPack(brief)));
   }
   for (const pillar of brief.pillars) {
     if (pillar.score == null) continue;
@@ -684,7 +697,7 @@ export function planActionsFromOverview(brief: OverviewBrief): PlannedAction[] {
   const items: PlannedAction[] = [];
   if (brief.runwayWeeks != null && brief.runwayWeeks < 12) {
     const cash =
-      brief.cash != null ? ` Cash on file is ${money(brief.cash, brief.copyPack)}.` : "";
+      brief.cash != null ? ` Cash on file is ${money(brief.cash, briefMoneyPack(brief))}.` : "";
     items.push({
       sourceMoveKey: "bot:cash-runway",
       title: `Protect cash runway (${brief.runwayWeeks} weeks)`,
@@ -803,7 +816,7 @@ export function packContentFromOverview(
         title: "Cash",
         body:
           brief.cash != null || brief.runwayLabel || brief.runwayWeeks != null
-            ? `Cash on file ${brief.cash != null ? money(brief.cash, brief.copyPack) : "not on file"}. Runway ${
+            ? `Cash on file ${brief.cash != null ? money(brief.cash, briefMoneyPack(brief)) : "not on file"}. Runway ${
                 brief.runwayLabel ??
                 (brief.runwayWeeks != null ? `${brief.runwayWeeks} weeks` : "not on file")
               }.`
