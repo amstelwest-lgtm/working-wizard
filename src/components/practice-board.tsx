@@ -392,6 +392,7 @@ function FirmClientCapNotice({
                 clientCount: cap.upgrade.clientCount,
                 usageLabel: cap.upgrade.usageLabel,
                 zaLabels: cap.upgrade.zaLabels,
+                zarPlan: cap.upgrade.zarPlan,
                 phase: cap.upgrade.phase,
               }
             : null
@@ -455,6 +456,7 @@ function FirmClientCapNotice({
           clientCount={upgrade.clientCount}
           usageLabel={upgrade.usageLabel}
           zaLabels={upgrade.zaLabels}
+          zarPlan={upgrade.zarPlan}
           cardFree={cap.starterTrial.cardFree === true && !cap.starterTrial.expired}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}
@@ -1589,9 +1591,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         return { ok: false as const, map: {} as Record<string, number> };
       });
 
-    // Figures settle the book. History, actions, queries, names, and orphans
-    // each get their own 8s clock: they patch the rows when they land, and a
-    // timeout stays an unknown count. No Sentry, no figures error.
+    // Figures settle on their own. History, actions, queries, names, and
+    // orphans are extra reads: each one settles within 8s and patches the
+    // rows when it lands. A failed late patch is a warning only. No Sentry.
     let historyMap: Record<string, StoredScorePoint[]> = {};
     let openActionsMap: Record<string, number> = {};
     let overdueActionsMap: Record<string, number> = {};
@@ -1635,35 +1637,47 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     const rememberAuxiliary = () => {
       if (booksMerged && gen === loadGen.current) publishMerged();
     };
+    const applyLatePatch = (patch: string, apply: () => void) => {
+      try {
+        apply();
+      } catch {
+        // A late read must not blank the board. The label is a fixed word:
+        // no client ids, names, or other PII, and this is not reported to Sentry.
+        console.warn("[practice-board] late patch failed", { patch });
+      }
+    };
     void historyPromise.then((map) => {
-      historyMap = map;
-      rememberAuxiliary();
+      applyLatePatch("history", () => {
+        historyMap = map;
+        rememberAuxiliary();
+      });
     }, () => {});
     void actionsPromise.then((maps) => {
-      openActionsMap = maps.openActionsMap;
-      overdueActionsMap = maps.overdueActionsMap;
-      chaseActionsMap = maps.chaseActionsMap;
-      rememberAuxiliary();
+      applyLatePatch("actions", () => {
+        openActionsMap = maps.openActionsMap;
+        overdueActionsMap = maps.overdueActionsMap;
+        chaseActionsMap = maps.chaseActionsMap;
+        rememberAuxiliary();
+      });
     }, () => {});
     void queriesPromise.then((counts) => {
-      queryCounts = counts;
-      rememberAuxiliary();
+      applyLatePatch("queries", () => {
+        queryCounts = counts;
+        rememberAuxiliary();
+      });
     }, () => {});
     void namesPromise.then((map) => {
-      displayNames = map;
-      rememberAuxiliary();
+      applyLatePatch("names", () => {
+        displayNames = map;
+        rememberAuxiliary();
+      });
     }, () => {});
     void orphansPromise.then((ids) => {
-      linked = new Set(ids.filter((id): id is string => Boolean(id)));
-      rememberAuxiliary();
+      applyLatePatch("orphans", () => {
+        linked = new Set(ids.filter((id): id is string => Boolean(id)));
+        rememberAuxiliary();
+      });
     }, () => {});
-
-    const peekedNames = await Promise.race([
-      namesPromise.then((map) => map),
-      Promise.resolve(null as Map<string, string> | null),
-    ]);
-    if (gen !== loadGen.current) return;
-    if (peekedNames) displayNames = peekedNames;
 
     const figures = await figuresPromise;
     if (gen !== loadGen.current) return;
@@ -2419,7 +2433,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         ) : null}
 
         {scoredRows.length > 0 ? (
-          <CheckoutAfterInsight clientCount={trialAllowance?.upgrade?.clientCount ?? null} />
+          <CheckoutAfterInsight
+            clientCount={trialAllowance?.upgrade?.clientCount ?? null}
+            variant="practice-home"
+          />
         ) : null}
           </>
         ) : null}

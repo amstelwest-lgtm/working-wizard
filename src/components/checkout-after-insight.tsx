@@ -25,6 +25,7 @@ export function CheckoutAfterInsight({
   priceLabel,
   clientCount,
   quote,
+  variant = "client",
 }: {
   priceLabel?: string | null;
   /**
@@ -34,6 +35,11 @@ export function CheckoutAfterInsight({
   clientCount?: number | null;
   /** Firm billing quote. Omit it and this block loads the wall's quote. */
   quote?: { market?: string | null; priceLabel?: string | null } | null;
+  /**
+   * Practice home drops the client-file heading. Client pages keep it.
+   * The kicker, approved line, and button stay on both.
+   */
+  variant?: "client" | "practice-home";
 } = {}) {
   const { user } = useAuth();
   const profile = useOptionalAccountantProfile();
@@ -91,7 +97,7 @@ export function CheckoutAfterInsight({
       aria-label="Continue after the figures"
     >
       <p className="kicker">Next · {planName}</p>
-      <h3>The figures stay on this client.</h3>
+      {variant === "client" ? <h3>The figures stay on this client.</h3> : null}
       <TrialCardSentence
         priceLabel={priceLabel ?? loadedPrice}
         line={clientCount === undefined ? undefined : cardFreeTrialLine(clientCount)}

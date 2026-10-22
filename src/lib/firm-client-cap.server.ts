@@ -1049,6 +1049,7 @@ export async function buildUpgradeSnapshot(input: {
     }),
     interval,
     zarByBand,
+    zarPlan: showZar,
     zaLabels,
     zaPriceLabel,
   };

@@ -138,6 +138,9 @@ export function FirmBandUpgrade({
   const starterLeads = currentBand == null && selected === "starter";
   const startHereBand = currentBand ?? (starterLeads ? "starter" : null);
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
+  // A missing rand quote leaves labels empty and the currency on USD.
+  // zarPlan still selects the published ladder. Without it, the row falls
+  // back to the USD catalog. Charge currency is unchanged.
   const saFirm = zarPlan || zaLabels != null || priceCurrency.toLowerCase() === "zar";
 
   async function applyVoucher(): Promise<boolean> {
