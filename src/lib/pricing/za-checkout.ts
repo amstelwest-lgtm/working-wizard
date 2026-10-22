@@ -1,4 +1,5 @@
 import type { StripePlanMarket } from "@/lib/stripe-plans";
+import { resolveCheckoutPriceMarket } from "@/lib/pricing/market-resolution";
 import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
 
 /**
@@ -7,14 +8,15 @@ import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
  * because the address is collected during Checkout.
  * A known non-ZA country falls back to the USD price.
  */
+/** Checkout currency for a stored firm market. The rule lives in resolveCheckoutPriceMarket. */
 export function priceMarketForFirm(input: {
   firmMarket: StripePlanMarket;
   billingCountry?: string | null;
 }): StripePlanMarket {
-  if (input.firmMarket !== "za") return "us";
-  const country = (input.billingCountry ?? "").trim().toUpperCase();
-  if (country && country !== "ZA") return "us";
-  return "za";
+  return resolveCheckoutPriceMarket({
+    storedFirmMarket: input.firmMarket === "za" ? { country: "ZA" } : { country: "US" },
+    billingCountry: input.billingCountry,
+  });
 }
 
 /** After Checkout, a missing country is not enough to keep the rand price. */

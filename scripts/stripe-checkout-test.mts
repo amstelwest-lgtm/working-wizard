@@ -315,10 +315,10 @@ assert(
 );
 assert(resolveFirmCheckoutMarket(null, "us") === "us", "no firm row and a US request stays USD");
 assert(resolveFirmCheckoutMarket(null, "za") === "us", "no firm row ignores a za request");
-assert(resolveFirmCheckoutMarket(null, "za", "ZA") === "za", "no firm row in ZA uses the edge");
+assert(resolveFirmCheckoutMarket(null, "za", "ZA") === "us", "no firm row ignores ZA geo");
 assert(
-  resolveFirmCheckoutMarket(null, "us", "ZA") === "za",
-  "no firm row in ZA does not follow a us URL",
+  resolveFirmCheckoutMarket(null, "us", "ZA") === "us",
+  "no firm row ignores geo and a us URL",
 );
 const usFirmZaBill = firmCheckoutCharge({
   firmMarket: { country: "US", regionCode: "CA" },
@@ -396,14 +396,13 @@ const usWithCoupon = firmCheckoutSessionParams({
   userId: "user_1",
   email: "firm@example.com",
   market: "us",
-  zaCouponId: "MILON_ZA_50",
   integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
   includeTrial: true,
 });
 assert(usWithCoupon.adaptive_pricing?.enabled === false, "US session disables Adaptive Pricing");
 assert(
-  !usWithCoupon.discounts?.some((entry) => "coupon" in entry && entry.coupon === "MILON_ZA_50"),
-  "the SA 50% coupon never attaches for a US firm",
+  !usWithCoupon.discounts?.some((entry) => "coupon" in entry),
+  "a US firm session does not attach a coupon",
 );
 const zaWithCoupon = firmCheckoutSessionParams({
   priceId: "price_test_solo_month",
@@ -414,7 +413,6 @@ const zaWithCoupon = firmCheckoutSessionParams({
   userId: "user_1",
   email: "firm@example.com",
   market: "za",
-  zaCouponId: "MILON_ZA_50",
   integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
   includeTrial: false,
 });
@@ -428,8 +426,8 @@ assert(
 );
 assert(zaWithCoupon.allow_promotion_codes !== true, "a rand session hides the promotion box");
 assert(
-  !zaWithCoupon.discounts?.some((entry) => "coupon" in entry && entry.coupon === "MILON_ZA_50"),
-  "a rand session does not attach the old coupon",
+  !zaWithCoupon.discounts?.some((entry) => "coupon" in entry),
+  "a rand session does not attach a coupon",
 );
 const usUpgrade = firmUpgradeCheckoutSessionParams({
   priceId: "price_test_solo_month",
@@ -440,7 +438,6 @@ const usUpgrade = firmUpgradeCheckoutSessionParams({
   userId: "user_1",
   email: "firm@example.com",
   market: "us",
-  zaCouponId: "MILON_ZA_50",
   integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
   includeTrial: false,
 });
@@ -842,10 +839,6 @@ assert(
 );
 assert(zaParams.allow_promotion_codes !== true, "owner Checkout hides the promotion box");
 assert(!zaParams.discounts, "owner Checkout attaches no coupon");
-assert(
-  !JSON.stringify(zaParams).includes("MILON_ZA_50"),
-  "owner Checkout does not stack the firm coupon",
-);
 assert(!/vat/i.test(JSON.stringify(zaParams)), "owner Checkout has no VAT wording");
 assert(!zaParams.subscription_data?.trial_period_days, "owner Checkout has no trial");
 assert(zaParams.metadata?.milon_plan === "owner", "owner session is marked owner");

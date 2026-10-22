@@ -391,7 +391,6 @@ function FirmClientCapNotice({
                 canUpgrade: cap.upgrade.canUpgrade,
                 clientCount: cap.upgrade.clientCount,
                 usageLabel: cap.upgrade.usageLabel,
-                saDiscount: cap.upgrade.saDiscount,
                 zaLabels: cap.upgrade.zaLabels,
                 phase: cap.upgrade.phase,
               }
@@ -455,7 +454,6 @@ function FirmClientCapNotice({
           canUpgrade={upgrade.canUpgrade}
           clientCount={upgrade.clientCount}
           usageLabel={upgrade.usageLabel}
-          saDiscount={upgrade.saDiscount}
           zaLabels={upgrade.zaLabels}
           cardFree={cap.starterTrial.cardFree === true && !cap.starterTrial.expired}
           upgrading={upgrading}

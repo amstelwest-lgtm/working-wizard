@@ -35,7 +35,8 @@ import {
   visitorMarketBootScript,
 } from "@/lib/market/marketing";
 import { draftToSelection, marketToJson } from "@/lib/market/parse";
-import { readVisitorDraft, writeVisitorDraft } from "@/lib/market/storage";
+import { readVisitorChoice, writeVisitorDraft } from "@/lib/market/storage";
+import { resolveVisitorDraft } from "@/lib/pricing/market-resolution";
 import type { DraftMarket } from "@/lib/market/types";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
@@ -395,8 +396,12 @@ function LandingPage() {
   // reads draftMarket on every render. A later const is a TDZ crash
   // (ReferenceError: Cannot access 'draftMarket' before initialization)
   // and white-screens the landing page.
-  const [draftMarket, setDraftMarket] = useState<DraftMarket>(
-    urlDraft?.country ? urlDraft : geoZa ? { country: "ZA", regionCode: null } : (urlDraft ?? { country: null, regionCode: null }),
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
+    resolveVisitorDraft({
+      geoCountry: geoZa ? "ZA" : null,
+      saved: urlDraft,
+      choiceFromThisVisit: Boolean(urlDraft?.country),
+    }),
   );
   const marketReady = useRef(false);
   // Hero and pricing copy follow the server pack, not this draft. The draft
@@ -408,15 +413,16 @@ function LandingPage() {
     setMounted(true);
   }, []);
   // Storage is client-only. Apply it after the first paint so SSR and hydration agree.
-  // A stored ZA country is ignored unless the edge is ZA.
+  // A stale saved country does not override geo. ?market= on this request does.
   useEffect(() => {
-    const stored = readVisitorDraft();
-    const allowed = geoZa || stored.country !== "ZA" ? stored : { country: null, regionCode: null };
-    setDraftMarket((current) => {
-      if (current.country) return current;
-      if (allowed.country) return allowed;
-      return geoZa ? { country: "ZA", regionCode: null } : { country: "US", regionCode: null };
-    });
+    const choice = readVisitorChoice();
+    setDraftMarket(
+      resolveVisitorDraft({
+        geoCountry: geoZa ? "ZA" : null,
+        saved: choice.draft,
+        choiceFromThisVisit: choice.fromThisVisit,
+      }),
+    );
     marketReady.current = true;
   }, [geoZa]);
 

@@ -102,7 +102,6 @@ const zar = firmCheckoutSessionParams({
   userId: "user_1",
   email: "firm@example.com",
   market: "za",
-  zaCouponId: "MILON_ZA_50",
   integrationIdentifier: "milon-solo-month-abcdefgh",
   includeTrial: true,
 });
@@ -110,17 +109,11 @@ assert(zar.adaptive_pricing?.enabled === false, "rand checkout does not use adap
 assert(zar.automatic_tax?.enabled === false, "rand checkout does not enable automatic tax");
 assert(!zar.line_items?.some((item) => "tax_rates" in item && item.tax_rates), "no tax rates");
 assert(zar.allow_promotion_codes !== true, "rand checkout hides the promotion box");
-assert(!JSON.stringify(zar.discounts ?? []).includes("MILON_ZA_50"), "the old coupon is not attached");
+assert(!JSON.stringify(zar.discounts ?? []).includes("coupon"), "a coupon is not attached");
 assert(!JSON.stringify(zar.discounts ?? []).includes("promo_founding"), "FOUNDING is not stacked on rand");
-
-const cleared = firmUpgradeDiscounts({
-  zaCouponId: "MILON_ZA_50",
-  existing: [{ id: "di_za", couponId: "MILON_ZA_50" }],
-});
-assert(JSON.stringify(cleared) === "[]", "an existing coupon is cleared");
 assert(
-  firmUpgradeDiscounts({ zaCouponId: "MILON_ZA_50", existing: [] }) == null,
-  "nothing to clear stays untouched",
+  firmUpgradeDiscounts({ promotionCodeId: null, existing: [{ id: "di_old", couponId: "coupon_old" }] }) == null,
+  "without a voucher, discounts are left alone",
 );
 
 console.log("za-pricing-test: ok", expectedAnnual.solo);

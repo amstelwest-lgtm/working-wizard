@@ -9,7 +9,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { stripePlanMarketFromFirm } from "../src/lib/billing-market.ts";
 import { openQueriesPhase, practiceClientsPhase, settleWithin } from "../src/lib/bounded-load.ts";
-import { isSaMarketFirm } from "../src/lib/firm-sa-market.ts";
+import { resolveFirmMarket } from "../src/lib/pricing/market-resolution.ts";
 import { parseMarketSelection } from "../src/lib/market/parse.ts";
 import { effectiveFirmMarket, marketForFirm } from "../src/lib/market/scope.ts";
 import { regionFormFromSaved } from "../src/lib/region-settings.ts";
@@ -47,10 +47,7 @@ assert(
 );
 
 assert(stripePlanMarketFromFirm(null) === "us", "checkout still treats a missing blob as not ZA");
-assert(
-  isSaMarketFirm({ market: null }) === false,
-  "the ZA coupon still requires a stored ZA market",
-);
+assert(resolveFirmMarket(null) === "us", "a missing firm market is not ZA");
 
 const unset = regionFormFromSaved({ loaded: true, saved: null });
 assert(

@@ -154,7 +154,6 @@ const PLAN = {
     dayOfTrial: null,
     daysLeft: null,
   },
-  saDiscount: true,
   zaLabels: null,
   zaPriceLabel: null,
 };

@@ -15,10 +15,12 @@ import {
   type FirmPlanDisplay,
   type FirmSubscriptionPhase,
 } from "@/lib/firm-client-cap";
+import { resolveFirmMarket, resolveFirmPriceCurrency } from "@/lib/pricing/market-resolution";
 import {
   readSubscriptionDiscountRefs,
+  UnexpandedStripeDiscountError,
   type StoredDiscountRef,
-} from "@/lib/firm-sa-market";
+} from "@/lib/stripe-discount";
 import { noPlanTrialClock, starterTrialClock, type StarterTrialBanner } from "@/lib/firm-starter-trial";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
@@ -243,7 +245,7 @@ async function listCustomerSubscriptions(
           customer: customerId,
           status: "all",
           limit: 20,
-          expand: ["data.items.data.price"],
+          expand: ["data.items.data.price", "data.discounts"],
         },
         listOptions,
       ) as unknown as Promise<{ data: ListedSubscription[] }>,
@@ -261,6 +263,7 @@ async function listCustomerSubscriptions(
           customer: customerId,
           status: "all",
           limit: 20,
+          expand: ["data.discounts"],
         },
         listOptions,
       ) as unknown as Promise<{ data: ListedSubscription[] }>,
@@ -270,9 +273,42 @@ async function listCustomerSubscriptions(
   return { customerId, data: listed.data };
 }
 
+/** Bare ids stay on the plan. The coupon is unknown, so nothing is cleared. */
+function keptBareDiscountRefs(raw: { discount?: unknown; discounts?: unknown }): StoredDiscountRef[] {
+  const values: unknown[] = [];
+  if (typeof raw.discounts === "string" || Array.isArray(raw.discounts)) {
+    values.push(...(Array.isArray(raw.discounts) ? raw.discounts : [raw.discounts]));
+  }
+  if (raw.discount != null) values.push(raw.discount);
+  const out: StoredDiscountRef[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const id = value.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, couponId: null, promotionCodeId: null });
+  }
+  return out;
+}
+
+function planDiscountRefs(
+  raw: { discount?: unknown; discounts?: unknown },
+  firmId: string | null | undefined,
+): StoredDiscountRef[] {
+  try {
+    return readSubscriptionDiscountRefs(raw);
+  } catch (err) {
+    if (!(err instanceof UnexpandedStripeDiscountError)) throw err;
+    console.warn(`[stripe] unexpanded discounts kept firm=${(firmId ?? "").trim()}`);
+    return keptBareDiscountRefs(raw);
+  }
+}
+
 function entitlingFromListed(
   customerId: string | null,
   data: ListedSubscription[],
+  firmId?: string | null,
 ): EntitlingFirmSubscription | null {
   if (!customerId) return null;
   const ranked = data.map((sub) => {
@@ -356,7 +392,7 @@ function entitlingFromListed(
     unitAmount: hit.price.unitAmount,
     metadata: hit.metadata,
     hasDefaultPaymentMethod: Boolean(defaultPaymentMethod || defaultSource),
-    discounts: readSubscriptionDiscountRefs(hit.raw as { discount?: unknown; discounts?: unknown }),
+    discounts: planDiscountRefs(hit.raw as { discount?: unknown; discounts?: unknown }, firmId),
   };
 }
 
@@ -406,7 +442,7 @@ export async function readFirmSubscriptionHistory(
   const load = async (): Promise<FirmSubscriptionHistory> => {
     const listed = await listCustomerSubscriptions(email, ids);
     return {
-      entitling: entitlingFromListed(listed.customerId, listed.data),
+      entitling: entitlingFromListed(listed.customerId, listed.data, ids.firmId),
       priorSubscriptionCount: listed.data.length,
     };
   };
@@ -792,12 +828,11 @@ export async function loadFirmPlanDisplay(input: {
       clientLimit: null,
       usageLabel: null,
       canUpgrade: false,
-      priceCurrency: "USD",
+      priceCurrency: resolveFirmPriceCurrency(null),
       interval: "month",
       zarByBand: {},
       starterTrial: idleStarterTrialBanner(),
       introTrialEligible: false,
-      saDiscount: false,
     };
   }
 
@@ -825,7 +860,6 @@ export async function loadFirmPlanDisplay(input: {
       zarByBand: {},
       starterTrial: idleStarterTrialBanner(),
       introTrialEligible: false,
-      saDiscount: false,
       zaLabels: null,
       zaPriceLabel: null,
     };
@@ -874,7 +908,6 @@ export async function loadFirmPlanDisplay(input: {
     zarByBand: upgrade.zarByBand,
     starterTrial,
     introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
-    saDiscount: upgrade.saDiscount,
     zaLabels: upgrade.zaLabels ?? null,
     zaPriceLabel: upgrade.zaPriceLabel ?? null,
   };
@@ -944,7 +977,7 @@ export async function buildUpgradeSnapshot(input: {
   const band = input.sub?.band ?? null;
   const clientLimit = firmUsageLimit(phase, band, input.sub?.unitAmount);
   const interval = input.sub?.interval === "year" ? "year" : "month";
-  const marketCountry = parseMarketSelection(input.market)?.country ?? null;
+  const marketCountry = resolveFirmMarket(input.market) === "za" ? "ZA" : null;
   const billingCurrency = billingCurrencyCode({
     stripeCurrency: input.sub?.currency,
     marketCountry,
@@ -972,8 +1005,8 @@ export async function buildUpgradeSnapshot(input: {
       const { loadSaPricingCopy } = await import("@/lib/pricing/za-pricing-chunk.server");
       const copy = loadSaPricingCopy();
       zaLabels = copy.labels;
-      // Same band as Checkout and the ZA coupon. The list above can still
-      // be rand for a client mix whose billing country is not yet ZA.
+      // Same band as Checkout. The list above can still be rand for a client
+      // mix whose billing country is not yet ZA.
       if (charge.priceMarket === "za") {
         zaPriceLabel = copy.labels[pricedBand][interval];
       }
@@ -1016,7 +1049,6 @@ export async function buildUpgradeSnapshot(input: {
     }),
     interval,
     zarByBand,
-    saDiscount: showZar,
     zaLabels,
     zaPriceLabel,
   };

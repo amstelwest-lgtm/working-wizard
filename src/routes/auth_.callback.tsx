@@ -39,7 +39,7 @@ import {
   draftToSelection,
   isDraftComplete,
   marketToJson,
-  readVisitorDraft,
+  readVisitorChoice,
   readVisitorMarket,
   withMarketRpcFallback,
   writeVisitorMarket,
@@ -434,15 +434,21 @@ function AuthCallbackPage() {
         let market = googlePracticeFirmMarket({
           draftCountry: draft?.marketCountry,
           draftRegion: draft?.marketRegion,
-          visitor: readVisitorMarket(),
+          visitor: null,
           geoCountry: null,
         });
         if (provisionPractice && !market) {
           geoCountry = await readGeoCountry().catch(() => "");
+          const choice = readVisitorChoice();
+          const seeded = googlePracticePickerDraft({
+            visitorDraft: choice.draft,
+            geoCountry,
+            choiceFromThisVisit: choice.fromThisVisit,
+          });
           market = googlePracticeFirmMarket({
             draftCountry: draft?.marketCountry,
             draftRegion: draft?.marketRegion,
-            visitor: readVisitorMarket(),
+            visitor: draftToSelection(seeded),
             geoCountry,
           });
         }
@@ -557,10 +563,12 @@ function AuthCallbackPage() {
       next: input.next,
       joinToken: input.joinToken,
     });
+    const choice = readVisitorChoice();
     setPracticeDraft(
       googlePracticePickerDraft({
-        visitorDraft: readVisitorDraft(),
+        visitorDraft: choice.draft,
         geoCountry: input.geoCountry,
+        choiceFromThisVisit: choice.fromThisVisit,
       }),
     );
     setPracticeError("");

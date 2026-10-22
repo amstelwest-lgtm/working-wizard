@@ -80,6 +80,7 @@ export {
 export { resolveMarket, ZA_MARKET } from "./resolve";
 export { effectiveFirmMarket, marketForClient, marketForFirm } from "./scope";
 export {
+  readVisitorChoice,
   readVisitorDraft,
   readVisitorMarket,
   visitorMarketFromSearch,

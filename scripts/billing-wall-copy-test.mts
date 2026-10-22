@@ -436,7 +436,6 @@ function openPathUpgrade(clientCount: number) {
     priceCurrency: "USD" as const,
     interval: "month" as const,
     zarByBand: {},
-    saDiscount: false,
     zaLabels: null,
     zaPriceLabel: null,
   };

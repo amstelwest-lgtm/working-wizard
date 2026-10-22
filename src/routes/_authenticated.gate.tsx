@@ -39,7 +39,8 @@ import { FirmBillingAccessProvider } from "@/contexts/firm-billing-access";
 import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
-import { bootMarketLabel, markBootContent, SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { resolveFirmBootMarket } from "@/lib/pricing/market-resolution";
+import { markBootContent, SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
 import {
   lastKnownEntitlementForFirm,
@@ -573,7 +574,7 @@ export function AuthGate() {
       !showWall);
   useEffect(() => {
     if (loading || !user || gateShowsSkeleton) return;
-    const market = bootMarketLabel(firmMarket);
+    const market = resolveFirmBootMarket(firmMarket);
     // /practice opens before the firm row. Hold the line until that country
     // is known, or the firm read has finished without one. ms stays the shell.
     const marketReady = firmsLoaded || firmsLoadFailed || market !== "unknown";

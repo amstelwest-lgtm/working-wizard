@@ -48,9 +48,6 @@ export const LIGHTHOUSE_CHAT_PROMPTS = [
 export const CHAT_TEASER_ACCOUNTANT = ACCOUNTANT_TEASER_PRACTICE;
 export const CHAT_TEASER_OWNER = ACCOUNTANT_TEASER_OWNER;
 
-const SA_DISCOUNT_LINE =
-  "South African firms can take the 50% discount on this cohort.";
-
 const QBO_XERO_LEAD =
   "QuickBooks Online and Xero plug straight in. Milōn works as an autonomous agent: it diagnoses from the numbers and produces advisory deliverables.";
 
@@ -286,10 +283,6 @@ export function forbiddenChatAction(
   return null;
 }
 
-export function saDiscountAllowed(geo: LighthouseGeo | string | null | undefined): boolean {
-  return geo === "SA";
-}
-
 function toAgentLead(row: ChatLeadInput): AgentLead {
   return {
     id: row.id,
@@ -511,7 +504,7 @@ Locks:
 When you draft, the body is plain text, short, and human.
 - Lead with QuickBooks Online and Xero plug-and-play, and Milōn as an autonomous agent that diagnoses from the numbers and produces advisory deliverables.
 - Include both teasers when a draft is the right move: ${CHAT_TEASER_ACCOUNTANT} and ${CHAT_TEASER_OWNER}.
-- Mention the South African 50% discount only when the firm geo is SA. Never mention it for a US firm.
+- Do not mention a discount or a percent off.
 - action must be "answer" or "draft". Never "send", "approve", or "schedule".
 
 Return ONLY JSON: {"reply":"...","action":"answer","chips":[{"kind":"firm","id":"...","label":"..."}],"draft":null}`;
@@ -773,7 +766,6 @@ export function nextDraftStep(firm: ChatFirm): number {
 
 export function composeFollowUpDraft(firm: ChatFirm): { subject: string; body: string } {
   const greeting = "Hi,";
-  const sa = saDiscountAllowed(firm.geo) ? `\n${SA_DISCOUNT_LINE}\n` : "";
   const body = `${greeting}
 
 ${QBO_XERO_LEAD}
@@ -781,7 +773,7 @@ ${QBO_XERO_LEAD}
 Two short clips, one for the accountant and one for the owner:
 ${CHAT_TEASER_ACCOUNTANT}
 ${CHAT_TEASER_OWNER}
-${sa}
+
 Worth a reply if that is the gap at ${firm.title}?
 
 ${LIGHTHOUSE_SENDER_NAME}`;
@@ -808,7 +800,7 @@ export function lockChatDraft(input: {
   body = body
     .split("\n")
     .filter((line) => !BANNED_DRAFT.test(line))
-    .filter((line) => (saDiscountAllowed(input.geo) ? true : !/50\s*%|discount/i.test(line)))
+    .filter((line) => !/50\s*%|discount/i.test(line))
     .join("\n");
   body = body.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "");
   body = body.replace(/[!]{1,}/g, ".");
@@ -824,17 +816,12 @@ export function lockChatDraft(input: {
   if (!body.includes(CHAT_TEASER_ACCOUNTANT) || !body.includes(CHAT_TEASER_OWNER)) {
     body = `${body}\n\nAccountant: ${CHAT_TEASER_ACCOUNTANT}\nOwner: ${CHAT_TEASER_OWNER}`.trim();
   }
-  if (saDiscountAllowed(input.geo) && !/50\s*%/.test(body)) {
-    body = `${body}\n\n${SA_DISCOUNT_LINE}`.trim();
-  }
-  if (!saDiscountAllowed(input.geo)) {
-    body = body
-      .split("\n")
-      .filter((line) => !/50\s*%|discount/i.test(line))
-      .join("\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-  }
+  body = body
+    .split("\n")
+    .filter((line) => !/50\s*%|discount/i.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   body = `${body}\n\n${LIGHTHOUSE_SENDER_NAME}`;
 
   let subject = input.subject
@@ -843,7 +830,7 @@ export function lockChatDraft(input: {
     .replace(/\s{2,}/g, " ")
     .replace(/\s+([,.:])/g, "$1")
     .trim();
-  if (!saDiscountAllowed(input.geo)) subject = subject.replace(/50\s*%|discount/gi, "").trim();
+  subject = subject.replace(/50\s*%|discount/gi, "").trim();
   if (!subject || /^(a note from,?|hi,?|hello,?)$/i.test(subject)) {
     subject = "QuickBooks, Xero, and the books";
   }

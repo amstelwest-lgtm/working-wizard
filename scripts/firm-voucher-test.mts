@@ -1,5 +1,5 @@
 /**
- * Firm upgrade vouchers: Stripe promotion codes replace the SA 50% coupon.
+ * Firm upgrade vouchers: Stripe promotion codes.
  * Run: pnpm test:firm-voucher
  */
 import { readFileSync } from "node:fs";
@@ -7,7 +7,6 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
-import { SA_FIRM_DISCOUNT_NOTE } from "../src/lib/firm-sa-market";
 import {
   firmSetupCheckoutMessage,
   firmSetupCheckoutSessionParams,
@@ -19,6 +18,7 @@ import {
   assessFirmVoucher,
   firmUpgradeDiscounts,
   firmUpgradeResultMessage,
+  readCheckoutUpgradeDiscounts,
   firmVoucherPricePreview,
   voucherDiscountedCents,
   FIRM_VOUCHER_INVALID_MESSAGE,
@@ -26,6 +26,12 @@ import {
   isBenignZeroInvoiceError,
 } from "../src/lib/firm-voucher";
 import { resolveFirmVoucher } from "../src/lib/firm-voucher.server";
+import {
+  LEGACY_ZA_COUPON_ID,
+  LEGACY_ZA_COUPON_ON_UPGRADE,
+  readSubscriptionDiscountRefs,
+  UnexpandedStripeDiscountError,
+} from "../src/lib/stripe-discount";
 import { upgradeSuccessMessage } from "../src/lib/firm-band-upgrade";
 
 function assert(cond: boolean, msg: string) {
@@ -153,35 +159,277 @@ assert(firstTimeFresh.ok, "no prior payment can use a first-time code");
 assert(
   firmUpgradeDiscounts({
     promotionCodeId: "promo_free",
-    zaCouponId: "MILON_ZA_50",
-    existing: [{ id: "di_za", couponId: "MILON_ZA_50", promotionCodeId: null }],
+    existing: [{ id: "di_old", couponId: "coupon_old", promotionCodeId: null }],
   })?.length === 1 &&
     JSON.stringify(
       firmUpgradeDiscounts({
         promotionCodeId: "promo_free",
-        zaCouponId: "MILON_ZA_50",
-        existing: [{ id: "di_za", couponId: "MILON_ZA_50", promotionCodeId: null }],
+        existing: [{ id: "di_old", couponId: "coupon_old", promotionCodeId: null }],
       }),
     ) === JSON.stringify([{ promotion_code: "promo_free" }]),
-  "an SA firm with a voucher keeps only the voucher",
+  "a voucher replaces every other discount",
 );
 assert(
-  firmUpgradeDiscounts({ promotionCodeId: null, zaCouponId: "MILON_ZA_50", existing: [] }) == null,
-  "an SA firm without a voucher does not get the old coupon",
+  firmUpgradeDiscounts({ promotionCodeId: null, existing: [] }) == null,
+  "without a voucher, discounts are left alone",
+);
+assert(
+  firmUpgradeDiscounts({
+    promotionCodeId: null,
+    existing: [{ id: "di_old", couponId: "coupon_old" }],
+  }) == null,
+  "without a voucher, a non-legacy discount is not rewritten",
+);
+
+const legacyOnly = [{ id: "di_za", couponId: LEGACY_ZA_COUPON_ID, promotionCodeId: null }];
+const legacyPlusOther = [
+  ...legacyOnly,
+  { id: "di_other", couponId: "coupon_other", promotionCodeId: null },
+];
+assert(LEGACY_ZA_COUPON_ON_UPGRADE === "clear", "the upgrade switch defaults to clear");
+assert(
+  JSON.stringify(
+    firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly, legacyZaCoupon: "clear" }),
+  ) === "[]",
+  "checkout path clear drops a lone legacy coupon",
 );
 assert(
   JSON.stringify(
     firmUpgradeDiscounts({
       promotionCodeId: null,
-      zaCouponId: "MILON_ZA_50",
-      existing: [{ id: "di_za", couponId: "MILON_ZA_50" }],
+      existing: legacyPlusOther,
+      legacyZaCoupon: "clear",
     }),
-  ) === "[]",
-  "an existing coupon is cleared so it cannot stack",
+  ) === JSON.stringify([{ discount: "di_other" }]),
+  "checkout path clear keeps a non-legacy discount",
 );
 assert(
-  firmUpgradeDiscounts({ promotionCodeId: null, zaCouponId: null, existing: [] }) == null,
-  "a US firm never gets the SA coupon",
+  firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly, legacyZaCoupon: "keep" }) ==
+    null,
+  "checkout path keep leaves the legacy coupon",
+);
+assert(
+  JSON.stringify(
+    firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly, legacyZaCoupon: "clear" }),
+  ) === "[]",
+  "billing sync path clear drops a lone legacy coupon",
+);
+assert(
+  firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly, legacyZaCoupon: "keep" }) ==
+    null,
+  "billing sync path keep leaves the legacy coupon",
+);
+assert(
+  JSON.stringify(firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly })) === "[]",
+  "the default switch clears the legacy coupon",
+);
+
+const dahliaLegacySub = {
+  discounts: [
+    {
+      id: "di_za",
+      object: "discount",
+      source: { type: "coupon", coupon: "MILON_ZA_50" },
+    },
+  ],
+};
+const dahliaLegacyRefs = readSubscriptionDiscountRefs(dahliaLegacySub);
+assert(
+  dahliaLegacyRefs.length === 1 && dahliaLegacyRefs[0]?.couponId === LEGACY_ZA_COUPON_ID,
+  "a Dahlia discount coupon is read from source.coupon",
+);
+assert(
+  JSON.stringify(
+    firmUpgradeDiscounts({
+      promotionCodeId: null,
+      existing: dahliaLegacyRefs,
+      legacyZaCoupon: "clear",
+    }),
+  ) === "[]",
+  "checkout path clear drops a Dahlia MILON_ZA_50",
+);
+assert(
+  firmUpgradeDiscounts({
+    promotionCodeId: null,
+    existing: dahliaLegacyRefs,
+    legacyZaCoupon: "keep",
+  }) == null,
+  "checkout path keep preserves a Dahlia MILON_ZA_50",
+);
+assert(
+  JSON.stringify(
+    firmUpgradeDiscounts({
+      promotionCodeId: null,
+      existing: dahliaLegacyRefs,
+      legacyZaCoupon: "clear",
+    }),
+  ) === "[]",
+  "billing sync path clear drops a Dahlia MILON_ZA_50",
+);
+assert(
+  firmUpgradeDiscounts({
+    promotionCodeId: null,
+    existing: dahliaLegacyRefs,
+    legacyZaCoupon: "keep",
+  }) == null,
+  "billing sync path keep preserves a Dahlia MILON_ZA_50",
+);
+
+const legacyCouponObject = readSubscriptionDiscountRefs({
+  discounts: [{ id: "di_old_shape", coupon: { id: LEGACY_ZA_COUPON_ID } }],
+});
+assert(
+  legacyCouponObject[0]?.couponId === LEGACY_ZA_COUPON_ID &&
+    JSON.stringify(
+      firmUpgradeDiscounts({
+        promotionCodeId: null,
+        existing: legacyCouponObject,
+        legacyZaCoupon: "clear",
+      }),
+    ) === "[]",
+  "an older discount.coupon object still clears",
+);
+
+const dahliaVoucherRefs = readSubscriptionDiscountRefs({
+  discounts: [
+    {
+      id: "di_voucher",
+      object: "discount",
+      promotion_code: "promo_free",
+      source: { type: "coupon", coupon: "coupon_free" },
+    },
+  ],
+});
+assert(
+  dahliaVoucherRefs[0]?.couponId === "coupon_free" &&
+    dahliaVoucherRefs[0]?.promotionCodeId === "promo_free" &&
+    firmUpgradeDiscounts({ promotionCodeId: "promo_free", existing: dahliaVoucherRefs }) == null,
+  "a Dahlia voucher already on the subscription is left alone",
+);
+const fallbackCouponRefs = readSubscriptionDiscountRefs({
+  discounts: [
+    {
+      id: "di_voucher",
+      object: "discount",
+      promotion_code: { id: "promo_free" },
+      source: { type: "coupon", coupon: null },
+      coupon: { id: "coupon_free" },
+    },
+  ],
+});
+assert(
+  fallbackCouponRefs[0]?.couponId === "coupon_free" &&
+    fallbackCouponRefs[0]?.promotionCodeId === "promo_free" &&
+    firmUpgradeDiscounts({ promotionCodeId: "promo_free", existing: fallbackCouponRefs }) == null,
+  "a null source.coupon falls back to discount.coupon and the voucher stays applied",
+);
+
+let bareIdThrew = false;
+try {
+  readSubscriptionDiscountRefs({ discounts: ["di_za"] });
+} catch (err) {
+  bareIdThrew = err instanceof UnexpandedStripeDiscountError;
+}
+assert(bareIdThrew, "an unexpanded discount id is not treated as no discount");
+assert(
+  readSubscriptionDiscountRefs({ discounts: [] }).length === 0 &&
+    readSubscriptionDiscountRefs({}).length === 0,
+  "a subscription with no discounts stays empty",
+);
+
+const checkoutUpgrade = readFileSync(resolve("src/lib/stripe-checkout.functions.ts"), "utf8");
+const syncUpgrade = readFileSync(resolve("src/lib/stripe-billing-sync.server.ts"), "utf8");
+const capList = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
+assert(
+  checkoutUpgrade.includes("LEGACY_ZA_COUPON_ON_UPGRADE") &&
+    checkoutUpgrade.includes("clearLegacyZaCoupon") &&
+    checkoutUpgrade.includes("readCheckoutUpgradeDiscounts") &&
+    checkoutUpgrade.includes('expand: ["items.data.price", "discounts"]') &&
+    !checkoutUpgrade.includes("readSubscriptionDiscountRefs"),
+  "checkout re-reads expanded discounts and does not throw on a bare id",
+);
+
+const bareFirmId = "11111111-1111-4111-8111-111111111111";
+const bareExpands: string[][] = [];
+const bareWarnings: string[] = [];
+const originalWarn = console.warn;
+console.warn = (...args: unknown[]) => {
+  bareWarnings.push(args.map((part) => String(part)).join(" "));
+};
+let bareCheckoutThrew = false;
+let bareCheckoutDecision: unknown = "unset";
+try {
+  bareCheckoutDecision = await readCheckoutUpgradeDiscounts({
+    firmId: bareFirmId,
+    subscriptionId: "sub_bare",
+    fresh: { discounts: ["di_za"], customer: "cus_secret", email: "owner@example.com" },
+    promotionCodeId: "promo_free",
+    legacyZaCoupon: "clear",
+    retrieve: async (_id, params) => {
+      bareExpands.push(params.expand);
+      return { discounts: ["di_za"] };
+    },
+  });
+} catch {
+  bareCheckoutThrew = true;
+} finally {
+  console.warn = originalWarn;
+}
+assert(!bareCheckoutThrew, "a bare discount id on checkout does not throw");
+assert(bareCheckoutDecision == null, "a still-bare checkout keeps existing discounts");
+assert(
+  bareExpands.length === 1 && bareExpands[0]?.length === 1 && bareExpands[0]?.[0] === "discounts",
+  "checkout re-retrieves a bare discount id with expand discounts",
+);
+assert(
+  bareWarnings.length === 1 &&
+    bareWarnings[0] === `[stripe] unexpanded discounts kept firm=${bareFirmId}`,
+  "a still-bare checkout warns with the firm id only",
+);
+
+const recoveredExpands: string[][] = [];
+const recoveredWarnings: string[] = [];
+console.warn = (...args: unknown[]) => {
+  recoveredWarnings.push(args.map((part) => String(part)).join(" "));
+};
+let recovered: unknown;
+try {
+  recovered = await readCheckoutUpgradeDiscounts({
+    firmId: bareFirmId,
+    subscriptionId: "sub_recover",
+    fresh: { discounts: ["di_za"] },
+    promotionCodeId: null,
+    legacyZaCoupon: "clear",
+    retrieve: async (_id, params) => {
+      recoveredExpands.push(params.expand);
+      return {
+        discounts: [
+          {
+            id: "di_za",
+            object: "discount",
+            source: { type: "coupon", coupon: "MILON_ZA_50" },
+          },
+        ],
+      };
+    },
+  });
+} finally {
+  console.warn = originalWarn;
+}
+assert(
+  recoveredExpands.length === 1 && JSON.stringify(recovered) === "[]" && recoveredWarnings.length === 0,
+  "checkout clear drops MILON_ZA_50 once the re-retrieve expands it",
+);
+assert(
+  syncUpgrade.includes("legacyZaCoupon: LEGACY_ZA_COUPON_ON_UPGRADE") &&
+    syncUpgrade.includes('expand: ["items.data.price.product", "customer", "discounts"]') &&
+    syncUpgrade.includes('expand: ["items.data.price", "discounts"]'),
+  "billing sync expands discounts on the main and fallback subscription fetches",
+);
+assert(
+  capList.includes('expand: ["data.items.data.price", "data.discounts"]') &&
+    capList.includes('expand: ["data.discounts"]'),
+  "the firm plan list expands discounts before they are read",
 );
 
 const listed: Array<Record<string, unknown>> = [];
@@ -610,8 +858,8 @@ assert(
   "a Starter voucher upgrade bills the discounted price today",
 );
 assert(
-  !JSON.stringify(saVoucher.calls[0]?.discounts ?? []).includes("MILON_ZA_50"),
-  "the SA coupon is not stacked",
+  !JSON.stringify(saVoucher.calls[0]?.discounts ?? []).includes("coupon"),
+  "the voucher update does not stack a coupon",
 );
 assert(
   saApplied &&
@@ -632,6 +880,89 @@ const saKept = await completeFirmSetupUpgrade(session(), saPlain.stripe as never
 });
 assert(saKept?.notice == null, "an SA upgrade without a voucher has no voucher notice");
 assert(saPlain.calls[0]?.discounts == null, "an SA upgrade does not attach the old coupon");
+
+const dahliaExpands: string[][] = [];
+const dahliaSync = stripeFor({
+  promos: [],
+  beforeUpdateSub: () => ({
+    ...starterSub(),
+    discounts: [
+      {
+        id: "di_za",
+        object: "discount",
+        source: { type: "coupon", coupon: "MILON_ZA_50" },
+      },
+    ],
+  }),
+  onUpdate: (params) =>
+    upgradedSub(
+      { id: "in_dahlia", amount_due: 79900, total: 79900, status: "paid", paid: true },
+      String(params.metadata?.milon_lookup_key ?? "milon_za_solo_monthly"),
+    ),
+});
+const dahliaRetrieve = dahliaSync.stripe.subscriptions.retrieve;
+dahliaSync.stripe.subscriptions.retrieve = async (id: string, params?: { expand?: string[] }) => {
+  dahliaExpands.push(params?.expand ?? []);
+  return dahliaRetrieve(id, params);
+};
+const dahliaCleared = await completeFirmSetupUpgrade(session(), dahliaSync.stripe as never, {
+  firmMarket: { country: "ZA" },
+});
+assert(dahliaCleared?.updated === true, "billing sync still upgrades when a Dahlia coupon is present");
+assert(
+  JSON.stringify(dahliaSync.calls[0]?.discounts) === "[]",
+  "billing sync clear sends [] for a Dahlia MILON_ZA_50",
+);
+assert(
+  dahliaExpands.some((expand) => expand.includes("discounts")),
+  "billing sync retrieve expands discounts",
+);
+
+let bareSyncThrew = false;
+try {
+  const bareSync = stripeFor({
+    promos: [],
+    beforeUpdateSub: () => ({ ...starterSub(), discounts: ["di_za"] }),
+    onUpdate: () =>
+      upgradedSub({ id: "in_bare", amount_due: 9900, total: 9900, status: "paid", paid: true }),
+  });
+  await completeFirmSetupUpgrade(session(), bareSync.stripe as never, {
+    firmMarket: { country: "US" },
+  });
+} catch (err) {
+  bareSyncThrew = err instanceof UnexpandedStripeDiscountError;
+}
+assert(bareSyncThrew, "billing sync does not treat an unexpanded discount id as no discount");
+
+const dahliaVoucherSync = stripeFor({
+  promos: [promo()],
+  beforeUpdateSub: () => ({
+    ...starterSub(),
+    discounts: [
+      {
+        id: "di_voucher",
+        object: "discount",
+        promotion_code: "promo_free",
+        source: { type: "coupon", coupon: "coupon_100" },
+      },
+    ],
+  }),
+  onUpdate: (params) =>
+    upgradedSub(
+      zeroInvoice,
+      String(params.metadata?.milon_lookup_key ?? "milon_solo_monthly"),
+    ),
+});
+const voucherKept = await completeFirmSetupUpgrade(
+  session({ milon_promotion_code_id: "promo_free", milon_promotion_code: "FREEMONTH" }),
+  dahliaVoucherSync.stripe as never,
+  { firmMarket: { country: "US" } },
+);
+assert(voucherKept?.updated === true, "an already-applied Dahlia voucher still changes the price");
+assert(
+  dahliaVoucherSync.calls[0]?.discounts == null,
+  "billing sync leaves a Dahlia voucher that is already the only discount",
+);
 assert(
   saPlain.calls[0]?.metadata?.milon_lookup_key === "milon_za_solo_monthly",
   "an SA upgrade bills the rand lookup key",
@@ -646,10 +977,10 @@ const usResult = await completeFirmSetupUpgrade(session(), usPlain.stripe as nev
   firmMarket: { country: "US" },
 });
 assert(usResult?.band === "solo" && usResult.notice == null, "a US firm upgrades without a notice");
-assert(usPlain.calls[0]?.discounts == null, "a US firm is not given the SA coupon");
+assert(usPlain.calls[0]?.discounts == null, "a US firm is not given a coupon");
 assert(
-  !JSON.stringify(usPlain.calls[0]).includes("MILON_ZA_50"),
-  "the US update payload has no SA coupon",
+  !JSON.stringify(usPlain.calls[0]).includes("coupon"),
+  "the US update payload has no coupon",
 );
 
 const wrong = stripeFor({
@@ -810,7 +1141,6 @@ const picker = renderToStaticMarkup(
     priceCurrency: "USD",
     canUpgrade: true,
     clientCount: 1,
-    saDiscount: false,
     onUpgrade: () => undefined,
     onValidateVoucher: async () => ({ ok: false, message: FIRM_VOUCHER_INVALID_MESSAGE }),
   }),
@@ -818,7 +1148,7 @@ const picker = renderToStaticMarkup(
 assert(picker.includes("Have a voucher code?"), "the band picker offers a voucher");
 assert(picker.includes("<details"), "the voucher field is a disclosure");
 assert(!picker.includes("<details open"), "the voucher field is collapsed");
-assert(!picker.includes(SA_FIRM_DISCOUNT_NOTE), "a US picker does not show the SA note");
+assert(!picker.includes("50% off"), "a US picker does not show a percent-off note");
 assert(!picker.includes("$49.50"), "a US picker does not show the halved price");
 assert(!picker.includes("50% off"), "a US picker has no discount text");
 
@@ -829,7 +1159,6 @@ const saPicker = renderToStaticMarkup(
     priceCurrency: "USD",
     canUpgrade: true,
     clientCount: 1,
-    saDiscount: true,
     zaLabels: {
       solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
     },
@@ -838,7 +1167,7 @@ const saPicker = renderToStaticMarkup(
   }),
 );
 assert(saPicker.includes("R799/mo · about R53 per client"), "an SA picker shows the rand price");
-assert(!saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker does not show the old discount note");
+assert(!saPicker.includes("50% off"), "an SA picker does not show a percent-off note");
 assert(saPicker.includes("Have a voucher code?"), "an SA picker can enter a voucher");
 
 const lookup = readFileSync(resolve("src/lib/firm-voucher.server.ts"), "utf8");

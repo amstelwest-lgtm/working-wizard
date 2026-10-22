@@ -92,7 +92,6 @@ export function FinalWalkPreview() {
           priceCurrency="USD"
           canUpgrade={false}
           clientCount={1}
-          saDiscount
         />
       </section>
       <section id="cash-grid" className="mt-8">

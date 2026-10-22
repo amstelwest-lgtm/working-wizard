@@ -13,8 +13,8 @@ import { ownerRunPhase, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { supabase } from "@/integrations/supabase/client";
 import { bootSelect } from "@/lib/boot-read";
 import { formatDate } from "@/lib/market/format";
-import { visitorCopyPack } from "@/lib/market/marketing";
-import { readVisitorDraft } from "@/lib/market/storage";
+import { readRequestGeoCountry } from "@/lib/geo-country.functions";
+import { resolveOwnerMarket } from "@/lib/pricing/market-resolution";
 import type { ResolvedMarket } from "@/lib/market/types";
 import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
@@ -324,6 +324,7 @@ export function OwnerDoor({
   const [subscribeBusy, setSubscribeBusy] = useState(false);
   const loadEntitlement = useServerFn(getOwnerEntitlement);
   const loadSaPricing = useServerFn(readSaPricingCopy);
+  const readGeo = useServerFn(readRequestGeoCountry);
   const beginCheckout = useServerFn(startOwnerCheckout);
   const recRef = useRef<SpeechRec | null>(null);
   const listenGen = useRef(0);
@@ -385,8 +386,16 @@ export function OwnerDoor({
   }, [focusSigned, screen]);
 
   useEffect(() => {
-    setVisitor(visitorCopyPack(readVisitorDraft()));
     let cancelled = false;
+    const storedMarket =
+      marketCountry === "ZA" || marketCountry === "US" ? { country: marketCountry } : null;
+    void readGeo()
+      .then((geo) => {
+        if (!cancelled) setVisitor(resolveOwnerMarket({ storedMarket, geoCountry: geo }));
+      })
+      .catch(() => {
+        if (!cancelled) setVisitor(resolveOwnerMarket({ storedMarket, geoCountry: null }));
+      });
     void loadSaPricing()
       .then((copy) => {
         if (!cancelled) setZaMonthly(copy?.ownerMonthly ?? null);
@@ -397,7 +406,7 @@ export function OwnerDoor({
     return () => {
       cancelled = true;
     };
-  }, [loadSaPricing]);
+  }, [loadSaPricing, marketCountry, readGeo]);
 
   useEffect(() => {
     let cancelled = false;

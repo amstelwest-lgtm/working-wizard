@@ -52,8 +52,6 @@ export type FirmUpgradeAllowance = {
   priceCurrency: "USD" | "zar";
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
-  /** Practice list is in rand. Not the Checkout charge currency. */
-  saDiscount: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   zaPriceLabel?: string | null;
 };
@@ -280,7 +278,6 @@ export type FirmPlanDisplay = FirmPlanStatusCopy & {
   starterTrial: StarterTrialBanner;
   /** True when this billing customer has never had a Stripe subscription. */
   introTrialEligible: boolean;
-  saDiscount: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   zaPriceLabel?: string | null;
 };

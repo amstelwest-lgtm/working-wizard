@@ -3,6 +3,8 @@
  * hold a blank page. Server routes still enforce billing when the shell opens.
  */
 
+import { resolveFirmBootMarket } from "@/lib/pricing/market-resolution";
+
 /** How long a cold load may show a spinner before the shell opens anyway. */
 export const SHELL_GATE_TIMEOUT_MS = 8_000;
 
@@ -80,11 +82,7 @@ export function markAuthReady(): void {
 
 /** Stored country only. A missing or unreadable firm market is unknown. */
 export function bootMarketLabel(raw: unknown): "za" | "us" | "unknown" {
-  if (!raw || typeof raw !== "object") return "unknown";
-  const country = (raw as { country?: unknown }).country;
-  if (country === "ZA") return "za";
-  if (country === "US") return "us";
-  return "unknown";
+  return resolveFirmBootMarket(raw);
 }
 
 /**
