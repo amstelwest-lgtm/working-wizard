@@ -54,3 +54,61 @@ export function bootRouteBucket(pathname: string): "practice" | "client" | "owne
   if (/^\/clients\/.+/.test(path)) return "client";
   return /^\/(dashboard|practice|clients|reports)(\/|$)/.test(path) ? "practice" : "other";
 }
+
+const AUTH_READY_MARK = "auth-ready";
+const FIRST_CONTENT_MARK = "first-content";
+let bootTimingLogged = false;
+
+function performanceMarks(): Performance | null {
+  try {
+    if (typeof performance === "undefined" || typeof performance.mark !== "function") return null;
+    if (typeof performance.getEntriesByName !== "function") return null;
+    return performance;
+  } catch {
+    return null;
+  }
+}
+
+/** Signed-in auth has finished. Once per page load. No ids or emails. */
+export function markAuthReady(): void {
+  const marks = performanceMarks();
+  if (!marks || marks.getEntriesByName(AUTH_READY_MARK).length > 0) return;
+  marks.mark(AUTH_READY_MARK);
+}
+
+/** Stored country only. A missing or unreadable firm market is unknown. */
+export function bootMarketLabel(raw: unknown): "za" | "us" | "unknown" {
+  if (!raw || typeof raw !== "object") return "unknown";
+  const country = (raw as { country?: unknown }).country;
+  if (country === "ZA") return "za";
+  if (country === "US") return "us";
+  return "unknown";
+}
+
+/**
+ * The shell left its skeleton. One `[boot-timing]` line per page load.
+ * `route` is a bucket. `market` is za, us, or unknown.
+ */
+export function markBootContent(pathname: string, market: "za" | "us" | "unknown"): void {
+  if (bootTimingLogged) return;
+  const marks = performanceMarks();
+  if (!marks) return;
+  if (marks.getEntriesByName(AUTH_READY_MARK).length === 0) marks.mark(AUTH_READY_MARK);
+  if (marks.getEntriesByName(FIRST_CONTENT_MARK).length === 0) marks.mark(FIRST_CONTENT_MARK);
+  const ready = marks.getEntriesByName(AUTH_READY_MARK)[0];
+  const content = marks.getEntriesByName(FIRST_CONTENT_MARK)[0];
+  if (!ready || !content) return;
+  bootTimingLogged = true;
+  console.info("[boot-timing]", {
+    ms: Math.max(0, Math.round(content.startTime - ready.startTime)),
+    market,
+    route: bootRouteBucket(pathname),
+  });
+}
+
+export function resetBootTimingForTests(): void {
+  bootTimingLogged = false;
+  const marks = performanceMarks();
+  marks?.clearMarks?.(AUTH_READY_MARK);
+  marks?.clearMarks?.(FIRST_CONTENT_MARK);
+}

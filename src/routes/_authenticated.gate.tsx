@@ -39,7 +39,7 @@ import { FirmBillingAccessProvider } from "@/contexts/firm-billing-access";
 import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
-import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { bootMarketLabel, markBootContent, SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
 import {
   lastKnownEntitlementForFirm,
@@ -562,6 +562,19 @@ export function AuthGate() {
   });
   const holdGatedPage = firmEntitled !== true && unknownPage === "wall";
   const firmLoadHoldsRetry = Boolean(firmsLoadFailed) && holdGatedPage;
+  const gateShowsSkeleton =
+    loading ||
+    (!!user &&
+      holdGatedPage &&
+      failureSurface !== "error" &&
+      !deadlineHoldsRetry &&
+      !firmLoadHoldsRetry &&
+      failureSurface !== "wall" &&
+      !showWall);
+  useEffect(() => {
+    if (loading || !user || gateShowsSkeleton) return;
+    markBootContent(pathname, bootMarketLabel(firmMarket));
+  }, [loading, user, gateShowsSkeleton, pathname, firmMarket]);
   if (loading) {
     return <FirmShellLoading />;
   }
