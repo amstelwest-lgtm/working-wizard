@@ -13,8 +13,16 @@ export function useAskAiMount(deps: {
   viewMode: string;
   hasRealFinancials: boolean;
   forecastKey?: string | null;
+  firmId?: string | null;
 }) {
-  const { effectiveClientId, activeTab, viewMode, hasRealFinancials, forecastKey } = deps;
+  const {
+    effectiveClientId,
+    activeTab,
+    viewMode,
+    hasRealFinancials,
+    forecastKey,
+    firmId = null,
+  } = deps;
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +52,10 @@ export function useAskAiMount(deps: {
       }
       if (forecastKey) {
         for (const el of allContainers) el.dataset.forecastKey = forecastKey;
+      }
+      for (const el of allContainers) {
+        if (firmId) el.dataset.firmId = firmId;
+        else delete el.dataset.firmId;
       }
 
       // The widget mounts with or without figures — before them it carries a
@@ -122,5 +134,5 @@ export function useAskAiMount(deps: {
       cancelled = true;
       for (const t of timers) window.clearTimeout(t);
     };
-  }, [effectiveClientId, activeTab, viewMode, hasRealFinancials]);
+  }, [effectiveClientId, activeTab, viewMode, hasRealFinancials, firmId]);
 }

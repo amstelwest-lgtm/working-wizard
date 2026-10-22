@@ -789,6 +789,16 @@ html[data-theme="light"] .milon-desk {
   overflow: auto;
 }
 
+.milon-desk-host #ask-ai-accountant .ask-ai-thread:has(.ask-ai-trial-ended),
+.milon-desk-host #ask-ai-accountant .ask-ai-thread:has(.trial-ended-block) {
+  max-height: min(70vh, 720px);
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-trial-ended,
+.milon-desk-host #ask-ai-accountant .ask-ai-trial-ended-host {
+  grid-column: 1 / -1;
+}
+
 .milon-desk-host #ask-ai-accountant .ask-ai-textarea {
   grid-column: 1;
   grid-row: 2;

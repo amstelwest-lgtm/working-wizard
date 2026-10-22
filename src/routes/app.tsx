@@ -3405,6 +3405,7 @@ function Index() {
     viewMode,
     hasRealFinancials,
     forecastKey: forecastPlFingerprint(clientMeta?.cashflow, v),
+    firmId: clientMeta?.firm_id ?? null,
   });
 
   const exitImpersonation = async () => {
