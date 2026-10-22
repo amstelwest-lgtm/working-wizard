@@ -36,7 +36,7 @@ export const SAMPLE_TAX_PACK_FILES: TaxPackSourceFile[] = [
 
 /** A reply shaped the way the model is told to answer. */
 export const SAMPLE_TAX_PACK_REPLY = JSON.stringify({
-  period_label: "2026 year of assessment (sample)",
+  year_of_assessment: "2026 year of assessment (sample)",
   income: [
     {
       label: "Practice turnover (sample)",

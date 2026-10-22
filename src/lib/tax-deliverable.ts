@@ -68,7 +68,7 @@ export function taxPackSystemPrompt(): string {
   return [
     "You prepare a DRAFT tax pack for a South African individual who runs a practice as a sole practitioner. An accountant will check every line before anything is used.",
     "Return ONLY valid JSON, no markdown, no prose. Schema:",
-    '{"period_label":"2026 year of assessment or null","income":[{"label":"","amount_cents":0,"file_id":"","confidence":"stated|uncertain","note":""}],"expenses":[],"medical_aid":[],"retirement_annuity":[],"worksheet":[],"queries":[""]}',
+    '{"year_of_assessment":"2026 year of assessment or null","income":[{"label":"","amount_cents":0,"file_id":"","confidence":"stated|uncertain","note":""}],"expenses":[],"medical_aid":[],"retirement_annuity":[],"worksheet":[],"queries":[""]}',
     "Rules:",
     "- Use only the documents provided, named FILE <file_id>. Every figure MUST carry the file_id of the document where that amount is printed.",
     "- Never invent, estimate, or extrapolate an amount. If an amount is not printed, or a document is unreadable, leave the figure out and add a query instead.",
@@ -168,7 +168,7 @@ export function parseTaxPackPayload(
   const fileIds = new Set(files.map((file) => file.fileId));
   const dropped: string[] = [];
   const draft: TaxPackDraft = {
-    periodLabel: asTrimmed(o.period_label, 80) || null,
+    periodLabel: asTrimmed(o.year_of_assessment, 80) || null,
     income: sectionFrom(o.income, fileIds, dropped),
     expenses: sectionFrom(o.expenses, fileIds, dropped),
     medicalAid: sectionFrom(o.medical_aid, fileIds, dropped),
