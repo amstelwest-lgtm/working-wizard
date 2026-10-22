@@ -12,15 +12,29 @@ import {
 } from "@/lib/pending-checkout";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { readCachedFirmEntitlement } from "@/lib/firm-entitlement-client";
+import { cardFreeTrialLine, cardFreeTrialPriceFromQuote } from "@/lib/billing-wall";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
-import { loadStarterMonthlyLabel } from "@/lib/trial-card-price";
+import { loadCardFreeTrialPriceLabel } from "@/lib/trial-card-price";
 import { TrialCardSentence } from "@/components/trial-card-sentence";
 
 /**
  * Shown once figures are on screen. Entitled firms see nothing.
  * Unpaid firms get one Checkout action for the stashed band (Starter by default).
  */
-export function CheckoutAfterInsight({ priceLabel }: { priceLabel?: string | null } = {}) {
+export function CheckoutAfterInsight({
+  priceLabel,
+  clientCount,
+  quote,
+}: {
+  priceLabel?: string | null;
+  /**
+   * Firm client count for the practice home. Omit it and the sentence stays
+   * the locked one-client line used on a client file.
+   */
+  clientCount?: number | null;
+  /** Firm billing quote. Omit it and this block loads the wall's quote. */
+  quote?: { market?: string | null; priceLabel?: string | null } | null;
+} = {}) {
   const { user } = useAuth();
   const profile = useOptionalAccountantProfile();
   const firmId = profile?.firmId ?? null;
@@ -50,14 +64,18 @@ export function CheckoutAfterInsight({ priceLabel }: { priceLabel?: string | nul
 
   useEffect(() => {
     if (priceLabel != null) return;
+    if (quote !== undefined) {
+      setLoadedPrice(cardFreeTrialPriceFromQuote(quote));
+      return;
+    }
     let cancelled = false;
-    void loadStarterMonthlyLabel().then((label) => {
+    void loadCardFreeTrialPriceLabel().then((label) => {
       if (!cancelled) setLoadedPrice(label);
     });
     return () => {
       cancelled = true;
     };
-  }, [priceLabel]);
+  }, [priceLabel, quote]);
 
   if (!unpaid) return null;
 
@@ -74,7 +92,10 @@ export function CheckoutAfterInsight({ priceLabel }: { priceLabel?: string | nul
     >
       <p className="kicker">Next · {planName}</p>
       <h3>The figures stay on this client.</h3>
-      <TrialCardSentence priceLabel={priceLabel ?? loadedPrice} />
+      <TrialCardSentence
+        priceLabel={priceLabel ?? loadedPrice}
+        line={clientCount === undefined ? undefined : cardFreeTrialLine(clientCount)}
+      />
       <Link to="/billing/start" search={billingStartSearch(pending)} className="btn gold">
         Add a card
       </Link>

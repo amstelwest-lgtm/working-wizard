@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { BillingSignOutButton } from "@/components/billing-sign-out";
+import { useOptionalAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { billingIntentForResolvedMarket } from "@/lib/billing-market";
 import { loadFirstFirmClient, type FirstFirmClient } from "@/lib/firm-client-gate";
@@ -29,7 +30,7 @@ import {
   FIRM_WALL_START_LABEL,
   FIRM_WALL_TRIAL_ENDED_LINE,
   cardFreeTrialLine,
-  cardFreeTrialPrice,
+  cardFreeTrialPriceFromQuote,
   firmWallBackTarget,
   firmWallOffersRetry,
   firmWallWhyLine,
@@ -146,6 +147,7 @@ function BillingRequiredPage() {
   const pending = Route.useSearch();
   const { quote: loadedQuote } = Route.useLoaderData();
   const { user, loading } = useAuth();
+  const firmId = useOptionalAccountantProfile()?.firmId ?? null;
   const navigate = useNavigate();
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   const fetchQuote = useServerFn(readFirmBillingQuote);
@@ -209,7 +211,7 @@ function BillingRequiredPage() {
     const interval = pending.interval;
     void resolveBillingWall({
       client: loadFirstFirmClient(),
-      clientCount: fetchClientCount({ data: {} }),
+      clientCount: fetchClientCount({ data: { firmId } }),
       entitlement: checkEntitlement({ data: { refresh: true } }).then((result) => {
         if (user?.id) noteFirmEntitlement(user.id, result);
         return result;
@@ -244,6 +246,7 @@ function BillingRequiredPage() {
     checkEntitlement,
     fetchQuote,
     fetchClientCount,
+    firmId,
     wallAttempt,
   ]);
 
@@ -260,10 +263,7 @@ function BillingRequiredPage() {
   // null price stays unresolved.
   const shownPrice =
     checkout.plan === "starter" && checkout.interval === "month"
-      ? cardFreeTrialPrice({
-          market: quote?.market ?? null,
-          zaPriceLabel: quote?.market === "za" ? (quote.priceLabel ?? null) : null,
-        })
+      ? cardFreeTrialPriceFromQuote(quote)
       : priceLabel ||
         (quote?.market === "za" ? null : usdPriceLabel(checkout.plan, checkout.interval));
 

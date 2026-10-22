@@ -2345,7 +2345,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           />
         ) : null}
 
-        {scoredRows.length > 0 ? <CheckoutAfterInsight /> : null}
+        {scoredRows.length > 0 ? (
+          <CheckoutAfterInsight clientCount={trialAllowance?.upgrade?.clientCount ?? null} />
+        ) : null}
           </>
         ) : null}
         {view === "practice" || view === "follow-up" ? (
