@@ -8,8 +8,16 @@
 import type { FirstFirmClient } from "@/lib/firm-client-gate";
 import { settleWithin, type Settled } from "@/lib/bounded-load";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
-import { CARD_FREE_TRIAL_LINE } from "@/lib/starter-trial-constants";
-import { FIRM_BAND_CATALOG, firmUsdListPrice, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import { CARD_FREE_TRIAL_LINE, cardFreeTrialLine } from "@/lib/starter-trial-constants";
+import {
+  FIRM_BAND_CATALOG,
+  firmSignupCheckoutIntent,
+  firmUsdListPrice,
+  type FirmCheckoutBand,
+  type FirmInterval,
+} from "@/lib/stripe-plans";
+
+export { cardFreeTrialLine };
 
 export const BILLING_WALL_TRIAL_ACTION = "Start your 14-day free trial · add a card";
 
@@ -49,6 +57,24 @@ export function firmWallDisplayPrice(input: {
   return input.interval === "year" ? `${usd}/yr` : `${usd}/mo`;
 }
 
+/**
+ * Price under the card-free trial line. Starter monthly, the same plan
+ * Checkout opens for a firm with no subscription. A ZA label is the
+ * server's Starter line. Every other market uses the USD catalog.
+ */
+export function cardFreeTrialPrice(input: {
+  market: "za" | "us" | null;
+  zaPriceLabel: string | null;
+}): string | null {
+  const intent = firmSignupCheckoutIntent(input.market === "za" ? "za" : "us");
+  return firmWallDisplayPrice({
+    market: input.market,
+    zaPriceLabel: input.zaPriceLabel,
+    plan: intent.plan,
+    interval: intent.interval,
+  });
+}
+
 export function firmWallTrialDetail(priceLabel: string | null): string {
   const limit = FIRM_BAND_CATALOG.starter.clientLimit;
   const head = `Starter, up to ${limit} clients`;
@@ -64,8 +90,21 @@ export function firmWallTrialDetail(priceLabel: string | null): string {
  * Home, the client list, and practice stay open too (`isPracticeShellPath`).
  * Reports and a later client do not.
  */
-export function firmWallWhyLine(_clientName: string | null | undefined): string {
-  return "This firm has no plan yet. Your first client and its numbers stay open. Reports and a later client need Starter.";
+const FIRM_WALL_WHY_FIRST =
+  "This firm has no plan yet. Your first client and its numbers stay open. Reports and a later client need Starter.";
+
+/** More than one client: the earliest file still stays open, without saying "first client". */
+const FIRM_WALL_WHY_LATER =
+  "This firm has no plan yet. The earliest client file and its numbers stay open. Reports and a later client need Starter.";
+
+export function firmWallWhyLine(
+  _clientName: string | null | undefined,
+  clientCount?: number | null,
+): string {
+  if (typeof clientCount === "number" && Number.isFinite(clientCount) && clientCount > 1) {
+    return FIRM_WALL_WHY_LATER;
+  }
+  return FIRM_WALL_WHY_FIRST;
 }
 
 export type FirmWallEntitlementOutcome = "entitled" | "not_entitled" | "failed";
@@ -82,7 +121,9 @@ export function firmWallOffersRetry(outcome: FirmWallEntitlementOutcome): boolea
   return outcome === "failed";
 }
 
-export function firmWallTrialEnded(settled: Settled<{ entitled: boolean; introTrialEligible?: boolean }>): boolean {
+export function firmWallTrialEnded(
+  settled: Settled<{ entitled: boolean; introTrialEligible?: boolean }>,
+): boolean {
   if (settled.status !== "value" || settled.value.entitled === true) return false;
   return settled.value.introTrialEligible === false;
 }
@@ -108,7 +149,10 @@ export function firmWallBackTarget(input: {
   return FIRM_WALL_BACK_HREF;
 }
 
-function inAppPath(referrer: string | null | undefined, pageOrigin: string | null | undefined): string | null {
+function inAppPath(
+  referrer: string | null | undefined,
+  pageOrigin: string | null | undefined,
+): string | null {
   const raw = (referrer ?? "").trim();
   if (!raw) return null;
   if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
@@ -122,6 +166,8 @@ function inAppPath(referrer: string | null | undefined, pageOrigin: string | nul
 export type BillingWallResolution = {
   checking: false;
   returnClient: FirstFirmClient | null;
+  /** Cap count for the trial sentence. Null when the read failed or was omitted. */
+  clientCount: number | null;
   entitled: boolean;
   entitlementOutcome: FirmWallEntitlementOutcome;
   trialEnded: boolean;
@@ -132,6 +178,8 @@ export type BillingWallResolution = {
 
 export async function resolveBillingWall(input: {
   client: Promise<FirstFirmClient | null>;
+  /** Same count the client cap uses. Omitted or failed stays null, never 0. */
+  clientCount?: Promise<number | null>;
   entitlement: Promise<{ entitled: boolean; introTrialEligible?: boolean }>;
   quote: Promise<FirmWallQuote | null>;
   plan: FirmCheckoutBand;
@@ -139,26 +187,36 @@ export async function resolveBillingWall(input: {
   timeoutMs?: number;
 }): Promise<BillingWallResolution> {
   const timeoutMs = input.timeoutMs ?? SHELL_GATE_TIMEOUT_MS;
-  const [client, entitlement, quote] = await Promise.all([
+  const [client, entitlement, quote, clientCount] = await Promise.all([
     settleWithin(input.client, timeoutMs),
     settleWithin(input.entitlement, timeoutMs),
     settleWithin(input.quote, timeoutMs),
+    input.clientCount
+      ? settleWithin(input.clientCount, timeoutMs)
+      : Promise.resolve({ status: "value" as const, value: null as number | null }),
   ]);
   const nextQuote = quote.status === "value" ? quote.value : null;
   let quoteError = "";
   if (!nextQuote) quoteError = BILLING_WALL_QUOTE_ERROR;
-  const priceLabel = firmWallDisplayPrice({
-    market: nextQuote?.market ?? null,
-    zaPriceLabel: nextQuote?.market === "za" ? nextQuote.priceLabel : null,
-    plan: input.plan,
-    interval: input.interval,
-  });
+  const signup = firmSignupCheckoutIntent();
+  const zaPriceLabel = nextQuote?.market === "za" ? nextQuote.priceLabel : null;
+  const priceLabel =
+    input.plan === signup.plan && input.interval === signup.interval
+      ? cardFreeTrialPrice({ market: nextQuote?.market ?? null, zaPriceLabel })
+      : firmWallDisplayPrice({
+          market: nextQuote?.market ?? null,
+          zaPriceLabel,
+          plan: input.plan,
+          interval: input.interval,
+        });
   if (nextQuote?.market === "za" && !nextQuote.priceLabel?.trim()) {
     quoteError = quoteError || BILLING_WALL_QUOTE_ERROR;
   }
+  const counted = clientCount.status === "value" ? clientCount.value : null;
   return {
     checking: false,
     returnClient: client.status === "value" ? client.value : null,
+    clientCount: typeof counted === "number" && Number.isFinite(counted) ? counted : null,
     entitled: entitlement.status === "value" && entitlement.value.entitled === true,
     entitlementOutcome: firmWallEntitlementOutcome(entitlement),
     trialEnded: firmWallTrialEnded(entitlement),

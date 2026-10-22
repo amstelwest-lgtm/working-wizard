@@ -153,7 +153,7 @@ const ITEM_HELP: Record<string, string> = {
     "Your income and expense summary for the year, or your bookkeeping export.",
   bank_statements: `All business accounts, ${documentYearWindow()}.`,
   travel_logbook: "Your business kilometres for the year, if you claim travel.",
-  medical_aid_certificate: "Totals only. Do not send a line-by-line breakdown.",
+  medical_aid_certificate: "The annual tax certificate from your medical aid.",
   ra_contribution_certificate: "The annual certificate from your retirement annuity provider.",
   irp5: "From your employer, if you had a salaried job.",
   it3b: "Interest certificates from your bank or investments.",

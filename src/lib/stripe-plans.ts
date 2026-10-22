@@ -18,6 +18,7 @@ import { parseZaLookupKey } from "./pricing/za-lookup.ts";
 
 export {
   CARD_FREE_TRIAL_LINE,
+  cardFreeTrialLine,
   FIRM_TRIAL_CARD_LINE,
   FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_CLIENT_LIMIT,

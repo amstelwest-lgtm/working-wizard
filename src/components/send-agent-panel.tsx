@@ -6,9 +6,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
 import {
-  PHYSIO_ITEMS,
   SEND_AGENT_BODY,
   SEND_AGENT_ONCE,
+  SEND_DEFAULT_ITEM_KEYS,
+  SEND_ITEM_KEYS,
+  SEND_ITEM_LABELS,
+  SEND_OTHER_LABEL_MAX,
+  chooseSendItems,
   recipientEmail,
 } from "@/lib/client-agent-send";
 import { formatDate, type DateMarket } from "@/lib/market";
@@ -40,6 +44,8 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
   const [emailEdited, setEmailEdited] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([...SEND_DEFAULT_ITEM_KEYS]);
+  const [otherLabel, setOtherLabel] = useState("");
 
   const applyList = useCallback(
     (result: {
@@ -82,12 +88,39 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const open = sends.find((send) => send.open) ?? null;
   const shownId = fresh?.sendId ?? open?.id ?? null;
 
+  const onToggleItem = (itemKey: string) => {
+    setSelectedKeys((current) =>
+      current.includes(itemKey) ? current.filter((key) => key !== itemKey) : [...current, itemKey],
+    );
+  };
+
   const onMint = async () => {
+    const chosen = chooseSendItems(
+      SEND_ITEM_KEYS.filter((itemKey) => selectedKeys.includes(itemKey)).map((itemKey) => ({
+        itemKey,
+        label: itemKey === "other" ? otherLabel : undefined,
+      })),
+    );
+    if (!chosen.ok) {
+      setNotice(
+        chosen.reason === "empty"
+          ? "Choose at least one document."
+          : chosen.reason === "other"
+            ? "Name the other document."
+            : "Choose documents from the list.",
+      );
+      return;
+    }
     setBusy(true);
     setNotice(null);
     try {
       const result = await mint({
-        data: { clientId, recipientEmail: email, recipientFirstName: firstName },
+        data: {
+          clientId,
+          recipientEmail: email,
+          recipientFirstName: firstName,
+          items: chosen.items.map((item) => ({ itemKey: item.itemKey, label: item.label })),
+        },
       });
       if (!result.ok && result.reason === "not_allowed") {
         setAllowed(false);
@@ -100,6 +133,18 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
       }
       if (!result.ok && result.reason === "name") {
         setNotice("Use a shorter first name.");
+        return;
+      }
+      if (!result.ok && result.reason === "empty") {
+        setNotice("Choose at least one document.");
+        return;
+      }
+      if (!result.ok && result.reason === "other") {
+        setNotice("Name the other document.");
+        return;
+      }
+      if (!result.ok && result.reason === "items") {
+        setNotice("Choose documents from the list.");
         return;
       }
       if (!result.ok && result.reason === "email") {
@@ -168,11 +213,15 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
       notice={notice}
       firstName={firstName}
       email={email}
+      selectedKeys={selectedKeys}
+      otherLabel={otherLabel}
       onFirstName={setFirstName}
       onEmail={(value) => {
         setEmailEdited(true);
         setEmail(value);
       }}
+      onToggleItem={onToggleItem}
+      onOtherLabel={setOtherLabel}
       onMint={() => void onMint()}
       onCopy={() => void onCopy()}
       onRevoke={() => void onRevoke()}
@@ -190,8 +239,12 @@ export function SendAgentCard({
   notice,
   firstName,
   email,
+  selectedKeys,
+  otherLabel,
   onFirstName,
   onEmail,
+  onToggleItem,
+  onOtherLabel,
   onMint,
   onCopy,
   onRevoke,
@@ -205,12 +258,22 @@ export function SendAgentCard({
   notice: string | null;
   firstName: string;
   email: string;
+  selectedKeys: readonly string[];
+  otherLabel: string;
   onFirstName: (value: string) => void;
   onEmail: (value: string) => void;
+  onToggleItem: (itemKey: string) => void;
+  onOtherLabel: (value: string) => void;
   onMint: () => void;
   onCopy: () => void;
   onRevoke: () => void;
 }) {
+  const chosen = chooseSendItems(
+    SEND_ITEM_KEYS.filter((itemKey) => selectedKeys.includes(itemKey)).map((itemKey) => ({
+      itemKey,
+      label: itemKey === "other" ? otherLabel : undefined,
+    })),
+  );
   return (
     <section
       className="flex flex-col gap-4 rounded-2xl border border-[#DBEAFE] bg-white p-4 text-[#102A43]"
@@ -229,13 +292,6 @@ export function SendAgentCard({
         </h2>
         <p className="text-sm leading-6 text-[#3D5270]">{SEND_AGENT_BODY}</p>
       </div>
-      <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
-        {PHYSIO_ITEMS.map((item) => (
-          <li key={item.itemKey} data-send-item={item.itemKey}>
-            {item.label}
-          </li>
-        ))}
-      </ul>
       {fresh ? (
         <div className="flex flex-col gap-3" data-send-agent-link="">
           <p className="text-sm leading-6 text-[#3D5270]">{SEND_AGENT_ONCE}</p>
@@ -280,6 +336,50 @@ export function SendAgentCard({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
+          <fieldset className="flex flex-col gap-2" data-send-agent-items="">
+            <legend className="text-sm font-semibold">Documents</legend>
+            <p className="text-sm leading-6 text-[#3D5270]">
+              Choose what the client should send. At least one.
+            </p>
+            {SEND_ITEM_KEYS.map((itemKey) => {
+              const checked = selectedKeys.includes(itemKey);
+              return (
+                <div key={itemKey} className="flex flex-col gap-2">
+                  <label
+                    className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 text-sm font-normal ${checked ? "border-[#0B5FFF]" : "border-[#DBEAFE]"}`}
+                    data-send-item={itemKey}
+                  >
+                    <input
+                      id={`send-agent-item-${itemKey}`}
+                      type="checkbox"
+                      className="h-5 w-5 shrink-0 accent-[#0B5FFF]"
+                      checked={checked}
+                      onChange={() => onToggleItem(itemKey)}
+                    />
+                    <span>{SEND_ITEM_LABELS[itemKey]}</span>
+                  </label>
+                  {itemKey === "other" && checked ? (
+                    <label
+                      className="flex flex-col text-sm font-semibold"
+                      htmlFor="send-agent-other-label"
+                    >
+                      Name for the client
+                      <span className="mt-1 font-normal text-[#3D5270]">
+                        Required. This is the line they see.
+                      </span>
+                      <input
+                        id="send-agent-other-label"
+                        className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] px-3 text-sm font-normal text-[#102A43]"
+                        value={otherLabel}
+                        maxLength={SEND_OTHER_LABEL_MAX}
+                        onChange={(event) => onOtherLabel(event.target.value)}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              );
+            })}
+          </fieldset>
           <label className="flex flex-col text-sm font-semibold" htmlFor="send-agent-first-name">
             Client first name
             <span className="mt-1 font-normal text-[#3D5270]">Optional.</span>
@@ -310,7 +410,7 @@ export function SendAgentCard({
           <button
             type="button"
             className={PRIMARY}
-            disabled={!ready || busy || !recipientEmail(email)}
+            disabled={!ready || busy || !recipientEmail(email) || !chosen.ok}
             onClick={onMint}
           >
             Send

@@ -322,7 +322,8 @@ const wall = src("src/routes/billing.required.tsx");
 const wallCopy = src("src/lib/billing-wall.ts");
 const trialCopy = src("src/lib/starter-trial-constants.ts");
 assert(
-  wall.includes("FIRM_WALL_TRIAL_LINE") &&
+  wall.includes("cardFreeTrialLine") &&
+    wallCopy.includes("cardFreeTrialLine") &&
     wallCopy.includes("CARD_FREE_TRIAL_LINE") &&
     trialCopy.includes("Your first client is free to explore") &&
     trialCopy.includes("seen your first result"),

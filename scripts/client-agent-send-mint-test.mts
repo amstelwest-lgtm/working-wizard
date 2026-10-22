@@ -8,8 +8,13 @@ import {
   PHYSIO_ITEMS,
   SEND_AGENT_BODY,
   SEND_AGENT_ONCE,
+  SEND_DEFAULT_ITEM_KEYS,
   SEND_EXPIRY_DAYS,
+  SEND_ITEM_KEYS,
+  SEND_ITEM_LABELS,
+  SEND_OTHER_LABEL_MAX,
   agentLink,
+  chooseSendItems,
   newSendToken,
   recipientEmail,
   recipientFirstName,
@@ -124,6 +129,12 @@ assert(panel.includes("Confirm this address"), "the accountant confirms the emai
 assert(/>\s*Send\s*</.test(panel), "the button is Send");
 assert(panel.includes("recipientEmail: email"), "Send posts the confirmed address");
 assert(panel.includes("recipientFirstName: firstName"), "Send posts the first name");
+assert(panel.includes("items: chosen.items.map"), "Send posts the chosen documents");
+assert(panel.includes('type="checkbox"'), "the dialog picks documents with checkboxes");
+assert(panel.includes("send-agent-other-label"), "other has a label field");
+assert(panel.includes("min-h-11"), "rows keep a 44px tap target");
+assert(panel.includes("SEND_DEFAULT_ITEM_KEYS"), "the current five start ticked");
+assert(panel.includes("SEND_ITEM_KEYS.map"), "the picker lists every allowed document");
 const effect = panel.slice(panel.indexOf("useEffect"), panel.indexOf("const open"));
 assert(!effect.includes("mint("), "mail is not sent on load");
 const listBody = fn.slice(
@@ -153,6 +164,16 @@ assert(
   mintBody.includes("recipientEmail(data.recipientEmail)"),
   "the address is trimmed on the server",
 );
+assert(
+  mintBody.indexOf("sendAgentFirmAllowed") < mintBody.indexOf("chooseSendItems"),
+  "the item list is checked after the allowlist",
+);
+assert(
+  mintBody.indexOf("chooseSendItems") < mintBody.indexOf(".insert("),
+  "a bad item list is refused before anything is written",
+);
+assert(mintBody.includes("label: item.label"), "the chosen label is stored");
+assert(mintBody.includes("totals_only: item.totalsOnly"), "medical aid stays totals only");
 assert(route.includes("<SendAgentPanel"), "the client file mounts the panel");
 assert(route.includes("market={clientMarket}"), "the expiry uses the client market");
 assert(panel.includes("formatDate("), "expiry uses the shared date formatter");
@@ -182,5 +203,67 @@ assert(kept.section === "send-agent", "the section is not dropped");
 
 const chrome = read("src/components/client-studio-chrome.tsx");
 assert(chrome.includes('{ id: "send-agent", label: "Send an agent" }'), "vertical nav label");
+
+const sql = read("supabase/migrations/20261021210000_client_agent_sends.sql");
+const check = sql.slice(
+  sql.indexOf("item_key text NOT NULL CHECK (item_key IN ("),
+  sql.indexOf("label text,"),
+);
+const constraintKeys = [...check.matchAll(/'([a-z0-9_]+)'/g)].map((match) => match[1]);
+assert(constraintKeys.length === SEND_ITEM_KEYS.length, "the picker lists every allowed key");
+for (const itemKey of SEND_ITEM_KEYS) {
+  assert(constraintKeys.includes(itemKey), `${itemKey} is allowed by the database`);
+}
+assert(sql.includes("length(label) <= 200"), "other labels fit the 200 character check");
+assert(SEND_OTHER_LABEL_MAX === 200, "the label field matches the database");
+
+const defaults = chooseSendItems(SEND_DEFAULT_ITEM_KEYS.map((itemKey) => ({ itemKey })));
+assert(defaults.ok, "the five defaults are accepted");
+if (defaults.ok) {
+  assert(
+    defaults.items.map((item) => item.itemKey).join() === [...SEND_DEFAULT_ITEM_KEYS].join(),
+    "defaults stay the current five",
+  );
+  assert(
+    defaults.items.find((item) => item.itemKey === "medical_aid_certificate")?.totalsOnly === true,
+    "the default medical item is totals only",
+  );
+  assert(
+    defaults.items
+      .filter((item) => item.itemKey !== "medical_aid_certificate")
+      .every((item) => !item.totalsOnly),
+    "the other defaults are not totals only",
+  );
+  assert(
+    defaults.items.every((item) => item.label === SEND_ITEM_LABELS[item.itemKey]),
+    "default labels are the plain names",
+  );
+}
+
+const custom = chooseSendItems([
+  { itemKey: "bank_statements", label: "ignored" },
+  { itemKey: "other", label: "  Trust deed  " },
+]);
+assert(custom.ok, "a custom selection is accepted");
+if (custom.ok) {
+  assert(custom.items.length === 2, "only the ticked documents are stored");
+  assert(custom.items[0]?.label === SEND_ITEM_LABELS.bank_statements, "a known label is not overwritten");
+  assert(custom.items[0]?.totalsOnly === false, "bank statements are not totals only");
+  assert(custom.items[1]?.itemKey === "other" && custom.items[1].label === "Trust deed", "other stores the trimmed label");
+  assert(custom.items[1].totalsOnly === false, "other is not totals only");
+}
+
+const empty = chooseSendItems([]);
+assert(!empty.ok && empty.reason === "empty", "an empty list is refused");
+const missing = chooseSendItems(undefined);
+assert(!missing.ok && missing.reason === "empty", "a missing list is refused");
+const unknown = chooseSendItems([{ itemKey: "sars_return" }]);
+assert(!unknown.ok && unknown.reason === "items", "an unknown key is refused");
+const duplicate = chooseSendItems([{ itemKey: "irp5" }, { itemKey: "irp5" }]);
+assert(!duplicate.ok && duplicate.reason === "items", "a duplicate key is refused");
+const blankOther = chooseSendItems([{ itemKey: "other", label: "   " }]);
+assert(!blankOther.ok && blankOther.reason === "other", "other needs a label");
+const longOther = chooseSendItems([{ itemKey: "other", label: "n".repeat(201) }]);
+assert(!longOther.ok && longOther.reason === "other", "a long other label is refused");
 
 console.log("client agent send mint test ok");

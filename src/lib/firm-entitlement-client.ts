@@ -76,15 +76,22 @@ function entitledSlotMatches(slot: Slot | null, userId: string, firmId?: string 
 
 function fresh(userId: string, firmId?: string | null): boolean {
   if (!cached || cached.userId !== userId) return false;
+  if (Date.now() - cached.at >= ttlFor(cached.value)) return false;
+  // The gate names the firm. Start here and the insight card sometimes
+  // ask again before that id is in hand. That is the same open.
+  const requested = firmKey(firmId);
+  const slotId = cached.firmId?.trim() ?? "";
+  if (!requested && slotId) return true;
   if (cached.value.entitled && !entitledSlotMatches(cached, userId, firmId)) return false;
-  return sameFirm(cached, userId, firmId) && Date.now() - cached.at < ttlFor(cached.value);
+  return sameFirm(cached, userId, firmId);
 }
 
 function sameInflight(userId: string, firmId?: string | null): boolean {
   if (!inflight || inflightUser !== userId) return false;
   const id = firmKey(firmId);
   const current = inflightFirm ?? "";
-  if (!id || !current) return id === current;
+  // A missing id on either side is this open, not a second firm.
+  if (!id || !current) return true;
   return current === id;
 }
 
