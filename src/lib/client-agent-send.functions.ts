@@ -23,6 +23,7 @@ import {
   sha256Hex,
 } from "@/lib/client-agent-send";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
+import { taxReviewCardFromFinding, type TaxReviewCardModel } from "@/lib/tax-review-card";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -156,6 +157,42 @@ function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
   };
 }
 
+async function loadTaxReview(clientId: string, sendId: string): Promise<TaxReviewCardModel | null> {
+  if (!sendId) return null;
+  try {
+    const found = await table("agent_findings")
+      .select("id, kind, title, detail, evidence, status, created_at")
+      .eq("client_id", clientId)
+      .eq("kind", "tax_document_review")
+      .order("created_at", { ascending: false });
+    if (found.error) return null;
+    const row = rows(found.data).find((item) => {
+      const evidence = item.evidence;
+      if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false;
+      return (evidence as { send_id?: unknown }).send_id === sendId;
+    });
+    if (!row || typeof row.id !== "string") return null;
+    const questions = await table("client_brain_questions")
+      .select("prompt_text, audience, question_key")
+      .eq("client_id", clientId)
+      .eq("audience", "accountant");
+    const prompts = questions.error
+      ? []
+      : rows(questions.data)
+          .filter((item) => String(item.question_key ?? "").startsWith(`tax_review:${sendId}:`))
+          .map((item) => (typeof item.prompt_text === "string" ? item.prompt_text : ""))
+          .filter(Boolean);
+    return taxReviewCardFromFinding({
+      id: row.id,
+      evidence: row.evidence,
+      status: typeof row.status === "string" ? row.status : null,
+      questions: prompts,
+    });
+  } catch {
+    return null;
+  }
+}
+
 export const listClientAgentSends = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
@@ -168,9 +205,10 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
       allowed: boolean;
       sends: AgentSendRow[];
       contactEmail: string | null;
+      taxReview: TaxReviewCardModel | null;
     }> => {
       if (!isSupabaseAdminConfigured()) {
-        return { migrated: false, allowed: false, sends: [], contactEmail: null };
+        return { migrated: false, allowed: false, sends: [], contactEmail: null, taxReview: null };
       }
       const firm = await firmOfClient(data.clientId);
       if (!firm.ok) {
@@ -179,13 +217,14 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
           allowed: false,
           sends: [],
           contactEmail: null,
+          taxReview: null,
         };
       }
       if (!sendAgentFirmAllowed(firm.firmId)) {
-        return { migrated: true, allowed: false, sends: [], contactEmail: null };
+        return { migrated: true, allowed: false, sends: [], contactEmail: null, taxReview: null };
       }
       if (!(await isFirmMember(context.userId, firm.firmId))) {
-        return { migrated: true, allowed: false, sends: [], contactEmail: null };
+        return { migrated: true, allowed: false, sends: [], contactEmail: null, taxReview: null };
       }
 
       let listed = await table("client_agent_sends")
@@ -208,14 +247,20 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
       }
       if (listed.error) {
         if (missingTable(listed.error)) {
-          return { migrated: false, allowed: false, sends: [], contactEmail: null };
+          return { migrated: false, allowed: false, sends: [], contactEmail: null, taxReview: null };
         }
         throw new Error("The links could not be read.");
       }
       const now = new Date();
       const sends = rows(listed.data).map((row) => parseSend(row, now));
       if (sends.length === 0) {
-        return { migrated: true, allowed: true, sends, contactEmail: firm.contactEmail };
+        return {
+          migrated: true,
+          allowed: true,
+          sends,
+          contactEmail: firm.contactEmail,
+          taxReview: null,
+        };
       }
 
       for (const send of sends) {
@@ -224,7 +269,7 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
           .eq("send_id", send.id);
         if (found.error) {
           if (missingTable(found.error)) {
-            return { migrated: false, allowed: false, sends: [], contactEmail: null };
+            return { migrated: false, allowed: false, sends: [], contactEmail: null, taxReview: null };
           }
           throw new Error("The links could not be read.");
         }
@@ -252,7 +297,18 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
           );
         }
       }
-      return { migrated: true, allowed: true, sends, contactEmail: firm.contactEmail };
+      return {
+        migrated: true,
+        allowed: true,
+        sends,
+        contactEmail: firm.contactEmail,
+        taxReview: await loadTaxReview(
+          data.clientId,
+          sends.find((send) => send.completedAt && !send.reviewedAt)?.id ??
+            sends.find((send) => send.completedAt)?.id ??
+            "",
+        ),
+      };
     },
   );
 

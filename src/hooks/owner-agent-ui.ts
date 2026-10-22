@@ -113,8 +113,9 @@ export function draftFindingLabel(row: {
   kind?: string | null;
   evidence: unknown;
 }): string | null {
-  if (!isDraftEvidence(row.evidence)) return null;
   const kind = draftKind(row);
+  if (kind === "tax_document_review") return DRAFT_NEEDS_ACCOUNTANT;
+  if (!isDraftEvidence(row.evidence)) return null;
   if (!DRAFT_KINDS.has(kind)) return null;
   return ACCOUNTANT_DRAFTS.has(kind) ? DRAFT_NEEDS_ACCOUNTANT : DRAFT_NEEDS_OWNER;
 }

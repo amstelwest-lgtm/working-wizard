@@ -18,7 +18,10 @@ import {
   recipientEmail,
 } from "@/lib/client-agent-send";
 import { clientDocumentDownloadUrl } from "@/lib/client-documents-browser";
+import { submitAgentDraftDecision } from "@/lib/agent-draft-decision-client";
 import { formatDate, type DateMarket } from "@/lib/market";
+import type { TaxReviewCardModel } from "@/lib/tax-review-card";
+import { TaxSpecialistReviewCard } from "@/components/tax-specialist-review-card";
 import {
   listClientAgentSends,
   mintClientAgentSend,
@@ -52,6 +55,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const [emailEdited, setEmailEdited] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([...SEND_DEFAULT_ITEM_KEYS]);
   const [otherLabel, setOtherLabel] = useState("");
+  const [taxReview, setTaxReview] = useState<TaxReviewCardModel | null>(null);
 
   const applyList = useCallback(
     (result: {
@@ -59,11 +63,13 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
       migrated: boolean;
       sends: AgentSendRow[];
       contactEmail?: string | null;
+      taxReview?: TaxReviewCardModel | null;
     }) => {
       setSends(result.allowed ? result.sends : []);
       setAllowed(result.allowed);
       setReady(result.migrated && result.allowed);
       setLoaded(true);
+      setTaxReview(result.allowed ? (result.taxReview ?? null) : null);
       if (!emailEdited && result.contactEmail) setEmail(result.contactEmail);
     },
     [emailEdited],
@@ -241,6 +247,27 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     }
   };
 
+  const onTaxDecision = async (decision: "approve" | "dismiss") => {
+    if (!taxReview) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await submitAgentDraftDecision({
+        findingId: taxReview.findingId,
+        decision,
+      });
+      if (!result.ok) {
+        setNotice("message" in result ? result.message : "That could not be saved.");
+        return;
+      }
+      await reload();
+    } catch {
+      setNotice("That could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!allowed) return null;
 
   return (
@@ -267,8 +294,10 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
       onCopy={() => void onCopy()}
       onRevoke={() => void onRevoke()}
       received={receivedSend}
+      taxReview={taxReview && receivedSend && taxReview.sendId === receivedSend.id ? taxReview : null}
       onOpenDocument={(path) => void onOpenDocument(path)}
       onReview={() => void onReview()}
+      onTaxDecision={(decision) => void onTaxDecision(decision)}
     />
   );
 }
@@ -293,8 +322,10 @@ export function SendAgentCard({
   onCopy,
   onRevoke,
   received = null,
+  taxReview = null,
   onOpenDocument,
   onReview,
+  onTaxDecision,
 }: {
   market: DateMarket;
   fresh: FreshLink | null;
@@ -315,8 +346,10 @@ export function SendAgentCard({
   onCopy: () => void;
   onRevoke: () => void;
   received?: AgentSendRow | null;
+  taxReview?: TaxReviewCardModel | null;
   onOpenDocument?: (path: string) => void;
   onReview?: () => void;
+  onTaxDecision?: (decision: "approve" | "dismiss") => void;
 }) {
   const chosen = chooseSendItems(
     SEND_ITEM_KEYS.filter((itemKey) => selectedKeys.includes(itemKey)).map((itemKey) => ({
@@ -394,6 +427,9 @@ export function SendAgentCard({
             </button>
           )}
         </div>
+      ) : null}
+      {taxReview ? (
+        <TaxSpecialistReviewCard review={taxReview} busy={busy} onDecide={onTaxDecision} />
       ) : null}
       {fresh ? (
         <div className="flex flex-col gap-3" data-send-agent-link="">

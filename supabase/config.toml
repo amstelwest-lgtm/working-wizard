@@ -72,6 +72,10 @@ verify_jwt = true
 [functions.agent-dispatch]
 verify_jwt = true
 
+# Tax document review. Service-role JWT. One accountant finding. Not deployed from CI.
+[functions.agent-tax-specialist]
+verify_jwt = true
+
 # Source document extraction. Caller JWT. Writes a proposal only. Does not post.
 [functions.extract-source-document]
 verify_jwt = true
