@@ -1,4 +1,4 @@
-import { cardFreeTrialPriceFromQuote } from "@/lib/billing-wall";
+import { cardFreeTrialPriceFromQuote, firmPlanNameOnly } from "@/lib/billing-wall";
 import { firmUsdListPrice } from "@/lib/stripe-plans";
 
 export type StarterMonthlyQuote = {
@@ -7,18 +7,34 @@ export type StarterMonthlyQuote = {
   priceLabel?: string | null;
 };
 
+/** Shown when the Starter quote failed or the market is not US or ZA. No amount. */
+export const STARTER_PLAN_ONLY = firmPlanNameOnly("starter");
+
 /**
  * One Starter monthly price. A ZA quote keeps the server's rand label
- * (the part before the per-client clause). Every other quote uses the
- * USD catalog. This file does not contain a rand amount.
+ * (the part before the per-client clause). A US quote uses the USD catalog.
+ * A missing quote, or any other market, is the plan name. This file does
+ * not contain a rand amount.
  */
 export function starterMonthlyFromQuote(quote: StarterMonthlyQuote | null | undefined): string {
   if (quote?.market === "za") {
     const head = (quote.priceLabel ?? "").split(" · ")[0]?.trim() ?? "";
-    return head;
+    return head || STARTER_PLAN_ONLY;
   }
+  if (quote?.market !== "us") return STARTER_PLAN_ONLY;
   const usd = firmUsdListPrice("starter", "month");
-  return usd ? `${usd}/mo` : "";
+  return usd ? `${usd}/mo` : STARTER_PLAN_ONLY;
+}
+
+/** Quote read for the trial card. A throw or a null quote is the plan name. */
+export async function resolveStarterMonthlyLabel(
+  read: () => Promise<StarterMonthlyQuote | null | undefined>,
+): Promise<string> {
+  try {
+    return starterMonthlyFromQuote(await read());
+  } catch {
+    return STARTER_PLAN_ONLY;
+  }
 }
 
 let inflight: Promise<string> | null = null;
@@ -26,7 +42,7 @@ let fullLineInflight: Promise<string | null> | null = null;
 
 /**
  * Full Starter line for the practice home. Same quote and formatter as
- * the Start trial wall. A failed read does not invent a dollar price.
+ * the Start trial wall. A failed read is the plan name, not a dollar price.
  */
 export function loadCardFreeTrialPriceLabel(): Promise<string | null> {
   if (!fullLineInflight) {
@@ -34,10 +50,10 @@ export function loadCardFreeTrialPriceLabel(): Promise<string | null> {
       try {
         const { readFirmBillingQuote } = await import("@/lib/pricing/za-pricing.functions");
         const quote = await readFirmBillingQuote({ data: { plan: "starter", interval: "month" } });
-        return cardFreeTrialPriceFromQuote(quote);
+        return cardFreeTrialPriceFromQuote(quote) || STARTER_PLAN_ONLY;
       } catch {
         fullLineInflight = null;
-        return null;
+        return STARTER_PLAN_ONLY;
       }
     })();
   }
@@ -51,9 +67,12 @@ export function loadStarterMonthlyLabel(): Promise<string> {
       try {
         const { readFirmBillingQuote } = await import("@/lib/pricing/za-pricing.functions");
         const quote = await readFirmBillingQuote({ data: { plan: "starter", interval: "month" } });
-        return starterMonthlyFromQuote(quote);
+        const label = starterMonthlyFromQuote(quote);
+        if (label === STARTER_PLAN_ONLY) inflight = null;
+        return label;
       } catch {
-        return starterMonthlyFromQuote({ market: "us", priceLabel: null });
+        inflight = null;
+        return STARTER_PLAN_ONLY;
       }
     })();
   }

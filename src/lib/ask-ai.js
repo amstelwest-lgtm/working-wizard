@@ -37,7 +37,7 @@ import {
 } from "./precard-cap.ts";
 import { billingStartPath, peekPendingCheckout } from "./pending-checkout.ts";
 import { firmSignupCheckoutIntent } from "./stripe-plans.ts";
-import { loadStarterMonthlyLabel, starterMonthlyFromQuote } from "./trial-card-price.ts";
+import { loadStarterMonthlyLabel, STARTER_PLAN_ONLY } from "./trial-card-price.ts";
 import { botSignoffCtas, botSignoffDestination, botSignoffStateLine } from "./bot-signoff-path.ts";
 import { stripMilonProjection } from "./milon-projection.ts";
 import { supabase } from "../integrations/supabase/client.ts";
@@ -866,6 +866,13 @@ export function mountAskAi(container, options) {
     return [card, ...tail.slice(0, 15)];
   }
 
+  function applyStarterMonthly(next) {
+    const shown = next || STARTER_PLAN_ONLY;
+    if (shown === starterMonthly) return;
+    starterMonthly = shown;
+    safeRender(lastQuestion);
+  }
+
   function ensureStarterMonthly() {
     if (starterMonthly || starterMonthlyStarted) return;
     const load =
@@ -876,15 +883,10 @@ export function mountAskAi(container, options) {
     Promise.resolve()
       .then(() => load())
       .then((label) => {
-        const next = typeof label === "string" ? label.trim() : "";
-        if (!next || next === starterMonthly) return;
-        starterMonthly = next;
-        safeRender(lastQuestion);
+        applyStarterMonthly(typeof label === "string" ? label.trim() : "");
       })
       .catch(() => {
-        if (starterMonthly) return;
-        starterMonthly = starterMonthlyFromQuote({ market: "us", priceLabel: null });
-        safeRender(lastQuestion);
+        applyStarterMonthly("");
       });
   }
 

@@ -1,8 +1,8 @@
 /**
  * Firm billing wall. A hung read becomes a card or an error inside the
- * shell deadline. Unknown market is priced as not-ZA (USD catalog).
- * A ZA quote with no price label is an error. US quotes leave priceLabel
- * null on purpose; the USD catalog fills it in.
+ * shell deadline. An unknown market names the plan and does not invent a
+ * dollar or rand amount. A ZA quote keeps the server label. US quotes
+ * leave priceLabel null on purpose; the USD catalog fills that in.
  */
 
 import type { FirstFirmClient } from "@/lib/firm-client-gate";
@@ -42,6 +42,11 @@ export type FirmWallQuote = {
   priceLabel: string | null;
 };
 
+/** Plan name with no amount. Used when the quote failed or the market is unknown. */
+export function firmPlanNameOnly(plan: FirmCheckoutBand): string {
+  return `${FIRM_BAND_CATALOG[plan].name} plan`;
+}
+
 export function firmWallDisplayPrice(input: {
   market: "za" | "us" | null;
   zaPriceLabel: string | null;
@@ -50,17 +55,19 @@ export function firmWallDisplayPrice(input: {
 }): string | null {
   if (input.market === "za") {
     const label = input.zaPriceLabel?.trim() ?? "";
-    return label || null;
+    return label || firmPlanNameOnly(input.plan);
   }
+  if (input.market !== "us") return firmPlanNameOnly(input.plan);
   const usd = firmUsdListPrice(input.plan, input.interval);
-  if (!usd) return null;
+  if (!usd) return firmPlanNameOnly(input.plan);
   return input.interval === "year" ? `${usd}/yr` : `${usd}/mo`;
 }
 
 /**
  * Price under the card-free trial line. Starter monthly, the same plan
  * Checkout opens for a firm with no subscription. A ZA label is the
- * server's Starter line. Every other market uses the USD catalog.
+ * server's Starter line. A US quote uses the USD catalog. Any other
+ * quote is the plan name, with no amount.
  */
 export function cardFreeTrialPrice(input: {
   market: "za" | "us" | null;
@@ -76,10 +83,9 @@ export function cardFreeTrialPrice(input: {
 }
 
 /**
- * Starter monthly label for a firm quote. The same market split the
- * Start trial wall uses: a ZA quote keeps the server line, including the
- * per-client clause. A US quote is the USD catalog. Any other quote is
- * not treated as South Africa.
+ * Starter monthly label for a firm quote. A ZA quote keeps the server
+ * line, including the per-client clause. A US quote is the USD catalog.
+ * A missing quote is the plan name, not a dollar amount.
  */
 export function cardFreeTrialPriceFromQuote(
   quote: { market?: string | null; priceLabel?: string | null } | null | undefined,
@@ -89,6 +95,27 @@ export function cardFreeTrialPriceFromQuote(
     market,
     zaPriceLabel: market === "za" ? (quote?.priceLabel ?? null) : null,
   });
+}
+
+/** Checkout and wall amount. A missing or unknown market is the plan name only. */
+export function checkoutPriceLabel(
+  plan: FirmCheckoutBand,
+  interval: FirmInterval,
+  quote: { market?: string | null; priceLabel?: string | null } | null | undefined,
+): string {
+  const market = quote?.market === "za" ? "za" : quote?.market === "us" ? "us" : null;
+  if (market == null) return firmPlanNameOnly(plan);
+  if (plan === "starter" && interval === "month") {
+    return cardFreeTrialPriceFromQuote(quote) || firmPlanNameOnly(plan);
+  }
+  return (
+    firmWallDisplayPrice({
+      market,
+      zaPriceLabel: market === "za" ? (quote?.priceLabel ?? null) : null,
+      plan,
+      interval,
+    }) || firmPlanNameOnly(plan)
+  );
 }
 
 export function firmWallTrialDetail(priceLabel: string | null): string {

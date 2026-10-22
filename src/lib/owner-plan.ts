@@ -47,6 +47,23 @@ export function ownerRegisterPlanNote(visitor: OwnerVisitor, zaMonthly?: string 
   return `Owner plan: ${ownerPlanPublicPrice(visitor, zaMonthly)} · free when your accountant joins`;
 }
 
+/**
+ * Amount in a sentence such as "Business owners pay …".
+ * US is the dollar catalog. ZA uses the server amount. A missing ZA amount,
+ * or a visitor who is neither market, is the plan name.
+ */
+export function ownerQuotedAmount(
+  visitor: string | null | undefined,
+  zaMonthly?: string | null,
+): string {
+  if (visitor === "us") return OWNER_MONTHLY_USD_LABEL;
+  if (visitor === "za") {
+    const amount = zaMonthly?.trim() ?? "";
+    return amount || "Owner plan";
+  }
+  return "Owner plan";
+}
+
 export function ownerPlanPublicPrice(visitor: OwnerVisitor, zaMonthly?: string | null): string {
   if (visitor === "za" && zaMonthly) return zaMonthly;
   if (visitor === "za") return "";
