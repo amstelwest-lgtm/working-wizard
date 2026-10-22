@@ -2,8 +2,18 @@
  * Reads due agent events and asks Postgres (pg_net) to call the runner.
  * The cron job that posts here is created inactive. Each runner has its own
  * agent_settings flag, default false, so a disabled runner's queue is not read.
+ * Completed Tax Specialist sends are placed on agent_tax when that firm's
+ * flag is on. That path only enqueues. It does not call a model.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  planTaxDispatch,
+  TAX_AGENT_QUEUE,
+  TAX_DISPATCH_FIRM_ID,
+  TAX_DISPATCH_FLAG,
+  TAX_SEND_AGENT,
+  type TaxDispatchSend,
+} from "../../../src/lib/tax-specialist-dispatch.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -43,6 +53,87 @@ function flagOn(value: unknown): boolean {
   return false;
 }
 
+type DbError = { message: string; code?: string } | null;
+type Row = Record<string, unknown>;
+type Rows = { data: Row[] | null; error: DbError };
+
+type LooseFilter = {
+  eq: (column: string, value: string) => LooseFilter;
+  not: (column: string, op: string, value: null) => LooseFilter;
+  in: (column: string, values: string[]) => Promise<Rows>;
+  limit: (n: number) => Promise<Rows>;
+  maybeSingle: () => Promise<{ data: Row | null; error: DbError }>;
+};
+
+type LooseDb = {
+  from: (table: string) => {
+    select: (cols: string) => LooseFilter;
+    insert: (row: Row) => { select: (cols: string) => Promise<Rows> };
+    delete: () => { eq: (column: string, value: string) => Promise<{ error: DbError }> };
+  };
+  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: DbError }>;
+};
+
+/**
+ * Claim the send, then enqueue it. A failed send drops the claim so a later
+ * tick can try once. A send already claimed is left alone.
+ * The new tables are not in the generated Database type, so this uses a
+ * narrow cast. It does not call a model.
+ */
+async function enqueueCompletedTaxSends(db: LooseDb): Promise<number> {
+  const flag = await db
+    .from("agent_firm_flags")
+    .select("enabled")
+    .eq("firm_id", TAX_DISPATCH_FIRM_ID)
+    .eq("flag", TAX_DISPATCH_FLAG)
+    .maybeSingle();
+  if (flag.error || flag.data?.enabled !== true) return 0;
+
+  const found = await db
+    .from("client_agent_sends")
+    .select("id, firm_id, client_id, agent, completed_at")
+    .eq("firm_id", TAX_DISPATCH_FIRM_ID)
+    .eq("agent", TAX_SEND_AGENT)
+    .not("completed_at", "is", null)
+    .limit(25);
+  if (found.error || !found.data?.length) return 0;
+
+  const ids = found.data.map((row) => String(row.id));
+  const prior = await db.from("agent_tax_enqueued").select("send_id").in("send_id", ids);
+  if (prior.error) return 0;
+  const queued = new Set((prior.data ?? []).map((row) => String(row.send_id)));
+
+  const sends: TaxDispatchSend[] = found.data.map((row) => ({
+    id: String(row.id),
+    firmId: String(row.firm_id),
+    clientId: String(row.client_id),
+    agent: String(row.agent),
+    completedAt: typeof row.completed_at === "string" ? row.completed_at : null,
+    alreadyQueued: queued.has(String(row.id)),
+  }));
+  const plans = planTaxDispatch({ sends, flagEnabled: true });
+
+  let enqueued = 0;
+  for (const plan of plans) {
+    const claimed = await db
+      .from("agent_tax_enqueued")
+      .insert({ send_id: plan.sendId })
+      .select("send_id");
+    if (claimed.error || !claimed.data?.length) continue;
+    const sent = await db.rpc("agent_queue_send", {
+      p_queue: TAX_AGENT_QUEUE,
+      p_payload: plan.payload,
+      p_delay: 0,
+    });
+    if (sent.error) {
+      await db.from("agent_tax_enqueued").delete().eq("send_id", plan.sendId);
+      continue;
+    }
+    enqueued += 1;
+  }
+  return enqueued;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -54,6 +145,7 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   if (!url || !serviceKey) return json({ error: "not_configured" }, 500);
   const db = createClient(url, serviceKey);
+  const taxEnqueued = await enqueueCompletedTaxSends(db as unknown as LooseDb);
 
   const { data: settings, error: settingError } = await db
     .from("agent_settings")
@@ -62,7 +154,7 @@ Deno.serve(async (req) => {
   if (settingError) return json({ error: settingError.message }, 500);
   const flags = new Map((settings ?? []).map((row) => [row.key as string, flagOn(row.value)]));
   const enabled = RUNNERS.filter((runner) => flags.get(runner.setting) === true);
-  if (enabled.length === 0) return json({ skipped: true, reason: "disabled" });
+  if (enabled.length === 0) return json({ skipped: true, reason: "disabled", taxEnqueued });
 
   let promoted = 0;
   if (enabled.some((runner) => runner.promote)) {
@@ -94,5 +186,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json({ promoted, kicked });
+  return json({ promoted, kicked, taxEnqueued });
 });
