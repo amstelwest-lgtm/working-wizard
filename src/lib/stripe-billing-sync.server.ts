@@ -258,12 +258,12 @@ async function retrieveFirmSubscription(
 ): Promise<RetrievedSubscription> {
   try {
     return await stripe.subscriptions.retrieve(subscriptionId, {
-      expand: ["items.data.price.product", "customer"],
+      expand: ["items.data.price.product", "customer", "discounts"],
     });
   } catch (err) {
     console.warn("[stripe] subscription expand failed", err instanceof Error ? err.message : err);
     return stripe.subscriptions.retrieve(subscriptionId, {
-      expand: ["items.data.price"],
+      expand: ["items.data.price", "discounts"],
     });
   }
 }

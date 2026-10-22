@@ -280,8 +280,11 @@ export function firmUpgradeDiscounts(input: {
   const promo = input.promotionCodeId?.trim() ?? "";
   const existing = input.existing ?? [];
   if (promo) {
+    // couponId is read from Discount.source.coupon (Dahlia), then discount.coupon.
+    // A missing coupon means the discount was not actually read, so this is not "already applied".
     const voucherAlreadyOnly =
-      existing.length > 0 && existing.every((row) => row.promotionCodeId === promo);
+      existing.length > 0 &&
+      existing.every((row) => row.promotionCodeId === promo && row.couponId != null);
     if (voucherAlreadyOnly) return undefined;
     return [{ promotion_code: promo }];
   }

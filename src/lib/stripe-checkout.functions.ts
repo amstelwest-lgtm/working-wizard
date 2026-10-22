@@ -979,7 +979,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       (voucherPromotionCodeId || clearLegacyZaCoupon || !itemId)
     ) {
       const fresh = await stripe.subscriptions.retrieve(sub.id, {
-        expand: ["items.data.price"],
+        expand: ["items.data.price", "discounts"],
       });
       if (!itemId) itemId = readSubscriptionPrice(fresh).itemId;
       if (voucherPromotionCodeId || clearLegacyZaCoupon) {
