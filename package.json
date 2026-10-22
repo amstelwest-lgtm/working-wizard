@@ -133,6 +133,7 @@
     "test:client-agent-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-invite-email-test.mts",
     "test:client-agent-invite-mail": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-invite-mail-test.mts",
     "test:client-agent-finish": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-finish-test.mts",
+    "test:agent-tax-flag": "vite-node --config scripts/vite-test.config.ts scripts/agent-tax-flag-test.mts",
     "test:source-documents-ui": "vite-node --config scripts/vite-test.config.ts scripts/source-documents-ui-test.mts",
     "test:statement-text-layer": "vite-node --config scripts/vite-test.config.ts scripts/statement-text-layer-test.mts",
     "test:auto-populate": "vite-node --config scripts/vite-test.config.ts scripts/auto-populate-test.mts",

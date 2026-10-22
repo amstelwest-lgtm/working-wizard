@@ -35,6 +35,7 @@ import {
 } from "@/lib/client-agent-file-secret";
 import { recipientFirstName } from "@/lib/client-agent-send";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
+import { planTaxEnqueue, TAX_SPECIALIST_SETTING } from "@/lib/agent-tax-flag";
 import {
   SEND_ATTEMPT_WINDOW_MS,
   SEND_STORAGE_BUCKET,
@@ -1089,6 +1090,56 @@ async function copyOneFile(input: {
   return true;
 }
 
+async function enqueueTaxReview(input: {
+  firmId: string;
+  sendId: string;
+  clientId: string;
+}): Promise<void> {
+  try {
+    const read = await (
+      supabaseAdmin as unknown as {
+        from: (name: string) => {
+          select: (columns: string) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              maybeSingle: () => Promise<{ data: { value?: unknown } | null; error: DbError }>;
+            };
+          };
+        };
+      }
+    )
+      .from("agent_settings")
+      .select("value")
+      .eq("key", TAX_SPECIALIST_SETTING)
+      .maybeSingle();
+    if (read.error) return;
+    const plan = planTaxEnqueue({
+      already: false,
+      setting: read.data?.value ?? null,
+      firmId: input.firmId,
+      sendId: input.sendId,
+      clientId: input.clientId,
+    });
+    if (!plan.enqueue) return;
+    await (
+      supabaseAdmin as unknown as {
+        rpc: (
+          name: string,
+          args: { p_queue: string; p_payload: { send_id: string; client_id: string; firm_id: string }; p_delay: number },
+        ) => Promise<{ error: DbError }>;
+      }
+    ).rpc("agent_queue_send", {
+      p_queue: plan.queue,
+      p_payload: plan.payload,
+      p_delay: 0,
+    });
+  } catch {
+    return;
+  }
+}
+
 async function markCompleted(sendId: string): Promise<boolean> {
   const { error } = await (
     supabaseAdmin as unknown as {
@@ -1169,5 +1220,10 @@ export const completeClientAgentSend = createServerFn({ method: "POST" })
     if (!mailed.ok) return { ok: false, body: FINISH_BODY };
     const marked = await markCompleted(resolved.send.id);
     if (!marked) return { ok: false, body: FINISH_BODY };
+    await enqueueTaxReview({
+      firmId: resolved.send.firm_id,
+      sendId: resolved.send.id,
+      clientId: resolved.send.client_id,
+    });
     return { ok: true };
   });
