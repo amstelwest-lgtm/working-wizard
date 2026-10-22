@@ -51,12 +51,8 @@ import { parseMarketSelection } from "@/lib/market/parse";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { practiceLocationHint } from "@/lib/firm-signup-copy";
 import { FirmSignupTerms } from "@/components/firm-signup-terms";
-import {
-  isFirmCheckoutBand,
-  isFirmInterval,
-  type FirmCheckoutBand,
-  type FirmInterval,
-} from "@/lib/stripe-plans";
+import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import { parseAuthSearch, type AuthPageSearch } from "@/lib/auth-search";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
@@ -99,14 +95,7 @@ import { readSignupQuotes } from "@/lib/pricing/price-quote.functions";
 import { useSignupQuotes } from "@/lib/pricing/use-signup-quotes";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 
-type AuthSearch = {
-  next?: string;
-  signup?: boolean;
-  plan?: FirmCheckoutBand;
-  interval?: FirmInterval;
-  /** Visitor hint from the landing dropdown. ZA or US only. Not a country override. */
-  market?: "ZA" | "US";
-};
+type AuthSearch = AuthPageSearch;
 
 export const Route = createFileRoute("/auth")({
   loader: async () => {
@@ -123,27 +112,7 @@ export const Route = createFileRoute("/auth")({
     return { ...visitor, signupQuotes };
   },
   component: AuthPage,
-  validateSearch: (search: Record<string, unknown>): AuthSearch => {
-    const next =
-      typeof search.next === "string" && search.next.startsWith("/") ? search.next : undefined;
-    const plan =
-      typeof search.plan === "string" && isFirmCheckoutBand(search.plan) ? search.plan : undefined;
-    const interval =
-      typeof search.interval === "string" && isFirmInterval(search.interval)
-        ? search.interval
-        : undefined;
-    const signupFlag =
-      search.signup === true || search.signup === "1" || search.signup === "true" || plan != null;
-    const marketRaw = typeof search.market === "string" ? search.market.trim().toUpperCase() : "";
-    const market = marketRaw === "ZA" || marketRaw === "US" ? marketRaw : undefined;
-    return {
-      ...(next ? { next } : {}),
-      ...(signupFlag ? { signup: true } : {}),
-      ...(plan ? { plan } : {}),
-      ...(interval ? { interval } : {}),
-      ...(market ? { market } : {}),
-    };
-  },
+  validateSearch: (search: Record<string, unknown>): AuthSearch => parseAuthSearch(search),
   head: () => pageHead(SEO_PAGES.auth),
 });
 
@@ -254,7 +223,10 @@ function AuthPage() {
     const safe = safeAccountantRedirect(next);
     void navigate({
       to: "/auth",
-      search: safe ? { next: safe } : {},
+      search: {
+        ...(safe ? { next: safe } : {}),
+        ...(market ? { market } : {}),
+      },
       replace: true,
     });
   };
@@ -661,6 +633,7 @@ function AuthPage() {
               to: "/auth",
               search: {
                 ...(next ? { next } : {}),
+                ...(market ? { market } : {}),
                 signup: true,
                 plan: selectedPlan,
                 interval: selectedInterval,
@@ -687,6 +660,7 @@ function AuthPage() {
                 to: "/auth",
                 search: {
                   ...(next ? { next } : {}),
+                  ...(market ? { market } : {}),
                   signup: true,
                   plan: nextPlan,
                   interval: selectedInterval,

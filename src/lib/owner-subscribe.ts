@@ -29,6 +29,21 @@ export function ownerCheckoutReturnCopy(kind: "success" | "cancel"): string {
   return "Payment received. Your plan updates in a moment.";
 }
 
+/**
+ * Plan and Settings action. An accountant-covered owner has no Subscribe
+ * button and no checkout CTA, even when the entitlement read still says
+ * subscribe.
+ */
+export function ownerPlanBillingView(input: {
+  accountantOnMilon: boolean;
+  firmName: string | null;
+  billing: OwnerSubscribeView;
+}): OwnerSubscribeView {
+  if (!input.accountantOnMilon) return input.billing;
+  if (input.billing.kind === "covered") return input.billing;
+  return { kind: "covered", firmName: input.firmName?.trim() || "" };
+}
+
 /** What the plan page shows. Firm coverage and an unavailable price have no button. */
 export function ownerSubscribeView(input: {
   entitlement: OwnerEntitlement | null;
