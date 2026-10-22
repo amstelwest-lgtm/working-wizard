@@ -3,8 +3,8 @@
  * a shared artifact, firm-member review, and the needs-attention count.
  * Run: pnpm test:client-agent-finish
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { uploadSourceLabel, parseDocumentMeta } from "../src/lib/client-documents.ts";
 import {
   artifactCopyKey,
@@ -21,6 +21,7 @@ import {
   renderClientAgentDoneEmail,
   sendClientAgentDone,
 } from "../src/lib/client-agent-done-mail.ts";
+import { ownerDraftPresentations, ownerNeedsView } from "../src/lib/owner-needs.ts";
 import { exceptionsFor, type PortfolioClientFacts } from "../src/lib/portfolio.ts";
 
 function assert(cond: boolean, msg: string) {
@@ -344,5 +345,78 @@ assert(exceptions.includes('section === "send-agent"'), "needs attention opens t
 const page = read("src/components/client-agent-link-page.tsx");
 assert(page.includes("Finish"), "the button says Finish");
 assert(!/recipient|owner@|resend/i.test(page), "the page does not email anyone");
+
+const ownerSurfaces = [
+  "src/lib/owner-needs.ts",
+  "src/lib/owner-ops.functions.ts",
+  ...walk("src/components/owner-door").filter((path) => path.endsWith(".ts") || path.endsWith(".tsx")),
+];
+const ownerNeedles = [
+  "Documents received from client",
+  "documents_received",
+  "client_agent_sends",
+  "getFirmPortfolio",
+  "unreviewedSends",
+];
+for (const path of ownerSurfaces) {
+  const text = read(path);
+  for (const needle of ownerNeedles) {
+    assert(!text.includes(needle), `${path} never mentions ${needle}`);
+  }
+}
+assert(
+  !read("src/components/owner-door/owner-door.tsx").includes("PortfolioExceptions"),
+  "the owner door does not render the practice exceptions",
+);
+assert(
+  !read("src/lib/owner-ops.functions.ts").includes(".from(\"client_agent_sends\")"),
+  "the owner dashboard does not query client document links",
+);
+const ownerView = ownerNeedsView({
+  ownerEmail: "owner@example.com",
+  actionsReady: true,
+  actionsUnavailable: false,
+  actions: [],
+  draftsReady: true,
+  draftsUnavailable: false,
+  draftTitles: [],
+  deliverablesReady: true,
+  deliverablesUnavailable: false,
+  deliverableCount: 0,
+  advisoryTitles: [],
+  quickBooks: { state: "absent" },
+  xero: { state: "absent" },
+  when: (iso) => iso,
+});
+assert(
+  !JSON.stringify(ownerView).includes("Documents received from client"),
+  "owner needs does not invent the documents item",
+);
+assert(
+  ownerDraftPresentations([
+    {
+      id: "finding-1",
+      agent: "analyst",
+      client_id: clientId,
+      kind: "documents_received",
+      title: "Documents received from client",
+      detail: null,
+      evidence: { draft: true, requires_human_approval: true, figures: { files: 1 } },
+      as_of: null,
+      created_at: NOW,
+    },
+  ]).length === 0,
+  "a documents-received row is not an owner draft",
+);
+
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(resolve(root, dir))) {
+    const path = join(dir, name);
+    if (statSync(resolve(root, path)).isDirectory()) out.push(...walk(path));
+    else out.push(path);
+  }
+  return out;
+}
 
 console.log("client agent finish test ok");
