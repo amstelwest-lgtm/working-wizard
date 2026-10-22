@@ -17,8 +17,11 @@ export const SEND_CONSENT_VERSION = "popia-client-agent-2";
 const DOCUMENT_YEAR_OF_ASSESSMENT = 2026;
 
 export const SEND_ATTEMPT_LIMIT = 30;
+/** Successful opens on one live send. Failures still use SEND_ATTEMPT_LIMIT. */
+export const SEND_VALID_ATTEMPT_LIMIT = 300;
 export const SEND_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 export const SEND_STORAGE_BUCKET = "client-agent-sends";
+export const UPLOAD_GRANT_TTL_MS = 15 * 60 * 1000;
 
 /**
  * Client-facing practice name for the one allowlisted firm.
@@ -51,11 +54,13 @@ const PUBLIC_ITEM_ORDER = [
 ];
 
 export type SendGate = "ok" | "unavailable" | "expired" | "revoked" | "limited";
-export type SendLinkReason = "unavailable" | "limited" | "consent" | "mime" | "size";
+export type SendLinkReason = "unavailable" | "revoked" | "limited" | "consent" | "mime" | "size";
 
 export const GENERIC_LINK_STATUS = 200;
 export const GENERIC_LINK_BODY = "This link is not available.";
-export const LIMITED_LINK_BODY = "Too many attempts. Wait a little, then try again.";
+export const REVOKED_LINK_BODY =
+  "This link was replaced by a newer one. Please open the latest email.";
+export const LIMITED_LINK_BODY = "Please wait a minute and try again.";
 export const CONSENT_LINK_BODY = "Agree at the start of the page before sending a document.";
 export const FILE_LINK_BODY = "Use a PDF, JPG, PNG, or HEIC up to 20 MB.";
 
@@ -66,21 +71,27 @@ export type ClosedLink = {
   body: string;
 };
 
-/** One public refusal. Expired, revoked, and unknown share this status and body. */
+/** Public refusal. Unknown and expired share one body. Revoked names the replacement. */
 export function closedLink(reason: SendLinkReason): ClosedLink {
   const body =
     reason === "limited"
       ? LIMITED_LINK_BODY
-      : reason === "consent"
-        ? CONSENT_LINK_BODY
-        : reason === "mime" || reason === "size"
-          ? FILE_LINK_BODY
-          : GENERIC_LINK_BODY;
+      : reason === "revoked"
+        ? REVOKED_LINK_BODY
+        : reason === "consent"
+          ? CONSENT_LINK_BODY
+          : reason === "mime" || reason === "size"
+            ? FILE_LINK_BODY
+            : GENERIC_LINK_BODY;
   return { ok: false, status: GENERIC_LINK_STATUS, reason, body };
 }
 
 export function sendAttemptLimited(recentCount: number): boolean {
   return recentCount >= SEND_ATTEMPT_LIMIT;
+}
+
+export function sendVolumeLimited(recentCount: number): boolean {
+  return recentCount >= SEND_VALID_ATTEMPT_LIMIT;
 }
 
 export async function hashPresentedToken(token: string): Promise<string> {
@@ -117,6 +128,35 @@ export function clientAgentIntro(practiceName: string, expiresAt: Date | string)
 export function clientConsentNotice(practiceName: string): string {
   const practice = cleanPracticeName(practiceName) || "your accountant";
   return `I agree that ${practice} may securely store the documents I upload here for my tax file, using Milōn. Medical aid: send the tax certificate totals only.`;
+}
+
+/**
+ * Checklist line under the title. The consent page keeps clientAgentIntro.
+ * A missing first name starts at "Hi, I'm…".
+ */
+export function clientAgentChecklistIntro(
+  firstName: string | null | undefined,
+  practiceName: string,
+): string {
+  const practice = cleanPracticeName(practiceName) || "your accountant";
+  const name = (firstName ?? "").trim();
+  const hello = name
+    ? `Hi ${name}, I'm the Tax Specialist at ${practice}.`
+    : `Hi, I'm the Tax Specialist at ${practice}.`;
+  return `${hello} Thank you for sending these through. Please upload what you have, and tap 'I don't have this' for anything that doesn't apply. It's no trouble at all.`;
+}
+
+/** Thank-you after Next stores completed_at. Nothing is emailed. One paragraph, no second practice line. */
+export function clientAgentThanks(input: {
+  firstName: string | null;
+  practiceName: string;
+}): { text: string } {
+  const practice = cleanPracticeName(input.practiceName) || "Your accountant";
+  const name = (input.firstName ?? "").trim();
+  const hello = name ? `Thank you, ${name}.` : "Thank you.";
+  return {
+    text: `${hello} We've received your documents, and ${practice} is working on them now. We'll be in touch if we need anything else. Have a lovely day.`,
+  };
 }
 
 function longCalendarDay(iso: string): string {
@@ -161,6 +201,9 @@ const ITEM_HELP: Record<string, string> = {
 };
 
 export const CLIENT_AGENT_FILE_NOTE = "PDF, JPG, PNG or HEIC, up to 20 MB each.";
+
+/** Shown when the password key is missing or not 32 bytes. Nothing is stored. */
+export const CLIENT_AGENT_PASSWORD_UNSAVED = "Couldn't save the password.";
 
 /** One short line for a checklist row. File types are not repeated here. */
 export function clientAgentItemHelp(item: { itemKey: string }): string {
@@ -214,16 +257,18 @@ export function gatePresentedSend(input: {
   return "ok";
 }
 
-export type AttemptOutcome = "ok" | "unknown" | "expired" | "revoked" | "limited";
+export type AttemptOutcome = "ok" | "unknown" | "expired" | "revoked" | "limited" | "rejected";
 
 /**
  * Public result for a presented token. The raw token is not an input:
  * the caller has already looked the send up by its hash.
- * IP and per-send counts both come from client_agent_send_attempts.
+ * ipCount and sendFailureCount are failed attempts only.
+ * sendCount is every attempt on a live send, and uses the higher ceiling.
  */
 export function resolvePresentedLink(input: {
   ipCount: number;
   sendCount: number | null;
+  sendFailureCount?: number | null;
   found: boolean;
   firmId: string | null;
   revokedAt: string | null;
@@ -242,11 +287,13 @@ export function resolvePresentedLink(input: {
     now: input.now,
   });
   if (gate === "unavailable") return { public: closedLink("unavailable"), outcome: "unknown" };
-  if (gate === "revoked" || gate === "expired") {
-    return { public: closedLink("unavailable"), outcome: gate };
+  if (gate === "revoked") return { public: closedLink("revoked"), outcome: "revoked" };
+  if (gate === "expired") return { public: closedLink("unavailable"), outcome: "expired" };
+  if (sendAttemptLimited(input.sendFailureCount ?? 0)) {
+    return { public: closedLink("limited"), outcome: "limited" };
   }
-  if (input.sendCount != null && sendAttemptLimited(input.sendCount)) {
-    return { public: closedLink("unavailable"), outcome: "limited" };
+  if (input.sendCount != null && sendVolumeLimited(input.sendCount)) {
+    return { public: closedLink("limited"), outcome: "limited" };
   }
   return { public: { ok: true }, outcome: "ok" };
 }
@@ -272,6 +319,17 @@ export function pathBelongsToSend(path: string, sendId: string, itemKey: string)
 
 export function mimeAllowed(mime: string): boolean {
   return (SEND_FILE_MIMES as readonly string[]).includes(mime);
+}
+
+/** Declared type for the signed upload. Magic bytes are checked again on confirm. */
+export function clientFileMime(type: string, name: string): string {
+  if (mimeAllowed(type)) return type;
+  const ext = sanitizeClientFileName(name).split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "heic") return "image/heic";
+  return type || "application/octet-stream";
 }
 
 export function sizeAllowed(size: number): boolean {
@@ -341,7 +399,110 @@ export type PublicChecklistItem = {
   status: string;
   quality: string | null;
   hasFile: boolean;
+  fileCount?: number;
+  passwordSaved?: boolean;
+  fileNames?: string[];
 };
+
+/** A name the client can see. No path, no control characters, capped. */
+export function sanitizeClientFileName(name: string): string {
+  const base = name.split(/[/\\]/).pop() ?? "";
+  const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim();
+  return cleaned.slice(0, 120);
+}
+
+/** A row is done when a file is in, or the client has said they don't have it. */
+export function itemSettled(item: {
+  hasFile: boolean;
+  status: string;
+  quality?: string | null;
+}): boolean {
+  if (item.hasFile) return true;
+  return item.status === "received" && (item.quality === "incomplete" || item.quality === "poor");
+}
+
+export function checklistReady(
+  items: Array<{ hasFile: boolean; status: string; quality?: string | null }>,
+): boolean {
+  return items.length > 0 && items.every((item) => itemSettled(item));
+}
+
+/**
+ * Next may store completed_at only after consent, and only when every row
+ * is uploaded or marked missing. A second press does not write again.
+ */
+export function completionDecision(input: {
+  consentAt: string | null;
+  completedAt: string | null;
+  items: Array<{ hasFile: boolean; status: string; quality?: string | null }>;
+}): { ok: true; already: boolean } | { ok: false; reason: "consent" | "incomplete" } {
+  if (!consentReady(input.consentAt)) return { ok: false, reason: "consent" };
+  if (input.completedAt) return { ok: true, already: true };
+  if (!checklistReady(input.items)) return { ok: false, reason: "incomplete" };
+  return { ok: true, already: false };
+}
+
+/** Live document chat stays off until this is turned on in code. */
+export const CLIENT_AGENT_CHAT_ENABLED: boolean = false;
+
+export const CLIENT_AGENT_FAQ_TITLE = "Help with these documents";
+
+/** Closing help line. The practice name comes from the send, not from a fixed sentence. */
+export function clientAgentFaqClose(practiceName: string): string {
+  const practice = cleanPracticeName(practiceName) || "your accountant";
+  return `Anything else? ${practice} will help.`;
+}
+
+const ITEM_FAQ: Record<string, { title: string; body: string }> = {
+  practice_income_expenses: {
+    title: "Practice income and expenses",
+    body: "This is a summary of income and expenses for the year. Download it from your bookkeeping, or use the summary you already keep.",
+  },
+  bank_statements: {
+    title: "Bank statements",
+    body: `These are the statements for every business account, ${documentYearWindow()}. Download them from each bank.`,
+  },
+  travel_logbook: {
+    title: "Travel logbook",
+    body: "This is a log of business kilometres for the year. It is usually in the car's logbook or a mileage app.",
+  },
+  medical_aid_certificate: {
+    title: "Medical aid certificate",
+    body: "This is the annual certificate from your medical aid. Ask the scheme for that certificate.",
+  },
+  ra_contribution_certificate: {
+    title: "Retirement annuity certificate",
+    body: "This is the annual certificate from your retirement annuity provider. They send it after the year ends.",
+  },
+  irp5: {
+    title: "IRP5",
+    body: "This is the certificate from an employer for a salaried job. Your employer, or the payroll office, can send a copy.",
+  },
+  it3b: {
+    title: "IT3(b)",
+    body: "This is a certificate of interest from a bank or investment. Each bank can download it for you.",
+  },
+  other: {
+    title: "Order and proof of payments",
+    body: "This is the court order and the proof of payments you received. Keep the order with the payment records.",
+  },
+};
+
+/** One help line per listed document. No live chat. */
+export function clientAgentFaq(
+  items: Array<{ itemKey: string; label: string }>,
+): Array<{ itemKey: string; label: string; body: string }> {
+  const seen = new Set<string>();
+  const rows: Array<{ itemKey: string; label: string; body: string }> = [];
+  for (const item of items) {
+    if (seen.has(item.itemKey)) continue;
+    seen.add(item.itemKey);
+    const entry = ITEM_FAQ[item.itemKey];
+    if (!entry) continue;
+    rows.push({ itemKey: item.itemKey, label: entry.title, body: entry.body });
+  }
+  return rows;
+}
 
 type ChecklistRow = {
   sendId: string;
@@ -353,7 +514,10 @@ type ChecklistRow = {
   storagePath: string | null;
   firmId?: string;
   fileName?: string;
+  displayNames?: string[];
   bytes?: Uint8Array;
+  fileCount?: number;
+  passwordSaved?: boolean;
 };
 
 /** Her own checklist only. Firm fields, file names, and file bytes stay off the page. */
@@ -367,6 +531,11 @@ export function toPublicChecklist(rows: ChecklistRow[], sendId: string): PublicC
       status: row.status,
       quality: row.quality,
       hasFile: typeof row.storagePath === "string" && row.storagePath.length > 0,
+      fileCount: row.fileCount,
+      passwordSaved: row.passwordSaved === true,
+      fileNames: (row.displayNames ?? [])
+        .map((name) => sanitizeClientFileName(name))
+        .filter((name) => name.length > 0),
     }))
     .sort((a, b) => {
       const ai = PUBLIC_ITEM_ORDER.indexOf(a.itemKey);
@@ -449,6 +618,128 @@ export async function storeAcceptedFile<T>(
 ): Promise<{ ok: true; value: T } | ClosedLink> {
   if (!decision.ok) return decision;
   return { ok: true, value: await write({ mime: decision.mime, bytes: decision.bytes }) };
+}
+
+/** Declared size and type, before a signed upload URL is issued. */
+export function declareUpload(input: {
+  consented: boolean;
+  size: number;
+  mime: string;
+}): { ok: true } | ClosedLink {
+  if (!input.consented) return closedLink("consent");
+  if (!sizeAllowed(input.size)) return closedLink("size");
+  if (!mimeAllowed(input.mime)) return closedLink("mime");
+  return { ok: true };
+}
+
+export type UploadGrant = {
+  sendId: string;
+  itemKey: string;
+  path: string;
+  size: number;
+  mime: string;
+  exp: number;
+};
+
+function b64urlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+function b64urlDecode(value: string): Uint8Array | null {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) return null;
+  const padded = value.replaceAll("-", "+").replaceAll("_", "/") + "=".repeat((4 - (value.length % 4)) % 4);
+  try {
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function timingEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!;
+  return diff === 0;
+}
+
+async function hmacSha256(secret: string, payload: string): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload)));
+}
+
+/** Binds a server-built path to this send. The secret is not part of the token. */
+export async function signUploadGrant(secret: string, grant: UploadGrant): Promise<string> {
+  const payload = JSON.stringify(grant);
+  const sig = await hmacSha256(secret, payload);
+  return `${b64urlEncode(new TextEncoder().encode(payload))}.${b64urlEncode(sig)}`;
+}
+
+export async function readUploadGrant(secret: string, token: string): Promise<UploadGrant | null> {
+  const parts = token.split(".");
+  if (parts.length !== 2 || !secret) return null;
+  const body = parts[0];
+  const sigPart = parts[1];
+  if (!body || !sigPart) return null;
+  const payloadBytes = b64urlDecode(body);
+  const sig = b64urlDecode(sigPart);
+  if (!payloadBytes || !sig) return null;
+  const payload = new TextDecoder().decode(payloadBytes);
+  const expected = await hmacSha256(secret, payload);
+  if (!timingEqual(sig, expected)) return null;
+  let parsed: Partial<UploadGrant>;
+  try {
+    parsed = JSON.parse(payload) as Partial<UploadGrant>;
+  } catch {
+    return null;
+  }
+  if (typeof parsed.sendId !== "string" || typeof parsed.itemKey !== "string") return null;
+  if (typeof parsed.path !== "string" || typeof parsed.mime !== "string") return null;
+  if (!Number.isInteger(parsed.size) || !Number.isInteger(parsed.exp)) return null;
+  if ((parsed.exp as number) <= Date.now()) return null;
+  return {
+    sendId: parsed.sendId,
+    itemKey: parsed.itemKey,
+    path: parsed.path,
+    size: parsed.size as number,
+    mime: parsed.mime,
+    exp: parsed.exp as number,
+  };
+}
+
+/**
+ * The object must be the server-issued path, at most 20 MB, and the leading
+ * bytes must be an allowed type. A path the client invents does not match.
+ */
+export function confirmStoredObject(input: {
+  grant: UploadGrant;
+  claimedPath: string;
+  sendId: string;
+  itemKey: string;
+  objectSize: number | null;
+  sniffed: DocumentMime | null;
+}): { ok: true; mime: DocumentMime; size: number } | ClosedLink {
+  if (input.claimedPath !== input.grant.path) return closedLink("unavailable");
+  if (input.grant.sendId !== input.sendId || input.grant.itemKey !== input.itemKey) {
+    return closedLink("unavailable");
+  }
+  if (!pathBelongsToSend(input.claimedPath, input.sendId, input.itemKey)) {
+    return closedLink("unavailable");
+  }
+  if (input.objectSize == null || !sizeAllowed(input.objectSize)) return closedLink("size");
+  if (input.objectSize !== input.grant.size) return closedLink("size");
+  if (!input.sniffed || input.sniffed !== input.grant.mime) return closedLink("mime");
+  return { ok: true, mime: input.sniffed, size: input.objectSize };
 }
 
 const LOG_KEYS = new Set(["event", "outcome", "reason"]);
