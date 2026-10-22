@@ -389,6 +389,7 @@ export async function buildContext(
           cash: metrics?.cash.amount ?? null,
           runwayWeeks: metrics?.runway.weeks ?? null,
           runwayLabel: metrics ? runwayDisplayLabel(metrics.runway) : null,
+          cashGenerative: metrics?.runway.kind === "cash_generative",
           copyPack,
           storedMarket: clientMarketRaw,
           fyStartMonth: overviewFyStartMonth(copyPack, operatingProfile),

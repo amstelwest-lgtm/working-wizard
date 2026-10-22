@@ -223,6 +223,7 @@ Rules:
 - Creditor days use the healthy band named in OVERVIEW FIGURES (30–60 days). Do not call that a 40-day band. 40 is the health-score Watch floor, not a day count.
 - Quote a stored total liabilities figure. Do not replace it with assets minus equity. A total liabilities line marked (derived) is an estimate.
 - "Cash generative" is a valid cash runway. Report it as written. It is not zero weeks and it is not a missing figure.
+- When OVERVIEW FIGURES says gross margin or cash runway is not available, say not available. Do not replace either line with 0 or with a figure you calculate.
 
 ${chatReplyFormatRules(copyPack, moneyPack)}`;
 }

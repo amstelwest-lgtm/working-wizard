@@ -18,6 +18,7 @@ import {
 import { DISPLAY_TO_CAMEL } from "../ask-ai/derive-ratios.ts";
 import {
   buildOverviewBrief,
+  quotedGrossMarginFraction,
   resolveTotalLiabilities,
   type OverviewCopyPack,
 } from "../ask-ai/overview-brief.ts";
@@ -115,6 +116,8 @@ export function shapeSnapshot(input: {
   ratios: unknown;
   financials: unknown;
   cashRunwayWeeks: number | null;
+  /** Overview cash-card runway. Null when that card has no measured runway. */
+  runwayLabel?: string | null;
   /** Same year-start the profit waterfall uses. Omitted leaves the raw statement. */
   fyStartMonth?: number | null;
 }): Record<string, unknown> {
@@ -155,6 +158,11 @@ export function shapeSnapshot(input: {
   }
   const liabilities = resolveTotalLiabilities(rawFinancials);
   if (liabilities) totals.totalLiabilities = liabilities.amount;
+  const marginRevenue =
+    typeof totals.revenue === "number" ? totals.revenue : amountOnFile(rawFinancials, "revenue");
+  const marginGross = typeof totals.grossProfit === "number" ? totals.grossProfit : null;
+  const grossMargin = quotedGrossMarginFraction(marginGross, marginRevenue);
+  const runwayLabel = input.runwayLabel?.trim() ?? "";
   const empty =
     !periodLabel && Object.keys(ratios).length === 0 && Object.keys(totals).length === 0;
   return {
@@ -165,8 +173,21 @@ export function shapeSnapshot(input: {
     statement_totals: totals,
     total_liabilities: liabilities?.amount ?? null,
     total_liabilities_source: liabilities ? (liabilities.derived ? "derived" : "stored") : null,
+    gross_margin: grossMargin,
     cash_runway_weeks: input.cashRunwayWeeks,
+    cash_runway: runwayLabel && runwayLabel !== "—" ? runwayLabel : null,
   };
+}
+
+function amountOnFile(raw: Record<string, unknown> | null, key: string): number | null {
+  if (!raw) return null;
+  const value = raw[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value.replace(/[,\s]/g, ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 export function shapeHealth(
