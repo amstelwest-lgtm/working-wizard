@@ -861,6 +861,14 @@ export const confirmClientAgentUpload = createServerFn({ method: "POST" })
   return { ok: true };
   });
 
+/**
+ * Once the client presses Finish, the copies in the client's documents are
+ * the firm's record of what was sent, so a later removal leaves them alone.
+ */
+function sendArchiveSealed(send: { completed_at: string | null }): boolean {
+  return Boolean(send.completed_at);
+}
+
 export const removeClientAgentFile = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     tokenInput
@@ -897,8 +905,8 @@ export const removeClientAgentFile = createServerFn({ method: "POST" })
     if (previous && pathBelongsToSend(previous, resolved.send.id, data.itemKey)) paths.add(previous);
     if (paths.size > 0) await objectStorage().remove([...paths]);
     // A file removed before Finish also leaves the client's documents, so a
-    // replaced upload is not kept twice. A completed send is never touched.
-    if (!resolved.send.completed_at && paths.size > 0) {
+    // replaced upload is not kept twice. A sealed archive is never touched.
+    if (!sendArchiveSealed(resolved.send) && paths.size > 0) {
       try {
         await removeSendArchiveCopies({
           clientId: resolved.send.client_id,

@@ -235,8 +235,14 @@ const removeHandler = linkFn.slice(
 );
 assert(removeHandler.includes("removeSendArchiveCopies"), "removal also removes the copy");
 assert(
-  removeHandler.includes("!resolved.send.completed_at"),
+  removeHandler.includes("!sendArchiveSealed(resolved.send)"),
   "a completed send's copies are never removed",
+);
+assert(
+  /function sendArchiveSealed\(send: \{ completed_at: string \| null \}\): boolean \{\s*\n\s*return Boolean\(send\.completed_at\);/.test(
+    linkFn,
+  ),
+  "sealed means the send was finished",
 );
 const finishHandler = linkFn.slice(linkFn.indexOf("export const completeClientAgentSend"));
 assert(finishHandler.includes("copiesStillNeeded"), "Finish still skips stored copies");
