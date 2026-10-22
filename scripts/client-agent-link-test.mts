@@ -62,6 +62,7 @@ import {
   sendStoragePath,
   sizeAllowed,
   storeAcceptedFile,
+  itemNotAvailable,
   itemSettled,
   toPublicChecklist,
   type PublicChecklistItem,
@@ -481,7 +482,11 @@ const grant = {
 const grantToken = await signUploadGrant("test-grant-secret", grant);
 const openedGrant = await readUploadGrant("test-grant-secret", grantToken);
 assert(openedGrant?.path === path, "a grant opens with the server secret");
+assert(openedGrant?.name === undefined, "an older grant still opens without a file name");
 assert((await readUploadGrant("other-secret", grantToken)) === null, "a grant does not open with another secret");
+const namedGrantToken = await signUploadGrant("test-grant-secret", { ...grant, name: "../salary.pdf" });
+const openedNamedGrant = await readUploadGrant("test-grant-secret", namedGrantToken);
+assert(openedNamedGrant?.name === "salary.pdf", "the grant carries the file name without its path");
 const forged = confirmStoredObject({
   grant,
   claimedPath: `${sendId}/irp5/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
@@ -556,6 +561,22 @@ assert(
 assert(
   finishItem({ quality: "incomplete", explanation: "   ", hasFile: true }).ok === false,
   "incomplete needs an explanation",
+);
+const emptyMissing = finishItem({ quality: "incomplete", explanation: "", hasFile: false });
+assert(
+  emptyMissing.ok === true && emptyMissing.explanation === null,
+  "an empty note still marks the document not available",
+);
+const keptMissing = finishItem({ quality: "incomplete", explanation: " Left it at home. ", hasFile: false });
+assert(
+  keptMissing.ok === true && keptMissing.explanation === "Left it at home.",
+  "a note is stored with the mark",
+);
+assert(
+  itemNotAvailable({ hasFile: false, status: "received", quality: "incomplete" }) &&
+    !itemNotAvailable({ hasFile: false, status: "open", quality: null }) &&
+    !itemNotAvailable({ hasFile: true, status: "received", quality: "incomplete" }),
+  "undo clears a missing mark and a file is not that mark",
 );
 assert(
   finishItem({ quality: "poor", explanation: "The scan is cut off.", hasFile: true }).ok === true,
@@ -1005,6 +1026,22 @@ assert(
   ]),
   "Next is on when every row is uploaded or skipped",
 );
+assert(
+  itemSettled({ hasFile: true, status: "received", quality: "usable" }) &&
+    checklistReady([{ hasFile: true, status: "open", quality: null }]),
+  "an uploaded file counts as complete when its password is left empty",
+);
+assert(
+  checklistReady([
+    { hasFile: false, status: "received", quality: "incomplete" },
+    { hasFile: false, status: "received", quality: "poor" },
+  ]),
+  "two rows marked independently are enough for Next",
+);
+assert(
+  !itemSettled({ hasFile: false, status: "open", quality: null }),
+  "undo returns a row to open",
+);
 function nextDisabled(html: string): boolean {
   const tag = html.match(/<button[^>]*data-client-next="true"[^>]*>/)?.[0] ?? "";
   return /\sdisabled(=|\s|>)/.test(tag);
@@ -1061,6 +1098,78 @@ assert(
 );
 assert(readyHtml.includes("Password saved"), "a stored password is labelled and not shown back");
 assert(!readyHtml.includes("secret-file-pass"), "the password value is not on the page");
+const emptyPasswordHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: {
+      ok: true,
+      practiceName: "Theo's practice",
+      expiresAt: lateExpiry,
+      consented: true,
+      notice: practiceNotice,
+      items: [
+        {
+          itemKey: "bank_statements",
+          label: "Bank statements",
+          totalsOnly: false,
+          status: "received",
+          quality: "usable",
+          hasFile: true,
+          passwordSaved: false,
+          fileNames: ["statements.pdf"],
+        },
+        {
+          itemKey: "irp5",
+          label: "IRP5",
+          totalsOnly: false,
+          status: "received",
+          quality: "incomplete",
+          hasFile: false,
+          explanation: null,
+        },
+        {
+          itemKey: "it3b",
+          label: "IT3(b)",
+          totalsOnly: false,
+          status: "received",
+          quality: "incomplete",
+          hasFile: false,
+          explanation: "The account was closed.",
+        },
+      ],
+    },
+    busy: false,
+    notice: null,
+    noteFor: null,
+    explanation: "",
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+  }),
+);
+assert(
+  emptyPasswordHtml.includes('data-client-next="true"') && !nextDisabled(emptyPasswordHtml),
+  "Next is on when a file has no password and every other row is not available",
+);
+assert(emptyPasswordHtml.includes("statements.pdf"), "the stored file name stays on the row");
+assert(!emptyPasswordHtml.includes("Password saved"), "an empty password is not labelled saved");
+assert(
+  (emptyPasswordHtml.match(/Marked as not available/g) ?? []).length === 2,
+  "two rows stay marked on their own",
+);
+assert(
+  (emptyPasswordHtml.match(/data-undo-missing=/g) ?? []).length === 2,
+  "each marked row can be undone",
+);
+assert(
+  emptyPasswordHtml.includes("The account was closed."),
+  "a saved note stays on its own row",
+);
+assert(
+  (emptyPasswordHtml.match(/data-missing-note=/g) ?? []).length === 2,
+  "each marked row can edit its note",
+);
 assert(readyHtml.includes('type="password"') && readyHtml.includes('value=""'), "the password field is cleared");
 assert(readyHtml.includes("data-doc-help"), "a finished list shows document help");
 assert(readyHtml.includes(CLIENT_AGENT_FAQ_TITLE), "the help block has its heading");
@@ -1183,6 +1292,30 @@ assert(passwordSql.includes("length(password_box) BETWEEN 8 AND 448"), "the pass
 assert(!passwordSql.toLowerCase().includes("security definer"), "the password migration is not security definer");
 assert(!/\bgrant\b/i.test(passwordSql), "the password migration does not grant");
 assert(passwordSql.includes("'rejected'"), "a failed attempt can be recorded as rejected");
+const missingSql = read("supabase/migrations/20261023140000_client_agent_not_available.sql");
+assert(
+  missingSql.includes("DROP CONSTRAINT IF EXISTS client_agent_send_items_explanation"),
+  "a missing document can be saved without a note",
+);
+assert(missingSql.includes("display_name text"), "the file name has its own column");
+assert(missingSql.includes("length(display_name) <= 120"), "the file name is capped");
+assert(!missingSql.toLowerCase().includes("security definer"), "the not-available migration is not security definer");
+assert(!/\bgrant\b/i.test(missingSql), "the not-available migration does not grant");
+assert(
+  read("supabase/migrations/20261021210000_client_agent_sends.sql").includes(
+    "length(btrim(explanation)) > 0",
+  ),
+  "the applied sends migration is left as it was",
+);
+assert(fn.includes('select("item_key")'), "a checklist save checks that a row changed");
+assert(fn.includes("display_name"), "the file name is read back from the file row");
+assert(fn.includes("export const undoClientAgentItem"), "undo is a token-gated server action");
+assert(page.includes("undoClientAgentItem"), "undo is called from the page");
+assert(page.includes("Marked as not available"), "a missing row says it was recorded");
+assert(page.includes("name: file.name"), "prepare receives the file name");
+assert(page.includes("scrollTo(0, y)") && page.includes("scrollY"), "a state change keeps the scroll position");
+assert(page.includes("}, [token, attempt]);"), "opening the link does not refetch on every render");
+assert(!page.includes("scrollRestoration: false"), "scroll restoration stays on for the rest of the app");
 const throttledHtml = closedScreen(closedLink("limited"));
 assert(throttledHtml.includes("Please wait a minute and try again."), "a throttle shows the wait sentence");
 assert(throttledHtml.includes("Try again"), "a throttle can be tried again");
