@@ -144,7 +144,7 @@ export function voucherDiscountedCents(
 }
 
 /**
- * "$0 for your first month, then $99/mo" for a one-time 100% coupon.
+ * A one-time coupon shows the free or discounted first period, then the list price.
  * Forever coupons show only the discounted amount.
  */
 export function firmVoucherPricePreview(input: {

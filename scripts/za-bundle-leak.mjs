@@ -80,6 +80,64 @@ function zarInAssetNameOrHash(text, at) {
   return token.length > needle.length && /\d/.test(token);
 }
 
+/**
+ * Rand ladder amounts, in cents, from the approved price table.
+ * Bare copies of these in a US chunk are prices even without an R.
+ * Dollar catalog amounts are not in this list: the US bundle is allowed to show them.
+ */
+export const ZAR_LADDER_CENTS = new Set([
+  29900, 283700, 287040, 79900, 766700, 119900, 1150700, 199900, 1918700, 279900, 2686700, 399900,
+  3838700, 529900, 5086700, 799900, 7678700,
+]);
+
+function amountCents(intPart, frac) {
+  const digits = intPart.replace(/[ \u00a0\u202f,]/g, "");
+  if (!/^\d+$/.test(digits)) return null;
+  const whole = Number(digits);
+  if (!Number.isSafeInteger(whole)) return null;
+  if (!frac) return whole * 100;
+  const padded = `${frac}00`.slice(0, 2);
+  return whole * 100 + Number(padded);
+}
+
+/** A hashed filename or identifier (C9FUd799, billing.cancel-C9FUd799.js) is not a price. */
+function insideHashOrFilename(text, start, end) {
+  let from = start;
+  let to = end;
+  while (from > 0 && /[A-Za-z0-9._-]/.test(text[from - 1])) from -= 1;
+  while (to < text.length && /[A-Za-z0-9._-]/.test(text[to])) to += 1;
+  return /[A-Za-z]/.test(text.slice(from, to));
+}
+
+function nearPriceContext(text, start, end) {
+  const window = text.slice(Math.max(0, start - 24), Math.min(text.length, end + 24));
+  return /\/(?:mo|month|yr|year)\b|\bprice\b|\bpriced\b/i.test(window);
+}
+
+/**
+ * Bare ladder amounts near a price or /mo. `799`, `1 199`, and `7,999` count.
+ * `R 187 444` does not: it is not a ladder amount. Digits inside a hash do not.
+ */
+export function bareLadderLeakHits(text) {
+  const hits = [];
+  const re = /(?<![A-Za-z0-9])(\d{1,3}(?:[ \u00a0\u202f,]\d{3})+|\d+)(?:\.(\d{1,2}))?(?!\d)/g;
+  let match;
+  while ((match = re.exec(text))) {
+    const cents = amountCents(match[1], match[2]);
+    if (cents == null || !ZAR_LADDER_CENTS.has(cents)) continue;
+    const start = match.index;
+    const end = start + match[0].length;
+    if (insideHashOrFilename(text, start, end)) continue;
+    if (!nearPriceContext(text, start, end)) continue;
+    const line = text.slice(0, start).split("\n").length;
+    const excerpt = text
+      .slice(Math.max(0, start - 40), end + 40)
+      .replace(/\s+/g, " ");
+    hits.push({ needle: match[0], line, excerpt });
+  }
+  return hits;
+}
+
 function ignoreLeakHit(text, at, needle) {
   if (needle === "50%" && cssPercent(text, at)) return true;
   if (needle === "rand " && randInsideWord(text, at)) return true;
@@ -226,6 +284,9 @@ function main() {
     for (const hit of contentLeakHits(text)) {
       hits.push(`${path}:${hit.line}: ${JSON.stringify(hit.needle)} ${hit.excerpt}`);
     }
+    for (const hit of bareLadderLeakHits(text)) {
+      hits.push(`${path}:${hit.line}: bare ladder ${JSON.stringify(hit.needle)} ${hit.excerpt}`);
+    }
   }
 
   console.log(
@@ -301,6 +362,9 @@ function main() {
     talkChunks += 1;
     for (const hit of contentLeakHits(text, talkNeedles, true)) {
       talkHits.push(`${path}: ${JSON.stringify(hit.needle)} ${hit.excerpt}`);
+    }
+    for (const hit of bareLadderLeakHits(text)) {
+      talkHits.push(`${path}: bare ladder ${JSON.stringify(hit.needle)} ${hit.excerpt}`);
     }
   }
   if (talkChunks === 0) {
