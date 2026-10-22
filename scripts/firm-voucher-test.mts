@@ -18,6 +18,7 @@ import {
   assessFirmVoucher,
   firmUpgradeDiscounts,
   firmUpgradeResultMessage,
+  readCheckoutUpgradeDiscounts,
   firmVoucherPricePreview,
   voucherDiscountedCents,
   FIRM_VOUCHER_INVALID_MESSAGE,
@@ -342,9 +343,82 @@ const capList = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8
 assert(
   checkoutUpgrade.includes("LEGACY_ZA_COUPON_ON_UPGRADE") &&
     checkoutUpgrade.includes("clearLegacyZaCoupon") &&
-    checkoutUpgrade.includes("readSubscriptionDiscountRefs(fresh)") &&
-    checkoutUpgrade.includes('expand: ["items.data.price", "discounts"]'),
-  "checkout re-reads expanded discounts when the legacy coupon is cleared",
+    checkoutUpgrade.includes("readCheckoutUpgradeDiscounts") &&
+    checkoutUpgrade.includes('expand: ["items.data.price", "discounts"]') &&
+    !checkoutUpgrade.includes("readSubscriptionDiscountRefs"),
+  "checkout re-reads expanded discounts and does not throw on a bare id",
+);
+
+const bareFirmId = "11111111-1111-4111-8111-111111111111";
+const bareExpands: string[][] = [];
+const bareWarnings: string[] = [];
+const originalWarn = console.warn;
+console.warn = (...args: unknown[]) => {
+  bareWarnings.push(args.map((part) => String(part)).join(" "));
+};
+let bareCheckoutThrew = false;
+let bareCheckoutDecision: unknown = "unset";
+try {
+  bareCheckoutDecision = await readCheckoutUpgradeDiscounts({
+    firmId: bareFirmId,
+    subscriptionId: "sub_bare",
+    fresh: { discounts: ["di_za"], customer: "cus_secret", email: "owner@example.com" },
+    promotionCodeId: "promo_free",
+    legacyZaCoupon: "clear",
+    retrieve: async (_id, params) => {
+      bareExpands.push(params.expand);
+      return { discounts: ["di_za"] };
+    },
+  });
+} catch {
+  bareCheckoutThrew = true;
+} finally {
+  console.warn = originalWarn;
+}
+assert(!bareCheckoutThrew, "a bare discount id on checkout does not throw");
+assert(bareCheckoutDecision == null, "a still-bare checkout keeps existing discounts");
+assert(
+  bareExpands.length === 1 && bareExpands[0]?.length === 1 && bareExpands[0]?.[0] === "discounts",
+  "checkout re-retrieves a bare discount id with expand discounts",
+);
+assert(
+  bareWarnings.length === 1 &&
+    bareWarnings[0] === `[stripe] unexpanded discounts kept firm=${bareFirmId}`,
+  "a still-bare checkout warns with the firm id only",
+);
+
+const recoveredExpands: string[][] = [];
+const recoveredWarnings: string[] = [];
+console.warn = (...args: unknown[]) => {
+  recoveredWarnings.push(args.map((part) => String(part)).join(" "));
+};
+let recovered: unknown;
+try {
+  recovered = await readCheckoutUpgradeDiscounts({
+    firmId: bareFirmId,
+    subscriptionId: "sub_recover",
+    fresh: { discounts: ["di_za"] },
+    promotionCodeId: null,
+    legacyZaCoupon: "clear",
+    retrieve: async (_id, params) => {
+      recoveredExpands.push(params.expand);
+      return {
+        discounts: [
+          {
+            id: "di_za",
+            object: "discount",
+            source: { type: "coupon", coupon: "MILON_ZA_50" },
+          },
+        ],
+      };
+    },
+  });
+} finally {
+  console.warn = originalWarn;
+}
+assert(
+  recoveredExpands.length === 1 && JSON.stringify(recovered) === "[]" && recoveredWarnings.length === 0,
+  "checkout clear drops MILON_ZA_50 once the re-retrieve expands it",
 );
 assert(
   syncUpgrade.includes("legacyZaCoupon: LEGACY_ZA_COUPON_ON_UPGRADE") &&

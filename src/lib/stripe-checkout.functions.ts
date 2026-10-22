@@ -22,12 +22,12 @@ import {
   readFirmSubscriptionHistory,
   syncStarterTrialMirrorForActor,
 } from "@/lib/firm-client-cap.server";
-import { LEGACY_ZA_COUPON_ON_UPGRADE, readSubscriptionDiscountRefs } from "@/lib/stripe-discount";
+import { LEGACY_ZA_COUPON_ON_UPGRADE } from "@/lib/stripe-discount";
 import { resolveFirmVoucher } from "@/lib/firm-voucher.server";
 import {
   firmBandListCents,
-  firmUpgradeDiscounts,
   firmUpgradeResultMessage,
+  readCheckoutUpgradeDiscounts,
   FIRM_VOUCHER_INVALID_MESSAGE,
   normalizeVoucherCode,
   stripeProductId,
@@ -971,7 +971,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     });
 
     let itemId = sub?.itemId ?? null;
-    let existingDiscounts = sub?.discounts ?? [];
+    let discountUpdate: Awaited<ReturnType<typeof readCheckoutUpgradeDiscounts>> = undefined;
     const clearLegacyZaCoupon = LEGACY_ZA_COUPON_ON_UPGRADE === "clear";
     if (
       route === "update_subscription" &&
@@ -983,7 +983,14 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       });
       if (!itemId) itemId = readSubscriptionPrice(fresh).itemId;
       if (voucherPromotionCodeId || clearLegacyZaCoupon) {
-        existingDiscounts = readSubscriptionDiscountRefs(fresh);
+        discountUpdate = await readCheckoutUpgradeDiscounts({
+          firmId: data.firmId,
+          subscriptionId: sub.id,
+          fresh,
+          promotionCodeId: voucherPromotionCodeId,
+          legacyZaCoupon: LEGACY_ZA_COUPON_ON_UPGRADE,
+          retrieve: (id, params) => stripe.subscriptions.retrieve(id, params),
+        });
       }
     }
 
@@ -1001,11 +1008,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
           lookupKey: sub.lookupKey,
           unitAmount: sub.unitAmount,
         },
-        discounts: firmUpgradeDiscounts({
-          promotionCodeId: voucherPromotionCodeId,
-          existing: existingDiscounts,
-          legacyZaCoupon: LEGACY_ZA_COUPON_ON_UPGRADE,
-        }),
+        discounts: discountUpdate,
       });
       try {
         await stripe.subscriptions.update(sub.id, params);

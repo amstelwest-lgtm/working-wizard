@@ -7,6 +7,7 @@
 import {
   LEGACY_ZA_COUPON_ID,
   LEGACY_ZA_COUPON_ON_UPGRADE,
+  readSubscriptionDiscountRefs,
   type FirmCouponDiscount,
   type StoredDiscountRef,
 } from "./stripe-discount";
@@ -263,6 +264,48 @@ export function withVoucherInterval(
     ...result,
     preview: firmVoucherPricePreview({ listCents, interval, coupon: result.coupon }),
   };
+}
+
+function discountsAreBare(sub: { discount?: unknown; discounts?: unknown }): boolean {
+  if (typeof sub.discounts === "string" && sub.discounts.trim()) return true;
+  if (
+    Array.isArray(sub.discounts) &&
+    sub.discounts.some((entry) => typeof entry === "string" && entry.trim())
+  ) {
+    return true;
+  }
+  return typeof sub.discount === "string" && Boolean(sub.discount.trim());
+}
+
+/**
+ * Checkout upgrade discounts. A bare discount id is re-retrieved with
+ * expand ['discounts']. If it is still bare, the update omits discounts
+ * so Stripe keeps them. This path does not throw.
+ */
+export async function readCheckoutUpgradeDiscounts(input: {
+  firmId: string;
+  subscriptionId: string;
+  fresh: { discount?: unknown; discounts?: unknown };
+  promotionCodeId?: string | null;
+  legacyZaCoupon?: "keep" | "clear";
+  retrieve: (
+    id: string,
+    params: { expand: string[] },
+  ) => Promise<{ discount?: unknown; discounts?: unknown }>;
+}): Promise<FirmCouponDiscount[] | undefined> {
+  let source = input.fresh;
+  if (discountsAreBare(source)) {
+    source = await input.retrieve(input.subscriptionId, { expand: ["discounts"] });
+  }
+  if (discountsAreBare(source)) {
+    console.warn(`[stripe] unexpanded discounts kept firm=${input.firmId.trim()}`);
+    return undefined;
+  }
+  return firmUpgradeDiscounts({
+    promotionCodeId: input.promotionCodeId,
+    existing: readSubscriptionDiscountRefs(source),
+    legacyZaCoupon: input.legacyZaCoupon,
+  });
 }
 
 /**
