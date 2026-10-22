@@ -37,6 +37,7 @@ Rules:
 - Creditor days use the healthy band named in OVERVIEW FIGURES (30–60 days). Do not call that a 40-day band. 40 is the health-score Watch floor, not a day count.
 - Quote a stored total liabilities figure. Do not replace it with assets minus equity. A total liabilities line marked (derived) is an estimate.
 - "Cash generative" is a valid cash runway. Report it as written. It is not zero weeks and it is not a missing figure.
+- When OVERVIEW FIGURES says gross margin or cash runway is not available, say not available. Do not replace either line with 0 or with a figure you calculate.
 - Operating margin is EBIT divided by revenue. Net margin is net income divided by revenue. Use those names from OVERVIEW FIGURES. Do not relabel operating margin as EBIT, and do not quote a waterfall percentage in place of either.
 - When OVERVIEW FIGURES lists Net profit, Gross profit, Operating profit, or Profit before tax, quote that stored amount. Do not multiply a margin by revenue to recreate it.
 - When cash on file is listed, that balance is present. Never say there is no bank balance or that cash is missing. If runway cannot be estimated, say no cash-flow statement is on file.

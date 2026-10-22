@@ -8,6 +8,7 @@ import type { AgentAudience, AgentToolName } from "./agent.ts";
 import { resolveRatioRecord } from "../ask-ai/derive-ratios.ts";
 import {
   buildOverviewBrief,
+  overviewCardRunwayLabel,
   overviewFyStartMonth,
   copyPackFromMarket,
   overviewFactLines,
@@ -476,6 +477,7 @@ export async function executeAgentTool(
         ratios: resolved,
         runwayWeeks: runway,
         runwayLabel: runwayDisplayLabel(healthMetrics.runway),
+        cashGenerative: healthMetrics.runway.kind === "cash_generative",
         cash: healthMetrics.cash.amount,
         copyPack,
         storedMarket: clientRes.data?.market ?? null,
@@ -537,6 +539,16 @@ export async function executeAgentTool(
       ratios: snap?.ratios,
       financials: snapFinancials,
       cashRunwayWeeks: runway,
+      runwayLabel: overviewCardRunwayLabel({
+        runwayLabel: runwayDisplayLabel(healthMetrics.runway),
+        runwayWeeks: runway,
+        cash: healthMetrics.cash.amount,
+        opening: healthMetrics.outlook.opening,
+        closings: healthMetrics.outlook.closing,
+        floor: healthMetrics.outlook.floor,
+        openingMissing: storedOpeningIsMissing(clientRes.data?.cashflow),
+        cashGenerative: healthMetrics.runway.kind === "cash_generative",
+      }),
       fyStartMonth,
     });
   }

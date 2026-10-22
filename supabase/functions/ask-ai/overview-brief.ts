@@ -10,6 +10,7 @@
  * including the financial-year span Ratios uses for days.
  */
 
+import { forecastRunwayHeadlineShared } from "../../../src/lib/cash-forecast-parity.ts";
 import { hasFinancialEvidence } from "../../../src/lib/client-metrics.ts";
 import { parseOperatingProfile } from "../../../src/lib/client-profile.ts";
 import {
@@ -28,11 +29,7 @@ import {
   periodMonthsOf,
 } from "../../../src/lib/ratios.ts";
 import { firmYearStatement } from "../_shared/firm-year-slice.ts";
-import {
-  statementGrossMarginFraction,
-  statementGrossProfit,
-  statementNetProfit,
-} from "../../../src/lib/period-profit.ts";
+import { statementGrossProfit, statementNetProfit } from "../../../src/lib/period-profit.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import {
   figuresPeriodLabelFrom,
@@ -259,6 +256,69 @@ function finiteOrNull(n: number | null | undefined): number | null {
   return n != null && Number.isFinite(n) ? n : null;
 }
 
+/** Shown when the page has no gross margin or no cash-runway reading. Never 0. */
+export const FIGURE_NOT_AVAILABLE = "not available";
+
+/**
+ * Gross margin the Overview quotes: statement gross profit ÷ revenue.
+ * Null when either figure is missing. A blank cost of sales is not zero.
+ */
+export function quotedGrossMarginFraction(
+  grossProfit: number | null,
+  revenue: number | null,
+): number | null {
+  if (grossProfit == null || revenue == null) return null;
+  if (!Number.isFinite(grossProfit) || !Number.isFinite(revenue) || !(revenue > 0)) return null;
+  return grossProfit / revenue;
+}
+
+/**
+ * Cash-runway words on the Overview cash card.
+ * `forecastRunwayHeadlineShared` is that card. Closings must already be the
+ * base forecast — scenario knobs are not applied here. Null when the card
+ * has no measured runway (a horizon fallback with no cash on file is not one).
+ */
+export function overviewCardRunwayLabel(input: {
+  runwayLabel?: string | null;
+  runwayWeeks?: number | null;
+  cash?: number | null;
+  opening?: number | null;
+  closings?: readonly number[] | null;
+  floor?: number | null;
+  openingMissing?: boolean;
+  cashGenerative?: boolean;
+}): string | null {
+  const closings = input.closings;
+  const hasSeries = Array.isArray(closings) && closings.length > 0;
+  if (hasSeries) {
+    const headline = forecastRunwayHeadlineShared({
+      opening: input.opening ?? 0,
+      closings,
+      floor: input.floor ?? 0,
+      runwayLabel: input.runwayLabel,
+      cashGenerative: input.cashGenerative === true || input.runwayLabel === "Cash generative",
+      openingMissing: input.openingMissing === true,
+    }).headline.trim();
+    if (!headline || headline === "—") return null;
+    const cashOnFile = input.cash != null && Number.isFinite(input.cash);
+    const openingOnFile =
+      cashOnFile ||
+      (input.openingMissing !== true &&
+        input.opening != null &&
+        Number.isFinite(input.opening) &&
+        Math.abs(input.opening) >= 0.5);
+    if (/\+\s*wks$/i.test(headline) && !openingOnFile) return null;
+    return headline;
+  }
+  const label = input.runwayLabel?.trim() ?? "";
+  if (label && label !== "—") return label;
+  if (input.runwayWeeks != null && Number.isFinite(input.runwayWeeks)) {
+    const weeks = input.runwayWeeks;
+    return `${weeks} ${weeks === 1 ? "week" : "weeks"}`;
+  }
+  return null;
+}
+
 function figuresSourcePhrase(source: string | null | undefined): string | null {
   switch (source) {
     case "xero":
@@ -334,6 +394,8 @@ export function buildOverviewBrief(input: {
   ratios?: Record<string, number | null> | null;
   runwayWeeks?: number | null;
   runwayLabel?: string | null;
+  /** True only when the runway engine kind is cash-generative. */
+  cashGenerative?: boolean;
   /** Resolved cash (bank, then period). When set, wins over financials.cash. */
   cash?: number | null;
   copyPack?: OverviewCopyPack;
@@ -506,11 +568,21 @@ export function buildOverviewBrief(input: {
     runwayWeeks: evidenced ? runway : null,
     runwayLabel: !evidenced
       ? null
-      : input.runwayLabel !== undefined
-        ? input.runwayLabel
-        : runway != null
-          ? `${runway} ${runway === 1 ? "week" : "weeks"}`
-          : null,
+      : overviewCardRunwayLabel({
+          runwayLabel:
+            input.runwayLabel !== undefined
+              ? input.runwayLabel
+              : runway != null
+                ? `${runway} ${runway === 1 ? "week" : "weeks"}`
+                : null,
+          runwayWeeks: runway,
+          cash: cashOnFile,
+          opening: input.cashOpening ?? null,
+          closings: input.cashClosings ?? null,
+          floor: input.cashFloor ?? null,
+          openingMissing: input.openingMissing === true,
+          cashGenerative: input.cashGenerative === true,
+        }),
     creditorDays: Number.isFinite(ratios["Creditor Days"]) ? ratios["Creditor Days"] : null,
     debtorDays: Number.isFinite(ratios["Debtor Days"]) ? ratios["Debtor Days"] : null,
     inventory: asNumber(financials?.inventory),
@@ -522,9 +594,7 @@ export function buildOverviewBrief(input: {
     periodEnd: statement?.periodEnd ?? null,
     figuresSource: figuresSourcePhrase(statement?.statementSource),
     yearToDateEnd: storedYearToDateEnd(financials, fyStartMonth, dateMarket),
-    grossMargin:
-      statementGrossMarginFraction(financials) ??
-      (Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null),
+    grossMargin: quotedGrossMarginFraction(quotedGross, quotedRevenue),
     operatingMargin: Number.isFinite(ratios["Operating Margin"]) ? ratios["Operating Margin"] : null,
     netMargin: netUsable && Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
     grossProfit: quotedGross,
@@ -581,9 +651,12 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
         : `Net profit: ${money(brief.netProfit, briefMoneyPack(brief))} (stored net income — quote this amount; do not multiply net margin by revenue)`,
     );
   }
-  const runwayFact = overviewRunwayFact(brief);
-  if (runwayFact) lines.push(runwayFact);
-  if (brief.grossMargin != null) lines.push(`Gross margin: ${pct(brief.grossMargin)}`);
+  lines.push(overviewRunwayFact(brief) ?? `Cash runway: ${FIGURE_NOT_AVAILABLE}`);
+  lines.push(
+    brief.grossMargin != null
+      ? `Gross margin: ${pct(brief.grossMargin)}`
+      : `Gross margin: ${FIGURE_NOT_AVAILABLE}`,
+  );
   if (brief.operatingMargin != null) lines.push(`Operating margin: ${pct(brief.operatingMargin)}`);
   if (brief.netMargin != null) lines.push(`Net margin: ${pct(brief.netMargin)}`);
   if (brief.debtorDays != null) {

@@ -78,6 +78,7 @@ export async function loadOverviewBrief(
     cash: metrics.cash.amount,
     runwayWeeks: metrics.runway.weeks,
     runwayLabel: runwayDisplayLabel(metrics.runway),
+    cashGenerative: metrics.runway.kind === "cash_generative",
     copyPack,
     storedMarket: row?.market ?? null,
     fyStartMonth,
