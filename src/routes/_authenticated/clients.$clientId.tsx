@@ -4022,6 +4022,7 @@ function ClientView() {
       buildFinancialManagerBrief({
         clientName: client?.name ?? "",
         currentFinancials: financials,
+        profitPeriod: homeProfitPeriod,
         currentPeriodEnd: statementMeta.periodEnd,
         snapshots: snapshots.map((row) => {
           const meta = readStatementMeta(row.financials, clientMarket);
@@ -4079,6 +4080,7 @@ function ClientView() {
     [
       client?.name,
       financials,
+      homeProfitPeriod,
       statementMeta.periodEnd,
       snapshots,
       openPlanTitles,

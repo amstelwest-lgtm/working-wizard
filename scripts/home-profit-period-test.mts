@@ -7,7 +7,9 @@
  * Other side? Owner (`app.tsx` → `owner-door.tsx`) and accountant
  * (`clients.$clientId.tsx`) Home both pass the Waterfall's slice as
  * `profitPeriod`. The cash interest line (`cash-forecast.tsx`) uses the
- * same clip.
+ * same clip. The Financial Manager brief drops its Net profit movement
+ * when that slice is pro-rated, so a clipped period is not compared with
+ * a prior statement.
  *
  * Run: pnpm test:home-profit-period
  */
@@ -26,6 +28,7 @@ import {
   ownerHomeLines,
   type OwnerBooks,
 } from "../src/lib/owner-answers";
+import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief";
 import { resolveMarket, type ResolvedMarket } from "../src/lib/market";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -195,6 +198,83 @@ assert(
   "undated interest not clipped",
 );
 
+// ── Financial Manager brief: a clipped period is not compared with a prior month ──
+const PRIOR_FIN = {
+  revenue: "400000",
+  cash: "40000",
+  netIncome: "1000",
+  receivables: "1000",
+  payables: "1000",
+  fixedCosts: "180000",
+};
+
+function movementBrief(
+  fin: Record<string, string>,
+  market: ResolvedMarket,
+  fy: number,
+  periodEnd: string,
+  priorDate: string,
+) {
+  const current = { ...fin, cash: "50000", receivables: "8000", payables: "3000" };
+  return buildFinancialManagerBrief({
+    clientName: "1020",
+    currentFinancials: current,
+    currentPeriodEnd: periodEnd,
+    snapshots: [
+      {
+        periodDate: priorDate,
+        periodLabel: "Prior month",
+        financials: PRIOR_FIN,
+      },
+    ],
+    profitPeriod: fiscalStatementSlice(current, fy),
+    actionsReady: false,
+    draftsReady: false,
+    formatMoney: (amount) => plain(ownerAmount(amount, market)),
+  });
+}
+
+function movementText(
+  brief: ReturnType<typeof movementBrief>,
+  market: ResolvedMarket,
+): string {
+  const fmt = (amount: number) => plain(ownerAmount(amount, market));
+  return brief.movements
+    .map((row) => `${row.label} ${fmt(row.current)} from ${fmt(row.prior)}`)
+    .join(" | ");
+}
+
+const zaBrief = movementBrief(JAN_SEP, ZA, ZA.fyStartMonthDefault, "2026-09-30", "2026-08-31");
+const zaMoves = movementText(zaBrief, ZA);
+assert(
+  !zaBrief.movements.some((row) => row.key === "netIncome" || row.label === "Net profit"),
+  `ZA brief drops the Net profit movement, got: ${zaMoves}`,
+);
+assert(!zaMoves.includes("R 38 200"), `ZA brief never prints the raw net, got: ${zaMoves}`);
+assert(
+  zaBrief.movements.some((row) => row.key === "revenue"),
+  `ZA brief keeps the other movements, got: ${zaMoves}`,
+);
+
+const usBrief = movementBrief(JAN_SEP, US, US.fyStartMonthDefault, "2026-09-30", "2026-08-31");
+const usNet = usBrief.movements.find((row) => row.key === "netIncome");
+assert(
+  usNet?.label === "Net profit" && usNet.current === 38200 && usNet.prior === 1000,
+  `US Net profit movement unchanged, got: ${movementText(usBrief, US)}`,
+);
+
+const fullBrief = movementBrief(MAR_FEB, ZA, ZA.fyStartMonthDefault, "2027-02-28", "2027-01-31");
+assert(
+  fullBrief.movements.some((row) => row.label === "Net profit" && row.current === 38200),
+  `ZA full year still compares net, got: ${movementText(fullBrief, ZA)}`,
+);
+
+const undatedBrief = movementBrief(UNDATED, ZA, ZA.fyStartMonthDefault, "2026-09-30", "2026-08-31");
+assert(
+  undatedBrief.movements.some((row) => row.label === "Net profit" && row.current === 38200),
+  `undated brief still compares net, got: ${movementText(undatedBrief, ZA)}`,
+);
+
 // ── Both Home sides and the cash screen pass the clip ──
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const accountant = read("src/routes/_authenticated/clients.$clientId.tsx");
@@ -205,6 +285,10 @@ assert(
 assert(
   /profitPeriod: homeProfitPeriod/.test(accountant),
   "accountant Home books carry profitPeriod",
+);
+assert(
+  /currentFinancials: financials,\n\s*profitPeriod: homeProfitPeriod,/.test(accountant),
+  "accountant brief gets the same slice as the Home card",
 );
 assert(
   /profitPeriod=\{ownerProfitPeriod\?\.slice \?\? null\}/.test(read("src/routes/app.tsx")),
