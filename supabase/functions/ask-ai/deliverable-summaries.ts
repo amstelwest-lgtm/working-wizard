@@ -4,7 +4,9 @@
  * Keep Deno-free so scripts can import this file directly.
  */
 
+import { firmYearStatement } from "../_shared/firm-year-slice.ts";
 import { forecastChatFacts } from "../../../src/lib/cash-forecast-parity.ts";
+import { formatMoney as formatCardMoney } from "../../../src/lib/market/format.ts";
 import { MONTHS_LONG } from "../../../src/lib/market/date-presets.ts";
 import { moveFactorLabel, strategicMovePillar } from "../../../src/lib/move-pillars.ts";
 import { periodProfitBridge, statementNetProfitFromSteps } from "../../../src/lib/period-profit.ts";
@@ -245,9 +247,21 @@ export type WaterfallFigures = {
   tax: number;
   statedNetIncome?: number | null;
   source: "weekly" | "period";
+  /** Set when the statement was scaled onto the firm year. */
+  periodLabel?: string | null;
+  quotedGrossProfit?: number | null;
+  quotedNetProfit?: number | null;
 };
 
-export function extractWaterfallFigures(financials: Record<string, unknown> | null): WaterfallFigures {
+const CARD_MONEY = {
+  us: { currency: "USD" as const, locale: "en-US" as const },
+  za: { currency: "ZAR" as const, locale: "en-ZA" as const },
+};
+
+export function extractWaterfallFigures(
+  financials: Record<string, unknown> | null,
+  fyStartMonth?: number | null,
+): WaterfallFigures {
   const weeklyRaw = financials?.weeklyInputs;
   const weeks =
     weeklyRaw && typeof weeklyRaw === "object" && !Array.isArray(weeklyRaw)
@@ -281,12 +295,20 @@ export function extractWaterfallFigures(financials: Record<string, unknown> | nu
 
   // Same bridge the profitability waterfall uses. Interest is that charge
   // divided by revenue, not the DuPont interest-burden multiple.
-  const bridge = periodProfitBridge(financials ?? {});
-  const statedRaw = financials?.netIncome;
+  // A statement that crosses the firm-year start is scaled first, the same
+  // slice the Budget cards and the profit waterfall draw.
+  const firmYear =
+    financials && fyStartMonth != null ? firmYearStatement(financials, fyStartMonth) : null;
+  const clipped = firmYear?.applied === true ? firmYear : null;
+  const sourceFin = clipped ? clipped.financials : (financials ?? {});
+  const bridge = periodProfitBridge(sourceFin);
+  const statedRaw = sourceFin.netIncome;
   const statedNet =
-    statedRaw == null || String(statedRaw).trim() === ""
-      ? null
-      : Number(String(statedRaw).replace(/,/g, ""));
+    clipped?.slice.netProfit != null
+      ? clipped.slice.netProfit
+      : statedRaw == null || String(statedRaw).trim() === ""
+        ? null
+        : Number(String(statedRaw).replace(/,/g, ""));
   return {
     revenue: bridge.revenue,
     costOfSales: bridge.cogs,
@@ -295,6 +317,9 @@ export function extractWaterfallFigures(financials: Record<string, unknown> | nu
     tax: bridge.tax,
     statedNetIncome: statedNet != null && Number.isFinite(statedNet) ? statedNet : null,
     source: "period",
+    periodLabel: clipped?.slice.label ?? null,
+    quotedGrossProfit: clipped?.slice.grossProfit ?? null,
+    quotedNetProfit: clipped?.slice.netProfit ?? null,
   };
 }
 
@@ -317,6 +342,9 @@ export function summarizeWaterfall(figures: WaterfallFigures): WaterfallSummary 
   return {
     source,
     hasData: true,
+    periodLabel: figures.periodLabel ?? null,
+    quotedGrossProfit: figures.quotedGrossProfit ?? null,
+    quotedNetProfit: figures.quotedNetProfit ?? null,
     steps: [
       step("Revenue", revenue),
       step("Cost of sales", costOfSales),
@@ -329,6 +357,23 @@ export function summarizeWaterfall(figures: WaterfallFigures): WaterfallSummary 
       step("Net income", ni),
     ],
   };
+}
+
+/** Gross profit and net profit the cards quote, with the same prorated label. */
+export function slicedWaterfallQuote(
+  summary: Pick<WaterfallSummary, "periodLabel" | "quotedGrossProfit" | "quotedNetProfit"> | null | undefined,
+  copyPack: "za" | "us",
+): string | null {
+  if (!summary?.periodLabel) return null;
+  const market = CARD_MONEY[copyPack];
+  const parts = [summary.periodLabel];
+  if (summary.quotedGrossProfit != null) {
+    parts.push(`Gross profit: ${formatCardMoney(summary.quotedGrossProfit, market)}`);
+  }
+  if (summary.quotedNetProfit != null) {
+    parts.push(`Net profit: ${formatCardMoney(summary.quotedNetProfit, market)}`);
+  }
+  return parts.join(". ");
 }
 
 type CashLine = {

@@ -1,5 +1,5 @@
 import type { AskAiContext, DisclosureTier } from "./types.ts";
-import { fmtPct } from "./deliverable-summaries.ts";
+import { fmtPct, slicedWaterfallQuote } from "./deliverable-summaries.ts";
 import { DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
 import { formatOverviewForPrompt } from "./overview-brief.ts";
 import { formatAdvisorySignoffGrounding } from "../../../src/lib/advisory-signoff.ts";
@@ -245,6 +245,8 @@ export function buildPrompt(
     lines.push(
       `\nProfitability waterfall (${ctx.waterfall.source} figures, % of revenue). Not a substitute for Operating margin or Net margin:`,
     );
+    const firmYearQuote = slicedWaterfallQuote(ctx.waterfall, copyPack);
+    if (firmYearQuote) lines.push(`  ${firmYearQuote}`);
     for (const step of ctx.waterfall.steps) {
       if (step.label === "EBIT" && ctx.overview?.operatingMargin != null) {
         const shown = formatStatementMargin(ctx.overview.operatingMargin) ?? "n/a";

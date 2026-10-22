@@ -936,6 +936,24 @@ export function presentBudgetOnStatementWindow(
   return { doc: next, moved, uniform: kind, caption };
 }
 
+/**
+ * The Actuals slot quotes the firm-year slice label when that slice is applied.
+ * The words are the slice's. This does not build a second period string.
+ */
+export function budgetCaptionActuals(
+  caption: string,
+  actualsLabel: string | null | undefined,
+): string {
+  if (!actualsLabel) return caption;
+  const marker = ". Actuals ";
+  const at = caption.indexOf(marker);
+  if (at < 0) return caption;
+  const valueAt = at + marker.length;
+  const end = caption.indexOf(". ", valueAt);
+  if (end < 0) return caption;
+  return `${caption.slice(0, valueAt)}${actualsLabel}${caption.slice(end)}`;
+}
+
 /** The plan was copied from the statement it is being scored against. */
 export const SEEDED_VARIANCE_NOTE =
   "Plan seeded from these actuals, so variance starts once new actuals arrive";

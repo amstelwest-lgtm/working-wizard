@@ -292,10 +292,11 @@ export async function buildContext(
   }
 
   // ── Waterfall / product mix / cash (outputs only — no statement dump) ─────
+  const waterfallFy = overviewFyStartMonth(copyPack, operatingProfile);
   const waterfall =
     tier === "none" || !financials
       ? null
-      : summarizeWaterfall(extractWaterfallFigures(financials));
+      : summarizeWaterfall(extractWaterfallFigures(financials, waterfallFy));
   const opRecord =
     operatingProfile && typeof operatingProfile === "object"
       ? (operatingProfile as Record<string, unknown>)

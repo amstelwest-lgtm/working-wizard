@@ -67,6 +67,10 @@ export interface WaterfallSummary {
   source: "weekly" | "period";
   hasData: boolean;
   steps: WaterfallStep[];
+  /** "Mar–Sep 2026, pro-rated from your Jan–Sep 2026 statement" when the firm-year slice is applied. */
+  periodLabel?: string | null;
+  quotedGrossProfit?: number | null;
+  quotedNetProfit?: number | null;
 }
 
 export interface CashForecastSummary {

@@ -27,6 +27,7 @@ import {
   peerMedian,
   periodMonthsOf,
 } from "../../../src/lib/ratios.ts";
+import { firmYearStatement } from "../_shared/firm-year-slice.ts";
 import { statementGrossMarginFraction, statementNetProfit } from "../../../src/lib/period-profit.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import {
@@ -35,7 +36,7 @@ import {
   storedYearToDateEnd,
 } from "../../../src/lib/statement-period.ts";
 import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
-import type { DateMarket } from "../../../src/lib/market/format.ts";
+import { formatMoney as formatCardMoney, type DateMarket } from "../../../src/lib/market/format.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 
 export type OverviewCopyPack = "za" | "us";
@@ -82,6 +83,11 @@ export type OverviewBrief = {
   grossMargin: number | null;
   operatingMargin: number | null;
   netMargin: number | null;
+  /**
+   * "Mar 2026 – Sep 2026, prorated" when the statement crosses the firm-year
+   * start. Null when the statement already sits in that year.
+   */
+  estimateLabel: string | null;
   /** Stored P&L headlines. Null when that line is not on the file. */
   grossProfit: number | null;
   operatingProfit: number | null;
@@ -206,6 +212,20 @@ function money(n: number, copyPack: OverviewCopyPack): string {
     maximumFractionDigits: digits,
   });
   return `${n < 0 ? "-" : ""}${symbol}${formatted}`;
+}
+
+/** Same whole-unit print as the Budget cards. A US figure stays `$241,000`. */
+function cardMoney(n: number, copyPack: OverviewCopyPack): string {
+  return formatCardMoney(
+    n,
+    copyPack === "us"
+      ? { currency: "USD" as const, locale: "en-US" as const }
+      : { currency: "ZAR" as const, locale: "en-ZA" as const },
+  );
+}
+
+function flowMoney(n: number, brief: OverviewBrief): string {
+  return brief.estimateLabel ? cardMoney(n, brief.copyPack) : money(n, brief.copyPack);
 }
 
 export function formatMoney(n: number, copyPack: OverviewCopyPack): string {
@@ -420,8 +440,14 @@ export function buildOverviewBrief(input: {
   const weakest = scored?.weakestPillar ?? null;
 
   const statement = financials ? readStatementMeta(financials, dateMarket) : null;
-  const operatingProfit = asNumber(financials?.ebit);
-  const quotedNet = statementNetProfit(financials);
+  const firmYear = financials ? firmYearStatement(financials, fyStartMonth) : null;
+  const clipped = firmYear?.applied === true ? firmYear : null;
+  const estimateLabel = clipped?.slice.label ?? null;
+  const operatingProfit = clipped ? clipped.slice.operatingProfit : asNumber(financials?.ebit);
+  const quotedNet = clipped ? clipped.slice.netProfit : statementNetProfit(financials);
+  const quotedRevenue = clipped ? clipped.slice.revenue : asNumber(financials?.revenue);
+  const quotedGross = clipped ? clipped.slice.grossProfit : asNumber(financials?.grossProfit);
+  const quotedBeforeTax = clipped ? asNumber(clipped.financials.ebt) : asNumber(financials?.ebt);
   const netUsable = quotedNet != null;
   const liabilities = resolveTotalLiabilities(financials);
   const currentAssets = asNumber(financials?.currentAssets);
@@ -433,7 +459,8 @@ export function buildOverviewBrief(input: {
 
   return {
     clientName: input.clientName?.trim() || null,
-    periodLabel: figuresPeriodLabelFrom(financials, input.periodLabel, dateMarket),
+    periodLabel: estimateLabel ?? figuresPeriodLabelFrom(financials, input.periodLabel, dateMarket),
+    estimateLabel,
     figuresAsOf: input.figuresAsOf ?? null,
     copyPack,
     health,
@@ -445,7 +472,7 @@ export function buildOverviewBrief(input: {
         ? { id: weakest.id, label: weakest.label, score: weakest.score }
         : null,
     cash: evidenced ? cashOnFile : null,
-    revenue: evidenced ? asNumber(financials?.revenue) : null,
+    revenue: evidenced ? quotedRevenue : null,
     runwayWeeks: evidenced ? runway : null,
     runwayLabel: !evidenced
       ? null
@@ -470,9 +497,9 @@ export function buildOverviewBrief(input: {
       (Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null),
     operatingMargin: Number.isFinite(ratios["Operating Margin"]) ? ratios["Operating Margin"] : null,
     netMargin: netUsable && Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
-    grossProfit: asNumber(financials?.grossProfit),
+    grossProfit: quotedGross,
     operatingProfit,
-    profitBeforeTax: asNumber(financials?.ebt),
+    profitBeforeTax: quotedBeforeTax,
     netProfit: quotedNet,
     equity: asNumber(financials?.equity),
     totalAssets: asNumber(financials?.totalAssets),
@@ -485,6 +512,8 @@ export function buildOverviewBrief(input: {
 /** Lines the model must quote. Present figures are already on file. */
 export function overviewFactLines(brief: OverviewBrief): string[] {
   const lines: string[] = [];
+  const note = (stored: string) => brief.estimateLabel ?? stored;
+  if (brief.estimateLabel) lines.push(`Figures period: ${brief.estimateLabel}`);
   if (brief.health != null && brief.healthLabel) {
     lines.push(`Health: ${brief.health} (${brief.healthLabel})`);
   }
@@ -500,23 +529,26 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   if (brief.equity != null) lines.push(`Total equity: ${money(brief.equity, brief.copyPack)}`);
   if (brief.revenue != null) {
     const ytd = brief.yearToDateEnd ? ` (year to date to ${brief.yearToDateEnd})` : "";
-    lines.push(`Revenue for the period on file: ${money(brief.revenue, brief.copyPack)}${ytd}`);
+    const clip = brief.estimateLabel ? ` (${brief.estimateLabel})` : "";
+    lines.push(`Revenue for the period on file: ${flowMoney(brief.revenue, brief)}${ytd}${clip}`);
   }
   if (brief.inventory != null) {
     lines.push(`Inventory: ${money(brief.inventory, brief.copyPack)} (stored balance)`);
   }
   if (brief.grossProfit != null) {
-    lines.push(`Gross profit: ${money(brief.grossProfit, brief.copyPack)} (stored)`);
+    lines.push(`Gross profit: ${flowMoney(brief.grossProfit, brief)} (${note("stored")})`);
   }
   if (brief.operatingProfit != null) {
-    lines.push(`Operating profit: ${money(brief.operatingProfit, brief.copyPack)} (stored)`);
+    lines.push(`Operating profit: ${flowMoney(brief.operatingProfit, brief)} (${note("stored")})`);
   }
   if (brief.profitBeforeTax != null) {
-    lines.push(`Profit before tax: ${money(brief.profitBeforeTax, brief.copyPack)} (stored)`);
+    lines.push(`Profit before tax: ${flowMoney(brief.profitBeforeTax, brief)} (${note("stored")})`);
   }
   if (brief.netProfit != null) {
     lines.push(
-      `Net profit: ${money(brief.netProfit, brief.copyPack)} (stored net income — quote this amount; do not multiply net margin by revenue)`,
+      brief.estimateLabel
+        ? `Net profit: ${flowMoney(brief.netProfit, brief)} (${brief.estimateLabel})`
+        : `Net profit: ${money(brief.netProfit, brief.copyPack)} (stored net income — quote this amount; do not multiply net margin by revenue)`,
     );
   }
   const runwayFact = overviewRunwayFact(brief);
@@ -586,7 +618,7 @@ export function formatOverviewForPrompt(
     "OVERVIEW FIGURES — same source as the app Overview for this client. Quote these. Do not recompute a different health score. Do not invent replacements.",
   ];
   if (brief.clientName) lines.push(`- Client name: ${brief.clientName}`);
-  if (brief.periodLabel) {
+  if (brief.periodLabel && !brief.estimateLabel) {
     const range =
       brief.periodStart && brief.periodEnd ? ` (${brief.periodStart} to ${brief.periodEnd})` : "";
     lines.push(`- Figures period: ${brief.periodLabel}${range}`);
