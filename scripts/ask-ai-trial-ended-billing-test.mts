@@ -15,7 +15,8 @@ import {
   STARTER_TRIAL_ENDED_CODE,
   STARTER_TRIAL_ENDED_MESSAGE,
 } from "../src/lib/starter-trial-constants.ts";
-import { firmUsdListPrice } from "../src/lib/stripe-plans.ts";
+import { quotePrice } from "../src/lib/pricing/price-quote.server.ts";
+import { firmUsdListPrice, type FirmBandId } from "../src/lib/stripe-plans.ts";
 
 const ACCOUNTANT_BILLING = "/settings#firm-billing";
 const OWNER_BILLING = "/app?screen=plan";
@@ -106,15 +107,28 @@ async function until(host: ParentNode, predicate: () => boolean, label: string) 
   throw new Error(`${label}\n${host instanceof Element ? host.innerHTML : ""}`);
 }
 
-const ACCOUNTANT_PRICES = ["starter", "solo", "small"].map((band) => {
-  const price = firmUsdListPrice(band as "starter" | "solo" | "small", "month");
+const QUOTED_BANDS = ["starter", "solo", "small"] as const satisfies readonly FirmBandId[];
+
+function quotedLabel(plan: (typeof QUOTED_BANDS)[number], interval: "month" | "year"): string {
+  const quote = quotePrice({ market: "za", plan, interval, surface: "firm" });
+  assert(quote?.label, `${plan} ${interval} has a server quote`);
+  return quote.label;
+}
+
+const ACCOUNTANT_PRICES = QUOTED_BANDS.map((band) => {
+  const price = firmUsdListPrice(band, "month");
   assert(price, `${band} has a published monthly price`);
   return price;
 });
 
+const ZA_QUOTE_LABELS = QUOTED_BANDS.flatMap((plan) => [
+  quotedLabel(plan, "month"),
+  quotedLabel(plan, "year"),
+]);
+
 function assertNoAccountantPrices(root: ParentNode, where: string) {
   const html = root instanceof Element ? root.innerHTML : "";
-  for (const price of ACCOUNTANT_PRICES) {
+  for (const price of [...ACCOUNTANT_PRICES, ...ZA_QUOTE_LABELS]) {
     assert(!html.includes(price), `${where} does not show ${price}`);
   }
   assert(!/\$\d/.test(html), `${where} shows no dollar price`);
@@ -328,9 +342,9 @@ const pricedOwner = renderToStaticMarkup(
       clientCount: 1,
       zarPlan: true,
       zaLabels: {
-        starter: { month: "R299/mo", year: "R2,990/yr" },
-        solo: { month: "R990/mo", year: "R9,900/yr" },
-        small: { month: "R1,490/mo", year: "R14,900/yr" },
+        starter: { month: quotedLabel("starter", "month"), year: quotedLabel("starter", "year") },
+        solo: { month: quotedLabel("solo", "month"), year: quotedLabel("solo", "year") },
+        small: { month: quotedLabel("small", "month"), year: quotedLabel("small", "year") },
       },
     },
     audience: "owner",
