@@ -1,5 +1,5 @@
 /**
- * Public /a/<token> rules. No database and no mail.
+ * Public /a/<token> rules. No database. Finish emails the firm owner, never the client.
  * Run: pnpm test:client-agent-link
  */
 import { readFileSync } from "node:fs";
@@ -547,9 +547,11 @@ assert(!/method:\s*"PUT"/.test(page), "the page does not write to storage itself
 assert(!/path:\s*z\.string/.test(fn), "the client does not choose the object path");
 assert(!/requireSupabaseAuth/.test(fn), "the public route does not ask for a login");
 assert(
-  !/resend|sendAccessEmail|nodemailer|sendTeamMail|extract-source-document|decide_ledger/i.test(fn),
-  "no mail, extraction, or ledger",
+  !/sendAccessEmail|nodemailer|sendTeamMail|extract-source-document|decide_ledger/i.test(fn),
+  "no other mail, extraction, or ledger",
 );
+assert(fn.includes("sendClientAgentDone"), "finish emails the firm owner once");
+assert(!fn.includes("recipient_email"), "the client is not emailed");
 assert(!/whatsapp/i.test(page + route), "the page does not mention WhatsApp");
 assert(
   !/sars|fill in a form|send a form back/i.test(page),
@@ -588,10 +590,12 @@ assert(
 assert(page.includes("usePrefersReducedMotion"), "reduced motion drops the clip");
 assert(page.includes("reduced ? null"), "the clip is omitted when motion is reduced");
 assert(!page.includes("flex-wrap"), "the list does not wrap into a row");
-assert(page.includes("setThanks(true)"), "Next only switches the thank-you screen");
-assert(!page.includes("finishClientAgentLink"), "Next does not call a completion action");
-assert(!fn.includes("finishClientAgentLink"), "there is no completion server action");
-assert(!fn.includes("client_finished_at"), "completion is not stored");
+assert(page.includes("completeClientAgentSend"), "Finish calls the completion action");
+assert(page.includes("setThanks(true)"), "Finish shows the thank-you screen after it succeeds");
+assert(!page.includes("finishClientAgentLink"), "Finish does not use a retired action name");
+assert(fn.includes("completeClientAgentSend"), "completion is a server function");
+assert(!fn.includes("client_finished_at"), "completion is stored as completed_at");
+assert(fn.includes("completed_at"), "completion stores completed_at");
 assert(page.includes("multiple"), "a row accepts more than one file");
 assert(page.includes("Ask the Tax Specialist"), "the page can ask about the documents");
 assert(page.includes("File password (if it has one)"), "a password field is offered after upload");
@@ -1036,7 +1040,7 @@ assert(
 );
 
 const nextHandler = page.slice(page.indexOf("onNext={() =>"), page.indexOf("thanks={thanks}"));
-assert(nextHandler.includes("setThanks(true)"), "Next writes local thank-you state");
-assert(!nextHandler.includes("await"), "Next does not wait on the server");
+assert(nextHandler.includes("await"), "Finish waits for the server");
+assert(nextHandler.includes("setThanks(true)"), "Finish writes the thank-you after success");
 
 console.log("client agent link test ok");

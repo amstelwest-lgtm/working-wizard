@@ -1,13 +1,26 @@
 /**
  * Public /a/<token> actions. Service role only. The raw token is hashed
  * before lookup. File bytes are uploaded and downloaded with the service
- * role. The browser never receives a storage URL. Nothing is emailed,
- * extracted, or posted to a ledger. Chat text and file passwords are not logged.
+ * role. The browser never receives a storage URL. The first Finish copies
+ * each final file into the client's documents and emails the firm owner
+ * once. The client is never emailed. Nothing is extracted or posted to a
+ * ledger. Chat text, file passwords, and the owner address are not logged.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { canonicalAuthUrl } from "@/lib/app-origin";
 import { CLAUDE_MODEL } from "@/lib/claude-config";
+import {
+  buildClientAgentArtifact,
+  clientAgentDoneIdempotencyKey,
+  completionDecision,
+  copiesStillNeeded,
+  indexedCopyKeys,
+  type CompletionItem,
+} from "@/lib/client-agent-done";
+import { sendClientAgentDone } from "@/lib/client-agent-done-mail";
+import { CLIENT_DOCUMENTS_BUCKET } from "@/lib/client-documents";
 import {
   CLIENT_AGENT_CHAT_FALLBACK,
   CLIENT_AGENT_CHAT_LIMIT,
@@ -56,12 +69,14 @@ type DbError = { message: string } | null;
 
 type SendRow = {
   id: string;
+  client_id: string;
   firm_id: string;
   expires_at: string;
   revoked_at: string | null;
   consent_at: string | null;
   practice_display_name: string | null;
   recipient_first_name: string | null;
+  completed_at: string | null;
 };
 
 type ItemRow = {
@@ -81,6 +96,7 @@ export type OpenLinkResult =
       practiceName: string;
       expiresAt: string;
       firstName: string | null;
+      completed?: boolean;
       consented: boolean;
       notice: string;
       items: PublicItem[];
@@ -191,24 +207,35 @@ async function loadSend(tokenHash: string): Promise<SendRow | null> {
       .select(columns)
       .eq("token_hash", tokenHash)
       .maybeSingle();
-  const named = await query(
-    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name",
-  );
-  if (!named.error) return named.data;
-  const practice = await query(
-    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
-  );
-  if (!practice.error && practice.data) {
-    return { ...practice.data, recipient_first_name: null };
+  const columns = [
+    "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name, completed_at",
+    "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name",
+    "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
+    "id, client_id, firm_id, expires_at, revoked_at, consent_at",
+  ];
+  let lastError: DbError = null;
+  for (const columnList of columns) {
+    const result = await query(columnList);
+    if (!result.error) {
+      if (!result.data) return null;
+      return {
+        ...result.data,
+        client_id: result.data.client_id ?? "",
+        practice_display_name: result.data.practice_display_name ?? null,
+        recipient_first_name: result.data.recipient_first_name ?? null,
+        completed_at: result.data.completed_at ?? null,
+      };
+    }
+    lastError = result.error;
+    const missing =
+      missingRelation(result.error, "completed_at") ||
+      missingRelation(result.error, "recipient_first_name") ||
+      missingRelation(result.error, "practice_display_name") ||
+      missingRelation(result.error, "client_id");
+    if (!missing) break;
   }
-  const plain = await query("id, firm_id, expires_at, revoked_at, consent_at");
-  if (plain.error) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
-  if (!plain.data) return null;
-  return {
-    ...plain.data,
-    practice_display_name: null,
-    recipient_first_name: null,
-  };
+  if (lastError) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
+  return null;
 }
 
 async function loadFirmName(firmId: string): Promise<string | null> {
@@ -407,6 +434,7 @@ async function present(send: SendRow, items: PublicItem[]): Promise<OpenLinkResu
     practiceName,
     expiresAt: send.expires_at,
     firstName: firstName.ok ? firstName.name : null,
+    completed: Boolean(send.completed_at),
     ...openLinkView({
       consented: consentReady(send.consent_at),
       notice: clientConsentNotice(practiceName),
@@ -470,12 +498,16 @@ type ObjectStorage = {
   remove: (paths: string[]) => Promise<{ error: DbError }>;
 };
 
-function objectStorage(): ObjectStorage {
+function bucketStorage(bucket: string): ObjectStorage {
   return (
     supabaseAdmin as unknown as {
-      storage: { from: (bucket: string) => ObjectStorage };
+      storage: { from: (name: string) => ObjectStorage };
     }
-  ).storage.from(SEND_STORAGE_BUCKET);
+  ).storage.from(bucket);
+}
+
+function objectStorage(): ObjectStorage {
+  return bucketStorage(SEND_STORAGE_BUCKET);
 }
 
 async function loadStoredPath(sendId: string, itemKey: string): Promise<string | null> {
@@ -881,3 +913,261 @@ async function recordChatTurn(sendId: string): Promise<void> {
 }
 
 export type { ItemQuality };
+
+const FINISH_BODY = "That could not be finished. Please try again.";
+
+async function loadCompletionItems(sendId: string): Promise<CompletionItem[]> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => Promise<{
+            data: Array<{
+              item_key: string;
+              label: string | null;
+              status: string;
+              quality: string | null;
+              storage_path: string | null;
+              mime: string | null;
+              size_bytes: number | null;
+              explanation: string | null;
+            }> | null;
+            error: DbError;
+          }>;
+        };
+      };
+    }
+  )
+    .from("client_agent_send_items")
+    .select("item_key, label, status, quality, storage_path, mime, size_bytes, explanation")
+    .eq("send_id", sendId);
+  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "items" }));
+  return (data ?? []).map((row) => ({
+    itemKey: row.item_key,
+    label: row.label,
+    status: row.status,
+    quality: row.quality,
+    storagePath: row.storage_path,
+    mime: row.mime,
+    sizeBytes: row.size_bytes,
+    explanation: row.explanation,
+  }));
+}
+
+async function loadCopiedKeys(clientId: string, sendId: string) {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => Promise<{ data: Array<{ meta: unknown }> | null; error: DbError }>;
+        };
+      };
+    }
+  )
+    .from("client_artifacts")
+    .select("meta")
+    .eq("client_id", clientId);
+  if (error) return null;
+  return indexedCopyKeys(data ?? [], sendId);
+}
+
+async function firmOwnerEmail(firmId: string): Promise<string | null> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            maybeSingle: () => Promise<{
+              data: { owner_user_id: string | null } | null;
+              error: DbError;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("firms")
+    .select("owner_user_id")
+    .eq("id", firmId)
+    .maybeSingle();
+  if (error || !data?.owner_user_id) return null;
+  const looked = await (
+    supabaseAdmin as unknown as {
+      auth: {
+        admin: {
+          getUserById: (
+            id: string,
+          ) => Promise<{ data: { user: { email?: string | null } | null } | null }>;
+        };
+      };
+    }
+  ).auth.admin.getUserById(data.owner_user_id);
+  const email = looked.data?.user?.email?.trim() ?? "";
+  if (!email.includes("@")) return null;
+  return email;
+}
+
+async function clientNameOf(clientId: string): Promise<string> {
+  const { data } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            maybeSingle: () => Promise<{ data: { name: string | null } | null; error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("clients")
+    .select("name")
+    .eq("id", clientId)
+    .maybeSingle();
+  const name = data?.name?.trim() ?? "";
+  return name || "Your client";
+}
+
+async function copyOneFile(input: {
+  clientId: string;
+  sendId: string;
+  file: { itemKey: string; label: string; sourcePath: string; mime: string; size: number };
+}): Promise<boolean> {
+  const downloaded = await bucketStorage(SEND_STORAGE_BUCKET).download(input.file.sourcePath);
+  if (downloaded.error || !downloaded.data) return false;
+  const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
+  const sniffed = sniffDocumentMime(bytes);
+  if (!sniffed || sniffed !== input.file.mime) return false;
+  const artifactId = crypto.randomUUID();
+  const row = buildClientAgentArtifact({
+    artifactId,
+    clientId: input.clientId,
+    sendId: input.sendId,
+    itemKey: input.file.itemKey,
+    label: input.file.label,
+    mime: sniffed,
+    size: bytes.byteLength,
+    sourcePath: input.file.sourcePath,
+  });
+  const uploaded = await bucketStorage(CLIENT_DOCUMENTS_BUCKET).upload(row.storage_path, bytes, {
+    contentType: sniffed,
+    upsert: false,
+  });
+  if (uploaded.error) return false;
+  const inserted = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        insert: (value: Record<string, unknown>) => Promise<{ error: DbError }>;
+      };
+    }
+  )
+    .from("client_artifacts")
+    .insert({
+      id: row.id,
+      client_id: row.client_id,
+      kind: row.kind,
+      storage_path: row.storage_path,
+      visibility: row.visibility,
+      created_by: row.created_by,
+      meta: row.meta,
+    });
+  if (inserted.error) {
+    await bucketStorage(CLIENT_DOCUMENTS_BUCKET).remove([row.storage_path]);
+    return false;
+  }
+  return true;
+}
+
+async function markCompleted(sendId: string): Promise<boolean> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        update: (row: Record<string, unknown>) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            is: (column: string, value: null) => Promise<{ error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_sends")
+    .update({ completed_at: new Date().toISOString() })
+    .eq("id", sendId)
+    .is("completed_at", null);
+  return !error;
+}
+
+export const completeClientAgentSend = createServerFn({ method: "POST" })
+  .inputValidator((input) => tokenInput.parse(input))
+  .handler(async ({ data }): Promise<{ ok: true } | { ok: false; body: string }> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return { ok: false, body: "This link is not available." };
+    const items = await loadCompletionItems(resolved.send.id);
+    const decision = completionDecision({
+      consentAt: resolved.send.consent_at,
+      completedAt: resolved.send.completed_at,
+      sendId: resolved.send.id,
+      items,
+    });
+    if (!decision.ok) {
+      return {
+        ok: false,
+        body:
+          decision.reason === "consent"
+            ? "Please agree before finishing."
+            : "Finish each document first.",
+      };
+    }
+    if (decision.already) return { ok: true };
+    if (!/^[0-9a-f-]{36}$/i.test(resolved.send.client_id)) {
+      return { ok: false, body: FINISH_BODY };
+    }
+    const existing = await loadCopiedKeys(resolved.send.client_id, resolved.send.id);
+    if (!existing) return { ok: false, body: FINISH_BODY };
+    const pending = copiesStillNeeded(decision.files, resolved.send.id, existing);
+    for (const file of pending) {
+      const copied = await copyOneFile({
+        clientId: resolved.send.client_id,
+        sendId: resolved.send.id,
+        file,
+      });
+      if (!copied) return { ok: false, body: FINISH_BODY };
+    }
+    const owner = await firmOwnerEmail(resolved.send.firm_id);
+    if (!owner) return { ok: false, body: FINISH_BODY };
+    const practiceName = practiceDisplayName({
+      firmId: resolved.send.firm_id,
+      practiceDisplayName: resolved.send.practice_display_name,
+      firmName: await loadFirmName(resolved.send.firm_id),
+    });
+    const mailed = await sendClientAgentDone({
+      practiceName,
+      to: owner,
+      clientName: await clientNameOf(resolved.send.client_id),
+      received: decision.received,
+      missing: decision.missing,
+      notes: decision.notes,
+      link: canonicalAuthUrl(`/clients/${resolved.send.client_id}?section=send-agent`),
+      idempotencyKey: clientAgentDoneIdempotencyKey(resolved.send.id),
+      apiKey: process.env.RESEND_API_KEY,
+      fromEmail: process.env.RESEND_FROM_EMAIL,
+    });
+    if (!mailed.ok) return { ok: false, body: FINISH_BODY };
+    const marked = await markCompleted(resolved.send.id);
+    if (!marked) return { ok: false, body: FINISH_BODY };
+    return { ok: true };
+  });

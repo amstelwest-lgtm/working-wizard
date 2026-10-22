@@ -1,6 +1,7 @@
 /**
  * Public Tax Specialist page. Consent first, then a vertical checklist.
- * Nothing is emailed. The portrait is the silent in-app agent card.
+ * Finish asks the server to store the files and tell the practice.
+ * The page never emails the client. The portrait is the silent in-app agent card.
  */
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -19,6 +20,7 @@ import {
 } from "@/lib/client-agent-link";
 import {
   askClientAgentLink,
+  completeClientAgentSend,
   consentClientAgentLink,
   finishClientAgentItem,
   openClientAgentLink,
@@ -368,7 +370,7 @@ export function ClientAgentLinkScreen({
             disabled={busy || !ready}
             onClick={onNext}
           >
-            Next
+            Finish
           </button>
         </div>
       ) : null}
@@ -384,6 +386,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   const finish = useServerFn(finishClientAgentItem);
   const savePassword = useServerFn(saveClientAgentFilePassword);
   const ask = useServerFn(askClientAgentLink);
+  const complete = useServerFn(completeClientAgentSend);
   const [view, setView] = useState<OpenLinkResult | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -562,10 +565,25 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
       }
       onPassword={(item) => void onPassword(item)}
       onNext={() => {
-        if (!view?.ok || !checklistReady(view.items)) return;
-        setThanks(true);
+        void (async () => {
+          if (!view?.ok || !checklistReady(view.items)) return;
+          setBusy(true);
+          setNotice(null);
+          try {
+            const result = await complete({ data: { token } });
+            if (!result.ok) {
+              setNotice(result.body);
+              return;
+            }
+            setThanks(true);
+          } catch {
+            setNotice("That could not be finished. Please try again.");
+          } finally {
+            setBusy(false);
+          }
+        })();
       }}
-      thanks={thanks}
+      thanks={thanks || Boolean(view?.ok && view.completed)}
       onRetry={() => {
         if (busy) return;
         setAttempt((current) => current + 1);

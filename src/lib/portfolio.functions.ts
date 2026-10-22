@@ -19,6 +19,7 @@ import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse"
 import { resolveMarket } from "@/lib/market/resolve";
 import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
 import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
+import { countUnreviewedSends } from "@/lib/client-agent-done";
 import {
   rankPortfolio,
   summarisePortfolio,
@@ -168,7 +169,8 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     const ids = clients.map((c) => c.id);
     const cycleIds = clients.map((c) => c.advisory_cycle_id).filter((x): x is string => Boolean(x));
 
-    const [cycles, snaps, requests, actions, recs, packs, outcomes, planRows] = await Promise.all([
+    const [cycles, snaps, requests, actions, recs, packs, outcomes, planRows, agentSends] =
+      await Promise.all([
       cycleIds.length
         ? sb
             .from("advisory_cycles")
@@ -207,6 +209,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
       groupCount(sb, "action_plans", ids, "client_id, target_date", (q) =>
         (q as { eq: (c: string, v: boolean) => unknown }).eq("is_active", true),
       ),
+      groupCount(sb, "client_agent_sends", ids, "client_id, completed_at, reviewed_at"),
     ]);
 
     const cycleUpdated = new Map<string, string>();
@@ -285,6 +288,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
         missed.set(o.client_id, (missed.get(o.client_id) ?? 0) + 1);
     }
 
+    const unreviewedSends = countUnreviewedSends(agentSends);
     const okStatus = ["draft", "in_review", "changes_requested", "approved", "rejected"];
     const facts: PortfolioClientFacts[] = clients.map((c) => {
       const pack = packByClient.get(c.id);
@@ -314,6 +318,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
         outcomesMissed: missed.get(c.id) ?? 0,
         outcomesMeasured: measured.get(c.id) ?? 0,
         lastLoginAt: c.last_login_at,
+        unreviewedSends: unreviewedSends.get(c.id) ?? 0,
       };
     });
 

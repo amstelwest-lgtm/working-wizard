@@ -123,7 +123,7 @@ export function clientConsentNotice(practiceName: string): string {
   return `I agree that ${practice} may securely store the documents I upload here for my tax file, using Milōn. Medical aid: send the tax certificate totals only.`;
 }
 
-/** Local thank-you after Next. Nothing is emailed and nothing is stored as complete. */
+/** Thank-you after Finish. The owner notice is sent by the server, never to the client. */
 export function clientAgentThanks(input: {
   firstName: string | null;
   practiceName: string;

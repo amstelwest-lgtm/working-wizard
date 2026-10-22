@@ -5,6 +5,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
+import { receivedItemStatus } from "@/lib/client-agent-done";
+import { itemLabel } from "@/lib/client-agent-link";
 import {
   SEND_AGENT_BODY,
   SEND_AGENT_ONCE,
@@ -15,11 +17,14 @@ import {
   chooseSendItems,
   recipientEmail,
 } from "@/lib/client-agent-send";
+import { clientDocumentDownloadUrl } from "@/lib/client-documents-browser";
 import { formatDate, type DateMarket } from "@/lib/market";
 import {
   listClientAgentSends,
   mintClientAgentSend,
+  reviewClientAgentSend,
   revokeClientAgentSend,
+  type AgentSendItem,
   type AgentSendRow,
 } from "@/lib/client-agent-send.functions";
 
@@ -34,6 +39,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const list = useServerFn(listClientAgentSends);
   const mint = useServerFn(mintClientAgentSend);
   const revoke = useServerFn(revokeClientAgentSend);
+  const review = useServerFn(reviewClientAgentSend);
   const [sends, setSends] = useState<AgentSendRow[]>([]);
   const [ready, setReady] = useState(false);
   const [allowed, setAllowed] = useState(false);
@@ -87,6 +93,10 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
 
   const open = sends.find((send) => send.open) ?? null;
   const shownId = fresh?.sendId ?? open?.id ?? null;
+  const receivedSend =
+    sends.find((send) => send.completedAt && !send.reviewedAt) ??
+    sends.find((send) => send.completedAt) ??
+    null;
 
   const onToggleItem = (itemKey: string) => {
     setSelectedKeys((current) =>
@@ -200,6 +210,37 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     }
   };
 
+  const onOpenDocument = async (path: string) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const url = await clientDocumentDownloadUrl(path);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      setNotice("That document could not be opened.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onReview = async () => {
+    if (!receivedSend) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await review({ data: { clientId, sendId: receivedSend.id } });
+      if (!result.ok) {
+        setNotice("That could not be saved.");
+        return;
+      }
+      await reload();
+    } catch {
+      setNotice("That could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!allowed) return null;
 
   return (
@@ -225,6 +266,9 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
       onMint={() => void onMint()}
       onCopy={() => void onCopy()}
       onRevoke={() => void onRevoke()}
+      received={receivedSend}
+      onOpenDocument={(path) => void onOpenDocument(path)}
+      onReview={() => void onReview()}
     />
   );
 }
@@ -248,6 +292,9 @@ export function SendAgentCard({
   onMint,
   onCopy,
   onRevoke,
+  received = null,
+  onOpenDocument,
+  onReview,
 }: {
   market: DateMarket;
   fresh: FreshLink | null;
@@ -267,6 +314,9 @@ export function SendAgentCard({
   onMint: () => void;
   onCopy: () => void;
   onRevoke: () => void;
+  received?: AgentSendRow | null;
+  onOpenDocument?: (path: string) => void;
+  onReview?: () => void;
 }) {
   const chosen = chooseSendItems(
     SEND_ITEM_KEYS.filter((itemKey) => selectedKeys.includes(itemKey)).map((itemKey) => ({
@@ -292,6 +342,59 @@ export function SendAgentCard({
         </h2>
         <p className="text-sm leading-6 text-[#3D5270]">{SEND_AGENT_BODY}</p>
       </div>
+      {received?.completedAt ? (
+        <div className="flex flex-col gap-3" data-send-agent-received="">
+          <h3 className="text-sm font-semibold">Documents received</h3>
+          <ul className="flex flex-col gap-3">
+            {received.items.map((item: AgentSendItem) => {
+              const path = item.documentPath;
+              return (
+                <li
+                  key={item.itemKey}
+                  className="flex flex-col gap-2 rounded-xl border border-[#DBEAFE] p-3"
+                  data-received-item={item.itemKey}
+                >
+                  <p className="text-sm font-semibold">{itemLabel(item.itemKey, item.label)}</p>
+                  <p className="text-sm text-[#3D5270]">
+                    {receivedItemStatus({
+                      storagePath: path ?? (item.status === "received" ? "stored" : null),
+                      status: item.status,
+                      quality: item.quality,
+                    })}
+                  </p>
+                  {item.explanation ? (
+                    <p className="text-sm text-[#3D5270]">{item.explanation}</p>
+                  ) : null}
+                  {path ? (
+                    <button
+                      type="button"
+                      className={`${SECONDARY} w-full`}
+                      data-open-document={item.itemKey}
+                      disabled={busy}
+                      onClick={() => onOpenDocument?.(path)}
+                    >
+                      Open in Documents
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {received.reviewedAt ? (
+            <p className="text-sm text-[#3D5270]">Reviewed</p>
+          ) : (
+            <button
+              type="button"
+              className={`${PRIMARY} w-full`}
+              data-mark-reviewed=""
+              disabled={busy}
+              onClick={onReview}
+            >
+              Mark reviewed
+            </button>
+          )}
+        </div>
+      ) : null}
       {fresh ? (
         <div className="flex flex-col gap-3" data-send-agent-link="">
           <p className="text-sm leading-6 text-[#3D5270]">{SEND_AGENT_ONCE}</p>

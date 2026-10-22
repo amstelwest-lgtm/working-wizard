@@ -300,6 +300,7 @@ export type NeedsAttentionSource = {
     severity: number;
     label: string;
     tab: string;
+    section?: string;
   }>;
 };
 
@@ -311,6 +312,8 @@ export type MergedAttention = {
   detail: string;
   /** Studio tab that resolves the most urgent fact on the row. */
   tab?: string;
+  /** Client-page section for that fact, when it has one. */
+  section?: string;
   openPlan: boolean;
   openQueries: boolean;
   overdue: boolean;
@@ -403,6 +406,7 @@ export function mergeNeedsAttention(
       reason,
       detail,
       tab: top.tab,
+      section: top.section,
       openPlan: existing?.openPlan ?? top.tab === "plan",
       openQueries: existing?.openQueries ?? false,
       overdue: existing?.overdue ?? /overdue/i.test(top.label),
