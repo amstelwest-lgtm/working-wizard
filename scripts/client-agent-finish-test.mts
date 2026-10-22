@@ -308,7 +308,7 @@ assert(code.includes("image/jpeg") && code.includes("image/png") && code.include
 const fn = read("src/lib/client-agent-link.functions.ts");
 const handler = fn.slice(fn.indexOf("export const completeClientAgentSend"));
 const alreadyAt = handler.indexOf("if (decision.already) return { ok: true }");
-const copyAt = handler.indexOf("copyOneFile");
+const copyAt = handler.indexOf("copySendFileToArchive");
 const mailAt = handler.indexOf("sendClientAgentDone");
 const markAt = handler.indexOf("markCompleted");
 assert(alreadyAt > 0 && alreadyAt < copyAt && copyAt < mailAt && mailAt < markAt, "a finished link skips the copy and the email");
@@ -316,10 +316,11 @@ assert(handler.indexOf("if (!mailed.ok)") < markAt, "a failed email does not sto
 assert(!handler.includes("completed_at: null"), "the public path does not clear completion");
 assert(!handler.includes("recipient_email") && !handler.includes("contact_email"), "finish does not read the client's email");
 assert(handler.includes("clientAgentDoneIdempotencyKey"), "finish uses one email key");
+const archiveModule = read("src/lib/client-agent-send-archive.server.ts");
 assert(
-  fn.includes("kind: row.kind") &&
-    fn.includes("visibility: row.visibility") &&
-    fn.includes("created_by: row.created_by"),
+  archiveModule.includes("kind: row.kind") &&
+    archiveModule.includes("visibility: row.visibility") &&
+    archiveModule.includes("created_by: row.created_by"),
   "finish writes the shared artifact",
 );
 

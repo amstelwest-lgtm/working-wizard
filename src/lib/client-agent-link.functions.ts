@@ -27,13 +27,16 @@ import {
   completionDecision,
   clientAgentDoneIdempotencyKey,
   copiesStillNeeded,
-  buildClientAgentArtifact,
   indexedCopyKeys,
   type ArchiveFileRow,
   type CompletionItem,
 } from "@/lib/client-agent-done";
 import { sendClientAgentDone } from "@/lib/client-agent-done-mail";
-import { CLIENT_DOCUMENTS_BUCKET } from "@/lib/client-documents";
+import {
+  copySendFileIfMissing,
+  copySendFileToArchive,
+  removeSendArchiveCopies,
+} from "@/lib/client-agent-send-archive.server";
 import { recipientFirstName } from "@/lib/client-agent-send";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import {
@@ -834,6 +837,27 @@ export const confirmClientAgentUpload = createServerFn({ method: "POST" })
       await storage.remove([data.path]);
       throw error;
     }
+    // The firm sees the file as soon as it is stored — a send the client
+    // never finishes still reaches the client's documents. Best effort:
+    // listing the sends heals a copy this step could not make.
+    try {
+      const item = items.find((row) => row.itemKey === data.itemKey);
+      const displayName = sanitizeClientFileName(grant.name ?? "");
+      await copySendFileIfMissing({
+        clientId: resolved.send.client_id,
+        sendId: resolved.send.id,
+        file: {
+          itemKey: data.itemKey,
+          label: item?.label ?? data.itemKey,
+          sourcePath: data.path,
+          mime: decision.mime,
+          size: decision.size,
+          displayName: displayName || null,
+        },
+      });
+    } catch {
+      // The upload stands. The copy is retried when the firm opens the file.
+    }
   return { ok: true };
   });
 
@@ -872,6 +896,19 @@ export const removeClientAgentFile = createServerFn({ method: "POST" })
     }
     if (previous && pathBelongsToSend(previous, resolved.send.id, data.itemKey)) paths.add(previous);
     if (paths.size > 0) await objectStorage().remove([...paths]);
+    // A file removed before Finish also leaves the client's documents, so a
+    // replaced upload is not kept twice. A completed send is never touched.
+    if (!resolved.send.completed_at && paths.size > 0) {
+      try {
+        await removeSendArchiveCopies({
+          clientId: resolved.send.client_id,
+          sendId: resolved.send.id,
+          sourcePaths: [...paths],
+        });
+      } catch {
+        // The removal on the send side stands either way.
+      }
+    }
     return { ok: true };
   });
 
@@ -1388,82 +1425,6 @@ async function clientNameOf(clientId: string): Promise<string> {
   return name || "Your client";
 }
 
-function archiveStorage(bucket: string) {
-  return (
-    supabaseAdmin as unknown as {
-      storage: {
-        from: (name: string) => {
-          download: (path: string) => Promise<{ data: Blob | null; error: DbError }>;
-          upload: (
-            path: string,
-            body: Uint8Array,
-            options: { contentType: string; upsert: boolean },
-          ) => Promise<{ error: DbError }>;
-          remove: (paths: string[]) => Promise<{ error: DbError }>;
-        };
-      };
-    }
-  ).storage.from(bucket);
-}
-
-async function copyOneFile(input: {
-  clientId: string;
-  sendId: string;
-  file: {
-    itemKey: string;
-    label: string;
-    sourcePath: string;
-    mime: string;
-    size: number;
-    displayName: string | null;
-  };
-}): Promise<boolean> {
-  const downloaded = await archiveStorage(SEND_STORAGE_BUCKET).download(input.file.sourcePath);
-  if (downloaded.error || !downloaded.data) return false;
-  const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
-  const sniffed = sniffDocumentMime(bytes);
-  if (!sniffed || sniffed !== input.file.mime) return false;
-  const artifactId = crypto.randomUUID();
-  const row = buildClientAgentArtifact({
-    artifactId,
-    clientId: input.clientId,
-    sendId: input.sendId,
-    itemKey: input.file.itemKey,
-    label: input.file.label,
-    mime: sniffed,
-    size: bytes.byteLength,
-    sourcePath: input.file.sourcePath,
-    displayName: input.file.displayName,
-  });
-  const uploaded = await archiveStorage(CLIENT_DOCUMENTS_BUCKET).upload(row.storage_path, bytes, {
-    contentType: sniffed,
-    upsert: false,
-  });
-  if (uploaded.error) return false;
-  const inserted = await (
-    supabaseAdmin as unknown as {
-      from: (name: string) => {
-        insert: (value: Record<string, unknown>) => Promise<{ error: DbError }>;
-      };
-    }
-  )
-    .from("client_artifacts")
-    .insert({
-      id: row.id,
-      client_id: row.client_id,
-      kind: row.kind,
-      storage_path: row.storage_path,
-      visibility: row.visibility,
-      created_by: row.created_by,
-      meta: row.meta,
-    });
-  if (inserted.error) {
-    await archiveStorage(CLIENT_DOCUMENTS_BUCKET).remove([row.storage_path]);
-    return false;
-  }
-  return true;
-}
-
 async function markCompleted(sendId: string): Promise<boolean> {
   const { error } = await (
     supabaseAdmin as unknown as {
@@ -1523,7 +1484,7 @@ export const completeClientAgentSend = createServerFn({ method: "POST" })
     if (!existing) return { ok: false, body: FINISH_BODY };
     const pending = copiesStillNeeded(decision.files, resolved.send.id, existing);
     for (const file of pending) {
-      const copied = await copyOneFile({
+      const copied = await copySendFileToArchive({
         clientId: resolved.send.client_id,
         sendId: resolved.send.id,
         file,

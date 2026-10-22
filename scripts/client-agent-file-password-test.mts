@@ -253,12 +253,14 @@ const files = [
     itemKey: "bank_statements",
     displayName: "March statements.pdf",
     hasPassword: true,
+    documentPath: null,
   },
   {
     id: "file-without",
     itemKey: "travel_logbook",
     displayName: "Travel log.pdf",
     hasPassword: false,
+    documentPath: null,
   },
 ];
 const hidden = renderToStaticMarkup(

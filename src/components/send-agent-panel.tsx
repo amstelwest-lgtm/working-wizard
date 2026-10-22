@@ -334,6 +334,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
           onShow={(fileId) => void onShowPassword(fileId)}
           onToggleVisible={onTogglePassword}
           onCopy={() => void onCopyPassword()}
+          onOpen={(documentPath) => void onOpenDocument(documentPath)}
         />
       }
     />

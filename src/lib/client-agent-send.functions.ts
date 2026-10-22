@@ -8,6 +8,8 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { CANONICAL_APP_ORIGIN, canonicalAuthOrigin } from "@/lib/app-origin";
 import { copiedDocumentPaths, reviewDecision } from "@/lib/client-agent-done";
+import { sendFileDocumentPath, type ArtifactPathRow } from "@/lib/client-agent-send-backfill";
+import { copyMissingSendArtifacts } from "@/lib/client-agent-send-archive.server";
 import { practiceDisplayName, sanitizeClientFileName, sendPracticeDisplayName } from "@/lib/client-agent-link";
 import { filePasswordKey, openFilePassword } from "@/lib/client-agent-file-secret";
 import {
@@ -151,7 +153,11 @@ export type AgentSendFile = {
   itemKey: string;
   displayName: string | null;
   hasPassword: boolean;
+  /** The shared copy in the client's documents, when the copy exists. */
+  documentPath: string | null;
 };
+
+type LoadedSendFile = AgentSendFile & { storagePath: string | null };
 
 export type AgentSendRow = {
   id: string;
@@ -181,19 +187,19 @@ function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
   };
 }
 
-async function loadSendFiles(sendId: string): Promise<AgentSendFile[]> {
+async function loadSendFiles(sendId: string): Promise<LoadedSendFile[]> {
   const load = (columns: string) =>
     table("client_agent_send_files")
       .select(columns)
       .eq("send_id", sendId)
       .order("created_at", { ascending: false });
 
-  let found = await load("id, item_key, display_name, password_box, created_at");
+  let found = await load("id, item_key, display_name, password_box, storage_path, created_at");
   if (found.error && missingSendColumn(found.error, "display_name")) {
-    found = await load("id, item_key, password_box, created_at");
+    found = await load("id, item_key, password_box, storage_path, created_at");
   }
   if (found.error && missingSendColumn(found.error, "password_box")) {
-    found = await load("id, item_key, created_at");
+    found = await load("id, item_key, storage_path, created_at");
   }
   if (found.error) {
     if (missingFilesTable(found.error)) return [];
@@ -211,6 +217,8 @@ async function loadSendFiles(sendId: string): Promise<AgentSendFile[]> {
         itemKey: typeof row.item_key === "string" ? row.item_key : "",
         displayName: displayName || null,
         hasPassword: sendFileHasPassword(row.password_box),
+        documentPath: null,
+        storagePath: typeof row.storage_path === "string" ? row.storage_path : null,
       },
     ];
   });
@@ -279,10 +287,17 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
         return { migrated: true, allowed: true, sends, contactEmail: firm.contactEmail };
       }
 
+      const filesBySend = new Map<string, LoadedSendFile[]>();
+      const itemPathsBySend = new Map<string, string[]>();
       for (const send of sends) {
-        const found = await table("client_agent_send_items")
-          .select("item_key, label, totals_only, status, quality, explanation")
+        let found = await table("client_agent_send_items")
+          .select("item_key, label, totals_only, status, quality, explanation, storage_path")
           .eq("send_id", send.id);
+        if (found.error && missingSendColumn(found.error, "storage_path")) {
+          found = await table("client_agent_send_items")
+            .select("item_key, label, totals_only, status, quality, explanation")
+            .eq("send_id", send.id);
+        }
         if (found.error) {
           if (missingTable(found.error)) {
             return { migrated: false, allowed: false, sends: [], contactEmail: null };
@@ -298,21 +313,67 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
           explanation: typeof row.explanation === "string" ? row.explanation : null,
           documentPaths: [],
         }));
-        send.files = await loadSendFiles(send.id);
+        itemPathsBySend.set(
+          send.id,
+          rows(found.data).flatMap((row) =>
+            typeof row.storage_path === "string" && row.storage_path ? [row.storage_path] : [],
+          ),
+        );
+        filesBySend.set(send.id, await loadSendFiles(send.id));
       }
-      const artifacts = await table("client_artifacts")
-        .select("storage_path, visibility, meta")
-        .eq("client_id", data.clientId);
-      const artifactRows = artifacts.error ? [] : rows(artifacts.data);
+
+      const loadArtifactRows = async () => {
+        const artifacts = await table("client_artifacts")
+          .select("storage_path, visibility, meta")
+          .eq("client_id", data.clientId);
+        return artifacts.error ? [] : rows(artifacts.data);
+      };
+      let artifactRows = await loadArtifactRows();
+
+      // A stored send file without a shared copy is copied now, so a send
+      // finished before the copy step shipped — or an upload whose own copy
+      // failed — still shows here. completed_at and reviewed_at stay as
+      // they are, and no mail goes out.
+      let healed = false;
       for (const send of sends) {
-        if (!send.completedAt) continue;
-        for (const item of send.items) {
-          item.documentPaths = copiedDocumentPaths(
-            artifactRows as Array<{ storage_path: unknown; visibility: unknown; meta: unknown }>,
-            send.id,
-            item.itemKey,
-          );
+        const stored = [
+          ...(filesBySend.get(send.id) ?? []).flatMap((file) =>
+            file.storagePath ? [file.storagePath] : [],
+          ),
+          ...(itemPathsBySend.get(send.id) ?? []),
+        ];
+        const missing = stored.some(
+          (path) => !sendFileDocumentPath(artifactRows as ArtifactPathRow[], send.id, path),
+        );
+        if (!missing) continue;
+        try {
+          const result = await copyMissingSendArtifacts({
+            clientId: data.clientId,
+            sendId: send.id,
+          });
+          if (result.copied > 0) healed = true;
+        } catch {
+          // The list still renders; the next open retries the copy.
         }
+      }
+      if (healed) artifactRows = await loadArtifactRows();
+
+      for (const send of sends) {
+        if (send.completedAt) {
+          for (const item of send.items) {
+            item.documentPaths = copiedDocumentPaths(
+              artifactRows as Array<{ storage_path: unknown; visibility: unknown; meta: unknown }>,
+              send.id,
+              item.itemKey,
+            );
+          }
+        }
+        send.files = (filesBySend.get(send.id) ?? []).map(({ storagePath, ...file }) => ({
+          ...file,
+          documentPath: storagePath
+            ? sendFileDocumentPath(artifactRows as ArtifactPathRow[], send.id, storagePath)
+            : null,
+        }));
       }
       return { migrated: true, allowed: true, sends, contactEmail: firm.contactEmail };
     },
