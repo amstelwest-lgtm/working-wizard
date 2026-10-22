@@ -14,6 +14,7 @@
  */
 
 import { calendarDayFromIso, dateOrder } from "../../../src/lib/market/date-presets.ts";
+import { ZA_PROMPT_MONEY_LINE } from "../../../src/lib/prompt-money.ts";
 
 export type ChatAgent = "financial_manager" | "analyst" | "advisor";
 
@@ -21,19 +22,21 @@ export function parseChatAgent(raw: unknown): ChatAgent | null {
   return raw === "financial_manager" || raw === "analyst" || raw === "advisor" ? raw : null;
 }
 
-/** Prompt block that fixes the reply shape. */
-export function chatReplyFormatRules(copyPack: "za" | "us" | null = null): string {
-  const money =
-    copyPack === "us"
-      ? "Amounts use the US dollar format, for example $4,200,000."
-      : copyPack === "za"
-        ? "Amounts use the South African rand format, for example R4,200,000."
-        : "Amounts use the currency format already shown in the figures you were given, for example R4,200,000 or $4,200,000.";
+/** Prompt block that fixes the reply shape. Dates follow copyPack. Money follows moneyPack. */
+export function chatReplyFormatRules(
+  copyPack: "za" | "us" | null = null,
+  moneyPack?: "za" | "us" | null,
+): string {
+  const money = moneyPack === undefined ? copyPack : moneyPack;
+  const moneyLine =
+    money === "za"
+      ? ZA_PROMPT_MONEY_LINE
+      : "Amounts use the US dollar format, for example $187,444.";
   const dateExample = copyPack === "us" ? "Sep 8, 2026" : "8 Sep 2026";
   return `Reply format (always, unless the user asks for more detail). These rules override any other length or style rule above:
 - The reply has only three parts, in this order, and nothing else.
 - Part 1, line 1: one plain sentence that answers the question. No heading marks, no bold.
-- Part 2: a blank line, then 3–5 key figures, one per line, each as "- Label: value". Never more than 5. ${money} Percentages have one decimal place, for example 12.9%.
+- Part 2: a blank line, then 3–5 key figures, one per line, each as "- Label: value". Never more than 5. ${moneyLine} Percentages have one decimal place, for example 12.9%.
 - Part 3: a blank line, then the line **Next actions** on its own, then at most 3 numbered items ("1. ", "2. ", "3. "), each one short plain sentence of at most 20 words.
 - No paragraphs between the figures and Next actions, and nothing after the last action. If a figure or date is missing, say so as one figure line, for example "- Due dates: none on file", not as a paragraph.
 - Skip the figures part when there are no figures (for example small talk or a definition). Skip Next actions when there is nothing to do.

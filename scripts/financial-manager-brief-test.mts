@@ -11,6 +11,7 @@ import {
   previousMonthSnapshot,
   topMoneyMovements,
 } from "../src/lib/financial-manager-brief";
+import { proratedPeriodLabel } from "../supabase/functions/_shared/firm-year-label.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -240,6 +241,39 @@ assert(page.includes("openPlanHandoffs.map"), "the shown rows start from the sto
 assert(
   !page.includes('onHandToBot={() => openHomeAgent("financial_manager")}'),
   "the home hand control does not open the Financial Manager page",
+);
+
+const proRata = proratedPeriodLabel(
+  ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"],
+  ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"],
+);
+assert(proRata != null, "the edge helper names the clipped period");
+const clippedPeriod = {
+  label: proRata,
+  prorated: true,
+  months: 7,
+  revenue: 1,
+  cogs: null,
+  grossProfit: null,
+  operatingExpenses: null,
+  operatingProfit: null,
+  netProfit: null,
+};
+const labelled = topMoneyMovements(current, lastMonth, 3, clippedPeriod);
+assert(!labelled.some((row) => row.key === "netIncome"), "a pro-rated period still drops net profit");
+const flowLabels: Record<string, string> = {
+  revenue: "Revenue",
+  fixedCosts: "Fixed costs",
+  cash: "Cash",
+};
+for (const key of ["revenue", "fixedCosts", "cash"] as const) {
+  const row = labelled.find((item) => item.key === key);
+  assert(row?.label === `${flowLabels[key]} (${proRata})`, `${key} label ${row?.label}`);
+}
+const uncaptioned = topMoneyMovements(current, lastMonth, 3, { ...clippedPeriod, label: "Mar 2026 – Sep 2026" });
+assert(
+  !uncaptioned.some((row) => row.key === "revenue" || row.key === "fixedCosts" || row.key === "cash"),
+  "a clipped period without the pro-rata caption drops the raw flow rows",
 );
 
 console.log("financial-manager-brief ok");

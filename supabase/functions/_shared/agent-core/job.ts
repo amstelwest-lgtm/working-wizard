@@ -18,6 +18,7 @@ import {
   type FindingEvidence,
   type StoredFigures,
 } from "../../../../src/lib/agent-bus.ts";
+import { zaPromptMoneyLine } from "../../../../src/lib/prompt-money.ts";
 import {
   analystFailurePlan,
   analystRunCostUsd,
@@ -385,11 +386,16 @@ export async function runQueueJob(
           p_client_id: job.clientId,
           p_run_id: existing.run_id,
         });
-        const round = await callClaudeRound(config.system, agentTurnMessages(ctx), config.toolSchemas(), {
-          toolChoice: { type: "auto" },
-          maxTokens: RUNNER_MAX_OUTPUT_TOKENS,
-          cachePrompt: true,
-        });
+        const round = await callClaudeRound(
+          config.system + zaPromptMoneyLine(client?.market),
+          agentTurnMessages(ctx),
+          config.toolSchemas(),
+          {
+            toolChoice: { type: "auto" },
+            maxTokens: RUNNER_MAX_OUTPUT_TOKENS,
+            cachePrompt: true,
+          },
+        );
         lastInputTokens = round.inputTokens;
         lastOutputTokens = round.outputTokens;
         lastCacheWriteTokens = round.cacheCreationTokens;

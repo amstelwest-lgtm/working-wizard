@@ -155,6 +155,9 @@ export function previousMonthSnapshot<T extends BriefSnapshot>(
 /** Profit lines. A clipped firm year is not compared with a prior statement. */
 const PROFIT_MOVEMENT_KEYS = new Set(["netIncome", "grossProfit", "operatingProfit", "ebit"]);
 
+/** Full-statement flows. A pro-rated period labels these instead of printing a raw delta. */
+const CLIPPED_FLOW_KEYS = new Set(["revenue", "fixedCosts", "cash"]);
+
 function isProfitMovement(field: BriefMoneyField): boolean {
   return field.label === "Net profit" || PROFIT_MOVEMENT_KEYS.has(field.key);
 }
@@ -175,12 +178,18 @@ export function topMoneyMovements(
   const rows: BriefMovement[] = [];
   for (const field of BRIEF_MONEY_FIELDS) {
     if (dropProfit && isProfitMovement(field)) continue;
+    let label = field.label;
+    if (dropProfit && CLIPPED_FLOW_KEYS.has(field.key)) {
+      const caption = profitPeriod?.label;
+      if (!isProratedPeriodLabel(caption)) continue;
+      label = `${field.label} (${caption})`;
+    }
     const now = numField(current, field.key);
     const then = numField(prior, field.key);
     if (now == null || then == null) continue;
     const delta = now - then;
     if (Math.abs(delta) < 1) continue;
-    rows.push({ key: field.key, label: field.label, current: now, prior: then, delta });
+    rows.push({ key: field.key, label, current: now, prior: then, delta });
   }
   rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.label.localeCompare(b.label));
   return rows.slice(0, limit);
@@ -192,7 +201,9 @@ export function buildFinancialManagerBrief(input: {
   /**
    * The firm-year slice the Waterfall and Home card quote. When it is
    * pro-rated, the Net profit movement is dropped: a clipped period is not
-   * compared with a prior statement. Omit it and every movement stays.
+   * compared with a prior statement. Revenue, Fixed costs, and Cash keep
+   * their movement only with that slice's pro-rata label. Omit the slice
+   * and every movement stays.
    */
   profitPeriod?: FiscalStatementSlice | null;
   currentPeriodEnd?: string | null;

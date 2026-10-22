@@ -3,7 +3,7 @@
  * A URL `?market=` on this request may opt a ZA visitor into US.
  * A stored market is not an input here.
  */
-import { resolveVisitorMarket, type SurfaceMarket } from "@/lib/pricing/market-resolution";
+import { resolveVisitorMarket, type SurfaceMarket } from "./pricing/market-resolution.ts";
 
 export type MarketingCopyPack = SurfaceMarket;
 

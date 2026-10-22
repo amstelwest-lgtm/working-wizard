@@ -138,6 +138,8 @@ export interface AskAiContext {
   ratios: RatioRow[];
   playbook: PlaybookRow[];
   copyPack: "za" | "us";
+  /** Dollar unless the stored firm country is ZA. Omitted follows copyPack. */
+  moneyPack?: "za" | "us";
   waterfall: WaterfallSummary | null;
   cashForecast: CashForecastSummary | null;
   productLines: ProductLineSummary[];
