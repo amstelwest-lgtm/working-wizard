@@ -15,6 +15,11 @@ import {
   validateFirmVoucher,
 } from "@/lib/stripe-checkout.functions";
 import { readCachedFirmPlan } from "@/lib/firm-plan-client";
+import {
+  TRIAL_ENDED_BILLING_LABEL,
+  trialEndedBillingHref,
+  type TrialEndedBillingAudience,
+} from "@/lib/trial-ended-billing";
 
 export type TrialEndedUpgrade = {
   band: FirmBandId | null;
@@ -39,12 +44,15 @@ export function TrialEndedPlanCard({
   upgrade,
   loading = false,
   upgrading = false,
+  audience = "accountant",
   onUpgrade,
   onValidateVoucher,
 }: {
   upgrade: TrialEndedUpgrade | null;
   loading?: boolean;
   upgrading?: boolean;
+  /** Practice Settings billing, or the owner Plan page. */
+  audience?: TrialEndedBillingAudience;
   onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval, voucherCode?: string | null) => void;
   onValidateVoucher?: (input: {
     code: string;
@@ -63,9 +71,14 @@ export function TrialEndedPlanCard({
       <p className="trial-ended-title text-foreground">{STARTER_TRIAL_ENDED_MESSAGE}</p>
       {loading ? <p className="trial-ended-note text-muted-foreground">Loading plans…</p> : null}
       {!loading && !upgrade ? (
-        <p className="trial-ended-note text-muted-foreground" role="alert">
-          Plans could not be loaded. Refresh and try again.
-        </p>
+        <>
+          <p className="trial-ended-note text-muted-foreground" role="alert">
+            Plans could not be loaded. Refresh and try again.
+          </p>
+          <a className="trial-ended-billing" href={trialEndedBillingHref(audience)}>
+            {TRIAL_ENDED_BILLING_LABEL}
+          </a>
+        </>
       ) : null}
       {upgrade ? (
         <FirmBandUpgrade
@@ -91,12 +104,14 @@ export function TrialEndedPlanBlock({
   firmId,
   upgrade: upgradeFromCaller,
   upgrading = false,
+  audience = "accountant",
   onUpgrade,
   onUpgraded,
 }: {
   firmId: string | null;
   upgrade?: TrialEndedUpgrade | null;
   upgrading?: boolean;
+  audience?: TrialEndedBillingAudience;
   onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval, voucherCode?: string | null) => void;
   onUpgraded?: () => void;
 }) {
@@ -188,6 +203,7 @@ export function TrialEndedPlanBlock({
       upgrade={upgrade}
       loading={loading && !upgrade}
       upgrading={upgrading || localUpgrading}
+      audience={audience}
       onUpgrade={upgrade ? handleUpgrade : undefined}
       onValidateVoucher={onValidateVoucher}
     />
@@ -199,7 +215,14 @@ export function TrialEndedPlanBlock({
  * The widget mounts this in its own root, outside the router, so the server
  * functions are called directly. Prices stay on FirmBandUpgrade.
  */
-export function ChatTrialEndedPlan({ firmId }: { firmId: string | null }) {
+export function ChatTrialEndedPlan({
+  firmId,
+  audience = "owner",
+}: {
+  firmId: string | null;
+  /** Ask-ai audience. Owner /app and the accountant Analyst chat differ. */
+  audience?: TrialEndedBillingAudience;
+}) {
   const [fetched, setFetched] = useState<TrialEndedUpgrade | null>(null);
   const [phase, setPhase] = useState<FirmSubscriptionPhase | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -293,6 +316,7 @@ export function ChatTrialEndedPlan({ firmId }: { firmId: string | null }) {
       upgrade={fetched}
       loading={loading && !fetched}
       upgrading={upgrading}
+      audience={audience}
       onUpgrade={fetched && firmId ? handleUpgrade : undefined}
       onValidateVoucher={onValidateVoucher}
     />
@@ -326,15 +350,17 @@ export function TrialEndedActionNotice({
   firmId,
   open,
   error,
+  audience = "accountant",
 }: {
   firmId: string | null;
   open: boolean;
   error: string | null;
+  audience?: TrialEndedBillingAudience;
 }) {
   if (!open && !error) return null;
   return (
     <div className="trial-ended-action">
-      {open ? <TrialEndedPlanBlock firmId={firmId} /> : null}
+      {open ? <TrialEndedPlanBlock firmId={firmId} audience={audience} /> : null}
       {error ? (
         <p role="alert" className="trial-ended-error">
           {error}

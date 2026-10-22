@@ -380,6 +380,7 @@ function FirmClientCapNotice({
     return (
       <TrialEndedPlanBlock
         firmId={firmId}
+        audience="accountant"
         upgrading={upgrading}
         upgrade={
           cap.upgrade

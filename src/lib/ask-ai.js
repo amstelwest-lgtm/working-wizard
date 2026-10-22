@@ -46,6 +46,7 @@ import {
   STARTER_TRIAL_ENDED_MESSAGE,
   isStarterTrialEndedMessage,
 } from "./starter-trial-generation.ts";
+import { TRIAL_ENDED_BILLING_LABEL, trialEndedBillingHref } from "./trial-ended-billing.ts";
 
 export {
   routeMilonIntent,
@@ -426,7 +427,8 @@ export function mountAskAi(container, options) {
   }
 
   // Same sentences as TrialEndedPlanCard. The React card replaces this shell
-  // once it mounts. A real failure keeps the red Retry row.
+  // once it mounts. If that chunk fails, keep the title and the note and link
+  // to Plan & billing. A real ask failure still keeps the red Retry row.
   function paintTrialEndedShell(host) {
     const section = document.createElement("section");
     section.className = "trial-ended-block";
@@ -441,24 +443,46 @@ export function mountAskAi(container, options) {
     section.appendChild(title);
     section.appendChild(note);
     host.appendChild(section);
-    return note;
+    return { note, section };
+  }
+
+  function appendTrialEndedBillingLink(section) {
+    if (!section || typeof section.appendChild !== "function") return;
+    const link = document.createElement("a");
+    link.className = "trial-ended-billing";
+    const href = trialEndedBillingHref(accountant ? "accountant" : "owner");
+    if (typeof link.setAttribute === "function") link.setAttribute("href", href);
+    link.href = href;
+    link.textContent = TRIAL_ENDED_BILLING_LABEL;
+    section.appendChild(link);
   }
 
   function mountTrialEnded(parent) {
     const host = document.createElement("div");
     host.className = "ask-ai-trial-ended-host";
     if (host.dataset) host.dataset.trialEnded = "1";
-    const note = paintTrialEndedShell(host);
+    const shell = paintTrialEndedShell(host);
+    const note = shell.note;
+    const section = shell.section;
     parent.appendChild(host);
     const gen = trialMountGen;
     if (typeof HTMLElement === "undefined" || !(host instanceof HTMLElement)) return host;
     const firmId = firmIdForTrial();
-    import("./chat-trial-ended-mount.ts")
+    const loadTrialChunk =
+      options && typeof options.loadTrialChunk === "function"
+        ? options.loadTrialChunk
+        : () => import("./chat-trial-ended-mount.ts");
+    Promise.resolve()
+      .then(() => loadTrialChunk())
       .then((mod) => {
         if (gen !== trialMountGen) return;
         if (typeof host.isConnected === "boolean" && !host.isConnected) return;
         if (typeof host.replaceChildren === "function") host.replaceChildren();
-        const cleanup = mod.mountChatTrialEndedPlan(host, firmId);
+        const cleanup = mod.mountChatTrialEndedPlan(
+          host,
+          firmId,
+          accountant ? "accountant" : "owner",
+        );
         if (typeof cleanup !== "function") return;
         if (gen !== trialMountGen) {
           cleanup();
@@ -468,6 +492,14 @@ export function mountAskAi(container, options) {
       })
       .catch(() => {
         if (note) note.textContent = "Plans could not be loaded. Refresh and try again.";
+        if (
+          section &&
+          section.parentElement !== host &&
+          typeof host.replaceChildren === "function"
+        ) {
+          host.replaceChildren(section);
+        }
+        appendTrialEndedBillingLink(section);
       });
     return host;
   }

@@ -1552,6 +1552,22 @@ html:not([data-theme="light"]) .accountant-portal .trial-ended-block select {
   font-size: 12px;
   color: var(--paywall-muted);
 }
+.trial-ended-block .trial-ended-billing {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--paywall-ink);
+  -webkit-text-fill-color: var(--paywall-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+html.dark .trial-ended-block .trial-ended-billing,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block .trial-ended-billing {
+  color: #f4f7fb !important;
+  -webkit-text-fill-color: #f4f7fb !important;
+}
 /* Band picker outside the trial card (Settings → Plan, Add client).
    Portal ink, not Tailwind foreground, so prices stay readable on the dark board. */
 .accountant-portal .firm-band-upgrade {

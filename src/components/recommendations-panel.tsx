@@ -289,7 +289,12 @@ export function RecommendationsPanel({
         </div>
       </div>
 
-      <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
+      <TrialEndedActionNotice
+        firmId={firmId}
+        audience={audience}
+        open={trialBlock.open}
+        error={trialBlock.error}
+      />
       {precardOpen ? <PrecardCapCard /> : null}
 
       {error ? (

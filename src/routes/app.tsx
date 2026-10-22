@@ -4502,7 +4502,7 @@ function Index() {
         <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
           {generationTrialOpen ? (
             <div className="mx-auto max-w-3xl px-4 pt-4">
-              <TrialEndedPlanBlock firmId={clientMeta?.firm_id ?? null} />
+              <TrialEndedPlanBlock firmId={clientMeta?.firm_id ?? null} audience="owner" />
             </div>
           ) : null}
           <SplashScreen />
