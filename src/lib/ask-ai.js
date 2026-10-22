@@ -46,7 +46,12 @@ import {
   STARTER_TRIAL_ENDED_MESSAGE,
   isStarterTrialEndedMessage,
 } from "./starter-trial-generation.ts";
-import { TRIAL_ENDED_BILLING_LABEL, trialEndedBillingHref } from "./trial-ended-billing.ts";
+import { OWNER_ACCOUNTANT_TRIAL_NOTE } from "./owner-trial-ended.ts";
+import {
+  TRIAL_ENDED_BILLING_LABEL,
+  trialEndedBillingHref,
+  trialEndedOwnerAsksAccountant,
+} from "./trial-ended-billing.ts";
 
 export {
   routeMilonIntent,
@@ -427,8 +432,10 @@ export function mountAskAi(container, options) {
   }
 
   // Same sentences as TrialEndedPlanCard. The React card replaces this shell
-  // once it mounts. If that chunk fails, keep the title and the note and link
-  // to Plan & billing. A real ask failure still keeps the red Retry row.
+  // once it mounts. If that chunk fails, keep the title and the note. An
+  // accountant, or an owner on their own plan, gets Plan & billing. An owner
+  // whose firm is an accountant firm gets the renewal note and no plan link.
+  // A real ask failure still keeps the red Retry row.
   function paintTrialEndedShell(host) {
     const section = document.createElement("section");
     section.className = "trial-ended-block";
@@ -491,7 +498,16 @@ export function mountAskAi(container, options) {
         trialCleanups.push(cleanup);
       })
       .catch(() => {
-        if (note) note.textContent = "Plans could not be loaded. Refresh and try again.";
+        const asksAccountant = trialEndedOwnerAsksAccountant(
+          accountant ? "accountant" : "owner",
+          firmId,
+        );
+        if (note) {
+          note.textContent = asksAccountant
+            ? OWNER_ACCOUNTANT_TRIAL_NOTE
+            : "Plans could not be loaded. Refresh and try again.";
+        }
+        if (asksAccountant && section?.dataset) section.dataset.ownerTrialEnded = "accountant";
         if (
           section &&
           section.parentElement !== host &&
@@ -499,7 +515,7 @@ export function mountAskAi(container, options) {
         ) {
           host.replaceChildren(section);
         }
-        appendTrialEndedBillingLink(section);
+        if (!asksAccountant) appendTrialEndedBillingLink(section);
       });
     return host;
   }

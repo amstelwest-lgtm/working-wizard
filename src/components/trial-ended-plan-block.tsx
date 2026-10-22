@@ -15,9 +15,11 @@ import {
   validateFirmVoucher,
 } from "@/lib/stripe-checkout.functions";
 import { readCachedFirmPlan } from "@/lib/firm-plan-client";
+import { OWNER_ACCOUNTANT_TRIAL_NOTE } from "@/lib/owner-trial-ended";
 import {
   TRIAL_ENDED_BILLING_LABEL,
   trialEndedBillingHref,
+  trialEndedOwnerAsksAccountant,
   type TrialEndedBillingAudience,
 } from "@/lib/trial-ended-billing";
 
@@ -45,6 +47,7 @@ export function TrialEndedPlanCard({
   loading = false,
   upgrading = false,
   audience = "accountant",
+  accountantFirm = false,
   onUpgrade,
   onValidateVoucher,
 }: {
@@ -53,6 +56,11 @@ export function TrialEndedPlanCard({
   upgrading?: boolean;
   /** Practice Settings billing, or the owner Plan page. */
   audience?: TrialEndedBillingAudience;
+  /**
+   * Owner whose business is a client of an accountant firm.
+   * The accountant pays, so this card stays the calm renewal note.
+   */
+  accountantFirm?: boolean;
   onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval, voucherCode?: string | null) => void;
   onValidateVoucher?: (input: {
     code: string;
@@ -62,6 +70,23 @@ export function TrialEndedPlanCard({
     { ok: true; promotionCodeId: string; preview: string } | { ok: false; message: string }
   >;
 }) {
+  if (audience === "owner" && accountantFirm) {
+    return (
+      <section
+        className="trial-ended-block bg-card text-foreground"
+        role="region"
+        aria-label={STARTER_TRIAL_ENDED_MESSAGE}
+        data-owner-trial-ended="accountant"
+      >
+        <p className="trial-ended-title text-foreground">{STARTER_TRIAL_ENDED_MESSAGE}</p>
+        {loading ? (
+          <p className="trial-ended-note text-muted-foreground">Loading plans…</p>
+        ) : (
+          <p className="trial-ended-note text-muted-foreground">{OWNER_ACCOUNTANT_TRIAL_NOTE}</p>
+        )}
+      </section>
+    );
+  }
   return (
     <section
       className="trial-ended-block bg-card text-foreground"
@@ -204,6 +229,7 @@ export function TrialEndedPlanBlock({
       loading={loading && !upgrade}
       upgrading={upgrading || localUpgrading}
       audience={audience}
+      accountantFirm={trialEndedOwnerAsksAccountant(audience, firmId)}
       onUpgrade={upgrade ? handleUpgrade : undefined}
       onValidateVoucher={onValidateVoucher}
     />
@@ -317,6 +343,7 @@ export function ChatTrialEndedPlan({
       loading={loading && !fetched}
       upgrading={upgrading}
       audience={audience}
+      accountantFirm={trialEndedOwnerAsksAccountant(audience, firmId)}
       onUpgrade={fetched && firmId ? handleUpgrade : undefined}
       onValidateVoucher={onValidateVoucher}
     />
