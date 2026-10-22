@@ -69,15 +69,40 @@ None of `missing-metrics.ts`, `health-metric-row.ts`, `stripe-entitlement.ts`, `
 
 ## Edges
 
-No edge function imports `budget-period.ts`. These still quote the unclipped statement through `period-profit.ts` and were not edited:
-
-- `supabase/functions/ask-ai/deliverable-summaries.ts` (`periodProfitBridge`)
-- `supabase/functions/ask-ai/overview-brief.ts` (`statementNetProfit`)
-- `supabase/functions/milon-bot/` quotes that overview brief
+`ask-ai` and `milon-bot` cannot import `budget-period.ts` (it pulls `budget.bridges` and the market barrel). The numeric overlap lives in `supabase/functions/_shared/firm-year-slice.ts` and matches `fiscalStatementSlice` on the amounts. The pro-rata sentence lives in `supabase/functions/_shared/firm-year-label.ts` (`proratedPeriodLabel`, `compactMonthRange`, `isProratedPeriodLabel`), the Deno twin of Eng2's `src/lib/firm-year-label.ts`.
 
 `brain-propose` and `brain-deliverable-draft` do not import the budget period engine.
 
 `ask-ai` already type-checks `budget.types` through `deliverable-input-config`. The slice type lives in `src/lib/budget-period-types.ts` so that path does not load `budget-period.ts`, `budget.months`, or the market barrel (`zod`).
+
+## Statement-flow readers
+
+A reader is sliced when a statement that opens before the firm year is scaled to the overlap before the figure is quoted. The label, when sliced, is the firm-year pro-rata sentence (`proratedPeriodLabel` on the edges; `fiscalStatementSlice().label` on the Budget header, which Eng2 is switching to that same sentence).
+
+| Reader | Sliced? |
+| --- | --- |
+| Budget This year card (`budgetHeadlineFigures`) | Yes |
+| This year vs last year (`yearMoneyFromFiscalSlice`) | Yes |
+| Budget vs actual tiles (`budgetStatementTiles`) | Yes |
+| Budget header Actuals (`budgetCaptionActuals` inserts `slice.label`) | Yes, words come from `budget-period` |
+| Owner waterfall (`app.tsx` `fiscalWaterfallFallback`) | Yes |
+| Accountant waterfall (`clients.$clientId.tsx` `fiscalWaterfallFallback`) | Yes |
+| Waterfall chart (`profitability-waterfall.tsx`) | Draws the fallback it is given. Sliced at those two call sites. Prior-period margins stay on the raw snapshot |
+| ask-ai waterfall (`deliverable-summaries.ts`) | Yes, edge slice + pro-rata label |
+| ask-ai overview (`overview-brief.ts`) | Yes, same slice and label |
+| milon-bot health lines and `shapeSnapshot` | Yes, through the overview brief and the edge slice |
+| `budgetVersusStatement` actuals | No. The cards read the slice. This bridge keeps the full statement |
+| Home Analyst (`owner-answers.ts`) | No. Eng2 |
+| Owner door home (`owner-door.tsx`) | No. Eng2 |
+| Owner home block (`app.tsx`) | No. Eng2 |
+| Accountant home block (`clients.$clientId.tsx`) | No. Eng2 |
+| Cash interest note (`cash-interest-note.ts`) | No. Eng2 |
+| Owner move ranker (`app.tsx` `periodProfitBridge`) | No |
+| Accountant move ranker (`clients.$clientId.tsx` `periodProfitBridge`) | No |
+| Budget PDF (`budget-pdf.ts`) | No |
+| Cash pace (`client-metrics.ts` `periodProfitBridge`) | No. Annualised weeks, not the firm-year clip |
+| Ratios and health | No. Annualise by cover, not a March clip |
+| `brain-propose`, `brain-deliverable-draft`, `agent-analyst` | No |
 
 ## Other side?
 

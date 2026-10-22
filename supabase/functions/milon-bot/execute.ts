@@ -512,7 +512,7 @@ export async function executeAgentTool(
         health_label: brief.healthLabel,
         pillars: brief.pillars.map((p) => ({ id: p.id, label: p.label, score: p.score })),
         weakest: brief.weakest,
-        period_label: periodLabel,
+        period_label: brief.periodLabel ?? periodLabel,
         ...(scoreSnapshot ? snapshotEvidenceFields(scoreSnapshot) : {}),
         cash_on_file: brief.cash,
         revenue: brief.revenue,
@@ -535,6 +535,7 @@ export async function executeAgentTool(
       ratios: snap?.ratios,
       financials: snapFinancials,
       cashRunwayWeeks: runway,
+      fyStartMonth,
     });
   }
 
