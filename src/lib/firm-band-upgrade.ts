@@ -78,6 +78,12 @@ export type FirmUpgradeSnapshot = {
   priceCurrency: FirmPriceCurrency;
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, ZarBandAmounts>>;
+  /**
+   * Practice list is in rand (firm row ZA, or most clients ZA).
+   * This is not the Checkout charge currency. A missing rand quote still
+   * falls back to the published ladder while this is set.
+   */
+  zarPlan: boolean;
   /** Server-built rand lines when the practice list is in rand. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /**
@@ -100,6 +106,7 @@ export function emptyFirmUpgradeSnapshot(): FirmUpgradeSnapshot {
     priceCurrency: resolveFirmPriceCurrency(null),
     interval: "month",
     zarByBand: {},
+    zarPlan: false,
     zaLabels: null,
     zaPriceLabel: null,
   };

@@ -52,6 +52,11 @@ export type FirmUpgradeAllowance = {
   priceCurrency: "USD" | "zar";
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
+  /**
+   * Practice list is in rand. Not the Checkout charge currency.
+   * Absent on older payloads; the picker then uses labels or currency.
+   */
+  zarPlan?: boolean;
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   zaPriceLabel?: string | null;
 };
