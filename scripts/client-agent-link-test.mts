@@ -677,17 +677,23 @@ assert(!fn.includes("bytesFromBase64") && !fn.includes("base64"), "the server fu
 assert(fn.includes("createSignedUploadUrl"), "a signed upload URL is issued by the service role");
 assert(fn.includes("upsert: false"), "the signed upload path is one-time");
 assert(fn.includes('Range: "bytes=0-31"'), "confirm reads only the first bytes");
-assert(!fn.includes(".download("), "confirm does not download the whole object");
+assert(!confirmSlice.includes(".download("), "confirm does not download the whole object");
 assert(page.includes("uploadToClientAgentSignedUrl"), "the browser uploads to the signed URL");
 assert(!page.includes("fileBase64") && !page.includes("base64"), "the page does not post the file body");
 assert(!/method:\s*"PUT"/.test(page), "the page uses the signed upload helper");
 assert(fn.includes("readUploadGrant"), "confirm checks the server-issued grant");
 assert(fn.includes("pathBelongsToSend"), "a path must belong to this send");
 assert(!/requireSupabaseAuth/.test(fn), "the public route does not ask for a login");
+const finishStart = fn.indexOf("const FINISH_BODY");
+const finishEnd = fn.indexOf("export const askClientAgentLink");
+const outsideFinish = fn.slice(0, finishStart) + fn.slice(finishEnd);
 assert(
-  !/resend|sendAccessEmail|nodemailer|sendTeamMail|extract-source-document|decide_ledger/i.test(fn),
-  "no mail, extraction, or ledger",
+  !/resend|sendAccessEmail|nodemailer|sendTeamMail|extract-source-document|decide_ledger/i.test(
+    outsideFinish,
+  ),
+  "no mail, extraction, or ledger outside finish",
 );
+assert(fn.includes("sendClientAgentDone"), "finish emails the firm owner once");
 assert(!/whatsapp/i.test(page + route), "the page does not mention WhatsApp");
 assert(
   !/sars|fill in a form|send a form back/i.test(page),
@@ -1363,7 +1369,7 @@ assert(!removeFn.includes("completed_at"), "a finished send can still remove a f
 assert(page.includes("CLIENT_AGENT_PASSWORD_UNSAVED"), "the page shows the password note");
 const releaseFn = fn.slice(
   fn.indexOf("export async function releaseClientAgentFilePassword"),
-  fn.indexOf("async function markSendComplete"),
+  fn.indexOf("const FINISH_BODY"),
 );
 assert(!releaseFn.includes("createServerFn"), "opening a password is not a public action");
 
@@ -1487,6 +1493,11 @@ assert(!askFn.slice(0, askFn.indexOf("guideDocumentQuestion")).includes("recordC
 const completeFn = fn.slice(fn.indexOf("export const completeClientAgentSend"), fn.indexOf("export const askClientAgentLink"));
 assert(completeFn.includes("completionDecision"), "completion uses the checklist decision");
 assert(completeFn.includes("decision.already"), "a completed send is left as it is");
-assert(!/resend|recipient_email|contact_email|sendAccessEmail/i.test(completeFn), "completion sends no mail");
+assert(
+  !/recipient_email|contact_email|sendAccessEmail/i.test(completeFn),
+  "completion does not email the client",
+);
+assert(completeFn.includes("sendClientAgentDone"), "completion emails the firm owner once");
+assert(completeFn.includes("clientAgentDoneIdempotencyKey"), "completion uses one email key");
 
 console.log("client agent link test ok");

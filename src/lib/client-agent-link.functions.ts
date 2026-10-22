@@ -2,12 +2,14 @@
  * Public /a/<token> actions. Service role only. The raw token is hashed
  * before lookup. The browser uploads straight to a one-time signed URL.
  * Confirm reads the size and the first bytes with the service role.
- * Nothing is emailed, extracted, or posted to a ledger.
- * Chat text and file passwords are not logged.
+ * Finish copies the files into the client's documents and emails the firm
+ * owner once. The client is never emailed. Chat text and file passwords
+ * are not logged.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { canonicalAuthUrl } from "@/lib/app-origin";
 import { CLAUDE_MODEL } from "@/lib/claude-config";
 import {
   CLIENT_AGENT_CHAT_FALLBACK,
@@ -21,6 +23,17 @@ import {
   openFilePassword,
   sealFilePassword,
 } from "@/lib/client-agent-file-secret";
+import {
+  completionDecision,
+  clientAgentDoneIdempotencyKey,
+  copiesStillNeeded,
+  buildClientAgentArtifact,
+  indexedCopyKeys,
+  type ArchiveFileRow,
+  type CompletionItem,
+} from "@/lib/client-agent-done";
+import { sendClientAgentDone } from "@/lib/client-agent-done-mail";
+import { CLIENT_DOCUMENTS_BUCKET } from "@/lib/client-documents";
 import { recipientFirstName } from "@/lib/client-agent-send";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import {
@@ -31,7 +44,6 @@ import {
   CLIENT_AGENT_CHAT_ENABLED,
   CLIENT_AGENT_PASSWORD_UNSAVED,
   closedLink,
-  completionDecision,
   confirmStoredObject,
   consentReady,
   consentWrite,
@@ -63,6 +75,7 @@ type DbError = { message: string } | null;
 type SendRow = {
   id: string;
   firm_id: string;
+  client_id: string;
   expires_at: string;
   revoked_at: string | null;
   consent_at: string | null;
@@ -212,22 +225,22 @@ async function loadSend(tokenHash: string): Promise<SendRow | null> {
       .eq("token_hash", tokenHash)
       .maybeSingle();
   const named = await query(
-    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name, completed_at",
+    "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name, completed_at",
   );
   if (!named.error) return named.data;
   const practice = await query(
-    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name",
+    "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name",
   );
   if (!practice.error && practice.data) {
     return { ...practice.data, completed_at: null };
   }
   const namedPractice = await query(
-    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
+    "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
   );
   if (!namedPractice.error && namedPractice.data) {
     return { ...namedPractice.data, recipient_first_name: null, completed_at: null };
   }
-  const plain = await query("id, firm_id, expires_at, revoked_at, consent_at");
+  const plain = await query("id, client_id, firm_id, expires_at, revoked_at, consent_at");
   if (plain.error) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
   if (!plain.data) return null;
   return {
@@ -1206,7 +1219,252 @@ export async function releaseClientAgentFilePassword(
   return plain;
 }
 
-async function markSendComplete(sendId: string): Promise<boolean> {
+const FINISH_BODY = "That could not be finished. Please try again.";
+
+async function loadCompletionItems(sendId: string): Promise<CompletionItem[]> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => Promise<{
+            data: Array<{
+              item_key: string;
+              label: string | null;
+              status: string;
+              quality: string | null;
+              storage_path: string | null;
+              mime: string | null;
+              size_bytes: number | null;
+              explanation: string | null;
+            }> | null;
+            error: DbError;
+          }>;
+        };
+      };
+    }
+  )
+    .from("client_agent_send_items")
+    .select("item_key, label, status, quality, storage_path, mime, size_bytes, explanation")
+    .eq("send_id", sendId);
+  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "items" }));
+  return (data ?? []).map((row) => ({
+    itemKey: row.item_key,
+    label: row.label,
+    status: row.status,
+    quality: row.quality,
+    storagePath: row.storage_path,
+    mime: row.mime,
+    sizeBytes: row.size_bytes,
+    explanation: row.explanation,
+  }));
+}
+
+async function loadArchiveFileRows(sendId: string): Promise<ArchiveFileRow[] | "legacy"> {
+  const load = (columns: string) =>
+    (
+      supabaseAdmin as unknown as {
+        from: (name: string) => {
+          select: (cols: string) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => Promise<{ data: Array<Record<string, unknown>> | null; error: DbError }>;
+          };
+        };
+      }
+    )
+      .from("client_agent_send_files")
+      .select(columns)
+      .eq("send_id", sendId);
+  let found = await load("item_key, storage_path, mime, size_bytes, display_name");
+  if (found.error && missingRelation(found.error, "display_name")) {
+    found = await load("item_key, storage_path, mime, size_bytes");
+  }
+  if (found.error) {
+    if (missingRelation(found.error, "client_agent_send_files")) return "legacy";
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+  return (found.data ?? []).flatMap((row) => {
+    const itemKey = typeof row.item_key === "string" ? row.item_key : "";
+    const storagePath = typeof row.storage_path === "string" ? row.storage_path : "";
+    if (!itemKey || !storagePath) return [];
+    const displayName = sanitizeClientFileName(
+      typeof row.display_name === "string" ? row.display_name : "",
+    );
+    return [
+      {
+        itemKey,
+        storagePath,
+        mime: typeof row.mime === "string" ? row.mime : null,
+        sizeBytes: typeof row.size_bytes === "number" ? row.size_bytes : null,
+        displayName: displayName || null,
+      },
+    ];
+  });
+}
+
+async function loadCopiedKeys(clientId: string, sendId: string) {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => Promise<{ data: Array<{ meta: unknown }> | null; error: DbError }>;
+        };
+      };
+    }
+  )
+    .from("client_artifacts")
+    .select("meta")
+    .eq("client_id", clientId);
+  if (error) return null;
+  return indexedCopyKeys(data ?? [], sendId);
+}
+
+async function firmOwnerEmail(firmId: string): Promise<string | null> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            maybeSingle: () => Promise<{
+              data: { owner_user_id: string | null } | null;
+              error: DbError;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("firms")
+    .select("owner_user_id")
+    .eq("id", firmId)
+    .maybeSingle();
+  if (error || !data?.owner_user_id) return null;
+  const looked = await (
+    supabaseAdmin as unknown as {
+      auth: {
+        admin: {
+          getUserById: (
+            id: string,
+          ) => Promise<{ data: { user: { email?: string | null } | null } | null }>;
+        };
+      };
+    }
+  ).auth.admin.getUserById(data.owner_user_id);
+  const email = looked.data?.user?.email?.trim() ?? "";
+  if (!email.includes("@")) return null;
+  return email;
+}
+
+async function clientNameOf(clientId: string): Promise<string> {
+  const { data } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            maybeSingle: () => Promise<{ data: { name: string | null } | null; error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("clients")
+    .select("name")
+    .eq("id", clientId)
+    .maybeSingle();
+  const name = data?.name?.trim() ?? "";
+  return name || "Your client";
+}
+
+function archiveStorage(bucket: string) {
+  return (
+    supabaseAdmin as unknown as {
+      storage: {
+        from: (name: string) => {
+          download: (path: string) => Promise<{ data: Blob | null; error: DbError }>;
+          upload: (
+            path: string,
+            body: Uint8Array,
+            options: { contentType: string; upsert: boolean },
+          ) => Promise<{ error: DbError }>;
+          remove: (paths: string[]) => Promise<{ error: DbError }>;
+        };
+      };
+    }
+  ).storage.from(bucket);
+}
+
+async function copyOneFile(input: {
+  clientId: string;
+  sendId: string;
+  file: {
+    itemKey: string;
+    label: string;
+    sourcePath: string;
+    mime: string;
+    size: number;
+    displayName: string | null;
+  };
+}): Promise<boolean> {
+  const downloaded = await archiveStorage(SEND_STORAGE_BUCKET).download(input.file.sourcePath);
+  if (downloaded.error || !downloaded.data) return false;
+  const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
+  const sniffed = sniffDocumentMime(bytes);
+  if (!sniffed || sniffed !== input.file.mime) return false;
+  const artifactId = crypto.randomUUID();
+  const row = buildClientAgentArtifact({
+    artifactId,
+    clientId: input.clientId,
+    sendId: input.sendId,
+    itemKey: input.file.itemKey,
+    label: input.file.label,
+    mime: sniffed,
+    size: bytes.byteLength,
+    sourcePath: input.file.sourcePath,
+    displayName: input.file.displayName,
+  });
+  const uploaded = await archiveStorage(CLIENT_DOCUMENTS_BUCKET).upload(row.storage_path, bytes, {
+    contentType: sniffed,
+    upsert: false,
+  });
+  if (uploaded.error) return false;
+  const inserted = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        insert: (value: Record<string, unknown>) => Promise<{ error: DbError }>;
+      };
+    }
+  )
+    .from("client_artifacts")
+    .insert({
+      id: row.id,
+      client_id: row.client_id,
+      kind: row.kind,
+      storage_path: row.storage_path,
+      visibility: row.visibility,
+      created_by: row.created_by,
+      meta: row.meta,
+    });
+  if (inserted.error) {
+    await archiveStorage(CLIENT_DOCUMENTS_BUCKET).remove([row.storage_path]);
+    return false;
+  }
+  return true;
+}
+
+async function markCompleted(sendId: string): Promise<boolean> {
   const { error } = await (
     supabaseAdmin as unknown as {
       from: (name: string) => {
@@ -1241,11 +1499,14 @@ export const completeClientAgentSend = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ ok: true } | { ok: false; body: string }> => {
     const resolved = await resolveToken(data.token);
     if (!resolved.ok) return { ok: false, body: resolved.body };
-    const items = await loadItems(resolved.send.id);
+    const items = await loadCompletionItems(resolved.send.id);
+    const fileRows = await loadArchiveFileRows(resolved.send.id);
     const decision = completionDecision({
       consentAt: resolved.send.consent_at,
       completedAt: resolved.send.completed_at,
+      sendId: resolved.send.id,
       items,
+      ...(fileRows !== "legacy" && fileRows.length > 0 ? { fileRows } : {}),
     });
     if (!decision.ok) {
       return {
@@ -1257,8 +1518,40 @@ export const completeClientAgentSend = createServerFn({ method: "POST" })
       };
     }
     if (decision.already) return { ok: true };
-    const saved = await markSendComplete(resolved.send.id);
-    if (!saved) return { ok: false, body: "That could not be saved." };
+    if (!/^[0-9a-f-]{36}$/i.test(resolved.send.client_id)) return { ok: false, body: FINISH_BODY };
+    const existing = await loadCopiedKeys(resolved.send.client_id, resolved.send.id);
+    if (!existing) return { ok: false, body: FINISH_BODY };
+    const pending = copiesStillNeeded(decision.files, resolved.send.id, existing);
+    for (const file of pending) {
+      const copied = await copyOneFile({
+        clientId: resolved.send.client_id,
+        sendId: resolved.send.id,
+        file,
+      });
+      if (!copied) return { ok: false, body: FINISH_BODY };
+    }
+    const owner = await firmOwnerEmail(resolved.send.firm_id);
+    if (!owner) return { ok: false, body: FINISH_BODY };
+    const practiceName = practiceDisplayName({
+      firmId: resolved.send.firm_id,
+      practiceDisplayName: resolved.send.practice_display_name,
+      firmName: await loadFirmName(resolved.send.firm_id),
+    });
+    const mailed = await sendClientAgentDone({
+      practiceName,
+      to: owner,
+      clientName: await clientNameOf(resolved.send.client_id),
+      received: decision.received,
+      missing: decision.missing,
+      notes: decision.notes,
+      link: canonicalAuthUrl(`/clients/${resolved.send.client_id}?section=send-agent`),
+      idempotencyKey: clientAgentDoneIdempotencyKey(resolved.send.id),
+      apiKey: process.env.RESEND_API_KEY,
+      fromEmail: process.env.RESEND_FROM_EMAIL,
+    });
+    if (!mailed.ok) return { ok: false, body: FINISH_BODY };
+    const marked = await markCompleted(resolved.send.id);
+    if (!marked) return { ok: false, body: FINISH_BODY };
     return { ok: true };
   });
 

@@ -18,7 +18,7 @@ export type UploadVisibility = (typeof UPLOAD_VISIBILITIES)[number];
 /** Safe default: nothing leaves the owner's side unless they chose to share. */
 export const DEFAULT_UPLOAD_VISIBILITY: UploadVisibility = "private";
 
-export type UploadSource = "bank_pack" | "cash_pack" | "financial_statement";
+export type UploadSource = "bank_pack" | "cash_pack" | "financial_statement" | "client_agent_send";
 
 export const UPLOAD_VISIBILITY_COPY: Record<
   UploadVisibility,
@@ -55,6 +55,7 @@ export function uploadSourceLabel(source: unknown): string {
   if (source === "bank_pack") return "Bank statements";
   if (source === "cash_pack") return "Bank statements (cash)";
   if (source === "financial_statement") return "Financial statement";
+  if (source === "client_agent_send") return "Sent by client (Send an agent)";
   return "Upload";
 }
 
@@ -111,7 +112,10 @@ export function parseDocumentMeta(meta: unknown): Partial<ClientDocumentMeta> {
     bytes: typeof m.bytes === "number" ? m.bytes : undefined,
     mime: typeof m.mime === "string" ? m.mime : undefined,
     source:
-      m.source === "bank_pack" || m.source === "cash_pack" || m.source === "financial_statement"
+      m.source === "bank_pack" ||
+      m.source === "cash_pack" ||
+      m.source === "financial_statement" ||
+      m.source === "client_agent_send"
         ? m.source
         : undefined,
     account_label: typeof m.account_label === "string" ? m.account_label : undefined,

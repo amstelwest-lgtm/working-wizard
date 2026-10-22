@@ -7,6 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { CANONICAL_APP_ORIGIN, canonicalAuthOrigin } from "@/lib/app-origin";
+import { copiedDocumentPaths, reviewDecision } from "@/lib/client-agent-done";
 import { practiceDisplayName, sanitizeClientFileName, sendPracticeDisplayName } from "@/lib/client-agent-link";
 import { filePasswordKey, openFilePassword } from "@/lib/client-agent-file-secret";
 import {
@@ -137,9 +138,12 @@ async function isFirmMember(userId: string, firmId: string): Promise<boolean> {
 
 export type AgentSendItem = {
   itemKey: string;
+  label: string | null;
   totalsOnly: boolean;
   status: string;
   quality: string | null;
+  explanation: string | null;
+  documentPaths: string[];
 };
 
 export type AgentSendFile = {
@@ -154,6 +158,8 @@ export type AgentSendRow = {
   expiresAt: string;
   revokedAt: string | null;
   consentAt: string | null;
+  completedAt: string | null;
+  reviewedAt: string | null;
   open: boolean;
   items: AgentSendItem[];
   files: AgentSendFile[];
@@ -167,6 +173,8 @@ function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
     expiresAt,
     revokedAt,
     consentAt: typeof row.consent_at === "string" ? row.consent_at : null,
+    completedAt: typeof row.completed_at === "string" ? row.completed_at : null,
+    reviewedAt: typeof row.reviewed_at === "string" ? row.reviewed_at : null,
     open: sendStillOpen({ revokedAt, expiresAt }, now),
     items: [],
     files: [],
@@ -240,11 +248,25 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
         return { migrated: true, allowed: false, sends: [], contactEmail: null };
       }
 
-      const listed = await table("client_agent_sends")
-        .select("id, expires_at, revoked_at, consent_at, created_at")
+      let listed = await table("client_agent_sends")
+        .select("id, expires_at, revoked_at, consent_at, created_at, completed_at, reviewed_at")
         .eq("client_id", data.clientId)
         .eq("firm_id", firm.firmId)
         .order("created_at", { ascending: false });
+      if (listed.error && missingSendColumn(listed.error, "reviewed_at")) {
+        listed = await table("client_agent_sends")
+          .select("id, expires_at, revoked_at, consent_at, created_at, completed_at")
+          .eq("client_id", data.clientId)
+          .eq("firm_id", firm.firmId)
+          .order("created_at", { ascending: false });
+      }
+      if (listed.error && missingSendColumn(listed.error, "completed_at")) {
+        listed = await table("client_agent_sends")
+          .select("id, expires_at, revoked_at, consent_at, created_at")
+          .eq("client_id", data.clientId)
+          .eq("firm_id", firm.firmId)
+          .order("created_at", { ascending: false });
+      }
       if (listed.error) {
         if (missingTable(listed.error)) {
           return { migrated: false, allowed: false, sends: [], contactEmail: null };
@@ -259,7 +281,7 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
 
       for (const send of sends) {
         const found = await table("client_agent_send_items")
-          .select("item_key, totals_only, status, quality")
+          .select("item_key, label, totals_only, status, quality, explanation")
           .eq("send_id", send.id);
         if (found.error) {
           if (missingTable(found.error)) {
@@ -269,11 +291,28 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
         }
         send.items = rows(found.data).map((row) => ({
           itemKey: String(row.item_key ?? ""),
+          label: typeof row.label === "string" ? row.label : null,
           totalsOnly: row.totals_only === true,
           status: String(row.status ?? "open"),
           quality: typeof row.quality === "string" ? row.quality : null,
+          explanation: typeof row.explanation === "string" ? row.explanation : null,
+          documentPaths: [],
         }));
         send.files = await loadSendFiles(send.id);
+      }
+      const artifacts = await table("client_artifacts")
+        .select("storage_path, visibility, meta")
+        .eq("client_id", data.clientId);
+      const artifactRows = artifacts.error ? [] : rows(artifacts.data);
+      for (const send of sends) {
+        if (!send.completedAt) continue;
+        for (const item of send.items) {
+          item.documentPaths = copiedDocumentPaths(
+            artifactRows as Array<{ storage_path: unknown; visibility: unknown; meta: unknown }>,
+            send.id,
+            item.itemKey,
+          );
+        }
       }
       return { migrated: true, allowed: true, sends, contactEmail: firm.contactEmail };
     },
@@ -540,4 +579,52 @@ export const revealClientAgentFilePassword = createServerFn({ method: "POST" })
         }
       },
     });
+  });
+
+export type ReviewAgentSendResult =
+  | { ok: true; reviewedAt: string }
+  | {
+      ok: false;
+      reason: "forbidden" | "not_allowed" | "not_found" | "not_ready" | "unavailable" | "not_on_firm";
+    };
+
+export const reviewClientAgentSend = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ clientId: z.string().uuid(), sendId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }): Promise<ReviewAgentSendResult> => {
+    if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
+    const firm = await firmOfClient(data.clientId);
+    if (!firm.ok) return { ok: false, reason: firm.reason };
+    const member = await isFirmMember(context.userId, firm.firmId);
+    const found = await table("client_agent_sends")
+      .select("id, client_id, firm_id, completed_at, reviewed_at")
+      .eq("id", data.sendId)
+      .maybeSingle();
+    if (found.error) {
+      if (missingTable(found.error) || missingSendColumn(found.error, "reviewed_at")) {
+        return { ok: false, reason: "unavailable" };
+      }
+      throw new Error("The link could not be read.");
+    }
+    const row = found.data;
+    const same = Boolean(row) && row?.client_id === data.clientId && row?.firm_id === firm.firmId;
+    const decision = reviewDecision({
+      member,
+      firmAllowed: sendAgentFirmAllowed(firm.firmId),
+      found: Boolean(same),
+      completedAt: typeof row?.completed_at === "string" ? row.completed_at : null,
+      reviewedAt: typeof row?.reviewed_at === "string" ? row.reviewed_at : null,
+    });
+    if (!decision.ok) return decision;
+    if (decision.already) return { ok: true, reviewedAt: String(row?.reviewed_at) };
+    const reviewedAt = new Date().toISOString();
+    const updated = await table("client_agent_sends")
+      .update({ reviewed_at: reviewedAt })
+      .eq("id", data.sendId)
+      .eq("client_id", data.clientId)
+      .is("reviewed_at", null);
+    if (updated.error) throw new Error("The review could not be saved.");
+    return { ok: true, reviewedAt };
   });

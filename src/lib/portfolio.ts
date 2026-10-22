@@ -37,6 +37,8 @@ export type PortfolioClientFacts = {
   outcomesMissed: number;
   outcomesMeasured: number;
   lastLoginAt: string | null;
+  /** Completed document links the firm has not marked reviewed. */
+  unreviewedSends?: number;
 };
 
 export const EXCEPTION_KINDS = [
@@ -50,6 +52,7 @@ export const EXCEPTION_KINDS = [
   "stale_figures",
   "review_due",
   "owner_inactive",
+  "documents_received",
 ] as const;
 export type ExceptionKind = (typeof EXCEPTION_KINDS)[number];
 
@@ -58,7 +61,9 @@ export type PortfolioException = {
   severity: 1 | 2 | 3; // 1 = act today
   label: string;
   /** Studio tab that resolves it. */
-  tab: "advisory" | "summary" | "plan" | "cash" | "ratios";
+  tab: "advisory" | "summary" | "plan" | "cash" | "ratios" | "portal";
+  /** Client-page section. send-agent opens the document link panel. */
+  section?: "send-agent";
 };
 
 export type PortfolioRow = {
@@ -190,6 +195,15 @@ export function exceptionsFor(f: PortfolioClientFacts, now: string): PortfolioEx
           ? "Cycle review due"
           : `Review due in ${Math.max(0, reviewIn ?? 0)} days`,
       tab: "summary",
+    });
+  }
+  if ((f.unreviewedSends ?? 0) > 0) {
+    out.push({
+      kind: "documents_received",
+      severity: 1,
+      label: "Documents received from client",
+      tab: "portal",
+      section: "send-agent",
     });
   }
   const login = daysSince(f.lastLoginAt, now);

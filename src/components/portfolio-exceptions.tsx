@@ -20,6 +20,11 @@ import {
 } from "@/lib/portfolio-dashboard";
 import { clientHomeSearch } from "@/lib/client-home-search";
 
+function clientSearch(section?: string): { tab: "home" } | { tab: "portal"; section: "send-agent" } {
+  if (section === "send-agent") return { tab: "portal", section: "send-agent" };
+  return clientHomeSearch();
+}
+
 type Props = {
   firmId: string | null;
   refreshKey?: string | number;
@@ -107,7 +112,7 @@ export function PortfolioExceptions({
               <Link
                 to="/clients/$clientId"
                 params={{ clientId: row.clientId }}
-                search={clientHomeSearch()}
+                search={clientSearch(row.section)}
                 className="attn-strip-name"
               >
                 {index + 1}. {row.name}
@@ -126,7 +131,7 @@ export function PortfolioExceptions({
                 <Link
                   to="/clients/$clientId"
                   params={{ clientId: row.clientId }}
-                  search={clientHomeSearch()}
+                  search={clientSearch(row.section)}
                   className="attn-strip-go"
                 >
                   {todayAttentionAction(row)}
@@ -238,7 +243,7 @@ export function PortfolioExceptions({
                       key={e.kind}
                       to="/clients/$clientId"
                       params={{ clientId: r.clientId }}
-                      search={clientHomeSearch()}
+                      search={clientSearch(e.section)}
                       className={`inline-flex items-center gap-1 rounded-full border px-2 py-[2px] text-[10.5px] font-semibold ${SEV_CLASS[e.severity]}`}
                       data-exception={e.kind}
                     >

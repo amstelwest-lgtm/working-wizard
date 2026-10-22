@@ -444,7 +444,7 @@ export function ClientAgentLinkScreen({
             onMouseDown={(event) => event.preventDefault()}
             onClick={onNext}
           >
-            Next
+            Finish
           </button>
           {!ready ? (
             <p className="text-sm leading-6 text-[#3D5270]" data-next-hint="true">
