@@ -8,6 +8,7 @@ import type { FmAvatarClip } from "@/lib/fm-avatar-state";
 import { ownerPlanLine } from "@/lib/owner-plan";
 import {
   OWNER_ACCOUNTANT_TRIAL_NOTE,
+  OWNER_ACCOUNTANT_TRIAL_TITLE,
   ownerAskIsTrialEnded,
   type OwnerChatPlan,
 } from "@/lib/owner-trial-ended";
@@ -218,14 +219,15 @@ export function OwnerChat({
 
 function OwnerTrialEnded({ plan }: { plan: OwnerChatPlan | null }) {
   const accountantFirm = plan?.accountantFirm === true;
+  const title = accountantFirm ? OWNER_ACCOUNTANT_TRIAL_TITLE : STARTER_TRIAL_ENDED_MESSAGE;
   return (
     <section
       className="owner-trial-ended"
       role="region"
-      aria-label={STARTER_TRIAL_ENDED_MESSAGE}
+      aria-label={title}
       data-owner-trial-ended={accountantFirm ? "accountant" : "owner"}
     >
-      <p className="owner-trial-ended-title">{STARTER_TRIAL_ENDED_MESSAGE}</p>
+      <p className="owner-trial-ended-title">{title}</p>
       {accountantFirm ? (
         <p className="owner-trial-ended-note">{OWNER_ACCOUNTANT_TRIAL_NOTE}</p>
       ) : (

@@ -6,6 +6,9 @@ import type { OwnerVisitor } from "./owner-plan.ts";
 import type { OwnerSubscribeView } from "./owner-subscribe.ts";
 import { isStarterTrialEndedMessage } from "./starter-trial-generation.ts";
 
+/** Visible title when this owner's firm is an accountant firm. The note below stays the body. */
+export const OWNER_ACCOUNTANT_TRIAL_TITLE = "Your accountant's plan needs renewing";
+
 export const OWNER_ACCOUNTANT_TRIAL_NOTE =
   "Your accountant's Milōn plan needs to be renewed before the team can answer here. Ask your accountant to choose a plan.";
 

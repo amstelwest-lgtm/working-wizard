@@ -27,6 +27,32 @@ function textOf(html: string): string {
     .trim();
 }
 
+/** Visible title of the calm trial card. The accessible name is asserted separately. */
+function cardTitle(html: string): string {
+  const match = html.match(/class="owner-trial-ended-title">([^<]*)</);
+  assert(match, "the trial card has a title");
+  return textOf(match[1]);
+}
+
+function cardLabel(html: string): string {
+  const at = html.indexOf('class="owner-trial-ended"');
+  assert(at >= 0, "the trial card is mounted");
+  const match = html.slice(at).match(/aria-label="([^"]*)"/);
+  assert(match, "the trial card has an accessible name");
+  return textOf(match[1]);
+}
+
+function cardNote(html: string): string {
+  const match = html.match(/class="owner-trial-ended-note">([^<]*)</);
+  assert(match, "the accountant card has a note");
+  return textOf(match[1]);
+}
+
+const ACCOUNTANT_FIRM_TRIAL_TITLE = "Your accountant's plan needs renewing";
+const OWNER_PLAN_TRIAL_TITLE = "Your trial has ended, choose a plan";
+const ACCOUNTANT_FIRM_TRIAL_BODY =
+  "Your accountant's Milōn plan needs to be renewed before the team can answer here. Ask your accountant to choose a plan.";
+
 const market = { locale: "en-US", timezone: "America/New_York" };
 
 function chat(error: string | null, extra?: { errorCode?: string | null; accountantFirm?: boolean; visitor?: "us" | "za" | null; zaMonthly?: string | null }) {
@@ -63,8 +89,17 @@ function chat(error: string | null, extra?: { errorCode?: string | null; account
 const accountant = chat(STARTER_TRIAL_ENDED_MESSAGE, { accountantFirm: true });
 assert(!accountant.includes("owner-error"), "owner trial-ended is still the red line");
 assert(accountant.includes('data-owner-trial-ended="accountant"'), "an accountant's client gets the calm card");
-assert(textOf(accountant).includes(STARTER_TRIAL_ENDED_MESSAGE), "the card uses the shared title");
-assert(textOf(accountant).includes(OWNER_ACCOUNTANT_TRIAL_NOTE), "the card tells the owner to ask their accountant");
+assert(
+  cardTitle(accountant) === ACCOUNTANT_FIRM_TRIAL_TITLE,
+  `an accountant's client sees the renewing title (got ${JSON.stringify(cardTitle(accountant))})`,
+);
+assert(
+  cardLabel(accountant) === ACCOUNTANT_FIRM_TRIAL_TITLE,
+  `the accountant card's accessible name is the renewing title (got ${JSON.stringify(cardLabel(accountant))})`,
+);
+assert(cardTitle(accountant) !== OWNER_PLAN_TRIAL_TITLE, "the accountant card does not keep the choose-a-plan title");
+assert(OWNER_ACCOUNTANT_TRIAL_NOTE === ACCOUNTANT_FIRM_TRIAL_BODY, "the accountant card body is unchanged");
+assert(cardNote(accountant) === ACCOUNTANT_FIRM_TRIAL_BODY, "the card tells the owner to ask their accountant");
 assert(!accountant.includes(">Retry<"), "the trial-ended card has no Retry");
 assert(!accountant.includes("Subscribe"), "an accountant's client does not get the owner checkout button");
 assert(!accountant.includes("$99"), "an owner does not see the Solo price");
@@ -74,11 +109,21 @@ assert(!/R\s?\d/.test(accountant), "an accountant's client sees no rand price");
 
 const coded = chat("Draft was not saved.", { accountantFirm: true, errorCode: STARTER_TRIAL_ENDED_CODE });
 assert(!coded.includes("owner-error"), "a starter_trial_ended code is not the red line");
-assert(textOf(coded).includes(OWNER_ACCOUNTANT_TRIAL_NOTE), "the code still opens the accountant note");
+assert(cardTitle(coded) === ACCOUNTANT_FIRM_TRIAL_TITLE, "a coded trial end uses the renewing title");
+assert(cardNote(coded) === ACCOUNTANT_FIRM_TRIAL_BODY, "the code still opens the accountant note");
 
 const ownUs = chat(STARTER_TRIAL_ENDED_MESSAGE, { accountantFirm: false, visitor: "us" });
 const usLine = ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null });
+assert(STARTER_TRIAL_ENDED_MESSAGE === OWNER_PLAN_TRIAL_TITLE, "the owner-plan title sentence is unchanged");
 assert(ownUs.includes('data-owner-trial-ended="owner"'), "an owner without an accountant gets the owner plan card");
+assert(
+  cardTitle(ownUs) === OWNER_PLAN_TRIAL_TITLE,
+  `an owner without an accountant keeps the choose-a-plan title (got ${JSON.stringify(cardTitle(ownUs))})`,
+);
+assert(
+  cardLabel(ownUs) === OWNER_PLAN_TRIAL_TITLE,
+  `the owner plan card's accessible name stays the choose-a-plan title (got ${JSON.stringify(cardLabel(ownUs))})`,
+);
 assert(!ownUs.includes("owner-error"), "the owner plan card is not red");
 assert(textOf(ownUs).includes(usLine), `the owner plan line is the catalog price (${usLine})`);
 assert(ownUs.includes(OWNER_SUBSCRIBE_LABEL), "the owner plan card keeps the subscribe CTA");
@@ -89,6 +134,7 @@ const zaMonthly = loadSaPricingCopy().ownerMonthly;
 const ownZa = chat(STARTER_TRIAL_ENDED_MESSAGE, { accountantFirm: false, visitor: "za", zaMonthly });
 const zaLine = ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null, zaMonthly });
 assert(textOf(ownZa).includes(zaLine), `a ZA owner sees the server rand label (${zaLine})`);
+assert(cardTitle(ownZa) === OWNER_PLAN_TRIAL_TITLE, "a ZA owner without an accountant keeps the choose-a-plan title");
 assert(!ownZa.includes("$39"), "a ZA owner plan card does not show the dollar price");
 
 const generic = chat("Could not check the plan. Nothing was generated.");
