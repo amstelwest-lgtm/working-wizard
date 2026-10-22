@@ -148,7 +148,11 @@ assert(
   "landing does not read storage during the first render",
 );
 assert(landing.includes("const copyMarket = { copyPack }"), "hero copy is the server pack");
-assert(landing.includes("stored.country !== \"ZA\""), "a stored ZA country is ignored off the ZA edge");
+assert(landing.includes("resolveVisitorDraft"), "landing prices the practice location through the visitor resolver");
+assert(
+  landing.includes('geoCountry: geoZa ? "ZA" : null'),
+  "a stored ZA country is ignored off the ZA edge",
+);
 
 const billing = read("src/routes/billing.start.tsx");
 assert(billing.includes("readMarketingVisitor"), "billing start reads the server geo");
