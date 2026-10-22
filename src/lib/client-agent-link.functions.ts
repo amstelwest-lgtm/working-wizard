@@ -1,8 +1,9 @@
 /**
  * Public /a/<token> actions. Service role only. The raw token is hashed
- * before lookup. File bytes are uploaded and downloaded with the service
- * role. The browser never receives a storage URL. Nothing is emailed,
- * extracted, or posted to a ledger. Chat text and file passwords are not logged.
+ * before lookup. The browser uploads straight to a one-time signed URL.
+ * Confirm reads the size and the first bytes with the service role.
+ * Nothing is emailed, extracted, or posted to a ledger.
+ * Chat text and file passwords are not logged.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
@@ -25,29 +26,29 @@ import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import {
   SEND_ATTEMPT_WINDOW_MS,
   SEND_STORAGE_BUCKET,
+  UPLOAD_GRANT_TTL_MS,
   clientConsentNotice,
-  SEND_FILE_BASE64_MAX,
-  acceptClientFile,
-  bytesFromBase64,
   CLIENT_AGENT_CHAT_ENABLED,
   CLIENT_AGENT_PASSWORD_UNSAVED,
   closedLink,
   completionDecision,
+  confirmStoredObject,
   consentReady,
   consentWrite,
+  declareUpload,
   finishItem,
   hashClientAddress,
   hashPresentedToken,
   openLinkView,
   pathBelongsToSend,
   practiceDisplayName,
+  readUploadGrant,
   resolvePresentedLink,
   sendAttemptLimited,
   sendLinkLogLine,
   sendStoragePath,
-  sizeAllowed,
+  signUploadGrant,
   sniffDocumentMime,
-  storeAcceptedFile,
   toPublicChecklist,
   type AttemptOutcome,
   type ItemQuality,
@@ -120,9 +121,15 @@ function clientAddress(): string {
   }
 }
 
-async function countAttempts(column: "ip_hash" | "send_id", value: string): Promise<number> {
+type CountResult = Promise<{ count: number | null; error: DbError }>;
+
+async function countAttempts(
+  column: "ip_hash" | "send_id",
+  value: string,
+  mode: "all" | "failures",
+): Promise<number> {
   const since = new Date(Date.now() - SEND_ATTEMPT_WINDOW_MS).toISOString();
-  const { count, error } = await (
+  const counted = (
     supabaseAdmin as unknown as {
       from: (name: string) => {
         select: (
@@ -136,7 +143,7 @@ async function countAttempts(column: "ip_hash" | "send_id", value: string): Prom
             gte: (
               column: string,
               value: string,
-            ) => Promise<{ count: number | null; error: DbError }>;
+            ) => CountResult & { neq: (column: string, value: string) => CountResult };
           };
         };
       };
@@ -146,23 +153,28 @@ async function countAttempts(column: "ip_hash" | "send_id", value: string): Prom
     .select("id", { count: "exact", head: true })
     .eq(column, value)
     .gte("created_at", since);
+  const { count, error } = await (mode === "failures" ? counted.neq("outcome", "ok") : counted);
   if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "count" }));
   return count ?? 0;
 }
 
 function recentAttempts(ipHash: string): Promise<number> {
-  return countAttempts("ip_hash", ipHash);
+  return countAttempts("ip_hash", ipHash, "failures");
 }
 
 function recentSendAttempts(sendId: string): Promise<number> {
-  return countAttempts("send_id", sendId);
+  return countAttempts("send_id", sendId, "all");
+}
+
+function recentSendFailures(sendId: string): Promise<number> {
+  return countAttempts("send_id", sendId, "failures");
 }
 
 async function recordAttempt(row: {
   send_id: string | null;
   token_hash: string | null;
   ip_hash: string;
-  outcome: "ok" | "unknown" | "expired" | "revoked" | "limited";
+  outcome: AttemptOutcome;
 }) {
   const { error } = await (
     supabaseAdmin as unknown as {
@@ -388,9 +400,11 @@ async function resolveToken(token: string): Promise<Resolved> {
     return opened.public.ok ? closedLink("unavailable") : opened.public;
   }
   const sendCount = await recentSendAttempts(send.id);
+  const sendFailureCount = await recentSendFailures(send.id);
   const decision = resolvePresentedLink({
     ipCount,
     sendCount,
+    sendFailureCount,
     found: true,
     firmId: send.firm_id,
     revokedAt: send.revoked_at,
@@ -467,19 +481,25 @@ const finishInput = z.object({
   explanation: z.string().max(2000).optional(),
 });
 
-type StoredObject = {
-  size: number;
-  type: string;
-  arrayBuffer: () => Promise<ArrayBuffer>;
-};
-
 type ObjectStorage = {
-  upload: (
+  createSignedUploadUrl: (
     path: string,
-    body: Uint8Array,
-    options: { contentType: string; upsert: boolean },
-  ) => Promise<{ error: DbError }>;
-  download: (path: string) => Promise<{ data: StoredObject | null; error: DbError }>;
+    options: { upsert: boolean },
+  ) => Promise<{
+    data: { signedUrl: string; token: string; path: string } | null;
+    error: DbError;
+  }>;
+  info: (path: string) => Promise<{
+    data: { size?: number; metadata?: Record<string, unknown> } | null;
+    error: DbError;
+  }>;
+  list: (
+    folder: string,
+    options: { search: string; limit: number },
+  ) => Promise<{
+    data: Array<{ name: string; metadata?: Record<string, unknown> | null }> | null;
+    error: DbError;
+  }>;
   remove: (paths: string[]) => Promise<{ error: DbError }>;
 };
 
@@ -545,89 +565,267 @@ async function updateItem(sendId: string, itemKey: string, patch: Record<string,
   if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "save" }));
 }
 
-export const uploadClientAgentFile = createServerFn({ method: "POST" })
+function uploadGrantSecret(): string | null {
+  const keys = [
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "NEXT_SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SECRET_KEY",
+  ];
+  for (const key of keys) {
+    const value = (process.env[key] ?? "").trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+function storageEndpoint(): { url: string; key: string } | null {
+  const urls = ["SUPABASE_URL", "NEXT_SUPABASE_URL", "VITE_SUPABASE_URL"];
+  let url = "";
+  for (const key of urls) {
+    const value = (process.env[key] ?? "").trim();
+    if (value) {
+      url = value.replace(/\/$/, "");
+      break;
+    }
+  }
+  const service = uploadGrantSecret();
+  if (!url || !service) return null;
+  return { url, key: service };
+}
+
+async function noteRejected(resolved: { send: SendRow; tokenHash: string; ipHash: string }) {
+  try {
+    await recordAttempt({
+      send_id: resolved.send.id,
+      token_hash: resolved.tokenHash,
+      ip_hash: resolved.ipHash,
+      outcome: "rejected",
+    });
+  } catch {
+    // A stored outcome the database does not know yet must not hide the refusal.
+  }
+}
+
+function totalFromContentRange(header: string | null): number | null {
+  const match = /\/(\d+)$/.exec(header ?? "");
+  if (!match) return null;
+  const total = Number(match[1]);
+  return Number.isInteger(total) ? total : null;
+}
+
+/** First bytes only. A full-body response is cancelled. The range total is the object size. */
+async function readObjectPrefix(path: string): Promise<{ bytes: Uint8Array; total: number | null } | null> {
+  const endpoint = storageEndpoint();
+  if (!endpoint) return null;
+  const target = `${endpoint.url}/storage/v1/object/${SEND_STORAGE_BUCKET}/${path}`;
+  const response = await fetch(target, {
+    headers: {
+      Authorization: `Bearer ${endpoint.key}`,
+      apikey: endpoint.key,
+      Range: "bytes=0-31",
+    },
+  });
+  if (response.status !== 206 && response.status !== 200) {
+    await response.body?.cancel();
+    return null;
+  }
+  const length = Number(response.headers.get("content-length") ?? "0");
+  if (response.status === 200 && length > 64) {
+    await response.body?.cancel();
+    return null;
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return { bytes: bytes.subarray(0, 32), total: totalFromContentRange(response.headers.get("content-range")) };
+}
+
+async function storedObjectSize(path: string): Promise<number | null> {
+  const storage = objectStorage();
+  const info = await storage.info(path);
+  const fromInfo = info.error ? null : objectByteSize(info.data);
+  if (fromInfo != null) return fromInfo;
+  const slash = path.lastIndexOf("/");
+  const listed = await storage.list(slash >= 0 ? path.slice(0, slash) : "", {
+    search: slash >= 0 ? path.slice(slash + 1) : path,
+    limit: 10,
+  });
+  const name = slash >= 0 ? path.slice(slash + 1) : path;
+  const match = listed.data?.find((row) => row.name === name);
+  return objectByteSize({ metadata: match?.metadata ?? undefined });
+}
+
+function objectByteSize(info: { size?: number; metadata?: Record<string, unknown> } | null): number | null {
+  if (!info) return null;
+  if (typeof info.size === "number" && Number.isInteger(info.size)) return info.size;
+  const meta = info.metadata?.size;
+  if (typeof meta === "number" && Number.isInteger(meta)) return meta;
+  if (typeof meta === "string" && /^\d+$/.test(meta)) return Number(meta);
+  return null;
+}
+
+export const prepareClientAgentUpload = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     tokenInput
       .extend({
         itemKey: z.string().regex(/^[a-z0-9_]+$/),
-        base64: z.string().min(4).max(SEND_FILE_BASE64_MAX),
+        size: z.number().int(),
+        mime: z.string().max(80),
+      })
+      .parse(input),
+  )
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      | { ok: true; path: string; token: string; signedUrl: string; grant: string }
+      | ReturnType<typeof closedLink>
+    > => {
+  const resolved = await resolveToken(data.token);
+      if (!resolved.ok) return resolved;
+      const items = await loadItems(resolved.send.id);
+      if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
+      const declared = declareUpload({
+        consented: consentReady(resolved.send.consent_at),
+        size: data.size,
+        mime: data.mime,
+      });
+      if (!declared.ok) {
+        await noteRejected(resolved);
+        return declared;
+      }
+      const secret = uploadGrantSecret();
+      if (!secret) throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
+      const path = sendStoragePath(resolved.send.id, data.itemKey, crypto.randomUUID());
+      const signed = await objectStorage().createSignedUploadUrl(path, { upsert: false });
+      if (signed.error || !signed.data?.token || !signed.data.signedUrl) {
+        throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
+      }
+      const grant = await signUploadGrant(secret, {
+        sendId: resolved.send.id,
+        itemKey: data.itemKey,
+        path,
+        size: data.size,
+        mime: data.mime,
+        exp: Date.now() + UPLOAD_GRANT_TTL_MS,
+      });
+  return { ok: true, path, token: signed.data.token, signedUrl: signed.data.signedUrl, grant };
+    },
+  );
+
+export const confirmClientAgentUpload = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    tokenInput
+      .extend({
+        itemKey: z.string().regex(/^[a-z0-9_]+$/),
+        path: z.string().min(1).max(240),
+        grant: z.string().min(1).max(2000),
       })
       .parse(input),
   )
   .handler(async ({ data }): Promise<{ ok: true } | ReturnType<typeof closedLink>> => {
-    const resolved = await resolveToken(data.token);
+  const resolved = await resolveToken(data.token);
     if (!resolved.ok) return resolved;
+    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
     const items = await loadItems(resolved.send.id);
     if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
-
-    const decision = acceptClientFile({
-      consented: consentReady(resolved.send.consent_at),
-      bytes: bytesFromBase64(data.base64),
+    const secret = uploadGrantSecret();
+    const grant = secret ? await readUploadGrant(secret, data.grant) : null;
+    if (
+      !grant ||
+      grant.path !== data.path ||
+      grant.sendId !== resolved.send.id ||
+      grant.itemKey !== data.itemKey ||
+      !pathBelongsToSend(data.path, resolved.send.id, data.itemKey)
+    ) {
+      await noteRejected(resolved);
+      return closedLink("unavailable");
+    }
+    const storage = objectStorage();
+    const prefix = await readObjectPrefix(data.path);
+    const listedSize = await storedObjectSize(data.path);
+    const objectSize = listedSize ?? prefix?.total ?? null;
+    const sniffed = prefix ? sniffDocumentMime(prefix.bytes) : null;
+    const decision = confirmStoredObject({
+      grant,
+      claimedPath: data.path,
+      sendId: resolved.send.id,
+      itemKey: data.itemKey,
+      objectSize,
+      sniffed,
     });
-    const path = sendStoragePath(resolved.send.id, data.itemKey, crypto.randomUUID());
-    const stored = await storeAcceptedFile(decision, async (file) => {
-      const storage = objectStorage();
-      const uploaded = await storage.upload(path, file.bytes, {
-        contentType: file.mime,
-        upsert: false,
+    if (!decision.ok) {
+      if (pathBelongsToSend(grant.path, resolved.send.id, data.itemKey)) {
+        await storage.remove([grant.path]);
+      }
+      await noteRejected(resolved);
+      return decision;
+    }
+    const existing = await findSendFile(resolved.send.id, data.path);
+    if (existing === "missing") {
+      const filed = await insertSendFile({
+        send_id: resolved.send.id,
+        item_key: data.itemKey,
+        storage_path: data.path,
+        mime: decision.mime,
+        size_bytes: decision.size,
       });
-      if (uploaded.error) {
-        throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
+      if (filed === "failed") {
+        await storage.remove([data.path]);
+        throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
       }
-      const downloaded = await storage.download(path);
-      const object = downloaded.data;
-      if (downloaded.error || !object) {
-        await storage.remove([path]);
-        return null;
-      }
-      const storedBytes = new Uint8Array(await object.arrayBuffer());
-      const sniffed = sniffDocumentMime(storedBytes);
-      if (
-        storedBytes.byteLength !== file.bytes.byteLength ||
-        !sizeAllowed(storedBytes.byteLength) ||
-        sniffed !== file.mime
-      ) {
-        await storage.remove([path]);
-        return null;
-      }
-      return { mime: sniffed, size: storedBytes.byteLength };
-    });
-    if (!stored.ok) return stored;
-    if (!stored.value) return closedLink("mime");
-
-    const previous = await loadStoredPath(resolved.send.id, data.itemKey);
-    const filed = await insertSendFile({
-      send_id: resolved.send.id,
-      item_key: data.itemKey,
-      storage_path: path,
-      mime: stored.value.mime,
-      size_bytes: stored.value.size,
-    });
-    if (filed === "failed") {
-      await objectStorage().remove([path]);
-      throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
     }
     try {
       await updateItem(resolved.send.id, data.itemKey, {
         status: "received",
         quality: "usable",
         explanation: null,
-        mime: stored.value.mime,
-        size_bytes: stored.value.size,
-        storage_path: path,
+        mime: decision.mime,
+        size_bytes: decision.size,
+        storage_path: data.path,
       });
     } catch (error) {
-      await objectStorage().remove([path]);
+      await deleteSendFile(resolved.send.id, data.path);
+      await storage.remove([data.path]);
       throw error;
     }
-    if (
-      filed === "legacy" &&
-      previous &&
-      previous !== path &&
-      pathBelongsToSend(previous, resolved.send.id, data.itemKey)
-    ) {
-      await objectStorage().remove([previous]);
+  return { ok: true };
+  });
+
+export const removeClientAgentFile = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    tokenInput
+      .extend({
+        itemKey: z.string().regex(/^[a-z0-9_]+$/),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }): Promise<{ ok: true } | ReturnType<typeof closedLink>> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return resolved;
+    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
+    const items = await loadItems(resolved.send.id);
+    if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
+    const rows = await listSendFiles(resolved.send.id, data.itemKey);
+    const previous = await loadStoredPath(resolved.send.id, data.itemKey);
+    await updateItem(resolved.send.id, data.itemKey, {
+      status: "open",
+      quality: null,
+      explanation: null,
+      mime: null,
+      size_bytes: null,
+      storage_path: null,
+    });
+    const paths = new Set<string>();
+    if (rows !== "legacy") {
+      for (const row of rows) {
+        if (pathBelongsToSend(row.storage_path, resolved.send.id, data.itemKey)) {
+          paths.add(row.storage_path);
+        }
+        await deleteSendFileById(row.id);
+      }
     }
+    if (previous && pathBelongsToSend(previous, resolved.send.id, data.itemKey)) paths.add(previous);
+    if (paths.size > 0) await objectStorage().remove([...paths]);
     return { ok: true };
   });
 
@@ -672,6 +870,115 @@ export const finishClientAgentItem = createServerFn({ method: "POST" })
       return { ok: true };
     },
   );
+
+async function findSendFile(sendId: string, path: string): Promise<"present" | "missing"> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              limit: (count: number) => Promise<{ data: Array<{ id: string }> | null; error: DbError }>;
+            };
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .select("id")
+    .eq("send_id", sendId)
+    .eq("storage_path", path)
+    .limit(1);
+  if (error) {
+    if (missingRelation(error, "client_agent_send_files")) return "missing";
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+  return data && data.length > 0 ? "present" : "missing";
+}
+
+async function deleteSendFile(sendId: string, path: string): Promise<void> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        delete: () => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (column: string, value: string) => Promise<{ error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .delete()
+    .eq("send_id", sendId)
+    .eq("storage_path", path);
+  if (error && !missingRelation(error, "client_agent_send_files")) {
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+}
+
+async function deleteSendFileById(id: string): Promise<void> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        delete: () => {
+          eq: (column: string, value: string) => Promise<{ error: DbError }>;
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .delete()
+    .eq("id", id);
+  if (error && !missingRelation(error, "client_agent_send_files")) {
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+}
+
+async function listSendFiles(
+  sendId: string,
+  itemKey: string,
+): Promise<Array<{ id: string; storage_path: string }> | "legacy"> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => Promise<{
+              data: Array<{ id: string; storage_path: string }> | null;
+              error: DbError;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .select("id, storage_path")
+    .eq("send_id", sendId)
+    .eq("item_key", itemKey);
+  if (error) {
+    if (missingRelation(error, "client_agent_send_files")) return "legacy";
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+  return data ?? [];
+}
 
 async function insertSendFile(row: {
   send_id: string;

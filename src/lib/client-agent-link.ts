@@ -17,8 +17,11 @@ export const SEND_CONSENT_VERSION = "popia-client-agent-2";
 const DOCUMENT_YEAR_OF_ASSESSMENT = 2026;
 
 export const SEND_ATTEMPT_LIMIT = 30;
+/** Successful opens on one live send. Failures still use SEND_ATTEMPT_LIMIT. */
+export const SEND_VALID_ATTEMPT_LIMIT = 300;
 export const SEND_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 export const SEND_STORAGE_BUCKET = "client-agent-sends";
+export const UPLOAD_GRANT_TTL_MS = 15 * 60 * 1000;
 
 /**
  * Client-facing practice name for the one allowlisted firm.
@@ -57,7 +60,7 @@ export const GENERIC_LINK_STATUS = 200;
 export const GENERIC_LINK_BODY = "This link is not available.";
 export const REVOKED_LINK_BODY =
   "This link was replaced by a newer one. Please open the latest email.";
-export const LIMITED_LINK_BODY = "Too many attempts. Wait a little, then try again.";
+export const LIMITED_LINK_BODY = "Please wait a minute and try again.";
 export const CONSENT_LINK_BODY = "Agree at the start of the page before sending a document.";
 export const FILE_LINK_BODY = "Use a PDF, JPG, PNG, or HEIC up to 20 MB.";
 
@@ -85,6 +88,10 @@ export function closedLink(reason: SendLinkReason): ClosedLink {
 
 export function sendAttemptLimited(recentCount: number): boolean {
   return recentCount >= SEND_ATTEMPT_LIMIT;
+}
+
+export function sendVolumeLimited(recentCount: number): boolean {
+  return recentCount >= SEND_VALID_ATTEMPT_LIMIT;
 }
 
 export async function hashPresentedToken(token: string): Promise<string> {
@@ -123,17 +130,32 @@ export function clientConsentNotice(practiceName: string): string {
   return `I agree that ${practice} may securely store the documents I upload here for my tax file, using Milōn. Medical aid: send the tax certificate totals only.`;
 }
 
-/** Thank-you after Next stores completed_at. Nothing is emailed. */
+/**
+ * Checklist line under the title. The consent page keeps clientAgentIntro.
+ * A missing first name starts at "Hi, I'm…".
+ */
+export function clientAgentChecklistIntro(
+  firstName: string | null | undefined,
+  practiceName: string,
+): string {
+  const practice = cleanPracticeName(practiceName) || "your accountant";
+  const name = (firstName ?? "").trim();
+  const hello = name
+    ? `Hi ${name}, I'm the Tax Specialist at ${practice}.`
+    : `Hi, I'm the Tax Specialist at ${practice}.`;
+  return `${hello} Thank you for sending these through. Please upload what you have, and tap 'I don't have this' for anything that doesn't apply. It's no trouble at all.`;
+}
+
+/** Thank-you after Next stores completed_at. Nothing is emailed. One paragraph, no second practice line. */
 export function clientAgentThanks(input: {
   firstName: string | null;
   practiceName: string;
-}): { greeting: string; body: string; signoff: string } {
+}): { text: string } {
   const practice = cleanPracticeName(input.practiceName) || "Your accountant";
   const name = (input.firstName ?? "").trim();
+  const hello = name ? `Thank you, ${name}.` : "Thank you.";
   return {
-    greeting: name ? `Thank you, ${name}.` : "Thank you.",
-    body: `${practice} is working on it and will be in touch if anything else is needed.`,
-    signoff: practice,
+    text: `${hello} We've received your documents, and ${practice} is working on them now. We'll be in touch if we need anything else. Have a lovely day.`,
   };
 }
 
@@ -235,16 +257,18 @@ export function gatePresentedSend(input: {
   return "ok";
 }
 
-export type AttemptOutcome = "ok" | "unknown" | "expired" | "revoked" | "limited";
+export type AttemptOutcome = "ok" | "unknown" | "expired" | "revoked" | "limited" | "rejected";
 
 /**
  * Public result for a presented token. The raw token is not an input:
  * the caller has already looked the send up by its hash.
- * IP and per-send counts both come from client_agent_send_attempts.
+ * ipCount and sendFailureCount are failed attempts only.
+ * sendCount is every attempt on a live send, and uses the higher ceiling.
  */
 export function resolvePresentedLink(input: {
   ipCount: number;
   sendCount: number | null;
+  sendFailureCount?: number | null;
   found: boolean;
   firmId: string | null;
   revokedAt: string | null;
@@ -265,8 +289,11 @@ export function resolvePresentedLink(input: {
   if (gate === "unavailable") return { public: closedLink("unavailable"), outcome: "unknown" };
   if (gate === "revoked") return { public: closedLink("revoked"), outcome: "revoked" };
   if (gate === "expired") return { public: closedLink("unavailable"), outcome: "expired" };
-  if (input.sendCount != null && sendAttemptLimited(input.sendCount)) {
-    return { public: closedLink("unavailable"), outcome: "limited" };
+  if (sendAttemptLimited(input.sendFailureCount ?? 0)) {
+    return { public: closedLink("limited"), outcome: "limited" };
+  }
+  if (input.sendCount != null && sendVolumeLimited(input.sendCount)) {
+    return { public: closedLink("limited"), outcome: "limited" };
   }
   return { public: { ok: true }, outcome: "ok" };
 }
@@ -292,6 +319,17 @@ export function pathBelongsToSend(path: string, sendId: string, itemKey: string)
 
 export function mimeAllowed(mime: string): boolean {
   return (SEND_FILE_MIMES as readonly string[]).includes(mime);
+}
+
+/** Declared type for the signed upload. Magic bytes are checked again on confirm. */
+export function clientFileMime(type: string, name: string): string {
+  if (mimeAllowed(type)) return type;
+  const ext = sanitizeClientFileName(name).split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "heic") return "image/heic";
+  return type || "application/octet-stream";
 }
 
 export function sizeAllowed(size: number): boolean {
@@ -363,7 +401,15 @@ export type PublicChecklistItem = {
   hasFile: boolean;
   fileCount?: number;
   passwordSaved?: boolean;
+  fileNames?: string[];
 };
+
+/** A name the client can see. No path, no control characters, capped. */
+export function sanitizeClientFileName(name: string): string {
+  const base = name.split(/[/\\]/).pop() ?? "";
+  const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim();
+  return cleaned.slice(0, 120);
+}
 
 /** A row is done when a file is in, or the client has said they don't have it. */
 export function itemSettled(item: {
@@ -401,7 +447,11 @@ export const CLIENT_AGENT_CHAT_ENABLED: boolean = false;
 
 export const CLIENT_AGENT_FAQ_TITLE = "Help with these documents";
 
-export const CLIENT_AGENT_FAQ_CLOSE = "Anything else? Theo's practice will help.";
+/** Closing help line. The practice name comes from the send, not from a fixed sentence. */
+export function clientAgentFaqClose(practiceName: string): string {
+  const practice = cleanPracticeName(practiceName) || "your accountant";
+  return `Anything else? ${practice} will help.`;
+}
 
 const ITEM_FAQ: Record<string, { title: string; body: string }> = {
   practice_income_expenses: {
@@ -464,6 +514,7 @@ type ChecklistRow = {
   storagePath: string | null;
   firmId?: string;
   fileName?: string;
+  displayNames?: string[];
   bytes?: Uint8Array;
   fileCount?: number;
   passwordSaved?: boolean;
@@ -482,6 +533,9 @@ export function toPublicChecklist(rows: ChecklistRow[], sendId: string): PublicC
       hasFile: typeof row.storagePath === "string" && row.storagePath.length > 0,
       fileCount: row.fileCount,
       passwordSaved: row.passwordSaved === true,
+      fileNames: (row.displayNames ?? [])
+        .map((name) => sanitizeClientFileName(name))
+        .filter((name) => name.length > 0),
     }))
     .sort((a, b) => {
       const ai = PUBLIC_ITEM_ORDER.indexOf(a.itemKey);
@@ -564,6 +618,128 @@ export async function storeAcceptedFile<T>(
 ): Promise<{ ok: true; value: T } | ClosedLink> {
   if (!decision.ok) return decision;
   return { ok: true, value: await write({ mime: decision.mime, bytes: decision.bytes }) };
+}
+
+/** Declared size and type, before a signed upload URL is issued. */
+export function declareUpload(input: {
+  consented: boolean;
+  size: number;
+  mime: string;
+}): { ok: true } | ClosedLink {
+  if (!input.consented) return closedLink("consent");
+  if (!sizeAllowed(input.size)) return closedLink("size");
+  if (!mimeAllowed(input.mime)) return closedLink("mime");
+  return { ok: true };
+}
+
+export type UploadGrant = {
+  sendId: string;
+  itemKey: string;
+  path: string;
+  size: number;
+  mime: string;
+  exp: number;
+};
+
+function b64urlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+function b64urlDecode(value: string): Uint8Array | null {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) return null;
+  const padded = value.replaceAll("-", "+").replaceAll("_", "/") + "=".repeat((4 - (value.length % 4)) % 4);
+  try {
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function timingEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!;
+  return diff === 0;
+}
+
+async function hmacSha256(secret: string, payload: string): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload)));
+}
+
+/** Binds a server-built path to this send. The secret is not part of the token. */
+export async function signUploadGrant(secret: string, grant: UploadGrant): Promise<string> {
+  const payload = JSON.stringify(grant);
+  const sig = await hmacSha256(secret, payload);
+  return `${b64urlEncode(new TextEncoder().encode(payload))}.${b64urlEncode(sig)}`;
+}
+
+export async function readUploadGrant(secret: string, token: string): Promise<UploadGrant | null> {
+  const parts = token.split(".");
+  if (parts.length !== 2 || !secret) return null;
+  const body = parts[0];
+  const sigPart = parts[1];
+  if (!body || !sigPart) return null;
+  const payloadBytes = b64urlDecode(body);
+  const sig = b64urlDecode(sigPart);
+  if (!payloadBytes || !sig) return null;
+  const payload = new TextDecoder().decode(payloadBytes);
+  const expected = await hmacSha256(secret, payload);
+  if (!timingEqual(sig, expected)) return null;
+  let parsed: Partial<UploadGrant>;
+  try {
+    parsed = JSON.parse(payload) as Partial<UploadGrant>;
+  } catch {
+    return null;
+  }
+  if (typeof parsed.sendId !== "string" || typeof parsed.itemKey !== "string") return null;
+  if (typeof parsed.path !== "string" || typeof parsed.mime !== "string") return null;
+  if (!Number.isInteger(parsed.size) || !Number.isInteger(parsed.exp)) return null;
+  if ((parsed.exp as number) <= Date.now()) return null;
+  return {
+    sendId: parsed.sendId,
+    itemKey: parsed.itemKey,
+    path: parsed.path,
+    size: parsed.size as number,
+    mime: parsed.mime,
+    exp: parsed.exp as number,
+  };
+}
+
+/**
+ * The object must be the server-issued path, at most 20 MB, and the leading
+ * bytes must be an allowed type. A path the client invents does not match.
+ */
+export function confirmStoredObject(input: {
+  grant: UploadGrant;
+  claimedPath: string;
+  sendId: string;
+  itemKey: string;
+  objectSize: number | null;
+  sniffed: DocumentMime | null;
+}): { ok: true; mime: DocumentMime; size: number } | ClosedLink {
+  if (input.claimedPath !== input.grant.path) return closedLink("unavailable");
+  if (input.grant.sendId !== input.sendId || input.grant.itemKey !== input.itemKey) {
+    return closedLink("unavailable");
+  }
+  if (!pathBelongsToSend(input.claimedPath, input.sendId, input.itemKey)) {
+    return closedLink("unavailable");
+  }
+  if (input.objectSize == null || !sizeAllowed(input.objectSize)) return closedLink("size");
+  if (input.objectSize !== input.grant.size) return closedLink("size");
+  if (!input.sniffed || input.sniffed !== input.grant.mime) return closedLink("mime");
+  return { ok: true, mime: input.sniffed, size: input.objectSize };
 }
 
 const LOG_KEYS = new Set(["event", "outcome", "reason"]);
