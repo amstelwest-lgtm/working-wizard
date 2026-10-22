@@ -40,6 +40,10 @@ export function normalizeDraftKind(raw: unknown): DeliverableKind {
 }
 
 export function draftKindLabel(kind: string | null | undefined): string {
+  const flat = asTrimmed(kind)
+    ?.toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  if (flat === "tax_pack") return "Tax pack";
   const k = normalizeDraftKind(kind);
   if (k === "client_email") return "Client email";
   if (k === "meeting_agenda") return "Meeting agenda";

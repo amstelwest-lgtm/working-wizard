@@ -4,11 +4,9 @@
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  AccountantSendFileList,
-  type ShownFilePassword,
-} from "@/components/accountant-send-files";
+import { AccountantSendFileList, type ShownFilePassword } from "@/components/accountant-send-files";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
+import { TaxPackPanel } from "@/components/tax-pack-panel";
 import { receivedItemStatus } from "@/lib/client-agent-done";
 import { itemLabel } from "@/lib/client-agent-link";
 import {
@@ -336,6 +334,12 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
           onCopy={() => void onCopyPassword()}
         />
       }
+      taxPack={
+        <TaxPackPanel
+          clientId={clientId}
+          sendId={receivedSend?.consentAt && receivedSend.completedAt ? receivedSend.id : null}
+        />
+      }
     />
   );
 }
@@ -363,6 +367,7 @@ export function SendAgentCard({
   onOpenDocument,
   onReview,
   fileList = null,
+  taxPack = null,
 }: {
   market: DateMarket;
   fresh: FreshLink | null;
@@ -386,6 +391,7 @@ export function SendAgentCard({
   onOpenDocument?: (path: string) => void;
   onReview?: () => void;
   fileList?: ReactNode;
+  taxPack?: ReactNode;
 }) {
   const chosen = chooseSendItems(
     SEND_ITEM_KEYS.filter((itemKey) => selectedKeys.includes(itemKey)).map((itemKey) => ({
@@ -591,6 +597,7 @@ export function SendAgentCard({
         </div>
       )}
       {fileList}
+      {taxPack}
       {loaded && !ready ? (
         <p className="text-sm text-[#3D5270]">This is not available on this file yet.</p>
       ) : null}
