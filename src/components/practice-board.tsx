@@ -124,7 +124,7 @@ import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
 import { markInsightSeen } from "@/lib/funnel-timing";
 import { MarketPicker } from "@/components/market-picker";
 import {
-  clientMarketDraftFromFirm,
+  firmClientDraftMarket,
   coerceMarketSelection,
   draftToSelection,
   formatDate,
@@ -511,7 +511,7 @@ function AddClientDialog({
   const [saving, setSaving] = useState(false);
   const [savePhase, setSavePhase] = useState<AddClientSavePhase | null>(null);
   const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
-    clientMarketDraftFromFirm(firmMarket),
+    firmClientDraftMarket(firmMarket),
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const createClient = useServerFn(createFirmClient);
@@ -531,7 +531,7 @@ function AddClientDialog({
     setNewName(defaultName);
     setNewType("");
     setOwnerEmail("");
-    setDraftMarket(clientMarketDraftFromFirm(firmMarket));
+    setDraftMarket(firmClientDraftMarket(firmMarket));
     // Firm row already carries market. Fetch only when that value was not loaded.
     if (firmMarket == null && firmId) {
       void supabase
@@ -541,7 +541,7 @@ function AddClientDialog({
         .maybeSingle()
         .then(({ data }) => {
           if (cancelled) return;
-          setDraftMarket(clientMarketDraftFromFirm((data as { market?: unknown } | null)?.market));
+          setDraftMarket(firmClientDraftMarket((data as { market?: unknown } | null)?.market));
         });
     }
     const focus = setTimeout(() => inputRef.current?.focus(), 50);
@@ -607,8 +607,8 @@ function AddClientDialog({
       return;
     }
     const market = draftToSelection(draftMarket);
-    if (!market) {
-      toast.error("Pick a region — and a US state if this client is in the United States.");
+    if (draftMarket.country === "US" && !market) {
+      toast.error("Pick a US state if this client is in the United States.");
       return;
     }
     setSaving(true);
@@ -621,8 +621,9 @@ function AddClientDialog({
           name: newName.trim(),
           firmId: firmId ?? undefined,
           businessType: newType.trim() || null,
-          marketCountry: market.country,
-          marketRegion: market.regionCode,
+          ...(market
+            ? { marketCountry: market.country, marketRegion: market.regionCode }
+            : {}),
         },
       });
       let inviteDetail: string | null = null;
@@ -963,7 +964,11 @@ function AddClientDialog({
                 <button
                   className="btn gold"
                   onClick={() => void add()}
-                  disabled={saving || !newName.trim() || !isDraftComplete(draftMarket)}
+                  disabled={
+                    saving ||
+                    !newName.trim() ||
+                    (draftMarket.country === "US" && !isDraftComplete(draftMarket))
+                  }
                   style={{ flex: 1 }}
                 >
                   {addClientButtonLabel(savePhase)}

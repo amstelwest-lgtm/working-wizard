@@ -878,6 +878,11 @@ assert(
   "one agent face renders",
 );
 assert(consentHtml.includes("<video") && consentHtml.includes("muted"), "the hero loops a muted clip");
+assert(consentHtml.includes("playsInline") || consentHtml.includes("playsinline"), "the hero plays inline");
+assert(consentHtml.includes("loop"), "the hero loops");
+assert(consentHtml.includes("autoPlay") || consentHtml.includes("autoplay"), "the hero autoplays");
+assert(consentHtml.includes("poster="), "the hero has a poster");
+assert(!consentHtml.includes("controls"), "the hero has no audio controls");
 assert(!consentHtml.includes("<audio"), "the hero has no audio element");
 assert(consentHtml.includes("/avatars/tax/tax-curious"), "the clip is the Tax Specialist");
 assert(
@@ -1223,7 +1228,11 @@ assert(
     thanksHtml.includes("Theo's practice is working on them now"),
   "the thank-you names the practice once",
 );
-assert(!thanksHtml.includes("data-practice-name"), "the thank-you does not repeat the practice name");
+assert(thanksHtml.includes("data-practice-name"), "the thank-you shows the practice line");
+assert(
+  thanksHtml.includes("Theo&#x27;s practice") || thanksHtml.includes("Theo's practice"),
+  "the thank-you practice line is the stored practice name",
+);
 assert(thanksHtml.includes("/avatars/tax/tax-done"), "the thank-you uses the done clip");
 assert(thanksHtml.includes("data-client-thanks"), "Next shows the thank-you screen");
 assert(!thanksHtml.includes("data-client-next"), "the thank-you screen has no Next button");

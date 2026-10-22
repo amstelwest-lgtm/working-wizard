@@ -168,7 +168,7 @@ export function ClientAgentLinkScreen({
       >
         <TaxSpecialistHero clip={showThanks ? "done" : "curious"} />
       </span>
-      {openView && !showThanks ? (
+      {openView ? (
         <p className="text-sm font-semibold" data-practice-name="true">
           {openView.practiceName}
         </p>

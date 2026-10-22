@@ -69,6 +69,8 @@ export type { DateMarket, MoneyMarket } from "./format";
 export {
   assertMarketSelection,
   clientMarketDraftFromFirm,
+  firmClientCreateMarket,
+  firmClientDraftMarket,
   coerceMarketSelection,
   draftToSelection,
   isDraftComplete,
