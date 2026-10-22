@@ -87,6 +87,28 @@ export function statedNetIsUsable(operatingProfit: number, netIncome: number | n
   return netIncome <= operatingProfit + PROFIT_RECONCILE_TOLERANCE;
 }
 
+/**
+ * Gross profit the home Analyst card and the waterfall print.
+ * Stated gross profit when it sits in range; otherwise revenue minus the cost
+ * of sales (a credit cost is still a cost). A stored amount with no revenue
+ * and cost pair is returned as stored. Null when neither is on the file, so
+ * a blank cost is not treated as zero.
+ */
+export function statementGrossProfit(
+  fields: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!fields) return null;
+  const stated = fieldPresent(fields, "grossProfit") ? fieldNum(fields, "grossProfit") : null;
+  if (!fieldPresent(fields, "revenue") || !fieldPresent(fields, "cogs")) return stated;
+  const bridgeFields: Record<string, unknown> = {
+    revenue: fieldNum(fields, "revenue"),
+    cogs: fieldNum(fields, "cogs"),
+  };
+  if (stated != null) bridgeFields.grossProfit = stated;
+  const gross = periodProfitBridge(bridgeFields).grossProfit;
+  return Number.isFinite(gross) ? gross : stated;
+}
+
 /** Gross profit ÷ revenue from the same bridge the waterfall prints. Null when revenue is missing. */
 export function statementGrossMarginFraction(
   fields: Record<string, unknown> | null | undefined,

@@ -1,5 +1,5 @@
 /**
- * Public /a/<token> rules. No database. Finish emails the firm owner, never the client.
+ * Public /a/<token> rules. No database and no mail.
  * Run: pnpm test:client-agent-link
  */
 import { readFileSync } from "node:fs";
@@ -11,6 +11,7 @@ import { SEND_FILE_MAX_BYTES } from "../src/lib/client-agent-send.ts";
 import { isBarePublicPath } from "../src/lib/public-marketing.ts";
 import {
   CLIENT_AGENT_LOAD_ERROR,
+  CLIENT_AGENT_NEXT_HINT,
   ClientAgentLinkScreen,
 } from "../src/components/client-agent-link-page.tsx";
 import {
@@ -21,18 +22,27 @@ import {
   REVOKED_LINK_BODY,
   closedLink,
   CLIENT_AGENT_FILE_NOTE,
+  CLIENT_AGENT_PASSWORD_UNSAVED,
   SEND_CONSENT_VERSION,
   SEND_LINK_META,
+  CLIENT_AGENT_CHAT_ENABLED,
+  CLIENT_AGENT_FAQ_TITLE,
   checklistReady,
+  clientAgentChecklistIntro,
   clientAgentExpiryLabel,
+  clientAgentFaq,
+  clientAgentFaqClose,
   clientAgentIntro,
   clientAgentItemHelp,
   clientAgentThanks,
+  completionDecision,
   clientConsentNotice,
   acceptClientFile,
   bytesFromBase64,
   consentReady,
   consentWrite,
+  confirmStoredObject,
+  declareUpload,
   finishItem,
   gatePresentedSend,
   hashPresentedToken,
@@ -42,13 +52,17 @@ import {
   openLinkView,
   pathBelongsToSend,
   practiceDisplayName,
+  readUploadGrant,
   resolvePresentedLink,
+  sanitizeClientFileName,
+  signUploadGrant,
   sendPracticeDisplayName,
   sendAttemptLimited,
   sendLinkLogLine,
   sendStoragePath,
   sizeAllowed,
   storeAcceptedFile,
+  itemNotAvailable,
   itemSettled,
   toPublicChecklist,
   type PublicChecklistItem,
@@ -182,6 +196,7 @@ assert(
 function presented(overrides: {
   ipCount?: number;
   sendCount?: number | null;
+  sendFailureCount?: number | null;
   found?: boolean;
   firmId?: string | null;
   revokedAt?: string | null;
@@ -190,6 +205,7 @@ function presented(overrides: {
   return resolvePresentedLink({
     ipCount: overrides.ipCount ?? 0,
     sendCount: overrides.sendCount === undefined ? 0 : overrides.sendCount,
+    sendFailureCount: overrides.sendFailureCount ?? 0,
     found: overrides.found ?? true,
     firmId: overrides.firmId === undefined ? firm : overrides.firmId,
     revokedAt: overrides.revokedAt ?? null,
@@ -257,13 +273,31 @@ assert(
   ipKnown.outcome === "limited" && ipUnknown.outcome === "limited",
   "both IP limits are recorded as limited",
 );
-const sendLimited = presented({ sendCount: 30 });
-assert(sendLimited.outcome === "limited", "thirty attempts on one send is limited");
-assert(JSON.stringify(sendLimited.public) === closedBody, "a per-send limit uses the generic page");
+const sendSuccesses = presented({ sendCount: 30, sendFailureCount: 0 });
+assert(sendSuccesses.outcome === "ok", "successful attempts on an open send stay open");
 assert(
-  presented({ ipCount: 29, sendCount: 29 }).outcome === "ok",
-  "twenty-nine attempts are still allowed",
+  sendSuccesses.public.ok === true,
+  "a full checklist of successes is not the closed page",
 );
+const sendFailures = presented({ sendCount: 12, sendFailureCount: 30 });
+assert(sendFailures.outcome === "limited", "thirty failed attempts on one send is limited");
+assert(
+  !sendFailures.public.ok &&
+    sendFailures.public.body === LIMITED_LINK_BODY &&
+    sendFailures.public.body !== GENERIC_LINK_BODY,
+  "a per-send limit asks them to wait",
+);
+const sendVolume = presented({ sendCount: 300, sendFailureCount: 0 });
+assert(sendVolume.outcome === "limited", "three hundred attempts on one send is limited");
+assert(
+  !sendVolume.public.ok && sendVolume.public.body === LIMITED_LINK_BODY,
+  "the higher ceiling still asks them to wait",
+);
+assert(
+  presented({ ipCount: 29, sendCount: 299, sendFailureCount: 29 }).outcome === "ok",
+  "twenty-nine failures and 299 attempts are still allowed",
+);
+assert(LIMITED_LINK_BODY === "Please wait a minute and try again.", "the wait sentence is exact");
 
 const consentRow = consentWrite(now);
 assert(
@@ -345,8 +379,31 @@ assert(
 assert(!checklistJson.includes(firm), "the firm id is not on the page");
 assert(
   !checklistJson.includes("salary.pdf") && !checklistJson.includes("other.pdf"),
-  "file names are not on the page",
+  "stored file names are not copied onto the page",
 );
+const named = toPublicChecklist(
+  [
+    {
+      sendId,
+      itemKey: "bank_statements",
+      label: null,
+      totalsOnly: false,
+      status: "received",
+      quality: "usable",
+      storagePath: path,
+      displayNames: ["../secret/bank statement.pdf", "notes.pdf"],
+      fileName: "hidden.pdf",
+    },
+  ],
+  sendId,
+);
+const namedJson = JSON.stringify(named);
+assert(
+  named[0]?.fileNames?.[0] === "bank statement.pdf" && namedJson.includes("notes.pdf"),
+  "a display name is the file name the client sees",
+);
+assert(!namedJson.includes("hidden.pdf") && !namedJson.includes("../"), "a stored name and a path stay off the page");
+assert(sanitizeClientFileName("a\u0000b.pdf") === "ab.pdf", "a display name drops control characters");
 assert(
   !checklistJson.includes("it3b") && !checklistJson.includes(otherSend),
   "another send is not on the page",
@@ -408,6 +465,64 @@ assert(
   kept.ok && kept.value === "application/pdf" && writes === 1,
   "an accepted PDF is the first write",
 );
+assert(!declareUpload({ consented: false, size: 8, mime: "application/pdf" }).ok, "a signed upload needs consent");
+const tooLarge = declareUpload({ consented: true, size: SEND_FILE_MAX_BYTES + 1, mime: "application/pdf" });
+assert(!tooLarge.ok && tooLarge.reason === "size", "a declared file over 20 MB is refused");
+const gifDeclared = declareUpload({ consented: true, size: 8, mime: "image/gif" });
+assert(!gifDeclared.ok && gifDeclared.reason === "mime", "a declared gif is refused");
+assert(declareUpload({ consented: true, size: 8 * 1024 * 1024, mime: "application/pdf" }).ok, "an 8 MB PDF may be prepared");
+const grant = {
+  sendId,
+  itemKey: "irp5",
+  path,
+  size: pdfBytes.byteLength,
+  mime: "application/pdf",
+  exp: Date.now() + 60_000,
+};
+const grantToken = await signUploadGrant("test-grant-secret", grant);
+const openedGrant = await readUploadGrant("test-grant-secret", grantToken);
+assert(openedGrant?.path === path, "a grant opens with the server secret");
+assert(openedGrant?.name === undefined, "an older grant still opens without a file name");
+assert((await readUploadGrant("other-secret", grantToken)) === null, "a grant does not open with another secret");
+const namedGrantToken = await signUploadGrant("test-grant-secret", { ...grant, name: "../salary.pdf" });
+const openedNamedGrant = await readUploadGrant("test-grant-secret", namedGrantToken);
+assert(openedNamedGrant?.name === "salary.pdf", "the grant carries the file name without its path");
+const forged = confirmStoredObject({
+  grant,
+  claimedPath: `${sendId}/irp5/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+  sendId,
+  itemKey: "irp5",
+  objectSize: pdfBytes.byteLength,
+  sniffed: "application/pdf",
+});
+assert(!forged.ok && forged.reason === "unavailable", "a path the client invents is refused");
+const oversizedObject = confirmStoredObject({
+  grant: { ...grant, size: SEND_FILE_MAX_BYTES + 1 },
+  claimedPath: path,
+  sendId,
+  itemKey: "irp5",
+  objectSize: SEND_FILE_MAX_BYTES + 1,
+  sniffed: "application/pdf",
+});
+assert(!oversizedObject.ok && oversizedObject.reason === "size", "storage metadata over 20 MB is refused");
+const wrongMagic = confirmStoredObject({
+  grant,
+  claimedPath: path,
+  sendId,
+  itemKey: "irp5",
+  objectSize: pdfBytes.byteLength,
+  sniffed: "image/png",
+});
+assert(!wrongMagic.ok && wrongMagic.reason === "mime", "magic bytes that disagree are refused");
+const confirmed = confirmStoredObject({
+  grant,
+  claimedPath: path,
+  sendId,
+  itemKey: "irp5",
+  objectSize: pdfBytes.byteLength,
+  sniffed: "application/pdf",
+});
+assert(confirmed.ok && confirmed.size === pdfBytes.byteLength, "a matching object is confirmed");
 
 const leaked = sendLinkLogLine({
   event: "link",
@@ -446,6 +561,22 @@ assert(
 assert(
   finishItem({ quality: "incomplete", explanation: "   ", hasFile: true }).ok === false,
   "incomplete needs an explanation",
+);
+const emptyMissing = finishItem({ quality: "incomplete", explanation: "", hasFile: false });
+assert(
+  emptyMissing.ok === true && emptyMissing.explanation === null,
+  "an empty note still marks the document not available",
+);
+const keptMissing = finishItem({ quality: "incomplete", explanation: " Left it at home. ", hasFile: false });
+assert(
+  keptMissing.ok === true && keptMissing.explanation === "Left it at home.",
+  "a note is stored with the mark",
+);
+assert(
+  itemNotAvailable({ hasFile: false, status: "received", quality: "incomplete" }) &&
+    !itemNotAvailable({ hasFile: false, status: "open", quality: null }) &&
+    !itemNotAvailable({ hasFile: true, status: "received", quality: "incomplete" }),
+  "undo clears a missing mark and a file is not that mark",
 );
 assert(
   finishItem({ quality: "poor", explanation: "The scan is cut off.", hasFile: true }).ok === true,
@@ -524,34 +655,45 @@ const ci = read(".github/workflows/ci.yml");
 assert(fn.includes("resolvePresentedLink"), "the server uses the public link decision");
 assert(fn.includes("sendAgentFirmAllowed"), "the server gates the firm");
 assert(
-  fn.includes("recentAttempts") && fn.includes("recentSendAttempts"),
-  "rate limits count IP and send attempts",
+  fn.includes("recentAttempts") && fn.includes("recentSendAttempts") && fn.includes("recentSendFailures"),
+  "rate limits count IP attempts, send attempts, and send failures",
 );
+assert(fn.includes('countAttempts("ip_hash", ipHash, "failures")'), "an IP limit counts failures");
 assert(fn.includes("client_agent_send_attempts"), "attempts are recorded");
 assert(
-  fn.includes("acceptClientFile") && fn.includes("storeAcceptedFile"),
+  fn.includes("declareUpload") && fn.includes("confirmStoredObject"),
   "storage waits for the file decision",
 );
 assert(fn.includes("consentWrite"), "consent writes the notice version");
 assert(!fn.includes("error.message"), "database errors are not copied into logs");
-assert(!fn.includes("data.mime"), "declared MIME is not the file check");
-assert(fn.includes("sendStoragePath"), "the object path is built on the server");
-assert(fn.includes("bytesFromBase64"), "the server accepts file bytes");
-assert(fn.includes(".upload("), "uploads go through the service role");
-assert(fn.includes(".download("), "downloads go through the service role");
-assert(
-  !/createSignedUploadUrl|createSignedUrl|getPublicUrl|uploadUrl/.test(fn + page),
-  "the browser gets no storage URL",
+assert(fn.includes("sniffDocumentMime"), "confirm reads the magic bytes");
+const confirmSlice = fn.slice(
+  fn.indexOf("export const confirmClientAgentUpload"),
+  fn.indexOf("export const removeClientAgentFile"),
 );
-assert(!/method:\s*"PUT"/.test(page), "the page does not write to storage itself");
-assert(!/path:\s*z\.string/.test(fn), "the client does not choose the object path");
+assert(!confirmSlice.includes("data.mime"), "confirm does not trust the declared type");
+assert(fn.includes("sendStoragePath"), "the object path is built on the server");
+assert(!fn.includes("bytesFromBase64") && !fn.includes("base64"), "the server function body has no file bytes");
+assert(fn.includes("createSignedUploadUrl"), "a signed upload URL is issued by the service role");
+assert(fn.includes("upsert: false"), "the signed upload path is one-time");
+assert(fn.includes('Range: "bytes=0-31"'), "confirm reads only the first bytes");
+assert(!confirmSlice.includes(".download("), "confirm does not download the whole object");
+assert(page.includes("uploadToClientAgentSignedUrl"), "the browser uploads to the signed URL");
+assert(!page.includes("fileBase64") && !page.includes("base64"), "the page does not post the file body");
+assert(!/method:\s*"PUT"/.test(page), "the page uses the signed upload helper");
+assert(fn.includes("readUploadGrant"), "confirm checks the server-issued grant");
+assert(fn.includes("pathBelongsToSend"), "a path must belong to this send");
 assert(!/requireSupabaseAuth/.test(fn), "the public route does not ask for a login");
+const finishStart = fn.indexOf("const FINISH_BODY");
+const finishEnd = fn.indexOf("export const askClientAgentLink");
+const outsideFinish = fn.slice(0, finishStart) + fn.slice(finishEnd);
 assert(
-  !/sendAccessEmail|nodemailer|sendTeamMail|extract-source-document|decide_ledger/i.test(fn),
-  "no other mail, extraction, or ledger",
+  !/resend|sendAccessEmail|nodemailer|sendTeamMail|extract-source-document|decide_ledger/i.test(
+    outsideFinish,
+  ),
+  "no mail, extraction, or ledger outside finish",
 );
 assert(fn.includes("sendClientAgentDone"), "finish emails the firm owner once");
-assert(!fn.includes("recipient_email"), "the client is not emailed");
 assert(!/whatsapp/i.test(page + route), "the page does not mention WhatsApp");
 assert(
   !/sars|fill in a form|send a form back/i.test(page),
@@ -568,7 +710,8 @@ assert(!loadEffect.includes("closedLink"), "a thrown open is not the closed page
 assert(page.includes("setAttempt"), "Try again runs the load again");
 assert(fn.includes("outcome: opened.outcome"), "attempt logging still uses the outcome");
 assert(fn.includes('outcome: "revoked"') === false, "the server does not hard-code a second revoked log");
-assert(!page.includes("file.name"), "the page does not read the file name");
+assert(page.includes("sanitizeClientFileName(file.name)"), "a shown name is the sanitized file name");
+assert(!page.includes("console."), "the page does not log the file name");
 assert(route.includes("SEND_LINK_META"), "the route uses the noindex meta");
 assert(
   server.includes("linkPrivacyHeaders") && server.includes("linkLogPath"),
@@ -584,20 +727,22 @@ assert(page.includes("muted") && page.includes("autoPlay"), "the clip is muted a
 assert(page.includes("playsInline") && page.includes("loop"), "the clip loops inline");
 assert(!page.includes("<audio"), "the page has no audio element");
 assert(
-  page.includes('fmClipSources("curious", "tax_specialist")'),
-  "the loop is the Tax Specialist curious clip",
+  page.includes('fmClipSources(clip, "tax_specialist")') && page.includes('showThanks ? "done" : "curious"'),
+  "the checklist loops curious and the thank-you loops done",
 );
 assert(page.includes("usePrefersReducedMotion"), "reduced motion drops the clip");
 assert(page.includes("reduced ? null"), "the clip is omitted when motion is reduced");
 assert(!page.includes("flex-wrap"), "the list does not wrap into a row");
-assert(page.includes("completeClientAgentSend"), "Finish calls the completion action");
-assert(page.includes("setThanks(true)"), "Finish shows the thank-you screen after it succeeds");
-assert(!page.includes("finishClientAgentLink"), "Finish does not use a retired action name");
-assert(fn.includes("completeClientAgentSend"), "completion is a server function");
-assert(!fn.includes("client_finished_at"), "completion is stored as completed_at");
+assert(page.includes("setThanks(true)"), "Next shows the thank-you after the server accepts");
+assert(page.includes("completeClientAgentSend"), "Next calls the completion action");
+assert(!page.includes("finishClientAgentLink"), "Next does not use the mail completion action");
+assert(!fn.includes("finishClientAgentLink"), "there is no mail completion action");
+assert(fn.includes("completeClientAgentSend"), "completion is a token-gated server action");
 assert(fn.includes("completed_at"), "completion stores completed_at");
+assert(!fn.includes("client_finished_at"), "completion does not use a second timestamp");
 assert(page.includes("multiple"), "a row accepts more than one file");
-assert(page.includes("Ask the Tax Specialist"), "the page can ask about the documents");
+assert(page.includes("CLIENT_AGENT_CHAT_ENABLED"), "the live chat sits behind a flag");
+assert(page.includes("data-doc-help"), "the page shows document help");
 assert(page.includes("File password (if it has one)"), "a password field is offered after upload");
 assert(page.includes("I'll check with Theo's practice"), "an unsure chat falls back to the practice");
 assert(!fn.includes("console."), "the link actions do not log");
@@ -619,12 +764,18 @@ assert(
 assert(!page.includes("flex-row"), "the page stacks vertically");
 assert(page.includes("I agree"), "consent comes first");
 assert(page.includes("I don't have this"), "the client can skip an item");
-assert(page.includes("Only upload what you have"), "the list says to upload only what they have");
+assert(page.includes("clientAgentChecklistIntro"), "the list uses the checklist intro");
 assert(/>\s*Upload\s*</.test(page), "each item has an upload button");
 assert(page.includes("min-h-11"), "tap targets are at least 44px");
-assert(page.includes('data-upload-tick="true"'), "an uploaded item shows a tick");
+assert(page.includes("Received ✓"), "an uploaded item says it was received");
+assert(/>\s*Remove\s*</.test(page), "an uploaded item can be removed");
+assert(page.includes("removeClientAgentFile"), "remove is a token-gated server action");
+assert(!page.includes("data-upload-tick"), "the lone upload tick is gone");
 assert(!page.includes("This is all I have"), "the old skip label is gone");
-assert(page.includes("uploadClientAgentFile"), "the page sends the file to the server");
+assert(page.includes("prepareClientAgentUpload") && page.includes("confirmClientAgentUpload"), "the page prepares and confirms the upload");
+assert(page.includes(CLIENT_AGENT_NEXT_HINT) || page.includes("CLIENT_AGENT_NEXT_HINT"), "Next explains why it is off");
+assert(page.includes("Password saved"), "a saved password is labelled");
+assert(page.includes("onMouseDown"), "Save and Next keep a blur from swallowing the click");
 assert(route.includes('createFileRoute("/a/$token")'), "the public path is /a/<token>");
 assert(isBarePublicPath("/a/abc"), "the link page skips the signed-in shell");
 const sqlCode = sql
@@ -733,6 +884,11 @@ assert(
   "one agent face renders",
 );
 assert(consentHtml.includes("<video") && consentHtml.includes("muted"), "the hero loops a muted clip");
+assert(consentHtml.includes("playsInline") || consentHtml.includes("playsinline"), "the hero plays inline");
+assert(consentHtml.includes("loop"), "the hero loops");
+assert(consentHtml.includes("autoPlay") || consentHtml.includes("autoplay"), "the hero autoplays");
+assert(consentHtml.includes("poster="), "the hero has a poster");
+assert(!consentHtml.includes("controls"), "the hero has no audio controls");
 assert(!consentHtml.includes("<audio"), "the hero has no audio element");
 assert(consentHtml.includes("/avatars/tax/tax-curious"), "the clip is the Tax Specialist");
 assert(
@@ -778,7 +934,10 @@ const checklistHtml = renderToStaticMarkup(
     onSaveNote: () => undefined,
   }),
 );
-assert((checklistHtml.match(/data-upload-tick/g) ?? []).length === 1, "one uploaded tick renders");
+assert((checklistHtml.match(/data-received=/g) ?? []).length === 1, "one received line renders");
+assert(checklistHtml.includes("Received ✓"), "the received line names the file as received");
+assert(checklistHtml.includes("Replace") && checklistHtml.includes("Remove"), "replace and remove sit in the row");
+assert(!checklistHtml.includes("data-upload-tick"), "the received row has no floating tick");
 assert(
   checklistHtml.includes("I don&#x27;t have this") || checklistHtml.includes("I don't have this"),
   "the skip link renders",
@@ -792,7 +951,23 @@ assert(
   "totals only stays in the medical label only",
 );
 assert(checklistHtml.includes("data-missing-note"), "the optional note renders");
-assert(checklistHtml.includes("Only upload what you have"), "the checklist intro renders");
+assert(
+  checklistHtml.includes("Hi, I&#x27;m the Tax Specialist at") ||
+    checklistHtml.includes("Hi, I'm the Tax Specialist at"),
+  "a missing first name still introduces the specialist",
+);
+assert(checklistHtml.includes("data-checklist-intro"), "the checklist intro renders");
+assert(
+  checklistHtml.includes("for each document to continue."),
+  "a disabled Next explains what is left",
+);
+assert(checklistHtml.includes("data-doc-help"), "the checklist shows document help");
+assert(
+  checklistHtml.includes("Anything else? Theo&#x27;s practice will help.") ||
+    checklistHtml.includes("Anything else? Theo's practice will help."),
+  "the checklist help ends with the practice",
+);
+assert(!checklistHtml.includes("data-agent-chat"), "the checklist does not open the live chat");
 
 function closedScreen(view: ReturnType<typeof closedLink> | null, loadFailed = false) {
   return renderToStaticMarkup(
@@ -862,6 +1037,22 @@ assert(
   ]),
   "Next is on when every row is uploaded or skipped",
 );
+assert(
+  itemSettled({ hasFile: true, status: "received", quality: "usable" }) &&
+    checklistReady([{ hasFile: true, status: "open", quality: null }]),
+  "an uploaded file counts as complete when its password is left empty",
+);
+assert(
+  checklistReady([
+    { hasFile: false, status: "received", quality: "incomplete" },
+    { hasFile: false, status: "received", quality: "poor" },
+  ]),
+  "two rows marked independently are enough for Next",
+);
+assert(
+  !itemSettled({ hasFile: false, status: "open", quality: null }),
+  "undo returns a row to open",
+);
 function nextDisabled(html: string): boolean {
   const tag = html.match(/<button[^>]*data-client-next="true"[^>]*>/)?.[0] ?? "";
   return /\sdisabled(=|\s|>)/.test(tag);
@@ -916,10 +1107,91 @@ assert(
   readyHtml.includes('data-client-next="true"') && !nextDisabled(readyHtml),
   "a finished list enables Next",
 );
-assert(readyHtml.includes("Saved"), "a stored password is not shown back");
-assert(!readyHtml.includes('type="password"'), "a saved password field is gone");
-assert(readyHtml.includes("data-agent-chat-panel"), "the document chat can open");
-assert(!/sars|filing instructions/i.test(readyHtml), "the open chat does not recite filing rules");
+assert(readyHtml.includes("Password saved"), "a stored password is labelled and not shown back");
+assert(!readyHtml.includes("secret-file-pass"), "the password value is not on the page");
+const emptyPasswordHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: {
+      ok: true,
+      practiceName: "Theo's practice",
+      expiresAt: lateExpiry,
+      consented: true,
+      notice: practiceNotice,
+      items: [
+        {
+          itemKey: "bank_statements",
+          label: "Bank statements",
+          totalsOnly: false,
+          status: "received",
+          quality: "usable",
+          hasFile: true,
+          passwordSaved: false,
+          fileNames: ["statements.pdf"],
+        },
+        {
+          itemKey: "irp5",
+          label: "IRP5",
+          totalsOnly: false,
+          status: "received",
+          quality: "incomplete",
+          hasFile: false,
+          explanation: null,
+        },
+        {
+          itemKey: "it3b",
+          label: "IT3(b)",
+          totalsOnly: false,
+          status: "received",
+          quality: "incomplete",
+          hasFile: false,
+          explanation: "The account was closed.",
+        },
+      ],
+    },
+    busy: false,
+    notice: null,
+    noteFor: null,
+    explanation: "",
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+  }),
+);
+assert(
+  emptyPasswordHtml.includes('data-client-next="true"') && !nextDisabled(emptyPasswordHtml),
+  "Next is on when a file has no password and every other row is not available",
+);
+assert(emptyPasswordHtml.includes("statements.pdf"), "the stored file name stays on the row");
+assert(!emptyPasswordHtml.includes("Password saved"), "an empty password is not labelled saved");
+assert(
+  (emptyPasswordHtml.match(/Marked as not available/g) ?? []).length === 2,
+  "two rows stay marked on their own",
+);
+assert(
+  (emptyPasswordHtml.match(/data-undo-missing=/g) ?? []).length === 2,
+  "each marked row can be undone",
+);
+assert(
+  emptyPasswordHtml.includes("The account was closed."),
+  "a saved note stays on its own row",
+);
+assert(
+  (emptyPasswordHtml.match(/data-missing-note=/g) ?? []).length === 2,
+  "each marked row can edit its note",
+);
+assert(readyHtml.includes('type="password"') && readyHtml.includes('value=""'), "the password field is cleared");
+assert(readyHtml.includes("data-doc-help"), "a finished list shows document help");
+assert(readyHtml.includes(CLIENT_AGENT_FAQ_TITLE), "the help block has its heading");
+assert(
+  readyHtml.includes("Anything else? Theo&#x27;s practice will help.") ||
+    readyHtml.includes("Anything else? Theo's practice will help."),
+  "the help block ends with the practice line",
+);
+assert(!readyHtml.includes("data-agent-chat"), "the live chat stays hidden");
+assert(!readyHtml.includes("Ask the Tax Specialist"), "the ask button stays hidden");
+assert(!/sars|filing|irp6|itr14|south africa|\brand\b|zar/i.test(readyHtml), "the help block has no filing wording");
 
 const thanksHtml = renderToStaticMarkup(
   createElement(ClientAgentLinkScreen, {
@@ -958,16 +1230,31 @@ assert(
   "the thank-you uses the first name",
 );
 assert(
-  thanksHtml.includes("Theo&#x27;s practice is working on it") ||
-    thanksHtml.includes("Theo's practice is working on it"),
-  "the thank-you names the practice",
+  thanksHtml.includes("Theo&#x27;s practice is working on them now") ||
+    thanksHtml.includes("Theo's practice is working on them now"),
+  "the thank-you names the practice once",
 );
+assert(thanksHtml.includes("data-practice-name"), "the thank-you shows the practice line");
+assert(
+  thanksHtml.includes("Theo&#x27;s practice") || thanksHtml.includes("Theo's practice"),
+  "the thank-you practice line is the stored practice name",
+);
+assert(thanksHtml.includes("/avatars/tax/tax-done"), "the thank-you uses the done clip");
 assert(thanksHtml.includes("data-client-thanks"), "Next shows the thank-you screen");
 assert(!thanksHtml.includes("data-client-next"), "the thank-you screen has no Next button");
 assert(!thanksHtml.includes("Upload"), "the thank-you screen has no upload");
 const plainThanks = clientAgentThanks({ firstName: null, practiceName: "Theo's practice" });
-assert(plainThanks.greeting === "Thank you.", "a missing first name still says thank you");
-assert(plainThanks.signoff === "Theo's practice", "the sign-off is the practice");
+assert(plainThanks.text.startsWith("Thank you."), "a missing first name still says thank you");
+assert(!plainThanks.text.startsWith("Thank you, "), "a missing first name is not a blank name");
+const namedIntro = clientAgentChecklistIntro("Nicola", "Harbour Books");
+assert(
+  namedIntro.startsWith("Hi Nicola, I'm the Tax Specialist at Harbour Books."),
+  "the checklist intro uses the first name and the practice",
+);
+assert(
+  clientAgentChecklistIntro(null, "Harbour Books").startsWith("Hi, I'm the Tax Specialist at Harbour Books."),
+  "a missing first name starts with Hi, I'm",
+);
 
 const filesSql = read("supabase/migrations/20261022180000_client_agent_send_files.sql");
 const filesCode = filesSql
@@ -977,10 +1264,27 @@ const filesCode = filesSql
   .toLowerCase();
 assert(filesCode.includes("create table if not exists public.client_agent_send_files"), "files have a table");
 assert(filesCode.includes("password_iv") && filesCode.includes("password_box"), "the password is two ciphertext columns");
-assert(!filesCode.includes("client_finished_at"), "the files migration does not store completion");
+assert(filesCode.includes("add column if not exists completed_at timestamptz"), "next stores completed_at");
+assert(!filesCode.includes("client_finished_at"), "completion is completed_at only");
+assert(!filesCode.includes("reviewed_at"), "this file does not add a review column");
 assert(!/\bsecurity\s+definer\b/.test(filesCode), "the files migration has no security definer");
-assert(!/\bcreate\s+(or\s+replace\s+)?function\b/.test(filesCode), "the files migration creates no function");
+assert(
+  filesCode.includes("create or replace function public.client_agent_send_guard_firm()"),
+  "the firm guard is replaced in place",
+);
+assert(filesCode.includes("firm_client_mismatch"), "the firm check stays");
+assert(filesCode.includes("consent_required"), "completion without consent is refused");
+assert(filesCode.includes("completed_at_required"), "completed_at cannot be cleared");
+assert(
+  filesCode.includes("revoke all on function public.client_agent_send_guard_firm() from public, anon, authenticated"),
+  "anon cannot run the guard",
+);
+assert(
+  filesCode.includes("grant execute on function public.client_agent_send_guard_firm() to service_role"),
+  "only the service role can run the guard",
+);
 assert(!/\bcreate\s+policy\b/.test(filesCode), "the files migration creates no policy");
+assert(!/resend|recipient_email|contact_email/.test(filesCode), "the files migration sends no mail");
 assert(filesCode.includes("revoke all on table public.client_agent_send_files from public, anon, authenticated"), "anon cannot read file rows");
 const chatTable = filesCode.slice(
   filesCode.indexOf("create table if not exists public.client_agent_send_chat_turns"),
@@ -989,15 +1293,83 @@ const chatTable = filesCode.slice(
 assert(chatTable.includes("send_id"), "chat turns are counted per send");
 assert(!chatTable.includes("message") && !chatTable.includes("token"), "chat rows store no message and no token");
 
+const passwordSql = read("supabase/migrations/20261023090000_client_agent_file_password_box.sql");
+assert(passwordSql.includes("4 * ceil(336 / 3) = 448"), "the password cap comment states the bound");
+assert(
+  passwordSql.includes("DROP CONSTRAINT IF EXISTS client_agent_send_files_password_pair"),
+  "the password pair constraint is dropped",
+);
+assert(
+  passwordSql.includes("ADD CONSTRAINT client_agent_send_files_password_pair"),
+  "the password pair constraint is added again",
+);
+assert(passwordSql.includes("length(password_box) BETWEEN 8 AND 448"), "the password box allows 448 characters");
+assert(!passwordSql.toLowerCase().includes("security definer"), "the password migration is not security definer");
+assert(!/\bgrant\b/i.test(passwordSql), "the password migration does not grant");
+assert(passwordSql.includes("'rejected'"), "a failed attempt can be recorded as rejected");
+const missingSql = read("supabase/migrations/20261023140000_client_agent_not_available.sql");
+assert(
+  missingSql.includes("DROP CONSTRAINT IF EXISTS client_agent_send_items_explanation"),
+  "a missing document can be saved without a note",
+);
+assert(missingSql.includes("display_name text"), "the file name has its own column");
+assert(missingSql.includes("length(display_name) <= 120"), "the file name is capped");
+assert(!missingSql.toLowerCase().includes("security definer"), "the not-available migration is not security definer");
+assert(!/\bgrant\b/i.test(missingSql), "the not-available migration does not grant");
+assert(
+  read("supabase/migrations/20261021210000_client_agent_sends.sql").includes(
+    "length(btrim(explanation)) > 0",
+  ),
+  "the applied sends migration is left as it was",
+);
+assert(fn.includes('select("item_key")'), "a checklist save checks that a row changed");
+assert(fn.includes("display_name"), "the file name is read back from the file row");
+assert(fn.includes("export const undoClientAgentItem"), "undo is a token-gated server action");
+assert(page.includes("undoClientAgentItem"), "undo is called from the page");
+assert(page.includes("Marked as not available"), "a missing row says it was recorded");
+assert(page.includes("name: file.name"), "prepare receives the file name");
+assert(page.includes("scrollTo(0, y)") && page.includes("scrollY"), "a state change keeps the scroll position");
+assert(page.includes("}, [token, attempt]);"), "opening the link does not refetch on every render");
+assert(!page.includes("scrollRestoration: false"), "scroll restoration stays on for the rest of the app");
+const throttledHtml = closedScreen(closedLink("limited"));
+assert(throttledHtml.includes("Please wait a minute and try again."), "a throttle shows the wait sentence");
+assert(throttledHtml.includes("Try again"), "a throttle can be tried again");
+assert(throttledHtml.includes("data-link-throttled"), "a throttle is its own state");
+assert(!throttledHtml.includes(GENERIC_LINK_BODY), "a throttle is not the unavailable page");
+assert(!throttledHtml.includes("not available"), "a throttle never says the link is not available");
+
 const saveFn = fn.slice(
   fn.indexOf("export const saveClientAgentFilePassword"),
   fn.indexOf("async function storeFilePassword"),
 );
 assert(saveFn.includes("return { ok: true }"), "a saved password returns no secret");
 assert(!/return\s*\{[^}]*password/.test(saveFn), "the password is not in the response");
+assert(saveFn.includes("CLIENT_AGENT_PASSWORD_UNSAVED"), "a bad key tells the client the password was not saved");
+assert(
+  saveFn.indexOf("filePasswordKey") < saveFn.indexOf("sealFilePassword") &&
+    saveFn.indexOf("if (!key)") < saveFn.indexOf("storeFilePassword"),
+  "a missing key stores nothing",
+);
+const uploadFn = fn.slice(
+  fn.indexOf("export const prepareClientAgentUpload"),
+  fn.indexOf("export const finishClientAgentItem"),
+);
+assert(!uploadFn.includes("filePasswordKey"), "an upload still succeeds without a password key");
+assert(!uploadFn.includes("base64"), "prepare and confirm do not take file bytes");
+assert(
+  uploadFn.includes("deleteSendFile") && uploadFn.includes(".remove("),
+  "a failed item update deletes the file row and the object",
+);
+const removeFn = fn.slice(
+  fn.indexOf("export const removeClientAgentFile"),
+  fn.indexOf("export const finishClientAgentItem"),
+);
+assert(removeFn.includes("deleteSendFileById"), "remove deletes the file row and its password");
+assert(!removeFn.includes("completed_at"), "a finished send can still remove a file");
+assert(page.includes("CLIENT_AGENT_PASSWORD_UNSAVED"), "the page shows the password note");
 const releaseFn = fn.slice(
   fn.indexOf("export async function releaseClientAgentFilePassword"),
-  fn.indexOf("export const askClientAgentLink"),
+  fn.indexOf("const FINISH_BODY"),
 );
 assert(!releaseFn.includes("createServerFn"), "opening a password is not a public action");
 
@@ -1008,7 +1380,20 @@ const sealed = await sealFilePassword("secret-file-pass", key!);
 assert(!sealed.box.includes("secret-file-pass"), "the stored password is not plaintext");
 assert(!sealed.iv.includes("secret-file-pass"), "the iv is not the password");
 assert((await openFilePassword(sealed, key!)) === "secret-file-pass", "the ciphertext opens with the server key");
+assert(filePasswordKey(undefined) === null, "a missing key is refused");
+assert(filePasswordKey("") === null, "an empty key is refused");
+assert(filePasswordKey("   ") === null, "a blank key is refused");
 assert(filePasswordKey("short") === null, "a short key is refused");
+assert(filePasswordKey("!!!!") === null, "a key that is not base64 is refused");
+assert(
+  filePasswordKey(Buffer.from(Uint8Array.from({ length: 16 }, () => 1)).toString("base64")) === null,
+  "a key that is not 32 bytes is refused",
+);
+assert(
+  filePasswordKey(Buffer.from(Uint8Array.from({ length: 33 }, () => 2)).toString("base64")) === null,
+  "a key longer than 32 bytes is refused",
+);
+assert(CLIENT_AGENT_PASSWORD_UNSAVED === "Couldn't save the password.", "the password note is the polite sentence");
 
 assert(clientAgentChatDecision("How do I file my tax return?") === "refuse", "filing questions are refused");
 assert(clientAgentChatDecision("Can you submit this to SARS?") === "refuse", "a SARS submission is refused");
@@ -1040,7 +1425,79 @@ assert(
 );
 
 const nextHandler = page.slice(page.indexOf("onNext={() =>"), page.indexOf("thanks={thanks}"));
-assert(nextHandler.includes("await"), "Finish waits for the server");
-assert(nextHandler.includes("setThanks(true)"), "Finish writes the thank-you after success");
+assert(nextHandler.includes("await complete("), "Next waits for the server");
+assert(
+  nextHandler.indexOf("saveItemPassword") !== -1 &&
+    nextHandler.indexOf("saveItemPassword") < nextHandler.indexOf("await complete("),
+  "Next saves a typed password before it finishes",
+);
+assert(nextHandler.includes("setThanks(true)"), "Next shows thanks after a saved completion");
+const refusalAt = nextHandler.indexOf("if (!saved.ok)");
+assert(refusalAt !== -1 && nextHandler.indexOf("setThanks(true)", refusalAt) > refusalAt, "a refusal does not show thanks");
+
+const settled = [
+  { hasFile: true, status: "received", quality: "usable" },
+  { hasFile: false, status: "received", quality: "incomplete" },
+];
+assert(
+  completionDecision({ consentAt: null, completedAt: null, items: settled }).ok === false,
+  "next refuses before consent",
+);
+assert(
+  completionDecision({ consentAt: "2026-10-22T00:00:00.000Z", completedAt: null, items: [{ hasFile: false, status: "open", quality: null }] }).ok === false,
+  "next refuses an open row",
+);
+const again = completionDecision({
+  consentAt: "2026-10-22T00:00:00.000Z",
+  completedAt: "2026-10-22T01:00:00.000Z",
+  items: settled,
+});
+assert(again.ok && again.already, "a second next does not write again");
+const first = completionDecision({
+  consentAt: "2026-10-22T00:00:00.000Z",
+  completedAt: null,
+  items: settled,
+});
+assert(first.ok && !first.already, "a settled list can complete");
+
+const faq = clientAgentFaq([
+  { itemKey: "irp5", label: "IRP5" },
+  { itemKey: "bank_statements", label: "Bank statements" },
+  { itemKey: "irp5", label: "IRP5" },
+]);
+assert(faq.length === 2, "help is one line per item");
+assert(faq[0]?.body.includes("employer"), "IRP5 help says where to find it");
+assert(faq[1]?.body.includes("1 March 2025"), "bank help keeps the year window");
+assert(
+  clientAgentFaqClose("Theo's practice") === "Anything else? Theo's practice will help.",
+  "the help block ends on that sentence",
+);
+assert(
+  clientAgentFaqClose("Harbour Books") === "Anything else? Harbour Books will help.",
+  "the help closer uses the practice on the send",
+);
+assert(CLIENT_AGENT_CHAT_ENABLED === false, "the document chat is off");
+assert(
+  !/sars|filing|irp6|itr14|south africa|\brand\b|\bzar\b/i.test(
+    faq.map((row) => row.body).join(" ") + CLIENT_AGENT_FAQ_TITLE + clientAgentFaqClose("Harbour Books"),
+  ),
+  "document help has no filing wording",
+);
+const askFn = fn.slice(fn.indexOf("export const askClientAgentLink"), fn.indexOf("async function countChatTurns"));
+assert(
+  askFn.indexOf("CLIENT_AGENT_CHAT_ENABLED") !== -1 &&
+    askFn.indexOf("CLIENT_AGENT_CHAT_ENABLED") < askFn.indexOf("guideDocumentQuestion"),
+  "a chat request does not call the model while the flag is off",
+);
+assert(!askFn.slice(0, askFn.indexOf("guideDocumentQuestion")).includes("recordChatTurn"), "a closed chat writes no turn");
+const completeFn = fn.slice(fn.indexOf("export const completeClientAgentSend"), fn.indexOf("export const askClientAgentLink"));
+assert(completeFn.includes("completionDecision"), "completion uses the checklist decision");
+assert(completeFn.includes("decision.already"), "a completed send is left as it is");
+assert(
+  !/recipient_email|contact_email|sendAccessEmail/i.test(completeFn),
+  "completion does not email the client",
+);
+assert(completeFn.includes("sendClientAgentDone"), "completion emails the firm owner once");
+assert(completeFn.includes("clientAgentDoneIdempotencyKey"), "completion uses one email key");
 
 console.log("client agent link test ok");

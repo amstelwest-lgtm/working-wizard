@@ -67,6 +67,10 @@ export interface WaterfallSummary {
   source: "weekly" | "period";
   hasData: boolean;
   steps: WaterfallStep[];
+  /** "Mar–Sep 2026, pro-rated from your Jan–Sep 2026 statement" when the firm-year slice is applied. */
+  periodLabel?: string | null;
+  quotedGrossProfit?: number | null;
+  quotedNetProfit?: number | null;
 }
 
 export interface CashForecastSummary {
@@ -134,6 +138,8 @@ export interface AskAiContext {
   ratios: RatioRow[];
   playbook: PlaybookRow[];
   copyPack: "za" | "us";
+  /** Dollar unless the stored firm country is ZA. Omitted follows copyPack. */
+  moneyPack?: "za" | "us";
   waterfall: WaterfallSummary | null;
   cashForecast: CashForecastSummary | null;
   productLines: ProductLineSummary[];

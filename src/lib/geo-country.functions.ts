@@ -13,7 +13,7 @@ function geoFromRequest(): { country: string; requested: string | null; draft: D
   try {
     const request = getRequest();
     const header = request.headers.get("x-vercel-ip-country") ?? "";
-    if (header.trim()) country = header.trim();
+    if (header.trim()) country = header.trim().toUpperCase();
     const url = new URL(request.url);
     requested = url.searchParams.get("market");
     draft = visitorMarketFromSearch(url.search);
@@ -21,7 +21,7 @@ function geoFromRequest(): { country: string; requested: string | null; draft: D
     // No request scope (tests, build). Fall through.
   }
   if (!country && process.env.NODE_ENV !== "production") {
-    country = (process.env.MILON_DEV_GEO ?? "").trim();
+    country = (process.env.MILON_DEV_GEO ?? "").trim().toUpperCase();
   }
   return { country, requested, draft };
 }
@@ -52,14 +52,15 @@ export type MarketingVisitor = {
 export const readMarketingVisitor = createServerFn({ method: "GET" }).handler(
   async (): Promise<MarketingVisitor> => {
     const { country, requested, draft } = geoFromRequest();
-    const copyPack = marketingPackForGeo(country, requested ?? draft.country);
+    const code = country.toUpperCase();
+    const copyPack = marketingPackForGeo(code, requested ?? draft.country);
     const urlDraft =
-      country === "ZA" || draft.country !== "ZA"
+      code === "ZA" || draft.country !== "ZA"
         ? draft
         : EMPTY_DRAFT;
     return {
-      geoCountry: country,
-      geoZa: country === "ZA",
+      geoCountry: code,
+      geoZa: code === "ZA",
       copyPack,
       showSaPricing: copyPack === "za",
       urlDraft,

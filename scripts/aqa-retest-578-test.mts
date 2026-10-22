@@ -13,6 +13,7 @@ import { displayForecastFrequency, forecastRowLabel } from "../src/lib/cash-fore
 import { suggestOnceOffRows } from "../src/lib/cash-once-off-suggest";
 import { distributeForecastLine, forecastMinimumCash, weekDatesFrom } from "../src/lib/client-metrics";
 import { practiceDisplaysZarPlan, saFirmDisplayPrice, saPlanRegionControls } from "../src/lib/firm-band-upgrade";
+import { quotePrice } from "../src/lib/pricing/price-quote.server";
 import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief";
 import { ownerAnswerTiles, type OwnerBooks } from "../src/lib/owner-answers";
 import { homeActionNeeds } from "../src/lib/owner-needs";
@@ -190,10 +191,11 @@ assert(
   }),
   "a United States practice keeps the dollar ladder",
 );
-const starter = saFirmDisplayPrice("starter", "month");
-const solo = saFirmDisplayPrice("solo", "month");
-assert(starter.includes("R 299") && !starter.includes("$") && !/vat/i.test(starter), starter);
-assert(solo.includes("R 799") && !solo.includes("$") && !/vat/i.test(solo), solo);
+const starter = quotePrice({ market: "za", plan: "starter", interval: "month", surface: "visitor" })?.label ?? "";
+const solo = quotePrice({ market: "za", plan: "solo", interval: "month", surface: "visitor" })?.label ?? "";
+assert(starter.startsWith("R") && !starter.includes("$") && !/vat/i.test(starter), starter);
+assert(solo.startsWith("R") && !solo.includes("$") && !/vat/i.test(solo), solo);
+assert(saFirmDisplayPrice("starter", "month", "$39/mo") === "Starter plan", "the client does not invent a rand amount");
 const hidden = saPlanRegionControls(true);
 assert(hidden.stateDropdown === false && hidden.vatCopy === false, "an SA plan has no state list and no VAT wording");
 assert(saPlanRegionControls(false).stateDropdown === true, "a US plan still asks for a state");

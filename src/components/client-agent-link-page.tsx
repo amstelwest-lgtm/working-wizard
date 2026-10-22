@@ -1,62 +1,63 @@
 /**
  * Public Tax Specialist page. Consent first, then a vertical checklist.
- * Finish asks the server to store the files and tell the practice.
- * The page never emails the client. The portrait is the silent in-app agent card.
+ * Nothing is emailed. The portrait is the silent in-app agent card.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import "@/components/owner-door/owner-door.css";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES } from "@/lib/client-agent-send";
 import {
+  CLIENT_AGENT_CHAT_ENABLED,
+  CLIENT_AGENT_FAQ_TITLE,
   CLIENT_AGENT_FILE_NOTE,
+  CLIENT_AGENT_PASSWORD_UNSAVED,
   checklistReady,
+  itemNotAvailable,
+  clientAgentChecklistIntro,
+  clientAgentFaq,
+  clientAgentFaqClose,
   clientAgentIntro,
   clientAgentItemHelp,
   clientAgentThanks,
-  itemSettled,
+  clientFileMime,
+  sanitizeClientFileName,
   sizeAllowed,
   type ItemQuality,
 } from "@/lib/client-agent-link";
 import {
   askClientAgentLink,
   completeClientAgentSend,
+  confirmClientAgentUpload,
   consentClientAgentLink,
   finishClientAgentItem,
   openClientAgentLink,
+  prepareClientAgentUpload,
+  removeClientAgentFile,
   saveClientAgentFilePassword,
-  uploadClientAgentFile,
+  undoClientAgentItem,
   type OpenLinkResult,
   type PublicItem,
 } from "@/lib/client-agent-link.functions";
+import { uploadToClientAgentSignedUrl } from "@/lib/client-agent-upload-browser";
 import { avatarPoster, fmClipSources } from "@/lib/fm-avatar-state";
 
 const PRIMARY =
   "inline-flex min-h-11 items-center justify-center rounded-full bg-[#0B5FFF] px-4 text-sm font-semibold text-white hover:bg-[#2563EB] disabled:opacity-60";
+const SECONDARY =
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-[#DBEAFE] bg-white px-4 text-sm font-semibold text-[#102A43] disabled:opacity-60";
 const QUIET =
   "inline-flex min-h-11 items-center text-sm font-semibold text-[#3D5270] underline decoration-[#DBEAFE] underline-offset-4 disabled:opacity-60";
 
-export const CLIENT_AGENT_UPLOAD_INTRO =
-  "Only upload what you have. If something doesn't apply to you, tap 'I don't have this' and move on.";
+export const CLIENT_AGENT_NEXT_HINT =
+  "Upload a file or tap I don't have this for each document to continue.";
 
 export const CLIENT_AGENT_LOAD_ERROR = "Couldn't load, try again";
 
-function fileBase64(file: File): Promise<string> {
-  return file.arrayBuffer().then((buffer) => {
-    const bytes = new Uint8Array(buffer);
-    let binary = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    }
-    return btoa(binary);
-  });
-}
-
-function TaxSpecialistHero() {
+function TaxSpecialistHero({ clip }: { clip: "curious" | "done" }) {
   const reduced = usePrefersReducedMotion();
   const poster = avatarPoster("tax_specialist");
-  const sources = fmClipSources("curious", "tax_specialist");
+  const sources = fmClipSources(clip, "tax_specialist");
   return (
     <span
       className="owner-presence is-tax_specialist is-character is-idle is-lg is-fm-clip"
@@ -89,27 +90,6 @@ function TaxSpecialistHero() {
   );
 }
 
-function UploadedTick() {
-  return (
-    <span
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#0B5FFF] text-white"
-      aria-label="Uploaded"
-      data-upload-tick="true"
-    >
-      <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
-        <path
-          d="M3.5 8.2 6.4 11 12.5 4.8"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </span>
-  );
-}
-
 export function ClientAgentLinkScreen({
   view,
   busy,
@@ -118,8 +98,13 @@ export function ClientAgentLinkScreen({
   explanation,
   onAgree,
   onPickFile,
+  onRemove,
   onOpenNote,
+  onMarkMissing,
+  onUndo,
   onExplanation,
+  onExplanationFor,
+  explanations = {},
   onSaveNote,
   loadFailed = false,
   onRetry,
@@ -141,9 +126,14 @@ export function ClientAgentLinkScreen({
   noteFor: string | null;
   explanation: string;
   onAgree: () => void;
-  onPickFile: (item: PublicItem, files: File[]) => void;
+  onPickFile: (item: PublicItem, files: File[], mode?: "replace") => void;
+  onRemove?: (item: PublicItem) => void;
   onOpenNote: (itemKey: string) => void;
+  onMarkMissing?: (item: PublicItem) => void;
+  onUndo?: (item: PublicItem) => void;
   onExplanation: (value: string) => void;
+  onExplanationFor?: (itemKey: string, value: string) => void;
+  explanations?: Record<string, string>;
   onSaveNote: (item: PublicItem) => void;
   loadFailed?: boolean;
   onRetry?: () => void;
@@ -161,12 +151,14 @@ export function ClientAgentLinkScreen({
 }) {
   const openView = view?.ok ? view : null;
   const ready = openView ? checklistReady(openView.items) : false;
+  const showThanks = Boolean(openView && (thanks || openView.completed));
   const thankYou = openView
     ? clientAgentThanks({
         firstName: openView.firstName ?? null,
         practiceName: openView.practiceName,
       })
     : null;
+  const help = openView ? clientAgentFaq(openView.items) : [];
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 bg-white px-4 py-6 text-[#102A43]">
@@ -174,7 +166,7 @@ export function ClientAgentLinkScreen({
         className="owner-door -ml-3 inline-flex h-[96px] w-[96px] shrink-0 self-start overflow-hidden min-[761px]:-ml-[21.5px] min-[761px]:h-[172px] min-[761px]:w-[172px]"
         data-client-portrait="tax_specialist"
       >
-        <TaxSpecialistHero />
+        <TaxSpecialistHero clip={showThanks ? "done" : "curious"} />
       </span>
       {openView ? (
         <p className="text-sm font-semibold" data-practice-name="true">
@@ -193,7 +185,17 @@ export function ClientAgentLinkScreen({
           </button>
         </div>
       ) : null}
-      {view && !view.ok && !loadFailed ? <p className="text-sm">{view.body}</p> : null}
+      {view && !view.ok && !loadFailed && view.reason === "limited" ? (
+        <div className="flex flex-col gap-3" data-link-throttled="true">
+          <p className="text-sm">{view.body}</p>
+          <button type="button" className={PRIMARY} disabled={busy} onClick={onRetry}>
+            Try again
+          </button>
+        </div>
+      ) : null}
+      {view && !view.ok && !loadFailed && view.reason !== "limited" ? (
+        <p className="text-sm">{view.body}</p>
+      ) : null}
       {openView && !openView.consented ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm leading-6 text-[#3D5270]" data-client-intro="true">
@@ -205,63 +207,78 @@ export function ClientAgentLinkScreen({
           </button>
         </div>
       ) : null}
-      {openView?.consented && thanks && thankYou ? (
+      {openView?.consented && showThanks && thankYou ? (
         <div className="flex flex-col gap-3" data-client-thanks="true">
-          <p className="text-lg font-semibold">{thankYou.greeting}</p>
-          <p className="text-sm leading-6">{thankYou.body}</p>
-          <p className="text-sm font-semibold">{thankYou.signoff}</p>
+          <p className="text-sm leading-6">{thankYou.text}</p>
         </div>
       ) : null}
-      {openView?.consented && !thanks ? (
+      {openView?.consented && !showThanks ? (
         <div className="flex flex-col gap-3">
-          <p className="text-sm leading-6 text-[#3D5270]">{CLIENT_AGENT_UPLOAD_INTRO}</p>
-          <div className="flex flex-col gap-2" data-agent-chat="true">
-            <button type="button" className={QUIET} disabled={busy} onClick={onToggleChat}>
-              {chatOpen ? "Close" : "Ask the Tax Specialist"}
-            </button>
-            {chatOpen ? (
-              <div
-                className="flex flex-col gap-2 rounded-2xl border border-[#DBEAFE] p-3"
-                data-agent-chat-panel="true"
-              >
-                {chatMessages.length === 0 ? (
-                  <p className="text-sm leading-6 text-[#3D5270]">
-                    Ask what a document is, where to find it, or what counts.
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {chatMessages.map((message, index) => (
-                      <p
-                        key={`${message.role}-${index}`}
-                        className="text-sm leading-6"
-                        data-chat-role={message.role}
-                      >
-                        {message.text}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                <label className="text-sm text-[#3D5270]">
-                  Your question
-                  <textarea
-                    className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] p-2 text-sm text-[#102A43]"
-                    value={chatDraft}
-                    maxLength={400}
-                    data-agent-chat-draft="true"
-                    onChange={(event) => onChatDraft?.(event.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className={PRIMARY}
-                  disabled={busy || chatDraft.trim().length === 0}
-                  onClick={onAsk}
+          <p className="text-sm leading-6 text-[#3D5270]" data-checklist-intro="true">
+            {clientAgentChecklistIntro(openView.firstName, openView.practiceName)}
+          </p>
+          {CLIENT_AGENT_CHAT_ENABLED ? (
+            <div className="flex flex-col gap-2" data-agent-chat="true">
+              <button type="button" className={QUIET} disabled={busy} onClick={onToggleChat}>
+                {chatOpen ? "Close" : "Ask the Tax Specialist"}
+              </button>
+              {chatOpen ? (
+                <div
+                  className="flex flex-col gap-2 rounded-2xl border border-[#DBEAFE] p-3"
+                  data-agent-chat-panel="true"
                 >
-                  Ask
-                </button>
-              </div>
-            ) : null}
-          </div>
+                  {chatMessages.length === 0 ? (
+                    <p className="text-sm leading-6 text-[#3D5270]">
+                      Ask what a document is, where to find it, or what counts.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {chatMessages.map((message, index) => (
+                        <p
+                          key={`${message.role}-${index}`}
+                          className="text-sm leading-6"
+                          data-chat-role={message.role}
+                        >
+                          {message.text}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <label className="text-sm text-[#3D5270]">
+                    Your question
+                    <textarea
+                      className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] p-2 text-sm text-[#102A43]"
+                      value={chatDraft}
+                      maxLength={400}
+                      data-agent-chat-draft="true"
+                      onChange={(event) => onChatDraft?.(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className={PRIMARY}
+                    disabled={busy || chatDraft.trim().length === 0}
+                    onClick={onAsk}
+                  >
+                    Ask
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <section className="flex flex-col gap-3 rounded-2xl border border-[#DBEAFE] p-3" data-doc-help="true">
+              <h2 className="text-base font-semibold">{CLIENT_AGENT_FAQ_TITLE}</h2>
+              {help.map((entry) => (
+                <div key={entry.itemKey} className="flex flex-col gap-1" data-doc-help-item={entry.itemKey}>
+                  <p className="text-sm font-semibold">{entry.label}</p>
+                  <p className="text-sm leading-6 text-[#3D5270]">{entry.body}</p>
+                </div>
+              ))}
+              <p className="text-sm leading-6" data-doc-help-close="true">
+                {clientAgentFaqClose(openView.practiceName)}
+              </p>
+            </section>
+          )}
           <ol className="flex flex-col border-t border-[#DBEAFE]" data-doc-list="true">
             {openView.items.map((item) => (
               <li
@@ -276,23 +293,70 @@ export function ClientAgentLinkScreen({
                   <p className="text-sm leading-6 text-[#3D5270]" data-doc-hint="true">
                     {clientAgentItemHelp(item)}
                   </p>
-                  <button
-                    type="button"
-                    className={`${PRIMARY} w-full min-[761px]:w-auto`}
-                    disabled={busy}
-                    onClick={() => document.getElementById(`upload-${item.itemKey}`)?.click()}
-                  >
-                    Upload
-                  </button>
-                  <button
-                    type="button"
-                    className={`${QUIET} w-full justify-center whitespace-nowrap min-[761px]:w-auto min-[761px]:justify-start`}
-                    disabled={busy}
-                    onClick={() => onOpenNote(item.itemKey)}
-                  >
-                    I don't have this
-                  </button>
-                  {itemSettled(item) ? <UploadedTick /> : <span className="h-11 w-11" />}
+                  {item.hasFile ? (
+                    <div className="flex flex-col gap-2" data-received={item.itemKey}>
+                      {(item.fileNames ?? []).map((name) => (
+                        <p key={name} className="text-sm" data-received-name="true">
+                          {name}
+                        </p>
+                      ))}
+                      <p className="text-sm font-semibold">Received ✓</p>
+                      <button
+                        type="button"
+                        className={SECONDARY}
+                        disabled={busy}
+                        onClick={() => document.getElementById(`upload-${item.itemKey}`)?.click()}
+                      >
+                        Replace
+                      </button>
+                      <button
+                        type="button"
+                        className={SECONDARY}
+                        disabled={busy}
+                        onClick={() => onRemove?.(item)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : itemNotAvailable(item) ? (
+                    <div className="flex flex-col gap-2" data-not-available={item.itemKey}>
+                      <p className="text-sm font-semibold">Marked as not available</p>
+                      <button
+                        type="button"
+                        className={SECONDARY}
+                        disabled={busy}
+                        data-undo-missing={item.itemKey}
+                        onClick={() => onUndo?.(item)}
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        className={`${PRIMARY} w-full min-[761px]:w-auto`}
+                        disabled={busy}
+                        onClick={() => document.getElementById(`upload-${item.itemKey}`)?.click()}
+                      >
+                        Upload
+                      </button>
+                      <button
+                        type="button"
+                        className={`${QUIET} w-full justify-center whitespace-nowrap min-[761px]:w-auto min-[761px]:justify-start`}
+                        disabled={busy}
+                        onClick={() => {
+                          if (onMarkMissing) {
+                            onMarkMissing(item);
+                            return;
+                          }
+                          onOpenNote(item.itemKey);
+                        }}
+                      >
+                        I don't have this
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <input
                   id={`upload-${item.itemKey}`}
@@ -301,50 +365,59 @@ export function ClientAgentLinkScreen({
                   multiple
                   accept={SEND_FILE_MIMES.join(",")}
                   disabled={busy}
-                  onChange={(event) => {
+                    onChange={(event) => {
                     const picked = Array.from(event.target.files ?? []);
                     event.target.value = "";
                     const files = picked.filter((file) => file.size <= SEND_FILE_MAX_BYTES);
                     if (files.length === 0) return;
-                    onPickFile(item, files);
+                    onPickFile(item, files, item.hasFile ? "replace" : undefined);
                   }}
                 />
                 {item.hasFile ? (
-                  item.passwordSaved ? (
-                    <p className="text-sm text-[#3D5270]" data-file-password-saved={item.itemKey}>
-                      Saved
-                    </p>
-                  ) : (
-                    <label className="text-sm text-[#3D5270]" data-file-password={item.itemKey}>
+                  <div className="flex flex-col gap-2" data-file-password={item.itemKey}>
+                    {item.passwordSaved ? (
+                      <p className="text-sm text-[#3D5270]" data-file-password-saved={item.itemKey}>
+                        Password saved 🔒
+                      </p>
+                    ) : null}
+                    <label className="text-sm text-[#3D5270]">
                       File password (if it has one)
                       <input
                         type="password"
-                        className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] px-2 text-sm text-[#102A43]"
+                        className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] bg-white px-2 text-sm text-[#102A43]"
                         value={passwordDrafts[item.itemKey] ?? ""}
                         maxLength={80}
                         autoComplete="off"
                         onChange={(event) => onPasswordDraft?.(item.itemKey, event.target.value)}
+                        onBlur={() => {
+                          if ((passwordDrafts[item.itemKey] ?? "").trim().length === 0) return;
+                          onPassword?.(item);
+                        }}
                       />
-                      <button
-                        type="button"
-                        className={`${QUIET} mt-1`}
-                        disabled={busy || (passwordDrafts[item.itemKey] ?? "").trim().length === 0}
-                        onClick={() => onPassword?.(item)}
-                      >
-                        Save password
-                      </button>
                     </label>
-                  )
+                    <button
+                      type="button"
+                      className={SECONDARY}
+                      disabled={busy || (passwordDrafts[item.itemKey] ?? "").trim().length === 0}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => onPassword?.(item)}
+                    >
+                      Save password
+                    </button>
+                  </div>
                 ) : null}
-                {noteFor === item.itemKey ? (
+                {itemNotAvailable(item) || noteFor === item.itemKey ? (
                   <div className="flex flex-col gap-2" data-missing-note={item.itemKey}>
                     <label className="text-sm text-[#3D5270]">
                       Optional note
                       <textarea
                         className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] p-2 text-sm text-[#102A43]"
-                        value={explanation}
+                        value={explanations[item.itemKey] ?? (noteFor === item.itemKey ? explanation : item.explanation ?? "")}
                         maxLength={2000}
-                        onChange={(event) => onExplanation(event.target.value)}
+                        onChange={(event) => {
+                          if (onExplanationFor) onExplanationFor(item.itemKey, event.target.value);
+                          else onExplanation(event.target.value);
+                        }}
                       />
                     </label>
                     <button
@@ -368,10 +441,16 @@ export function ClientAgentLinkScreen({
             className={PRIMARY}
             data-client-next="true"
             disabled={busy || !ready}
+            onMouseDown={(event) => event.preventDefault()}
             onClick={onNext}
           >
             Finish
           </button>
+          {!ready ? (
+            <p className="text-sm leading-6 text-[#3D5270]" data-next-hint="true">
+              {CLIENT_AGENT_NEXT_HINT}
+            </p>
+          ) : null}
         </div>
       ) : null}
       {notice ? <p className="text-sm text-[#3D5270]">{notice}</p> : null}
@@ -382,8 +461,11 @@ export function ClientAgentLinkScreen({
 export function ClientAgentLinkPage({ token }: { token: string }) {
   const open = useServerFn(openClientAgentLink);
   const agree = useServerFn(consentClientAgentLink);
-  const uploadFile = useServerFn(uploadClientAgentFile);
+  const prepareUpload = useServerFn(prepareClientAgentUpload);
+  const confirmUpload = useServerFn(confirmClientAgentUpload);
+  const removeUpload = useServerFn(removeClientAgentFile);
   const finish = useServerFn(finishClientAgentItem);
+  const undoMissing = useServerFn(undoClientAgentItem);
   const savePassword = useServerFn(saveClientAgentFilePassword);
   const ask = useServerFn(askClientAgentLink);
   const complete = useServerFn(completeClientAgentSend);
@@ -392,20 +474,66 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [noteFor, setNoteFor] = useState<string | null>(null);
-  const [explanation, setExplanation] = useState("");
+  const [explanations, setExplanations] = useState<Record<string, string>>({});
+  const scrollY = useRef(0);
+  const holdScroll = useRef(false);
+  const rememberScroll = () => {
+    if (typeof window === "undefined") return;
+    scrollY.current = window.scrollY;
+    holdScroll.current = scrollY.current > 0;
+  };
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ role: "you" | "she"; text: string }>>(
     [],
   );
   const [chatDraft, setChatDraft] = useState("");
   const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
+  const [fileNames, setFileNames] = useState<Record<string, string[]>>({});
   const [thanks, setThanks] = useState(false);
+
+  const shownView: OpenLinkResult | null = view?.ok
+    ? {
+        ...view,
+        items: view.items.map((item) => ({
+          ...item,
+          fileNames:
+            item.fileNames && item.fileNames.length > 0
+              ? item.fileNames
+              : (fileNames[item.itemKey] ?? []),
+        })),
+      }
+    : view;
+
+  const openRef = useRef(open);
+  openRef.current = open;
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (holdScroll.current) return;
+      scrollY.current = window.scrollY;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useLayoutEffect(() => {
+    const y = scrollY.current;
+    if (typeof window === "undefined" || y <= 0) return;
+    window.scrollTo(0, y);
+    const first = window.requestAnimationFrame(() => {
+      window.scrollTo(0, y);
+      window.requestAnimationFrame(() => {
+        window.scrollTo(0, y);
+        holdScroll.current = false;
+      });
+    });
+    return () => window.cancelAnimationFrame(first);
+  }, [view, notice, thanks, busy, loadFailed]);
 
   useEffect(() => {
     let alive = true;
     setBusy(true);
-    void open({ data: { token } })
+    void openRef.current({ data: { token } })
       .then((result) => {
         if (!alive) return;
         setLoadFailed(false);
@@ -422,9 +550,10 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     return () => {
       alive = false;
     };
-  }, [open, token, attempt]);
+  }, [token, attempt]);
 
   const onAgree = async () => {
+    rememberScroll();
     setBusy(true);
     setNotice(null);
     try {
@@ -436,28 +565,65 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     }
   };
 
-  const upload = async (item: PublicItem, files: File[]) => {
+  const upload = async (item: PublicItem, files: File[], mode?: "replace") => {
     const accepted = files.filter((file) => sizeAllowed(file.size));
     if (accepted.length === 0) {
       setNotice("Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
       return;
     }
+    rememberScroll();
     setBusy(true);
     setNotice(files.length === accepted.length ? null : "Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
     try {
-      for (const file of accepted) {
-        const base64 = await fileBase64(file);
-        const saved = await uploadFile({
-          data: { token, itemKey: item.itemKey, base64 },
-        });
-        if (!saved.ok) {
-          setNotice(saved.body);
+      if (mode === "replace" && item.hasFile) {
+        const removed = await removeUpload({ data: { token, itemKey: item.itemKey } });
+        if (!removed.ok) {
+          setNotice(removed.body);
           setView(await open({ data: { token } }));
           return;
         }
       }
-      setNoteFor(null);
-      setExplanation("");
+      const stored: string[] = [];
+      for (const file of accepted) {
+        const prepared = await prepareUpload({
+          data: {
+            token,
+            itemKey: item.itemKey,
+            size: file.size,
+            mime: clientFileMime(file.type, file.name),
+            name: file.name,
+          },
+        });
+        if (!prepared.ok) {
+          setNotice(prepared.body);
+          setView(await open({ data: { token } }));
+          return;
+        }
+        const placed = await uploadToClientAgentSignedUrl({
+          path: prepared.path,
+          token: prepared.token,
+          file,
+        });
+        if (!placed) {
+          setNotice("The document could not be saved.");
+          return;
+        }
+        const confirmed = await confirmUpload({
+          data: { token, itemKey: item.itemKey, path: prepared.path, grant: prepared.grant },
+        });
+        if (!confirmed.ok) {
+          setNotice(confirmed.body);
+          setView(await open({ data: { token } }));
+          return;
+        }
+        const label = sanitizeClientFileName(file.name);
+        if (label) stored.push(label);
+      }
+      setFileNames((current) => ({
+        ...current,
+        [item.itemKey]: mode === "replace" ? stored : [...(current[item.itemKey] ?? []), ...stored],
+      }));
+      rememberScroll();
       setView(await open({ data: { token } }));
     } catch {
       setNotice("The document could not be saved.");
@@ -466,30 +632,62 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     }
   };
 
-  const onPassword = async (item: PublicItem) => {
-    const password = (passwordDrafts[item.itemKey] ?? "").trim();
-    if (!password) return;
+  const onRemove = async (item: PublicItem) => {
+    rememberScroll();
     setBusy(true);
     setNotice(null);
     try {
-      const saved = await savePassword({
-        data: { token, itemKey: item.itemKey, password },
-      });
-      setPasswordDrafts((current) => ({ ...current, [item.itemKey]: "" }));
-      if (!saved.ok) {
-        setNotice(saved.body);
+      const removed = await removeUpload({ data: { token, itemKey: item.itemKey } });
+      if (!removed.ok) {
+        setNotice(removed.body);
         return;
       }
+      setFileNames((current) => ({ ...current, [item.itemKey]: [] }));
+      setPasswordDrafts((current) => ({ ...current, [item.itemKey]: "" }));
+      rememberScroll();
       setView(await open({ data: { token } }));
     } catch {
-      setPasswordDrafts((current) => ({ ...current, [item.itemKey]: "" }));
       setNotice("That could not be saved.");
     } finally {
       setBusy(false);
     }
   };
 
+  const saveItemPassword = async (item: PublicItem): Promise<boolean> => {
+    const password = (passwordDrafts[item.itemKey] ?? "").trim();
+    if (!password) return true;
+    const saved = await savePassword({
+      data: { token, itemKey: item.itemKey, password },
+    });
+    setPasswordDrafts((current) => ({ ...current, [item.itemKey]: "" }));
+    if (!saved.ok) {
+      setNotice(saved.body);
+      return false;
+    }
+    return true;
+  };
+
+  const onPassword = async (item: PublicItem) => {
+    const password = (passwordDrafts[item.itemKey] ?? "").trim();
+    if (!password) return;
+    rememberScroll();
+    setBusy(true);
+    setNotice(null);
+    try {
+      const saved = await saveItemPassword(item);
+      if (!saved) return;
+      rememberScroll();
+      setView(await open({ data: { token } }));
+    } catch {
+      setPasswordDrafts((current) => ({ ...current, [item.itemKey]: "" }));
+      setNotice(CLIENT_AGENT_PASSWORD_UNSAVED);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onAsk = async () => {
+    if (!CLIENT_AGENT_CHAT_ENABLED) return;
     const message = chatDraft.trim();
     if (!message) return;
     setBusy(true);
@@ -510,10 +708,56 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     }
   };
 
-  const onNote = async (item: PublicItem) => {
+  const onMarkMissing = async (item: PublicItem) => {
+    rememberScroll();
     setBusy(true);
     setNotice(null);
-    const note = explanation.trim() || "I don't have this.";
+    const note = (explanations[item.itemKey] ?? "").trim();
+    try {
+      const saved = await finish({
+        data: {
+          token,
+          itemKey: item.itemKey,
+          quality: "incomplete" satisfies ItemQuality,
+          ...(note ? { explanation: note } : { explanation: "" }),
+        },
+      });
+      if (!saved.ok) {
+        setNotice(saved.body);
+        return;
+      }
+      setView(await open({ data: { token } }));
+    } catch {
+      setNotice("That could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onUndoMissing = async (item: PublicItem) => {
+    rememberScroll();
+    setBusy(true);
+    setNotice(null);
+    try {
+      const saved = await undoMissing({ data: { token, itemKey: item.itemKey } });
+      if (!saved.ok) {
+        setNotice(saved.body);
+        return;
+      }
+      setExplanations((current) => ({ ...current, [item.itemKey]: "" }));
+      setView(await open({ data: { token } }));
+    } catch {
+      setNotice("That could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSaveNote = async (item: PublicItem) => {
+    rememberScroll();
+    setBusy(true);
+    setNotice(null);
+    const note = (explanations[item.itemKey] ?? item.explanation ?? "").trim();
     try {
       const saved = await finish({
         data: {
@@ -527,8 +771,6 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         setNotice(saved.body);
         return;
       }
-      setNoteFor(null);
-      setExplanation("");
       setView(await open({ data: { token } }));
     } catch {
       setNotice("That could not be saved.");
@@ -539,19 +781,23 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
 
   return (
     <ClientAgentLinkScreen
-      view={view}
+      view={shownView}
       busy={busy}
       notice={notice}
-      noteFor={noteFor}
-      explanation={explanation}
+      noteFor={null}
+      explanation=""
+      explanations={explanations}
       onAgree={() => void onAgree()}
-      onPickFile={(item, file) => void upload(item, file)}
-      onOpenNote={(itemKey) => {
-        setNoteFor(itemKey);
-        setExplanation("");
-      }}
-      onExplanation={setExplanation}
-      onSaveNote={(item) => void onNote(item)}
+      onPickFile={(item, file, mode) => void upload(item, file, mode)}
+      onRemove={(item) => void onRemove(item)}
+      onOpenNote={() => undefined}
+      onMarkMissing={(item) => void onMarkMissing(item)}
+      onUndo={(item) => void onUndoMissing(item)}
+      onExplanation={() => undefined}
+      onExplanationFor={(itemKey, value) =>
+        setExplanations((current) => ({ ...current, [itemKey]: value }))
+      }
+      onSaveNote={(item) => void onSaveNote(item)}
       loadFailed={loadFailed}
       chatOpen={chatOpen}
       chatMessages={chatMessages}
@@ -566,24 +812,35 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
       onPassword={(item) => void onPassword(item)}
       onNext={() => {
         void (async () => {
-          if (!view?.ok || !checklistReady(view.items)) return;
+          if (!view?.ok || view.completed) {
+            if (view?.ok && view.completed) setThanks(true);
+            return;
+          }
+          if (!checklistReady(view.items)) return;
+          rememberScroll();
           setBusy(true);
           setNotice(null);
           try {
-            const result = await complete({ data: { token } });
-            if (!result.ok) {
-              setNotice(result.body);
+            for (const item of view.items) {
+              const pending = (passwordDrafts[item.itemKey] ?? "").trim();
+              if (!pending) continue;
+              const savedPassword = await saveItemPassword(item);
+              if (!savedPassword) return;
+            }
+            const saved = await complete({ data: { token } });
+            if (!saved.ok) {
+              setNotice(saved.body);
               return;
             }
             setThanks(true);
           } catch {
-            setNotice("That could not be finished. Please try again.");
+            setNotice("That could not be saved.");
           } finally {
             setBusy(false);
           }
         })();
       }}
-      thanks={thanks || Boolean(view?.ok && view.completed)}
+      thanks={thanks}
       onRetry={() => {
         if (busy) return;
         setAttempt((current) => current + 1);

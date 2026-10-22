@@ -1,19 +1,30 @@
 /**
- * ZA pricing copy is shown only when the edge says the visitor is in ZA.
- * A URL `?market=` or a stored market never opens that view for anyone else.
- * A ZA visitor may opt into the US view.
+ * Anonymous visitor pack. The decision lives in resolveVisitorMarket.
+ * A URL `?market=` on this request may opt a ZA visitor into US.
+ * A stored market is not an input here.
  */
+import { resolveVisitorMarket, type SurfaceMarket } from "./pricing/market-resolution.ts";
+
+export type MarketingCopyPack = SurfaceMarket;
+
 export function isSaPricingCountry(geoCountry: string | null | undefined): boolean {
-  return geoCountry === "ZA";
+  return (
+    resolveVisitorMarket({
+      geoCountry,
+      choiceFromThisVisit: false,
+    }) === "za"
+  );
 }
 
-export type MarketingCopyPack = "za" | "us";
-
-/** Non-ZA geos stay on US. ZA may pass ?market=US to see the US view. */
+/** Non-ZA geos stay on US. A ZA visitor may pass ?market=US on this request. */
 export function marketingPackForGeo(
   geoCountry: string | null | undefined,
   requestedMarket: string | null | undefined,
 ): MarketingCopyPack {
-  if (!isSaPricingCountry(geoCountry)) return "us";
-  return (requestedMarket ?? "").trim().toUpperCase() === "US" ? "us" : "za";
+  const requested = (requestedMarket ?? "").trim();
+  return resolveVisitorMarket({
+    geoCountry,
+    savedChoice: requested || null,
+    choiceFromThisVisit: requested.length > 0,
+  });
 }

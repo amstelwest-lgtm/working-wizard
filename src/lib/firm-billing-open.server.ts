@@ -5,6 +5,7 @@
  */
 
 import { emptyFirmUpgradeSnapshot } from "@/lib/firm-band-upgrade";
+import { resolveFirmPriceCurrency } from "@/lib/pricing/market-resolution";
 import type { StoredFirmPlan } from "@/lib/billing-check-failure";
 import { collapseDuplicateClientShells } from "@/lib/client-display-name";
 import {
@@ -57,6 +58,8 @@ export type StoredFirmOpenFacts = {
   createdAt: string | null;
   trialClockStartOverride: string | null;
   clientCount: number;
+  /** Stored firms.market. Absent on older callers, which stay not-ZA. */
+  market?: unknown;
 };
 
 type FactsRead = (firmId: string) => Promise<StoredFirmOpenFacts | null> | StoredFirmOpenFacts | null;
@@ -92,6 +95,7 @@ type FirmFactsClient = {
             starter_trial_enforced?: boolean | null;
             created_at?: string | null;
             trial_clock_start_override?: string | null;
+            market?: unknown;
           } | null;
           error: { message?: string } | null;
         }>;
@@ -133,7 +137,7 @@ export async function readStoredFirmOpenFacts(
     const client = supabase as FirmFactsClient;
     const firms = client
       .from("firms")
-      .select("starter_trial_enforced, created_at, trial_clock_start_override")
+      .select("starter_trial_enforced, created_at, trial_clock_start_override, market")
       .eq("id", id);
     if (typeof firms.maybeSingle !== "function") return null;
     const { data, error } = await firms.maybeSingle();
@@ -146,6 +150,7 @@ export async function readStoredFirmOpenFacts(
           ? data.trial_clock_start_override
           : null,
       clientCount: await countStoredClients(client, id),
+      market: data.market ?? null,
     };
   } catch {
     return null;
@@ -202,12 +207,11 @@ export function entitlementFromStoredPlan(
       clientLimit: null,
       usageLabel: null,
       canUpgrade: false,
-      priceCurrency: "USD",
+      priceCurrency: resolveFirmPriceCurrency(facts?.market),
       interval: "month",
       zarByBand: {},
       starterTrial: trial,
       introTrialEligible: false,
-      saDiscount: false,
       zaLabels: null,
       zaPriceLabel: null,
     },

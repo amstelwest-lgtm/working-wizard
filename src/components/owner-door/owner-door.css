@@ -1369,6 +1369,41 @@ html.dark .owner-status.is-attention {
   font-weight: 600;
 }
 
+.owner-door .owner-trial-ended {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 16px;
+  border: var(--owner-line);
+  border-radius: var(--owner-radius);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--owner-shadow);
+}
+
+.owner-door .owner-trial-ended-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.owner-door .owner-trial-ended-note,
+.owner-door .owner-trial-ended .owner-plan {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.owner-door .owner-trial-ended .owner-plan {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .owner-door .owner-composer {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

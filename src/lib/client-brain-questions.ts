@@ -3,7 +3,7 @@
  * Slow drip stamps last_asked_at on one owner|both item per call.
  */
 
-import { MONTHS_LONG as MONTHS } from "@/lib/market/date-presets";
+import { MONTHS_LONG as MONTHS } from "./market/date-presets.ts";
 import type { ClientOperatingProfile } from "./client-profile.ts";
 import {
   canAdvanceFromCosts,

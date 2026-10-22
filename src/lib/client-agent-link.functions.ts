@@ -1,26 +1,16 @@
 /**
  * Public /a/<token> actions. Service role only. The raw token is hashed
- * before lookup. File bytes are uploaded and downloaded with the service
- * role. The browser never receives a storage URL. The first Finish copies
- * each final file into the client's documents and emails the firm owner
- * once. The client is never emailed. Nothing is extracted or posted to a
- * ledger. Chat text, file passwords, and the owner address are not logged.
+ * before lookup. The browser uploads straight to a one-time signed URL.
+ * Confirm reads the size and the first bytes with the service role.
+ * Finish copies the files into the client's documents and emails the firm
+ * owner once. The client is never emailed. Chat text and file passwords
+ * are not logged.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { canonicalAuthUrl } from "@/lib/app-origin";
 import { CLAUDE_MODEL } from "@/lib/claude-config";
-import {
-  buildClientAgentArtifact,
-  clientAgentDoneIdempotencyKey,
-  completionDecision,
-  copiesStillNeeded,
-  indexedCopyKeys,
-  type CompletionItem,
-} from "@/lib/client-agent-done";
-import { sendClientAgentDone } from "@/lib/client-agent-done-mail";
-import { CLIENT_DOCUMENTS_BUCKET } from "@/lib/client-documents";
 import {
   CLIENT_AGENT_CHAT_FALLBACK,
   CLIENT_AGENT_CHAT_LIMIT,
@@ -33,31 +23,46 @@ import {
   openFilePassword,
   sealFilePassword,
 } from "@/lib/client-agent-file-secret";
+import {
+  completionDecision,
+  clientAgentDoneIdempotencyKey,
+  copiesStillNeeded,
+  buildClientAgentArtifact,
+  indexedCopyKeys,
+  type ArchiveFileRow,
+  type CompletionItem,
+} from "@/lib/client-agent-done";
+import { sendClientAgentDone } from "@/lib/client-agent-done-mail";
+import { CLIENT_DOCUMENTS_BUCKET } from "@/lib/client-documents";
 import { recipientFirstName } from "@/lib/client-agent-send";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import {
   SEND_ATTEMPT_WINDOW_MS,
   SEND_STORAGE_BUCKET,
+  UPLOAD_GRANT_TTL_MS,
   clientConsentNotice,
-  SEND_FILE_BASE64_MAX,
-  acceptClientFile,
-  bytesFromBase64,
+  CLIENT_AGENT_CHAT_ENABLED,
+  CLIENT_AGENT_PASSWORD_UNSAVED,
   closedLink,
+  confirmStoredObject,
   consentReady,
   consentWrite,
+  declareUpload,
   finishItem,
+  itemNotAvailable,
   hashClientAddress,
   hashPresentedToken,
   openLinkView,
   pathBelongsToSend,
   practiceDisplayName,
+  readUploadGrant,
   resolvePresentedLink,
   sendAttemptLimited,
+  sanitizeClientFileName,
   sendLinkLogLine,
   sendStoragePath,
-  sizeAllowed,
+  signUploadGrant,
   sniffDocumentMime,
-  storeAcceptedFile,
   toPublicChecklist,
   type AttemptOutcome,
   type ItemQuality,
@@ -69,8 +74,8 @@ type DbError = { message: string } | null;
 
 type SendRow = {
   id: string;
-  client_id: string;
   firm_id: string;
+  client_id: string;
   expires_at: string;
   revoked_at: string | null;
   consent_at: string | null;
@@ -86,6 +91,7 @@ type ItemRow = {
   status: string;
   quality: string | null;
   storage_path: string | null;
+  explanation: string | null;
 };
 
 export type PublicItem = PublicChecklistItem;
@@ -96,10 +102,10 @@ export type OpenLinkResult =
       practiceName: string;
       expiresAt: string;
       firstName: string | null;
-      completed?: boolean;
       consented: boolean;
       notice: string;
       items: PublicItem[];
+      completed: boolean;
     }
   | ReturnType<typeof closedLink>;
 
@@ -131,9 +137,15 @@ function clientAddress(): string {
   }
 }
 
-async function countAttempts(column: "ip_hash" | "send_id", value: string): Promise<number> {
+type CountResult = Promise<{ count: number | null; error: DbError }>;
+
+async function countAttempts(
+  column: "ip_hash" | "send_id",
+  value: string,
+  mode: "all" | "failures",
+): Promise<number> {
   const since = new Date(Date.now() - SEND_ATTEMPT_WINDOW_MS).toISOString();
-  const { count, error } = await (
+  const counted = (
     supabaseAdmin as unknown as {
       from: (name: string) => {
         select: (
@@ -147,7 +159,7 @@ async function countAttempts(column: "ip_hash" | "send_id", value: string): Prom
             gte: (
               column: string,
               value: string,
-            ) => Promise<{ count: number | null; error: DbError }>;
+            ) => CountResult & { neq: (column: string, value: string) => CountResult };
           };
         };
       };
@@ -157,23 +169,28 @@ async function countAttempts(column: "ip_hash" | "send_id", value: string): Prom
     .select("id", { count: "exact", head: true })
     .eq(column, value)
     .gte("created_at", since);
+  const { count, error } = await (mode === "failures" ? counted.neq("outcome", "ok") : counted);
   if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "count" }));
   return count ?? 0;
 }
 
 function recentAttempts(ipHash: string): Promise<number> {
-  return countAttempts("ip_hash", ipHash);
+  return countAttempts("ip_hash", ipHash, "failures");
 }
 
 function recentSendAttempts(sendId: string): Promise<number> {
-  return countAttempts("send_id", sendId);
+  return countAttempts("send_id", sendId, "all");
+}
+
+function recentSendFailures(sendId: string): Promise<number> {
+  return countAttempts("send_id", sendId, "failures");
 }
 
 async function recordAttempt(row: {
   send_id: string | null;
   token_hash: string | null;
   ip_hash: string;
-  outcome: "ok" | "unknown" | "expired" | "revoked" | "limited";
+  outcome: AttemptOutcome;
 }) {
   const { error } = await (
     supabaseAdmin as unknown as {
@@ -207,35 +224,31 @@ async function loadSend(tokenHash: string): Promise<SendRow | null> {
       .select(columns)
       .eq("token_hash", tokenHash)
       .maybeSingle();
-  const columns = [
+  const named = await query(
     "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name, completed_at",
+  );
+  if (!named.error) return named.data;
+  const practice = await query(
     "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name",
-    "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
-    "id, client_id, firm_id, expires_at, revoked_at, consent_at",
-  ];
-  let lastError: DbError = null;
-  for (const columnList of columns) {
-    const result = await query(columnList);
-    if (!result.error) {
-      if (!result.data) return null;
-      return {
-        ...result.data,
-        client_id: result.data.client_id ?? "",
-        practice_display_name: result.data.practice_display_name ?? null,
-        recipient_first_name: result.data.recipient_first_name ?? null,
-        completed_at: result.data.completed_at ?? null,
-      };
-    }
-    lastError = result.error;
-    const missing =
-      missingRelation(result.error, "completed_at") ||
-      missingRelation(result.error, "recipient_first_name") ||
-      missingRelation(result.error, "practice_display_name") ||
-      missingRelation(result.error, "client_id");
-    if (!missing) break;
+  );
+  if (!practice.error && practice.data) {
+    return { ...practice.data, completed_at: null };
   }
-  if (lastError) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
-  return null;
+  const namedPractice = await query(
+    "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
+  );
+  if (!namedPractice.error && namedPractice.data) {
+    return { ...namedPractice.data, recipient_first_name: null, completed_at: null };
+  }
+  const plain = await query("id, client_id, firm_id, expires_at, revoked_at, consent_at");
+  if (plain.error) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
+  if (!plain.data) return null;
+  return {
+    ...plain.data,
+    practice_display_name: null,
+    recipient_first_name: null,
+    completed_at: null,
+  };
 }
 
 async function loadFirmName(firmId: string): Promise<string | null> {
@@ -275,7 +288,7 @@ async function loadItems(sendId: string): Promise<PublicItem[]> {
     }
   )
     .from("client_agent_send_items")
-    .select("item_key, label, totals_only, status, quality, storage_path")
+    .select("item_key, label, totals_only, status, quality, storage_path, explanation")
     .eq("send_id", sendId);
   if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "items" }));
   const files = await loadFileMeta(sendId);
@@ -293,6 +306,8 @@ async function loadItems(sendId: string): Promise<PublicItem[]> {
         storagePath: stored || (extra?.count ?? 0) > 0 ? row.storage_path || "stored" : null,
         fileCount: extra?.count ?? (stored ? 1 : 0),
         passwordSaved: extra?.passwordSaved === true,
+        displayNames: extra?.names ?? [],
+        explanation: row.explanation,
       };
     }),
     sendId,
@@ -301,31 +316,44 @@ async function loadItems(sendId: string): Promise<PublicItem[]> {
 
 async function loadFileMeta(
   sendId: string,
-): Promise<Map<string, { count: number; passwordSaved: boolean }> | null> {
-  const { data, error } = await (
-    supabaseAdmin as unknown as {
-      from: (name: string) => {
-        select: (cols: string) => {
-          eq: (
-            column: string,
-            value: string,
-          ) => Promise<{
-            data: Array<{ item_key: string; password_box: string | null; created_at: string }> | null;
-            error: DbError;
-          }>;
+): Promise<Map<string, { count: number; passwordSaved: boolean; names: string[] }> | null> {
+  const query = (columns: string) =>
+    (
+      supabaseAdmin as unknown as {
+        from: (name: string) => {
+          select: (cols: string) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => Promise<{
+              data: Array<{
+                item_key: string;
+                password_box: string | null;
+                created_at: string;
+                display_name?: string | null;
+              }> | null;
+              error: DbError;
+            }>;
+          };
         };
-      };
-    }
-  )
-    .from("client_agent_send_files")
-    .select("item_key, password_box, created_at")
-    .eq("send_id", sendId);
+      }
+    )
+      .from("client_agent_send_files")
+      .select(columns)
+      .eq("send_id", sendId);
+  let selected = await query("item_key, password_box, created_at, display_name");
+  if (selected.error && missingRelation(selected.error, "display_name")) {
+    selected = await query("item_key, password_box, created_at");
+  }
+  const { data, error } = selected;
   if (error) {
     if (missingRelation(error, "client_agent_send_files")) return null;
     throw new Error(sendLinkLogLine({ event: "link", reason: "files" }));
   }
-  const grouped = new Map<string, { count: number; passwordSaved: boolean; at: string }>();
-  for (const row of data ?? []) {
+  const grouped = new Map<string, { count: number; passwordSaved: boolean; at: string; names: string[] }>();
+  const rows = [...(data ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+  for (const row of rows) {
+    const name = sanitizeClientFileName(row.display_name ?? "");
     const current = grouped.get(row.item_key);
     const at = row.created_at ?? "";
     if (!current) {
@@ -333,10 +361,12 @@ async function loadFileMeta(
         count: 1,
         passwordSaved: Boolean(row.password_box),
         at,
+        names: name ? [name] : [],
       });
       continue;
     }
     current.count += 1;
+    if (name) current.names.push(name);
     if (at >= current.at) {
       current.at = at;
       current.passwordSaved = Boolean(row.password_box);
@@ -345,7 +375,7 @@ async function loadFileMeta(
   return new Map(
     [...grouped.entries()].map(([key, value]) => [
       key,
-      { count: value.count, passwordSaved: value.passwordSaved },
+      { count: value.count, passwordSaved: value.passwordSaved, names: value.names },
     ]),
   );
 }
@@ -403,9 +433,11 @@ async function resolveToken(token: string): Promise<Resolved> {
     return opened.public.ok ? closedLink("unavailable") : opened.public;
   }
   const sendCount = await recentSendAttempts(send.id);
+  const sendFailureCount = await recentSendFailures(send.id);
   const decision = resolvePresentedLink({
     ipCount,
     sendCount,
+    sendFailureCount,
     found: true,
     firmId: send.firm_id,
     revokedAt: send.revoked_at,
@@ -434,12 +466,12 @@ async function present(send: SendRow, items: PublicItem[]): Promise<OpenLinkResu
     practiceName,
     expiresAt: send.expires_at,
     firstName: firstName.ok ? firstName.name : null,
-    completed: Boolean(send.completed_at),
     ...openLinkView({
       consented: consentReady(send.consent_at),
       notice: clientConsentNotice(practiceName),
       items,
     }),
+    completed: Boolean(send.completed_at),
   };
 }
 
@@ -482,32 +514,34 @@ const finishInput = z.object({
   explanation: z.string().max(2000).optional(),
 });
 
-type StoredObject = {
-  size: number;
-  type: string;
-  arrayBuffer: () => Promise<ArrayBuffer>;
-};
-
 type ObjectStorage = {
-  upload: (
+  createSignedUploadUrl: (
     path: string,
-    body: Uint8Array,
-    options: { contentType: string; upsert: boolean },
-  ) => Promise<{ error: DbError }>;
-  download: (path: string) => Promise<{ data: StoredObject | null; error: DbError }>;
+    options: { upsert: boolean },
+  ) => Promise<{
+    data: { signedUrl: string; token: string; path: string } | null;
+    error: DbError;
+  }>;
+  info: (path: string) => Promise<{
+    data: { size?: number; metadata?: Record<string, unknown> } | null;
+    error: DbError;
+  }>;
+  list: (
+    folder: string,
+    options: { search: string; limit: number },
+  ) => Promise<{
+    data: Array<{ name: string; metadata?: Record<string, unknown> | null }> | null;
+    error: DbError;
+  }>;
   remove: (paths: string[]) => Promise<{ error: DbError }>;
 };
 
-function bucketStorage(bucket: string): ObjectStorage {
+function objectStorage(): ObjectStorage {
   return (
     supabaseAdmin as unknown as {
-      storage: { from: (name: string) => ObjectStorage };
+      storage: { from: (bucket: string) => ObjectStorage };
     }
-  ).storage.from(bucket);
-}
-
-function objectStorage(): ObjectStorage {
-  return bucketStorage(SEND_STORAGE_BUCKET);
+  ).storage.from(SEND_STORAGE_BUCKET);
 }
 
 async function loadStoredPath(sendId: string, itemKey: string): Promise<string | null> {
@@ -543,7 +577,7 @@ async function loadStoredPath(sendId: string, itemKey: string): Promise<string |
 }
 
 async function updateItem(sendId: string, itemKey: string, patch: Record<string, unknown>) {
-  const { error } = await (
+  const { data, error } = await (
     supabaseAdmin as unknown as {
       from: (name: string) => {
         update: (row: Record<string, unknown>) => {
@@ -551,7 +585,15 @@ async function updateItem(sendId: string, itemKey: string, patch: Record<string,
             column: string,
             value: string,
           ) => {
-            eq: (column: string, value: string) => Promise<{ error: DbError }>;
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              select: (cols: string) => Promise<{
+                data: Array<{ item_key: string }> | null;
+                error: DbError;
+              }>;
+            };
           };
         };
       };
@@ -560,93 +602,276 @@ async function updateItem(sendId: string, itemKey: string, patch: Record<string,
     .from("client_agent_send_items")
     .update(patch)
     .eq("send_id", sendId)
-    .eq("item_key", itemKey);
-  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "save" }));
+    .eq("item_key", itemKey)
+    .select("item_key");
+  if (error || !data?.length) throw new Error(sendLinkLogLine({ event: "link", reason: "save" }));
 }
 
-export const uploadClientAgentFile = createServerFn({ method: "POST" })
+function uploadGrantSecret(): string | null {
+  const keys = [
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "NEXT_SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SECRET_KEY",
+  ];
+  for (const key of keys) {
+    const value = (process.env[key] ?? "").trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+function storageEndpoint(): { url: string; key: string } | null {
+  const urls = ["SUPABASE_URL", "NEXT_SUPABASE_URL", "VITE_SUPABASE_URL"];
+  let url = "";
+  for (const key of urls) {
+    const value = (process.env[key] ?? "").trim();
+    if (value) {
+      url = value.replace(/\/$/, "");
+      break;
+    }
+  }
+  const service = uploadGrantSecret();
+  if (!url || !service) return null;
+  return { url, key: service };
+}
+
+async function noteRejected(resolved: { send: SendRow; tokenHash: string; ipHash: string }) {
+  try {
+    await recordAttempt({
+      send_id: resolved.send.id,
+      token_hash: resolved.tokenHash,
+      ip_hash: resolved.ipHash,
+      outcome: "rejected",
+    });
+  } catch {
+    // A stored outcome the database does not know yet must not hide the refusal.
+  }
+}
+
+function totalFromContentRange(header: string | null): number | null {
+  const match = /\/(\d+)$/.exec(header ?? "");
+  if (!match) return null;
+  const total = Number(match[1]);
+  return Number.isInteger(total) ? total : null;
+}
+
+/** First bytes only. A full-body response is cancelled. The range total is the object size. */
+async function readObjectPrefix(path: string): Promise<{ bytes: Uint8Array; total: number | null } | null> {
+  const endpoint = storageEndpoint();
+  if (!endpoint) return null;
+  const target = `${endpoint.url}/storage/v1/object/${SEND_STORAGE_BUCKET}/${path}`;
+  const response = await fetch(target, {
+    headers: {
+      Authorization: `Bearer ${endpoint.key}`,
+      apikey: endpoint.key,
+      Range: "bytes=0-31",
+    },
+  });
+  if (response.status !== 206 && response.status !== 200) {
+    await response.body?.cancel();
+    return null;
+  }
+  const length = Number(response.headers.get("content-length") ?? "0");
+  if (response.status === 200 && length > 64) {
+    await response.body?.cancel();
+    return null;
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return { bytes: bytes.subarray(0, 32), total: totalFromContentRange(response.headers.get("content-range")) };
+}
+
+async function storedObjectSize(path: string): Promise<number | null> {
+  const storage = objectStorage();
+  const info = await storage.info(path);
+  const fromInfo = info.error ? null : objectByteSize(info.data);
+  if (fromInfo != null) return fromInfo;
+  const slash = path.lastIndexOf("/");
+  const listed = await storage.list(slash >= 0 ? path.slice(0, slash) : "", {
+    search: slash >= 0 ? path.slice(slash + 1) : path,
+    limit: 10,
+  });
+  const name = slash >= 0 ? path.slice(slash + 1) : path;
+  const match = listed.data?.find((row) => row.name === name);
+  return objectByteSize({ metadata: match?.metadata ?? undefined });
+}
+
+function objectByteSize(info: { size?: number; metadata?: Record<string, unknown> } | null): number | null {
+  if (!info) return null;
+  if (typeof info.size === "number" && Number.isInteger(info.size)) return info.size;
+  const meta = info.metadata?.size;
+  if (typeof meta === "number" && Number.isInteger(meta)) return meta;
+  if (typeof meta === "string" && /^\d+$/.test(meta)) return Number(meta);
+  return null;
+}
+
+export const prepareClientAgentUpload = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     tokenInput
       .extend({
         itemKey: z.string().regex(/^[a-z0-9_]+$/),
-        base64: z.string().min(4).max(SEND_FILE_BASE64_MAX),
+        size: z.number().int(),
+        mime: z.string().max(80),
+        name: z.string().max(300).optional(),
+      })
+      .parse(input),
+  )
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      | { ok: true; path: string; token: string; signedUrl: string; grant: string }
+      | ReturnType<typeof closedLink>
+    > => {
+  const resolved = await resolveToken(data.token);
+      if (!resolved.ok) return resolved;
+      const items = await loadItems(resolved.send.id);
+      if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
+      const declared = declareUpload({
+        consented: consentReady(resolved.send.consent_at),
+        size: data.size,
+        mime: data.mime,
+      });
+      if (!declared.ok) {
+        await noteRejected(resolved);
+        return declared;
+      }
+      const secret = uploadGrantSecret();
+      if (!secret) throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
+      const path = sendStoragePath(resolved.send.id, data.itemKey, crypto.randomUUID());
+      const signed = await objectStorage().createSignedUploadUrl(path, { upsert: false });
+      if (signed.error || !signed.data?.token || !signed.data.signedUrl) {
+        throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
+      }
+      const displayName = sanitizeClientFileName(data.name ?? "");
+      const grant = await signUploadGrant(secret, {
+        sendId: resolved.send.id,
+        itemKey: data.itemKey,
+        path,
+        size: data.size,
+        mime: data.mime,
+        exp: Date.now() + UPLOAD_GRANT_TTL_MS,
+        ...(displayName ? { name: displayName } : {}),
+      });
+  return { ok: true, path, token: signed.data.token, signedUrl: signed.data.signedUrl, grant };
+    },
+  );
+
+export const confirmClientAgentUpload = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    tokenInput
+      .extend({
+        itemKey: z.string().regex(/^[a-z0-9_]+$/),
+        path: z.string().min(1).max(240),
+        grant: z.string().min(1).max(2000),
       })
       .parse(input),
   )
   .handler(async ({ data }): Promise<{ ok: true } | ReturnType<typeof closedLink>> => {
-    const resolved = await resolveToken(data.token);
+  const resolved = await resolveToken(data.token);
     if (!resolved.ok) return resolved;
+    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
     const items = await loadItems(resolved.send.id);
     if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
-
-    const decision = acceptClientFile({
-      consented: consentReady(resolved.send.consent_at),
-      bytes: bytesFromBase64(data.base64),
+    const secret = uploadGrantSecret();
+    const grant = secret ? await readUploadGrant(secret, data.grant) : null;
+    if (
+      !grant ||
+      grant.path !== data.path ||
+      grant.sendId !== resolved.send.id ||
+      grant.itemKey !== data.itemKey ||
+      !pathBelongsToSend(data.path, resolved.send.id, data.itemKey)
+    ) {
+      await noteRejected(resolved);
+      return closedLink("unavailable");
+    }
+    const storage = objectStorage();
+    const prefix = await readObjectPrefix(data.path);
+    const listedSize = await storedObjectSize(data.path);
+    const objectSize = listedSize ?? prefix?.total ?? null;
+    const sniffed = prefix ? sniffDocumentMime(prefix.bytes) : null;
+    const decision = confirmStoredObject({
+      grant,
+      claimedPath: data.path,
+      sendId: resolved.send.id,
+      itemKey: data.itemKey,
+      objectSize,
+      sniffed,
     });
-    const path = sendStoragePath(resolved.send.id, data.itemKey, crypto.randomUUID());
-    const stored = await storeAcceptedFile(decision, async (file) => {
-      const storage = objectStorage();
-      const uploaded = await storage.upload(path, file.bytes, {
-        contentType: file.mime,
-        upsert: false,
+    if (!decision.ok) {
+      if (pathBelongsToSend(grant.path, resolved.send.id, data.itemKey)) {
+        await storage.remove([grant.path]);
+      }
+      await noteRejected(resolved);
+      return decision;
+    }
+    const existing = await findSendFile(resolved.send.id, data.path);
+    if (existing === "missing") {
+      const filed = await insertSendFile({
+        send_id: resolved.send.id,
+        item_key: data.itemKey,
+        storage_path: data.path,
+        mime: decision.mime,
+        size_bytes: decision.size,
+        display_name: sanitizeClientFileName(grant.name ?? ""),
       });
-      if (uploaded.error) {
-        throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
+      if (filed === "failed") {
+        await storage.remove([data.path]);
+        throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
       }
-      const downloaded = await storage.download(path);
-      const object = downloaded.data;
-      if (downloaded.error || !object) {
-        await storage.remove([path]);
-        return null;
-      }
-      const storedBytes = new Uint8Array(await object.arrayBuffer());
-      const sniffed = sniffDocumentMime(storedBytes);
-      if (
-        storedBytes.byteLength !== file.bytes.byteLength ||
-        !sizeAllowed(storedBytes.byteLength) ||
-        sniffed !== file.mime
-      ) {
-        await storage.remove([path]);
-        return null;
-      }
-      return { mime: sniffed, size: storedBytes.byteLength };
-    });
-    if (!stored.ok) return stored;
-    if (!stored.value) return closedLink("mime");
-
-    const previous = await loadStoredPath(resolved.send.id, data.itemKey);
-    const filed = await insertSendFile({
-      send_id: resolved.send.id,
-      item_key: data.itemKey,
-      storage_path: path,
-      mime: stored.value.mime,
-      size_bytes: stored.value.size,
-    });
-    if (filed === "failed") {
-      await objectStorage().remove([path]);
-      throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
     }
     try {
       await updateItem(resolved.send.id, data.itemKey, {
         status: "received",
         quality: "usable",
         explanation: null,
-        mime: stored.value.mime,
-        size_bytes: stored.value.size,
-        storage_path: path,
+        mime: decision.mime,
+        size_bytes: decision.size,
+        storage_path: data.path,
       });
     } catch (error) {
-      await objectStorage().remove([path]);
+      await deleteSendFile(resolved.send.id, data.path);
+      await storage.remove([data.path]);
       throw error;
     }
-    if (
-      filed === "legacy" &&
-      previous &&
-      previous !== path &&
-      pathBelongsToSend(previous, resolved.send.id, data.itemKey)
-    ) {
-      await objectStorage().remove([previous]);
+  return { ok: true };
+  });
+
+export const removeClientAgentFile = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    tokenInput
+      .extend({
+        itemKey: z.string().regex(/^[a-z0-9_]+$/),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }): Promise<{ ok: true } | ReturnType<typeof closedLink>> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return resolved;
+    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
+    const items = await loadItems(resolved.send.id);
+    if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
+    const rows = await listSendFiles(resolved.send.id, data.itemKey);
+    const previous = await loadStoredPath(resolved.send.id, data.itemKey);
+    await updateItem(resolved.send.id, data.itemKey, {
+      status: "open",
+      quality: null,
+      explanation: null,
+      mime: null,
+      size_bytes: null,
+      storage_path: null,
+    });
+    const paths = new Set<string>();
+    if (rows !== "legacy") {
+      for (const row of rows) {
+        if (pathBelongsToSend(row.storage_path, resolved.send.id, data.itemKey)) {
+          paths.add(row.storage_path);
+        }
+        await deleteSendFileById(row.id);
+      }
     }
+    if (previous && pathBelongsToSend(previous, resolved.send.id, data.itemKey)) paths.add(previous);
+    if (paths.size > 0) await objectStorage().remove([...paths]);
     return { ok: true };
   });
 
@@ -692,24 +917,174 @@ export const finishClientAgentItem = createServerFn({ method: "POST" })
     },
   );
 
+export const undoClientAgentItem = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    tokenInput
+      .extend({
+        itemKey: z.string().regex(/^[a-z0-9_]+$/),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }): Promise<{ ok: true } | ReturnType<typeof closedLink>> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return resolved;
+    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
+    const items = await loadItems(resolved.send.id);
+    const item = items.find((row) => row.itemKey === data.itemKey);
+    if (!item || !itemNotAvailable(item)) return closedLink("unavailable");
+    await updateItem(resolved.send.id, data.itemKey, {
+      status: "open",
+      quality: null,
+      explanation: null,
+    });
+    return { ok: true };
+  });
+
+async function findSendFile(sendId: string, path: string): Promise<"present" | "missing"> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              limit: (count: number) => Promise<{ data: Array<{ id: string }> | null; error: DbError }>;
+            };
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .select("id")
+    .eq("send_id", sendId)
+    .eq("storage_path", path)
+    .limit(1);
+  if (error) {
+    if (missingRelation(error, "client_agent_send_files")) return "missing";
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+  return data && data.length > 0 ? "present" : "missing";
+}
+
+async function deleteSendFile(sendId: string, path: string): Promise<void> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        delete: () => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (column: string, value: string) => Promise<{ error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .delete()
+    .eq("send_id", sendId)
+    .eq("storage_path", path);
+  if (error && !missingRelation(error, "client_agent_send_files")) {
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+}
+
+async function deleteSendFileById(id: string): Promise<void> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        delete: () => {
+          eq: (column: string, value: string) => Promise<{ error: DbError }>;
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .delete()
+    .eq("id", id);
+  if (error && !missingRelation(error, "client_agent_send_files")) {
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+}
+
+async function listSendFiles(
+  sendId: string,
+  itemKey: string,
+): Promise<Array<{ id: string; storage_path: string }> | "legacy"> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => Promise<{
+              data: Array<{ id: string; storage_path: string }> | null;
+              error: DbError;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .select("id, storage_path")
+    .eq("send_id", sendId)
+    .eq("item_key", itemKey);
+  if (error) {
+    if (missingRelation(error, "client_agent_send_files")) return "legacy";
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+  return data ?? [];
+}
+
 async function insertSendFile(row: {
   send_id: string;
   item_key: string;
   storage_path: string;
   mime: string;
   size_bytes: number;
+  display_name?: string;
 }): Promise<"stored" | "legacy" | "failed"> {
-  const { error } = await (
-    supabaseAdmin as unknown as {
-      from: (name: string) => {
-        insert: (value: Record<string, unknown>) => Promise<{ error: DbError }>;
-      };
-    }
-  )
-    .from("client_agent_send_files")
-    .insert(row);
-  if (!error) return "stored";
-  if (missingRelation(error, "client_agent_send_files")) return "legacy";
+  const write = (value: Record<string, unknown>) =>
+    (
+      supabaseAdmin as unknown as {
+        from: (name: string) => {
+          insert: (next: Record<string, unknown>) => Promise<{ error: DbError }>;
+        };
+      }
+    )
+      .from("client_agent_send_files")
+      .insert(value);
+  const payload: Record<string, unknown> = {
+    send_id: row.send_id,
+    item_key: row.item_key,
+    storage_path: row.storage_path,
+    mime: row.mime,
+    size_bytes: row.size_bytes,
+  };
+  if (row.display_name) payload.display_name = row.display_name;
+  const first = await write(payload);
+  if (!first.error) return "stored";
+  if (payload.display_name && missingRelation(first.error, "display_name")) {
+    delete payload.display_name;
+    const second = await write(payload);
+    if (!second.error) return "stored";
+    if (missingRelation(second.error, "client_agent_send_files")) return "legacy";
+    return "failed";
+  }
+  if (missingRelation(first.error, "client_agent_send_files")) return "legacy";
   return "failed";
 }
 
@@ -729,7 +1104,7 @@ export const saveClientAgentFilePassword = createServerFn({ method: "POST" })
     const password = data.password.replace(/\s+/g, " ").trim();
     if (!password || password.length > 80) return { ok: false, body: "That could not be saved." };
     const key = filePasswordKey(process.env[CLIENT_AGENT_FILE_PASSWORD_KEY]);
-    if (!key) return { ok: false, body: "That could not be saved." };
+    if (!key) return { ok: false, body: CLIENT_AGENT_PASSWORD_UNSAVED };
     const sealed = await sealFilePassword(password, key);
     const saved = await storeFilePassword(resolved.send.id, data.itemKey, sealed);
     if (!saved) return { ok: false, body: "That could not be saved." };
@@ -844,76 +1219,6 @@ export async function releaseClientAgentFilePassword(
   return plain;
 }
 
-export const askClientAgentLink = createServerFn({ method: "POST" })
-  .inputValidator((input) =>
-    tokenInput.extend({ message: z.string().max(400) }).parse(input),
-  )
-  .handler(async ({ data }): Promise<{ ok: true; reply: string } | ReturnType<typeof closedLink>> => {
-    const resolved = await resolveToken(data.token);
-    if (!resolved.ok) return resolved;
-    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
-    const turns = await countChatTurns(resolved.send.id);
-    if (turns === null) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
-    if (turns >= CLIENT_AGENT_CHAT_LIMIT) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
-    const reply = await guideDocumentQuestion({
-      message: data.message,
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      model: CLAUDE_MODEL,
-    });
-    await recordChatTurn(resolved.send.id);
-    return { ok: true, reply };
-  });
-
-async function countChatTurns(sendId: string): Promise<number | null> {
-  const since = new Date(Date.now() - SEND_ATTEMPT_WINDOW_MS).toISOString();
-  const { count, error } = await (
-    supabaseAdmin as unknown as {
-      from: (name: string) => {
-        select: (
-          cols: string,
-          opts: { count: "exact"; head: boolean },
-        ) => {
-          eq: (
-            column: string,
-            value: string,
-          ) => {
-            gte: (
-              column: string,
-              value: string,
-            ) => Promise<{ count: number | null; error: DbError }>;
-          };
-        };
-      };
-    }
-  )
-    .from("client_agent_send_chat_turns")
-    .select("id", { count: "exact", head: true })
-    .eq("send_id", sendId)
-    .gte("created_at", since);
-  if (error) {
-    if (missingRelation(error, "client_agent_send_chat_turns")) return null;
-    throw new Error(sendLinkLogLine({ event: "link", reason: "chat" }));
-  }
-  return count ?? 0;
-}
-
-async function recordChatTurn(sendId: string): Promise<void> {
-  const { error } = await (
-    supabaseAdmin as unknown as {
-      from: (name: string) => {
-        insert: (row: Record<string, unknown>) => Promise<{ error: DbError }>;
-      };
-    }
-  )
-    .from("client_agent_send_chat_turns")
-    .insert({ send_id: sendId });
-  if (error && !missingRelation(error, "client_agent_send_chat_turns")) {
-    throw new Error(sendLinkLogLine({ event: "link", reason: "chat" }));
-  }
-}
-
-export type { ItemQuality };
-
 const FINISH_BODY = "That could not be finished. Please try again.";
 
 async function loadCompletionItems(sendId: string): Promise<CompletionItem[]> {
@@ -955,6 +1260,50 @@ async function loadCompletionItems(sendId: string): Promise<CompletionItem[]> {
     sizeBytes: row.size_bytes,
     explanation: row.explanation,
   }));
+}
+
+async function loadArchiveFileRows(sendId: string): Promise<ArchiveFileRow[] | "legacy"> {
+  const load = (columns: string) =>
+    (
+      supabaseAdmin as unknown as {
+        from: (name: string) => {
+          select: (cols: string) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => Promise<{ data: Array<Record<string, unknown>> | null; error: DbError }>;
+          };
+        };
+      }
+    )
+      .from("client_agent_send_files")
+      .select(columns)
+      .eq("send_id", sendId);
+  let found = await load("item_key, storage_path, mime, size_bytes, display_name");
+  if (found.error && missingRelation(found.error, "display_name")) {
+    found = await load("item_key, storage_path, mime, size_bytes");
+  }
+  if (found.error) {
+    if (missingRelation(found.error, "client_agent_send_files")) return "legacy";
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+  return (found.data ?? []).flatMap((row) => {
+    const itemKey = typeof row.item_key === "string" ? row.item_key : "";
+    const storagePath = typeof row.storage_path === "string" ? row.storage_path : "";
+    if (!itemKey || !storagePath) return [];
+    const displayName = sanitizeClientFileName(
+      typeof row.display_name === "string" ? row.display_name : "",
+    );
+    return [
+      {
+        itemKey,
+        storagePath,
+        mime: typeof row.mime === "string" ? row.mime : null,
+        sizeBytes: typeof row.size_bytes === "number" ? row.size_bytes : null,
+        displayName: displayName || null,
+      },
+    ];
+  });
 }
 
 async function loadCopiedKeys(clientId: string, sendId: string) {
@@ -1039,12 +1388,37 @@ async function clientNameOf(clientId: string): Promise<string> {
   return name || "Your client";
 }
 
+function archiveStorage(bucket: string) {
+  return (
+    supabaseAdmin as unknown as {
+      storage: {
+        from: (name: string) => {
+          download: (path: string) => Promise<{ data: Blob | null; error: DbError }>;
+          upload: (
+            path: string,
+            body: Uint8Array,
+            options: { contentType: string; upsert: boolean },
+          ) => Promise<{ error: DbError }>;
+          remove: (paths: string[]) => Promise<{ error: DbError }>;
+        };
+      };
+    }
+  ).storage.from(bucket);
+}
+
 async function copyOneFile(input: {
   clientId: string;
   sendId: string;
-  file: { itemKey: string; label: string; sourcePath: string; mime: string; size: number };
+  file: {
+    itemKey: string;
+    label: string;
+    sourcePath: string;
+    mime: string;
+    size: number;
+    displayName: string | null;
+  };
 }): Promise<boolean> {
-  const downloaded = await bucketStorage(SEND_STORAGE_BUCKET).download(input.file.sourcePath);
+  const downloaded = await archiveStorage(SEND_STORAGE_BUCKET).download(input.file.sourcePath);
   if (downloaded.error || !downloaded.data) return false;
   const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
   const sniffed = sniffDocumentMime(bytes);
@@ -1059,8 +1433,9 @@ async function copyOneFile(input: {
     mime: sniffed,
     size: bytes.byteLength,
     sourcePath: input.file.sourcePath,
+    displayName: input.file.displayName,
   });
-  const uploaded = await bucketStorage(CLIENT_DOCUMENTS_BUCKET).upload(row.storage_path, bytes, {
+  const uploaded = await archiveStorage(CLIENT_DOCUMENTS_BUCKET).upload(row.storage_path, bytes, {
     contentType: sniffed,
     upsert: false,
   });
@@ -1083,7 +1458,7 @@ async function copyOneFile(input: {
       meta: row.meta,
     });
   if (inserted.error) {
-    await bucketStorage(CLIENT_DOCUMENTS_BUCKET).remove([row.storage_path]);
+    await archiveStorage(CLIENT_DOCUMENTS_BUCKET).remove([row.storage_path]);
     return false;
   }
   return true;
@@ -1098,7 +1473,12 @@ async function markCompleted(sendId: string): Promise<boolean> {
             column: string,
             value: string,
           ) => {
-            is: (column: string, value: null) => Promise<{ error: DbError }>;
+            is: (
+              column: string,
+              value: null,
+            ) => {
+              select: (cols: string) => Promise<{ data: Array<{ id: string }> | null; error: DbError }>;
+            };
           };
         };
       };
@@ -1107,21 +1487,26 @@ async function markCompleted(sendId: string): Promise<boolean> {
     .from("client_agent_sends")
     .update({ completed_at: new Date().toISOString() })
     .eq("id", sendId)
-    .is("completed_at", null);
-  return !error;
+    .is("completed_at", null)
+    .select("id");
+  if (!error) return true;
+  if (missingRelation(error, "completed_at")) return false;
+  return false;
 }
 
 export const completeClientAgentSend = createServerFn({ method: "POST" })
   .inputValidator((input) => tokenInput.parse(input))
   .handler(async ({ data }): Promise<{ ok: true } | { ok: false; body: string }> => {
     const resolved = await resolveToken(data.token);
-    if (!resolved.ok) return { ok: false, body: "This link is not available." };
+    if (!resolved.ok) return { ok: false, body: resolved.body };
     const items = await loadCompletionItems(resolved.send.id);
+    const fileRows = await loadArchiveFileRows(resolved.send.id);
     const decision = completionDecision({
       consentAt: resolved.send.consent_at,
       completedAt: resolved.send.completed_at,
       sendId: resolved.send.id,
       items,
+      ...(fileRows !== "legacy" && fileRows.length > 0 ? { fileRows } : {}),
     });
     if (!decision.ok) {
       return {
@@ -1129,13 +1514,11 @@ export const completeClientAgentSend = createServerFn({ method: "POST" })
         body:
           decision.reason === "consent"
             ? "Please agree before finishing."
-            : "Finish each document first.",
+            : "Add each document, or say you don't have it.",
       };
     }
     if (decision.already) return { ok: true };
-    if (!/^[0-9a-f-]{36}$/i.test(resolved.send.client_id)) {
-      return { ok: false, body: FINISH_BODY };
-    }
+    if (!/^[0-9a-f-]{36}$/i.test(resolved.send.client_id)) return { ok: false, body: FINISH_BODY };
     const existing = await loadCopiedKeys(resolved.send.client_id, resolved.send.id);
     if (!existing) return { ok: false, body: FINISH_BODY };
     const pending = copiesStillNeeded(decision.files, resolved.send.id, existing);
@@ -1171,3 +1554,74 @@ export const completeClientAgentSend = createServerFn({ method: "POST" })
     if (!marked) return { ok: false, body: FINISH_BODY };
     return { ok: true };
   });
+
+export const askClientAgentLink = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    tokenInput.extend({ message: z.string().max(400) }).parse(input),
+  )
+  .handler(async ({ data }): Promise<{ ok: true; reply: string } | ReturnType<typeof closedLink>> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return resolved;
+    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
+    if (!CLIENT_AGENT_CHAT_ENABLED) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
+    const turns = await countChatTurns(resolved.send.id);
+    if (turns === null) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
+    if (turns >= CLIENT_AGENT_CHAT_LIMIT) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
+    const reply = await guideDocumentQuestion({
+      message: data.message,
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: CLAUDE_MODEL,
+    });
+    await recordChatTurn(resolved.send.id);
+    return { ok: true, reply };
+  });
+
+async function countChatTurns(sendId: string): Promise<number | null> {
+  const since = new Date(Date.now() - SEND_ATTEMPT_WINDOW_MS).toISOString();
+  const { count, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (
+          cols: string,
+          opts: { count: "exact"; head: boolean },
+        ) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            gte: (
+              column: string,
+              value: string,
+            ) => Promise<{ count: number | null; error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_chat_turns")
+    .select("id", { count: "exact", head: true })
+    .eq("send_id", sendId)
+    .gte("created_at", since);
+  if (error) {
+    if (missingRelation(error, "client_agent_send_chat_turns")) return null;
+    throw new Error(sendLinkLogLine({ event: "link", reason: "chat" }));
+  }
+  return count ?? 0;
+}
+
+async function recordChatTurn(sendId: string): Promise<void> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        insert: (row: Record<string, unknown>) => Promise<{ error: DbError }>;
+      };
+    }
+  )
+    .from("client_agent_send_chat_turns")
+    .insert({ send_id: sendId });
+  if (error && !missingRelation(error, "client_agent_send_chat_turns")) {
+    throw new Error(sendLinkLogLine({ event: "link", reason: "chat" }));
+  }
+}
+
+export type { ItemQuality };

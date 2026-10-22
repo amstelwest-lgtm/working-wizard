@@ -24,6 +24,7 @@ import {
   resolveRatioRecord,
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./overview-brief.ts";
+import { promptMoneyPack } from "../../../src/lib/prompt-money.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import { adviceChatProductName, adviceChatVolumeUnit, adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
@@ -292,10 +293,11 @@ export async function buildContext(
   }
 
   // ── Waterfall / product mix / cash (outputs only — no statement dump) ─────
+  const waterfallFy = overviewFyStartMonth(copyPack, operatingProfile);
   const waterfall =
     tier === "none" || !financials
       ? null
-      : summarizeWaterfall(extractWaterfallFigures(financials));
+      : summarizeWaterfall(extractWaterfallFigures(financials, waterfallFy));
   const opRecord =
     operatingProfile && typeof operatingProfile === "object"
       ? (operatingProfile as Record<string, unknown>)
@@ -388,6 +390,7 @@ export async function buildContext(
           runwayWeeks: metrics?.runway.weeks ?? null,
           runwayLabel: metrics ? runwayDisplayLabel(metrics.runway) : null,
           copyPack,
+          storedMarket: clientMarketRaw,
           fyStartMonth: overviewFyStartMonth(copyPack, operatingProfile),
           shortfallWeek: metrics?.outlook.shortfallWeek,
           clientName,
@@ -443,6 +446,7 @@ export async function buildContext(
     ratios,
     playbook: [],
     copyPack,
+    moneyPack: promptMoneyPack(clientMarketRaw),
     waterfall,
     cashForecast,
     productLines,

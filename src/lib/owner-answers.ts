@@ -18,8 +18,15 @@ import {
   OPENING_CASH_UNKNOWN,
   storedSeriesReading,
 } from "@/lib/client-metrics";
-import { periodProfitBridge, statementNetProfit, statedNetIsUsable } from "@/lib/period-profit";
+import {
+  periodProfitBridge,
+  statementGrossProfit,
+  statementNetProfit,
+  statedNetIsUsable,
+} from "@/lib/period-profit";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
+import type { FiscalStatementSlice } from "@/lib/budget-period-types";
+import { isProratedPeriodLabel } from "@/lib/firm-year-label";
 
 export type OwnerHomeLines = Record<AgentKey, readonly string[]>;
 
@@ -50,6 +57,13 @@ export type OwnerBooks = {
   netIncome?: number | null;
   /** Operating profit from the same bridge as the waterfall. */
   operatingProfit?: number | null;
+  /**
+   * The firm-year slice the Waterfall and Budget quote (fiscalStatementSlice,
+   * same year start). When it is prorated the profit tile quotes the slice and
+   * its pro-rated label, and does not compare with the prior period.
+   * Omit it, or pass an unclipped slice, and the raw statement is quoted.
+   */
+  profitPeriod?: FiscalStatementSlice | null;
   /** Blank or zero opening with no source. Not cash under the floor. */
   openingMissing?: boolean;
   receivables: number | null;
@@ -250,6 +264,7 @@ function profitHomeLine(sentence: string): string {
   const [gross, net] = amounts;
   if (!gross) return guardOwnerLine(sentence);
   const netBit = sentence.includes("Net profit") && net ? ` Net profit is ${net}.` : "";
+  const periodBit = proratedSentenceTail(sentence);
   let head = `Gross profit is ${gross}.`;
   if (sentence.includes("more than the prior"))
     head = `Gross profit is ${gross}, up on last period.`;
@@ -257,14 +272,20 @@ function profitHomeLine(sentence: string): string {
     head = `Gross profit is ${gross}, down on last period.`;
   else if (sentence.includes("the same as the prior"))
     head = `Gross profit is ${gross}, the same as last period.`;
-  return `${head}${netBit}`;
+  return `${head}${netBit}${periodBit}`;
+}
+
+/** The pro-rated label sentence at the end of a profit tile, with its leading space. */
+function proratedSentenceTail(sentence: string): string {
+  const last = sentence.match(/ ([^.]+)\.$/);
+  return last && isProratedPeriodLabel(last[1]) ? ` ${last[1]}.` : "";
 }
 
 /** Gross profit the waterfall prints: stated gross profit when it is in range, otherwise revenue minus the cost. */
 function waterfallGross(revenue: number, cogs: number, stated: number | null | undefined): number {
   const fields: Record<string, unknown> = { revenue, cogs };
   if (stated != null && Number.isFinite(stated)) fields.grossProfit = stated;
-  return periodProfitBridge(fields).grossProfit;
+  return statementGrossProfit(fields) ?? periodProfitBridge(fields).grossProfit;
 }
 
 export type OwnerStatusTone = "attention" | "critical";
@@ -328,7 +349,8 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
     finite(books.priorRevenue) && finite(books.priorCogs)
       ? waterfallGross(books.priorRevenue, books.priorCogs, books.priorGrossProfit)
       : null;
-  const profitDown = gross != null && prior != null && gross < prior;
+  // A pro-rated slice is not compared with a prior statement of another length.
+  const profitDown = !profitClip(books) && gross != null && prior != null && gross < prior;
   const overdue = finite(books.overdueReceivables ?? null) && (books.overdueReceivables ?? 0) > 0;
   const analyst: OwnerCardStatus | null =
     profitDown || overdue ? { tone: "attention", word: "Attention" } : null;
@@ -716,6 +738,12 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
   };
 }
 
+/** The firm-year slice when it really clipped the statement. Null otherwise. */
+function profitClip(books: OwnerBooks): FiscalStatementSlice | null {
+  const period = books.profitPeriod;
+  return period?.prorated && isProratedPeriodLabel(period.label) ? period : null;
+}
+
 function profitTile(
   books: OwnerBooks,
   money: (n: number) => string,
@@ -727,7 +755,11 @@ function profitTile(
     ask: "analyst" as const,
     signed: false,
   };
-  if (!finite(books.revenue) || !finite(books.cogs)) {
+  // A clipped firm-year slice is the figure the Waterfall and Budget print.
+  const clip = profitClip(books);
+  const revenue = clip ? clip.revenue : books.revenue;
+  const cogs = clip ? clip.cogs : books.cogs;
+  if (!finite(revenue) || !finite(cogs)) {
     return {
       ...base,
       sentence: books.hasBooks ? "Profit is not on file yet." : connectLine(books.market),
@@ -736,9 +768,11 @@ function profitTile(
       empty: true,
     };
   }
-  const gross = waterfallGross(books.revenue, books.cogs, books.grossProfit);
-  const operating = finite(books.operatingProfit) ? books.operatingProfit : null;
-  const netIncome = finite(books.netIncome) ? books.netIncome : null;
+  const gross = waterfallGross(revenue, cogs, clip ? clip.grossProfit : books.grossProfit);
+  const statedOperating = clip ? clip.operatingProfit : books.operatingProfit;
+  const statedNet = clip ? clip.netProfit : books.netIncome;
+  const operating = finite(statedOperating) ? statedOperating : null;
+  const netIncome = finite(statedNet) ? statedNet : null;
   const quotedNet = statementNetProfit({
     ...(operating != null ? { ebit: operating } : {}),
     ...(netIncome != null ? { netIncome } : {}),
@@ -750,8 +784,10 @@ function profitTile(
       : operating != null
         ? ` Operating profit is ${money(operating)}.`
         : "";
-  let sentence = `Gross profit is ${money(gross)}.${profitBit}`;
-  if (finite(books.priorRevenue) && finite(books.priorCogs)) {
+  const periodBit = clip?.label ? ` ${clip.label}.` : "";
+  let sentence = `Gross profit is ${money(gross)}.${profitBit}${periodBit}`;
+  // A pro-rated slice is not compared with a prior statement of another length.
+  if (!clip && finite(books.priorRevenue) && finite(books.priorCogs)) {
     const prior = waterfallGross(books.priorRevenue, books.priorCogs, books.priorGrossProfit);
     const compared =
       gross < prior

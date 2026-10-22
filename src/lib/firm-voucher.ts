@@ -1,16 +1,16 @@
 /**
- * Firm upgrade vouchers are Stripe promotion codes. A valid code replaces
- * the South Africa 50% coupon. The two never stack, and a US firm never
- * receives the SA coupon.
- *
+ * Firm upgrade vouchers are Stripe promotion codes.
  * Setup Checkout collects a card only, so the code is checked here and
  * applied later on subscriptions.update.
  */
 
 import {
+  LEGACY_ZA_COUPON_ID,
+  LEGACY_ZA_COUPON_ON_UPGRADE,
+  readSubscriptionDiscountRefs,
   type FirmCouponDiscount,
   type StoredDiscountRef,
-} from "./firm-sa-market";
+} from "./stripe-discount";
 import {
   FIRM_BAND_CATALOG,
   formatUsdFromCents,
@@ -144,7 +144,7 @@ export function voucherDiscountedCents(
 }
 
 /**
- * "$0 for your first month, then $99/mo" for a one-time 100% coupon.
+ * A one-time coupon shows the free or discounted first period, then the list price.
  * Forever coupons show only the discounted amount.
  */
 export function firmVoucherPricePreview(input: {
@@ -266,36 +266,78 @@ export function withVoucherInterval(
   };
 }
 
+function discountsAreBare(sub: { discount?: unknown; discounts?: unknown }): boolean {
+  if (typeof sub.discounts === "string" && sub.discounts.trim()) return true;
+  if (
+    Array.isArray(sub.discounts) &&
+    sub.discounts.some((entry) => typeof entry === "string" && entry.trim())
+  ) {
+    return true;
+  }
+  return typeof sub.discount === "string" && Boolean(sub.discount.trim());
+}
+
+/**
+ * Checkout upgrade discounts. A bare discount id is re-retrieved with
+ * expand ['discounts']. If it is still bare, the update omits discounts
+ * so Stripe keeps them. This path does not throw.
+ */
+export async function readCheckoutUpgradeDiscounts(input: {
+  firmId: string;
+  subscriptionId: string;
+  fresh: { discount?: unknown; discounts?: unknown };
+  promotionCodeId?: string | null;
+  legacyZaCoupon?: "keep" | "clear";
+  retrieve: (
+    id: string,
+    params: { expand: string[] },
+  ) => Promise<{ discount?: unknown; discounts?: unknown }>;
+}): Promise<FirmCouponDiscount[] | undefined> {
+  let source = input.fresh;
+  if (discountsAreBare(source)) {
+    source = await input.retrieve(input.subscriptionId, { expand: ["discounts"] });
+  }
+  if (discountsAreBare(source)) {
+    console.warn(`[stripe] unexpanded discounts kept firm=${input.firmId.trim()}`);
+    return undefined;
+  }
+  return firmUpgradeDiscounts({
+    promotionCodeId: input.promotionCodeId,
+    existing: readSubscriptionDiscountRefs(source),
+    legacyZaCoupon: input.legacyZaCoupon,
+  });
+}
+
 /**
  * One discount on the subscription update. A voucher replaces every other
- * discount. Without a voucher, an existing rand-market coupon is removed
- * so it cannot stack on the local price. Undefined leaves discounts alone.
- * An empty list clears them.
+ * discount. Without a voucher, LEGACY_ZA_COUPON_ON_UPGRADE decides the
+ * legacy MILON_ZA_50: 'clear' drops it and keeps any other discount ids,
+ * 'keep' leaves the subscription's discounts alone.
  */
 export function firmUpgradeDiscounts(input: {
   promotionCodeId?: string | null;
-  zaCouponId?: string | null;
   existing?: StoredDiscountRef[] | null;
+  /** Tests pass both modes. Production uses LEGACY_ZA_COUPON_ON_UPGRADE. */
+  legacyZaCoupon?: "keep" | "clear";
 }): FirmCouponDiscount[] | undefined {
   const promo = input.promotionCodeId?.trim() ?? "";
+  const existing = input.existing ?? [];
   if (promo) {
-    const existing = input.existing ?? [];
-    const za = input.zaCouponId?.trim() ?? "";
+    // couponId is read from Discount.source.coupon (Dahlia), then discount.coupon.
+    // A missing coupon means the discount was not actually read, so this is not "already applied".
     const voucherAlreadyOnly =
       existing.length > 0 &&
-      existing.every((row) => row.promotionCodeId === promo) &&
-      existing.every((row) => !za || row.couponId !== za);
+      existing.every((row) => row.promotionCodeId === promo && row.couponId != null);
     if (voucherAlreadyOnly) return undefined;
     return [{ promotion_code: promo }];
   }
-  const za = input.zaCouponId?.trim() ?? "";
-  if (!za) return undefined;
-  const existing = input.existing ?? [];
-  if (!existing.some((row) => row.couponId === za)) return undefined;
+  const mode = input.legacyZaCoupon ?? LEGACY_ZA_COUPON_ON_UPGRADE;
+  if (mode !== "clear") return undefined;
+  if (!existing.some((row) => row.couponId === LEGACY_ZA_COUPON_ID)) return undefined;
   const kept: FirmCouponDiscount[] = [];
   const seen = new Set<string>();
   for (const row of existing) {
-    if (row.couponId === za) continue;
+    if (row.couponId === LEGACY_ZA_COUPON_ID) continue;
     const id = row.id?.trim() ?? "";
     if (!id || seen.has(id)) continue;
     seen.add(id);

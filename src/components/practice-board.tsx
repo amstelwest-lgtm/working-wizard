@@ -124,7 +124,7 @@ import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
 import { markInsightSeen } from "@/lib/funnel-timing";
 import { MarketPicker } from "@/components/market-picker";
 import {
-  clientMarketDraftFromFirm,
+  firmClientDraftMarket,
   coerceMarketSelection,
   draftToSelection,
   formatDate,
@@ -391,8 +391,8 @@ function FirmClientCapNotice({
                 canUpgrade: cap.upgrade.canUpgrade,
                 clientCount: cap.upgrade.clientCount,
                 usageLabel: cap.upgrade.usageLabel,
-                saDiscount: cap.upgrade.saDiscount,
                 zaLabels: cap.upgrade.zaLabels,
+                zarPlan: cap.upgrade.zarPlan,
                 phase: cap.upgrade.phase,
               }
             : null
@@ -455,8 +455,8 @@ function FirmClientCapNotice({
           canUpgrade={upgrade.canUpgrade}
           clientCount={upgrade.clientCount}
           usageLabel={upgrade.usageLabel}
-          saDiscount={upgrade.saDiscount}
           zaLabels={upgrade.zaLabels}
+          zarPlan={upgrade.zarPlan}
           cardFree={cap.starterTrial.cardFree === true && !cap.starterTrial.expired}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}
@@ -511,7 +511,7 @@ function AddClientDialog({
   const [saving, setSaving] = useState(false);
   const [savePhase, setSavePhase] = useState<AddClientSavePhase | null>(null);
   const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
-    clientMarketDraftFromFirm(firmMarket),
+    firmClientDraftMarket(firmMarket),
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const createClient = useServerFn(createFirmClient);
@@ -531,7 +531,7 @@ function AddClientDialog({
     setNewName(defaultName);
     setNewType("");
     setOwnerEmail("");
-    setDraftMarket(clientMarketDraftFromFirm(firmMarket));
+    setDraftMarket(firmClientDraftMarket(firmMarket));
     // Firm row already carries market. Fetch only when that value was not loaded.
     if (firmMarket == null && firmId) {
       void supabase
@@ -541,7 +541,7 @@ function AddClientDialog({
         .maybeSingle()
         .then(({ data }) => {
           if (cancelled) return;
-          setDraftMarket(clientMarketDraftFromFirm((data as { market?: unknown } | null)?.market));
+          setDraftMarket(firmClientDraftMarket((data as { market?: unknown } | null)?.market));
         });
     }
     const focus = setTimeout(() => inputRef.current?.focus(), 50);
@@ -607,8 +607,8 @@ function AddClientDialog({
       return;
     }
     const market = draftToSelection(draftMarket);
-    if (!market) {
-      toast.error("Pick a region — and a US state if this client is in the United States.");
+    if (draftMarket.country === "US" && !market) {
+      toast.error("Pick a US state if this client is in the United States.");
       return;
     }
     setSaving(true);
@@ -621,8 +621,9 @@ function AddClientDialog({
           name: newName.trim(),
           firmId: firmId ?? undefined,
           businessType: newType.trim() || null,
-          marketCountry: market.country,
-          marketRegion: market.regionCode,
+          ...(market
+            ? { marketCountry: market.country, marketRegion: market.regionCode }
+            : {}),
         },
       });
       let inviteDetail: string | null = null;
@@ -963,7 +964,11 @@ function AddClientDialog({
                 <button
                   className="btn gold"
                   onClick={() => void add()}
-                  disabled={saving || !newName.trim() || !isDraftComplete(draftMarket)}
+                  disabled={
+                    saving ||
+                    !newName.trim() ||
+                    (draftMarket.country === "US" && !isDraftComplete(draftMarket))
+                  }
                   style={{ flex: 1 }}
                 >
                   {addClientButtonLabel(savePhase)}
@@ -1380,6 +1385,20 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const load = async (activeFirmId: string | null, userId: string | undefined, viewerName?: string | null) => {
     const gen = ++loadGen.current;
+    // Both shell deadlines guard the slim list and the figures read. A superseded
+    // load (firm id arriving later) must not clear the deadlines the new load armed.
+    const clearBookDeadlines = () => {
+      const timer = bookDeadlineTimer.current;
+      if (timer != null) {
+        window.clearTimeout(timer);
+        bookDeadlineTimer.current = null;
+      }
+      const firmTimer = firmReloadTimer.current;
+      if (firmTimer != null) {
+        window.clearTimeout(firmTimer);
+        firmReloadTimer.current = null;
+      }
+    };
     setBookEnriched(false);
     const warm = readPaintedBook<ClientRow>(userId, activeFirmId);
     if (warm) {
@@ -1577,44 +1596,25 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         return { ok: false as const, map: {} as Record<string, number> };
       });
 
-    const [historyMap, actionMaps, queryCounts, displayNames, figures, linkedIds] = await Promise.all([
-      historyPromise,
-      actionsPromise,
-      queriesPromise,
-      namesPromise,
-      figuresPromise,
-      orphansPromise,
-    ]);
-    const { openActionsMap, overdueActionsMap, chaseActionsMap } = actionMaps;
-    if (gen !== loadGen.current) return;
-    const linked = new Set(linkedIds.filter((id): id is string => Boolean(id)));
-    const books = new Map(
-      ((figures.data ?? []) as { id: string; financials: Client["financials"]; cashflow: unknown }[]).map(
-        (row) => [row.id, row],
-      ),
-    );
-    if (figures.error) {
-      if (gen === loadGen.current && !figuresSettled.current) {
-        const painted = readPaintedBook<ClientRow>(userId, activeFirmId);
-        if (painted && painted.length > 0) {
-          setClientRows(painted);
-          figuresSettled.current = true;
-          setFiguresLoad("merged");
-          setBookEnriched(true);
-        } else {
-          setFiguresLoad("failed");
-        }
-      }
-    } else {
+    // Figures settle on their own. History, actions, queries, names, and
+    // orphans are extra reads: each one settles within 8s and patches the
+    // rows when it lands. A failed late patch is a warning only. No Sentry.
+    let historyMap: Record<string, StoredScorePoint[]> = {};
+    let openActionsMap: Record<string, number> = {};
+    let overdueActionsMap: Record<string, number> = {};
+    let chaseActionsMap: Record<string, { title: string; overdue: boolean }[]> = {};
+    let queryCounts: { ok: boolean; map: Record<string, number> } = { ok: false, map: {} };
+    let displayNames = new Map<string, string>();
+    let linked = new Set<string>();
+    let booksMerged = false;
+
+    const publishMerged = () => {
       rawClients = rawClients.map((client) => {
         const name = displayNames.get(client.id);
-        const book = books.get(client.id);
         return {
           ...client,
           name: name && name !== client.name ? name : client.name,
           firm_id: linked.has(client.id) ? activeFirmId : client.firm_id,
-          financials: book?.financials ?? client.financials ?? null,
-          cashflow: book?.cashflow ?? client.cashflow,
         };
       });
       const fullRows = rawClients.map((c) =>
@@ -1634,8 +1634,97 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         figuresSettled.current = true;
         setFiguresLoad("merged");
         setBookTimedOut(false);
+        setCountsReady(true);
+        clearBookDeadlines();
       }
+    };
+
+    const rememberAuxiliary = () => {
+      if (booksMerged && gen === loadGen.current) publishMerged();
+    };
+    const applyLatePatch = (patch: string, apply: () => void) => {
+      try {
+        apply();
+      } catch {
+        // A late read must not blank the board. The label is a fixed word:
+        // no client ids, names, or other PII, and this is not reported to Sentry.
+        console.warn("[practice-board] late patch failed", { patch });
+      }
+    };
+    void historyPromise.then((map) => {
+      applyLatePatch("history", () => {
+        historyMap = map;
+        rememberAuxiliary();
+      });
+    }, () => {});
+    void actionsPromise.then((maps) => {
+      applyLatePatch("actions", () => {
+        openActionsMap = maps.openActionsMap;
+        overdueActionsMap = maps.overdueActionsMap;
+        chaseActionsMap = maps.chaseActionsMap;
+        rememberAuxiliary();
+      });
+    }, () => {});
+    void queriesPromise.then((counts) => {
+      applyLatePatch("queries", () => {
+        queryCounts = counts;
+        rememberAuxiliary();
+      });
+    }, () => {});
+    void namesPromise.then((map) => {
+      applyLatePatch("names", () => {
+        displayNames = map;
+        rememberAuxiliary();
+      });
+    }, () => {});
+    void orphansPromise.then((ids) => {
+      applyLatePatch("orphans", () => {
+        linked = new Set(ids.filter((id): id is string => Boolean(id)));
+        rememberAuxiliary();
+      });
+    }, () => {});
+
+    const figures = await figuresPromise;
+    if (gen !== loadGen.current) return;
+    if (figures.error) {
+      if (!figuresSettled.current) {
+        const painted = readPaintedBook<ClientRow>(userId, activeFirmId);
+        if (painted && painted.length > 0) {
+          setClientRows(painted);
+          figuresSettled.current = true;
+          setFiguresLoad("merged");
+          setBookEnriched(true);
+        } else {
+          setFiguresLoad("failed");
+        }
+      }
+      // The figures read has settled, so the deadlines must not also fire.
+      clearBookDeadlines();
+    } else {
+      const books = new Map(
+        ((figures.data ?? []) as { id: string; financials: Client["financials"]; cashflow: unknown }[]).map(
+          (row) => [row.id, row],
+        ),
+      );
+      rawClients = rawClients.map((client) => {
+        const book = books.get(client.id);
+        return {
+          ...client,
+          financials: book?.financials ?? client.financials ?? null,
+          cashflow: book?.cashflow ?? client.cashflow,
+        };
+      });
+      booksMerged = true;
+      publishMerged();
     }
+
+    await Promise.all([
+      settleWithin(historyPromise, SHELL_GATE_TIMEOUT_MS),
+      settleWithin(actionsPromise, SHELL_GATE_TIMEOUT_MS),
+      settleWithin(queriesPromise, SHELL_GATE_TIMEOUT_MS),
+      settleWithin(namesPromise, SHELL_GATE_TIMEOUT_MS),
+      settleWithin(orphansPromise, SHELL_GATE_TIMEOUT_MS),
+    ]);
     } catch (err) {
       console.error("practice book:", err);
       if (gen === loadGen.current && !figuresSettled.current) {
@@ -1655,16 +1744,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       if (gen === loadGen.current) {
         setLoading(false);
         setCountsReady(true);
-        const timer = bookDeadlineTimer.current;
-        if (timer != null) {
-          window.clearTimeout(timer);
-          bookDeadlineTimer.current = null;
-        }
-        const firmTimer = firmReloadTimer.current;
-        if (firmTimer != null) {
-          window.clearTimeout(firmTimer);
-          firmReloadTimer.current = null;
-        }
+        clearBookDeadlines();
       }
     }
   };
@@ -2164,6 +2244,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 finding={(practiceLines[dashAgent] ?? []).filter((line) => line.trim()).join(" ")}
                 clients={clientRows.map((row) => ({ id: row.id, name: row.name }))}
                 marketCountry={parseMarketSelection(firmMarket)?.country ?? null}
+                firmId={firmId}
                 onBack={() => {
                   void navigate({ to: "/dashboard", hash: "" });
                 }}
@@ -2357,7 +2438,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         ) : null}
 
         {scoredRows.length > 0 ? (
-          <CheckoutAfterInsight clientCount={trialAllowance?.upgrade?.clientCount ?? null} />
+          <CheckoutAfterInsight
+            clientCount={trialAllowance?.upgrade?.clientCount ?? null}
+            variant="practice-home"
+          />
         ) : null}
           </>
         ) : null}

@@ -29,6 +29,15 @@ export type FinalFile = {
   sourcePath: string;
   mime: string;
   size: number;
+  displayName: string | null;
+};
+
+export type ArchiveFileRow = {
+  itemKey: string;
+  storagePath: string;
+  mime: string | null;
+  sizeBytes: number | null;
+  displayName: string | null;
 };
 
 export type CompletionDecision =
@@ -85,6 +94,7 @@ export function completionDecision(input: {
   completedAt: string | null;
   sendId: string;
   items: readonly CompletionItem[];
+  fileRows?: readonly ArchiveFileRow[];
 }): CompletionDecision {
   if (input.completedAt) return { ok: true, already: true };
   if (!input.consentAt) return { ok: false, reason: "consent" };
@@ -103,28 +113,57 @@ export function completionDecision(input: {
 
   const files: FinalFile[] = [];
   const notes: string[] = [];
-  let missing = 0;
-  for (const item of input.items) {
-    const label = itemLabel(item.itemKey, item.label);
-    const note = item.explanation?.trim() ?? "";
-    if (note) notes.push(`${label}: ${note}`);
-    if (!item.storagePath) {
-      missing += 1;
-      continue;
-    }
+  const pushFile = (file: Omit<FinalFile, "displayName"> & { displayName?: string | null }) => {
+    files.push({ ...file, displayName: file.displayName?.trim() || null });
+  };
+  const fromItem = (item: CompletionItem): { ok: false; reason: "file" } | { ok: true } => {
+    if (!item.storagePath) return { ok: true };
+    if (files.some((file) => file.sourcePath === item.storagePath)) return { ok: true };
     if (!pathBelongsToSend(item.storagePath, input.sendId, item.itemKey)) {
       return { ok: false, reason: "file" };
     }
     const mime = item.mime ?? "";
     if (!extensionForAgentMime(mime)) return { ok: false, reason: "file" };
-    files.push({
+    pushFile({
       itemKey: item.itemKey,
-      label,
+      label: itemLabel(item.itemKey, item.label),
       sourcePath: item.storagePath,
       mime,
       size: item.sizeBytes ?? 0,
     });
+    return { ok: true };
+  };
+
+  if (input.fileRows && input.fileRows.length > 0) {
+    const labels = new Map(
+      input.items.map((item) => [item.itemKey, itemLabel(item.itemKey, item.label)]),
+    );
+    for (const row of input.fileRows) {
+      if (!pathBelongsToSend(row.storagePath, input.sendId, row.itemKey)) {
+        return { ok: false, reason: "file" };
+      }
+      const mime = row.mime ?? "";
+      if (!extensionForAgentMime(mime)) return { ok: false, reason: "file" };
+      pushFile({
+        itemKey: row.itemKey,
+        label: labels.get(row.itemKey) ?? itemLabel(row.itemKey, null),
+        sourcePath: row.storagePath,
+        mime,
+        size: row.sizeBytes ?? 0,
+        displayName: row.displayName,
+      });
+    }
   }
+
+  for (const item of input.items) {
+    const label = itemLabel(item.itemKey, item.label);
+    const note = item.explanation?.trim() ?? "";
+    if (note) notes.push(`${label}: ${note}`);
+    const added = fromItem(item);
+    if (!added.ok) return added;
+  }
+  const withFile = new Set(files.map((file) => file.itemKey));
+  const missing = input.items.filter((item) => !withFile.has(item.itemKey)).length;
 
   return {
     ok: true,
@@ -145,6 +184,7 @@ export function buildClientAgentArtifact(input: {
   mime: string;
   size: number;
   sourcePath: string;
+  displayName?: string | null;
 }): {
   id: string;
   client_id: string;
@@ -181,10 +221,28 @@ export function buildClientAgentArtifact(input: {
       mime: input.mime,
       size: input.size,
       source_path: input.sourcePath,
-      file_name: input.label,
+      file_name: input.displayName?.trim() || input.label,
       bytes: input.size,
     },
   };
+}
+
+export function copiedDocumentPaths(
+  rows: ReadonlyArray<{ storage_path: unknown; visibility: unknown; meta: unknown }>,
+  sendId: string,
+  itemKey: string,
+): string[] {
+  const out: string[] = [];
+  for (const row of rows) {
+    if (row.visibility !== "shared") continue;
+    if (typeof row.storage_path !== "string" || row.storage_path.length === 0) continue;
+    if (!row.meta || typeof row.meta !== "object") continue;
+    const meta = row.meta as Record<string, unknown>;
+    if (meta.source !== "client_agent_send") continue;
+    if (meta.send_id !== sendId || meta.item_key !== itemKey) continue;
+    out.push(row.storage_path);
+  }
+  return out;
 }
 
 export function copiedDocumentPath(

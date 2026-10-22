@@ -45,10 +45,13 @@ type Props = {
   clientCount?: number | null;
   usageLabel?: string | null;
   upgrading?: boolean;
-  /** Server says this signed-in firm is SA. Never set from a public page. */
-  saDiscount?: boolean;
   /** Server-built rand lines for the practice list. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
+  /**
+   * Practice list is rand from the stored firm market (or a ZA-heavy client
+   * list). Keeps rand lines when the quote fails and the currency is still USD.
+   */
+  zarPlan?: boolean;
   /**
    * From eligibleForIntroTrial. Starter shows the signup trial lines only
    * while this firm has never had a subscription.
@@ -100,8 +103,8 @@ export function FirmBandUpgrade({
   clientCount = null,
   usageLabel,
   upgrading = false,
-  saDiscount = false,
   zaLabels = null,
+  zarPlan = false,
   introTrialEligible = false,
   cardFree = false,
   onUpgrade,
@@ -135,7 +138,10 @@ export function FirmBandUpgrade({
   const starterLeads = currentBand == null && selected === "starter";
   const startHereBand = currentBand ?? (starterLeads ? "starter" : null);
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
-  const saFirm = saDiscount || zaLabels != null || priceCurrency.toLowerCase() === "zar";
+  // A missing rand quote leaves labels empty and the currency on USD.
+  // zarPlan still selects the published ladder. Without it, the row falls
+  // back to the USD catalog. Charge currency is unchanged.
+  const saFirm = zarPlan || zaLabels != null || priceCurrency.toLowerCase() === "zar";
 
   async function applyVoucher(): Promise<boolean> {
     if (!selected || !onValidateVoucher) return false;
@@ -278,10 +284,12 @@ export function FirmBandUpgrade({
                     Start here
                   </span>
                 ) : null}
-                <span className="text-muted-foreground" style={{ display: "block", fontSize: 12 }}>
-                  {band.clientLimit == null
-                    ? "Unlimited active clients"
-                    : firmClientLimitLabel(band.id)}
+                <span
+                  className="text-muted-foreground"
+                  data-band-cap={band.id}
+                  style={{ display: "block", fontSize: 12 }}
+                >
+                  {firmClientLimitLabel(band.id)}
                 </span>
                 {band.id === "starter" && cardFree ? (
                   <span

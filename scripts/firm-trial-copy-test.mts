@@ -88,9 +88,9 @@ assert(!/R\s?\d/.test(PRICING_TRIAL_AFTER), "the shared pricing line has no rand
 
 const za = loadSaPricingCopy();
 assert(za.heroNote.includes(FIRM_TRIAL_SENTENCE), "ZA hero uses the locked sentence");
-assert(za.heroNote.includes("Then R 299/mo."), "ZA hero names the Starter rand price");
+assert(za.heroNote.includes("Then R299/mo."), "ZA hero names the Starter rand price");
 assert(!za.heroNote.includes("$39"), "ZA hero does not name the dollar price");
-assert(za.trialAfter.includes("Then R 299/mo."), "ZA pricing bar names the rand price");
+assert(za.trialAfter.includes("Then R299/mo."), "ZA pricing bar names the rand price");
 assert(!za.trialAfter.toLowerCase().includes("vat"), "ZA trial line has no VAT wording");
 
 for (const band of ["starter", "solo", "small", "scale"] as const) {

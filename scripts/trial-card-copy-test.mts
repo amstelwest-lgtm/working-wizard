@@ -61,7 +61,7 @@ assert(
   starterMonthlyFromQuote({ market: "za", priceLabel: "R 299/mo · about R 60 per client" }) === "R 299/mo",
   "a ZA quote keeps the server's monthly rand label",
 );
-assert(starterMonthlyFromQuote(null) === "$39/mo", "an unknown quote stays on the USD catalog");
+assert(starterMonthlyFromQuote(null) === "Starter plan", "an unknown quote names the plan and does not invent a price");
 
 const capSrc = readFileSync(join(root, "src/components/precard-cap-card.tsx"), "utf8");
 const healthSrc = readFileSync(join(root, "src/components/checkout-after-insight.tsx"), "utf8");
@@ -246,7 +246,7 @@ const zaPrice = JSON.parse(zaLine.slice("ZA_CHUNK_REPORT ".length)) as {
   tight: boolean;
   nbsp: boolean;
 };
-assert(zaPrice.spaced, "the ZA server chunk is where R 299 is produced");
-assert(!zaPrice.tight && !zaPrice.nbsp, "the ZA server chunk uses the spaced rand price");
+assert(zaPrice.tight, "the ZA server chunk is where R299 is produced");
+assert(!zaPrice.spaced && !zaPrice.nbsp, "the ZA server chunk uses the tight rand price");
 
 console.log("trial-card-copy ok");

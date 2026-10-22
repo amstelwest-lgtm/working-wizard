@@ -69,6 +69,8 @@ export type { DateMarket, MoneyMarket } from "./format";
 export {
   assertMarketSelection,
   clientMarketDraftFromFirm,
+  firmClientCreateMarket,
+  firmClientDraftMarket,
   coerceMarketSelection,
   draftToSelection,
   isDraftComplete,
@@ -80,6 +82,7 @@ export {
 export { resolveMarket, ZA_MARKET } from "./resolve";
 export { effectiveFirmMarket, marketForClient, marketForFirm } from "./scope";
 export {
+  readVisitorChoice,
   readVisitorDraft,
   readVisitorMarket,
   visitorMarketFromSearch,

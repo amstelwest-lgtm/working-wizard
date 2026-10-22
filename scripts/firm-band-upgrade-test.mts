@@ -33,6 +33,7 @@ import {
   shouldCancelReplacedSubscription,
   shouldRevertBlockedDowngrade,
   currentPlanLabel,
+  practiceDisplaysZarPlan,
   upgradeButtonLabel,
   upgradeSuccessMessage,
 } from "../src/lib/firm-band-upgrade";
@@ -43,14 +44,7 @@ import {
   firmSetupCheckoutSessionParams,
   firmUpgradeCheckoutSessionParams,
   readFirmSetupUpgrade,
-  withFirmZaCoupon,
 } from "../src/lib/stripe-checkout.core";
-import {
-  SA_FIRM_DISCOUNT_NOTE,
-  isSaMarketFirm,
-  stripeZaCouponId,
-  zaSubscriptionDiscounts,
-} from "../src/lib/firm-sa-market";
 import {
   CANONICAL_APP_ORIGIN,
   appRedirectOrigin,
@@ -61,6 +55,7 @@ import {
 } from "../supabase/functions/_shared/app-origin.ts";
 import { checkoutEmailRedirectTo } from "../src/lib/pending-checkout";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
+import { quotePrice } from "../src/lib/pricing/price-quote.server";
 import { FirmStarterTrialBanner } from "../src/components/firm-starter-trial-banner";
 import {
   decideFirmClientCreate,
@@ -119,6 +114,16 @@ function practiceCountClaims(text: string): number[] {
   return claims;
 }
 
+const approvedZaLabels = Object.fromEntries(
+  FIRM_CHECKOUT_BANDS.map((band) => [
+    band,
+    {
+      month: quotePrice({ market: "za", plan: band, interval: "month", surface: "firm" })?.label ?? "",
+      year: quotePrice({ market: "za", plan: band, interval: "year", surface: "firm" })?.label ?? "",
+    },
+  ]),
+);
+
 for (const market of ["za", "us"] as const) {
   for (const clientCount of [5, 6]) {
     for (const currentBand of [null, "starter"] as const) {
@@ -151,10 +156,10 @@ for (const market of ["za", "us"] as const) {
           currentBand,
           interval: "month",
           priceCurrency: za ? "zar" : "USD",
+          zaLabels: za ? approvedZaLabels : null,
           canUpgrade: true,
           clientCount,
           usageLabel,
-          saDiscount: za,
           onUpgrade: () => undefined,
         }),
       );
@@ -914,6 +919,12 @@ assert(
   settings.includes("introTrialEligible={plan.introTrialEligible}"),
   "settings shows the Starter trial lines from the plan flag",
 );
+assert(settings.includes("zarPlan={zarPlan}"), "settings keeps the rand list when the quote fails");
+assert(
+  dashboard.includes("zarPlan={upgrade.zarPlan}") &&
+    dashboard.includes("zarPlan: cap.upgrade.zarPlan"),
+  "the practice list keeps the rand plan when the quote is missing",
+);
 assert(
   settings.includes("plan.phase === \"none\"") && settings.includes("plan.starterTrial?.enforced === true"),
   "settings uses the card-free sentence only for an enforced firm with no subscription",
@@ -1042,26 +1053,6 @@ assert(nudge.includes("transactionalSiteUrl"), "nudge emails use the allowlisted
 assert(taskLink.includes("transactionalFrom"), "task-link From uses the locked mailbox");
 assert(!/co\.za/i.test(taskLink) && !/co\.za/i.test(nudge), "edge mail no longer names the retired zone");
 
-assert(isSaMarketFirm({ market: { country: "ZA", regionCode: null } }), "country ZA is SA");
-assert(!isSaMarketFirm({ market: { country: "US", regionCode: "NY" } }), "country US is not SA");
-assert(!isSaMarketFirm({ market: null }), "a missing market is not SA");
-assert(!isSaMarketFirm(null), "a missing firm is not SA");
-assert(
-  isSaMarketFirm({ market: { country: "US", regionCode: "NY" }, currency: "ZAR" }),
-  "a stored ZAR currency is SA when country is not ZA",
-);
-assert(
-  isSaMarketFirm({ market: { locale: "en-ZA" } }),
-  "a stored en-ZA locale is SA when country is absent",
-);
-assert(
-  !isSaMarketFirm({ market: { country: "US", currency: "USD", locale: "en-US" } }),
-  "USD and en-US are not SA",
-);
-assert(stripeZaCouponId(undefined) === "MILON_ZA_50", "the coupon id defaults to MILON_ZA_50");
-assert(stripeZaCouponId("  ") === "MILON_ZA_50", "a blank env still uses the default coupon");
-assert(stripeZaCouponId("coupon_custom") === "coupon_custom", "STRIPE_ZA_COUPON_ID overrides the id");
-
 const checkoutBase = {
   priceId: "price_test_solo",
   lookupKey: "milon_solo_monthly",
@@ -1082,35 +1073,31 @@ assert(
   "a US checkout can still carry FOUNDING",
 );
 assert(
-  !JSON.stringify(usCheckout.discounts ?? []).includes("MILON_ZA_50"),
-  "a US checkout does not include the SA coupon",
+  !JSON.stringify(usCheckout.discounts ?? []).includes("coupon"),
+  "a US checkout does not attach a coupon",
 );
 const saCheckout = firmCheckoutSessionParams({
   ...checkoutBase,
   lookupKey: "milon_za_solo_monthly",
   priceId: "price_za_solo",
   market: "za",
-  zaCouponId: "MILON_ZA_50",
   promotionCodeId: null,
 });
-assert(!saCheckout.discounts?.length, "SA checkout does not attach the old coupon");
+assert(!saCheckout.discounts?.length, "SA checkout does not attach a coupon");
 assert(saCheckout.automatic_tax?.enabled === false, "SA checkout does not enable automatic tax");
 assert(saCheckout.allow_promotion_codes == null, "SA checkout does not open the promo box");
 assert(
   !JSON.stringify(saCheckout.discounts ?? []).includes("promo_founding"),
   "SA checkout does not stack FOUNDING",
 );
-const saAgain = withFirmZaCoupon(saCheckout, "MILON_ZA_50");
-assert(saAgain.discounts?.length === 1, "applying the SA coupon twice does not stack it");
 const saUpgrade = firmUpgradeCheckoutSessionParams({
   ...checkoutBase,
   lookupKey: "milon_za_solo_monthly",
   market: "za",
-  zaCouponId: "MILON_ZA_50",
   promotionCodeId: null,
   replacesSubscriptionId: "sub_starter",
 });
-assert(!saUpgrade.discounts?.length, "replacing a Starter subscription does not attach the old coupon");
+assert(!saUpgrade.discounts?.length, "replacing a Starter subscription does not attach a coupon");
 assert(saUpgrade.automatic_tax?.enabled === false, "the rand upgrade session does not enable automatic tax");
 
 const saUpdate = firmSubscriptionUpgradeParams({
@@ -1124,13 +1111,6 @@ const saUpdate = firmSubscriptionUpgradeParams({
 });
 assert(JSON.stringify(saUpdate.discounts) === "[]", "an SA subscription update can clear discounts");
 assert(saUpdate.automatic_tax?.enabled === false, "a rand subscription update does not enable automatic tax");
-assert(
-  zaSubscriptionDiscounts({
-    couponId: "MILON_ZA_50",
-    existing: [{ id: "di_za", couponId: "MILON_ZA_50" }],
-  }) === undefined,
-  "the legacy helper does not re-attach a coupon that is already present",
-);
 const usUpdate = firmSubscriptionUpgradeParams({
   itemId: "si_test",
   priceId: "price_test_solo",
@@ -1138,17 +1118,10 @@ const usUpdate = firmSubscriptionUpgradeParams({
   interval: "month",
   lookupKey: "milon_solo_monthly",
   endTrial: false,
-  discounts: zaSubscriptionDiscounts({ couponId: null, existing: [] }),
 });
-assert(usUpdate.discounts == null, "a US subscription update has no SA coupon");
-assert(
-  firmBandPriceLabel("solo", "month", "USD", null, { saDiscount: true }) === "$99",
-  "the USD catalog is not halved",
-);
-assert(
-  firmBandPriceLabel("solo", "year", "USD", null, { saDiscount: true }) === "$950",
-  "the annual USD catalog is not halved",
-);
+assert(usUpdate.discounts == null, "a US subscription update has no coupon");
+assert(firmBandPriceLabel("solo", "month", "USD", null) === "$99", "the USD catalog is not halved");
+assert(firmBandPriceLabel("solo", "year", "USD", null) === "$950", "the annual USD catalog is not halved");
 assert(firmBandPriceLabel("solo", "month", "USD") === "$99", "US Solo monthly stays $99");
 
 const usPicker = renderToStaticMarkup(
@@ -1158,13 +1131,12 @@ const usPicker = renderToStaticMarkup(
     priceCurrency: "USD",
     canUpgrade: true,
     clientCount: 1,
-    saDiscount: false,
     onUpgrade: () => undefined,
   }),
 );
 assert(usPicker.includes("$99"), "a US picker shows the full USD price");
 assert(!usPicker.includes("$49.50"), "a US picker does not show the halved price");
-assert(!usPicker.includes(SA_FIRM_DISCOUNT_NOTE), "a US picker has no SA pricing note");
+assert(!usPicker.includes("50% off"), "a US picker has no discount text");
 assert(!usPicker.includes("50% off"), "a US picker has no discount text");
 assert(!usPicker.includes("regional pricing"), "a US picker has no regional-pricing text");
 const annualStarter = renderToStaticMarkup(
@@ -1174,7 +1146,6 @@ const annualStarter = renderToStaticMarkup(
     priceCurrency: "USD",
     canUpgrade: true,
     clientCount: 1,
-    saDiscount: false,
     onUpgrade: () => undefined,
   }),
 );
@@ -1187,7 +1158,6 @@ const saPicker = renderToStaticMarkup(
     priceCurrency: "USD",
     canUpgrade: true,
     clientCount: 1,
-    saDiscount: true,
     zaLabels: {
       starter: { month: "R299/mo · about R60 per client", year: "R2,837/yr · about R60 per client" },
       solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
@@ -1199,7 +1169,7 @@ assert(saPicker.includes("R799/mo · about R53 per client"), "an SA picker shows
 assert(saPicker.includes("R299/mo · about R60 per client"), "an SA picker shows the Starter rand line");
 assert(!saPicker.includes("R0/mo"), "an SA picker does not invent a zero rand price");
 assert(!saPicker.includes("$39"), "an SA picker does not show the dollar Starter price");
-assert(!saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker has no discount note");
+assert(!saPicker.includes("50% off"), "an SA picker has no discount note");
 assert(!saPicker.toLowerCase().includes("vat"), "an SA picker has no tax wording");
 assert(!saPicker.includes(FIRM_TRIAL_CARD_LINE), "a used trial does not repeat the signup line");
 
@@ -1232,7 +1202,6 @@ const unusedSa = renderToStaticMarkup(
     priceCurrency: "zar",
     canUpgrade: true,
     clientCount: 0,
-    saDiscount: true,
     introTrialEligible: true,
     zaLabels: {
       starter: { month: "R299/mo · about R60 per client", year: "R2,837/yr · about R60 per client" },
@@ -1266,12 +1235,11 @@ assert(!usedTrial.includes(CARD_FREE_TRIAL_LINE), "a trialing firm does not see 
 
 const OLD_CARD_FREE_LINE = "14-day free trial · up to 5 clients on Starter";
 for (const [label, props] of [
-  ["US", { priceCurrency: "USD" as const, saDiscount: false, price: "$39" }],
+  ["US", { priceCurrency: "USD" as const, price: "$39" }],
   [
     "SA",
     {
       priceCurrency: "zar" as const,
-      saDiscount: true,
       price: "R299/mo · about R60 per client",
       zaLabels: {
         starter: { month: "R299/mo · about R60 per client", year: "R2,837/yr · about R60 per client" },
@@ -1288,7 +1256,6 @@ for (const [label, props] of [
       canUpgrade: true,
       clientCount: 0,
       cardFree: true,
-      saDiscount: props.saDiscount,
       zaLabels: "zaLabels" in props ? props.zaLabels : null,
       onUpgrade: () => undefined,
     }),
@@ -1352,13 +1319,12 @@ for (const publicFile of [
   "src/routes/for-owners.tsx",
 ]) {
   const text = readFileSync(resolve(publicFile), "utf8");
-  assert(!text.includes(SA_FIRM_DISCOUNT_NOTE), `${publicFile} does not advertise the SA discount`);
+  assert(!text.includes("50% off"), `${publicFile} does not advertise a percent-off discount`);
   assert(!text.includes("regional pricing"), `${publicFile} does not mention regional pricing`);
 }
 
-assert(fn.includes("isSaMarketFirm"), "checkout decides SA from the firm record");
-assert(fn.includes("STRIPE_ZA_COUPON_ID"), "the coupon id is read from the env");
-assert(fn.includes("zaCouponIdForMarket"), "the client market flag is not the coupon switch");
+assert(fn.includes("firmCheckoutCharge"), "checkout price goes through the charge helper");
+assert(readFileSync(resolve("src/lib/stripe-checkout.core.ts"), "utf8").includes("resolveCheckoutPriceMarket"), "the charge uses the checkout resolver");
 assert(sync.includes("firmUpgradeDiscounts"), "setup completion attaches one discount");
 assert(sync.includes("FIRM_VOUCHER_NOT_APPLIED_MESSAGE"), "a dropped voucher is reported");
 
@@ -1518,5 +1484,48 @@ assert(
   brain.includes("assertFirmCanGenerateDeliverable"),
   "a new brain deliverable checks the trial before the edge function",
 );
+
+const { buildUpgradeSnapshot } = await import("../src/lib/firm-client-cap.server");
+const { setSaPricingCopyForTests } = await import("../src/lib/pricing/za-pricing-chunk.server");
+setSaPricingCopyForTests(() => {
+  throw new Error("quote failed");
+});
+let failedSnap: Awaited<ReturnType<typeof buildUpgradeSnapshot>>;
+try {
+  failedSnap = await buildUpgradeSnapshot({
+    isOwner: true,
+    membershipRole: "owner",
+    market: { country: "ZA" },
+    clientMarkets: [],
+    clientCount: 1,
+    sub: null,
+  });
+} finally {
+  setSaPricingCopyForTests(null);
+}
+assert(failedSnap.zaLabels == null, "a failed rand quote leaves labels empty");
+assert(failedSnap.priceCurrency !== "zar", `a failed rand quote has no ZAR currency, saw ${failedSnap.priceCurrency}`);
+assert(failedSnap.zarPlan === true, "a missing rand quote keeps the rand-plan flag");
+const failedZarPlan = practiceDisplaysZarPlan({
+  firmMarket: { country: "ZA" },
+  clientMarkets: [],
+});
+assert(failedZarPlan, "a ZA firm still has a rand plan list");
+const failedHtml = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: failedSnap.band,
+    interval: failedSnap.interval,
+    priceCurrency: failedSnap.priceCurrency,
+    zarByBand: failedSnap.zarByBand,
+    canUpgrade: failedSnap.canUpgrade,
+    clientCount: failedSnap.clientCount,
+    zaLabels: failedSnap.zaLabels,
+    zarPlan: failedSnap.zarPlan,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(!failedHtml.includes("$"), `a ZA firm with a failed quote shows no dollar amounts, saw ${failedHtml.slice(0, 400)}`);
+assert(!/R\s?\d/.test(failedHtml), "a failed quote does not invent a rand amount on the client");
+assert(failedHtml.includes("Solo plan"), "a failed quote names the plan");
 
 console.log("firm-band-upgrade ok");

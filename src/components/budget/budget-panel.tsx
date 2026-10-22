@@ -16,6 +16,7 @@ import {
   budgetUniformNote,
   statementBudgetRead,
   budgetScaleBreak,
+  budgetCaptionActuals,
   budgetVersusStatement,
   budgetWasRebuiltFromActuals,
   budgetPlanFiguresChanged,
@@ -676,7 +677,10 @@ export function BudgetPanel({
   }
 
   const shownDoc = presented?.doc ?? statementView?.doc ?? doc;
-  const periodCaption = presented?.caption ?? null;
+  const sliceLabel = actuals?.period?.prorated ? actuals.period.label : null;
+  const periodCaption = presented?.caption
+    ? budgetCaptionActuals(presented.caption, sliceLabel)
+    : null;
   const uniformNote = budgetUniformNote(presented?.uniform ?? null);
   const implausible = budgetIsImplausible(shownDoc, figureSource);
   const scaleBroken = budgetScaleBreak(shownDoc, figureSource) != null;

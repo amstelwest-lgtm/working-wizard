@@ -59,6 +59,7 @@ export function LandingRegisterForm({
   firmInterval,
   copyMarket,
   ownerNote,
+  starterMonthly = null,
   handleRegister,
   goToFirmSignup,
   goToOwnerSpark,
@@ -94,6 +95,8 @@ export function LandingRegisterForm({
   copyMarket: { copyPack: VisitorCopyPack };
   /** Server-built for ZA. The US sentence otherwise. Never a client-side rand literal. */
   ownerNote: string;
+  /** Starter monthly quote for the practice country. Empty until it arrives. */
+  starterMonthly?: string | null;
   handleRegister: (event: FormEvent) => void;
   goToFirmSignup: (opts?: { plan?: FirmCheckoutBand; scrollTo?: "register" | "pricing" }) => void;
   goToOwnerSpark: () => void;
@@ -251,6 +254,7 @@ export function LandingRegisterForm({
                   plan={paidPlanFromRegisterLabel(regPlan) ?? "starter"}
                   interval={firmInterval}
                   country={draftMarket.country}
+                  starterMonthly={starterMonthly}
                   onPlanChange={(nextPlan) => {
                     setRegPlan(registerLabelForPlan(nextPlan));
                     stashPendingCheckout({
@@ -377,7 +381,7 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  {firmSignupTrialReminder("Starter", draftMarket.country)} The AI team prepares the
+                  {firmSignupTrialReminder("Starter", draftMarket.country, starterMonthly)} The AI team prepares the
                   analysis and you review and approve it. By creating an account you agree to the{" "}
                   <a href="/terms">Terms</a>.
                 </p>
@@ -491,7 +495,7 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  {ownerNote} Accounting firms: {firmSignupTrialReminder("Starter", draftMarket.country)}{" "}
+                  {ownerNote} Accounting firms: {firmSignupTrialReminder("Starter", draftMarket.country, starterMonthly)}{" "}
                   By creating an account you agree to the <a href="/terms">Terms</a>.
                 </p>
               </>

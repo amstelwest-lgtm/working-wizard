@@ -27,7 +27,12 @@ import {
   peerMedian,
   periodMonthsOf,
 } from "../../../src/lib/ratios.ts";
-import { statementGrossMarginFraction, statementNetProfit } from "../../../src/lib/period-profit.ts";
+import { firmYearStatement } from "../_shared/firm-year-slice.ts";
+import {
+  statementGrossMarginFraction,
+  statementGrossProfit,
+  statementNetProfit,
+} from "../../../src/lib/period-profit.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import {
   figuresPeriodLabelFrom,
@@ -35,7 +40,8 @@ import {
   storedYearToDateEnd,
 } from "../../../src/lib/statement-period.ts";
 import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
-import type { DateMarket } from "../../../src/lib/market/format.ts";
+import { formatMoney as formatCardMoney, type DateMarket } from "../../../src/lib/market/format.ts";
+import { formatPromptMoney, promptMoneyPack } from "../../../src/lib/prompt-money.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 
 export type OverviewCopyPack = "za" | "us";
@@ -52,6 +58,8 @@ export type OverviewBrief = {
   periodLabel: string | null;
   figuresAsOf: string | null;
   copyPack: OverviewCopyPack;
+  /** Stored firm country. ZA prints rand. Anything else, including null, prints dollars. */
+  moneyPack: OverviewCopyPack;
   health: number | null;
   healthStatus: "healthy" | "at_risk" | "critical" | null;
   healthLabel: "Healthy" | "Watch" | "Critical" | null;
@@ -82,7 +90,17 @@ export type OverviewBrief = {
   grossMargin: number | null;
   operatingMargin: number | null;
   netMargin: number | null;
-  /** Stored P&L headlines. Null when that line is not on the file. */
+  /**
+   * "Mar–Sep 2026, pro-rated from your Jan–Sep 2026 statement" when the
+   * statement crosses the firm-year start. Null when the statement already
+   * sits in that year.
+   */
+  estimateLabel: string | null;
+  /**
+   * Gross profit the home Analyst card prints. The stored line when it is in
+   * range, otherwise revenue minus cost of sales on the same firm-year slice.
+   * Null when neither a stored amount nor that pair is on the file.
+   */
   grossProfit: number | null;
   operatingProfit: number | null;
   profitBeforeTax: number | null;
@@ -197,15 +215,32 @@ function resolvedFyStart(copyPack: OverviewCopyPack, explicit?: number | null): 
   return copyPack === "us" ? 1 : 3;
 }
 
-function money(n: number, copyPack: OverviewCopyPack): string {
-  const symbol = copyPack === "us" ? "$" : "R";
+function money(n: number, pack: OverviewCopyPack): string {
   const abs = Math.abs(n);
   const digits = abs >= 100 ? 0 : 2;
-  const formatted = abs.toLocaleString("en-US", {
+  return formatPromptMoney(n, pack, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
-  return `${n < 0 ? "-" : ""}${symbol}${formatted}`;
+}
+
+/** Same whole-unit print as the Budget cards. A US figure stays `$241,000`. */
+function cardMoney(n: number, pack: OverviewCopyPack): string {
+  return formatCardMoney(
+    n,
+    pack === "us"
+      ? { currency: "USD" as const, locale: "en-US" as const }
+      : { currency: "ZAR" as const, locale: "en-ZA" as const },
+  );
+}
+
+function briefMoneyPack(brief: OverviewBrief): OverviewCopyPack {
+  return brief.moneyPack ?? brief.copyPack;
+}
+
+function flowMoney(n: number, brief: OverviewBrief): string {
+  const pack = briefMoneyPack(brief);
+  return brief.estimateLabel ? cardMoney(n, pack) : money(n, pack);
 }
 
 export function formatMoney(n: number, copyPack: OverviewCopyPack): string {
@@ -302,6 +337,11 @@ export function buildOverviewBrief(input: {
   /** Resolved cash (bank, then period). When set, wins over financials.cash. */
   cash?: number | null;
   copyPack?: OverviewCopyPack;
+  /**
+   * Stored firm market. Country ZA prints rand. Null and every other country
+   * print dollars. Omit this and money follows copyPack.
+   */
+  storedMarket?: unknown;
   /** Operating-profile year start. Omitted uses January for US and March for ZA. */
   fyStartMonth?: number | null;
   /** First forecast week below zero. Week 1 cannot display Healthy. */
@@ -329,6 +369,7 @@ export function buildOverviewBrief(input: {
   now?: Date;
 }): OverviewBrief {
   const copyPack = input.copyPack ?? "za";
+  const moneyPack = input.storedMarket !== undefined ? promptMoneyPack(input.storedMarket) : copyPack;
   const market = input.market ?? marketFromCopyPack(copyPack);
   const dateMarket =
     input.dateMarket ??
@@ -420,8 +461,22 @@ export function buildOverviewBrief(input: {
   const weakest = scored?.weakestPillar ?? null;
 
   const statement = financials ? readStatementMeta(financials, dateMarket) : null;
-  const operatingProfit = asNumber(financials?.ebit);
-  const quotedNet = statementNetProfit(financials);
+  const firmYear = financials ? firmYearStatement(financials, fyStartMonth) : null;
+  const clipped = firmYear?.applied === true ? firmYear : null;
+  const estimateLabel = clipped?.slice.label ?? null;
+  const operatingProfit = clipped ? clipped.slice.operatingProfit : asNumber(financials?.ebit);
+  const quotedNet = clipped ? clipped.slice.netProfit : statementNetProfit(financials);
+  const quotedRevenue = clipped ? clipped.slice.revenue : asNumber(financials?.revenue);
+  // Same gross profit as the home Analyst card: the firm-year slice when it
+  // clipped the statement, otherwise the raw file. A missing pair stays null.
+  const quotedGross = clipped
+    ? statementGrossProfit({
+        revenue: clipped.slice.revenue,
+        cogs: clipped.slice.cogs,
+        grossProfit: clipped.slice.grossProfit,
+      })
+    : statementGrossProfit(financials);
+  const quotedBeforeTax = clipped ? asNumber(clipped.financials.ebt) : asNumber(financials?.ebt);
   const netUsable = quotedNet != null;
   const liabilities = resolveTotalLiabilities(financials);
   const currentAssets = asNumber(financials?.currentAssets);
@@ -433,9 +488,11 @@ export function buildOverviewBrief(input: {
 
   return {
     clientName: input.clientName?.trim() || null,
-    periodLabel: figuresPeriodLabelFrom(financials, input.periodLabel, dateMarket),
+    periodLabel: estimateLabel ?? figuresPeriodLabelFrom(financials, input.periodLabel, dateMarket),
+    estimateLabel,
     figuresAsOf: input.figuresAsOf ?? null,
     copyPack,
+    moneyPack,
     health,
     healthStatus,
     healthLabel: healthStatus ? chipLabel(healthStatus) : null,
@@ -445,7 +502,7 @@ export function buildOverviewBrief(input: {
         ? { id: weakest.id, label: weakest.label, score: weakest.score }
         : null,
     cash: evidenced ? cashOnFile : null,
-    revenue: evidenced ? asNumber(financials?.revenue) : null,
+    revenue: evidenced ? quotedRevenue : null,
     runwayWeeks: evidenced ? runway : null,
     runwayLabel: !evidenced
       ? null
@@ -470,9 +527,9 @@ export function buildOverviewBrief(input: {
       (Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null),
     operatingMargin: Number.isFinite(ratios["Operating Margin"]) ? ratios["Operating Margin"] : null,
     netMargin: netUsable && Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
-    grossProfit: asNumber(financials?.grossProfit),
+    grossProfit: quotedGross,
     operatingProfit,
-    profitBeforeTax: asNumber(financials?.ebt),
+    profitBeforeTax: quotedBeforeTax,
     netProfit: quotedNet,
     equity: asNumber(financials?.equity),
     totalAssets: asNumber(financials?.totalAssets),
@@ -485,38 +542,43 @@ export function buildOverviewBrief(input: {
 /** Lines the model must quote. Present figures are already on file. */
 export function overviewFactLines(brief: OverviewBrief): string[] {
   const lines: string[] = [];
+  const note = (stored: string) => brief.estimateLabel ?? stored;
+  if (brief.estimateLabel) lines.push(`Figures period: ${brief.estimateLabel}`);
   if (brief.health != null && brief.healthLabel) {
     lines.push(`Health: ${brief.health} (${brief.healthLabel})`);
   }
-  if (brief.cash != null) lines.push(`Cash on file: ${money(brief.cash, brief.copyPack)}`);
+  if (brief.cash != null) lines.push(`Cash on file: ${money(brief.cash, briefMoneyPack(brief))}`);
   else if (brief.revenue != null || brief.health != null) lines.push("Opening cash unknown");
   if (brief.totalAssets != null) {
-    lines.push(`Total assets: ${money(brief.totalAssets, brief.copyPack)}`);
+    lines.push(`Total assets: ${money(brief.totalAssets, briefMoneyPack(brief))}`);
   }
   if (brief.totalLiabilities != null) {
     const label = brief.totalLiabilitiesDerived ? "Total liabilities (derived)" : "Total liabilities";
-    lines.push(`${label}: ${money(brief.totalLiabilities, brief.copyPack)}`);
+    lines.push(`${label}: ${money(brief.totalLiabilities, briefMoneyPack(brief))}`);
   }
-  if (brief.equity != null) lines.push(`Total equity: ${money(brief.equity, brief.copyPack)}`);
+  if (brief.equity != null) lines.push(`Total equity: ${money(brief.equity, briefMoneyPack(brief))}`);
   if (brief.revenue != null) {
     const ytd = brief.yearToDateEnd ? ` (year to date to ${brief.yearToDateEnd})` : "";
-    lines.push(`Revenue for the period on file: ${money(brief.revenue, brief.copyPack)}${ytd}`);
+    const clip = brief.estimateLabel ? ` (${brief.estimateLabel})` : "";
+    lines.push(`Revenue for the period on file: ${flowMoney(brief.revenue, brief)}${ytd}${clip}`);
   }
   if (brief.inventory != null) {
-    lines.push(`Inventory: ${money(brief.inventory, brief.copyPack)} (stored balance)`);
+    lines.push(`Inventory: ${money(brief.inventory, briefMoneyPack(brief))} (stored balance)`);
   }
   if (brief.grossProfit != null) {
-    lines.push(`Gross profit: ${money(brief.grossProfit, brief.copyPack)} (stored)`);
+    lines.push(`Gross profit: ${flowMoney(brief.grossProfit, brief)} (${note("stored")})`);
   }
   if (brief.operatingProfit != null) {
-    lines.push(`Operating profit: ${money(brief.operatingProfit, brief.copyPack)} (stored)`);
+    lines.push(`Operating profit: ${flowMoney(brief.operatingProfit, brief)} (${note("stored")})`);
   }
   if (brief.profitBeforeTax != null) {
-    lines.push(`Profit before tax: ${money(brief.profitBeforeTax, brief.copyPack)} (stored)`);
+    lines.push(`Profit before tax: ${flowMoney(brief.profitBeforeTax, brief)} (${note("stored")})`);
   }
   if (brief.netProfit != null) {
     lines.push(
-      `Net profit: ${money(brief.netProfit, brief.copyPack)} (stored net income — quote this amount; do not multiply net margin by revenue)`,
+      brief.estimateLabel
+        ? `Net profit: ${flowMoney(brief.netProfit, brief)} (${brief.estimateLabel})`
+        : `Net profit: ${money(brief.netProfit, briefMoneyPack(brief))} (stored net income — quote this amount; do not multiply net margin by revenue)`,
     );
   }
   const runwayFact = overviewRunwayFact(brief);
@@ -559,12 +621,12 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
     lines.push("Working Capital Days: not meaningful");
   }
   if (brief.currentRatio != null) {
-    lines.push(formatOverviewRatio("Current Ratio", brief.currentRatio, brief.copyPack));
+    lines.push(formatOverviewRatio("Current Ratio", brief.currentRatio, briefMoneyPack(brief)));
   }
   for (const name of OVERVIEW_RATIO_NAMES) {
     const value = brief.ratioValues[name];
     if (!Number.isFinite(value)) continue;
-    lines.push(formatOverviewRatio(name, value, brief.copyPack));
+    lines.push(formatOverviewRatio(name, value, briefMoneyPack(brief)));
   }
   for (const pillar of brief.pillars) {
     if (pillar.score == null) continue;
@@ -586,7 +648,7 @@ export function formatOverviewForPrompt(
     "OVERVIEW FIGURES — same source as the app Overview for this client. Quote these. Do not recompute a different health score. Do not invent replacements.",
   ];
   if (brief.clientName) lines.push(`- Client name: ${brief.clientName}`);
-  if (brief.periodLabel) {
+  if (brief.periodLabel && !brief.estimateLabel) {
     const range =
       brief.periodStart && brief.periodEnd ? ` (${brief.periodStart} to ${brief.periodEnd})` : "";
     lines.push(`- Figures period: ${brief.periodLabel}${range}`);
@@ -651,7 +713,7 @@ export function planActionsFromOverview(brief: OverviewBrief): PlannedAction[] {
   const items: PlannedAction[] = [];
   if (brief.runwayWeeks != null && brief.runwayWeeks < 12) {
     const cash =
-      brief.cash != null ? ` Cash on file is ${money(brief.cash, brief.copyPack)}.` : "";
+      brief.cash != null ? ` Cash on file is ${money(brief.cash, briefMoneyPack(brief))}.` : "";
     items.push({
       sourceMoveKey: "bot:cash-runway",
       title: `Protect cash runway (${brief.runwayWeeks} weeks)`,
@@ -770,7 +832,7 @@ export function packContentFromOverview(
         title: "Cash",
         body:
           brief.cash != null || brief.runwayLabel || brief.runwayWeeks != null
-            ? `Cash on file ${brief.cash != null ? money(brief.cash, brief.copyPack) : "not on file"}. Runway ${
+            ? `Cash on file ${brief.cash != null ? money(brief.cash, briefMoneyPack(brief)) : "not on file"}. Runway ${
                 brief.runwayLabel ??
                 (brief.runwayWeeks != null ? `${brief.runwayWeeks} weeks` : "not on file")
               }.`

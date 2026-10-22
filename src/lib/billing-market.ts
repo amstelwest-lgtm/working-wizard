@@ -5,6 +5,7 @@
  */
 
 import type { PendingCheckout } from "@/lib/pending-checkout";
+import { resolveFirmMarket, resolveOwnerMarket } from "@/lib/pricing/market-resolution";
 import {
   isFirmCheckoutBand,
   type FirmCheckoutBand,
@@ -13,24 +14,19 @@ import {
 } from "@/lib/stripe-plans";
 
 export function stripePlanMarketFromFirm(firmMarket: unknown): StripePlanMarket {
-  if (!firmMarket || typeof firmMarket !== "object" || Array.isArray(firmMarket)) return "us";
-  const country = (firmMarket as { country?: unknown }).country;
-  if (typeof country !== "string") return "us";
-  return country.trim().toUpperCase() === "ZA" ? "za" : "us";
+  return resolveFirmMarket(firmMarket);
 }
 
 /**
- * Owner Checkout market. Same rule as a firm: a stored country wins,
- * and the URL market is not an input. No stored country: the edge.
- * A za URL does not open the rand price when the edge is not ZA.
+ * Owner Checkout market. Stored country wins. The URL market is not an input.
+ * No stored country: geo, through resolveOwnerMarket.
  */
 export function resolveOwnerCheckoutMarket(
   ownerMarket: unknown,
   _requested: StripePlanMarket,
   geoCountry?: string | null,
 ): StripePlanMarket {
-  if (ownerMarket != null) return stripePlanMarketFromFirm(ownerMarket);
-  return geoCountry === "ZA" ? "za" : "us";
+  return resolveOwnerMarket({ storedMarket: ownerMarket, geoCountry });
 }
 
 export function firmBillingResumeIntent(

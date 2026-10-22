@@ -11,6 +11,7 @@
  */
 
 import { budgetCoverWindowLabel, statementPeriodBasis } from "@/lib/budget.bridges";
+import { proratedPeriodLabel } from "@/lib/firm-year-label";
 import { firmFyContaining, fyMonths } from "@/lib/budget.months";
 import { statementNetProfit } from "@/lib/period-profit";
 import type { FiscalStatementSlice } from "@/lib/budget-period-types";
@@ -118,8 +119,11 @@ export function fiscalStatementSlice(
   );
   const operatingProfit = scaleAmount(presentAmount(fin, "ebit"), scale);
   const net = statementNetProfit(fin);
+  const basis = statementPeriodBasis(fin);
+  const statementKeys = basis.kind === "dated" ? basis.keys : [];
   return {
-    label: fiscalPeriodLabel(overlap.keys),
+    // A clip says it is pro-rated from the statement. An unclipped period keeps its label.
+    label: proratedPeriodLabel(overlap.keys, statementKeys) ?? fiscalPeriodLabel(overlap.keys),
     prorated: overlap.keys.length > 0 && overlap.keys.length < overlap.statementMonths,
     months: overlap.keys.length > 0 ? overlap.keys.length : overlap.statementMonths,
     revenue,

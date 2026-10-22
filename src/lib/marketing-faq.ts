@@ -1,4 +1,5 @@
 import { LIST_PRICES } from "./market/marketing";
+import { OWNER_MONTHLY_USD_LABEL } from "./owner-plan";
 import { FIRM_BAND_CATALOG, FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "./stripe-plans";
 import type { FaqItem } from "./seo";
 
@@ -28,8 +29,10 @@ export const FOUNDING_CALLOUT =
   "FOUNDING is 50% off monthly paid Solo+ after the trial and does not stack with annual billing.";
 
 /** Visible US answer and FAQPage JSON-LD. The ZA page shows the server rand sentence instead. */
+const ownerAMonth = OWNER_MONTHLY_USD_LABEL.replace("/mo", "");
+
 export const FAQ_OWNER_PLAN_US =
-  "$39 a month for a business owner's own workspace, and free when your accountant is on Milōn. Your three AI agents, Milōn Financial Manager, Milōn Analyst and Milōn Advisor, are included.";
+  `${ownerAMonth} a month for a business owner's own workspace, and free when your accountant is on Milōn. Your three AI agents, Milōn Financial Manager, Milōn Analyst and Milōn Advisor, are included.`;
 
 export const FAQ_NOT_A_BOOKKEEPER_QUESTION = "Is Milōn an AI accountant or an AI bookkeeper?";
 
@@ -38,7 +41,7 @@ export const FAQ_NOT_A_BOOKKEEPER_ANSWER =
 
 /** Last sentence of the homepage cost answer. USD only. ZA replaces this from the server chunk. */
 export const HOMEPAGE_OWNER_COST_US =
-  "Business owners pay $39/mo, or nothing when their accountant is on Milōn.";
+  `Business owners pay ${OWNER_MONTHLY_USD_LABEL}, or nothing when their accountant is on Milōn.`;
 
 const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Starter at ${LIST_PRICES.us.firmStarter}/mo for up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. ${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then ${LIST_PRICES.us.firmStarter}/mo. Annual billing is about 20% off, and Enterprise is a custom quote. ${HOMEPAGE_OWNER_COST_US}`;
 

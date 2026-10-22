@@ -1,21 +1,4 @@
-import type { StripePlanMarket } from "@/lib/stripe-plans";
 import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
-
-/**
- * A rand price is valid only when Checkout's billing country is ZA.
- * Unknown country at session creation still starts on the rand price,
- * because the address is collected during Checkout.
- * A known non-ZA country falls back to the USD price.
- */
-export function priceMarketForFirm(input: {
-  firmMarket: StripePlanMarket;
-  billingCountry?: string | null;
-}): StripePlanMarket {
-  if (input.firmMarket !== "za") return "us";
-  const country = (input.billingCountry ?? "").trim().toUpperCase();
-  if (country && country !== "ZA") return "us";
-  return "za";
-}
 
 /** After Checkout, a missing country is not enough to keep the rand price. */
 export function zarBillingCountryOk(country: string | null | undefined): boolean {

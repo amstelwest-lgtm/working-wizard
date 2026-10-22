@@ -7,9 +7,11 @@ import {
   SOLO_TRIAL_BUTTON,
 } from "@/lib/landing-copy";
 import {
+  FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_SENTENCE,
+  firmClientLimitLabel,
   firmUsdPublicLine,
   isFirmCheckoutBand,
   type FirmBand,
@@ -27,6 +29,8 @@ type Props = {
   showSaPricing?: boolean;
   /** Server-built lines. Absent unless the edge is ZA. */
   saLabels?: Partial<Record<string, { month: string; year: string }>> | null;
+  /** Visitor dropdown choice for signup links. Not a charge market. */
+  marketHint?: string | null;
   /** Rand line under the trial sentence. Absent unless the edge is ZA. */
   trialAfter?: string | null;
 };
@@ -65,8 +69,9 @@ function FirmPrice({ price }: { price: string }) {
 }
 
 function clientLabel(band: FirmBand, withActive: boolean): string {
-  if (band.clientLimit == null) return withActive ? "Unlimited" : "Unlimited";
-  return withActive ? `Up to ${band.clientLimit} active clients` : `Up to ${band.clientLimit}`;
+  const limit = FIRM_BAND_CATALOG[band.id].clientLimit;
+  if (limit == null) return withActive ? firmClientLimitLabel(band.id) : "Unlimited";
+  return withActive ? firmClientLimitLabel(band.id) : `Up to ${limit}`;
 }
 
 type StartControl = (band: FirmBand, className: string) => ReactNode;
@@ -177,6 +182,7 @@ export function FirmBandPricingTable({
   showSaPricing = false,
   saLabels = null,
   trialAfter = null,
+  marketHint = null,
 }: Props) {
   const labels = showSaPricing ? saLabels : null;
   const bands = FIRM_BAND_TABLE;
@@ -208,7 +214,7 @@ export function FirmBandPricingTable({
     return (
       <a
         className={className}
-        href={isFirmCheckoutBand(band.id) ? firmSignupHref(band.id, billed) : firmSignupHref()}
+        href={isFirmCheckoutBand(band.id) ? firmSignupHref(band.id, billed, marketHint) : firmSignupHref(undefined, undefined, marketHint)}
       >
         Set up firm
       </a>

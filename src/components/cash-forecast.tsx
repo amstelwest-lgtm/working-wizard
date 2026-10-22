@@ -86,6 +86,7 @@ import type {
   CashFromBanksDraftResult,
 } from "@/lib/cash-from-banks.types";
 import { interestOfRevenueSentence } from "@/lib/cash-interest-note";
+import { firmYearInterestClip } from "@/lib/firm-year-interest";
 import { FORECAST_PREVIEW_EMPTY } from "@/lib/report-preview";
 import { periodMonthsOf } from "@/lib/ratios";
 import { balanceSheetCashAsOf } from "@/lib/statement-parse";
@@ -1641,7 +1642,20 @@ export function CashForecastPanel({
     () => forecastMinimumCash({ configured: configuredFloor, weeklyOutflows: baseCalc.outflow }),
     [baseCalc.outflow, configuredFloor],
   );
-  const interestNote = interestOfRevenueSentence(inputFinancials, (amount) => fmtR(amount));
+  // Same firm-year clip and label as the Waterfall's interest step.
+  const interestClip = useMemo(
+    () =>
+      firmYearInterestClip(
+        inputFinancials,
+        inputProfile?.fyStartMonth ?? market.fyStartMonthDefault,
+      ),
+    [inputFinancials, inputProfile?.fyStartMonth, market.fyStartMonthDefault],
+  );
+  const interestNote = interestOfRevenueSentence(
+    inputFinancials,
+    (amount) => fmtR(amount),
+    interestClip,
+  );
   const cashSuggestions = useMemo(
     () =>
       suggestCashForecast({

@@ -8,11 +8,12 @@ import { FIRM_BAND_CATALOG, FIRM_CHECKOUT_BANDS, FIRM_TRIAL_CARD_NOTE, FIRM_TRIA
 import {
   annualZarCents,
   perClientRands,
-  ZA_MONTHLY_RANDS,
   zaLookupKey,
 } from "../src/lib/pricing/za-ladder";
 import { zaBandAmountCents, zaCatalogEntries } from "../src/lib/pricing/za-ladder-amounts";
-import { priceMarketForFirm, zarBillingCountryOk } from "../src/lib/pricing/za-checkout";
+import { approvedFirmMonthlyRands } from "../src/lib/pricing/price-table.server";
+import { zarBillingCountryOk } from "../src/lib/pricing/za-checkout";
+import { resolveCheckoutPriceMarket } from "../src/lib/pricing/market-resolution";
 import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { firmCheckoutSessionParams } from "../src/lib/stripe-checkout.core";
 import { firmUpgradeDiscounts } from "../src/lib/firm-voucher";
@@ -29,7 +30,7 @@ for (const band of FIRM_CHECKOUT_BANDS) {
   assert(annual % 100 === 0, `${band} annual is whole rands`);
   assert(
     annual ===
-      annualZarCents(ZA_MONTHLY_RANDS[band] * 100, entry.yearlyUsdCents ?? 0, entry.monthlyUsdCents ?? 0),
+      annualZarCents(approvedFirmMonthlyRands(band) * 100, entry.yearlyUsdCents ?? 0, entry.monthlyUsdCents ?? 0),
     `${band} annual uses the USD ratio`,
   );
   assert(bandIdFromLookupKey(zaLookupKey(band, "month")) === band, `${band} monthly key maps`);
@@ -49,18 +50,18 @@ assert(perClientRands(7999, 500) === 16, "Scale is about R16 per client");
 const copy = loadSaPricingCopy();
 assert(copy.heading === "Pricing in rand", "heading");
 assert(
-  copy.heroNote === `${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then R 299/mo.`,
+  copy.heroNote === `${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then R299/mo.`,
   "hero",
 );
 assert(
-  copy.trialAfter === `On Starter. ${FIRM_TRIAL_CARD_NOTE} Then R 299/mo.`,
+  copy.trialAfter === `On Starter. ${FIRM_TRIAL_CARD_NOTE} Then R299/mo.`,
   "pricing bar rand line",
 );
-assert(copy.labels.starter.month === "R 299/mo · about R 60 per client", "starter monthly line");
-assert(copy.labels.starter.year === "R 2 837/yr · about R 60 per client", "starter annual matches Stripe");
+assert(copy.labels.starter.month === "R299/mo · about R60 per client", "starter monthly line");
+assert(copy.labels.starter.year === "R2837/yr · about R60 per client", "starter annual matches Stripe");
 assert(zaBandAmountCents("starter", "year") === 283_700, "starter annual rand is R2,837");
-assert(copy.ownerMonthly === "R 299/mo", "owner monthly is R299");
-assert(copy.ownerHomepageCost.includes("R 299/mo"), "owner homepage sentence is R299");
+assert(copy.ownerMonthly === "R299/mo", "owner monthly is R299");
+assert(copy.ownerHomepageCost.includes("R299/mo"), "owner homepage sentence is R299");
 
 const retiredOwnerRand = "R" + "199";
 function walkText(dir: string, out: string[] = []): string[] {
@@ -76,19 +77,31 @@ const retiredHits = ["src", "docs", "scripts"]
   .flatMap((dir) => walkText(resolve(dir)))
   .filter((path) => readFileSync(path, "utf8").includes(retiredOwnerRand));
 assert(retiredHits.length === 0, `retired owner rand remains in ${retiredHits.join(", ")}`);
-assert(copy.labels.solo.month === "R 799/mo · about R 53 per client", "solo monthly line");
+assert(copy.labels.solo.month === "R799/mo · about R53 per client", "solo monthly line");
 assert(!copy.labels.solo.month.toLowerCase().includes("vat"), "price line has no tax wording");
-assert(copy.labels.small.month === "R 1 199/mo · about R 48 per client", "small monthly line");
+assert(copy.labels.small.month === "R1199/mo · about R48 per client", "small monthly line");
 assert(zaCatalogEntries().length === 16, "eight bands, monthly and annual");
 assert(
   zaCatalogEntries().every((row) => row.currency === "zar" && !("tax_rates" in row)),
   "catalog entries are zar and carry no tax rate",
 );
 
-assert(priceMarketForFirm({ firmMarket: "us", billingCountry: "ZA" }) === "us", "US firm stays USD");
-assert(priceMarketForFirm({ firmMarket: "za", billingCountry: null }) === "za", "unknown country starts on rand");
-assert(priceMarketForFirm({ firmMarket: "za", billingCountry: "ZA" }) === "za", "ZA billing stays on rand");
-assert(priceMarketForFirm({ firmMarket: "za", billingCountry: "US" }) === "us", "non-ZA billing falls back");
+assert(
+  resolveCheckoutPriceMarket({ storedFirmMarket: { country: "US" }, billingCountry: "ZA" }) === "us",
+  "US firm stays USD",
+);
+assert(
+  resolveCheckoutPriceMarket({ storedFirmMarket: { country: "ZA" }, billingCountry: null }) === "za",
+  "unknown country starts on rand",
+);
+assert(
+  resolveCheckoutPriceMarket({ storedFirmMarket: { country: "ZA" }, billingCountry: "ZA" }) === "za",
+  "ZA billing stays on rand",
+);
+assert(
+  resolveCheckoutPriceMarket({ storedFirmMarket: { country: "ZA" }, billingCountry: "US" }) === "us",
+  "non-ZA billing falls back",
+);
 assert(zarBillingCountryOk("ZA"), "ZA country keeps the rand price");
 assert(!zarBillingCountryOk(""), "a missing country does not keep the rand price");
 assert(!zarBillingCountryOk("US"), "US billing does not keep the rand price");
@@ -102,7 +115,6 @@ const zar = firmCheckoutSessionParams({
   userId: "user_1",
   email: "firm@example.com",
   market: "za",
-  zaCouponId: "MILON_ZA_50",
   integrationIdentifier: "milon-solo-month-abcdefgh",
   includeTrial: true,
 });
@@ -110,17 +122,11 @@ assert(zar.adaptive_pricing?.enabled === false, "rand checkout does not use adap
 assert(zar.automatic_tax?.enabled === false, "rand checkout does not enable automatic tax");
 assert(!zar.line_items?.some((item) => "tax_rates" in item && item.tax_rates), "no tax rates");
 assert(zar.allow_promotion_codes !== true, "rand checkout hides the promotion box");
-assert(!JSON.stringify(zar.discounts ?? []).includes("MILON_ZA_50"), "the old coupon is not attached");
+assert(!JSON.stringify(zar.discounts ?? []).includes("coupon"), "a coupon is not attached");
 assert(!JSON.stringify(zar.discounts ?? []).includes("promo_founding"), "FOUNDING is not stacked on rand");
-
-const cleared = firmUpgradeDiscounts({
-  zaCouponId: "MILON_ZA_50",
-  existing: [{ id: "di_za", couponId: "MILON_ZA_50" }],
-});
-assert(JSON.stringify(cleared) === "[]", "an existing coupon is cleared");
 assert(
-  firmUpgradeDiscounts({ zaCouponId: "MILON_ZA_50", existing: [] }) == null,
-  "nothing to clear stays untouched",
+  firmUpgradeDiscounts({ promotionCodeId: null, existing: [{ id: "di_old", couponId: "coupon_old" }] }) == null,
+  "without a voucher, discounts are left alone",
 );
 
 console.log("za-pricing-test: ok", expectedAnnual.solo);

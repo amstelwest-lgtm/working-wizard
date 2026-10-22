@@ -39,7 +39,8 @@ import { FirmBillingAccessProvider } from "@/contexts/firm-billing-access";
 import { useAnalytics } from "@/contexts/analytics";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { reportClientError } from "@/lib/monitoring";
-import { bootMarketLabel, markBootContent, SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import { resolveFirmBootMarket } from "@/lib/pricing/market-resolution";
+import { markBootContent, SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { redirectAccountantWithoutFirm } from "@/lib/google-practice-market";
 import {
   lastKnownEntitlementForFirm,
@@ -118,7 +119,7 @@ function resumeUnpaidFirm(snap: GateSnap, clients: FirmClientGateContext) {
 const billingWallWarned = new Set<string>();
 
 /** One wall line per firm for this tab. A later open of the same firm stays quiet. */
-function warnBillingWall(firmId: string, reason: string): void {
+function warnBillingWall(firmId: string, reason: string, firmMarket: unknown): void {
   const id = firmId.trim();
   if (!id || billingWallWarned.has(id)) return;
   billingWallWarned.add(id);
@@ -131,7 +132,10 @@ function warnBillingWall(firmId: string, reason: string): void {
   } catch {
     // The set above already limits this page load.
   }
-  console.warn("[billing-gate] wall", { firmId: id, reason });
+  console.warn("[billing-gate] wall", {
+    reason,
+    market: resolveFirmBootMarket(firmMarket),
+  });
 }
 
 export function AuthGate() {
@@ -518,7 +522,7 @@ export function AuthGate() {
           setFirmEntitled(true);
           return;
         }
-        warnBillingWall(attemptFirmId, reason);
+        warnBillingWall(attemptFirmId, reason, latest.current.firmMarket);
         setFirmEntitled(false);
         resumeUnpaidFirm(latest.current, clients);
       } catch (err) {
@@ -573,7 +577,7 @@ export function AuthGate() {
       !showWall);
   useEffect(() => {
     if (loading || !user || gateShowsSkeleton) return;
-    const market = bootMarketLabel(firmMarket);
+    const market = resolveFirmBootMarket(firmMarket);
     // /practice opens before the firm row. Hold the line until that country
     // is known, or the firm read has finished without one. ms stays the shell.
     const marketReady = firmsLoaded || firmsLoadFailed || market !== "unknown";

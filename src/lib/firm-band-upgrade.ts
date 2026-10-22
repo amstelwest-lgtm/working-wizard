@@ -4,12 +4,13 @@
  * Do not invent ZAR list prices. Adaptive Pricing presents ZAR at Checkout.
  */
 
-import { isSaMarketFirm, type FirmCouponDiscount } from "./firm-sa-market";
+import { resolveFirmMarket, resolveFirmPriceCurrency } from "@/lib/pricing/market-resolution";
+import type { FirmCouponDiscount } from "./stripe-discount";
 import { formatMoney } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
 import { parseMarketSelection } from "./market/parse";
 import { isOwnerCatalogPrice } from "./owner-price";
-import { annualZarCents, isZaCheckoutBand, parseZaLookupKey, perClientRands, ZA_MONTHLY_RANDS } from "./pricing/za-ladder";
+import { parseZaLookupKey } from "./pricing/za-lookup";
 import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_IDS,
@@ -79,9 +80,10 @@ export type FirmUpgradeSnapshot = {
   zarByBand: Partial<Record<FirmBandId, ZarBandAmounts>>;
   /**
    * Practice list is in rand (firm row ZA, or most clients ZA).
-   * This is not the Checkout charge currency.
+   * This is not the Checkout charge currency. A missing rand quote still
+   * falls back to the published ladder while this is set.
    */
-  saDiscount: boolean;
+  zarPlan: boolean;
   /** Server-built rand lines when the practice list is in rand. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /**
@@ -101,10 +103,10 @@ export function emptyFirmUpgradeSnapshot(): FirmUpgradeSnapshot {
     clientCount: 0,
     clientLimit: null,
     usageLabel: "0 clients",
-    priceCurrency: "USD",
+    priceCurrency: resolveFirmPriceCurrency(null),
     interval: "month",
     zarByBand: {},
-    saDiscount: false,
+    zarPlan: false,
     zaLabels: null,
     zaPriceLabel: null,
   };
@@ -505,17 +507,9 @@ export function saFirmDisplayPrice(
     .replace(/\s+·/g, " ·")
     .trim();
   if (cleaned && !cleaned.includes("$")) return cleaned;
-  if (!isZaCheckoutBand(band)) return cleaned || "—";
-  const monthly = ZA_MONTHLY_RANDS[band];
   const entry = FIRM_BAND_CATALOG[band];
-  if (interval === "year") {
-    const cents = annualZarCents(monthly * 100, entry.yearlyUsdCents ?? 0, entry.monthlyUsdCents ?? 0);
-    const rands = Math.round(cents / 100);
-    return `${formatMoney(rands, ZA_MARKET)}/yr`;
-  }
-  const per = entry.clientLimit ? perClientRands(monthly, entry.clientLimit) : 0;
-  const head = `${formatMoney(monthly, ZA_MARKET)}/mo`;
-  return per > 0 ? `${head} · about ${formatMoney(per, ZA_MARKET)} per client` : head;
+  if (!entry || entry.customQuote) return cleaned || "—";
+  return `${entry.name} plan`;
 }
 
 /**
@@ -532,7 +526,7 @@ export function practiceDisplaysZarPlan(input: {
   firmMarket: unknown;
   clientMarkets?: readonly unknown[] | null;
 }): boolean {
-  if (isSaMarketFirm({ market: input.firmMarket })) return true;
+  if (resolveFirmMarket(input.firmMarket) === "za") return true;
   let za = 0;
   let us = 0;
   for (const raw of input.clientMarkets ?? []) {
@@ -554,7 +548,6 @@ export function firmBandPriceLabel(
   interval: FirmInterval,
   currency: FirmPriceCurrency,
   zarByBand?: Partial<Record<FirmBandId, ZarBandAmounts>> | null,
-  _options?: { saDiscount?: boolean },
 ): string | null {
   const entry = FIRM_BAND_CATALOG[band];
   if (entry.customQuote) return null;
@@ -589,7 +582,7 @@ export type FirmSubscriptionUpgradeParams = {
   billing_cycle_anchor?: "now";
   metadata: Record<string, string>;
   trial_end?: "now";
-  /** Present when a voucher is attached, or an old coupon must be cleared. */
+  /** Present when a voucher is attached. */
   discounts?: FirmCouponDiscount[];
   automatic_tax?: { enabled: boolean };
 };

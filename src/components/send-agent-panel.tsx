@@ -2,8 +2,12 @@
  * Accountant action: mint a Tax Specialist link and email the invite.
  * The invite goes out only when Send is clicked. Revoke sits with the link.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import {
+  AccountantSendFileList,
+  type ShownFilePassword,
+} from "@/components/accountant-send-files";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
 import { receivedItemStatus } from "@/lib/client-agent-done";
 import { itemLabel } from "@/lib/client-agent-link";
@@ -19,10 +23,12 @@ import {
 } from "@/lib/client-agent-send";
 import { clientDocumentDownloadUrl } from "@/lib/client-documents-browser";
 import { formatDate, type DateMarket } from "@/lib/market";
+import { FILE_PASSWORD_HIDE_MS } from "@/lib/client-agent-file-password-reveal";
 import {
   listClientAgentSends,
   mintClientAgentSend,
   reviewClientAgentSend,
+  revealClientAgentFilePassword,
   revokeClientAgentSend,
   type AgentSendItem,
   type AgentSendRow,
@@ -40,6 +46,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const mint = useServerFn(mintClientAgentSend);
   const revoke = useServerFn(revokeClientAgentSend);
   const review = useServerFn(reviewClientAgentSend);
+  const reveal = useServerFn(revealClientAgentFilePassword);
   const [sends, setSends] = useState<AgentSendRow[]>([]);
   const [ready, setReady] = useState(false);
   const [allowed, setAllowed] = useState(false);
@@ -52,6 +59,14 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const [emailEdited, setEmailEdited] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([...SEND_DEFAULT_ITEM_KEYS]);
   const [otherLabel, setOtherLabel] = useState("");
+  const [revealed, setRevealed] = useState<ShownFilePassword | null>(null);
+  const [passwordBusy, setPasswordBusy] = useState<string | null>(null);
+  const [seenClientId, setSeenClientId] = useState(clientId);
+  if (seenClientId !== clientId) {
+    setSeenClientId(clientId);
+    setRevealed(null);
+  }
+  const revealedFileId = revealed?.fileId ?? null;
 
   const applyList = useCallback(
     (result: {
@@ -73,6 +88,14 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     const result = await list({ data: { clientId } });
     applyList(result);
   }, [applyList, clientId, list]);
+
+  useEffect(() => {
+    if (!revealedFileId) return undefined;
+    const timer = window.setTimeout(() => {
+      setRevealed(null);
+    }, FILE_PASSWORD_HIDE_MS);
+    return () => window.clearTimeout(timer);
+  }, [revealedFileId]);
 
   useEffect(() => {
     let alive = true;
@@ -210,6 +233,40 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     }
   };
 
+  const onShowPassword = async (fileId: string) => {
+    setPasswordBusy(fileId);
+    setNotice(null);
+    try {
+      const result = await reveal({ data: { clientId, fileId } });
+      if (!result.ok || result.password == null || result.password === "") {
+        setRevealed(null);
+        setNotice(result.ok ? "No password on this file." : "The password could not be shown.");
+        return;
+      }
+      setRevealed({ fileId, password: result.password, visible: false });
+    } catch {
+      setRevealed(null);
+      setNotice("The password could not be shown.");
+    } finally {
+      setPasswordBusy(null);
+    }
+  };
+
+  const onCopyPassword = async () => {
+    if (!revealed) return;
+    const value = revealed.password;
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice("Copied.");
+    } catch {
+      setNotice("Select the password and copy it.");
+    }
+  };
+
+  const onTogglePassword = () => {
+    setRevealed((current) => (current ? { ...current, visible: !current.visible } : current));
+  };
+
   const onOpenDocument = async (path: string) => {
     setBusy(true);
     setNotice(null);
@@ -269,6 +326,16 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
       received={receivedSend}
       onOpenDocument={(path) => void onOpenDocument(path)}
       onReview={() => void onReview()}
+      fileList={
+        <AccountantSendFileList
+          files={sends.flatMap((send) => send.files ?? [])}
+          revealed={revealed}
+          busyFileId={passwordBusy}
+          onShow={(fileId) => void onShowPassword(fileId)}
+          onToggleVisible={onTogglePassword}
+          onCopy={() => void onCopyPassword()}
+        />
+      }
     />
   );
 }
@@ -295,6 +362,7 @@ export function SendAgentCard({
   received = null,
   onOpenDocument,
   onReview,
+  fileList = null,
 }: {
   market: DateMarket;
   fresh: FreshLink | null;
@@ -317,6 +385,7 @@ export function SendAgentCard({
   received?: AgentSendRow | null;
   onOpenDocument?: (path: string) => void;
   onReview?: () => void;
+  fileList?: ReactNode;
 }) {
   const chosen = chooseSendItems(
     SEND_ITEM_KEYS.filter((itemKey) => selectedKeys.includes(itemKey)).map((itemKey) => ({
@@ -347,7 +416,7 @@ export function SendAgentCard({
           <h3 className="text-sm font-semibold">Documents received</h3>
           <ul className="flex flex-col gap-3">
             {received.items.map((item: AgentSendItem) => {
-              const path = item.documentPath;
+              const path = item.documentPaths[0] ?? null;
               return (
                 <li
                   key={item.itemKey}
@@ -365,17 +434,18 @@ export function SendAgentCard({
                   {item.explanation ? (
                     <p className="text-sm text-[#3D5270]">{item.explanation}</p>
                   ) : null}
-                  {path ? (
+                  {item.documentPaths.map((documentPath) => (
                     <button
+                      key={documentPath}
                       type="button"
                       className={`${SECONDARY} w-full`}
                       data-open-document={item.itemKey}
                       disabled={busy}
-                      onClick={() => onOpenDocument?.(path)}
+                      onClick={() => onOpenDocument?.(documentPath)}
                     >
                       Open in Documents
                     </button>
-                  ) : null}
+                  ))}
                 </li>
               );
             })}
@@ -520,6 +590,7 @@ export function SendAgentCard({
           </button>
         </div>
       )}
+      {fileList}
       {loaded && !ready ? (
         <p className="text-sm text-[#3D5270]">This is not available on this file yet.</p>
       ) : null}

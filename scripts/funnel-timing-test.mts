@@ -381,7 +381,7 @@ assert(pricing.includes('band.id === "growing"'), "Growing is the third featured
 assert(!pricing.includes('band.id === "scale"'), "Scale sits in the dropdown with the later bands");
 assert(picker.includes("FUNNEL_SOLO_FIRST"), "plan picker marks Solo when it leads");
 assert(picker.includes("Start here"), "plan picker says Solo is where to start");
-assert(!pricing.includes("SA_FIRM_DISCOUNT") || pricing.includes("showSaPricing"), "SA discount stays behind the geo flag");
+assert(!pricing.includes("50% off"), "pricing does not advertise a percent-off discount");
 assert(prompt.includes(`data-funnel={FUNNEL_CHECKOUT_AFTER_INSIGHT}`), "checkout prompt is the after-insight marker");
 assert(prompt.includes("TrialCardSentence"), "Health uses the shared trial sentence");
 const sentence = read("src/components/trial-card-sentence.tsx");
@@ -407,8 +407,15 @@ assert(
 );
 assert(client.includes("Other ways"), "upload/sync alternatives are folded");
 assert(
-  dash.includes("<CheckoutAfterInsight clientCount={trialAllowance?.upgrade?.clientCount"),
-  "a scored book offers Checkout",
+  dash.includes("CheckoutAfterInsight") &&
+    dash.includes("clientCount={trialAllowance?.upgrade?.clientCount") &&
+    dash.includes('variant="practice-home"'),
+  "a scored book offers Checkout without the client-file heading",
+);
+assert(
+  prompt.includes("The figures stay on this client.") &&
+    prompt.includes('variant === "client"'),
+  "client pages keep the figures heading",
 );
 assert(dash.includes("markInsightSeen(firmId)"), "a scored book marks this firm's insight");
 assert(

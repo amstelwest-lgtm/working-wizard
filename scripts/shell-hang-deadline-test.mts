@@ -48,7 +48,7 @@ assert(hungWall.checking === false, "a hung billing read stops checking");
 assert(hungWall.returnClient === null, "a hung client read does not invent a client");
 assert(hungWall.quote === null, "a hung quote is missing");
 assert(hungWall.quoteError.length > 0, "a missing quote is an error");
-assert(hungWall.priceLabel === "$39/mo", "unknown market prices from the USD catalog");
+assert(hungWall.priceLabel === "Starter plan", "a hung quote names the plan and does not invent a price");
 assert(hungWall.entitled === false, "a hung entitlement is not a grant");
 
 const zaBlank = await resolveBillingWall({
@@ -60,7 +60,7 @@ const zaBlank = await resolveBillingWall({
   timeoutMs: 30,
 });
 assert(zaBlank.quoteError.length > 0, "a ZA quote with no price label is an error");
-assert(zaBlank.priceLabel === null, "a blank ZA label is not replaced with a rand amount");
+assert(zaBlank.priceLabel === "Starter plan", "a blank ZA label is the plan name, not a currency amount");
 
 const usQuote = await resolveBillingWall({
   client: Promise.resolve(null),
@@ -81,7 +81,7 @@ const nullMarket = await resolveBillingWall({
   interval: "month",
   timeoutMs: 30,
 });
-assert(nullMarket.priceLabel === "$39/mo", "a null market is not ZA");
+assert(nullMarket.priceLabel === "Starter plan", "a null market names the plan and does not invent a price");
 
 const restored = await restoreSession(() => never<{ data: { session: null } }>(), 20);
 assert(restored.ok === false, "a hung session restore fails closed");

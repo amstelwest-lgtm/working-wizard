@@ -8,7 +8,6 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TrialEndedPlanCard } from "../src/components/trial-ended-plan-block";
-import { SA_FIRM_DISCOUNT_NOTE } from "../src/lib/firm-sa-market";
 import { STARTER_TRIAL_ENDED_MESSAGE } from "../src/lib/firm-starter-trial";
 import { attentionCountPhrase, portfolioSummaryLine } from "../src/lib/portfolio-dashboard";
 import {
@@ -358,8 +357,8 @@ assert(
   "Milōn Bot create tells the page to open the plan picker",
 );
 assert(
-  !read("src/routes/_authenticated/settings.index.tsx").includes("SA_FIRM_DISCOUNT_NOTE"),
-  "Settings → Plan does not repeat the South Africa note",
+  !read("src/routes/_authenticated/settings.index.tsx").includes("50% off"),
+  "Settings → Plan does not repeat a percent-off note",
 );
 const gateSrc = read("supabase/functions/_shared/starter-trial-gate.ts");
 assert(!gateSrc.toLowerCase().includes("stripe"), "the edge gate does not call billing");
@@ -398,7 +397,6 @@ const upgrade = {
   priceCurrency: "USD" as const,
   canUpgrade: true,
   clientCount: 1,
-  saDiscount: false,
 };
 const usCard = renderToStaticMarkup(createElement(TrialEndedPlanCard, { upgrade, onUpgrade: () => undefined }));
 assert(usCard.includes(STARTER_TRIAL_ENDED_MESSAGE), "the card states that the trial has ended");
@@ -409,13 +407,12 @@ assert(
   (usCard.match(/trial-ended-title/g) ?? []).length === 1,
   "the ended title is shown once",
 );
-assert(!usCard.includes(SA_FIRM_DISCOUNT_NOTE), "a US card has no South Africa note");
+assert(!usCard.includes("50% off"), "a US card has no percent-off note");
 assert(!usCard.includes("50% off"), "a US card has no discount text");
 const saCard = renderToStaticMarkup(
   createElement(TrialEndedPlanCard, {
     upgrade: {
       ...upgrade,
-      saDiscount: true,
       zaLabels: {
         solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
       },
@@ -424,7 +421,7 @@ const saCard = renderToStaticMarkup(
   }),
 );
 assert(saCard.includes("R799/mo · about R53 per client"), "an SA card shows the rand price");
-assert(!saCard.includes(SA_FIRM_DISCOUNT_NOTE), "an SA card has no discount note");
+assert(!saCard.includes("50% off"), "an SA card has no percent-off note");
 assert(!saCard.toLowerCase().includes("vat"), "an SA card has no tax wording");
 assert(
   (saCard.match(/trial-ended-title/g) ?? []).length === 1,

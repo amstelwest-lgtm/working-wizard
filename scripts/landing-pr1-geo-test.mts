@@ -61,7 +61,8 @@ assert(isSaPricingCountry("ZA") === true, "ZA header shows SA pricing");
 assert(isSaPricingCountry("US") === false, "US header hides SA pricing");
 assert(isSaPricingCountry("") === false, "missing header hides SA pricing");
 assert(isSaPricingCountry(null) === false, "null header hides SA pricing");
-assert(isSaPricingCountry("za") === false, "country match is case-sensitive ZA");
+assert(isSaPricingCountry("za") === true, "a lowercase za header is still South Africa");
+assert(isSaPricingCountry(" ZA ") === true, "geo country is trimmed");
 
 const us = surface(false);
 assert(!LEAK.test(us), `US render leaked a forbidden string: ${us.match(LEAK)?.[0]}`);
@@ -71,11 +72,11 @@ assert(!us.includes("South African"), "US render omits the rand heading");
 
 const za = surface(true);
 assert(
-  za.includes("R 799/mo") && za.includes("about R 53 per client"),
+  za.includes("R799/mo") && za.includes("about R53 per client"),
   "ZA render shows the solo rand price",
 );
 assert(
-  za.includes("R 299/mo") && za.includes("about R 60 per client"),
+  za.includes("R299/mo") && za.includes("about R60 per client"),
   "ZA render shows the Starter rand line",
 );
 assert(!za.toLowerCase().includes("vat"), "ZA render has no tax wording");

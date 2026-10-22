@@ -11,7 +11,7 @@ import { talkPriceCopy } from "./talk-price-lines.ts";
 const starterUsd = firmUsdListPrice("starter", "month");
 if (!starterUsd) throw new Error("Starter has no published monthly price.");
 
-/** Same spelling as the pricing bar: "Then $39/mo." */
+/** Pricing-bar sentence after the trial, built from the catalog. */
 export const PUBLIC_STARTER_THEN_US = `Then ${starterUsd}/mo.`;
 
 /** Pricing-bar line under the trial sentence. USD only. */

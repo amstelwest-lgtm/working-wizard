@@ -1,5 +1,6 @@
 import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { HOMEPAGE_FAQ_ITEMS, HOMEPAGE_OWNER_COST_US } from "@/lib/marketing-faq";
+import { OWNER_MONTHLY_USD_LABEL } from "@/lib/owner-plan";
 import type { FaqItem } from "@/lib/seo";
 import { PRICING_OWNER_BAR_US, PRICING_TRIAL_AFTER } from "@/lib/public-pricing-lines";
 import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
@@ -23,13 +24,14 @@ export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
 export const HERO_CONTACT_HREF =
   "mailto:hello@milonfinance.com?subject=Question%20about%20Mil%C5%8Dn";
 export const HERO_OWNER_PREFIX = "Business owner?";
-export const HERO_OWNER_LINK = "Business owner? $39/mo, or free when your accountant is on Milōn →";
+export const HERO_OWNER_LINK = `Business owner? ${OWNER_MONTHLY_USD_LABEL}, or free when your accountant is on Milōn →`;
 export const OWNER_SIGNUP_LINK = "Get your own AI finance team →";
 /** /for-owners and /about. USD. The rand twin lives in the SA pricing server chunk. */
+const ownerAMonth = OWNER_MONTHLY_USD_LABEL.replace("/mo", "");
 export const OWNER_PLAN_EARLY_US =
-  "The owner plan is $39 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.";
+  `The owner plan is ${ownerAMonth} a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.`;
 export const OWNER_REGISTER_NOTE_US =
-  "Business owners pay $39/mo, or nothing when their accountant is on Milōn.";
+  `Business owners pay ${OWNER_MONTHLY_USD_LABEL}, or nothing when their accountant is on Milōn.`;
 
 /**
  * VERIFY-1. Unsigned packs, recommendations, and a cash-forecast email can

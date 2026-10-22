@@ -83,7 +83,7 @@ export const FIRM_BAND_CATALOG: Record<FirmBandId, FirmBand> = {
     id: "starter",
     name: "Starter",
     clientLimit: 5,
-    /** Live catalog: $39/mo and $370/yr. */
+    /** Published monthly and annual cents for this band. */
     monthlyUsdCents: 3_900,
     yearlyUsdCents: 37_000,
     lookup: { month: "milon_starter_monthly", year: "milon_starter_yearly" },

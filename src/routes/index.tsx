@@ -35,7 +35,8 @@ import {
   visitorMarketBootScript,
 } from "@/lib/market/marketing";
 import { draftToSelection, marketToJson } from "@/lib/market/parse";
-import { readVisitorDraft, writeVisitorDraft } from "@/lib/market/storage";
+import { readVisitorChoice, writeVisitorDraft } from "@/lib/market/storage";
+import { resolveVisitorDraft } from "@/lib/pricing/market-resolution";
 import type { DraftMarket } from "@/lib/market/types";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
@@ -68,7 +69,10 @@ import { readInsightSeen } from "@/lib/funnel-timing";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 import { LiteYouTube } from "@/components/lite-youtube";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { readSignupQuotes } from "@/lib/pricing/price-quote.functions";
+import { useSignupQuotes } from "@/lib/pricing/use-signup-quotes";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
+import { visitorMarketHint, withVisitorMarketHint } from "@/lib/pricing/visitor-market-hint";
 import {
   ACCOUNTANT_TEASER,
   DASH_ARIA_LABEL,
@@ -156,7 +160,16 @@ export const Route = createFileRoute("/")({
   loader: async () => {
     const visitor = await readMarketingVisitor();
     const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
-    return { ...visitor, saPricing };
+    const hinted =
+      resolveVisitorDraft({
+        geoCountry: visitor.geoZa ? "ZA" : null,
+        saved: visitor.urlDraft,
+        choiceFromThisVisit: Boolean(visitor.urlDraft.country),
+      }).country === "ZA"
+        ? "ZA"
+        : "US";
+    const signupQuotes = await readSignupQuotes({ data: { country: hinted } });
+    return { ...visitor, saPricing, signupQuotes };
   },
   component: LandingPage,
   head: ({ loaderData }) => {
@@ -263,7 +276,7 @@ function applyLandingTheme(theme: "light" | "dark") {
 /* ─────────────────────────────────────────────────────────────── */
 
 function LandingPage() {
-  const { showSaPricing, saPricing, urlDraft, copyPack, geoZa } = Route.useLoaderData();
+  const { showSaPricing, saPricing, urlDraft, copyPack, geoZa, signupQuotes } = Route.useLoaderData();
   const homeFaq = homepageFaqItems(showSaPricing, saPricing?.ownerHomepageCost ?? null);
   const { user, loading } = useAuth();
   const [firmId, setFirmId] = useState<string | null>(null);
@@ -395,28 +408,35 @@ function LandingPage() {
   // reads draftMarket on every render. A later const is a TDZ crash
   // (ReferenceError: Cannot access 'draftMarket' before initialization)
   // and white-screens the landing page.
-  const [draftMarket, setDraftMarket] = useState<DraftMarket>(
-    urlDraft?.country ? urlDraft : geoZa ? { country: "ZA", regionCode: null } : (urlDraft ?? { country: null, regionCode: null }),
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
+    resolveVisitorDraft({
+      geoCountry: geoZa ? "ZA" : null,
+      saved: urlDraft,
+      choiceFromThisVisit: Boolean(urlDraft?.country),
+    }),
   );
   const marketReady = useRef(false);
   // Hero and pricing copy follow the server pack, not this draft. The draft
   // is the practice-location form, applied after mount. The signup price
   // lines follow the country select.
   const copyMarket = { copyPack };
-  const signupOwnerNote = firmSignupOwnerPayLine(draftMarket.country);
+  const signupPack = useSignupQuotes(draftMarket.country, signupQuotes);
+  const signupOwnerNote =
+    signupPack?.ownerPayLine ?? firmSignupOwnerPayLine(draftMarket.country);
   useEffect(() => {
     setMounted(true);
   }, []);
   // Storage is client-only. Apply it after the first paint so SSR and hydration agree.
-  // A stored ZA country is ignored unless the edge is ZA.
+  // A stale saved country does not override geo. ?market= on this request does.
   useEffect(() => {
-    const stored = readVisitorDraft();
-    const allowed = geoZa || stored.country !== "ZA" ? stored : { country: null, regionCode: null };
-    setDraftMarket((current) => {
-      if (current.country) return current;
-      if (allowed.country) return allowed;
-      return geoZa ? { country: "ZA", regionCode: null } : { country: "US", regionCode: null };
-    });
+    const choice = readVisitorChoice();
+    setDraftMarket(
+      resolveVisitorDraft({
+        geoCountry: geoZa ? "ZA" : null,
+        saved: choice.draft,
+        choiceFromThisVisit: choice.fromThisVisit,
+      }),
+    );
     marketReady.current = true;
   }, [geoZa]);
 
@@ -1446,7 +1466,11 @@ function LandingPage() {
       return;
     }
     toast.message(`Create your firm account to start ${registerLabelForPlan(plan)}.`);
-    void navigate({ to: "/auth", search: { signup: true, plan, interval } });
+    const hint = visitorMarketHint(draftMarket.country);
+    void navigate({
+      to: "/auth",
+      search: { signup: true, plan, interval, ...(hint ? { market: hint } : {}) },
+    });
   };
 
   const goToFirmSignup = async (opts?: {
@@ -2016,7 +2040,7 @@ function LandingPage() {
             </ul>
             <p className="hero-owner">
               <a
-                href="/?signup=owner#register"
+                href={withVisitorMarketHint("/?signup=owner#register", draftMarket.country)}
                 onClick={(e) => {
                   e.preventDefault();
                   goToOwnerSpark();
@@ -2623,6 +2647,7 @@ function LandingPage() {
             showSaPricing={showSaPricing}
             saLabels={saPricing?.labels}
             trialAfter={saPricing?.trialAfter}
+            marketHint={visitorMarketHint(draftMarket.country)}
           />
 
           <div className="owner-spark-path">
@@ -2636,7 +2661,7 @@ function LandingPage() {
             </p>
             <a
               className="btn btn-ghost"
-              href="/?signup=owner#register"
+              href={withVisitorMarketHint("/?signup=owner#register", draftMarket.country)}
               onClick={(e) => {
                 e.preventDefault();
                 goToOwnerSpark();
@@ -2695,6 +2720,7 @@ function LandingPage() {
             <Suspense fallback={<div className="reg-shell" style={{ minHeight: 480 }} />}>
               <LandingRegisterForm
                 ownerNote={signupOwnerNote}
+                starterMonthly={signupPack?.starterMonthly ?? ""}
                 inviteClientId={inviteClientId}
                 inviteBusiness={inviteBusiness}
                 inviteFirmName={inviteFirmName}

@@ -1,9 +1,9 @@
 -- Extra files on a client send, plus a chat-turn counter.
 -- Password ciphertext is AES-GCM. The plaintext is not stored.
--- Chat rows store no message and no token.
+-- Chat rows store no message and no token. The table stays unused
+-- while the document chat is off.
+-- Next sets client_agent_sends.completed_at. Nothing is emailed.
 -- CoS applies this file. It is not wired into the CI apply script.
--- Next on the public page is client-side only. This file does not
--- add a completion column and does not send mail.
 
 CREATE TABLE IF NOT EXISTS public.client_agent_send_files (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -72,3 +72,58 @@ GRANT ALL ON TABLE public.client_agent_send_files TO service_role;
 GRANT ALL ON TABLE public.client_agent_send_chat_turns TO service_role;
 
 -- No policies. Service role bypasses RLS. No login-free function.
+
+ALTER TABLE public.client_agent_sends
+  ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+
+COMMENT ON COLUMN public.client_agent_sends.completed_at IS
+  'Set when the client presses Next. Null until then. Not cleared. No mail.';
+
+-- Same trigger as 20261021210000. Not security definer.
+CREATE OR REPLACE FUNCTION public.client_agent_send_guard_firm()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.clients c
+    WHERE c.id = NEW.client_id
+      AND c.firm_id = NEW.firm_id
+  ) THEN
+    RAISE EXCEPTION 'firm_client_mismatch' USING ERRCODE = '23514';
+  END IF;
+
+  IF TG_OP = 'UPDATE'
+     AND OLD.consent_at IS NOT NULL
+     AND NEW.consent_at IS NULL
+     AND EXISTS (
+       SELECT 1
+       FROM public.client_agent_send_items i
+       WHERE i.send_id = NEW.id
+         AND (
+           i.mime IS NOT NULL
+           OR i.size_bytes IS NOT NULL
+           OR i.storage_path IS NOT NULL
+         )
+     ) THEN
+    RAISE EXCEPTION 'consent_required' USING ERRCODE = '23514';
+  END IF;
+
+  IF NEW.completed_at IS NOT NULL AND NEW.consent_at IS NULL THEN
+    RAISE EXCEPTION 'consent_required' USING ERRCODE = '23514';
+  END IF;
+
+  IF TG_OP = 'UPDATE'
+     AND OLD.completed_at IS NOT NULL
+     AND NEW.completed_at IS NULL THEN
+    RAISE EXCEPTION 'completed_at_required' USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.client_agent_send_guard_firm() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.client_agent_send_guard_firm() TO service_role;

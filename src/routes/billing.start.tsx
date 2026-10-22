@@ -15,14 +15,8 @@ import {
   stashPendingCheckout,
   type PendingCheckout,
 } from "@/lib/pending-checkout";
-import {
-  FIRM_BAND_CATALOG,
-  FIRM_TRIAL_SENTENCE,
-  firmSignupCheckoutIntent,
-  firmUsdListPrice,
-  type FirmCheckoutBand,
-  type FirmInterval,
-} from "@/lib/stripe-plans";
+import { FIRM_TRIAL_SENTENCE, firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { checkoutPriceBit, checkoutPriceLabel } from "@/lib/billing-wall";
 
 export const Route = createFileRoute("/billing/start")({
   validateSearch: (search: Record<string, unknown>) => {
@@ -58,18 +52,6 @@ export const Route = createFileRoute("/billing/start")({
     ],
   }),
 });
-
-function priceLabel(
-  plan: FirmCheckoutBand,
-  interval: FirmInterval,
-  quote: FirmBillingQuote | null,
-): string | null {
-  if (!quote) return null;
-  if (quote.market === "za") return quote.priceLabel;
-  const amount = firmUsdListPrice(plan, interval);
-  if (!amount) return FIRM_BAND_CATALOG[plan].name;
-  return interval === "year" ? `${amount}/yr` : `${amount}/mo`;
-}
 
 function BillingStartPage() {
   const search = Route.useSearch();
@@ -146,8 +128,8 @@ function BillingStartPage() {
   }, [loading, user, quote, pending.plan, pending.interval, pending.market, pending.promo, navigate, startCheckout, hold]);
 
   const planName = registerLabelForPlan(pending.plan);
-  const shownPrice = priceLabel(pending.plan, pending.interval, user ? quote : null);
-  const priceBit = shownPrice ? ` (${shownPrice})` : "";
+  const shownPrice = checkoutPriceLabel(pending.plan, pending.interval, user ? quote : null);
+  const priceBit = checkoutPriceBit(planName, shownPrice);
 
   if (error) {
     return (

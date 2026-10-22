@@ -168,7 +168,7 @@ import {
   resolveWaterfallFigures,
   hasWeeklyProfitFigures,
 } from "@/lib/weekly-inputs";
-import { fiscalWaterfallFallback } from "@/lib/budget-period";
+import { fiscalStatementSlice, fiscalWaterfallFallback } from "@/lib/budget-period";
 import { emptyProductMix, type ProductMix, hasProductMixAnswer } from "@/lib/product-mix";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
@@ -2359,6 +2359,8 @@ function ClientView() {
     // request time, so a stale value would send questions for the wrong client.
     el.dataset.clientId = clientId;
     el.dataset.forecastKey = forecastPlFingerprint(client.cashflow, client.financials);
+    if (client.firm_id) el.dataset.firmId = client.firm_id;
+    else delete el.dataset.firmId;
     const askAgent =
       search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
         ? search.agent
@@ -3854,6 +3856,11 @@ function ClientView() {
     },
     [clientId, navigate],
   );
+  // The same firm-year slice and year start as the Waterfall below.
+  const homeProfitPeriod = useMemo(
+    () => fiscalStatementSlice(financials, fyStartMonth),
+    [financials, fyStartMonth],
+  );
   const homeBooks = useMemo<OwnerBooks>(() => {
     const priorFin =
       priorSnapshot?.financials && typeof priorSnapshot.financials === "object"
@@ -3876,6 +3883,7 @@ function ClientView() {
       priorGrossProfit: amount(priorFin?.grossProfit),
       netIncome: amount(financials.netIncome),
       operatingProfit: clientProfitBridge.ebit,
+      profitPeriod: homeProfitPeriod,
       openingMissing,
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
@@ -3923,6 +3931,7 @@ function ClientView() {
     openingMissing,
     cashOnFile,
     clientProfitBridge.ebit,
+    homeProfitPeriod,
     pillarStatus.cash,
     evidenced,
     effectiveRunway,
@@ -4015,6 +4024,7 @@ function ClientView() {
       buildFinancialManagerBrief({
         clientName: client?.name ?? "",
         currentFinancials: financials,
+        profitPeriod: homeProfitPeriod,
         currentPeriodEnd: statementMeta.periodEnd,
         snapshots: snapshots.map((row) => {
           const meta = readStatementMeta(row.financials, clientMarket);
@@ -4072,6 +4082,7 @@ function ClientView() {
     [
       client?.name,
       financials,
+      homeProfitPeriod,
       statementMeta.periodEnd,
       snapshots,
       openPlanTitles,

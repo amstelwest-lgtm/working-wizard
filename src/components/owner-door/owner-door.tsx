@@ -13,9 +13,10 @@ import { ownerRunPhase, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { supabase } from "@/integrations/supabase/client";
 import { bootSelect } from "@/lib/boot-read";
 import { formatDate } from "@/lib/market/format";
-import { visitorCopyPack } from "@/lib/market/marketing";
-import { readVisitorDraft } from "@/lib/market/storage";
+import { readRequestGeoCountry } from "@/lib/geo-country.functions";
+import { resolveOwnerMarket } from "@/lib/pricing/market-resolution";
 import type { ResolvedMarket } from "@/lib/market/types";
+import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { askOwnerAgent } from "@/lib/owner-ask";
 import {
@@ -89,7 +90,7 @@ import {
   ownerSubscribeView,
   type OwnerSubscribeView,
 } from "@/lib/owner-subscribe";
-import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
+import { readPriceQuote } from "@/lib/pricing/price-quote.functions";
 import { getOwnerEntitlement, startOwnerCheckout } from "@/lib/stripe-checkout.functions";
 import { OwnerAccountant, OwnerFirst, OwnerPlan, OwnerSettings } from "./owner-pages";
 import { OwnerShell, type OwnerScreen } from "./owner-shell";
@@ -137,6 +138,7 @@ export function OwnerDoor({
   cogs,
   receivables,
   netIncome,
+  profitPeriod = null,
   periodEnd,
   statementSpan = null,
   history,
@@ -190,6 +192,8 @@ export function OwnerDoor({
   cogs: string;
   receivables: string;
   netIncome: string;
+  /** Firm-year slice the owner Waterfall quotes. The Analyst card uses it when it is pro-rated. */
+  profitPeriod?: FiscalStatementSlice | null;
   periodEnd: string | null;
   /** Market-formatted statement span. Home keeps this sentence when ledger status arrives later. */
   statementSpan?: string | null;
@@ -287,6 +291,7 @@ export function OwnerDoor({
   );
   const [busyAgent, setBusyAgent] = useState<AgentKey | null>(null);
   const [errors, setErrors] = useState<Partial<Record<AgentKey, string>>>({});
+  const [errorCodes, setErrorCodes] = useState<Partial<Record<AgentKey, string>>>({});
   const [listening, setListening] = useState(false);
   const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | null>(null);
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
@@ -319,7 +324,8 @@ export function OwnerDoor({
   const [billing, setBilling] = useState<OwnerSubscribeView>({ kind: "pending" });
   const [subscribeBusy, setSubscribeBusy] = useState(false);
   const loadEntitlement = useServerFn(getOwnerEntitlement);
-  const loadSaPricing = useServerFn(readSaPricingCopy);
+  const readQuote = useServerFn(readPriceQuote);
+  const readGeo = useServerFn(readRequestGeoCountry);
   const beginCheckout = useServerFn(startOwnerCheckout);
   const recRef = useRef<SpeechRec | null>(null);
   const listenGen = useRef(0);
@@ -381,11 +387,21 @@ export function OwnerDoor({
   }, [focusSigned, screen]);
 
   useEffect(() => {
-    setVisitor(visitorCopyPack(readVisitorDraft()));
     let cancelled = false;
-    void loadSaPricing()
-      .then((copy) => {
-        if (!cancelled) setZaMonthly(copy?.ownerMonthly ?? null);
+    const storedCountry = marketCountry === "ZA" || marketCountry === "US" ? marketCountry : "";
+    const storedMarket = storedCountry ? { country: storedCountry } : null;
+    void readGeo()
+      .then((geo) => {
+        if (!cancelled) setVisitor(resolveOwnerMarket({ storedMarket, geoCountry: geo }));
+      })
+      .catch(() => {
+        if (!cancelled) setVisitor(resolveOwnerMarket({ storedMarket, geoCountry: null }));
+      });
+    void readQuote({
+      data: { surface: "owner", plan: "owner", interval: "month", storedCountry },
+    })
+      .then((quote) => {
+        if (!cancelled) setZaMonthly(quote?.label ?? null);
       })
       .catch(() => {
         if (!cancelled) setZaMonthly(null);
@@ -393,7 +409,7 @@ export function OwnerDoor({
     return () => {
       cancelled = true;
     };
-  }, [loadSaPricing]);
+  }, [marketCountry, readGeo, readQuote]);
 
   useEffect(() => {
     let cancelled = false;
@@ -747,6 +763,7 @@ export function OwnerDoor({
       priorCogs: parseOwnerNumber(priorFin?.cogs),
       priorGrossProfit: parseOwnerNumber(priorFin?.grossProfit),
       netIncome: parseOwnerNumber(netIncome),
+      profitPeriod,
       receivables: parseOwnerNumber(receivables),
       cashflow,
       cashOutlook: cashOutlook ?? undefined,
@@ -780,6 +797,7 @@ export function OwnerDoor({
     cashDebtorScore,
     cashBurnScore,
     netIncome,
+    profitPeriod,
     periodEnd,
     financials,
     history,
@@ -996,8 +1014,12 @@ export function OwnerDoor({
     setAgent(next);
   }
 
-  function setAgentError(which: AgentKey, message: string | null) {
+  function setAgentError(which: AgentKey, message: string | null, code?: string | null) {
     setErrors((current) => ({ ...current, [which]: message ?? undefined }));
+    setErrorCodes((current) => ({
+      ...current,
+      [which]: message && code ? code : undefined,
+    }));
   }
 
   async function send(text: string) {
@@ -1028,7 +1050,7 @@ export function OwnerDoor({
       setTalk((current) =>
         current?.agent === asked && current.mode === "working" ? null : current,
       );
-      setAgentError(asked, result.error);
+      setAgentError(asked, result.error, result.code);
       return;
     }
     updateThread(asked, askedClient, (thread) => ({
@@ -1151,6 +1173,16 @@ export function OwnerDoor({
           listening={listening && talk?.agent === agent}
           busy={busyAgent === agent}
           error={errors[agent] ?? null}
+          errorCode={errorCodes[agent] ?? null}
+          plan={{
+            accountantFirm: Boolean(firmId),
+            visitor,
+            zaMonthly,
+            firmName,
+            billing,
+            subscribeBusy,
+            onSubscribe: () => void subscribe(),
+          }}
           onDraft={(value) => {
             const which = agentRef.current;
             const nextThread = { ...threadsRef.current[which], draft: value };

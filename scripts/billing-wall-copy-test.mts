@@ -416,7 +416,7 @@ for (const variant of [
   );
   assert(!home.toLowerCase().includes("vat"), `${variant.market} home has no VAT wording`);
   assert(
-    variant.market === "us" ? homePrice === "$39/mo" : homePrice.includes("R 299"),
+    variant.market === "us" ? homePrice === "$39/mo" : homePrice.includes("R299"),
     `${variant.market} home uses Starter`,
   );
 }
@@ -436,7 +436,6 @@ function openPathUpgrade(clientCount: number) {
     priceCurrency: "USD" as const,
     interval: "month" as const,
     zarByBand: {},
-    saDiscount: false,
     zaLabels: null,
     zaPriceLabel: null,
   };
