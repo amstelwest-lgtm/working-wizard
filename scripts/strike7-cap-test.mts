@@ -15,7 +15,7 @@ import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
 import { practiceDisplaysZarPlan } from "../src/lib/firm-band-upgrade";
 import { buildUpgradeSnapshot } from "../src/lib/firm-client-cap.server";
 import { LIST_PRICES, visitorCopyPack } from "../src/lib/market/marketing";
-import { priceMarketForFirm } from "../src/lib/pricing/za-checkout";
+import { resolveCheckoutPriceMarket } from "../src/lib/pricing/market-resolution";
 import { firmCheckoutCharge } from "../src/lib/stripe-checkout.core";
 import { strike7MyPracticeRow } from "./strike7-firms";
 
@@ -143,15 +143,15 @@ assert(
   "a client-mix firm with billing country US leaves the charge line empty",
 );
 assert(
-  priceMarketForFirm({ firmMarket: "za", billingCountry: "ZA" }) === "za",
+  resolveCheckoutPriceMarket({ storedFirmMarket: { country: "ZA" }, billingCountry: "ZA" }) === "za",
   "a ZA firm with a ZA billing country still gets a rand Checkout price",
 );
 assert(
-  priceMarketForFirm({ firmMarket: "za", billingCountry: "US" }) === "us",
+  resolveCheckoutPriceMarket({ storedFirmMarket: { country: "ZA" }, billingCountry: "US" }) === "us",
   "a known non-ZA billing country still falls back to USD",
 );
 assert(
-  priceMarketForFirm({ firmMarket: "us", billingCountry: "ZA" }) === "us",
+  resolveCheckoutPriceMarket({ storedFirmMarket: { country: "US" }, billingCountry: "ZA" }) === "us",
   "a US firm row never takes a rand Checkout price",
 );
 

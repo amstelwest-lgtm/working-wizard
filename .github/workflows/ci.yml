@@ -143,6 +143,23 @@ jobs:
           bash scripts/apply-client-agent-sends-sql.sh
           bash scripts/apply-client-agent-send-storage-sql.sh
 
+  stripe-price-table:
+    name: Stripe price table
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Compare approved prices to live Stripe
+        env:
+          STRIPE_RESTRICTED_KEY: ${{ secrets.STRIPE_RESTRICTED_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        run: pnpm exec vite-node --config scripts/vite-test.config.ts scripts/stripe-price-table-check.mts
+
   # Reporting for the existing typing and Prettier backlog, except undefined
   # names. `tsc` still carries long-standing PostgREST / vite-plugin errors, and
   # `eslint .` a Prettier backlog, so those stay non-blocking. TS2304 / TS2552

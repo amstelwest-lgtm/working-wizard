@@ -31,6 +31,7 @@ import { describeBusiness } from "../src/lib/client-briefing.ts";
 import { clientIndustryDisplay } from "../src/lib/profile-signals.ts";
 import { adviceIndustryLabel } from "../src/lib/advice-industry.ts";
 import { saFirmDisplayPrice } from "../src/lib/firm-band-upgrade.ts";
+import { quotePrice } from "../src/lib/pricing/price-quote.server.ts";
 import type { ClientOperatingProfile } from "../src/lib/client-profile.ts";
 
 function assert(cond: unknown, msg: string) {
@@ -245,10 +246,10 @@ assert(
     "Hotels & accommodation",
   "advice uses the hotel industry, not the labour template id",
 );
-const starter = saFirmDisplayPrice("starter", "month");
-assert(starter.includes("R 299") && !starter.includes("$") && !/vat/i.test(starter), `SA starter is rand: ${starter}`);
+const starter = quotePrice({ market: "za", plan: "starter", interval: "month", surface: "visitor" })?.label ?? "";
+assert(starter.startsWith("R") && !starter.includes("$") && !/vat/i.test(starter), `SA starter is rand: ${starter}`);
 const vatStripped = saFirmDisplayPrice("starter", "month", "$39/mo excl. VAT");
-assert(vatStripped.includes("R 299") && !vatStripped.includes("$") && !/vat/i.test(vatStripped), "a dollar SA fallback is the published rand price");
+assert(vatStripped === "Starter plan" && !vatStripped.includes("$") && !/vat/i.test(vatStripped), "a dollar or VAT label is the plan name");
 const css = read("src/styles/accountant-portal.css");
 assert(css.includes("max-width:420px") && css.includes("padding-bottom"), "the narrow practice page clears the share button");
 const context = read("supabase/functions/ask-ai/context-builder.ts");

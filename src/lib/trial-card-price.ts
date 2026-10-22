@@ -17,13 +17,15 @@ export const STARTER_PLAN_ONLY = firmPlanNameOnly("starter");
  * not contain a rand amount.
  */
 export function starterMonthlyFromQuote(quote: StarterMonthlyQuote | null | undefined): string {
-  if (quote?.market === "za") {
-    const head = (quote.priceLabel ?? "").split(" · ")[0]?.trim() ?? "";
-    return head || STARTER_PLAN_ONLY;
+  const market = quote?.market;
+  if (market !== "za" && market !== "us") return STARTER_PLAN_ONLY;
+  const head = (quote?.priceLabel ?? "").split(" · ")[0]?.trim() ?? "";
+  if (head) return head;
+  if (market === "us") {
+    const usd = firmUsdListPrice("starter", "month");
+    return usd ? `${usd}/mo` : STARTER_PLAN_ONLY;
   }
-  if (quote?.market !== "us") return STARTER_PLAN_ONLY;
-  const usd = firmUsdListPrice("starter", "month");
-  return usd ? `${usd}/mo` : STARTER_PLAN_ONLY;
+  return STARTER_PLAN_ONLY;
 }
 
 /** Quote read for the trial card. A throw or a null quote is the plan name. */

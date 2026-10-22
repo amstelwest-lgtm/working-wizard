@@ -3,7 +3,8 @@ import { useState } from "react";
 import { MarketingShell } from "@/components/marketing-shell";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { LiteYouTube } from "@/components/lite-youtube";
-import { FIRM_SIGNUP_HREF, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
+import { firmSignupHref, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
+import { visitorMarketHint } from "@/lib/pricing/visitor-market-hint";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { ACCOUNTANT_TEASER, FIRM_NOT_A_BOOKKEEPER, FIRM_TEAM_BULLETS } from "@/lib/landing-copy";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
@@ -32,12 +33,19 @@ function ForAccountantsPage() {
   const { saPricing, copyPack, geoZa } = Route.useLoaderData();
   const navigate = useNavigate();
   const [interval, setInterval] = useState<FirmInterval>("month");
+  const marketHint = visitorMarketHint(copyPack === "za" ? "ZA" : "US");
+  const signupHref = firmSignupHref("starter", "month", marketHint);
 
   const startBand = (plan: FirmCheckoutBand, nextInterval: FirmInterval) => {
     stashPendingCheckout({ plan, interval: nextInterval, market: copyPack });
     void navigate({
       to: "/auth",
-      search: { signup: true, plan, interval: nextInterval },
+      search: {
+        signup: true,
+        plan,
+        interval: nextInterval,
+        ...(marketHint ? { market: marketHint } : {}),
+      },
     });
   };
 
@@ -58,9 +66,9 @@ function ForAccountantsPage() {
             "Management accounts, 13-week cash and advisory drafts from QuickBooks or Xero. Sage is coming soon."}
         </>
       }
-      heroCta={{ label: FIRM_TRIAL_CTA_LABEL, href: FIRM_SIGNUP_HREF }}
+      heroCta={{ label: FIRM_TRIAL_CTA_LABEL, href: signupHref }}
       navCtaLabel={FIRM_TRIAL_CTA_LABEL}
-      navCtaHref={FIRM_SIGNUP_HREF}
+      navCtaHref={signupHref}
       ctaTitle={<>Run it over your own client book</>}
       ctaBody={
         <>
@@ -69,7 +77,7 @@ function ForAccountantsPage() {
         </>
       }
       ctaLabel="Set up your firm account ✦"
-      ctaHref={FIRM_SIGNUP_HREF}
+      ctaHref={signupHref}
       footerLine={saPricing?.footerLine}
       copyPack={copyPack}
       geoZa={geoZa}
@@ -217,6 +225,7 @@ function ForAccountantsPage() {
         showSaPricing={Boolean(saPricing)}
         saLabels={saPricing?.labels}
         trialAfter={saPricing?.trialAfter}
+        marketHint={marketHint}
       />
       <div className="mk-note">
         Where we are honest about being early: our first pilots are running now, so we are not

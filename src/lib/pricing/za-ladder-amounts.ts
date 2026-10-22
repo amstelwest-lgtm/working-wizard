@@ -1,10 +1,7 @@
-import {
-  FIRM_BAND_CATALOG,
-  FIRM_CHECKOUT_BANDS,
-  type FirmCheckoutBand,
-  type FirmInterval,
-} from "../stripe-plans.ts";
-import { annualZarCents, ZA_MONTHLY_CENTS, zaLookupKey } from "./za-ladder.ts";
+import type { FirmCheckoutBand, FirmInterval } from "../stripe-plans.ts";
+import { approvedPrice } from "./price-table.server.ts";
+import { FIRM_BAND_CATALOG } from "../stripe-plans.ts";
+import { zaLookupKey } from "./za-ladder.ts";
 
 export type ZaCatalogEntry = {
   band: FirmCheckoutBand;
@@ -18,20 +15,24 @@ export type ZaCatalogEntry = {
 };
 
 export function zaBandAmountCents(band: FirmCheckoutBand, interval: FirmInterval): number {
-  const monthly = ZA_MONTHLY_CENTS[band];
-  if (interval === "month") return monthly;
-  const entry = FIRM_BAND_CATALOG[band];
-  const yearlyUsd = entry.yearlyUsdCents;
-  const monthlyUsd = entry.monthlyUsdCents;
-  if (yearlyUsd == null || monthlyUsd == null) {
-    throw new Error(`${entry.name} has no annual catalog price.`);
-  }
-  return annualZarCents(monthly, yearlyUsd, monthlyUsd);
+  const row = approvedPrice(band, interval, "ZAR");
+  if (!row) throw new Error(`${band} has no approved rand price.`);
+  return row.unitAmount;
 }
 
 export function zaCatalogEntries(): ZaCatalogEntry[] {
   const intervals: FirmInterval[] = ["month", "year"];
-  return FIRM_CHECKOUT_BANDS.flatMap((band) =>
+  const bands = [
+    "starter",
+    "solo",
+    "small",
+    "growing",
+    "established",
+    "larger",
+    "advanced",
+    "scale",
+  ] as const;
+  return bands.flatMap((band) =>
     intervals.map((interval) => {
       const usdLookupKey =
         interval === "year"
@@ -40,12 +41,14 @@ export function zaCatalogEntries(): ZaCatalogEntry[] {
       if (!usdLookupKey) {
         throw new Error(`${band} is missing a USD lookup key.`);
       }
+      const row = approvedPrice(band, interval, "ZAR");
+      if (!row) throw new Error(`${band} ${interval} is missing from the price table.`);
       return {
         band,
         interval,
         lookupKey: zaLookupKey(band, interval),
         usdLookupKey,
-        unitAmount: zaBandAmountCents(band, interval),
+        unitAmount: row.unitAmount,
         currency: "zar" as const,
         recurringInterval: interval === "year" ? ("year" as const) : ("month" as const),
       };

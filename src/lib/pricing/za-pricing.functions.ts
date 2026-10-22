@@ -1,12 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { resolveFirmMarket, resolveVisitorMarket } from "@/lib/pricing/market-resolution";
+import { resolveVisitorMarket } from "@/lib/pricing/market-resolution";
 import { isFirmCheckoutBand, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 
 export type FirmBillingQuote = {
   market: "za" | "us";
-  /** Server-built line for a ZA firm. Null for a US firm so the client uses its USD catalog. */
+  /** Approved label for this firm's market. Null when the table has no row. */
   priceLabel: string | null;
 };
 
@@ -39,8 +39,8 @@ export const readSaPricingCopy = createServerFn({ method: "GET" }).handler(async
 });
 
 /**
- * Price line for the signed-in firm's stored market. The URL market is not
- * an argument. A missing or non-ZA firm market is USD (priceLabel null).
+ * Price line for the signed-in firm's stored market. The URL is not an
+ * argument. Both currencies come from the approved price table.
  */
 export const readFirmBillingQuote = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -52,9 +52,13 @@ export const readFirmBillingQuote = createServerFn({ method: "GET" })
       supabase: ctx.supabase,
       userId: ctx.userId,
     });
-    if (resolveFirmMarket(firmMarket) !== "za") return { market: "us", priceLabel: null };
-    const { loadSaPricingCopy } = await import("@/lib/pricing/za-pricing-chunk.server");
-    const copy = loadSaPricingCopy();
-    const priceLabel = copy.labels[data.plan]?.[data.interval] ?? null;
-    return { market: "za", priceLabel };
+    const { quotePrice, resolveQuoteMarket } = await import("@/lib/pricing/price-quote.server");
+    const market = resolveQuoteMarket({ surface: "wall", storedMarket: firmMarket });
+    const quote = quotePrice({
+      market,
+      plan: data.plan,
+      interval: data.interval,
+      surface: "wall",
+    });
+    return { market, priceLabel: quote?.label ?? null };
   });

@@ -12,8 +12,8 @@ import {
   firmSignupTrialReminder,
 } from "../src/lib/firm-signup-copy";
 import { OWNER_MONTHLY_USD_LABEL } from "../src/lib/owner-plan";
-import { ZA_MONTHLY_RANDS } from "../src/lib/pricing/za-ladder";
-import { OWNER_MONTHLY_ZA_CENTS } from "../src/lib/stripe-checkout.core";
+import { approvedFirmMonthlyRands, approvedPrice } from "../src/lib/pricing/price-table.server";
+import { signupQuotePack } from "../src/lib/pricing/price-quote.server";
 import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE, firmUsdListPrice } from "../src/lib/stripe-plans";
 import type { DraftMarket } from "../src/lib/market/types";
 
@@ -26,32 +26,41 @@ const TRIAL =
 const OLD_LINE = FIRM_TRIAL_CARD_NOTE;
 
 const starterUsd = firmUsdListPrice("starter", "month");
+const zaPack = signupQuotePack("ZA");
+const usPack = signupQuotePack("US");
 assert(starterUsd === "$39", "Starter's dollar catalog price is $39");
-assert(ZA_MONTHLY_RANDS.starter === 299, "Starter's rand catalog price is 299");
-assert(OWNER_MONTHLY_ZA_CENTS === 29_900, "the owner rand catalog price is 299 rand");
+assert(approvedFirmMonthlyRands("starter") === 299, "Starter's rand catalog price is 299");
+assert(approvedPrice("owner", "month", "ZAR")?.unitAmount === 29_900, "the owner rand catalog price is 299 rand");
 assert(OWNER_MONTHLY_USD_LABEL === "$39/mo", "the owner dollar catalog price is $39/mo");
 
-assert(firmSignupStarterMonthly("ZA") === "R299/mo", "South Africa shows Starter R299/mo");
+assert(zaPack.starterMonthly === "R299/mo", "South Africa shows Starter R299/mo");
+assert(firmSignupStarterMonthly("ZA", zaPack.starterMonthly) === "R299/mo", "a ZA quote stays tight");
+assert(firmSignupStarterMonthly("ZA") === "", "South Africa omits the amount until the quote arrives");
 assert(firmSignupStarterMonthly("US") === "$39/mo", "the US shows Starter $39/mo");
 assert(firmSignupStarterMonthly(null) === "$39/mo", "a missing country shows Starter $39/mo");
 assert(firmSignupStarterMonthly("GB") === "$39/mo", "any other country shows Starter $39/mo");
 
 assert(
-  firmSignupOwnerPayLine("ZA") ===
+  zaPack.ownerPayLine ===
     "Business owners pay R299/mo, or nothing when their accountant is on Milōn.",
   "South Africa says business owners pay R299/mo",
 );
 assert(
-  firmSignupOwnerPayLine("US") ===
+  firmSignupOwnerPayLine("ZA") ===
+    "Business owners are on the Owner plan, or pay nothing when their accountant is on Milōn.",
+  "a missing ZA quote does not say pay Owner plan",
+);
+assert(
+  usPack.ownerPayLine ===
     "Business owners pay $39/mo, or nothing when their accountant is on Milōn.",
   "the US says business owners pay $39/mo",
 );
 assert(firmSignupOwnerPayLine("GB").includes("Business owners pay $39/mo"), "any other country stays on dollars");
-assert(!firmSignupOwnerPayLine("ZA").toLowerCase().includes("vat"), "the owner line has no VAT wording");
-assert(!firmSignupStarterMonthly("ZA").toLowerCase().includes("vat"), "the Starter line has no VAT wording");
+assert(!zaPack.ownerPayLine.toLowerCase().includes("vat"), "the owner line has no VAT wording");
+assert(!zaPack.starterMonthly.toLowerCase().includes("vat"), "the Starter line has no VAT wording");
 
-const zaTrial = firmSignupTrialReminder("Starter", "ZA");
-const usTrial = firmSignupTrialReminder("Starter", "US");
+const zaTrial = firmSignupTrialReminder("Starter", "ZA", zaPack.starterMonthly);
+const usTrial = firmSignupTrialReminder("Starter", "US", usPack.starterMonthly);
 assert(zaTrial === `${TRIAL} Then R299/mo.`, "ZA signup uses the approved rand trial line");
 assert(usTrial === `${TRIAL} Then $39/mo.`, "US signup uses the approved dollar trial line");
 assert(firmSignupTrialReminder("Solo", null) === usTrial, "a missing country uses the dollar trial line");
@@ -68,8 +77,14 @@ const auth = readFileSync(resolve(root, "src/routes/auth.tsx"), "utf8");
 assert(index.includes("firmSignupOwnerPayLine(draftMarket.country)"), "the signup section follows the country select");
 assert(!index.includes("saPricing?.ownerRegisterNote"), "the signup owner line is not the IP sentence");
 assert(register.includes("country={draftMarket.country}"), "the landing form passes the country select");
-assert(register.includes('firmSignupTrialReminder("Starter", draftMarket.country)'), "the landing trial line follows the select");
-assert(terms.includes("firmSignupTrialReminder(registerLabelForPlan(plan), country)"), "auth and landing share the trial helper");
+assert(
+  register.includes('firmSignupTrialReminder("Starter", draftMarket.country, starterMonthly)'),
+  "the landing trial line follows the select",
+);
+assert(
+  terms.includes("firmSignupTrialReminder(registerLabelForPlan(plan), country, starterMonthly)"),
+  "auth and landing share the trial helper",
+);
 assert(auth.includes("country={draftMarket.country}"), "Create Firm passes the country select");
 assert(!register.includes(OLD_LINE), "the register form no longer inlines the old card line");
 assert(!terms.includes(OLD_LINE), "the signup terms no longer inline the old card line");
@@ -137,10 +152,11 @@ function SignupSection({ initial }: { initial: "ZA" | "US" }) {
     country: initial,
     regionCode: initial === "US" ? "NY" : null,
   });
+  const pack = signupQuotePack(draft.country);
   return createElement(
     "section",
     { id: "register" },
-    createElement("p", { className: "sub" }, firmSignupOwnerPayLine(draft.country)),
+    createElement("p", { className: "sub" }, pack.ownerPayLine),
     createElement(LandingRegisterForm, {
       inviteClientId: null,
       inviteBusiness: null,
@@ -170,7 +186,8 @@ function SignupSection({ initial }: { initial: "ZA" | "US" }) {
       setDraftMarket: setDraft,
       firmInterval: "month",
       copyMarket: { copyPack: "us" as const },
-      ownerNote: firmSignupOwnerPayLine(draft.country),
+      ownerNote: pack.ownerPayLine,
+      starterMonthly: pack.starterMonthly,
       handleRegister: (event: FormEventLike) => event.preventDefault(),
       goToFirmSignup: () => {},
       goToOwnerSpark: () => {},

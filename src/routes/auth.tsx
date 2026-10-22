@@ -95,6 +95,8 @@ import {
 import { resolveVisitorDraft, resolveVisitorMarket } from "@/lib/pricing/market-resolution";
 
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { readSignupQuotes } from "@/lib/pricing/price-quote.functions";
+import { useSignupQuotes } from "@/lib/pricing/use-signup-quotes";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 
 type AuthSearch = {
@@ -102,10 +104,24 @@ type AuthSearch = {
   signup?: boolean;
   plan?: FirmCheckoutBand;
   interval?: FirmInterval;
+  /** Visitor hint from the landing dropdown. ZA or US only. Not a country override. */
+  market?: "ZA" | "US";
 };
 
 export const Route = createFileRoute("/auth")({
-  loader: () => readMarketingVisitor(),
+  loader: async () => {
+    const visitor = await readMarketingVisitor();
+    const hinted =
+      resolveVisitorDraft({
+        geoCountry: visitor.geoZa ? "ZA" : null,
+        saved: visitor.urlDraft,
+        choiceFromThisVisit: Boolean(visitor.urlDraft.country),
+      }).country === "ZA"
+        ? "ZA"
+        : "US";
+    const signupQuotes = await readSignupQuotes({ data: { country: hinted } });
+    return { ...visitor, signupQuotes };
+  },
   component: AuthPage,
   validateSearch: (search: Record<string, unknown>): AuthSearch => {
     const next =
@@ -118,11 +134,14 @@ export const Route = createFileRoute("/auth")({
         : undefined;
     const signupFlag =
       search.signup === true || search.signup === "1" || search.signup === "true" || plan != null;
+    const marketRaw = typeof search.market === "string" ? search.market.trim().toUpperCase() : "";
+    const market = marketRaw === "ZA" || marketRaw === "US" ? marketRaw : undefined;
     return {
       ...(next ? { next } : {}),
       ...(signupFlag ? { signup: true } : {}),
       ...(plan ? { plan } : {}),
       ...(interval ? { interval } : {}),
+      ...(market ? { market } : {}),
     };
   },
   head: () => pageHead(SEO_PAGES.auth),
@@ -139,10 +158,10 @@ type AuthFieldDraft = {
 let authFieldDraft: AuthFieldDraft = { email: "", password: "", fullName: "", firmName: "" };
 
 function AuthPage() {
-  const { geoZa } = Route.useLoaderData();
+  const { geoZa, signupQuotes } = Route.useLoaderData();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const { next, signup, plan, interval } = Route.useSearch();
+  const { next, signup, plan, interval, market } = Route.useSearch();
   const ensurePractice = useServerFn(ensurePracticePortalAccess);
   const doSendWelcome = useServerFn(sendSignupWelcome);
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
@@ -171,7 +190,11 @@ function AuthPage() {
   const [resetEmail, setResetEmail] = useState("");
   const submitLock = useRef(false);
   const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
-    resolveVisitorDraft({ geoCountry: geoZa ? "ZA" : null }),
+    resolveVisitorDraft({
+      geoCountry: geoZa ? "ZA" : null,
+      saved: market ? { country: market, regionCode: null } : null,
+      choiceFromThisVisit: Boolean(market),
+    }),
   );
 
   /* Client-only form gate — browser password managers (LastPass etc.) inject
@@ -180,19 +203,21 @@ function AuthPage() {
   useEffect(() => {
     setMounted(true);
     const choice = readVisitorChoice();
+    const hinted = market === "ZA" || market === "US";
     setDraftMarket(
       resolveVisitorDraft({
         geoCountry: geoZa ? "ZA" : null,
-        saved: choice.draft,
-        choiceFromThisVisit: choice.fromThisVisit,
+        saved: hinted ? { country: market, regionCode: null } : choice.draft,
+        choiceFromThisVisit: hinted || choice.fromThisVisit,
       }),
     );
     const pending = peekPendingCheckout();
     if (pending) setStoredBand({ plan: pending.plan, interval: pending.interval });
-  }, [geoZa]);
+  }, [geoZa, market]);
   const selectedPlan = plan ?? storedBand?.plan ?? "starter";
   const selectedInterval = interval ?? storedBand?.interval ?? "month";
   const practiceHint = practiceLocationHint(draftMarket);
+  const signupPack = useSignupQuotes(draftMarket.country, signupQuotes);
 
   const pendingForSignup = (country: "ZA" | "US" | null): PendingCheckout => {
     const existing = peekPendingCheckout();
@@ -655,6 +680,7 @@ function AuthPage() {
             plan={selectedPlan}
             interval={selectedInterval}
             country={draftMarket.country}
+            starterMonthly={signupPack?.starterMonthly ?? ""}
             onPlanChange={(nextPlan) => {
               setTabOverride("signup");
               void navigate({

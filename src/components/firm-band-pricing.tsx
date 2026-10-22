@@ -27,6 +27,8 @@ type Props = {
   showSaPricing?: boolean;
   /** Server-built lines. Absent unless the edge is ZA. */
   saLabels?: Partial<Record<string, { month: string; year: string }>> | null;
+  /** Visitor dropdown choice for signup links. Not a charge market. */
+  marketHint?: string | null;
   /** Rand line under the trial sentence. Absent unless the edge is ZA. */
   trialAfter?: string | null;
 };
@@ -177,6 +179,7 @@ export function FirmBandPricingTable({
   showSaPricing = false,
   saLabels = null,
   trialAfter = null,
+  marketHint = null,
 }: Props) {
   const labels = showSaPricing ? saLabels : null;
   const bands = FIRM_BAND_TABLE;
@@ -208,7 +211,7 @@ export function FirmBandPricingTable({
     return (
       <a
         className={className}
-        href={isFirmCheckoutBand(band.id) ? firmSignupHref(band.id, billed) : firmSignupHref()}
+        href={isFirmCheckoutBand(band.id) ? firmSignupHref(band.id, billed, marketHint) : firmSignupHref(undefined, undefined, marketHint)}
       >
         Set up firm
       </a>

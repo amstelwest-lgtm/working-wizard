@@ -69,7 +69,10 @@ import { readInsightSeen } from "@/lib/funnel-timing";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 import { LiteYouTube } from "@/components/lite-youtube";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { readSignupQuotes } from "@/lib/pricing/price-quote.functions";
+import { useSignupQuotes } from "@/lib/pricing/use-signup-quotes";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
+import { visitorMarketHint, withVisitorMarketHint } from "@/lib/pricing/visitor-market-hint";
 import {
   ACCOUNTANT_TEASER,
   DASH_ARIA_LABEL,
@@ -157,7 +160,16 @@ export const Route = createFileRoute("/")({
   loader: async () => {
     const visitor = await readMarketingVisitor();
     const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
-    return { ...visitor, saPricing };
+    const hinted =
+      resolveVisitorDraft({
+        geoCountry: visitor.geoZa ? "ZA" : null,
+        saved: visitor.urlDraft,
+        choiceFromThisVisit: Boolean(visitor.urlDraft.country),
+      }).country === "ZA"
+        ? "ZA"
+        : "US";
+    const signupQuotes = await readSignupQuotes({ data: { country: hinted } });
+    return { ...visitor, saPricing, signupQuotes };
   },
   component: LandingPage,
   head: ({ loaderData }) => {
@@ -264,7 +276,7 @@ function applyLandingTheme(theme: "light" | "dark") {
 /* ─────────────────────────────────────────────────────────────── */
 
 function LandingPage() {
-  const { showSaPricing, saPricing, urlDraft, copyPack, geoZa } = Route.useLoaderData();
+  const { showSaPricing, saPricing, urlDraft, copyPack, geoZa, signupQuotes } = Route.useLoaderData();
   const homeFaq = homepageFaqItems(showSaPricing, saPricing?.ownerHomepageCost ?? null);
   const { user, loading } = useAuth();
   const [firmId, setFirmId] = useState<string | null>(null);
@@ -408,7 +420,9 @@ function LandingPage() {
   // is the practice-location form, applied after mount. The signup price
   // lines follow the country select.
   const copyMarket = { copyPack };
-  const signupOwnerNote = firmSignupOwnerPayLine(draftMarket.country);
+  const signupPack = useSignupQuotes(draftMarket.country, signupQuotes);
+  const signupOwnerNote =
+    signupPack?.ownerPayLine ?? firmSignupOwnerPayLine(draftMarket.country);
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -1452,7 +1466,11 @@ function LandingPage() {
       return;
     }
     toast.message(`Create your firm account to start ${registerLabelForPlan(plan)}.`);
-    void navigate({ to: "/auth", search: { signup: true, plan, interval } });
+    const hint = visitorMarketHint(draftMarket.country);
+    void navigate({
+      to: "/auth",
+      search: { signup: true, plan, interval, ...(hint ? { market: hint } : {}) },
+    });
   };
 
   const goToFirmSignup = async (opts?: {
@@ -2022,7 +2040,7 @@ function LandingPage() {
             </ul>
             <p className="hero-owner">
               <a
-                href="/?signup=owner#register"
+                href={withVisitorMarketHint("/?signup=owner#register", draftMarket.country)}
                 onClick={(e) => {
                   e.preventDefault();
                   goToOwnerSpark();
@@ -2629,6 +2647,7 @@ function LandingPage() {
             showSaPricing={showSaPricing}
             saLabels={saPricing?.labels}
             trialAfter={saPricing?.trialAfter}
+            marketHint={visitorMarketHint(draftMarket.country)}
           />
 
           <div className="owner-spark-path">
@@ -2642,7 +2661,7 @@ function LandingPage() {
             </p>
             <a
               className="btn btn-ghost"
-              href="/?signup=owner#register"
+              href={withVisitorMarketHint("/?signup=owner#register", draftMarket.country)}
               onClick={(e) => {
                 e.preventDefault();
                 goToOwnerSpark();
@@ -2701,6 +2720,7 @@ function LandingPage() {
             <Suspense fallback={<div className="reg-shell" style={{ minHeight: 480 }} />}>
               <LandingRegisterForm
                 ownerNote={signupOwnerNote}
+                starterMonthly={signupPack?.starterMonthly ?? ""}
                 inviteClientId={inviteClientId}
                 inviteBusiness={inviteBusiness}
                 inviteFirmName={inviteFirmName}

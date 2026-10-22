@@ -6,6 +6,7 @@ import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { OWNER_PLAN_EARLY_US, OWNER_TEASER } from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
+import { withVisitorMarketHint } from "@/lib/pricing/visitor-market-hint";
 import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
@@ -26,6 +27,10 @@ export const Route = createFileRoute("/for-owners")({
 
 function ForOwnersPage() {
   const { copyPack, geoZa, saPricing } = Route.useLoaderData();
+  const ownerHref = withVisitorMarketHint(
+    "/?signup=owner#register",
+    copyPack === "za" ? "ZA" : "US",
+  );
   return (
     <MarketingShell
       copyPack={copyPack}
@@ -48,8 +53,8 @@ function ForOwnersPage() {
       ctaTitle={<>Start with your own figures</>}
       ctaLabel="Get your own AI finance team →"
       navCtaLabel="Get your own AI finance team"
-      ctaHref="/?signup=owner#register"
-      navCtaHref="/?signup=owner#register"
+      ctaHref={ownerHref}
+      navCtaHref={ownerHref}
       ctaBody={<>{saPricing?.ownerEarly ?? OWNER_PLAN_EARLY_US}</>}
     >
       <h2>What you get in the first week</h2>

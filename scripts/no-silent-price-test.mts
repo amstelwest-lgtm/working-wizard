@@ -12,11 +12,12 @@ import { FirmStarterTrialBanner } from "../src/components/firm-starter-trial-ban
 import { TrialCardSentence } from "../src/components/trial-card-sentence.tsx";
 import { BillingRequiredCard } from "../src/routes/billing.required.tsx";
 import {
+  checkoutPriceBit,
   checkoutPriceLabel,
   firmWallDisplayPrice,
   resolveBillingWall,
 } from "../src/lib/billing-wall.ts";
-import { ownerPlanLine, ownerQuotedAmount } from "../src/lib/owner-plan.ts";
+import { ownerPaySentence, ownerPlanLine, ownerQuotedAmount } from "../src/lib/owner-plan.ts";
 import { noPlanTrialClock } from "../src/lib/firm-starter-trial.ts";
 import {
   resolveStarterMonthlyLabel,
@@ -89,7 +90,9 @@ const wall = renderToStaticMarkup(
 assertPlanOnly(wall, "Starter", "the billing wall when the quote is null");
 assert(wall.includes("Continue on Starter"), "the wall heading names Starter");
 
-const startLine = `Redirecting to Stripe for Starter (${checkoutPriceLabel("starter", "month", null)}).`;
+const startShown = checkoutPriceLabel("starter", "month", null);
+const startLine = `Redirecting to Stripe for Starter${checkoutPriceBit("Starter", startShown)}.`;
+assert(!startLine.includes("(Starter"), "checkout does not repeat Starter in parentheses");
 assertPlanOnly(startLine, "Starter", "Checkout start when the quote is null");
 assert(
   checkoutPriceLabel("solo", "month", { market: "us", priceLabel: null }) === "$99/mo",
@@ -113,13 +116,18 @@ const ownerUnknown = renderToStaticMarkup(
   ),
 );
 assertPlanOnly(ownerUnknown, "Owner", "the owner plan when the visitor is unknown");
-const ownerTerms = `Business owners pay ${ownerQuotedAmount("za", null)}, or nothing when their accountant is on Milōn.`;
+const ownerTerms = ownerPaySentence("za", null);
+assert(!ownerTerms.includes("pay Owner plan"), "a missing owner amount does not say pay Owner plan");
 assertPlanOnly(ownerTerms, "Owner", "ZA terms when the owner amount is missing");
 assert(ownerQuotedAmount("us", null) === "$39/mo", "US terms keep the owner dollar amount");
 assert(ownerQuotedAmount(null, null) === "Owner plan", "an unknown owner visitor has no amount");
+assert(
+  ownerPaySentence("us", null) === "Business owners pay $39/mo, or nothing when their accountant is on Milōn.",
+  "US terms keep the pay sentence",
+);
 
 const termsSrc = readFileSync(resolve("src/routes/terms.tsx"), "utf8");
-assert(termsSrc.includes("ownerQuotedAmount"), "terms uses the owner amount helper");
+assert(termsSrc.includes("ownerPaySentence"), "terms uses the owner sentence helper");
 assert(!termsSrc.includes('?? "$39/mo"'), "terms does not fall back to $39");
 
 type Handler = (event?: unknown) => void;

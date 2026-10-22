@@ -203,6 +203,7 @@
     "test:no-silent-price": "vite-node --config scripts/vite-test.config.ts scripts/no-silent-price-test.mts",
     "test:stripe-checkout": "vite-node --config scripts/vite-test.config.ts scripts/stripe-checkout-test.mts",
     "test:za-pricing": "vite-node --config scripts/vite-test.config.ts scripts/za-pricing-test.mts",
+    "test:price-quote": "vite-node --config scripts/vite-test.config.ts scripts/price-quote-test.mts",
     "stripe:za-prices": "vite-node --config scripts/vite-test.config.ts scripts/stripe-create-za-prices.mts",
     "test:add-client-save": "vite-node --config scripts/vite-test.config.ts scripts/add-client-save-test.mts",
     "test:firm-billing-gate": "vite-node --config scripts/vite-test.config.ts scripts/firm-billing-gate-test.mts",

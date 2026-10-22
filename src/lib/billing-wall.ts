@@ -58,6 +58,8 @@ export function firmWallDisplayPrice(input: {
     return label || firmPlanNameOnly(input.plan);
   }
   if (input.market !== "us") return firmPlanNameOnly(input.plan);
+  const provided = input.zaPriceLabel?.trim() ?? "";
+  if (provided.startsWith("$")) return provided;
   const usd = firmUsdListPrice(input.plan, input.interval);
   if (!usd) return firmPlanNameOnly(input.plan);
   return input.interval === "year" ? `${usd}/yr` : `${usd}/mo`;
@@ -91,10 +93,19 @@ export function cardFreeTrialPriceFromQuote(
   quote: { market?: string | null; priceLabel?: string | null } | null | undefined,
 ): string | null {
   const market = quote?.market === "za" ? "za" : quote?.market === "us" ? "us" : null;
+  const label = quote?.priceLabel?.trim() ?? "";
+  if (market && label) return label;
   return cardFreeTrialPrice({
     market,
-    zaPriceLabel: market === "za" ? (quote?.priceLabel ?? null) : null,
+    zaPriceLabel: market === "za" ? label || null : null,
   });
+}
+
+/** Parenthetical after the plan name. Empty when the quote only repeats the name. */
+export function checkoutPriceBit(planName: string, shownPrice: string | null | undefined): string {
+  const shown = shownPrice?.trim() ?? "";
+  if (!shown || shown === planName || shown === `${planName} plan`) return "";
+  return ` (${shown})`;
 }
 
 /** Checkout and wall amount. A missing or unknown market is the plan name only. */
@@ -108,10 +119,11 @@ export function checkoutPriceLabel(
   if (plan === "starter" && interval === "month") {
     return cardFreeTrialPriceFromQuote(quote) || firmPlanNameOnly(plan);
   }
+  const label = quote?.priceLabel?.trim() ?? "";
   return (
     firmWallDisplayPrice({
       market,
-      zaPriceLabel: market === "za" ? (quote?.priceLabel ?? null) : null,
+      zaPriceLabel: label || (market === "za" ? (quote?.priceLabel ?? null) : null),
       plan,
       interval,
     }) || firmPlanNameOnly(plan)

@@ -16,7 +16,7 @@ import {
   type PendingCheckout,
 } from "@/lib/pending-checkout";
 import { FIRM_TRIAL_SENTENCE, firmSignupCheckoutIntent } from "@/lib/stripe-plans";
-import { checkoutPriceLabel } from "@/lib/billing-wall";
+import { checkoutPriceBit, checkoutPriceLabel } from "@/lib/billing-wall";
 
 export const Route = createFileRoute("/billing/start")({
   validateSearch: (search: Record<string, unknown>) => {
@@ -129,7 +129,7 @@ function BillingStartPage() {
 
   const planName = registerLabelForPlan(pending.plan);
   const shownPrice = checkoutPriceLabel(pending.plan, pending.interval, user ? quote : null);
-  const priceBit = shownPrice ? ` (${shownPrice})` : "";
+  const priceBit = checkoutPriceBit(planName, shownPrice);
 
   if (error) {
     return (

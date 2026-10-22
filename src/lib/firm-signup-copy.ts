@@ -1,9 +1,6 @@
 import { COMPANY_ADDRESS, LEGAL_ENTITY } from "@/lib/legal";
-import { formatMoney } from "@/lib/market/format";
-import { ZA_MARKET } from "@/lib/market/resolve";
 import { OWNER_MONTHLY_USD_LABEL } from "@/lib/owner-plan";
-import { ZA_MONTHLY_RANDS } from "@/lib/pricing/za-ladder";
-import { OWNER_MONTHLY_ZA_CENTS } from "@/lib/stripe-checkout.core";
+import { withVisitorMarketHint } from "@/lib/pricing/visitor-market-hint";
 import {
   FIRM_TRIAL_CARD_LINE,
   FIRM_TRIAL_SENTENCE,
@@ -20,31 +17,46 @@ import {
 export const FIRM_CARD_TIMING = FIRM_TRIAL_CARD_LINE;
 
 /**
- * Catalog monthly label. Rand comes from the published amounts and is joined
- * at runtime so the client bundle does not contain a rand price literal.
- * South Africa is the only rand country. Every other value, including a
- * missing country, stays on the dollar catalog.
+ * Catalog monthly label. A South African practice uses the quote passed in
+ * from the server. This file does not contain a rand amount. Every other
+ * country, including a missing one, stays on the dollar catalog.
  */
-function randMonthly(rands: number): string {
-  const amount = formatMoney(rands, ZA_MARKET).replace(/\s+/g, "");
-  return `${amount}/mo`;
-}
-
-export function firmSignupStarterMonthly(country: string | null | undefined): string {
-  if (country === "ZA") return randMonthly(ZA_MONTHLY_RANDS.starter);
+export function firmSignupStarterMonthly(
+  country: string | null | undefined,
+  quotedLabel?: string | null,
+): string {
+  if ((country ?? "").trim().toUpperCase() === "ZA") {
+    return (quotedLabel ?? "").replace(/\s+/g, "");
+  }
+  const quoted = quotedLabel?.trim();
+  if (quoted) return quoted;
   const usd = firmUsdListPrice("starter", "month");
   if (!usd) throw new Error("Starter has no published monthly price.");
   return `${usd}/mo`;
 }
 
-export function firmSignupOwnerMonthly(country: string | null | undefined): string {
-  if (country === "ZA") return randMonthly(OWNER_MONTHLY_ZA_CENTS / 100);
+export function firmSignupOwnerMonthly(
+  country: string | null | undefined,
+  quotedLabel?: string | null,
+): string {
+  if ((country ?? "").trim().toUpperCase() === "ZA") {
+    return (quotedLabel ?? "").replace(/\s+/g, "");
+  }
+  const quoted = quotedLabel?.trim();
+  if (quoted) return quoted;
   return OWNER_MONTHLY_USD_LABEL;
 }
 
 /** Owner price under the accountant signup form. No VAT wording. */
-export function firmSignupOwnerPayLine(country: string | null | undefined): string {
-  return `Business owners pay ${firmSignupOwnerMonthly(country)}, or nothing when their accountant is on Milōn.`;
+export function firmSignupOwnerPayLine(
+  country: string | null | undefined,
+  quotedLabel?: string | null,
+): string {
+  const amount = firmSignupOwnerMonthly(country, quotedLabel);
+  if (!amount) {
+    return "Business owners are on the Owner plan, or pay nothing when their accountant is on Milōn.";
+  }
+  return `Business owners pay ${amount}, or nothing when their accountant is on Milōn.`;
 }
 
 /**
@@ -52,8 +64,14 @@ export function firmSignupOwnerPayLine(country: string | null | undefined): stri
  * The price follows the country select. Auth and the homepage share this
  * helper so the two surfaces cannot drift.
  */
-export function firmSignupTrialReminder(_planLabel: string, country?: string | null): string {
-  return `Your first client is free to explore. Add a card to start your ${FIRM_TRIAL_SENTENCE}. Then ${firmSignupStarterMonthly(country)}.`;
+export function firmSignupTrialReminder(
+  _planLabel: string,
+  country?: string | null,
+  quotedLabel?: string | null,
+): string {
+  const price = firmSignupStarterMonthly(country, quotedLabel);
+  const then = price ? ` Then ${price}.` : "";
+  return `Your first client is free to explore. Add a card to start your ${FIRM_TRIAL_SENTENCE}.${then}`;
 }
 
 /** Accountant nav / hero label. Firms need a card, so this is not "Start free". */
@@ -67,13 +85,14 @@ export const FIRM_ROLE_LABEL = "Accountant / Advisory firm";
 export function firmSignupHref(
   plan: FirmCheckoutBand = "starter",
   interval: FirmInterval = "month",
+  marketHint?: string | null,
 ): string {
   const q = new URLSearchParams({
     signup: "true",
     plan,
     interval,
   });
-  return `/auth?${q.toString()}`;
+  return withVisitorMarketHint(`/auth?${q.toString()}`, marketHint);
 }
 
 export const FIRM_SIGNUP_HREF = firmSignupHref();
