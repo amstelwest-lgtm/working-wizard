@@ -231,6 +231,17 @@ assert(
   deskCss.includes(".accountant-portal:has(.agent-stage) .milon-desk-scroll"),
   "the agent desk grows with its content",
 );
+{
+  const lock = ".accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main {";
+  const at = deskCss.indexOf(lock);
+  assert(at >= 0, "the open agent page has one scroll area");
+  const rule = deskCss.slice(at, deskCss.indexOf("}", at));
+  assert(rule.includes("overflow-y: auto"), "the open agent page scrolls down to Ask");
+  assert(
+    !/#pane-ask\.on\):has\(\.agent-stage\) \.milon-desk \{[^}]*overflow: hidden/.test(deskCss),
+    "the open agent page does not clip the Ask composer",
+  );
+}
 assert(pane.includes("<AgentWork"), "the client agent page lists its work");
 
 const drawer = read("src/components/playbook-drawer.tsx");
