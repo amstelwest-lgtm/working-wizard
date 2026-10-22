@@ -11,7 +11,6 @@ import {
   CLIENT_AGENT_FILE_NOTE,
   clientAgentIntro,
   clientAgentItemHelp,
-  closedLink,
   sizeAllowed,
   type ItemQuality,
 } from "@/lib/client-agent-link";
@@ -31,6 +30,8 @@ const QUIET =
 
 export const CLIENT_AGENT_UPLOAD_INTRO =
   "Only upload what you have. If something doesn't apply to you, tap 'I don't have this' and move on.";
+
+export const CLIENT_AGENT_LOAD_ERROR = "Couldn't load, try again";
 
 function fileBase64(file: File): Promise<string> {
   return file.arrayBuffer().then((buffer) => {
@@ -76,6 +77,8 @@ export function ClientAgentLinkScreen({
   onOpenNote,
   onExplanation,
   onSaveNote,
+  loadFailed = false,
+  onRetry,
 }: {
   view: OpenLinkResult | null;
   busy: boolean;
@@ -87,6 +90,8 @@ export function ClientAgentLinkScreen({
   onOpenNote: (itemKey: string) => void;
   onExplanation: (value: string) => void;
   onSaveNote: (item: PublicItem) => void;
+  loadFailed?: boolean;
+  onRetry?: () => void;
 }) {
   const openView = view?.ok ? view : null;
 
@@ -112,8 +117,16 @@ export function ClientAgentLinkScreen({
       <h1 id="agent-link-title" className="text-2xl font-semibold">
         Tax Specialist
       </h1>
-      {!view ? <p className="text-sm text-[#3D5270]">Opening this link.</p> : null}
-      {view && !view.ok ? <p className="text-sm">{view.body}</p> : null}
+      {!view && !loadFailed ? <p className="text-sm text-[#3D5270]">Opening this link.</p> : null}
+      {loadFailed ? (
+        <div className="flex flex-col gap-3" data-link-retry="true">
+          <p className="text-sm">{CLIENT_AGENT_LOAD_ERROR}</p>
+          <button type="button" className={PRIMARY} disabled={busy} onClick={onRetry}>
+            Try again
+          </button>
+        </div>
+      ) : null}
+      {view && !view.ok && !loadFailed ? <p className="text-sm">{view.body}</p> : null}
       {openView && !openView.consented ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm leading-6 text-[#3D5270]" data-client-intro="true">
@@ -216,6 +229,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   const uploadFile = useServerFn(uploadClientAgentFile);
   const finish = useServerFn(finishClientAgentItem);
   const [view, setView] = useState<OpenLinkResult | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [noteFor, setNoteFor] = useState<string | null>(null);
@@ -226,10 +241,14 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     setBusy(true);
     void open({ data: { token } })
       .then((result) => {
-        if (alive) setView(result);
+        if (!alive) return;
+        setLoadFailed(false);
+        setView(result);
       })
       .catch(() => {
-        if (alive) setView(closedLink("unavailable"));
+        if (!alive) return;
+        setView(null);
+        setLoadFailed(true);
       })
       .finally(() => {
         if (alive) setBusy(false);
@@ -237,7 +256,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     return () => {
       alive = false;
     };
-  }, [open, token]);
+  }, [open, token, attempt]);
 
   const onAgree = async () => {
     setBusy(true);
@@ -319,6 +338,11 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
       }}
       onExplanation={setExplanation}
       onSaveNote={(item) => void onNote(item)}
+      loadFailed={loadFailed}
+      onRetry={() => {
+        if (busy) return;
+        setAttempt((current) => current + 1);
+      }}
     />
   );
 }

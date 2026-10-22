@@ -9,12 +9,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { SEND_AGENT_FIRM_ALLOWLIST } from "../src/lib/client-agent-send-allowlist.ts";
 import { SEND_FILE_MAX_BYTES } from "../src/lib/client-agent-send.ts";
 import { isBarePublicPath } from "../src/lib/public-marketing.ts";
-import { ClientAgentLinkScreen } from "../src/components/client-agent-link-page.tsx";
+import {
+  CLIENT_AGENT_LOAD_ERROR,
+  ClientAgentLinkScreen,
+} from "../src/components/client-agent-link-page.tsx";
 import {
   CONSENT_LINK_BODY,
   FILE_LINK_BODY,
   GENERIC_LINK_BODY,
   LIMITED_LINK_BODY,
+  REVOKED_LINK_BODY,
+  closedLink,
   CLIENT_AGENT_FILE_NOTE,
   SEND_CONSENT_VERSION,
   SEND_LINK_META,
@@ -187,8 +192,16 @@ assert(
   "an expired token matches the unknown page",
 );
 assert(
-  closedBody === JSON.stringify(revokedLink.public),
-  "a revoked token matches the unknown page",
+  !revokedLink.public.ok &&
+    revokedLink.public.reason === "revoked" &&
+    revokedLink.public.body === REVOKED_LINK_BODY &&
+    revokedLink.public.status === 200,
+  "a revoked token says the link was replaced",
+);
+assert(
+  !JSON.stringify(revokedLink.public).includes("revoked_at") &&
+    revokedLink.public.body !== GENERIC_LINK_BODY,
+  "a revoked token does not leak the row",
 );
 assert(
   closedBody === JSON.stringify(otherFirmLink.public),
@@ -435,6 +448,7 @@ const copy = [
   intro,
   clientAgentIntro("Theo's practice", lateExpiry),
   GENERIC_LINK_BODY,
+  REVOKED_LINK_BODY,
   LIMITED_LINK_BODY,
   CONSENT_LINK_BODY,
   FILE_LINK_BODY,
@@ -530,6 +544,12 @@ assert(page.includes("CLIENT_AGENT_FILE_NOTE"), "file types are one note");
 assert(fn.includes("clientConsentNotice"), "consent wording includes the practice");
 assert(fn.includes("expiresAt: send.expires_at"), "the page receives the expiry instant");
 assert(!/has expired|been revoked/i.test(page), "the page has one closed sentence");
+const loadEffect = page.slice(page.indexOf("useEffect"), page.indexOf("const onAgree"));
+assert(loadEffect.includes("setLoadFailed(true)"), "a thrown open is retryable");
+assert(!loadEffect.includes("closedLink"), "a thrown open is not the closed page");
+assert(page.includes("setAttempt"), "Try again runs the load again");
+assert(fn.includes("outcome: opened.outcome"), "attempt logging still uses the outcome");
+assert(fn.includes('outcome: "revoked"') === false, "the server does not hard-code a second revoked log");
 assert(!page.includes("file.name"), "the page does not read the file name");
 assert(route.includes("SEND_LINK_META"), "the route uses the noindex meta");
 assert(
@@ -735,6 +755,47 @@ assert(
 );
 assert(checklistHtml.includes("data-missing-note"), "the optional note renders");
 assert(checklistHtml.includes("Only upload what you have"), "the checklist intro renders");
+
+function closedScreen(view: ReturnType<typeof closedLink> | null, loadFailed = false) {
+  return renderToStaticMarkup(
+    createElement(ClientAgentLinkScreen, {
+      view,
+      busy: false,
+      notice: null,
+      noteFor: null,
+      explanation: "",
+      loadFailed,
+      onAgree: () => undefined,
+      onPickFile: () => undefined,
+      onOpenNote: () => undefined,
+      onExplanation: () => undefined,
+      onSaveNote: () => undefined,
+      onRetry: () => undefined,
+    }),
+  );
+}
+
+const retryHtml = closedScreen(null, true);
+assert(
+  retryHtml.includes(CLIENT_AGENT_LOAD_ERROR) || retryHtml.includes("Couldn&#x27;t load, try again"),
+  "a transport failure asks to try again",
+);
+assert(/>\s*Try again\s*</.test(retryHtml), "a transport failure has a Try again button");
+assert(!retryHtml.includes(GENERIC_LINK_BODY), "a transport failure is not the closed page");
+assert(
+  (retryHtml.match(/data-client-portrait="tax_specialist"/g) ?? []).length === 1,
+  "the retry state keeps the portrait",
+);
+const revokedHtml = closedScreen(closedLink("revoked"));
+assert(revokedHtml.includes(REVOKED_LINK_BODY), "a revoked link says it was replaced");
+assert(!revokedHtml.includes("Try again"), "a revoked link is not a retry");
+assert(!revokedHtml.includes(GENERIC_LINK_BODY), "a revoked link is not the generic refusal");
+const unavailableHtml = closedScreen(closedLink("unavailable"));
+assert(unavailableHtml.includes(GENERIC_LINK_BODY), "an unknown link is not available");
+assert(!unavailableHtml.includes(REVOKED_LINK_BODY), "an unknown link does not say it was replaced");
+assert(!unavailableHtml.includes("Try again"), "an unknown link is not a retry");
+const expiredHtml = closedScreen(closedLink("unavailable"));
+assert(expiredHtml.includes(GENERIC_LINK_BODY), "an expired link is not available");
 assert(
   (checklistHtml.match(/PDF, JPG, PNG or HEIC, up to 20 MB each/g) ?? []).length === 1,
   "file types appear once",

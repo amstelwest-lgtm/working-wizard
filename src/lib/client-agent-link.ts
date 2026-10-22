@@ -51,10 +51,12 @@ const PUBLIC_ITEM_ORDER = [
 ];
 
 export type SendGate = "ok" | "unavailable" | "expired" | "revoked" | "limited";
-export type SendLinkReason = "unavailable" | "limited" | "consent" | "mime" | "size";
+export type SendLinkReason = "unavailable" | "revoked" | "limited" | "consent" | "mime" | "size";
 
 export const GENERIC_LINK_STATUS = 200;
 export const GENERIC_LINK_BODY = "This link is not available.";
+export const REVOKED_LINK_BODY =
+  "This link was replaced by a newer one. Please open the latest email.";
 export const LIMITED_LINK_BODY = "Too many attempts. Wait a little, then try again.";
 export const CONSENT_LINK_BODY = "Agree at the start of the page before sending a document.";
 export const FILE_LINK_BODY = "Use a PDF, JPG, PNG, or HEIC up to 20 MB.";
@@ -66,16 +68,18 @@ export type ClosedLink = {
   body: string;
 };
 
-/** One public refusal. Expired, revoked, and unknown share this status and body. */
+/** Public refusal. Unknown and expired share one body. Revoked names the replacement. */
 export function closedLink(reason: SendLinkReason): ClosedLink {
   const body =
     reason === "limited"
       ? LIMITED_LINK_BODY
-      : reason === "consent"
-        ? CONSENT_LINK_BODY
-        : reason === "mime" || reason === "size"
-          ? FILE_LINK_BODY
-          : GENERIC_LINK_BODY;
+      : reason === "revoked"
+        ? REVOKED_LINK_BODY
+        : reason === "consent"
+          ? CONSENT_LINK_BODY
+          : reason === "mime" || reason === "size"
+            ? FILE_LINK_BODY
+            : GENERIC_LINK_BODY;
   return { ok: false, status: GENERIC_LINK_STATUS, reason, body };
 }
 
@@ -242,9 +246,8 @@ export function resolvePresentedLink(input: {
     now: input.now,
   });
   if (gate === "unavailable") return { public: closedLink("unavailable"), outcome: "unknown" };
-  if (gate === "revoked" || gate === "expired") {
-    return { public: closedLink("unavailable"), outcome: gate };
-  }
+  if (gate === "revoked") return { public: closedLink("revoked"), outcome: "revoked" };
+  if (gate === "expired") return { public: closedLink("unavailable"), outcome: "expired" };
   if (input.sendCount != null && sendAttemptLimited(input.sendCount)) {
     return { public: closedLink("unavailable"), outcome: "limited" };
   }
