@@ -12,14 +12,17 @@ const NEEDS_DB = new Set([
   "test:ci",
 ]);
 
+// Own CI job. Leaving it in this serial list made every run wait on it.
+const OWN_JOB = new Set(["test:landing-gold-scan"]);
+
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const scripts = Object.keys(pkg.scripts)
-  .filter((s) => s.startsWith("test:") && !NEEDS_DB.has(s))
+  .filter((s) => s.startsWith("test:") && !NEEDS_DB.has(s) && !OWN_JOB.has(s))
   .sort();
 
 // A blocked child (for example a synchronous browser download) never reaches
 // its own timer. Kill the process group from here so one script cannot hold
-// the job open. The slowest current script is the landing scan, under 3 min.
+// the job open.
 const TEST_TIMEOUT_MS = 8 * 60 * 1000;
 
 function runScript(name) {
