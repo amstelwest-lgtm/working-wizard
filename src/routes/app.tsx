@@ -381,6 +381,7 @@ import {
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
+import { bootMarketLabel, markBootContent } from "@/lib/shell-gate";
 import { isOwnerDeliverablesRequest, ownerDeliverablesRedirectTarget } from "@/lib/owner-nav";
 
 function AppBootSpinner() {
@@ -4265,8 +4266,10 @@ function Index() {
   const ownerGateSettled =
     boardReady || ownerBootTimedOut || workspaceLoadFailed || criticalBootFailed;
   useEffect(() => {
-    reportOwnerBoardReady(boardReady && !workspaceLoadFailed && !criticalBootFailed);
-  }, [boardReady, workspaceLoadFailed, criticalBootFailed, reportOwnerBoardReady]);
+    const ready = boardReady && !workspaceLoadFailed && !criticalBootFailed;
+    reportOwnerBoardReady(ready);
+    if (ready) markBootContent("/app", bootMarketLabel(workspaceMarket));
+  }, [boardReady, workspaceLoadFailed, criticalBootFailed, reportOwnerBoardReady, workspaceMarket]);
   // Role guard — a real firm membership belongs on My practice, not the owner app.
   // An invite redeem (owner force) and impersonating a client stay on /app.
   // user_roles and firm_memberships wait until this gate has settled.
