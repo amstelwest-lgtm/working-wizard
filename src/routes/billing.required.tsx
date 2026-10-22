@@ -18,19 +18,14 @@ import {
   stashPendingCheckout,
   type PendingCheckout,
 } from "@/lib/pending-checkout";
+import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import {
-  firmSignupCheckoutIntent,
-  firmUsdListPrice,
-  type FirmCheckoutBand,
-  type FirmInterval,
-} from "@/lib/stripe-plans";
-import {
+  checkoutPriceLabel,
   FIRM_WALL_BACK_HREF,
   FIRM_WALL_BACK_LABEL,
   FIRM_WALL_START_LABEL,
   FIRM_WALL_TRIAL_ENDED_LINE,
   cardFreeTrialLine,
-  cardFreeTrialPriceFromQuote,
   firmWallBackTarget,
   firmWallOffersRetry,
   resolveBillingWall,
@@ -62,12 +57,6 @@ export const Route = createFileRoute("/billing/required")({
     ],
   }),
 });
-
-function usdPriceLabel(plan: FirmCheckoutBand, interval: FirmInterval): string {
-  const amount = firmUsdListPrice(plan, interval);
-  if (!amount) return "";
-  return interval === "year" ? `${amount}/yr` : `${amount}/mo`;
-}
 
 export function BillingRequiredCard({
   planName,
@@ -246,20 +235,11 @@ function BillingRequiredPage() {
 
   const checkout = priced ?? pending;
   const planName = registerLabelForPlan(checkout.plan);
-  const priceLabel =
-    quote?.market === "za"
-      ? quote.priceLabel
-      : quote?.market === "us"
-        ? usdPriceLabel(checkout.plan, checkout.interval)
-        : null;
-  // Card-free firms open on Starter monthly. That price is the same helper
-  // the practice home uses. A missing quote is not ZA. A ZA quote with a
-  // null price stays unresolved.
-  const shownPrice =
-    checkout.plan === "starter" && checkout.interval === "month"
-      ? cardFreeTrialPriceFromQuote(quote)
-      : priceLabel ||
-        (quote?.market === "za" ? null : usdPriceLabel(checkout.plan, checkout.interval));
+  // Starter monthly uses the same helper as the practice home. A missing
+  // quote names the plan and does not invent a dollar amount.
+  const shownPrice = checkoutPriceLabel(checkout.plan, checkout.interval, quote);
+  const quotePriced =
+    quote?.market === "us" || (quote?.market === "za" && Boolean(quote.priceLabel?.trim()));
 
   if (loading || checking || !user || returnClient === undefined) {
     return (
@@ -284,7 +264,7 @@ function BillingRequiredPage() {
       onRetry={firmWallOffersRetry(entitlementOutcome) ? retryWall : undefined}
       backHref={backHref}
       trialEnded={trialEnded}
-      quoteError={shownPrice ? undefined : quoteError || "Refresh and try again."}
+      quoteError={quotePriced ? undefined : quoteError || "Refresh and try again."}
     />
   );
 }
