@@ -31,7 +31,7 @@ import {
   zarBillingCountryOk,
 } from "@/lib/pricing/za-checkout";
 import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
-import { readSubscriptionDiscountRefs } from "@/lib/stripe-discount";
+import { LEGACY_ZA_COUPON_ON_UPGRADE, readSubscriptionDiscountRefs } from "@/lib/stripe-discount";
 import { resolveFirmVoucher, type FirmVoucherStripe } from "@/lib/firm-voucher.server";
 import {
   firmBandListCents,
@@ -609,6 +609,7 @@ export async function completeFirmSetupUpgrade(
     firmUpgradeDiscounts({
       promotionCodeId: promo,
       existing,
+      legacyZaCoupon: LEGACY_ZA_COUPON_ON_UPGRADE,
     });
 
   const already = priceSnap.lookupKey === lookupKey;

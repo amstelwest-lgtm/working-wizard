@@ -25,6 +25,10 @@ import {
   isBenignZeroInvoiceError,
 } from "../src/lib/firm-voucher";
 import { resolveFirmVoucher } from "../src/lib/firm-voucher.server";
+import {
+  LEGACY_ZA_COUPON_ID,
+  LEGACY_ZA_COUPON_ON_UPGRADE,
+} from "../src/lib/stripe-discount";
 import { upgradeSuccessMessage } from "../src/lib/firm-band-upgrade";
 
 function assert(cond: boolean, msg: string) {
@@ -171,7 +175,63 @@ assert(
     promotionCodeId: null,
     existing: [{ id: "di_old", couponId: "coupon_old" }],
   }) == null,
-  "without a voucher, an existing discount is not rewritten",
+  "without a voucher, a non-legacy discount is not rewritten",
+);
+
+const legacyOnly = [{ id: "di_za", couponId: LEGACY_ZA_COUPON_ID, promotionCodeId: null }];
+const legacyPlusOther = [
+  ...legacyOnly,
+  { id: "di_other", couponId: "coupon_other", promotionCodeId: null },
+];
+assert(LEGACY_ZA_COUPON_ON_UPGRADE === "clear", "the upgrade switch defaults to clear");
+assert(
+  JSON.stringify(
+    firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly, legacyZaCoupon: "clear" }),
+  ) === "[]",
+  "checkout path clear drops a lone legacy coupon",
+);
+assert(
+  JSON.stringify(
+    firmUpgradeDiscounts({
+      promotionCodeId: null,
+      existing: legacyPlusOther,
+      legacyZaCoupon: "clear",
+    }),
+  ) === JSON.stringify([{ discount: "di_other" }]),
+  "checkout path clear keeps a non-legacy discount",
+);
+assert(
+  firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly, legacyZaCoupon: "keep" }) ==
+    null,
+  "checkout path keep leaves the legacy coupon",
+);
+assert(
+  JSON.stringify(
+    firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly, legacyZaCoupon: "clear" }),
+  ) === "[]",
+  "billing sync path clear drops a lone legacy coupon",
+);
+assert(
+  firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly, legacyZaCoupon: "keep" }) ==
+    null,
+  "billing sync path keep leaves the legacy coupon",
+);
+assert(
+  JSON.stringify(firmUpgradeDiscounts({ promotionCodeId: null, existing: legacyOnly })) === "[]",
+  "the default switch clears the legacy coupon",
+);
+
+const checkoutUpgrade = readFileSync(resolve("src/lib/stripe-checkout.functions.ts"), "utf8");
+const syncUpgrade = readFileSync(resolve("src/lib/stripe-billing-sync.server.ts"), "utf8");
+assert(
+  checkoutUpgrade.includes("LEGACY_ZA_COUPON_ON_UPGRADE") &&
+    checkoutUpgrade.includes("clearLegacyZaCoupon") &&
+    checkoutUpgrade.includes("readSubscriptionDiscountRefs(fresh)"),
+  "checkout re-reads discounts when the legacy coupon is cleared",
+);
+assert(
+  syncUpgrade.includes("legacyZaCoupon: LEGACY_ZA_COUPON_ON_UPGRADE"),
+  "billing sync applies the legacy coupon switch",
 );
 
 const listed: Array<Record<string, unknown>> = [];

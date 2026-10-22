@@ -1,7 +1,17 @@
 /**
  * Stripe discount refs on a subscription. Vouchers use this.
  * The retired South Africa coupon is not applied here.
+ *
+ * Existing subscriptions can still carry MILON_ZA_50. An upgrade does not
+ * attach it. LEGACY_ZA_COUPON_ON_UPGRADE decides whether that upgrade drops
+ * it. 'clear' is the shipped behaviour. Flip to 'keep' only if Theo says so.
  */
+
+/** Legacy coupon id. Not applied to new Checkout sessions. */
+export const LEGACY_ZA_COUPON_ID = "MILON_ZA_50";
+
+/** 'clear' drops the legacy coupon on upgrade. 'keep' leaves it on the subscription. */
+export const LEGACY_ZA_COUPON_ON_UPGRADE: "keep" | "clear" = "clear";
 
 export type StoredDiscountRef = {
   id: string | null;

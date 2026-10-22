@@ -22,7 +22,7 @@ import {
   readFirmSubscriptionHistory,
   syncStarterTrialMirrorForActor,
 } from "@/lib/firm-client-cap.server";
-import { readSubscriptionDiscountRefs } from "@/lib/stripe-discount";
+import { LEGACY_ZA_COUPON_ON_UPGRADE, readSubscriptionDiscountRefs } from "@/lib/stripe-discount";
 import { resolveFirmVoucher } from "@/lib/firm-voucher.server";
 import {
   firmBandListCents,
@@ -972,12 +972,19 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
 
     let itemId = sub?.itemId ?? null;
     let existingDiscounts = sub?.discounts ?? [];
-    if (route === "update_subscription" && sub && (voucherPromotionCodeId || !itemId)) {
+    const clearLegacyZaCoupon = LEGACY_ZA_COUPON_ON_UPGRADE === "clear";
+    if (
+      route === "update_subscription" &&
+      sub &&
+      (voucherPromotionCodeId || clearLegacyZaCoupon || !itemId)
+    ) {
       const fresh = await stripe.subscriptions.retrieve(sub.id, {
         expand: ["items.data.price"],
       });
       if (!itemId) itemId = readSubscriptionPrice(fresh).itemId;
-      if (voucherPromotionCodeId) existingDiscounts = readSubscriptionDiscountRefs(fresh);
+      if (voucherPromotionCodeId || clearLegacyZaCoupon) {
+        existingDiscounts = readSubscriptionDiscountRefs(fresh);
+      }
     }
 
     if (route === "update_subscription" && sub && itemId) {
@@ -997,6 +1004,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         discounts: firmUpgradeDiscounts({
           promotionCodeId: voucherPromotionCodeId,
           existing: existingDiscounts,
+          legacyZaCoupon: LEGACY_ZA_COUPON_ON_UPGRADE,
         }),
       });
       try {

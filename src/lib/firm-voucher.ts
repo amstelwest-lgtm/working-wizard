@@ -4,7 +4,12 @@
  * applied later on subscriptions.update.
  */
 
-import { type FirmCouponDiscount, type StoredDiscountRef } from "./stripe-discount";
+import {
+  LEGACY_ZA_COUPON_ID,
+  LEGACY_ZA_COUPON_ON_UPGRADE,
+  type FirmCouponDiscount,
+  type StoredDiscountRef,
+} from "./stripe-discount";
 import {
   FIRM_BAND_CATALOG,
   formatUsdFromCents,
@@ -262,19 +267,37 @@ export function withVoucherInterval(
 
 /**
  * One discount on the subscription update. A voucher replaces every other
- * discount. Without a voucher, discounts are left alone.
+ * discount. Without a voucher, LEGACY_ZA_COUPON_ON_UPGRADE decides the
+ * legacy MILON_ZA_50: 'clear' drops it and keeps any other discount ids,
+ * 'keep' leaves the subscription's discounts alone.
  */
 export function firmUpgradeDiscounts(input: {
   promotionCodeId?: string | null;
   existing?: StoredDiscountRef[] | null;
+  /** Tests pass both modes. Production uses LEGACY_ZA_COUPON_ON_UPGRADE. */
+  legacyZaCoupon?: "keep" | "clear";
 }): FirmCouponDiscount[] | undefined {
   const promo = input.promotionCodeId?.trim() ?? "";
-  if (!promo) return undefined;
   const existing = input.existing ?? [];
-  const voucherAlreadyOnly =
-    existing.length > 0 && existing.every((row) => row.promotionCodeId === promo);
-  if (voucherAlreadyOnly) return undefined;
-  return [{ promotion_code: promo }];
+  if (promo) {
+    const voucherAlreadyOnly =
+      existing.length > 0 && existing.every((row) => row.promotionCodeId === promo);
+    if (voucherAlreadyOnly) return undefined;
+    return [{ promotion_code: promo }];
+  }
+  const mode = input.legacyZaCoupon ?? LEGACY_ZA_COUPON_ON_UPGRADE;
+  if (mode !== "clear") return undefined;
+  if (!existing.some((row) => row.couponId === LEGACY_ZA_COUPON_ID)) return undefined;
+  const kept: FirmCouponDiscount[] = [];
+  const seen = new Set<string>();
+  for (const row of existing) {
+    if (row.couponId === LEGACY_ZA_COUPON_ID) continue;
+    const id = row.id?.trim() ?? "";
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    kept.push({ discount: id });
+  }
+  return kept;
 }
 
 export function firmUpgradeResultMessage(base: string, notice?: string | null): string {
