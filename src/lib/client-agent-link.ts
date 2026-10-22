@@ -379,7 +379,8 @@ export function finishItem(input: {
 }): { ok: true; explanation: string | null } | { ok: false; reason: "explanation" | "empty" } {
   const explanation = input.explanation?.trim() ?? "";
   if (!input.hasFile && input.quality === "usable") return { ok: false, reason: "empty" };
-  if ((input.quality === "incomplete" || input.quality === "poor") && explanation.length === 0) {
+  // A file that is incomplete still needs a note. A missing document does not.
+  if (input.hasFile && (input.quality === "incomplete" || input.quality === "poor") && explanation.length === 0) {
     return { ok: false, reason: "explanation" };
   }
   return { ok: true, explanation: explanation.length > 0 ? explanation : null };
@@ -402,6 +403,7 @@ export type PublicChecklistItem = {
   fileCount?: number;
   passwordSaved?: boolean;
   fileNames?: string[];
+  explanation?: string | null;
 };
 
 /** A name the client can see. No path, no control characters, capped. */
@@ -411,14 +413,27 @@ export function sanitizeClientFileName(name: string): string {
   return cleaned.slice(0, 120);
 }
 
-/** A row is done when a file is in, or the client has said they don't have it. */
+/** The client said this document is not available. A file is a different state. */
+export function itemNotAvailable(item: {
+  hasFile: boolean;
+  status: string;
+  quality?: string | null;
+}): boolean {
+  return (
+    !item.hasFile &&
+    item.status === "received" &&
+    (item.quality === "incomplete" || item.quality === "poor")
+  );
+}
+
+/** A row is done when a file is in, or the client has said they don't have it. A password is optional. */
 export function itemSettled(item: {
   hasFile: boolean;
   status: string;
   quality?: string | null;
 }): boolean {
   if (item.hasFile) return true;
-  return item.status === "received" && (item.quality === "incomplete" || item.quality === "poor");
+  return itemNotAvailable(item);
 }
 
 export function checklistReady(
@@ -518,6 +533,7 @@ type ChecklistRow = {
   bytes?: Uint8Array;
   fileCount?: number;
   passwordSaved?: boolean;
+  explanation?: string | null;
 };
 
 /** Her own checklist only. Firm fields, file names, and file bytes stay off the page. */
@@ -536,6 +552,7 @@ export function toPublicChecklist(rows: ChecklistRow[], sendId: string): PublicC
       fileNames: (row.displayNames ?? [])
         .map((name) => sanitizeClientFileName(name))
         .filter((name) => name.length > 0),
+      explanation: row.explanation?.trim() ? row.explanation.trim() : null,
     }))
     .sort((a, b) => {
       const ai = PUBLIC_ITEM_ORDER.indexOf(a.itemKey);
@@ -639,6 +656,8 @@ export type UploadGrant = {
   size: number;
   mime: string;
   exp: number;
+  /** Sanitized client-visible file name. Absent on grants issued before it was stored. */
+  name?: string;
 };
 
 function b64urlEncode(bytes: Uint8Array): string {
@@ -707,6 +726,7 @@ export async function readUploadGrant(secret: string, token: string): Promise<Up
   if (typeof parsed.path !== "string" || typeof parsed.mime !== "string") return null;
   if (!Number.isInteger(parsed.size) || !Number.isInteger(parsed.exp)) return null;
   if ((parsed.exp as number) <= Date.now()) return null;
+  const name = typeof parsed.name === "string" ? sanitizeClientFileName(parsed.name) : "";
   return {
     sendId: parsed.sendId,
     itemKey: parsed.itemKey,
@@ -714,6 +734,7 @@ export async function readUploadGrant(secret: string, token: string): Promise<Up
     size: parsed.size as number,
     mime: parsed.mime,
     exp: parsed.exp as number,
+    ...(name ? { name } : {}),
   };
 }
 

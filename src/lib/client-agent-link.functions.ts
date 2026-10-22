@@ -37,6 +37,7 @@ import {
   consentWrite,
   declareUpload,
   finishItem,
+  itemNotAvailable,
   hashClientAddress,
   hashPresentedToken,
   openLinkView,
@@ -45,6 +46,7 @@ import {
   readUploadGrant,
   resolvePresentedLink,
   sendAttemptLimited,
+  sanitizeClientFileName,
   sendLinkLogLine,
   sendStoragePath,
   signUploadGrant,
@@ -76,6 +78,7 @@ type ItemRow = {
   status: string;
   quality: string | null;
   storage_path: string | null;
+  explanation: string | null;
 };
 
 export type PublicItem = PublicChecklistItem;
@@ -272,7 +275,7 @@ async function loadItems(sendId: string): Promise<PublicItem[]> {
     }
   )
     .from("client_agent_send_items")
-    .select("item_key, label, totals_only, status, quality, storage_path")
+    .select("item_key, label, totals_only, status, quality, storage_path, explanation")
     .eq("send_id", sendId);
   if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "items" }));
   const files = await loadFileMeta(sendId);
@@ -290,6 +293,8 @@ async function loadItems(sendId: string): Promise<PublicItem[]> {
         storagePath: stored || (extra?.count ?? 0) > 0 ? row.storage_path || "stored" : null,
         fileCount: extra?.count ?? (stored ? 1 : 0),
         passwordSaved: extra?.passwordSaved === true,
+        displayNames: extra?.names ?? [],
+        explanation: row.explanation,
       };
     }),
     sendId,
@@ -298,31 +303,44 @@ async function loadItems(sendId: string): Promise<PublicItem[]> {
 
 async function loadFileMeta(
   sendId: string,
-): Promise<Map<string, { count: number; passwordSaved: boolean }> | null> {
-  const { data, error } = await (
-    supabaseAdmin as unknown as {
-      from: (name: string) => {
-        select: (cols: string) => {
-          eq: (
-            column: string,
-            value: string,
-          ) => Promise<{
-            data: Array<{ item_key: string; password_box: string | null; created_at: string }> | null;
-            error: DbError;
-          }>;
+): Promise<Map<string, { count: number; passwordSaved: boolean; names: string[] }> | null> {
+  const query = (columns: string) =>
+    (
+      supabaseAdmin as unknown as {
+        from: (name: string) => {
+          select: (cols: string) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => Promise<{
+              data: Array<{
+                item_key: string;
+                password_box: string | null;
+                created_at: string;
+                display_name?: string | null;
+              }> | null;
+              error: DbError;
+            }>;
+          };
         };
-      };
-    }
-  )
-    .from("client_agent_send_files")
-    .select("item_key, password_box, created_at")
-    .eq("send_id", sendId);
+      }
+    )
+      .from("client_agent_send_files")
+      .select(columns)
+      .eq("send_id", sendId);
+  let selected = await query("item_key, password_box, created_at, display_name");
+  if (selected.error && missingRelation(selected.error, "display_name")) {
+    selected = await query("item_key, password_box, created_at");
+  }
+  const { data, error } = selected;
   if (error) {
     if (missingRelation(error, "client_agent_send_files")) return null;
     throw new Error(sendLinkLogLine({ event: "link", reason: "files" }));
   }
-  const grouped = new Map<string, { count: number; passwordSaved: boolean; at: string }>();
-  for (const row of data ?? []) {
+  const grouped = new Map<string, { count: number; passwordSaved: boolean; at: string; names: string[] }>();
+  const rows = [...(data ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+  for (const row of rows) {
+    const name = sanitizeClientFileName(row.display_name ?? "");
     const current = grouped.get(row.item_key);
     const at = row.created_at ?? "";
     if (!current) {
@@ -330,10 +348,12 @@ async function loadFileMeta(
         count: 1,
         passwordSaved: Boolean(row.password_box),
         at,
+        names: name ? [name] : [],
       });
       continue;
     }
     current.count += 1;
+    if (name) current.names.push(name);
     if (at >= current.at) {
       current.at = at;
       current.passwordSaved = Boolean(row.password_box);
@@ -342,7 +362,7 @@ async function loadFileMeta(
   return new Map(
     [...grouped.entries()].map(([key, value]) => [
       key,
-      { count: value.count, passwordSaved: value.passwordSaved },
+      { count: value.count, passwordSaved: value.passwordSaved, names: value.names },
     ]),
   );
 }
@@ -544,7 +564,7 @@ async function loadStoredPath(sendId: string, itemKey: string): Promise<string |
 }
 
 async function updateItem(sendId: string, itemKey: string, patch: Record<string, unknown>) {
-  const { error } = await (
+  const { data, error } = await (
     supabaseAdmin as unknown as {
       from: (name: string) => {
         update: (row: Record<string, unknown>) => {
@@ -552,7 +572,15 @@ async function updateItem(sendId: string, itemKey: string, patch: Record<string,
             column: string,
             value: string,
           ) => {
-            eq: (column: string, value: string) => Promise<{ error: DbError }>;
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              select: (cols: string) => Promise<{
+                data: Array<{ item_key: string }> | null;
+                error: DbError;
+              }>;
+            };
           };
         };
       };
@@ -561,8 +589,9 @@ async function updateItem(sendId: string, itemKey: string, patch: Record<string,
     .from("client_agent_send_items")
     .update(patch)
     .eq("send_id", sendId)
-    .eq("item_key", itemKey);
-  if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "save" }));
+    .eq("item_key", itemKey)
+    .select("item_key");
+  if (error || !data?.length) throw new Error(sendLinkLogLine({ event: "link", reason: "save" }));
 }
 
 function uploadGrantSecret(): string | null {
@@ -670,6 +699,7 @@ export const prepareClientAgentUpload = createServerFn({ method: "POST" })
         itemKey: z.string().regex(/^[a-z0-9_]+$/),
         size: z.number().int(),
         mime: z.string().max(80),
+        name: z.string().max(300).optional(),
       })
       .parse(input),
   )
@@ -700,6 +730,7 @@ export const prepareClientAgentUpload = createServerFn({ method: "POST" })
       if (signed.error || !signed.data?.token || !signed.data.signedUrl) {
         throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
       }
+      const displayName = sanitizeClientFileName(data.name ?? "");
       const grant = await signUploadGrant(secret, {
         sendId: resolved.send.id,
         itemKey: data.itemKey,
@@ -707,6 +738,7 @@ export const prepareClientAgentUpload = createServerFn({ method: "POST" })
         size: data.size,
         mime: data.mime,
         exp: Date.now() + UPLOAD_GRANT_TTL_MS,
+        ...(displayName ? { name: displayName } : {}),
       });
   return { ok: true, path, token: signed.data.token, signedUrl: signed.data.signedUrl, grant };
     },
@@ -768,6 +800,7 @@ export const confirmClientAgentUpload = createServerFn({ method: "POST" })
         storage_path: data.path,
         mime: decision.mime,
         size_bytes: decision.size,
+        display_name: sanitizeClientFileName(grant.name ?? ""),
       });
       if (filed === "failed") {
         await storage.remove([data.path]);
@@ -870,6 +903,29 @@ export const finishClientAgentItem = createServerFn({ method: "POST" })
       return { ok: true };
     },
   );
+
+export const undoClientAgentItem = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    tokenInput
+      .extend({
+        itemKey: z.string().regex(/^[a-z0-9_]+$/),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }): Promise<{ ok: true } | ReturnType<typeof closedLink>> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return resolved;
+    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
+    const items = await loadItems(resolved.send.id);
+    const item = items.find((row) => row.itemKey === data.itemKey);
+    if (!item || !itemNotAvailable(item)) return closedLink("unavailable");
+    await updateItem(resolved.send.id, data.itemKey, {
+      status: "open",
+      quality: null,
+      explanation: null,
+    });
+    return { ok: true };
+  });
 
 async function findSendFile(sendId: string, path: string): Promise<"present" | "missing"> {
   const { data, error } = await (
@@ -986,18 +1042,36 @@ async function insertSendFile(row: {
   storage_path: string;
   mime: string;
   size_bytes: number;
+  display_name?: string;
 }): Promise<"stored" | "legacy" | "failed"> {
-  const { error } = await (
-    supabaseAdmin as unknown as {
-      from: (name: string) => {
-        insert: (value: Record<string, unknown>) => Promise<{ error: DbError }>;
-      };
-    }
-  )
-    .from("client_agent_send_files")
-    .insert(row);
-  if (!error) return "stored";
-  if (missingRelation(error, "client_agent_send_files")) return "legacy";
+  const write = (value: Record<string, unknown>) =>
+    (
+      supabaseAdmin as unknown as {
+        from: (name: string) => {
+          insert: (next: Record<string, unknown>) => Promise<{ error: DbError }>;
+        };
+      }
+    )
+      .from("client_agent_send_files")
+      .insert(value);
+  const payload: Record<string, unknown> = {
+    send_id: row.send_id,
+    item_key: row.item_key,
+    storage_path: row.storage_path,
+    mime: row.mime,
+    size_bytes: row.size_bytes,
+  };
+  if (row.display_name) payload.display_name = row.display_name;
+  const first = await write(payload);
+  if (!first.error) return "stored";
+  if (payload.display_name && missingRelation(first.error, "display_name")) {
+    delete payload.display_name;
+    const second = await write(payload);
+    if (!second.error) return "stored";
+    if (missingRelation(second.error, "client_agent_send_files")) return "legacy";
+    return "failed";
+  }
+  if (missingRelation(first.error, "client_agent_send_files")) return "legacy";
   return "failed";
 }
 
