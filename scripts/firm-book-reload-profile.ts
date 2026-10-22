@@ -1,25 +1,52 @@
+import { useSyncExternalStore } from "react";
 import { FIRM_BOOK_USER_ID } from "./firm-book-reload-auth";
 
 export const FIRM_BOOK_FIRM_ID = "firm-book-reload";
 
-function profileValue() {
+let firmId: string | null = FIRM_BOOK_FIRM_ID;
+const listeners = new Set<() => void>();
+
+function emit() {
+  for (const listener of listeners) listener();
+}
+
+/** Firm id is null until membership resolves, then the practice reloads the book. */
+export function setFirmBookFirmId(next: string | null) {
+  firmId = next;
+  emit();
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function snapshot() {
+  return firmId;
+}
+
+function profileValue(id: string | null) {
   return {
-    firmId: FIRM_BOOK_FIRM_ID,
+    firmId: id,
     firmMarket: { country: "ZA" },
-    hasFirm: true,
-    firms: [
-      {
-        id: FIRM_BOOK_FIRM_ID,
-        name: "North",
-        referral_code: null,
-        owner_user_id: FIRM_BOOK_USER_ID,
-      },
-    ],
+    hasFirm: id != null,
+    firms: id
+      ? [
+          {
+            id,
+            name: "North",
+            referral_code: null,
+            owner_user_id: FIRM_BOOK_USER_ID,
+          },
+        ]
+      : [],
     firmsLoaded: true,
     firmsLoadFailed: false,
     brandLoading: false,
     profile: {
-      firmName: "North",
+      firmName: id ? "North" : "",
       accountantName: "Ada",
       logoUrl: null,
       primaryColor: "#102A43",
@@ -55,9 +82,11 @@ export const DEFAULT_PROFILE = {
 };
 
 export function useAccountantProfile() {
-  return profileValue();
+  const id = useSyncExternalStore(subscribe, snapshot, snapshot);
+  return profileValue(id);
 }
 
 export function useOptionalAccountantProfile() {
-  return profileValue();
+  const id = useSyncExternalStore(subscribe, snapshot, snapshot);
+  return profileValue(id);
 }

@@ -1380,6 +1380,20 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const load = async (activeFirmId: string | null, userId: string | undefined, viewerName?: string | null) => {
     const gen = ++loadGen.current;
+    // Both shell deadlines guard the slim list and the figures read. A superseded
+    // load (firm id arriving later) must not clear the deadlines the new load armed.
+    const clearBookDeadlines = () => {
+      const timer = bookDeadlineTimer.current;
+      if (timer != null) {
+        window.clearTimeout(timer);
+        bookDeadlineTimer.current = null;
+      }
+      const firmTimer = firmReloadTimer.current;
+      if (firmTimer != null) {
+        window.clearTimeout(firmTimer);
+        firmReloadTimer.current = null;
+      }
+    };
     setBookEnriched(false);
     const warm = readPaintedBook<ClientRow>(userId, activeFirmId);
     if (warm) {
@@ -1577,44 +1591,25 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         return { ok: false as const, map: {} as Record<string, number> };
       });
 
-    const [historyMap, actionMaps, queryCounts, displayNames, figures, linkedIds] = await Promise.all([
-      historyPromise,
-      actionsPromise,
-      queriesPromise,
-      namesPromise,
-      figuresPromise,
-      orphansPromise,
-    ]);
-    const { openActionsMap, overdueActionsMap, chaseActionsMap } = actionMaps;
-    if (gen !== loadGen.current) return;
-    const linked = new Set(linkedIds.filter((id): id is string => Boolean(id)));
-    const books = new Map(
-      ((figures.data ?? []) as { id: string; financials: Client["financials"]; cashflow: unknown }[]).map(
-        (row) => [row.id, row],
-      ),
-    );
-    if (figures.error) {
-      if (gen === loadGen.current && !figuresSettled.current) {
-        const painted = readPaintedBook<ClientRow>(userId, activeFirmId);
-        if (painted && painted.length > 0) {
-          setClientRows(painted);
-          figuresSettled.current = true;
-          setFiguresLoad("merged");
-          setBookEnriched(true);
-        } else {
-          setFiguresLoad("failed");
-        }
-      }
-    } else {
+    // Figures settle the book. History, actions, queries, names, and orphans
+    // each get their own 8s clock: they patch the rows when they land, and a
+    // timeout stays an unknown count. No Sentry, no figures error.
+    let historyMap: Record<string, StoredScorePoint[]> = {};
+    let openActionsMap: Record<string, number> = {};
+    let overdueActionsMap: Record<string, number> = {};
+    let chaseActionsMap: Record<string, { title: string; overdue: boolean }[]> = {};
+    let queryCounts: { ok: boolean; map: Record<string, number> } = { ok: false, map: {} };
+    let displayNames = new Map<string, string>();
+    let linked = new Set<string>();
+    let booksMerged = false;
+
+    const publishMerged = () => {
       rawClients = rawClients.map((client) => {
         const name = displayNames.get(client.id);
-        const book = books.get(client.id);
         return {
           ...client,
           name: name && name !== client.name ? name : client.name,
           firm_id: linked.has(client.id) ? activeFirmId : client.firm_id,
-          financials: book?.financials ?? client.financials ?? null,
-          cashflow: book?.cashflow ?? client.cashflow,
         };
       });
       const fullRows = rawClients.map((c) =>
@@ -1634,8 +1629,85 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         figuresSettled.current = true;
         setFiguresLoad("merged");
         setBookTimedOut(false);
+        setCountsReady(true);
+        clearBookDeadlines();
       }
+    };
+
+    const rememberAuxiliary = () => {
+      if (booksMerged && gen === loadGen.current) publishMerged();
+    };
+    void historyPromise.then((map) => {
+      historyMap = map;
+      rememberAuxiliary();
+    }, () => {});
+    void actionsPromise.then((maps) => {
+      openActionsMap = maps.openActionsMap;
+      overdueActionsMap = maps.overdueActionsMap;
+      chaseActionsMap = maps.chaseActionsMap;
+      rememberAuxiliary();
+    }, () => {});
+    void queriesPromise.then((counts) => {
+      queryCounts = counts;
+      rememberAuxiliary();
+    }, () => {});
+    void namesPromise.then((map) => {
+      displayNames = map;
+      rememberAuxiliary();
+    }, () => {});
+    void orphansPromise.then((ids) => {
+      linked = new Set(ids.filter((id): id is string => Boolean(id)));
+      rememberAuxiliary();
+    }, () => {});
+
+    const peekedNames = await Promise.race([
+      namesPromise.then((map) => map),
+      Promise.resolve(null as Map<string, string> | null),
+    ]);
+    if (gen !== loadGen.current) return;
+    if (peekedNames) displayNames = peekedNames;
+
+    const figures = await figuresPromise;
+    if (gen !== loadGen.current) return;
+    if (figures.error) {
+      if (!figuresSettled.current) {
+        const painted = readPaintedBook<ClientRow>(userId, activeFirmId);
+        if (painted && painted.length > 0) {
+          setClientRows(painted);
+          figuresSettled.current = true;
+          setFiguresLoad("merged");
+          setBookEnriched(true);
+        } else {
+          setFiguresLoad("failed");
+        }
+      }
+      // The figures read has settled, so the deadlines must not also fire.
+      clearBookDeadlines();
+    } else {
+      const books = new Map(
+        ((figures.data ?? []) as { id: string; financials: Client["financials"]; cashflow: unknown }[]).map(
+          (row) => [row.id, row],
+        ),
+      );
+      rawClients = rawClients.map((client) => {
+        const book = books.get(client.id);
+        return {
+          ...client,
+          financials: book?.financials ?? client.financials ?? null,
+          cashflow: book?.cashflow ?? client.cashflow,
+        };
+      });
+      booksMerged = true;
+      publishMerged();
     }
+
+    await Promise.all([
+      settleWithin(historyPromise, SHELL_GATE_TIMEOUT_MS),
+      settleWithin(actionsPromise, SHELL_GATE_TIMEOUT_MS),
+      settleWithin(queriesPromise, SHELL_GATE_TIMEOUT_MS),
+      settleWithin(namesPromise, SHELL_GATE_TIMEOUT_MS),
+      settleWithin(orphansPromise, SHELL_GATE_TIMEOUT_MS),
+    ]);
     } catch (err) {
       console.error("practice book:", err);
       if (gen === loadGen.current && !figuresSettled.current) {
@@ -1655,16 +1727,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       if (gen === loadGen.current) {
         setLoading(false);
         setCountsReady(true);
-        const timer = bookDeadlineTimer.current;
-        if (timer != null) {
-          window.clearTimeout(timer);
-          bookDeadlineTimer.current = null;
-        }
-        const firmTimer = firmReloadTimer.current;
-        if (firmTimer != null) {
-          window.clearTimeout(firmTimer);
-          firmReloadTimer.current = null;
-        }
+        clearBookDeadlines();
       }
     }
   };
