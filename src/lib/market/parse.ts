@@ -68,6 +68,35 @@ export function clientMarketDraftFromFirm(firmMarket: unknown): DraftMarket {
   return { country: sel.country, regionCode: sel.regionCode };
 }
 
+/**
+ * Market and year-start for a new firm client.
+ * An explicit picker choice wins. Otherwise the firm's stored market is used.
+ * A firm row with no market adds none: no country and no year-start.
+ */
+export function firmClientCreateMarket(input: {
+  firmMarket: unknown;
+  chosen?: { country?: string | null; regionCode?: string | null } | null;
+}): {
+  market: { country: MarketId; regionCode: UsStateCode | null } | null;
+  financialYearStartMonth: 1 | 3 | null;
+} {
+  const chosen = input.chosen ? parseMarketSelection(input.chosen) : null;
+  const firm = parseMarketSelection(input.firmMarket);
+  const sel = chosen ?? firm;
+  if (!sel) return { market: null, financialYearStartMonth: null };
+  return {
+    market: { country: sel.country, regionCode: sel.regionCode },
+    financialYearStartMonth: sel.country === "US" ? 1 : 3,
+  };
+}
+
+/** Picker value for Add client. A firm with no market leaves both countries unset. */
+export function firmClientDraftMarket(firmMarket: unknown): DraftMarket {
+  const sel = parseMarketSelection(firmMarket);
+  if (!sel) return { country: null, regionCode: null };
+  return { country: sel.country, regionCode: sel.regionCode };
+}
+
 export function marketToJson(sel: MarketSelection): {
   country: MarketId;
   regionCode: UsStateCode | null;

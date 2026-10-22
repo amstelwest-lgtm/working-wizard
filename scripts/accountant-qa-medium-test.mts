@@ -16,7 +16,7 @@ import {
   summarizePortfolioAttention,
   type PortfolioClientSignals,
 } from "../src/lib/portfolio-dashboard";
-import { clientMarketDraftFromFirm } from "../src/lib/market";
+import { clientMarketDraftFromFirm, firmClientCreateMarket, firmClientDraftMarket } from "../src/lib/market";
 import { detectImportPeriod, importPeriodFromParts } from "../src/lib/import-period";
 import {
   firmRenewalStatusLine,
@@ -176,6 +176,53 @@ assert(unknown.country !== "US", "missing firm market is not the visitor US defa
 const us = clientMarketDraftFromFirm({ country: "US", regionCode: "CA" });
 assert(us.country === "US" && us.regionCode === "CA", "US firm with a state keeps that market");
 
+const zaCreate = firmClientCreateMarket({ firmMarket: { country: "ZA", regionCode: null } });
+assert(
+  zaCreate.market?.country === "ZA" && zaCreate.financialYearStartMonth === 3,
+  "a ZA firm defaults a new client to March",
+);
+const nyCreate = firmClientCreateMarket({ firmMarket: { country: "US", regionCode: "NY" } });
+assert(
+  nyCreate.market?.country === "US" &&
+    nyCreate.market.regionCode === "NY" &&
+    nyCreate.financialYearStartMonth === 1,
+  "a stored US state is kept, with a January year-start",
+);
+const emptyCreate = firmClientCreateMarket({ firmMarket: null });
+assert(
+  emptyCreate.market === null && emptyCreate.financialYearStartMonth === null,
+  "a firm with no market adds none",
+);
+const chosen = firmClientCreateMarket({
+  firmMarket: { country: "US", regionCode: "NY" },
+  chosen: { country: "ZA", regionCode: null },
+});
+assert(
+  chosen.market?.country === "ZA" && chosen.financialYearStartMonth === 3,
+  "an explicit choice wins over the firm market",
+);
+const blankDraft = firmClientDraftMarket(null);
+assert(blankDraft.country === null && blankDraft.regionCode === null, "add client leaves a missing firm market unset");
+const zaDraft = firmClientDraftMarket({ country: "ZA", regionCode: null });
+assert(zaDraft.country === "ZA", "add client starts from a stored ZA firm market");
+const createSql = readFileSync(
+  resolve("supabase/migrations/20261024120000_create_firm_client_market_default.sql"),
+  "utf8",
+);
+assert(
+  createSql.includes("WHEN v_market IS NULL THEN NULL"),
+  "a client with no market does not get a January or March default",
+);
+assert(
+  !createSql.includes('{"country":"ZA","regionCode":null}'),
+  "the new function does not invent South Africa",
+);
+assert(!createSql.includes('{"country":"US"'), "the new function does not invent a US state");
+assert(createSql.includes("IF v_uid IS NULL"), "the function still requires a login");
+assert(createSql.includes("GRANT EXECUTE") && createSql.includes("TO authenticated"), "authenticated keeps execute");
+assert(!/grant\s+execute[\s\S]*to\s+anon/i.test(createSql), "anon cannot call the function");
+assert(!/grant\s+execute[\s\S]*to\s+public/i.test(createSql), "public cannot call the function");
+
 assert(detectImportPeriod(null) == null, "missing period is not detected");
 assert(detectImportPeriod("Unknown") == null, "unknown text is not detected");
 assert(detectImportPeriod("2026-13-01") == null, "invalid month is not detected");
@@ -276,7 +323,7 @@ assert(!dash.includes("scrollIntoView"), "open queries does not scroll into a de
 assert(!dash.includes("queriesClientId ? () => openClientQueries"), "the tile is not an onClick that the tour can swallow");
 assert(dash.includes("bookLoading"), "dashboard waits on the client list");
 assert(dash.includes("Loading your clients…"), "greeting stays in a loading state");
-assert(dash.includes("clientMarketDraftFromFirm"), "add-client starts from the firm market");
+assert(dash.includes("firmClientDraftMarket"), "add-client starts from the firm market");
 
 const upload = readFileSync(resolve("src/components/upload-financials.tsx"), "utf8");
 assert(upload.includes('id="import-period-month"'), "confirm step asks for a month");
