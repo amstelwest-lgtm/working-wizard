@@ -2,6 +2,9 @@ name: CI
 
 on:
   pull_request:
+    # Drafts do not run this workflow. Marking one ready fires
+    # ready_for_review, which is not in the default activity types.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
