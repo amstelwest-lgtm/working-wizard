@@ -22,6 +22,7 @@ export function PracticeAgentThread({
   onBack,
   onSelectAgent,
   marketCountry = null,
+  firmId = null,
   children,
 }: {
   agent: AgentKey;
@@ -30,6 +31,7 @@ export function PracticeAgentThread({
   onBack: () => void;
   onSelectAgent: (agent: AgentKey) => void;
   marketCountry?: string | null;
+  firmId?: string | null;
   children?: ReactNode;
 }) {
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
@@ -44,6 +46,8 @@ export function PracticeAgentThread({
     let cancelled = false;
     el.dataset.clientId = clientId;
     el.dataset.agent = agent;
+    if (firmId) el.dataset.firmId = firmId;
+    else delete el.dataset.firmId;
     el.dispatchEvent(new Event("ask-ai-context"));
     if (el.dataset.askAiMounted === "1" && el.dataset.askAiClient === clientId) return;
     el.innerHTML = "";
@@ -82,7 +86,7 @@ export function PracticeAgentThread({
     return () => {
       cancelled = true;
     };
-  }, [clientId, agent]);
+  }, [clientId, agent, firmId]);
 
   return (
     <div className="practice-agent-thread" data-practice-agent-thread={agent}>

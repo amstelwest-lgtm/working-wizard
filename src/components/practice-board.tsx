@@ -2227,6 +2227,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 finding={(practiceLines[dashAgent] ?? []).filter((line) => line.trim()).join(" ")}
                 clients={clientRows.map((row) => ({ id: row.id, name: row.name }))}
                 marketCountry={parseMarketSelection(firmMarket)?.country ?? null}
+                firmId={firmId}
                 onBack={() => {
                   void navigate({ to: "/dashboard", hash: "" });
                 }}
