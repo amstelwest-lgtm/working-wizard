@@ -208,6 +208,7 @@
     "test:stripe-checkout": "vite-node --config scripts/vite-test.config.ts scripts/stripe-checkout-test.mts",
     "test:za-pricing": "vite-node --config scripts/vite-test.config.ts scripts/za-pricing-test.mts",
     "test:price-quote": "vite-node --config scripts/vite-test.config.ts scripts/price-quote-test.mts",
+    "test:pricing-matrix": "vite-node --config scripts/vite-test.config.ts scripts/pricing-matrix-test.mts",
     "test:za-bundle-leak": "node scripts/za-bundle-leak-test.mjs",
     "stripe:za-prices": "vite-node --config scripts/vite-test.config.ts scripts/stripe-create-za-prices.mts",
     "test:add-client-save": "vite-node --config scripts/vite-test.config.ts scripts/add-client-save-test.mts",
