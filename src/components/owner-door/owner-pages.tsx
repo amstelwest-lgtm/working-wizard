@@ -8,6 +8,7 @@ import {
   OWNER_PLAN_BENEFITS,
   OWNER_PLAN_FREE_LINE,
   OWNER_PLAN_INVITE_LABEL,
+  ownerPlanBillingView,
   type OwnerSubscribeView,
 } from "@/lib/owner-subscribe";
 import { OwnerSubscribe } from "./owner-subscribe";
@@ -187,6 +188,7 @@ export function OwnerPlan({
   onInvite?: () => void;
   checkoutNotice?: "success" | "cancel" | null;
 }) {
+  const action = ownerPlanBillingView({ accountantOnMilon, firmName, billing });
   return (
     <section className="owner-pane" data-owner-page="plan">
       <OwnerPageHead eyebrow="Billing" title="Plan" />
@@ -200,12 +202,12 @@ export function OwnerPlan({
           ))}
         </ul>
         <OwnerSubscribe
-          view={billing}
+          view={action}
           busy={subscribeBusy}
           notice={checkoutNotice}
-          onSubscribe={onSubscribe}
+          onSubscribe={action.kind === "subscribe" ? onSubscribe : undefined}
         />
-        {billing.kind === "subscribe" ? (
+        {action.kind === "subscribe" ? (
           <p className="owner-plan-note">
             {OWNER_PLAN_FREE_LINE}
             <button type="button" className="owner-plan-invite" onClick={onInvite}>
@@ -245,6 +247,7 @@ export function OwnerSettings({
   subscribeBusy?: boolean;
   onSubscribe?: () => void;
 }) {
+  const action = ownerPlanBillingView({ accountantOnMilon, firmName, billing });
   return (
     <section className="owner-pane" data-owner-page="settings">
       <button type="button" className="owner-back" onClick={onBack}>
@@ -258,7 +261,11 @@ export function OwnerSettings({
       <section className="owner-settings-block">
         <h2>Plan</h2>
         <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName, zaMonthly })}</p>
-        <OwnerSubscribe view={billing} busy={subscribeBusy} onSubscribe={onSubscribe} />
+        <OwnerSubscribe
+          view={action}
+          busy={subscribeBusy}
+          onSubscribe={action.kind === "subscribe" ? onSubscribe : undefined}
+        />
       </section>
       <section className="owner-settings-block">
         <h2>Theme</h2>

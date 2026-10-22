@@ -80,10 +80,13 @@ assert(
   quotePrice({ market: "za", plan: "starter", interval: "month", surface: "signup" })?.label === "R299/mo",
   "signup Starter is R299/mo without the per-client hint",
 );
+const usWall = quotePrice({ market: "us", plan: "starter", interval: "month", surface: "wall" });
 assert(
-  quotePrice({ market: "us", plan: "starter", interval: "month", surface: "wall" })?.label === "$39/mo",
-  "the US wall is $39/mo without the per-client hint",
+  Boolean(usWall?.label) && usWall.label === usVisitor?.label,
+  `the US wall uses the same server quote as the landing, saw ${usWall?.label}`,
 );
+assert(usWall.label.includes("per client"), "the US wall quote includes the per-client hint");
+assert(usWall.label === firmUsdPublicLine("starter", "month"), "the US wall quote matches the landing catalog line");
 
 assert(resolveQuoteMarket({ surface: "firm", storedMarket: null }) === "us", "a missing firm market is USD");
 assert(resolveQuoteMarket({ surface: "firm", storedMarket: {} }) === "us", "a firm with no country is USD");
@@ -189,7 +192,10 @@ assert(geo.includes(".toUpperCase()"), "the geo country is uppercased");
 assert(!geo.includes('country === "za"'), "geo comparisons use the uppercased country");
 
 const auth = readFileSync(resolve(root, "src/routes/auth.tsx"), "utf8");
-assert(auth.includes('marketRaw === "ZA"'), "auth keeps a ZA or US market hint");
+const authSearch = readFileSync(resolve(root, "src/lib/auth-search.ts"), "utf8");
+assert(auth.includes("parseAuthSearch"), "auth uses the shared search parser");
+assert(authSearch.includes('marketRaw === "ZA"'), "auth keeps a ZA or US market hint");
 assert(!auth.includes("search.country"), "auth does not accept a country override");
+assert(!authSearch.includes("search.country"), "auth search does not accept a country override");
 
 console.log("price-quote-test: ok");

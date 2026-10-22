@@ -60,7 +60,9 @@ function showPerClient(
   plan: ApprovedPlan,
 ): boolean {
   if (plan === "owner" || surface === "signup" || surface === "owner") return false;
-  if (currency === "USD") return plan === "starter" && (surface === "visitor" || surface === "firm");
+  if (currency === "USD") {
+    return plan === "starter" && (surface === "visitor" || surface === "firm" || surface === "wall");
+  }
   return surface === "visitor" || surface === "firm" || surface === "wall" || surface === "checkout";
 }
 
