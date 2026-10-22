@@ -28,7 +28,11 @@ import {
   periodMonthsOf,
 } from "../../../src/lib/ratios.ts";
 import { firmYearStatement } from "../_shared/firm-year-slice.ts";
-import { statementGrossMarginFraction, statementNetProfit } from "../../../src/lib/period-profit.ts";
+import {
+  statementGrossMarginFraction,
+  statementGrossProfit,
+  statementNetProfit,
+} from "../../../src/lib/period-profit.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import {
   figuresPeriodLabelFrom,
@@ -92,7 +96,11 @@ export type OverviewBrief = {
    * sits in that year.
    */
   estimateLabel: string | null;
-  /** Stored P&L headlines. Null when that line is not on the file. */
+  /**
+   * Gross profit the home Analyst card prints. The stored line when it is in
+   * range, otherwise revenue minus cost of sales on the same firm-year slice.
+   * Null when neither a stored amount nor that pair is on the file.
+   */
   grossProfit: number | null;
   operatingProfit: number | null;
   profitBeforeTax: number | null;
@@ -459,7 +467,15 @@ export function buildOverviewBrief(input: {
   const operatingProfit = clipped ? clipped.slice.operatingProfit : asNumber(financials?.ebit);
   const quotedNet = clipped ? clipped.slice.netProfit : statementNetProfit(financials);
   const quotedRevenue = clipped ? clipped.slice.revenue : asNumber(financials?.revenue);
-  const quotedGross = clipped ? clipped.slice.grossProfit : asNumber(financials?.grossProfit);
+  // Same gross profit as the home Analyst card: the firm-year slice when it
+  // clipped the statement, otherwise the raw file. A missing pair stays null.
+  const quotedGross = clipped
+    ? statementGrossProfit({
+        revenue: clipped.slice.revenue,
+        cogs: clipped.slice.cogs,
+        grossProfit: clipped.slice.grossProfit,
+      })
+    : statementGrossProfit(financials);
   const quotedBeforeTax = clipped ? asNumber(clipped.financials.ebt) : asNumber(financials?.ebt);
   const netUsable = quotedNet != null;
   const liabilities = resolveTotalLiabilities(financials);
