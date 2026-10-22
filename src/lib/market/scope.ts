@@ -15,8 +15,7 @@ export function marketForClient(client: { market?: unknown } | null | undefined)
  * `firms.market` values are South Africa (ZAR, en-ZA, Africa/Johannesburg).
  * Never throws, including when the firm row itself is null.
  * Use this for dates, timezone, and locale formatting only.
- * ZA-only content and pricing must use the stored country
- * (`parseMarketSelection(...)?.country ?? null`) and treat null as not ZA.
+ * Prices and gates use resolveFirmMarket and treat null as not ZA.
  */
 export function effectiveFirmMarket(firm: { market?: unknown } | null | undefined): ResolvedMarket {
   return resolveMarket(coerceMarketSelection(firm?.market));

@@ -15,10 +15,11 @@ import {
   type FirmPlanDisplay,
   type FirmSubscriptionPhase,
 } from "@/lib/firm-client-cap";
+import { resolveFirmMarket, resolveFirmPriceCurrency } from "@/lib/pricing/market-resolution";
 import {
   readSubscriptionDiscountRefs,
   type StoredDiscountRef,
-} from "@/lib/firm-sa-market";
+} from "@/lib/stripe-discount";
 import { noPlanTrialClock, starterTrialClock, type StarterTrialBanner } from "@/lib/firm-starter-trial";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
@@ -792,12 +793,11 @@ export async function loadFirmPlanDisplay(input: {
       clientLimit: null,
       usageLabel: null,
       canUpgrade: false,
-      priceCurrency: "USD",
+      priceCurrency: resolveFirmPriceCurrency(null),
       interval: "month",
       zarByBand: {},
       starterTrial: idleStarterTrialBanner(),
       introTrialEligible: false,
-      saDiscount: false,
     };
   }
 
@@ -825,7 +825,6 @@ export async function loadFirmPlanDisplay(input: {
       zarByBand: {},
       starterTrial: idleStarterTrialBanner(),
       introTrialEligible: false,
-      saDiscount: false,
       zaLabels: null,
       zaPriceLabel: null,
     };
@@ -874,7 +873,6 @@ export async function loadFirmPlanDisplay(input: {
     zarByBand: upgrade.zarByBand,
     starterTrial,
     introTrialEligible: eligibleForIntroTrial(history.priorSubscriptionCount),
-    saDiscount: upgrade.saDiscount,
     zaLabels: upgrade.zaLabels ?? null,
     zaPriceLabel: upgrade.zaPriceLabel ?? null,
   };
@@ -944,7 +942,7 @@ export async function buildUpgradeSnapshot(input: {
   const band = input.sub?.band ?? null;
   const clientLimit = firmUsageLimit(phase, band, input.sub?.unitAmount);
   const interval = input.sub?.interval === "year" ? "year" : "month";
-  const marketCountry = parseMarketSelection(input.market)?.country ?? null;
+  const marketCountry = resolveFirmMarket(input.market) === "za" ? "ZA" : null;
   const billingCurrency = billingCurrencyCode({
     stripeCurrency: input.sub?.currency,
     marketCountry,
@@ -972,8 +970,8 @@ export async function buildUpgradeSnapshot(input: {
       const { loadSaPricingCopy } = await import("@/lib/pricing/za-pricing-chunk.server");
       const copy = loadSaPricingCopy();
       zaLabels = copy.labels;
-      // Same band as Checkout and the ZA coupon. The list above can still
-      // be rand for a client mix whose billing country is not yet ZA.
+      // Same band as Checkout. The list above can still be rand for a client
+      // mix whose billing country is not yet ZA.
       if (charge.priceMarket === "za") {
         zaPriceLabel = copy.labels[pricedBand][interval];
       }
@@ -1016,7 +1014,6 @@ export async function buildUpgradeSnapshot(input: {
     }),
     interval,
     zarByBand,
-    saDiscount: showZar,
     zaLabels,
     zaPriceLabel,
   };

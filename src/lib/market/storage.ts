@@ -9,17 +9,26 @@ function draftFromSearch(search: string): DraftMarket {
   return parseDraftMarket({ country, regionCode: state });
 }
 
-export function readVisitorDraft(): DraftMarket {
-  if (typeof window === "undefined") return { country: null, regionCode: null };
+/**
+ * URL `?market=` is a choice on this visit. localStorage is a previous visit.
+ * Callers that price a page must pass `fromThisVisit` into resolveVisitorDraft.
+ */
+export function readVisitorChoice(): { draft: DraftMarket; fromThisVisit: boolean } {
+  const empty = { country: null, regionCode: null } as const;
+  if (typeof window === "undefined") return { draft: { ...empty }, fromThisVisit: false };
   try {
     const fromUrl = draftFromSearch(window.location.search);
-    if (fromUrl.country) return fromUrl;
+    if (fromUrl.country) return { draft: fromUrl, fromThisVisit: true };
     const raw = window.localStorage.getItem(MARKET_STORAGE_KEY);
-    if (raw) return parseDraftMarket(JSON.parse(raw));
+    if (raw) return { draft: parseDraftMarket(JSON.parse(raw)), fromThisVisit: false };
   } catch {
     /* ignore */
   }
-  return { country: null, regionCode: null };
+  return { draft: { ...empty }, fromThisVisit: false };
+}
+
+export function readVisitorDraft(): DraftMarket {
+  return readVisitorChoice().draft;
 }
 
 export function writeVisitorDraft(draft: DraftMarket): void {

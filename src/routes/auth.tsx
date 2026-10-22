@@ -88,10 +88,11 @@ import {
   draftToSelection,
   isDraftComplete,
   marketToJson,
-  readVisitorDraft,
+  readVisitorChoice,
   writeVisitorDraft,
   type DraftMarket,
 } from "@/lib/market";
+import { resolveVisitorDraft, resolveVisitorMarket } from "@/lib/pricing/market-resolution";
 
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
@@ -169,8 +170,8 @@ function AuthPage() {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const submitLock = useRef(false);
-  const [draftMarket, setDraftMarket] = useState<DraftMarket>(
-    geoZa ? { country: "ZA", regionCode: null } : { country: null, regionCode: null },
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
+    resolveVisitorDraft({ geoCountry: geoZa ? "ZA" : null }),
   );
 
   /* Client-only form gate — browser password managers (LastPass etc.) inject
@@ -178,14 +179,13 @@ function AuthPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
-    const stored = readVisitorDraft();
-    const allowed = geoZa || stored.country !== "ZA" ? stored : { country: null, regionCode: null };
+    const choice = readVisitorChoice();
     setDraftMarket(
-      allowed.country
-        ? allowed
-        : geoZa
-          ? { country: "ZA", regionCode: null }
-          : { country: "US", regionCode: null },
+      resolveVisitorDraft({
+        geoCountry: geoZa ? "ZA" : null,
+        saved: choice.draft,
+        choiceFromThisVisit: choice.fromThisVisit,
+      }),
     );
     const pending = peekPendingCheckout();
     if (pending) setStoredBand({ plan: pending.plan, interval: pending.interval });
@@ -196,7 +196,7 @@ function AuthPage() {
 
   const pendingForSignup = (country: "ZA" | "US" | null): PendingCheckout => {
     const existing = peekPendingCheckout();
-    const fallback = geoZa && existing?.market === "za" ? "za" : "us";
+    const fallback = resolveVisitorMarket({ geoCountry: geoZa ? "ZA" : null });
     const market = country === "ZA" ? "za" : country === "US" ? "us" : fallback;
     return {
       plan: selectedPlan,

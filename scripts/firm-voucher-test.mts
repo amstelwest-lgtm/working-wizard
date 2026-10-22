@@ -1,5 +1,5 @@
 /**
- * Firm upgrade vouchers: Stripe promotion codes replace the SA 50% coupon.
+ * Firm upgrade vouchers: Stripe promotion codes.
  * Run: pnpm test:firm-voucher
  */
 import { readFileSync } from "node:fs";
@@ -7,7 +7,6 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
-import { SA_FIRM_DISCOUNT_NOTE } from "../src/lib/firm-sa-market";
 import {
   firmSetupCheckoutMessage,
   firmSetupCheckoutSessionParams,
@@ -153,35 +152,26 @@ assert(firstTimeFresh.ok, "no prior payment can use a first-time code");
 assert(
   firmUpgradeDiscounts({
     promotionCodeId: "promo_free",
-    zaCouponId: "MILON_ZA_50",
-    existing: [{ id: "di_za", couponId: "MILON_ZA_50", promotionCodeId: null }],
+    existing: [{ id: "di_old", couponId: "coupon_old", promotionCodeId: null }],
   })?.length === 1 &&
     JSON.stringify(
       firmUpgradeDiscounts({
         promotionCodeId: "promo_free",
-        zaCouponId: "MILON_ZA_50",
-        existing: [{ id: "di_za", couponId: "MILON_ZA_50", promotionCodeId: null }],
+        existing: [{ id: "di_old", couponId: "coupon_old", promotionCodeId: null }],
       }),
     ) === JSON.stringify([{ promotion_code: "promo_free" }]),
-  "an SA firm with a voucher keeps only the voucher",
+  "a voucher replaces every other discount",
 );
 assert(
-  firmUpgradeDiscounts({ promotionCodeId: null, zaCouponId: "MILON_ZA_50", existing: [] }) == null,
-  "an SA firm without a voucher does not get the old coupon",
+  firmUpgradeDiscounts({ promotionCodeId: null, existing: [] }) == null,
+  "without a voucher, discounts are left alone",
 );
 assert(
-  JSON.stringify(
-    firmUpgradeDiscounts({
-      promotionCodeId: null,
-      zaCouponId: "MILON_ZA_50",
-      existing: [{ id: "di_za", couponId: "MILON_ZA_50" }],
-    }),
-  ) === "[]",
-  "an existing coupon is cleared so it cannot stack",
-);
-assert(
-  firmUpgradeDiscounts({ promotionCodeId: null, zaCouponId: null, existing: [] }) == null,
-  "a US firm never gets the SA coupon",
+  firmUpgradeDiscounts({
+    promotionCodeId: null,
+    existing: [{ id: "di_old", couponId: "coupon_old" }],
+  }) == null,
+  "without a voucher, an existing discount is not rewritten",
 );
 
 const listed: Array<Record<string, unknown>> = [];
@@ -610,8 +600,8 @@ assert(
   "a Starter voucher upgrade bills the discounted price today",
 );
 assert(
-  !JSON.stringify(saVoucher.calls[0]?.discounts ?? []).includes("MILON_ZA_50"),
-  "the SA coupon is not stacked",
+  !JSON.stringify(saVoucher.calls[0]?.discounts ?? []).includes("coupon"),
+  "the voucher update does not stack a coupon",
 );
 assert(
   saApplied &&
@@ -646,10 +636,10 @@ const usResult = await completeFirmSetupUpgrade(session(), usPlain.stripe as nev
   firmMarket: { country: "US" },
 });
 assert(usResult?.band === "solo" && usResult.notice == null, "a US firm upgrades without a notice");
-assert(usPlain.calls[0]?.discounts == null, "a US firm is not given the SA coupon");
+assert(usPlain.calls[0]?.discounts == null, "a US firm is not given a coupon");
 assert(
-  !JSON.stringify(usPlain.calls[0]).includes("MILON_ZA_50"),
-  "the US update payload has no SA coupon",
+  !JSON.stringify(usPlain.calls[0]).includes("coupon"),
+  "the US update payload has no coupon",
 );
 
 const wrong = stripeFor({
@@ -810,7 +800,6 @@ const picker = renderToStaticMarkup(
     priceCurrency: "USD",
     canUpgrade: true,
     clientCount: 1,
-    saDiscount: false,
     onUpgrade: () => undefined,
     onValidateVoucher: async () => ({ ok: false, message: FIRM_VOUCHER_INVALID_MESSAGE }),
   }),
@@ -818,7 +807,7 @@ const picker = renderToStaticMarkup(
 assert(picker.includes("Have a voucher code?"), "the band picker offers a voucher");
 assert(picker.includes("<details"), "the voucher field is a disclosure");
 assert(!picker.includes("<details open"), "the voucher field is collapsed");
-assert(!picker.includes(SA_FIRM_DISCOUNT_NOTE), "a US picker does not show the SA note");
+assert(!picker.includes("50% off"), "a US picker does not show a percent-off note");
 assert(!picker.includes("$49.50"), "a US picker does not show the halved price");
 assert(!picker.includes("50% off"), "a US picker has no discount text");
 
@@ -829,7 +818,6 @@ const saPicker = renderToStaticMarkup(
     priceCurrency: "USD",
     canUpgrade: true,
     clientCount: 1,
-    saDiscount: true,
     zaLabels: {
       solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
     },
@@ -838,7 +826,7 @@ const saPicker = renderToStaticMarkup(
   }),
 );
 assert(saPicker.includes("R799/mo · about R53 per client"), "an SA picker shows the rand price");
-assert(!saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker does not show the old discount note");
+assert(!saPicker.includes("50% off"), "an SA picker does not show a percent-off note");
 assert(saPicker.includes("Have a voucher code?"), "an SA picker can enter a voucher");
 
 const lookup = readFileSync(resolve("src/lib/firm-voucher.server.ts"), "utf8");

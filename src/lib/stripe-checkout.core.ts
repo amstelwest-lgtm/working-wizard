@@ -8,9 +8,12 @@ import { appRedirectOrigin } from "@/lib/app-origin";
 import { formatMoney } from "@/lib/market/format";
 import { ZA_MARKET } from "@/lib/market/resolve";
 import { firmUpgradeReturnPath, practiceDisplaysZarPlan } from "@/lib/firm-band-upgrade";
-import { isSaMarketFirm } from "@/lib/firm-sa-market";
-import { resolveOwnerCheckoutMarket } from "@/lib/billing-market";
-import { isZaCatalogLookup, priceMarketForFirm } from "@/lib/pricing/za-checkout";
+import {
+  resolveCheckoutPriceMarket,
+  resolveFirmMarket,
+  resolveOwnerMarket,
+} from "@/lib/pricing/market-resolution";
+import { isZaCatalogLookup } from "@/lib/pricing/za-checkout";
 import { zaLookupKey } from "@/lib/pricing/za-ladder";
 import {
   FIRM_SETUP_PROMOTION_CODE,
@@ -127,11 +130,6 @@ export type FirmCheckoutSessionInput = {
   market: StripePlanMarket;
   /** Stripe promotion_code id (promo_…), already resolved. */
   promotionCodeId?: string | null;
-  /**
-   * Ignored. The rand price replaces the old coupon, so Checkout never
-   * attaches it. Kept so older callers still type-check.
-   */
-  zaCouponId?: string | null;
   /** SA firm whose billing country is already known and is not ZA. */
   billingFallback?: boolean;
   integrationIdentifier: string;
@@ -152,32 +150,29 @@ export function adaptivePricingNote(_market: StripePlanMarket): string | null {
 }
 
 /**
- * A stored firm wins over the request. No firm row: the edge country.
- * A za request never opens rand pricing when the edge is not ZA.
+ * Stored firm market only. A missing firm is not ZA. Geo and the URL market
+ * are not inputs. The charge currency is resolveCheckoutPriceMarket.
  */
 export function resolveFirmCheckoutMarket(
   firmMarket: unknown,
-  _requested: StripePlanMarket,
-  geoCountry?: string | null,
+  _requested?: StripePlanMarket,
+  _geoCountry?: string | null,
 ): StripePlanMarket {
-  if (firmMarket != null) return isSaMarketFirm({ market: firmMarket }) ? "za" : "us";
-  return geoCountry === "ZA" ? "za" : "us";
+  return resolveFirmMarket(firmMarket);
 }
 
 /**
- * Currency for one Checkout, and the ZA coupon that goes with that charge.
- * A South Africa firm row pays ZAR unless the billing country is known and
- * is not ZA. Unknown still starts on rand, because Checkout collects the
- * address. A non-ZA firm row pays ZAR only when the practice list is rand
- * (more ZA clients than US clients) and the billing country is known to be
- * ZA. Unknown, or any other country, is USD. A US firm with no ZA majority
- * stays USD. `zaCoupon` is that same choice: on only when the charge is ZAR.
+ * Currency for one Checkout. Rand follows resolveCheckoutPriceMarket.
+ * A ZA firm with an unknown billing country still starts on rand, because
+ * Checkout collects the address. A known non-ZA billing country is USD.
  */
 export function firmCheckoutCharge(input: {
   firmMarket: unknown;
   clientMarkets?: readonly unknown[] | null;
-  requested: StripePlanMarket;
+  /** Ignored. The URL market does not choose the charge. */
+  requested?: StripePlanMarket;
   billingCountry?: string | null;
+  /** Ignored. Checkout does not read geo. */
   geoCountry?: string | null;
   band: FirmCheckoutBand;
   interval: FirmInterval;
@@ -186,23 +181,21 @@ export function firmCheckoutCharge(input: {
   priceMarket: StripePlanMarket;
   lookupKey: string;
   billingFallback: boolean;
-  zaCoupon: boolean;
 } {
-  const firmMarket = resolveFirmCheckoutMarket(input.firmMarket, input.requested, input.geoCountry);
+  const firmMarket = resolveFirmCheckoutMarket(input.firmMarket);
   const country = (input.billingCountry ?? "").trim().toUpperCase();
   const knownCountry = country.length > 0;
-  const mixZar =
+  const practiceListZar =
     firmMarket !== "za" &&
     practiceDisplaysZarPlan({
       firmMarket: input.firmMarket,
       clientMarkets: input.clientMarkets,
     });
-  const priceMarket =
-    firmMarket === "za"
-      ? priceMarketForFirm({ firmMarket: "za", billingCountry: input.billingCountry })
-      : mixZar && country === "ZA"
-        ? "za"
-        : "us";
+  const priceMarket = resolveCheckoutPriceMarket({
+    storedFirmMarket: input.firmMarket,
+    billingCountry: input.billingCountry,
+    practiceListZar,
+  });
   const lookupKey =
     priceMarket === "za"
       ? zaLookupKey(input.band, input.interval)
@@ -212,8 +205,7 @@ export function firmCheckoutCharge(input: {
     priceMarket,
     lookupKey,
     billingFallback:
-      priceMarket === "us" && knownCountry && country !== "ZA" && (firmMarket === "za" || mixZar),
-    zaCoupon: priceMarket === "za",
+      priceMarket === "us" && knownCountry && country !== "ZA" && (firmMarket === "za" || practiceListZar),
   };
 }
 
@@ -325,25 +317,6 @@ export function firmCheckoutSessionParams(
 }
 
 /**
- * Attach the SA coupon once. Clears allow_promotion_codes and any promotion
- * code so Checkout cannot stack a second discount. A second call is a no-op.
- */
-export function withFirmZaCoupon<T extends Stripe.Checkout.SessionCreateParams>(
-  params: T,
-  couponId: string | null | undefined,
-): T {
-  const id = couponId?.trim() ?? "";
-  if (!id) return params;
-  const current = params.discounts ?? [];
-  const already = current.some((entry) => "coupon" in entry && entry.coupon === id);
-  params.discounts = already
-    ? current.filter((entry) => !("promotion_code" in entry))
-    : [...current.filter((entry) => !("promotion_code" in entry)), { coupon: id }];
-  delete params.allow_promotion_codes;
-  return params;
-}
-
-/**
  * Checkout for a firm that already exists but has no card (Starter $0) or no
  * subscription. Does not send them to the Customer Portal. No second trial.
  * Success reopens Add client on the dashboard.
@@ -403,7 +376,6 @@ export function firmSetupCheckoutMessage(input: {
   unitAmount: number;
   currency: string;
   interval: FirmInterval;
-  saMarket: boolean;
   /** Set when a voucher changes the amount shown above Save. */
   voucherPreview?: string | null;
 }): string {
@@ -444,7 +416,6 @@ export function firmSetupCheckoutSessionParams(input: {
     currency?: string | null;
     recurring?: { interval?: string | null } | null;
   };
-  saMarket: boolean;
   promotionCodeId?: string | null;
   promotionCode?: string | null;
   voucherPreview?: string | null;
@@ -476,7 +447,6 @@ export function firmSetupCheckoutSessionParams(input: {
     unitAmount,
     currency,
     interval: setupPriceInterval(input.price.recurring?.interval, input.interval),
-    saMarket: input.saMarket,
     voucherPreview: input.voucherPreview,
   });
   return {
@@ -573,13 +543,12 @@ export function ownerCheckoutCharge(input: {
   lookupKey: string;
   billingFallback: boolean;
 } {
-  const ownerMarket = resolveOwnerCheckoutMarket(
-    input.ownerMarket,
-    input.requested,
-    input.geoCountry,
-  );
-  const priceMarket = priceMarketForFirm({
-    firmMarket: ownerMarket,
+  const ownerMarket = resolveOwnerMarket({
+    storedMarket: input.ownerMarket,
+    geoCountry: input.geoCountry,
+  });
+  const priceMarket = resolveCheckoutPriceMarket({
+    storedFirmMarket: ownerMarket === "za" ? { country: "ZA" } : { country: "US" },
     billingCountry: input.billingCountry,
   });
   return {

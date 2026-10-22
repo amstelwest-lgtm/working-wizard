@@ -22,11 +22,7 @@ import {
   readFirmSubscriptionHistory,
   syncStarterTrialMirrorForActor,
 } from "@/lib/firm-client-cap.server";
-import {
-  isSaMarketFirm,
-  readSubscriptionDiscountRefs,
-  stripeZaCouponId,
-} from "@/lib/firm-sa-market";
+import { readSubscriptionDiscountRefs } from "@/lib/stripe-discount";
 import { resolveFirmVoucher } from "@/lib/firm-voucher.server";
 import {
   firmBandListCents,
@@ -544,11 +540,6 @@ async function createPortalUrl(customerId: string, origin: string): Promise<stri
   return session.url;
 }
 
-function zaCouponIdForMarket(charge: { zaCoupon: boolean }): string | null {
-  if (!charge.zaCoupon) return null;
-  return stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID);
-}
-
 async function createPaidCheckoutSession(input: {
   userId: string;
   email: string;
@@ -612,25 +603,14 @@ async function createPaidCheckoutSession(input: {
   }
 
   const billingCountry = await readStripeCustomerCountry(stripe, customerId);
-  let geoCountry = "";
-  try {
-    geoCountry = (getRequest().headers.get("x-vercel-ip-country") ?? "").trim();
-  } catch {
-    // No request scope.
-  }
-  if (!geoCountry && process.env.NODE_ENV !== "production") {
-    geoCountry = (process.env.MILON_DEV_GEO ?? "").trim();
-  }
   const charge = firmCheckoutCharge({
     firmMarket: input.firmMarket,
     clientMarkets: input.clientMarkets,
     requested: input.requested,
     billingCountry,
-    geoCountry,
     band: input.plan,
     interval: input.interval,
   });
-  const zaCouponId = zaCouponIdForMarket(charge);
   const { price, lookupKey } = await resolveFirmCatalogPrice(
     stripe,
     input.plan,
@@ -652,7 +632,6 @@ async function createPaidCheckoutSession(input: {
     customerId: action.customerId,
     market: charge.firmMarket,
     promotionCodeId,
-    zaCouponId,
     billingFallback: charge.billingFallback,
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
     includeTrial: action.includeTrial,
@@ -927,7 +906,6 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       email,
       firmId: data.firmId,
     });
-    const saFirm = isSaMarketFirm({ market: firmMarket });
     const band = data.band as FirmCheckoutBand;
     const interval = data.interval as FirmInterval;
     const sub = await findEntitlingFirmSubscription(billingEmail, {
@@ -950,13 +928,11 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const charge = firmCheckoutCharge({
       firmMarket,
       clientMarkets,
-      requested: saFirm ? "za" : "us",
       billingCountry,
       band,
       interval,
     });
     const priceMarket = charge.priceMarket;
-    const zaCouponId = charge.zaCoupon ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
     const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, band, interval, priceMarket);
     const voucherCode = normalizeVoucherCode(data.voucherCode);
     if (data.voucherCode?.trim() && !voucherCode) {
@@ -996,16 +972,12 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
 
     let itemId = sub?.itemId ?? null;
     let existingDiscounts = sub?.discounts ?? [];
-    if (
-      route === "update_subscription" &&
-      sub &&
-      (zaCouponId || voucherPromotionCodeId || !itemId)
-    ) {
+    if (route === "update_subscription" && sub && (voucherPromotionCodeId || !itemId)) {
       const fresh = await stripe.subscriptions.retrieve(sub.id, {
         expand: ["items.data.price"],
       });
       if (!itemId) itemId = readSubscriptionPrice(fresh).itemId;
-      if (zaCouponId) existingDiscounts = readSubscriptionDiscountRefs(fresh);
+      if (voucherPromotionCodeId) existingDiscounts = readSubscriptionDiscountRefs(fresh);
     }
 
     if (route === "update_subscription" && sub && itemId) {
@@ -1024,7 +996,6 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         },
         discounts: firmUpgradeDiscounts({
           promotionCodeId: voucherPromotionCodeId,
-          zaCouponId: voucherPromotionCodeId ? null : zaCouponId,
           existing: existingDiscounts,
         }),
       });
@@ -1054,7 +1025,6 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         band,
         interval,
         price,
-        saMarket: charge.zaCoupon && !voucherPromotionCodeId,
         promotionCodeId: voucherPromotionCodeId,
         promotionCode: voucherPromotionCodeId ? voucherCode : null,
         voucherPreview,
@@ -1108,7 +1078,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       userId,
       email: billingEmail,
       customerId,
-      market: saFirm ? "za" : "us",
+      market: charge.firmMarket,
       integrationIdentifier: firmIntegrationIdentifier(band, interval),
       includeTrial: false,
       replacesSubscriptionId,

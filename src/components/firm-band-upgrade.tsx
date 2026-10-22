@@ -45,8 +45,6 @@ type Props = {
   clientCount?: number | null;
   usageLabel?: string | null;
   upgrading?: boolean;
-  /** Server says this signed-in firm is SA. Never set from a public page. */
-  saDiscount?: boolean;
   /** Server-built rand lines for the practice list. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /**
@@ -100,7 +98,6 @@ export function FirmBandUpgrade({
   clientCount = null,
   usageLabel,
   upgrading = false,
-  saDiscount = false,
   zaLabels = null,
   introTrialEligible = false,
   cardFree = false,
@@ -135,7 +132,7 @@ export function FirmBandUpgrade({
   const starterLeads = currentBand == null && selected === "starter";
   const startHereBand = currentBand ?? (starterLeads ? "starter" : null);
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
-  const saFirm = saDiscount || zaLabels != null || priceCurrency.toLowerCase() === "zar";
+  const saFirm = zaLabels != null || priceCurrency.toLowerCase() === "zar";
 
   async function applyVoucher(): Promise<boolean> {
     if (!selected || !onValidateVoucher) return false;

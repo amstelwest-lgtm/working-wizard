@@ -1,16 +1,10 @@
 /**
- * Firm upgrade vouchers are Stripe promotion codes. A valid code replaces
- * the South Africa 50% coupon. The two never stack, and a US firm never
- * receives the SA coupon.
- *
+ * Firm upgrade vouchers are Stripe promotion codes.
  * Setup Checkout collects a card only, so the code is checked here and
  * applied later on subscriptions.update.
  */
 
-import {
-  type FirmCouponDiscount,
-  type StoredDiscountRef,
-} from "./firm-sa-market";
+import { type FirmCouponDiscount, type StoredDiscountRef } from "./stripe-discount";
 import {
   FIRM_BAND_CATALOG,
   formatUsdFromCents,
@@ -268,40 +262,19 @@ export function withVoucherInterval(
 
 /**
  * One discount on the subscription update. A voucher replaces every other
- * discount. Without a voucher, an existing rand-market coupon is removed
- * so it cannot stack on the local price. Undefined leaves discounts alone.
- * An empty list clears them.
+ * discount. Without a voucher, discounts are left alone.
  */
 export function firmUpgradeDiscounts(input: {
   promotionCodeId?: string | null;
-  zaCouponId?: string | null;
   existing?: StoredDiscountRef[] | null;
 }): FirmCouponDiscount[] | undefined {
   const promo = input.promotionCodeId?.trim() ?? "";
-  if (promo) {
-    const existing = input.existing ?? [];
-    const za = input.zaCouponId?.trim() ?? "";
-    const voucherAlreadyOnly =
-      existing.length > 0 &&
-      existing.every((row) => row.promotionCodeId === promo) &&
-      existing.every((row) => !za || row.couponId !== za);
-    if (voucherAlreadyOnly) return undefined;
-    return [{ promotion_code: promo }];
-  }
-  const za = input.zaCouponId?.trim() ?? "";
-  if (!za) return undefined;
+  if (!promo) return undefined;
   const existing = input.existing ?? [];
-  if (!existing.some((row) => row.couponId === za)) return undefined;
-  const kept: FirmCouponDiscount[] = [];
-  const seen = new Set<string>();
-  for (const row of existing) {
-    if (row.couponId === za) continue;
-    const id = row.id?.trim() ?? "";
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    kept.push({ discount: id });
-  }
-  return kept;
+  const voucherAlreadyOnly =
+    existing.length > 0 && existing.every((row) => row.promotionCodeId === promo);
+  if (voucherAlreadyOnly) return undefined;
+  return [{ promotion_code: promo }];
 }
 
 export function firmUpgradeResultMessage(base: string, notice?: string | null): string {

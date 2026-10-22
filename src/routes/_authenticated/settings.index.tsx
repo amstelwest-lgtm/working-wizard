@@ -500,7 +500,6 @@ function SettingsPage() {
                     canUpgrade: plan.canUpgrade,
                     clientCount: plan.clientCount,
                     usageLabel: plan.usageLabel,
-                    saDiscount: Boolean(plan.saDiscount) || zarPlan,
                     zaLabels: plan.zaLabels,
                     phase: plan.phase,
                   }}
@@ -519,7 +518,6 @@ function SettingsPage() {
                   zarByBand={plan.zarByBand ?? {}}
                   canUpgrade={plan.canUpgrade}
                   clientCount={plan.clientCount}
-                  saDiscount={Boolean(plan.saDiscount) || zarPlan}
                   zaLabels={plan.zaLabels}
                   introTrialEligible={plan.introTrialEligible}
                   cardFree={

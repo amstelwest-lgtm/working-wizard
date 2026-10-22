@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { isSaPricingCountry } from "@/lib/geo-country";
+import { resolveFirmMarket, resolveVisitorMarket } from "@/lib/pricing/market-resolution";
 import { isFirmCheckoutBand, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 
 export type FirmBillingQuote = {
@@ -33,7 +33,7 @@ export const readSaPricingCopy = createServerFn({ method: "GET" }).handler(async
   if (!country && process.env.NODE_ENV !== "production") {
     country = (process.env.MILON_DEV_GEO ?? "").trim();
   }
-  if (!isSaPricingCountry(country)) return null;
+  if (resolveVisitorMarket({ geoCountry: country, choiceFromThisVisit: false }) !== "za") return null;
   const { loadSaPricingCopy } = await import("@/lib/pricing/za-pricing-chunk.server");
   return loadSaPricingCopy();
 });
@@ -48,12 +48,11 @@ export const readFirmBillingQuote = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<FirmBillingQuote> => {
     const ctx = context as { supabase: unknown; userId: string };
     const { loadCallerFirmMarket } = await import("@/lib/firm-client-cap.server");
-    const { isSaMarketFirm } = await import("@/lib/firm-sa-market");
     const firmMarket = await loadCallerFirmMarket({
       supabase: ctx.supabase,
       userId: ctx.userId,
     });
-    if (!isSaMarketFirm({ market: firmMarket })) return { market: "us", priceLabel: null };
+    if (resolveFirmMarket(firmMarket) !== "za") return { market: "us", priceLabel: null };
     const { loadSaPricingCopy } = await import("@/lib/pricing/za-pricing-chunk.server");
     const copy = loadSaPricingCopy();
     const priceLabel = copy.labels[data.plan]?.[data.interval] ?? null;

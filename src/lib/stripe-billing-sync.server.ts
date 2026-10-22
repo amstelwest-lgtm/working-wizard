@@ -31,11 +31,7 @@ import {
   zarBillingCountryOk,
 } from "@/lib/pricing/za-checkout";
 import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
-import {
-  isSaMarketFirm,
-  readSubscriptionDiscountRefs,
-  stripeZaCouponId,
-} from "@/lib/firm-sa-market";
+import { readSubscriptionDiscountRefs } from "@/lib/stripe-discount";
 import { resolveFirmVoucher, type FirmVoucherStripe } from "@/lib/firm-voucher.server";
 import {
   firmBandListCents,
@@ -569,18 +565,15 @@ export async function completeFirmSetupUpgrade(
           const { getSupabaseAdminOrNull } = await import("@/integrations/supabase/client.server");
           return loadFirmClientMarkets(getSupabaseAdminOrNull(), setupFirmId);
         })();
-  const saFirm = isSaMarketFirm({ market: firmMarket });
   const billingCountry = await readStripeCustomerCountry(stripe, customerId);
   const charge = firmCheckoutCharge({
     firmMarket,
     clientMarkets,
-    requested: saFirm ? "za" : "us",
     billingCountry,
     band: intent.band,
     interval: intent.interval,
   });
   const priceMarket = charge.priceMarket;
-  const zaCouponId = charge.zaCoupon ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
   const { price, lookupKey } = await resolveFirmCatalogPrice(
     stripe as unknown as Parameters<typeof resolveFirmCatalogPrice>[0],
     intent.band,
@@ -615,7 +608,6 @@ export async function completeFirmSetupUpgrade(
   const discountsFor = (promo: string | null) =>
     firmUpgradeDiscounts({
       promotionCodeId: promo,
-      zaCouponId: promo ? null : zaCouponId,
       existing,
     });
 

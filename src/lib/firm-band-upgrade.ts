@@ -4,7 +4,8 @@
  * Do not invent ZAR list prices. Adaptive Pricing presents ZAR at Checkout.
  */
 
-import { isSaMarketFirm, type FirmCouponDiscount } from "./firm-sa-market";
+import { resolveFirmMarket, resolveFirmPriceCurrency } from "@/lib/pricing/market-resolution";
+import type { FirmCouponDiscount } from "./stripe-discount";
 import { formatMoney } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
 import { parseMarketSelection } from "./market/parse";
@@ -77,11 +78,6 @@ export type FirmUpgradeSnapshot = {
   priceCurrency: FirmPriceCurrency;
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, ZarBandAmounts>>;
-  /**
-   * Practice list is in rand (firm row ZA, or most clients ZA).
-   * This is not the Checkout charge currency.
-   */
-  saDiscount: boolean;
   /** Server-built rand lines when the practice list is in rand. */
   zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /**
@@ -101,10 +97,9 @@ export function emptyFirmUpgradeSnapshot(): FirmUpgradeSnapshot {
     clientCount: 0,
     clientLimit: null,
     usageLabel: "0 clients",
-    priceCurrency: "USD",
+    priceCurrency: resolveFirmPriceCurrency(null),
     interval: "month",
     zarByBand: {},
-    saDiscount: false,
     zaLabels: null,
     zaPriceLabel: null,
   };
@@ -532,7 +527,7 @@ export function practiceDisplaysZarPlan(input: {
   firmMarket: unknown;
   clientMarkets?: readonly unknown[] | null;
 }): boolean {
-  if (isSaMarketFirm({ market: input.firmMarket })) return true;
+  if (resolveFirmMarket(input.firmMarket) === "za") return true;
   let za = 0;
   let us = 0;
   for (const raw of input.clientMarkets ?? []) {
@@ -554,7 +549,6 @@ export function firmBandPriceLabel(
   interval: FirmInterval,
   currency: FirmPriceCurrency,
   zarByBand?: Partial<Record<FirmBandId, ZarBandAmounts>> | null,
-  _options?: { saDiscount?: boolean },
 ): string | null {
   const entry = FIRM_BAND_CATALOG[band];
   if (entry.customQuote) return null;
@@ -589,7 +583,7 @@ export type FirmSubscriptionUpgradeParams = {
   billing_cycle_anchor?: "now";
   metadata: Record<string, string>;
   trial_end?: "now";
-  /** Present when a voucher is attached, or an old coupon must be cleared. */
+  /** Present when a voucher is attached. */
   discounts?: FirmCouponDiscount[];
   automatic_tax?: { enabled: boolean };
 };

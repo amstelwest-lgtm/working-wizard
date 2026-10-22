@@ -161,6 +161,7 @@
     "test:palette-contrast": "vite-node --config scripts/vite-test.config.ts scripts/palette-contrast-test.mts",
     "test:firm-brand": "vite-node --config scripts/vite-test.config.ts scripts/firm-brand-test.mts",
     "test:market": "vite-node --config scripts/vite-test.config.ts scripts/market-kernel-test.mts",
+    "test:market-resolution": "vite-node --config scripts/vite-test.config.ts scripts/market-resolution-test.mts",
     "test:date-presets": "vite-node --config scripts/vite-test.config.ts scripts/date-presets-test.mts",
     "test:date-format-guard": "vite-node --config scripts/vite-test.config.ts scripts/date-format-guard-test.mts",
     "test:client-brain": "vite-node --config scripts/vite-test.config.ts scripts/client-brain-summary-test.mts",

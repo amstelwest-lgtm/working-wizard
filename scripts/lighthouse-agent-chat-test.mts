@@ -185,7 +185,7 @@ assert(prompt.includes("auto_send is false"), "prompt locks auto_send");
 assert(/never send, approve, or schedule/i.test(prompt) || prompt.includes('Never "send"'), "prompt forbids send");
 assert(prompt.includes(CHAT_TEASER_ACCOUNTANT) && prompt.includes("https://youtu.be/oILDudRd7Qk"), "accountant teaser");
 assert(prompt.includes(CHAT_TEASER_OWNER) && prompt.includes("https://youtu.be/EhIFIdez-1M"), "owner teaser");
-assert(/50% discount only when the firm geo is SA/i.test(prompt), "SA discount is SA-only in the prompt");
+assert(!/50% discount/i.test(prompt), "the prompt does not pitch a percent-off discount");
 assert(/outsourced cfo/i.test(prompt), "prompt bans OCFO wording");
 assert(!/claude|anthropic/i.test(prompt.replace(/Never name a model, Claude, or Anthropic\./, "")), "prompt does not brand the model");
 
@@ -643,7 +643,7 @@ assert(!/status:\s*"sent"/.test(persistSrc), "shared draft write never sets sent
     persistDraft: async (write) => persistPendingLighthouseDraft(admin, write, NOW, { refuseLocked: true }),
   });
   const body = String(admin.writes.find((write) => write.op === "insert")?.row?.body ?? "");
-  assert(/50\s*%/.test(body) && /discount/i.test(body), "SA draft may mention the 50% discount");
+  assert(!/50\s*%/.test(body) && !/discount/i.test(body), "SA draft does not pitch a discount");
   assert(body.includes("The MILŌN Team"), "SA draft still signs as the team");
   assert(!/50\s*%/.test(
     lockChatDraft({
