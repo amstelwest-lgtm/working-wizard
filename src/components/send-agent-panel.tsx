@@ -2,8 +2,12 @@
  * Accountant action: mint a Tax Specialist link and email the invite.
  * The invite goes out only when Send is clicked. Revoke sits with the link.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import {
+  AccountantSendFileList,
+  type ShownFilePassword,
+} from "@/components/accountant-send-files";
 import { SilentAgentPortrait } from "@/components/silent-agent-portrait";
 import {
   SEND_AGENT_BODY,
@@ -16,9 +20,11 @@ import {
   recipientEmail,
 } from "@/lib/client-agent-send";
 import { formatDate, type DateMarket } from "@/lib/market";
+import { FILE_PASSWORD_HIDE_MS } from "@/lib/client-agent-file-password-reveal";
 import {
   listClientAgentSends,
   mintClientAgentSend,
+  revealClientAgentFilePassword,
   revokeClientAgentSend,
   type AgentSendRow,
 } from "@/lib/client-agent-send.functions";
@@ -34,6 +40,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const list = useServerFn(listClientAgentSends);
   const mint = useServerFn(mintClientAgentSend);
   const revoke = useServerFn(revokeClientAgentSend);
+  const reveal = useServerFn(revealClientAgentFilePassword);
   const [sends, setSends] = useState<AgentSendRow[]>([]);
   const [ready, setReady] = useState(false);
   const [allowed, setAllowed] = useState(false);
@@ -46,6 +53,14 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const [emailEdited, setEmailEdited] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([...SEND_DEFAULT_ITEM_KEYS]);
   const [otherLabel, setOtherLabel] = useState("");
+  const [revealed, setRevealed] = useState<ShownFilePassword | null>(null);
+  const [passwordBusy, setPasswordBusy] = useState<string | null>(null);
+  const [seenClientId, setSeenClientId] = useState(clientId);
+  if (seenClientId !== clientId) {
+    setSeenClientId(clientId);
+    setRevealed(null);
+  }
+  const revealedFileId = revealed?.fileId ?? null;
 
   const applyList = useCallback(
     (result: {
@@ -67,6 +82,14 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     const result = await list({ data: { clientId } });
     applyList(result);
   }, [applyList, clientId, list]);
+
+  useEffect(() => {
+    if (!revealedFileId) return undefined;
+    const timer = window.setTimeout(() => {
+      setRevealed(null);
+    }, FILE_PASSWORD_HIDE_MS);
+    return () => window.clearTimeout(timer);
+  }, [revealedFileId]);
 
   useEffect(() => {
     let alive = true;
@@ -200,6 +223,40 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     }
   };
 
+  const onShowPassword = async (fileId: string) => {
+    setPasswordBusy(fileId);
+    setNotice(null);
+    try {
+      const result = await reveal({ data: { clientId, fileId } });
+      if (!result.ok || result.password == null || result.password === "") {
+        setRevealed(null);
+        setNotice(result.ok ? "No password on this file." : "The password could not be shown.");
+        return;
+      }
+      setRevealed({ fileId, password: result.password, visible: false });
+    } catch {
+      setRevealed(null);
+      setNotice("The password could not be shown.");
+    } finally {
+      setPasswordBusy(null);
+    }
+  };
+
+  const onCopyPassword = async () => {
+    if (!revealed) return;
+    const value = revealed.password;
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice("Copied.");
+    } catch {
+      setNotice("Select the password and copy it.");
+    }
+  };
+
+  const onTogglePassword = () => {
+    setRevealed((current) => (current ? { ...current, visible: !current.visible } : current));
+  };
+
   if (!allowed) return null;
 
   return (
@@ -225,6 +282,16 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
       onMint={() => void onMint()}
       onCopy={() => void onCopy()}
       onRevoke={() => void onRevoke()}
+      fileList={
+        <AccountantSendFileList
+          files={sends.flatMap((send) => send.files ?? [])}
+          revealed={revealed}
+          busyFileId={passwordBusy}
+          onShow={(fileId) => void onShowPassword(fileId)}
+          onToggleVisible={onTogglePassword}
+          onCopy={() => void onCopyPassword()}
+        />
+      }
     />
   );
 }
@@ -248,6 +315,7 @@ export function SendAgentCard({
   onMint,
   onCopy,
   onRevoke,
+  fileList = null,
 }: {
   market: DateMarket;
   fresh: FreshLink | null;
@@ -267,6 +335,7 @@ export function SendAgentCard({
   onMint: () => void;
   onCopy: () => void;
   onRevoke: () => void;
+  fileList?: ReactNode;
 }) {
   const chosen = chooseSendItems(
     SEND_ITEM_KEYS.filter((itemKey) => selectedKeys.includes(itemKey)).map((itemKey) => ({
@@ -417,6 +486,7 @@ export function SendAgentCard({
           </button>
         </div>
       )}
+      {fileList}
       {loaded && !ready ? (
         <p className="text-sm text-[#3D5270]">This is not available on this file yet.</p>
       ) : null}

@@ -7,7 +7,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { CANONICAL_APP_ORIGIN, canonicalAuthOrigin } from "@/lib/app-origin";
-import { practiceDisplayName, sendPracticeDisplayName } from "@/lib/client-agent-link";
+import { practiceDisplayName, sanitizeClientFileName, sendPracticeDisplayName } from "@/lib/client-agent-link";
+import { filePasswordKey, openFilePassword } from "@/lib/client-agent-file-secret";
+import {
+  FILE_PASSWORD_READ_ACTION,
+  filePasswordAuditDetails,
+  revealFilePassword,
+  sendFileHasPassword,
+  type FilePasswordRevealResult,
+} from "@/lib/client-agent-file-password-reveal";
 import { sendClientAgentInvite } from "@/lib/client-agent-invite-mail";
 import {
   SEND_AGENT_SLUG,
@@ -100,6 +108,14 @@ function missingSendColumn(error: DbError, column: string): boolean {
   return message.includes(column) && /does not exist|schema cache|could not find/i.test(message);
 }
 
+function missingFilesTable(error: DbError): boolean {
+  const message = error?.message ?? "";
+  return (
+    /client_agent_send_files/.test(message) &&
+    /does not exist|schema cache|could not find/i.test(message)
+  );
+}
+
 async function isFirmMember(userId: string, firmId: string): Promise<boolean> {
   const { data: firm, error: firmError } = await supabaseAdmin
     .from("firms")
@@ -126,6 +142,13 @@ export type AgentSendItem = {
   quality: string | null;
 };
 
+export type AgentSendFile = {
+  id: string;
+  itemKey: string;
+  displayName: string | null;
+  hasPassword: boolean;
+};
+
 export type AgentSendRow = {
   id: string;
   expiresAt: string;
@@ -133,6 +156,7 @@ export type AgentSendRow = {
   consentAt: string | null;
   open: boolean;
   items: AgentSendItem[];
+  files: AgentSendFile[];
 };
 
 function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
@@ -145,7 +169,43 @@ function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
     consentAt: typeof row.consent_at === "string" ? row.consent_at : null,
     open: sendStillOpen({ revokedAt, expiresAt }, now),
     items: [],
+    files: [],
   };
+}
+
+async function loadSendFiles(sendId: string): Promise<AgentSendFile[]> {
+  const load = (columns: string) =>
+    table("client_agent_send_files")
+      .select(columns)
+      .eq("send_id", sendId)
+      .order("created_at", { ascending: false });
+
+  let found = await load("id, item_key, display_name, password_box, created_at");
+  if (found.error && missingSendColumn(found.error, "display_name")) {
+    found = await load("id, item_key, password_box, created_at");
+  }
+  if (found.error && missingSendColumn(found.error, "password_box")) {
+    found = await load("id, item_key, created_at");
+  }
+  if (found.error) {
+    if (missingFilesTable(found.error)) return [];
+    throw new Error("The links could not be read.");
+  }
+  return rows(found.data).flatMap((row) => {
+    const id = typeof row.id === "string" ? row.id : "";
+    if (!id) return [];
+    const displayName = sanitizeClientFileName(
+      typeof row.display_name === "string" ? row.display_name : "",
+    );
+    return [
+      {
+        id,
+        itemKey: typeof row.item_key === "string" ? row.item_key : "",
+        displayName: displayName || null,
+        hasPassword: sendFileHasPassword(row.password_box),
+      },
+    ];
+  });
 }
 
 export const listClientAgentSends = createServerFn({ method: "GET" })
@@ -213,6 +273,7 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
           status: String(row.status ?? "open"),
           quality: typeof row.quality === "string" ? row.quality : null,
         }));
+        send.files = await loadSendFiles(send.id);
       }
       return { migrated: true, allowed: true, sends, contactEmail: firm.contactEmail };
     },
@@ -406,4 +467,77 @@ export const revokeClientAgentSend = createServerFn({ method: "POST" })
       .eq("client_id", data.clientId);
     if (updated.error) throw new Error(updated.error.message);
     return { ok: true, revokedAt };
+  });
+
+export const revealClientAgentFilePassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ clientId: z.string().uuid(), fileId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data, context }): Promise<FilePasswordRevealResult> => {
+    const userId = context.userId;
+    if (!userId) return { ok: false, reason: "anon" };
+    if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
+
+    const found = await table("client_agent_send_files")
+      .select("id, send_id")
+      .eq("id", data.fileId)
+      .maybeSingle();
+    if (found.error) return { ok: false, reason: "unavailable" };
+    const fileId = typeof found.data?.id === "string" ? found.data.id : "";
+    const sendId = typeof found.data?.send_id === "string" ? found.data.send_id : "";
+    if (!fileId || !sendId) return { ok: false, reason: "not_found" };
+
+    const send = await table("client_agent_sends")
+      .select("id, client_id, firm_id")
+      .eq("id", sendId)
+      .maybeSingle();
+    if (send.error) return { ok: false, reason: "unavailable" };
+    const clientId = typeof send.data?.client_id === "string" ? send.data.client_id : "";
+    const firmId = typeof send.data?.firm_id === "string" ? send.data.firm_id : "";
+    if (!clientId || !firmId || clientId !== data.clientId) return { ok: false, reason: "not_found" };
+
+    const firm = await firmOfClient(data.clientId);
+    if (!firm.ok || firm.firmId !== firmId) return { ok: false, reason: "not_found" };
+
+    const member = await isFirmMember(userId, firm.firmId);
+    const firmAllowed = sendAgentFirmAllowed(firm.firmId);
+
+    let passwordIv: string | null = null;
+    let passwordBox: string | null = null;
+    if (member && firmAllowed) {
+      const sealed = await table("client_agent_send_files")
+        .select("password_iv, password_box")
+        .eq("id", fileId)
+        .maybeSingle();
+      if (sealed.error) return { ok: false, reason: "unavailable" };
+      passwordIv = typeof sealed.data?.password_iv === "string" ? sealed.data.password_iv : null;
+      passwordBox = typeof sealed.data?.password_box === "string" ? sealed.data.password_box : null;
+    }
+
+    return revealFilePassword({
+      caller: { userId, firmMember: member, firmAllowed },
+      requestedClientId: data.clientId,
+      file: { id: fileId, sendId, clientId, passwordIv, passwordBox },
+      open: async (sealed) => {
+        const key = filePasswordKey(process.env.CLIENT_AGENT_FILE_PASSWORD_KEY);
+        if (!key) return null;
+        return openFilePassword(sealed, key);
+      },
+      audit: async (details) => {
+        try {
+          const inserted = await table("audit_log").insert({
+            actor_id: userId,
+            action: FILE_PASSWORD_READ_ACTION,
+            firm_id: firmId,
+            client_id: clientId,
+            subject_user_id: null,
+            details: filePasswordAuditDetails(details.file_id, details.send_id),
+          });
+          return !inserted.error;
+        } catch {
+          return false;
+        }
+      },
+    });
   });
