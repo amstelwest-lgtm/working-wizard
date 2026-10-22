@@ -256,6 +256,80 @@ for (const call of listed) {
   assertBudget(call, "subscriptions.list", LIST_BUDGET_MS);
 }
 
+const bareEmail = "owner@example.com";
+const bareStripe = boundStripe({
+  "customers.retrieve": async () => ({
+    id: "cus_stored",
+    email: bareEmail,
+    metadata: { firm_id: FIRM, milon_user_id: USER },
+  }),
+  "subscriptions.list": async () => ({
+    data: [
+      {
+        id: "sub_live",
+        status: "active",
+        created: 1_700_000_000,
+        currency: "usd",
+        metadata: { milon_plan: "solo" },
+        discounts: ["di_za"],
+        items: {
+          data: [
+            {
+              id: "si_1",
+              price: {
+                id: "price_solo",
+                lookup_key: "milon_solo_monthly",
+                unit_amount: 9900,
+                currency: "usd",
+                recurring: { interval: "month" },
+                product: "prod_solo",
+              },
+            },
+          ],
+        },
+      },
+    ],
+  }),
+});
+setTestStripe(bareStripe.stripe);
+const bareWarnings: string[] = [];
+const originalWarn = console.warn;
+console.warn = (...args: unknown[]) => {
+  bareWarnings.push(args.map((part) => String(part)).join(" "));
+};
+let bareHistory: Awaited<ReturnType<typeof readFirmSubscriptionHistory>> | undefined;
+let bareThrew = false;
+try {
+  bareHistory = await readFirmSubscriptionHistory(bareEmail, {
+    fresh: true,
+    userId: USER,
+    firmId: FIRM,
+    storedCustomerId: "cus_stored",
+  });
+} catch {
+  bareThrew = true;
+} finally {
+  console.warn = originalWarn;
+}
+assert(!bareThrew, "a bare discount id on the firm plan list does not throw");
+assert(
+  bareWarnings.length === 1 &&
+    bareWarnings[0] === `[stripe] unexpanded discounts kept firm=${FIRM}` &&
+    !bareWarnings.some((line) => /cus_|sub_|@/.test(line)),
+  "the firm plan list warns with the firm id only",
+);
+assert(
+  JSON.stringify(bareHistory?.entitling?.discounts) ===
+    JSON.stringify([{ id: "di_za", couponId: null, promotionCodeId: null }]),
+  "the firm plan list keeps the bare discount",
+);
+assert(
+  bareHistory?.entitling?.band === "solo" &&
+    bareHistory.entitling.lookupKey === "milon_solo_monthly" &&
+    bareHistory.entitling.unitAmount === 9900,
+  "a bare discount id does not change the plan price",
+);
+
 async function flush() {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 }

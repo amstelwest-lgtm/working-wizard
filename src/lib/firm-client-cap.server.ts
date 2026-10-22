@@ -18,6 +18,7 @@ import {
 import { resolveFirmMarket, resolveFirmPriceCurrency } from "@/lib/pricing/market-resolution";
 import {
   readSubscriptionDiscountRefs,
+  UnexpandedStripeDiscountError,
   type StoredDiscountRef,
 } from "@/lib/stripe-discount";
 import { noPlanTrialClock, starterTrialClock, type StarterTrialBanner } from "@/lib/firm-starter-trial";
@@ -272,9 +273,42 @@ async function listCustomerSubscriptions(
   return { customerId, data: listed.data };
 }
 
+/** Bare ids stay on the plan. The coupon is unknown, so nothing is cleared. */
+function keptBareDiscountRefs(raw: { discount?: unknown; discounts?: unknown }): StoredDiscountRef[] {
+  const values: unknown[] = [];
+  if (typeof raw.discounts === "string" || Array.isArray(raw.discounts)) {
+    values.push(...(Array.isArray(raw.discounts) ? raw.discounts : [raw.discounts]));
+  }
+  if (raw.discount != null) values.push(raw.discount);
+  const out: StoredDiscountRef[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const id = value.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, couponId: null, promotionCodeId: null });
+  }
+  return out;
+}
+
+function planDiscountRefs(
+  raw: { discount?: unknown; discounts?: unknown },
+  firmId: string | null | undefined,
+): StoredDiscountRef[] {
+  try {
+    return readSubscriptionDiscountRefs(raw);
+  } catch (err) {
+    if (!(err instanceof UnexpandedStripeDiscountError)) throw err;
+    console.warn(`[stripe] unexpanded discounts kept firm=${(firmId ?? "").trim()}`);
+    return keptBareDiscountRefs(raw);
+  }
+}
+
 function entitlingFromListed(
   customerId: string | null,
   data: ListedSubscription[],
+  firmId?: string | null,
 ): EntitlingFirmSubscription | null {
   if (!customerId) return null;
   const ranked = data.map((sub) => {
@@ -358,7 +392,7 @@ function entitlingFromListed(
     unitAmount: hit.price.unitAmount,
     metadata: hit.metadata,
     hasDefaultPaymentMethod: Boolean(defaultPaymentMethod || defaultSource),
-    discounts: readSubscriptionDiscountRefs(hit.raw as { discount?: unknown; discounts?: unknown }),
+    discounts: planDiscountRefs(hit.raw as { discount?: unknown; discounts?: unknown }, firmId),
   };
 }
 
@@ -408,7 +442,7 @@ export async function readFirmSubscriptionHistory(
   const load = async (): Promise<FirmSubscriptionHistory> => {
     const listed = await listCustomerSubscriptions(email, ids);
     return {
-      entitling: entitlingFromListed(listed.customerId, listed.data),
+      entitling: entitlingFromListed(listed.customerId, listed.data, ids.firmId),
       priorSubscriptionCount: listed.data.length,
     };
   };
