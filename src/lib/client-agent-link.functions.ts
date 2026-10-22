@@ -29,7 +29,10 @@ import {
   SEND_FILE_BASE64_MAX,
   acceptClientFile,
   bytesFromBase64,
+  CLIENT_AGENT_CHAT_ENABLED,
+  CLIENT_AGENT_PASSWORD_UNSAVED,
   closedLink,
+  completionDecision,
   consentReady,
   consentWrite,
   finishItem,
@@ -62,6 +65,7 @@ type SendRow = {
   consent_at: string | null;
   practice_display_name: string | null;
   recipient_first_name: string | null;
+  completed_at: string | null;
 };
 
 type ItemRow = {
@@ -84,6 +88,7 @@ export type OpenLinkResult =
       consented: boolean;
       notice: string;
       items: PublicItem[];
+      completed: boolean;
     }
   | ReturnType<typeof closedLink>;
 
@@ -192,14 +197,20 @@ async function loadSend(tokenHash: string): Promise<SendRow | null> {
       .eq("token_hash", tokenHash)
       .maybeSingle();
   const named = await query(
-    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name",
+    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name, completed_at",
   );
   if (!named.error) return named.data;
   const practice = await query(
-    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
+    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name",
   );
   if (!practice.error && practice.data) {
-    return { ...practice.data, recipient_first_name: null };
+    return { ...practice.data, completed_at: null };
+  }
+  const namedPractice = await query(
+    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
+  );
+  if (!namedPractice.error && namedPractice.data) {
+    return { ...namedPractice.data, recipient_first_name: null, completed_at: null };
   }
   const plain = await query("id, firm_id, expires_at, revoked_at, consent_at");
   if (plain.error) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
@@ -208,6 +219,7 @@ async function loadSend(tokenHash: string): Promise<SendRow | null> {
     ...plain.data,
     practice_display_name: null,
     recipient_first_name: null,
+    completed_at: null,
   };
 }
 
@@ -412,6 +424,7 @@ async function present(send: SendRow, items: PublicItem[]): Promise<OpenLinkResu
       notice: clientConsentNotice(practiceName),
       items,
     }),
+    completed: Boolean(send.completed_at),
   };
 }
 
@@ -697,7 +710,7 @@ export const saveClientAgentFilePassword = createServerFn({ method: "POST" })
     const password = data.password.replace(/\s+/g, " ").trim();
     if (!password || password.length > 80) return { ok: false, body: "That could not be saved." };
     const key = filePasswordKey(process.env[CLIENT_AGENT_FILE_PASSWORD_KEY]);
-    if (!key) return { ok: false, body: "That could not be saved." };
+    if (!key) return { ok: false, body: CLIENT_AGENT_PASSWORD_UNSAVED };
     const sealed = await sealFilePassword(password, key);
     const saved = await storeFilePassword(resolved.send.id, data.itemKey, sealed);
     if (!saved) return { ok: false, body: "That could not be saved." };
@@ -812,6 +825,62 @@ export async function releaseClientAgentFilePassword(
   return plain;
 }
 
+async function markSendComplete(sendId: string): Promise<boolean> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        update: (row: Record<string, unknown>) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            is: (
+              column: string,
+              value: null,
+            ) => {
+              select: (cols: string) => Promise<{ data: Array<{ id: string }> | null; error: DbError }>;
+            };
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_sends")
+    .update({ completed_at: new Date().toISOString() })
+    .eq("id", sendId)
+    .is("completed_at", null)
+    .select("id");
+  if (!error) return true;
+  if (missingRelation(error, "completed_at")) return false;
+  return false;
+}
+
+export const completeClientAgentSend = createServerFn({ method: "POST" })
+  .inputValidator((input) => tokenInput.parse(input))
+  .handler(async ({ data }): Promise<{ ok: true } | { ok: false; body: string }> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return { ok: false, body: resolved.body };
+    const items = await loadItems(resolved.send.id);
+    const decision = completionDecision({
+      consentAt: resolved.send.consent_at,
+      completedAt: resolved.send.completed_at,
+      items,
+    });
+    if (!decision.ok) {
+      return {
+        ok: false,
+        body:
+          decision.reason === "consent"
+            ? "Please agree before finishing."
+            : "Add each document, or say you don't have it.",
+      };
+    }
+    if (decision.already) return { ok: true };
+    const saved = await markSendComplete(resolved.send.id);
+    if (!saved) return { ok: false, body: "That could not be saved." };
+    return { ok: true };
+  });
+
 export const askClientAgentLink = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     tokenInput.extend({ message: z.string().max(400) }).parse(input),
@@ -820,6 +889,7 @@ export const askClientAgentLink = createServerFn({ method: "POST" })
     const resolved = await resolveToken(data.token);
     if (!resolved.ok) return resolved;
     if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
+    if (!CLIENT_AGENT_CHAT_ENABLED) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
     const turns = await countChatTurns(resolved.send.id);
     if (turns === null) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
     if (turns >= CLIENT_AGENT_CHAT_LIMIT) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };

@@ -123,7 +123,7 @@ export function clientConsentNotice(practiceName: string): string {
   return `I agree that ${practice} may securely store the documents I upload here for my tax file, using Milōn. Medical aid: send the tax certificate totals only.`;
 }
 
-/** Local thank-you after Next. Nothing is emailed and nothing is stored as complete. */
+/** Thank-you after Next stores completed_at. Nothing is emailed. */
 export function clientAgentThanks(input: {
   firstName: string | null;
   practiceName: string;
@@ -179,6 +179,9 @@ const ITEM_HELP: Record<string, string> = {
 };
 
 export const CLIENT_AGENT_FILE_NOTE = "PDF, JPG, PNG or HEIC, up to 20 MB each.";
+
+/** Shown when the password key is missing or not 32 bytes. Nothing is stored. */
+export const CLIENT_AGENT_PASSWORD_UNSAVED = "Couldn't save the password.";
 
 /** One short line for a checklist row. File types are not repeated here. */
 export function clientAgentItemHelp(item: { itemKey: string }): string {
@@ -376,6 +379,79 @@ export function checklistReady(
   items: Array<{ hasFile: boolean; status: string; quality?: string | null }>,
 ): boolean {
   return items.length > 0 && items.every((item) => itemSettled(item));
+}
+
+/**
+ * Next may store completed_at only after consent, and only when every row
+ * is uploaded or marked missing. A second press does not write again.
+ */
+export function completionDecision(input: {
+  consentAt: string | null;
+  completedAt: string | null;
+  items: Array<{ hasFile: boolean; status: string; quality?: string | null }>;
+}): { ok: true; already: boolean } | { ok: false; reason: "consent" | "incomplete" } {
+  if (!consentReady(input.consentAt)) return { ok: false, reason: "consent" };
+  if (input.completedAt) return { ok: true, already: true };
+  if (!checklistReady(input.items)) return { ok: false, reason: "incomplete" };
+  return { ok: true, already: false };
+}
+
+/** Live document chat stays off until this is turned on in code. */
+export const CLIENT_AGENT_CHAT_ENABLED: boolean = false;
+
+export const CLIENT_AGENT_FAQ_TITLE = "Help with these documents";
+
+export const CLIENT_AGENT_FAQ_CLOSE = "Anything else? Theo's practice will help.";
+
+const ITEM_FAQ: Record<string, { title: string; body: string }> = {
+  practice_income_expenses: {
+    title: "Practice income and expenses",
+    body: "This is a summary of income and expenses for the year. Download it from your bookkeeping, or use the summary you already keep.",
+  },
+  bank_statements: {
+    title: "Bank statements",
+    body: `These are the statements for every business account, ${documentYearWindow()}. Download them from each bank.`,
+  },
+  travel_logbook: {
+    title: "Travel logbook",
+    body: "This is a log of business kilometres for the year. It is usually in the car's logbook or a mileage app.",
+  },
+  medical_aid_certificate: {
+    title: "Medical aid certificate",
+    body: "This is the annual certificate from your medical aid. Ask the scheme for that certificate.",
+  },
+  ra_contribution_certificate: {
+    title: "Retirement annuity certificate",
+    body: "This is the annual certificate from your retirement annuity provider. They send it after the year ends.",
+  },
+  irp5: {
+    title: "IRP5",
+    body: "This is the certificate from an employer for a salaried job. Your employer, or the payroll office, can send a copy.",
+  },
+  it3b: {
+    title: "IT3(b)",
+    body: "This is a certificate of interest from a bank or investment. Each bank can download it for you.",
+  },
+  other: {
+    title: "Order and proof of payments",
+    body: "This is the court order and the proof of payments you received. Keep the order with the payment records.",
+  },
+};
+
+/** One help line per listed document. No live chat. */
+export function clientAgentFaq(
+  items: Array<{ itemKey: string; label: string }>,
+): Array<{ itemKey: string; label: string; body: string }> {
+  const seen = new Set<string>();
+  const rows: Array<{ itemKey: string; label: string; body: string }> = [];
+  for (const item of items) {
+    if (seen.has(item.itemKey)) continue;
+    seen.add(item.itemKey);
+    const entry = ITEM_FAQ[item.itemKey];
+    if (!entry) continue;
+    rows.push({ itemKey: item.itemKey, label: entry.title, body: entry.body });
+  }
+  return rows;
 }
 
 type ChecklistRow = {

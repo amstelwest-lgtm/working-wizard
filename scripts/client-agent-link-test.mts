@@ -21,13 +21,19 @@ import {
   REVOKED_LINK_BODY,
   closedLink,
   CLIENT_AGENT_FILE_NOTE,
+  CLIENT_AGENT_PASSWORD_UNSAVED,
   SEND_CONSENT_VERSION,
   SEND_LINK_META,
+  CLIENT_AGENT_CHAT_ENABLED,
+  CLIENT_AGENT_FAQ_CLOSE,
+  CLIENT_AGENT_FAQ_TITLE,
   checklistReady,
   clientAgentExpiryLabel,
+  clientAgentFaq,
   clientAgentIntro,
   clientAgentItemHelp,
   clientAgentThanks,
+  completionDecision,
   clientConsentNotice,
   acceptClientFile,
   bytesFromBase64,
@@ -588,12 +594,16 @@ assert(
 assert(page.includes("usePrefersReducedMotion"), "reduced motion drops the clip");
 assert(page.includes("reduced ? null"), "the clip is omitted when motion is reduced");
 assert(!page.includes("flex-wrap"), "the list does not wrap into a row");
-assert(page.includes("setThanks(true)"), "Next only switches the thank-you screen");
-assert(!page.includes("finishClientAgentLink"), "Next does not call a completion action");
-assert(!fn.includes("finishClientAgentLink"), "there is no completion server action");
-assert(!fn.includes("client_finished_at"), "completion is not stored");
+assert(page.includes("setThanks(true)"), "Next shows the thank-you after the server accepts");
+assert(page.includes("completeClientAgentSend"), "Next calls the completion action");
+assert(!page.includes("finishClientAgentLink"), "Next does not use the mail completion action");
+assert(!fn.includes("finishClientAgentLink"), "there is no mail completion action");
+assert(fn.includes("completeClientAgentSend"), "completion is a token-gated server action");
+assert(fn.includes("completed_at"), "completion stores completed_at");
+assert(!fn.includes("client_finished_at"), "completion does not use a second timestamp");
 assert(page.includes("multiple"), "a row accepts more than one file");
-assert(page.includes("Ask the Tax Specialist"), "the page can ask about the documents");
+assert(page.includes("CLIENT_AGENT_CHAT_ENABLED"), "the live chat sits behind a flag");
+assert(page.includes("data-doc-help"), "the page shows document help");
 assert(page.includes("File password (if it has one)"), "a password field is offered after upload");
 assert(page.includes("I'll check with Theo's practice"), "an unsure chat falls back to the practice");
 assert(!fn.includes("console."), "the link actions do not log");
@@ -789,6 +799,13 @@ assert(
 );
 assert(checklistHtml.includes("data-missing-note"), "the optional note renders");
 assert(checklistHtml.includes("Only upload what you have"), "the checklist intro renders");
+assert(checklistHtml.includes("data-doc-help"), "the checklist shows document help");
+assert(
+  checklistHtml.includes(CLIENT_AGENT_FAQ_CLOSE) ||
+    checklistHtml.includes("Anything else? Theo&#x27;s practice will help."),
+  "the checklist help ends with the practice",
+);
+assert(!checklistHtml.includes("data-agent-chat"), "the checklist does not open the live chat");
 
 function closedScreen(view: ReturnType<typeof closedLink> | null, loadFailed = false) {
   return renderToStaticMarkup(
@@ -914,8 +931,16 @@ assert(
 );
 assert(readyHtml.includes("Saved"), "a stored password is not shown back");
 assert(!readyHtml.includes('type="password"'), "a saved password field is gone");
-assert(readyHtml.includes("data-agent-chat-panel"), "the document chat can open");
-assert(!/sars|filing instructions/i.test(readyHtml), "the open chat does not recite filing rules");
+assert(readyHtml.includes("data-doc-help"), "a finished list shows document help");
+assert(readyHtml.includes(CLIENT_AGENT_FAQ_TITLE), "the help block has its heading");
+assert(
+  readyHtml.includes(CLIENT_AGENT_FAQ_CLOSE) ||
+    readyHtml.includes("Anything else? Theo&#x27;s practice will help."),
+  "the help block ends with the practice line",
+);
+assert(!readyHtml.includes("data-agent-chat"), "the live chat stays hidden");
+assert(!readyHtml.includes("Ask the Tax Specialist"), "the ask button stays hidden");
+assert(!/sars|filing|irp6|itr14|south africa|\brand\b|zar/i.test(readyHtml), "the help block has no filing wording");
 
 const thanksHtml = renderToStaticMarkup(
   createElement(ClientAgentLinkScreen, {
@@ -973,10 +998,27 @@ const filesCode = filesSql
   .toLowerCase();
 assert(filesCode.includes("create table if not exists public.client_agent_send_files"), "files have a table");
 assert(filesCode.includes("password_iv") && filesCode.includes("password_box"), "the password is two ciphertext columns");
-assert(!filesCode.includes("client_finished_at"), "the files migration does not store completion");
+assert(filesCode.includes("add column if not exists completed_at timestamptz"), "next stores completed_at");
+assert(!filesCode.includes("client_finished_at"), "completion is completed_at only");
+assert(!filesCode.includes("reviewed_at"), "this file does not add a review column");
 assert(!/\bsecurity\s+definer\b/.test(filesCode), "the files migration has no security definer");
-assert(!/\bcreate\s+(or\s+replace\s+)?function\b/.test(filesCode), "the files migration creates no function");
+assert(
+  filesCode.includes("create or replace function public.client_agent_send_guard_firm()"),
+  "the firm guard is replaced in place",
+);
+assert(filesCode.includes("firm_client_mismatch"), "the firm check stays");
+assert(filesCode.includes("consent_required"), "completion without consent is refused");
+assert(filesCode.includes("completed_at_required"), "completed_at cannot be cleared");
+assert(
+  filesCode.includes("revoke all on function public.client_agent_send_guard_firm() from public, anon, authenticated"),
+  "anon cannot run the guard",
+);
+assert(
+  filesCode.includes("grant execute on function public.client_agent_send_guard_firm() to service_role"),
+  "only the service role can run the guard",
+);
 assert(!/\bcreate\s+policy\b/.test(filesCode), "the files migration creates no policy");
+assert(!/resend|recipient_email|contact_email/.test(filesCode), "the files migration sends no mail");
 assert(filesCode.includes("revoke all on table public.client_agent_send_files from public, anon, authenticated"), "anon cannot read file rows");
 const chatTable = filesCode.slice(
   filesCode.indexOf("create table if not exists public.client_agent_send_chat_turns"),
@@ -991,9 +1033,21 @@ const saveFn = fn.slice(
 );
 assert(saveFn.includes("return { ok: true }"), "a saved password returns no secret");
 assert(!/return\s*\{[^}]*password/.test(saveFn), "the password is not in the response");
+assert(saveFn.includes("CLIENT_AGENT_PASSWORD_UNSAVED"), "a bad key tells the client the password was not saved");
+assert(
+  saveFn.indexOf("filePasswordKey") < saveFn.indexOf("sealFilePassword") &&
+    saveFn.indexOf("if (!key)") < saveFn.indexOf("storeFilePassword"),
+  "a missing key stores nothing",
+);
+const uploadFn = fn.slice(
+  fn.indexOf("export const uploadClientAgentFile"),
+  fn.indexOf("export const finishClientAgentItem"),
+);
+assert(!uploadFn.includes("filePasswordKey"), "an upload still succeeds without a password key");
+assert(page.includes("CLIENT_AGENT_PASSWORD_UNSAVED"), "the page shows the password note");
 const releaseFn = fn.slice(
   fn.indexOf("export async function releaseClientAgentFilePassword"),
-  fn.indexOf("export const askClientAgentLink"),
+  fn.indexOf("async function markSendComplete"),
 );
 assert(!releaseFn.includes("createServerFn"), "opening a password is not a public action");
 
@@ -1004,7 +1058,20 @@ const sealed = await sealFilePassword("secret-file-pass", key!);
 assert(!sealed.box.includes("secret-file-pass"), "the stored password is not plaintext");
 assert(!sealed.iv.includes("secret-file-pass"), "the iv is not the password");
 assert((await openFilePassword(sealed, key!)) === "secret-file-pass", "the ciphertext opens with the server key");
+assert(filePasswordKey(undefined) === null, "a missing key is refused");
+assert(filePasswordKey("") === null, "an empty key is refused");
+assert(filePasswordKey("   ") === null, "a blank key is refused");
 assert(filePasswordKey("short") === null, "a short key is refused");
+assert(filePasswordKey("!!!!") === null, "a key that is not base64 is refused");
+assert(
+  filePasswordKey(Buffer.from(Uint8Array.from({ length: 16 }, () => 1)).toString("base64")) === null,
+  "a key that is not 32 bytes is refused",
+);
+assert(
+  filePasswordKey(Buffer.from(Uint8Array.from({ length: 33 }, () => 2)).toString("base64")) === null,
+  "a key longer than 32 bytes is refused",
+);
+assert(CLIENT_AGENT_PASSWORD_UNSAVED === "Couldn't save the password.", "the password note is the polite sentence");
 
 assert(clientAgentChatDecision("How do I file my tax return?") === "refuse", "filing questions are refused");
 assert(clientAgentChatDecision("Can you submit this to SARS?") === "refuse", "a SARS submission is refused");
@@ -1036,7 +1103,62 @@ assert(
 );
 
 const nextHandler = page.slice(page.indexOf("onNext={() =>"), page.indexOf("thanks={thanks}"));
-assert(nextHandler.includes("setThanks(true)"), "Next writes local thank-you state");
-assert(!nextHandler.includes("await"), "Next does not wait on the server");
+assert(nextHandler.includes("await complete("), "Next waits for the server");
+assert(nextHandler.includes("setThanks(true)"), "Next shows thanks after a saved completion");
+const refusalAt = nextHandler.indexOf("if (!saved.ok)");
+assert(refusalAt !== -1 && nextHandler.indexOf("setThanks(true)", refusalAt) > refusalAt, "a refusal does not show thanks");
+
+const settled = [
+  { hasFile: true, status: "received", quality: "usable" },
+  { hasFile: false, status: "received", quality: "incomplete" },
+];
+assert(
+  completionDecision({ consentAt: null, completedAt: null, items: settled }).ok === false,
+  "next refuses before consent",
+);
+assert(
+  completionDecision({ consentAt: "2026-10-22T00:00:00.000Z", completedAt: null, items: [{ hasFile: false, status: "open", quality: null }] }).ok === false,
+  "next refuses an open row",
+);
+const again = completionDecision({
+  consentAt: "2026-10-22T00:00:00.000Z",
+  completedAt: "2026-10-22T01:00:00.000Z",
+  items: settled,
+});
+assert(again.ok && again.already, "a second next does not write again");
+const first = completionDecision({
+  consentAt: "2026-10-22T00:00:00.000Z",
+  completedAt: null,
+  items: settled,
+});
+assert(first.ok && !first.already, "a settled list can complete");
+
+const faq = clientAgentFaq([
+  { itemKey: "irp5", label: "IRP5" },
+  { itemKey: "bank_statements", label: "Bank statements" },
+  { itemKey: "irp5", label: "IRP5" },
+]);
+assert(faq.length === 2, "help is one line per item");
+assert(faq[0]?.body.includes("employer"), "IRP5 help says where to find it");
+assert(faq[1]?.body.includes("1 March 2025"), "bank help keeps the year window");
+assert(CLIENT_AGENT_FAQ_CLOSE === "Anything else? Theo's practice will help.", "the help block ends on that sentence");
+assert(CLIENT_AGENT_CHAT_ENABLED === false, "the document chat is off");
+assert(
+  !/sars|filing|irp6|itr14|south africa|\brand\b|\bzar\b/i.test(
+    faq.map((row) => row.body).join(" ") + CLIENT_AGENT_FAQ_TITLE + CLIENT_AGENT_FAQ_CLOSE,
+  ),
+  "document help has no filing wording",
+);
+const askFn = fn.slice(fn.indexOf("export const askClientAgentLink"), fn.indexOf("async function countChatTurns"));
+assert(
+  askFn.indexOf("CLIENT_AGENT_CHAT_ENABLED") !== -1 &&
+    askFn.indexOf("CLIENT_AGENT_CHAT_ENABLED") < askFn.indexOf("guideDocumentQuestion"),
+  "a chat request does not call the model while the flag is off",
+);
+assert(!askFn.slice(0, askFn.indexOf("guideDocumentQuestion")).includes("recordChatTurn"), "a closed chat writes no turn");
+const completeFn = fn.slice(fn.indexOf("export const completeClientAgentSend"), fn.indexOf("export const askClientAgentLink"));
+assert(completeFn.includes("completionDecision"), "completion uses the checklist decision");
+assert(completeFn.includes("decision.already"), "a completed send is left as it is");
+assert(!/resend|recipient_email|contact_email|sendAccessEmail/i.test(completeFn), "completion sends no mail");
 
 console.log("client agent link test ok");

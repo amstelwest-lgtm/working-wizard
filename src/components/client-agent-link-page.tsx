@@ -8,8 +8,13 @@ import "@/components/owner-door/owner-door.css";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES } from "@/lib/client-agent-send";
 import {
+  CLIENT_AGENT_CHAT_ENABLED,
+  CLIENT_AGENT_FAQ_CLOSE,
+  CLIENT_AGENT_FAQ_TITLE,
   CLIENT_AGENT_FILE_NOTE,
+  CLIENT_AGENT_PASSWORD_UNSAVED,
   checklistReady,
+  clientAgentFaq,
   clientAgentIntro,
   clientAgentItemHelp,
   clientAgentThanks,
@@ -19,6 +24,7 @@ import {
 } from "@/lib/client-agent-link";
 import {
   askClientAgentLink,
+  completeClientAgentSend,
   consentClientAgentLink,
   finishClientAgentItem,
   openClientAgentLink,
@@ -159,12 +165,14 @@ export function ClientAgentLinkScreen({
 }) {
   const openView = view?.ok ? view : null;
   const ready = openView ? checklistReady(openView.items) : false;
+  const showThanks = Boolean(openView && (thanks || openView.completed));
   const thankYou = openView
     ? clientAgentThanks({
         firstName: openView.firstName ?? null,
         practiceName: openView.practiceName,
       })
     : null;
+  const help = openView ? clientAgentFaq(openView.items) : [];
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 bg-white px-4 py-6 text-[#102A43]">
@@ -203,63 +211,78 @@ export function ClientAgentLinkScreen({
           </button>
         </div>
       ) : null}
-      {openView?.consented && thanks && thankYou ? (
+      {openView?.consented && showThanks && thankYou ? (
         <div className="flex flex-col gap-3" data-client-thanks="true">
           <p className="text-lg font-semibold">{thankYou.greeting}</p>
           <p className="text-sm leading-6">{thankYou.body}</p>
           <p className="text-sm font-semibold">{thankYou.signoff}</p>
         </div>
       ) : null}
-      {openView?.consented && !thanks ? (
+      {openView?.consented && !showThanks ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm leading-6 text-[#3D5270]">{CLIENT_AGENT_UPLOAD_INTRO}</p>
-          <div className="flex flex-col gap-2" data-agent-chat="true">
-            <button type="button" className={QUIET} disabled={busy} onClick={onToggleChat}>
-              {chatOpen ? "Close" : "Ask the Tax Specialist"}
-            </button>
-            {chatOpen ? (
-              <div
-                className="flex flex-col gap-2 rounded-2xl border border-[#DBEAFE] p-3"
-                data-agent-chat-panel="true"
-              >
-                {chatMessages.length === 0 ? (
-                  <p className="text-sm leading-6 text-[#3D5270]">
-                    Ask what a document is, where to find it, or what counts.
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {chatMessages.map((message, index) => (
-                      <p
-                        key={`${message.role}-${index}`}
-                        className="text-sm leading-6"
-                        data-chat-role={message.role}
-                      >
-                        {message.text}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                <label className="text-sm text-[#3D5270]">
-                  Your question
-                  <textarea
-                    className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] p-2 text-sm text-[#102A43]"
-                    value={chatDraft}
-                    maxLength={400}
-                    data-agent-chat-draft="true"
-                    onChange={(event) => onChatDraft?.(event.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className={PRIMARY}
-                  disabled={busy || chatDraft.trim().length === 0}
-                  onClick={onAsk}
+          {CLIENT_AGENT_CHAT_ENABLED ? (
+            <div className="flex flex-col gap-2" data-agent-chat="true">
+              <button type="button" className={QUIET} disabled={busy} onClick={onToggleChat}>
+                {chatOpen ? "Close" : "Ask the Tax Specialist"}
+              </button>
+              {chatOpen ? (
+                <div
+                  className="flex flex-col gap-2 rounded-2xl border border-[#DBEAFE] p-3"
+                  data-agent-chat-panel="true"
                 >
-                  Ask
-                </button>
-              </div>
-            ) : null}
-          </div>
+                  {chatMessages.length === 0 ? (
+                    <p className="text-sm leading-6 text-[#3D5270]">
+                      Ask what a document is, where to find it, or what counts.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {chatMessages.map((message, index) => (
+                        <p
+                          key={`${message.role}-${index}`}
+                          className="text-sm leading-6"
+                          data-chat-role={message.role}
+                        >
+                          {message.text}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <label className="text-sm text-[#3D5270]">
+                    Your question
+                    <textarea
+                      className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] p-2 text-sm text-[#102A43]"
+                      value={chatDraft}
+                      maxLength={400}
+                      data-agent-chat-draft="true"
+                      onChange={(event) => onChatDraft?.(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className={PRIMARY}
+                    disabled={busy || chatDraft.trim().length === 0}
+                    onClick={onAsk}
+                  >
+                    Ask
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <section className="flex flex-col gap-3 rounded-2xl border border-[#DBEAFE] p-3" data-doc-help="true">
+              <h2 className="text-base font-semibold">{CLIENT_AGENT_FAQ_TITLE}</h2>
+              {help.map((entry) => (
+                <div key={entry.itemKey} className="flex flex-col gap-1" data-doc-help-item={entry.itemKey}>
+                  <p className="text-sm font-semibold">{entry.label}</p>
+                  <p className="text-sm leading-6 text-[#3D5270]">{entry.body}</p>
+                </div>
+              ))}
+              <p className="text-sm leading-6" data-doc-help-close="true">
+                {CLIENT_AGENT_FAQ_CLOSE}
+              </p>
+            </section>
+          )}
           <ol className="flex flex-col border-t border-[#DBEAFE]" data-doc-list="true">
             {openView.items.map((item) => (
               <li
@@ -384,6 +407,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   const finish = useServerFn(finishClientAgentItem);
   const savePassword = useServerFn(saveClientAgentFilePassword);
   const ask = useServerFn(askClientAgentLink);
+  const complete = useServerFn(completeClientAgentSend);
   const [view, setView] = useState<OpenLinkResult | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -480,13 +504,14 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
       setView(await open({ data: { token } }));
     } catch {
       setPasswordDrafts((current) => ({ ...current, [item.itemKey]: "" }));
-      setNotice("That could not be saved.");
+      setNotice(CLIENT_AGENT_PASSWORD_UNSAVED);
     } finally {
       setBusy(false);
     }
   };
 
   const onAsk = async () => {
+    if (!CLIENT_AGENT_CHAT_ENABLED) return;
     const message = chatDraft.trim();
     if (!message) return;
     setBusy(true);
@@ -562,8 +587,27 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
       }
       onPassword={(item) => void onPassword(item)}
       onNext={() => {
-        if (!view?.ok || !checklistReady(view.items)) return;
-        setThanks(true);
+        void (async () => {
+          if (!view?.ok || view.completed) {
+            if (view?.ok && view.completed) setThanks(true);
+            return;
+          }
+          if (!checklistReady(view.items)) return;
+          setBusy(true);
+          setNotice(null);
+          try {
+            const saved = await complete({ data: { token } });
+            if (!saved.ok) {
+              setNotice(saved.body);
+              return;
+            }
+            setThanks(true);
+          } catch {
+            setNotice("That could not be saved.");
+          } finally {
+            setBusy(false);
+          }
+        })();
       }}
       thanks={thanks}
       onRetry={() => {
