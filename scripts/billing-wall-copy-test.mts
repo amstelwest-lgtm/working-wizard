@@ -22,7 +22,6 @@ import {
   cardFreeTrialPriceFromQuote,
   firmWallBackTarget,
   firmWallOffersRetry,
-  firmWallWhyLine,
   resolveBillingWall,
 } from "../src/lib/billing-wall.ts";
 
@@ -52,6 +51,20 @@ function overLimitLine(count: number): string {
   return `This practice has ${count} clients. The free trial covers up to 5. Add a card to start your trial; more than 5 clients needs Solo.`;
 }
 
+const WHY_BANNED = [
+  "This firm has no plan yet",
+  "Reports and a later client need Starter",
+  "The earliest client file and its numbers stay open",
+  "Your first client and its numbers stay open",
+];
+
+function assertNoWhy(html: string, where: string) {
+  for (const phrase of WHY_BANNED) {
+    assert(!html.includes(phrase), `${where} does not say: ${phrase}`);
+  }
+  assert(!html.includes("data-billing-why"), `${where} has no why line`);
+}
+
 function card(props: {
   priceLabel: string | null;
   onRetry?: () => void;
@@ -63,7 +76,6 @@ function card(props: {
     createElement(BillingRequiredCard, {
       planName: "Starter",
       priceLabel: props.priceLabel,
-      clientName: "New York Test company",
       clientCount: props.clientCount,
       checkout,
       onRetry: props.onRetry,
@@ -157,19 +169,7 @@ for (const variant of [
     !html.includes("amber") && !html.includes("#0b1220"),
     `${variant.market} wall has no gold or near-black canvas`,
   );
-  assert(
-    html.includes(firmWallWhyLine("New York Test company")),
-    `${variant.market} explains the open client`,
-  );
-  assert(
-    firmWallWhyLine("New York Test company") ===
-      "This firm has no plan yet. Your first client and its numbers stay open. Reports and a later client need Starter.",
-    `${variant.market} names the open file, not the client`,
-  );
-  assert(
-    !firmWallWhyLine("New York Test company").includes("New York Test company"),
-    `${variant.market} does not put the client name in the why line`,
-  );
+  assertNoWhy(html, `${variant.market} wall`);
   assert(
     !html.includes(FIRM_WALL_TRIAL_ENDED_LINE),
     `${variant.market} does not mention an ended trial by default`,
@@ -180,6 +180,7 @@ const retryHtml = card({ priceLabel: "$39/mo", clientCount: 1, onRetry: () => un
 assert(retryHtml.includes("Retry"), "Retry is present when the check failed");
 
 const unknownHtml = card({ priceLabel: "$39/mo" });
+assertNoWhy(unknownHtml, "an unknown-count wall");
 assert(unknownHtml.includes(FEW_CLIENTS_LINE), "an unknown count uses the 2–4 line");
 assert(
   !unknownHtml.includes(FIRST_CLIENT_LINE),
@@ -192,10 +193,7 @@ assert(
   !threeHtml.toLowerCase().includes("first client"),
   "a 3-client wall does not say first client",
 );
-assert(
-  !firmWallWhyLine("New York Test company", 3).toLowerCase().includes("first client"),
-  "the why line drops first client once the firm has more than one client",
-);
+assertNoWhy(threeHtml, "a 3-client wall");
 
 const fiveHtml = card({ priceLabel: "$39/mo", clientCount: 5 });
 assert(
@@ -207,6 +205,7 @@ assert(
   !fiveHtml.toLowerCase().includes("first client"),
   "a 5-client wall does not say first client",
 );
+assertNoWhy(fiveHtml, "a 5-client wall");
 assert(count(fiveHtml, "Start trial") === 1, "a 5-client wall has one Start trial");
 assert(!fiveHtml.toLowerCase().includes("vat"), "a 5-client wall has no VAT wording");
 
@@ -215,6 +214,7 @@ assert(
   !sixHtml.toLowerCase().includes("first client"),
   "a 6-client wall does not say first client",
 );
+assertNoWhy(sixHtml, "a 6-client wall");
 assert(sixHtml.includes(overLimitLine(6)), "a 6-client wall names 6 clients");
 assert(count(sixHtml, "Start trial") === 1, "a 6-client wall has one Start trial");
 assert(!sixHtml.toLowerCase().includes("vat"), "a 6-client wall has no VAT wording");
@@ -476,6 +476,8 @@ for (const count of [2, 5]) {
 const usHome = openHome(2, usQuote);
 assert(marked(usHome, "trial-price") === "$39/mo", "a US home banner shows $39/mo");
 assert(!usHome.includes("R 299"), "a US home banner does not show the rand price");
+assertNoWhy(usHome, "a US home banner");
+assertNoWhy(nextSentence(2, usQuote), "a US Next block");
 assert(
   marked(usHome, "trial-price") === marked(nextSentence(2, usQuote), "trial-price"),
   "a US home banner and Next prices match",
@@ -498,6 +500,8 @@ for (const band of [
   if (band.count > 1) {
     assert(!next.toLowerCase().includes("first client"), `Next at ${band.count} clients does not say first client`);
   }
+  assertNoWhy(banner, `ZA home banner at ${band.count} clients`);
+  assertNoWhy(next, `Next at ${band.count} clients`);
 }
 
 const root = resolve(import.meta.dirname, "..");
@@ -507,11 +511,17 @@ const whySrc = readFileSync(resolve(root, "src/lib/billing-wall.ts"), "utf8");
 const nextSrc = readFileSync(resolve(root, "src/components/checkout-after-insight.tsx"), "utf8");
 assert(wallSrc.includes("fetchClientCount({ data: { firmId } })"), "the wall passes the firm id into the client-count read");
 assert(countSrc.includes("firmId"), "the client-count read accepts a firm id");
-assert(!whySrc.includes("earliest client file"), "the wall does not use the unapproved earliest-file sentence");
-assert(
-  !firmWallWhyLine("New York Test company", 6).includes("earliest"),
-  "a 6-client why line does not say earliest",
-);
+for (const phrase of WHY_BANNED) {
+  assert(!whySrc.includes(phrase), `billing-wall source does not say: ${phrase}`);
+  assert(!wallSrc.includes(phrase), `wall route does not say: ${phrase}`);
+  assert(!nextSrc.includes(phrase), `Next does not say: ${phrase}`);
+}
+const bannerSrc = readFileSync(resolve(root, "src/components/firm-starter-trial-banner.tsx"), "utf8");
+for (const phrase of WHY_BANNED) {
+  assert(!bannerSrc.includes(phrase), `home banner does not say: ${phrase}`);
+}
+assert(!whySrc.includes("firmWallWhyLine"), "the why line helper is gone");
+assert(!wallSrc.includes("data-billing-why"), "the wall does not render a why line");
 assert(nextSrc.includes("cardFreeTrialLine(clientCount)"), "Next uses the count-aware trial line");
 assert(nextSrc.includes("loadCardFreeTrialPriceLabel"), "Next loads the same price as the wall");
 

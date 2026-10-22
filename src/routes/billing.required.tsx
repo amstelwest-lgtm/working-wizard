@@ -33,7 +33,6 @@ import {
   cardFreeTrialPriceFromQuote,
   firmWallBackTarget,
   firmWallOffersRetry,
-  firmWallWhyLine,
   resolveBillingWall,
   type FirmWallEntitlementOutcome,
 } from "@/lib/billing-wall";
@@ -73,7 +72,6 @@ function usdPriceLabel(plan: FirmCheckoutBand, interval: FirmInterval): string {
 export function BillingRequiredCard({
   planName,
   priceLabel,
-  clientName,
   clientCount = null,
   checkout,
   onRetry,
@@ -83,7 +81,6 @@ export function BillingRequiredCard({
 }: {
   planName: string;
   priceLabel: string | null;
-  clientName?: string | null;
   /** Firm client count from the cap. Null is unknown and does not say "first client". */
   clientCount?: number | null;
   checkout: PendingCheckout;
@@ -107,9 +104,6 @@ export function BillingRequiredCard({
         <h1 className="mt-2 text-xl font-semibold text-[#102A43]">
           Continue on {planName} to keep this practice
         </h1>
-        <p className="mt-2 text-sm text-[#102A43]" data-billing-why>
-          {firmWallWhyLine(clientName, clientCount)}
-        </p>
         <p className="mt-2 text-sm text-[#102A43]" data-billing-trial>
           {cardFreeTrialLine(clientCount)}
         </p>
@@ -285,7 +279,6 @@ function BillingRequiredPage() {
     <BillingRequiredCard
       planName={planName}
       priceLabel={shownPrice}
-      clientName={returnClient?.name}
       clientCount={clientCount}
       checkout={checkout}
       onRetry={firmWallOffersRetry(entitlementOutcome) ? retryWall : undefined}

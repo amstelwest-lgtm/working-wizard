@@ -1564,8 +1564,8 @@ assert(appSrc.includes("shouldBounceFromOwnerApp"), "owner bounce helper still u
 const required = readFileSync(resolve("src/routes/billing.required.tsx"), "utf8");
 assert(required.includes("Continue on"), "required page is Checkout after the figures");
 assert(
-  required.includes("firmWallWhyLine"),
-  "required page explains why the first client stays open",
+  !required.includes("firmWallWhyLine") && !required.includes("This firm has no plan yet"),
+  "required page shows the trial line and no why line",
 );
 assert(
   required.includes("FIRM_WALL_START_LABEL"),
