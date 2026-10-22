@@ -154,17 +154,18 @@ const ZA_CLIP_REVENUE = (412_000 * 7) / 9;
 const ZA_CLIP_OPERATING = (52_000 * 7) / 9;
 
 // ZA firm year starts in March. January and February sit in the prior year.
+// A clip is an estimate from the longer statement, and says so.
 const zaClip = cardsAgree(JAN_SEP, 3, ZA, ZA_CLIP_REVENUE, ZA_CLIP_OPERATING, [
-  "Mar 2026",
-  "Sep 2026",
-  "prorated",
+  "Mar\u2013Sep 2026",
+  "pro-rated from your Jan\u2013Sep 2026 statement",
 ]);
 assert(zaClip.year?.revenue !== 412_000, "year strip must not keep the 9-month statement revenue");
 assert(
   zaClip.waterfall.operatingProfit !== 52_000,
   "waterfall must not keep the 9-month operating profit",
 );
-assert(!zaClip.headline.label?.includes("Jan"), zaClip.headline.label ?? "");
+// The slice is Mar–Sep. Jan only appears in the statement it was pro-rated from.
+assert(!zaClip.headline.label?.split(",")[0].includes("Jan"), zaClip.headline.label ?? "");
 
 const zaSeed = seedBudgetFromFinancials(
   createBudgetDocument({

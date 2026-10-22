@@ -168,7 +168,7 @@ import {
   resolveWaterfallFigures,
   hasWeeklyProfitFigures,
 } from "@/lib/weekly-inputs";
-import { fiscalWaterfallFallback } from "@/lib/budget-period";
+import { fiscalStatementSlice, fiscalWaterfallFallback } from "@/lib/budget-period";
 import { emptyProductMix, type ProductMix, hasProductMixAnswer } from "@/lib/product-mix";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
@@ -3854,6 +3854,11 @@ function ClientView() {
     },
     [clientId, navigate],
   );
+  // The same firm-year slice and year start as the Waterfall below.
+  const homeProfitPeriod = useMemo(
+    () => fiscalStatementSlice(financials, fyStartMonth),
+    [financials, fyStartMonth],
+  );
   const homeBooks = useMemo<OwnerBooks>(() => {
     const priorFin =
       priorSnapshot?.financials && typeof priorSnapshot.financials === "object"
@@ -3876,6 +3881,7 @@ function ClientView() {
       priorGrossProfit: amount(priorFin?.grossProfit),
       netIncome: amount(financials.netIncome),
       operatingProfit: clientProfitBridge.ebit,
+      profitPeriod: homeProfitPeriod,
       openingMissing,
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
@@ -3923,6 +3929,7 @@ function ClientView() {
     openingMissing,
     cashOnFile,
     clientProfitBridge.ebit,
+    homeProfitPeriod,
     pillarStatus.cash,
     evidenced,
     effectiveRunway,
