@@ -1,13 +1,13 @@
-import { COMPANY_ADDRESS, LEGAL_ENTITY } from "@/lib/legal";
-import { OWNER_MONTHLY_USD_LABEL } from "@/lib/owner-plan";
-import { withVisitorMarketHint } from "@/lib/pricing/visitor-market-hint";
+import { COMPANY_ADDRESS, LEGAL_ENTITY } from "./legal.ts";
+import { OWNER_MONTHLY_USD_LABEL } from "./owner-plan.ts";
+import { withVisitorMarketHint } from "./pricing/visitor-market-hint.ts";
 import {
   FIRM_TRIAL_CARD_LINE,
   FIRM_TRIAL_SENTENCE,
   firmUsdListPrice,
   type FirmCheckoutBand,
   type FirmInterval,
-} from "@/lib/stripe-plans";
+} from "./stripe-plans.ts";
 
 /**
  * Card after the first result, then the Starter price. Shared by the trial

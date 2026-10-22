@@ -6,8 +6,8 @@
  * Owner annual uses the existing monthly × 12 × 0.8 rule. Nothing new.
  */
 
-import { OWNER_LOOKUP_KEYS } from "@/lib/owner-price";
-import { firmLookupKey, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import { OWNER_LOOKUP_KEYS } from "../owner-price.ts";
+import { firmLookupKey, type FirmCheckoutBand, type FirmInterval } from "../stripe-plans.ts";
 import { annualZarCents } from "./za-ladder.ts";
 import { zaLookupKey } from "./za-lookup.ts";
 

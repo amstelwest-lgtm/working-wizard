@@ -3,7 +3,7 @@
  * Rand amounts are passed in from the server chunk. This module does not
  * contain them, so a US download never ships a rand price.
  */
-import { firmUsdListPrice } from "@/lib/stripe-plans";
+import { firmUsdListPrice } from "./stripe-plans.ts";
 
 const starterUsd = firmUsdListPrice("starter", "month");
 if (!starterUsd) throw new Error("Starter has no published monthly price.");

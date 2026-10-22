@@ -4,19 +4,19 @@
  * code only.
  */
 
-import { formatUsdFromCents, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import { formatUsdFromCents, type FirmCheckoutBand, type FirmInterval } from "../stripe-plans.ts";
 import {
   resolveCheckoutPriceMarket,
   resolveFirmMarket,
   resolveOwnerMarket,
   resolveVisitorMarket,
   type SurfaceMarket,
-} from "@/lib/pricing/market-resolution";
-import { perClientRands } from "@/lib/pricing/za-ladder";
+} from "./market-resolution.ts";
+import { perClientRands } from "./za-ladder.ts";
 import {
   firmSignupOwnerPayLine,
   firmSignupTrialReminder,
-} from "@/lib/firm-signup-copy";
+} from "../firm-signup-copy.ts";
 import { approvedPrice, type ApprovedCurrency, type ApprovedPlan } from "./price-table.server.ts";
 
 export type QuoteSurface = "visitor" | "firm" | "owner" | "checkout" | "signup" | "wall";
