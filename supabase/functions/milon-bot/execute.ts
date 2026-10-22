@@ -520,6 +520,7 @@ export async function executeAgentTool(
         creditor_days: brief.creditorDays,
         debtor_days: brief.debtorDays,
         gross_margin: brief.grossMargin,
+        gross_profit: brief.grossProfit,
         operating_margin: brief.operatingMargin,
         net_margin: brief.netMargin,
         overview_lines: overviewFactLines(brief),

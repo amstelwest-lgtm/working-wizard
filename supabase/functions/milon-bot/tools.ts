@@ -27,6 +27,7 @@ import type { RatioRow } from "../ask-ai/types.ts";
 import type { SavedCashflow } from "../ask-ai/deliverable-summaries.ts";
 import type { DateMarket } from "../../../src/lib/market/format.ts";
 import { statementSpanLabel } from "../../../src/lib/statement-period.ts";
+import { statementGrossProfit } from "../../../src/lib/period-profit.ts";
 import { firmYearStatement } from "../_shared/firm-year-slice.ts";
 
 const CAMEL_TO_DISPLAY: Record<string, string> = {};
@@ -128,17 +129,29 @@ export function shapeSnapshot(input: {
       ? (input.financials as Record<string, unknown>)
       : null;
   let periodLabel = input.periodLabel;
+  let firmApplied = false;
   if (rawFinancials && input.fyStartMonth != null) {
     const firm = firmYearStatement(rawFinancials, input.fyStartMonth);
     if (firm?.applied) {
+      firmApplied = true;
       const slice = firm.slice;
       if (slice.revenue != null) totals.revenue = slice.revenue;
       if (slice.cogs != null) totals.cogs = slice.cogs;
-      if (slice.grossProfit != null) totals.grossProfit = slice.grossProfit;
+      const pageGross = statementGrossProfit({
+        revenue: slice.revenue,
+        cogs: slice.cogs,
+        grossProfit: slice.grossProfit,
+      });
+      if (pageGross != null) totals.grossProfit = pageGross;
+      else if (slice.grossProfit != null) totals.grossProfit = slice.grossProfit;
       if (slice.operatingProfit != null) totals.ebit = slice.operatingProfit;
       if (slice.netProfit != null) totals.netIncome = slice.netProfit;
       if (slice.label) periodLabel = slice.label;
     }
+  }
+  if (!firmApplied && rawFinancials) {
+    const pageGross = statementGrossProfit(rawFinancials);
+    if (pageGross != null) totals.grossProfit = pageGross;
   }
   const liabilities = resolveTotalLiabilities(rawFinancials);
   if (liabilities) totals.totalLiabilities = liabilities.amount;

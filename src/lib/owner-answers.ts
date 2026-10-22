@@ -18,7 +18,12 @@ import {
   OPENING_CASH_UNKNOWN,
   storedSeriesReading,
 } from "@/lib/client-metrics";
-import { periodProfitBridge, statementNetProfit, statedNetIsUsable } from "@/lib/period-profit";
+import {
+  periodProfitBridge,
+  statementGrossProfit,
+  statementNetProfit,
+  statedNetIsUsable,
+} from "@/lib/period-profit";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { isProratedPeriodLabel } from "@/lib/firm-year-label";
@@ -280,7 +285,7 @@ function proratedSentenceTail(sentence: string): string {
 function waterfallGross(revenue: number, cogs: number, stated: number | null | undefined): number {
   const fields: Record<string, unknown> = { revenue, cogs };
   if (stated != null && Number.isFinite(stated)) fields.grossProfit = stated;
-  return periodProfitBridge(fields).grossProfit;
+  return statementGrossProfit(fields) ?? periodProfitBridge(fields).grossProfit;
 }
 
 export type OwnerStatusTone = "attention" | "critical";
