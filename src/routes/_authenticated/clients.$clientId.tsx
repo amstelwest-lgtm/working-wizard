@@ -4718,7 +4718,7 @@ function ClientView() {
                 />
 
                 {generationTrialOpen ? (
-                  <TrialEndedPlanBlock firmId={client.firm_id ?? null} />
+                  <TrialEndedPlanBlock firmId={client.firm_id ?? null} audience="accountant" />
                 ) : null}
 
                 {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}

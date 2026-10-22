@@ -42,6 +42,7 @@
     "test:ask-ai-context": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-context-test.mts",
     "test:ask-ai-response": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-response-test.mts",
     "test:ask-ai-trial-ended": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-trial-ended-test.mts",
+    "test:ask-ai-trial-ended-billing": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-trial-ended-billing-test.mts",
     "test:ask-ai-agent-body": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-agent-body-test.mts",
     "test:product-facts-prompt": "vite-node --config scripts/vite-test.config.ts scripts/product-facts-prompt-test.mts",
     "test:edge-auth": "vite-node --config scripts/vite-test.config.ts scripts/edge-auth-test.mts",

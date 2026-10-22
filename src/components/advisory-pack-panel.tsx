@@ -813,7 +813,12 @@ export function AdvisoryPackPanel({
         {inputs}
       </ReviewInputsDrawer>
 
-      <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
+      <TrialEndedActionNotice
+        firmId={firmId}
+        audience={audience}
+        open={trialBlock.open}
+        error={trialBlock.error}
+      />
       {precardOpen ? <PrecardCapCard /> : null}
 
       {pack && liveStats && liveStats.edit_rate >= HIGH_EDIT_RATE && audience === "accountant" ? (
