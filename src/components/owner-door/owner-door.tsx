@@ -16,6 +16,7 @@ import { formatDate } from "@/lib/market/format";
 import { visitorCopyPack } from "@/lib/market/marketing";
 import { readVisitorDraft } from "@/lib/market/storage";
 import type { ResolvedMarket } from "@/lib/market/types";
+import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { askOwnerAgent } from "@/lib/owner-ask";
 import {
@@ -137,6 +138,7 @@ export function OwnerDoor({
   cogs,
   receivables,
   netIncome,
+  profitPeriod = null,
   periodEnd,
   statementSpan = null,
   history,
@@ -190,6 +192,8 @@ export function OwnerDoor({
   cogs: string;
   receivables: string;
   netIncome: string;
+  /** Firm-year slice the owner Waterfall quotes. The Analyst card uses it when it is pro-rated. */
+  profitPeriod?: FiscalStatementSlice | null;
   periodEnd: string | null;
   /** Market-formatted statement span. Home keeps this sentence when ledger status arrives later. */
   statementSpan?: string | null;
@@ -747,6 +751,7 @@ export function OwnerDoor({
       priorCogs: parseOwnerNumber(priorFin?.cogs),
       priorGrossProfit: parseOwnerNumber(priorFin?.grossProfit),
       netIncome: parseOwnerNumber(netIncome),
+      profitPeriod,
       receivables: parseOwnerNumber(receivables),
       cashflow,
       cashOutlook: cashOutlook ?? undefined,
@@ -780,6 +785,7 @@ export function OwnerDoor({
     cashDebtorScore,
     cashBurnScore,
     netIncome,
+    profitPeriod,
     periodEnd,
     financials,
     history,
