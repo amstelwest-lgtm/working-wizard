@@ -10,7 +10,9 @@ import { routeMilonIntent } from "@/lib/milon-bot-copy";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { OwnerAskHistoryTurn } from "@/lib/owner-chat-thread";
 
-export type OwnerAskResult = { ok: true; answer: string } | { ok: false; error: string };
+export type OwnerAskResult =
+  | { ok: true; answer: string }
+  | { ok: false; error: string; code?: string };
 
 export function ownerAskPayload(input: {
   clientId: string;
@@ -111,5 +113,6 @@ export async function askOwnerAgent(input: {
   }
   const body: unknown = await res.json().catch(() => null);
   const turn = parseAskAiBody(res.status, body, res.ok);
-  return turn.ok ? { ok: true, answer: turn.answer } : turn;
+  if (turn.ok) return { ok: true, answer: turn.answer };
+  return { ok: false, error: turn.error, ...(turn.code ? { code: turn.code } : {}) };
 }

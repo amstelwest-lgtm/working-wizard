@@ -284,10 +284,12 @@ export function FirmBandUpgrade({
                     Start here
                   </span>
                 ) : null}
-                <span className="text-muted-foreground" style={{ display: "block", fontSize: 12 }}>
-                  {band.clientLimit == null
-                    ? "Unlimited active clients"
-                    : firmClientLimitLabel(band.id)}
+                <span
+                  className="text-muted-foreground"
+                  data-band-cap={band.id}
+                  style={{ display: "block", fontSize: 12 }}
+                >
+                  {firmClientLimitLabel(band.id)}
                 </span>
                 {band.id === "starter" && cardFree ? (
                   <span

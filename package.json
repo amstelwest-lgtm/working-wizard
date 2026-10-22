@@ -244,6 +244,7 @@
     "test:drawer-dismiss": "vite-node --config scripts/vite-test.config.ts scripts/drawer-dismiss-test.mts",
     "test:owner-subscribe": "vite-node --config scripts/vite-test.config.ts scripts/owner-subscribe-test.mts",
     "test:owner-chat-reply": "vite-node --config scripts/vite-test.config.ts scripts/owner-chat-reply-test.mts",
+    "test:owner-bot-trial-ended": "vite-node --config scripts/vite-test.config.ts scripts/owner-bot-trial-ended-test.mts",
     "test:owner-handoff": "vite-node --config scripts/vite-test.config.ts scripts/owner-handoff-test.mts",
     "test:handoff-author-name": "vite-node --config scripts/vite-test.config.ts scripts/handoff-author-name-test.mts",
     "test:j6-za-1021": "vite-node --config scripts/vite-test.config.ts scripts/j6-za-1021-test.mts",

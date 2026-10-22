@@ -7,9 +7,11 @@ import {
   SOLO_TRIAL_BUTTON,
 } from "@/lib/landing-copy";
 import {
+  FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_TRIAL_CARD_NOTE,
   FIRM_TRIAL_SENTENCE,
+  firmClientLimitLabel,
   firmUsdPublicLine,
   isFirmCheckoutBand,
   type FirmBand,
@@ -65,8 +67,9 @@ function FirmPrice({ price }: { price: string }) {
 }
 
 function clientLabel(band: FirmBand, withActive: boolean): string {
-  if (band.clientLimit == null) return withActive ? "Unlimited" : "Unlimited";
-  return withActive ? `Up to ${band.clientLimit} active clients` : `Up to ${band.clientLimit}`;
+  const limit = FIRM_BAND_CATALOG[band.id].clientLimit;
+  if (limit == null) return withActive ? firmClientLimitLabel(band.id) : "Unlimited";
+  return withActive ? firmClientLimitLabel(band.id) : `Up to ${limit}`;
 }
 
 type StartControl = (band: FirmBand, className: string) => ReactNode;

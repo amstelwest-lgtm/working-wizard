@@ -291,6 +291,7 @@ export function OwnerDoor({
   );
   const [busyAgent, setBusyAgent] = useState<AgentKey | null>(null);
   const [errors, setErrors] = useState<Partial<Record<AgentKey, string>>>({});
+  const [errorCodes, setErrorCodes] = useState<Partial<Record<AgentKey, string>>>({});
   const [listening, setListening] = useState(false);
   const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | null>(null);
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
@@ -1011,8 +1012,12 @@ export function OwnerDoor({
     setAgent(next);
   }
 
-  function setAgentError(which: AgentKey, message: string | null) {
+  function setAgentError(which: AgentKey, message: string | null, code?: string | null) {
     setErrors((current) => ({ ...current, [which]: message ?? undefined }));
+    setErrorCodes((current) => ({
+      ...current,
+      [which]: message && code ? code : undefined,
+    }));
   }
 
   async function send(text: string) {
@@ -1043,7 +1048,7 @@ export function OwnerDoor({
       setTalk((current) =>
         current?.agent === asked && current.mode === "working" ? null : current,
       );
-      setAgentError(asked, result.error);
+      setAgentError(asked, result.error, result.code);
       return;
     }
     updateThread(asked, askedClient, (thread) => ({
@@ -1166,6 +1171,16 @@ export function OwnerDoor({
           listening={listening && talk?.agent === agent}
           busy={busyAgent === agent}
           error={errors[agent] ?? null}
+          errorCode={errorCodes[agent] ?? null}
+          plan={{
+            accountantFirm: Boolean(firmId),
+            visitor,
+            zaMonthly,
+            firmName,
+            billing,
+            subscribeBusy,
+            onSubscribe: () => void subscribe(),
+          }}
           onDraft={(value) => {
             const which = agentRef.current;
             const nextThread = { ...threadsRef.current[which], draft: value };

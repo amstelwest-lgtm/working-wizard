@@ -5,10 +5,18 @@ import type { AgentKey } from "@/lib/milon-team-feed";
 import { formatOwnerReply, ownerReplyPlainText } from "@/lib/owner-reply-format";
 import type { ResolvedMarket } from "@/lib/market";
 import type { FmAvatarClip } from "@/lib/fm-avatar-state";
+import { ownerPlanLine } from "@/lib/owner-plan";
+import {
+  OWNER_ACCOUNTANT_TRIAL_NOTE,
+  ownerAskIsTrialEnded,
+  type OwnerChatPlan,
+} from "@/lib/owner-trial-ended";
 import type { OwnerMotion } from "@/lib/owner-presence";
 import { browserSpeechPort, createReplySpeech, type ReplySpeech } from "@/lib/owner-reply-speech";
+import { STARTER_TRIAL_ENDED_MESSAGE } from "@/lib/starter-trial-constants";
 import { ChatIcon, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 import { OwnerReply } from "./owner-reply";
+import { OwnerSubscribe } from "./owner-subscribe";
 
 export type OwnerChatTurn = { role: "owner" | "agent"; text: string };
 
@@ -37,6 +45,8 @@ export function OwnerChat({
   listening,
   busy,
   error,
+  errorCode = null,
+  plan = null,
   onDraft,
   onSend,
   onListen,
@@ -54,6 +64,10 @@ export function OwnerChat({
   listening: boolean;
   busy: boolean;
   error: string | null;
+  /** Edge code, when the reply is a structured failure rather than plain text. */
+  errorCode?: string | null;
+  /** Present when this chat can tell an ended trial from a real failure. */
+  plan?: OwnerChatPlan | null;
   onDraft: (value: string) => void;
   onSend: () => void;
   onListen: () => void;
@@ -159,7 +173,11 @@ export function OwnerChat({
           );
         })}
       </ol>
-      {error ? <p className="owner-error">{error}</p> : null}
+      {ownerAskIsTrialEnded(error, errorCode) ? (
+        <OwnerTrialEnded plan={plan} />
+      ) : error ? (
+        <p className="owner-error">{error}</p>
+      ) : null}
       <form
         className="owner-composer"
         onSubmit={(event) => {
@@ -195,6 +213,39 @@ export function OwnerChat({
         </button>
       </form>
     </div>
+  );
+}
+
+function OwnerTrialEnded({ plan }: { plan: OwnerChatPlan | null }) {
+  const accountantFirm = plan?.accountantFirm === true;
+  return (
+    <section
+      className="owner-trial-ended"
+      role="region"
+      aria-label={STARTER_TRIAL_ENDED_MESSAGE}
+      data-owner-trial-ended={accountantFirm ? "accountant" : "owner"}
+    >
+      <p className="owner-trial-ended-title">{STARTER_TRIAL_ENDED_MESSAGE}</p>
+      {accountantFirm ? (
+        <p className="owner-trial-ended-note">{OWNER_ACCOUNTANT_TRIAL_NOTE}</p>
+      ) : (
+        <>
+          <p className="owner-plan">
+            {ownerPlanLine({
+              visitor: plan?.visitor ?? null,
+              accountantOnMilon: false,
+              firmName: plan?.firmName ?? null,
+              zaMonthly: plan?.zaMonthly ?? null,
+            })}
+          </p>
+          <OwnerSubscribe
+            view={plan?.billing ?? { kind: "pending" }}
+            busy={plan?.subscribeBusy}
+            onSubscribe={plan?.onSubscribe}
+          />
+        </>
+      )}
+    </section>
   );
 }
 
