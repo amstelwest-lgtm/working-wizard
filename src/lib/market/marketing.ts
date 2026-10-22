@@ -3,39 +3,44 @@
  * (URL / localStorage), never by the authenticated workspace.
  */
 
+import { firmUsdListPrice, type FirmCheckoutBand } from "@/lib/stripe-plans";
 import type { DraftMarket } from "./types";
 
 export type VisitorCopyPack = "za" | "us";
 
-/** Published list prices. Owner Spark is free. Firm bands are USD catalog amounts. */
+function firmUsd(plan: FirmCheckoutBand): string {
+  const price = firmUsdListPrice(plan, "month");
+  if (!price) throw new Error(`${plan} has no published monthly price.`);
+  return price;
+}
+
+/** USD firm amounts from the catalog. Rand ladder stays on the server. */
+const FIRM_USD = {
+  firmStarter: firmUsd("starter"),
+  firmSolo: firmUsd("solo"),
+  firmSmall: firmUsd("small"),
+  firmGrowing: firmUsd("growing"),
+  firmEstablished: firmUsd("established"),
+  firmLarger: firmUsd("larger"),
+  firmAdvanced: firmUsd("advanced"),
+  firmScale: firmUsd("scale"),
+};
+
+/** Published list prices. Firm bands follow the USD catalog. */
 export const LIST_PRICES = {
   za: {
     orbit: "R699",
     constellation: "R1 299",
-    firmStarter: "$39",
-    firmSolo: "$99",
-    firmSmall: "$149",
-    firmGrowing: "$249",
-    firmEstablished: "$349",
-    firmLarger: "$499",
-    firmAdvanced: "$649",
-    firmScale: "$999",
+    ...FIRM_USD,
     retainerUplift: "R1 200+",
   },
   us: {
-    orbit: "$39",
+    orbit: FIRM_USD.firmStarter,
     constellation: "$75",
-    firmStarter: "$39",
-    firmSolo: "$99",
-    firmSmall: "$149",
-    firmGrowing: "$249",
-    firmEstablished: "$349",
-    firmLarger: "$499",
-    firmAdvanced: "$649",
-    firmScale: "$999",
+    ...FIRM_USD,
     retainerUplift: "$70+",
   },
-} as const;
+};
 
 export function visitorCopyPack(
   draft: Pick<DraftMarket, "country"> | null | undefined,

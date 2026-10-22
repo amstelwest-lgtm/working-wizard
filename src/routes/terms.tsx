@@ -7,7 +7,7 @@ import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
-import { ownerQuotedAmount } from "@/lib/owner-plan";
+import { ownerPaySentence } from "@/lib/owner-plan";
 import { LANDING_FONT_CSS } from "@/lib/landing-assets";
 import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import marketingCss from "../styles/marketing.css?inline";
@@ -75,8 +75,8 @@ function TermsPage() {
       </p>
       ) : null}
       <p>
-        Business owners pay {ownerQuotedAmount(copyPack, saPricing?.ownerMonthly)}, or nothing when their accountant
-        is on Milōn. Accounting firms start on Starter: {FIRM_TRIAL_SENTENCE}. {FIRM_TRIAL_CARD_NOTE}
+        {ownerPaySentence(copyPack, saPricing?.ownerMonthly)} Accounting firms start on Starter:{" "}
+        {FIRM_TRIAL_SENTENCE}. {FIRM_TRIAL_CARD_NOTE}
       </p>
       {copyPack === "us" ? (
       <p className="mk-copy-us">

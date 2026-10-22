@@ -18,6 +18,8 @@ type Props = {
   showRole?: boolean;
   /** Practice country from the signup select. South Africa is rand. Anything else is dollars. */
   country?: string | null;
+  /** Quote for the practice country. Empty until the server pack arrives. */
+  starterMonthly?: string | null;
 };
 
 /**
@@ -31,10 +33,11 @@ export function FirmSignupTerms({
   onPlanChange,
   showRole = variant === "auth",
   country = null,
+  starterMonthly = null,
 }: Props) {
   const bandId = variant === "auth" ? "auth-firm-band" : "register-firm-band";
   const intervalLabel = interval === "year" ? "annually" : "monthly";
-  const reminder = firmSignupTrialReminder(registerLabelForPlan(plan), country);
+  const reminder = firmSignupTrialReminder(registerLabelForPlan(plan), country, starterMonthly);
   const hintClass = variant === "auth" ? "auth-entry__hint" : "firm-signup-hint";
   const trialClass = variant === "auth" ? "auth-entry__trial" : "firm-signup-hint";
 

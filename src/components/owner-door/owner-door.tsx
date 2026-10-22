@@ -90,7 +90,7 @@ import {
   ownerSubscribeView,
   type OwnerSubscribeView,
 } from "@/lib/owner-subscribe";
-import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
+import { readPriceQuote } from "@/lib/pricing/price-quote.functions";
 import { getOwnerEntitlement, startOwnerCheckout } from "@/lib/stripe-checkout.functions";
 import { OwnerAccountant, OwnerFirst, OwnerPlan, OwnerSettings } from "./owner-pages";
 import { OwnerShell, type OwnerScreen } from "./owner-shell";
@@ -323,7 +323,7 @@ export function OwnerDoor({
   const [billing, setBilling] = useState<OwnerSubscribeView>({ kind: "pending" });
   const [subscribeBusy, setSubscribeBusy] = useState(false);
   const loadEntitlement = useServerFn(getOwnerEntitlement);
-  const loadSaPricing = useServerFn(readSaPricingCopy);
+  const readQuote = useServerFn(readPriceQuote);
   const readGeo = useServerFn(readRequestGeoCountry);
   const beginCheckout = useServerFn(startOwnerCheckout);
   const recRef = useRef<SpeechRec | null>(null);
@@ -387,8 +387,8 @@ export function OwnerDoor({
 
   useEffect(() => {
     let cancelled = false;
-    const storedMarket =
-      marketCountry === "ZA" || marketCountry === "US" ? { country: marketCountry } : null;
+    const storedCountry = marketCountry === "ZA" || marketCountry === "US" ? marketCountry : "";
+    const storedMarket = storedCountry ? { country: storedCountry } : null;
     void readGeo()
       .then((geo) => {
         if (!cancelled) setVisitor(resolveOwnerMarket({ storedMarket, geoCountry: geo }));
@@ -396,9 +396,11 @@ export function OwnerDoor({
       .catch(() => {
         if (!cancelled) setVisitor(resolveOwnerMarket({ storedMarket, geoCountry: null }));
       });
-    void loadSaPricing()
-      .then((copy) => {
-        if (!cancelled) setZaMonthly(copy?.ownerMonthly ?? null);
+    void readQuote({
+      data: { surface: "owner", plan: "owner", interval: "month", storedCountry },
+    })
+      .then((quote) => {
+        if (!cancelled) setZaMonthly(quote?.label ?? null);
       })
       .catch(() => {
         if (!cancelled) setZaMonthly(null);
@@ -406,7 +408,7 @@ export function OwnerDoor({
     return () => {
       cancelled = true;
     };
-  }, [loadSaPricing, marketCountry, readGeo]);
+  }, [marketCountry, readGeo, readQuote]);
 
   useEffect(() => {
     let cancelled = false;

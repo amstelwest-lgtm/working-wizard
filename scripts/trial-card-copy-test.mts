@@ -246,7 +246,7 @@ const zaPrice = JSON.parse(zaLine.slice("ZA_CHUNK_REPORT ".length)) as {
   tight: boolean;
   nbsp: boolean;
 };
-assert(zaPrice.spaced, "the ZA server chunk is where R 299 is produced");
-assert(!zaPrice.tight && !zaPrice.nbsp, "the ZA server chunk uses the spaced rand price");
+assert(zaPrice.tight, "the ZA server chunk is where R299 is produced");
+assert(!zaPrice.spaced && !zaPrice.nbsp, "the ZA server chunk uses the tight rand price");
 
 console.log("trial-card-copy ok");

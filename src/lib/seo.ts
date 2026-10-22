@@ -1,6 +1,7 @@
 import { HEALTH_RATIO_COUNT } from "./health-catalogue";
 import { COMPANY_POSTAL_ADDRESS, LEGAL_ENTITY } from "./legal";
 import { LIST_PRICES } from "./market/marketing";
+import { OWNER_MONTHLY_USD_LABEL } from "./owner-plan";
 import { FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "./stripe-plans";
 
 /**
@@ -57,7 +58,7 @@ export const SEO_PAGES = {
     path: "/for-owners",
     title: "AI CFO · QuickBooks, Xero · Sage soon | MILŌN",
     description:
-      "An AI finance team: 13-week cash and next moves from QuickBooks or Xero. Sage is coming soon. $39 a month, or free with your accountant.",
+      `An AI finance team: 13-week cash and next moves from QuickBooks or Xero. Sage is coming soon. ${OWNER_MONTHLY_USD_LABEL.replace("/mo", "")} a month, or free with your accountant.`,
     ogTitle: "An AI finance team for small business owners | MILŌN",
     ogDescription:
       "Milōn Financial Manager, Analyst and Advisor read QuickBooks or Xero. Sage is coming soon. Free when your accountant is on Milōn.",
@@ -355,8 +356,8 @@ export const LLMS_TXT = `# Milōn
 - Source documents post to the books only after a named person approves
 
 ## Pricing (USD)
-- Accounting firms: flat bands by active client count, Starter $39/mo to Scale $999/mo; ${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then $39/mo.
-- Business owners: $39/mo, free when their accountant is on Milōn
+- Accounting firms: flat bands by active client count, Starter ${LIST_PRICES.us.firmStarter}/mo to Scale ${LIST_PRICES.us.firmScale}/mo; ${FIRM_TRIAL_SENTENCE} on Starter. ${FIRM_TRIAL_CARD_NOTE} Then ${LIST_PRICES.us.firmStarter}/mo.
+- Business owners: ${OWNER_MONTHLY_USD_LABEL}, free when their accountant is on Milōn
 
 ## Who it is for
 - Accounting firms, CPA firms and bookkeeping firms launching or scaling client advisory services

@@ -3,6 +3,11 @@
  * Rand amounts are passed in from the server chunk. This module does not
  * contain them, so a US download never ships a rand price.
  */
+import { firmUsdListPrice } from "./stripe-plans.ts";
+
+const starterUsd = firmUsdListPrice("starter", "month");
+if (!starterUsd) throw new Error("Starter has no published monthly price.");
+
 export type OwnerVisitor = "za" | "us";
 
 /** Loader data widens the pack to string. Only an explicit za value is ZA. */
@@ -10,7 +15,8 @@ export function ownerVisitorFromPack(value: string | null | undefined): OwnerVis
   return value === "za" ? "za" : "us";
 }
 
-export const OWNER_MONTHLY_USD_LABEL = "$39/mo";
+/** Same published dollar amount as Starter. The price table is the server source. */
+export const OWNER_MONTHLY_USD_LABEL = `${starterUsd}/mo`;
 
 export function ownerPlanLine(input: {
   visitor: OwnerVisitor | null;
@@ -26,7 +32,10 @@ export function ownerPlanLine(input: {
   if (input.visitor === "za") {
     return input.zaMonthly ? `Owner plan · ${input.zaMonthly}` : "Owner plan";
   }
-  if (input.visitor === "us") return `Owner plan · ${OWNER_MONTHLY_USD_LABEL}`;
+  if (input.visitor === "us") {
+    const amount = input.zaMonthly?.trim();
+    return `Owner plan · ${amount || OWNER_MONTHLY_USD_LABEL}`;
+  }
   return "Owner plan";
 }
 
@@ -62,6 +71,21 @@ export function ownerQuotedAmount(
     return amount || "Owner plan";
   }
   return "Owner plan";
+}
+
+/**
+ * "Business owners pay …". A missing amount names the Owner plan and does
+ * not say "pay Owner plan".
+ */
+export function ownerPaySentence(
+  visitor: string | null | undefined,
+  zaMonthly?: string | null,
+): string {
+  const amount = ownerQuotedAmount(visitor, zaMonthly);
+  if (!amount || amount === "Owner plan") {
+    return "Business owners are on the Owner plan, or pay nothing when their accountant is on Milōn.";
+  }
+  return `Business owners pay ${amount}, or nothing when their accountant is on Milōn.`;
 }
 
 export function ownerPlanPublicPrice(visitor: OwnerVisitor, zaMonthly?: string | null): string {

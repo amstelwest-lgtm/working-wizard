@@ -142,7 +142,10 @@ const cancel = read("src/routes/billing.cancel.tsx");
 assert(cancel.includes('plan === "owner"'), "cancel treats an owner return differently");
 
 const owners = read("src/routes/for-owners.tsx");
-assert(owners.includes('ctaHref="/?signup=owner#register"'), "for owners uses the existing owner signup route");
+assert(
+  owners.includes('"/?signup=owner#register"') && owners.includes("withVisitorMarketHint"),
+  "for owners uses the existing owner signup route",
+);
 const landing = read("src/routes/index.tsx");
 assert(landing.includes('get("signup") === "owner"'), "the landing signup flag selects an owner");
 assert(landing.includes('clearPendingCheckout()'), "owner signup does not keep a firm checkout");

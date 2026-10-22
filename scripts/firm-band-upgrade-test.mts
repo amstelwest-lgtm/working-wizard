@@ -55,6 +55,7 @@ import {
 } from "../supabase/functions/_shared/app-origin.ts";
 import { checkoutEmailRedirectTo } from "../src/lib/pending-checkout";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
+import { quotePrice } from "../src/lib/pricing/price-quote.server";
 import { FirmStarterTrialBanner } from "../src/components/firm-starter-trial-banner";
 import {
   decideFirmClientCreate,
@@ -113,6 +114,16 @@ function practiceCountClaims(text: string): number[] {
   return claims;
 }
 
+const approvedZaLabels = Object.fromEntries(
+  FIRM_CHECKOUT_BANDS.map((band) => [
+    band,
+    {
+      month: quotePrice({ market: "za", plan: band, interval: "month", surface: "firm" })?.label ?? "",
+      year: quotePrice({ market: "za", plan: band, interval: "year", surface: "firm" })?.label ?? "",
+    },
+  ]),
+);
+
 for (const market of ["za", "us"] as const) {
   for (const clientCount of [5, 6]) {
     for (const currentBand of [null, "starter"] as const) {
@@ -145,6 +156,7 @@ for (const market of ["za", "us"] as const) {
           currentBand,
           interval: "month",
           priceCurrency: za ? "zar" : "USD",
+          zaLabels: za ? approvedZaLabels : null,
           canUpgrade: true,
           clientCount,
           usageLabel,
@@ -1513,6 +1525,7 @@ const failedHtml = renderToStaticMarkup(
   }),
 );
 assert(!failedHtml.includes("$"), `a ZA firm with a failed quote shows no dollar amounts, saw ${failedHtml.slice(0, 400)}`);
-assert(/R\s?299/.test(failedHtml), `a ZA firm with a failed quote falls back to the rand ladder, saw ${failedHtml.slice(0, 400)}`);
+assert(!/R\s?\d/.test(failedHtml), "a failed quote does not invent a rand amount on the client");
+assert(failedHtml.includes("Solo plan"), "a failed quote names the plan");
 
 console.log("firm-band-upgrade ok");

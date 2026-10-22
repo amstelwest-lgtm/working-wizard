@@ -86,11 +86,11 @@ assert(!usPlain.includes("mk-market-switch"), "US geo renders no switcher");
 
 const za = accountantsMarkup("ZA", null);
 assert(
-  za.includes("R 799/mo") && za.includes("about R 53 per client"),
+  za.includes("R799/mo") && za.includes("about R53 per client"),
   "ZA geo renders the solo rand price",
 );
 assert(
-  za.includes("R 299/mo") && za.includes("about R 60 per client"),
+  za.includes("R299/mo") && za.includes("about R60 per client"),
   "ZA geo renders the Starter rand line",
 );
 assert(/\brand\b/i.test(za), "ZA geo renders the rand word");

@@ -10,7 +10,7 @@ import { formatMoney } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
 import { parseMarketSelection } from "./market/parse";
 import { isOwnerCatalogPrice } from "./owner-price";
-import { annualZarCents, isZaCheckoutBand, parseZaLookupKey, perClientRands, ZA_MONTHLY_RANDS } from "./pricing/za-ladder";
+import { parseZaLookupKey } from "./pricing/za-lookup";
 import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_IDS,
@@ -507,17 +507,9 @@ export function saFirmDisplayPrice(
     .replace(/\s+·/g, " ·")
     .trim();
   if (cleaned && !cleaned.includes("$")) return cleaned;
-  if (!isZaCheckoutBand(band)) return cleaned || "—";
-  const monthly = ZA_MONTHLY_RANDS[band];
   const entry = FIRM_BAND_CATALOG[band];
-  if (interval === "year") {
-    const cents = annualZarCents(monthly * 100, entry.yearlyUsdCents ?? 0, entry.monthlyUsdCents ?? 0);
-    const rands = Math.round(cents / 100);
-    return `${formatMoney(rands, ZA_MARKET)}/yr`;
-  }
-  const per = entry.clientLimit ? perClientRands(monthly, entry.clientLimit) : 0;
-  const head = `${formatMoney(monthly, ZA_MARKET)}/mo`;
-  return per > 0 ? `${head} · about ${formatMoney(per, ZA_MARKET)} per client` : head;
+  if (!entry || entry.customQuote) return cleaned || "—";
+  return `${entry.name} plan`;
 }
 
 /**

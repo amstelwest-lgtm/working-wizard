@@ -1,4 +1,5 @@
 import { LIST_PRICES } from "./market/marketing";
+import { OWNER_MONTHLY_USD_LABEL } from "./owner-plan";
 import { FIRM_BAND_CATALOG, FIRM_TRIAL_CARD_NOTE, FIRM_TRIAL_SENTENCE } from "./stripe-plans";
 import type { FaqItem } from "./seo";
 import {
@@ -14,7 +15,7 @@ import {
 
 /** Lead sentence of the cost answer. USD. The ZA page swaps this from the server chunk. */
 export const FAQ_OWNER_COST_US =
-  "Business owners: $39 a month, or free when your accountant is on Milōn.";
+  `Business owners: ${OWNER_MONTHLY_USD_LABEL.replace("/mo", "")} a month, or free when your accountant is on Milōn.`;
 
 export {
   FAQ_NOT_A_BOOKKEEPER_ANSWER,

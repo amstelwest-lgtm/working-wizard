@@ -115,14 +115,15 @@ export function resolveFirmBootMarket(firmMarket: unknown): "za" | "us" | "unkno
 }
 
 /**
- * Owner plan. A stored market wins, including a stored non-ZA country.
- * No stored market: geo, trimmed and uppercased, same ZA rule as a visitor.
+ * Owner plan. A stored country wins, including a stored non-ZA country.
+ * No stored country falls through to geo, trimmed and uppercased, same ZA
+ * rule as a visitor. Currency alone is not a country.
  */
 export function resolveOwnerMarket(input: {
   storedMarket: unknown;
   geoCountry?: string | null;
 }): SurfaceMarket {
-  if (input.storedMarket != null) return resolveFirmMarket(input.storedMarket);
+  if (storedCountry(input.storedMarket)) return resolveFirmMarket(input.storedMarket);
   return countryCode(input.geoCountry) === "ZA" ? "za" : "us";
 }
 

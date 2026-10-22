@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { entitlementFromStoredPlan } from "../src/lib/firm-billing-open.server";
-import { firmSignupOwnerPayLine, firmSignupStarterMonthly } from "../src/lib/firm-signup-copy";
+import { signupQuotePack } from "../src/lib/pricing/price-quote.server";
 import {
   resolveCheckoutPriceMarket,
   resolveFirmBootMarket,
@@ -50,10 +50,12 @@ const j1 = resolveVisitorDraft({
   choiceFromThisVisit: false,
 });
 assert(j1.country === "ZA", "J1: stale saved US does not override ZA geo");
-const starter = firmSignupStarterMonthly(j1.country);
-assert(starter !== "$39/mo" && !starter.startsWith("$"), `J1 signup price stays rand, saw ${starter}`);
-const ownerLine = firmSignupOwnerPayLine(j1.country);
-assert(!ownerLine.includes("$39"), `J1 owner signup line stays rand, saw ${ownerLine}`);
+const j1Pack = signupQuotePack(j1.country);
+assert(
+  j1Pack.starterMonthly.startsWith("R") && !j1Pack.starterMonthly.startsWith("$"),
+  `J1 signup price stays rand, saw ${j1Pack.starterMonthly}`,
+);
+assert(!j1Pack.ownerPayLine.includes("$39"), `J1 owner signup line stays rand, saw ${j1Pack.ownerPayLine}`);
 
 const auth = readFileSync("src/routes/auth.tsx", "utf8");
 const signup = readFileSync("src/routes/index.tsx", "utf8");
@@ -166,6 +168,18 @@ assert(
 assert(
   resolveOwnerMarket({ storedMarket: null, geoCountry: "us" }) === "us",
   "a lowercase us geo is not South Africa",
+);
+assert(
+  resolveOwnerMarket({ storedMarket: {}, geoCountry: "ZA" }) === "za",
+  "an owner market with no country falls through to ZA geo",
+);
+assert(
+  resolveOwnerMarket({ storedMarket: { currency: "ZAR" }, geoCountry: "US" }) === "us",
+  "currency without a country falls through to US geo",
+);
+assert(
+  resolveOwnerMarket({ storedMarket: { country: "GB" }, geoCountry: "ZA" }) === "us",
+  "a stored non-ZA country still wins over ZA geo",
 );
 
 const usBusiness = { country: "US", regionCode: "NY" };
