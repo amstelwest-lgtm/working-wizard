@@ -5,6 +5,7 @@
  */
 
 import { isOwnerCatalogPrice } from "@/lib/owner-price";
+import { resolveStoredOwnerClientMarket } from "@/lib/pricing/market-resolution";
 import {
   assertNoManagedPaymentsOverride,
   findOwnerCatalogPrice,
@@ -79,26 +80,12 @@ export function emptyOwnerStripeSnapshot(): OwnerStripeSnapshot {
 }
 
 /**
- * Any explicit US business keeps the owner on the USD price.
- * No explicit country leaves the market unset so the edge can decide.
+ * Any explicit non-ZA business keeps the owner on the USD price.
+ * No explicit country leaves the market unset so geo can decide.
+ * The rule is resolveStoredOwnerClientMarket.
  */
 export function storedOwnerMarket(clients: Array<{ market: unknown }>): unknown {
-  let us: unknown = null;
-  let za: unknown = null;
-  for (const client of clients) {
-    const market = client.market;
-    if (!market || typeof market !== "object" || Array.isArray(market)) continue;
-    const country = (market as { country?: unknown }).country;
-    if (typeof country !== "string" || !country.trim()) continue;
-    if (country.trim().toUpperCase() === "ZA") {
-      if (!za) za = market;
-    } else if (!us) {
-      us = market;
-    }
-  }
-  if (us) return us;
-  if (za) return za;
-  return null;
+  return resolveStoredOwnerClientMarket(clients);
 }
 
 export type PracticeGrantEvidence = {

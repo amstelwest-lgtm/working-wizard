@@ -4,7 +4,7 @@
  *
  * Precedence
  * 1. Anonymous visitor (landing, /auth, signup, FAQ, terms)
- *    Geo country: exactly "ZA" is ZA, every other value is US.
+ *    Geo country, trimmed and uppercased: "ZA" is ZA, every other value is US.
  *    A saved dropdown choice overrides geo only when the visitor changed it
  *    on this visit (or this request's URL carries ?market=).
  *    A stale saved "US" does not override ZA geo. A non-ZA geo never accepts ZA.
@@ -14,6 +14,9 @@
  *    Dates and timezone may still fall back to ZA for non-price display.
  * 3. Owner plan
  *    Stored owner or firm market, otherwise geo (same ZA rule as a visitor).
+ *    When the stored market is chosen from the owner's businesses, any
+ *    explicit non-ZA country wins over ZA. No explicit country stays unset
+ *    so geo can decide (resolveStoredOwnerClientMarket).
  * 4. Checkout charge currency
  *    Rand only when that charge's billing country allows it:
  *    a stored ZA firm starts on rand when billing country is ZA or still
@@ -38,15 +41,19 @@ export type VisitorMarketInput = {
   choiceFromThisVisit?: boolean;
 };
 
+function countryCode(value: string | null | undefined): string {
+  return (value ?? "").trim().toUpperCase();
+}
+
 function choiceCode(value: string | null | undefined): "ZA" | "US" | null {
-  const text = (value ?? "").trim().toUpperCase();
+  const text = countryCode(value);
   if (text === "ZA" || text === "US") return text;
   return null;
 }
 
 /** Anonymous visitor pack. ZA geo stays ZA unless this visit explicitly chose US. */
 export function resolveVisitorMarket(input: VisitorMarketInput): SurfaceMarket {
-  if (input.geoCountry !== "ZA") return "us";
+  if (countryCode(input.geoCountry) !== "ZA") return "us";
   if (input.choiceFromThisVisit && choiceCode(input.savedChoice) === "US") return "us";
   return "za";
 }
@@ -109,14 +116,41 @@ export function resolveFirmBootMarket(firmMarket: unknown): "za" | "us" | "unkno
 
 /**
  * Owner plan. A stored market wins, including a stored non-ZA country.
- * No stored market: geo, with the same exact-"ZA" rule as a visitor.
+ * No stored market: geo, trimmed and uppercased, same ZA rule as a visitor.
  */
 export function resolveOwnerMarket(input: {
   storedMarket: unknown;
   geoCountry?: string | null;
 }): SurfaceMarket {
   if (input.storedMarket != null) return resolveFirmMarket(input.storedMarket);
-  return input.geoCountry === "ZA" ? "za" : "us";
+  return countryCode(input.geoCountry) === "ZA" ? "za" : "us";
+}
+
+/**
+ * Stored market from the businesses an owner already has.
+ * Any explicit non-ZA country wins, so one US business keeps the USD price.
+ * ZA is used only when every explicit country is ZA. No explicit country
+ * returns null and the caller may fall through to geo.
+ */
+export function resolveStoredOwnerClientMarket(
+  clients: Array<{ market: unknown }>,
+): unknown {
+  let us: unknown = null;
+  let za: unknown = null;
+  for (const client of clients) {
+    const market = client.market;
+    if (!market || typeof market !== "object" || Array.isArray(market)) continue;
+    const country = (market as { country?: unknown }).country;
+    if (typeof country !== "string" || !country.trim()) continue;
+    if (countryCode(country) === "ZA") {
+      if (!za) za = market;
+    } else if (!us) {
+      us = market;
+    }
+  }
+  if (us) return us;
+  if (za) return za;
+  return null;
 }
 
 /**

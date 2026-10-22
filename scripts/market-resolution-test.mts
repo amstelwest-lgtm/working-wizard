@@ -12,10 +12,12 @@ import {
   resolveFirmMarket,
   resolveFirmPriceCurrency,
   resolveOwnerMarket,
+  resolveStoredOwnerClientMarket,
   resolveVisitorDraft,
   resolveVisitorMarket,
   type SurfaceMarket,
 } from "../src/lib/pricing/market-resolution";
+import { googlePracticePickerDraft } from "../src/lib/google-practice-market";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -32,7 +34,8 @@ for (const geo of geos) {
         savedChoice: choice,
         choiceFromThisVisit: visit,
       });
-      const expected: SurfaceMarket = geo === "ZA" && !(visit && choice === "US") ? "za" : "us";
+      const zaGeo = (geo ?? "").trim().toUpperCase() === "ZA";
+      const expected: SurfaceMarket = zaGeo && !(visit && choice === "US") ? "za" : "us";
       assert(
         market === expected,
         `visitor geo=${String(geo)} choice=${String(choice)} visit=${visit} => ${market}, expected ${expected}`,
@@ -97,8 +100,9 @@ for (const stored of storedCases) {
 for (const geo of ["ZA", "US", null, "GB", "za"] as const) {
   for (const stored of [null, { country: "ZA" }, { country: "US" }] as const) {
     const market = resolveOwnerMarket({ storedMarket: stored, geoCountry: geo });
+    const zaGeo = (geo ?? "").trim().toUpperCase() === "ZA";
     const expected: SurfaceMarket =
-      stored == null ? (geo === "ZA" ? "za" : "us") : stored.country === "ZA" ? "za" : "us";
+      stored == null ? (zaGeo ? "za" : "us") : stored.country === "ZA" ? "za" : "us";
     assert(
       market === expected,
       `owner stored=${JSON.stringify(stored)} geo=${String(geo)} => ${market}, expected ${expected}`,
@@ -153,5 +157,59 @@ assert(
   entitlementFromStoredPlan("entitled", openFacts).plan?.priceCurrency === "USD",
   "the open path treats a missing market as not ZA",
 );
+
+assert(resolveVisitorMarket({ geoCountry: " za " }) === "za", "visitor geo is trimmed and uppercased");
+assert(
+  resolveOwnerMarket({ storedMarket: null, geoCountry: " za " }) === "za",
+  "owner geo is trimmed and uppercased",
+);
+assert(
+  resolveOwnerMarket({ storedMarket: null, geoCountry: "us" }) === "us",
+  "a lowercase us geo is not South Africa",
+);
+
+const usBusiness = { country: "US", regionCode: "NY" };
+const zaBusiness = { country: "ZA", regionCode: null };
+assert(
+  resolveStoredOwnerClientMarket([{ market: zaBusiness }, { market: usBusiness }]) === usBusiness,
+  "an explicit US business wins over a ZA business",
+);
+assert(
+  resolveStoredOwnerClientMarket([{ market: zaBusiness }]) === zaBusiness,
+  "ZA is the stored owner market only when every business is ZA",
+);
+assert(resolveStoredOwnerClientMarket([]) === null, "no explicit business leaves the owner market unset");
+
+function googleSeed(
+  geo: string,
+  saved: { country: "ZA" | "US" | null; regionCode: "NY" | "CA" | null },
+  visit: boolean,
+) {
+  return googlePracticePickerDraft({
+    visitorDraft: saved,
+    geoCountry: geo,
+    choiceFromThisVisit: visit,
+  });
+}
+assert(googleSeed("ZA", { country: "US", regionCode: "NY" }, false).country === "ZA", "stale US on ZA geo seeds ZA");
+assert(googleSeed("US", { country: "ZA", regionCode: null }, false).country === "US", "stale ZA on US geo seeds US");
+const thisVisit = googleSeed("ZA", { country: "US", regionCode: "CA" }, true);
+assert(
+  thisVisit.country === "US" && thisVisit.regionCode === "CA",
+  "a this-visit US choice still wins on ZA geo",
+);
+assert(
+  googlePracticePickerDraft({
+    visitorDraft: { country: "US", regionCode: "NY" },
+    geoCountry: "GB",
+  }).country === null,
+  "an unknown edge does not take a stale saved country",
+);
+
+const callback = readFileSync("src/routes/auth_.callback.tsx", "utf8");
+assert(callback.includes("readVisitorChoice()"), "the Google doorway reads this-visit choice");
+assert(callback.includes("googlePracticePickerDraft"), "the Google doorway seeds the picker");
+assert(!callback.includes("readVisitorDraft()"), "the Google doorway does not pass a stale draft");
+assert(readFileSync("src/lib/google-practice-market.ts", "utf8").includes("resolveVisitorDraft"), "the picker seed uses the visitor resolver");
 
 console.log("market-resolution-test: ok");

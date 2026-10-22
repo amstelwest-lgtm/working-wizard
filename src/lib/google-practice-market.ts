@@ -1,5 +1,6 @@
 import { parseMarketSelection } from "./market/parse.ts";
 import type { DraftMarket, MarketSelection } from "./market/types.ts";
+import { resolveVisitorDraft } from "./pricing/market-resolution.ts";
 
 const GOOGLE_PRACTICE_GATE_KEY = "milon.google.practice-gate";
 
@@ -150,17 +151,23 @@ export function accountantNeedsLocationPicker(input: {
   );
 }
 
-/** Picker seed when the firm cannot be created yet. Does not default to South Africa. */
+/**
+ * Picker seed when the firm cannot be created yet. A stale saved country
+ * does not beat geo. A this-visit choice does. An unknown edge stays empty
+ * and does not become South Africa or the United States.
+ */
 export function googlePracticePickerDraft(input: {
   visitorDraft: DraftMarket;
   geoCountry?: string | null;
+  /** True only for ?market= or a dropdown change on this visit. */
+  choiceFromThisVisit?: boolean;
 }): DraftMarket {
-  if (input.visitorDraft.country === "ZA") return { country: "ZA", regionCode: null };
-  if (input.visitorDraft.country === "US") {
-    return { country: "US", regionCode: input.visitorDraft.regionCode };
-  }
   const geo = (input.geoCountry ?? "").trim().toUpperCase();
-  if (geo === "US") return { country: "US", regionCode: null };
-  if (geo === "ZA") return { country: "ZA", regionCode: null };
+  const resolved = resolveVisitorDraft({
+    geoCountry: input.geoCountry,
+    saved: input.visitorDraft,
+    choiceFromThisVisit: input.choiceFromThisVisit,
+  });
+  if (geo === "ZA" || geo === "US" || input.choiceFromThisVisit) return resolved;
   return { country: null, regionCode: null };
 }
