@@ -84,8 +84,9 @@ export type OverviewBrief = {
   operatingMargin: number | null;
   netMargin: number | null;
   /**
-   * "Mar 2026 – Sep 2026, prorated" when the statement crosses the firm-year
-   * start. Null when the statement already sits in that year.
+   * "Mar–Sep 2026, pro-rated from your Jan–Sep 2026 statement" when the
+   * statement crosses the firm-year start. Null when the statement already
+   * sits in that year.
    */
   estimateLabel: string | null;
   /** Stored P&L headlines. Null when that line is not on the file. */

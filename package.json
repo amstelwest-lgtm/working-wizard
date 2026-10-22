@@ -27,6 +27,7 @@
     "test:budget-chart-table": "vite-node --config scripts/vite-test.config.ts scripts/budget-chart-table-test.mts",
     "test:budget-net-profit": "vite-node --config scripts/vite-test.config.ts scripts/budget-net-profit-test.mts",
     "test:budget-za-period": "vite-node --config scripts/vite-test.config.ts scripts/budget-za-period-test.mts",
+    "test:home-profit-period": "vite-node --config scripts/vite-test.config.ts scripts/home-profit-period-test.mts",
     "test:j4-za-firm-year-label": "vite-node --config scripts/vite-test.config.ts scripts/j4-za-firm-year-label-test.mts",
     "test:answer-strip-cash-budget": "vite-node --config scripts/vite-test.config.ts scripts/answer-strip-cash-budget-test.mts",
     "test:answer-strip-health-profit": "vite-node --config scripts/vite-test.config.ts scripts/answer-strip-health-profit-test.mts",

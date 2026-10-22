@@ -4593,6 +4593,7 @@ function Index() {
                 cogs={v.cogs}
                 receivables={v.receivables}
                 netIncome={v.netIncome}
+                profitPeriod={ownerProfitPeriod?.slice ?? null}
                 periodEnd={v.periodEnd ?? null}
                 statementSpan={statementSpanLabel({
                   periodStart: v.periodStart,

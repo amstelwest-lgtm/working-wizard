@@ -15,6 +15,8 @@ import {
   OPENING_CASH_UNKNOWN,
   storedSeriesReading,
 } from "./client-metrics.ts";
+import type { FiscalStatementSlice } from "./budget-period-types.ts";
+import { isProratedPeriodLabel } from "./firm-year-label.ts";
 import { cashFloorCopy } from "./owner-answers.ts";
 import { presentHomeDraftBody, presentHomeDraftTitle } from "./owner-needs.ts";
 import { renderHealthNarrative, type HealthScoreSnapshot } from "./health-snapshot.ts";
@@ -150,13 +152,29 @@ export function previousMonthSnapshot<T extends BriefSnapshot>(
   return best;
 }
 
+/** Profit lines. A clipped firm year is not compared with a prior statement. */
+const PROFIT_MOVEMENT_KEYS = new Set(["netIncome", "grossProfit", "operatingProfit", "ebit"]);
+
+function isProfitMovement(field: BriefMoneyField): boolean {
+  return field.label === "Net profit" || PROFIT_MOVEMENT_KEYS.has(field.key);
+}
+
+/** True when the firm-year slice really clipped the statement. */
+function profitPeriodClipped(period: FiscalStatementSlice | null | undefined): boolean {
+  if (!period) return false;
+  return period.prorated || isProratedPeriodLabel(period.label);
+}
+
 export function topMoneyMovements(
   current: Record<string, unknown> | null | undefined,
   prior: Record<string, unknown> | null | undefined,
   limit = 3,
+  profitPeriod?: FiscalStatementSlice | null,
 ): BriefMovement[] {
+  const dropProfit = profitPeriodClipped(profitPeriod);
   const rows: BriefMovement[] = [];
   for (const field of BRIEF_MONEY_FIELDS) {
+    if (dropProfit && isProfitMovement(field)) continue;
     const now = numField(current, field.key);
     const then = numField(prior, field.key);
     if (now == null || then == null) continue;
@@ -171,6 +189,12 @@ export function topMoneyMovements(
 export function buildFinancialManagerBrief(input: {
   clientName: string;
   currentFinancials: Record<string, unknown> | null | undefined;
+  /**
+   * The firm-year slice the Waterfall and Home card quote. When it is
+   * pro-rated, the Net profit movement is dropped: a clipped period is not
+   * compared with a prior statement. Omit it and every movement stays.
+   */
+  profitPeriod?: FiscalStatementSlice | null;
   currentPeriodEnd?: string | null;
   snapshots: readonly BriefSnapshot[];
   openActionTitle?: string | null;
@@ -225,7 +249,9 @@ export function buildFinancialManagerBrief(input: {
     financials: input.currentFinancials,
   });
   const priorLabel = prior?.periodLabel?.trim() || null;
-  const movements = prior ? topMoneyMovements(input.currentFinancials, prior.financials) : [];
+  const movements = prior
+    ? topMoneyMovements(input.currentFinancials, prior.financials, 3, input.profitPeriod)
+    : [];
   const movementEmpty = prior
     ? movements.length
       ? null
