@@ -17,15 +17,40 @@ In scope:
 
 Out of scope for v1:
 
-- Individuals, trusts, and partnerships.
+- Individuals, trusts, and partnerships on the company worksheet. A natural person's documents can still be read for the accountant. That collection review is below. It does not compute this company return.
 - Small business corporations and the gold-mining formula. Those rates are not 27% flat. The accountant must classify the company before a later version computes them.
 - Personal service providers, REITs, long-term insurers, and other special regimes.
-- VAT (VAT201), employees' tax (EMP201), dividends tax, and provisional tax for natural persons.
+- VAT (VAT201), employees' tax (EMP201), and dividends tax. Provisional tax for a natural person is not computed on this worksheet. The collection review can list the first and second payments the files show, and flag when the second is still an estimate.
 - Assessing a penalty or interest figure and showing it as an amount due. The sample may show the 80% comparison. A rand penalty waits until the Fourth Schedule rule is confirmed for that year.
 - SARS eFiling login, a SARS API, or submission of ITR14 or IRP6.
 - Any write back to Xero, QuickBooks, or Sage: no journals, no tax codes, no invoices, no payments.
 
 Years of assessment ending before 31 March 2023 used 28% for a standard company. v1 does not compute those years.
+
+## Collection review for a natural person
+
+This path is separate from the company worksheet. It starts when a client finishes a document link. The files already stored for that send are read. One review is written for the accountant. The accountant approves or rejects it. Nothing is sent to the client, and nothing is submitted.
+
+In scope for that review:
+
+- A South African natural person who pays provisional tax.
+- Practice income and expenses, including a line that looks personal.
+- The first and second provisional payments. The second is normally due at the end of February. An estimate that still needs a check is flagged.
+- Medical scheme fees tax credit inputs: months, dependants, contributions, and out-of-pocket amounts where the file shows them.
+- Retirement annuity contributions.
+- The travel logbook: business kilometres, total kilometres, opening odometer, and closing odometer.
+- Interest shown on an IT3(b).
+- Maintenance received. It is called likely exempt only when a divorce order or a maintenance order in the files confirms it. It is never assumed. If the order is missing, the accountant is asked.
+
+Out of scope for that review:
+
+- Filing instructions, a SARS login, eFiling, or submission.
+- Any text written for the client.
+- A write to Xero, QuickBooks, or Sage.
+- A row in deliverable drafts, or any other send-to-client path.
+- Showing the review on an owner or business-owner screen. It stays with the accountant.
+
+The finding kind is `tax_document_review`. Questions are stored for the accountant. The spend for the send is stored on the run, with a per-send cap so one pack cannot run past it.
 
 ## Data needed from Xero, QuickBooks, and Sage
 

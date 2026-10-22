@@ -19,6 +19,7 @@ export const OWNER_SIDE_DRAFT_KINDS = [
 export const ACCOUNTANT_SIDE_DRAFT_KINDS = [
   "accountant_handoff_draft",
   "advisory_deliverable_draft",
+  "tax_document_review",
 ] as const;
 
 export const DRAFT_DECISION_KINDS = [
@@ -294,4 +295,25 @@ export function recordMarksSignedOff(row: Record<string, unknown>): boolean {
     if (typeof value === "string" && value.trim().toLowerCase() === "signed_off") return true;
   }
   return false;
+}
+
+/** A tax document review is decided on the finding. No live row is inserted. */
+export function taxReviewStaysOnFinding(kind: string): boolean {
+  return kind === "tax_document_review";
+}
+
+export function taxReviewApprovalUpdate(findingId: string, userId: string, approvedAt: string): {
+  status: "approved";
+  approved_by: string;
+  approved_at: string;
+  approved_table: "agent_findings";
+  approved_row_id: string;
+} {
+  return {
+    status: "approved",
+    approved_by: userId,
+    approved_at: approvedAt,
+    approved_table: "agent_findings",
+    approved_row_id: findingId,
+  };
 }

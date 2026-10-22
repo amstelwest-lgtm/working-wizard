@@ -31,7 +31,7 @@ const findingId = "33333333-3333-3333-3333-333333333333";
 const recordId = "44444444-4444-4444-4444-444444444444";
 
 const ownerSide = ["action_point_draft", "data_request_draft", "next_move_draft"] as const;
-const accountantSide = ["accountant_handoff_draft", "advisory_deliverable_draft"] as const;
+const accountantSide = ["accountant_handoff_draft", "advisory_deliverable_draft", "tax_document_review"] as const;
 
 for (const kind of ownerSide) {
   const owner = draftDecisionAccess({ kind, userId, ownerUserId: userId, firmMember: false });

@@ -163,6 +163,11 @@ export function ownerDraftTitles(
   return ownerDraftPresentations(findings, canonicalRatios).map((row) => row.text);
 }
 
+export function ownerSurfaceForFinding(kind: string | null | undefined): "accountant" | "hidden" {
+  if (kind === "tax_document_review") return "accountant";
+  return "hidden";
+}
+
 export function ownerDraftPresentations(
   findings: readonly AgentFindingRow[],
   canonicalRatios?: Record<string, number> | null,
@@ -171,6 +176,7 @@ export function ownerDraftPresentations(
   return findings.flatMap((row) => {
     if (row.status === "approved") return [];
     if (!isVisibleAgentFinding(row)) return [];
+    if (ownerSurfaceForFinding(row.kind) === "accountant") return [];
     if (draftFindingLabel(row) !== DRAFT_NEEDS_OWNER) return [];
     const shown = presentFindingDraft(row, canonicalRatios, live);
     return shown.text ? [shown] : [];

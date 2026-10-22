@@ -93,6 +93,7 @@ const HUMAN_APPROVER_DRAFT_KINDS = new Set([
   "action_point_draft",
   "data_request_draft",
   "accountant_handoff_draft",
+  "tax_document_review",
 ]);
 
 export type DraftBotKey = "financial_manager" | "analyst" | "advisor";

@@ -24,6 +24,8 @@ import {
   recordMarksSignedOff,
   repeatDecision,
   settledDraftEvidence,
+  taxReviewApprovalUpdate,
+  taxReviewStaysOnFinding,
   type DraftDecision,
   type RepeatDecision,
 } from "../../../src/lib/agent-draft-decision.ts";
@@ -177,6 +179,36 @@ Deno.serve(async (req) => {
       already: false,
       status: "dismissed",
       dismissed_reason: DISMISSED_BY_USER,
+    });
+  }
+
+  if (taxReviewStaysOnFinding(row.kind)) {
+    const approvedAt = new Date().toISOString();
+    const patch = taxReviewApprovalUpdate(row.id, user.id, approvedAt);
+    const { data: marked, error: markError } = await admin
+      .from("agent_findings")
+      .update({
+        ...patch,
+        title: text.title,
+        detail: text.detail || null,
+        evidence: settledDraftEvidence(row.evidence),
+      })
+      .eq("id", row.id)
+      .is("status", null)
+      .select("id")
+      .maybeSingle();
+    if (markError) return json({ ok: false, error: "decision_not_saved" }, 500);
+    if (!marked) return await reread(admin, row.id, decision);
+    return json({
+      ok: true,
+      finding_id: row.id,
+      decision: "approve" satisfies DraftDecision,
+      already: false,
+      status: "approved",
+      record_table: patch.approved_table,
+      record_id: patch.approved_row_id,
+      approved_by: user.id,
+      approved_at: approvedAt,
     });
   }
 
