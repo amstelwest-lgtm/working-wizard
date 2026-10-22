@@ -2,7 +2,7 @@
  * Budget document types — living FY budget shared by owner + accountant.
  */
 
-import type { FiscalStatementSlice } from "@/lib/budget-period-types";
+import type { FiscalStatementSlice } from "./budget-period-types.ts";
 
 export type BudgetScenarioId = "base" | "upside" | "downside";
 

@@ -478,6 +478,7 @@ export async function executeAgentTool(
         runwayLabel: runwayDisplayLabel(healthMetrics.runway),
         cash: healthMetrics.cash.amount,
         copyPack,
+        storedMarket: clientRes.data?.market ?? null,
         fyStartMonth,
         shortfallWeek: healthMetrics.outlook.shortfallWeek,
         clientName,

@@ -79,6 +79,7 @@ export async function loadOverviewBrief(
     runwayWeeks: metrics.runway.weeks,
     runwayLabel: runwayDisplayLabel(metrics.runway),
     copyPack,
+    storedMarket: row?.market ?? null,
     fyStartMonth,
     shortfallWeek: metrics.outlook.shortfallWeek,
     clientName,

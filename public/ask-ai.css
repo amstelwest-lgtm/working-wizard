@@ -320,6 +320,19 @@
 }
 .ask-ai-retry:hover { background: #3a2e10; }
 
+.ask-ai-trial-ended,
+.ask-ai-trial-ended-host {
+  align-self: stretch;
+  max-width: 100%;
+  font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ask-ai-thread:has(.ask-ai-trial-ended),
+.ask-ai-thread:has(.trial-ended-block) {
+  max-height: min(70vh, 720px);
+}
+
 .ask-ai-signoff-row {
   display: flex;
   flex-wrap: wrap;

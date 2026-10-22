@@ -12,6 +12,7 @@ import { callClaudeRound } from "../_shared/agent-core/claude.ts";
 import { ANALYST_SYSTEM, analystToolSchemas } from "../_shared/agent-prompts/analyst.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 import { moneyMarketFromClient, sanitizeAgentError, type StoredFigures } from "../../../src/lib/agent-bus.ts";
+import { zaPromptMoneyLine } from "../../../src/lib/prompt-money.ts";
 import { RUNNER_COST_CEILING_USD, runnerNextCallExceedsCeiling } from "../../../src/lib/agent-draft.ts";
 import {
   ANALYST_MAX_ITERATIONS,
@@ -197,7 +198,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           p_run_id: existing.run_id,
         });
         const round = await callClaudeRound(
-          ANALYST_SYSTEM,
+          ANALYST_SYSTEM + zaPromptMoneyLine(client?.market),
           agentTurnMessages(ctx),
           analystToolSchemas(),
           { toolChoice: { type: "any" }, maxTokens: 700, cachePrompt: true },

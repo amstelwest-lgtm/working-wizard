@@ -26,7 +26,7 @@
  *    Geo and the requested URL market are not inputs.
  */
 
-import type { DraftMarket } from "@/lib/market/types";
+import type { DraftMarket } from "../market/types.ts";
 
 export type SurfaceMarket = "za" | "us";
 

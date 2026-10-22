@@ -1,5 +1,5 @@
-import { calendarDayFromIso, dateOrder } from "@/lib/market/date-presets";
-import { canonicalScoreProse } from "@/lib/score-prose";
+import { calendarDayFromIso, dateOrder } from "./market/date-presets.ts";
+import { canonicalScoreProse } from "./score-prose.ts";
 
 /**
  * Safe layout for an owner-agent reply.

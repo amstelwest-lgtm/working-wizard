@@ -407,8 +407,15 @@ assert(
 );
 assert(client.includes("Other ways"), "upload/sync alternatives are folded");
 assert(
-  dash.includes("<CheckoutAfterInsight clientCount={trialAllowance?.upgrade?.clientCount"),
-  "a scored book offers Checkout",
+  dash.includes("CheckoutAfterInsight") &&
+    dash.includes("clientCount={trialAllowance?.upgrade?.clientCount") &&
+    dash.includes('variant="practice-home"'),
+  "a scored book offers Checkout without the client-file heading",
+);
+assert(
+  prompt.includes("The figures stay on this client.") &&
+    prompt.includes('variant === "client"'),
+  "client pages keep the figures heading",
 );
 assert(dash.includes("markInsightSeen(firmId)"), "a scored book marks this firm's insight");
 assert(

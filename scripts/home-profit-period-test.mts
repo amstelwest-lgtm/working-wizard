@@ -255,6 +255,10 @@ assert(
   zaBrief.movements.some((row) => row.key === "revenue"),
   `ZA brief keeps the other movements, got: ${zaMoves}`,
 );
+for (const key of ["revenue", "fixedCosts", "cash"] as const) {
+  const row = zaBrief.movements.find((item) => item.key === key);
+  assert(row != null && row.label.includes(LABEL), `${key} carries the pro-rata label, got ${row?.label}`);
+}
 
 const usBrief = movementBrief(JAN_SEP, US, US.fyStartMonthDefault, "2026-09-30", "2026-08-31");
 const usNet = usBrief.movements.find((row) => row.key === "netIncome");

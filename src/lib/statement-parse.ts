@@ -12,7 +12,7 @@ import {
   MONTHS as MONTH_SHORT,
   MONTHS_LONG_LOWER as MONTHS,
   type DateOrder,
-} from "@/lib/market/date-presets";
+} from "./market/date-presets.ts";
 
 export type StatementKind = "income_statement" | "balance_sheet" | "mixed" | "unknown";
 

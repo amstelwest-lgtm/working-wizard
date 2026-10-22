@@ -42,6 +42,10 @@ import { botSignoffCtas, botSignoffDestination, botSignoffStateLine } from "./bo
 import { stripMilonProjection } from "./milon-projection.ts";
 import { supabase } from "../integrations/supabase/client.ts";
 import { authRetryPlanFromResponse } from "./edge-auth-retry.ts";
+import {
+  STARTER_TRIAL_ENDED_MESSAGE,
+  isStarterTrialEndedMessage,
+} from "./starter-trial-generation.ts";
 
 export {
   routeMilonIntent,
@@ -238,6 +242,8 @@ export function mountAskAi(container, options) {
   let boundAgent = "";
   let boundForecastKey = "";
   let requestGen = 0;
+  let trialMountGen = 0;
+  const trialCleanups = [];
 
   const THREAD_PREFIX = "milon-bot-thread:";
   const THREAD_AGENTS = new Set(["financial_manager", "analyst", "advisor"]);
@@ -317,6 +323,7 @@ export function mountAskAi(container, options) {
           if (typeof turn.error === "string" && turn.error.trim()) {
             next.error = turn.error.trim().slice(0, 400);
           }
+          if (turn.trialEnded === true) next.trialEnded = true;
           return next;
         })
         .slice(-16);
@@ -376,20 +383,115 @@ export function mountAskAi(container, options) {
     if (typeof el?.setAttribute === "function") el.setAttribute(name, value);
   }
 
+  function dropTrialMounts() {
+    trialMountGen += 1;
+    const pending = trialCleanups.splice(0, trialCleanups.length);
+    for (const cleanup of pending) {
+      try {
+        cleanup();
+      } catch {
+        /* the host is already gone */
+      }
+    }
+  }
+
+  function signalIsTrialEnded(message, code) {
+    const text = typeof message === "string" ? message : "";
+    const extra = typeof code === "string" ? code : "";
+    return isStarterTrialEndedMessage(text) || (extra !== "" && isStarterTrialEndedMessage(extra));
+  }
+
+  function turnIsTrialEnded(turn) {
+    if (!turn) return false;
+    if (turn.trialEnded === true) return true;
+    if (turn.role === "user") return signalIsTrialEnded(turn.error, turn.code);
+    if (turn.role === "assistant" && !capLimitForTurn(turn)) {
+      return signalIsTrialEnded(turn.content, null);
+    }
+    return false;
+  }
+
+  function firmIdForTrial() {
+    const id = container.dataset && container.dataset.firmId;
+    return typeof id === "string" && id.trim() ? id.trim() : null;
+  }
+
+  function notifyTrialEnded() {
+    try {
+      if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+      window.dispatchEvent(new CustomEvent("milon-starter-trial-ended"));
+    } catch {
+      /* the card in the thread still stands */
+    }
+  }
+
+  // Same sentences as TrialEndedPlanCard. The React card replaces this shell
+  // once it mounts. A real failure keeps the red Retry row.
+  function paintTrialEndedShell(host) {
+    const section = document.createElement("section");
+    section.className = "trial-ended-block";
+    section.role = "region";
+    if (section.dataset) section.dataset.trialEnded = "plan";
+    const title = document.createElement("p");
+    title.className = "trial-ended-title";
+    title.textContent = STARTER_TRIAL_ENDED_MESSAGE;
+    const note = document.createElement("p");
+    note.className = "trial-ended-note";
+    note.textContent = "Loading plans…";
+    section.appendChild(title);
+    section.appendChild(note);
+    host.appendChild(section);
+    return note;
+  }
+
+  function mountTrialEnded(parent) {
+    const host = document.createElement("div");
+    host.className = "ask-ai-trial-ended-host";
+    if (host.dataset) host.dataset.trialEnded = "1";
+    const note = paintTrialEndedShell(host);
+    parent.appendChild(host);
+    const gen = trialMountGen;
+    if (typeof HTMLElement === "undefined" || !(host instanceof HTMLElement)) return host;
+    const firmId = firmIdForTrial();
+    import("./chat-trial-ended-mount.ts")
+      .then((mod) => {
+        if (gen !== trialMountGen) return;
+        if (typeof host.isConnected === "boolean" && !host.isConnected) return;
+        if (typeof host.replaceChildren === "function") host.replaceChildren();
+        const cleanup = mod.mountChatTrialEndedPlan(host, firmId);
+        if (typeof cleanup !== "function") return;
+        if (gen !== trialMountGen) {
+          cleanup();
+          return;
+        }
+        trialCleanups.push(cleanup);
+      })
+      .catch(() => {
+        if (note) note.textContent = "Plans could not be loaded. Refresh and try again.";
+      });
+    return host;
+  }
+
   function render() {
+    dropTrialMounts();
     container.innerHTML = "";
+    syncThreadClient();
 
     const widget = document.createElement("div");
     widget.className = studio ? "ask-ai-widget ask-ai-studio" : "ask-ai-widget";
-    const unanswered =
-      !loading && history.length > 0 && history[history.length - 1]?.role === "user";
+    const lastTurn = history[history.length - 1];
+    const unanswered = !loading && history.length > 0 && lastTurn?.role === "user";
+    const trialEnded =
+      !loading && (signalIsTrialEnded(errorMsg, null) || turnIsTrialEnded(lastTurn));
     widget.dataset.askState = loading
       ? "thinking"
-      : unanswered || errorMsg
-        ? "error"
-        : answer
-          ? "answer"
-          : "idle";
+      : trialEnded
+        ? "trial-ended"
+        : unanswered || errorMsg
+          ? "error"
+          : answer
+            ? "answer"
+            : "idle";
     mark(widget, "aria-busy", loading ? "true" : "false");
 
     if (!open) {
@@ -544,13 +646,17 @@ export function mountAskAi(container, options) {
         panel.appendChild(thinking);
       }
 
-      // Error
+      // Error. A trial-ended block is the plan card, not a red Retry.
       if (errorMsg) {
-        const err = document.createElement("div");
-        err.className = "ask-ai-error";
-        err.role = "alert";
-        err.textContent = errorMsg;
-        panel.appendChild(err);
+        if (signalIsTrialEnded(errorMsg, null)) {
+          mountTrialEnded(panel);
+        } else {
+          const err = document.createElement("div");
+          err.className = "ask-ai-error";
+          err.role = "alert";
+          err.textContent = errorMsg;
+          panel.appendChild(err);
+        }
       }
 
       const shown = history.slice();
@@ -569,16 +675,19 @@ export function mountAskAi(container, options) {
         shown.forEach((turn, index) => {
           const capLimit = capLimitForTurn(turn);
           if (capLimit && capCard) return;
+          const trialAnswer = turn.role === "assistant" && turnIsTrialEnded(turn);
           const latest = index === shown.length - 1 && !loading;
           const latestAssistant =
-            turn.role === "assistant" && latest && Boolean(answer) && !capLimit;
+            turn.role === "assistant" && latest && Boolean(answer) && !capLimit && !trialAnswer;
           const bubble = document.createElement("div");
           bubble.className =
             turn.role === "user"
               ? "ask-ai-turn ask-ai-turn-user"
               : capLimit
                 ? "ask-ai-turn ask-ai-answer precard-cap-card"
-                : "ask-ai-turn ask-ai-answer";
+                : trialAnswer
+                  ? "ask-ai-turn ask-ai-trial-ended"
+                  : "ask-ai-turn ask-ai-answer";
           if (latestAssistant || (turn.role === "assistant" && latest)) bubble.dataset.latest = "1";
           if (capLimit) {
             capCard = bubble;
@@ -606,6 +715,8 @@ export function mountAskAi(container, options) {
             bubble.appendChild(link);
           } else if (turn.role === "user") {
             bubble.textContent = stripMilonProjection(turn.content);
+          } else if (trialAnswer) {
+            mountTrialEnded(bubble);
           } else {
             bubble.innerHTML = renderMarkdown(stripMilonProjection(turn.content));
           }
@@ -920,6 +1031,12 @@ export function mountAskAi(container, options) {
   }
 
   function inlineTurnError(turn) {
+    if (turnIsTrialEnded(turn)) {
+      const slot = document.createElement("div");
+      slot.className = "ask-ai-trial-ended";
+      mountTrialEnded(slot);
+      return slot;
+    }
     const err = document.createElement("div");
     err.className = "ask-ai-error ask-ai-inline-error";
     err.role = "alert";
@@ -941,6 +1058,7 @@ export function mountAskAi(container, options) {
   }
 
   function paintBareError(message) {
+    dropTrialMounts();
     const text = message || "Something went wrong.";
     try {
       container.innerHTML = "";
@@ -949,6 +1067,10 @@ export function mountAskAi(container, options) {
         echo.className = "ask-ai-turn ask-ai-turn-user";
         echo.textContent = lastQuestion;
         container.appendChild(echo);
+      }
+      if (signalIsTrialEnded(text, null)) {
+        mountTrialEnded(container);
+        return;
       }
       const err = document.createElement("div");
       err.className = "ask-ai-error";
@@ -1124,13 +1246,17 @@ export function mountAskAi(container, options) {
       if (gen !== requestGen) return;
       const turn = await readTurn(res);
       if (gen !== requestGen) return;
-      if (!turn.ok) throw new Error(turn.error || "Something went wrong.");
+      if (!turn.ok) {
+        const err = new Error(turn.error || "Something went wrong.");
+        if (typeof turn.code === "string" && turn.code) err.code = turn.code;
+        throw err;
+      }
 
       answer = turn.answer;
       precardCap = turn.precardCap || null;
       precardRemaining = turn.precardCap ? null : (turn.precardRemaining ?? null);
-      if (!precardCap && answer.includes("Your trial has ended, choose a plan")) {
-        window.dispatchEvent(new CustomEvent("milon-starter-trial-ended"));
+      if (!precardCap && isStarterTrialEndedMessage(answer)) {
+        notifyTrialEnded();
       }
       answerChips = precardCap ? [] : turn.chips;
       agentRun = turn.run;
@@ -1168,10 +1294,17 @@ export function mountAskAi(container, options) {
       const message = timedOut
         ? ASK_TIMEOUT_REPLY
         : friendlyReachMessage(e, "Something went wrong.") || "Something went wrong.";
+      const trialEnded = !timedOut && signalIsTrialEnded(message, e && e.code);
       const echoed = history.some((item) => item.role === "user" && item.turnId === turnId);
       history = history.map((item) =>
         item.role === "user" && item.turnId === turnId
-          ? { role: "user", content: item.content, turnId, error: message }
+          ? {
+              role: "user",
+              content: item.content,
+              turnId,
+              error: message,
+              ...(trialEnded ? { trialEnded: true } : {}),
+            }
           : item,
       );
       writeThread(boundClientId || currentClientId(), history);
@@ -1184,6 +1317,7 @@ export function mountAskAi(container, options) {
       agentRun = null;
       signoffCtas = [];
       errorMsg = "";
+      if (trialEnded) notifyTrialEnded();
     } finally {
       clearTimeout(timer);
       if (gen !== requestGen) return;

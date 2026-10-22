@@ -37,6 +37,7 @@ function panel(snapshot: Awaited<ReturnType<typeof buildUpgradeSnapshot>>): stri
       canUpgrade: true,
       clientCount: snapshot.clientCount,
       zaLabels: snapshot.zaLabels,
+      zarPlan: snapshot.zarPlan,
       onUpgrade: () => undefined,
     }),
   );

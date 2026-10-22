@@ -921,6 +921,11 @@ assert(
 );
 assert(settings.includes("zarPlan={zarPlan}"), "settings keeps the rand list when the quote fails");
 assert(
+  dashboard.includes("zarPlan={upgrade.zarPlan}") &&
+    dashboard.includes("zarPlan: cap.upgrade.zarPlan"),
+  "the practice list keeps the rand plan when the quote is missing",
+);
+assert(
   settings.includes("plan.phase === \"none\"") && settings.includes("plan.starterTrial?.enforced === true"),
   "settings uses the card-free sentence only for an enforced firm with no subscription",
 );
@@ -1500,6 +1505,7 @@ try {
 }
 assert(failedSnap.zaLabels == null, "a failed rand quote leaves labels empty");
 assert(failedSnap.priceCurrency !== "zar", `a failed rand quote has no ZAR currency, saw ${failedSnap.priceCurrency}`);
+assert(failedSnap.zarPlan === true, "a missing rand quote keeps the rand-plan flag");
 const failedZarPlan = practiceDisplaysZarPlan({
   firmMarket: { country: "ZA" },
   clientMarkets: [],
@@ -1514,7 +1520,7 @@ const failedHtml = renderToStaticMarkup(
     canUpgrade: failedSnap.canUpgrade,
     clientCount: failedSnap.clientCount,
     zaLabels: failedSnap.zaLabels,
-    zarPlan: failedZarPlan,
+    zarPlan: failedSnap.zarPlan,
     onUpgrade: () => undefined,
   }),
 );

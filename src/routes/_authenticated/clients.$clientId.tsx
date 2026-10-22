@@ -2359,6 +2359,8 @@ function ClientView() {
     // request time, so a stale value would send questions for the wrong client.
     el.dataset.clientId = clientId;
     el.dataset.forecastKey = forecastPlFingerprint(client.cashflow, client.financials);
+    if (client.firm_id) el.dataset.firmId = client.firm_id;
+    else delete el.dataset.firmId;
     const askAgent =
       search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
         ? search.agent

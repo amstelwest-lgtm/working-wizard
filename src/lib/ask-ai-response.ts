@@ -23,7 +23,7 @@ export type AskAiSuccess = {
   precardRemaining: number | null;
 };
 
-export type AskAiFailure = { ok: false; error: string };
+export type AskAiFailure = { ok: false; error: string; code?: string };
 
 export type AskAiTurn = AskAiSuccess | AskAiFailure;
 
@@ -84,18 +84,26 @@ function remainingOf(body: Record<string, unknown> | null): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
 }
 
+/** Keep a structured edge code (for example starter_trial_ended) with the error text. */
+function failureOf(error: string, body: unknown): AskAiFailure {
+  const rec = asRecord(body);
+  const code = rec && typeof rec.code === "string" ? rec.code.trim() : "";
+  if (!code) return { ok: false, error };
+  return { ok: false, error, code };
+}
+
 /** Interpret an already-parsed body. `ok` is the HTTP success flag. */
 export function parseAskAiBody(status: number, body: unknown, ok = status >= 200 && status < 300): AskAiTurn {
   const precard = precardTurn(body);
   if (precard) return precard;
   if (!ok || status < 200 || status >= 300) {
-    return { ok: false, error: errorText(body, status) };
+    return failureOf(errorText(body, status), body);
   }
   const rec = asRecord(body);
   const answer = rec && typeof rec.answer === "string" ? rec.answer.trim() : "";
   if (!answer) {
     const err = rec && typeof rec.error === "string" ? rec.error.trim() : "";
-    return { ok: false, error: err || ASK_EMPTY_REPLY };
+    return failureOf(err || ASK_EMPTY_REPLY, body);
   }
   const run =
     rec?.run && typeof rec.run === "object" && !Array.isArray(rec.run)
