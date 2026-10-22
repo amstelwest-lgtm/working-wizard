@@ -3,6 +3,7 @@
  * cash-forecast UI. Pure — safe to import from client components.
  */
 
+import { isProratedPeriodLabel } from "../../supabase/functions/_shared/firm-year-label.ts";
 import { dateOrder, MONTHS, MONTHS_LONG as FULL_MONTHS } from "./market/date-presets.ts";
 import { formatCalendarDay, formatDateRange, type DateMarket } from "./market/format.ts";
 
@@ -558,23 +559,61 @@ const SAVED_MONTH =
 /**
  * A saved finding that names the file month ("Sep 2026 books", "full Sep 2026
  * statement") is the snapshot stamp, not the period. A dated day ("8 Sep 2026")
- * stays. Display only — the stored finding is not rewritten.
+ * stays. A pro-rated period label stays too: the months inside it are the
+ * firm-year clip, not the file stamp. Display only — the stored finding is
+ * not rewritten.
  */
 /** "Sep 2026 books look healthy" becomes a singular subject. Agree the verb. */
 function agreeFullYearGrammar(text: string): string {
   return text.replace(/\bFull year on file look\b/g, "Full year on file looks");
 }
 
+/**
+ * Compact ranges `proratedPeriodLabel` can emit. Cross-year first, then
+ * same-year `Mar–Sep 2026`, then a single month. This only finds the span.
+ * `isProratedPeriodLabel` decides whether it is a pro-rata label.
+ */
+function proratedRangeSource(): string {
+  const dash = "[\\u2010-\\u2015-]";
+  const month = `(?:${SAVED_MONTH})`;
+  const year = "\\d{4}";
+  return `(?:${month}\\s+${year}\\s*${dash}\\s*${month}\\s+${year}|${month}\\s*${dash}\\s*${month}\\s+${year}|${month}\\s+${year})`;
+}
+
+/**
+ * Hide pro-rata labels, run the month-stamp rewrite, then put them back.
+ * `src/lib/firm-year-label.ts` is Eng2-owned and its `@/` import cannot sit
+ * on this file's Deno graph, so the matcher is the twin
+ * `isProratedPeriodLabel`, which Eng2 keeps identical.
+ */
+function withProratedLabelsShielded(text: string, rewrite: (masked: string) => string): string {
+  const slots: string[] = [];
+  const range = proratedRangeSource();
+  const pattern = new RegExp(`${range}, pro-rated from your ${range} statement`, "gi");
+  const masked = text.replace(pattern, (match) => {
+    if (!isProratedPeriodLabel(match)) return match;
+    slots.push(match);
+    return `\u0000pr${slots.length - 1}\u0000`;
+  });
+  let out = rewrite(masked);
+  for (let i = slots.length - 1; i >= 0; i--) {
+    out = out.split(`\u0000pr${i}\u0000`).join(slots[i] ?? "");
+  }
+  return out;
+}
+
 export function rewriteSavedMonthStamp(text: string): string {
   const monthYear = `(?<!\\d\\s)(?:${SAVED_MONTH})\\s+\\d{4}`;
-  return agreeFullYearGrammar(
-    text
-      .replace(new RegExp(`\\bfull\\s+${monthYear}\\s+statement\\b`, "gi"), FULL_YEAR_ON_FILE)
-      .replace(new RegExp(`\\b${monthYear}\\s+books\\s+on\\s+file\\b`, "gi"), FULL_YEAR_ON_FILE)
-      .replace(
-        new RegExp(`\\b${monthYear}\\s+(?:books|statement|snapshot)\\b`, "gi"),
-        FULL_YEAR_ON_FILE,
-      ),
+  return withProratedLabelsShielded(text, (body) =>
+    agreeFullYearGrammar(
+      body
+        .replace(new RegExp(`\\bfull\\s+${monthYear}\\s+statement\\b`, "gi"), FULL_YEAR_ON_FILE)
+        .replace(new RegExp(`\\b${monthYear}\\s+books\\s+on\\s+file\\b`, "gi"), FULL_YEAR_ON_FILE)
+        .replace(
+          new RegExp(`\\b${monthYear}\\s+(?:books|statement|snapshot)\\b`, "gi"),
+          FULL_YEAR_ON_FILE,
+        ),
+    ),
   );
 }
 
@@ -764,8 +803,10 @@ export function offsetInsideCalendarSpan(text: string, offset: number, length: n
 
 export function rewriteDraftMonthStamp(text: string): string {
   const monthYear = `(?<!\\d\\s)(?:${SAVED_MONTH})\\s+\\d{4}`;
-  return agreeFullYearGrammar(
-    rewriteSavedMonthStamp(text).replace(new RegExp(monthYear, "gi"), FULL_YEAR_ON_FILE),
+  return withProratedLabelsShielded(text, (body) =>
+    agreeFullYearGrammar(
+      rewriteSavedMonthStamp(body).replace(new RegExp(monthYear, "gi"), FULL_YEAR_ON_FILE),
+    ),
   );
 }
 
