@@ -185,6 +185,48 @@ await check("the gate logs one boot line when it releases the skeleton", async (
   assert(infos.length === 1, `a second paint logged again: ${infos.join(" | ")}`);
 });
 
+await check("market that resolves after the gate opens is za or us", async () => {
+  const { setBootTimingFirmMarket } = await import("@/contexts/accountant-profile");
+  resetBootTimingForTests();
+  infos.length = 0;
+  setBootTimingFirmMarket(null, { loaded: false, failed: false });
+  markAuthReady();
+  await act(async () => {
+    root.render(createElement(RouterProvider, { key: "market-pending", router }));
+  });
+  await flush();
+  await flush();
+  assert(document.body.innerHTML.includes("Practice home"), "the practice page should render");
+  assert(infos.length === 0, `boot line fired before the market resolved: ${infos.join(" | ")}`);
+  const shell = performance.getEntriesByName("first-content")[0];
+  assert(shell != null, "the shell stamps first-content before the market arrives");
+  const shellMs = Math.max(0, Math.round(shell.startTime));
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  setBootTimingFirmMarket({ country: "US", note: BOOT_TIMING_EMAIL }, { loaded: true });
+  await act(async () => {
+    root.render(createElement(RouterProvider, { key: "market-ready", router }));
+  });
+  await flush();
+  await flush();
+  assert(infos.length === 1, `expected 1 resolved boot line, saw ${infos.join(" | ")}`);
+  assertClean(infos[0]);
+  const payload = bootLines()[0];
+  assert(payload.market === "za" || payload.market === "us", `market ${payload.market}`);
+  assert(payload.market === "us", `market ${payload.market}`);
+  assert(payload.route === "practice", `route ${payload.route}`);
+  assert(payload.ms === shellMs, `ms ${payload.ms} is not the shell at ${shellMs}`);
+  assert(
+    performance.getEntriesByName("first-content")[0]?.startTime === shell.startTime,
+    "first-content moved when the market arrived",
+  );
+  await act(async () => {
+    root.render(createElement(RouterProvider, { key: "market-ready", router }));
+  });
+  await flush();
+  assert(infos.length === 1, `a resolved market logged again: ${infos.join(" | ")}`);
+  setBootTimingFirmMarket({ country: "ZA", note: BOOT_TIMING_EMAIL }, { loaded: false });
+});
+
 console.info = originalInfo;
 
 if (failures.length) {

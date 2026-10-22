@@ -58,6 +58,8 @@ export function bootRouteBucket(pathname: string): "practice" | "client" | "owne
 const AUTH_READY_MARK = "auth-ready";
 const FIRST_CONTENT_MARK = "first-content";
 let bootTimingLogged = false;
+/** Path of the first usable shell. A later market read must not change the route bucket. */
+let bootPathname: string | null = null;
 
 function performanceMarks(): Performance | null {
   try {
@@ -87,27 +89,40 @@ export function bootMarketLabel(raw: unknown): "za" | "us" | "unknown" {
 
 /**
  * The shell left its skeleton. One `[boot-timing]` line per page load.
+ * `ms` is that moment, measured from navigation start: the `first-content`
+ * mark's offset from the time origin. Auth-ready is marked for the timeline,
+ * and a market that arrives later does not move `ms`.
  * `route` is a bucket. `market` is za, us, or unknown.
+ *
+ * Pass `marketReady: false` while the firm country is still loading. The shell
+ * time is recorded and the line waits. It still fires once, when the country
+ * is za or us, or when the caller says the read has settled.
  */
-export function markBootContent(pathname: string, market: "za" | "us" | "unknown"): void {
+export function markBootContent(
+  pathname: string,
+  market: "za" | "us" | "unknown",
+  marketReady = true,
+): void {
   if (bootTimingLogged) return;
   const marks = performanceMarks();
   if (!marks) return;
   if (marks.getEntriesByName(AUTH_READY_MARK).length === 0) marks.mark(AUTH_READY_MARK);
   if (marks.getEntriesByName(FIRST_CONTENT_MARK).length === 0) marks.mark(FIRST_CONTENT_MARK);
-  const ready = marks.getEntriesByName(AUTH_READY_MARK)[0];
+  if (bootPathname == null) bootPathname = pathname;
+  if (!marketReady && market === "unknown") return;
   const content = marks.getEntriesByName(FIRST_CONTENT_MARK)[0];
-  if (!ready || !content) return;
+  if (!content) return;
   bootTimingLogged = true;
   console.info("[boot-timing]", {
-    ms: Math.max(0, Math.round(content.startTime - ready.startTime)),
+    ms: Math.max(0, Math.round(content.startTime)),
     market,
-    route: bootRouteBucket(pathname),
+    route: bootRouteBucket(bootPathname),
   });
 }
 
 export function resetBootTimingForTests(): void {
   bootTimingLogged = false;
+  bootPathname = null;
   const marks = performanceMarks();
   marks?.clearMarks?.(AUTH_READY_MARK);
   marks?.clearMarks?.(FIRST_CONTENT_MARK);

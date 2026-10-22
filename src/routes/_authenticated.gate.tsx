@@ -573,8 +573,12 @@ export function AuthGate() {
       !showWall);
   useEffect(() => {
     if (loading || !user || gateShowsSkeleton) return;
-    markBootContent(pathname, bootMarketLabel(firmMarket));
-  }, [loading, user, gateShowsSkeleton, pathname, firmMarket]);
+    const market = bootMarketLabel(firmMarket);
+    // /practice opens before the firm row. Hold the line until that country
+    // is known, or the firm read has finished without one. ms stays the shell.
+    const marketReady = firmsLoaded || firmsLoadFailed || market !== "unknown";
+    markBootContent(pathname, market, marketReady);
+  }, [loading, user, gateShowsSkeleton, pathname, firmMarket, firmsLoaded, firmsLoadFailed]);
   if (loading) {
     return <FirmShellLoading />;
   }
