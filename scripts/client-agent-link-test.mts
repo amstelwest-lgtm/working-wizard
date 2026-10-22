@@ -23,9 +23,11 @@ import {
   CLIENT_AGENT_FILE_NOTE,
   SEND_CONSENT_VERSION,
   SEND_LINK_META,
+  checklistReady,
   clientAgentExpiryLabel,
   clientAgentIntro,
   clientAgentItemHelp,
+  clientAgentThanks,
   clientConsentNotice,
   acceptClientFile,
   bytesFromBase64,
@@ -47,9 +49,23 @@ import {
   sendStoragePath,
   sizeAllowed,
   storeAcceptedFile,
+  itemSettled,
   toPublicChecklist,
   type PublicChecklistItem,
 } from "../src/lib/client-agent-link.ts";
+import {
+  CLIENT_AGENT_CHAT_FALLBACK,
+  CLIENT_AGENT_CHAT_REFUSAL,
+  CLIENT_AGENT_CHAT_SYSTEM,
+  clientAgentChatDecision,
+  clientAgentChatReply,
+  guideDocumentQuestion,
+} from "../src/lib/client-agent-chat.ts";
+import {
+  filePasswordKey,
+  openFilePassword,
+  sealFilePassword,
+} from "../src/lib/client-agent-file-secret.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -557,14 +573,33 @@ assert(
   "the server sets privacy headers and redacts the path",
 );
 assert(!page.includes("SilentAgentPortrait"), "the stacked talk portrait is gone");
-assert((page.match(/<OwnerAvatar/g) ?? []).length === 1, "exactly one portrait");
-assert(page.includes('agent="tax_specialist"'), "Tax Specialist face");
-assert(page.includes('size="lg"'), "the portrait uses the agent card size");
-assert(page.includes('variant="character"'), "the portrait is the round character");
+assert(!page.includes("<OwnerAvatar"), "the page uses the tax clip, not the still card");
+assert(page.includes('data-agent="tax_specialist"'), "Tax Specialist face");
+assert(page.includes("is-lg"), "the portrait uses the agent card size");
+assert(page.includes("is-character"), "the portrait is the round character");
+assert(page.includes("<video"), "the hero plays the tax clip");
+assert(page.includes("muted") && page.includes("autoPlay"), "the clip is muted and starts itself");
+assert(page.includes("playsInline") && page.includes("loop"), "the clip loops inline");
+assert(!page.includes("<audio"), "the page has no audio element");
 assert(
-  !page.includes("<video") && !page.includes("<audio") && !page.includes("autoPlay"),
-  "the page adds no audio or autoplay",
+  page.includes('fmClipSources("curious", "tax_specialist")'),
+  "the loop is the Tax Specialist curious clip",
 );
+assert(page.includes("usePrefersReducedMotion"), "reduced motion drops the clip");
+assert(page.includes("reduced ? null"), "the clip is omitted when motion is reduced");
+assert(!page.includes("flex-wrap"), "the list does not wrap into a row");
+assert(page.includes("setThanks(true)"), "Next only switches the thank-you screen");
+assert(!page.includes("finishClientAgentLink"), "Next does not call a completion action");
+assert(!fn.includes("finishClientAgentLink"), "there is no completion server action");
+assert(!fn.includes("client_finished_at"), "completion is not stored");
+assert(page.includes("multiple"), "a row accepts more than one file");
+assert(page.includes("Ask the Tax Specialist"), "the page can ask about the documents");
+assert(page.includes("File password (if it has one)"), "a password field is offered after upload");
+assert(page.includes("I'll check with Theo's practice"), "an unsure chat falls back to the practice");
+assert(!fn.includes("console."), "the link actions do not log");
+assert(fn.includes("guideDocumentQuestion"), "questions use the document guide");
+assert(fn.includes("ANTHROPIC_API_KEY") && fn.includes("CLAUDE_MODEL"), "the guide uses the app model");
+assert(!fn.includes("callClaudeMessages"), "errors from the model client are not thrown through");
 assert(!/#(?:d4a550|c4a35a|b7791f)/i.test(page), "the page has no gold primary");
 const portraitAt = page.indexOf("data-client-portrait");
 const portraitSource = page.slice(Math.max(0, portraitAt - 240), page.indexOf("</span>", portraitAt));
@@ -693,10 +728,9 @@ assert(
   (consentHtml.match(/data-agent="tax_specialist"/g) ?? []).length === 1,
   "one agent face renders",
 );
-assert(
-  !consentHtml.includes("<video") && !consentHtml.includes("<audio"),
-  "the still portrait has no media element",
-);
+assert(consentHtml.includes("<video") && consentHtml.includes("muted"), "the hero loops a muted clip");
+assert(!consentHtml.includes("<audio"), "the hero has no audio element");
+assert(consentHtml.includes("/avatars/tax/tax-curious"), "the clip is the Tax Specialist");
 assert(
   consentHtml.includes("Theo&#x27;s practice") || consentHtml.includes("Theo's practice"),
   "the consent page shows the practice",
@@ -803,5 +837,206 @@ assert(
 assert(checklistHtml.includes(CLIENT_AGENT_FILE_NOTE), "the file note is the shared sentence");
 assert(consentHtml.includes("before 5 Nov 2026"), "the consent page shows the Johannesburg expiry");
 assert(!/sars|fill in a form/i.test(consentHtml), "the rendered consent drops internal denials");
+
+assert(
+  itemSettled({ hasFile: true, status: "open", quality: null }) &&
+    itemSettled({ hasFile: false, status: "received", quality: "incomplete" }) &&
+    !itemSettled({ hasFile: false, status: "open", quality: null }),
+  "a row is settled by a file or by saying it is missing",
+);
+assert(
+  !checklistReady([
+    { hasFile: true, status: "received", quality: "usable" },
+    { hasFile: false, status: "open", quality: null },
+  ]),
+  "Next stays off while a row is open",
+);
+assert(
+  checklistReady([
+    { hasFile: true, status: "received", quality: "usable" },
+    { hasFile: false, status: "received", quality: "incomplete" },
+  ]),
+  "Next is on when every row is uploaded or skipped",
+);
+function nextDisabled(html: string): boolean {
+  const tag = html.match(/<button[^>]*data-client-next="true"[^>]*>/)?.[0] ?? "";
+  return /\sdisabled(=|\s|>)/.test(tag);
+}
+assert(nextDisabled(checklistHtml), "the partly done list keeps Next off");
+assert(checklistHtml.includes("File password (if it has one)"), "an uploaded row offers a password");
+assert(checklistHtml.includes('type="password"'), "the password is not a visible text field");
+
+const readyHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: {
+      ok: true,
+      practiceName: "Theo's practice",
+      expiresAt: lateExpiry,
+      firstName: "Nicola",
+      consented: true,
+      notice: practiceNotice,
+      items: [
+        {
+          itemKey: "irp5",
+          label: "IRP5",
+          totalsOnly: false,
+          status: "received",
+          quality: "usable",
+          hasFile: true,
+          passwordSaved: true,
+        },
+        {
+          itemKey: "medical_aid_certificate",
+          label: "Medical aid tax certificate (totals only)",
+          totalsOnly: true,
+          status: "received",
+          quality: "incomplete",
+          hasFile: false,
+        },
+      ],
+    },
+    busy: false,
+    notice: null,
+    noteFor: null,
+    explanation: "",
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+    chatOpen: true,
+    chatMessages: [{ role: "she", text: "Your employer sends the IRP5." }],
+  }),
+);
+assert(
+  readyHtml.includes('data-client-next="true"') && !nextDisabled(readyHtml),
+  "a finished list enables Next",
+);
+assert(readyHtml.includes("Saved"), "a stored password is not shown back");
+assert(!readyHtml.includes('type="password"'), "a saved password field is gone");
+assert(readyHtml.includes("data-agent-chat-panel"), "the document chat can open");
+assert(!/sars|filing instructions/i.test(readyHtml), "the open chat does not recite filing rules");
+
+const thanksHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: {
+      ok: true,
+      practiceName: "Theo's practice",
+      expiresAt: lateExpiry,
+      firstName: "Nicola",
+      consented: true,
+      notice: practiceNotice,
+      items: [
+        {
+          itemKey: "irp5",
+          label: "IRP5",
+          totalsOnly: false,
+          status: "received",
+          quality: "usable",
+          hasFile: true,
+        },
+      ],
+    },
+    busy: false,
+    notice: null,
+    noteFor: null,
+    explanation: "",
+    thanks: true,
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+  }),
+);
+assert(
+  thanksHtml.includes("Thank you, Nicola."),
+  "the thank-you uses the first name",
+);
+assert(
+  thanksHtml.includes("Theo&#x27;s practice is working on it") ||
+    thanksHtml.includes("Theo's practice is working on it"),
+  "the thank-you names the practice",
+);
+assert(thanksHtml.includes("data-client-thanks"), "Next shows the thank-you screen");
+assert(!thanksHtml.includes("data-client-next"), "the thank-you screen has no Next button");
+assert(!thanksHtml.includes("Upload"), "the thank-you screen has no upload");
+const plainThanks = clientAgentThanks({ firstName: null, practiceName: "Theo's practice" });
+assert(plainThanks.greeting === "Thank you.", "a missing first name still says thank you");
+assert(plainThanks.signoff === "Theo's practice", "the sign-off is the practice");
+
+const filesSql = read("supabase/migrations/20261022180000_client_agent_send_files.sql");
+const filesCode = filesSql
+  .split("\n")
+  .map((line) => line.split("--")[0])
+  .join("\n")
+  .toLowerCase();
+assert(filesCode.includes("create table if not exists public.client_agent_send_files"), "files have a table");
+assert(filesCode.includes("password_iv") && filesCode.includes("password_box"), "the password is two ciphertext columns");
+assert(!filesCode.includes("client_finished_at"), "the files migration does not store completion");
+assert(!/\bsecurity\s+definer\b/.test(filesCode), "the files migration has no security definer");
+assert(!/\bcreate\s+(or\s+replace\s+)?function\b/.test(filesCode), "the files migration creates no function");
+assert(!/\bcreate\s+policy\b/.test(filesCode), "the files migration creates no policy");
+assert(filesCode.includes("revoke all on table public.client_agent_send_files from public, anon, authenticated"), "anon cannot read file rows");
+const chatTable = filesCode.slice(
+  filesCode.indexOf("create table if not exists public.client_agent_send_chat_turns"),
+  filesCode.indexOf("create index if not exists client_agent_send_chat_turns"),
+);
+assert(chatTable.includes("send_id"), "chat turns are counted per send");
+assert(!chatTable.includes("message") && !chatTable.includes("token"), "chat rows store no message and no token");
+
+const saveFn = fn.slice(
+  fn.indexOf("export const saveClientAgentFilePassword"),
+  fn.indexOf("async function storeFilePassword"),
+);
+assert(saveFn.includes("return { ok: true }"), "a saved password returns no secret");
+assert(!/return\s*\{[^}]*password/.test(saveFn), "the password is not in the response");
+const releaseFn = fn.slice(
+  fn.indexOf("export async function releaseClientAgentFilePassword"),
+  fn.indexOf("export const askClientAgentLink"),
+);
+assert(!releaseFn.includes("createServerFn"), "opening a password is not a public action");
+
+const rawKey = Buffer.from(Uint8Array.from({ length: 32 }, (_, i) => i + 1)).toString("base64");
+const key = filePasswordKey(rawKey);
+assert(key?.length === 32, "the password key is 32 bytes");
+const sealed = await sealFilePassword("secret-file-pass", key!);
+assert(!sealed.box.includes("secret-file-pass"), "the stored password is not plaintext");
+assert(!sealed.iv.includes("secret-file-pass"), "the iv is not the password");
+assert((await openFilePassword(sealed, key!)) === "secret-file-pass", "the ciphertext opens with the server key");
+assert(filePasswordKey("short") === null, "a short key is refused");
+
+assert(clientAgentChatDecision("How do I file my tax return?") === "refuse", "filing questions are refused");
+assert(clientAgentChatDecision("Can you submit this to SARS?") === "refuse", "a SARS submission is refused");
+assert(
+  clientAgentChatDecision("How do I log in to SARS eFiling?") === "refuse",
+  "a SARS login is refused",
+);
+assert(clientAgentChatDecision("Where do I find my IRP5?") === "answer", "a document question is answered");
+assert(clientAgentChatDecision("   ") === "empty", "a blank question is empty");
+assert(
+  clientAgentChatReply("Log in to SARS and file the return") === CLIENT_AGENT_CHAT_REFUSAL,
+  "a filing reply is replaced",
+);
+assert(CLIENT_AGENT_CHAT_SYSTEM.includes("Never give filing instructions."), "the prompt forbids filing steps");
+assert(
+  CLIENT_AGENT_CHAT_SYSTEM.includes("Never mention a SARS login, eFiling, or submitting a return."),
+  "the prompt forbids SARS submission",
+);
+assert(CLIENT_AGENT_CHAT_SYSTEM.includes(CLIENT_AGENT_CHAT_FALLBACK), "the prompt uses the practice fallback");
+assert(
+  (await guideDocumentQuestion({ message: "How do I file my return?", apiKey: "secret", model: "claude" })) ===
+    CLIENT_AGENT_CHAT_REFUSAL,
+  "a filing question never calls the model",
+);
+assert(
+  (await guideDocumentQuestion({ message: "Where is my IRP5?", apiKey: "", model: "" })) ===
+    CLIENT_AGENT_CHAT_FALLBACK,
+  "a missing model key uses the practice fallback",
+);
+
+const nextHandler = page.slice(page.indexOf("onNext={() =>"), page.indexOf("thanks={thanks}"));
+assert(nextHandler.includes("setThanks(true)"), "Next writes local thank-you state");
+assert(!nextHandler.includes("await"), "Next does not wait on the server");
 
 console.log("client agent link test ok");

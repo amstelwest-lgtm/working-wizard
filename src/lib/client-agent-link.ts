@@ -123,6 +123,20 @@ export function clientConsentNotice(practiceName: string): string {
   return `I agree that ${practice} may securely store the documents I upload here for my tax file, using Milōn. Medical aid: send the tax certificate totals only.`;
 }
 
+/** Local thank-you after Next. Nothing is emailed and nothing is stored as complete. */
+export function clientAgentThanks(input: {
+  firstName: string | null;
+  practiceName: string;
+}): { greeting: string; body: string; signoff: string } {
+  const practice = cleanPracticeName(input.practiceName) || "Your accountant";
+  const name = (input.firstName ?? "").trim();
+  return {
+    greeting: name ? `Thank you, ${name}.` : "Thank you.",
+    body: `${practice} is working on it and will be in touch if anything else is needed.`,
+    signoff: practice,
+  };
+}
+
 function longCalendarDay(iso: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!match) return iso;
@@ -344,7 +358,25 @@ export type PublicChecklistItem = {
   status: string;
   quality: string | null;
   hasFile: boolean;
+  fileCount?: number;
+  passwordSaved?: boolean;
 };
+
+/** A row is done when a file is in, or the client has said they don't have it. */
+export function itemSettled(item: {
+  hasFile: boolean;
+  status: string;
+  quality?: string | null;
+}): boolean {
+  if (item.hasFile) return true;
+  return item.status === "received" && (item.quality === "incomplete" || item.quality === "poor");
+}
+
+export function checklistReady(
+  items: Array<{ hasFile: boolean; status: string; quality?: string | null }>,
+): boolean {
+  return items.length > 0 && items.every((item) => itemSettled(item));
+}
 
 type ChecklistRow = {
   sendId: string;
@@ -357,6 +389,8 @@ type ChecklistRow = {
   firmId?: string;
   fileName?: string;
   bytes?: Uint8Array;
+  fileCount?: number;
+  passwordSaved?: boolean;
 };
 
 /** Her own checklist only. Firm fields, file names, and file bytes stay off the page. */
@@ -370,6 +404,8 @@ export function toPublicChecklist(rows: ChecklistRow[], sendId: string): PublicC
       status: row.status,
       quality: row.quality,
       hasFile: typeof row.storagePath === "string" && row.storagePath.length > 0,
+      fileCount: row.fileCount,
+      passwordSaved: row.passwordSaved === true,
     }))
     .sort((a, b) => {
       const ai = PUBLIC_ITEM_ORDER.indexOf(a.itemKey);

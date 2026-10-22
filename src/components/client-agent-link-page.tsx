@@ -4,24 +4,30 @@
  */
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import "@/components/owner-door/owner-door.css";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES } from "@/lib/client-agent-send";
 import {
   CLIENT_AGENT_FILE_NOTE,
+  checklistReady,
   clientAgentIntro,
   clientAgentItemHelp,
+  clientAgentThanks,
+  itemSettled,
   sizeAllowed,
   type ItemQuality,
 } from "@/lib/client-agent-link";
 import {
+  askClientAgentLink,
   consentClientAgentLink,
   finishClientAgentItem,
   openClientAgentLink,
+  saveClientAgentFilePassword,
   uploadClientAgentFile,
   type OpenLinkResult,
   type PublicItem,
 } from "@/lib/client-agent-link.functions";
+import { avatarPoster, fmClipSources } from "@/lib/fm-avatar-state";
 
 const PRIMARY =
   "inline-flex min-h-11 items-center justify-center rounded-full bg-[#0B5FFF] px-4 text-sm font-semibold text-white hover:bg-[#2563EB] disabled:opacity-60";
@@ -43,6 +49,42 @@ function fileBase64(file: File): Promise<string> {
     }
     return btoa(binary);
   });
+}
+
+function TaxSpecialistHero() {
+  const reduced = usePrefersReducedMotion();
+  const poster = avatarPoster("tax_specialist");
+  const sources = fmClipSources("curious", "tax_specialist");
+  return (
+    <span
+      className="owner-presence is-tax_specialist is-character is-idle is-lg is-fm-clip"
+      data-avatar="character"
+      data-agent="tax_specialist"
+      role="img"
+      aria-label="Tax Specialist"
+    >
+      <span className="owner-fm-face">
+        <picture className="owner-fm-poster">
+          <source srcSet={poster.webp} type="image/webp" />
+          <img src={poster.jpg} alt="" />
+        </picture>
+        {reduced ? null : (
+          <video
+            className="is-on"
+            muted
+            autoPlay
+            playsInline
+            loop
+            preload="auto"
+            poster={poster.webp}
+          >
+            <source src={sources.webm} type="video/webm" />
+            <source src={sources.mp4} type="video/mp4" />
+          </video>
+        )}
+      </span>
+    </span>
+  );
 }
 
 function UploadedTick() {
@@ -79,6 +121,17 @@ export function ClientAgentLinkScreen({
   onSaveNote,
   loadFailed = false,
   onRetry,
+  chatOpen = false,
+  chatMessages = [],
+  chatDraft = "",
+  onToggleChat,
+  onChatDraft,
+  onAsk,
+  passwordDrafts = {},
+  onPasswordDraft,
+  onPassword,
+  onNext,
+  thanks = false,
 }: {
   view: OpenLinkResult | null;
   busy: boolean;
@@ -86,28 +139,40 @@ export function ClientAgentLinkScreen({
   noteFor: string | null;
   explanation: string;
   onAgree: () => void;
-  onPickFile: (item: PublicItem, file: File) => void;
+  onPickFile: (item: PublicItem, files: File[]) => void;
   onOpenNote: (itemKey: string) => void;
   onExplanation: (value: string) => void;
   onSaveNote: (item: PublicItem) => void;
   loadFailed?: boolean;
   onRetry?: () => void;
+  chatOpen?: boolean;
+  chatMessages?: Array<{ role: "you" | "she"; text: string }>;
+  chatDraft?: string;
+  onToggleChat?: () => void;
+  onChatDraft?: (value: string) => void;
+  onAsk?: () => void;
+  passwordDrafts?: Record<string, string>;
+  onPasswordDraft?: (itemKey: string, value: string) => void;
+  onPassword?: (item: PublicItem) => void;
+  onNext?: () => void;
+  thanks?: boolean;
 }) {
   const openView = view?.ok ? view : null;
+  const ready = openView ? checklistReady(openView.items) : false;
+  const thankYou = openView
+    ? clientAgentThanks({
+        firstName: openView.firstName ?? null,
+        practiceName: openView.practiceName,
+      })
+    : null;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col gap-4 bg-white px-4 py-6 text-[#102A43]">
+    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 bg-white px-4 py-6 text-[#102A43]">
       <span
         className="owner-door -ml-3 inline-flex h-[96px] w-[96px] shrink-0 self-start overflow-hidden min-[761px]:-ml-[21.5px] min-[761px]:h-[172px] min-[761px]:w-[172px]"
         data-client-portrait="tax_specialist"
       >
-        <OwnerAvatar
-          agent="tax_specialist"
-          variant="character"
-          size="lg"
-          motion="idle"
-          label="Tax Specialist"
-        />
+        <TaxSpecialistHero />
       </span>
       {openView ? (
         <p className="text-sm font-semibold" data-practice-name="true">
@@ -138,29 +203,80 @@ export function ClientAgentLinkScreen({
           </button>
         </div>
       ) : null}
-      {openView?.consented ? (
+      {openView?.consented && thanks && thankYou ? (
+        <div className="flex flex-col gap-3" data-client-thanks="true">
+          <p className="text-lg font-semibold">{thankYou.greeting}</p>
+          <p className="text-sm leading-6">{thankYou.body}</p>
+          <p className="text-sm font-semibold">{thankYou.signoff}</p>
+        </div>
+      ) : null}
+      {openView?.consented && !thanks ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm leading-6 text-[#3D5270]">{CLIENT_AGENT_UPLOAD_INTRO}</p>
-          <ol className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2" data-agent-chat="true">
+            <button type="button" className={QUIET} disabled={busy} onClick={onToggleChat}>
+              {chatOpen ? "Close" : "Ask the Tax Specialist"}
+            </button>
+            {chatOpen ? (
+              <div
+                className="flex flex-col gap-2 rounded-2xl border border-[#DBEAFE] p-3"
+                data-agent-chat-panel="true"
+              >
+                {chatMessages.length === 0 ? (
+                  <p className="text-sm leading-6 text-[#3D5270]">
+                    Ask what a document is, where to find it, or what counts.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {chatMessages.map((message, index) => (
+                      <p
+                        key={`${message.role}-${index}`}
+                        className="text-sm leading-6"
+                        data-chat-role={message.role}
+                      >
+                        {message.text}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <label className="text-sm text-[#3D5270]">
+                  Your question
+                  <textarea
+                    className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] p-2 text-sm text-[#102A43]"
+                    value={chatDraft}
+                    maxLength={400}
+                    data-agent-chat-draft="true"
+                    onChange={(event) => onChatDraft?.(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className={PRIMARY}
+                  disabled={busy || chatDraft.trim().length === 0}
+                  onClick={onAsk}
+                >
+                  Ask
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <ol className="flex flex-col border-t border-[#DBEAFE]" data-doc-list="true">
             {openView.items.map((item) => (
               <li
                 key={item.itemKey}
-                className="flex flex-col gap-3 rounded-2xl border border-[#DBEAFE] bg-white p-4"
+                className="flex flex-col gap-2 border-b border-[#DBEAFE] py-3"
                 data-send-item={item.itemKey}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold">{item.label}</p>
-                    <p className="mt-1 text-sm leading-6 text-[#3D5270]">
-                      {clientAgentItemHelp(item)}
-                    </p>
-                  </div>
-                  {item.hasFile ? <UploadedTick /> : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="grid grid-cols-1 gap-2 min-[761px]:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_max-content_max-content_2.75rem] min-[761px]:items-center">
+                  <p className="font-semibold" data-doc-name="true">
+                    {item.label}
+                  </p>
+                  <p className="text-sm leading-6 text-[#3D5270]" data-doc-hint="true">
+                    {clientAgentItemHelp(item)}
+                  </p>
                   <button
                     type="button"
-                    className={PRIMARY}
+                    className={`${PRIMARY} w-full min-[761px]:w-auto`}
                     disabled={busy}
                     onClick={() => document.getElementById(`upload-${item.itemKey}`)?.click()}
                   >
@@ -168,27 +284,56 @@ export function ClientAgentLinkScreen({
                   </button>
                   <button
                     type="button"
-                    className={QUIET}
+                    className={`${QUIET} w-full justify-center whitespace-nowrap min-[761px]:w-auto min-[761px]:justify-start`}
                     disabled={busy}
                     onClick={() => onOpenNote(item.itemKey)}
                   >
                     I don't have this
                   </button>
-                  <input
-                    id={`upload-${item.itemKey}`}
-                    className="sr-only"
-                    type="file"
-                    accept={SEND_FILE_MIMES.join(",")}
-                    disabled={busy}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.target.value = "";
-                      if (!file) return;
-                      if (file.size > SEND_FILE_MAX_BYTES) return;
-                      onPickFile(item, file);
-                    }}
-                  />
+                  {itemSettled(item) ? <UploadedTick /> : <span className="h-11 w-11" />}
                 </div>
+                <input
+                  id={`upload-${item.itemKey}`}
+                  className="sr-only"
+                  type="file"
+                  multiple
+                  accept={SEND_FILE_MIMES.join(",")}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const picked = Array.from(event.target.files ?? []);
+                    event.target.value = "";
+                    const files = picked.filter((file) => file.size <= SEND_FILE_MAX_BYTES);
+                    if (files.length === 0) return;
+                    onPickFile(item, files);
+                  }}
+                />
+                {item.hasFile ? (
+                  item.passwordSaved ? (
+                    <p className="text-sm text-[#3D5270]" data-file-password-saved={item.itemKey}>
+                      Saved
+                    </p>
+                  ) : (
+                    <label className="text-sm text-[#3D5270]" data-file-password={item.itemKey}>
+                      File password (if it has one)
+                      <input
+                        type="password"
+                        className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] px-2 text-sm text-[#102A43]"
+                        value={passwordDrafts[item.itemKey] ?? ""}
+                        maxLength={80}
+                        autoComplete="off"
+                        onChange={(event) => onPasswordDraft?.(item.itemKey, event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className={`${QUIET} mt-1`}
+                        disabled={busy || (passwordDrafts[item.itemKey] ?? "").trim().length === 0}
+                        onClick={() => onPassword?.(item)}
+                      >
+                        Save password
+                      </button>
+                    </label>
+                  )
+                ) : null}
                 {noteFor === item.itemKey ? (
                   <div className="flex flex-col gap-2" data-missing-note={item.itemKey}>
                     <label className="text-sm text-[#3D5270]">
@@ -216,6 +361,15 @@ export function ClientAgentLinkScreen({
           <p className="text-sm leading-6 text-[#3D5270]" data-file-note="true">
             {CLIENT_AGENT_FILE_NOTE}
           </p>
+          <button
+            type="button"
+            className={PRIMARY}
+            data-client-next="true"
+            disabled={busy || !ready}
+            onClick={onNext}
+          >
+            Next
+          </button>
         </div>
       ) : null}
       {notice ? <p className="text-sm text-[#3D5270]">{notice}</p> : null}
@@ -228,6 +382,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   const agree = useServerFn(consentClientAgentLink);
   const uploadFile = useServerFn(uploadClientAgentFile);
   const finish = useServerFn(finishClientAgentItem);
+  const savePassword = useServerFn(saveClientAgentFilePassword);
+  const ask = useServerFn(askClientAgentLink);
   const [view, setView] = useState<OpenLinkResult | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -235,6 +391,13 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [noteFor, setNoteFor] = useState<string | null>(null);
   const [explanation, setExplanation] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ role: "you" | "she"; text: string }>>(
+    [],
+  );
+  const [chatDraft, setChatDraft] = useState("");
+  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
+  const [thanks, setThanks] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -270,27 +433,75 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     }
   };
 
-  const upload = async (item: PublicItem, file: File) => {
-    if (!sizeAllowed(file.size)) {
+  const upload = async (item: PublicItem, files: File[]) => {
+    const accepted = files.filter((file) => sizeAllowed(file.size));
+    if (accepted.length === 0) {
       setNotice("Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
       return;
     }
     setBusy(true);
-    setNotice(null);
+    setNotice(files.length === accepted.length ? null : "Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
     try {
-      const base64 = await fileBase64(file);
-      const saved = await uploadFile({
-        data: { token, itemKey: item.itemKey, base64 },
-      });
-      if (!saved.ok) {
-        setNotice(saved.body);
-        return;
+      for (const file of accepted) {
+        const base64 = await fileBase64(file);
+        const saved = await uploadFile({
+          data: { token, itemKey: item.itemKey, base64 },
+        });
+        if (!saved.ok) {
+          setNotice(saved.body);
+          setView(await open({ data: { token } }));
+          return;
+        }
       }
       setNoteFor(null);
       setExplanation("");
       setView(await open({ data: { token } }));
     } catch {
       setNotice("The document could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onPassword = async (item: PublicItem) => {
+    const password = (passwordDrafts[item.itemKey] ?? "").trim();
+    if (!password) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const saved = await savePassword({
+        data: { token, itemKey: item.itemKey, password },
+      });
+      setPasswordDrafts((current) => ({ ...current, [item.itemKey]: "" }));
+      if (!saved.ok) {
+        setNotice(saved.body);
+        return;
+      }
+      setView(await open({ data: { token } }));
+    } catch {
+      setPasswordDrafts((current) => ({ ...current, [item.itemKey]: "" }));
+      setNotice("That could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onAsk = async () => {
+    const message = chatDraft.trim();
+    if (!message) return;
+    setBusy(true);
+    setNotice(null);
+    setChatMessages((current) => [...current, { role: "you", text: message }]);
+    setChatDraft("");
+    try {
+      const result = await ask({ data: { token, message } });
+      const reply = result.ok ? result.reply : result.body;
+      setChatMessages((current) => [...current, { role: "she", text: reply }]);
+    } catch {
+      setChatMessages((current) => [
+        ...current,
+        { role: "she", text: "I'll check with Theo's practice" },
+      ]);
     } finally {
       setBusy(false);
     }
@@ -339,6 +550,22 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
       onExplanation={setExplanation}
       onSaveNote={(item) => void onNote(item)}
       loadFailed={loadFailed}
+      chatOpen={chatOpen}
+      chatMessages={chatMessages}
+      chatDraft={chatDraft}
+      onToggleChat={() => setChatOpen((openChat) => !openChat)}
+      onChatDraft={setChatDraft}
+      onAsk={() => void onAsk()}
+      passwordDrafts={passwordDrafts}
+      onPasswordDraft={(itemKey, value) =>
+        setPasswordDrafts((current) => ({ ...current, [itemKey]: value }))
+      }
+      onPassword={(item) => void onPassword(item)}
+      onNext={() => {
+        if (!view?.ok || !checklistReady(view.items)) return;
+        setThanks(true);
+      }}
+      thanks={thanks}
       onRetry={() => {
         if (busy) return;
         setAttempt((current) => current + 1);

@@ -2,11 +2,25 @@
  * Public /a/<token> actions. Service role only. The raw token is hashed
  * before lookup. File bytes are uploaded and downloaded with the service
  * role. The browser never receives a storage URL. Nothing is emailed,
- * extracted, or posted to a ledger.
+ * extracted, or posted to a ledger. Chat text and file passwords are not logged.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { CLAUDE_MODEL } from "@/lib/claude-config";
+import {
+  CLIENT_AGENT_CHAT_FALLBACK,
+  CLIENT_AGENT_CHAT_LIMIT,
+  CLIENT_AGENT_CHAT_WAIT,
+  guideDocumentQuestion,
+} from "@/lib/client-agent-chat";
+import {
+  CLIENT_AGENT_FILE_PASSWORD_KEY,
+  filePasswordKey,
+  openFilePassword,
+  sealFilePassword,
+} from "@/lib/client-agent-file-secret";
+import { recipientFirstName } from "@/lib/client-agent-send";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import {
   SEND_ATTEMPT_WINDOW_MS,
@@ -47,6 +61,7 @@ type SendRow = {
   revoked_at: string | null;
   consent_at: string | null;
   practice_display_name: string | null;
+  recipient_first_name: string | null;
 };
 
 type ItemRow = {
@@ -65,11 +80,17 @@ export type OpenLinkResult =
       ok: true;
       practiceName: string;
       expiresAt: string;
+      firstName: string | null;
       consented: boolean;
       notice: string;
       items: PublicItem[];
     }
   | ReturnType<typeof closedLink>;
+
+function missingRelation(error: DbError, name: string): boolean {
+  const message = error?.message ?? "";
+  return message.includes(name) && /does not exist|schema cache|could not find/i.test(message);
+}
 
 const tokenInput = z.object({
   token: z
@@ -170,14 +191,24 @@ async function loadSend(tokenHash: string): Promise<SendRow | null> {
       .select(columns)
       .eq("token_hash", tokenHash)
       .maybeSingle();
-  const wide = await query(
+  const named = await query(
+    "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name",
+  );
+  if (!named.error) return named.data;
+  const practice = await query(
     "id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
   );
-  if (!wide.error) return wide.data;
+  if (!practice.error && practice.data) {
+    return { ...practice.data, recipient_first_name: null };
+  }
   const plain = await query("id, firm_id, expires_at, revoked_at, consent_at");
   if (plain.error) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
   if (!plain.data) return null;
-  return { ...plain.data, practice_display_name: null };
+  return {
+    ...plain.data,
+    practice_display_name: null,
+    recipient_first_name: null,
+  };
 }
 
 async function loadFirmName(firmId: string): Promise<string | null> {
@@ -220,17 +251,75 @@ async function loadItems(sendId: string): Promise<PublicItem[]> {
     .select("item_key, label, totals_only, status, quality, storage_path")
     .eq("send_id", sendId);
   if (error) throw new Error(sendLinkLogLine({ event: "link", reason: "items" }));
+  const files = await loadFileMeta(sendId);
   return toPublicChecklist(
-    (data ?? []).map((row) => ({
-      sendId,
-      itemKey: row.item_key,
-      label: row.label,
-      totalsOnly: row.totals_only === true,
-      status: row.status,
-      quality: row.quality,
-      storagePath: row.storage_path,
-    })),
+    (data ?? []).map((row) => {
+      const extra = files?.get(row.item_key);
+      const stored = typeof row.storage_path === "string" && row.storage_path.length > 0;
+      return {
+        sendId,
+        itemKey: row.item_key,
+        label: row.label,
+        totalsOnly: row.totals_only === true,
+        status: row.status,
+        quality: row.quality,
+        storagePath: stored || (extra?.count ?? 0) > 0 ? row.storage_path || "stored" : null,
+        fileCount: extra?.count ?? (stored ? 1 : 0),
+        passwordSaved: extra?.passwordSaved === true,
+      };
+    }),
     sendId,
+  );
+}
+
+async function loadFileMeta(
+  sendId: string,
+): Promise<Map<string, { count: number; passwordSaved: boolean }> | null> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => Promise<{
+            data: Array<{ item_key: string; password_box: string | null; created_at: string }> | null;
+            error: DbError;
+          }>;
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .select("item_key, password_box, created_at")
+    .eq("send_id", sendId);
+  if (error) {
+    if (missingRelation(error, "client_agent_send_files")) return null;
+    throw new Error(sendLinkLogLine({ event: "link", reason: "files" }));
+  }
+  const grouped = new Map<string, { count: number; passwordSaved: boolean; at: string }>();
+  for (const row of data ?? []) {
+    const current = grouped.get(row.item_key);
+    const at = row.created_at ?? "";
+    if (!current) {
+      grouped.set(row.item_key, {
+        count: 1,
+        passwordSaved: Boolean(row.password_box),
+        at,
+      });
+      continue;
+    }
+    current.count += 1;
+    if (at >= current.at) {
+      current.at = at;
+      current.passwordSaved = Boolean(row.password_box);
+    }
+  }
+  return new Map(
+    [...grouped.entries()].map(([key, value]) => [
+      key,
+      { count: value.count, passwordSaved: value.passwordSaved },
+    ]),
   );
 }
 
@@ -312,10 +401,12 @@ async function present(send: SendRow, items: PublicItem[]): Promise<OpenLinkResu
     practiceDisplayName: send.practice_display_name,
     firmName: await loadFirmName(send.firm_id),
   });
+  const firstName = recipientFirstName(send.recipient_first_name);
   return {
     ok: true,
     practiceName,
     expiresAt: send.expires_at,
+    firstName: firstName.ok ? firstName.name : null,
     ...openLinkView({
       consented: consentReady(send.consent_at),
       notice: clientConsentNotice(practiceName),
@@ -492,6 +583,17 @@ export const uploadClientAgentFile = createServerFn({ method: "POST" })
     if (!stored.value) return closedLink("mime");
 
     const previous = await loadStoredPath(resolved.send.id, data.itemKey);
+    const filed = await insertSendFile({
+      send_id: resolved.send.id,
+      item_key: data.itemKey,
+      storage_path: path,
+      mime: stored.value.mime,
+      size_bytes: stored.value.size,
+    });
+    if (filed === "failed") {
+      await objectStorage().remove([path]);
+      throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+    }
     try {
       await updateItem(resolved.send.id, data.itemKey, {
         status: "received",
@@ -506,6 +608,7 @@ export const uploadClientAgentFile = createServerFn({ method: "POST" })
       throw error;
     }
     if (
+      filed === "legacy" &&
       previous &&
       previous !== path &&
       pathBelongsToSend(previous, resolved.send.id, data.itemKey)
@@ -556,5 +659,225 @@ export const finishClientAgentItem = createServerFn({ method: "POST" })
       return { ok: true };
     },
   );
+
+async function insertSendFile(row: {
+  send_id: string;
+  item_key: string;
+  storage_path: string;
+  mime: string;
+  size_bytes: number;
+}): Promise<"stored" | "legacy" | "failed"> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        insert: (value: Record<string, unknown>) => Promise<{ error: DbError }>;
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .insert(row);
+  if (!error) return "stored";
+  if (missingRelation(error, "client_agent_send_files")) return "legacy";
+  return "failed";
+}
+
+export const saveClientAgentFilePassword = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    tokenInput
+      .extend({
+        itemKey: z.string().regex(/^[a-z0-9_]+$/),
+        password: z.string().min(1).max(80),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }): Promise<{ ok: true } | { ok: false; body: string }> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return { ok: false, body: resolved.body };
+    if (!consentReady(resolved.send.consent_at)) return { ok: false, body: "Agree first." };
+    const password = data.password.replace(/\s+/g, " ").trim();
+    if (!password || password.length > 80) return { ok: false, body: "That could not be saved." };
+    const key = filePasswordKey(process.env[CLIENT_AGENT_FILE_PASSWORD_KEY]);
+    if (!key) return { ok: false, body: "That could not be saved." };
+    const sealed = await sealFilePassword(password, key);
+    const saved = await storeFilePassword(resolved.send.id, data.itemKey, sealed);
+    if (!saved) return { ok: false, body: "That could not be saved." };
+    return { ok: true };
+  });
+
+async function storeFilePassword(
+  sendId: string,
+  itemKey: string,
+  sealed: { iv: string; box: string },
+): Promise<boolean> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => Promise<{
+              data: Array<{ id: string; created_at: string }> | null;
+              error: DbError;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .select("id, created_at")
+    .eq("send_id", sendId)
+    .eq("item_key", itemKey);
+  if (error || !data?.length) return false;
+  const latest = [...data].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+  if (!latest) return false;
+  const updated = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        update: (row: Record<string, unknown>) => {
+          eq: (column: string, value: string) => Promise<{ error: DbError }>;
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .update({ password_iv: sealed.iv, password_box: sealed.box })
+    .eq("id", latest.id);
+  return !updated.error;
+}
+
+/**
+ * Opens one stored password for extraction, then deletes it.
+ * Not a server function. The public page cannot call it.
+ */
+export async function releaseClientAgentFilePassword(
+  sendId: string,
+  itemKey: string,
+): Promise<string | null> {
+  const key = filePasswordKey(process.env[CLIENT_AGENT_FILE_PASSWORD_KEY]);
+  if (!key) return null;
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => Promise<{
+              data: Array<{
+                id: string;
+                created_at: string;
+                password_iv: string | null;
+                password_box: string | null;
+              }> | null;
+              error: DbError;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .select("id, created_at, password_iv, password_box")
+    .eq("send_id", sendId)
+    .eq("item_key", itemKey);
+  if (error || !data?.length) return null;
+  const latest = [...data].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+  if (!latest?.password_iv || !latest.password_box) return null;
+  const plain = await openFilePassword(
+    { iv: latest.password_iv, box: latest.password_box },
+    key,
+  );
+  await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        update: (row: Record<string, unknown>) => {
+          eq: (column: string, value: string) => Promise<{ error: DbError }>;
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .update({ password_iv: null, password_box: null })
+    .eq("id", latest.id);
+  return plain;
+}
+
+export const askClientAgentLink = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    tokenInput.extend({ message: z.string().max(400) }).parse(input),
+  )
+  .handler(async ({ data }): Promise<{ ok: true; reply: string } | ReturnType<typeof closedLink>> => {
+    const resolved = await resolveToken(data.token);
+    if (!resolved.ok) return resolved;
+    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
+    const turns = await countChatTurns(resolved.send.id);
+    if (turns === null) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
+    if (turns >= CLIENT_AGENT_CHAT_LIMIT) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
+    const reply = await guideDocumentQuestion({
+      message: data.message,
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: CLAUDE_MODEL,
+    });
+    await recordChatTurn(resolved.send.id);
+    return { ok: true, reply };
+  });
+
+async function countChatTurns(sendId: string): Promise<number | null> {
+  const since = new Date(Date.now() - SEND_ATTEMPT_WINDOW_MS).toISOString();
+  const { count, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (
+          cols: string,
+          opts: { count: "exact"; head: boolean },
+        ) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            gte: (
+              column: string,
+              value: string,
+            ) => Promise<{ count: number | null; error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_chat_turns")
+    .select("id", { count: "exact", head: true })
+    .eq("send_id", sendId)
+    .gte("created_at", since);
+  if (error) {
+    if (missingRelation(error, "client_agent_send_chat_turns")) return null;
+    throw new Error(sendLinkLogLine({ event: "link", reason: "chat" }));
+  }
+  return count ?? 0;
+}
+
+async function recordChatTurn(sendId: string): Promise<void> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        insert: (row: Record<string, unknown>) => Promise<{ error: DbError }>;
+      };
+    }
+  )
+    .from("client_agent_send_chat_turns")
+    .insert({ send_id: sendId });
+  if (error && !missingRelation(error, "client_agent_send_chat_turns")) {
+    throw new Error(sendLinkLogLine({ event: "link", reason: "chat" }));
+  }
+}
 
 export type { ItemQuality };
