@@ -1364,6 +1364,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const sendDraftedInvite = useServerFn(sendDraftedOwnerInvite);
   const loadGen = useRef(0);
   const bookDeadlineTimer = useRef<number | null>(null);
+  const firmReloadTimer = useRef<number | null>(null);
   const figuresSettled = useRef(warmBook != null);
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -1659,6 +1660,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           window.clearTimeout(timer);
           bookDeadlineTimer.current = null;
         }
+        const firmTimer = firmReloadTimer.current;
+        if (firmTimer != null) {
+          window.clearTimeout(firmTimer);
+          firmReloadTimer.current = null;
+        }
       }
     }
   };
@@ -1709,9 +1715,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setClientsOutcome((outcome) => (outcome === "ready" ? outcome : "error"));
       if (!figuresSettled.current) setFiguresLoad("failed");
     }, SHELL_GATE_TIMEOUT_MS);
+    firmReloadTimer.current = timer;
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      if (firmReloadTimer.current === timer) firmReloadTimer.current = null;
     };
   }, [user?.id, firmId]);
 
@@ -2059,7 +2067,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   // ── Render ────────────────────────────────────────────────────────────────
   if (!portalReady) {
     return (
-      <div className="accountant-portal premium-shell">
+      <div className="accountant-portal premium-shell" data-book-timed-out={bookTimedOut ? "true" : "false"}>
         <main className="shell milon-page-enter">
           <DashboardSkeleton className="min-h-screen py-8" />
         </main>
@@ -2068,7 +2076,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   }
 
   return (
-    <div className={`accountant-portal premium-shell practice-home milon-page-enter${mobileNavOpen ? " nav-open" : ""}`}>
+    <div
+      className={`accountant-portal premium-shell practice-home milon-page-enter${mobileNavOpen ? " nav-open" : ""}`}
+      data-book-timed-out={bookTimedOut ? "true" : "false"}
+    >
       <WalkthroughWizard
         variant={clientRows.length > 0 ? "accountant-dashboard" : "accountant-dashboard-empty"}
         ready={!loading && !brandLoading && !firstClientOpen && !addOpen}
