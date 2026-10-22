@@ -175,12 +175,12 @@ assert(openRoute.includes("isSafeSmartLandingHref"), "landing refuses an unexpec
 const wall = readFileSync(resolve("src/routes/billing.required.tsx"), "utf8");
 assert(wall.includes("FIRM_WALL_BACK_LABEL"), "wall offers a way back to the client list");
 assert(wall.includes("loadFirstFirmClient"), "wall looks up the open client");
-assert(wall.includes("firmWallWhyLine"), "wall says why the first client stays open");
+assert(!wall.includes("firmWallWhyLine"), "wall does not add a why line");
 assert(
-  readFileSync(resolve("src/lib/billing-wall.ts"), "utf8").includes(
+  !readFileSync(resolve("src/lib/billing-wall.ts"), "utf8").includes(
     "Your first client and its numbers stay open",
   ),
-  "wall names the open file in accountant terms",
+  "wall does not name an open file",
 );
 assert(
   wall.includes("FIRM_WALL_START_LABEL"),
