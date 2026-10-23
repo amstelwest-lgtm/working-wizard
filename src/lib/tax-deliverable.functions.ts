@@ -27,13 +27,16 @@ import {
   missingItemQuery,
   parseTaxPackPayload,
   renderTaxPackBody,
+  classifyTaxPackClaudeOutcome,
   taxPackAlreadyOpen,
   taxPackAssumptions,
+  taxPackClaudeRequestBody,
   taxPackDraftFailure,
   taxPackFileIntro,
   taxPackIsEmpty,
   taxPackPasswordStop,
   taxPackSystemPrompt,
+  type TaxPackClaudeFailureReason,
   unreadableFileQuery,
   withExtraQueries,
   type TaxPackSourceFile,
@@ -227,11 +230,24 @@ function contentChars(blocks: readonly ClaudeContentBlock[]): number {
   return total;
 }
 
+function claudeErrorDetail(raw: string): { errorType: string | null; errorMessage: string | null } {
+  try {
+    const json = JSON.parse(raw) as { error?: { type?: unknown; message?: unknown } };
+    return {
+      errorType: typeof json.error?.type === "string" ? json.error.type : null,
+      errorMessage:
+        typeof json.error?.message === "string" ? json.error.message.slice(0, 500) : null,
+    };
+  } catch {
+    return { errorType: null, errorMessage: null };
+  }
+}
+
 async function callClaude(input: {
   apiKey: string;
   system: string;
   content: ClaudeContentBlock[];
-}): Promise<{ text: string } | { failed: "model" | "timeout" }> {
+}): Promise<{ text: string; stopReason: string | null } | { failed: TaxPackClaudeFailureReason }> {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), CLAUDE_TIMEOUT_MS);
   try {
@@ -243,27 +259,47 @@ async function callClaude(input: {
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 3000,
-        temperature: 0,
-        system: input.system,
-        messages: [{ role: "user", content: input.content }],
-      }),
+      body: JSON.stringify(
+        taxPackClaudeRequestBody({
+          model: CLAUDE_MODEL,
+          system: input.system,
+          content: input.content,
+        }),
+      ),
     });
     if (!response.ok) {
-      await response.body?.cancel();
-      return { failed: "model" };
+      const raw = await response.text().catch(() => "");
+      const detail = claudeErrorDetail(raw.slice(0, 4000));
+      const outcome = classifyTaxPackClaudeOutcome({
+        httpStatus: response.status,
+        errorType: detail.errorType,
+        errorMessage: detail.errorMessage,
+      });
+      return { failed: outcome.ok ? "unavailable" : outcome.reason };
     }
-    const json = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
+    let json: { stop_reason?: unknown; content?: Array<{ type?: string; text?: string }> };
+    try {
+      json = (await response.json()) as typeof json;
+    } catch (error) {
+      const name = (error as { name?: string } | null)?.name;
+      if (name === "AbortError" || name === "TimeoutError") throw error;
+      const outcome = classifyTaxPackClaudeOutcome({ httpStatus: 200, parsed: false });
+      return { failed: outcome.ok ? "model" : outcome.reason };
+    }
     const text = (json.content ?? [])
       .filter((part) => part.type === "text")
       .map((part) => part.text ?? "")
       .join("")
       .trim();
-    return { text };
+    return {
+      text,
+      stopReason: typeof json.stop_reason === "string" ? json.stop_reason : null,
+    };
   } catch (error) {
-    return { failed: (error as Error)?.name === "AbortError" ? "timeout" : "model" };
+    const name = (error as { name?: string } | null)?.name;
+    const aborted = name === "AbortError" || name === "TimeoutError";
+    const outcome = classifyTaxPackClaudeOutcome({ aborted, network: !aborted });
+    return { failed: outcome.ok ? "unavailable" : outcome.reason };
   } finally {
     clearTimeout(timer);
   }
@@ -287,6 +323,11 @@ export type DraftTaxPackResult =
         | "ai_not_configured"
         | "model"
         | "timeout"
+        | "truncated"
+        | "rejected"
+        | "rate_limited"
+        | "overloaded"
+        | "context_too_large"
         | "empty";
       /** Display names of files that need their password saved first. */
       passwordNeeded?: string[];
@@ -451,11 +492,18 @@ async function draftTaxPack(
     ];
 
     const reply = await callClaude({ apiKey, system: taxPackSystemPrompt(), content });
-    // Locked files already returned above. A model or timeout failure still
+    // Locked files already returned above. A model-call failure still
     // names any that were collected, so the panel can list them.
     if ("failed" in reply) return taxPackDraftFailure(reply.failed, passwordNeeded);
     const parsed = parseTaxPackPayload(reply.text, files);
-    if (!parsed) return taxPackDraftFailure("model", passwordNeeded);
+    if (!parsed) {
+      const outcome = classifyTaxPackClaudeOutcome({
+        httpStatus: 200,
+        stopReason: reply.stopReason,
+        parsed: false,
+      });
+      return taxPackDraftFailure(outcome.ok ? "model" : outcome.reason, passwordNeeded);
+    }
     const draft = withExtraQueries(parsed, extraQueries);
     if (taxPackIsEmpty(draft) && draft.queries.length === 0) return { ok: false, reason: "empty" };
 

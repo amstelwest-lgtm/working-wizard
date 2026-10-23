@@ -14,10 +14,13 @@ import {
   TAX_PACK_WORKSHEET_NOTE,
   formatRandsFromCents,
   missingItemQuery,
+  TAX_PACK_CLAUDE_MAX_TOKENS,
+  classifyTaxPackClaudeOutcome,
   parseTaxPackPayload,
   renderTaxPackBody,
   taxPackAlreadyOpen,
   taxPackAssumptions,
+  taxPackClaudeRequestBody,
   taxPackDedupeTag,
   taxPackDraftFailure,
   taxPackFileIntro,
@@ -42,6 +45,7 @@ import {
   sampleTaxPackChecks,
   sampleTaxPackDraft,
 } from "../src/lib/tax-deliverable-fixture.ts";
+import { CLAUDE_SONNET_55 } from "../src/lib/claude-request.ts";
 import { draftKindLabel } from "../src/lib/client-brain-deliverable.ts";
 import {
   TAX_PACK_PANEL_BODY,
@@ -154,7 +158,9 @@ check("the body cites a source on every figure and carries the dedupe tag", () =
   assert.ok(body.includes("(check)"));
   assert.ok(body.includes(TAX_PACK_WORKSHEET_NOTE));
   assert.ok(body.includes(taxPackDedupeTag(SAMPLE_TAX_PACK_SEND_ID)));
-  const amountLines = body.split("\n").filter((line) => line.includes("R ") && line.startsWith("- "));
+  const amountLines = body
+    .split("\n")
+    .filter((line) => line.includes("R ") && line.startsWith("- "));
   for (const line of amountLines) assert.ok(line.includes("— source: "), line);
 });
 
@@ -332,7 +338,122 @@ check("model and timeout failures still name locked files when any were found", 
   const fn = source.slice(source.indexOf("async function draftTaxPack("));
   const failed = fn.indexOf('"failed" in reply');
   assert.ok(failed > 0 && fn.indexOf("taxPackDraftFailure(reply.failed, passwordNeeded)") > failed);
-  assert.ok(fn.includes('taxPackDraftFailure("model", passwordNeeded)'));
+  assert.ok(fn.includes("classifyTaxPackClaudeOutcome("), "an unparsed reply is classified");
+  assert.ok(
+    fn.includes('taxPackDraftFailure(outcome.ok ? "model" : outcome.reason, passwordNeeded)'),
+  );
+});
+
+check("Sonnet 5.5 draft request omits temperature and still parses a pack", () => {
+  const body = taxPackClaudeRequestBody({
+    model: CLAUDE_SONNET_55,
+    system: taxPackSystemPrompt(),
+    content: [
+      { type: "text", text: taxPackFileIntro(SAMPLE_TAX_PACK_FILES) },
+      {
+        type: "text",
+        text: "FILE file-income (extracted text):\nPractice turnover R 482 300.00",
+      },
+    ],
+  });
+  assert.equal(body.model, CLAUDE_SONNET_55);
+  assert.equal(body.max_tokens, TAX_PACK_CLAUDE_MAX_TOKENS);
+  assert.equal(body.max_tokens, 4096);
+  assert.equal("temperature" in body, false, "Sonnet 5.5 rejects a non-default temperature");
+  assert.equal(body.thinking?.type, "between_tools", "adaptive thinking stays off");
+  assert.equal(body.messages[0]?.role, "user");
+  const draft = parseTaxPackPayload(SAMPLE_TAX_PACK_REPLY, SAMPLE_TAX_PACK_FILES);
+  assert.ok(draft);
+  assert.ok(!taxPackIsEmpty(draft));
+  const rendered = renderTaxPackBody({
+    draft,
+    files: SAMPLE_TAX_PACK_FILES,
+    clientName: SAMPLE_TAX_PACK_CLIENT_NAME,
+    sendId: SAMPLE_TAX_PACK_SEND_ID,
+  });
+  assert.ok(rendered.includes("— source: sample-practice-income-2026.pdf"));
+  assert.deepEqual(
+    classifyTaxPackClaudeOutcome({ httpStatus: 200, stopReason: "end_turn", parsed: true }),
+    { ok: true },
+  );
+
+  const legacy = taxPackClaudeRequestBody({
+    model: "claude-legacy",
+    system: taxPackSystemPrompt(),
+    content: [{ type: "text", text: "FILE file-income" }],
+  });
+  assert.equal(legacy.temperature, 0, "a non-5.5 model keeps temperature 0");
+  assert.equal(legacy.thinking, undefined);
+
+  const server = read("src/lib/tax-deliverable.functions.ts");
+  assert.ok(server.includes("taxPackClaudeRequestBody("), "the server builds the shared request");
+  assert.equal(server.includes("temperature:"), false, "the server does not hard-code temperature");
+  const call = server.slice(
+    server.indexOf("async function callClaude("),
+    server.indexOf("export type DraftTaxPackResult"),
+  );
+  assert.equal(call.includes('failed: "model"'), false, "HTTP failures are classified");
+  assert.ok(call.includes("classifyTaxPackClaudeOutcome("));
+});
+
+check("known Claude failures are not reported as a silent model", () => {
+  const modelNotice = "The drafting model did not answer. Try again in a minute.";
+  const cases: Array<
+    [
+      {
+        httpStatus?: number;
+        errorType?: string;
+        errorMessage?: string;
+        aborted?: boolean;
+        network?: boolean;
+        stopReason?: string;
+        parsed?: boolean;
+      },
+      string,
+    ]
+  > = [
+    [
+      {
+        httpStatus: 400,
+        errorType: "invalid_request_error",
+        errorMessage: "`temperature` is deprecated for this model.",
+      },
+      "rejected",
+    ],
+    [
+      {
+        httpStatus: 400,
+        errorType: "invalid_request_error",
+        errorMessage: "prompt is too long: 210000 tokens > 200000 maximum",
+      },
+      "context_too_large",
+    ],
+    [{ httpStatus: 413, errorType: "request_too_large" }, "context_too_large"],
+    [{ httpStatus: 401, errorType: "authentication_error" }, "ai_not_configured"],
+    [{ httpStatus: 429, errorType: "rate_limit_error" }, "rate_limited"],
+    [{ httpStatus: 529, errorType: "overloaded_error" }, "overloaded"],
+    [{ httpStatus: 500, errorType: "api_error" }, "unavailable"],
+    [{ httpStatus: 504 }, "timeout"],
+    [{ aborted: true }, "timeout"],
+    [{ network: true }, "unavailable"],
+    [{ httpStatus: 200, stopReason: "end_turn", parsed: false }, "model"],
+    [{ httpStatus: 200, stopReason: "max_tokens", parsed: false }, "truncated"],
+    [{ httpStatus: 200, stopReason: "max_tokens", parsed: true }, "ok"],
+  ];
+  for (const [input, expected] of cases) {
+    const outcome = classifyTaxPackClaudeOutcome(input);
+    if (expected === "ok") {
+      assert.deepEqual(outcome, { ok: true }, JSON.stringify(input));
+      continue;
+    }
+    assert.deepEqual(outcome, { ok: false, reason: expected }, JSON.stringify(input));
+    if (expected === "model") continue;
+    const notice = draftTaxPackNotice({
+      ok: false,
+      reason: expected as "rejected",
+    });
+    assert.ok(notice && notice !== modelNotice, `${expected} has its own notice`);
+  }
 });
 
 // --- the review panel the accountant sees ---
@@ -390,9 +511,24 @@ check("status and notice copy stay calm and specific", () => {
 
 check("every failure reason has its own words, not one generic error", () => {
   const generic = "The pack could not be drafted.";
-  for (const reason of ["model", "timeout", "unavailable", "no_files", "empty"] as const) {
+  const modelNotice = "The drafting model did not answer. Try again in a minute.";
+  for (const reason of [
+    "model",
+    "timeout",
+    "unavailable",
+    "no_files",
+    "empty",
+    "truncated",
+    "rejected",
+    "rate_limited",
+    "overloaded",
+    "context_too_large",
+  ] as const) {
     const notice = draftTaxPackNotice({ ok: false, reason });
     assert.ok(notice && notice !== generic, `reason ${reason} is specific`);
+    if (reason !== "model") {
+      assert.notEqual(notice, modelNotice, `reason ${reason} is not the silent-model copy`);
+    }
   }
   const withNames = draftTaxPackNotice({
     ok: false,
@@ -422,6 +558,26 @@ check("every failure reason has its own words, not one generic error", () => {
   assert.equal(
     draftTaxPackNotice({ ok: false, reason: "timeout" }),
     "Reading the documents took too long. Try again — it helps to save passwords so large scans can be read as text.",
+  );
+  assert.equal(
+    draftTaxPackNotice({ ok: false, reason: "truncated" }),
+    "The draft was cut off before it finished. Try again in a minute.",
+  );
+  assert.equal(
+    draftTaxPackNotice({ ok: false, reason: "rejected" }),
+    "The drafter rejected this pack. Open any large scans yourself, then draft again.",
+  );
+  assert.equal(
+    draftTaxPackNotice({ ok: false, reason: "context_too_large" }),
+    "These documents are too large to draft together. Open the biggest files yourself, then draft again.",
+  );
+  assert.equal(
+    draftTaxPackNotice({ ok: false, reason: "rate_limited" }),
+    "Drafting is rate limited. Try again in a minute.",
+  );
+  assert.equal(
+    draftTaxPackNotice({ ok: false, reason: "overloaded" }),
+    "The drafting service is overloaded. Try again in a minute.",
   );
   assert.equal(
     draftTaxPackNotice({
