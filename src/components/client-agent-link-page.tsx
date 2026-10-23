@@ -11,6 +11,7 @@ import {
   CLIENT_AGENT_CHAT_ENABLED,
   CLIENT_AGENT_FAQ_TITLE,
   CLIENT_AGENT_FILE_NOTE,
+  CLIENT_AGENT_PASSWORD_REQUIRED,
   CLIENT_AGENT_PASSWORD_UNSAVED,
   checklistReady,
   itemNotAvailable,
@@ -40,6 +41,7 @@ import {
   type PublicItem,
 } from "@/lib/client-agent-link.functions";
 import { uploadToClientAgentSignedUrl } from "@/lib/client-agent-upload-browser";
+import { pickedPdfLooksEncrypted } from "@/lib/pdf-password";
 import { avatarPoster, fmClipSources } from "@/lib/fm-avatar-state";
 
 const PRIMARY =
@@ -488,6 +490,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   );
   const [chatDraft, setChatDraft] = useState("");
   const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
+  /** Items whose uploaded PDF looks password-protected, this session. */
+  const [lockedItems, setLockedItems] = useState<Record<string, boolean>>({});
   const [fileNames, setFileNames] = useState<Record<string, string[]>>({});
   const [thanks, setThanks] = useState(false);
 
@@ -583,6 +587,15 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
           return;
         }
       }
+      let lockedPick = false;
+      for (const file of accepted) {
+        if (clientFileMime(file.type, file.name) !== "application/pdf") continue;
+        try {
+          if (await pickedPdfLooksEncrypted(file)) lockedPick = true;
+        } catch {
+          // Unreadable bytes never block the upload itself.
+        }
+      }
       const stored: string[] = [];
       for (const file of accepted) {
         const prepared = await prepareUpload({
@@ -623,6 +636,18 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         ...current,
         [item.itemKey]: mode === "replace" ? stored : [...(current[item.itemKey] ?? []), ...stored],
       }));
+      setLockedItems((current) => ({
+        ...current,
+        [item.itemKey]:
+          mode === "replace" ? lockedPick : (current[item.itemKey] ?? false) || lockedPick,
+      }));
+      // A password already typed in the box is saved with the upload, so a
+      // client who filled the field first never loses it.
+      if ((passwordDrafts[item.itemKey] ?? "").trim()) {
+        await saveItemPassword(item);
+      } else if (lockedPick && !item.passwordSaved) {
+        setNotice(CLIENT_AGENT_PASSWORD_REQUIRED);
+      }
       rememberScroll();
       setView(await open({ data: { token } }));
     } catch {
@@ -643,6 +668,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         return;
       }
       setFileNames((current) => ({ ...current, [item.itemKey]: [] }));
+      setLockedItems((current) => ({ ...current, [item.itemKey]: false }));
       setPasswordDrafts((current) => ({ ...current, [item.itemKey]: "" }));
       rememberScroll();
       setView(await open({ data: { token } }));
@@ -817,6 +843,18 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
             return;
           }
           if (!checklistReady(view.items)) return;
+          // A locked PDF cannot be finished without its password: the
+          // accountant could not open it and the pack would stall.
+          const missingPassword = view.items.find(
+            (item) =>
+              lockedItems[item.itemKey] &&
+              !item.passwordSaved &&
+              !(passwordDrafts[item.itemKey] ?? "").trim(),
+          );
+          if (missingPassword) {
+            setNotice(CLIENT_AGENT_PASSWORD_REQUIRED);
+            return;
+          }
           rememberScroll();
           setBusy(true);
           setNotice(null);
