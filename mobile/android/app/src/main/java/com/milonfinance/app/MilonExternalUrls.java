@@ -8,8 +8,8 @@ import java.util.Set;
 
 /**
  * Which navigations stay in the WebView, and which must leave it.
- * Google rejects sign-in inside an embedded WebView, and Stripe / ledger
- * OAuth pages are full browser flows. Those open in Custom Tabs.
+ * Google and Apple reject sign-in inside an embedded WebView, and Stripe /
+ * ledger OAuth pages are full browser flows. Those open in Custom Tabs.
  */
 final class MilonExternalUrls {
 
@@ -46,6 +46,12 @@ final class MilonExternalUrls {
         "accounting.sageone.co.za"
     );
 
+    /** Sign in with Apple. The WebView is not an allowed user agent. */
+    private static final Set<String> APPLE_SIGN_IN = setOf(
+        "appleid.apple.com",
+        "idmsa.apple.com"
+    );
+
     private MilonExternalUrls() {}
 
     static boolean isAppLinkReturn(Uri uri) {
@@ -62,6 +68,7 @@ final class MilonExternalUrls {
         String host = host(uri);
         if (host.isEmpty()) return false;
         if (isGoogleSignIn(host)) return true;
+        if (isAppleSignIn(host)) return true;
         if (isSupabaseAuth(host, uri.getPath())) return true;
         if (YOUTUBE.contains(host)) return true;
         return LEDGER_OAUTH.contains(host);
@@ -84,6 +91,10 @@ final class MilonExternalUrls {
 
     private static boolean isGoogleSignIn(String host) {
         return "accounts.google.com".equals(host) || host.startsWith("accounts.google.");
+    }
+
+    private static boolean isAppleSignIn(String host) {
+        return APPLE_SIGN_IN.contains(host);
     }
 
     /**
