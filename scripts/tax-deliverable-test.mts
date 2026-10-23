@@ -26,6 +26,7 @@ import {
   withExtraQueries,
 } from "../src/lib/tax-deliverable.ts";
 import {
+  TAX_PACK_PDF_DOCUMENT_MAX_BYTES,
   extractSendFileContent,
   pdfLooksEncrypted,
 } from "../src/lib/tax-deliverable-extract.server.ts";
@@ -212,10 +213,10 @@ check("images pass through, HEIC and oversized files are refused", async () => {
     mime: "image/png",
     password: null,
   });
-  assert.deepEqual(big, { kind: "unreadable", reason: "format" });
+  assert.deepEqual(big, { kind: "unreadable", reason: "oversized" });
 });
 
-check("an open PDF goes whole; the /Encrypt marker is noticed", async () => {
+check("a small scanned PDF goes whole; the /Encrypt marker is noticed", async () => {
   const open = new TextEncoder().encode("%PDF-1.7 plain sample body");
   assert.equal(pdfLooksEncrypted(open), false);
   const result = await extractSendFileContent({
@@ -226,6 +227,38 @@ check("an open PDF goes whole; the /Encrypt marker is noticed", async () => {
   assert.equal(result.kind, "pdf");
   const sealed = new TextEncoder().encode("%PDF-1.7 … /Encrypt 12 0 R …");
   assert.equal(pdfLooksEncrypted(sealed), true);
+});
+
+check("a sealed PDF without a password is a password query, never a crash", async () => {
+  const sealed = new TextEncoder().encode("%PDF-1.7 … /Encrypt 12 0 R …");
+  const noPassword = await extractSendFileContent({
+    bytes: sealed,
+    mime: "application/pdf",
+    password: null,
+  });
+  assert.deepEqual(noPassword, { kind: "unreadable", reason: "password" });
+  const wrongPassword = await extractSendFileContent({
+    bytes: sealed,
+    mime: "application/pdf",
+    password: "sample-password",
+  });
+  assert.equal(wrongPassword.kind, "unreadable");
+});
+
+check("an oversized open PDF with no text layer is left out, never shipped", async () => {
+  const big = new Uint8Array(TAX_PACK_PDF_DOCUMENT_MAX_BYTES + 1);
+  const head = new TextEncoder().encode("%PDF-1.7 big scan");
+  big.set(head, 0);
+  const result = await extractSendFileContent({
+    bytes: big,
+    mime: "application/pdf",
+    password: null,
+  });
+  assert.deepEqual(result, { kind: "unreadable", reason: "oversized" });
+  assert.ok(
+    unreadableFileQuery(SAMPLE_TAX_PACK_FILES[0], "oversized").includes("too large"),
+    "the oversized query names the problem",
+  );
 });
 
 // --- the review panel the accountant sees ---
@@ -274,6 +307,22 @@ check("status and notice copy stay calm and specific", () => {
   assert.equal(draftTaxPackNotice({ ok: true }), null);
   assert.ok(draftTaxPackNotice({ ok: false, reason: "not_ready" })?.includes("finished the link"));
   assert.ok(draftTaxPackNotice({ ok: false, reason: "already_open" })?.includes("already open"));
+});
+
+check("every failure reason has its own words, not one generic error", () => {
+  const generic = "The pack could not be drafted.";
+  for (const reason of ["model", "timeout", "unavailable", "no_files", "empty"] as const) {
+    const notice = draftTaxPackNotice({ ok: false, reason });
+    assert.ok(notice && notice !== generic, `reason ${reason} is specific`);
+  }
+  const withNames = draftTaxPackNotice({
+    ok: false,
+    reason: "passwords_needed",
+    passwordNeeded: ["Bankstate.pdf", "Certificate(s).pdf"],
+  });
+  assert.ok(withNames?.includes("Bankstate.pdf"), "the notice names the locked files");
+  assert.ok(withNames?.includes("Certificate(s).pdf"));
+  assert.ok(withNames?.includes("Save each password"), "the notice says what to do");
 });
 
 check("tax packs are labelled, not mislabelled as advisory", () => {

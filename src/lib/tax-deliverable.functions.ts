@@ -42,6 +42,9 @@ import { isSupabaseAdminConfigured, supabaseAdmin } from "@/integrations/supabas
 const FILE_PASSWORD_USED_ACTION = "client_agent_file_password_used";
 const MAX_OPEN_TAX_PACKS = 3;
 const MAX_FILES = 24;
+/** Cap on the whole model payload (base64 + text), so one big send cannot time the call out. */
+const MAX_TOTAL_CONTENT_CHARS = 6_000_000;
+const CLAUDE_TIMEOUT_MS = 90_000;
 
 type DbError = { message: string } | null;
 
@@ -213,14 +216,26 @@ function contentBlockFor(fileId: string, content: SendFileContent): ClaudeConten
   return [];
 }
 
+function contentChars(blocks: readonly ClaudeContentBlock[]): number {
+  let total = 0;
+  for (const block of blocks) {
+    if (block.type === "text") total += block.text.length;
+    else total += block.source.data.length;
+  }
+  return total;
+}
+
 async function callClaude(input: {
   apiKey: string;
   system: string;
   content: ClaudeContentBlock[];
-}): Promise<string | null> {
+}): Promise<{ text: string } | { failed: "model" | "timeout" }> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), CLAUDE_TIMEOUT_MS);
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal: abort.signal,
       headers: {
         "x-api-key": input.apiKey,
         "anthropic-version": "2023-06-01",
@@ -236,16 +251,19 @@ async function callClaude(input: {
     });
     if (!response.ok) {
       await response.body?.cancel();
-      return null;
+      return { failed: "model" };
     }
     const json = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
-    return (json.content ?? [])
+    const text = (json.content ?? [])
       .filter((part) => part.type === "text")
       .map((part) => part.text ?? "")
       .join("")
       .trim();
-  } catch {
-    return null;
+    return { text };
+  } catch (error) {
+    return { failed: (error as Error)?.name === "AbortError" ? "timeout" : "model" };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -261,11 +279,15 @@ export type DraftTaxPackResult =
         | "not_found"
         | "not_ready"
         | "no_files"
+        | "passwords_needed"
         | "already_open"
         | "draft_limit"
         | "ai_not_configured"
         | "model"
+        | "timeout"
         | "empty";
+      /** Display names of files that need their password saved first. */
+      passwordNeeded?: string[];
     };
 
 export const draftTaxPackFromSend = createServerFn({ method: "POST" })
@@ -274,11 +296,24 @@ export const draftTaxPackFromSend = createServerFn({ method: "POST" })
     z.object({ clientId: z.string().uuid(), sendId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }): Promise<DraftTaxPackResult> => {
+    // A thrown error must reach the page as a reason, not a 500.
+    try {
+      return await draftTaxPack(data, context.userId);
+    } catch {
+      return { ok: false, reason: "unavailable" };
+    }
+  });
+
+async function draftTaxPack(
+  data: { clientId: string; sendId: string },
+  userId: string,
+): Promise<DraftTaxPackResult> {
+  {
     if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
     const firm = await firmOfClient(data.clientId);
     if (!firm.ok) return { ok: false, reason: "not_on_firm" };
     if (!sendAgentFirmAllowed(firm.firmId)) return { ok: false, reason: "not_allowed" };
-    if (!(await isFirmMember(context.userId, firm.firmId))) {
+    if (!(await isFirmMember(userId, firm.firmId))) {
       return { ok: false, reason: "forbidden" };
     }
 
@@ -326,6 +361,7 @@ export const draftTaxPackFromSend = createServerFn({ method: "POST" })
     const files: TaxPackSourceFile[] = [];
     const blocks: ClaudeContentBlock[] = [];
     const extraQueries: string[] = [];
+    const passwordNeeded: string[] = [];
     const key = filePasswordKey(process.env[CLIENT_AGENT_FILE_PASSWORD_KEY]);
     for (const file of fileRows.slice(0, MAX_FILES)) {
       const ref: TaxPackSourceFile = {
@@ -333,38 +369,54 @@ export const draftTaxPackFromSend = createServerFn({ method: "POST" })
         itemKey: file.itemKey,
         displayName: file.displayName,
       };
-      const downloaded = await sendStorage().download(file.storagePath);
-      if (downloaded.error || !downloaded.data) {
-        extraQueries.push(unreadableFileQuery(ref, "parse"));
-        continue;
-      }
-      const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
+      // One bad file must never kill the whole draft — it becomes a query.
+      try {
+        const downloaded = await sendStorage().download(file.storagePath);
+        if (downloaded.error || !downloaded.data) {
+          extraQueries.push(unreadableFileQuery(ref, "parse"));
+          continue;
+        }
+        const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
 
-      let password: string | null = null;
-      if (file.passwordIv && file.passwordBox && key) {
-        const audited = await auditPasswordUse({
-          userId: context.userId,
-          firmId: firm.firmId,
-          clientId: data.clientId,
-          fileId: file.id,
-          sendId: data.sendId,
-        });
-        if (audited) {
-          try {
-            password = await openFilePassword({ iv: file.passwordIv, box: file.passwordBox }, key);
-          } catch {
-            password = null;
+        let password: string | null = null;
+        if (file.passwordIv && file.passwordBox && key) {
+          const audited = await auditPasswordUse({
+            userId,
+            firmId: firm.firmId,
+            clientId: data.clientId,
+            fileId: file.id,
+            sendId: data.sendId,
+          });
+          if (audited) {
+            try {
+              password = await openFilePassword(
+                { iv: file.passwordIv, box: file.passwordBox },
+                key,
+              );
+            } catch {
+              password = null;
+            }
           }
         }
-      }
 
-      const content = await extractSendFileContent({ bytes, mime: file.mime, password });
-      if (content.kind === "unreadable") {
-        extraQueries.push(unreadableFileQuery(ref, content.reason));
-        continue;
+        const content = await extractSendFileContent({ bytes, mime: file.mime, password });
+        if (content.kind === "unreadable") {
+          if (content.reason === "password") {
+            passwordNeeded.push(ref.displayName ?? itemLabel(ref.itemKey, null));
+          }
+          extraQueries.push(unreadableFileQuery(ref, content.reason));
+          continue;
+        }
+        const fileBlocks = contentBlockFor(file.id, content);
+        if (contentChars(blocks) + contentChars(fileBlocks) > MAX_TOTAL_CONTENT_CHARS) {
+          extraQueries.push(unreadableFileQuery(ref, "oversized"));
+          continue;
+        }
+        files.push(ref);
+        blocks.push(...fileBlocks);
+      } catch {
+        extraQueries.push(unreadableFileQuery(ref, "parse"));
       }
-      files.push(ref);
-      blocks.push(...contentBlockFor(file.id, content));
     }
 
     for (const item of items) {
@@ -379,7 +431,12 @@ export const draftTaxPackFromSend = createServerFn({ method: "POST" })
       );
     }
 
-    if (files.length === 0) return { ok: false, reason: "no_files" };
+    if (files.length === 0) {
+      if (passwordNeeded.length > 0) {
+        return { ok: false, reason: "passwords_needed", passwordNeeded };
+      }
+      return { ok: false, reason: "no_files" };
+    }
 
     const intro = taxPackFileIntro(files);
     const checklist = items
@@ -394,8 +451,8 @@ export const draftTaxPackFromSend = createServerFn({ method: "POST" })
     ];
 
     const reply = await callClaude({ apiKey, system: taxPackSystemPrompt(), content });
-    if (reply == null) return { ok: false, reason: "model" };
-    const parsed = parseTaxPackPayload(reply, files);
+    if ("failed" in reply) return { ok: false, reason: reply.failed };
+    const parsed = parseTaxPackPayload(reply.text, files);
     if (!parsed) return { ok: false, reason: "model" };
     const draft = withExtraQueries(parsed, extraQueries);
     if (taxPackIsEmpty(draft) && draft.queries.length === 0) return { ok: false, reason: "empty" };
@@ -412,8 +469,9 @@ export const draftTaxPackFromSend = createServerFn({ method: "POST" })
       body,
       assumption_checklist: taxPackAssumptions(draft, files),
       status: "draft",
-      created_by: context.userId,
+      created_by: userId,
     });
     if (inserted.error) return { ok: false, reason: "unavailable" };
     return { ok: true };
-  });
+  }
+}
