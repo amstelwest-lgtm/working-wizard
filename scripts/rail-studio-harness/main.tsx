@@ -44,6 +44,7 @@ import { AqaFollowupPreview } from "./aqa-followup-preview";
 import { AqaRetest573Preview } from "./aqa-retest-573-preview";
 import { AqaPracticePreview } from "./aqa-practice-preview";
 import { WalkthroughPreview } from "./walkthrough-preview";
+import { TaxPackPreview } from "./tax-pack-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -608,6 +609,22 @@ const walkthroughRoute = createRoute({
   },
 });
 
+const taxPackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tax-pack",
+  validateSearch: (search: Record<string, unknown>) => ({
+    view: search.view === "draft" ? ("draft" as const) : ("profile" as const),
+  }),
+  component: function TaxPackHarness() {
+    const search = useSearch({ strict: false }) as { view?: "profile" | "draft" };
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <TaxPackPreview view={search.view ?? "profile"} />
+      </MarketProvider>
+    );
+  },
+});
+
 const proofLandingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/proof-landing",
@@ -643,6 +660,7 @@ const routeTree = rootRoute.addChildren([
   settingsBrandRoute,
   settingsTeamRoute,
   proofLandingRoute,
+  taxPackRoute,
   walkthroughRoute,
   personaCritRoute,
   retest560Route,
