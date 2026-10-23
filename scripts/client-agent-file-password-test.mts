@@ -10,9 +10,12 @@ import { AccountantSendFileList } from "../src/components/accountant-send-files.
 import { filePasswordKey, openFilePassword, sealFilePassword } from "../src/lib/client-agent-file-secret.ts";
 import {
   FILE_PASSWORD_HIDE_MS,
+  FILE_PASSWORD_MAX,
   FILE_PASSWORD_READ_ACTION,
+  FILE_PASSWORD_SEAL_ACTION,
   filePasswordAuditDetails,
   revealFilePassword,
+  sealFilePasswordGate,
   sendFileHasPassword,
   type FilePasswordCaller,
   type FilePasswordRecord,
@@ -310,5 +313,135 @@ const masked = renderToStaticMarkup(
 assert(masked.includes('type="password"'), "the password is masked until reveal");
 assert(masked.includes("Reveal"), "a masked password can be revealed");
 assert(masked.includes('data-file-password="masked"'), "the masked state is marked");
+
+// --- sealing a password the client never saved ---
+const openFile = { clientId: "client-1", passwordBox: null };
+const sealAnon = sealFilePasswordGate({
+  caller: { userId: null, firmMember: true, firmAllowed: true },
+  requestedClientId: "client-1",
+  file: openFile,
+  password: plain,
+});
+assert(!sealAnon.ok && sealAnon.reason === "anon", "an anonymous caller cannot seal");
+
+const sealMissing = sealFilePasswordGate({
+  caller,
+  requestedClientId: "client-1",
+  file: null,
+  password: plain,
+});
+assert(!sealMissing.ok && sealMissing.reason === "not_found", "a missing file cannot be sealed");
+
+const sealWrongClient = sealFilePasswordGate({
+  caller,
+  requestedClientId: "client-2",
+  file: openFile,
+  password: plain,
+});
+assert(
+  !sealWrongClient.ok && sealWrongClient.reason === "not_found",
+  "a file on another client cannot be sealed",
+);
+
+const sealOutsider = sealFilePasswordGate({
+  caller: { ...caller, firmMember: false },
+  requestedClientId: "client-1",
+  file: openFile,
+  password: plain,
+});
+assert(!sealOutsider.ok && sealOutsider.reason === "forbidden", "a non-member cannot seal");
+
+const sealOtherFirm = sealFilePasswordGate({
+  caller: { ...caller, firmAllowed: false },
+  requestedClientId: "client-1",
+  file: openFile,
+  password: plain,
+});
+assert(
+  !sealOtherFirm.ok && sealOtherFirm.reason === "forbidden",
+  "a firm outside the send list cannot seal",
+);
+
+const sealTaken = sealFilePasswordGate({
+  caller,
+  requestedClientId: "client-1",
+  file: { clientId: "client-1", passwordBox: sealed.box },
+  password: plain,
+});
+assert(
+  !sealTaken.ok && sealTaken.reason === "already",
+  "what the client saved is never overwritten",
+);
+
+const sealBlank = sealFilePasswordGate({
+  caller,
+  requestedClientId: "client-1",
+  file: openFile,
+  password: "   ",
+});
+assert(!sealBlank.ok && sealBlank.reason === "password", "a blank password is refused");
+
+const sealLong = sealFilePasswordGate({
+  caller,
+  requestedClientId: "client-1",
+  file: openFile,
+  password: "x".repeat(FILE_PASSWORD_MAX + 1),
+});
+assert(!sealLong.ok && sealLong.reason === "password", "an oversize password is refused");
+
+const sealOk = sealFilePasswordGate({
+  caller,
+  requestedClientId: "client-1",
+  file: openFile,
+  password: `  ${plain}  `,
+});
+assert(sealOk.ok && sealOk.password === plain, "a good password is accepted trimmed");
+assert(
+  FILE_PASSWORD_SEAL_ACTION === "client_agent_file_password_sealed",
+  "the seal audit action is its own mark",
+);
+
+const sealSrc = fn.slice(
+  fn.indexOf("export const sealClientAgentFilePassword"),
+  fn.indexOf("export type ReviewAgentSendResult"),
+);
+assert(sealSrc.length > 0, "the seal server function exists");
+assert(sealSrc.includes(".middleware([requireSupabaseAuth])"), "the seal requires a logged-in user");
+assert(sealSrc.includes("sealFilePasswordGate"), "the seal uses the membership gate");
+assert(sealSrc.includes("isFirmMember"), "membership is checked");
+assert(sealSrc.includes("sendAgentFirmAllowed"), "the firm allowlist is checked");
+assert(sealSrc.includes("FILE_PASSWORD_SEAL_ACTION"), "the audit action is the seal mark");
+assert(
+  sealSrc.indexOf('table("audit_log")') > 0 &&
+    sealSrc.indexOf('table("audit_log")') < sealSrc.indexOf(".update("),
+  "the audit row lands before the ciphertext is written",
+);
+assert(sealSrc.includes('.is("password_box", null)'), "the write never replaces a stored password");
+assert(sealSrc.includes("sealFilePassword(") && sealSrc.includes("filePasswordKey"), "the password is sealed with the server key");
+assert(!sealSrc.includes("console."), "the seal does not log");
+assert(!/return\s*\{[^}]*password/.test(sealSrc), "the seal returns no password");
+assert(!/password_iv:\s*null|password_box:\s*null/.test(sealSrc), "the seal never clears a password");
+
+const sealable = renderToStaticMarkup(
+  createElement(AccountantSendFileList, {
+    files,
+    revealed: null,
+    busyFileId: null,
+    onShow: () => undefined,
+    onToggleVisible: () => undefined,
+    onCopy: () => undefined,
+    onSeal: () => undefined,
+  }),
+);
+assert(
+  sealable.includes('data-seal-password="file-without"'),
+  "a file without a password offers save password",
+);
+assert(!sealable.includes('data-seal-password="file-with"'), "a saved password cannot be replaced");
+assert(sealable.includes("Save password"), "the save control is named");
+assert(sealable.includes('type="password"'), "the typed password is masked");
+assert(!sealable.includes(plain), "nothing typed leaks into the markup");
+assert(panel.includes("sealClientAgentFilePassword"), "save password calls the server function");
+assert(panel.includes("onSeal"), "the panel wires the save control");
 
 console.log("client agent file password test ok");

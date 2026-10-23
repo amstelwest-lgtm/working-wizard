@@ -11,13 +11,20 @@ import { copiedDocumentPaths, reviewDecision } from "@/lib/client-agent-done";
 import { sendFileDocumentPath, type ArtifactPathRow } from "@/lib/client-agent-send-backfill";
 import { copyMissingSendArtifacts } from "@/lib/client-agent-send-archive.server";
 import { practiceDisplayName, sanitizeClientFileName, sendPracticeDisplayName } from "@/lib/client-agent-link";
-import { filePasswordKey, openFilePassword } from "@/lib/client-agent-file-secret";
+import {
+  filePasswordKey,
+  openFilePassword,
+  sealFilePassword,
+} from "@/lib/client-agent-file-secret";
 import {
   FILE_PASSWORD_READ_ACTION,
+  FILE_PASSWORD_SEAL_ACTION,
   filePasswordAuditDetails,
   revealFilePassword,
+  sealFilePasswordGate,
   sendFileHasPassword,
   type FilePasswordRevealResult,
+  type FilePasswordSealResult,
 } from "@/lib/client-agent-file-password-reveal";
 import { sendClientAgentInvite } from "@/lib/client-agent-invite-mail";
 import {
@@ -640,6 +647,91 @@ export const revealClientAgentFilePassword = createServerFn({ method: "POST" })
         }
       },
     });
+  });
+
+/**
+ * A firm owner or member seals a password onto a send file the client
+ * uploaded locked but never saved a password for. The client's own saved
+ * password is never overwritten, the plaintext is never stored or logged,
+ * and the write is audited first — no audit row, no write.
+ */
+export const sealClientAgentFilePassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        clientId: z.string().uuid(),
+        fileId: z.string().uuid(),
+        password: z.string().min(1).max(200),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }): Promise<FilePasswordSealResult> => {
+    const userId = context.userId;
+    if (!userId) return { ok: false, reason: "anon" };
+    if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
+
+    const found = await table("client_agent_send_files")
+      .select("id, send_id, password_box")
+      .eq("id", data.fileId)
+      .maybeSingle();
+    if (found.error) return { ok: false, reason: "unavailable" };
+    const fileId = typeof found.data?.id === "string" ? found.data.id : "";
+    const sendId = typeof found.data?.send_id === "string" ? found.data.send_id : "";
+    if (!fileId || !sendId) return { ok: false, reason: "not_found" };
+    const passwordBox =
+      typeof found.data?.password_box === "string" ? found.data.password_box : null;
+
+    const send = await table("client_agent_sends")
+      .select("id, client_id, firm_id")
+      .eq("id", sendId)
+      .maybeSingle();
+    if (send.error) return { ok: false, reason: "unavailable" };
+    const clientId = typeof send.data?.client_id === "string" ? send.data.client_id : "";
+    const firmId = typeof send.data?.firm_id === "string" ? send.data.firm_id : "";
+    if (!clientId || !firmId) return { ok: false, reason: "not_found" };
+
+    const firm = await firmOfClient(data.clientId);
+    if (!firm.ok || firm.firmId !== firmId) return { ok: false, reason: "not_found" };
+
+    const gate = sealFilePasswordGate({
+      caller: {
+        userId,
+        firmMember: await isFirmMember(userId, firm.firmId),
+        firmAllowed: sendAgentFirmAllowed(firm.firmId),
+      },
+      requestedClientId: data.clientId,
+      file: { clientId, passwordBox },
+      password: data.password,
+    });
+    if (!gate.ok) return gate;
+
+    const key = filePasswordKey(process.env.CLIENT_AGENT_FILE_PASSWORD_KEY);
+    if (!key) return { ok: false, reason: "unavailable" };
+
+    let recorded = false;
+    try {
+      const inserted = await table("audit_log").insert({
+        actor_id: userId,
+        action: FILE_PASSWORD_SEAL_ACTION,
+        firm_id: firmId,
+        client_id: clientId,
+        subject_user_id: null,
+        details: filePasswordAuditDetails(fileId, sendId),
+      });
+      recorded = !inserted.error;
+    } catch {
+      recorded = false;
+    }
+    if (!recorded) return { ok: false, reason: "unavailable" };
+
+    const sealed = await sealFilePassword(gate.password, key);
+    const updated = await table("client_agent_send_files")
+      .update({ password_iv: sealed.iv, password_box: sealed.box })
+      .eq("id", fileId)
+      .is("password_box", null);
+    if (updated.error) return { ok: false, reason: "unavailable" };
+    return { ok: true };
   });
 
 export type ReviewAgentSendResult =

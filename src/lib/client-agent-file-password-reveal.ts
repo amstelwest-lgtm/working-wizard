@@ -88,3 +88,38 @@ export async function revealFilePassword(input: {
   if (!recorded) return { ok: false, reason: "unavailable" };
   return { ok: true, password: plain };
 }
+
+export const FILE_PASSWORD_SEAL_ACTION = "client_agent_file_password_sealed";
+export const FILE_PASSWORD_MAX = 80;
+
+export type FilePasswordSealResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "anon" | "forbidden" | "not_found" | "already" | "password" | "unavailable";
+    };
+
+/**
+ * Whether a firm member may seal a password onto a send file the client
+ * left locked. A file that already has a sealed password is refused —
+ * what the client saved is never overwritten. The password itself is
+ * only returned to the caller for sealing, never stored or logged plain.
+ */
+export function sealFilePasswordGate(input: {
+  caller: FilePasswordCaller;
+  requestedClientId: string;
+  file: { clientId: string; passwordBox: string | null } | null;
+  password: string;
+}): { ok: true; password: string } | Exclude<FilePasswordSealResult, { ok: true }> {
+  if (!input.caller.userId) return { ok: false, reason: "anon" };
+  if (!input.file || input.file.clientId !== input.requestedClientId) {
+    return { ok: false, reason: "not_found" };
+  }
+  if (!input.caller.firmMember || !input.caller.firmAllowed) {
+    return { ok: false, reason: "forbidden" };
+  }
+  if (sendFileHasPassword(input.file.passwordBox)) return { ok: false, reason: "already" };
+  const password = input.password.trim();
+  if (!password || password.length > FILE_PASSWORD_MAX) return { ok: false, reason: "password" };
+  return { ok: true, password };
+}
