@@ -19,8 +19,10 @@ import {
   taxPackAlreadyOpen,
   taxPackAssumptions,
   taxPackDedupeTag,
+  taxPackDraftFailure,
   taxPackFileIntro,
   taxPackIsEmpty,
+  taxPackPasswordStop,
   taxPackSystemPrompt,
   unreadableFileQuery,
   withExtraQueries,
@@ -28,6 +30,7 @@ import {
 import {
   TAX_PACK_PDF_DOCUMENT_MAX_BYTES,
   extractSendFileContent,
+  pdfExceedsTaxPackCap,
   pdfLooksEncrypted,
 } from "../src/lib/tax-deliverable-extract.server.ts";
 import {
@@ -261,12 +264,88 @@ check("an oversized open PDF with no text layer is left out, never shipped", asy
   );
 });
 
+check("a PDF over the scan cap is never parsed and never becomes model content", async () => {
+  assert.equal(TAX_PACK_PDF_DOCUMENT_MAX_BYTES, 3 * 1024 * 1024, "the whole-scan cap stays 3 MB");
+  assert.equal(pdfExceedsTaxPackCap(TAX_PACK_PDF_DOCUMENT_MAX_BYTES), false);
+  assert.equal(pdfExceedsTaxPackCap(8 * 1024 * 1024), true);
+
+  const source = read("src/lib/tax-deliverable-extract.server.ts");
+  const pdfTextFn = source.slice(
+    source.indexOf("async function pdfText"),
+    source.indexOf("export async function extractSendFileContent"),
+  );
+  const parseImport = pdfTextFn.indexOf('import("pdf-parse")');
+  assert.ok(
+    pdfTextFn.indexOf("pdfExceedsTaxPackCap(") >= 0 &&
+      parseImport > pdfTextFn.indexOf("pdfExceedsTaxPackCap("),
+    "pdf-parse is not imported for an over-cap PDF",
+  );
+  const extractFn = source.slice(source.indexOf("export async function extractSendFileContent"));
+  const extractCap = extractFn.indexOf("pdfExceedsTaxPackCap(");
+  const extractParse = extractFn.indexOf("await pdfText(");
+  assert.ok(extractCap >= 0 && extractParse > extractCap, "the cap is applied before pdf-parse");
+
+  const big = new Uint8Array(TAX_PACK_PDF_DOCUMENT_MAX_BYTES + 1);
+  big.set(new TextEncoder().encode("%PDF-1.7 BT (practice income 482300) Tj /Encrypt"), 0);
+  const result = await extractSendFileContent({
+    bytes: big,
+    mime: "application/pdf",
+    password: null,
+  });
+  assert.deepEqual(result, { kind: "unreadable", reason: "oversized" });
+  assert.equal("text" in result, false, "extracted text is not model content");
+  assert.equal("base64" in result, false, "the PDF bytes are not model content");
+});
+
+check("locked files stop the draft before Claude, even when other files are readable", () => {
+  assert.equal(taxPackPasswordStop([]), null);
+  assert.deepEqual(taxPackPasswordStop(["Bankstate.pdf"]), {
+    ok: false,
+    reason: "passwords_needed",
+    passwordNeeded: ["Bankstate.pdf"],
+  });
+  const source = read("src/lib/tax-deliverable.functions.ts");
+  const fn = source.slice(source.indexOf("async function draftTaxPack("));
+  const stop = fn.indexOf("taxPackPasswordStop(passwordNeeded)");
+  const call = fn.indexOf("await callClaude(");
+  const noFiles = fn.indexOf("if (files.length === 0)");
+  assert.ok(stop > 0 && call > stop, "the password stop is before the model call");
+  assert.ok(noFiles > stop, "the stop is not only for a send with no readable files");
+  assert.equal(fn.slice(stop, noFiles).includes("files.length === 0"), false);
+  assert.ok(source.includes("const CLAUDE_TIMEOUT_MS = 90_000"), "the Claude abort stays 90s");
+});
+
+check("model and timeout failures still name locked files when any were found", () => {
+  assert.deepEqual(taxPackDraftFailure("model", ["Divorce order.pdf"]), {
+    ok: false,
+    reason: "model",
+    passwordNeeded: ["Divorce order.pdf"],
+  });
+  assert.deepEqual(taxPackDraftFailure("timeout", ["Bankstate.pdf"]), {
+    ok: false,
+    reason: "timeout",
+    passwordNeeded: ["Bankstate.pdf"],
+  });
+  assert.deepEqual(taxPackDraftFailure("model", []), { ok: false, reason: "model" });
+  assert.deepEqual(taxPackDraftFailure("timeout", []), { ok: false, reason: "timeout" });
+  const source = read("src/lib/tax-deliverable.functions.ts");
+  const fn = source.slice(source.indexOf("async function draftTaxPack("));
+  const failed = fn.indexOf('"failed" in reply');
+  assert.ok(failed > 0 && fn.indexOf("taxPackDraftFailure(reply.failed, passwordNeeded)") > failed);
+  assert.ok(fn.includes('taxPackDraftFailure("model", passwordNeeded)'));
+});
+
 // --- the review panel the accountant sees ---
 check("the panel shows the draft, its sources, and Approve/Discard", () => {
   const html = renderToStaticMarkup(
     createElement(TaxPackCard, {
       drafts: [
-        { id: "draft-1", body: sampleTaxPackBody(), status: "draft", checks: sampleTaxPackChecks() },
+        {
+          id: "draft-1",
+          body: sampleTaxPackBody(),
+          status: "draft",
+          checks: sampleTaxPackChecks(),
+        },
       ],
       canDraft: true,
       busy: false,
@@ -323,6 +402,35 @@ check("every failure reason has its own words, not one generic error", () => {
   assert.ok(withNames?.includes("Bankstate.pdf"), "the notice names the locked files");
   assert.ok(withNames?.includes("Certificate(s).pdf"));
   assert.ok(withNames?.includes("Save each password"), "the notice says what to do");
+  const modelWithNames = draftTaxPackNotice({
+    ok: false,
+    reason: "model",
+    passwordNeeded: ["Divorce order.pdf"],
+  });
+  assert.ok(modelWithNames?.includes("Divorce order.pdf"), "a model failure names locked files");
+  assert.ok(modelWithNames?.includes("Save each password"));
+  const timeoutWithNames = draftTaxPackNotice({
+    ok: false,
+    reason: "timeout",
+    passwordNeeded: ["Bankstate.pdf"],
+  });
+  assert.ok(timeoutWithNames?.includes("Bankstate.pdf"), "a timeout names locked files");
+  assert.equal(
+    draftTaxPackNotice({ ok: false, reason: "model" }),
+    "The drafting model did not answer. Try again in a minute.",
+  );
+  assert.equal(
+    draftTaxPackNotice({ ok: false, reason: "timeout" }),
+    "Reading the documents took too long. Try again — it helps to save passwords so large scans can be read as text.",
+  );
+  assert.equal(
+    draftTaxPackNotice({
+      ok: false,
+      reason: "ai_not_configured",
+      passwordNeeded: ["Bankstate.pdf"],
+    }),
+    "Drafting is not configured on this environment.",
+  );
 });
 
 check("tax packs are labelled, not mislabelled as advisory", () => {
