@@ -40,12 +40,24 @@ export function draftTaxPackNotice(result: DraftTaxPackResult): string | null {
       return "The pack can be drafted once the client has finished the link.";
     case "no_files":
       return "No readable documents on this send yet.";
+    case "passwords_needed": {
+      const names = (result.passwordNeeded ?? []).join(", ");
+      return names
+        ? `These files need their password saved first: ${names}. Save each password in the Files list above, then draft again.`
+        : "The documents need their passwords saved first. Save them in the Files list above, then draft again.";
+    }
     case "already_open":
       return "A pack for this send is already open below.";
     case "draft_limit":
       return "Close an open pack before drafting another.";
     case "ai_not_configured":
       return "Drafting is not configured on this environment.";
+    case "model":
+      return "The drafting model did not answer. Try again in a minute.";
+    case "timeout":
+      return "Reading the documents took too long. Try again — it helps to save passwords so large scans can be read as text.";
+    case "unavailable":
+      return "Drafting is unavailable right now. Try again in a minute.";
     case "empty":
       return "Nothing in the documents could be traced into a pack.";
     default:

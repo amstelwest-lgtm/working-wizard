@@ -28,6 +28,7 @@ import {
   reviewClientAgentSend,
   revealClientAgentFilePassword,
   revokeClientAgentSend,
+  sealClientAgentFilePassword,
   type AgentSendItem,
   type AgentSendRow,
 } from "@/lib/client-agent-send.functions";
@@ -45,6 +46,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
   const revoke = useServerFn(revokeClientAgentSend);
   const review = useServerFn(reviewClientAgentSend);
   const reveal = useServerFn(revealClientAgentFilePassword);
+  const seal = useServerFn(sealClientAgentFilePassword);
   const [sends, setSends] = useState<AgentSendRow[]>([]);
   const [ready, setReady] = useState(false);
   const [allowed, setAllowed] = useState(false);
@@ -250,6 +252,28 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
     }
   };
 
+  const onSealPassword = async (fileId: string, password: string) => {
+    setPasswordBusy(fileId);
+    setNotice(null);
+    try {
+      const result = await seal({ data: { clientId, fileId, password } });
+      if (!result.ok) {
+        setNotice(
+          result.reason === "already"
+            ? "This file already has a saved password."
+            : "The password could not be saved.",
+        );
+        return;
+      }
+      setNotice("Password saved.");
+      await reload();
+    } catch {
+      setNotice("The password could not be saved.");
+    } finally {
+      setPasswordBusy(null);
+    }
+  };
+
   const onCopyPassword = async () => {
     if (!revealed) return;
     const value = revealed.password;
@@ -333,6 +357,7 @@ export function SendAgentPanel({ clientId, market }: { clientId: string; market:
           onToggleVisible={onTogglePassword}
           onCopy={() => void onCopyPassword()}
           onOpen={(documentPath) => void onOpenDocument(documentPath)}
+          onSeal={(fileId, password) => void onSealPassword(fileId, password)}
         />
       }
       taxPack={

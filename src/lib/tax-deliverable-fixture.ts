@@ -89,7 +89,7 @@ export function sampleTaxPackDraft(): TaxPackDraft {
   const parsed = parseTaxPackPayload(SAMPLE_TAX_PACK_REPLY, SAMPLE_TAX_PACK_FILES);
   if (!parsed) throw new Error("fixture reply must parse");
   return withExtraQueries(parsed, [
-    "sample-bank-statement.pdf is password-protected and could not be opened. Ask the client to confirm the password.",
+    "sample-bank-statement.pdf is password-protected and no password is saved for it. Save the file's password on this page, then draft again.",
   ]);
 }
 

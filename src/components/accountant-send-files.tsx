@@ -2,7 +2,13 @@
  * Files a client uploaded on a send. A saved password stays masked until
  * the accountant asks for it. The plaintext is a prop from the page, held
  * in memory there, and is not written to storage or analytics.
+ *
+ * A file without a saved password can take one here: the firm types the
+ * password the client gave them outside the app and it is sealed on the
+ * server. It is never shown back, logged, or sent anywhere else.
  */
+import { useState } from "react";
+import { FILE_PASSWORD_MAX } from "@/lib/client-agent-file-password-reveal";
 import { SEND_ITEM_KEYS, SEND_ITEM_LABELS, type SendItemKey } from "@/lib/client-agent-send";
 
 const QUIET =
@@ -38,6 +44,7 @@ export function AccountantSendFileList({
   onToggleVisible,
   onCopy,
   onOpen,
+  onSeal,
 }: {
   files: readonly AccountantSendFile[];
   revealed: ShownFilePassword | null;
@@ -46,7 +53,9 @@ export function AccountantSendFileList({
   onToggleVisible: () => void;
   onCopy: () => void;
   onOpen?: (documentPath: string) => void;
+  onSeal?: (fileId: string, password: string) => void;
 }) {
+  const [sealDrafts, setSealDrafts] = useState<Record<string, string>>({});
   if (files.length === 0) return null;
   return (
     <div className="flex flex-col gap-3" data-accountant-file-list="">
@@ -85,6 +94,37 @@ export function AccountantSendFileList({
               >
                 Show password
               </button>
+            ) : null}
+            {!file.hasPassword && onSeal ? (
+              <div className="flex flex-col gap-2" data-seal-password={file.id}>
+                <label className="text-sm text-[#3D5270]">
+                  No password is saved for this file. If the client gave you one, save it here.
+                  <input
+                    type="password"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] bg-white px-3 text-sm text-[#102A43]"
+                    value={sealDrafts[file.id] ?? ""}
+                    maxLength={FILE_PASSWORD_MAX}
+                    autoComplete="off"
+                    onChange={(event) =>
+                      setSealDrafts((current) => ({ ...current, [file.id]: event.target.value }))
+                    }
+                  />
+                </label>
+                <button
+                  type="button"
+                  className={QUIET}
+                  data-save-file-password=""
+                  disabled={busyFileId === file.id || !(sealDrafts[file.id] ?? "").trim()}
+                  onClick={() => {
+                    const password = (sealDrafts[file.id] ?? "").trim();
+                    if (!password) return;
+                    setSealDrafts((current) => ({ ...current, [file.id]: "" }));
+                    onSeal(file.id, password);
+                  }}
+                >
+                  Save password
+                </button>
+              </div>
             ) : null}
             {shown ? (
               <div

@@ -306,14 +306,17 @@ export function taxPackAssumptions(
 /** A file the server could not read becomes a query, never a guessed figure. */
 export function unreadableFileQuery(
   file: TaxPackSourceFile,
-  reason: "password" | "format" | "parse",
+  reason: "password" | "format" | "parse" | "oversized",
 ): string {
   const name = file.displayName ?? `the ${file.itemKey} document`;
   if (reason === "password") {
-    return `${name} is password-protected and could not be opened. Ask the client to confirm the password.`;
+    return `${name} is password-protected and no password is saved for it. Save the file's password on this page, then draft again.`;
   }
   if (reason === "format") {
     return `${name} is in a format that could not be read. Ask the client for a PDF.`;
+  }
+  if (reason === "oversized") {
+    return `${name} is too large to read into this pack. Open it yourself before relying on this pack.`;
   }
   return `${name} could not be read. Open it yourself before relying on this pack.`;
 }

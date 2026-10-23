@@ -204,6 +204,8 @@ export const CLIENT_AGENT_FILE_NOTE = "PDF, JPG, PNG or HEIC, up to 20 MB each."
 
 /** Shown when the password key is missing or not 32 bytes. Nothing is stored. */
 export const CLIENT_AGENT_PASSWORD_UNSAVED = "Couldn't save the password.";
+export const CLIENT_AGENT_PASSWORD_REQUIRED =
+  "That PDF has a password. Type it in the password box under the file so your accountant can open it.";
 
 /** One short line for a checklist row. File types are not repeated here. */
 export function clientAgentItemHelp(item: { itemKey: string }): string {

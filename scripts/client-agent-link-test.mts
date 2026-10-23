@@ -10,6 +10,11 @@ import { SEND_AGENT_FIRM_ALLOWLIST } from "../src/lib/client-agent-send-allowlis
 import { SEND_FILE_MAX_BYTES } from "../src/lib/client-agent-send.ts";
 import { isBarePublicPath } from "../src/lib/public-marketing.ts";
 import {
+  PDF_ENCRYPT_TAIL_BYTES,
+  pdfLooksEncrypted,
+  pickedPdfLooksEncrypted,
+} from "../src/lib/pdf-password.ts";
+import {
   CLIENT_AGENT_LOAD_ERROR,
   CLIENT_AGENT_NEXT_HINT,
   ClientAgentLinkScreen,
@@ -22,6 +27,7 @@ import {
   REVOKED_LINK_BODY,
   closedLink,
   CLIENT_AGENT_FILE_NOTE,
+  CLIENT_AGENT_PASSWORD_REQUIRED,
   CLIENT_AGENT_PASSWORD_UNSAVED,
   SEND_CONSENT_VERSION,
   SEND_LINK_META,
@@ -1499,5 +1505,56 @@ assert(
 );
 assert(completeFn.includes("sendClientAgentDone"), "completion emails the firm owner once");
 assert(completeFn.includes("clientAgentDoneIdempotencyKey"), "completion uses one email key");
+
+// --- a locked PDF needs its password before Finish ---
+const openPdf = new TextEncoder().encode("%PDF-1.7 plain sample statement");
+assert(!pdfLooksEncrypted(openPdf), "an open PDF is not flagged");
+const sealedPdf = new TextEncoder().encode("%PDF-1.7 … /Encrypt 12 0 R …");
+assert(pdfLooksEncrypted(sealedPdf), "a sealed PDF is flagged");
+const bigTail = new Uint8Array(PDF_ENCRYPT_TAIL_BYTES * 3);
+bigTail.set(new TextEncoder().encode("/Encrypt"), bigTail.length - 20);
+assert(pdfLooksEncrypted(bigTail), "the trailer of a big PDF is still read");
+const fakeFile = (bytes: Uint8Array) => ({
+  size: bytes.length,
+  slice: (start: number, end?: number) => new Blob([bytes.slice(start, end)]),
+});
+assert(
+  (await pickedPdfLooksEncrypted(fakeFile(sealedPdf))) === true &&
+    (await pickedPdfLooksEncrypted(fakeFile(openPdf))) === false,
+  "a picked file is checked without a whole-file read",
+);
+
+assert(
+  CLIENT_AGENT_PASSWORD_REQUIRED.includes("password box") &&
+    !/sars|fail|error/i.test(CLIENT_AGENT_PASSWORD_REQUIRED),
+  "the password ask is calm and says where to type",
+);
+assert(page.includes("pickedPdfLooksEncrypted"), "an uploaded PDF is checked for a password");
+const uploadUi = page.slice(page.indexOf("const upload = async ("), page.indexOf("const onRemove = async ("));
+assert(
+  uploadUi.indexOf("pickedPdfLooksEncrypted") < uploadUi.indexOf("uploadToClientAgentSignedUrl"),
+  "the check happens before the upload, never blocking it",
+);
+assert(uploadUi.includes("setLockedItems"), "the lock is remembered for the item");
+assert(
+  uploadUi.includes("await saveItemPassword(item)"),
+  "a password already typed is saved with the upload",
+);
+assert(uploadUi.includes("CLIENT_AGENT_PASSWORD_REQUIRED"), "a locked upload asks for the password");
+const missingAt = page.indexOf("const missingPassword");
+const finishGate = page.slice(missingAt, page.indexOf("setBusy(true)", missingAt));
+assert(
+  finishGate.includes("lockedItems[item.itemKey]") &&
+    finishGate.includes("!item.passwordSaved") &&
+    finishGate.includes("return;"),
+  "Finish stops while a locked item has no password",
+);
+assert(
+  page
+    .slice(page.indexOf("const onRemove = async ("), page.indexOf("const saveItemPassword"))
+    .includes("setLockedItems"),
+  "removing the file clears the lock",
+);
+assert(!read("src/lib/pdf-password.ts").includes("console."), "the check does not log");
 
 console.log("client agent link test ok");
