@@ -29,8 +29,10 @@ import {
   renderTaxPackBody,
   taxPackAlreadyOpen,
   taxPackAssumptions,
+  taxPackDraftFailure,
   taxPackFileIntro,
   taxPackIsEmpty,
+  taxPackPasswordStop,
   taxPackSystemPrompt,
   unreadableFileQuery,
   withExtraQueries,
@@ -419,6 +421,9 @@ async function draftTaxPack(
       }
     }
 
+    const blocked = taxPackPasswordStop(passwordNeeded);
+    if (blocked) return blocked;
+
     for (const item of items) {
       const skipped =
         item.status === "received" && (item.quality === "incomplete" || item.quality === "poor");
@@ -431,12 +436,7 @@ async function draftTaxPack(
       );
     }
 
-    if (files.length === 0) {
-      if (passwordNeeded.length > 0) {
-        return { ok: false, reason: "passwords_needed", passwordNeeded };
-      }
-      return { ok: false, reason: "no_files" };
-    }
+    if (files.length === 0) return { ok: false, reason: "no_files" };
 
     const intro = taxPackFileIntro(files);
     const checklist = items
@@ -451,9 +451,11 @@ async function draftTaxPack(
     ];
 
     const reply = await callClaude({ apiKey, system: taxPackSystemPrompt(), content });
-    if ("failed" in reply) return { ok: false, reason: reply.failed };
+    // Locked files already returned above. A model or timeout failure still
+    // names any that were collected, so the panel can list them.
+    if ("failed" in reply) return taxPackDraftFailure(reply.failed, passwordNeeded);
     const parsed = parseTaxPackPayload(reply.text, files);
-    if (!parsed) return { ok: false, reason: "model" };
+    if (!parsed) return taxPackDraftFailure("model", passwordNeeded);
     const draft = withExtraQueries(parsed, extraQueries);
     if (taxPackIsEmpty(draft) && draft.queries.length === 0) return { ok: false, reason: "empty" };
 

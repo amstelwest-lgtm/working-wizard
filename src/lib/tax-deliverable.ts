@@ -303,6 +303,31 @@ export function taxPackAssumptions(
   return texts.slice(0, 12).map((text, index) => ({ id: `t-${index}`, text, checked: false }));
 }
 
+/**
+ * One locked file stops the draft before the model runs, even when other
+ * files on the send could be read.
+ */
+export function taxPackPasswordStop(passwordNeeded: readonly string[]): {
+  ok: false;
+  reason: "passwords_needed";
+  passwordNeeded: string[];
+} | null {
+  if (passwordNeeded.length === 0) return null;
+  return { ok: false, reason: "passwords_needed", passwordNeeded: [...passwordNeeded] };
+}
+
+/**
+ * A model or timeout failure still names locked files when any were found,
+ * so the panel can list them.
+ */
+export function taxPackDraftFailure(
+  reason: "model" | "timeout",
+  passwordNeeded: readonly string[],
+): { ok: false; reason: "model" | "timeout"; passwordNeeded?: string[] } {
+  if (passwordNeeded.length === 0) return { ok: false, reason };
+  return { ok: false, reason, passwordNeeded: [...passwordNeeded] };
+}
+
 /** A file the server could not read becomes a query, never a guessed figure. */
 export function unreadableFileQuery(
   file: TaxPackSourceFile,

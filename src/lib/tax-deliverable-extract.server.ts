@@ -5,9 +5,9 @@
  * browser, and nothing is logged.
  *
  * Text is always preferred over shipping the PDF itself: a multi-file
- * send must not become one huge base64 payload. A PDF goes whole only
- * when it has no text layer (a scan) and is small; anything bigger is
- * left out and becomes a query the accountant sees.
+ * send must not become one huge base64 payload. A PDF over the scan cap
+ * is not parsed and not shipped — it becomes an oversized query. A PDF
+ * goes whole only when it has no text layer and is within that cap.
  */
 import { pdfLooksEncrypted } from "@/lib/pdf-password";
 
@@ -16,6 +16,11 @@ export { pdfLooksEncrypted };
 export const TAX_PACK_PDF_DOCUMENT_MAX_BYTES = 3 * 1024 * 1024;
 export const TAX_PACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const TAX_PACK_TEXT_MAX_CHARS = 60_000;
+
+/** Past the whole-scan cap a PDF is neither parsed nor sent to the model. */
+export function pdfExceedsTaxPackCap(byteLength: number): boolean {
+  return byteLength > TAX_PACK_PDF_DOCUMENT_MAX_BYTES;
+}
 
 export type SendFileContent =
   | { kind: "pdf"; base64: string }
@@ -34,6 +39,11 @@ function isPasswordError(error: unknown): boolean {
 
 /** Never throws: a broken parser or a bad file is an unreadable result. */
 async function pdfText(bytes: Uint8Array, password: string | null): Promise<SendFileContent> {
+  // The cap is also checked by the caller. This guard is what keeps an
+  // 8 MB file out of pdf-parse if that check is ever skipped.
+  if (pdfExceedsTaxPackCap(bytes.byteLength)) {
+    return { kind: "unreadable", reason: "oversized" };
+  }
   let parser: { getText: () => Promise<{ text?: string }>; destroy: () => Promise<void> } | null =
     null;
   try {
@@ -55,10 +65,11 @@ async function pdfText(bytes: Uint8Array, password: string | null): Promise<Send
 }
 
 /**
- * PDF: text first, with the saved password when the file is sealed. A PDF
- * with no text layer goes whole only when small; a bigger one is left out
- * as oversized. JPEG and PNG go as images. HEIC becomes a query, never a
- * guess.
+ * PDF: anything over the scan cap is an oversized query — no pdf-parse,
+ * and the bytes are not shipped. Under the cap, text first, with the
+ * saved password when the file is sealed. A PDF with no text layer goes
+ * whole only when it is still within that cap. JPEG and PNG go as images.
+ * HEIC becomes a query, never a guess.
  */
 export async function extractSendFileContent(input: {
   bytes: Uint8Array;
@@ -73,6 +84,10 @@ export async function extractSendFileContent(input: {
   }
   if (input.mime !== "application/pdf") return { kind: "unreadable", reason: "format" };
 
+  if (pdfExceedsTaxPackCap(input.bytes.byteLength)) {
+    return { kind: "unreadable", reason: "oversized" };
+  }
+
   const text = await pdfText(input.bytes, input.password);
   if (text.kind === "text") return text;
   if (text.kind === "unreadable" && text.reason === "password") {
@@ -85,7 +100,7 @@ export async function extractSendFileContent(input: {
   if (pdfLooksEncrypted(input.bytes)) {
     return { kind: "unreadable", reason: input.password ? "parse" : "password" };
   }
-  if (input.bytes.byteLength > TAX_PACK_PDF_DOCUMENT_MAX_BYTES) {
+  if (pdfExceedsTaxPackCap(input.bytes.byteLength)) {
     return { kind: "unreadable", reason: "oversized" };
   }
   return { kind: "pdf", base64: bytesToBase64(input.bytes) };
