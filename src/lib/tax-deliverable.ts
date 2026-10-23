@@ -12,7 +12,30 @@
  *    is preparation for the accountant, who submits via eFiling.
  */
 
+import { claudeRequestFields } from "@/lib/claude-request";
+
 export const TAX_PACK_KIND = "tax_pack" as const;
+
+/**
+ * Ceiling for one tax-pack reply. High enough for a multi-file pack of
+ * cited figures, low enough that a runaway reply still hits the 90s abort
+ * as a timeout instead of a platform kill. Sonnet 5.5 counts adaptive
+ * thinking against this budget when `thinking` is omitted — the request
+ * body turns that off.
+ */
+export const TAX_PACK_CLAUDE_MAX_TOKENS = 4096;
+
+/** Failures of the model call itself, after the files are readable. */
+export type TaxPackClaudeFailureReason =
+  | "model"
+  | "timeout"
+  | "truncated"
+  | "rejected"
+  | "rate_limited"
+  | "overloaded"
+  | "context_too_large"
+  | "ai_not_configured"
+  | "unavailable";
 
 /** One per send. A second draft for the same send is refused while one is open. */
 export function taxPackDedupeTag(sendId: string): string {
@@ -304,6 +327,99 @@ export function taxPackAssumptions(
 }
 
 /**
+ * The Messages body for one tax-pack draft.
+ *
+ * Sonnet 5.5 rejects a non-default temperature and, if `thinking` is
+ * omitted, spends the token budget on adaptive thinking before any JSON.
+ * Both of those come back as an empty or HTTP-failed reply, which the
+ * drafter used to report as "the model did not answer". The shared
+ * request helper drops temperature and sends between_tools for 5.5, and
+ * keeps temperature 0 for any other model id.
+ */
+export function taxPackClaudeRequestBody(input: {
+  model: string;
+  system: string;
+  content: unknown;
+}): {
+  model: string;
+  max_tokens: number;
+  system: string;
+  messages: Array<{ role: "user"; content: unknown }>;
+  thinking?: { type: "between_tools" };
+  temperature?: number;
+} {
+  return {
+    model: input.model,
+    max_tokens: TAX_PACK_CLAUDE_MAX_TOKENS,
+    system: input.system,
+    messages: [{ role: "user", content: input.content }],
+    ...claudeRequestFields({ model: input.model, temperature: 0 }),
+  };
+}
+
+function messageSaysContextTooLarge(message: string | null | undefined): boolean {
+  if (!message) return false;
+  return /prompt is too long|request exceeds the maximum size|exceeds the context window|context length exceeded/i.test(
+    message,
+  );
+}
+
+/**
+ * Turns a Claude call outcome into a reason the panel can say out loud.
+ * A silent or unparseable reply is `model`. A known HTTP failure is not.
+ */
+export function classifyTaxPackClaudeOutcome(input: {
+  aborted?: boolean;
+  network?: boolean;
+  httpStatus?: number | null;
+  errorType?: string | null;
+  errorMessage?: string | null;
+  stopReason?: string | null;
+  parsed?: boolean;
+}): { ok: true } | { ok: false; reason: TaxPackClaudeFailureReason } {
+  if (input.aborted) return { ok: false, reason: "timeout" };
+  if (input.network) return { ok: false, reason: "unavailable" };
+
+  const status = input.httpStatus;
+  if (status != null && status !== 200) {
+    const type = input.errorType ?? "";
+    if (
+      status === 401 ||
+      status === 403 ||
+      status === 404 ||
+      type === "authentication_error" ||
+      type === "permission_error" ||
+      type === "not_found_error"
+    ) {
+      return { ok: false, reason: "ai_not_configured" };
+    }
+    if (status === 429 || type === "rate_limit_error") {
+      return { ok: false, reason: "rate_limited" };
+    }
+    if (
+      status === 413 ||
+      type === "request_too_large" ||
+      messageSaysContextTooLarge(input.errorMessage)
+    ) {
+      return { ok: false, reason: "context_too_large" };
+    }
+    if (status === 408 || status === 504) return { ok: false, reason: "timeout" };
+    if (status === 529 || status === 503 || type === "overloaded_error") {
+      return { ok: false, reason: "overloaded" };
+    }
+    if (status === 400 || type === "invalid_request_error") {
+      return { ok: false, reason: "rejected" };
+    }
+    if (status >= 500 || type === "api_error") return { ok: false, reason: "unavailable" };
+    return { ok: false, reason: "unavailable" };
+  }
+
+  if (input.parsed) return { ok: true };
+  if (input.stopReason === "max_tokens") return { ok: false, reason: "truncated" };
+  return { ok: false, reason: "model" };
+}
+
+/**
  * One locked file stops the draft before the model runs, even when other
  * files on the send could be read.
  */
@@ -317,13 +433,13 @@ export function taxPackPasswordStop(passwordNeeded: readonly string[]): {
 }
 
 /**
- * A model or timeout failure still names locked files when any were found,
+ * A model-call failure still names locked files when any were found,
  * so the panel can list them.
  */
 export function taxPackDraftFailure(
-  reason: "model" | "timeout",
+  reason: TaxPackClaudeFailureReason,
   passwordNeeded: readonly string[],
-): { ok: false; reason: "model" | "timeout"; passwordNeeded?: string[] } {
+): { ok: false; reason: TaxPackClaudeFailureReason; passwordNeeded?: string[] } {
   if (passwordNeeded.length === 0) return { ok: false, reason };
   return { ok: false, reason, passwordNeeded: [...passwordNeeded] };
 }

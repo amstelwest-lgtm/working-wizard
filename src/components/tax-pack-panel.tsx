@@ -37,6 +37,13 @@ const MODEL_NOTICE = "The drafting model did not answer. Try again in a minute."
 const TIMEOUT_NOTICE =
   "Reading the documents took too long. Try again — it helps to save passwords so large scans can be read as text.";
 const AI_NOT_CONFIGURED_NOTICE = "Drafting is not configured on this environment.";
+const TRUNCATED_NOTICE = "The draft was cut off before it finished. Try again in a minute.";
+const REJECTED_NOTICE =
+  "The drafter rejected this pack. Open any large scans yourself, then draft again.";
+const RATE_LIMITED_NOTICE = "Drafting is rate limited. Try again in a minute.";
+const OVERLOADED_NOTICE = "The drafting service is overloaded. Try again in a minute.";
+const CONTEXT_TOO_LARGE_NOTICE =
+  "These documents are too large to draft together. Open the biggest files yourself, then draft again.";
 
 function lockedFileNotice(names: readonly string[] | undefined, fallback: string): string {
   const listed = (names ?? []).join(", ");
@@ -67,6 +74,16 @@ export function draftTaxPackNotice(result: DraftTaxPackResult): string | null {
       return lockedFileNotice(result.passwordNeeded, MODEL_NOTICE);
     case "timeout":
       return lockedFileNotice(result.passwordNeeded, TIMEOUT_NOTICE);
+    case "truncated":
+      return lockedFileNotice(result.passwordNeeded, TRUNCATED_NOTICE);
+    case "rejected":
+      return lockedFileNotice(result.passwordNeeded, REJECTED_NOTICE);
+    case "rate_limited":
+      return lockedFileNotice(result.passwordNeeded, RATE_LIMITED_NOTICE);
+    case "overloaded":
+      return lockedFileNotice(result.passwordNeeded, OVERLOADED_NOTICE);
+    case "context_too_large":
+      return lockedFileNotice(result.passwordNeeded, CONTEXT_TOO_LARGE_NOTICE);
     case "unavailable":
       return "Drafting is unavailable right now. Try again in a minute.";
     case "empty":
