@@ -13,6 +13,8 @@ export type AccountantSendFile = {
   itemKey: string;
   displayName: string | null;
   hasPassword: boolean;
+  /** The shared copy in the client's documents — set as soon as the upload is stored. */
+  documentPath: string | null;
 };
 
 export type ShownFilePassword = {
@@ -35,6 +37,7 @@ export function AccountantSendFileList({
   onShow,
   onToggleVisible,
   onCopy,
+  onOpen,
 }: {
   files: readonly AccountantSendFile[];
   revealed: ShownFilePassword | null;
@@ -42,6 +45,7 @@ export function AccountantSendFileList({
   onShow: (fileId: string) => void;
   onToggleVisible: () => void;
   onCopy: () => void;
+  onOpen?: (documentPath: string) => void;
 }) {
   if (files.length === 0) return null;
   return (
@@ -60,6 +64,16 @@ export function AccountantSendFileList({
             <p className="text-sm font-semibold">{title}</p>
             {file.displayName && file.displayName !== label ? (
               <p className="text-sm text-[#3D5270]">{label}</p>
+            ) : null}
+            {file.documentPath && onOpen ? (
+              <button
+                type="button"
+                className={QUIET}
+                data-open-file={file.id}
+                onClick={() => onOpen(file.documentPath as string)}
+              >
+                Open in Documents
+              </button>
             ) : null}
             {file.hasPassword && !shown ? (
               <button

@@ -140,6 +140,7 @@
     "test:client-agent-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-invite-email-test.mts",
     "test:client-agent-invite-mail": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-invite-mail-test.mts",
     "test:client-agent-finish": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-finish-test.mts",
+    "test:client-agent-send-backfill": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-send-backfill-test.mts",
     "test:tax-deliverable": "vite-node --config scripts/vite-test.config.ts scripts/tax-deliverable-test.mts",
     "test:source-documents-ui": "vite-node --config scripts/vite-test.config.ts scripts/source-documents-ui-test.mts",
     "test:statement-text-layer": "vite-node --config scripts/vite-test.config.ts scripts/statement-text-layer-test.mts",

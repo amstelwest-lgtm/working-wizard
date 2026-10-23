@@ -64,12 +64,14 @@ const RECEIVED_SEND: AgentSendRow = {
       itemKey: "practice_income_expenses",
       displayName: "sample-practice-income-2026.pdf",
       hasPassword: false,
+      documentPath: "harness-client/sample-practice-income.pdf",
     },
     {
       id: "file-medical",
       itemKey: "medical_aid_certificate",
       displayName: "sample-medical-aid-certificate.pdf",
       hasPassword: true,
+      documentPath: "harness-client/sample-medical-aid-certificate.pdf",
     },
   ],
 };
