@@ -983,30 +983,31 @@ body:has(#pane-ask.on) #wizard-notes-pin {
   grid-template-rows: minmax(0, 1fr);
 }
 
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main,
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) #pane-ask.on,
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host,
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk {
+/* The face, the feed and the Ask composer scroll together inside the card.
+   The pane sits in an unsized wrapper, so a height lock below the card
+   clips the composer with no way to reach it. */
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
   height: 100%;
   max-height: 100%;
-  overflow: hidden;
-}
-
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--pp-canvas, #f4f6fa);
 }
 
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) #pane-ask.on,
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host,
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk,
 .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: none;
+  min-height: auto;
   height: auto;
-  max-height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 /* The share and notes buttons are hidden on this pane, so the phone pad
