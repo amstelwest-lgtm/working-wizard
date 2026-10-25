@@ -4,8 +4,8 @@ import SafariServices
 import WebKit
 
 /**
- * Opens Google, Supabase authorize, Stripe, and ledger hosts outside the
- * WKWebView. The PKCE verifier stays in the WebView. iOS 17.4 and later
+ * Opens Google, Apple, Supabase authorize, Stripe, and ledger hosts outside
+ * the WKWebView. The PKCE verifier stays in the WebView. iOS 17.4 and later
  * hand the https return back through ASWebAuthenticationSession. Older
  * systems use SFSafariViewController and depend on a Universal Link.
  *
@@ -120,6 +120,11 @@ enum MilonExternalUrls {
         "accounting.sageone.co.za",
     ]
 
+    private static let apple: Set<String> = [
+        "appleid.apple.com",
+        "idmsa.apple.com",
+    ]
+
     static func isYouTube(_ url: URL) -> Bool {
         youtube.contains((url.host ?? "").lowercased())
     }
@@ -144,6 +149,7 @@ enum MilonExternalUrls {
             return false
         }
         if host == "accounts.google.com" || host.hasPrefix("accounts.google.") { return true }
+        if apple.contains(host) { return true }
         if isSupabaseAuth(host: host, path: url.path) { return true }
         if youtube.contains(host) || ledger.contains(host) { return true }
         return false
