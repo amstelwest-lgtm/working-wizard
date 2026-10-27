@@ -12,6 +12,7 @@ import {
 import { Unlink, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { SAGE_CONNECTION_UNAVAILABLE, sageSyncPopulatedFields } from "@/lib/sage";
+import { SAGE_NOT_SYNCED_HINT } from "@/lib/connect-books-copy";
 import { useConnectionProbe } from "@/lib/use-connection-probe";
 
 type Props = {
@@ -25,6 +26,8 @@ type Props = {
   onSyncComplete?: (inputs: Record<string, string>) => void;
   /** Other cards on the page reload after connect or disconnect. */
   onConnectionChange?: () => void;
+  /** Show the branded Connect to Sage button first, like Xero and QuickBooks. The form opens on click. */
+  buttonFirst?: boolean;
 };
 
 export function SageConnectCard({
@@ -32,6 +35,7 @@ export function SageConnectCard({
   refreshToken = 0,
   onSyncComplete,
   onConnectionChange,
+  buttonFirst = false,
 }: Props) {
   const fetchStatus = useServerFn(getSageStatus);
   const checkConfig = useServerFn(getSageConfig);
@@ -59,6 +63,7 @@ export function SageConnectCard({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [companyId, setCompanyId] = useState("");
+  const [showForm, setShowForm] = useState(!buttonFirst);
 
   const handleConnect = async (event: FormEvent) => {
     event.preventDefault();
@@ -208,8 +213,20 @@ export function SageConnectCard({
     );
   }
 
+  if (!showForm) {
+    return (
+      <div className="ledger-connect ledger-connect--panel" data-sage-connect="start">
+        <p className="ledger-connect__kicker">Sage Accounting</p>
+        <p className="ledger-connect__hint">{SAGE_NOT_SYNCED_HINT}</p>
+        <div style={{ marginTop: 12 }}>
+          <BrandConnectButton brand="sage" onClick={() => setShowForm(true)} />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <form className="ledger-connect ledger-connect--panel" onSubmit={handleConnect}>
+    <form className="ledger-connect ledger-connect--panel" onSubmit={handleConnect} data-sage-connect="form">
       <p className="ledger-connect__kicker">Sage Accounting</p>
       <p className="ledger-connect__hint">
         South African Sage Business Cloud Accounting. Email, password, and Company ID. Milōn

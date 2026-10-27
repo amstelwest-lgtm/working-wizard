@@ -5321,6 +5321,7 @@ function ClientView() {
                     }}
                     onConnectXero={() => setShowXeroDialog(true)}
                     onConnectQbo={() => setShowQboDialog(true)}
+                    onConnectSage={isUsCopy(gateMarket) ? undefined : () => setShowSageDialog(true)}
                     onOpenDrafts={() => openHomeSection("reports", "drafts")}
                     onOpenActions={() => openHomeSection("plan", "open")}
                   />
@@ -5348,6 +5349,7 @@ function ClientView() {
                     }}
                     onConnectXero={() => setShowXeroDialog(true)}
                     onConnectQbo={() => setShowQboDialog(true)}
+                    onConnectSage={isUsCopy(gateMarket) ? undefined : () => setShowSageDialog(true)}
                     onOpenDrafts={() => openHomeSection("reports", "drafts")}
                     onOpenActions={() => openHomeSection("plan", "open")}
                   />

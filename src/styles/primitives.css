@@ -1404,6 +1404,8 @@ html[data-theme="light"] .ledger-connect__label {
 
 .brand-connect--sage,
 .accountant-portal .brand-connect--sage {
+  gap: 12px;
+  padding: 4px 18px 4px 4px;
   background-color: #00843d;
 }
 

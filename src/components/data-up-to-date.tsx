@@ -127,6 +127,7 @@ export function DataUpToDate({
           refreshToken={sageRefresh}
           onConnectionChange={onSageConnectionChange}
           onSyncComplete={onSageSyncComplete}
+          buttonFirst
         />
       </div>
       <ReviewInputsDrawer hint={booksDrawerHint(freshness)}>

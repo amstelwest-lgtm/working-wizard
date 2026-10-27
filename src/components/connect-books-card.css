@@ -71,30 +71,9 @@
   cursor: progress;
 }
 
-.owner-door .connect-books-card .connect-books-card__sage,
-.connect-books-card__sage {
-  display: inline-block;
-  margin: 12px 0 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--cobalt, #0b5fff);
-  -webkit-text-fill-color: var(--cobalt, #0b5fff);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-
-.connect-books-card__sage:hover {
-  color: var(--royal, #2563eb);
-  -webkit-text-fill-color: var(--royal, #2563eb);
-}
-
-.connect-books-card__sage:focus-visible {
-  outline: 2px solid var(--cobalt, #0b5fff);
-  outline-offset: 3px;
-  border-radius: 4px;
+.connect-books-card__note {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-dim, #3d5270);
 }

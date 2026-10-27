@@ -7,7 +7,7 @@ import { Window } from "happy-dom";
 import { beginLedgerConnect } from "../src/lib/connect-books-start.ts";
 import {
   CONNECT_BOOKS_BODY,
-  CONNECT_BOOKS_TITLE,
+  CONNECT_BOOKS_TITLE_WITH_SAGE,
   connectBooksHomeVisible,
 } from "../src/lib/connect-books-copy.ts";
 
@@ -80,8 +80,8 @@ const none = await paint({ xero: null, qbo: null, sage: null });
 const open = none.host.querySelector('[data-connect-books="home"]');
 assert(Boolean(open), "no ledger shows the card on Home");
 assert(
-  none.host.innerHTML.includes(CONNECT_BOOKS_TITLE),
-  "card title is Connect Xero or QuickBooks",
+  none.host.innerHTML.includes(CONNECT_BOOKS_TITLE_WITH_SAGE),
+  "card title names Xero, QuickBooks and Sage",
 );
 assert(none.host.innerHTML.includes(CONNECT_BOOKS_BODY), "card uses the read-only approval copy");
 assert(
@@ -93,8 +93,13 @@ assert(
   "QuickBooks button",
 );
 assert(
-  none.host.querySelector('[data-connect-books="sage"]')?.textContent === "Connect Sage",
-  "Sage link",
+  none.host.querySelector('[data-connect-books="sage"]')?.textContent === "Sage" &&
+    none.host.querySelector('[data-connect-books="sage"]')?.className === "connect-books-card__primary",
+  "Sage is a primary button like Xero and QuickBooks",
+);
+assert(
+  (none.host.querySelector('[data-connect-books-note="sage"]')?.textContent ?? "").includes("not synced yet"),
+  "the card says Sage figures are not synced yet",
 );
 
 await act(async () => {

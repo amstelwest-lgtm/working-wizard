@@ -49,6 +49,7 @@ type Props = {
   onUploadAged?: () => void;
   onConnectXero?: () => void;
   onConnectQbo?: () => void;
+  onConnectSage?: () => void;
   onOpenDrafts?: () => void;
   onOpenActions?: () => void;
 };
@@ -71,6 +72,7 @@ export function CollectionsPanel({
   onUploadAged,
   onConnectXero,
   onConnectQbo,
+  onConnectSage,
   onOpenDrafts,
   onOpenActions,
 }: Props) {
@@ -213,6 +215,7 @@ export function CollectionsPanel({
           uploadClassName="btn ghost mini"
           onConnectXero={onConnectXero}
           onConnectQbo={onConnectQbo}
+          onConnectSage={onConnectSage}
         />
         {onOpenDrafts || onOpenActions ? (
           <div className="collections-actions">

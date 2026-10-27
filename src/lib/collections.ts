@@ -511,6 +511,7 @@ export type StatementWorkingCapital = {
 export const COLLECTIONS_UPLOAD_CTA = "Upload aged debtors and creditors";
 export const COLLECTIONS_XERO_CTA = "Connect Xero";
 export const COLLECTIONS_QBO_CTA = "Connect QuickBooks";
+export const COLLECTIONS_SAGE_CTA = "Connect Sage";
 
 export function collectionsStatementLead(copyPack: "za" | "us"): string {
   if (copyPack === "us") {

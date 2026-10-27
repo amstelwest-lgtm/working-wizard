@@ -38,6 +38,26 @@ function XeroMark() {
   );
 }
 
+/** White circle with a plain "sage" word in Sage green, same pattern as the Xero badge. */
+function SageMark() {
+  return (
+    <svg className="brand-connect__mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      <circle cx="50" cy="50" r="50" fill="#ffffff" />
+      <text
+        x="50"
+        y="60"
+        textAnchor="middle"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="30"
+        fontWeight="700"
+        fill="#00843d"
+      >
+        sage
+      </text>
+    </svg>
+  );
+}
+
 export function BrandConnectButton({
   brand,
   busy = false,
@@ -58,6 +78,7 @@ export function BrandConnectButton({
       {...rest}
     >
       {brand === "xero" ? <XeroMark /> : null}
+      {brand === "sage" ? <SageMark /> : null}
       {busy ? <span className="brand-connect__spinner" aria-hidden="true" /> : null}
       <span className="brand-connect__label">{label}</span>
     </button>
