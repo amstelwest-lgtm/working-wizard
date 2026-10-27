@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { completeDeliverablePdfItems, downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { cashPagedSearch, cashPagedViewFromSearch } from "@/lib/cash-paged-view";
 import { CollectionsPanel } from "@/components/collections-panel";
 import { PayablesPanel } from "@/components/payables-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
@@ -5254,10 +5255,18 @@ function ClientView() {
                     id="forecast"
                     eyebrow="Cash flow"
                     title="13-week forecast"
-                    subtitle="Thirteen weeks of cash. Sign off and export from this page."
                   >
-                  <div className="card cf-wrap" id="wizard-cash-panel">
+                  <div id="wizard-cash-panel">
                     <CashForecastPanel
+                      layout="paged"
+                      pagedView={cashPagedViewFromSearch(search.view)}
+                      onPagedViewChange={(next) =>
+                        navigate({
+                          to: "/clients/$clientId",
+                          params: { clientId },
+                          search: (prev) => cashPagedSearch(prev, next),
+                        })
+                      }
                       clientId={client.id}
                       clientName={client.name}
                       canSign

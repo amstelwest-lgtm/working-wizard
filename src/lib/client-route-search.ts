@@ -857,7 +857,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   action?: "preview" | "download";
   agent?: string;
   profile?: number;
-  view?: "chart" | "table" | "13week";
+  view?: "chart" | "table" | "13week" | "setup" | "audit" | "scenario";
   invite?: "owner";
   draft?: string;
 } {
@@ -878,7 +878,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     action?: "preview" | "download";
     agent?: string;
     profile?: number;
-    view?: "chart" | "table" | "13week";
+    view?: "chart" | "table" | "13week" | "setup" | "audit" | "scenario";
     invite?: "owner";
     draft?: string;
   } = {};
@@ -900,8 +900,11 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   }
   if (search.profile === 1 || search.profile === "1") out.profile = 1;
   if (typeof search.draft === "string" && /^[0-9a-f-]{36}$/i.test(search.draft)) out.draft = search.draft;
-  if (search.view === "13week" && (out.tab === "cash" || out.section === "forecast")) {
-    out.view = "13week";
+  if (out.tab === "cash" || out.section === "forecast") {
+    const view = search.view === "table" ? "13week" : search.view;
+    if (view === "13week" || view === "setup" || view === "audit" || view === "scenario") {
+      out.view = view;
+    }
   }
   if (search.invite === "owner" && out.tab === "settings") out.invite = "owner";
   return out;

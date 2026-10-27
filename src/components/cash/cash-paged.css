@@ -1,0 +1,205 @@
+/* Accountant cash forecast, paged layout. Owner and try views keep the stacked layout. */
+
+.cash-paged {
+  --cash-paged-bg: #f4f8ff;
+  --cash-paged-line: #dbeafe;
+  --cash-paged-ink: #102a43;
+  --cash-paged-muted: #486581;
+  --cash-paged-cobalt: #0b5fff;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--cash-paged-bg);
+  color: var(--cash-paged-ink);
+}
+
+.dark .cash-paged,
+[data-theme="dark"] .cash-paged {
+  --cash-paged-bg: #0b1b2b;
+  --cash-paged-line: #1e3a5f;
+  --cash-paged-ink: #f4f7fb;
+  --cash-paged-muted: #9fb3c8;
+}
+
+.cash-paged__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cash-paged__meta,
+.cash-paged__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cash-paged__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--cash-paged-line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cash-paged-muted);
+}
+
+.cash-paged__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--cash-paged-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--cash-paged-ink);
+}
+
+.cash-paged__icon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cash-paged__sentence {
+  margin: 0;
+  font-size: 14px;
+  color: var(--cash-paged-muted);
+}
+
+.cash-paged__pane {
+  position: relative;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--cash-paged-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(16, 42, 67, 0.06);
+}
+
+.dark .cash-paged__pane,
+[data-theme="dark"] .cash-paged__pane,
+.dark .cash-paged__chip,
+[data-theme="dark"] .cash-paged__chip,
+.dark .cash-paged__icon,
+[data-theme="dark"] .cash-paged__icon {
+  background: #102a43;
+}
+
+.cash-paged__pane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cash-paged__period {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cash-paged__audit-warn {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9a5b00;
+}
+
+/* Block segmented menu: square-ish blocks, never pills. */
+.cash-menu {
+  display: flex;
+  gap: 6px;
+  max-width: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.cash-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.cash-menu__tab {
+  display: inline-flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--cash-paged-line, #dbeafe);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--cash-paged-ink, #102a43);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.cash-menu__tab:hover {
+  background: #eaf2ff;
+}
+
+.cash-menu__tab:focus-visible {
+  outline: 2px solid var(--cash-paged-cobalt, #0b5fff);
+  outline-offset: 2px;
+}
+
+.cash-menu__tab[aria-selected="true"] {
+  border-color: var(--cash-paged-cobalt, #0b5fff);
+  background: var(--cash-paged-cobalt, #0b5fff);
+  color: #fff;
+}
+
+.dark .cash-menu__tab,
+[data-theme="dark"] .cash-menu__tab {
+  background: #102a43;
+}
+
+.cash-menu__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: #e05c5c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cash-menu__tab[aria-selected="true"] .cash-menu__badge {
+  background: #fff;
+  color: var(--cash-paged-cobalt, #0b5fff);
+}
+
+@media (max-width: 640px) {
+  .cash-paged {
+    padding: 10px;
+  }
+
+  .cash-paged__pane {
+    padding: 14px;
+  }
+
+  .cash-menu__tab {
+    flex: 0 0 auto;
+    padding: 0 12px;
+  }
+}
