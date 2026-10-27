@@ -92,6 +92,22 @@ assert((pagedBranch.match(/<EnlargeButton/g) ?? []).length === 1, "paged layout 
 assert(!pagedBranch.includes("<ViewToggle"), "the menu replaces the Chart/13-week toggle");
 assert(!pagedBranch.includes("ReviewInputsDrawer"), "no drawer in the paged layout");
 assert(!pagedBranch.includes("answer-strip__heading"), "no duplicate H2 in the paged header");
+for (const noise of [
+  "cashCopy.bullets",
+  "runwayAside",
+  "weekTableHint",
+  "data-forecast-updated",
+  "data-forecast-seed",
+  "cash-details",
+  "disagreeNotice",
+]) {
+  assert(!pagedBranch.includes(noise), `paged layout drops ${noise}`);
+}
+assert(
+  (pagedBranch.match(/data-cash-pane-sentence/g) ?? []).length === 1,
+  "one sentence line under the menu",
+);
+assert(!cash.includes("PlBankDisagreeNotice"), "the invoiced-vs-cash banner is gone from cash");
 
 const route = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 const mount = route.slice(route.indexOf('title="13-week forecast"'), route.indexOf("<CashForecastPanel"));

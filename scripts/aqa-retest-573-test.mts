@@ -2,7 +2,7 @@
  * AQA retest of #573. One check per finding. Figures are the ones AQA quoted.
  * Run: pnpm test:aqa-retest-573
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { summarizeCashForecast } from "../supabase/functions/ask-ai/deliverable-summaries.ts";
 import { buildOverviewBrief } from "../supabase/functions/ask-ai/overview-brief.ts";
@@ -263,7 +263,7 @@ assert(!/sells time/i.test(about ?? ""), about ?? "");
 const rows = profileDisplayRows(labourHotel, ZA_MARKET, null, industry);
 assert(rows.find((row) => row.label === "Model")?.value === "Hotels & accommodation", "profile model uses the client industry");
 
-// 7. P&L revenue and bank receipts stay visible, and are named as different figures.
+// 7. P&L revenue and bank receipts are still compared, with no banner on screen.
 const weeklyReceipts = (47_458 * 12) / 52;
 const gap = plBankDisagreement({
   financials: { revenue: 101_250, cogs: 40_000, fixedCosts: 10_000, periodMonths: "1" },
@@ -273,13 +273,15 @@ const gap = plBankDisagreement({
     expenses: [{ amount: String((20_000 * 12) / 52), frequency: "recurring-weekly", startWeek: 1, name: "Payments" }],
   },
 });
-assert(gap != null, "the invoiced-versus-collected gap stays on screen");
+assert(gap != null, "the invoiced-versus-collected gap is still computed");
 assert(Math.round(gap?.plRevenueMonthly ?? 0) === 101_250, `P&L revenue ${gap?.plRevenueMonthly}`);
 assert(Math.round(gap?.bankInflowMonthly ?? 0) === 47_458, `bank receipts ${gap?.bankInflowMonthly}`);
-const notice = read("src/components/pl-bank-disagree-notice.tsx");
-assert(notice.includes("Invoiced sales and cash collected are different figures"), notice);
-assert(notice.includes("invoiced sales"), notice);
-assert(notice.includes("cash collected"), notice);
-assert(!notice.includes("P&L and bank data disagree"), "the banner does not call the gap a data error");
+// The gap is still computed, but no page shows the banner: it did not help the forecast.
+assert(!existsSync("src/components/pl-bank-disagree-notice.tsx"), "the banner component is gone");
+for (const file of ["src/components/cash-forecast.tsx", "src/routes/_authenticated/clients.$clientId.tsx"]) {
+  const src = read(file);
+  assert(!src.includes("PlBankDisagreeNotice"), `${file} does not render the banner`);
+  assert(!src.includes("Invoiced sales and cash collected are different figures"), file);
+}
 
 console.log("aqa-retest-573: ok");

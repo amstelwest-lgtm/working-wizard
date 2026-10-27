@@ -63,7 +63,6 @@ import {
 import { formatMoney } from "@/lib/market/format";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
-import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
 import {
@@ -236,7 +235,6 @@ import {
   forecastOpeningIsKnown,
   hasFinancialEvidence,
   persistedRunwayWeeks,
-  plBankDisagreement,
   runwayDisplayLabel,
   storedOpeningIsMissing,
 } from "@/lib/client-metrics";
@@ -1510,10 +1508,6 @@ function ClientView() {
     openingMissing,
     cashOnFile,
   });
-  const plVersusBank = useMemo(
-    () => plBankDisagreement({ financials, cashflow: client?.cashflow }),
-    [financials, client?.cashflow],
-  );
   const healthScoreRounded = overallHealth.overall ?? 0;
   const pageSignoffStale = (
     signoff: ClientReviewSignoff | null,
@@ -4727,9 +4721,6 @@ function ClientView() {
                   <p className="mb-4 text-sm text-[#3D5270] dark:text-slate-300" role="status">
                     {implausibleSampleNote(clientMarket)}
                   </p>
-                ) : null}
-                {plVersusBank ? (
-                  <PlBankDisagreeNotice disagreement={plVersusBank} market={gateMarket} />
                 ) : null}
 
                 <ClientBriefing

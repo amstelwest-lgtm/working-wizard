@@ -97,7 +97,6 @@ import {
   formatWeekHeader,
 } from "@/lib/market/format";
 import { openingCashToConfirm } from "@/lib/cash-from-banks.publish";
-import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import {
   assessClientMetrics,
   baseCashflow,
@@ -113,7 +112,6 @@ import {
   storedOpeningIsMissing,
   ledgerOpeningIsCashEvidence,
   persistedRunwayWeeks,
-  plBankDisagreement,
   runwayDisplayLabel,
   resolveClientCash,
   reanchoredForecastPatch,
@@ -2288,14 +2286,6 @@ export function CashForecastPanel({
     market,
   });
 
-  const bankDisagree = plBankDisagreement({
-    financials: inputFinancials,
-    cashflow: bankSeeded ? { revenue, expenses, other, seededFromBanksAt: "published" } : null,
-  });
-  const disagreeNotice = bankDisagree ? (
-    <PlBankDisagreeNotice disagreement={bankDisagree} market={market} />
-  ) : null;
-
   const emptyNotice = forecastEmpty ? (
     readOnly ? (
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-[var(--card)] px-4 py-3 text-[15px] text-[var(--ink)]">
@@ -3038,7 +3028,6 @@ export function CashForecastPanel({
               {scenarioLabel}
             </p>
           ) : null}
-          {simplified ? null : disagreeNotice}
           {simplified ? null : emptyNotice}
           {simplified ? null : exportError ? (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
@@ -3442,7 +3431,6 @@ export function CashForecastPanel({
               {scenarioLabel}
             </p>
           ) : null}
-          {disagreeNotice}
           {emptyNotice}
           {exportError ? (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">

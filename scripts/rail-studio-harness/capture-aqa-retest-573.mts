@@ -25,10 +25,9 @@ if (/71[, ]?628/.test(openingTotal.replace(/\s/g, ""))) {
 if (!body.includes("Hotels & accommodation")) throw new Error(`industry missing: ${body.slice(0, 800)}`);
 if (/sells time/i.test(body)) throw new Error("health still says sells time");
 if (!body.includes("Runway —")) throw new Error(`dust runway missing: ${body.slice(0, 800)}`);
-if (!body.includes("Invoiced sales and cash collected are different figures")) {
-  throw new Error(`banner missing: ${body.slice(0, 800)}`);
+if (body.includes("Invoiced sales and cash collected are different figures")) {
+  throw new Error("the invoiced-versus-collected banner is back");
 }
-if (!body.includes("101") || !body.includes("47")) throw new Error(`gap amounts missing: ${body}`);
 await page.locator(".cash-13w-scroll").evaluate((node) => {
   node.scrollLeft = node.scrollWidth;
 });

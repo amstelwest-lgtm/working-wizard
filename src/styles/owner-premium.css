@@ -357,37 +357,6 @@ html:not(.dark) .owner-door .cash-kpi-sub {
   color: var(--op-ink-dim);
 }
 
-/* ===== amber warning banner (P&L vs bank) ===== */
-html:not(.dark) .owner-door .pl-disagree {
-  align-items: center;
-  border: 1px solid #f0dfb3;
-  border-radius: var(--milon-radius-md, 14px);
-  background: #fff8e8;
-  color: var(--op-ink-dim);
-  padding: 12px 16px;
-}
-html:not(.dark) .owner-door .pl-disagree-ic {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  margin-top: 0;
-  border-radius: 999px;
-  background: #faedc8;
-}
-html:not(.dark) .owner-door .pl-disagree-ic svg {
-  color: #a16207;
-}
-html:not(.dark) .owner-door .pl-disagree-title {
-  color: var(--op-ink);
-  font-size: 13.5px;
-}
-html:not(.dark) .owner-door .pl-disagree-line {
-  margin-top: 1px;
-  font-size: 12.5px;
-  color: #6b7a90;
-}
-
 /* ===== chart legend ===== */
 .owner-door .cash-legend {
   display: flex;
