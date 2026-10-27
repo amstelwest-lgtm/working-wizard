@@ -340,25 +340,18 @@ assert(
   "snapshot movement follows the statement dates",
 );
 assert(
-  route.includes("figuresPeriodLabel={figuresPeriodLabel}"),
-  "workflow kicker uses the statement or snapshot period",
+  !route.includes("<ClientBriefing") && !route.includes("figuresPeriodLabel={figuresPeriodLabel}"),
+  "Health does not mount the workflow kicker",
 );
 assert(
   /const figuresPeriodLabel =[\s\S]{0,280}pickCurrentSnapshot\(snapshots\)/.test(route),
   "an undated statement still dates the period from the snapshot",
 );
-assert(
-  route.includes("boardFigures: xeroLink.boardFigures"),
-  "Xero proof receives the board source",
-);
-assert(
-  route.includes("boardFigures: qboLink.boardFigures"),
-  "QuickBooks proof receives the board source",
-);
-
 const briefing = read("src/components/client-briefing.tsx");
 const xeroCard = read("src/components/xero-connect.tsx");
 const qboCard = read("src/components/qbo-connect.tsx");
+assert(xeroCard.includes("board: status.boardFigures"), "Xero proof receives the board source");
+assert(qboCard.includes("board: status.boardFigures"), "QuickBooks proof receives the board source");
 for (const [name, src] of [
   ["briefing", briefing],
   ["xero card", xeroCard],
