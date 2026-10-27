@@ -11,6 +11,7 @@ import { completeDeliverablePdfItems, downloadActionPlanPdf } from "@/lib/action
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { cashPagedSearch, cashPagedViewFromSearch } from "@/lib/cash-paged-view";
+import { budgetPagedSearch, budgetPagedViewFromSearch } from "@/lib/budget-paged-view";
 import { CollectionsPanel } from "@/components/collections-panel";
 import { PayablesPanel } from "@/components/payables-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
@@ -5386,15 +5387,26 @@ function ClientView() {
                   <ClientSubpageFrame
                     id={search.section}
                     eyebrow="Budget"
-                    title={search.section === "months" ? "Month by month" : "This year"}
-                    subtitle={
-                      search.section === "months"
-                        ? "Every month in the budget, next to actuals. Sign off and export from this page."
-                        : "The year against the plan. Sign off and export from this page."
+                    title={
+                      budgetPagedViewFromSearch(search) === "setup"
+                        ? "Setup"
+                        : budgetPagedViewFromSearch(search) === "months"
+                          ? "Month by month"
+                          : "This year"
                     }
+                    subtitle={null}
                   >
                   <div id="wizard-budget-panel">
                     <BudgetPanel
+                      layout="paged"
+                      pagedView={budgetPagedViewFromSearch(search)}
+                      onPagedViewChange={(next) =>
+                        navigate({
+                          to: "/clients/$clientId",
+                          params: { clientId },
+                          search: (prev) => budgetPagedSearch(prev, next),
+                        })
+                      }
                       clientId={client.id}
                       clientName={client.name}
                       simplified

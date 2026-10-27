@@ -16,14 +16,31 @@ const GROUP_LABEL: Record<CashAuditGroup, string> = {
 
 const GROUP_ORDER: CashAuditGroup[] = ["setup", "line", "source", "assumption"];
 
+function rowInitials(
+  status: ReturnType<typeof cashAuditStatus>,
+  approval: CashInputAudit[string] | undefined,
+  viewerId: string | null,
+  viewerInitials: string,
+): string {
+  if (status !== "approved" || !approval) return "";
+  const stored = approval.initials?.trim() ?? "";
+  if (stored) return stored;
+  if (viewerId && approval.approvedBy === viewerId && viewerInitials.trim())
+    return viewerInitials.trim();
+  return "";
+}
+
 export function CashInputAuditTable({
   rows,
   audit,
   canApprove,
   saving = false,
   approvedOn,
+  viewerId = null,
+  viewerInitials = "",
   onApprove,
   onApproveAll,
+  onUnapprove,
   onEdit,
 }: {
   rows: readonly CashAuditRow[];
@@ -31,8 +48,12 @@ export function CashInputAuditTable({
   canApprove: boolean;
   saving?: boolean;
   approvedOn: (iso: string) => string;
+  /** Current user. Their initials fill a stamp that was saved before initials were stored. */
+  viewerId?: string | null;
+  viewerInitials?: string;
   onApprove: (key: string) => void;
   onApproveAll: () => void;
+  onUnapprove: (key: string) => void;
   onEdit: (row: CashAuditRow) => void;
 }) {
   const pending = rows.filter((row) => cashAuditStatus(row, audit) !== "approved").length;
@@ -79,6 +100,7 @@ export function CashInputAuditTable({
                 {groupRows.map((row) => {
                   const status = cashAuditStatus(row, audit);
                   const approval = audit[row.key];
+                  const initials = rowInitials(status, approval, viewerId, viewerInitials);
                   return (
                     <tr key={row.key} data-cash-audit-row={row.key} data-status={status}>
                       <td data-label="Input" className="cash-audit__label">
@@ -98,6 +120,11 @@ export function CashInputAuditTable({
                               : undefined
                           }
                         >
+                          {initials ? (
+                            <span className="cash-audit__initials" data-cash-audit-initials="">
+                              {initials}
+                            </span>
+                          ) : null}
                           {status === "approved" ? (
                             <Check className="h-3.5 w-3.5" aria-hidden="true" />
                           ) : null}
@@ -116,15 +143,30 @@ export function CashInputAuditTable({
                             Approve
                           </button>
                         ) : null}
+                        {canApprove && status === "approved" ? (
+                          <button
+                            type="button"
+                            className="cash-audit__unapprove"
+                            disabled={saving}
+                            aria-label={`Unapprove ${row.label}`}
+                            onClick={() => onUnapprove(row.key)}
+                          >
+                            Unapprove
+                          </button>
+                        ) : null}
                         {row.group === "source" ? null : (
                           <button
                             type="button"
-                            className="cash-audit__edit"
-                            aria-label={`Edit ${row.label}`}
-                            title="Edit"
+                            className={`cash-audit__edit${status === "approved" ? " cash-audit__edit--text" : ""}`}
+                            aria-label={`${status === "approved" ? "Adjust" : "Edit"} ${row.label}`}
+                            title={status === "approved" ? "Adjust" : "Edit"}
                             onClick={() => onEdit(row)}
                           >
-                            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                            {status === "approved" ? (
+                              "Adjust"
+                            ) : (
+                              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
                           </button>
                         )}
                       </td>
