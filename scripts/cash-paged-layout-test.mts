@@ -17,6 +17,10 @@ import {
 } from "../src/lib/cash-paged-view";
 import { accountantClientRouteSearch } from "../src/lib/client-route-search";
 import { CashForecastMenu } from "../src/components/cash/cash-forecast-menu";
+import {
+  ForecastLineTable,
+  forecastLineRemovable,
+} from "../src/components/cash/forecast-line-table";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) {
@@ -78,6 +82,49 @@ const quiet = renderToStaticMarkup(
 );
 assert(!quiet.includes("data-cash-audit-badge"), "no badge when nothing waits");
 
+const line = (id: string, name: string, frequency = "recurring-monthly" as const) => ({
+  id,
+  name,
+  amount: "1000",
+  frequency,
+  startWeek: 1,
+  splitCount: 3,
+});
+const table = renderToStaticMarkup(
+  createElement(ForecastLineTable, {
+    revenue: [line("r1", "Sales"), line("r2", "Grant")],
+    expenses: [line("e1", "Rent"), line("e2", "Salaries & wages")],
+    other: [{ ...line("o1", "Deposit"), frequency: "split-weeks" as const }],
+    currency: "R",
+    weeks: 13,
+    stagedIds: new Set(["r2"]),
+    onChange: () => {},
+    onRemove: () => {},
+    onAdd: () => {},
+  }),
+);
+assert((table.match(/<table/g) ?? []).length === 1, "one table holds every line");
+const headers = [...table.matchAll(/<th scope="col"[^>]*>(.*?)<\/th>/g)].map((m) =>
+  m[1].replace(/<[^>]+>/g, ""),
+);
+assert(
+  headers.join(" | ") === "Description | Amount (R) | Frequency | Start week | Remove",
+  `columns: ${headers.join(" | ")}`,
+);
+for (const group of ["Money in", "Main expenses", "Other expenses"]) {
+  assert(table.includes(`>${group}</th>`), `${group} group header`);
+}
+assert(table.includes('aria-label="Remove Sales"'), "money-in rows can be removed");
+assert(!table.includes('aria-label="Remove Rent"'), "main expenses keep no remove");
+assert(!table.includes('aria-label="Remove Deposit"'), "the last other-expense row stays");
+assert(table.includes('aria-label="Number of weeks"'), "split count sits inline in Frequency");
+assert(/data-forecast-line="r2" data-staged=""/.test(table), "staged once-offs are highlighted");
+assert(table.includes("Add money-in line") && table.includes("Add expense line"), "block add buttons");
+assert(!table.includes("rounded-full"), "no pills in the table");
+assert(forecastLineRemovable("expenses", 9) === false, "main expenses never remove");
+assert(forecastLineRemovable("revenue", 1) === false, "keep one money-in row");
+assert(forecastLineRemovable("other", 2) === true, "extra other rows remove");
+
 const css = readFileSync("src/components/cash/cash-paged.css", "utf8");
 assert(/\.cash-menu__tab \{[^}]*border-radius: 8px/.test(css), "menu tabs are blocks, not pills");
 assert(css.includes("#f4f8ff"), "light blue page background");
@@ -108,6 +155,10 @@ assert(
   "one sentence line under the menu",
 );
 assert(!cash.includes("PlBankDisagreeNotice"), "the invoiced-vs-cash banner is gone from cash");
+assert(pagedBranch.includes("<ForecastLineTable"), "setup pane uses the one table");
+assert(!pagedBranch.includes("<LineEditor"), "no per-line cards on the paged setup pane");
+assert(!pagedBranch.includes("{moneyInOut}"), "Money In & Out folds into Forecast setup");
+assert(!pagedBranch.includes("CollapsibleGoldCard"), "no collapsible cards in the paged layout");
 
 const route = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 const mount = route.slice(route.indexOf('title="13-week forecast"'), route.indexOf("<CashForecastPanel"));

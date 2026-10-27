@@ -161,6 +161,7 @@ import {
 } from "@/lib/cash-week-overrides";
 import { CashSuggestionCard } from "@/components/cash-suggestion-card";
 import { CashForecastMenu } from "@/components/cash/cash-forecast-menu";
+import { ForecastLineTable } from "@/components/cash/forecast-line-table";
 import "@/components/cash/cash-paged.css";
 import {
   cashPagedEnlargeTarget,
@@ -3348,10 +3349,56 @@ export function CashForecastPanel({
             </div>
           ) : null}
           {view === "setup" ? (
-            <div id="wizard-cash-setup" className="space-y-6">
-              {setupFields}
-              {onceOffSaveBar}
-              {moneyInOut}
+            <div id="wizard-cash-setup" className="space-y-5">
+              <div className="cash-setup__top">
+                <label className="cash-setup__field">
+                  Forecast start date
+                  <input
+                    type="date"
+                    className="forecast-lines__input"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </label>
+                <label className="cash-setup__field">
+                  Opening bank balance ({cur})
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    className="forecast-lines__input"
+                    value={openingBalance}
+                    onChange={(e) => setOpeningBalance(e.target.value)}
+                  />
+                </label>
+                {xeroBankNote ? (
+                  <p id="xero-bank-forecast-note" className="cash-setup__note">
+                    {humanizeIsoDates(xeroBankNote, market)}
+                  </p>
+                ) : null}
+              </div>
+              <ForecastLineTable
+                revenue={revenue}
+                expenses={expenses}
+                other={other}
+                currency={cur}
+                weeks={WEEKS}
+                singleMonth={singleMonthHistory}
+                stagedIds={new Set(stagedOnceOffs.map((line) => line.id))}
+                toolbar={onceOffSaveBar}
+                onChange={(side, index, line) => {
+                  if (side === "revenue") updateAt(revenue, setRevenue, index, line);
+                  else if (side === "expenses") updateAt(expenses, setExpenses, index, line);
+                  else updateAt(other, setOther, index, line);
+                }}
+                onRemove={(side, index) => {
+                  if (side === "revenue") setRevenue(revenue.filter((_, x) => x !== index));
+                  else if (side === "other") setOther(other.filter((_, x) => x !== index));
+                }}
+                onAdd={(side) => {
+                  if (side === "revenue") setRevenue([...revenue, makeLine("New revenue line")]);
+                  else if (side === "other") setOther([...other, makeLine("Other expense")]);
+                }}
+              />
             </div>
           ) : null}
           {view === "audit" ? (
