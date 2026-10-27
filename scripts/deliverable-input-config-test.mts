@@ -229,6 +229,28 @@ assert(ui.includes("Inputs used"), "sources heading");
 assert(ui.includes("Open questions"), "questions heading");
 assert(ui.includes("Assumptions"), "assumptions heading");
 assert(!/claude|seeding ai|\bbots?\b/i.test(ui), "component copy stays accountant-facing");
+assert(ui.includes("loadServerDeliverableInputs"), "checklist hydrates from the client row");
+assert(ui.includes("saveServerDeliverableInput"), "checklist writes back to the client row");
+assert(ui.includes("does not change the figures"), "checklist says it is notes only");
+assert(!ui.includes("Choices are saved for this analysis"), "the long stale warning is gone");
+const remote = read("src/lib/deliverable-input-config.remote.ts");
+assert(remote.includes(".update({ deliverable_inputs"), "server copy lives on clients.deliverable_inputs");
+assert(remote.includes("if (!read.ok) return;"), "a failed read never overwrites other notes");
+assert(/42703/.test(remote), "a missing column falls back to browser storage");
+const migration = read("supabase/migrations/20261027120000_client_deliverable_inputs.sql");
+assert(migration.includes("ADD COLUMN IF NOT EXISTS deliverable_inputs JSONB"), "migration adds the column");
+const portalCss = read("src/styles/accountant-portal.css");
+assert(
+  /\.accountant-portal button\[role="checkbox"\]\{[^}]*width:18px;height:18px[^}]*border:2px solid/.test(portalCss),
+  "portal checkboxes are an 18px box with a 2px border",
+);
+assert(
+  /button\[role="checkbox"\]\[data-state="checked"\]\{[^}]*background:#0b5fff/.test(portalCss),
+  "checked portal checkboxes fill cobalt",
+);
+assert(/button\[role="checkbox"\] svg\{\s*width:12px;height:12px/.test(portalCss), "the check is a visible 12px mark");
+assert(/button\[role="checkbox"\]:focus-visible\{\s*outline:2px/.test(portalCss), "checkboxes show focus");
+assert(/input\[type="checkbox"\]\{[^}]*accent-color:#0b5fff/.test(portalCss), "native checkboxes are cobalt too");
 
 const cashSrc = read("src/components/cash-forecast.tsx");
 assert(cashSrc.includes("DeliverableInputConfig"), "cash panel hosts configure inputs");

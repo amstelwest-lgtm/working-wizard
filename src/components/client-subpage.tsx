@@ -37,7 +37,7 @@ export function ClientSubpageFrame({
   id: string;
   eyebrow: string;
   title: string;
-  subtitle: string;
+  subtitle?: string | null;
   children: ReactNode;
 }) {
   return (

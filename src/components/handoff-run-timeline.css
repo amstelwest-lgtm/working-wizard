@@ -1,0 +1,185 @@
+.handoff-timeline {
+  margin-top: 6px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f4f8ff;
+  padding: 6px 10px;
+  color: #102a43;
+  font-size: 12.5px;
+}
+
+.handoff-timeline__summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #0b5fff;
+  list-style: none;
+}
+
+.handoff-timeline__summary::-webkit-details-marker {
+  display: none;
+}
+
+.handoff-timeline__summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 120ms ease;
+}
+
+.handoff-timeline[open] > .handoff-timeline__summary::before {
+  transform: rotate(90deg);
+}
+
+.handoff-timeline__steps {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.handoff-timeline__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.handoff-timeline__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #e8f1fe;
+  color: #0b5fff;
+}
+
+.handoff-timeline__step[data-step-state="done"] .handoff-timeline__icon {
+  background: rgba(63, 156, 114, 0.14);
+  color: #2f7d59;
+}
+
+.handoff-timeline__step[data-step-state="failed"] .handoff-timeline__icon {
+  background: rgba(224, 92, 92, 0.14);
+  color: #c0392b;
+}
+
+.handoff-timeline__step[data-step-state="skipped"] .handoff-timeline__icon {
+  background: #eef2f7;
+  color: #5c7190;
+}
+
+.handoff-timeline__copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.handoff-timeline__label {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.handoff-timeline__detail,
+.handoff-timeline__muted {
+  color: #3d5270;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.handoff-timeline__muted {
+  margin: 8px 0 2px;
+}
+
+.handoff-timeline__time {
+  flex: none;
+  color: #5c7190;
+  font-size: 11px;
+}
+
+.handoff-timeline__output {
+  margin-top: 10px;
+  border-top: 1px solid #dbeafe;
+  padding-top: 8px;
+}
+
+.handoff-timeline__output ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.handoff-timeline__output li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.handoff-timeline__kicker {
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #3d5270;
+}
+
+.handoff-timeline__finding-title {
+  font-weight: 700;
+}
+
+.handoff-timeline__open {
+  align-self: flex-start;
+  margin-top: 2px;
+  border: 1px solid #0b5fff;
+  border-radius: 6px;
+  background: #fff;
+  color: #0b5fff;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.handoff-paused {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3d5270;
+}
+
+.handoff-paused button {
+  font: inherit;
+  font-weight: 700;
+  color: #0b5fff;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+html.dark .handoff-timeline {
+  background: #0b1b2b;
+  border-color: #1e3a5f;
+  color: #f4f7fb;
+}
+
+html.dark .handoff-timeline__detail,
+html.dark .handoff-timeline__muted,
+html.dark .handoff-timeline__kicker,
+html.dark .handoff-paused {
+  color: #c5d4e4;
+}
+
+html.dark .handoff-timeline__open {
+  background: transparent;
+}

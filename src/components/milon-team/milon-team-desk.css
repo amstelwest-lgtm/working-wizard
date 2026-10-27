@@ -69,6 +69,8 @@ html.dark .milon-desk {
   flex-direction: column;
   height: 100vh;
   max-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   box-sizing: border-box;
   padding-bottom: 12px;
   overflow: hidden;
@@ -759,7 +761,7 @@ html[data-theme="light"] .milon-desk {
   background: var(--desk-plate);
   border-top: 1px solid var(--desk-line);
   padding: 8px 2px 2px;
-  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.45);
+  box-shadow: none;
 }
 
 .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell::before {
@@ -963,6 +965,9 @@ body:has(#pane-ask.on) #wizard-notes-pin {
   height: 100vh;
   max-height: 100vh;
   min-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
   overflow: hidden;
   padding-bottom: 0;
 }
@@ -1019,6 +1024,59 @@ body:has(#pane-ask.on) #wizard-notes-pin {
 
 .milon-desk-agents:has([data-agent-card="tax_specialist"]) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Agent names and status lines wrap instead of running past the card. */
+.milon-desk-agent-name,
+.milon-desk-agent-short,
+.milon-desk-ran,
+.milon-desk-status span,
+.agent-stage-name,
+.agent-stage-role,
+.agent-stage-finding,
+.agent-work-title,
+.agent-work-detail {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* Phone and short tablet: a wrapped breadcrumb or topbar leaves the locked
+   desk too short, so cards and activity were clipped under the composer.
+   The page scrolls instead and the composer sticks to the bottom. */
+@media (max-width: 860px) {
+  .accountant-portal:has(.milon-desk) .shell,
+  .accountant-portal:has(.milon-desk) .client-workspace,
+  .accountant-portal:has(.milon-desk) .deliverable-main,
+  .accountant-portal:has(.milon-desk) #pane-ask.on,
+  .accountant-portal:has(.milon-desk) .milon-desk-host,
+  .accountant-portal:has(.milon-desk) .milon-desk,
+  .accountant-portal:has(.milon-desk) .milon-desk-scroll,
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .shell,
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .client-workspace,
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main,
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) #pane-ask.on,
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host,
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk,
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-scroll {
+    flex: none;
+    height: auto;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .accountant-portal:has(.milon-desk) .client-workspace {
+    grid-template-rows: auto;
+    align-items: start;
+  }
+
+  .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell,
+  .accountant-portal:has([data-agent-stage]) #ask-ai-accountant.ask-ai-studio-shell {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 @media (min-width: 1100px) {

@@ -37,6 +37,10 @@ import {
   patchStoredDeliverableInput,
   readStoredDeliverableInputs,
 } from "@/lib/deliverable-input-config.store";
+import {
+  loadServerDeliverableInputs,
+  saveServerDeliverableInput,
+} from "@/lib/deliverable-input-config.remote";
 
 const LABEL_CLS = "text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400";
 const SOURCE_CHIP_CLS =
@@ -75,6 +79,18 @@ export function useDeliverableInputConfig(opts: {
       setState(next);
     }
     hydrated.current = true;
+    if (!clientId) return;
+    let cancelled = false;
+    void loadServerDeliverableInputs(clientId).then((server) => {
+      const remote = server?.[deliverableId];
+      if (cancelled || !remote) return;
+      const merged = mergeDeliverableInputState(def, remote, contextRef.current);
+      patchStoredDeliverableInput(clientId, deliverableId, merged);
+      setState(merged);
+    });
+    return () => {
+      cancelled = true;
+    };
     // Hydrate once per client + tab. Live engine values overlay in the following effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, deliverableId]);
@@ -88,10 +104,23 @@ export function useDeliverableInputConfig(opts: {
     });
   }, [def]);
 
+  const serverSave = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (serverSave.current) clearTimeout(serverSave.current);
+    },
+    [],
+  );
   const persist = useCallback(
     (next: DeliverableInputState) => {
       setState(next);
-      if (hydrated.current && clientId) patchStoredDeliverableInput(clientId, deliverableId, next);
+      if (!hydrated.current || !clientId) return;
+      patchStoredDeliverableInput(clientId, deliverableId, next);
+      if (serverSave.current) clearTimeout(serverSave.current);
+      serverSave.current = setTimeout(() => {
+        serverSave.current = null;
+        void saveServerDeliverableInput(clientId, deliverableId, next);
+      }, 600);
     },
     [clientId, deliverableId],
   );
@@ -105,6 +134,7 @@ export function DeliverableInputConfig({
   context,
   onEngineBoundChange,
   className = "",
+  hideSources = false,
 }: {
   clientId?: string;
   deliverableId: DeliverableInputId;
@@ -112,6 +142,8 @@ export function DeliverableInputConfig({
   /** Called when a first-class engine field changes so the parent can re-run. */
   onEngineBoundChange?: (patch: EngineBoundPatch) => void;
   className?: string;
+  /** The cash Audit inputs pane lists sources as rows to approve instead. */
+  hideSources?: boolean;
 }) {
   const { def, state, persist } = useDeliverableInputConfig({
     clientId,
@@ -163,20 +195,17 @@ export function DeliverableInputConfig({
         {needsRefresh ? (
           <div className="mb-5 flex items-start gap-2 rounded-lg border border-[#0B5FFF]/35 bg-[#0B5FFF]/10 px-3 py-2.5 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#102A43]" />
-            <span>
-              Choices are saved for this analysis. The figures below still reflect the last run —
-              they do not update on their own when you uncheck a source or edit an assumption that
-              the engine does not yet read.
-            </span>
+            <span>Saved as notes; unticking a source does not change the figures.</span>
           </div>
         ) : null}
 
-        <section className="space-y-3">
+        <section className="space-y-3" hidden={hideSources}>
           <h3 className={LABEL_CLS}>Inputs used</h3>
           <ul className="grid gap-2 sm:grid-cols-2">
             {def.sources.map((src) => {
               const checked = state.checkedSources[src.id] !== false;
-              const chip = deliverableId === "cash" ? cashChecklistSourceChip(src.id, context) : null;
+              const chip =
+                deliverableId === "cash" ? cashChecklistSourceChip(src.id, context) : null;
               return (
                 <li
                   key={src.id}

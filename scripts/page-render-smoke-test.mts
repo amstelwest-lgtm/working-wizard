@@ -309,7 +309,10 @@ const clientHome = (mode: SmokeMode): PageCase => ({
         html.includes('data-connect-books="home"'),
         "home with no ledger shows the connect card",
       );
-      assert(html.includes("Connect Xero or QuickBooks"), "connect card titles the action");
+      assert(
+        html.includes("Connect Xero or QuickBooks") || html.includes("Connect Xero, QuickBooks or Sage"),
+        "connect card titles the action",
+      );
       assert(
         html.includes("Nothing is posted without your approval."),
         "connect card keeps the approval line",

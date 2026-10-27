@@ -5,7 +5,6 @@
  * collected R47,458.
  */
 import { CashThirteenWeekGrid } from "@/components/cash-thirteen-week";
-import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import { clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { describeBusiness } from "@/lib/client-briefing";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
@@ -113,15 +112,6 @@ export function AqaRetest573Preview() {
           </p>
         </div>
       </section>
-      <PlBankDisagreeNotice
-        disagreement={{
-          plRevenueMonthly: 101_250,
-          bankInflowMonthly: 47_458,
-          plCostMonthly: null,
-          bankOutflowMonthly: 0,
-        }}
-        market={ZA_MARKET}
-      />
     </div>
   );
 }

@@ -405,7 +405,7 @@ export const MILON_CAPABILITIES: MilonCapability[] = [
     name: "13-week cash forecast from bank statements",
     where: "13-Week Cash Forecast tab",
     does: "Builds a weekly cash forecast from uploaded bank statements (or manual lines), classifies recurring movements, and shows the movements trial balance and runway in weeks. Scenario sliders test collections delay, headcount and capex.",
-    output: "Weekly closing balance, runway, scenario what-ifs.",
+    output: "Weekly closing balance, runway, scenario planning.",
   },
   {
     id: "budget",

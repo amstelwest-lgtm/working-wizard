@@ -80,6 +80,7 @@ function HandoffProgress({
         draftId={item.draftId}
         onOpenDraft={onOpenDraft}
         onRetry={onRetry}
+        actionItemId={item.id}
       />
       <AssignmentNotes notes={assignmentNotesForDraft(item.notes ?? [], item.draftId)} />
     </>

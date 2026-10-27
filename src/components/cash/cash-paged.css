@@ -1,0 +1,751 @@
+/* Accountant cash forecast, paged layout. Owner and try views keep the stacked layout. */
+
+.cash-paged {
+  --cash-paged-bg: #f4f8ff;
+  --cash-paged-line: #dbeafe;
+  --cash-paged-ink: #102a43;
+  --cash-paged-muted: #486581;
+  --cash-paged-cobalt: #0b5fff;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--cash-paged-bg);
+  color: var(--cash-paged-ink);
+}
+
+.dark .cash-paged,
+[data-theme="dark"] .cash-paged {
+  --cash-paged-bg: #0b1b2b;
+  --cash-paged-line: #1e3a5f;
+  --cash-paged-ink: #f4f7fb;
+  --cash-paged-muted: #9fb3c8;
+}
+
+.cash-paged__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cash-paged__meta,
+.cash-paged__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cash-paged__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--cash-paged-line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cash-paged-muted);
+}
+
+.cash-paged__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--cash-paged-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--cash-paged-ink);
+}
+
+.cash-paged__icon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cash-paged__sentence {
+  margin: 0;
+  font-size: 14px;
+  color: var(--cash-paged-muted);
+}
+
+.cash-paged__pane {
+  position: relative;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--cash-paged-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(16, 42, 67, 0.06);
+}
+
+.dark .cash-paged__pane,
+[data-theme="dark"] .cash-paged__pane,
+.dark .cash-paged__chip,
+[data-theme="dark"] .cash-paged__chip,
+.dark .cash-paged__icon,
+[data-theme="dark"] .cash-paged__icon {
+  background: #102a43;
+}
+
+.cash-paged__pane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cash-paged__period {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cash-paged__audit-warn {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a3a5c;
+}
+
+/* Block segmented menu: square-ish blocks, never pills. */
+.cash-menu {
+  display: flex;
+  gap: 6px;
+  max-width: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.cash-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.cash-menu__tab {
+  display: inline-flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--cash-paged-line, #dbeafe);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--cash-paged-ink, #102a43);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.cash-menu__tab:hover {
+  background: #eaf2ff;
+}
+
+.cash-menu__tab:focus-visible {
+  outline: 2px solid var(--cash-paged-cobalt, #0b5fff);
+  outline-offset: 2px;
+}
+
+.cash-menu__tab[aria-selected="true"] {
+  border-color: var(--cash-paged-cobalt, #0b5fff);
+  background: var(--cash-paged-cobalt, #0b5fff);
+  color: #fff;
+}
+
+.dark .cash-menu__tab,
+[data-theme="dark"] .cash-menu__tab {
+  background: #102a43;
+}
+
+.cash-menu__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: #e05c5c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cash-menu__tab[aria-selected="true"] .cash-menu__badge {
+  background: #fff;
+  color: var(--cash-paged-cobalt, #0b5fff);
+}
+
+/* Forecast setup: start date and opening, then one line-item table. */
+.cash-setup__top {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cash-setup__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cash-paged-muted, #486581);
+}
+
+.cash-setup__note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--cash-paged-muted, #486581);
+}
+
+.forecast-lines__toolbar {
+  margin-bottom: 8px;
+}
+
+.forecast-lines__scroll {
+  overflow-x: auto;
+}
+
+.forecast-lines__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+
+.forecast-lines__table thead th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--cash-paged-line, #dbeafe);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--cash-paged-muted, #486581);
+}
+
+.forecast-lines__table th.forecast-lines__num,
+.forecast-lines__table td.forecast-lines__num {
+  text-align: right;
+}
+
+.forecast-lines__group th {
+  padding: 14px 10px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  border-left: 3px solid transparent;
+}
+
+tbody[data-tone="in"] .forecast-lines__group th {
+  color: #3f9c72;
+  border-left-color: #5cc492;
+}
+
+tbody[data-tone="out"] .forecast-lines__group th {
+  color: #c94b4b;
+  border-left-color: #e05c5c;
+}
+
+.forecast-lines__row td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--cash-paged-line, #dbeafe);
+  vertical-align: middle;
+}
+
+tbody[data-tone="in"] .forecast-lines__row td:first-child {
+  box-shadow: inset 3px 0 0 #5cc492;
+}
+
+tbody[data-tone="out"] .forecast-lines__row td:first-child {
+  box-shadow: inset 3px 0 0 #e05c5c;
+}
+
+.forecast-lines__row[data-staged] td {
+  background: #eaf2ff;
+}
+
+.forecast-lines__input {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--cash-paged-line, #dbeafe);
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+.forecast-lines__input:focus-visible {
+  outline: 2px solid var(--cash-paged-cobalt, #0b5fff);
+  outline-offset: 1px;
+}
+
+.dark .forecast-lines__input,
+[data-theme="dark"] .forecast-lines__input {
+  background: #0b1b2b;
+}
+
+.forecast-lines__input--num {
+  min-width: 110px;
+  text-align: right;
+}
+
+.forecast-lines__input--week {
+  width: 72px;
+  text-align: right;
+}
+
+.forecast-lines__input--count {
+  width: 64px;
+  flex: none;
+}
+
+.forecast-lines__freq {
+  display: flex;
+  gap: 6px;
+  min-width: 170px;
+}
+
+.forecast-lines__remove-cell {
+  width: 44px;
+  text-align: center;
+}
+
+.forecast-lines__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #c94b4b;
+}
+
+.forecast-lines__remove:hover {
+  border-color: #f5c6c6;
+  background: #fdf0f0;
+}
+
+.forecast-lines__add-row td {
+  padding: 8px 0 4px;
+}
+
+.forecast-lines__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px dashed currentColor;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.forecast-lines__add[data-tone="in"] {
+  color: #3f9c72;
+}
+
+.forecast-lines__add[data-tone="out"] {
+  color: #c94b4b;
+}
+
+/* Audit inputs */
+.cash-audit__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.cash-audit__count {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cash-paged-muted, #486581);
+}
+
+.cash-audit__approve-all,
+.cash-audit__approve {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--cash-paged-cobalt, #0b5fff);
+  border-radius: 6px;
+  background: var(--cash-paged-cobalt, #0b5fff);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cash-audit__approve {
+  background: #fff;
+  color: var(--cash-paged-cobalt, #0b5fff);
+}
+
+.cash-audit__approve-all:disabled,
+.cash-audit__approve:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cash-audit__edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--cash-paged-line, #dbeafe);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cash-paged-muted, #486581);
+}
+
+.cash-audit__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+
+.cash-audit__table thead th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--cash-paged-line, #dbeafe);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--cash-paged-muted, #486581);
+}
+
+.cash-audit__group th {
+  padding: 14px 10px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  color: #1a3a5c;
+}
+
+.cash-audit__table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--cash-paged-line, #dbeafe);
+  vertical-align: middle;
+}
+
+.cash-audit__label {
+  font-weight: 600;
+}
+
+.cash-audit__chip {
+  display: inline-flex;
+  padding: 2px 8px;
+  border: 1px solid var(--cash-paged-line, #dbeafe);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cash-paged-muted, #486581);
+}
+
+.cash-audit__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cash-audit__status[data-status="suggested"] {
+  background: #e8f1fe;
+  color: #1a3a5c;
+}
+
+.cash-audit__status[data-status="approved"] {
+  background: rgba(92, 196, 146, 0.14);
+  color: #2f7a57;
+}
+
+.cash-audit__status[data-status="changed"] {
+  background: rgba(224, 92, 92, 0.12);
+  color: #b03a3a;
+}
+
+.cash-audit__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .cash-audit__table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .cash-audit__table,
+  .cash-audit__table tbody,
+  .cash-audit__group,
+  .cash-audit__group th {
+    display: block;
+  }
+
+  .cash-audit__table tbody tr:not(.cash-audit__group) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--cash-paged-line, #dbeafe);
+  }
+
+  .cash-audit__table tbody td {
+    padding: 0;
+    border: 0;
+  }
+
+  .cash-audit__label {
+    grid-column: 1 / -1;
+  }
+
+  .cash-audit__actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .cash-setup__top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .forecast-lines__table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .forecast-lines__table,
+  .forecast-lines__table tbody,
+  .forecast-lines__group,
+  .forecast-lines__group th,
+  .forecast-lines__add-row,
+  .forecast-lines__add-row td {
+    display: block;
+  }
+
+  .forecast-lines__row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px 0 8px 8px;
+    border-bottom: 1px solid var(--cash-paged-line, #dbeafe);
+  }
+
+  tbody[data-tone="in"] .forecast-lines__row {
+    box-shadow: inset 3px 0 0 #5cc492;
+  }
+
+  tbody[data-tone="out"] .forecast-lines__row {
+    box-shadow: inset 3px 0 0 #e05c5c;
+  }
+
+  .forecast-lines__row td {
+    display: block;
+    padding: 0;
+    border: 0;
+    box-shadow: none !important;
+    text-align: left !important;
+  }
+
+  .forecast-lines__row td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .forecast-lines__row td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cash-paged-muted, #486581);
+  }
+
+  .forecast-lines__remove-cell {
+    width: auto;
+    align-self: end;
+  }
+
+  .forecast-lines__input--num,
+  .forecast-lines__input--week {
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .forecast-lines__freq {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .cash-paged {
+    padding: 10px;
+  }
+
+  .cash-paged__pane {
+    padding: 14px;
+  }
+
+  .cash-menu__tab {
+    flex: 0 0 auto;
+    padding: 0 12px;
+  }
+}
+
+/* Scenario planning */
+.cash-scenario__key {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  margin-right: 6px;
+  border-top: 2.5px solid #0b5fff;
+  vertical-align: middle;
+}
+
+.cash-scenario__key[data-key="base"] {
+  border-top: 2px dashed #2c5580;
+}
+
+.cash-scenario__reset {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--cash-paged-cobalt, #0b5fff);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--cash-paged-cobalt, #0b5fff);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cash-scenario__reset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Colour pass: waterfall palette, no warm tints. Scoped so owner and try are unchanged. */
+html:not(.dark) .cash-paged .cash-kpi {
+  position: relative;
+  overflow: hidden;
+  border-color: #dbeafe;
+  background: #e8f1fe;
+  box-shadow: inset 3px 0 0 #1a3a5c;
+}
+
+html:not(.dark) .cash-paged .cash-kpi[data-tone="good"] {
+  background: rgba(31, 158, 98, 0.06);
+  box-shadow: inset 3px 0 0 #1f9e62;
+}
+
+html:not(.dark) .cash-paged .cash-kpi[data-tone="bad"] {
+  background: rgba(231, 106, 106, 0.06);
+  box-shadow: inset 3px 0 0 #e76a6a;
+}
+
+.dark .cash-paged .cash-kpi {
+  box-shadow: inset 3px 0 0 #3b6ea5;
+}
+
+.dark .cash-paged .cash-kpi[data-tone="good"] {
+  box-shadow: inset 3px 0 0 #41c586;
+}
+
+.dark .cash-paged .cash-kpi[data-tone="bad"] {
+  box-shadow: inset 3px 0 0 #f29191;
+}
+
+.cash-paged .cash-legend-net {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #41c586 50%, #e76a6a 50%);
+  vertical-align: middle;
+}
+
+/* Grid totals: green receipts, red payments, navy closing. */
+html:not(.dark) .cash-paged .cash-13w-scroll tr[data-cash-row="total-receipts"] th,
+html:not(.dark)
+  .cash-paged
+  .cash-13w-scroll
+  tr[data-cash-row="total-receipts"]
+  td:not([data-cash-tight]) {
+  background: #f2faf6;
+  color: #0e5c40;
+}
+
+html:not(.dark) .cash-paged .cash-13w-scroll tr[data-cash-row="total-payments"] th,
+html:not(.dark)
+  .cash-paged
+  .cash-13w-scroll
+  tr[data-cash-row="total-payments"]
+  td:not([data-cash-tight]) {
+  background: #fdf6f5;
+  color: #8e2430;
+}
+
+html:not(.dark) .cash-paged .cash-13w-scroll tr[data-cash-row="closing"] th,
+html:not(.dark) .cash-paged .cash-13w-scroll tr[data-cash-row="closing"] td:not([data-cash-tight]) {
+  background: #e8f1fe;
+  color: #1a3a5c;
+  font-weight: 700;
+}
+
+/* Warm amber/white-60 tints from the shared primitives read pink on the blue page. */
+html:not(.dark) .cash-paged [class*="border-amber-900"] {
+  border-color: #dbeafe;
+}
+
+html:not(.dark) .cash-paged [class*="bg-white/60"],
+html:not(.dark) .cash-paged [class*="bg-white/70"],
+html:not(.dark) .cash-paged [class*="bg-white/80"] {
+  background-color: #ffffff;
+}
+
+/* Block shapes, not pills, inside the cash page. */
+.cash-paged .cash-13w-scroll [class*="rounded-full"],
+.cash-paged [data-deliverable-input-config] [class*="rounded-full"] {
+  border-radius: 6px;
+}

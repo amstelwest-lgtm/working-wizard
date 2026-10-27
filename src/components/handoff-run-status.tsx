@@ -1,9 +1,39 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState, type MouseEvent } from "react";
 import { handoffIsSlow } from "@/lib/action-handoff";
+import { pausedHandoffLine, readHandoffPaused } from "@/lib/handoff-timeline";
+import { agentShortName } from "@/lib/milon-team";
+import type { AgentKey } from "@/lib/milon-team-feed";
+
+// Loaded on first use so the action plan's import graph stays light for Hand to.
+const HandoffRunTimeline = lazy(() =>
+  import("@/components/handoff-run-timeline").then((m) => ({ default: m.HandoffRunTimeline })),
+);
+
+const AGENT_KEYS: readonly string[] = ["financial_manager", "analyst", "advisor"];
+
+function shortName(agent: string | null | undefined): string | null {
+  return agent && AGENT_KEYS.includes(agent) ? agentShortName(agent as AgentKey) : null;
+}
+
+/** Reassign opens the Hand to menu in the same row when the caller has none. */
+function openNearestHandTo(event: MouseEvent<HTMLButtonElement>) {
+  let node: HTMLElement | null = event.currentTarget.parentElement;
+  for (let i = 0; node && i < 6; i += 1) {
+    const trigger = node.querySelector<HTMLButtonElement>("[data-hand-to-trigger]");
+    if (trigger) {
+      trigger.click();
+      trigger.focus();
+      return;
+    }
+    node = node.parentElement;
+  }
+}
 
 /**
  * Queued and running hand-offs show Working.
  * After three minutes the same row offers Retry instead of the queue line.
+ * A run id adds "What <agent> did" with the steps and output.
+ * A paused runner reads "Not started: <agent> is paused" with Reassign.
  */
 export function HandoffRunStatus({
   run,
@@ -13,8 +43,10 @@ export function HandoffRunStatus({
   draftId = null,
   onOpenDraft,
   onRetry,
+  actionItemId = null,
+  onReassign,
 }: {
-  run?: { status: string; at?: string | null } | null;
+  run?: { id?: string; agent?: string; status: string; at?: string | null } | null;
   caption?: string | null;
   /** No run appeared for this hand-off. Offer Retry instead of Working. */
   missed?: boolean;
@@ -24,6 +56,9 @@ export function HandoffRunStatus({
   draftId?: string | null;
   onOpenDraft?: (draftId: string) => void;
   onRetry?: () => void;
+  /** Reads the paused marker this device wrote when the runner was off. */
+  actionItemId?: string | null;
+  onReassign?: () => void;
 }) {
   const active = !error && !missed && (run?.status === "queued" || run?.status === "running");
   const stopped = Boolean(
@@ -38,7 +73,40 @@ export function HandoffRunStatus({
     return () => window.clearInterval(timer);
   }, [active, run?.at]);
   const slow = active && handoffIsSlow(run?.status, run?.at, now);
-  if (!slow && !caption && !active && !stopped && !missed && !error) return null;
+  const [pausedAgent, setPausedAgent] = useState<string | null>(null);
+  useEffect(() => {
+    const marker = readHandoffPaused(actionItemId);
+    const newerRun = marker && run?.at && run.at > marker.at;
+    setPausedAgent(marker && !newerRun ? marker.agent : null);
+  }, [actionItemId, run?.at, missed]);
+  const pausedName = !active && !error ? shortName(pausedAgent) : null;
+  const runId = run?.id?.trim() ?? "";
+  const runAgent = shortName(run?.agent);
+  const timeline =
+    runId && runAgent && !pausedName ? (
+      <Suspense fallback={null}>
+        <HandoffRunTimeline runId={runId} agentName={runAgent} onOpenDraft={onOpenDraft} />
+      </Suspense>
+    ) : null;
+  if (pausedName) {
+    return (
+      <p className="handoff-paused" data-handoff-paused>
+        {pausedHandoffLine(pausedName)} ·{" "}
+        <button
+          type="button"
+          data-handoff-reassign
+          onClick={(event) => {
+            event.stopPropagation();
+            if (onReassign) onReassign();
+            else openNearestHandTo(event);
+          }}
+        >
+          Reassign
+        </button>
+      </p>
+    );
+  }
+  if (!slow && !caption && !active && !stopped && !missed && !error) return timeline;
   return (
     <>
       {error ? (
@@ -110,7 +178,10 @@ export function HandoffRunStatus({
           </button>
         </p>
       ) : caption && !stopped && !missed && !(caption.includes("finished") && !openId) ? (
-        <p className="fm-brief-progress mt-1 text-[11px] font-semibold text-[#0B5FFF]" data-agent-pickup>
+        <p
+          className="fm-brief-progress mt-1 text-[11px] font-semibold text-[#0B5FFF]"
+          data-agent-pickup
+        >
           {caption}
           {finished && onOpenDraft ? (
             <>
@@ -130,6 +201,7 @@ export function HandoffRunStatus({
           ) : null}
         </p>
       ) : null}
+      {timeline}
     </>
   );
 }

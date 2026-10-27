@@ -307,6 +307,12 @@ assert(!fn.includes("password_enc"), "status select does not return the password
 
 const card = read("src/components/sage-connect.tsx");
 assert(card.includes('brand="sage"'), "card uses the shared connect button");
+assert(card.includes('data-sage-connect="start"'), "Connections shows Connect to Sage before the login form");
+assert(card.includes("SAGE_NOT_SYNCED_HINT"), "the Sage start state says figures are not synced yet");
+assert(read("src/components/data-up-to-date.tsx").includes("buttonFirst"), "Connections opens Sage with the button, like Xero and QuickBooks");
+assert(read("src/components/brand-connect-button.tsx").includes("<SageMark />"), "the Sage button has a badge like Xero");
+assert(read("src/components/statement-arap-fallback.tsx").includes("connect-sage"), "Collections and Payables offer Connect Sage");
+assert(read("src/components/connect-books-card.tsx").includes('data-connect-books="sage"'), "Home offers Sage as a primary button");
 assert(card.includes("Email"), "card asks for email");
 assert(card.includes("Password"), "card asks for password");
 assert(card.includes("Company ID"), "card asks for Company ID");

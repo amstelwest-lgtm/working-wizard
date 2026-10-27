@@ -10,6 +10,8 @@
 
 export const CONNECT_BOOKS_TITLE = "Connect Xero or QuickBooks";
 
+export const CONNECT_BOOKS_TITLE_WITH_SAGE = "Connect Xero, QuickBooks or Sage";
+
 export const CONNECT_BOOKS_BODY =
   "Connect your client's books so Milōn can read their numbers. Read-only. Nothing is posted without your approval.";
 
@@ -28,3 +30,7 @@ export type ConnectBooksLedger = {
 export function connectBooksHomeVisible(ledgers: ConnectBooksLedger): boolean {
   return !ledgers.xero && !ledgers.qbo && !ledgers.sage;
 }
+
+/** Sage sync is a stub (docs/SAGE_SA.md). Say so wherever Sage sits next to Xero and QuickBooks. */
+export const SAGE_NOT_SYNCED_HINT =
+  "Sage figures are not synced yet. Connecting checks the login only.";

@@ -5,10 +5,12 @@
  */
 import {
   COLLECTIONS_QBO_CTA,
+  COLLECTIONS_SAGE_CTA,
   COLLECTIONS_UPLOAD_CTA,
   COLLECTIONS_XERO_CTA,
   type StatementWorkingCapital,
 } from "@/lib/collections";
+import { SAGE_NOT_SYNCED_HINT } from "@/lib/connect-books-copy";
 import { t } from "@/lib/market/copy";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 
@@ -91,15 +93,18 @@ export function StatementArApActions({
   onUploadAged,
   onConnectXero,
   onConnectQbo,
+  onConnectSage,
   uploadClassName = "btn gold mini",
 }: {
   idPrefix: string;
   onUploadAged?: () => void;
   onConnectXero?: () => void;
   onConnectQbo?: () => void;
+  /** Non-US only. Sage checks the login; it does not pull figures yet. */
+  onConnectSage?: () => void;
   uploadClassName?: string;
 }) {
-  if (!onUploadAged && !onConnectXero && !onConnectQbo) return null;
+  if (!onUploadAged && !onConnectXero && !onConnectQbo && !onConnectSage) return null;
   return (
     <div className="statement-arap-actions">
       {onUploadAged ? (
@@ -132,6 +137,17 @@ export function StatementArApActions({
           {COLLECTIONS_QBO_CTA}
         </button>
       ) : null}
+      {onConnectSage ? (
+        <button
+          type="button"
+          className="btn ghost mini"
+          id={`${idPrefix}-connect-sage`}
+          title={SAGE_NOT_SYNCED_HINT}
+          onClick={onConnectSage}
+        >
+          {COLLECTIONS_SAGE_CTA}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -152,6 +168,7 @@ export function StatementArApFallback({
   onUploadAged,
   onConnectXero,
   onConnectQbo,
+  onConnectSage,
   omitLead = false,
   hideActions = false,
   cardLead = "debtors",
@@ -171,6 +188,7 @@ export function StatementArApFallback({
   onUploadAged?: () => void;
   onConnectXero?: () => void;
   onConnectQbo?: () => void;
+  onConnectSage?: () => void;
   /** The answer strip owns the sentence. The long lead stays in the drawer. */
   omitLead?: boolean;
   /** The strip or the drawer owns upload and connect. */
@@ -207,6 +225,7 @@ export function StatementArApFallback({
           onUploadAged={onUploadAged}
           onConnectXero={onConnectXero}
           onConnectQbo={onConnectQbo}
+          onConnectSage={onConnectSage}
         />
       )}
       <p className="collections-note">{footnote}</p>

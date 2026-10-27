@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { completeDeliverablePdfItems, downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { cashPagedSearch, cashPagedViewFromSearch } from "@/lib/cash-paged-view";
 import { CollectionsPanel } from "@/components/collections-panel";
 import { PayablesPanel } from "@/components/payables-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
@@ -62,7 +63,6 @@ import {
 import { formatMoney } from "@/lib/market/format";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
-import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
 import {
@@ -235,7 +235,6 @@ import {
   forecastOpeningIsKnown,
   hasFinancialEvidence,
   persistedRunwayWeeks,
-  plBankDisagreement,
   runwayDisplayLabel,
   storedOpeningIsMissing,
 } from "@/lib/client-metrics";
@@ -1509,10 +1508,6 @@ function ClientView() {
     openingMissing,
     cashOnFile,
   });
-  const plVersusBank = useMemo(
-    () => plBankDisagreement({ financials, cashflow: client?.cashflow }),
-    [financials, client?.cashflow],
-  );
   const healthScoreRounded = overallHealth.overall ?? 0;
   const pageSignoffStale = (
     signoff: ClientReviewSignoff | null,
@@ -4727,9 +4722,6 @@ function ClientView() {
                     {implausibleSampleNote(clientMarket)}
                   </p>
                 ) : null}
-                {plVersusBank ? (
-                  <PlBankDisagreeNotice disagreement={plVersusBank} market={gateMarket} />
-                ) : null}
 
                 <ClientBriefing
                   clientName={client.name}
@@ -5254,10 +5246,18 @@ function ClientView() {
                     id="forecast"
                     eyebrow="Cash flow"
                     title="13-week forecast"
-                    subtitle="Thirteen weeks of cash. Sign off and export from this page."
                   >
-                  <div className="card cf-wrap" id="wizard-cash-panel">
+                  <div id="wizard-cash-panel">
                     <CashForecastPanel
+                      layout="paged"
+                      pagedView={cashPagedViewFromSearch(search.view)}
+                      onPagedViewChange={(next) =>
+                        navigate({
+                          to: "/clients/$clientId",
+                          params: { clientId },
+                          search: (prev) => cashPagedSearch(prev, next),
+                        })
+                      }
                       clientId={client.id}
                       clientName={client.name}
                       canSign
@@ -5321,6 +5321,7 @@ function ClientView() {
                     }}
                     onConnectXero={() => setShowXeroDialog(true)}
                     onConnectQbo={() => setShowQboDialog(true)}
+                    onConnectSage={isUsCopy(gateMarket) ? undefined : () => setShowSageDialog(true)}
                     onOpenDrafts={() => openHomeSection("reports", "drafts")}
                     onOpenActions={() => openHomeSection("plan", "open")}
                   />
@@ -5348,6 +5349,7 @@ function ClientView() {
                     }}
                     onConnectXero={() => setShowXeroDialog(true)}
                     onConnectQbo={() => setShowQboDialog(true)}
+                    onConnectSage={isUsCopy(gateMarket) ? undefined : () => setShowSageDialog(true)}
                     onOpenDrafts={() => openHomeSection("reports", "drafts")}
                     onOpenActions={() => openHomeSection("plan", "open")}
                   />

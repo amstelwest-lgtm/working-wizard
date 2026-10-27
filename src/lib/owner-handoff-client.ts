@@ -16,6 +16,12 @@ import {
   type StoredAssignment,
 } from "@/lib/open-plan-home";
 import { agentDisplayName } from "@/lib/milon-team";
+import {
+  clearHandoffPaused,
+  parseHandoffRunDetail,
+  rememberHandoffPaused,
+  type HandoffRunDetail,
+} from "@/lib/handoff-timeline";
 import type { AgentKey } from "@/lib/milon-team-feed";
 
 export const ACTION_PLAN_REFRESH_EVENT = "milon-action-plan-refresh";
@@ -305,7 +311,12 @@ export async function commitActionHandoff(input: {
     const message = err instanceof Error && err.message.trim() ? err.message : HANDOFF_FAILED_COPY;
     return fail(message);
   }
+  if (result.ok && !result.reused) {
+    if (result.dispatched) clearHandoffPaused(input.actionItemId);
+    else rememberHandoffPaused(input.actionItemId, input.agent, since);
+  }
   if (!result.ok && handoffComingOnline(result.error)) {
+    rememberHandoffPaused(input.actionItemId, input.agent, since);
     const saved = await recordHandoffAssignment(input);
     if (!saved.ok) return fail(saved.error, true);
     await clearActionOwner(input.actionItemId);
@@ -386,6 +397,7 @@ export async function assignActionToPerson(input: {
   personName: string;
   title?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  clearHandoffPaused(input.actionItemId);
   const since = new Date().toISOString();
   const actorLabel = await signedInActorLabel();
   const note = {
@@ -483,6 +495,39 @@ async function requestPersonAssignment(input: {
 export type ActionHandoffRun = { id: string; agent: AgentKey; status: string; at: string };
 
 export type HandoffAgentNote = { agent: AgentKey; at: string };
+
+/**
+ * One run with its steps and findings, for the hand-off timeline.
+ * RLS (has_client_access) already allows this read. Trace args are
+ * dropped in parseHandoffRunDetail and never kept in state.
+ */
+export async function loadHandoffRunDetail(runId: string): Promise<HandoffRunDetail | null> {
+  if (!runId) return null;
+  const db = supabase as unknown as {
+    from(table: string): {
+      select(columns: string): {
+        eq(
+          column: string,
+          value: string,
+        ): PromiseLike<{ data: unknown; error: { message?: string } | null }> & {
+          maybeSingle(): Promise<{ data: unknown; error: { message?: string } | null }>;
+        };
+      };
+    };
+  };
+  const [runRes, findingsRes] = await Promise.all([
+    db
+      .from("agent_runs")
+      .select(
+        "id, agent, status, stop_reason, summary, error, trace, queued_at, started_at, finished_at",
+      )
+      .eq("id", runId)
+      .maybeSingle(),
+    db.from("agent_findings").select("id, title, detail, severity").eq("run_id", runId),
+  ]);
+  if (runRes.error || !runRes.data) return null;
+  return parseHandoffRunDetail(runRes.data, findingsRes.error ? [] : findingsRes.data);
+}
 
 /** Newest run per action. A missing column or an empty table stays quiet. */
 export async function loadActionHandoffRuns(

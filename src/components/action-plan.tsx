@@ -2573,7 +2573,7 @@ function ItemRow({
   comingSoon?: Partial<Record<AgentKey, true>>;
   /** Set when a queued run for this action has started or finished. */
   pickupLabel?: string | null;
-  pickupRun?: { status: string; at?: string | null } | null;
+  pickupRun?: { id?: string; agent?: string; status: string; at?: string | null } | null;
   handoffError?: string | null;
   onRetry?: () => void;
   notes?: readonly AssignmentNoteRow[];
@@ -2893,6 +2893,7 @@ function ItemRow({
               return stored?.kind === "bot" && !handoffStillAwaitingRun(stored.at);
             })()}
             onRetry={onRetry}
+            actionItemId={item.id}
           />
           <AssignmentNotes notes={notes} />
         </div>

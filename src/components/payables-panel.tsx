@@ -50,6 +50,7 @@ type Props = {
   onUploadAged?: () => void;
   onConnectXero?: () => void;
   onConnectQbo?: () => void;
+  onConnectSage?: () => void;
   onOpenDrafts?: () => void;
   onOpenActions?: () => void;
 };
@@ -73,6 +74,7 @@ export function PayablesPanel({
   onUploadAged,
   onConnectXero,
   onConnectQbo,
+  onConnectSage,
   onOpenDrafts,
   onOpenActions,
 }: Props) {
@@ -215,6 +217,7 @@ export function PayablesPanel({
           uploadClassName="btn ghost mini"
           onConnectXero={onConnectXero}
           onConnectQbo={onConnectQbo}
+          onConnectSage={onConnectSage}
         />
         {onOpenDrafts || onOpenActions ? (
           <div className="payables-actions">
