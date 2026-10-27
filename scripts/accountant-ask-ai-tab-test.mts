@@ -38,9 +38,8 @@ assert(clientSrc.includes('id: "home"') && clientSrc.includes("bot: true"), "Hom
 assert(clientSrc.includes('id="ask-ai-accountant"') || clientSrc.includes('id="pane-ask"') || clientSrc.includes('"ask"'), "the Bot pane stays mounted");
 assert(
   clientSrc.includes('id="pane-ratios"') &&
-    clientSrc.indexOf('id="pane-ratios"') < clientSrc.indexOf("<ClientBriefing") &&
-    clientSrc.indexOf("<ClientBriefing") < clientSrc.indexOf('id="pane-profit"'),
-  "the client briefing lives on Health",
+    !clientSrc.slice(clientSrc.indexOf('id="pane-ratios"'), clientSrc.indexOf('id="pane-profit"')).includes("<ClientBriefing"),
+  "Health does not repeat the business profile",
 );
 assert(clientSrc.includes('id="first-figures-card"'), "empty studio shows the first-figures card");
 assert(clientSrc.includes('{ id: "home", label: "Home" }'), "Home appears in the rail");

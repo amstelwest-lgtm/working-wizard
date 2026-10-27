@@ -64,29 +64,49 @@ export function ClientSectionOverview({
   title,
   subtitle,
   links,
+  variant = "cards",
 }: {
   clientId: string;
   eyebrow: string;
   title: string;
-  subtitle: string;
+  subtitle?: string | null;
   links: ClientSubpageLink[];
+  /** `lines` is two plain rows. Health uses it so the parent is not a second profile. */
+  variant?: "cards" | "lines";
 }) {
+  const lines = variant === "lines";
   return (
-    <section className="client-subpage" data-subpage="overview">
-      <PageHeader eyebrow={eyebrow} title={title} subtitle={subtitle} />
-      <ul className="client-subpage-links">
+    <section
+      className="client-subpage"
+      data-subpage="overview"
+      data-subpage-lines={lines ? "true" : undefined}
+    >
+      <PageHeader eyebrow={eyebrow} title={title} subtitle={subtitle || undefined} />
+      <ul className={lines ? "client-subpage-links client-subpage-links--lines" : "client-subpage-links"}>
         {links.map((link) => (
           <li key={link.id}>
             <Link
               to="/clients/$clientId"
               params={{ clientId }}
               search={link.search}
-              className={link.primary ? "client-subpage-link client-subpage-link--primary" : "client-subpage-link"}
+              className={
+                lines
+                  ? "client-subpage-link client-subpage-link--line"
+                  : link.primary
+                    ? "client-subpage-link client-subpage-link--primary"
+                    : "client-subpage-link"
+              }
               data-subpage-link={link.id}
               data-primary={link.primary ? "true" : undefined}
             >
               <span className="client-subpage-link__label">{link.label}</span>
-              <span className="client-subpage-link__detail">{link.detail}</span>
+              {lines ? (
+                <span className="client-subpage-link__chev" aria-hidden="true">
+                  ›
+                </span>
+              ) : (
+                <span className="client-subpage-link__detail">{link.detail}</span>
+              )}
             </Link>
           </li>
         ))}

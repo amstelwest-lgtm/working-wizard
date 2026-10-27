@@ -9,9 +9,9 @@
  *
  * Each side-menu sub-heading is its own page. `section` is that page
  * (`?tab=profit&section=lines`). A parent with nothing left but those
- * pages has no section: that URL is a short overview. Health keeps the
- * briefing and the figures on the parent, and Score / Where it hurts are
- * sections. Old anchors (`#pane-collections`, `#coach-pillars`) and old
+ * pages has no section: that URL is a short overview. Health's parent is
+ * the Score and Where it hurts lines. The figures stay on that parent.
+ * Score / Where it hurts are sections. Old anchors (`#pane-collections`, `#coach-pillars`) and old
  * `?tab=` aliases (`waterfall`, `collections`, `advisory`) rewrite to the
  * section page. `?view=lines` is the same rewrite; `view=table` opens
  * Budget month by month. `view=13week` stays on the cash forecast page.

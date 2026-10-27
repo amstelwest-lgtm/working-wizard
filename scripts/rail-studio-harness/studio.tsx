@@ -594,7 +594,7 @@ function HealthPane({ clientId }: { clientId: string }) {
             clientId={clientId}
             eyebrow="Numbers"
             title="Health"
-            subtitle="Score and where it hurts each have their own page. The figures stay here."
+            variant="lines"
             links={[
               {
                 id: "score",

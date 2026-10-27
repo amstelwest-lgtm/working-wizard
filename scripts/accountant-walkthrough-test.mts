@@ -212,7 +212,7 @@ assert(
 const client = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert(client.includes("homeFinding="), "the client agent view receives the Home line");
 assert(client.includes("<ClientBackLink"), "client pages have a header back control");
-assert(client.includes("hideScore"), "Health does not repeat the score");
+assert(!client.includes("<ClientBriefing"), "Health does not repeat the business profile");
 assert(client.includes("Edit the period figures on Health."), "Profit links to Health for the figures");
 assert(!client.includes("profitFinCollapse"), "Profit does not edit the same figures as Health");
 const openAgent = client.slice(client.indexOf("const openHomeAgent"), client.indexOf("const openHomeSection"));
