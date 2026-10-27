@@ -663,3 +663,89 @@ tbody[data-tone="out"] .forecast-lines__row td:first-child {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* Colour pass: waterfall palette, no warm tints. Scoped so owner and try are unchanged. */
+html:not(.dark) .cash-paged .cash-kpi {
+  position: relative;
+  overflow: hidden;
+  border-color: #dbeafe;
+  background: #e8f1fe;
+  box-shadow: inset 3px 0 0 #1a3a5c;
+}
+
+html:not(.dark) .cash-paged .cash-kpi[data-tone="good"] {
+  background: rgba(31, 158, 98, 0.06);
+  box-shadow: inset 3px 0 0 #1f9e62;
+}
+
+html:not(.dark) .cash-paged .cash-kpi[data-tone="bad"] {
+  background: rgba(231, 106, 106, 0.06);
+  box-shadow: inset 3px 0 0 #e76a6a;
+}
+
+.dark .cash-paged .cash-kpi {
+  box-shadow: inset 3px 0 0 #3b6ea5;
+}
+
+.dark .cash-paged .cash-kpi[data-tone="good"] {
+  box-shadow: inset 3px 0 0 #41c586;
+}
+
+.dark .cash-paged .cash-kpi[data-tone="bad"] {
+  box-shadow: inset 3px 0 0 #f29191;
+}
+
+.cash-paged .cash-legend-net {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #41c586 50%, #e76a6a 50%);
+  vertical-align: middle;
+}
+
+/* Grid totals: green receipts, red payments, navy closing. */
+html:not(.dark) .cash-paged .cash-13w-scroll tr[data-cash-row="total-receipts"] th,
+html:not(.dark)
+  .cash-paged
+  .cash-13w-scroll
+  tr[data-cash-row="total-receipts"]
+  td:not([data-cash-tight]) {
+  background: #f2faf6;
+  color: #0e5c40;
+}
+
+html:not(.dark) .cash-paged .cash-13w-scroll tr[data-cash-row="total-payments"] th,
+html:not(.dark)
+  .cash-paged
+  .cash-13w-scroll
+  tr[data-cash-row="total-payments"]
+  td:not([data-cash-tight]) {
+  background: #fdf6f5;
+  color: #8e2430;
+}
+
+html:not(.dark) .cash-paged .cash-13w-scroll tr[data-cash-row="closing"] th,
+html:not(.dark) .cash-paged .cash-13w-scroll tr[data-cash-row="closing"] td:not([data-cash-tight]) {
+  background: #e8f1fe;
+  color: #1a3a5c;
+  font-weight: 700;
+}
+
+/* Warm amber/white-60 tints from the shared primitives read pink on the blue page. */
+html:not(.dark) .cash-paged [class*="border-amber-900"] {
+  border-color: #dbeafe;
+}
+
+html:not(.dark) .cash-paged [class*="bg-white/60"],
+html:not(.dark) .cash-paged [class*="bg-white/70"],
+html:not(.dark) .cash-paged [class*="bg-white/80"] {
+  background-color: #ffffff;
+}
+
+/* Block shapes, not pills, inside the cash page. */
+.cash-paged .cash-13w-scroll [class*="rounded-full"],
+.cash-paged [data-deliverable-input-config] [class*="rounded-full"] {
+  border-radius: 6px;
+}

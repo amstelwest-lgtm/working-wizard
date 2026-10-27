@@ -172,6 +172,28 @@ for (const file of ["src/reports/cash-forecast.tsx", "src/lib/feature-finder.ts"
   assert(!/what-?if/i.test(readFileSync(file, "utf8")), `${file} has no what-if wording`);
 }
 
+const palette = readFileSync("src/lib/brand-palette.ts", "utf8");
+const waterfall = readFileSync("src/components/profitability-waterfall.tsx", "utf8");
+assert(waterfall.includes('from "@/lib/brand-palette"'), "waterfall reads the shared palette");
+assert(cash.includes('from "@/lib/brand-palette"'), "cash chart reads the shared palette");
+assert(palette.includes('green: { from: "#41c586", to: "#1f9e62" }'), "waterfall green kept");
+assert(cash.includes('dataKey="net"') && cash.includes("url(#cfNetDown)"), "weekly net bars");
+const heroAt = cash.indexOf("const heroChart");
+const barAt = cash.indexOf('dataKey="net"', heroAt);
+assert(cash.slice(heroAt, barAt).includes('layout === "paged" ? ('), "net bars only on the paged chart");
+assert(/\.cash-paged \.cash-kpi\[data-tone="bad"\][^}]*inset 3px 0 0 #e76a6a/.test(css), "red tile accent");
+assert(/\.cash-paged \.cash-kpi\[data-tone="good"\][^}]*inset 3px 0 0 #1f9e62/.test(css), "green tile accent");
+assert(css.includes('tr[data-cash-row="total-receipts"]'), "grid receipts row tinted");
+assert(css.includes('tr[data-cash-row="total-payments"]'), "grid payments row tinted");
+assert(/\[class\*="border-amber-900"\][^}]*#dbeafe/.test(css), "warm borders read blue on the page");
+for (const selector of [".cash-paged {", ".cash-paged__pane {", ".cash-menu__tab {", ".cash-paged__chip {"]) {
+  const block = css.slice(css.indexOf(selector), css.indexOf("}", css.indexOf(selector)));
+  for (const hex of block.match(/#[0-9a-f]{6}\b/gi) ?? []) {
+    const [r, , b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    assert(b >= r, `${selector} has no warm tint: ${hex}`);
+  }
+}
+
 const route = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 const mount = route.slice(route.indexOf('title="13-week forecast"'), route.indexOf("<CashForecastPanel"));
 assert(!mount.includes("subtitle="), "the forecast subpage has no subtitle");

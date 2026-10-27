@@ -41,6 +41,8 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Area,
+  Bar,
+  Cell,
   XAxis,
   YAxis,
   Tooltip,
@@ -1924,6 +1926,7 @@ export function CashForecastPanel({
       closing,
       underFloor: point.belowFloor ? closing : floor,
       weekIndex: point.week,
+      net: point.week === 0 ? null : Math.round(baseCalc.net[point.week - 1] ?? 0),
     };
   });
 
@@ -2094,9 +2097,29 @@ export function CashForecastPanel({
             >
               <defs>
                 <linearGradient id="cfGoldFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={GOLD} stopOpacity={0.02} />
+                  <stop
+                    offset="0%"
+                    stopColor={layout === "paged" ? GOLD_DARK : GOLD}
+                    stopOpacity={layout === "paged" ? 0.28 : 0.35}
+                  />
+                  <stop
+                    offset="100%"
+                    stopColor={layout === "paged" ? GOLD_DARK : GOLD}
+                    stopOpacity={0.02}
+                  />
                 </linearGradient>
+                {layout === "paged" ? (
+                  <>
+                    <linearGradient id="cfNetUp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={PALETTE.green.from} />
+                      <stop offset="100%" stopColor={PALETTE.green.to} />
+                    </linearGradient>
+                    <linearGradient id="cfNetDown" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={PALETTE.red.from} />
+                      <stop offset="100%" stopColor={PALETTE.red.to} />
+                    </linearGradient>
+                  </>
+                ) : null}
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
               <XAxis
@@ -2139,7 +2162,8 @@ export function CashForecastPanel({
                   color: "#f1f5f9",
                 }}
                 labelStyle={{ color: "#0B5FFF", fontWeight: 700 }}
-                formatter={(v: number, _name, item) => {
+                formatter={(v: number, name, item) => {
+                  if (name === "Weekly net") return [fmtR(v), "Weekly net"];
                   const weekIndex = (item?.payload as { weekIndex?: number } | undefined)
                     ?.weekIndex;
                   return [fmtR(v), weekIndex === 0 ? "Opening" : "Closing"];
@@ -2149,10 +2173,27 @@ export function CashForecastPanel({
                   return p?.label ? `${l} · ${p.label}` : String(l);
                 }}
               />
+              {layout === "paged" ? (
+                <Bar
+                  dataKey="net"
+                  name="Weekly net"
+                  barSize={enlarged ? 18 : 12}
+                  radius={[3, 3, 0, 0]}
+                  fillOpacity={0.55}
+                  isAnimationActive={false}
+                >
+                  {chartData.map((row) => (
+                    <Cell
+                      key={row.week}
+                      fill={(row.net ?? 0) < 0 ? "url(#cfNetDown)" : "url(#cfNetUp)"}
+                    />
+                  ))}
+                </Bar>
+              ) : null}
               <ReferenceLine y={0} stroke={RED} strokeDasharray="3 3" strokeOpacity={0.7} />
               <ReferenceLine
                 y={minimumCash}
-                stroke={GOLD}
+                stroke={layout === "paged" ? PALETTE.navy.to : GOLD}
                 strokeDasharray="4 4"
                 strokeOpacity={0.85}
               />
@@ -2976,6 +3017,12 @@ export function CashForecastPanel({
               <i className="cash-legend-floor" aria-hidden="true" />
               Runway floor {fmtCompact(minimumCash)}
             </span>
+            {layout === "paged" ? (
+              <span className="cash-legend-item">
+                <i className="cash-legend-net" aria-hidden="true" />
+                Weekly net
+              </span>
+            ) : null}
           </div>
           {interestNote ? (
             <p className="mt-2 text-xs text-slate-600 dark:text-slate-400" data-cash-interest>

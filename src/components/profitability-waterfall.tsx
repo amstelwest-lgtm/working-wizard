@@ -41,6 +41,7 @@ import { ownerOutflow } from "@/lib/owner-money";
 import { periodProfitBridge, statementNetProfit, statementNetProfitFromSteps } from "@/lib/period-profit";
 import { FULL_YEAR_ON_FILE } from "@/lib/statement-period";
 import "./profitability-waterfall.css";
+import { PALETTE, paletteGradient } from "@/lib/brand-palette";
 
 export type { WaterfallFallback };
 
@@ -104,10 +105,10 @@ const COLORS = {
 
 /** Premium bars — brand tokens with fallbacks (cobalt/royal totals, green subtotals, soft red steps). */
 const PREMIUM_BAR: Record<string, string> = {
-  total: "linear-gradient(180deg, var(--royal, #2563eb), var(--cobalt, #0b5fff))",
-  subtotal: "linear-gradient(180deg, #41c586, #1f9e62)",
-  decrease: "linear-gradient(180deg, #f29191, #e76a6a)",
-  netNeg: "linear-gradient(180deg, #d6565a, #bf3a44)",
+  total: `linear-gradient(180deg, var(--royal, ${PALETTE.cobalt.from}), var(--cobalt, ${PALETTE.cobalt.to}))`,
+  subtotal: paletteGradient("green"),
+  decrease: paletteGradient("red"),
+  netNeg: paletteGradient("redDeep"),
 };
 
 function niceStep(rough: number): number {
