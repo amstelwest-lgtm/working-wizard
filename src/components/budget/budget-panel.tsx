@@ -57,6 +57,7 @@ import { useMarket } from "@/contexts/market";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { budgetSaveErrorMessage } from "@/lib/reach-error";
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
+import type { BudgetPagedView } from "@/lib/budget-paged-view";
 import type { BudgetYearMoney } from "@/lib/budget-year-compare";
 
 type StoredBudgetRow = {
@@ -166,6 +167,9 @@ export function BudgetPanel({
   priorYearLabel = null,
   priorYearMonths = null,
   seededBooks = null,
+  layout = "stacked",
+  pagedView,
+  onPagedViewChange,
 }: {
   clientId?: string;
   clientName?: string;
@@ -212,6 +216,10 @@ export function BudgetPanel({
    * skips a second fat select until reloadToken asks for a fresh read.
    */
   seededBooks?: BudgetSeedBooks | null;
+  /** Accountant client budget. Owner and try stay stacked. */
+  layout?: "stacked" | "paged";
+  pagedView?: BudgetPagedView;
+  onPagedViewChange?: (view: BudgetPagedView) => void;
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
@@ -811,6 +819,9 @@ export function BudgetPanel({
           openingCash: shownDoc.openingCash,
           openingCashSource: shownDoc.openingCashSource,
         })}
+        layout={layout}
+        pagedView={pagedView}
+        onPagedViewChange={onPagedViewChange}
       />
 
       <Dialog open={lowOverlapOpen} onOpenChange={setLowOverlapOpen}>

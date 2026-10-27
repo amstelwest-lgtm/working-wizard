@@ -171,10 +171,14 @@ import { ForecastLineTable } from "@/components/cash/forecast-line-table";
 import { CashInputAuditTable } from "@/components/cash/cash-input-audit";
 import {
   approveCashInputs,
+  cashAuditInitials,
   cashAuditPendingCount,
   cashAuditRows,
   cashAuditSignoffWarning,
+  cashAuditStatus,
   parseCashInputAudit,
+  reapproveChangedCashInputs,
+  unapproveCashInputs,
   type CashInputAudit,
 } from "@/lib/cash-input-audit";
 import "@/components/cash/cash-paged.css";
@@ -2436,14 +2440,43 @@ export function CashForecastPanel({
       toast.error(`Could not save the approval: ${error.message}`);
     }
   };
+  const signerInitials = cashAuditInitials(
+    profile.accountantName,
+    user?.email ?? profile.accountantEmail,
+  );
   const approveInputs = (keys?: string[]) =>
     void saveInputAudit(
       approveCashInputs(inputAudit, auditRows, {
         by: user?.id ?? null,
         at: new Date().toISOString(),
+        initials: signerInitials || null,
         keys,
       }),
     );
+  const unapproveInput = (key: string) =>
+    void saveInputAudit(unapproveCashInputs(inputAudit, [key]));
+  const auditLive = useRef({ rows: auditRows, audit: inputAudit });
+  auditLive.current = { rows: auditRows, audit: inputAudit };
+  const saveAuditRef = useRef(saveInputAudit);
+  saveAuditRef.current = saveInputAudit;
+  const changedAuditSignature = auditRows
+    .filter((row) => cashAuditStatus(row, inputAudit) === "changed")
+    .map((row) => row.key)
+    .join("\n");
+  useEffect(() => {
+    if (!canApproveInputs || !changedAuditSignature) return;
+    const timer = window.setTimeout(() => {
+      const live = auditLive.current;
+      const next = reapproveChangedCashInputs(live.audit, live.rows, {
+        by: user?.id ?? null,
+        at: new Date().toISOString(),
+        initials: signerInitials || null,
+      });
+      if (next === live.audit) return;
+      void saveAuditRef.current(next);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [canApproveInputs, changedAuditSignature, signerInitials, user?.id]);
 
   const forecastUpdatedLabel = lastForecastAt
     ? `Updated ${ownerSignoffDate(lastForecastAt, market.timezone, market)}`
@@ -3087,6 +3120,7 @@ export function CashForecastPanel({
         openingMissing={openingTilesMissing}
         onCommit={commitWeekOverride}
         scrollClassName={scrollClassName}
+        palette={layout === "paged" ? "blue" : "warm"}
       />
     );
 
@@ -3612,8 +3646,11 @@ export function CashForecastPanel({
                 canApprove={canApproveInputs}
                 saving={auditSaving}
                 approvedOn={(iso) => ownerSignoffDate(iso, market.timezone, market)}
+                viewerId={user?.id ?? null}
+                viewerInitials={signerInitials}
                 onApprove={(key) => approveInputs([key])}
                 onApproveAll={() => approveInputs()}
+                onUnapprove={unapproveInput}
                 onEdit={(row) => {
                   if (row.group === "assumption") {
                     document

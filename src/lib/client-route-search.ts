@@ -906,6 +906,13 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
       out.view = view;
     }
   }
+  if (out.tab === "budget") {
+    const view = typeof search.view === "string" ? search.view : "";
+    if (view === "setup" || view === "engine" || view === "inputs") {
+      out.view = "setup";
+      if (!out.section) out.section = "year";
+    }
+  }
   if (search.invite === "owner" && out.tab === "settings") out.invite = "owner";
   return out;
 }

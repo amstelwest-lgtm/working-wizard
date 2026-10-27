@@ -21,6 +21,8 @@ export type CashInputApproval = {
   approvedAt: string;
   approvedBy: string | null;
   valueHash: string;
+  /** Signing user's initials, stored with the stamp so another browser can show them. */
+  initials: string | null;
 };
 
 export type CashInputAudit = Record<string, CashInputApproval>;
@@ -75,6 +77,8 @@ export function parseCashInputAudit(raw: unknown): CashInputAudit {
       approvedAt: row.approvedAt,
       approvedBy: typeof row.approvedBy === "string" ? row.approvedBy : null,
       valueHash: row.valueHash,
+      initials:
+        typeof row.initials === "string" && row.initials.trim() ? row.initials.trim() : null,
     };
   }
   return out;
@@ -217,13 +221,31 @@ export function cashAuditPendingCount(
   return rows.filter((row) => cashAuditStatus(row, audit) !== "approved").length;
 }
 
+/** Two letters for the person who approved. A full name wins; otherwise the email. */
+export function cashAuditInitials(name: string | null | undefined, email?: string | null): string {
+  const person = (name ?? "").trim();
+  const words = person.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    const first = words[0]?.[0] ?? "";
+    const last = words[words.length - 1]?.[0] ?? "";
+    return `${first}${last}`.toUpperCase();
+  }
+  if (words.length === 1 && words[0].length >= 2) return words[0].slice(0, 2).toUpperCase();
+  const local = (email ?? "").split("@")[0]?.trim() ?? "";
+  const bits = local.split(/[._+-]+/).filter(Boolean);
+  if (bits.length >= 2) return `${bits[0]?.[0] ?? ""}${bits[1]?.[0] ?? ""}`.toUpperCase();
+  if (local.length >= 2) return local.slice(0, 2).toUpperCase();
+  return words[0]?.[0]?.toUpperCase() ?? "";
+}
+
 /** Approve the given keys, or every row not yet approved when `keys` is left off. */
 export function approveCashInputs(
   audit: CashInputAudit,
   rows: readonly CashAuditRow[],
-  opts: { by: string | null; at: string; keys?: readonly string[] },
+  opts: { by: string | null; at: string; initials?: string | null; keys?: readonly string[] },
 ): CashInputAudit {
   const wanted = opts.keys ? new Set(opts.keys) : null;
+  const initials = opts.initials?.trim() ? opts.initials.trim() : null;
   const next: CashInputAudit = { ...audit };
   for (const row of rows) {
     if (wanted ? !wanted.has(row.key) : cashAuditStatus(row, audit) === "approved") continue;
@@ -231,9 +253,39 @@ export function approveCashInputs(
       approvedAt: opts.at,
       approvedBy: opts.by,
       valueHash: cashAuditHash(row.hashOf),
+      initials,
     };
   }
   return next;
+}
+
+/** Drop approval so the row reads "To approve" again. */
+export function unapproveCashInputs(
+  audit: CashInputAudit,
+  keys: readonly string[],
+): CashInputAudit {
+  const drop = new Set(keys);
+  const next: CashInputAudit = {};
+  for (const [key, value] of Object.entries(audit)) {
+    if (!drop.has(key)) next[key] = value;
+  }
+  return next;
+}
+
+/**
+ * A value that was approved and then edited. Re-stamp it for the current user
+ * so it does not sit on "Changed since approval".
+ */
+export function reapproveChangedCashInputs(
+  audit: CashInputAudit,
+  rows: readonly CashAuditRow[],
+  opts: { by: string | null; at: string; initials?: string | null },
+): CashInputAudit {
+  const keys = rows
+    .filter((row) => cashAuditStatus(row, audit) === "changed")
+    .map((row) => row.key);
+  if (!keys.length) return audit;
+  return approveCashInputs(audit, rows, { ...opts, keys });
 }
 
 /** One soft line near Sign off. Null when everything is approved. */

@@ -71,6 +71,8 @@ export function BudgetChartTable({
   periodCaption = null,
   uniformNote = null,
   windowMonths = null,
+  hideLensToggle = false,
+  quiet = false,
 }: {
   doc: BudgetDocument;
   clientId?: string;
@@ -97,6 +99,10 @@ export function BudgetChartTable({
   uniformNote?: string | null;
   /** Statement window. Totals match the verdict instead of the whole year. */
   windowMonths?: readonly string[] | null;
+  /** Accountant paged menu replaces Chart/Table. */
+  hideLensToggle?: boolean;
+  /** Paged panes already have their one sentence. */
+  quiet?: boolean;
 }) {
   const { market } = useMarketFormat();
   const money = (n: number) => {
@@ -196,20 +202,23 @@ export function BudgetChartTable({
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-[#102A43] dark:text-slate-100">Budget vs actual</h3>
-          {periodCaption ? (
+          {!quiet && periodCaption ? (
             <p className="mt-1 text-[13px] leading-snug text-[#3D5270] dark:text-slate-300" data-budget-period>
               {periodCaption}
             </p>
           ) : null}
+          {quiet ? null : (
           <p className={`mt-1 text-[13px] leading-snug ${ytdTone}`} data-ytd-signal={budgetYtdSignal(ytd) ?? "none"}>
             {sentence}
           </p>
-          {uniformNote ? (
+          )}
+          {!quiet && uniformNote ? (
             <p className="mt-1 text-[13px] leading-snug text-[#102A43] dark:text-[#93c5fd]" data-budget-uniform>
               {uniformNote}
             </p>
           ) : null}
         </div>
+        {hideLensToggle ? null : (
         <ViewToggle
           ariaLabel="Budget"
           value={activeLens}
@@ -219,6 +228,7 @@ export function BudgetChartTable({
             { value: "table", label: "Table" },
           ]}
         />
+        )}
       </div>
       <BudgetRangeTotalsRow totals={totals} money={money} />
       {actualsPending ? (

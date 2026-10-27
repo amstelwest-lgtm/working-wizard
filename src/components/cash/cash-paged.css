@@ -414,16 +414,43 @@ tbody[data-tone="out"] .forecast-lines__row td:first-child {
   cursor: not-allowed;
 }
 
-.cash-audit__edit {
+.cash-audit__edit,
+.cash-audit__unapprove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
   height: 32px;
   border: 1px solid var(--cash-paged-line, #dbeafe);
   border-radius: 6px;
-  background: transparent;
-  color: var(--cash-paged-muted, #486581);
+  background: #fff;
+  color: var(--cash-paged-ink, #102a43);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cash-audit__edit {
+  width: 32px;
+}
+
+.cash-audit__edit--text,
+.cash-audit__unapprove {
+  width: auto;
+  padding: 0 10px;
+}
+
+.cash-audit__initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.25rem;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: #0b5fff;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .cash-audit__table {
@@ -722,8 +749,15 @@ html:not(.dark)
   .cash-13w-scroll
   tr[data-cash-row="total-payments"]
   td:not([data-cash-tight]) {
-  background: #fdf6f5;
-  color: #8e2430;
+  background: #f4f8ff;
+  color: #1a3a5c;
+}
+
+/* Header and sticky shadow were a warm cream. Light blue, except weeks under the floor. */
+html:not(.dark) .cash-paged .cash-13w-scroll thead th:not([data-cash-tight]),
+html:not(.dark) .cash-paged .cash-13w-scroll tbody th[scope="colgroup"] {
+  background-color: #f4f8ff;
+  box-shadow: 4px 0 8px -6px rgba(16, 42, 67, 0.22);
 }
 
 html:not(.dark) .cash-paged .cash-13w-scroll tr[data-cash-row="closing"] th,

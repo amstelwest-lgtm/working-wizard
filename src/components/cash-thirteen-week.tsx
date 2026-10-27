@@ -149,6 +149,14 @@ const HEAD_BG = "bg-[#f3ecdc] dark:bg-[#1b170f]";
 const HEAD_TIGHT =
   "bg-[#f8e8e4] shadow-[inset_0_3px_0_#c0392b] dark:bg-[#2a1a1c] dark:shadow-[inset_0_3px_0_#ef6b6b]";
 
+/** Accountant paged 13-week chrome. Light blue, navy shadow. Red stays on weeks under the floor. */
+const BLUE_HEAD = "bg-[#F4F8FF] dark:bg-[#102A43]";
+const BLUE_HEAD_TIGHT =
+  "bg-[#FDECEC] shadow-[inset_0_3px_0_#c0392b] dark:bg-[#3A1820] dark:shadow-[inset_0_3px_0_#e05c5c]";
+const BLUE_CLOSE = "bg-[#E8F1FE] dark:bg-[#163654] dark:text-[#F4F7FB]";
+const BLUE_STICKY = "shadow-[4px_0_8px_-6px_rgba(16,42,67,0.22)]";
+const WARM_STICKY = "shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)]";
+
 export function CashThirteenWeekGrid({
   weeks,
   opening,
@@ -170,6 +178,7 @@ export function CashThirteenWeekGrid({
   readOnly = false,
   scrollClassName,
   openingMissing = false,
+  palette = "warm",
 }: {
   weeks: string[];
   opening: number;
@@ -200,7 +209,14 @@ export function CashThirteenWeekGrid({
   scrollClassName?: string;
   /** No stored opening. Closings are not rolled forward from zero, and weeks stay uncoloured. */
   openingMissing?: boolean;
+  /** Warm is the owner and try grid. Blue is the accountant paged page. */
+  palette?: "warm" | "blue";
 }) {
+  const blue = palette === "blue";
+  const headBg = blue ? BLUE_HEAD : HEAD_BG;
+  const headTight = blue ? BLUE_HEAD_TIGHT : HEAD_TIGHT;
+  const stickyShadow = blue ? BLUE_STICKY : WARM_STICKY;
+  const toneBg: Record<RowTone, string> = blue ? { ...TONE_BG, close: BLUE_CLOSE } : TONE_BG;
   const openings = openingMissing
     ? closing.map(() => Number.NaN)
     : closing.map((_, index) => {
@@ -214,17 +230,15 @@ export function CashThirteenWeekGrid({
   const openingBelow = openingMissing ? false : series[0]?.belowFloor === true;
   const tight = openingMissing
     ? closing.map(() => null)
-    : series.slice(1).map((point) =>
-        point.negative ? ("negative" as const) : point.belowFloor ? ("floor" as const) : null,
-      );
+    : series
+        .slice(1)
+        .map((point) =>
+          point.negative ? ("negative" as const) : point.belowFloor ? ("floor" as const) : null,
+        );
   const visibleReceipts = receipts.filter((line) => line.vals.some((value) => value));
   const visiblePayments = payments.filter((line) => line.vals.some((value) => value));
 
-  const lineRow = (
-    line: CashWeekLine,
-    kind: CellKind,
-    tone: RowTone,
-  ): GridRow => ({
+  const lineRow = (line: CashWeekLine, kind: CellKind, tone: RowTone): GridRow => ({
     key: line.id,
     name: line.name,
     chip: flowChip,
@@ -337,7 +351,10 @@ export function CashThirteenWeekGrid({
       </p>
       <div
         className={cn(
-          "cash-13w-scroll max-h-[min(70vh,680px)] overflow-auto overscroll-x-contain rounded-lg border border-[#DBEAFE]/70 pe-4 max-md:pe-16 dark:border-slate-800",
+          "cash-13w-scroll max-h-[min(70vh,680px)] overflow-auto overscroll-x-contain rounded-lg border pe-4 max-md:pe-16 dark:border-slate-800",
+          blue
+            ? "border-[#DBEAFE] bg-[#F4F8FF] shadow-[0_8px_24px_rgba(16,42,67,0.06)]"
+            : "border-[#DBEAFE]/70",
           scrollClassName,
         )}
         tabIndex={0}
@@ -353,8 +370,9 @@ export function CashThirteenWeekGrid({
               <th
                 scope="col"
                 className={cn(
-                  "sticky left-0 top-0 z-40 min-w-[148px] border-b border-[#DBEAFE]/80 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:border-slate-700 dark:text-slate-400",
-                  HEAD_BG,
+                  "sticky left-0 top-0 z-40 min-w-[148px] border-b border-[#DBEAFE]/80 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:text-slate-400",
+                  stickyShadow,
+                  headBg,
                 )}
               >
                 Line
@@ -375,7 +393,7 @@ export function CashThirteenWeekGrid({
                     }
                     className={cn(
                       "sticky top-0 z-20 min-w-[112px] whitespace-nowrap border-b border-[#DBEAFE]/80 px-2 py-2 text-right dark:border-slate-700",
-                      flag ? HEAD_TIGHT : HEAD_BG,
+                      flag ? headTight : headBg,
                     )}
                   >
                     <span className="block text-[11px] font-semibold tabular-nums text-slate-800 dark:text-slate-100">
@@ -391,7 +409,7 @@ export function CashThirteenWeekGrid({
                 scope="col"
                 className={cn(
                   "sticky top-0 z-20 min-w-[108px] border-b border-l border-[#DBEAFE] px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:text-slate-400",
-                  HEAD_BG,
+                  headBg,
                 )}
               >
                 Total
@@ -411,12 +429,18 @@ export function CashThirteenWeekGrid({
                 floorNote={section.rows.some((row) => row.key === "floor") ? floorNote : null}
                 openingNote={section.rows.some((row) => row.key === "opening") ? openingNote : null}
                 openingBelow={openingBelow}
+                toneBg={toneBg}
+                stickyShadow={stickyShadow}
+                labelBg={blue ? "bg-[#F4F8FF] dark:bg-[#102A43]" : "bg-[#FFFFFF] dark:bg-[#102A43]"}
               />
             ))}
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-[12px] text-slate-600 dark:text-slate-300" data-cash-horizon-totals="">
+      <p
+        className="mt-2 text-[12px] text-slate-600 dark:text-slate-300"
+        data-cash-horizon-totals=""
+      >
         Opening {openingMissing || !Number.isFinite(opening) ? "—" : format(opening)}
         {" · "}Total in {format(sum(inflow))}
         {" · "}Total out {format(sum(outflow))}
@@ -444,6 +468,9 @@ function SectionRows({
   floorNote,
   openingNote,
   openingBelow,
+  toneBg,
+  stickyShadow,
+  labelBg,
 }: {
   label: string;
   rows: GridRow[];
@@ -454,6 +481,9 @@ function SectionRows({
   floorNote?: string | null;
   openingNote?: string | null;
   openingBelow?: boolean;
+  toneBg: Record<RowTone, string>;
+  stickyShadow: string;
+  labelBg: string;
 }) {
   return (
     <>
@@ -461,15 +491,16 @@ function SectionRows({
         <tr>
           <th
             scope="colgroup"
-            className="sticky left-0 z-30 bg-[#FFFFFF] px-3 pb-1 pt-3 text-left text-[10px] font-bold uppercase tracking-[0.18em] text-[#102A43] shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:bg-[#102A43] dark:text-[#F4F7FB]"
+            className={cn(
+              "sticky left-0 z-30 px-3 pb-1 pt-3 text-left text-[10px] font-bold uppercase tracking-[0.18em] text-[#102A43] dark:text-[#F4F7FB]",
+              labelBg,
+              stickyShadow,
+            )}
           >
             {label}
           </th>
           {tight.map((flag, index) => (
-            <td
-              key={index}
-              className={flag ? TIGHT_BG : "bg-[#FFFFFF] dark:bg-[#102A43] dark:text-[#F4F7FB]"}
-            />
+            <td key={index} className={flag ? TIGHT_BG : cn(labelBg, "dark:text-[#F4F7FB]")} />
           ))}
           <td className="border-l border-[#DBEAFE]/70 bg-[#FFFFFF] dark:border-slate-800 dark:bg-[#102A43] dark:text-[#F4F7FB]" />
         </tr>
@@ -479,8 +510,9 @@ function SectionRows({
           <th
             scope="row"
             className={cn(
-              "sticky left-0 z-30 min-w-[148px] border-b border-[#DBEAFE]/70 px-3 py-1.5 text-left align-top shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:border-slate-800",
-              TONE_BG[row.tone],
+              "sticky left-0 z-30 min-w-[148px] border-b border-[#DBEAFE]/70 px-3 py-1.5 text-left align-top dark:border-slate-800",
+              stickyShadow,
+              toneBg[row.tone],
               row.strong ? "font-bold" : "font-normal",
               row.rule && "border-t border-slate-300/80 dark:border-slate-600",
             )}
@@ -529,15 +561,13 @@ function SectionRows({
                 }
                 className={cn(
                   "border-b border-[#DBEAFE]/70 px-2 py-1.5 text-right align-middle tabular-nums text-slate-800 dark:border-slate-800 dark:text-slate-100",
-                  flag ? TIGHT_BG : TONE_BG[row.tone],
+                  flag ? TIGHT_BG : toneBg[row.tone],
                   row.rule && "border-t border-slate-300/80 dark:border-slate-600",
                   row.strong && "font-bold",
                   (flaggedClose || openingCell) && "font-bold text-[#9b2c2c] dark:text-[#ffb4b4]",
                   display === "—" && "text-slate-400 dark:text-slate-500",
                   row.tone === "floor" && "text-slate-500 dark:text-slate-400",
-                  row.key === "net" &&
-                    value < 0 &&
-                    "text-[#9b2c2c] dark:text-[#ffb4b4]",
+                  row.key === "net" && value < 0 && "text-[#9b2c2c] dark:text-[#ffb4b4]",
                   row.key === "net" && value > 0 && "text-[#1f7a4d] dark:text-[#7dcca7]",
                 )}
               >
@@ -560,13 +590,11 @@ function SectionRows({
             data-cash-total={row.key}
             className={cn(
               "border-b border-l border-[#DBEAFE]/80 px-2 py-1.5 text-right align-middle font-semibold tabular-nums text-slate-900 dark:border-slate-700 dark:text-slate-50",
-              TONE_BG[row.tone],
+              toneBg[row.tone],
               row.rule && "border-t border-slate-300/80 dark:border-slate-600",
               row.strong && "font-bold",
               row.key === "closing" &&
-                (closingIsTight(row, tight)
-                  ? "text-[#9b2c2c] dark:text-[#ffb4b4]"
-                  : ""),
+                (closingIsTight(row, tight) ? "text-[#9b2c2c] dark:text-[#ffb4b4]" : ""),
             )}
           >
             {row.total == null ? "—" : money(row.total, row)}
