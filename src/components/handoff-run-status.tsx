@@ -1,9 +1,13 @@
-import { useEffect, useState, type MouseEvent } from "react";
-import { HandoffRunTimeline } from "@/components/handoff-run-timeline";
+import { Suspense, lazy, useEffect, useState, type MouseEvent } from "react";
 import { handoffIsSlow } from "@/lib/action-handoff";
 import { pausedHandoffLine, readHandoffPaused } from "@/lib/handoff-timeline";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
+
+// Loaded on first use so the action plan's import graph stays light for Hand to.
+const HandoffRunTimeline = lazy(() =>
+  import("@/components/handoff-run-timeline").then((m) => ({ default: m.HandoffRunTimeline })),
+);
 
 const AGENT_KEYS: readonly string[] = ["financial_manager", "analyst", "advisor"];
 
@@ -80,7 +84,9 @@ export function HandoffRunStatus({
   const runAgent = shortName(run?.agent);
   const timeline =
     runId && runAgent && !pausedName ? (
-      <HandoffRunTimeline runId={runId} agentName={runAgent} onOpenDraft={onOpenDraft} />
+      <Suspense fallback={null}>
+        <HandoffRunTimeline runId={runId} agentName={runAgent} onOpenDraft={onOpenDraft} />
+      </Suspense>
     ) : null;
   if (pausedName) {
     return (
@@ -172,7 +178,10 @@ export function HandoffRunStatus({
           </button>
         </p>
       ) : caption && !stopped && !missed && !(caption.includes("finished") && !openId) ? (
-        <p className="fm-brief-progress mt-1 text-[11px] font-semibold text-[#0B5FFF]" data-agent-pickup>
+        <p
+          className="fm-brief-progress mt-1 text-[11px] font-semibold text-[#0B5FFF]"
+          data-agent-pickup
+        >
           {caption}
           {finished && onOpenDraft ? (
             <>
