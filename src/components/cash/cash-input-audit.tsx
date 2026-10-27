@@ -21,7 +21,7 @@ export function CashInputAuditTable({
   audit,
   canApprove,
   saving = false,
-  formatDate,
+  approvedOn,
   onApprove,
   onApproveAll,
   onEdit,
@@ -30,7 +30,7 @@ export function CashInputAuditTable({
   audit: CashInputAudit;
   canApprove: boolean;
   saving?: boolean;
-  formatDate: (iso: string) => string;
+  approvedOn: (iso: string) => string;
   onApprove: (key: string) => void;
   onApproveAll: () => void;
   onEdit: (row: CashAuditRow) => void;
@@ -94,7 +94,7 @@ export function CashInputAuditTable({
                           data-status={status}
                           title={
                             approval && status === "approved"
-                              ? `Approved ${formatDate(approval.approvedAt)}`
+                              ? `Approved ${approvedOn(approval.approvedAt)}`
                               : undefined
                           }
                         >

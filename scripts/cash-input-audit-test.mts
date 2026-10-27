@@ -102,7 +102,7 @@ const html = renderToStaticMarkup(
     rows: edited,
     audit,
     canApprove: true,
-    formatDate: (iso: string) => iso.slice(0, 10),
+    approvedOn: (iso: string) => iso.slice(0, 10),
     onApprove: () => {},
     onApproveAll: () => {},
     onEdit: () => {},

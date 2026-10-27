@@ -518,7 +518,9 @@ export async function loadHandoffRunDetail(runId: string): Promise<HandoffRunDet
   const [runRes, findingsRes] = await Promise.all([
     db
       .from("agent_runs")
-      .select("id, agent, status, stop_reason, summary, error, trace, queued_at, started_at, finished_at")
+      .select(
+        "id, agent, status, stop_reason, summary, error, trace, queued_at, started_at, finished_at",
+      )
       .eq("id", runId)
       .maybeSingle(),
     db.from("agent_findings").select("id, title, detail, severity").eq("run_id", runId),

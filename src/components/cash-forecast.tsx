@@ -3611,7 +3611,7 @@ export function CashForecastPanel({
                 audit={inputAudit}
                 canApprove={canApproveInputs}
                 saving={auditSaving}
-                formatDate={(iso) => ownerSignoffDate(iso, market.timezone, market)}
+                approvedOn={(iso) => ownerSignoffDate(iso, market.timezone, market)}
                 onApprove={(key) => approveInputs([key])}
                 onApproveAll={() => approveInputs()}
                 onEdit={(row) => {

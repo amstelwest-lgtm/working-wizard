@@ -8,6 +8,7 @@ import {
   type TimelineStep,
 } from "@/lib/handoff-timeline";
 import "./handoff-run-timeline.css";
+import { useMarketFormat } from "@/contexts/market";
 
 const POLL_MS = 8000;
 
@@ -19,14 +20,12 @@ function StepIcon({ state }: { state: TimelineStep["state"] }) {
   return <CircleDashed className="h-3.5 w-3.5" aria-hidden />;
 }
 
-function stepTime(at: string | null | undefined): string | null {
-  if (!at) return null;
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-}
-
 export function HandoffTimelineList({ steps }: { steps: TimelineStep[] }) {
+  const { dateTime } = useMarketFormat();
+  const stepTime = (at: string | null | undefined): string | null => {
+    if (!at || Number.isNaN(new Date(at).getTime())) return null;
+    return dateTime(at, { hour: "2-digit", minute: "2-digit" });
+  };
   return (
     <ol className="handoff-timeline__steps" data-handoff-steps>
       {steps.map((step) => (
@@ -38,7 +37,9 @@ export function HandoffTimelineList({ steps }: { steps: TimelineStep[] }) {
             <span className="handoff-timeline__label">{step.label}</span>
             {step.detail ? <span className="handoff-timeline__detail">{step.detail}</span> : null}
           </span>
-          {stepTime(step.at) ? <time className="handoff-timeline__time">{stepTime(step.at)}</time> : null}
+          {stepTime(step.at) ? (
+            <time className="handoff-timeline__time">{stepTime(step.at)}</time>
+          ) : null}
         </li>
       ))}
     </ol>
@@ -118,7 +119,9 @@ export function HandoffRunTimeline({
                   <li key={finding.id}>
                     <span className="handoff-timeline__finding-title">{finding.title}</span>
                     {finding.detail ? (
-                      <span className="handoff-timeline__detail">{finding.detail.slice(0, 280)}</span>
+                      <span className="handoff-timeline__detail">
+                        {finding.detail.slice(0, 280)}
+                      </span>
                     ) : null}
                     {onOpenDraft ? (
                       <button

@@ -226,7 +226,11 @@ export function SageConnectCard({
   }
 
   return (
-    <form className="ledger-connect ledger-connect--panel" onSubmit={handleConnect} data-sage-connect="form">
+    <form
+      className="ledger-connect ledger-connect--panel"
+      onSubmit={handleConnect}
+      data-sage-connect="form"
+    >
       <p className="ledger-connect__kicker">Sage Accounting</p>
       <p className="ledger-connect__hint">
         South African Sage Business Cloud Accounting. Email, password, and Company ID. Milōn

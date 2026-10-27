@@ -32,4 +32,5 @@ export function connectBooksHomeVisible(ledgers: ConnectBooksLedger): boolean {
 }
 
 /** Sage sync is a stub (docs/SAGE_SA.md). Say so wherever Sage sits next to Xero and QuickBooks. */
-export const SAGE_NOT_SYNCED_HINT = "Sage figures are not synced yet. Connecting checks the login only.";
+export const SAGE_NOT_SYNCED_HINT =
+  "Sage figures are not synced yet. Connecting checks the login only.";

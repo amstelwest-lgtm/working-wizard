@@ -102,7 +102,9 @@ export function handoffRunActive(status: string | null | undefined): boolean {
 }
 
 function asRecord(raw: unknown): Record<string, unknown> | null {
-  return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+  return raw && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : null;
 }
 
 function str(raw: unknown): string | null {
@@ -174,18 +176,29 @@ export function handoffTimeline(input: {
   if (!run) {
     if (input.paused) {
       return [
-        { key: "handed", label: `Handed to ${agentName}`, state: "done", at: input.handedAt ?? null },
+        {
+          key: "handed",
+          label: `Handed to ${agentName}`,
+          state: "done",
+          at: input.handedAt ?? null,
+        },
         { key: "paused", label: `Not started: ${agentName} is paused`, state: "skipped" },
       ];
     }
-    return [{ key: "handed", label: `Handed to ${agentName}`, state: "done", at: input.handedAt ?? null }];
+    return [
+      { key: "handed", label: `Handed to ${agentName}`, state: "done", at: input.handedAt ?? null },
+    ];
   }
   const steps: TimelineStep[] = [];
   const failed = run.status === "failed" || run.status === "dead" || run.status === "cancelled";
   const finished = !handoffRunActive(run.status);
   steps.push({ key: "queued", label: `Handed to ${agentName}`, state: "done", at: run.queuedAt });
   if (run.status === "skipped") {
-    steps.push({ key: "skipped", label: `Not started: ${agentName} skipped this run`, state: "skipped" });
+    steps.push({
+      key: "skipped",
+      label: `Not started: ${agentName} skipped this run`,
+      state: "skipped",
+    });
     return steps;
   }
   const started = Boolean(run.startedAt) || run.status === "running" || finished;
@@ -219,7 +232,11 @@ export function handoffTimeline(input: {
     return steps;
   }
   const stop = run.stopReason ? STOP_LABELS[run.stopReason] : null;
-  const stoppedEarly = Boolean(run.stopReason && run.stopReason !== "objective_complete" && run.stopReason !== "no_further_action");
+  const stoppedEarly = Boolean(
+    run.stopReason &&
+    run.stopReason !== "objective_complete" &&
+    run.stopReason !== "no_further_action",
+  );
   steps.push({
     key: "end",
     label: stop ?? "Finished",
@@ -233,7 +250,11 @@ export function handoffTimeline(input: {
 const PAUSED_PREFIX = "milon.handoffPaused:";
 
 /** The runner flag is server-only, so a paused hand-off is remembered on this device. */
-export function rememberHandoffPaused(actionItemId: string, agent: string, at = new Date().toISOString()): void {
+export function rememberHandoffPaused(
+  actionItemId: string,
+  agent: string,
+  at = new Date().toISOString(),
+): void {
   if (typeof localStorage === "undefined" || !actionItemId) return;
   try {
     localStorage.setItem(`${PAUSED_PREFIX}${actionItemId}`, JSON.stringify({ agent, at }));
@@ -251,7 +272,9 @@ export function clearHandoffPaused(actionItemId: string): void {
   }
 }
 
-export function readHandoffPaused(actionItemId: string | null | undefined): { agent: string; at: string } | null {
+export function readHandoffPaused(
+  actionItemId: string | null | undefined,
+): { agent: string; at: string } | null {
   if (typeof localStorage === "undefined" || !actionItemId) return null;
   try {
     const raw = localStorage.getItem(`${PAUSED_PREFIX}${actionItemId}`);
