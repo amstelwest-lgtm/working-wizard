@@ -197,6 +197,7 @@
     "test:accountant-studio-clarity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-studio-clarity-test.mts",
     "test:accountant-walkthrough": "vite-node --config scripts/vite-test.config.ts scripts/accountant-walkthrough-test.mts",
     "test:owner-tour": "vite-node --config scripts/vite-test.config.ts scripts/owner-tour-sale-test.mts",
+    "test:cash-input-audit": "vite-node --config scripts/vite-test.config.ts scripts/cash-input-audit-test.mts",
     "test:cash-paged-layout": "vite-node --config scripts/vite-test.config.ts scripts/cash-paged-layout-test.mts",
     "test:cash-forecast-detail": "vite-node --config scripts/vite-test.config.ts scripts/cash-forecast-detail-test.mts",
     "test:cash-explainer": "vite-node --config scripts/vite-test.config.ts scripts/cash-explainer-test.mts",

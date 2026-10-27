@@ -2283,3 +2283,27 @@ html[data-theme="light"] .accountant-portal .milon-status-pill--warn *{
   }
 }
 
+
+/* ===== checkboxes: one visible, clickable box across the accountant portal ===== */
+.accountant-portal button[role="checkbox"]{
+  display:inline-grid;place-content:center;flex:none;
+  width:18px;height:18px;min-width:18px;min-height:18px;padding:0;margin:0;
+  border:2px solid #3d5270;border-radius:4px;
+  background:#ffffff;color:#ffffff;box-shadow:none;
+  cursor:pointer;
+}
+.accountant-portal button[role="checkbox"][data-state="checked"]{
+  background:#0b5fff;border-color:#0b5fff;color:#ffffff;
+}
+.accountant-portal button[role="checkbox"] svg{
+  width:12px;height:12px;stroke:currentColor;stroke-width:3;
+}
+.accountant-portal button[role="checkbox"]:focus-visible{
+  outline:2px solid #0b5fff;outline-offset:2px;
+}
+.accountant-portal button[role="checkbox"]:disabled{cursor:not-allowed;opacity:.5}
+html.dark .accountant-portal button[role="checkbox"]{border-color:#8aa0b8;background:#0b1b2b}
+html.dark .accountant-portal button[role="checkbox"][data-state="checked"]{background:#3b82f6;border-color:#3b82f6}
+.accountant-portal input[type="checkbox"]{
+  width:18px;height:18px;flex:none;accent-color:#0b5fff;cursor:pointer;
+}

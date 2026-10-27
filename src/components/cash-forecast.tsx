@@ -64,7 +64,10 @@ import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { SignoffStatusChip } from "@/components/signoff-status-chip";
 import {
   bankAccountsFromDraft,
+  buildDeliverableInputDefinition,
+  cashChecklistSourceChip,
   parseOperatingProfileUnknown,
+  type DeliverableInputContext,
 } from "@/lib/deliverable-input-config";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { CashThirteenWeekGrid } from "@/components/cash-thirteen-week";
@@ -162,6 +165,15 @@ import {
 import { CashSuggestionCard } from "@/components/cash-suggestion-card";
 import { CashForecastMenu } from "@/components/cash/cash-forecast-menu";
 import { ForecastLineTable } from "@/components/cash/forecast-line-table";
+import { CashInputAuditTable } from "@/components/cash/cash-input-audit";
+import {
+  approveCashInputs,
+  cashAuditPendingCount,
+  cashAuditRows,
+  cashAuditSignoffWarning,
+  parseCashInputAudit,
+  type CashInputAudit,
+} from "@/lib/cash-input-audit";
 import "@/components/cash/cash-paged.css";
 import {
   cashPagedEnlargeTarget,
@@ -750,6 +762,8 @@ export function CashForecastPanel({
   const [cashLedger, setCashLedger] = useState<CashLedger>("On file");
   const [configuredFloor, setConfiguredFloor] = useState<number | null>(null);
   const [suggestionConfirm, setSuggestionConfirm] = useState<ConfirmedCashSuggestions | null>(null);
+  const [inputAudit, setInputAudit] = useState<CashInputAudit>({});
+  const [auditSaving, setAuditSaving] = useState(false);
   const [trailingSnapshots, setTrailingSnapshots] = useState<TrailingMonthInput[]>([]);
   const [mounted, setMounted] = useState(false);
   const [showBankUpload, setShowBankUpload] = useState(false);
@@ -1187,6 +1201,7 @@ export function CashForecastPanel({
         setSuggestionConfirm(null);
         setConfiguredFloor(null);
       }
+      setInputAudit(parseCashInputAudit((cf as { inputAudit?: unknown } | null)?.inputAudit));
       skipNextAutosave.current = true;
       hydrateOnceOff.current = true;
       setLoaded(true);
@@ -2304,30 +2319,26 @@ export function CashForecastPanel({
     )
   ) : null;
 
-  const configureInputs = (
+  const inputConfigContext: DeliverableInputContext = {
+    financials: inputFinancials,
+    operatingProfile: inputProfile,
+    bankAccounts: inputBankAccounts,
+    hasBankDraft: inputHasBankDraft,
+    hasCashLines: !forecastEmpty,
+    budgetWc: inputBudgetWc,
+    collectDelay,
+    revGrowthPct,
+    openingBalance,
+    cashLineSource: shownLineSource as "Statement" | "Bank" | "Sync" | "Manual" | "Estimate" | null,
+    liveFloorLabel,
+  };
+  const configureInputsFor = (hideSources: boolean) => (
     <DeliverableInputConfig
       className="mb-5"
       clientId={clientId}
       deliverableId="cash"
-      context={{
-        financials: inputFinancials,
-        operatingProfile: inputProfile,
-        bankAccounts: inputBankAccounts,
-        hasBankDraft: inputHasBankDraft,
-        hasCashLines: !forecastEmpty,
-        budgetWc: inputBudgetWc,
-        collectDelay,
-        revGrowthPct,
-        openingBalance,
-        cashLineSource: shownLineSource as
-          | "Statement"
-          | "Bank"
-          | "Sync"
-          | "Manual"
-          | "Estimate"
-          | null,
-        liveFloorLabel,
-      }}
+      context={inputConfigContext}
+      hideSources={hideSources}
       onEngineBoundChange={(patch) => {
         if (typeof patch.collectDelay === "number") {
           setCollectDelay(Math.max(0, Math.min(6, Math.round(patch.collectDelay))));
@@ -2338,6 +2349,59 @@ export function CashForecastPanel({
       }}
     />
   );
+  const configureInputs = configureInputsFor(false);
+
+  const auditRows = cashAuditRows({
+    startDate,
+    startLabel,
+    openingBalance,
+    openingSource: openingSourceChip,
+    floor: minimumCash,
+    floorRule:
+      configuredFloor != null ? "Set by you" : liveFloorLabel ? "About 4 weeks of outflows" : null,
+    revenue,
+    expenses,
+    other,
+    linesSource: shownLineSource,
+    sources: buildDeliverableInputDefinition("cash", inputConfigContext).sources.map((src) => ({
+      id: src.id,
+      label: src.label,
+      available: src.available,
+      chip: cashChecklistSourceChip(src.id, inputConfigContext),
+    })),
+    collectDelay,
+    revGrowthPct,
+    format: fmtCompact,
+  });
+  const auditPending = cashAuditPendingCount(auditRows, inputAudit);
+  const auditWarning = cashAuditSignoffWarning(auditPending);
+  const canApproveInputs = Boolean(clientId) && !preview && !readOnly;
+  const saveInputAudit = async (next: CashInputAudit) => {
+    if (!clientId || preview) return;
+    const previous = inputAudit;
+    setInputAudit(next);
+    setAuditSaving(true);
+    const payload = { ...(loadedCashflowRef.current ?? {}), inputAudit: next };
+    loadedCashflowRef.current = payload;
+    const { error } = await supabase
+      .from("clients")
+      .update({ cashflow: payload as never })
+      .eq("id", clientId);
+    setAuditSaving(false);
+    if (error) {
+      setInputAudit(previous);
+      loadedCashflowRef.current = { ...payload, inputAudit: previous };
+      toast.error(`Could not save the approval: ${error.message}`);
+    }
+  };
+  const approveInputs = (keys?: string[]) =>
+    void saveInputAudit(
+      approveCashInputs(inputAudit, auditRows, {
+        by: user?.id ?? null,
+        at: new Date().toISOString(),
+        keys,
+      }),
+    );
 
   const forecastUpdatedLabel = lastForecastAt
     ? `Updated ${ownerSignoffDate(lastForecastAt, market.timezone, market)}`
@@ -3253,6 +3317,16 @@ export function CashForecastPanel({
             {statusChip}
           </div>
           <div className="cash-paged__actions">
+            {canSign && clientId && auditWarning ? (
+              <button
+                type="button"
+                className="cash-paged__audit-warn"
+                data-cash-audit-warning
+                onClick={() => selectPagedView("audit")}
+              >
+                {auditWarning}
+              </button>
+            ) : null}
             {canSign && clientId ? (
               <ReviewSignoffButton
                 hideStatus
@@ -3297,7 +3371,7 @@ export function CashForecastPanel({
             )}
           </div>
         </div>
-        <CashForecastMenu value={view} onChange={selectPagedView} />
+        <CashForecastMenu value={view} onChange={selectPagedView} auditCount={auditPending} />
         {sentence ? (
           <p className="cash-paged__sentence" data-cash-pane-sentence>
             {sentence}
@@ -3402,9 +3476,27 @@ export function CashForecastPanel({
             </div>
           ) : null}
           {view === "audit" ? (
-            <div id="wizard-cash-audit">
-              {cashSuggestionCard}
-              {configureInputs}
+            <div id="wizard-cash-audit" className="space-y-5">
+              {suggestionsConfirmed ? null : cashSuggestionCard}
+              <CashInputAuditTable
+                rows={auditRows}
+                audit={inputAudit}
+                canApprove={canApproveInputs}
+                saving={auditSaving}
+                formatDate={(iso) => ownerSignoffDate(iso, market.timezone, market)}
+                onApprove={(key) => approveInputs([key])}
+                onApproveAll={() => approveInputs()}
+                onEdit={(row) => {
+                  if (row.group === "assumption") {
+                    document
+                      .querySelector('[data-deliverable-input-config="cash"]')
+                      ?.scrollIntoView({ block: "start" });
+                    return;
+                  }
+                  selectPagedView("setup");
+                }}
+              />
+              {configureInputsFor(true)}
             </div>
           ) : null}
           {view === "scenario" ? (
