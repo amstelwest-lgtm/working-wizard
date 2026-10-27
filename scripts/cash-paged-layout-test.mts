@@ -119,7 +119,10 @@ assert(!table.includes('aria-label="Remove Rent"'), "main expenses keep no remov
 assert(!table.includes('aria-label="Remove Deposit"'), "the last other-expense row stays");
 assert(table.includes('aria-label="Number of weeks"'), "split count sits inline in Frequency");
 assert(/data-forecast-line="r2" data-staged=""/.test(table), "staged once-offs are highlighted");
-assert(table.includes("Add money-in line") && table.includes("Add expense line"), "block add buttons");
+assert(
+  table.includes("Add money-in line") && table.includes("Add expense line"),
+  "block add buttons",
+);
 assert(!table.includes("rounded-full"), "no pills in the table");
 assert(forecastLineRemovable("expenses", 9) === false, "main expenses never remove");
 assert(forecastLineRemovable("revenue", 1) === false, "keep one money-in row");
@@ -165,7 +168,10 @@ assert(pagedBranch.includes("{scenarioSliders}"), "scenario pane holds the slide
 assert(pagedBranch.includes('className="cash-scenario__reset"'), "Reset to base is a block button");
 assert(pagedBranch.includes("data-scenario-on"), "the Forecast pane says when a scenario is on");
 const miniChart = cash.slice(cash.indexOf("const scenarioMiniChart"), pagedStart);
-assert(miniChart.includes('dataKey="base"') && miniChart.includes('dataKey="scenario"'), "two series");
+assert(
+  miniChart.includes('dataKey="base"') && miniChart.includes('dataKey="scenario"'),
+  "two series",
+);
 const briefing = readFileSync("src/lib/client-briefing.ts", "utf8");
 assert(!/what-?if/i.test(briefing), "briefing copy says scenario planning");
 for (const file of ["src/reports/cash-forecast.tsx", "src/lib/feature-finder.ts"]) {
@@ -180,13 +186,39 @@ assert(palette.includes('green: { from: "#41c586", to: "#1f9e62" }'), "waterfall
 assert(cash.includes('dataKey="net"') && cash.includes("url(#cfNetDown)"), "weekly net bars");
 const heroAt = cash.indexOf("const heroChart");
 const barAt = cash.indexOf('dataKey="net"', heroAt);
-assert(cash.slice(heroAt, barAt).includes('layout === "paged" ? ('), "net bars only on the paged chart");
-assert(/\.cash-paged \.cash-kpi\[data-tone="bad"\][^}]*inset 3px 0 0 #e76a6a/.test(css), "red tile accent");
-assert(/\.cash-paged \.cash-kpi\[data-tone="good"\][^}]*inset 3px 0 0 #1f9e62/.test(css), "green tile accent");
+assert(
+  cash.slice(heroAt, barAt).includes('layout === "paged" ? ('),
+  "net bars only on the paged chart",
+);
+assert(
+  /\.cash-paged \.cash-kpi\[data-tone="bad"\][^}]*inset 3px 0 0 #e76a6a/.test(css),
+  "red tile accent",
+);
+assert(
+  /\.cash-paged \.cash-kpi\[data-tone="good"\][^}]*inset 3px 0 0 #1f9e62/.test(css),
+  "green tile accent",
+);
 assert(css.includes('tr[data-cash-row="total-receipts"]'), "grid receipts row tinted");
 assert(css.includes('tr[data-cash-row="total-payments"]'), "grid payments row tinted");
-assert(/\[class\*="border-amber-900"\][^}]*#dbeafe/.test(css), "warm borders read blue on the page");
-for (const selector of [".cash-paged {", ".cash-paged__pane {", ".cash-menu__tab {", ".cash-paged__chip {"]) {
+assert(!css.includes("#fdf6f5"), "payments row is not pink");
+assert(
+  cash.includes('palette={layout === "paged" ? "blue" : "warm"}'),
+  "the paged 13-week grid uses the blue palette",
+);
+const weekGrid = readFileSync("src/components/cash-thirteen-week.tsx", "utf8");
+assert(weekGrid.includes('palette?: "warm" | "blue"'), "owner 13-week stays on the warm palette");
+assert(weekGrid.includes("bg-[#F4F8FF]"), "blue 13-week chrome is light blue");
+assert(weekGrid.includes("rgba(16,42,67,0.22)"), "blue sticky shadow is cool, not warm");
+assert(
+  /\[class\*="border-amber-900"\][^}]*#dbeafe/.test(css),
+  "warm borders read blue on the page",
+);
+for (const selector of [
+  ".cash-paged {",
+  ".cash-paged__pane {",
+  ".cash-menu__tab {",
+  ".cash-paged__chip {",
+]) {
   const block = css.slice(css.indexOf(selector), css.indexOf("}", css.indexOf(selector)));
   for (const hex of block.match(/#[0-9a-f]{6}\b/gi) ?? []) {
     const [r, , b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -195,7 +227,10 @@ for (const selector of [".cash-paged {", ".cash-paged__pane {", ".cash-menu__tab
 }
 
 const route = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
-const mount = route.slice(route.indexOf('title="13-week forecast"'), route.indexOf("<CashForecastPanel"));
+const mount = route.slice(
+  route.indexOf('title="13-week forecast"'),
+  route.indexOf("<CashForecastPanel"),
+);
 assert(!mount.includes("subtitle="), "the forecast subpage has no subtitle");
 assert(route.includes('layout="paged"'), "accountant route opts into the paged layout");
 const owner = readFileSync("src/routes/app.tsx", "utf8");

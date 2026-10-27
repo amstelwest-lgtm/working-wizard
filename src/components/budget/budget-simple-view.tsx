@@ -3,7 +3,7 @@
  * visible COGS + overhead, year strip, FY totals. No spreadsheet noise.
  */
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,13 @@ import {
 } from "@/lib/budget.months";
 import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { BudgetChartTable } from "@/components/budget/budget-chart-table";
+import { BudgetPagedMenu } from "@/components/budget/budget-paged-menu";
+import {
+  budgetPagedSentence,
+  budgetPagedViewFromHash,
+  type BudgetPagedView,
+} from "@/lib/budget-paged-view";
+import "@/components/cash/cash-paged.css";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
 import { BudgetYearStrip } from "@/components/budget/budget-year-strip";
 import { budgetHeadlineFigures } from "@/lib/budget-period";
@@ -131,6 +138,9 @@ export function BudgetSimpleView({
   openingBalanceMissing = false,
   periodCaption = null,
   uniformNote = null,
+  layout = "stacked",
+  pagedView,
+  onPagedViewChange,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -163,6 +173,10 @@ export function BudgetSimpleView({
   openingBalanceMissing?: boolean;
   periodCaption?: string | null;
   uniformNote?: string | null;
+  /** Accountant client budget. Owner and try stay stacked. */
+  layout?: "stacked" | "paged";
+  pagedView?: BudgetPagedView;
+  onPagedViewChange?: (view: BudgetPagedView) => void;
 }) {
   const { market } = useMarket();
   const money = (n: number) => {
@@ -174,6 +188,25 @@ export function BudgetSimpleView({
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const [focusMonth, setFocusMonth] = useState(() => currentBudgetMonth(months));
   const [sameEveryMonth, setSameEveryMonth] = useState(false);
+  const paged = layout === "paged" && role === "accountant" && !readOnly;
+  const [localPagedView, setLocalPagedView] = useState<BudgetPagedView>("overview");
+  const view = pagedView ?? localPagedView;
+  const onPagedViewChangeRef = useRef(onPagedViewChange);
+  onPagedViewChangeRef.current = onPagedViewChange;
+  const selectPagedView = useCallback((next: BudgetPagedView) => {
+    if (onPagedViewChangeRef.current) onPagedViewChangeRef.current(next);
+    else setLocalPagedView(next);
+  }, []);
+  useEffect(() => {
+    if (!paged) return;
+    const fromHash = () => {
+      const next = budgetPagedViewFromHash(window.location.hash);
+      if (next) selectPagedView(next);
+    };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, [paged, selectPagedView]);
 
   const results = useMemo(() => computeBudgetMonths(doc, doc.activeScenario), [doc]);
   const focus = results.find((r) => r.month === focusMonth) ?? results[0];
@@ -271,8 +304,13 @@ export function BudgetSimpleView({
     [compared],
   );
   const priorOnFile = hasPriorYearFigures(priorYear);
+  const pane: BudgetPagedView = view === "months" || view === "setup" ? view : "overview";
   return (
-    <div id="wizard-budget-plan" className="space-y-5">
+    <div
+      id="wizard-budget-plan"
+      className={paged ? "cash-paged budget-paged" : "space-y-5"}
+      data-budget-layout={paged ? "paged" : "stacked"}
+    >
       <BudgetVerdictStrip
         periodLabel={headline.label ?? (compared ? compared.label : monthLabel(focusMonth))}
         revenueBudget={compared?.period ? headline.revenue : (compared?.budgetRevenue ?? focus?.revenue ?? 0)}
@@ -303,11 +341,25 @@ export function BudgetSimpleView({
           />
         }
       />
+      {paged ? (
+        <>
+          <BudgetPagedMenu value={pane} onChange={selectPagedView} />
+          <p className="cash-paged__sentence" data-budget-pane-sentence>
+            {budgetPagedSentence(pane)}
+          </p>
+        </>
+      ) : null}
+      <div
+        id={paged && pane !== "setup" ? `budget-pane-${pane === "months" ? "months" : "overview"}` : undefined}
+        role={paged && pane !== "setup" ? "tabpanel" : undefined}
+        data-budget-pane={paged ? (pane === "months" ? "months" : "overview") : undefined}
+        hidden={paged && pane === "setup"}
+      >
       <BudgetChartTable
         doc={doc}
         clientId={clientId}
-        lens={lens}
-        onLensChange={onLensChange}
+        lens={paged ? (pane === "months" ? "table" : "chart") : lens}
+        onLensChange={paged ? undefined : onLensChange}
         actualMonths={actualMonths}
         statementActuals={compared}
         windowMonths={compared?.windowMonths}
@@ -316,8 +368,14 @@ export function BudgetSimpleView({
         displayTemplateId={displayTemplateId}
         periodCaption={periodCaption}
         uniformNote={uniformNote}
+        hideLensToggle={paged}
+        quiet={paged}
       />
+      </div>
+      <div data-budget-pane="setup" hidden={paged && pane !== "setup"}>
       {readOnly ? null : <>{drawer}</>}
+      </div>
+      <div data-budget-pane="overview" hidden={paged && pane !== "overview"}>
       <BudgetYearStrip
         thisYear={thisYear}
         thisMonths={compared?.periodMonths ?? null}
@@ -328,12 +386,19 @@ export function BudgetSimpleView({
         signed={role === "owner"}
         periodLabel={headline.label ?? compared?.label ?? null}
       />
-      {readOnly ? null : (
+      </div>
+      {readOnly || paged ? null : (
       <p className="text-sm font-semibold text-[#102A43] dark:text-slate-100">
         {plainBudgetWindowHeading(shownTpl.label, doc, market)}
       </p>
       )}
 
+      <div
+        id={paged ? "budget-pane-setup" : undefined}
+        role={paged ? "tabpanel" : undefined}
+        data-budget-pane="setup"
+        hidden={paged && pane !== "setup"}
+      >
       <OwnerHowBuilt
         readOnly={readOnly}
         priorOnFile={priorOnFile}
@@ -367,14 +432,16 @@ export function BudgetSimpleView({
             <h3 className="serif mt-1 text-[22px] font-semibold tracking-tight text-[#102A43] dark:text-slate-100">
               How {monthLabel(focusMonth)} is built
             </h3>
+            {paged ? null : (
             <p className="mt-1.5 text-[13px] leading-relaxed text-[#3D5270] dark:text-slate-400">
               {role === "accountant"
                 ? "How many they sell × the price they charge becomes revenue. Gross profit % takes cost of sales. Overheads are the rest. The strip above scores those four numbers."
                 : "How many you sell × the price you charge becomes this month’s revenue. Set the margin, then overheads — leftover is what the month keeps."}
             </p>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center rounded-full border border-[#DBEAFE] bg-white/80 p-0.5 dark:border-slate-700 dark:bg-slate-900">
+            <div className={`inline-flex items-center border border-[#DBEAFE] bg-white/80 p-0.5 dark:border-slate-700 dark:bg-slate-900 ${paged ? "rounded-md" : "rounded-full"}`}>
               <button
                 type="button"
                 className="grid h-8 w-8 place-items-center rounded-full text-[#102A43] disabled:opacity-30 dark:text-[#F4F7FB]"
@@ -405,7 +472,7 @@ export function BudgetSimpleView({
                 setSameEveryMonth(on);
                 if (on) onChange(applySameMonths(doc, focusMonth));
               }}
-              className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors ${
+              className={`${paged ? "rounded-md" : "rounded-full"} border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors ${
                 sameEveryMonth
                   ? "border-[#0B5FFF] bg-[#0B5FFF] text-white"
                   : "border-[#DBEAFE] bg-transparent text-[#102A43] hover:border-[#0B5FFF] dark:text-[#F4F7FB]"
@@ -579,7 +646,9 @@ export function BudgetSimpleView({
         icon={BarChart3}
         title="Year detail"
         subtitle={
-          trough
+          paged
+            ? undefined
+            : trough
             ? `Budget-year cash trough ${monthLabel(trough.month)} ${money(trough.closingCash)} · budget year, not the 13-week forecast`
             : "Twelve months, closed until you need the grid"
         }
@@ -685,11 +754,13 @@ export function BudgetSimpleView({
               }
             />
             )}
+            {paged ? null : (
             <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
               {role === "accountant"
                 ? "Cash in the bank on day one of this financial year. Month-end cash stacks on this number, so closing cash is only as true as this start."
                 : "The bank balance at the start of the year. Everything below is added to or taken from this."}
             </p>
+            )}
           </div>
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
@@ -720,11 +791,13 @@ export function BudgetSimpleView({
               }
             />
             )}
+            {paged ? null : (
             <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
               {role === "accountant"
                 ? "How many days customers typically take to pay. Longer days delay cash even when the month’s profit looks fine — this is what creates a cash trough."
                 : "How long customers take to pay you. Longer = cash arrives later than the sale."}
             </p>
+            )}
           </div>
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
@@ -755,15 +828,18 @@ export function BudgetSimpleView({
               }
             />
             )}
+            {paged ? null : (
             <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
               {role === "accountant"
                 ? "How many days this business typically takes to pay suppliers. Longer days hold cash in; shorter days pull it out sooner."
                 : "How long you take to pay suppliers. Longer = cash stays in the business a bit longer."}
             </p>
+            )}
           </div>
         </div>
       </section>
       )}
+      </div>
     </div>
   );
 }

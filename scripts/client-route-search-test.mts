@@ -414,6 +414,21 @@ assert(
   monthsViaView.tab === "budget" && monthsViaView.section === "months" && monthsViaView.view === undefined,
   "?view=table redirects to Month by month",
 );
+const setupViaView = accountantClientRouteSearch({ tab: "budget", view: "setup" });
+assert(
+  setupViaView.tab === "budget" && setupViaView.section === "year" && setupViaView.view === "setup",
+  "?view=setup opens the budget setup pane on This year",
+);
+const setupKeepsYear = accountantClientRouteSearch({ tab: "budget", section: "year", view: "setup" });
+assert(
+  setupKeepsYear.section === "year" && setupKeepsYear.view === "setup",
+  "budget setup keeps the year section",
+);
+const setupKeepsMonths = accountantClientRouteSearch({ tab: "budget", section: "months", view: "engine" });
+assert(
+  setupKeepsMonths.section === "months" && setupKeepsMonths.view === "setup",
+  "a month-by-month setup link stays on months",
+);
 const weekView = accountantClientRouteSearch({ tab: "cash", section: "forecast", view: "13week" });
 assert(
   weekView.section === "forecast" && weekView.view === "13week",

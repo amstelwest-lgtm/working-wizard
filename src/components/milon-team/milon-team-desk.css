@@ -201,10 +201,13 @@ html.dark .milon-desk {
 
 .milon-desk-agent[aria-checked="true"] {
   border-color: var(--desk-accent);
-  box-shadow: 0 0 0 1px rgba(11, 95, 255, 0.28), 0 12px 32px rgba(0, 0, 0, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(11, 95, 255, 0.28),
+    0 12px 32px rgba(0, 0, 0, 0.28);
 }
 
-.milon-desk-team:has(.milon-desk-agent[aria-checked="true"]) .milon-desk-agent[aria-checked="false"] {
+.milon-desk-team:has(.milon-desk-agent[aria-checked="true"])
+  .milon-desk-agent[aria-checked="false"] {
   opacity: 0.58;
 }
 
@@ -1040,6 +1043,86 @@ body:has(#pane-ask.on) #wizard-notes-pin {
   min-width: 0;
 }
 
+/* Open agent inside a client. The stage, activity, thread and composer share
+   the locked column. The middle scrolls. The composer stays under the thread. */
+@media (min-width: 861px) {
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host > .agent-stage {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .agent-stage > .agent-work {
+    flex: 0 1 auto;
+    max-height: 22%;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .agent-stage > .milon-desk {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 120px;
+    height: auto;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
+    .milon-desk-host
+    > #ask-ai-accountant.ask-ai-studio-shell {
+    display: flex;
+    flex: 1 1 240px;
+    flex-direction: column;
+    min-height: 200px;
+    max-height: 46%;
+    overflow: hidden;
+    position: relative;
+    box-shadow: none;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
+    .milon-desk-host
+    #ask-ai-accountant
+    .ask-ai-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-content: stretch;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
+    .milon-desk-host
+    #ask-ai-accountant
+    .ask-ai-thread {
+    max-height: none;
+    min-height: 0;
+    height: auto;
+    overflow: auto;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host > #wizard-open-queries {
+    flex: 0 0 auto;
+  }
+}
+
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .owner-presence.is-stage {
+  width: min(112px, 28vw);
+  height: min(112px, 28vw);
+}
+
 /* Phone and short tablet: a wrapped breadcrumb or topbar leaves the locked
    desk too short, so cards and activity were clipped under the composer.
    The page scrolls instead and the composer sticks to the bottom. */
@@ -1076,6 +1159,34 @@ body:has(#pane-ask.on) #wizard-notes-pin {
     bottom: 0;
     z-index: 5;
     padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
+    .milon-desk-host
+    #ask-ai-accountant.ask-ai-studio-shell {
+    display: flex;
+    flex-direction: column;
+    max-height: min(52vh, 480px);
+    overflow: hidden;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
+    .milon-desk-host
+    #ask-ai-accountant
+    .ask-ai-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
+    .milon-desk-host
+    #ask-ai-accountant
+    .ask-ai-thread {
+    max-height: none;
+    min-height: 72px;
+    overflow: auto;
   }
 }
 

@@ -33,6 +33,7 @@ import { BudgetChartTable } from "@/components/budget/budget-chart-table";
 import { BudgetSimpleView, MoneyField } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
+import type { BudgetPagedView } from "@/lib/budget-paged-view";
 import type { BudgetYearMoney } from "@/lib/budget-year-compare";
 import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
@@ -92,6 +93,9 @@ export function BudgetWorkspace({
   openingBalanceMissing = false,
   periodCaption = null,
   uniformNote = null,
+  layout = "stacked",
+  pagedView,
+  onPagedViewChange,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -127,6 +131,10 @@ export function BudgetWorkspace({
   openingBalanceMissing?: boolean;
   periodCaption?: string | null;
   uniformNote?: string | null;
+  /** Accountant client budget. Owner and try stay stacked. */
+  layout?: "stacked" | "paged";
+  pagedView?: BudgetPagedView;
+  onPagedViewChange?: (view: BudgetPagedView) => void;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -168,6 +176,9 @@ export function BudgetWorkspace({
           openingBalanceMissing={openingBalanceMissing}
           periodCaption={periodCaption}
           uniformNote={uniformNote}
+          layout={layout}
+          pagedView={pagedView}
+          onPagedViewChange={onPagedViewChange}
         />
       </div>
     );
