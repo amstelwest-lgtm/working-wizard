@@ -164,6 +164,7 @@ import {
 } from "@/lib/cash-week-overrides";
 import { CashSuggestionCard } from "@/components/cash-suggestion-card";
 import { CashForecastMenu } from "@/components/cash/cash-forecast-menu";
+import { PALETTE } from "@/lib/brand-palette";
 import { ForecastLineTable } from "@/components/cash/forecast-line-table";
 import { CashInputAuditTable } from "@/components/cash/cash-input-audit";
 import {
@@ -2763,6 +2764,7 @@ export function CashForecastPanel({
 
   const inlineChart = useStableChartWidth();
   const enlargeChart = useStableChartWidth();
+  const scenarioChart = useStableChartWidth();
   const [cashEnlarge, setCashEnlarge] = useState<null | "chart" | "table">(null);
   const [cashLens, setCashLens] = useState<"chart" | "table">("chart");
   const paged = layout === "paged";
@@ -3291,6 +3293,75 @@ export function CashForecastPanel({
     />
   );
 
+  const scenarioSeries = [
+    { week: "Open", base: Math.round(baseCalc.opening), scenario: Math.round(calc.opening) },
+    ...weeks.map((_, i) => ({
+      week: `W${i + 1}`,
+      base: Math.round(baseCalc.closing[i] ?? 0),
+      scenario: Math.round(calc.closing[i] ?? 0),
+    })),
+  ];
+  const scenarioMiniChart = (
+    <div
+      ref={scenarioChart.onChartFrame}
+      className="cash-scenario__chart"
+      data-scenario-chart
+      style={{ height: 200 }}
+    >
+      {scenarioChart.chartWidth > 0 ? (
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={scenarioSeries} margin={{ top: 12, right: 12, left: 0, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+            <XAxis
+              dataKey="week"
+              stroke="#94a3b8"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+              interval={cashGraphWeekTickInterval(scenarioChart.chartWidth) === 2 ? 1 : 0}
+            />
+            <YAxis
+              stroke="#94a3b8"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+              width={64}
+              tickFormatter={(v) => sign(formatMoneyChartTick(v, market))}
+            />
+            <Tooltip
+              formatter={(v: number, name) => [fmtR(v), name === "base" ? "Base" : "Scenario"]}
+            />
+            <ReferenceLine
+              y={minimumCash}
+              stroke={PALETTE.navy.to}
+              strokeDasharray="4 4"
+              strokeOpacity={0.6}
+            />
+            <Line
+              type="monotone"
+              dataKey="base"
+              name="base"
+              stroke={PALETTE.navy.from}
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              dot={false}
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="scenario"
+              name="scenario"
+              stroke={PALETTE.cobalt.to}
+              strokeWidth={2.5}
+              dot={false}
+              isAnimationActive={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      ) : null}
+    </div>
+  );
+
   // ── Paged mode: accountant forecast page, one pane per menu item ─────────
   if (paged) {
     const view = activePagedView;
@@ -3389,6 +3460,16 @@ export function CashForecastPanel({
               <p className="cash-paged__period" data-cash-period>
                 {cashCopy.range || "Next 13 weeks"}
               </p>
+              {view === "graph" && scenarioActive ? (
+                <button
+                  type="button"
+                  className="cash-paged__chip"
+                  data-scenario-on
+                  onClick={() => selectPagedView("scenario")}
+                >
+                  Scenario on · chart shows the base
+                </button>
+              ) : null}
               {canEnlarge ? (
                 <EnlargeButton
                   label={enlargeTarget === "chart" ? "cash flow graph" : "cash flow table"}
@@ -3500,7 +3581,18 @@ export function CashForecastPanel({
             </div>
           ) : null}
           {view === "scenario" ? (
-            <div id="wizard-cash-scenario" className="space-y-4">
+            <div id="wizard-cash-scenario" className="cash-scenario space-y-4">
+              <div className="cash-legend" data-cash-legend>
+                <span className="cash-legend-item">
+                  <i className="cash-scenario__key" data-key="base" aria-hidden="true" />
+                  Base
+                </span>
+                <span className="cash-legend-item">
+                  <i className="cash-scenario__key" data-key="scenario" aria-hidden="true" />
+                  Scenario
+                </span>
+              </div>
+              {scenarioMiniChart}
               {scenarioActive ? (
                 <p className="text-sm text-slate-700 dark:text-slate-300" data-scenario-label>
                   {scenarioLabel}. Week 13 would close at {fmtCompact(closingW13)}, against{" "}
@@ -3508,15 +3600,14 @@ export function CashForecastPanel({
                 </p>
               ) : null}
               {scenarioSliders}
-              <Button
+              <button
                 type="button"
-                variant="outline"
-                className="rounded-md"
+                className="cash-scenario__reset"
                 disabled={!scenarioActive}
                 onClick={resetScenario}
               >
                 Reset to base
-              </Button>
+              </button>
             </div>
           ) : null}
         </section>

@@ -159,6 +159,18 @@ assert(pagedBranch.includes("<ForecastLineTable"), "setup pane uses the one tabl
 assert(!pagedBranch.includes("<LineEditor"), "no per-line cards on the paged setup pane");
 assert(!pagedBranch.includes("{moneyInOut}"), "Money In & Out folds into Forecast setup");
 assert(!pagedBranch.includes("CollapsibleGoldCard"), "no collapsible cards in the paged layout");
+assert(!/what-?if/i.test(pagedBranch), "no what-if wording on the accountant page");
+assert(pagedBranch.includes("{scenarioMiniChart}"), "scenario pane shows base vs scenario");
+assert(pagedBranch.includes("{scenarioSliders}"), "scenario pane holds the sliders");
+assert(pagedBranch.includes('className="cash-scenario__reset"'), "Reset to base is a block button");
+assert(pagedBranch.includes("data-scenario-on"), "the Forecast pane says when a scenario is on");
+const miniChart = cash.slice(cash.indexOf("const scenarioMiniChart"), pagedStart);
+assert(miniChart.includes('dataKey="base"') && miniChart.includes('dataKey="scenario"'), "two series");
+const briefing = readFileSync("src/lib/client-briefing.ts", "utf8");
+assert(!/what-?if/i.test(briefing), "briefing copy says scenario planning");
+for (const file of ["src/reports/cash-forecast.tsx", "src/lib/feature-finder.ts"]) {
+  assert(!/what-?if/i.test(readFileSync(file, "utf8")), `${file} has no what-if wording`);
+}
 
 const route = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 const mount = route.slice(route.indexOf('title="13-week forecast"'), route.indexOf("<CashForecastPanel"));

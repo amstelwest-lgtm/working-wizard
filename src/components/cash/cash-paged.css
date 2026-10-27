@@ -633,3 +633,33 @@ tbody[data-tone="out"] .forecast-lines__row td:first-child {
     padding: 0 12px;
   }
 }
+
+/* Scenario planning */
+.cash-scenario__key {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  margin-right: 6px;
+  border-top: 2.5px solid #0b5fff;
+  vertical-align: middle;
+}
+
+.cash-scenario__key[data-key="base"] {
+  border-top: 2px dashed #2c5580;
+}
+
+.cash-scenario__reset {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--cash-paged-cobalt, #0b5fff);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--cash-paged-cobalt, #0b5fff);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cash-scenario__reset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
