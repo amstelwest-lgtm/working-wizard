@@ -126,6 +126,10 @@ await act(async () => {
 });
 await tick();
 assert(counts().ring === 0 && counts().orb === 0, "the pillar page hides the health ring and orb");
+assert(
+  document.querySelectorAll(".sphere-orb, .owner-pillar-orb").length === 0,
+  "the pillar page does not show legacy health orbs",
+);
 assert(document.body.textContent?.includes("Health by pillar"), "pillar cards stay on the drill-down");
 assert(document.body.textContent?.includes(HEALTH_DRILL_CUE), "pillar cards use the same cue");
 const profit = [...document.querySelectorAll("button")].find((button) =>
@@ -146,6 +150,10 @@ await act(async () => {
   back.click();
 });
 await tick();
+assert(
+  document.querySelectorAll(".sphere-orb, .owner-pillar-orb, .health-orb").length === 0,
+  "back from the score drill does not restore legacy health orbs",
+);
 const overview = [...document.querySelectorAll("button")].find((button) =>
   button.textContent?.includes("Back to overview"),
 );
@@ -155,7 +163,40 @@ await act(async () => {
 });
 await tick();
 assert(counts().ring === 1, "backing out restores the health ring");
+assert(
+  document.querySelectorAll(".sphere-orb, .owner-pillar-orb").length === 0,
+  "the ring overview does not restore legacy orbs",
+);
 await owner();
+
+const drilled = await mount(
+  createElement(SphereHero, {
+    variant: "ring",
+    overallHealth: 64,
+    pillars,
+    caption: HEALTH_RING_CAPTION,
+    drillTo: { token: 1, pillarId: "profit" },
+  }),
+);
+assert(document.body.textContent?.includes("Profit drivers"), "an outside drill opens the drivers");
+assert(
+  document.querySelectorAll(".sphere-orb, .owner-pillar-orb, .health-orb").length === 0,
+  "an outside drill does not paint legacy orbs",
+);
+const drilledBack = [...document.querySelectorAll("button")].find((button) =>
+  button.textContent?.includes("Back to pillars"),
+);
+assert(drilledBack instanceof HTMLButtonElement, "the drilled score has Back");
+await act(async () => {
+  drilledBack.click();
+});
+await tick();
+assert(
+  document.querySelectorAll(".sphere-orb, .owner-pillar-orb, .health-orb").length === 0,
+  "Back from an outside drill stays on the flat cards",
+);
+assert(document.body.textContent?.includes("Health by pillar"), "Back returns to the pillar cards");
+await drilled();
 
 const accountant = await mount(hero("orb"));
 assert(counts().orb === 1 && counts().ring === 0, "the accountant orb stays on its top view");

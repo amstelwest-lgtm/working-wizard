@@ -105,7 +105,6 @@ import {
   PERIOD_MONTHS_CHOSEN_KEY,
   PERIOD_MONTHS_KEY,
   periodMonthsOf,
-  scoreTier,
 } from "@/lib/ratios";
 import type { HealthTier } from "@/lib/ratios";
 import {
@@ -264,8 +263,6 @@ import {
   emptyDebtSchedule,
   type DebtSchedule,
 } from "@/lib/debt-schedule";
-import { BrandConnectButton } from "@/components/brand-connect-button";
-import { ClientBriefing } from "@/components/client-briefing";
 import { NextStepCard } from "@/components/next-step-card";
 import { DataUpToDate } from "@/components/data-up-to-date";
 import {
@@ -277,7 +274,6 @@ import {
 import { relatedTabForRatio } from "@/lib/ratio-briefing";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
-import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { SendAgentPanel } from "@/components/send-agent-panel";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
@@ -287,22 +283,13 @@ import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-st
 import { portalButtonClass } from "@/lib/client-chrome";
 import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
 import { focusTrapTabIndex, listFocusable, overlayMayHandleKey } from "@/lib/dialog-focus";
-import {
-  buildFinancialSnapshot,
-  describeBusiness,
-  fallbackWorkflow,
-  healthHeadline,
-  whatMatters,
-  workflowInputsHash,
-  type WorkflowContext,
-} from "@/lib/client-briefing";
+import { buildFinancialSnapshot, healthHeadline, whatMatters } from "@/lib/client-briefing";
 import {
   overviewAnswerSentence,
   overviewSectionCards,
   snapshotFigure,
   storedAmountFigure,
 } from "@/lib/overview-moves-copy";
-import { draftMilonWorkflow, type BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
@@ -476,19 +463,6 @@ const PROFIT_FIELD_LABELS: { key: string; label: string }[] = [
   { key: "netIncome", label: "Net income" },
 ];
 
-// tier → band class mapping
-function tierToBand(tier: HealthTier): "ok" | "warn" | "risk" {
-  if (tier === "healthy") return "ok";
-  if (tier === "at_risk") return "warn";
-  return "risk";
-}
-
-function bandColor(band: "ok" | "warn" | "risk"): string {
-  if (band === "ok") return "var(--ok)";
-  if (band === "warn") return "var(--warn)";
-  return "var(--risk)";
-}
-
 // Score from ratio value — delegated to the shared health-score module
 function ratioHealthScore(
   name: string,
@@ -496,59 +470,6 @@ function ratioHealthScore(
   market?: Parameters<typeof scoreRatio>[2],
 ): number {
   return scoreRatio(name, val, market);
-}
-
-/** Health ring SVG */
-function HealthRing({
-  id,
-  score,
-  status,
-  size = 46,
-  strokeWidth = 4,
-}: {
-  id?: string;
-  score: number | null;
-  /** When set, drives ring colour (critical-pillar tell). */
-  status?: HealthTier;
-  size?: number;
-  strokeWidth?: number;
-}) {
-  const hasScore = score != null && Number.isFinite(score);
-  const shown = hasScore ? score : 0;
-  const r = (size - strokeWidth) / 2;
-  const c = 2 * Math.PI * r;
-  const band = tierToBand(status ?? (hasScore ? scoreTier(shown) : "at_risk"));
-  const color = bandColor(band);
-  const off = c * (1 - shown / 100);
-  return (
-    <div className="ring" id={id} style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle
-          className="tr"
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="var(--pale, #dbeafe)"
-          strokeWidth={strokeWidth}
-        />
-        {hasScore ? (
-          <circle
-            className="fl"
-            cx={size / 2}
-            cy={size / 2}
-            r={r}
-            fill="none"
-            strokeWidth={strokeWidth}
-            stroke={color}
-            strokeDasharray={`${c.toFixed(1)}`}
-            strokeDashoffset={`${off.toFixed(1)}`}
-          />
-        ) : null}
-      </svg>
-      <b>{hasScore ? Math.round(shown) : "—"}</b>
-    </div>
-  );
 }
 
 // ── route ──────────────────────────────────────────────────────────────────
@@ -1873,14 +1794,6 @@ function ClientView() {
           }
         : null,
   });
-  const debtorDaysFigure = ratios["Debtor Days"];
-  const actualDebtorDays = Number.isFinite(debtorDaysFigure) ? debtorDaysFigure : null;
-  const briefingAbout = describeBusiness(
-    briefingProfile,
-    client?.business_type ?? null,
-    actualDebtorDays,
-    { name: client?.name ?? null, businessType: client?.business_type ?? null },
-  );
   const briefingMatters = whatMatters({
     healthScore: overallHealth.overall,
     healthStatus: overallHealth.displayStatus,
@@ -2276,64 +2189,7 @@ function ClientView() {
       cancelled = true;
     };
   }, [clientId, openPlanTick]);
-  const workflowCtx: WorkflowContext = {
-    clientName: client?.name ?? "",
-    profile: briefingProfile,
-    businessType: client?.business_type ?? null,
-    healthScore: overallHealth.overall,
-    healthLabel: bookStatusWord,
-    snapshot: briefingSnapshot,
-    chips: varianceChips,
-    cashRunwayWeeks: effectiveRunway,
-    whatMatters: briefingMatters,
-    openQueries: openQueriesCount,
-    debtorDays: actualDebtorDays,
-    forecastKey: forecastPlFingerprint(client?.cashflow, financials),
-  };
-  const workflowHash = workflowInputsHash(workflowCtx);
-  const [workflow, setWorkflow] = useState<BriefingWorkflow | null>(null);
-  const [workflowLoading, setWorkflowLoading] = useState(false);
   const [generationTrialOpen, setGenerationTrialOpen] = useState(false);
-  const draftWorkflow = useServerFn(draftMilonWorkflow);
-  const workflowCtxRef = useRef(workflowCtx);
-  workflowCtxRef.current = workflowCtx;
-  const requestWorkflow = useCallback(
-    async (force: boolean) => {
-      if (!clientId) return;
-      setWorkflowLoading(true);
-      try {
-        const res = await draftWorkflow({
-          data: { clientId, force, context: workflowCtxRef.current as never },
-        });
-        setWorkflow(res);
-      } catch (e) {
-        if (isStarterTrialEndedMessage(messageFromUnknown(e))) {
-          setGenerationTrialOpen(true);
-        }
-        console.warn("[briefing] workflow draft failed:", messageFromUnknown(e) || e);
-      } finally {
-        setWorkflowLoading(false);
-      }
-    },
-    [clientId, draftWorkflow],
-  );
-  // Instant fallback so the briefing is never empty; the drafted line
-  // upgrades it when the cached or newly generated text arrives.
-  useEffect(() => {
-    if (!client || loading || !hasFigures) return;
-    setWorkflow((prev) => {
-      if (prev && prev.inputsHash === workflowHash) return prev;
-      return {
-        text: fallbackWorkflow(workflowCtxRef.current),
-        source: "fallback",
-        generatedAt: new Date().toISOString(),
-        inputsHash: workflowHash,
-      };
-    });
-    const t = setTimeout(() => void requestWorkflow(false), 400);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, workflowHash, loading, hasFigures, Boolean(client)]);
   useEffect(() => {
     const onTrialEnded = () => setGenerationTrialOpen(true);
     window.addEventListener("milon-starter-trial-ended", onTrialEnded);
@@ -4638,7 +4494,7 @@ function ClientView() {
                       clientId={clientId}
                       eyebrow="Numbers"
                       title="Health"
-                      subtitle="Score and where it hurts each have their own page. The figures are edited here."
+                      variant="lines"
                       links={[
                         {
                           id: "score",
@@ -4717,104 +4573,11 @@ function ClientView() {
                   <TrialEndedPlanBlock firmId={client.firm_id ?? null} audience="accountant" />
                 ) : null}
 
-                {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
                 {statementSampleImplausible(financials) ? (
                   <p className="mb-4 text-sm text-[#3D5270] dark:text-slate-300" role="status">
                     {implausibleSampleNote(clientMarket)}
                   </p>
                 ) : null}
-
-                <ClientBriefing
-                  clientName={client.name}
-                  clientCode={client.client_code}
-                  industryLabel={clientIndustryDisplay(client.name, briefingProfile, client.business_type)}
-                  ring={
-                    <HealthRing
-                      id="overview-health"
-                      score={evidenced ? overallHealth.overall : null}
-                      status={evidenced ? overallHealth.displayStatus : undefined}
-                      size={74}
-                      strokeWidth={5}
-                    />
-                  }
-                  healthScore={evidenced ? overallHealth.overall : null}
-                  healthLabel={evidenced ? bookStatusWord : NOT_SCORED_YET_LABEL}
-                  healthStatus={evidenced ? (bookStatusCritical ? "critical" : overallHealth.displayStatus) : null}
-                  snapshot={briefingSnapshot}
-                  about={briefingAbout}
-                  profile={briefingProfile}
-                  debtorDays={actualDebtorDays}
-                  onEditProfile={() => setProfileOpen(true)}
-                  whatMatters={briefingMatters}
-                  hideWhatMatters
-                  hideConnectionActions
-                  hideScore
-                  hideFigures
-                  workflow={workflow}
-                  workflowLoading={workflowLoading}
-                  onRefreshWorkflow={() => void requestWorkflow(true)}
-                  openQueries={
-                    notesLoading && clientNotes.length === 0
-                      ? openQueriesCount
-                      : clientNotes.filter((n) => !n.resolved).length
-                  }
-                  onOpenQueries={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
-                  reportsIssued={reportsIssued}
-                  movementReportAvailable={Boolean(priorSnapshot)}
-                  onOpenMovementReport={() => openReportPage("movement", "preview")}
-                  onAddPastPeriod={() => setPastPeriodOpen(true)}
-                  onOpenReports={() => revealTab("reports")}
-                  hasFigures={hasFigures}
-                  figuresPeriodLabel={figuresPeriodLabel}
-                  onUpload={() => setUploadOpen(true)}
-                  onConnectQuickBooks={() => setShowQboDialog(true)}
-                  onConnectXero={() => setShowXeroDialog(true)}
-                  onConnectSage={
-                    isUsCopy(gateMarket) ? undefined : () => setShowSageDialog(true)
-                  }
-                  qboLink={
-                    qboLink
-                      ? {
-                          tenantName: qboLink.companyName,
-                          lastSyncedAt: qboLink.lastSyncedAt,
-                          syncStatus: qboLink.syncStatus,
-                          periodLabel: qboLink.periodLabel,
-                          revenue: qboLink.revenue,
-                          ytdPeriodLabel: qboLink.ytdPeriodLabel,
-                          ytdRevenue: qboLink.ytdRevenue,
-                          ytdBasis: qboLink.ytdBasis,
-                          figuresFromThisSync: qboLink.figuresFromThisSync,
-                          syncFigures: qboLink.syncFigures,
-                          boardFigures: qboLink.boardFigures,
-                        }
-                      : null
-                  }
-                  xeroLink={
-                    xeroLink
-                      ? {
-                          tenantName: xeroLink.tenantName,
-                          lastSyncedAt: xeroLink.lastSyncedAt,
-                          syncStatus: xeroLink.syncStatus,
-                          periodLabel: xeroLink.periodLabel,
-                          revenue: xeroLink.revenue,
-                          ytdPeriodLabel: xeroLink.ytdPeriodLabel,
-                          ytdRevenue: xeroLink.ytdRevenue,
-                          ytdBasis: xeroLink.ytdBasis,
-                          figuresFromThisSync: xeroLink.figuresFromThisSync,
-                          syncFigures: xeroLink.syncFigures,
-                          boardFigures: xeroLink.boardFigures,
-                          bsAsOf: xeroLink.bsAsOf,
-                          bankCount: xeroLink.bankCount,
-                          bankTotal: xeroLink.bankTotal,
-                          bankWarning: xeroLink.bankWarning,
-                          bankFrom: xeroLink.bankFrom,
-                          bankTo: xeroLink.bankTo,
-                          openingCashNote: xeroLink.openingCashNote,
-                          forecastLinesNote: xeroLink.forecastLinesNote,
-                        }
-                      : null
-                  }
-                />
 
                 {hasFigures ? <CheckoutAfterInsight /> : null}
 

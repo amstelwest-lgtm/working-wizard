@@ -2050,6 +2050,59 @@ html.dark .accountant-portal .client-subpage-link--primary .client-subpage-link_
   line-height:1.45;
   color:var(--ink-dim,#3d5270);
 }
+.accountant-portal .client-subpage-links--lines{
+  gap:0;
+  margin-top:8px;
+  overflow:hidden;
+  border:1px solid #dbeafe;
+  border-radius:16px;
+  background:#fff;
+}
+html.dark .accountant-portal .client-subpage-links--lines{
+  border-color:#1e3a5f;
+  background:#102a43;
+}
+.accountant-portal .client-subpage-link--line{
+  flex-direction:row;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:52px;
+  padding:14px 18px;
+  border:0;
+  border-radius:0;
+  border-bottom:1px solid #dbeafe;
+  background:transparent;
+  box-shadow:none;
+}
+html.dark .accountant-portal .client-subpage-link--line{
+  border-bottom-color:#1e3a5f;
+}
+.accountant-portal .client-subpage-links--lines > li:last-child .client-subpage-link--line{
+  border-bottom:0;
+}
+.accountant-portal .client-subpage-link--line:hover{
+  border-color:transparent;
+  background:#f4f8ff;
+}
+html.dark .accountant-portal .client-subpage-link--line:hover{
+  background:#163654;
+}
+.accountant-portal .client-subpage-link--line .client-subpage-link__label{
+  color:#102a43;
+}
+html.dark .accountant-portal .client-subpage-link--line .client-subpage-link__label{
+  color:#f4f7fb;
+}
+.accountant-portal .client-subpage-link--line:hover .client-subpage-link__label{
+  color:#0b5fff;
+}
+.accountant-portal .client-subpage-link__chev{
+  color:#0b5fff;
+  font-size:20px;
+  font-weight:500;
+  line-height:1;
+}
 .accountant-portal .crumb a.crumb-link{
   color:inherit;
   text-decoration:none;

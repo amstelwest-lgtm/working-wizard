@@ -142,6 +142,9 @@ assert(
   "where it hurts is its own page",
 );
 assert(ratiosPane.includes('title="Health"'), "the health parent stays Health");
+assert(ratiosPane.includes('variant="lines"'), "Health opens as two lines");
+assert(!ratiosPane.includes("<ClientBriefing"), "Health does not repeat the business profile");
+assert(!ratiosPane.includes("About this business"), "Health does not repeat the profile block");
 assert(ratiosPane.includes('title="Where it hurts"'), "where it hurts keeps its own title");
 assert(ratiosPane.includes('title="Score"'), "the score lives on its own page");
 assert(profitPane.includes('aria-label="Export PDF"'), "profit export sits on the strip");

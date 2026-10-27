@@ -173,7 +173,7 @@ assert(!overviewPane.includes("<OverviewSectionCards"), "Home does not keep the 
 assert(!overviewPane.includes("client management"), "Home does not say client management");
 assert(!overviewPane.includes(">Audited<"), "the overview pane does not say Audited");
 assert(!route.includes('className="aud">Audited'), "the crumb no longer says Audited");
-assert(route.includes("hideWhatMatters"), "the briefing does not repeat the strip sentence");
+assert(!route.includes("<ClientBriefing"), "Health does not repeat the strip sentence in a briefing");
 
 assert(movesPane.includes("<StrategicMovesPanel"), "moves still renders the ranked list");
 assert(!movesPane.includes("From strategic moves"), "the moves pane drops that label");

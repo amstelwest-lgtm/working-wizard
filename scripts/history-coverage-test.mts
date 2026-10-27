@@ -90,7 +90,10 @@ assert(
 
 const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(studio.includes("historyOnlyUploadRef"), "accountant can save history without touching live");
-assert(studio.includes("movementReportAvailable={Boolean(priorSnapshot)}"), "movement CTA is honest");
+assert(
+  /hasFigures && priorSnapshot \? \([\s\S]{0,400}Open movement report/.test(studio),
+  "movement CTA is honest",
+);
 assert(studio.includes("PastPeriodUploadDialog"), "accountant studio has the past-period box");
 
 const snapSrc = readFileSync(resolve("src/lib/financial-snapshots.ts"), "utf8");

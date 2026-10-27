@@ -16,11 +16,13 @@ import { DigCue, DigLeaf, HEALTH_DRILL_CUE } from "@/components/health-drill-cue
  * SphereHero — the morphing 3-level health drill-down.
  *
  * Level 1: one large cobalt sphere (overall Business Health Score) with a
- *          compact 4-stat pillar row beneath it.
- * Level 2: main sphere shrinks to the top; the four pillars morph in as
- *          glowing sphere cards in a 2×2 grid.
- * Level 3: the chosen pillar's sphere takes the stage; its underlying
- *          drivers render as rows with progress bars (end of the drill).
+ *          compact 4-stat pillar row beneath it. The ring variant uses a flat
+ *          dial and pillar cards instead of spheres.
+ * Level 2: the orb variant shrinks the main sphere and shows four pillar
+ *          spheres. The ring variant stays on the same flat pillar cards —
+ *          Back must not restore the legacy orbs.
+ * Level 3: the chosen pillar's drivers render as rows (end of the drill).
+ *          The orb variant still shows that pillar's sphere. The ring does not.
  *
  * All transitions are reversible (back arrows + tapping the shrunken main
  * sphere collapses upward). Every sphere tap plays a synthesized metallic
@@ -474,6 +476,79 @@ function RingDial({
   );
 }
 
+function RingPillarCards({
+  pillars,
+  cashFloorCue,
+  onCashFloor,
+  onOpen,
+}: {
+  pillars: SpherePillar[];
+  cashFloorCue: string | null;
+  onCashFloor?: () => void;
+  onOpen: (id: SpherePillar["id"]) => void;
+}) {
+  return (
+    <div className="health-pillar-cards">
+      {pillars.map((p) => {
+        const Icon = PILLAR_ICON[p.id];
+        const t = tierOf(p.health, p.status);
+        return (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onOpen(p.id)}
+            aria-label={`${p.label} score ${fmtScore(p.health)}. Dig deeper.`}
+            className="health-pillar-cardx"
+            data-tier={t}
+          >
+            <span className="health-pillar-top">
+              <span className="health-pillar-ic" aria-hidden="true">
+                <Icon />
+              </span>
+              <span className="health-pillar-name">{p.label}</span>
+              <span className="health-pillar-chev" aria-hidden="true">
+                <ChevronRight />
+              </span>
+            </span>
+            <span className={`health-pillar-figure ${TIER_TEXT[t]}`}>{fmtScore(p.health)}</span>
+            <span className={`health-pillar-band ${TIER_TEXT[t]}`}>
+              {pillarBandLabel(p, t)}
+              {typeof p.delta === "number" && p.delta !== 0 ? (
+                <span className={p.delta > 0 ? "text-emerald-600" : "text-rose-600"}>
+                  {" "}
+                  {p.delta > 0 ? "↑" : "↓"} {Math.abs(Math.round(p.delta))}
+                </span>
+              ) : null}
+            </span>
+            <DigCue id={`pillar-ring-${p.id}`} compact />
+            {p.id === "cash" && cashFloorCue ? (
+              <span
+                className="health-cash-floor"
+                data-cash-floor-cue="true"
+                role="link"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onCashFloor?.();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onCashFloor?.();
+                }}
+              >
+                {cashFloorCue}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function takeawayDirection(tier: Tier): "up" | "flat" | "down" {
   if (tier === "healthy") return "up";
   if (tier === "critical") return "down";
@@ -556,13 +631,15 @@ export function SphereHero({
   cashFloorCue = null,
   onCashFloor,
 }: SphereHeroProps) {
-  const [level, setLevel] = useState<Level>(1);
-  const [activePillarId, setActivePillarId] = useState<SpherePillar["id"] | null>(null);
+  const drillToken = drillTo?.token ?? 0;
+  const drillPillarId = drillTo?.pillarId;
+  const [level, setLevel] = useState<Level>(() => (drillToken && drillPillarId ? 3 : 1));
+  const [activePillarId, setActivePillarId] = useState<SpherePillar["id"] | null>(() =>
+    drillToken && drillPillarId ? drillPillarId : null,
+  );
   const liveRef = useRef<HTMLDivElement>(null);
   const reduceMotion = usePrefersReducedMotion();
   const morphMs = reduceMotion ? 0 : 500;
-  const drillToken = drillTo?.token ?? 0;
-  const drillPillarId = drillTo?.pillarId;
 
   useEffect(() => {
     if (!drillToken || !drillPillarId) return;
@@ -680,66 +757,12 @@ export function SphereHero({
             </div>
           </div>
           <p className="health-kicker health-pillar-kicker">Health by pillar</p>
-          <div className="health-pillar-cards">
-            {pillars.map((p) => {
-              const Icon = PILLAR_ICON[p.id];
-              const t = tierOf(p.health, p.status);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => go(3, p.id)}
-                  aria-label={`${p.label} score ${fmtScore(p.health)}. Dig deeper.`}
-                  className="health-pillar-cardx"
-                  data-tier={t}
-                >
-                  <span className="health-pillar-top">
-                    <span className="health-pillar-ic" aria-hidden="true">
-                      <Icon />
-                    </span>
-                    <span className="health-pillar-name">{p.label}</span>
-                    <span className="health-pillar-chev" aria-hidden="true">
-                      <ChevronRight />
-                    </span>
-                  </span>
-                  <span className={`health-pillar-figure ${TIER_TEXT[t]}`}>
-                    {fmtScore(p.health)}
-                  </span>
-                  <span className={`health-pillar-band ${TIER_TEXT[t]}`}>
-                    {pillarBandLabel(p, t)}
-                    {typeof p.delta === "number" && p.delta !== 0 ? (
-                      <span className={p.delta > 0 ? "text-emerald-600" : "text-rose-600"}>
-                        {" "}
-                        {p.delta > 0 ? "↑" : "↓"} {Math.abs(Math.round(p.delta))}
-                      </span>
-                    ) : null}
-                  </span>
-                  <DigCue id={`pillar-ring-${p.id}`} compact />
-                  {p.id === "cash" && cashFloorCue ? (
-                    <span
-                      className="health-cash-floor"
-                      data-cash-floor-cue="true"
-                      role="link"
-                      tabIndex={0}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onCashFloor?.();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onCashFloor?.();
-                      }}
-                    >
-                      {cashFloorCue}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+          <RingPillarCards
+            pillars={pillars}
+            cashFloorCue={cashFloorCue}
+            onCashFloor={onCashFloor}
+            onOpen={(id) => go(3, id)}
+          />
         </div>
       )}
 
@@ -884,8 +907,21 @@ export function SphereHero({
         </div>
       )}
 
-      {/* ── LEVEL 2: pillar sphere grid ── */}
-      {level === 2 && (
+      {/* Ring Back lands here: the same flat cards, never the pillar spheres. */}
+      {variant === "ring" && level === 2 && (
+        <div className="health-ring-pane">
+          <p className="health-kicker health-pillar-kicker">Health by pillar</p>
+          <RingPillarCards
+            pillars={pillars}
+            cashFloorCue={cashFloorCue}
+            onCashFloor={onCashFloor}
+            onOpen={(id) => go(3, id)}
+          />
+        </div>
+      )}
+
+      {/* ── LEVEL 2: pillar sphere grid. Orb variant only. ── */}
+      {variant !== "ring" && level === 2 && (
         <>
           <p className="mb-3 mt-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-[#102A43] dark:text-[#F4F7FB]">
             Health by pillar

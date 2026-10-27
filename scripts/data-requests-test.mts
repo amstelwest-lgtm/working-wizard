@@ -573,10 +573,11 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
   const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
   const sCard = studio.indexOf("<NextStepCard");
   const sPanel = studio.indexOf("<DataRequestsPanel");
-  const sBrief = studio.indexOf("<ClientBriefing");
+  const sHealth = studio.indexOf('id="pane-ratios"');
+  const sProfit = studio.indexOf('id="pane-profit"');
   assert(
-    sCard > 0 && sPanel > sCard && sPanel < sBrief,
-    "studio: requests under Next Step, above briefing",
+    sCard > 0 && sHealth > sCard && sPanel > sHealth && sPanel < sProfit,
+    "studio: requests sit on Health, under the Next Step",
   );
   assert(
     studio.includes('audience="accountant"\n                  refreshKey'),
