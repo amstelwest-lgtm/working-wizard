@@ -77,6 +77,7 @@ import {
   CASH_FORECAST_CARD_ID,
   cashBalanceSeries,
   cashGraphAxisTicks,
+  cashStackedEnlargeTarget,
   cashYDomainIncludingFloor,
   cashGraphWeekTickInterval,
   stableCashChartWidth,
@@ -3191,10 +3192,19 @@ export function CashForecastPanel({
             </div>
           ) : null}
           <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
-            {emptyPresentation.showChart && !openingTilesMissing ? (
-              <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
-            ) : null}
-            <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
+            {(() => {
+              const stackedEnlarge = cashStackedEnlargeTarget(
+                cashLens,
+                emptyPresentation.showChart && !openingTilesMissing,
+              );
+              if (!stackedEnlarge) return null;
+              return (
+                <EnlargeButton
+                  label={stackedEnlarge === "chart" ? "cash flow graph" : "cash flow table"}
+                  onClick={() => setCashEnlarge(stackedEnlarge)}
+                />
+              );
+            })()}
             <ViewToggle
               ariaLabel="Cash forecast"
               value={cashLens}

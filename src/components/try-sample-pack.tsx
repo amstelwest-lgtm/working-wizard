@@ -1,19 +1,40 @@
 /**
  * SAMPLE advisory pack on the public demo. Rendered from the board already
- * on the page. No export, no ledger, no saved pack.
+ * on the page. The PDF uses that same board. No ledger and no saved pack.
  */
 import { useState } from "react";
 import { TrySignoffMark } from "@/components/try-signoff";
 import { buildSampleAdvisoryPack } from "@/lib/trial-sample-pack";
 import type { TrialBoard } from "@/lib/trial-demo";
 
-export function TrySamplePack({
-  board,
-  signed = false,
-}: {
-  board: TrialBoard;
-  signed?: boolean;
-}) {
+function SamplePackDownload({ board, signed }: { board: TrialBoard; signed: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="try-pack-download">
+      <button
+        type="button"
+        className="try-pack-download-btn"
+        aria-label="Download sample advisory pack"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setFailed(false);
+          void import("@/lib/trial-sample-pack-pdf")
+            .then((mod) => mod.downloadTrialAdvisoryPackPdf(board, { signed }))
+            .then(() => setFailed(false))
+            .catch(() => setFailed(true))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? "Preparing the PDF" : "Download PDF"}
+      </button>
+      {failed ? <p className="try-error">The PDF didn't download. Try again.</p> : null}
+    </div>
+  );
+}
+
+export function TrySamplePack({ board, signed = false }: { board: TrialBoard; signed?: boolean }) {
   const pack = buildSampleAdvisoryPack(board, { signed });
   return (
     <article className="try-pack" aria-label="Sample advisory pack">
@@ -38,6 +59,7 @@ export function TrySamplePack({
           ) : null}
         </section>
       ))}
+      <SamplePackDownload board={board} signed={signed} />
     </article>
   );
 }

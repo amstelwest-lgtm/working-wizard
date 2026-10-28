@@ -13,6 +13,7 @@ import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
 import {
   cashForecastSearchWithView,
   cashForecastViewFromSearch,
+  cashStackedEnlargeTarget,
   cashBalanceSeries,
   cashGraphAxisTicks,
   cashGraphWeekTickInterval,
@@ -158,12 +159,23 @@ assert(paymentsRow.includes('tone: "plain"') && paymentsRow.includes("rule: true
 assert(!paymentsRow.includes('tone: "out"'), "total payments is not a red band");
 assert(cashSrc.includes("<ViewToggle"), "cash uses the same Chart | 13-week toggle");
 const cashToggleAt = cashSrc.indexOf('ariaLabel="Cash forecast"');
-const cashToggleHeader = cashSrc.slice(Math.max(0, cashToggleAt - 500), cashToggleAt);
-assert(
-  cashToggleHeader.includes('label="cash flow graph"') &&
-    cashToggleHeader.includes('label="cash flow table"'),
-  "both enlarge controls sit in the toggle header on first paint",
+const cashToggleHeaderStart = cashSrc.lastIndexOf(
+  'className="mb-3 flex flex-wrap items-center justify-end gap-2"',
+  cashToggleAt,
 );
+const cashToggleHeader = cashSrc.slice(cashToggleHeaderStart, cashToggleAt);
+assert(
+  (cashToggleHeader.match(/<EnlargeButton/g) ?? []).length === 1,
+  "one enlarge control sits in the toggle header",
+);
+assert(
+  cashToggleHeader.includes("cashStackedEnlargeTarget"),
+  "that control follows the active lens",
+);
+assert(cashStackedEnlargeTarget("chart", true) === "chart", "chart lens enlarges the graph");
+assert(cashStackedEnlargeTarget("table", true) === "table", "13-week lens enlarges the table");
+assert(cashStackedEnlargeTarget("table", false) === "table", "13-week still enlarges when the chart is empty");
+assert(cashStackedEnlargeTarget("chart", false) === null, "an empty chart lens has no enlarge");
 assert(cashSrc.includes('label: "13-week"'), "the cash toggle names the 13-week table");
 assert(cashSrc.includes('id="detailed-forecast"'), "the weekly table keeps the old anchor");
 assert(cashSrc.includes("<CashThirteenWeekGrid"), "the weekly table sits on the cash page");

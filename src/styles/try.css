@@ -961,6 +961,38 @@ html:not(.dark) body:has(.try-page):has(.owner-door) {
   padding-left: 18px;
 }
 
+.try-pack-download {
+  margin-top: 4px;
+}
+
+.try-pack-download-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid #0b5fff;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0b5fff;
+  -webkit-text-fill-color: #0b5fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.try-pack-download-btn:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.try-pack-download-btn:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 3px;
+}
+
 .try-signoff {
   display: flex;
   flex-wrap: wrap;
