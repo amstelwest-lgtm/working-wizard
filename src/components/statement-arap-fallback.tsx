@@ -52,10 +52,7 @@ export function StatementArApTiles({
   lead?: "debtors" | "creditors";
 }) {
   const copy = { copyPack: copyPackOf(market) } as const;
-  const byKey = new Map<
-    string,
-    { key: string; label: string; value: string; tier?: HealthTier }
-  >();
+  const byKey = new Map<string, { key: string; label: string; value: string; tier?: HealthTier }>();
   if (typeof position.debtorDays === "number" && Number.isFinite(position.debtorDays)) {
     byKey.set("dso", {
       key: "dso",
