@@ -4588,7 +4588,10 @@ function ClientView() {
                   </p>
                 ) : null}
 
-                  <ReviewInputsDrawer hint={deliverableDrawerHint("ratios", deliverableInputContext)}>
+                  <ReviewInputsDrawer
+                    label="Review Source documents"
+                    hint={deliverableDrawerHint("ratios", deliverableInputContext)}
+                  >
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
