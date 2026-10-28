@@ -1047,6 +1047,17 @@ body:has(#pane-ask.on) #wizard-notes-pin {
    the locked column. The stage scrolls as one, so on a laptop-height screen
    the face, finding and activity cannot push the composer out of reach. */
 @media (min-width: 861px) {
+  /* Notes, banners or a back link above the pane can leave the locked column
+     too short. The pane keeps a floor and the main column scrolls to it. */
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .accountant-portal:has(#pane-ask.on):has(.agent-stage) #pane-ask.on {
+    min-height: 380px;
+  }
+
   .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host > .agent-stage {
     display: flex;
     flex: 1 1 auto;
