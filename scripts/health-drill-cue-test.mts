@@ -33,8 +33,8 @@ assert(
   "ring pillar cards, below the top score, carry the see-more cue",
 );
 assert(
-  !hero.includes("<DigCue id={`driver-${d.key}`} compact />"),
-  "the bottom driver level has no see-more hint",
+  hero.includes("{clickable ? <DigCue id={`driver-${d.key}`} compact /> : <DigLeaf />}"),
+  "a drilled pillar's driver rows show See more when they open a briefing",
 );
 assert(hero.includes("<DigLeaf />"), "a ratio with no briefing is the bottom line");
 
