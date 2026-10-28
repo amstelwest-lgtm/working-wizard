@@ -217,7 +217,7 @@ export function DataRequestsPanel({
   if (shownRows.length === 0 && audience === "owner") return null;
 
   const shell = [
-    "rounded-2xl border border-[#0B5FFF]/25 bg-white/70 p-4 shadow-sm dark:border-[#0B5FFF]/20 dark:bg-white/[0.035]",
+    "rounded-2xl border border-[#DBEAFE] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-[#1e3a5f] dark:bg-[#102A43]",
     className,
   ]
     .filter(Boolean)
@@ -241,29 +241,38 @@ export function DataRequestsPanel({
       ) : null}
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#102A43] dark:text-[#F4F7FB]">
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-[#0B5FFF] dark:text-[#93C5FD]">
             {audience === "owner" ? "What your accountant needs" : "Data requests"}
           </span>
           <h3
             id="data-requests-heading"
-            className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#F4F7FB]"
+            className="mt-1 text-[16px] font-bold leading-snug tracking-[-0.01em] text-[#102A43] dark:text-[#F4F7FB]"
           >
-            {rows.length === 0
-              ? "Nothing outstanding"
-              : rows.length === 1
+            {audience === "owner"
+              ? shownRows.length === 1
                 ? "One thing before the next step"
-                : `${rows.length} things before the next step`}
+                : `${shownRows.length} things before the next step`
+              : shownRows.length === 0
+                ? "Nothing needed from the owner right now"
+                : shownRows.length === 1
+                  ? "One thing to get from the owner"
+                  : `${shownRows.length} things to get from the owner`}
           </h3>
-          <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/80">
+          <p className="mt-1.5 max-w-[62ch] text-[13px] leading-[1.55] text-[#3D5270] dark:text-[#CBD5E1]">
             {audience === "owner"
               ? "Without these, the diagnosis and forecast are weaker than they look. Each one says exactly what to send."
-              : "Tracked asks. System rules open and close these on their own; anything you add by hand stays until you close it."}
+              : shownRows.length === 0
+                ? "When a gap would weaken this client's score, forecast or pack (stale figures, no bank balance, debtor or creditor days with no ageing report behind them), MILŌN lists it here, tells the owner exactly what to send, and closes the request once it arrives. Less chasing for you, and every number you sign off has a source behind it."
+                : "Each one fills a gap in the score, forecast or pack. Email the owner the list in one go. MILŌN closes each request on its own once the document arrives, so you only follow up on what is still missing."}
           </p>
-          {audience === "owner" ? (
-            <p className="mt-2 text-[12px] leading-snug text-slate-500 dark:text-slate-400" data-request-hint>
-              Upload sends the file. I've sent this closes the request. Not applicable means it does not apply.
-            </p>
-          ) : null}
+          <p
+            className="mt-2 text-[12px] leading-snug text-[#3D5270] dark:text-[#94A3B8]"
+            data-request-hint
+          >
+            {audience === "owner"
+              ? "Upload sends the file. I've sent this closes the request. Not applicable means it does not apply."
+              : "Need something else? Ask for a document. Requests you add stay open until you close them."}
+          </p>
         </div>
         {audience === "accountant" ? (
           <div className="flex items-center gap-2">

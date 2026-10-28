@@ -581,6 +581,14 @@ html:not(.dark) [data-sonner-toast][data-type="error"][class*="rounded-"][class*
   color: #ffffff !important;
   border-color: #7f1d1d !important;
 }
+/* A ticked checkbox keeps its cobalt fill so the white tick shows. The
+   rounded-bordered rule above would paint it white and hide the tick. */
+html:not(.dark) button[role="checkbox"][data-state="checked"],
+html:not(.dark) button[role="checkbox"][data-state="indeterminate"] {
+  background-color: #0b5fff !important;
+  border-color: #0b5fff !important;
+  color: #ffffff !important;
+}
 html:not(.dark) [data-sonner-toast][data-type="success"] [data-title],
 html:not(.dark) [data-sonner-toast][data-type="success"] [data-description],
 html:not(.dark) [data-sonner-toast][data-type="error"] [data-title],
@@ -756,7 +764,8 @@ html:not(.dark) .sphere-drill-back--on-dark:hover {
 
 /* Health drill cue — only on a control that opens a real next level.
    One line, "See more", on mouse and touch. Ice is a shimmer, never the text.
-   Drivers and the ratio drawer do not use this cue. */
+   A driver row carries it only when it opens a briefing; the briefing and
+   the ratio drawer are the bottom and do not. */
 .dig-cue {
   display: inline-flex;
   align-items: center;

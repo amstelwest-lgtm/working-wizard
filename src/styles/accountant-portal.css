@@ -1203,6 +1203,49 @@ html:not([data-theme="light"]) .accountant-portal input[type="radio"]:checked::a
   font-weight:700;
   font-variant-numeric:tabular-nums;
 }
+/* Day tiles carry the shared health band; money tiles stay on the brand accent. */
+.accountant-portal .statement-arap-position > div{
+  --arap-tone:linear-gradient(180deg,#0B5FFF,#38BDF8);
+  position:relative;
+  overflow:hidden;
+  padding-left:17px;
+  border-color:#DBEAFE;
+  background:linear-gradient(180deg,#F4F8FF 0%,#FFFFFF 72%);
+}
+.accountant-portal .statement-arap-position > div::before{
+  content:"";
+  position:absolute;
+  inset:0 auto 0 0;
+  width:3px;
+  background:var(--arap-tone);
+}
+.accountant-portal .statement-arap-position > div[data-tone="healthy"]{--arap-tone:#16845B}
+.accountant-portal .statement-arap-position > div[data-tone="at_risk"]{--arap-tone:#B7791F}
+.accountant-portal .statement-arap-position > div[data-tone="critical"]{--arap-tone:#C43D4B}
+.accountant-portal .statement-arap-position dd{color:#102A43}
+.accountant-portal .statement-arap-position dd.statement-arap-band{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-top:6px;
+  font-size:11px;
+  font-weight:650;
+  letter-spacing:.04em;
+  color:#3D5270;
+}
+.accountant-portal .statement-arap-band i{
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:var(--arap-tone);
+  flex:none;
+}
+html.dark .accountant-portal .statement-arap-position > div{
+  border-color:#1e3a5f;
+  background:linear-gradient(180deg,rgba(11,95,255,.12) 0%,rgba(11,95,255,0) 72%);
+}
+html.dark .accountant-portal .statement-arap-position dd{color:#F4F7FB}
+html.dark .accountant-portal .statement-arap-position dd.statement-arap-band{color:#cbd5e1}
 .accountant-portal .collections-buckets{
   display:flex;
   flex-wrap:wrap;

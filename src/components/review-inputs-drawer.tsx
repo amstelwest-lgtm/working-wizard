@@ -4,10 +4,13 @@ import { useState, type ReactNode } from "react";
 export function ReviewInputsDrawer({
   children,
   hint,
+  label = "Review inputs",
 }: {
   children: ReactNode;
   /** One line from labels already on the drawer, such as "Inputs, what-ifs". */
   hint?: string;
+  /** Summary wording. Health says "Review Source documents". */
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -17,7 +20,7 @@ export function ReviewInputsDrawer({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="review-inputs__summary">
-        <span>Review inputs</span>
+        <span>{label}</span>
         {hint ? <span className="review-inputs__hint">{hint}</span> : null}
         <span className="review-inputs__chevron" aria-hidden="true" />
       </summary>

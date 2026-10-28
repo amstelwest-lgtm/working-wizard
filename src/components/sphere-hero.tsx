@@ -1057,7 +1057,7 @@ export function SphereHero({
                       }}
                     />
                   </div>
-                  {clickable ? null : <DigLeaf />}
+                  {clickable ? <DigCue id={`driver-${d.key}`} compact /> : <DigLeaf />}
                 </>
               );
               if (clickable) {

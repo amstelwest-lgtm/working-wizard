@@ -616,7 +616,10 @@ function HealthPane({ clientId }: { clientId: string }) {
             audience="accountant"
             financials={healthFinancials}
           />
-          <ReviewInputsDrawer hint={deliverableDrawerHint("ratios", { financials: HARNESS_FINANCIALS })}>
+          <ReviewInputsDrawer
+            label="Review Source documents"
+            hint={deliverableDrawerHint("ratios", { financials: HARNESS_FINANCIALS })}
+          >
             <DeliverableInputConfig
               clientId={clientId}
               deliverableId="ratios"
