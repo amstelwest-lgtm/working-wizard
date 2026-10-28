@@ -10,9 +10,11 @@ import {
   COLLECTIONS_XERO_CTA,
   type StatementWorkingCapital,
 } from "@/lib/collections";
+import { scoreCreditorDays, scoreLowerIsBetterDays } from "@/lib/client-metrics";
 import { SAGE_NOT_SYNCED_HINT } from "@/lib/connect-books-copy";
 import { t } from "@/lib/market/copy";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
+import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
 
 export type StatementCopyMarket = MoneyMarket & { copyPack?: "za" | "us" };
 
@@ -50,9 +52,17 @@ export function StatementArApTiles({
   lead?: "debtors" | "creditors";
 }) {
   const copy = { copyPack: copyPackOf(market) } as const;
-  const byKey = new Map<string, { key: string; label: string; value: string }>();
+  const byKey = new Map<
+    string,
+    { key: string; label: string; value: string; tier?: HealthTier }
+  >();
   if (typeof position.debtorDays === "number" && Number.isFinite(position.debtorDays)) {
-    byKey.set("dso", { key: "dso", label: t("dso", copy), value: `${position.debtorDays} days` });
+    byKey.set("dso", {
+      key: "dso",
+      label: t("dso", copy),
+      value: `${position.debtorDays} days`,
+      tier: scoreTier(scoreLowerIsBetterDays(position.debtorDays)),
+    });
   }
   if (typeof position.receivables === "number" && Number.isFinite(position.receivables)) {
     byKey.set("ar", {
@@ -62,7 +72,12 @@ export function StatementArApTiles({
     });
   }
   if (typeof position.creditorDays === "number" && Number.isFinite(position.creditorDays)) {
-    byKey.set("dpo", { key: "dpo", label: t("dpo", copy), value: `${position.creditorDays} days` });
+    byKey.set("dpo", {
+      key: "dpo",
+      label: t("dpo", copy),
+      value: `${position.creditorDays} days`,
+      tier: scoreTier(scoreCreditorDays(position.creditorDays)),
+    });
   }
   if (typeof position.payables === "number" && Number.isFinite(position.payables)) {
     byKey.set("ap", {
@@ -79,9 +94,15 @@ export function StatementArApTiles({
   return (
     <dl className="statement-arap-position" id={id}>
       {metrics.map((metric) => (
-        <div key={metric.key} data-metric={metric.key}>
+        <div key={metric.key} data-metric={metric.key} data-tone={metric.tier ?? "neutral"}>
           <dt>{metric.label}</dt>
           <dd>{metric.value}</dd>
+          {metric.tier ? (
+            <dd className="statement-arap-band">
+              <i aria-hidden="true" />
+              {healthBandLabel(metric.tier)}
+            </dd>
+          ) : null}
         </div>
       ))}
     </dl>
