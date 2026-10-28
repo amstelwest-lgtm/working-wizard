@@ -1044,18 +1044,22 @@ body:has(#pane-ask.on) #wizard-notes-pin {
 }
 
 /* Open agent inside a client. The stage, activity, thread and composer share
-   the locked column. The middle scrolls. The composer stays under the thread. */
+   the locked column. The stage scrolls as one, so on a laptop-height screen
+   the face, finding and activity cannot push the composer out of reach. */
 @media (min-width: 861px) {
   .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host > .agent-stage {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     min-height: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
   }
 
   .accountant-portal:has(#pane-ask.on):has(.agent-stage) .agent-stage > .agent-work {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     max-height: 22%;
     min-height: 0;
     overflow: auto;
@@ -1063,12 +1067,12 @@ body:has(#pane-ask.on) #wizard-notes-pin {
 
   .accountant-portal:has(#pane-ask.on):has(.agent-stage) .agent-stage > .milon-desk {
     display: flex;
-    flex: 1 1 auto;
+    flex: 1 0 auto;
     flex-direction: column;
     min-height: 120px;
     height: auto;
     max-height: none;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-scroll {
