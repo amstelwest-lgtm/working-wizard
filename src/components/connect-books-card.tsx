@@ -2,7 +2,6 @@ import "./connect-books-card.css";
 import {
   CONNECT_BOOKS_BODY,
   CONNECT_BOOKS_TITLE,
-  CONNECT_BOOKS_TITLE_WITH_SAGE,
   SAGE_NOT_SYNCED_HINT,
 } from "@/lib/connect-books-copy";
 
@@ -13,6 +12,8 @@ type Props = {
   /** US clients do not get the Sage flow the portal already hides. */
   showSage?: boolean;
   busy?: "xero" | "qbo" | null;
+  /** Inside a Home pane that already draws the card. */
+  bare?: boolean;
 };
 
 /**
@@ -26,15 +27,16 @@ export function ConnectBooksHomeCard({
   onSage,
   showSage = true,
   busy = null,
+  bare = false,
 }: Props) {
   return (
     <section
-      className="connect-books-card"
+      className={bare ? "connect-books-card connect-books-card--bare" : "connect-books-card"}
       data-connect-books="home"
       aria-labelledby="connect-books-title"
     >
       <h2 id="connect-books-title" className="connect-books-card__title">
-        {showSage ? CONNECT_BOOKS_TITLE_WITH_SAGE : CONNECT_BOOKS_TITLE}
+        {CONNECT_BOOKS_TITLE}
       </h2>
       <p className="connect-books-card__body">{CONNECT_BOOKS_BODY}</p>
       <div className="connect-books-card__actions">

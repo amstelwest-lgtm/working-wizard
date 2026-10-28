@@ -8,12 +8,11 @@
  * closing. It does not read the bank-transaction list.
  */
 
-export const CONNECT_BOOKS_TITLE = "Connect Xero or QuickBooks";
-
-export const CONNECT_BOOKS_TITLE_WITH_SAGE = "Connect Xero, QuickBooks or Sage";
+/** The buttons name each ledger, so the heading does not list them. */
+export const CONNECT_BOOKS_TITLE = "Connect this client's books";
 
 export const CONNECT_BOOKS_BODY =
-  "Connect your client's books so Milōn can read their numbers. Read-only. Nothing is posted without your approval.";
+  "Milōn reads the figures straight from the ledger. Read-only. Nothing is posted without your approval.";
 
 export const QBO_CONNECT_SUBCOPY = "Connect QuickBooks Online to sync this client's books.";
 

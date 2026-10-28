@@ -286,7 +286,7 @@ function htmlHasStaleClient(html: string): boolean {
 const clientHome = (mode: SmokeMode): PageCase => ({
   label: `accountant home ${mode}`,
   mode,
-  url: mode === "loaded" ? `/clients/${SMOKE_CLIENT_ID}?tab=home` : `/clients/${SMOKE_CLIENT_ID}`,
+  url: mode === "loaded" ? `/clients/${SMOKE_CLIENT_ID}?tab=home&view=books` : `/clients/${SMOKE_CLIENT_ID}`,
   ready: (html) =>
     mode === "loading"
       ? html.includes("Checking this client.")
@@ -310,7 +310,7 @@ const clientHome = (mode: SmokeMode): PageCase => ({
         "home with no ledger shows the connect card",
       );
       assert(
-        html.includes("Connect Xero or QuickBooks") || html.includes("Connect Xero, QuickBooks or Sage"),
+        html.includes("Connect this client&#x27;s books") || html.includes("Connect this client's books"),
         "connect card titles the action",
       );
       assert(

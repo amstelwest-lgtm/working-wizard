@@ -1,0 +1,258 @@
+/* Accountant client Home, under the team cards. Same block menu and pane as the cash forecast. */
+.home-paged {
+  margin-top: 20px;
+}
+
+.home-menu__badge {
+  background: #eaf2ff;
+  color: #0b5fff;
+}
+
+/* Team progress: one row per piece of work. Three classes beat the owner-door table rules. */
+.home-log__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: #102a43;
+}
+
+.home-paged .home-log .home-log__table th {
+  padding: 0 12px 10px 0;
+  border-bottom: 1px solid #dbeafe;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+  vertical-align: bottom;
+  color: #486581;
+}
+
+.home-paged .home-log .home-log__table td {
+  padding: 12px 12px 12px 0;
+  border-bottom: 1px solid #eef4ff;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.home-paged .home-log .home-log__table .home-log__link {
+  padding-right: 0;
+  text-align: right;
+}
+
+.home-paged .home-log .home-log__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.home-log__date {
+  width: 1%;
+  white-space: nowrap;
+  color: #486581;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-log__who {
+  width: 1%;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.home-log__what {
+  font-weight: 500;
+}
+
+.home-log__next {
+  color: #486581;
+}
+
+.home-log__status {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #f4f8ff;
+  color: #486581;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.home-log__status[data-state="ready"] {
+  background: #eaf2ff;
+  color: #0b5fff;
+}
+
+.home-log__status[data-state="working"] {
+  background: #e0f4fd;
+  color: #102a43;
+}
+
+.home-log__status[data-state="approved"] {
+  background: #102a43;
+  color: #fff;
+}
+
+.home-log__link {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.home-log__link button,
+.home-log__all {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #0b5fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.home-log__link button:hover,
+.home-log__all:hover {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.home-log__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #dbeafe;
+  font-size: 13px;
+  color: #486581;
+}
+
+.home-log__empty {
+  margin: 0;
+  font-size: 14px;
+  color: #486581;
+}
+
+/* Books connection, once a ledger is on file. */
+.home-books {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.home-books__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-books__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #486581;
+}
+
+.home-books__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #102a43;
+}
+
+.home-books__detail {
+  font-size: 13px;
+  color: #486581;
+}
+
+.dark .home-log__table,
+[data-theme="dark"] .home-log__table,
+.dark .home-books__title,
+[data-theme="dark"] .home-books__title {
+  color: #f4f7fb;
+}
+
+.dark .home-paged .home-log .home-log__table th,
+[data-theme="dark"] .home-paged .home-log .home-log__table th,
+.dark .home-paged .home-log .home-log__table td,
+[data-theme="dark"] .home-paged .home-log .home-log__table td,
+.dark .home-log__foot,
+[data-theme="dark"] .home-log__foot {
+  border-color: #1e3a5f;
+}
+
+.dark .home-log__date,
+[data-theme="dark"] .home-log__date,
+.dark .home-log__next,
+[data-theme="dark"] .home-log__next,
+.dark .home-paged .home-log .home-log__table th,
+[data-theme="dark"] .home-paged .home-log .home-log__table th,
+.dark .home-books__label,
+[data-theme="dark"] .home-books__label,
+.dark .home-books__detail,
+[data-theme="dark"] .home-books__detail {
+  color: #9fb3c8;
+}
+
+.dark .home-log__status,
+[data-theme="dark"] .home-log__status {
+  background: #1e3a5f;
+  color: #9fb3c8;
+}
+
+.dark .home-log__status[data-state="ready"],
+[data-theme="dark"] .home-log__status[data-state="ready"],
+.dark .home-log__link button,
+[data-theme="dark"] .home-log__link button,
+.dark .home-log__all,
+[data-theme="dark"] .home-log__all {
+  color: #38bdf8;
+}
+
+@media (max-width: 720px) {
+  .home-log__table thead {
+    display: none;
+  }
+
+  .home-log__table,
+  .home-log__table tbody,
+  .home-log__table tr,
+  .home-log__table td {
+    display: block;
+    width: auto;
+  }
+
+  .home-log__table tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid #eef4ff;
+  }
+
+  .home-paged .home-log .home-log__table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .home-log__what {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  .home-log__who {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .home-log__next {
+    grid-column: 1 / 3;
+  }
+
+  .home-paged .home-log .home-log__table .home-log__link {
+    text-align: right;
+  }
+}

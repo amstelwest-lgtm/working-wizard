@@ -86,6 +86,15 @@ import {
 } from "@/lib/overview-moves-copy";
 import { ConnectBooksHomeCard } from "@/components/connect-books-card";
 import { connectBooksHomeVisible } from "@/lib/connect-books-copy";
+import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/financial-manager-brief";
+import { ClientHomePaged } from "@/components/client-home/client-home-paged";
+import { HomeBooks } from "@/components/client-home/home-books";
+import { HomeProgress } from "@/components/client-home/home-progress";
+import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
+import { homeAttentionItems } from "@/lib/home-attention";
+import { homePagedSearch, homePagedViewFromSearch } from "@/lib/home-paged-view";
+import { homeWorkLog, type WorkLogFinding } from "@/lib/home-work-log";
+import { formatMoney } from "@/lib/market/format";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { ownerPresence } from "@/lib/owner-presence";
@@ -467,21 +476,24 @@ function BriefingPane() {
       search: section ? { tab, section } : { tab },
     });
   };
-  const ledgerOn = new URLSearchParams(window.location.search).get("ledger") === "1";
+  const params = new URLSearchParams(window.location.search);
+  const ledgerOn = params.get("ledger") === "1";
+  const quiet = params.get("quiet") === "1";
+  const view = homePagedViewFromSearch(params.get("view"));
+  const booksMissing = connectBooksHomeVisible({ xero: ledgerOn ? { connected: true } : null, qbo: null, sage: null });
+  const brief = quiet ? HARNESS_QUIET_BRIEF : HARNESS_BRIEF;
+  const handoffs = quiet ? [] : HARNESS_HANDOFFS;
+  const work = homeWorkLog({ handoffs, findings: quiet ? [] : HARNESS_FINDINGS });
+  const attention = {
+    brief,
+    planHeading: "4 open, 1 overdue",
+    planMore: !quiet,
+    reportsLine: quiet ? null : "1 ready to send",
+    booksMissing,
+  };
   return (
     <div className="tabpane on" id="pane-overview">
       <div className="owner-door" data-client-home="true">
-        {connectBooksHomeVisible({
-          xero: ledgerOn ? { connected: true } : null,
-          qbo: null,
-          sage: null,
-        }) ? (
-          <ConnectBooksHomeCard
-            onXero={() => undefined}
-            onQuickBooks={() => undefined}
-            onSage={() => undefined}
-          />
-        ) : null}
         <OwnerHome
           title="Your whole finance team"
           variant="character"
@@ -494,27 +506,143 @@ function BriefingPane() {
           status={ownerCardStatuses(books)}
           onOpen={open}
           onAsk={open}
-          needs={{
-            actionsHeading: "Action plan",
-            actionLines: [HARNESS_STEP.title],
-            draftsHeading: "Drafts",
-            draftLines: ["No draft waiting."],
-            deliverablesHeading: "Reports",
-            deliverableLines: ["Nothing ready to send."],
-            syncHeading: "Books",
-            syncLines: ["No books connected."],
-          }}
-          onMoves={() => go("plan")}
-          onActions={() => go("plan")}
-          onDrafts={() => go("reports", "drafts")}
-          onDeliverables={() => go("reports")}
-          onBooks={() => go("portal")}
           signoffLine={signoffStatusLine({ kind: "draft", scopeLabel: "Advisory" })}
+        />
+        <ClientHomePaged
+          view={view}
+          onView={(next) =>
+            void navigate({
+              to: "/clients/$clientId",
+              params: { clientId: CLIENT_ID },
+              search: (prev) => homePagedSearch(prev, next),
+            })
+          }
+          attentionCount={homeAttentionItems(attention).length}
+          panes={{
+            attention: (
+              <FinancialManagerBrief
+                {...attention}
+                clientId={CLIENT_ID}
+                handoffs={handoffs}
+                onOpen={(tab) => (tab === "cash" ? go("cash", "forecast") : go(tab))}
+                onOpenDraft={() => go("reports", "drafts")}
+                onBooks={() =>
+                  void navigate({
+                    to: "/clients/$clientId",
+                    params: { clientId: CLIENT_ID },
+                    search: (prev) => homePagedSearch(prev, "books"),
+                  })
+                }
+              />
+            ),
+            progress: (
+              <HomeProgress
+                rows={work.rows}
+                more={work.more}
+                onOpenDraft={() => go("reports", "drafts")}
+                onOpenDrafts={() => go("reports", "drafts")}
+                onRetry={() => undefined}
+              />
+            ),
+            books: (
+              <HomeBooks
+                ledger={ledgerOn ? "Xero" : null}
+                syncLine={ledgerOn ? "Statements cover Oct 2025 – Sep 2026." : null}
+                onManage={() => go("portal", "connections")}
+                connect={
+                  <ConnectBooksHomeCard bare onXero={() => undefined} onQuickBooks={() => undefined} onSage={() => undefined} />
+                }
+              />
+            ),
+          }}
         />
       </div>
     </div>
   );
 }
+
+const HARNESS_DRAFT_EVIDENCE = { draft: true, requires_human_approval: true };
+
+const HARNESS_BRIEF = buildFinancialManagerBrief({
+  clientName: "Harbour Glass",
+  currentFinancials: { revenue: 420000, receivables: 118400 },
+  snapshots: [],
+  openActionTitles: ["Collect the Karoo Traders deposit", "File the VAT201 for September"],
+  overdueActions: 1,
+  receivables: 118400,
+  actionsReady: true,
+  draftsReady: true,
+  drafts: [
+    {
+      id: "draft-advisory",
+      title: "Debtor days moved from 38 to 52; collections are slowing.",
+      label: "Advisory",
+    },
+  ],
+  formatMoney: (amount) => formatMoney(amount, ZA_MARKET),
+});
+
+const HARNESS_QUIET_BRIEF = buildFinancialManagerBrief({
+  clientName: "Harbour Glass",
+  currentFinancials: { revenue: 420000 },
+  snapshots: [],
+  openActionTitles: [],
+  actionsReady: true,
+  draftsReady: true,
+  formatMoney: (amount) => formatMoney(amount, ZA_MARKET),
+});
+
+const HARNESS_HANDOFFS: HomeBriefHandoff[] = [
+  {
+    id: "act-deposit",
+    title: "Collect the Karoo Traders deposit",
+    assignee: "Analyst",
+    agent: "analyst",
+    run: { id: "run-deposit", agent: "analyst", status: "succeeded", at: "2026-10-26T09:12:00Z" },
+    draftId: "draft-deposit",
+    findingsReady: true,
+  },
+  {
+    id: "act-vat",
+    title: "File the VAT201 for September",
+    assignee: "Advisor",
+    agent: "advisor",
+    run: { id: "run-vat", agent: "advisor", status: "running", at: "2026-10-28T07:40:00Z" },
+    findingsReady: true,
+  },
+  {
+    id: "act-loan",
+    title: "Reconcile the vehicle loan",
+    assignee: "Thandi Mokoena",
+    openedAt: "2026-10-23T11:00:00Z",
+  },
+];
+
+const HARNESS_FINDINGS: WorkLogFinding[] = [
+  {
+    id: "draft-deposit",
+    agent: "analyst",
+    kind: "action_point_draft",
+    evidence: HARNESS_DRAFT_EVIDENCE,
+    created_at: "2026-10-26T09:12:00Z",
+  },
+  {
+    id: "draft-advisory",
+    agent: "advisor",
+    kind: "advisory_deliverable_draft",
+    evidence: HARNESS_DRAFT_EVIDENCE,
+    created_at: "2026-10-27T15:30:00Z",
+  },
+  {
+    id: "draft-request",
+    agent: "financial_manager",
+    kind: "data_request_draft",
+    evidence: HARNESS_DRAFT_EVIDENCE,
+    created_at: "2026-10-19T08:00:00Z",
+    status: "approved",
+    approved_at: "2026-10-20T10:05:00Z",
+  },
+];
 
 const HARNESS_FINANCIALS = {
   cash: "186000",

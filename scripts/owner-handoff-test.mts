@@ -466,6 +466,6 @@ const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
 assert(clientPage.includes("pendingHandoffs") && door.includes("pendingHandoffs"), "both Homes keep a hand-off per action");
 assert(clientPage.includes("runId") && door.includes("runId"), "both Homes track the run id");
 assert(door.includes("data-handoff-error") || readFileSync("src/components/owner-door/owner-home.tsx", "utf8").includes("data-handoff-error"), "owner Home shows the hand-off error");
-assert(readFileSync("src/components/financial-manager-brief.tsx", "utf8").includes("error={item.error}"), "accountant Home shows the hand-off error");
+assert(readFileSync("src/components/financial-manager-brief.tsx", "utf8").includes("error={handoff.error}"), "accountant Home shows the hand-off error");
 
 console.log("owner-handoff ok");

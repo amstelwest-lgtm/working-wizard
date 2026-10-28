@@ -217,13 +217,15 @@ assert(empty.draftEmpty === "No draft is waiting for review.", empty.draftEmpty 
 
 const src = readFileSync(resolve("src/components/financial-manager-brief.tsx"), "utf8");
 const briefCss = readFileSync(resolve("src/components/financial-manager-brief.css"), "utf8");
-assert(briefCss.includes(".fm-brief-actions li div span"), "the reason colour does not paint the Hand to name");
+assert(briefCss.includes(".home-attn__detail"), "the reason line has its own muted style");
 assert(briefCss.includes(".hand-to-assignee"), "the assignee name on the button stays readable");
-assert(src.includes("<HandToMenu"), "Act on these hands off through the shared menu");
+assert(src.includes("<HandToMenu"), "Needs attention hands off through the shared menu");
 assert(src.includes("commitActionHandoff"), "Hand to writes the assignment");
 assert(src.includes("toast.success"), "an accountant assign toasts");
-assert(src.includes("data-assignment-note") || src.includes("<AssignmentNotes"), "Act on these shows the latest note");
-assert(src.includes("HandoffRunStatus"), "Act on these shows Working and the slow retry");
+assert(!src.includes("<AssignmentNotes"), "Needs attention does not repeat the hand-off notes");
+assert(src.includes("HandoffRunStatus"), "Needs attention shows Working and the slow retry");
+assert(src.includes("showTimeline={false}"), "the run step list stays off Home");
+assert(!src.includes("What changed"), "Home drops the movement paragraph");
 const runStatus = readFileSync(resolve("src/components/handoff-run-status.tsx"), "utf8");
 assert(runStatus.includes("data-agent-pickup"), "a finished run names itself on the row");
 assert(runStatus.includes("Taking longer than usual ·"), "a slow run offers retry");
@@ -236,6 +238,13 @@ assert(!/supabase|sendEmail|mailto/i.test(src), "the brief does not send");
 
 const page = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(page.includes("<FinancialManagerBrief"), "client Home renders the brief");
+const homePane = page.slice(page.indexOf('id="pane-overview"'), page.indexOf('id="pane-summary"'));
+assert(
+  homePane.indexOf("<OwnerHome") >= 0 && homePane.indexOf("<OwnerHome") < homePane.indexOf("<ClientHomePaged"),
+  "the team cards come before the Home menu",
+);
+assert(!homePane.includes("needs={homeNeeds}"), "accountant Home drops the What needs you strip");
+assert(homePane.includes("attention: (") && homePane.includes("progress: (") && homePane.includes("books: ("), "three panes");
 assert(page.includes("handoffs={shownHandoffs}"), "Act on these uses the open action rows");
 assert(page.includes("openPlanHandoffs.map"), "the shown rows start from the stored actions");
 assert(

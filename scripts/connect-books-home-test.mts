@@ -7,7 +7,7 @@ import { Window } from "happy-dom";
 import { beginLedgerConnect } from "../src/lib/connect-books-start.ts";
 import {
   CONNECT_BOOKS_BODY,
-  CONNECT_BOOKS_TITLE_WITH_SAGE,
+  CONNECT_BOOKS_TITLE,
   connectBooksHomeVisible,
 } from "../src/lib/connect-books-copy.ts";
 
@@ -80,8 +80,8 @@ const none = await paint({ xero: null, qbo: null, sage: null });
 const open = none.host.querySelector('[data-connect-books="home"]');
 assert(Boolean(open), "no ledger shows the card on Home");
 assert(
-  none.host.innerHTML.includes(CONNECT_BOOKS_TITLE_WITH_SAGE),
-  "card title names Xero, QuickBooks and Sage",
+  none.host.innerHTML.includes(CONNECT_BOOKS_TITLE) && !CONNECT_BOOKS_TITLE.includes("Xero"),
+  "card title is about the books, and the buttons name each ledger",
 );
 assert(none.host.innerHTML.includes(CONNECT_BOOKS_BODY), "card uses the read-only approval copy");
 assert(

@@ -121,9 +121,9 @@ if (recorded.ok) {
 }
 
 const ownerHome = readFileSync(resolve("src/components/owner-door/owner-home.tsx"), "utf8");
-const accountantBrief = readFileSync(resolve("src/components/financial-manager-brief.tsx"), "utf8");
+const accountantAttention = readFileSync(resolve("src/lib/home-attention.ts"), "utf8");
 assert(ownerHome.includes("DRAFT_OUT_OF_DATE"), "the owner home shows the out-of-date state");
-assert(accountantBrief.includes("DRAFT_OUT_OF_DATE"), "Drafts ready to review shows the out-of-date state");
+assert(accountantAttention.includes("DRAFT_OUT_OF_DATE"), "a draft on Needs attention shows the out-of-date state");
 
 const handoffCopy =
   "Hand-off: Move fixed contracts to variable / usage-based pricing. Cash is 12 and health is 40.";
