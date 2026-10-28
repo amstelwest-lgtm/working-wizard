@@ -581,6 +581,14 @@ html:not(.dark) [data-sonner-toast][data-type="error"][class*="rounded-"][class*
   color: #ffffff !important;
   border-color: #7f1d1d !important;
 }
+/* A ticked checkbox keeps its cobalt fill so the white tick shows. The
+   rounded-bordered rule above would paint it white and hide the tick. */
+html:not(.dark) button[role="checkbox"][data-state="checked"],
+html:not(.dark) button[role="checkbox"][data-state="indeterminate"] {
+  background-color: #0b5fff !important;
+  border-color: #0b5fff !important;
+  color: #ffffff !important;
+}
 html:not(.dark) [data-sonner-toast][data-type="success"] [data-title],
 html:not(.dark) [data-sonner-toast][data-type="success"] [data-description],
 html:not(.dark) [data-sonner-toast][data-type="error"] [data-title],
