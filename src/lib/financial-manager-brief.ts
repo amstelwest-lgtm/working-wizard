@@ -65,6 +65,8 @@ export type BriefAction = {
 export type BriefDraft = {
   id: string;
   title: string;
+  /** Draft kind, e.g. "Advisory". Home names the document with it. */
+  label?: string | null;
   /** Stored body. Grounded with the title when the screen re-reads live figures. */
   detail?: string | null;
   /** Hash written with the draft. A mismatch with the live books is out of date. */
@@ -412,6 +414,7 @@ export function buildFinancialManagerBrief(input: {
     return [{
       id: row.id,
       title: text,
+      label: row.label ?? null,
       refresh,
       liveSentence: presented.regenerate && input.healthSnapshot ? renderHealthNarrative(input.healthSnapshot) : null,
     }];

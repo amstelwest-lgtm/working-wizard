@@ -45,6 +45,7 @@ export function HandoffRunStatus({
   onRetry,
   actionItemId = null,
   onReassign,
+  showTimeline = true,
 }: {
   run?: { id?: string; agent?: string; status: string; at?: string | null } | null;
   caption?: string | null;
@@ -59,6 +60,8 @@ export function HandoffRunStatus({
   /** Reads the paused marker this device wrote when the runner was off. */
   actionItemId?: string | null;
   onReassign?: () => void;
+  /** Off on client Home. The run steps stay on the action plan. */
+  showTimeline?: boolean;
 }) {
   const active = !error && !missed && (run?.status === "queued" || run?.status === "running");
   const stopped = Boolean(
@@ -83,7 +86,7 @@ export function HandoffRunStatus({
   const runId = run?.id?.trim() ?? "";
   const runAgent = shortName(run?.agent);
   const timeline =
-    runId && runAgent && !pausedName ? (
+    showTimeline && runId && runAgent && !pausedName ? (
       <Suspense fallback={null}>
         <HandoffRunTimeline runId={runId} agentName={runAgent} onOpenDraft={onOpenDraft} />
       </Suspense>
