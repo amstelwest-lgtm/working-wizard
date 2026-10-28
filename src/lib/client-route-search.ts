@@ -19,6 +19,7 @@
  * `onboard`, `report`, `action`, …) are preserved by the route parser.
  * An Action Plan `filter` sticks only while the tab is `plan`.
  */
+import { isHomePagedView } from "./home-paged-view.ts";
 
 export const CLIENT_RAIL_TABS = [
   "home",
@@ -541,6 +542,8 @@ export function accountantClientTabSearch<T extends object>(
     delete next.report;
     delete next.action;
   }
+  // A Home pane (`view=progress`) would otherwise ride along to the next page.
+  if (canonical.tab !== "home" && isHomePagedView(next.view)) delete next.view;
   delete next.agent;
   return next as T;
 }
@@ -857,7 +860,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   action?: "preview" | "download";
   agent?: string;
   profile?: number;
-  view?: "chart" | "table" | "13week" | "setup" | "audit" | "scenario";
+  view?: "chart" | "table" | "13week" | "setup" | "audit" | "scenario" | "progress" | "books";
   invite?: "owner";
   draft?: string;
 } {
@@ -878,7 +881,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     action?: "preview" | "download";
     agent?: string;
     profile?: number;
-    view?: "chart" | "table" | "13week" | "setup" | "audit" | "scenario";
+    view?: "chart" | "table" | "13week" | "setup" | "audit" | "scenario" | "progress" | "books";
     invite?: "owner";
     draft?: string;
   } = {};
@@ -912,6 +915,9 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
       out.view = "setup";
       if (!out.section) out.section = "year";
     }
+  }
+  if ((!out.tab || out.tab === "home") && (search.view === "progress" || search.view === "books")) {
+    out.view = search.view;
   }
   if (search.invite === "owner" && out.tab === "settings") out.invite = "owner";
   return out;
