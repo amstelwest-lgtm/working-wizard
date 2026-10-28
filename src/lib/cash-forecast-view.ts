@@ -32,6 +32,20 @@ export function cashForecastSearchWithView(
   return next;
 }
 
+export type CashStackedLens = "chart" | "table";
+
+/**
+ * Chart | 13-week header. One Enlarge, for the lens on screen.
+ * The chart control stays off until a forecast line and an opening exist.
+ */
+export function cashStackedEnlargeTarget(
+  lens: CashStackedLens,
+  chartReady: boolean,
+): "chart" | "table" | null {
+  if (lens === "table") return "table";
+  return chartReady ? "chart" : null;
+}
+
 /** Tile copy for weeks under the floor. The runway readout stays off this tile. */
 export function weeksBelowFloorCopy(input: {
   empty: boolean;

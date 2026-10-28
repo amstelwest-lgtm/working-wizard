@@ -500,14 +500,17 @@ assert(
   boardsHtml.includes("Show figures as amounts or as percentages of revenue"),
   "the toggle is the owner profit control",
 );
-assert(boardsHtml.includes("Enlarge cash flow graph"), "cash chip keeps the graph enlarge control");
+assert(
+  boardsHtml.includes("Enlarge cash flow graph"),
+  "chart lens keeps the graph enlarge control",
+);
 assert(
   boardsHtml.includes('aria-label="Enlarge cash flow graph"'),
   "the shared forecast still has its graph enlarge control",
 );
 assert(
-  boardsHtml.includes('aria-label="Enlarge cash flow table"'),
-  "the shared forecast still has its table enlarge control",
+  !boardsHtml.includes('aria-label="Enlarge cash flow table"'),
+  "chart lens does not also show the table enlarge",
 );
 const tryStyles = readFileSync(join(resolve("."), "src/styles/try.css"), "utf8");
 assert(
@@ -629,6 +632,12 @@ assert(
   "the advisory pack names the sample company",
 );
 assert(advisoryTalk.includes("Advisory pack"), "the advisory pack has its title");
+assert(advisoryTalk.includes("Download PDF"), "the advisory pack offers a PDF download");
+assert(
+  advisoryTalk.includes('aria-label="Download sample advisory pack"'),
+  "the download names the sample pack",
+);
+assert(!advisoryTalk.includes("Coming soon"), "the advisory pack does not say coming soon");
 assert(advisoryTalk.includes("Sign off"), "the advisory pack has a Sign off button");
 assert(advisoryTalk.includes("try-signoff-arrow"), "a hand-drawn arrow points at Sign off");
 assert(
@@ -964,5 +973,78 @@ for (const ch of "Sam QAAMste") {
 await act(async () => {
   gateRoot.unmount();
 });
+
+const chipSrc = readFileSync(resolve("src/lib/trial-demo.functions.ts"), "utf8");
+assert(!chipSrc.includes("Coming soon"), "the sample chip handler does not say coming soon");
+assert(chipSrc.includes('chip === "advisory"'), "the advisory chip is a real sample pack");
+
+const packNow = new Date("2026-10-14T00:00:00Z");
+const { trialSamplePackPdfInput } = await import("../src/lib/trial-sample-pack-pdf");
+const pdfInput = trialSamplePackPdfInput(us, { now: packNow });
+const packReading = trialReading(us, packNow);
+assert(pdfInput.filename.endsWith(".pdf"), "the sample pack downloads as a pdf");
+assert(pdfInput.clientName.includes("Harbor"), "the pdf names the sample company");
+assert(
+  pdfInput.sections.some((section) => section.title === "Cash"),
+  "the pdf includes cash",
+);
+assert(
+  pdfInput.sections.some((section) => section.body.includes(packReading.cashOpening)),
+  "cash opening matches the demo",
+);
+assert(
+  pdfInput.sections.some((section) =>
+    (section.bullets ?? []).some((bullet) => bullet.includes(packReading.grossMargin)),
+  ),
+  "gross margin matches the demo",
+);
+assert(
+  pdfInput.sections.some((section) => section.title === "Moves"),
+  "the pdf includes the next moves",
+);
+assert(
+  !pdfInput.disclosure.toLowerCase().includes("coming soon"),
+  "the disclosure is a real sentence",
+);
+assert(
+  pdfInput.period.includes(String(Math.round(us.health.score!))),
+  "the pdf period carries the health score",
+);
+
+const { renderToBuffer } = await import("@react-pdf/renderer");
+const { AdvisoryPackPDF } = await import("../src/reports/advisory-pack");
+const { extractText, getDocumentProxy } = await import("unpdf");
+const pdfBuf = await renderToBuffer(
+  createElement(AdvisoryPackPDF, {
+    smeData: { name: pdfInput.clientName, period: pdfInput.period },
+    accountantProfile: pdfInput.profile,
+    sections: pdfInput.sections,
+    draftDisclosure: pdfInput.disclosure,
+    sample: true,
+    market: pdfInput.market,
+  }),
+);
+assert(pdfBuf.length > 1000, "the sample advisory pdf rendered");
+const pdfDoc = await getDocumentProxy(new Uint8Array(pdfBuf));
+let pdfText = "";
+try {
+  const extracted = await extractText(pdfDoc, { mergePages: true });
+  pdfText = Array.isArray(extracted.text)
+    ? extracted.text.join("\n")
+    : String(extracted.text ?? "");
+} finally {
+  await pdfDoc.destroy();
+}
+assert(pdfText.includes("Harbor"), "the pdf bytes name the sample company");
+assert(pdfText.includes(packReading.cashOpening), "the pdf bytes include opening cash");
+assert(pdfText.includes(packReading.cashLow), "the pdf bytes include the cash low");
+assert(pdfText.includes(packReading.grossMargin), "the pdf bytes include gross margin");
+assert(/cut or reprice one operating cost/i.test(pdfText), "the pdf bytes include a next move");
+assert(pdfText.includes("SAMPLE"), "the pdf is stamped SAMPLE");
+assert(!/coming soon/i.test(pdfText), "the pdf does not say coming soon");
+assert(
+  !pdfText.includes("Draft for accountant review"),
+  "the sample pdf is not an accountant draft",
+);
 
 console.log(`trial-demo: ok (${seen.size} files in the try graph)`);

@@ -249,8 +249,9 @@ assert(simplified.includes("{kpiTiles}"), "owner KPIs move into More detail");
 assert(simplified.includes("{readOnly ? null : reviewInputs}"), "owner inputs move into More detail");
 assert(cash.includes("data-cash-period"), "the forecast period stays on the card");
 assert(cash.includes("data-cash-roll"), "the rolled-forward line stays on the card");
-assert(cash.includes('label="cash flow graph"'), "the graph enlarge button stays");
-assert(cash.includes('label="cash flow table"'), "the table enlarge button stays");
+assert(cash.includes('"cash flow graph"'), "the graph enlarge button stays");
+assert(cash.includes('"cash flow table"'), "the table enlarge button stays");
+assert(cash.includes("cashStackedEnlargeTarget"), "one enlarge follows the chart or 13-week lens");
 assert(cash.indexOf("data-cash-period") < cash.indexOf('aria-label="Graph"'), "the period is above the graph");
 assert(cash.includes("simplified ? null : kpiTiles"), "the owner graph does not keep the KPI row");
 

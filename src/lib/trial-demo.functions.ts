@@ -56,6 +56,7 @@ import {
   type TrialMarketId,
   type TrialProfit,
 } from "@/lib/trial-demo";
+import { buildSampleAdvisoryPack } from "@/lib/trial-sample-pack";
 
 type SessionRow = {
   id: string;
@@ -609,8 +610,14 @@ export const runTrialChip = createServerFn({ method: "POST" })
     if (!storeReady())
       return { ok: false as const, error: "The sample isn't available right now." };
     const chip = data.chip;
+    if (chip === "advisory") {
+      const session = await requireSession();
+      if (!session) return { ok: false as const, error: "Start again with Use sample." };
+      const board = buildTrialBoard(session.country);
+      return { ok: true as const, chip, pack: buildSampleAdvisoryPack(board) };
+    }
     if (chip !== "profit" && chip !== "cash") {
-      return { ok: false as const, error: "Coming soon." };
+      return { ok: false as const, error: "That sample isn't available." };
     }
     const session = await requireSession();
     if (!session) return { ok: false as const, error: "Start again with Use sample." };
