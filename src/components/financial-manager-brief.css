@@ -81,6 +81,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 140px;
   min-height: 36px;
   padding: 0 14px;
   border: 1px solid #0b5fff;
@@ -146,6 +147,23 @@
 .dark .home-attn__empty,
 [data-theme="dark"] .home-attn__empty {
   color: #9fb3c8;
+}
+
+.dark .home-attn [data-handoff-working],
+[data-theme="dark"] .home-attn [data-handoff-working],
+.dark .home-attn [data-handoff-slow],
+[data-theme="dark"] .home-attn [data-handoff-slow],
+.dark .home-attn [data-handoff-slow] button,
+[data-theme="dark"] .home-attn [data-handoff-slow] button,
+.dark .home-attn [data-handoff-error],
+[data-theme="dark"] .home-attn [data-handoff-error],
+.dark .home-attn [data-handoff-error] button,
+[data-theme="dark"] .home-attn [data-handoff-error] button,
+.dark .home-attn [data-handoff-stopped],
+[data-theme="dark"] .home-attn [data-handoff-stopped],
+.dark .home-attn [data-handoff-stopped] button,
+[data-theme="dark"] .home-attn [data-handoff-stopped] button {
+  color: #38bdf8;
 }
 
 .dark .home-attn__chip,
