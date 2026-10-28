@@ -165,7 +165,11 @@ const clientRoute = createRoute({
         search.planView === "empty" || search.planView === "signed" ? search.planView : undefined,
       drafterView: search.drafterView === "sent" ? "sent" : undefined,
       view:
-        search.view === "table" || search.view === "13week" || search.view === "chart"
+        search.view === "table" ||
+        search.view === "13week" ||
+        search.view === "chart" ||
+        search.view === "progress" ||
+        search.view === "books"
           ? search.view
           : undefined,
     };

@@ -319,9 +319,16 @@ import { ClientAgentStandby } from "@/components/client-agent-standby";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { AgentDraftShelf } from "@/components/agent-draft-shelf";
 import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/financial-manager-brief";
+import { retryHomeHandoff } from "@/components/client-home/retry-handoff";
+import { ClientHomePaged } from "@/components/client-home/client-home-paged";
+import { HomeBooks } from "@/components/client-home/home-books";
+import { HomeProgress } from "@/components/client-home/home-progress";
+import { homeAttentionItems } from "@/lib/home-attention";
+import { homePagedSearch, homePagedViewFromSearch, type HomePagedView } from "@/lib/home-paged-view";
+import { homeWorkLog } from "@/lib/home-work-log";
 import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
-import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
+import { DRAFT_NEEDS_ACCOUNTANT, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
 import { findingForAction } from "@/lib/action-handoff";
 import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
@@ -3915,6 +3922,7 @@ function ClientView() {
           return [{
             id: row.id,
             title,
+            label: draftFindingKindLabel(row),
             detail: row.detail,
             figuresHash: draftStoredFiguresHash(row.evidence),
             storedHealth: draftStoredHealth(row.evidence),
@@ -3960,6 +3968,33 @@ function ClientView() {
       gateMarket,
     ],
   );
+  const homeView = homePagedViewFromSearch(search.view);
+  const selectHomeView = useCallback(
+    (next: HomePagedView) => {
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => homePagedSearch(prev, next),
+      });
+    },
+    [clientId, navigate],
+  );
+  const homeWork = useMemo(
+    () => homeWorkLog({ handoffs: shownHandoffs, findings: homeActivity.findings }),
+    [shownHandoffs, homeActivity.findings],
+  );
+  const homeBooksMissing = connectBooksHomeVisible({ xero: xeroLink, qbo: qboLink, sage: sageLink });
+  const homeLedger = qboLink ? "QuickBooks" : xeroLink ? "Xero" : sageLink ? "Sage" : null;
+  const homePlanMore =
+    openPlanOverdue > 0 ||
+    (openPlanTitles?.length ?? 0) > homeBrief.actions.filter((action) => action.button === "hand").length;
+  const homeAttentionCount = homeAttentionItems({
+    brief: homeBrief,
+    planHeading: homeNeeds.actionsHeading,
+    planMore: homePlanMore,
+    reportsLine,
+    booksMissing: homeBooksMissing,
+  }).length;
   const financialsHomeLine = financialsHomeSignoffLine(
     financialsSignoff
       ? [
@@ -4193,28 +4228,6 @@ function ClientView() {
                   id="pane-overview"
                 >
                 <div className="owner-door" data-client-home="true">
-                  {statementSampleImplausible(financials) ? (
-                    <p className="mb-4 text-sm text-[#3D5270] dark:text-slate-300" role="status" data-sample-notice="">
-                      {implausibleSampleNote(clientMarket)}
-                    </p>
-                  ) : null}
-                  {connectBooksHomeVisible({ xero: xeroLink, qbo: qboLink, sage: sageLink }) ? (
-                    <ConnectBooksHomeCard
-                      busy={ledgerConnect.busy}
-                      showSage={!isUsCopy(gateMarket)}
-                      onXero={ledgerConnect.startXero}
-                      onQuickBooks={ledgerConnect.startQuickBooks}
-                      onSage={() => setShowSageDialog(true)}
-                    />
-                  ) : null}
-                  <FinancialManagerBrief
-                    brief={homeBrief}
-                    clientId={clientId}
-                    handoffs={shownHandoffs}
-                    audience="accountant"
-                    onOpen={(tab) => openHomeSection(tab)}
-                    onOpenDraft={(id) => openDraft(id)}
-                  />
                   <OwnerHome
                     title="Your whole finance team"
                     variant="character"
@@ -4224,18 +4237,62 @@ function ClientView() {
                     sampleClient={Boolean(client.is_demo)}
                     cardPhase="ready"
                     firmId={client.firm_id ?? null}
+                    notice={statementSampleImplausible(financials) ? implausibleSampleNote(clientMarket) : null}
                     presence={homePresence}
                     lines={homeLines}
                     status={homeStatus}
                     onOpen={openHomeAgent}
                     onAsk={openHomeAgent}
-                    needs={homeNeeds}
-                    onMoves={() => openHomeSection("plan")}
-                    onActions={() => openHomeSection("plan")}
-                    onDrafts={() => openDraft(homeNeeds.draftId)}
-                    onDeliverables={() => openHomeSection("reports")}
-                    onBooks={() => openHomeSection("portal")}
                     signoffLine={homeSignoffLine}
+                  />
+                  <ClientHomePaged
+                    view={homeView}
+                    onView={selectHomeView}
+                    attentionCount={homeAttentionCount}
+                    panes={{
+                      attention: (
+                        <FinancialManagerBrief
+                          brief={homeBrief}
+                          clientId={clientId}
+                          handoffs={shownHandoffs}
+                          audience="accountant"
+                          onOpen={(tab) => (tab === "cash" ? openHomeSection("cash", "forecast") : openHomeSection(tab))}
+                          onOpenDraft={(id) => openDraft(id)}
+                          planHeading={homeNeeds.actionsHeading}
+                          planMore={homePlanMore}
+                          reportsLine={reportsLine}
+                          booksMissing={homeBooksMissing}
+                          onBooks={() => selectHomeView("books")}
+                        />
+                      ),
+                      progress: (
+                        <HomeProgress
+                          rows={homeWork.rows}
+                          more={homeWork.more}
+                          loading={homeActivity.loading}
+                          onOpenDraft={(id) => openDraft(id)}
+                          onOpenDrafts={() => openDraft(null)}
+                          onRetry={(retry) => retryHomeHandoff({ clientId, ...retry })}
+                        />
+                      ),
+                      books: (
+                        <HomeBooks
+                          ledger={homeLedger}
+                          syncLine={homeNeeds.syncLines[0] ?? null}
+                          onManage={() => openHomeSection("portal", "connections")}
+                          connect={
+                            <ConnectBooksHomeCard
+                              bare
+                              busy={ledgerConnect.busy}
+                              showSage={!isUsCopy(gateMarket)}
+                              onXero={ledgerConnect.startXero}
+                              onQuickBooks={ledgerConnect.startQuickBooks}
+                              onSage={() => setShowSageDialog(true)}
+                            />
+                          }
+                        />
+                      ),
+                    }}
                   />
                 </div>
                 <div hidden>
