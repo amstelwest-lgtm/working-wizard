@@ -7,7 +7,8 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { agentTurnMessages, decisionFromClaude, runAgentLoop } from "./loop.ts";
 import { callClaudeRound } from "./claude.ts";
-import { CLAUDE_MODEL } from "../claude-model.ts";
+import { edgeModelForAgent } from "../claude-model.ts";
+import { assistantContentForModel } from "../../../../src/lib/claude-request.ts";
 import {
   agentCopyStatus,
   attachCitedEvidence,
@@ -76,6 +77,11 @@ export type QueueJobConfig = {
   fallbackDraftKind: string;
   /** Do not start a call whose proxy cost would take the run over this. */
   costCeilingUsd: number;
+  /**
+   * Messages API model for this run. The Financial Manager passes Opus 5.5.
+   * The Advisor passes the global Sonnet default. Omitted uses edgeModelForAgent.
+   */
+  model?: string;
   runOutcome: (input: {
     stopReason: string;
     steps: Array<{ tool: string | null; status: string }>;
@@ -352,6 +358,7 @@ export async function runQueueJob(
   let lastCacheWriteTokens = 0;
   let lastCacheReadTokens = 0;
   let roundStopReason = "";
+  const model = config.model ?? edgeModelForAgent(config.agent);
 
   try {
     const result = await runAgentLoop({
@@ -366,13 +373,13 @@ export async function runQueueJob(
       reason: async (ctx) => {
         const drafted = runnerEarlyFinish(recordedKeys.size);
         if (drafted) return { kind: "stop", reason: drafted.reason, summary: drafted.summary };
-        const spent = analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, CLAUDE_MODEL);
+        const spent = analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, model);
         const lastCall = analystRunCostUsd(
           lastInputTokens,
           lastOutputTokens,
           lastCacheWriteTokens,
           lastCacheReadTokens,
-          CLAUDE_MODEL,
+          model,
         );
         if (runnerNextCallExceedsCeiling({ spentUsd: spent, lastCallUsd: lastCall, ceilingUsd: config.costCeilingUsd })) {
           return {
@@ -391,6 +398,7 @@ export async function runQueueJob(
           agentTurnMessages(ctx),
           config.toolSchemas(),
           {
+            model,
             toolChoice: { type: "auto" },
             maxTokens: RUNNER_MAX_OUTPUT_TOKENS,
             cachePrompt: true,
@@ -405,7 +413,12 @@ export async function runQueueJob(
         cacheWriteTokens += round.cacheCreationTokens;
         cacheReadTokens += round.cacheReadTokens;
         roundStopReason = round.stopReason;
-        return decisionFromClaude({ text: round.text, toolUses: round.toolUses });
+        const decision = decisionFromClaude({ text: round.text, toolUses: round.toolUses });
+        const assistantContent = assistantContentForModel(model, round.contentBlocks);
+        if ((decision.kind === "tool" || decision.kind === "tools") && assistantContent) {
+          return { ...decision, assistantContent };
+        }
+        return decision;
       },
       execute: async (name, args) => {
         if (recordDraftWasCutOff({ stopReason: roundStopReason, name, args })) {
@@ -460,7 +473,7 @@ export async function runQueueJob(
         output_tokens: outputTokens,
         cache_write_tokens: cacheWriteTokens,
         cache_read_tokens: cacheReadTokens,
-        cost_usd: analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, CLAUDE_MODEL),
+        cost_usd: analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, model),
         latency_ms: Date.now() - started,
         trace: result.trace,
         finished_at: new Date().toISOString(),

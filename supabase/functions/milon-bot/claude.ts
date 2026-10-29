@@ -35,6 +35,8 @@ export type ClaudeRound = {
   cacheCreationTokens: number;
   cacheReadTokens: number;
   latencyMs: number;
+  /** Assistant content as returned, so an Opus tool turn can echo thinking blocks. */
+  contentBlocks: Array<Record<string, unknown>>;
 };
 
 export async function callClaudeRound(
@@ -47,6 +49,11 @@ export async function callClaudeRound(
     toolChoice?: { type: "auto" | "any" } | { type: "tool"; name: string };
     /** Agent runs set this. Milonbot omits it, so its request is unchanged. */
     cachePrompt?: boolean;
+    /**
+     * Per-call model. Omitted calls use CLAUDE_MODEL (Sonnet 5.5 unless that
+     * env is set). The Financial Manager passes Opus 5.5.
+     */
+    model?: string;
   },
 ): Promise<ClaudeRound> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -56,6 +63,7 @@ export async function callClaudeRound(
     );
   }
 
+  const model = opts?.model || CLAUDE_MODEL;
   const shaped = shapeCachedModelRequest({
     system,
     tools,
@@ -70,13 +78,13 @@ export async function callClaudeRound(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
+      model,
       system: shaped.system,
       messages,
       tools: shaped.tools,
       max_tokens: opts?.maxTokens ?? 1024,
       ...claudeRequestFields({
-        model: CLAUDE_MODEL,
+        model,
         temperature: opts?.temperature ?? 0.2,
         toolChoice: opts?.toolChoice,
       }),
@@ -90,7 +98,9 @@ export async function callClaudeRound(
   }
 
   const json = await res.json();
-  const blocks = (json?.content ?? []) as Array<Record<string, unknown>>;
+  const blocks = (Array.isArray(json?.content) ? json.content : []) as Array<
+    Record<string, unknown>
+  >;
   const text = blocks
     .filter((b) => b?.type === "text")
     .map((b) => String(b.text ?? ""))
@@ -117,5 +127,6 @@ export async function callClaudeRound(
     cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
     cacheReadTokens: usage.cache_read_input_tokens ?? 0,
     latencyMs: Date.now() - t0,
+    contentBlocks: blocks,
   };
 }

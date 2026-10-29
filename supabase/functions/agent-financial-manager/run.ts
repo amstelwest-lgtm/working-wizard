@@ -4,7 +4,12 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runQueueJob, type RunnerJob } from "../_shared/agent-core/job.ts";
-import { FINANCIAL_MANAGER_SYSTEM, financialManagerToolSchemas } from "../_shared/agent-prompts/financial-manager.ts";
+import { CLAUDE_MODEL, CLAUDE_MODEL_FM } from "../_shared/claude-model.ts";
+import {
+  FINANCIAL_MANAGER_SYSTEM,
+  financialManagerToolSchemas,
+} from "../_shared/agent-prompts/financial-manager.ts";
+import { CLAUDE_OPUS_55, modelForAgent } from "../../../src/lib/claude-request.ts";
 import {
   FM_COST_CEILING_USD,
   FM_DRAFT_KINDS,
@@ -33,6 +38,13 @@ export function runFinancialManagerJob(db: SupabaseClient, job: RunnerJob) {
     writeTools: FM_WRITE_TOOLS,
     fallbackDraftKind: FM_DRAFT_KINDS[0],
     costCeilingUsd: FM_COST_CEILING_USD,
+    // claude-opus-5-5. CLAUDE_MODEL does not select this agent. Opus list
+    // rates are about double Sonnet 5.5, and adaptive thinking is billed as
+    // output, so the unchanged $0.06 ceiling can stop a run sooner.
+    model: modelForAgent("financial_manager", {
+      standard: CLAUDE_MODEL,
+      financialManager: CLAUDE_MODEL_FM || CLAUDE_OPUS_55,
+    }),
     runOutcome: fmRunOutcome,
     execute: executeFinancialManagerTool,
   });
