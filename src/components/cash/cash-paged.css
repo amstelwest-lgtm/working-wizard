@@ -783,3 +783,13 @@ html:not(.dark) .cash-paged [class*="bg-white/80"] {
 .cash-paged [data-deliverable-input-config] [class*="rounded-full"] {
   border-radius: 6px;
 }
+
+/* 13-week hover card is always dark navy (owner stacked and accountant paged
+   share heroChart). Recharts paints each row with the series color. Weekly net
+   bars have no solid fill, so that row falls back to #000. Brand navy
+   (#102a43) is for the light canvas. !important beats the inline series color. */
+.cash-chart-tooltip .recharts-tooltip-label,
+.cash-chart-tooltip .recharts-tooltip-item {
+  color: #f4f7fb !important;
+}
+

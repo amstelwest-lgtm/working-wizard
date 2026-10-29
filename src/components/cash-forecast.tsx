@@ -2159,14 +2159,16 @@ export function CashForecastPanel({
                 }
               />
               <Tooltip
+                wrapperClassName="cash-chart-tooltip"
                 contentStyle={{
                   background: "rgba(17,24,39,0.95)",
                   border: "1px solid rgba(212,165,80,0.4)",
                   borderRadius: 10,
                   fontSize: 12,
-                  color: "#f1f5f9",
+                  color: "#F4F7FB",
                 }}
-                labelStyle={{ color: "#0B5FFF", fontWeight: 700 }}
+                labelStyle={{ color: "#F4F7FB", fontWeight: 700 }}
+                itemStyle={{ color: "#F4F7FB" }}
                 formatter={(v: number, name, item) => {
                   if (name === "Weekly net") return [fmtR(v), "Weekly net"];
                   const weekIndex = (item?.payload as { weekIndex?: number } | undefined)

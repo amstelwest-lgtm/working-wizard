@@ -132,6 +132,35 @@ const css = readFileSync("src/components/cash/cash-paged.css", "utf8");
 assert(/\.cash-menu__tab \{[^}]*border-radius: 8px/.test(css), "menu tabs are blocks, not pills");
 assert(css.includes("#f4f8ff"), "light blue page background");
 
+const tooltipRule = css.slice(css.indexOf(".cash-chart-tooltip .recharts-tooltip-item"));
+assert(tooltipRule.includes(".recharts-tooltip-item"), "dark tooltip styles the series rows");
+assert(
+  /color:\s*#f4f7fb\s*!important/i.test(tooltipRule.slice(0, 240)),
+  "weekly net line is off-white on the dark tooltip",
+);
+assert(!/#102a43|#000000|color:\s*#000\b/i.test(tooltipRule.slice(0, 240)), "tooltip body is not navy or black");
+
+function relativeLuminance(hex: string) {
+  const channels = [0, 2, 4].map((index) => {
+    const channel = parseInt(hex.slice(index + 1, index + 3), 16) / 255;
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+function contrastRatio(foreground: string, background: string) {
+  const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].sort(
+    (a, b) => b - a,
+  );
+  return (lighter + 0.05) / (darker + 0.05);
+}
+const tooltipCard = "#111827";
+assert(
+  contrastRatio("#f4f7fb", tooltipCard) >= 7,
+  "off-white tooltip text clears the dark card",
+);
+assert(contrastRatio("#000000", tooltipCard) < 2, "black weekly net fails on the dark card");
+assert(contrastRatio("#102a43", tooltipCard) < 2, "brand navy fails on the dark card");
+
 const cash = readFileSync("src/components/cash-forecast.tsx", "utf8");
 assert(cash.includes('layout = "stacked"'), "stacked stays the default");
 const pagedStart = cash.indexOf("if (paged) {");
@@ -184,6 +213,13 @@ assert(waterfall.includes('from "@/lib/brand-palette"'), "waterfall reads the sh
 assert(cash.includes('from "@/lib/brand-palette"'), "cash chart reads the shared palette");
 assert(palette.includes('green: { from: "#41c586", to: "#1f9e62" }'), "waterfall green kept");
 assert(cash.includes('dataKey="net"') && cash.includes("url(#cfNetDown)"), "weekly net bars");
+const heroAtEarly = cash.indexOf("const heroChart");
+const heroTooltip = cash.slice(heroAtEarly, cash.indexOf('name="Weekly net"', heroAtEarly));
+assert(heroTooltip.includes('wrapperClassName="cash-chart-tooltip"'), "shared chart tooltip uses the dark-card class");
+assert(heroTooltip.includes('itemStyle={{ color: "#F4F7FB" }}'), "weekly net item color overrides recharts black");
+assert(heroTooltip.includes('labelStyle={{ color: "#F4F7FB", fontWeight: 700 }}'), "week label is off-white, not cobalt");
+assert(!heroTooltip.includes("#0B5FFF"), "cobalt is not used as tooltip text");
+assert((cash.match(/cash-chart-tooltip/g) ?? []).length === 1, "owner and accountant share one tooltip class");
 const heroAt = cash.indexOf("const heroChart");
 const barAt = cash.indexOf('dataKey="net"', heroAt);
 assert(
