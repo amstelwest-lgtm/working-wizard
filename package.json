@@ -206,6 +206,7 @@
     "harness:dev": "vite --config scripts/rail-studio-harness/vite.config.ts",
     "test:agent-wheel": "vite-node scripts/rail-studio-harness/check-agent-wheel.mts",
     "e2e:irp6-download": "vite-node scripts/rail-studio-harness/check-irp6-download.mts",
+    "e2e:paged-menu-scroll": "vite-node scripts/rail-studio-harness/check-paged-menu-scroll.mts",
     "test:nav-collapse": "vite-node scripts/rail-studio-harness/check-nav-collapse.mts",
     "test:accountant-nav-collapsed": "vite-node --config scripts/vite-test.config.ts scripts/accountant-nav-collapsed-test.mts",
     "test:accountant-studio-clarity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-studio-clarity-test.mts",

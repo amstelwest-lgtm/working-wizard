@@ -3995,6 +3995,7 @@ function ClientView() {
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => homePagedSearch(prev, next),
+        resetScroll: false,
       });
     },
     [clientId, navigate],
@@ -5134,6 +5135,7 @@ function ClientView() {
                           to: "/clients/$clientId",
                           params: { clientId },
                           search: (prev) => cashPagedSearch(prev, next),
+                                  resetScroll: false,
                         })
                       }
                       clientId={client.id}
@@ -5282,6 +5284,7 @@ function ClientView() {
                           to: "/clients/$clientId",
                           params: { clientId },
                           search: (prev) => budgetPagedSearch(prev, next),
+                                resetScroll: false,
                         })
                       }
                       clientId={client.id}

@@ -547,6 +547,7 @@ function BriefingPane() {
               to: "/clients/$clientId",
               params: { clientId: CLIENT_ID },
               search: (prev) => homePagedSearch(prev, next),
+              resetScroll: false,
             })
           }
           attentionCount={homeAttentionItems(attention).length}
@@ -563,6 +564,7 @@ function BriefingPane() {
                     to: "/clients/$clientId",
                     params: { clientId: CLIENT_ID },
                     search: (prev) => homePagedSearch(prev, "books"),
+                    resetScroll: false,
                   })
                 }
               />
