@@ -206,6 +206,7 @@ import {
   silentForecastKey,
 } from "@/lib/cash-once-off-save";
 import {
+  applyWeekNetDelta,
   engineFromConfirmed,
   NEUTRAL_CASH_FORECAST_ENGINE,
   readConfirmedForecastAdjustments,
@@ -779,6 +780,8 @@ export function CashForecastPanel({
   const [revGrowthPct, setRevGrowthPct] = useState(0); // % per week, compounding
   const [capexAmount, setCapexAmount] = useState("0");
   const [capexWeek, setCapexWeek] = useState(1);
+  const [netWeek, setNetWeek] = useState(1);
+  const [netDelta, setNetDelta] = useState(0);
   const [loaded, setLoaded] = useState(!clientId);
   const [resolvedOpening, setResolvedOpening] = useState<number | null>(null);
   const [cashLedger, setCashLedger] = useState<CashLedger>("On file");
@@ -889,6 +892,8 @@ export function CashForecastPanel({
     setRevGrowthPct(payload.revGrowthPct);
     setCapexAmount(payload.capexAmount);
     setCapexWeek(payload.capexWeek);
+    setNetWeek(1);
+    setNetDelta(0);
     setShowBankUpload(false);
     toast.success("Cash forecast updated from bank statements.");
     setInputHasBankDraft(true);
@@ -1218,6 +1223,8 @@ export function CashForecastPanel({
       setRevGrowthPct(engine.revGrowthPct);
       setCapexAmount(engine.capexAmount);
       setCapexWeek(engine.capexWeek);
+      setNetWeek(engine.netWeek);
+      setNetDelta(engine.netDelta);
       skipNextAutosave.current = true;
       hydrateOnceOff.current = true;
       setLoaded(true);
@@ -1500,6 +1507,8 @@ export function CashForecastPanel({
     revGrowthPct: number;
     capexAmount: number;
     capexWeek: number;
+    netWeek: number;
+    netDelta: number;
   }) => {
     const enteredOnly = (lines: LineItem[]) =>
       lines.filter((line) =>
@@ -1591,7 +1600,11 @@ export function CashForecastPanel({
     const outflow = new Array(WEEKS).fill(0);
     revRows.forEach((r) => r.vals.forEach((v, i) => (inflow[i] += v)));
     allExpRows.forEach((r) => r.vals.forEach((v, i) => (outflow[i] += v)));
-    const net = inflow.map((v, i) => v - outflow[i]);
+    const net = applyWeekNetDelta(
+      inflow.map((v, i) => v - outflow[i]),
+      opts.netWeek,
+      opts.netDelta,
+    );
     const opening = parseFloat(openingBalance) || 0;
     const closing: number[] = [];
     let bal = opening;
@@ -1614,6 +1627,8 @@ export function CashForecastPanel({
         revGrowthPct,
         capexAmount: parseFloat(capexAmount) || 0,
         capexWeek,
+        netWeek,
+        netDelta,
       }),
     [
       revenue,
@@ -1629,6 +1644,8 @@ export function CashForecastPanel({
       revGrowthPct,
       capexAmount,
       capexWeek,
+      netWeek,
+      netDelta,
       singleMonthHistory,
       recurringPayees,
     ],
@@ -1664,6 +1681,8 @@ export function CashForecastPanel({
         revGrowthPct: baseEngine.revGrowthPct,
         capexAmount: parseFloat(baseEngine.capexAmount) || 0,
         capexWeek: baseEngine.capexWeek,
+        netWeek: baseEngine.netWeek,
+        netDelta: baseEngine.netDelta,
       }),
     [revenue, expenses, other, openingBalance, singleMonthHistory, recurringPayees, baseEngine],
   );
@@ -2639,6 +2658,8 @@ export function CashForecastPanel({
     setRevGrowthPct(baseEngine.revGrowthPct);
     setCapexAmount(baseEngine.capexAmount);
     setCapexWeek(baseEngine.capexWeek);
+    setNetWeek(baseEngine.netWeek);
+    setNetDelta(baseEngine.netDelta);
   };
   const scenarioSliders = (
     <div className="grid gap-5 md:grid-cols-3">
@@ -3478,6 +3499,8 @@ export function CashForecastPanel({
     setRevGrowthPct(engine.revGrowthPct);
     setCapexAmount(engine.capexAmount);
     setCapexWeek(engine.capexWeek);
+    setNetWeek(engine.netWeek);
+    setNetDelta(engine.netDelta);
     if (cashflow.openingBalance != null && cashflow.openingBalance !== "") {
       skipNextAutosave.current = true;
       setOpeningBalance(String(cashflow.openingBalance));

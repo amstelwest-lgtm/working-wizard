@@ -16,6 +16,8 @@ export const CASH_FORECAST_ADJUSTMENT_KEYS = [
   "revGrowthPct",
   "capexAmount",
   "capexWeek",
+  "netWeek",
+  "netDelta",
 ] as const;
 
 export type CashForecastAdjustmentKey = (typeof CASH_FORECAST_ADJUSTMENT_KEYS)[number];
@@ -70,6 +72,8 @@ export const NEUTRAL_CASH_FORECAST_ENGINE = {
   revGrowthPct: 0,
   capexAmount: "0",
   capexWeek: 1,
+  netWeek: 1,
+  netDelta: 0,
 } as const;
 
 export type CashForecastEngine = {
@@ -82,6 +86,8 @@ export type CashForecastEngine = {
   revGrowthPct: number;
   capexAmount: string;
   capexWeek: number;
+  netWeek: number;
+  netDelta: number;
 };
 
 export type CashForecastPatch = Partial<{
@@ -95,6 +101,8 @@ export type CashForecastPatch = Partial<{
   revGrowthPct: number;
   capexAmount: string;
   capexWeek: number;
+  netWeek: number;
+  netDelta: number;
 }>;
 
 export type CashForecastProposal = {
@@ -135,6 +143,8 @@ const LABELS: Record<CashForecastAdjustmentKey, string> = {
   revGrowthPct: "Revenue growth / week",
   capexAmount: "One-off capex",
   capexWeek: "Capex week",
+  netWeek: "Net week",
+  netDelta: "Week net change",
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -238,6 +248,16 @@ export function parseCashForecastPatch(
     if (n == null) return fail("capexWeek must be a whole week from 1 to 13.");
     patch.capexWeek = n;
   }
+  if ("netWeek" in record) {
+    const n = integerIn(record.netWeek, 1, 13);
+    if (n == null) return fail("netWeek must be a whole week from 1 to 13.");
+    patch.netWeek = n;
+  }
+  if ("netDelta" in record) {
+    const n = finite(record.netDelta);
+    if (n == null || Math.abs(n) > 1e12) return fail("netDelta must be a number.");
+    patch.netDelta = Math.round(n * 100) / 100;
+  }
   return { ok: true, patch };
 }
 
@@ -258,7 +278,8 @@ function neutralBefore(key: CashForecastAdjustmentKey): string | number {
   if (key === "openingBalance") return "";
   if (key === "revAdj" || key === "expAdj") return 100;
   if (key === "collectDelay" || key === "headcountDelta" || key === "revGrowthPct") return 0;
-  if (key === "capexWeek") return 1;
+  if (key === "capexWeek" || key === "netWeek") return 1;
+  if (key === "netDelta") return 0;
   return "0";
 }
 
@@ -468,6 +489,8 @@ export function engineFromConfirmed(confirmed: ConfirmedForecastAdjustments | nu
   if (patch.revGrowthPct != null) engine.revGrowthPct = patch.revGrowthPct;
   if (patch.capexAmount != null) engine.capexAmount = patch.capexAmount;
   if (patch.capexWeek != null) engine.capexWeek = patch.capexWeek;
+  if (patch.netWeek != null) engine.netWeek = patch.netWeek;
+  if (patch.netDelta != null) engine.netDelta = patch.netDelta;
   return engine;
 }
 
@@ -844,9 +867,17 @@ export function figureDeltaLines(proposal: {
   patch: FigureProposal["patch"];
   beforeValues: Record<string, string | number | null>;
 }): Array<{ key: string; text: string }> {
-  return Object.keys(proposal.patch).map((key) => {
-    const after = (proposal.patch as Record<string, string | number | undefined>)[key];
+  const patch = proposal.patch as Record<string, string | number | undefined>;
+  const keys = Object.keys(patch).filter((key) => !(key === "netWeek" && patch.netDelta != null));
+  return keys.map((key) => {
+    const after = patch[key];
     const before = proposal.beforeValues[key];
+    if (key === "netDelta") {
+      const week = patch.netWeek ?? proposal.beforeValues.netWeek ?? 1;
+      const delta = typeof after === "number" ? after : Number(after);
+      const shown = Number.isFinite(delta) ? `${delta > 0 ? "+" : ""}${delta}` : String(after ?? "");
+      return { key, text: `Week ${week} net ${shown}` };
+    }
     const label = FIGURE_LABELS[key] ?? key;
     const show = (value: string | number | null | undefined) => {
       if (value == null || value === "") return "not set";
@@ -858,6 +889,111 @@ export function figureDeltaLines(proposal: {
     };
     return { key, text: `${label} ${show(before)} → ${show(after)}` };
   });
+}
+
+/** Add a week-net change onto an already computed weekly net. Week 1 is index 0. */
+export function applyWeekNetDelta(net: readonly number[], week: number, delta: number): number[] {
+  const next = net.slice();
+  if (!Number.isFinite(delta) || delta === 0) return next;
+  const index = Math.round(week) - 1;
+  if (!Number.isInteger(index) || index < 0 || index >= next.length) return next;
+  next[index] += delta;
+  return next;
+}
+
+const CARD_TITLE: Record<FigureSurface, string> = {
+  cash: "Cash forecast change waiting for you",
+  budget: "Budget change waiting for you",
+  waterfall: "Waterfall change waiting for you",
+};
+
+/** Copy for the chat card. Owners can read it. Only a writer gets the two decisions. */
+export function figureProposalCardCopy(input: {
+  surface: FigureSurface;
+  patch: FigureProposal["patch"];
+  beforeValues: Record<string, string | number | null>;
+  canDecide: boolean;
+}): { title: string; lines: string[]; actions: readonly ["Confirm and apply", "Reject"] | readonly [] } {
+  return {
+    title: CARD_TITLE[input.surface],
+    lines: figureDeltaLines(input).map((line) => line.text),
+    actions: input.canDecide ? ["Confirm and apply", "Reject"] : [],
+  };
+}
+
+function askText(question: string): string {
+  return question.replace(/\s+/g, " ").trim();
+}
+
+function isFigureQuestion(question: string): boolean {
+  const q = askText(question).toLowerCase();
+  if (!q) return true;
+  if (/\?\s*$/.test(q)) return true;
+  if (/^(what|which|who|why|how|when|where|whose|should|can|could|would|do|does|did|is|are|am|will)\b/.test(q)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * A direct ask to change one figure. Questions and "propose next steps" stay
+ * on the numbers chat. Week net ("W1 net by R100") is a cash patch.
+ */
+export function parseFigureProposalAsk(
+  question: string,
+): { surface: FigureSurface; patch: FigureProposal["patch"]; reason: string } | null {
+  const q = askText(question);
+  if (!q || isFigureQuestion(q)) return null;
+  if (/\bpropose next steps\b/i.test(q)) return null;
+  if (!/\b(propose|change|adjust|increase|decrease|reduce|lower|raise)\b/i.test(q)) return null;
+  const lower = q.toLowerCase();
+  let surface: FigureSurface | null = null;
+  if (/\bwaterfall\b|\bprofitability\b/.test(lower)) surface = "waterfall";
+  else if (/\bbudget\b/.test(lower)) surface = "budget";
+  else if (/\bcash forecast\b|\bcashflow\b|\b13-week\b|\bw\d{1,2}\s+net\b/.test(lower)) surface = "cash";
+  if (surface !== "cash") return null;
+  const week = lower.match(/\bw(\d{1,2})\s+net\b/);
+  const amount = lower.match(/\bby\s+(?:r|zar|\$|usd)?\s*(-?\d[\d\s]*(?:\.\d+)?)/);
+  if (!week || !amount) return null;
+  const netWeek = Number(week[1]);
+  let netDelta = Number(amount[1].replace(/\s/g, ""));
+  if (!Number.isInteger(netWeek) || !Number.isFinite(netDelta)) return null;
+  if (/\b(reduce|lower|decrease|cut)\b/.test(lower) && netDelta > 0) netDelta = -netDelta;
+  const reason = q.slice(0, 600);
+  const parsed = parseFigureProposalArgs({ surface: "cash", reason, patch: { netWeek, netDelta } });
+  if (!parsed.ok) return null;
+  return { surface: "cash", patch: parsed.patch, reason: parsed.note };
+}
+
+export type FigureProposalTurn =
+  | {
+      kind: "propose";
+      tool: typeof FIGURE_PROPOSAL_TOOL;
+      args: { surface: FigureSurface; reason: string; patch: FigureProposal["patch"] };
+    }
+  | { kind: "refuse"; answer: string };
+
+/**
+ * The accountant chat on the Financial Manager can propose. The same sentence
+ * to the Analyst or the Advisor is a refusal. Other questions stay on ask-ai.
+ */
+export function figureProposalTurn(agent: string | null, question: string): FigureProposalTurn | null {
+  const parsed = parseFigureProposalAsk(question);
+  if (!parsed) return null;
+  if (agent === "financial_manager") {
+    return {
+      kind: "propose",
+      tool: FIGURE_PROPOSAL_TOOL,
+      args: { surface: parsed.surface, reason: parsed.reason, patch: parsed.patch },
+    };
+  }
+  if (agent === "analyst") {
+    return { kind: "refuse", answer: "The Analyst cannot propose a figure change. Nothing was saved." };
+  }
+  if (agent === "advisor") {
+    return { kind: "refuse", answer: "The Advisor cannot propose a figure change. Nothing was saved." };
+  }
+  return null;
 }
 
 export function proposeFigureToolSchema() {
@@ -885,7 +1021,7 @@ export function proposeFigureToolSchema() {
         patch: {
           type: "object",
           description:
-            "cash: openingBalance, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek. budget: openingCash, gpPct, debtorDays, creditorDays, inventoryDays. waterfall: revenue, cogs, grossProfit, fixedCosts, ebit, interest, tax, netIncome.",
+            "cash: openingBalance, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek, netWeek (1-13), netDelta (amount added to that week's net). Week 1 net by 100 is netWeek 1 and netDelta 100. budget: openingCash, gpPct, debtorDays, creditorDays, inventoryDays. waterfall: revenue, cogs, grossProfit, fixedCosts, ebit, interest, tax, netIncome.",
         },
       },
     },

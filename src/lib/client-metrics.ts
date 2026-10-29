@@ -1288,6 +1288,8 @@ export function rollForwardForecast(
   const revGrowth = finiteNum(cf.revGrowthPct) ?? 0;
   const capexAmt = finiteNum(cf.capexAmount) ?? 0;
   const capexWk = finiteNum(cf.capexWeek) ?? 1;
+  const netWeek = Math.round(finiteNum(cf.netWeek) ?? 1);
+  const netDelta = finiteNum(cf.netDelta) ?? 0;
 
   const shiftVals = (vals: number[]) => {
     if (!collectDelay) return vals;
@@ -1358,6 +1360,7 @@ export function rollForwardForecast(
   let bal = opening;
   for (let i = 0; i < weeks; i++) {
     bal += inflow[i] - outflow[i];
+    if (netDelta !== 0 && i === netWeek - 1) bal += netDelta;
     closing.push(bal);
   }
   return { opening, inflow, outflow, closing };

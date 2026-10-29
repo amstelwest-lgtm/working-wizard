@@ -99,6 +99,17 @@ export function useFigureProposals(input: {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    const onChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ clientId?: string; surface?: string }>).detail;
+      if (detail?.clientId && detail.clientId !== input.clientId) return;
+      if (detail?.surface && detail.surface !== input.surface) return;
+      void reload();
+    };
+    window.addEventListener("figure-proposals-changed", onChange);
+    return () => window.removeEventListener("figure-proposals-changed", onChange);
+  }, [reload, input.clientId, input.surface]);
+
   const confirm = useCallback(
     async (id: string): Promise<AppliedFigure | null> => {
       setBusyId(id);

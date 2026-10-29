@@ -13,6 +13,8 @@ import { rehydrateForUi } from "../_shared/redact-identifiers.ts";
 import { loadOverviewBrief } from "./load-overview.ts";
 import { persistAdvisoryCreate, type CreateIntent } from "./persist.ts";
 import { persistedCreateIntent } from "../../../src/lib/milon-bot-copy.ts";
+import { figureProposalTurn } from "../../../src/lib/figure-proposal.ts";
+import { executeFinancialManagerTool } from "../agent-financial-manager/execute.ts";
 import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE, normalizePrecardTurnId } from "../../../src/lib/precard-cap.ts";
 import { cardlessTrialAiBlock } from "../_shared/starter-trial-gate.ts";
@@ -455,6 +457,52 @@ async function handleMilonBot(req: Request): Promise<Response> {
       { error: "Rate limit exceeded. You can ask the bot up to 30 times per hour." },
       429,
     );
+  }
+
+  if (body.mode === "figure-proposal") {
+    const decision = figureProposalTurn(agent, typeof rawMessage === "string" ? rawMessage : "");
+    if (!decision || decision.kind !== "propose") {
+      const answer =
+        decision?.kind === "refuse"
+          ? decision.answer
+          : "Only the Financial Manager can propose a figure change. Nothing was saved.";
+      return respond({ answer, tools: [] });
+    }
+    try {
+      const saved = await executeFinancialManagerTool(decision.tool, decision.args, {
+        clientId,
+        runId: "chat",
+        correlationId: "figure-proposal-chat",
+        firmId: null,
+        db: adminClient,
+        pool: [],
+        recordedKeys: new Set(),
+        agent: "financial_manager",
+      });
+      const row = saved && typeof saved === "object" ? (saved as Record<string, unknown>) : null;
+      const proposalId = typeof row?.proposal_id === "string" ? row.proposal_id : "";
+      if (!row || row.proposed !== true || !proposalId) {
+        const message = typeof row?.error === "string" ? row.error : "The proposal was not saved.";
+        return respond({ error: message }, 500);
+      }
+      const surface = decision.args.surface;
+      return respond({
+        answer:
+          "A figure change is waiting for you. Nothing is saved until you confirm.",
+        tools: [{ name: decision.tool, status: "ok" }],
+        proposal: {
+          id: proposalId,
+          surface,
+          note: decision.args.reason,
+          patch: row.patch,
+          beforeValues: row.before_values ?? {},
+          canDecide: audience === "accountant",
+        },
+      });
+    } catch (err) {
+      console.error("figure proposal failed", err instanceof Error ? err.message : err);
+      return respond({ error: "The proposal was not saved." }, 500);
+    }
   }
 
   let overviewBlock = "";

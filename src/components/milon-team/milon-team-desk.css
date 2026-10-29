@@ -794,6 +794,24 @@ html[data-theme="light"] .milon-desk {
   overflow: auto;
 }
 
+/* A pending figure card sits above the clipped reply. The 220px thread
+   scrolls to Next actions and would hide Confirm and Reject. */
+.milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-figure-card {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-thread {
+  grid-row: 2;
+}
+.milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-textarea,
+.milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-actions {
+  grid-row: 3;
+}
+.milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-thinking,
+.milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-error {
+  grid-row: 4;
+}
+
 .milon-desk-host #ask-ai-accountant .ask-ai-thread:has(.ask-ai-trial-ended),
 .milon-desk-host #ask-ai-accountant .ask-ai-thread:has(.trial-ended-block) {
   max-height: min(70vh, 720px);
@@ -884,6 +902,19 @@ html[data-theme="light"] .milon-desk {
   .milon-desk-host #ask-ai-accountant .ask-ai-thinking,
   .milon-desk-host #ask-ai-accountant .ask-ai-error {
     grid-row: 4;
+  }
+
+  .milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-textarea {
+    grid-row: 3;
+  }
+
+  .milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-actions {
+    grid-row: 4;
+  }
+
+  .milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-thinking,
+  .milon-desk-host #ask-ai-accountant .ask-ai-panel:has(.ask-ai-figure-card) .ask-ai-error {
+    grid-row: 5;
   }
 }
 
