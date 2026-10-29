@@ -266,7 +266,7 @@ const FEATURES: readonly FeatureDef[] = [
   {
     id: "reports",
     label: "Reports",
-    hint: "Drafts, PDFs, sent",
+    hint: "Packs, PDFs, sent",
     order: 92,
     scope: "client",
     synonyms: ["reports", "report", "board pack", "scorecard"],
@@ -287,14 +287,14 @@ const FEATURES: readonly FeatureDef[] = [
   },
   {
     id: "advisory-drafter",
-    label: "Advisory drafter",
+    label: "Draft tool",
     hint: "Draft the note",
     order: 96,
     scope: "client",
-    synonyms: ["advisory drafter", "drafter", "draft note", "sent history"],
+    synonyms: ["draft tool", "advisory drafter", "drafter", "draft note", "sent history"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "reports", section: "drafts" },
+    studio: { tab: "reports", section: "draft-tool" },
   },
   {
     id: "data-sync",

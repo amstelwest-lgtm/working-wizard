@@ -27,6 +27,10 @@ export type ArchiveItem = {
   /** Where the PDF already sits in statement-uploads; copied server-side instead of re-uploaded. */
   storagePath?: string;
   accountLabel?: string;
+  /** Connections upload: the type the accountant picked. */
+  documentType?: string;
+  /** Connections upload: the Sonnet read, shown in Client library. */
+  summary?: string;
 };
 
 export type ArchiveInput = {
@@ -120,6 +124,8 @@ export async function archiveUploads(
         mime: item.storagePath ? "application/pdf" : documentContentType(item.file),
         source: input.source,
         ...(item.accountLabel?.trim() ? { account_label: item.accountLabel.trim() } : {}),
+        ...(item.documentType?.trim() ? { document_type: item.documentType.trim() } : {}),
+        ...(item.summary?.trim() ? { summary: item.summary.trim().slice(0, 400) } : {}),
       },
       created_by: userId,
     };

@@ -152,6 +152,7 @@ export function OwnerUploadsPanel({ clientId, refreshKey, className = "" }: Prop
                       {meta.account_label ? ` · ${meta.account_label}` : ""}
                       {meta.bytes != null ? ` · ${formatBytes(meta.bytes)}` : ""}
                       {` · ${dateTime(row.created_at)}`}
+                      {meta.summary ? ` · ${meta.summary}` : ""}
                     </span>
                   </span>
                 </div>

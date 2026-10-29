@@ -81,7 +81,7 @@ export function AccountantSendFileList({
                 data-open-file={file.id}
                 onClick={() => onOpen(file.documentPath as string)}
               >
-                Open in Documents
+                Open in Client library
               </button>
             ) : null}
             {file.hasPassword && !shown ? (

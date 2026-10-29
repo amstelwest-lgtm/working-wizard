@@ -1464,9 +1464,10 @@ const HARNESS_SECTION_LABEL: Record<string, string> = {
   months: "Month by month",
   open: "Open work",
   overdue: "Overdue",
-  drafts: "Drafts",
+  drafts: "Advisory pack",
+  "draft-tool": "Draft tool",
   sent: "Sent",
-  documents: "Documents",
+  documents: "Client library",
   connections: "Connections",
 };
 
