@@ -3,16 +3,16 @@
  * the Health, Cash, and Profit reports use, so a signed pack redraws
  * those charts after the books move.
  */
-import type { HealthPillarId, ScoreMarket } from "@/lib/health-score";
-import { pillarForRatioName, scorecardHealthFromFinancials } from "@/lib/health-score";
-import { assessClientMetrics } from "@/lib/client-metrics";
-import { firstClosingBelow, forecastLowestPoint } from "@/lib/cash-forecast-parity";
-import { buildBridgeSteps } from "@/lib/profit-bridge-steps";
-import { periodProfitBridge, statementNetProfit } from "@/lib/period-profit";
-import { currentRatioValue, metricDirection, periodMonthsOf } from "@/lib/ratios";
-import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
-import { diagnoseDuPont } from "@/reports/narrative";
-import type { OutcomeVerdict, Recommendation } from "@/lib/recommendations";
+import type { HealthPillarId, ScoreMarket } from "./health-score.ts";
+import { pillarForRatioName, scorecardHealthFromFinancials } from "./health-score.ts";
+import { assessClientMetrics } from "./client-metrics.ts";
+import { firstClosingBelow, forecastLowestPoint } from "./cash-forecast-parity.ts";
+import { buildBridgeSteps } from "./profit-bridge-steps.ts";
+import { periodProfitBridge, statementNetProfit } from "./period-profit.ts";
+import { currentRatioValue, metricDirection, periodMonthsOf } from "./ratios.ts";
+import { scorecardRatiosFromFinancials } from "./scorecard-rows.ts";
+import { diagnoseDuPont } from "./dupont-diagnosis.ts";
+import type { OutcomeVerdict, Recommendation } from "./recommendations.ts";
 import type {
   AdvisoryPackContentV1,
   PackDataGapRef,
@@ -21,7 +21,7 @@ import type {
   PackInputs,
   PackRatioBlock,
   PackRecommendationRef,
-} from "@/lib/advisory-pack";
+} from "./advisory-pack.ts";
 
 export const PACK_SCHEMA1_LAYOUT_NOTE =
   "Created before the new pack layout. Generate a new version for charts.";

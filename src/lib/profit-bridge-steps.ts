@@ -3,7 +3,7 @@
  * Kept out of the react-pdf module so the advisory pack can freeze the
  * same steps without importing the PDF renderer.
  */
-import { derivedProfitStepsAreFacts } from "@/lib/period-profit";
+import { derivedProfitStepsAreFacts } from "./period-profit.ts";
 
 export type BridgeStep = {
   label: string;

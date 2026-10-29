@@ -11,12 +11,19 @@
  * caller omits a market. Overview export and Reports studio pass the client
  * market. Pillar and overall scores come from `scorecardHealthFromFinancials`.
  */
-import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
-import { reportScalarInputs } from "@/lib/equity-coherence";
-import { PILLAR_RATIO_NAMES, pillarForRatioName, scoreAndBand, type HealthPillarId } from "@/lib/health-score";
-import { formatReportAmount, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
-import { computeRatios, periodMonthsOf, type HealthTier, type RatioInputs } from "@/lib/ratios";
-import { presentScorecardRatio } from "@/lib/report-coherence";
+import { withCanonicalDebtorCreditorDays } from "./deliverable-input-config.ts";
+import { reportScalarInputs } from "./equity-coherence.ts";
+import {
+  PILLAR_RATIO_NAMES,
+  pillarForRatioName,
+  scoreAndBand,
+  type HealthPillarId,
+} from "./health-score.ts";
+import { formatReportAmount } from "./market/format.ts";
+import { ZA_MARKET } from "./market/resolve.ts";
+import type { ResolvedMarket } from "./market/types.ts";
+import { computeRatios, periodMonthsOf, type HealthTier, type RatioInputs } from "./ratios.ts";
+import { presentScorecardRatio } from "./report-coherence.ts";
 
 export type ScorecardRatioRow = {
   ratio_key: string;
@@ -95,7 +102,11 @@ export function buildScorecardRatioResults(
   },
 ): ScorecardRatioRow[] {
   const rows: ScorecardRatioRow[] = [];
-  const pushRow = (name: string, val: number | null, presented: ReturnType<typeof presentScorecardRatio>) => {
+  const pushRow = (
+    name: string,
+    val: number | null,
+    presented: ReturnType<typeof presentScorecardRatio>,
+  ) => {
     const scoredValue = presented.scoredValue;
     const band =
       presented.unscored || scoredValue == null

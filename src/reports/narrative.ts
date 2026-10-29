@@ -5,10 +5,22 @@
 
 import { fmtPct, fmtRandCompact } from "@/components/pdf/theme";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { formatMoney, formatMoneyUnit, formatReportAmount, spellForMarket, spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import {
+  formatMoney,
+  formatMoneyUnit,
+  formatReportAmount,
+  spellForMarket,
+  spellLabor,
+  ZA_MARKET,
+  type ResolvedMarket,
+} from "@/lib/market";
 import { reportProfileCoda, type ReportNarrativeKind } from "@/lib/profile-signals";
 import { scoreRatio } from "@/lib/health-score";
 import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
+import type { DuPontDiagnosis, DuPontLevers } from "@/lib/dupont-diagnosis";
+
+export type { DuPontDiagnosis, DuPontLevers } from "@/lib/dupont-diagnosis";
+export { diagnoseDuPont } from "@/lib/dupont-diagnosis";
 import {
   cashCycleStory,
   leverBand,
@@ -32,77 +44,6 @@ function withCoda(
 ): string {
   const coda = reportProfileCoda(profile, kind, market, businessName);
   return coda ? `${base} ${coda}` : base;
-}
-
-export type DuPontLevers = {
-  roe: number;
-  netMargin: number;
-  assetTurnover: number;
-  equityMultiplier: number;
-};
-
-export type DuPontDiagnosis = {
-  /** Which lever is dragging ROE. */
-  weakLever: "margin" | "turnover" | "leverage" | null;
-  weakLeverLabel: string;
-  sentence: string;
-};
-
-const LEVER_RATIO: Record<"margin" | "turnover" | "leverage", { name: string; label: string }> = {
-  margin: { name: "Net Margin", label: "Net Profit Margin" },
-  turnover: { name: "Asset Turnover", label: "Asset Turnover" },
-  leverage: { name: "Equity Multiplier", label: "Equity Multiplier" },
-};
-
-const TIER_RANK: Record<HealthTier, number> = { healthy: 0, at_risk: 1, critical: 2 };
-
-/**
- * Which DuPont lever is weakest, using `scoreRatio` and the shared band table.
- * "All three healthy" is only true when every lever's band is Healthy.
- */
-export function diagnoseDuPont(l: DuPontLevers): DuPontDiagnosis {
-  const values = {
-    margin: l.netMargin,
-    turnover: l.assetTurnover,
-    leverage: l.equityMultiplier,
-  };
-  const ranked = (Object.keys(LEVER_RATIO) as Array<keyof typeof LEVER_RATIO>)
-    .map((lever) => {
-      const spec = LEVER_RATIO[lever];
-      const value = values[lever];
-      const tier = leverBand(spec.name, value);
-      return { lever, label: spec.label, value, tier };
-    })
-    .filter((row) => row.tier != null);
-  if (!ranked.length) {
-    return {
-      weakLever: null,
-      weakLeverLabel: "",
-      sentence: "The ROE levers cannot be scored from the figures on file.",
-    };
-  }
-  if (ranked.length === 3 && ranked.every((row) => row.tier === "healthy")) {
-    return {
-      weakLever: null,
-      weakLeverLabel: "",
-      sentence:
-        "All three ROE levers — margin, asset efficiency, and leverage — are in the Healthy band.",
-    };
-  }
-  ranked.sort((a, b) => TIER_RANK[b.tier!] - TIER_RANK[a.tier!]);
-  const worst = ranked[0];
-  const band = healthBandLabel(worst.tier!);
-  const detail =
-    worst.lever === "margin"
-      ? `net margin ${fmtPct(worst.value)}`
-      : worst.lever === "turnover"
-        ? `turnover ${worst.value.toFixed(2)}×`
-        : `equity multiplier ${worst.value.toFixed(2)}×`;
-  return {
-    weakLever: worst.lever,
-    weakLeverLabel: worst.label,
-    sentence: `Of the three ROE levers, ${worst.label.toLowerCase()} is ${band} (${detail}).`,
-  };
 }
 
 // ── Per-report narratives ──────────────────────────────────────────────────
@@ -252,9 +193,7 @@ export function leverageNarrative(
   profile?: NarrativeProfile,
   market: MoneyMarket = ZA_MARKET,
 ): string {
-  const em = Number.isFinite(d.equityMultiplier)
-    ? `${d.equityMultiplier.toFixed(2)}×`
-    : "n/a";
+  const em = Number.isFinite(d.equityMultiplier) ? `${d.equityMultiplier.toFixed(2)}×` : "n/a";
   const emBand = Number.isFinite(d.equityMultiplier)
     ? healthBandLabel(scoreTier(scoreRatio("Equity Multiplier", d.equityMultiplier)))
     : null;
