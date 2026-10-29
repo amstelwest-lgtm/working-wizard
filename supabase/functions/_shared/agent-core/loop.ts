@@ -114,8 +114,16 @@ export type AgentToolCall = {
 };
 
 export type AgentDecision =
-  | { kind: "tool"; id?: string; name: string; args: Record<string, unknown>; why: string }
-  | { kind: "tools"; calls: AgentToolCall[]; why: string }
+  | {
+      kind: "tool";
+      id?: string;
+      name: string;
+      args: Record<string, unknown>;
+      why: string;
+      /** Opus echoes the assistant turn, thinking blocks included. */
+      assistantContent?: unknown[];
+    }
+  | { kind: "tools"; calls: AgentToolCall[]; why: string; assistantContent?: unknown[] }
   | {
       kind: "stop";
       reason: AgentStopReason;
@@ -133,6 +141,8 @@ export type AgentToolExchange = {
     args: Record<string, unknown>;
     content: string;
   }>;
+  /** Set for Opus. The next request sends this assistant turn unchanged. */
+  assistantContent?: unknown[];
 };
 
 export type AgentModelContent =
@@ -760,6 +770,9 @@ export async function runAgentLoop(input: {
 
     exchanges.push({
       text: decision.why,
+      ...(decision.assistantContent && decision.assistantContent.length > 0
+        ? { assistantContent: decision.assistantContent }
+        : {}),
       calls: outcomes.map((outcome) => ({
         id: outcome.id,
         name: outcome.name,
@@ -834,12 +847,16 @@ export function agentTurnMessages(ctx: AgentReasonContext): AgentModelMessage[] 
   const messages: AgentModelMessage[] = [{ role: "user", content: opening }];
   for (const exchange of ctx.exchanges ?? []) {
     if (exchange.calls.length === 0) continue;
-    const assistant: AgentModelContent[] = [];
-    if (exchange.text.trim()) assistant.push({ type: "text", text: exchange.text });
-    for (const call of exchange.calls) {
-      assistant.push({ type: "tool_use", id: call.id, name: call.name, input: call.args });
+    if (exchange.assistantContent && exchange.assistantContent.length > 0) {
+      messages.push({ role: "assistant", content: exchange.assistantContent as AgentModelContent[] });
+    } else {
+      const assistant: AgentModelContent[] = [];
+      if (exchange.text.trim()) assistant.push({ type: "text", text: exchange.text });
+      for (const call of exchange.calls) {
+        assistant.push({ type: "tool_use", id: call.id, name: call.name, input: call.args });
+      }
+      messages.push({ role: "assistant", content: assistant });
     }
-    messages.push({ role: "assistant", content: assistant });
     messages.push({
       role: "user",
       content: exchange.calls.map((call) => ({

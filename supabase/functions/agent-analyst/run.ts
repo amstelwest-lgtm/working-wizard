@@ -11,6 +11,7 @@ import {
 import { callClaudeRound } from "../_shared/agent-core/claude.ts";
 import { ANALYST_SYSTEM, analystToolSchemas } from "../_shared/agent-prompts/analyst.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
+import { modelForAgent } from "../../../src/lib/claude-request.ts";
 import { moneyMarketFromClient, sanitizeAgentError, type StoredFigures } from "../../../src/lib/agent-bus.ts";
 import { zaPromptMoneyLine } from "../../../src/lib/prompt-money.ts";
 import { RUNNER_COST_CEILING_USD, runnerNextCallExceedsCeiling } from "../../../src/lib/agent-draft.ts";
@@ -30,6 +31,9 @@ import {
 import { executeAnalystTool } from "./execute.ts";
 import { HANDOFF_COST_STOP, handoffFinding, handoffFinishNote } from "../../../src/lib/owner-handoff.ts";
 import { agentDisplayNameFromKey } from "../../../src/lib/milon-team-names.ts";
+
+/** Analyst stays on the global default. CLAUDE_MODEL still overrides it. */
+const analystModel = modelForAgent("analyst", { standard: CLAUDE_MODEL });
 
 export type AnalystJob = {
   msgId: number | null;
@@ -175,13 +179,13 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
       reason: async (ctx) => {
         const emptyStop = analystEmptyFindingStop(ctx.transcript);
         if (emptyStop) return emptyStop;
-        const spent = analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, CLAUDE_MODEL);
+        const spent = analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, analystModel);
         const lastCall = analystRunCostUsd(
           lastInputTokens,
           lastOutputTokens,
           lastCacheWriteTokens,
           lastCacheReadTokens,
-          CLAUDE_MODEL,
+          analystModel,
         );
         // Same predictor as the Financial Manager and Advisor. $0.06 is the ceiling.
         // A call that would pass it does not start, so a run stops near $0.055.
@@ -201,7 +205,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           ANALYST_SYSTEM + zaPromptMoneyLine(client?.market),
           agentTurnMessages(ctx),
           analystToolSchemas(),
-          { toolChoice: { type: "any" }, maxTokens: 700, cachePrompt: true },
+          { model: analystModel, toolChoice: { type: "any" }, maxTokens: 700, cachePrompt: true },
         );
         lastInputTokens = round.inputTokens;
         lastOutputTokens = round.outputTokens;
@@ -261,7 +265,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
         output_tokens: outputTokens,
         cache_write_tokens: cacheWriteTokens,
         cache_read_tokens: cacheReadTokens,
-        cost_usd: analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, CLAUDE_MODEL),
+        cost_usd: analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, analystModel),
         latency_ms: Date.now() - started,
         trace: result.trace,
         finished_at: new Date().toISOString(),

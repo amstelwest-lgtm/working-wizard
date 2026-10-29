@@ -13,7 +13,7 @@ import {
   sanitizeAgentError,
   type StoredFigures,
 } from "./agent-bus.ts";
-import { CLAUDE_SONNET_55 } from "./claude-request.ts";
+import { CLAUDE_OPUS_55, CLAUDE_SONNET_55 } from "./claude-request.ts";
 
 export const ANALYST_MAX_ITERATIONS = 10;
 
@@ -277,7 +277,15 @@ export function collectStoredReads(
 
 /**
  * List rates in USD per million tokens. Sonnet 4.6 stays so a CLAUDE_MODEL
- * override still prices agent_runs. Cache writes are the 5-minute tier.
+ * override still prices agent_runs. Cache writes are the 5-minute tier
+ * (prompt cache marks are ephemeral, which is the 5-minute cache).
+ *
+ * Opus 5.5 list price is $4 input / $20 output per MTok. The 5-minute cache
+ * write is 1.25× input ($5). Cache reads are 0.05× input ($0.20). That is
+ * the same multiplier Anthropic publishes for Sonnet 5.5, not the 0.10×
+ * cache-read multiplier on older Opus models ($0.50 per MTok when input is
+ * $5). Verified against the pricing table footnote: Opus 5.5 and Sonnet 5.5
+ * cache hits are 0.05× base input.
  */
 export const CLAUDE_MODEL_RATES_USD_PER_MTOK = {
   "claude-sonnet-4-6": {
@@ -292,6 +300,12 @@ export const CLAUDE_MODEL_RATES_USD_PER_MTOK = {
     cacheWrite5m: 2.5,
     cacheRead: 0.1,
   },
+  "claude-opus-5-5": {
+    input: 4,
+    output: 20,
+    cacheWrite5m: 5,
+    cacheRead: 0.2,
+  },
 } as const;
 
 type PricedClaudeModel = keyof typeof CLAUDE_MODEL_RATES_USD_PER_MTOK;
@@ -299,6 +313,12 @@ type PricedClaudeModel = keyof typeof CLAUDE_MODEL_RATES_USD_PER_MTOK;
 function ratesForModel(model: string): (typeof CLAUDE_MODEL_RATES_USD_PER_MTOK)[PricedClaudeModel] {
   if (Object.prototype.hasOwnProperty.call(CLAUDE_MODEL_RATES_USD_PER_MTOK, model)) {
     return CLAUDE_MODEL_RATES_USD_PER_MTOK[model as PricedClaudeModel];
+  }
+  // An unrecognized Opus id must not inherit Sonnet 5.5 rates. That fallback
+  // would price Opus at $2/$10. Opus 5.5 list rates are the floor for any
+  // other id that names Opus. They are not a historical Opus 4.x price list.
+  if (model.toLowerCase().includes("opus")) {
+    return CLAUDE_MODEL_RATES_USD_PER_MTOK[CLAUDE_OPUS_55];
   }
   return CLAUDE_MODEL_RATES_USD_PER_MTOK[CLAUDE_SONNET_55];
 }

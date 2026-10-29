@@ -540,6 +540,22 @@ const DAY = 24 * 60 * 60 * 1000;
     analystRunCostUsd(0, 0, 0, 1_000_000, "claude-sonnet-4-6") === 0.3,
     "Sonnet 4.6 cache reads stay $0.30",
   );
+  assert(
+    analystRunCostUsd(1_000_000, 1_000_000, 0, 0, "claude-opus-5-5") === 24,
+    "Opus 5.5 input and output are $4 and $20",
+  );
+  assert(
+    analystRunCostUsd(0, 0, 1_000_000, 0, "claude-opus-5-5") === 5,
+    "Opus 5.5 5-minute cache writes are $5",
+  );
+  assert(
+    analystRunCostUsd(0, 0, 0, 1_000_000, "claude-opus-5-5") === 0.2,
+    "Opus 5.5 cache reads are $0.20",
+  );
+  assert(
+    analystRunCostUsd(1_000_000, 1_000_000, 0, 0, "claude-opus-9") === 24,
+    "an unrecognized Opus id is not priced on the Sonnet 5.5 $2 and $10 rates",
+  );
 
   const claudeSrc = readFileSync(resolve("supabase/functions/milon-bot/claude.ts"), "utf8");
   const handlerSrc = readFileSync(resolve("supabase/functions/milon-bot/handler.ts"), "utf8");
