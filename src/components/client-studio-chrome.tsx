@@ -18,6 +18,7 @@ export const CLIENT_RAIL = [
   { id: "moves", label: "Next moves" },
   { id: "plan", label: "Action plan" },
   { id: "reports", label: "Reports" },
+  { id: "tax", label: "Tax" },
   { id: "books", label: "Books" },
 ] as const;
 
@@ -132,6 +133,7 @@ function clientSections(clientId: string, showSendAgent: boolean): NavSection[] 
             { id: "all", label: "All reports" },
           ]),
         },
+        { id: "tax", label: "Tax", to: go("tax") },
       ],
     },
     {

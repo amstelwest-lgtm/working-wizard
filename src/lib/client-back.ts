@@ -17,6 +17,7 @@ export function clientBackTarget(input: {
     moves: { label: "Next moves", tab: "moves" },
     plan: { label: "Action plan", tab: "plan" },
     reports: { label: "Reports", tab: "reports" },
+    tax: { label: "Tax", tab: "tax" },
     summary: { label: "Books", tab: "portal" },
     portal: { label: "Books", tab: "portal" },
   };

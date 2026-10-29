@@ -110,7 +110,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   CLIENT_RAIL.map((row) => row.id),
-  ["home", "health", "cash", "profit", "budget", "moves", "plan", "reports", "books"],
+  ["home", "health", "cash", "profit", "budget", "moves", "plan", "reports", "tax", "books"],
   "the client rail lists the new items, including Health",
 );
 

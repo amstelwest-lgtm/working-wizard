@@ -68,6 +68,16 @@ const RAIL_PATHS: Record<string, ReactNode> = {
       <path d="M9.2 2.2V5h2.9" />
     </>
   ),
+  /** Receipt with a percent mark. */
+  tax: (
+    <>
+      <path d="M4.2 2.2h5.1L12.2 5v8.8H4.2Z" />
+      <path d="M9.2 2.4V5.1h2.8" />
+      <path d="m9.6 6.8-3.2 3.6" />
+      <circle cx="6.6" cy="7.1" r="0.7" />
+      <circle cx="9.4" cy="10.1" r="0.7" />
+    </>
+  ),
   books: (
     <>
       <path d="M8 3.4C6.8 2.5 4.9 2.2 2.4 2.4v10.2c2.5-.2 4.4.1 5.6 1 1.2-.9 3.1-1.2 5.6-1V2.4c-2.5-.2-4.4.1-5.6 1Z" />

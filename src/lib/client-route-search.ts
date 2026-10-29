@@ -30,6 +30,7 @@ export const CLIENT_RAIL_TABS = [
   "moves",
   "plan",
   "reports",
+  "tax",
   "portal",
   "settings",
 ] as const;
@@ -88,7 +89,8 @@ export type LegacyPaneId =
   | "advisory"
   | "drafter"
   | "summary"
-  | "moves";
+  | "moves"
+  | "tax";
 
 const RAIL_SET = new Set<string>(CLIENT_RAIL_TABS);
 
@@ -121,6 +123,8 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   books: { tab: "portal" },
   moves: { tab: "moves" },
   "strategic-moves": { tab: "moves" },
+  tax: { tab: "tax" },
+  "tax-specialist": { tab: "tax" },
   reports: { tab: "reports" },
   report: { tab: "reports" },
   pack: { tab: "reports", section: "drafts" },
@@ -186,6 +190,7 @@ function destinationForSection(
   if (section === "sent") return { tab: "reports", section: "sent" };
   if (section === "connections") return { tab: "portal", section: "connections" };
   if (section === "moves" || section === "strategic-moves") return { tab: "moves" };
+  if (section === "tax" || section === "tax-specialist") return { tab: "tax" };
   if (
     section === "books" ||
     section === "summary" ||
@@ -426,6 +431,8 @@ export function legacyPaneForSearch(search: {
       return "plan";
     case "reports":
       return "reports";
+    case "tax":
+      return "tax";
     case "portal":
       return "summary";
     case "settings":
@@ -619,6 +626,8 @@ export function clientRailSelection(input: {
       }
       if (report) return { headingId: "reports", subId: "all" };
       return { headingId: "reports", subId: null };
+    case "tax":
+      return { headingId: "tax", subId: null };
     case "portal":
       if (section === "connections") return { headingId: "books", subId: "connections" };
       if (section === "documents") return { headingId: "books", subId: "documents" };
@@ -712,6 +721,7 @@ export function clientNavSearch<T extends object>(
     delete next.action;
     return next as T;
   }
+  if (headingId === "tax") return accountantClientTabSearch(prev, "tax");
   if (headingId === "books") {
     if (sub === "connections" || sub === "documents" || sub === "send-agent") {
       return accountantClientTabSearch(prev, "portal", { section: sub });

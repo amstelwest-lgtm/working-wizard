@@ -4,6 +4,9 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { TaxWorkPlaceholder } from "../src/components/tax-work-placeholder";
 import {
   accountantClientRouteSearch,
   accountantClientTabSearch,
@@ -93,6 +96,9 @@ lands("brain", { tab: "portal" }, "?tab=brain opens Client portal");
 lands("client-brain", { tab: "portal" }, "?tab=client-brain opens Client portal");
 lands("moves", { tab: "moves" }, "?tab=moves opens Next moves");
 lands("strategic-moves", { tab: "moves" }, "?tab=strategic-moves opens Next moves");
+lands("tax", { tab: "tax" }, "?tab=tax opens Tax");
+lands("tax-specialist", { tab: "tax" }, "?tab=tax-specialist opens Tax");
+lands("overview", { tab: "tax" }, "?tab=overview&section=tax opens Tax", { section: "tax" });
 
 lands("reports", { tab: "reports" }, "?tab=reports opens Reports");
 lands("report", { tab: "reports" }, "?tab=report opens Reports");
@@ -290,7 +296,7 @@ assert(
   "the first paint uses the parsed tab and section",
 );
 const railSource = readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
-const railOrder = ["home", "health", "cash", "profit", "budget", "moves", "plan", "reports", "books"];
+const railOrder = ["home", "health", "cash", "profit", "budget", "moves", "plan", "reports", "tax", "books"];
 let railAt = -1;
 for (const id of railOrder) {
   const at = railSource.indexOf(`id: "${id}"`);
@@ -304,6 +310,30 @@ assert(route.includes('label: "File"'), "File is a rail kicker");
 assert(route.includes('{ id: "home", label: "Home" }'), "Home is a rail item");
 assert(route.includes('label: "Action plan"'), "Action plan is a rail item");
 assert(route.includes('label: "Books"'), "Books is a rail item");
+assert(route.includes('{ id: "tax", label: "Tax", to: go("tax") }'), "Tax sits under Work");
+const workGroup = railSource.slice(railSource.indexOf('id: "work"'), railSource.indexOf('id: "file"'));
+assert(workGroup.includes('label: "Tax"'), "Tax is a Work heading");
+assert(workGroup.indexOf('label: "Reports"') < workGroup.indexOf('label: "Tax"'), "Tax follows Reports under Work");
+const taxNav = clientNavSearch({ tab: "reports", section: "drafts", report: "scorecard" }, "tax");
+assert(taxNav.tab === "tax" && taxNav.section === undefined, "opening Tax writes ?tab=tax");
+assert(!("report" in taxNav), "a report link does not stick to Tax");
+const taxRail = clientRailSelection({ tab: "tax-specialist" });
+assert(taxRail.headingId === "tax" && taxRail.subId === null, "tax-specialist marks the Tax heading");
+const taxAlias = routerSearch({ tab: "tax-specialist", section: "open" });
+assert(taxAlias.tab === "tax" && taxAlias.section === undefined, "tax-specialist opens Tax with no section");
+assert(route.includes('id="pane-tax"'), "Tax has its own pane");
+assert(route.includes("<TaxWorkPlaceholder"), "the Tax pane is the placeholder");
+const taxHtml = renderToStaticMarkup(createElement(TaxWorkPlaceholder));
+assert(taxHtml.includes('data-subpage="tax"'), "the Tax page is its own subpage");
+assert(taxHtml.includes("No tax deliverables yet"), "the Tax page says there is nothing to review yet");
+assert(
+  taxHtml.includes("They will show up here when there is something to review."),
+  "the Tax page keeps the empty sentence",
+);
+const icons = readFileSync(resolve("src/components/chrome-icons.tsx"), "utf8");
+assert(/tax:\s*\(/.test(icons), "Tax has a rail icon");
+const ownerShell = readFileSync(resolve("src/components/owner-door/owner-shell.tsx"), "utf8");
+assert(!ownerShell.includes('label: "Tax"'), "the owner rail has no Tax item");
 const drafts = clientNavSearch({ tab: "home" }, "reports", "drafts");
 assert(drafts.tab === "reports" && drafts.section === "drafts", "Drafts opens Reports drafts");
 const draftsRail = clientRailSelection({ tab: "reports", section: "drafts" });

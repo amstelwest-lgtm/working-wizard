@@ -84,6 +84,7 @@ const headingOrder = [
   "moves",
   "plan",
   "reports",
+  "tax",
   "books",
 ];
 let cursor = -1;
