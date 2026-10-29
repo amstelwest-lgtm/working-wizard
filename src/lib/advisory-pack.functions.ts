@@ -41,7 +41,6 @@ import {
   type LivePackFigures,
   type LivePackMetrics,
   type PackReview,
-  type PackSection,
 } from "@/lib/advisory-pack";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { storedOpeningIsMissing } from "@/lib/client-metrics";
@@ -673,11 +672,23 @@ function applySectionPatch(
   key: string,
   patch: z.infer<typeof SectionPatch>,
 ): AdvisoryPackContent {
+  if (content.schema === 2) {
+    return {
+      ...content,
+      sections: content.sections.map((s) =>
+        s.key === key
+          ? {
+              ...s,
+              meaning: patch.body ?? s.meaning,
+              actions: patch.bullets ?? s.actions,
+            }
+          : s,
+      ),
+    };
+  }
   return {
     ...content,
-    sections: content.sections.map(
-      (s): PackSection => (s.key === key ? { ...s, ...patch, key: s.key } : s),
-    ),
+    sections: content.sections.map((s) => (s.key === key ? { ...s, ...patch, key: s.key } : s)),
   };
 }
 
@@ -745,8 +756,10 @@ export const reviewAdvisoryPack = createServerFn({ method: "POST" })
     let after: Record<string, unknown> | null = null;
     if (data.action === "edit") {
       if (!data.section || !data.patch) throw new Error("edit needs a section and a patch");
-      const target = pack.content.sections.find((s) => s.key === data.section);
-      if (target?.locked) throw new Error("This section is fixed and cannot be edited");
+      if (pack.content.schema !== 2) {
+        const target = pack.content.sections.find((s) => s.key === data.section);
+        if (target?.locked) throw new Error("This section is fixed and cannot be edited");
+      }
       const next = applySectionPatch(pack.content, data.section, data.patch);
       editStats = computeEditStats(pack.ai_draft, next);
       after = { ...data.patch };

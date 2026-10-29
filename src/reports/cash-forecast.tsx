@@ -7,26 +7,25 @@
  * SSR-rendered module.
  */
 
-import { Fragment, type ReactNode } from "react";
-import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { View, Text } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
-import { ReportSection, reportTablePartStyle } from "@/lib/report-pdf-layout";
+import { ReportSection } from "@/lib/report-pdf-layout";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
+import { RunwayChart } from "@/components/pdf/cash-runway-chart";
+import { WeekTable } from "@/components/pdf/cash-week-table";
 import { C, fmtRand, fmtRandCompact, resolveTheme } from "@/components/pdf/theme";
-import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { cashForecastNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { profileCashAssumptions } from "@/lib/profile-signals";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
-import { formatReportAmount, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 import { forecastIsCashGenerative } from "@/lib/client-metrics";
 import {
-  cashForecastWeekRowLabel,
   forecastFloorPosition,
   forecastLowestPoint,
   forecastRunwayHeadlineShared,
@@ -93,9 +92,6 @@ export type CashForecastPDFProps = {
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const DEFAULT_THRESHOLD = CASH_RUNWAY_THRESHOLD_RAND;
-const CHART_W = 515;
-const CHART_H = 130;
-const LABEL_H = 20;
 
 const SCENARIO_META: Record<string, { label: string; color: string }> = {
   base: { label: "Base forecast", color: C.blue },
@@ -111,294 +107,13 @@ const DEFAULT_ASSUMPTIONS = [
   "No extraordinary capital expenditure, asset disposals, or one-off items are assumed in this forecast.",
 ];
 
-// ── Runway chart ───────────────────────────────────────────────────────────
-
-const ch = StyleSheet.create({
-  container: { position: "relative", height: CHART_H + LABEL_H, marginBottom: 6 },
-  gridLine: { position: "absolute", left: 0, right: 0, height: 0.5, backgroundColor: C.hairline },
-  gridLabel: {
-    position: "absolute",
-    left: 0,
-    fontSize: 5.5,
-    fontFamily: "Helvetica",
-    color: C.faint,
-  },
-  dangerZone: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: LABEL_H,
-    backgroundColor: C.redSoft,
-    opacity: 0.7,
-  },
-  thresholdLine: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 0.9,
-    backgroundColor: C.red,
-  },
-  thresholdTag: {
-    position: "absolute",
-    right: 0,
-    fontSize: 5.5,
-    fontFamily: "Helvetica-Bold",
-    color: C.redDeep,
-  },
-  bar: { position: "absolute", borderTopLeftRadius: 1.5, borderTopRightRadius: 1.5 },
-  weekLabel: {
-    position: "absolute",
-    bottom: 3,
-    fontSize: 5.5,
-    textAlign: "center",
-    fontFamily: "Helvetica",
-    color: C.muted,
-  },
-  legend: { flexDirection: "row", gap: 14, marginTop: 2, marginBottom: 12 },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  legendDot: { width: 7, height: 7, borderRadius: 2 },
-  legendText: { fontSize: 6.5, color: C.muted, fontFamily: "Helvetica" },
-});
-
 function finiteCash(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
-}
-
-function pdfAmount(value: number | null | undefined, market: ResolvedMarket): string {
-  if (!finiteCash(value)) return "—";
-  return fmtRand(value, market);
 }
 
 function sumFinite(values: readonly (number | null | undefined)[]): number | null {
   if (values.length === 0 || values.some((value) => !finiteCash(value))) return null;
   return values.reduce<number>((sum, value) => sum + (value as number), 0);
-}
-
-function RunwayChart({
-  weeks,
-  threshold,
-  accent,
-}: {
-  weeks: CashForecastWeek[];
-  threshold: number;
-  accent: string;
-}) {
-  const market = usePdfMarket();
-  const values = weeks.map((w) => w.closing_balance);
-  if (values.some((value) => !finiteCash(value))) {
-    return (
-      <Text style={{ fontSize: 9, fontFamily: "Helvetica", color: C.body }}>
-        Opening cash unknown
-      </Text>
-    );
-  }
-  const closings = values as number[];
-  const maxVal = Math.max(...closings, threshold, 1);
-  const minVal = Math.min(...closings, 0);
-  const range = maxVal - minVal || 1;
-  const y = (v: number) => ((v - minVal) / range) * CHART_H;
-
-  const n = weeks.length;
-  const slot = CHART_W / n;
-  const barW = Math.max(6, slot - 8);
-  const thresholdY = LABEL_H + y(threshold);
-
-  return (
-    <View>
-      <View style={ch.container}>
-        {/* danger zone: below threshold */}
-        <View style={[ch.dangerZone, { height: Math.max(0, y(threshold)) }]} />
-
-        {[0.25, 0.5, 0.75, 1].map((p, i) => (
-          <View key={i} style={[ch.gridLine, { bottom: LABEL_H + p * CHART_H }]} />
-        ))}
-
-        {/* bars */}
-        {weeks.map((w, i) => {
-          const v = w.closing_balance as number;
-          const below = v < threshold;
-          const zero = y(Math.max(0, minVal < 0 ? 0 : minVal));
-          const top = y(Math.max(v, minVal < 0 ? 0 : minVal));
-          const bottom = Math.min(zero, y(v));
-          const h = Math.max(2, Math.abs(top - bottom));
-          return (
-            <Fragment key={i}>
-              <View
-                style={[
-                  ch.bar,
-                  {
-                    left: i * slot + (slot - barW) / 2,
-                    bottom: LABEL_H + bottom,
-                    width: barW,
-                    height: h,
-                    backgroundColor: v < 0 ? C.red : below ? C.amber : accent,
-                  },
-                ]}
-              />
-              <Text style={[ch.weekLabel, { left: i * slot, width: slot }]}>
-                {
-                  w.period_label.replace(/^Week /i, "W") // date-ok: week axis label, not a calendar span
-                }
-              </Text>
-            </Fragment>
-          );
-        })}
-
-        {/* threshold line on top */}
-        <View style={[ch.thresholdLine, { bottom: thresholdY }]} />
-        <Text style={[ch.thresholdTag, { bottom: thresholdY + 2 }]}>
-          MINIMUM {fmtRandCompact(threshold, market)}
-        </Text>
-      </View>
-
-      <View style={ch.legend}>
-        <View style={ch.legendItem}>
-          <View style={[ch.legendDot, { backgroundColor: accent }]} />
-          <Text style={ch.legendText}>Closing balance</Text>
-        </View>
-        <View style={ch.legendItem}>
-          <View style={[ch.legendDot, { backgroundColor: C.amber }]} />
-          <Text style={ch.legendText}>Below minimum</Text>
-        </View>
-        <View style={ch.legendItem}>
-          <View style={[ch.legendDot, { backgroundColor: C.red }]} />
-          <Text style={ch.legendText}>Negative balance</Text>
-        </View>
-        <View style={ch.legendItem}>
-          <View style={[ch.legendDot, { backgroundColor: C.redSoft }]} />
-          <Text style={ch.legendText}>Danger zone</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// ── Weekly table ───────────────────────────────────────────────────────────
-
-const tbl = StyleSheet.create({
-  wrapper: {
-    borderRadius: 5,
-    overflow: "hidden",
-    borderWidth: 0.75,
-    borderColor: C.line,
-    marginBottom: 12,
-  },
-  headerRow: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 8 },
-  headerCell: {
-    fontSize: 6.5,
-    fontFamily: "Helvetica-Bold",
-    color: C.white,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-  },
-  row: {
-    flexDirection: "row",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderTopWidth: 0.5,
-    borderTopColor: C.hairline,
-  },
-  cell: { fontSize: 7.5, fontFamily: "Helvetica", color: C.body },
-});
-
-function WeekTable({
-  weeks,
-  threshold,
-  accent,
-  heading,
-}: {
-  weeks: CashForecastWeek[];
-  threshold: number;
-  accent: string;
-  heading: ReactNode;
-}) {
-  const market = usePdfMarket();
-  const cols = [
-    { label: "Week", flex: 1.1 },
-    { label: "Opening", flex: 1.4, right: true },
-    { label: "Receipts", flex: 1.4, right: true },
-    { label: "Payments", flex: 1.4, right: true },
-    { label: "Net", flex: 1.3, right: true },
-    { label: "Closing", flex: 1.4, right: true },
-  ];
-  const header = (
-    <View style={[tbl.headerRow, { backgroundColor: accent }]}>
-      {cols.map((c, i) => (
-        <Text
-          key={i}
-          style={[tbl.headerCell, { flex: c.flex, textAlign: c.right ? "right" : "left" }]}
-        >
-          {c.label}
-        </Text>
-      ))}
-    </View>
-  );
-  const rowNodes = weeks.map((w, i) => {
-    const danger = finiteCash(w.closing_balance) && w.closing_balance < threshold;
-    const netUp = finiteCash(w.net_movement) && w.net_movement >= 0;
-    return (
-      <View
-        key={i}
-        style={[tbl.row, { backgroundColor: danger ? C.redSoft : i % 2 === 1 ? C.soft : C.white }]}
-      >
-        <Text style={[tbl.cell, { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink }]}>
-          {
-            cashForecastWeekRowLabel(w.period_label) // date-ok: week row label, not a calendar span
-          }
-        </Text>
-        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right" }]}>
-          {pdfAmount(w.opening_balance, market)}
-        </Text>
-        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.greenDeep }]}>
-          {pdfAmount(w.total_receipts, market)}
-        </Text>
-        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.redDeep }]}>
-          {finiteCash(w.total_payments)
-            ? formatReportAmount(w.total_payments, market, { sign: "parens" })
-            : "—"}
-        </Text>
-        <Text
-          style={[
-            tbl.cell,
-            {
-              flex: 1.3,
-              textAlign: "right",
-              color: netUp ? C.greenDeep : C.redDeep,
-            },
-          ]}
-        >
-          {pdfAmount(w.net_movement, market)}
-        </Text>
-        <Text
-          style={[
-            tbl.cell,
-            {
-              flex: 1.4,
-              textAlign: "right",
-              fontFamily: "Helvetica-Bold",
-              color: danger ? C.redDeep : C.ink,
-            },
-          ]}
-        >
-          {pdfAmount(w.closing_balance, market)}
-        </Text>
-      </View>
-    );
-  });
-  const rest = rowNodes.slice(1);
-  return (
-    <ReportSection
-      heading={heading}
-      lead={
-        <View style={reportTablePartStyle(rest.length ? "lead" : "only", C.line)}>
-          {header}
-          {rowNodes[0] ?? null}
-        </View>
-      }
-    >
-      {rest.length ? <View style={reportTablePartStyle("rest", C.line)}>{rest}</View> : null}
-    </ReportSection>
-  );
 }
 
 // ── Main component ─────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ResolvedMarket } from "@/lib/market";
 import {
   packAsGeneratedLabel,
+  packReadableSections,
   packSectionsForPdf,
   packStatusLabel,
   type AdvisoryPack,
@@ -58,11 +59,16 @@ export function pdfSafeText(value: string): string {
     .replace(/\u2014/g, " - ");
 }
 
-export function advisoryPackPdfFilename(clientName: string, version?: number | null): string {
+export function advisoryPackPdfFilename(clientName: string, period?: string | null): string {
   const raw = clientName.trim() || "Client";
   const slug = raw.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "Client";
-  const v = version != null && version > 0 ? `_v${version}` : "";
-  return `${slug}_Advisory_Pack${v}.pdf`;
+  const periodSlug = (period ?? "")
+    .trim()
+    .replace(/[^\w.-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return periodSlug
+    ? `Advisory_Management_Report_${slug}_${periodSlug}.pdf`
+    : `Advisory_Management_Report_${slug}.pdf`;
 }
 
 /**
@@ -124,7 +130,9 @@ export function advisoryPackPdfStamp(input: {
       firmName: recordedFirm || input.firmName,
     });
   const role = input.reviewedByKind === "owner" ? "Owner" : "Accountant";
-  const signedOffByName = pdfSafeText(recordedOk ? recordedName : isSigner && personal ? personal : role);
+  const signedOffByName = pdfSafeText(
+    recordedOk ? recordedName : isSigner && personal ? personal : role,
+  );
   const signature =
     isSigner && input.signatureDataUrl?.startsWith("data:image/") ? input.signatureDataUrl : null;
   const firmRaw = recordedOk && recordedFirm ? recordedFirm : input.firmName.trim();
@@ -192,7 +200,10 @@ export async function downloadAdvisoryPackPdf(input: {
   ]);
 
   const clientName = input.pack.content.clientName.trim() || "Client";
-  const filename = advisoryPackPdfFilename(clientName, input.pack.version);
+  const filename = advisoryPackPdfFilename(
+    clientName,
+    input.pack.period_label || input.pack.content.periodLabel, // date-ok: filename slug, not printed copy
+  );
   const stamp = advisoryPackPdfStamp({
     status: input.pack.status,
     reviewedAt: input.pack.reviewed_at,
@@ -205,11 +216,14 @@ export async function downloadAdvisoryPackPdf(input: {
     recordedSignerName: input.recordedSigner?.name ?? null,
     recordedFirmName: input.recordedSigner?.firmName ?? null,
   });
-  const sections: AdvisoryPackPdfSection[] = packSectionsForPdf(input.pack.content.sections, {
-    signed: Boolean(stamp),
-    firmName: stamp?.firmName ?? input.profile.firmName,
-    liveHealth: input.liveHealth,
-  }).map((s) => ({
+  const sections: AdvisoryPackPdfSection[] = packSectionsForPdf(
+    packReadableSections(input.pack.content),
+    {
+      signed: Boolean(stamp),
+      firmName: stamp?.firmName ?? input.profile.firmName,
+      liveHealth: input.liveHealth,
+    },
+  ).map((s) => ({
     title: s.title,
     body: s.body,
     bullets: s.bullets,
@@ -232,9 +246,7 @@ export async function downloadAdvisoryPackPdf(input: {
           market: input.market,
         })
       : null;
-  const staleNotice = staleSignoff
-    ? [staleSignoff, generatedOn].filter(Boolean).join(" ")
-    : null;
+  const staleNotice = staleSignoff ? [staleSignoff, generatedOn].filter(Boolean).join(" ") : null;
 
   const advisoryState = resolveAdvisorySignoffState({
     version: input.pack.version,
@@ -253,7 +265,10 @@ export async function downloadAdvisoryPackPdf(input: {
         period: advisoryPackPdfPeriodLine(input.pack, input.market ?? marketForClient(null)),
       },
       accountantProfile: input.profile,
-      sections,
+      content: input.pack.content,
+      legacyNote: input.pack.content.schema !== 2,
+      sections: input.pack.content.schema === 2 ? [] : sections,
+      dateLabel: generatedOn ?? undefined,
       draftDisclosure: stamp || unsignedReady ? null : ADVISORY_PACK_DRAFT_DISCLOSURE,
       draftLabel: stamp ? null : unsignedReady ? SIGNOFF_STATUS_READY : SIGNOFF_STATUS_DRAFT,
       draftMark: stamp ? null : unsignedReady ? "READY FOR REVIEW" : "DRAFT",

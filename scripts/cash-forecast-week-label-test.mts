@@ -20,9 +20,11 @@ const leaked = cashForecastWeekRowLabel("Week 1 // date-ok: week row label, not 
 assert.equal(leaked, "Week 1", "a marker stuck on the label is not printed");
 assert.equal(leaked.includes("//"), false);
 
-const pdf = readFileSync("src/reports/cash-forecast.tsx", "utf8");
+const forecast = readFileSync("src/reports/cash-forecast.tsx", "utf8");
+assert.match(forecast, /<WeekTable\b/, "the cash forecast PDF draws the shared week table");
+const table = readFileSync("src/components/pdf/cash-week-table.tsx", "utf8");
 assert.match(
-  pdf,
+  table,
   /cashForecastWeekRowLabel\(w\.period_label\)/,
   "the PDF week column uses the row label",
 );

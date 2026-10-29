@@ -129,27 +129,60 @@ export function DuPontDiagram({
   diagnosis,
   roeHeadline,
   roeNote,
+  nodeNotes,
+  typeface,
 }: {
   levers: DuPontLevers;
   diagnosis: DuPontDiagnosis;
   /** Short ROE figure. When set, replaces the raw percent (annualised label or n/a). */
   roeHeadline?: string;
   roeNote?: string | null;
+  /** Optional prior-period line under a node. Omitted nodes stay as they are. */
+  nodeNotes?: Partial<Record<"roe" | LeverKey, string>>;
+  /** Pack-only faces. Omitted reports stay on Helvetica. */
+  typeface?: { display: string; sans: string };
 }) {
   const market = usePdfMarket();
   const cards = leverCards(levers, t("currencyWord", market));
-  const roeOk = roeHeadline != null ? roeHeadline !== "n/a" && roeHeadline !== "—" : Number.isFinite(levers.roe);
+  const roeOk =
+    roeHeadline != null
+      ? roeHeadline !== "n/a" && roeHeadline !== "—"
+      : Number.isFinite(levers.roe);
   const roeText = roeHeadline ?? (roeOk ? fmtPct(levers.roe) : "n/a");
+  const displayFace = typeface ? { fontFamily: typeface.display, fontWeight: 600 as const } : null;
+  const sansFace = typeface ? { fontFamily: typeface.sans } : null;
+  const sansBold = typeface ? { fontFamily: typeface.sans, fontWeight: 700 as const } : null;
 
   return (
     <View style={D.wrap} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
       {/* ROE result */}
       <View style={D.roeRow}>
         <View style={D.roeBox}>
-          <Text style={D.roeLabel}>Return on Equity</Text>
-          <Text style={D.roeValue}>{roeText}</Text>
+          <Text style={sansBold ? [D.roeLabel, sansBold] : D.roeLabel}>Return on Equity</Text>
+          <Text style={displayFace ? [D.roeValue, displayFace] : D.roeValue}>{roeText}</Text>
+          {nodeNotes?.roe ? (
+            <Text
+              style={{
+                fontSize: 7,
+                color: C.white,
+                fontFamily: "Helvetica",
+                marginTop: 2,
+                textAlign: "center",
+              }}
+            >
+              {nodeNotes.roe}
+            </Text>
+          ) : null}
           {roeNote ? (
-            <Text style={{ fontSize: 7, color: C.white, fontFamily: "Helvetica", marginTop: 2, textAlign: "center" }}>
+            <Text
+              style={{
+                fontSize: 7,
+                color: C.white,
+                fontFamily: "Helvetica",
+                marginTop: 2,
+                textAlign: "center",
+              }}
+            >
               {roeNote}
             </Text>
           ) : null}
@@ -178,9 +211,23 @@ export function DuPontDiagram({
                 </View>
               )}
               <View style={[D.card, isWeak ? D.cardWeak : {}]}>
-                <Text style={D.cardLabel}>{card.label}</Text>
-                <Text style={[D.cardValue, isWeak ? { color: C.redDeep } : {}]}>{card.value}</Text>
-                <Text style={D.cardSub}>{card.sub}</Text>
+                <Text style={sansBold ? [D.cardLabel, sansBold] : D.cardLabel}>{card.label}</Text>
+                <Text style={[D.cardValue, displayFace ?? {}, isWeak ? { color: C.redDeep } : {}]}>
+                  {card.value}
+                </Text>
+                {nodeNotes?.[card.key] ? (
+                  <Text
+                    style={{
+                      fontSize: 6.5,
+                      fontFamily: "Helvetica",
+                      color: C.muted,
+                      marginBottom: 2,
+                    }}
+                  >
+                    {nodeNotes[card.key]}
+                  </Text>
+                ) : null}
+                <Text style={sansFace ? [D.cardSub, sansFace] : D.cardSub}>{card.sub}</Text>
                 {isWeak && (
                   <View style={D.dragChip}>
                     <Text style={D.dragText}>DRAG ON ROE</Text>

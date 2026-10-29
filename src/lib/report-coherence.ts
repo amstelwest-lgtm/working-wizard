@@ -7,14 +7,18 @@
  * a second cutoff table.
  */
 
-import { GROSS_MARGIN_MAPPING_NOTE, grossMarginLooksImplausible, scoreRatio } from "@/lib/health-score";
-import { formatReportAmount } from "@/lib/market/format";
+import {
+  GROSS_MARGIN_MAPPING_NOTE,
+  grossMarginLooksImplausible,
+  scoreRatio,
+} from "./health-score.ts";
+import { formatReportAmount } from "./market/format.ts";
 import {
   balanceSheetDayInputsMissing,
   isDayMetricName,
   NOT_ENOUGH_DATA,
   renderedMetricMissing,
-} from "@/lib/missing-metrics";
+} from "./missing-metrics.ts";
 import {
   equityMultiplierRatio,
   healthBandLabel,
@@ -24,7 +28,7 @@ import {
   scoreTier,
   taxBurdenRatio,
   type HealthTier,
-} from "@/lib/ratios";
+} from "./ratios.ts";
 
 export const NO_PRIOR_PERIOD = "No prior period";
 export const NO_HISTORY_YET = "No history yet";
@@ -277,7 +281,13 @@ export function presentReturn(input: {
   if (input.ratioName === "Return on Equity") {
     const equity = input.equity;
     if (equity == null || !roeIsMeaningful(equity, input.currency)) {
-      return { text: ROE_TOO_SMALL, headline: "n/a", scoredValue: null, note: null, unscored: true };
+      return {
+        text: ROE_TOO_SMALL,
+        headline: "n/a",
+        scoredValue: null,
+        note: null,
+        unscored: true,
+      };
     }
   }
   if (!Number.isFinite(input.value)) {
@@ -336,12 +346,7 @@ export function debtToEquityReading(input: {
     };
   }
   const facilities = input.facilityDebt;
-  if (
-    input.facilitiesCaptured &&
-    equityOk &&
-    facilities != null &&
-    Number.isFinite(facilities)
-  ) {
+  if (input.facilitiesCaptured && equityOk && facilities != null && Number.isFinite(facilities)) {
     return {
       value: facilities / (equity as number),
       source: "facilities",
@@ -360,14 +365,20 @@ export function reportDownloadGate(input: {
   busy?: boolean;
 }): { disabled: boolean; title: string } {
   if (input.loading) return { disabled: true, title: "Loading client figures…" };
-  if (input.blocked) return { disabled: true, title: "Upload financials before generating client reports" };
+  if (input.blocked)
+    return { disabled: true, title: "Upload financials before generating client reports" };
   if (input.unavailableReason) return { disabled: true, title: input.unavailableReason };
   if (input.busy) return { disabled: true, title: "This report is already downloading" };
   if (!input.ready) return { disabled: true, title: "Preparing the download…" };
   return { disabled: false, title: "Download this report" };
 }
 
-export type MovementVerdict = "improving" | "stable" | "declining_most" | "declining_all" | "no_history";
+export type MovementVerdict =
+  | "improving"
+  | "stable"
+  | "declining_most"
+  | "declining_all"
+  | "no_history";
 
 export function movementVerdict(input: {
   current: number;
@@ -410,7 +421,12 @@ export function leverBand(ratioName: string, value: number): HealthTier | null {
   return scoreTier(score);
 }
 
-export function burdenDisplay(kind: "interest" | "tax", ebit: number, ebt: number, netIncome: number): number {
+export function burdenDisplay(
+  kind: "interest" | "tax",
+  ebit: number,
+  ebt: number,
+  netIncome: number,
+): number {
   return kind === "interest" ? interestBurdenRatio(ebit, ebt) : taxBurdenRatio(ebt, netIncome);
 }
 
@@ -504,7 +520,14 @@ export function presentScorecardRatio(input: {
     // No cash-flow statement: omit the row. A dash pair ("OCF / EBITDA — —")
     // reads as a scored zero. A genuine zero from a statement still scores.
     if (!Number.isFinite(input.value) || unstatedZero) {
-      return { include: false, text: null, headline: null, scoredValue: null, note: null, unscored: true };
+      return {
+        include: false,
+        text: null,
+        headline: null,
+        scoredValue: null,
+        note: null,
+        unscored: true,
+      };
     }
   }
   if (input.name === "Return on Equity" || input.name === "Return on Assets") {
@@ -537,7 +560,14 @@ export function presentScorecardRatio(input: {
       };
     }
     if (!LIST_WHEN_MISSING.has(input.name)) {
-      return { include: false, text: null, headline: null, scoredValue: null, note: null, unscored: true };
+      return {
+        include: false,
+        text: null,
+        headline: null,
+        scoredValue: null,
+        note: null,
+        unscored: true,
+      };
     }
     return {
       include: true,

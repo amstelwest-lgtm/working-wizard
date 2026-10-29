@@ -5,7 +5,7 @@
  * Renderers ask this helper so a later engine fix, which sends null instead,
  * only makes the source check redundant.
  */
-import { benchmarkEmptyCopy } from "@/lib/benchmark-empty";
+import { benchmarkEmptyCopy } from "./benchmark-empty.ts";
 
 export const NOT_ENOUGH_DATA = "Not enough data";
 export const MISSING_FIGURE = "—";

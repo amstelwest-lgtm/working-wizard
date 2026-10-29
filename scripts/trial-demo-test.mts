@@ -1018,7 +1018,8 @@ const pdfBuf = await renderToBuffer(
   createElement(AdvisoryPackPDF, {
     smeData: { name: pdfInput.clientName, period: pdfInput.period },
     accountantProfile: pdfInput.profile,
-    sections: pdfInput.sections,
+    content: pdfInput.content,
+    sections: [],
     draftDisclosure: pdfInput.disclosure,
     sample: true,
     market: pdfInput.market,

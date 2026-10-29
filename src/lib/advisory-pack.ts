@@ -57,6 +57,17 @@ import {
 } from "./recommendations.ts";
 import type { DataRequest } from "./data-requests.ts";
 import type { OutcomeStory } from "./outcomes.ts";
+import {
+  assembleAdvisoryPackV2,
+  isAdvisoryPackV2,
+  packV2SectionTitle,
+  parseAdvisoryPackV2,
+  type AdvisoryPackContentV2,
+  type PackSectionV2,
+} from "./advisory-pack-schema.ts";
+
+export type { AdvisoryPackContentV2, PackSectionV2 };
+export { isAdvisoryPackV2, PACK_SCHEMA1_LAYOUT_NOTE, PACK_SECTION_V2_KEYS } from "./advisory-pack-schema.ts";
 
 export const PACK_STATUSES = [
   "draft",
@@ -168,7 +179,7 @@ export type PackDataGapRef = {
   severity: string;
 };
 
-export type AdvisoryPackContent = {
+export type AdvisoryPackContentV1 = {
   schema: 1;
   generatedAt: string;
   clientName: string;
@@ -182,6 +193,22 @@ export type AdvisoryPackContent = {
   recommendations: PackRecommendationRef[];
   dataGaps: PackDataGapRef[];
   sections: PackSection[];
+};
+
+export type AdvisoryPackContent = AdvisoryPackContentV1 | AdvisoryPackContentV2;
+
+export type PackBooks = {
+  financials: Record<string, unknown>;
+  priorFinancials?: Record<string, unknown> | null;
+  cashflow?: unknown;
+  financialsUpdatedAt?: string | null;
+  fyStartMonth?: number | null;
+  timeZone?: string | null;
+  now?: Date;
+  industry?: string | null;
+  market?: ScoreMarket | null;
+  assumptions?: string[];
+  sourceLabel?: string | null;
 };
 
 export type AdvisoryPack = {
@@ -229,6 +256,10 @@ export type PackReview = {
 
 export function parsePackContent(raw: unknown): AdvisoryPackContent {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  if (o.schema === 2) {
+    const parsed = parseAdvisoryPackV2(o);
+    if (parsed) return parsed;
+  }
   const sections = Array.isArray(o.sections)
     ? (o.sections as Record<string, unknown>[])
         .filter((s) => s && typeof s.key === "string")
@@ -441,14 +472,29 @@ export function advisoryPackFiguresChanged(
     | {
         health?: { overall?: number | null } | null;
         forecast?: { openingBalance?: number | null } | null;
-        sections?: Array<{ key?: string; body?: string }>;
+        sections?: Array<{ key?: string; body?: string; meaning?: string }>;
       }
     | null
     | undefined,
   current: { runwayLabel: string | null; cash: number | null; healthScore: number | null },
 ): boolean {
   if (!content) return false;
-  const body = content.sections?.find((section) => section.key === "forecast")?.body ?? "";
+  const body = (content.sections ?? [])
+    .map((section) => {
+      if (section.key === "forecast" && "body" in section && typeof section.body === "string") {
+        return section.body;
+      }
+      if (
+        (section.key === "cash" || section.key === "summary") &&
+        "meaning" in section &&
+        typeof section.meaning === "string"
+      ) {
+        return section.meaning;
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join(" ");
   if (current.runwayLabel && !forecastBodyMentionsRunway(body, current.runwayLabel)) return true;
   const packed = content.health?.overall;
   if (
@@ -681,6 +727,11 @@ export type PackInputs = {
   currency?: string;
   /** Client market. Missing is South Africa, via coerce, and never throws. */
   market?: { locale?: string | null } | null;
+  /**
+   * Statement, prior period, and cashflow the single reports already read.
+   * When set, the pack is schema 2 and the charts are frozen from these books.
+   */
+  books?: PackBooks;
   /**
    * Statement facts the Data and Collections surfaces already treat as missing.
    * Aged debtors are named when receivables exist and no ageing report is on file.
@@ -950,6 +1001,8 @@ export function packSectionsForPdf<T extends { key?: string; title: string; body
     });
 }
 
+export function buildAdvisoryPack(input: PackInputs & { books: PackBooks }): AdvisoryPackContentV2;
+export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContentV1;
 export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   const usd = packIsUsd(input.currency);
   const currencyCode = usd ? "USD" : "ZAR";
@@ -1279,7 +1332,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
     { key: "disclosure", title: "About this pack", body: disclosureBody, locked: true },
   ];
 
-  return {
+  const v1: AdvisoryPackContentV1 = {
     schema: 1,
     generatedAt: input.now,
     clientName: name,
@@ -1299,6 +1352,14 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
       bullets: section.bullets?.map(scrub),
     })),
   };
+  if (input.books) {
+    return assembleAdvisoryPackV2({
+      base: v1,
+      input,
+      formatRatio: (ratioName, value) => fmtRatio(ratioName, value, money),
+    });
+  }
+  return v1;
 }
 
 function rank(priority: string): number {
@@ -1380,15 +1441,16 @@ export type PackEditStats = {
 };
 
 export type SectionDiff = {
-  key: PackSectionKey;
+  key: string;
   title: string;
   changed: boolean;
   before: string;
   after: string;
 };
 
-function sectionText(s: PackSection | undefined): string {
+function sectionText(s: PackSection | PackSectionV2 | undefined): string {
   if (!s) return "";
+  if ("meaning" in s) return [s.verdict ?? "", s.meaning, ...(s.actions ?? [])].join("\n");
   return [s.title, s.body, ...(s.bullets ?? [])].join("\n");
 }
 
@@ -1420,8 +1482,28 @@ export function diffPackSections(
     const f = byKey.get(d.key);
     const before = sectionText(d);
     const after = sectionText(f);
-    return { key: d.key, title: f?.title ?? d.title, changed: before !== after, before, after };
+    const title = f && "title" in f ? f.title : d && "title" in d ? d.title : packV2SectionTitle(d.key as PackSectionV2["key"]);
+    return { key: d.key, title, changed: before !== after, before, after };
   });
+}
+
+export type PackReadableSection = {
+  key: string;
+  title: string;
+  body: string;
+  bullets?: string[];
+  locked?: boolean;
+};
+
+/** Schema 1 sections, or schema 2 pages shown as title / body / bullets for the current editor. */
+export function packReadableSections(content: AdvisoryPackContent): PackReadableSection[] {
+  if (!isAdvisoryPackV2(content)) return content.sections;
+  return content.sections.map((section) => ({
+    key: section.key,
+    title: packV2SectionTitle(section.key),
+    body: [section.verdict, section.meaning].filter(Boolean).join(" "),
+    bullets: section.actions.length ? section.actions : undefined,
+  }));
 }
 
 export function computeEditStats(
