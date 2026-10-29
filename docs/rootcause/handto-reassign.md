@@ -1,4 +1,97 @@
-# Hand to reassign: first reload shows the old agent
+# Hand to reassign
+
+## 29 Oct 2026 — first reload settles on Hand to
+
+ZA 1020F owner Next moves, client AQA J2 ZA 1020F (`24844299-1aec-449c-ab45-66ca1b97c3ef`). A new move, not a reassign. “Automate repeat tasks to free people for higher-value work” (`source_move_key` `gpToLabor`). Handed to Analyst at 10:16 SAST. The row showed `Handing to Analyst…`, then `Handed to Milōn Analyst · by Zanele Owner`. The first hard reload settled on plain `Hand to` and stayed there. The second reload showed `Handed to Milōn Analyst`. It was not a `Checking…` flash. US 1020E did not do this over two reloads.
+
+Read-only queries on the Milon real project (`jxclnsbsqpixxqlbcapl`). No writes, no deletes. `pg_stat_replication` still has one subscriber, `realtime_replication_connection`, async, replay lag about 1ms. There is no read replica in front of the reload.
+
+### What is on file
+
+One action. No blank twin.
+
+| | |
+|---|---|
+| `action_items.id` | `0079314c-5bfb-49ac-adf2-3aae4a4a4c3d` |
+| `plan_id` | `40d86075-265c-474d-8d7f-a3ff3be6c902` |
+| `source` / `source_move_key` | `strategic_move` / `gpToLabor` |
+| `owner_id` | null |
+| `created_at` | 2026-10-29 08:16:15.448484+00 |
+| `updated_at` | 2026-10-29 08:16:19.586990+00 |
+
+`action_updates` on that id, oldest first:
+
+| `created_at` | actor | note |
+|---|---|---|
+| 2026-10-29 08:16:19.954751+00 | Zanele Owner (`owner_app`) | Handed to Milōn Analyst. |
+| 2026-10-29 08:16:28.936536+00 | Milōn Analyst (`system`) | Analyst finished: Recorded one finding… |
+
+The Analyst run (`90b4cbdc-c0e5-4d52-a6c2-65bbf2d0aae1`) was queued at 08:16:19.090559+00, started at 08:16:20.554+00, and finished at 08:16:28.700+00. The item exists 4.5 seconds before the hand-off note. The run exists 0.86 seconds before the note. The note exists before the runner starts. That is the current edge order: insert `agent_runs`, then `writeAssignment`, then `agent_invoke`.
+
+A read in that 4.5 seconds finds a real row with `owner_id` null and no `Handed to ` note. `latestStoredAssignment` returns null. The button is `Hand to`. A read after 08:16:19.955+00 finds Analyst. That is reload 1, then reload 2. Nothing else was written between them that would change the match. There is one `gpToLabor` row.
+
+### Why the screen already said Handed to
+
+Owner Next moves is `ActionPlanPanel` with `ownerView` (`src/routes/app.tsx`). The click is `MoveHandTo` on a suggested move (`src/components/action-plan.tsx`). `handToAgent` sets the suggestion button to `Handing to ${agentShortName(agent)}…` and only then `await ensure()` (`src/components/hand-to-menu.tsx`).
+
+`ensureStrategicMoveItem` (`src/lib/ensure-plan-item.ts`) inserts `action_items` and returns. That insert is the 08:16:15.448 row. It does not write a note. `owner_id` stays null. `action_items_v` (`supabase/migrations/20260918150000_action_items_recommendation_view.sql`) takes `owner_name` from `client_employees` on `owner_id`, so the view name is null too.
+
+`commitActionHandoff` (`src/lib/owner-handoff-client.ts`) then builds the note in memory, `rememberOptimistic`, and `dispatchActionPlanRefresh` **before** `await requestOwnerHandoff`. `signedInActorLabel()` fills `note.actorLabel` on that same object, still before the fetch. The plan listener (`src/components/action-plan.tsx`) stores the note with `withPendingNote` and calls `refresh()`. `applyOptimisticPlan` sets that item’s `owner_name` to `Milōn Analyst` and keeps the optimistic note until a stored copy arrives.
+
+Once `refresh()` sees the row `ensure` just inserted, the plan row’s button is `handoffTriggerLabel("Milōn Analyst")`, which is `Handed to Milōn Analyst`. The line under it is `AssignmentNotes` → `formatAssignmentNote` (`src/lib/action-handoff.ts`): `Handed to Milōn Analyst · by Zanele Owner`. That string is not `handoffTriggerLabel`. The suggestion button can still say `Handing to Analyst…`, because `MoveHandTo` does not call `setAssignee(agentDisplayName(agent))` until `result.noted === true`, and `noted` is the edge response after `writeAssignment` and `agent_invoke`.
+
+The suggestion also leaves the list as soon as the new row is in `items`. `importedKeys` drops a move whose `source_move_key` is already on the plan. The control that remains is the plan row, and that row is already painted from the optimistic note.
+
+A hard reload drops `optimisticHandoffs`, `liveHandoff`, and `moveAssignmentCache`. They are module or component state. The new document reads `action_items_v` and `action_updates`. In the gap, the note is not there. `notesReady` becomes true (`handoffPending={!notesReady}`). `displayedAssignee(null, [])` is null. `pending` is false. `handoffTriggerLabel(null)` is `Hand to`. `MoveHandTo` does the same if it is still mounted: the load effect calls `setReady(true)` and then returns without `setAssignee` when `assigneeName` is null (`src/components/hand-to-menu.tsx`). `Checking…` is only while `ready` / `notesReady` is false. A finished read of a blank row is a settled Hand to.
+
+### Why it stays until the next reload
+
+The reloaded page has no memory of the click, so nothing is “awaiting a run”. `useAgentActivity(clientId)` on the plan (`src/hooks/use-agent-activity.ts`) arms its poll only when the runs it just fetched are queued or running, or when a caller passed an open hand-off. The plan does not pass one. `MoveHandTo` polls every 5 seconds only when `face.phase === "working"`, which needs the run.
+
+The run does not exist until 08:16:19.090, which is most of the way through the gap, and 0.86 seconds before the note. A reload whose read lands before that run gets no open run, does not arm the poll, and does not call `refresh()` again. The button stays `Hand to`. The second reload is after the note, so the same read returns Analyst.
+
+A read in the short slice that sees the run and not the note would arm the poll and could heal on its own within about 5 seconds. Today’s report stayed on Hand to until another reload, which is the earlier slice: the item is in, the run is not, the note is not. Either way the settled label is Hand to, because a bot assignee is the note, not `owner_id`.
+
+### Why #704, #706, #709, and the earlier note missed it
+
+#704 (`5dbe27a1`, commit `efeffb3f`) stops a newer blank duplicate from hiding an older noted row. This client has one `gpToLabor` row. `assignmentForMove` prefers a noted row only when one of the matches has `assigneeName`. A single row with no note is the match, and the name is null. The #704 test passed two notes that were already in the array.
+
+#706 (`8c8f482b`, commit `4ac73f40`) moves `writeAssignment` to before `agent_invoke`, and keeps the `MoveHandTo` label on `Handing to` until `noted === true`. The comment in `supabase/functions/owner-handoff/index.ts` says a reload during the runner already sees the note. Prod clocks match that order. The gap today is before `writeAssignment`: after `ensureStrategicMoveItem` has committed the blank row, while `commitActionHandoff` has already dispatched the byline. #706 never stopped that dispatch, and it never mounted a fresh page against a matching row whose note was still absent. Its reload fixture still had the previous agent’s note, so the gap read as the old name. That is US 1020E. A new row has no previous name, so the same gap is `Hand to`. Two reloads after the note is in both show Analyst, which is why 1020E did not reproduce this shape.
+
+#709 (`d91bbd90`, commit `10d1fcf8`) is the Checking guard, plus the 60-second reuse in the edge function. `setReady(true)` and `setNotesReady(true)` run when the read resolves, including when the resolved row has no assignee. Checking is the in-flight state. Today’s failure is the resolved state. The #709 reload test held the read open and asserted `Checking…`. It did not resolve the read with the new action and a null assignee, which is the settled Hand to.
+
+The sections below this one cover the two earlier failures: reload 1 shows the old agent (the note is not in yet, the previous note is), and a clickable Hand to while the read is still open (`useState(null)` before #709). Neither is a finished read of a brand-new blank row. The “first reload” test below seeds `Handed to Milōn Financial Manager.` first, so step 5 cannot be today’s button.
+
+### A test that is this reload
+
+Not `assignmentForMove` with the Analyst note already present. Not a remount that still holds the optimistic map. Not a read that is still pending (`Checking…`). Not a fixture that already has another agent’s note.
+
+1. Do not seed a hand-off note. Render the owner plan row and `MoveHandTo` for a move that has no `action_items` row.
+2. Choose Analyst. Let `ensureStrategicMoveItem` insert the row. Hold `requestOwnerHandoff` so `writeAssignment` has not inserted the note and no `agent_runs` row exists yet.
+3. Assert the plan row already says `Handed to Milōn Analyst` and the note line says `Handed to Milōn Analyst · by <actor>`, while the suggestion button can still say `Handing to Analyst…`. Do not resolve the fetch.
+4. Throw the document away: unmount, and load a new module so `moveAssignmentCache` and `optimisticHandoffs` are empty.
+5. Mount again. The loader returns that action, `owner_id` null, no assignment note, no run.
+6. Assert the read has finished: no `Checking…`, `[data-hand-to-trigger]` is present, and its accessible name is `Hand to`. That is reload 1, and it must still be `Hand to` with no later poll in the test.
+7. Resolve the fetch with `Handed to Milōn Analyst.` by the same actor, `created_at` after the item.
+8. Mount a third time. Assert `Handed to Milōn Analyst`. That is reload 2.
+
+Step 6 is today’s bug. Step 8 is the second reload.
+
+### Parked polish — raw login on an older byline
+
+Not this failure. Do not fix it in the same change.
+
+The 21 Oct note on “Audit and renegotiate your top 5 supplier contracts” (`eecc8d6d-9d5c-42ea-bb00-be2c730fbb68`) is `Handed to Milōn Financial Manager.` with `actor_label` `amstel.west+qa1020f` and `actor_type` `owner_app`. `formatAssignmentNote` prints `by` plus that label, because the author is not a bot and the type is not `system`. Later notes on this client are `Thandi Tester` and `Zanele Owner`.
+
+`handoffAuthorName` (`src/lib/owner-handoff.ts`) uses `profiles.full_name`, then the auth display name, then the email local-part. Commit `0c8299fd` stopped storing the email handle when a name exists. It does not rewrite a note already stored, and the email local-part is still the fallback when no name is on file. CoS has this as polish.
+
+### Hand to Tax Specialist is a sample preview
+
+Not this failure. Do not change it.
+
+On a ZA owner, `HandToMenu` renders `TaxSpecialistSlot` with `variant="handoff"` (`src/components/hand-to-menu.tsx`). That slot is `ZaTaxSpecialistSample` (`src/components/tax-specialist/za-tax-specialist-sample.tsx`), loaded only when `taxSampleEnabled` is true (`src/lib/tax-specialist/enabled.ts`, country `ZA`). The menu button is `data-tax-handoff` and its label is `Hand to Tax Specialist`. The click calls `openFromManager`, which opens the sample sheet (`data-tax-sample-sheet`, kicker `SAMPLE · ZA · SARS`). The banner says nothing was filed. It does not call `onAssignAgent` or `commitActionHandoff`. There is no Tax Specialist `agent_runs` row and no hand-off note for one. It is a sample preview, not a live hand-off.
+
+## Earlier — first reload shows the old agent
 
 AQA failed this a second time on US 1020E, client `353f1dbf-a7ba-4092-878d-792223ba3536`, `/clients/353f1dbf-a7ba-4092-878d-792223ba3536?tab=moves`. Next moves row 2 is “Set a quarterly revenue target and track weekly progress” (`source_move_key` `revenueGrowth`). Reassign from Financial Manager to Analyst. The toast says “Handed to Analyst” and the row updates immediately. Reload 1 shows “Handed to Milōn Financial Manager”. Reloads 2 and 3 show Analyst. It no longer falls back to “Hand to”.
 
