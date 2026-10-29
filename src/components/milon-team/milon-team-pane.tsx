@@ -68,28 +68,34 @@ export function MilonTeamPaneView({
   live: AgentActivitySnapshot & { refresh?: () => void };
   now?: Date;
 }) {
-  const filedFinding = useMemo(() => {
-    if (!agent) return "";
-    const rows = live.findings
+  const filed = useMemo(() => {
+    const newest = live.findings
       .filter((row) => row.agent === agent && isVisibleAgentFinding(row))
-      .sort((a, b) => b.created_at.localeCompare(a.created_at));
-    const newest = rows[0];
-    if (!newest) return "";
-    return findingSentence({
-      title: newest.title,
-      detail: newest.detail,
-      figures: findingFigureEntries(newest.evidence),
-      market: live.market,
-      canonicalRatios,
-      liveHealth: feed.healthQuote,
-      evidence: newest.evidence,
-      writtenAt: newest.created_at,
-      figuresUpdatedAt: feed.figuresUpdatedAt,
-    });
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    if (!agent || !newest) return undefined;
+    return {
+      id: newest.id,
+      text: findingSentence({
+        title: newest.title,
+        detail: newest.detail,
+        figures: findingFigureEntries(newest.evidence),
+        market: live.market,
+        canonicalRatios,
+        liveHealth: feed.healthQuote,
+        evidence: newest.evidence,
+        writtenAt: newest.created_at,
+        figuresUpdatedAt: feed.figuresUpdatedAt,
+      }),
+    };
   }, [agent, live.findings, live.market, canonicalRatios, feed.healthQuote, feed.figuresUpdatedAt]);
+  const filedFinding = filed?.text ?? "";
+  const homeLine = homeFinding?.trim() || findingFallback?.trim() || "";
   const finding = rewriteDraftMonthStamp(
     homeFinding?.trim() || findingFallback?.trim() || filedFinding,
   );
+  const heroFinding = agent
+    ? { id: homeLine ? null : (filed?.id ?? null), text: finding || null }
+    : null;
   const desk = (
     <MilonTeamDesk
       feed={feed}
@@ -105,6 +111,7 @@ export function MilonTeamPaneView({
       audience={audience}
       sampleClient={sampleClient}
       canonicalRatios={canonicalRatios}
+      heroFinding={heroFinding}
     />
   );
   if (!agent) {

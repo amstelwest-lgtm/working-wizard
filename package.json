@@ -359,7 +359,8 @@
     "test:prospect-talk-browser": "vite-node --config scripts/vite-test.config.ts scripts/prospect-talk-browser-test.mts",
     "test:try-outreach": "vite-node --config scripts/vite-test.config.ts scripts/render-try-outreach.mts",
     "render:try-outreach": "vite-node --config scripts/vite-test.config.ts scripts/render-try-outreach.mts",
-    "test:agent-page-layout": "vite-node --config scripts/vite-test.config.ts scripts/agent-page-layout-test.mts"
+    "test:agent-page-layout": "vite-node --config scripts/vite-test.config.ts scripts/agent-page-layout-test.mts",
+    "test:finding-dedupe": "vite-node --config scripts/vite-test.config.ts scripts/finding-dedupe-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

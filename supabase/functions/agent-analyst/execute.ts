@@ -40,6 +40,7 @@ import { earlierStatementNote } from "../../../src/lib/statement-import-plan.ts"
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { overviewRatios } from "../../../src/lib/health-score.ts";
 import { periodMonthsOf } from "../../../src/lib/ratios.ts";
+import { supersedeOlderFindings } from "../_shared/agent-findings-supersede.ts";
 
 export type AnalystExecCtx = {
   clientId: string;
@@ -52,6 +53,17 @@ export type AnalystExecCtx = {
   /** clients.market. Missing means South Africa. */
   market?: unknown;
 };
+
+/** The finding is already saved. A failed supersede only leaves an older duplicate visible. */
+async function supersedeAnalystFindings(ctx: AnalystExecCtx, keepId: string, title: string): Promise<void> {
+  const result = await supersedeOlderFindings(ctx.db, {
+    clientId: ctx.clientId,
+    agent: "analyst",
+    keepId,
+    title,
+  });
+  if (result.error) console.warn("agent_findings supersede failed", result.error);
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -383,6 +395,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       .eq("id", duplicate.id)
       .is("superseded_by", null);
     if (touchError) return { error: touchError.message };
+    await supersedeAnalystFindings(ctx, duplicate.id, shaped.title);
     for (const key of recordKeys) ctx.recordedKeys.add(key);
     return {
       recorded: true,
@@ -409,6 +422,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     .select("id")
     .maybeSingle();
   if (error || !data?.id) return { error: error?.message || "The finding was not saved." };
+  await supersedeAnalystFindings(ctx, String(data.id), shaped.title);
   for (const key of recordKeys) ctx.recordedKeys.add(key);
 
   const { error: messageError } = await ctx.db.from("agent_messages").insert({

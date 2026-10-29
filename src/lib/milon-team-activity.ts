@@ -19,6 +19,7 @@ import {
 } from "./health-snapshot";
 import { figuresMovedAfterDraft, quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
 import { offsetInsideCalendarSpan, repairCalendarFigureLeaks, rewriteDraftMonthStamp } from "./statement-period";
+import { findingTitleKey } from "./finding-title-key";
 
 export const TODAY_RATIO_CAP = 3;
 
@@ -72,6 +73,42 @@ export type AgentFindingRow = {
   superseded_by?: string | null;
   dismissed_reason?: string | null;
 };
+
+function findingSeenAt(row: { created_at: string; last_seen?: string | null }): string {
+  return row.last_seen || row.created_at || "";
+}
+
+/**
+ * One row per agent and finding title, newest first. Titles match on
+ * findingTitleKey, so a re-run that only changed a figure replaces the old row.
+ * Approved rows are never dropped; they point at work that was done.
+ */
+export function dedupeFindings<
+  T extends {
+    id: string;
+    agent: string;
+    title: string;
+    created_at: string;
+    last_seen?: string | null;
+    status?: string | null;
+  },
+>(rows: readonly T[]): T[] {
+  const ordered = [...rows].sort(
+    (a, b) => findingSeenAt(b).localeCompare(findingSeenAt(a)) || b.id.localeCompare(a.id),
+  );
+  const seen = new Set<string>();
+  const kept: T[] = [];
+  for (const row of ordered) {
+    const key = `${row.agent}:${findingTitleKey(row.title)}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      kept.push(row);
+    } else if (row.status === "approved") {
+      kept.push(row);
+    }
+  }
+  return kept;
+}
 
 /** Dismissed and superseded drafts stay off the owner surfaces. Approved rows stay. */
 export function isVisibleAgentFinding(row: {
