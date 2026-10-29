@@ -17,20 +17,15 @@ import {
   irp6Rows,
   itr14Rows,
 } from "./za-tax-specialist-sample";
+import {
+  TAX_FORM_GALLERY,
+  TAX_FORM_STATUS_LABEL,
+  type TaxFormCode,
+} from "@/lib/tax-specialist/forms/gallery";
 import "./za-tax-specialist-sample.css";
 import "./za-tax-specialist-page.css";
 
 export type TaxPageActivity = { id: string; text: string; at: string };
-
-export const TAX_FORMS = [
-  { id: "irp5", name: "IRP5 / IT3(a)", what: "Employee tax certificates for the year." },
-  { id: "emp201", name: "EMP201", what: "Monthly PAYE, UIF and SDL declaration." },
-  { id: "emp501", name: "EMP501", what: "Payroll reconciliation, twice a year." },
-  { id: "irp6", name: "IRP6", what: "Provisional tax for the company." },
-  { id: "itr14", name: "ITR14", what: "The company's income tax return." },
-  { id: "vat201", name: "VAT201", what: "VAT return for the period." },
-  { id: "itr12", name: "ITR12", what: "Personal income tax return for an owner." },
-] as const;
 
 function SampleBadge() {
   return (
@@ -62,19 +57,54 @@ function Workings() {
   );
 }
 
-export function ZaTaxSpecialistPage({ activity = [] }: { activity?: TaxPageActivity[] }) {
+function FormGallery({ onOpen }: { onOpen?: (code: TaxFormCode) => void }) {
+  return (
+    <ul className="tax-page-forms">
+      {TAX_FORM_GALLERY.map((form) => {
+        const ready = form.status === "ready" && onOpen != null;
+        const body = (
+          <>
+            <span className="tax-page-form-code">{form.label}</span>
+            <span className="tax-page-form-name">{form.name}</span>
+            <span className="tax-page-form-when">{form.frequency}</span>
+            {form.note ? <span className="tax-page-form-when">{form.note}</span> : null}
+            <span className={`tax-page-form-status is-${form.status}`}>
+              {TAX_FORM_STATUS_LABEL[form.status]}
+            </span>
+          </>
+        );
+        return (
+          <li key={form.code} data-tax-form={form.code} data-tax-form-status={form.status}>
+            {ready ? (
+              <button
+                type="button"
+                className="tax-page-form is-open"
+                onClick={() => onOpen?.(form.code)}
+              >
+                {body}
+              </button>
+            ) : (
+              <div className="tax-page-form">{body}</div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function ZaTaxSpecialistPage({
+  activity = [],
+  onOpenForm,
+}: {
+  activity?: TaxPageActivity[];
+  onOpenForm?: (code: TaxFormCode) => void;
+}) {
   const recent = [...activity].sort((a, b) => b.at.localeCompare(a.at)).slice(0, ACTIVITY_CAP);
   return (
     <div className="tax-page" data-tax-page="true">
       <AgentSection section="forms" data-tax-section="forms">
-        <ul className="tax-page-forms">
-          {TAX_FORMS.map((form) => (
-            <li key={form.id} className="tax-page-form" data-tax-form={form.id}>
-              <span className="tax-page-form-name">{form.name}</span>
-              <span className="tax-page-form-what">{form.what}</span>
-            </li>
-          ))}
-        </ul>
+        <FormGallery onOpen={onOpenForm} />
       </AgentSection>
       <Workings />
       <AgentSection section="deadlines" data-tax-section="deadlines">

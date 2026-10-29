@@ -2,14 +2,13 @@
  * Tax Specialist as a fourth agent page (ZA only): keys, route, stage,
  * sections, and the chat persona. Run: pnpm test:tax-specialist-agent
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentStage } from "../src/components/milon-team/agent-stage";
-import {
-  ZaTaxSpecialistPage,
-  TAX_FORMS,
-} from "../src/components/tax-specialist/za-tax-specialist-page";
+import { ZaTaxSpecialistPage } from "../src/components/tax-specialist/za-tax-specialist-page";
+import { TAX_FORM_GALLERY } from "../src/lib/tax-specialist/forms/gallery";
 import { askAgentFromHash, askHashForAgent } from "../src/lib/ask-agent";
 import {
   accountantClientRouteSearch,
@@ -124,9 +123,35 @@ assert(
 for (const title of ["SARS forms", "Tax workings", "Deadlines", "Recent activity"]) {
   assert(page.includes(`>${title}</h2>`), `${title} title`);
 }
-eq(TAX_FORMS.length, 7, "seven forms");
-for (const form of TAX_FORMS)
-  assert(page.includes(`data-tax-form="${form.id}"`), `${form.id} block`);
+// Part 7b: the form gallery, in Theo's order, with code, name, frequency and status
+eq(
+  TAX_FORM_GALLERY.map((form) => form.code).join(","),
+  "IRP5,EMP201,EMP501,IRP6,ITR14,VAT201,ITR12",
+  "gallery order",
+);
+for (const form of TAX_FORM_GALLERY) {
+  const at = page.indexOf(`data-tax-form="${form.code}"`);
+  assert(at >= 0, `${form.code} block`);
+  const block = page.slice(at, page.indexOf("</li>", at));
+  assert(block.includes(form.name), `${form.code} plain name`);
+  assert(block.includes(form.frequency.replace(/&/g, "&amp;")), `${form.code} frequency`);
+  const status = form.code === "IRP6" ? "Ready to prepare" : "Coming soon";
+  assert(block.includes(`>${status}<`), `${form.code} says ${status}`);
+}
+assert(
+  !page.includes('class="tax-page-form is-open"'),
+  "without a form sheet nothing is clickable",
+);
+const openable = renderToStaticMarkup(createElement(ZaTaxSpecialistPage, { onOpenForm: () => {} }));
+eq(
+  openable.split('class="tax-page-form is-open"').length - 1,
+  1,
+  "only the IRP6 block opens a sheet",
+);
+assert(
+  /data-tax-form="ITR14"[^]*?The worksheet is under Tax workings\./.test(page),
+  "ITR14 points at the worksheet",
+);
 assert(page.includes("Harbour"), "workings use the Harbour & Co sample");
 assert(
   page.split('data-tax-sample-label="true"').length - 1 >= 2,
@@ -188,6 +213,20 @@ assert(
   "the team desk tax chip opens the tax page",
 );
 assert(pane.includes("<TaxSpecialistPage"), "pane renders the tax page");
+function walk(dir: string, out: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) walk(path, out);
+    else if (/\.(tsx|ts|jsx|js)$/.test(name)) out.push(path);
+  }
+  return out;
+}
+const formsImport = /from\s+["'][^"']*tax-specialist\/forms\//;
+for (const path of walk("src")) {
+  if (/tax-specialist\/(za-[^/]+\.tsx|forms\/[^/]+\.ts)$/.test(path)) continue;
+  assert(!formsImport.test(readFileSync(path, "utf8")), `${path} imports a ZA form module`);
+}
+
 const agents = readFileSync("src/lib/tax-specialist/agents.ts", "utf8");
 assert(
   !/IRP6|ITR14|South Africa/.test(agents),
