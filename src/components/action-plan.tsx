@@ -3172,7 +3172,7 @@ function ImportPanel({
   const [busy, setBusy] = useState(false);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 p-4 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -3276,7 +3276,7 @@ function FromRecommendationsPanel({
   const [busy, setBusy] = useState(false);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 p-4 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -3414,7 +3414,7 @@ function TeamPanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 p-4 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -3651,7 +3651,7 @@ function ItemDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] flex justify-end bg-black/40" onClick={onClose}>
       <div
         className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-amber-900/15 bg-[#FFFFFF] p-5 shadow-2xl dark:border-slate-800 dark:bg-[#0d1524]"
         onClick={(e) => e.stopPropagation()}

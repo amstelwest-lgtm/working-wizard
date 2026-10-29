@@ -350,4 +350,18 @@ assert(profit?.score !== 14, "Profit power's ratio score is not the tile");
 assert(cash?.score == null && cash?.note === "Needs opening balance", "an unscored Cash tile keeps the Health note");
 assert(!tiles.some((tile) => tile.label === "Profit Power"), "a ratio nickname is not a pillar tile");
 
+// The item drawer and the plan's dialogs render inside the portal shell, beside the
+// sticky top bar, so they must stack above it or their top is hidden under it.
+const topbarZ = Number(/\.accountant-portal \.topbar\{[^}]*z-index:(\d+)/.exec(portalCss)?.[1]);
+assert(topbarZ > 0, "the accountant top bar has a z-index");
+for (const file of ["src/components/action-plan.tsx", "src/components/chase-draft-dialog.tsx"]) {
+  const source = readFileSync(resolve(file), "utf8");
+  const overlays = [...source.matchAll(/fixed inset-0 z-(?:\[(\d+)\]|(\d+))/g)];
+  assert(overlays.length > 0, `${file} has its overlays`);
+  for (const m of overlays) {
+    const z = Number(m[1] ?? m[2]);
+    assert(z > topbarZ, `${file}: an overlay at z ${z} sits under the top bar (z ${topbarZ})`);
+  }
+}
+
 console.log("action-plan-tab-test: ok");
