@@ -3,6 +3,7 @@ import { C } from "@/components/pdf/theme";
 import { pdfSafeText } from "@/lib/advisory-pack-pdf";
 import type { AdvisoryPackContentV2 } from "@/lib/advisory-pack-schema";
 import { PageBand } from "./pack-explainer";
+import { DISPLAY, SANS } from "./pack-type";
 
 function line(label: string, value: string | null | undefined) {
   const text = value?.trim();
@@ -12,7 +13,7 @@ function line(label: string, value: string | null | undefined) {
       key={label}
       style={{
         fontSize: 9.5,
-        fontFamily: "Helvetica",
+        fontFamily: SANS,
         color: C.body,
         marginBottom: 4,
         lineHeight: 1.4,
@@ -29,7 +30,13 @@ export function PackNotes({ content }: { content: AdvisoryPackContentV2 }) {
     <View break>
       <PageBand title="Notes and sign-off" />
       <Text
-        style={{ fontSize: 12, fontFamily: "Helvetica-Bold", color: "#102A43", marginBottom: 6 }}
+        style={{
+          fontSize: 12,
+          fontFamily: DISPLAY,
+          fontWeight: 600,
+          color: "#102A43",
+          marginBottom: 6,
+        }}
       >
         Data used
       </Text>
@@ -39,7 +46,8 @@ export function PackNotes({ content }: { content: AdvisoryPackContentV2 }) {
       <Text
         style={{
           fontSize: 12,
-          fontFamily: "Helvetica-Bold",
+          fontFamily: DISPLAY,
+          fontWeight: 600,
           color: "#102A43",
           marginTop: 8,
           marginBottom: 6,
@@ -48,14 +56,14 @@ export function PackNotes({ content }: { content: AdvisoryPackContentV2 }) {
         Assumptions
       </Text>
       {content.assumptions.length === 0 ? (
-        <Text style={{ fontSize: 9.5, fontFamily: "Helvetica", color: C.muted }}>
+        <Text style={{ fontSize: 9.5, fontFamily: SANS, color: C.muted }}>
           No forecast assumptions were frozen with this report.
         </Text>
       ) : (
         content.assumptions.map((item, index) => (
           <Text
             key={index}
-            style={{ fontSize: 9.5, fontFamily: "Helvetica", color: C.body, marginBottom: 3 }}
+            style={{ fontSize: 9.5, fontFamily: SANS, color: C.body, marginBottom: 3 }}
           >
             {pdfSafeText(item)}
           </Text>
@@ -64,7 +72,8 @@ export function PackNotes({ content }: { content: AdvisoryPackContentV2 }) {
       <Text
         style={{
           fontSize: 12,
-          fontFamily: "Helvetica-Bold",
+          fontFamily: DISPLAY,
+          fontWeight: 600,
           color: "#102A43",
           marginTop: 8,
           marginBottom: 6,
@@ -73,14 +82,14 @@ export function PackNotes({ content }: { content: AdvisoryPackContentV2 }) {
         Data gaps
       </Text>
       {content.dataGaps.length === 0 ? (
-        <Text style={{ fontSize: 9.5, fontFamily: "Helvetica", color: C.body }}>
+        <Text style={{ fontSize: 9.5, fontFamily: SANS, color: C.body }}>
           No open data gaps were frozen with this report.
         </Text>
       ) : (
         content.dataGaps.map((gap) => (
           <Text
             key={gap.id}
-            style={{ fontSize: 9.5, fontFamily: "Helvetica", color: C.body, marginBottom: 3 }}
+            style={{ fontSize: 9.5, fontFamily: SANS, color: C.body, marginBottom: 3 }}
           >
             {pdfSafeText(`${gap.severity}: ${gap.title}`)}
           </Text>
@@ -90,7 +99,7 @@ export function PackNotes({ content }: { content: AdvisoryPackContentV2 }) {
         <Text
           style={{
             fontSize: 8.5,
-            fontFamily: "Helvetica",
+            fontFamily: SANS,
             color: C.muted,
             marginTop: 10,
             lineHeight: 1.4,

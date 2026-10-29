@@ -17,14 +17,15 @@ import {
 } from "@/lib/advisory-pack-pdf";
 import { isAdvisoryPackV2, PACK_SCHEMA1_LAYOUT_NOTE } from "@/lib/advisory-pack-schema";
 import type { AdvisoryPackContent } from "@/lib/advisory-pack";
-import { PackCover } from "./advisory-pack/pack-cover";
-import { PackSummary } from "./advisory-pack/pack-summary";
-import { PackHealth } from "./advisory-pack/pack-health";
-import { PackDuPont } from "./advisory-pack/pack-dupont";
-import { PackCash } from "./advisory-pack/pack-cash";
-import { PackProfit } from "./advisory-pack/pack-profit";
-import { PackPriorities } from "./advisory-pack/pack-priorities";
-import { PackNotes } from "./advisory-pack/pack-notes";
+import "./advisory-pack-pages/pack-fonts";
+import { PackCover } from "./advisory-pack-pages/pack-cover";
+import { PackSummary } from "./advisory-pack-pages/pack-summary";
+import { PackHealth } from "./advisory-pack-pages/pack-health";
+import { PackDuPont } from "./advisory-pack-pages/pack-dupont";
+import { PackCash } from "./advisory-pack-pages/pack-cash";
+import { PackProfit } from "./advisory-pack-pages/pack-profit";
+import { PackPriorities } from "./advisory-pack-pages/pack-priorities";
+import { PackNotes } from "./advisory-pack-pages/pack-notes";
 
 export type AdvisoryPackPDFProps = {
   smeData: SmeData;

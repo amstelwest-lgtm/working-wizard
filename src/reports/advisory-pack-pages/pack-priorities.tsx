@@ -1,6 +1,7 @@
 import { Text, View } from "@react-pdf/renderer";
 import { C, TIER_META } from "@/components/pdf/theme";
 import { pdfSafeText } from "@/lib/advisory-pack-pdf";
+import { SANS } from "./pack-type";
 import type { AdvisoryPackContentV2 } from "@/lib/advisory-pack-schema";
 import { PageBand } from "./pack-explainer";
 
@@ -22,7 +23,7 @@ export function PackPriorities({ content }: { content: AdvisoryPackContentV2 }) 
           <Text
             style={{
               fontSize: 9.5,
-              fontFamily: "Helvetica",
+              fontFamily: SANS,
               color: C.body,
               lineHeight: 1.4,
               marginBottom: 6,
@@ -35,7 +36,7 @@ export function PackPriorities({ content }: { content: AdvisoryPackContentV2 }) 
           {(section?.actions ?? []).map((action, index) => (
             <Text
               key={index}
-              style={{ fontSize: 9.5, fontFamily: "Helvetica", color: C.body, marginBottom: 3 }}
+              style={{ fontSize: 9.5, fontFamily: SANS, color: C.body, marginBottom: 3 }}
             >
               {`${index + 1}. ${pdfSafeText(action)}`}
             </Text>
@@ -62,7 +63,13 @@ export function PackPriorities({ content }: { content: AdvisoryPackContentV2 }) 
               }}
             >
               <Text
-                style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: "#102A43", flex: 1 }}
+                style={{
+                  fontSize: 11,
+                  fontFamily: SANS,
+                  fontWeight: 700,
+                  color: "#102A43",
+                  flex: 1,
+                }}
               >
                 {`${index + 1}. ${pdfSafeText(item.title)}`}
               </Text>
@@ -75,25 +82,31 @@ export function PackPriorities({ content }: { content: AdvisoryPackContentV2 }) 
                     paddingVertical: 2,
                   }}
                 >
-                  <Text style={{ color: C.white, fontSize: 7, fontFamily: "Helvetica-Bold" }}>
+                  <Text style={{ color: C.white, fontSize: 7, fontFamily: SANS, fontWeight: 700 }}>
                     {item.pillar.toUpperCase()}
                   </Text>
                 </View>
               ) : null}
             </View>
             {item.problem ? (
-              <Text style={{ fontSize: 9, fontFamily: "Helvetica", color: C.body, marginTop: 3 }}>
+              <Text style={{ fontSize: 9, fontFamily: SANS, color: C.body, marginTop: 3 }}>
                 {pdfSafeText(item.problem)}
               </Text>
             ) : null}
             {item.expectedImpact ? (
               <Text
-                style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: C.ink, marginTop: 3 }}
+                style={{
+                  fontSize: 9,
+                  fontFamily: SANS,
+                  fontWeight: 700,
+                  color: C.ink,
+                  marginTop: 3,
+                }}
               >
                 {pdfSafeText(`Expected impact: ${item.expectedImpact}`)}
               </Text>
             ) : null}
-            <Text style={{ fontSize: 8, fontFamily: "Helvetica", color: C.muted, marginTop: 3 }}>
+            <Text style={{ fontSize: 8, fontFamily: SANS, color: C.muted, marginTop: 3 }}>
               {[
                 item.owner ? `Owner ${item.owner}` : null,
                 item.dueDate ? `Target ${item.dueDate}` : null,
@@ -102,9 +115,7 @@ export function PackPriorities({ content }: { content: AdvisoryPackContentV2 }) 
                 .join(" · ")}
             </Text>
             {item.metric ? (
-              <Text
-                style={{ fontSize: 8, fontFamily: "Helvetica", color: "#102A43", marginTop: 3 }}
-              >
+              <Text style={{ fontSize: 8, fontFamily: SANS, color: "#102A43", marginTop: 3 }}>
                 {pdfSafeText(`How we will measure it: ${item.metric}`)}
               </Text>
             ) : null}

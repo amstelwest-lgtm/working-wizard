@@ -1,10 +1,10 @@
 import { Text, View } from "@react-pdf/renderer";
 import { RunwayChart } from "@/components/pdf/cash-runway-chart";
 import { WeekTable, type CashWeekRow } from "@/components/pdf/cash-week-table";
-import { SectionHeader } from "@/components/pdf/section-header";
 import { C, fmtRandCompact } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { PACK_SHOWS } from "@/lib/advisory-pack-copy";
+import { P, SANS } from "./pack-type";
 import type { AdvisoryPackContentV2 } from "@/lib/advisory-pack-schema";
 import { PackExplainer, PageBand } from "./pack-explainer";
 
@@ -34,6 +34,7 @@ export function PackCash({ content, accent }: { content: AdvisoryPackContentV2; 
   const floor = forecast?.floor ?? 0;
   const cycle = content.cashCycle;
   const tiles = [
+    forecast ? { label: "Minimum cash", value: fmtRandCompact(floor, market) } : null,
     cycle?.debtorDays != null
       ? { label: "Debtor days", value: `${Math.round(cycle.debtorDays)}d` }
       : null,
@@ -56,12 +57,19 @@ export function PackCash({ content, accent }: { content: AdvisoryPackContentV2; 
         tagColor={forecast?.breachesZero ? C.red : forecast?.breachesThreshold ? C.amber : C.green}
       />
       <Text
-        style={{ fontSize: 12, fontFamily: "Helvetica-Bold", color: "#102A43", marginBottom: 4 }}
+        style={{
+          fontSize: 15,
+          fontFamily: SANS,
+          fontWeight: 600,
+          color: "#102A43",
+          marginBottom: 6,
+          textAlign: "center",
+        }}
       >
         Cash in the bank, week by week
       </Text>
       {weeks.length === 0 ? (
-        <Text style={{ fontSize: 9.5, fontFamily: "Helvetica", color: C.body, marginBottom: 8 }}>
+        <Text style={{ fontSize: 9.5, fontFamily: SANS, color: C.body, marginBottom: 8 }}>
           No 13-week forecast was frozen with this report.
         </Text>
       ) : (
@@ -70,6 +78,10 @@ export function PackCash({ content, accent }: { content: AdvisoryPackContentV2; 
           threshold={floor}
           accent={accent}
           markWeek={forecast?.lowestWeek}
+          chartHeight={88}
+          fontFamily={SANS}
+          centerLegend
+          showThresholdTag={false}
         />
       )}
       {tiles.length > 0 ? (
@@ -84,12 +96,30 @@ export function PackCash({ content, accent }: { content: AdvisoryPackContentV2; 
                 borderColor: C.line,
                 paddingHorizontal: 8,
                 paddingVertical: 6,
+                alignItems: "center",
               }}
             >
-              <Text style={{ fontSize: 7, fontFamily: "Helvetica", color: C.muted }}>
+              <Text
+                style={{
+                  fontSize: 7,
+                  fontFamily: SANS,
+                  fontWeight: 600,
+                  color: P.muted,
+                  textAlign: "center",
+                }}
+              >
                 {tile.label}
               </Text>
-              <Text style={{ fontSize: 12, fontFamily: "Helvetica-Bold", color: "#102A43" }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontFamily: SANS,
+                  fontWeight: 700,
+                  color: P.navy,
+                  textAlign: "center",
+                  marginTop: 1,
+                }}
+              >
                 {tile.value}
               </Text>
             </View>
@@ -102,7 +132,23 @@ export function PackCash({ content, accent }: { content: AdvisoryPackContentV2; 
           threshold={floor}
           accent={accent}
           density="compact"
-          heading={<SectionHeader title="Weekly cash movement" color={accent} />}
+          fontFamily={SANS}
+          together
+          heading={
+            <Text
+              style={{
+                fontFamily: SANS,
+                fontWeight: 700,
+                fontSize: 8,
+                letterSpacing: 1.2,
+                color: P.cobalt,
+                textAlign: "center",
+                marginBottom: 6,
+              }}
+            >
+              WEEKLY CASH MOVEMENT
+            </Text>
+          }
         />
       ) : null}
       <PackExplainer

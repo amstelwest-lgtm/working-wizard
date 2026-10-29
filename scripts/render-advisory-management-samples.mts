@@ -2,7 +2,7 @@
  * Render the Advisory Management Report for Chill Pepper and Harbour & Co
  * and write one PNG per page. Local sample for review. Not a client write.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createElement } from "react";
 import { assessClientMetrics } from "../src/lib/client-metrics";
@@ -10,8 +10,9 @@ import { scorecardHealthFromFinancials } from "../src/lib/health-score";
 import { scorecardRatiosFromFinancials } from "../src/lib/scorecard-rows";
 import { sampleFinancialsFor } from "../src/lib/sample-business";
 import { sampleOpeningCash } from "../src/lib/trial-sample-view";
-import { buildAdvisoryPack, packNarrativeRatios, type PackBooks, type PackInputs } from "../src/lib/advisory-pack";
+import { buildAdvisoryPack, packNarrativeRatios } from "../src/lib/advisory-pack";
 import { ZA_MARKET } from "../src/lib/market/resolve";
+import { AdvisoryPackPDF } from "../src/reports/advisory-pack";
 import { extractText, getDocumentProxy } from "unpdf";
 
 const OUT = "/opt/cursor/artifacts/advisory-management-report";
@@ -91,7 +92,7 @@ const PROFILE = {
 };
 
 function packFor(name: string, financials: Record<string, unknown>, cashflow?: unknown) {
-  const books: PackBooks = {
+  const books = {
     financials,
     cashflow,
     financialsUpdatedAt: NOW,
@@ -116,7 +117,7 @@ function packFor(name: string, financials: Record<string, unknown>, cashflow?: u
     timeZone: ZA_MARKET.timezone,
     fyStartMonth: 3,
   });
-  const input: PackInputs & { books: PackBooks } = {
+  const input = {
     clientName: name,
     firmName: PROFILE.firmName,
     hasFirm: true,
@@ -164,14 +165,18 @@ function pagePngs(pdfPath: string, prefix: string) {
 async function main() {
   mkdirSync(OUT, { recursive: true });
   const { renderToBuffer } = await import("@react-pdf/renderer");
-  const { AdvisoryPackPDF } = await import("../src/reports/advisory-pack");
   const harbourFin = {
     ...sampleFinancialsFor("ZA"),
     cash: String(sampleOpeningCash("ZA")),
     periodEnd: "2026-09-30",
   };
   const clients = [
-    { slug: "chill-pepper", name: "Chill Pepper Boutique Hotel", financials: CHILL, cashflow: CHILL_CASH },
+    {
+      slug: "chill-pepper",
+      name: "Chill Pepper Boutique Hotel",
+      financials: CHILL,
+      cashflow: CHILL_CASH,
+    },
     { slug: "harbour", name: "Harbour & Co", financials: harbourFin, cashflow: undefined },
   ];
   for (const client of clients) {
@@ -192,6 +197,11 @@ async function main() {
     console.log(client.slug, "pages", info.pages, "bytes", buf.length);
     if (!info.text.includes("Advisory Management Report")) {
       throw new Error(`${client.slug} missing title`);
+    }
+    for (const name of readdirSync(OUT)) {
+      if (name.startsWith(`${client.slug}-`) && name.endsWith(".png")) {
+        unlinkSync(`${OUT}/${name}`);
+      }
     }
     pagePngs(pdfPath, `${OUT}/${client.slug}`);
   }

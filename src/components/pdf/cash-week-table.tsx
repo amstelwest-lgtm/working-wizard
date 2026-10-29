@@ -53,6 +53,8 @@ export function WeekTable({
   accent,
   heading,
   density = "regular",
+  fontFamily,
+  together = false,
 }: {
   weeks: CashWeekRow[];
   threshold: number;
@@ -60,12 +62,21 @@ export function WeekTable({
   heading: ReactNode;
   /** Pack pages use compact so the 13 rows share the chart page. The cash report stays regular. */
   density?: "regular" | "compact";
+  /** Omitted on the cash report, which stays on Helvetica. */
+  fontFamily?: string;
+  /**
+   * Keep the heading and every row on one page. The cash report leaves this
+   * off so a long table can continue under the footer the way it does today.
+   */
+  together?: boolean;
 }) {
   const market = usePdfMarket();
   const compact = density === "compact";
   const cellFont = compact ? 6.5 : 7.5;
   const rowPad = compact ? 2.5 : 6;
   const headPad = compact ? 4 : 8;
+  const face = fontFamily ? { fontFamily } : {};
+  const faceBold = fontFamily ? { fontFamily, fontWeight: 700 as const } : {};
   const cols = [
     { label: "Week", flex: 1.1 },
     { label: "Opening", flex: 1.4, right: true },
@@ -79,7 +90,11 @@ export function WeekTable({
       {cols.map((c, i) => (
         <Text
           key={i}
-          style={[tbl.headerCell, { flex: c.flex, textAlign: c.right ? "right" : "left" }]}
+          style={[
+            tbl.headerCell,
+            faceBold,
+            { flex: c.flex, textAlign: c.right ? "right" : "left" },
+          ]}
         >
           {c.label}
         </Text>
@@ -103,20 +118,26 @@ export function WeekTable({
         <Text
           style={[
             tbl.cell,
-            { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink, fontSize: cellFont },
+            {
+              flex: 1.1,
+              fontFamily: fontFamily ?? "Helvetica-Bold",
+              fontWeight: fontFamily ? 700 : undefined,
+              color: C.ink,
+              fontSize: cellFont,
+            },
           ]}
         >
           {
             cashForecastWeekRowLabel(w.period_label) // date-ok: week row label, not a calendar span
           }
         </Text>
-        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", fontSize: cellFont }]}>
+        <Text style={[tbl.cell, face, { flex: 1.4, textAlign: "right", fontSize: cellFont }]}>
           {pdfAmount(w.opening_balance, market)}
         </Text>
         <Text
           style={[
             tbl.cell,
-            { flex: 1.4, textAlign: "right", color: C.greenDeep, fontSize: cellFont },
+            { flex: 1.4, textAlign: "right", color: C.greenDeep, fontSize: cellFont, ...face },
           ]}
         >
           {pdfAmount(w.total_receipts, market)}
@@ -124,7 +145,7 @@ export function WeekTable({
         <Text
           style={[
             tbl.cell,
-            { flex: 1.4, textAlign: "right", color: C.redDeep, fontSize: cellFont },
+            { flex: 1.4, textAlign: "right", color: C.redDeep, fontSize: cellFont, ...face },
           ]}
         >
           {finiteCash(w.total_payments)
@@ -138,6 +159,7 @@ export function WeekTable({
               flex: 1.3,
               textAlign: "right",
               fontSize: cellFont,
+              ...face,
               color: netUp ? C.greenDeep : C.redDeep,
             },
           ]}
@@ -150,7 +172,8 @@ export function WeekTable({
             {
               flex: 1.4,
               textAlign: "right",
-              fontFamily: "Helvetica-Bold",
+              fontFamily: fontFamily ?? "Helvetica-Bold",
+              fontWeight: fontFamily ? 700 : undefined,
               fontSize: cellFont,
               color: danger ? C.redDeep : C.ink,
             },
@@ -162,6 +185,17 @@ export function WeekTable({
     );
   });
   const rest = rowNodes.slice(1);
+  if (together) {
+    return (
+      <View wrap={false}>
+        {heading}
+        <View style={reportTablePartStyle("only", C.line)}>
+          {header}
+          {rowNodes}
+        </View>
+      </View>
+    );
+  }
   return (
     <ReportSection
       heading={heading}

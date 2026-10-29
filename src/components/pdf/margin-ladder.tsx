@@ -45,8 +45,19 @@ export type MarginLadderInput = {
   net_margin_pct: number;
 };
 
-export function MarginLadder({ d, accent }: { d: MarginLadderInput; accent: string }) {
+export function MarginLadder({
+  d,
+  accent,
+  fontFamily,
+}: {
+  d: MarginLadderInput;
+  accent: string;
+  /** Omitted on the profitability report, which stays on Helvetica. */
+  fontFamily?: string;
+}) {
   const market = usePdfMarket();
+  const face = fontFamily ? { fontFamily } : {};
+  const faceBold = fontFamily ? { fontFamily, fontWeight: 700 as const } : {};
   const rows = [
     { name: "Revenue", amount: d.revenue, pct: 1, color: accent },
     { name: "Gross Profit", amount: d.gross_profit, pct: d.gross_margin_pct, color: C.blue },
@@ -67,8 +78,8 @@ export function MarginLadder({ d, accent }: { d: MarginLadderInput; accent: stri
     <View>
       {rows.map((r) => (
         <View key={r.name} style={ladderStyles.row}>
-          <Text style={ladderStyles.name}>{r.name}</Text>
-          <Text style={ladderStyles.amount}>{fmtRand(r.amount, market)}</Text>
+          <Text style={[ladderStyles.name, face]}>{r.name}</Text>
+          <Text style={[ladderStyles.amount, faceBold]}>{fmtRand(r.amount, market)}</Text>
           <View style={ladderStyles.track}>
             <View
               style={[
@@ -80,7 +91,7 @@ export function MarginLadder({ d, accent }: { d: MarginLadderInput; accent: stri
               ]}
             />
           </View>
-          <Text style={ladderStyles.pct}>{fmtPct(r.pct)}</Text>
+          <Text style={[ladderStyles.pct, faceBold]}>{fmtPct(r.pct)}</Text>
         </View>
       ))}
     </View>

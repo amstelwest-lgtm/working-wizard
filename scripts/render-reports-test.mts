@@ -13,6 +13,9 @@
  */
 
 import { createElement } from "react";
+// Load the pack faces with the test entry. A late dynamic import of the
+// TTF files restarts vite-node and fails the advisory pack cases.
+import "../src/reports/advisory-pack-pages/pack-fonts";
 
 // ── Shared fixtures ─────────────────────────────────────────────────────────
 

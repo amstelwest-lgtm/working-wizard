@@ -46,6 +46,7 @@ const ch = StyleSheet.create({
     color: C.muted,
   },
   legend: { flexDirection: "row", gap: 14, marginTop: 2, marginBottom: 12 },
+  legendCenter: { justifyContent: "center" },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   legendDot: { width: 7, height: 7, borderRadius: 2 },
   legendText: { fontSize: 6.5, color: C.muted, fontFamily: "Helvetica" },
@@ -65,14 +66,28 @@ export function RunwayChart({
   threshold,
   accent,
   markWeek,
+  chartHeight = CHART_H,
+  fontFamily,
+  centerLegend = false,
+  showThresholdTag = true,
 }: {
   weeks: CashRunwayWeek[];
   threshold: number;
   accent: string;
   /** 1-based week to tag. The cash report leaves this unset. */
   markWeek?: number | null;
+  /** Defaults to the cash-report height. */
+  chartHeight?: number;
+  /** Omitted on the cash report, which stays on Helvetica. */
+  fontFamily?: string;
+  /** Pack pages centre the key. The cash report leaves it on the left. */
+  centerLegend?: boolean;
+  /** Pack pages move the minimum into a tile so the tag does not sit on the bars. */
+  showThresholdTag?: boolean;
 }) {
   const market = usePdfMarket();
+  const face = fontFamily ? { fontFamily } : {};
+  const faceBold = fontFamily ? { fontFamily, fontWeight: 700 as const } : {};
   const values = weeks.map((w) => w.closing_balance);
   if (values.some((value) => !finiteCash(value))) {
     return (
@@ -85,7 +100,7 @@ export function RunwayChart({
   const maxVal = Math.max(...closings, threshold, 1);
   const minVal = Math.min(...closings, 0);
   const range = maxVal - minVal || 1;
-  const y = (v: number) => ((v - minVal) / range) * CHART_H;
+  const y = (v: number) => ((v - minVal) / range) * chartHeight;
 
   const n = weeks.length;
   const slot = CHART_W / n;
@@ -94,12 +109,12 @@ export function RunwayChart({
 
   return (
     <View>
-      <View style={ch.container}>
+      <View style={[ch.container, { height: chartHeight + LABEL_H }]}>
         {/* danger zone: below threshold */}
         <View style={[ch.dangerZone, { height: Math.max(0, y(threshold)) }]} />
 
         {[0.25, 0.5, 0.75, 1].map((p, i) => (
-          <View key={i} style={[ch.gridLine, { bottom: LABEL_H + p * CHART_H }]} />
+          <View key={i} style={[ch.gridLine, { bottom: LABEL_H + p * chartHeight }]} />
         ))}
 
         {/* bars */}
@@ -133,14 +148,14 @@ export function RunwayChart({
                     bottom: LABEL_H + bottom + h + 2,
                     fontSize: 5.5,
                     textAlign: "center",
-                    fontFamily: "Helvetica-Bold",
+                    ...(fontFamily ? faceBold : { fontFamily: "Helvetica-Bold" }),
                     color: C.redDeep,
                   }}
                 >
                   LOW
                 </Text>
               ) : null}
-              <Text style={[ch.weekLabel, { left: i * slot, width: slot }]}>
+              <Text style={[ch.weekLabel, face, { left: i * slot, width: slot }]}>
                 {
                   w.period_label.replace(/^Week /i, "W") // date-ok: week axis label, not a calendar span
                 }
@@ -151,27 +166,29 @@ export function RunwayChart({
 
         {/* threshold line on top */}
         <View style={[ch.thresholdLine, { bottom: thresholdY }]} />
-        <Text style={[ch.thresholdTag, { bottom: thresholdY + 2 }]}>
-          MINIMUM {fmtRandCompact(threshold, market)}
-        </Text>
+        {showThresholdTag ? (
+          <Text style={[ch.thresholdTag, faceBold, { bottom: thresholdY + 2 }]}>
+            MINIMUM {fmtRandCompact(threshold, market)}
+          </Text>
+        ) : null}
       </View>
 
-      <View style={ch.legend}>
+      <View style={centerLegend ? [ch.legend, ch.legendCenter] : ch.legend}>
         <View style={ch.legendItem}>
           <View style={[ch.legendDot, { backgroundColor: accent }]} />
-          <Text style={ch.legendText}>Closing balance</Text>
+          <Text style={[ch.legendText, face]}>Closing balance</Text>
         </View>
         <View style={ch.legendItem}>
           <View style={[ch.legendDot, { backgroundColor: C.amber }]} />
-          <Text style={ch.legendText}>Below minimum</Text>
+          <Text style={[ch.legendText, face]}>Below minimum</Text>
         </View>
         <View style={ch.legendItem}>
           <View style={[ch.legendDot, { backgroundColor: C.red }]} />
-          <Text style={ch.legendText}>Negative balance</Text>
+          <Text style={[ch.legendText, face]}>Negative balance</Text>
         </View>
         <View style={ch.legendItem}>
           <View style={[ch.legendDot, { backgroundColor: C.redSoft }]} />
-          <Text style={ch.legendText}>Danger zone</Text>
+          <Text style={[ch.legendText, face]}>Danger zone</Text>
         </View>
       </View>
     </View>

@@ -4,7 +4,11 @@
  */
 import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
-import { buildBridgeSteps, type BridgeStep, type ProfitBridgeInput } from "@/lib/profit-bridge-steps";
+import {
+  buildBridgeSteps,
+  type BridgeStep,
+  type ProfitBridgeInput,
+} from "@/lib/profit-bridge-steps";
 import { C, fmtRandCompact } from "@/components/pdf/theme";
 import { formatReportAmount } from "@/lib/market";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
@@ -62,14 +66,22 @@ export function BridgeChart({
   d,
   accent,
   steps: provided,
+  fontFamily,
+  centerLegend = false,
 }: {
   d: ProfitBridgeInput;
   accent: string;
   /** Frozen steps. When omitted, the chart builds them from `d`. */
   steps?: BridgeStep[];
+  /** Omitted on the profitability report, which stays on Helvetica. */
+  fontFamily?: string;
+  /** Pack pages centre the key. The profitability report leaves it on the left. */
+  centerLegend?: boolean;
 }) {
   const market = usePdfMarket();
   const steps = provided ?? buildBridgeSteps(d);
+  const face = fontFamily ? { fontFamily } : {};
+  const faceBold = fontFamily ? { fontFamily, fontWeight: 700 as const } : {};
 
   // Scale: 0 .. revenue (floor at 0 for negative running values)
   const maxVal = Math.max(d.revenue, 1);
@@ -128,6 +140,7 @@ export function BridgeChart({
               <Text
                 style={[
                   brStyles.valueLabel,
+                  faceBold,
                   {
                     left: left - 7,
                     width: barW + 14,
@@ -140,28 +153,32 @@ export function BridgeChart({
                   ? formatReportAmount(s.delta, market, { style: "compact", sign: "parens" })
                   : fmtRandCompact(s.delta, market)}
               </Text>
-              <Text style={[brStyles.colLabel, { left: i * slot, width: slot }]}>{s.label}</Text>
+              <Text style={[brStyles.colLabel, face, { left: i * slot, width: slot }]}>
+                {s.label}
+              </Text>
             </Fragment>
           );
         })}
       </View>
 
-      <View style={brStyles.legend}>
+      <View
+        style={centerLegend ? [brStyles.legend, { justifyContent: "center" }] : brStyles.legend}
+      >
         <View style={brStyles.legendItem}>
           <View style={[brStyles.legendDot, { backgroundColor: accent }]} />
-          <Text style={brStyles.legendText}>Revenue</Text>
+          <Text style={[brStyles.legendText, face]}>Revenue</Text>
         </View>
         <View style={brStyles.legendItem}>
           <View style={[brStyles.legendDot, { backgroundColor: C.blueLight }]} />
-          <Text style={brStyles.legendText}>Gross profit</Text>
+          <Text style={[brStyles.legendText, face]}>Gross profit</Text>
         </View>
         <View style={brStyles.legendItem}>
           <View style={[brStyles.legendDot, { backgroundColor: C.red }]} />
-          <Text style={brStyles.legendText}>Cost step</Text>
+          <Text style={[brStyles.legendText, face]}>Cost step</Text>
         </View>
         <View style={brStyles.legendItem}>
           <View style={[brStyles.legendDot, { backgroundColor: C.green }]} />
-          <Text style={brStyles.legendText}>Net profit</Text>
+          <Text style={[brStyles.legendText, face]}>Net profit</Text>
         </View>
       </View>
     </View>

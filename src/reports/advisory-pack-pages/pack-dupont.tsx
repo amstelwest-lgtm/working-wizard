@@ -7,6 +7,7 @@ import { PACK_SHOWS } from "@/lib/advisory-pack-copy";
 import { diagnoseDuPont, type DuPontLevers } from "@/reports/narrative";
 import type { AdvisoryPackContentV2, PackDuPontBlock } from "@/lib/advisory-pack-schema";
 import { PackExplainer, PageBand } from "./pack-explainer";
+import { DISPLAY, SANS } from "./pack-type";
 
 function times(value: number | null): string {
   return value == null ? "—" : `${value.toFixed(2)}×`;
@@ -50,7 +51,7 @@ export function PackDuPont({ content }: { content: AdvisoryPackContentV2 }) {
     return (
       <View break>
         <PageBand title="DuPont diagnosis" />
-        <Text style={{ fontSize: 9.5, fontFamily: "Helvetica", color: C.body }}>
+        <Text style={{ fontSize: 9.5, fontFamily: SANS, color: C.body }}>
           Return on equity cannot be split from the figures on file.
         </Text>
       </View>
@@ -110,13 +111,21 @@ export function PackDuPont({ content }: { content: AdvisoryPackContentV2 }) {
         tagColor={C.red}
       />
       <Text
-        style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: "#102A43", marginBottom: 6 }}
+        style={{
+          fontSize: 16,
+          fontFamily: DISPLAY,
+          fontWeight: 600,
+          color: "#102A43",
+          marginBottom: 8,
+          textAlign: "center",
+        }}
       >
         What is driving the return
       </Text>
       <DuPontDiagram
         levers={levers}
         diagnosis={diagnosis}
+        typeface={{ display: DISPLAY, sans: SANS }}
         nodeNotes={{
           roe: prior?.roe == null ? undefined : `prior ${pct(prior.roe)}`,
           margin: prior?.netMargin == null ? undefined : `prior ${pct(prior.netMargin)}`,
@@ -142,7 +151,8 @@ export function PackDuPont({ content }: { content: AdvisoryPackContentV2 }) {
                 flex: heading === "Reading" ? 2.4 : 1,
                 color: C.white,
                 fontSize: 7,
-                fontFamily: "Helvetica-Bold",
+                fontFamily: SANS,
+                fontWeight: 700,
               }}
             >
               {heading}
@@ -154,17 +164,17 @@ export function PackDuPont({ content }: { content: AdvisoryPackContentV2 }) {
             key={row.label}
             style={{ flexDirection: "row", paddingHorizontal: 8, paddingVertical: 5 }}
           >
-            <Text style={{ flex: 1, fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink }}>
+            <Text style={{ flex: 1, fontSize: 8, fontFamily: SANS, fontWeight: 700, color: C.ink }}>
               {row.label}
             </Text>
-            <Text style={{ flex: 1, fontSize: 8, fontFamily: "Helvetica", color: C.body }}>
+            <Text style={{ flex: 1, fontSize: 8, fontFamily: SANS, color: C.body }}>
               {row.current}
               {row.benchmark ? `\nbench ${row.benchmark}` : ""}
             </Text>
-            <Text style={{ flex: 1, fontSize: 8, fontFamily: "Helvetica", color: C.muted }}>
+            <Text style={{ flex: 1, fontSize: 8, fontFamily: SANS, color: C.muted }}>
               {row.prior}
             </Text>
-            <Text style={{ flex: 2.4, fontSize: 8, fontFamily: "Helvetica", color: C.body }}>
+            <Text style={{ flex: 2.4, fontSize: 8, fontFamily: SANS, color: C.body }}>
               {row.reading}
             </Text>
           </View>
