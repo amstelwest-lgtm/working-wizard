@@ -11,6 +11,15 @@ export const ASK_TIMEOUT_REPLY = "Milōn Bot took too long. Try again.";
 
 export type AskAiTool = { name: string; status: string };
 
+export type AskAiProposal = {
+  id: string;
+  surface: "cash" | "budget" | "waterfall";
+  note: string;
+  patch: Record<string, string | number>;
+  beforeValues: Record<string, string | number | null>;
+  canDecide: boolean;
+};
+
 export type AskAiSuccess = {
   ok: true;
   answer: string;
@@ -18,6 +27,8 @@ export type AskAiSuccess = {
   tools: AskAiTool[];
   run: Record<string, unknown> | null;
   created: unknown;
+  /** Pending figure proposal. The chat paints Confirm and Reject from this. */
+  proposal: AskAiProposal | null;
   /** Set when the firm must add a card. The widget paints this as a reply, not an error. */
   precardCap: { limit: "pack" | "email" | "bot" } | null;
   precardRemaining: number | null;
@@ -74,8 +85,38 @@ function precardTurn(body: unknown): AskAiSuccess | null {
     tools: [],
     run: null,
     created: null,
+    proposal: null,
     precardCap: { limit },
     precardRemaining: null,
+  };
+}
+
+function proposalOf(body: Record<string, unknown> | null): AskAiProposal | null {
+  const raw = asRecord(body?.proposal);
+  if (!raw) return null;
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const surface = raw.surface;
+  const patch = asRecord(raw.patch);
+  if (!id || (surface !== "cash" && surface !== "budget" && surface !== "waterfall") || !patch) return null;
+  const cleanPatch: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (typeof value === "number" && Number.isFinite(value)) cleanPatch[key] = value;
+    else if (typeof value === "string") cleanPatch[key] = value;
+  }
+  if (!Object.keys(cleanPatch).length) return null;
+  const before = asRecord(raw.beforeValues) ?? asRecord(raw.before_values) ?? {};
+  const beforeValues: Record<string, string | number | null> = {};
+  for (const [key, value] of Object.entries(before)) {
+    if (typeof value === "number" || typeof value === "string") beforeValues[key] = value;
+    else if (value == null) beforeValues[key] = null;
+  }
+  return {
+    id,
+    surface,
+    note: typeof raw.note === "string" ? raw.note : "",
+    patch: cleanPatch,
+    beforeValues,
+    canDecide: raw.canDecide !== false,
   };
 }
 
@@ -116,6 +157,7 @@ export function parseAskAiBody(status: number, body: unknown, ok = status >= 200
     tools: toolsOf(rec),
     run,
     created: rec?.created ?? null,
+    proposal: proposalOf(rec),
     precardCap: null,
     precardRemaining: remainingOf(rec),
   };

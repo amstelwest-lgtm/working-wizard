@@ -53,6 +53,7 @@ import {
   trialEndedOwnerAsksAccountant,
 } from "./trial-ended-billing.ts";
 import { startBrowserSpeech, VOICE_MISSED, VOICE_UNAVAILABLE } from "./browser-speech.ts";
+import { figureDecisionError, figureProposalCardCopy, figureProposalTurn } from "./figure-proposal.ts";
 
 export {
   routeMilonIntent,
@@ -75,6 +76,23 @@ const TOOL_LABELS = {
   draft_deliverable: "Draft",
   answer_from_brain: "Brain",
 };
+
+function storedProposal(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const surface = raw.surface;
+  if (!id || (surface !== "cash" && surface !== "budget" && surface !== "waterfall")) return null;
+  if (!raw.patch || typeof raw.patch !== "object" || Array.isArray(raw.patch)) return null;
+  return {
+    id,
+    surface,
+    note: typeof raw.note === "string" ? raw.note : "",
+    patch: raw.patch,
+    beforeValues: raw.beforeValues && typeof raw.beforeValues === "object" ? raw.beforeValues : {},
+    canDecide: raw.canDecide !== false,
+    status: raw.status === "decided" ? "decided" : "pending",
+  };
+}
 
 function toolHint(name, status) {
   const base = TOOL_LABELS[name] ?? name;
@@ -241,6 +259,7 @@ export function mountAskAi(container, options) {
   let agentRun = null;
   let workingObjective = false;
   let creatingDeliverable = false;
+  let proposingFigure = false;
   let errorMsg = "";
   let history = [];
   let signoffCtas = [];
@@ -336,6 +355,8 @@ export function mountAskAi(container, options) {
             next.error = turn.error.trim().slice(0, 400);
           }
           if (turn.trialEnded === true) next.trialEnded = true;
+          const proposal = storedProposal(turn.proposal);
+          if (proposal) next.proposal = proposal;
           return next;
         })
         .slice(-16);
@@ -587,6 +608,95 @@ export function mountAskAi(container, options) {
     return host;
   }
 
+  function settleFigure(proposal, content) {
+    history = history.map((turn) =>
+      turn.proposal && turn.proposal.id === proposal.id
+        ? { ...turn, content, proposal: { ...turn.proposal, status: "decided" } }
+        : turn,
+    );
+    writeThread(boundClientId || currentClientId(), history);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("figure-proposals-changed", {
+          detail: { clientId: currentClientId(), surface: proposal.surface },
+        }),
+      );
+    }
+  }
+
+  async function decideFigure(proposal, confirm) {
+    const { error } = await supabase.rpc(
+      confirm ? "apply_figure_proposal" : "reject_figure_proposal",
+      confirm ? { p_id: proposal.id, p_confirm: true } : { p_id: proposal.id },
+    );
+    if (error) {
+      errorMsg = figureDecisionError(error.message || "");
+      render();
+      return;
+    }
+    const content = confirm
+      ? "Saved. The change is on file."
+      : "Proposal rejected. The saved figures were not changed.";
+    answer = content;
+    errorMsg = "";
+    settleFigure(proposal, content);
+    render();
+  }
+
+  function buildFigureCard(turns) {
+    const pending = [...turns].reverse().find((turn) => turn.proposal && turn.proposal.status === "pending");
+    if (!pending) return null;
+    const proposal = pending.proposal;
+    const copy = figureProposalCardCopy({
+      surface: proposal.surface,
+      patch: proposal.patch,
+      beforeValues: proposal.beforeValues || {},
+      canDecide: proposal.canDecide !== false,
+    });
+    const card = document.createElement("section");
+    card.className = "ask-ai-figure-card";
+    card.dataset.figureProposals = proposal.surface;
+    card.dataset.figureProposal = proposal.id;
+    card.setAttribute("aria-label", copy.title);
+    const title = document.createElement("h3");
+    title.className = "ask-ai-figure-title";
+    title.textContent = copy.title;
+    card.appendChild(title);
+    if (proposal.note) {
+      const note = document.createElement("p");
+      note.className = "ask-ai-figure-note";
+      note.textContent = proposal.note;
+      card.appendChild(note);
+    }
+    if (copy.lines.length) {
+      const list = document.createElement("ul");
+      list.className = "ask-ai-figure-lines";
+      copy.lines.forEach((text) => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        list.appendChild(li);
+      });
+      card.appendChild(list);
+    }
+    if (copy.actions.length) {
+      const row = document.createElement("div");
+      row.className = "ask-ai-figure-actions";
+      copy.actions.forEach((label) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = label.indexOf("Confirm") === 0 ? "ask-ai-figure-confirm" : "ask-ai-figure-reject";
+        btn.textContent = label;
+        btn.addEventListener("click", () => {
+          btn.disabled = true;
+          void decideFigure(proposal, label.indexOf("Confirm") === 0);
+        });
+        row.appendChild(btn);
+      });
+      card.appendChild(row);
+    }
+    return card;
+  }
+
   function render() {
     dropTrialMounts();
     container.innerHTML = "";
@@ -765,13 +875,15 @@ export function mountAskAi(container, options) {
       if (loading) {
         const thinking = document.createElement("div");
         thinking.className = "ask-ai-thinking";
-        thinking.textContent = creatingDeliverable
-          ? "Saving the draft…"
-          : workingObjective
-            ? "Working the objective…"
-            : pendingIntent === "milon-bot"
-              ? "Checking what's on file…"
-              : "Analysing your numbers…";
+        thinking.textContent = proposingFigure
+          ? "Saving the proposal…"
+          : creatingDeliverable
+            ? "Saving the draft…"
+            : workingObjective
+              ? "Working the objective…"
+              : pendingIntent === "milon-bot"
+                ? "Checking what's on file…"
+                : "Analysing your numbers…";
         panel.appendChild(thinking);
       }
 
@@ -887,8 +999,12 @@ export function mountAskAi(container, options) {
             '<span class="ask-ai-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Working on a reply…</span>';
           thread.appendChild(typing);
         }
+        const figureCard = buildFigureCard(shown);
+        if (figureCard) panel.appendChild(figureCard);
         panel.appendChild(thread);
-        if (capCard && typeof capCard.scrollIntoView === "function") {
+        if (figureCard && typeof figureCard.scrollIntoView === "function") {
+          figureCard.scrollIntoView({ block: "nearest" });
+        } else if (capCard && typeof capCard.scrollIntoView === "function") {
           capCard.scrollIntoView({ block: "nearest" });
         } else {
           thread.scrollTop = thread.scrollHeight;
@@ -1267,6 +1383,27 @@ export function mountAskAi(container, options) {
     }
     writeThread(boundClientId || currentClientId(), history);
     question = "";
+    const figureTurn = figureProposalTurn(currentAgent(), q);
+    if (figureTurn?.kind === "refuse") {
+      answer = figureTurn.answer;
+      lastQuestion = q;
+      history = [...history, { role: "assistant", content: figureTurn.answer }];
+      if (history.length > 16) history = history.slice(-16);
+      writeThread(boundClientId || currentClientId(), history);
+      loading = false;
+      proposingFigure = false;
+      safeRender(q);
+      return;
+    }
+    proposingFigure = figureTurn?.kind === "propose";
+    if (proposingFigure && !botEndpoint) {
+      errorMsg = "The proposal was not saved.";
+      lastQuestion = q;
+      loading = false;
+      proposingFigure = false;
+      safeRender(q);
+      return;
+    }
     loading = true;
     answer = "";
     precardCap = null;
@@ -1293,14 +1430,24 @@ export function mountAskAi(container, options) {
 
       if (!clientId) throw new Error("No client context found.");
 
-      const useAgent = Boolean(objective) && !createIntent && Boolean(botEndpoint);
-      const useCreate = Boolean(createIntent) && Boolean(botEndpoint);
-      const useBot = (useAgent || useCreate || pendingIntent === "milon-bot") && botEndpoint;
-      const url = useBot ? botEndpoint : endpoint;
+      const useFigure = figureTurn?.kind === "propose" && Boolean(botEndpoint);
+      const useAgent = !useFigure && Boolean(objective) && !createIntent && Boolean(botEndpoint);
+      const useCreate = !useFigure && Boolean(createIntent) && Boolean(botEndpoint);
+      const useBot = !useFigure && (useAgent || useCreate || pendingIntent === "milon-bot") && botEndpoint;
+      const url = useFigure || useBot ? botEndpoint : endpoint;
       const prior = priorTurns(turnId);
       const agent = currentAgent();
       const body = JSON.stringify(
-        useCreate
+        useFigure
+          ? {
+              clientId,
+              mode: "figure-proposal",
+              message: q,
+              turnId,
+              audience: accountant ? "accountant" : "owner",
+              agent,
+            }
+          : useCreate
           ? {
               clientId,
               mode: "create",
@@ -1393,11 +1540,20 @@ export function mountAskAi(container, options) {
       toolHints = turn.tools.map((t) => toolHint(t.name, t.status));
       const capped = Boolean(turn.precardCap && isPrecardLimitKind(turn.precardCap.limit));
       const hasCard = history.some((item) => capLimitForTurn(item));
+      const proposal = storedProposal(turn.proposal);
       const assistant = {
         role: "assistant",
         content: answer,
         ...(capped ? { precardCap: { limit: turn.precardCap.limit } } : {}),
+        ...(proposal ? { proposal } : {}),
       };
+      if (proposal && proposal.status === "pending" && typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("figure-proposals-changed", {
+            detail: { clientId: currentClientId(), surface: proposal.surface },
+          }),
+        );
+      }
       const mapped = history.map((item) =>
         item.role === "user" && item.turnId === turnId
           ? { role: "user", content: item.content, turnId }
@@ -1455,6 +1611,7 @@ export function mountAskAi(container, options) {
       pendingIntent = null;
       workingObjective = false;
       creatingDeliverable = false;
+      proposingFigure = false;
       safeRender(q);
     }
   }

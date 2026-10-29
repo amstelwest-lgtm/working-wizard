@@ -54,6 +54,14 @@ export async function executeFinancialManagerTool(
   return recordAgentDraft(args, ctx, FM_PEERS as readonly AgentKey[], FM_DRAFT_KINDS);
 }
 
+/** A queue run id is stored. A chat proposal has no agent_runs row, so the id stays null. */
+function persistedRunId(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
+}
+
 const SURFACE_PAGE: Record<FigureSurface, string> = {
   cash: "Cash forecast page",
   budget: "Budget page",
@@ -87,7 +95,7 @@ async function proposeFigureAdjustment(
   const proposal = buildFigureProposal({
     clientId: ctx.clientId,
     firmId: (client?.firm_id as string | null) ?? ctx.firmId,
-    runId: ctx.runId,
+    runId: persistedRunId(ctx.runId),
     surface: parsed.surface,
     patch: parsed.patch,
     beforeValues: before,

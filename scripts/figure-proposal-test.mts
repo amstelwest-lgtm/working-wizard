@@ -13,11 +13,16 @@ import { classifyResult } from "../supabase/functions/_shared/agent-core/loop.ts
 import { FINANCIAL_MANAGER_SYSTEM } from "../supabase/functions/_shared/agent-prompts/financial-manager.ts";
 import { askAiAgentPersona } from "../supabase/functions/ask-ai/prompt.ts";
 import { FigureProposals } from "../src/components/figure-proposals.tsx";
-import { baseCashflow } from "../src/lib/client-metrics.ts";
+import { baseCashflow, rollForwardForecast } from "../src/lib/client-metrics.ts";
+import { parseAskAiBody } from "../src/lib/ask-ai-response.ts";
+import { routeMilonIntent } from "../src/lib/milon-bot-copy.ts";
 import {
   applyFigureProposal,
+  applyWeekNetDelta,
   buildFigureProposal,
   figureBeforeValues,
+  figureProposalCardCopy,
+  figureProposalTurn,
   parseFigureProposalArgs,
   rejectFigureProposal,
   withConfirmedForecastAdjustments,
@@ -210,6 +215,80 @@ function pending(surface: "cash" | "budget" | "waterfall", patch: Record<string,
     ) === "",
     "an empty queue renders nothing",
   );
+}
+
+const AQA = "Propose changing W1 net by R100 in the cash forecast.";
+
+{
+  assert(routeMilonIntent(AQA) === "ask-ai", "the numbers chat still owns a free-text figure ask");
+  const analyst = figureProposalTurn("analyst", AQA);
+  const advisor = figureProposalTurn("advisor", AQA);
+  assert(analyst?.kind === "refuse" && /nothing was saved/i.test(analyst.answer), "the analyst chat refuses the write");
+  assert(advisor?.kind === "refuse" && /nothing was saved/i.test(advisor.answer), "the advisor chat refuses the write");
+  assert(figureProposalTurn("financial_manager", "What's the cash runway?") == null, "a cash question is not a proposal");
+  const turn = figureProposalTurn("financial_manager", AQA);
+  assert(turn?.kind === "propose" && turn.tool === FIGURE_PROPOSAL_TOOL, "the financial manager chat calls the proposal tool");
+  if (turn?.kind !== "propose") throw new Error("expected a proposal");
+  assert(turn.args.surface === "cash" && turn.args.patch.netWeek === 1 && turn.args.patch.netDelta === 100, "W1 net by R100 is week 1 plus 100");
+  const copy = figureProposalCardCopy({
+    surface: "cash",
+    patch: turn.args.patch,
+    beforeValues: { netWeek: 1, netDelta: 0 },
+    canDecide: true,
+  });
+  assert(copy.actions[0] === "Confirm and apply" && copy.actions[1] === "Reject", "the chat card offers both decisions");
+  assert(copy.lines.some((line) => line === "Week 1 net +100"), "the card names the week net change");
+  const owner = figureProposalCardCopy({
+    surface: "cash",
+    patch: turn.args.patch,
+    beforeValues: {},
+    canDecide: false,
+  });
+  assert(owner.actions.length === 0, "a read-only owner does not get Confirm or Reject");
+  const net = applyWeekNetDelta([10, 20], 1, 100);
+  assert(net[0] === 110 && net[1] === 20, "the week net change lands on week 1 only");
+  const base = {
+    openingBalance: "1000",
+    revenue: [{ id: "room", name: "Rooms", amount: "400", frequency: "once-off", startWeek: 1 }],
+    expenses: [],
+    other: [],
+  };
+  const plain = rollForwardForecast(base);
+  const shifted = rollForwardForecast({ ...base, netWeek: 1, netDelta: 100 });
+  assert(plain && shifted, "both forecasts roll");
+  assert(shifted!.closing[0] === plain!.closing[0] + 100, "confirming the proposal moves week 1 closing by 100");
+  assert(shifted!.closing[1] === plain!.closing[1] + 100, "later weeks keep that net change");
+  const parsed = parseAskAiBody(200, {
+    answer: "A figure change is waiting for you. Nothing is saved until you confirm.",
+    tools: [{ name: FIGURE_PROPOSAL_TOOL, status: "ok" }],
+    proposal: {
+      id: "p-w1",
+      surface: "cash",
+      note: AQA,
+      patch: { netWeek: 1, netDelta: 100 },
+      beforeValues: { netDelta: 0 },
+      canDecide: true,
+    },
+  });
+  assert(parsed.ok && parsed.proposal?.id === "p-w1" && parsed.proposal.canDecide === true, "the chat turn keeps the pending proposal");
+  const widget = readFileSync(resolve("src/lib/ask-ai.js"), "utf8");
+  assert(widget.includes('mode: "figure-proposal"'), "the financial manager chat posts the proposal mode");
+  assert(widget.includes("buildFigureCard"), "the card is built for the thread");
+  const cardAppend = widget.indexOf("if (figureCard) panel.appendChild(figureCard);");
+  const threadAppend = widget.indexOf("panel.appendChild(thread)", cardAppend);
+  assert(cardAppend > 0 && threadAppend > cardAppend, "the card is appended beside the thread");
+  const threadOpen = widget.lastIndexOf('thread.className = "ask-ai-thread"', cardAppend);
+  assert(threadOpen > 0 && !widget.slice(threadOpen, threadAppend).includes("ask-ai-figure-card"), "the card is not inside the clipped thread");
+  const desk = readFileSync(resolve("src/components/milon-team/milon-team-desk.css"), "utf8");
+  assert(desk.includes(".ask-ai-figure-card") && desk.includes("grid-row: 1"), "the card sits above the 220px reply");
+  assert(/max-height:\s*220px/.test(desk), "the reply thread stays clipped");
+  const bot = readFileSync(resolve("supabase/functions/milon-bot/index.ts"), "utf8");
+  assert(bot.includes('body.mode === "figure-proposal"'), "the bot saves the proposal without the numbers model");
+  assert(bot.includes("executeFinancialManagerTool"), "the chat uses the financial manager tool");
+  const weekSql = readFileSync(resolve("supabase/migrations/20261029180000_figure_proposal_week_net.sql"), "utf8");
+  assert(weekSql.includes("'netWeek'") && weekSql.includes("'netDelta'"), "confirm accepts a week net patch");
+  const page = readFileSync(resolve("src/components/figure-proposals.tsx"), "utf8");
+  assert(page.includes("figure-proposals-changed"), "the cash page reloads when the chat saves a proposal");
 }
 
 console.log("figure-proposal: ok");
