@@ -19,6 +19,7 @@ import {
   FM_WRITE_TOOLS,
   fmRunOutcome,
 } from "../../../src/lib/agent-financial-manager.ts";
+import { financialManagerJobObjective } from "../../../src/lib/client-report-prepare.ts";
 import { executeFinancialManagerTool } from "./execute.ts";
 
 const OBJECTIVE =
@@ -28,7 +29,7 @@ export function runFinancialManagerJob(db: SupabaseClient, job: RunnerJob) {
   return runQueueJob(db, job, {
     agent: "financial_manager",
     queue: "agent_fm",
-    objective: OBJECTIVE,
+    objective: financialManagerJobObjective(OBJECTIVE, job.inputs),
     audience: "accountant",
     maxIterations: FM_MAX_ITERATIONS,
     allowedTools: FM_TOOLS,

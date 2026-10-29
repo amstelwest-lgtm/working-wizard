@@ -183,10 +183,7 @@ export type AgentReasonContext = {
 
 export type AgentReasoner = (ctx: AgentReasonContext) => Promise<AgentDecision>;
 
-export type AgentToolExecutor = (
-  name: string,
-  args: Record<string, unknown>,
-) => Promise<unknown>;
+export type AgentToolExecutor = (name: string, args: Record<string, unknown>) => Promise<unknown>;
 
 export type AgentTraceStep = {
   iteration: number;
@@ -310,6 +307,25 @@ export function classifyResult(
       detail: happened
         ? "Proposal saved as pending. The saved figures were not changed. A person confirms before it is applied."
         : "The figure proposal was not saved.",
+    };
+  }
+
+  if (name === "prepare_client_report") {
+    const key = typeof rec.report_key === "string" ? rec.report_key : "";
+    const known =
+      key === "scorecard" ||
+      key === "forecast" ||
+      key === "waterfall" ||
+      key === "budget" ||
+      key === "benchmark";
+    const happened = rec.prepared === true && rec.applied === false && known;
+    return {
+      status: happened ? "ok" : "error",
+      verified: happened,
+      happened,
+      detail: happened
+        ? `Report ${key} is ready to download. Nothing was sent, and nothing was applied to the books.`
+        : "The report was not prepared.",
     };
   }
 
@@ -860,7 +876,10 @@ export function agentTurnMessages(ctx: AgentReasonContext): AgentModelMessage[] 
   for (const exchange of ctx.exchanges ?? []) {
     if (exchange.calls.length === 0) continue;
     if (exchange.assistantContent && exchange.assistantContent.length > 0) {
-      messages.push({ role: "assistant", content: exchange.assistantContent as AgentModelContent[] });
+      messages.push({
+        role: "assistant",
+        content: exchange.assistantContent as AgentModelContent[],
+      });
     } else {
       const assistant: AgentModelContent[] = [];
       if (exchange.text.trim()) assistant.push({ type: "text", text: exchange.text });
@@ -891,7 +910,8 @@ function finishDecision(
     (typeof input.summary === "string" && input.summary.trim()) ||
     text.trim() ||
     AGENT_OUTCOME_LABELS[reason];
-  const escalation = typeof input.escalation_reason === "string" ? input.escalation_reason.trim() : "";
+  const escalation =
+    typeof input.escalation_reason === "string" ? input.escalation_reason.trim() : "";
   return {
     kind: "stop",
     reason,
