@@ -97,6 +97,9 @@ assert(href("bot", firm) === "/dashboard", "Bot from practice opens practice Hom
 assert(href("drafts", firm) === "/dashboard", "Drafts from practice open practice Home");
 assert(href("overview", studio).endsWith("tab=home"), "the briefing opens Home");
 assert(href("moves", studio).includes("tab=moves"), "Next moves is its own rail item");
+assert(href("tax", studio) === `/clients/${CLIENT}?tab=tax`, "Tax is its own Work rail item");
+assert(ids("tax specialist", studio)[0] === "tax", "tax specialist opens Tax");
+assert(!ids("tax", owner).includes("tax"), "the owner finder has no Tax page");
 assert(href("reports", studio).includes("tab=reports"), "Reports is its own rail item");
 assert(
   href("advisory pack", studio).includes("tab=reports") &&

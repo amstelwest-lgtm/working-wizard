@@ -197,6 +197,7 @@ import { askAgentFromHash, searchWithAskAgent } from "@/lib/ask-agent";
 import { ClientRail } from "@/components/client-studio-chrome";
 import { ClientOwnerInviteHost } from "@/components/client-owner-invite-dialog";
 import { ClientBackLink, ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
+import { TaxWorkPlaceholder } from "@/components/tax-work-placeholder";
 import { clientBackTarget } from "@/lib/client-back";
 import { useOverlayHistory } from "@/lib/overlay-history";
 import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
@@ -520,7 +521,8 @@ type ActiveTab =
   | "advisory"
   | "drafter"
   | "summary"
-  | "moves";
+  | "moves"
+  | "tax";
 
 const ACCOUNTANT_TABS: ActiveTab[] = [
   "overview",
@@ -537,6 +539,7 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "plan",
   "advisory",
   "drafter",
+  "tax",
 ];
 
 const CRUMB_PARENT: Record<string, { label: string; tab: string }> = {
@@ -549,6 +552,7 @@ const CRUMB_PARENT: Record<string, { label: string; tab: string }> = {
   moves: { label: "Next moves", tab: "moves" },
   plan: { label: "Action plan", tab: "plan" },
   reports: { label: "Reports", tab: "reports" },
+  tax: { label: "Tax", tab: "tax" },
   summary: { label: "Books", tab: "portal" },
 };
 
@@ -5765,6 +5769,10 @@ function ClientView() {
                   </TabErrorBoundary>
                   </ClientSubpageFrame>
                   ) : null}
+                </div>
+
+                <div className={`tabpane${activeTab === "tax" ? " on" : ""}`} id="pane-tax">
+                  {activeTab === "tax" ? <TaxWorkPlaceholder /> : null}
                 </div>
                 </div>
 

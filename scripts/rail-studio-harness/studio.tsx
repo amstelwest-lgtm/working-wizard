@@ -51,6 +51,7 @@ import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
 import { clientAgentWork } from "@/lib/agent-work";
 import { clientBackTarget } from "@/lib/client-back";
 import { ClientBackLink, ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
+import { TaxWorkPlaceholder } from "@/components/tax-work-placeholder";
 import { NoteLayer } from "@/components/note-layer";
 import { DESK_NOW, useMilonTeamFeedStub } from "./milon-team-stub";
 import {
@@ -261,6 +262,7 @@ export function RailStudio() {
             {pane === "reports" ? (
               <ReportsPane clientId={clientId} packView={search.packView} />
             ) : null}
+            {pane === "tax" ? <TaxWorkPlaceholder /> : null}
             {pane === "settings" ? (
               <ClientFileSettings
                 clientName="Harbour Glass"
@@ -1449,6 +1451,7 @@ const HARNESS_CRUMB: Record<string, { label: string; tab: string }> = {
   moves: { label: "Next moves", tab: "moves" },
   plan: { label: "Action plan", tab: "plan" },
   reports: { label: "Reports", tab: "reports" },
+  tax: { label: "Tax", tab: "tax" },
   summary: { label: "Books", tab: "portal" },
 };
 

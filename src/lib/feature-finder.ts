@@ -275,6 +275,17 @@ const FEATURES: readonly FeatureDef[] = [
     studio: { tab: "reports" },
   },
   {
+    id: "tax",
+    label: "Tax",
+    hint: "Tax deliverables",
+    order: 93,
+    scope: "client",
+    synonyms: ["tax", "tax specialist", "tax deliverables", "income tax"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "tax" },
+  },
+  {
     id: "advisory-pack",
     label: "Advisory pack",
     hint: "Pack and recommendations",
