@@ -18,7 +18,8 @@ function assert(cond: unknown, msg: string) {
 }
 
 function eq(actual: unknown, expected: unknown, msg: string) {
-  if (actual !== expected) throw new Error(`${msg}\n  expected: ${String(expected)}\n  actual:   ${String(actual)}`);
+  if (actual !== expected)
+    throw new Error(`${msg}\n  expected: ${String(expected)}\n  actual:   ${String(actual)}`);
 }
 
 const NOW = new Date("2026-10-08T12:00:00.000Z");
@@ -36,28 +37,84 @@ for (const [key, copy] of Object.entries(AGENT_SECTION_COPY)) {
 
 const details = (agent: "financial_manager" | "analyst" | "advisor") =>
   Object.fromEntries(clientAgentWork(agent, "c").map((row) => [row.title, row.detail]));
-eq(details("advisor")["Next moves"], "Suggested actions for this client, ranked by impact.", "advisor next moves");
-eq(details("advisor")["Action plan"], "Tasks already agreed, who owns them, and what is overdue.", "advisor plan");
-eq(details("financial_manager")["13-week forecast"], "Expected cash in and out, week by week.", "fm forecast");
-eq(details("financial_manager")["Who to chase"], "Customers who owe money, oldest first.", "fm chase");
-eq(details("analyst")["Health score"], "The overall score, each pillar, and the PDF report.", "analyst score");
-eq(details("analyst")["Profit waterfall"], "How revenue turns into profit, step by step.", "analyst waterfall");
+eq(
+  details("advisor")["Next moves"],
+  "Suggested actions for this client, ranked by impact.",
+  "advisor next moves",
+);
+eq(
+  details("advisor")["Action plan"],
+  "Tasks already agreed, who owns them, and what is overdue.",
+  "advisor plan",
+);
+eq(
+  details("financial_manager")["13-week forecast"],
+  "Expected cash in and out, week by week.",
+  "fm forecast",
+);
+eq(
+  details("financial_manager")["Who to chase"],
+  "Customers who owe money, oldest first.",
+  "fm chase",
+);
+eq(
+  details("analyst")["Health score"],
+  "The overall score, each pillar, and the PDF report.",
+  "analyst score",
+);
+eq(
+  details("analyst")["Profit waterfall"],
+  "How revenue turns into profit, step by step.",
+  "analyst waterfall",
+);
 
 const event = (kind: TeamActivityEvent["kind"], text: string) => ({ kind, text });
-eq(activitySentence(event("sync", "Xero sync · Mar 2026")), "Read the Xero sync for Mar 2026.", "sync");
+eq(
+  activitySentence(event("sync", "Xero sync · Mar 2026")),
+  "Read the Xero sync for Mar 2026.",
+  "sync",
+);
 eq(activitySentence(event("upload", "Statement upload")), "Read the statement upload.", "upload");
-eq(activitySentence(event("diagnosis", "Diagnosis reviewed")), "Reviewed the diagnosis.", "diagnosis");
-eq(activitySentence(event("proposal", "Chase the two oldest debtors")), "Suggested: Chase the two oldest debtors.", "proposal");
-eq(activitySentence(event("approved", "Approved · Board note")), "You approved: Board note.", "approved");
+eq(
+  activitySentence(event("diagnosis", "Diagnosis reviewed")),
+  "Reviewed the diagnosis.",
+  "diagnosis",
+);
+eq(
+  activitySentence(event("proposal", "Chase the two oldest debtors")),
+  "Suggested: Chase the two oldest debtors.",
+  "proposal",
+);
+eq(
+  activitySentence(event("approved", "Approved · Board note")),
+  "You approved: Board note.",
+  "approved",
+);
 eq(
   activitySentence(event("dismissed", "Dismissed · Board note · Not now")),
   "You dismissed: Board note. Note: Not now.",
   "dismissed with a note",
 );
-eq(activitySentence(event("dismissed", "Advisory pack draft dismissed")), "You dismissed the Advisory pack draft.", "draft dismissed");
-eq(activitySentence(event("draft_created", "Advisory pack draft saved")), "Saved the Advisory pack draft.", "draft saved");
-eq(activitySentence(event("handoff", "Assigned: Review pricing")), "Picked up an assignment: Review pricing.", "handoff");
-eq(activitySentence(event("query", "Why did rent go up?")), "Raised a query: Why did rent go up?", "query keeps its mark");
+eq(
+  activitySentence(event("dismissed", "Advisory pack draft dismissed")),
+  "You dismissed the Advisory pack draft.",
+  "draft dismissed",
+);
+eq(
+  activitySentence(event("draft_created", "Advisory pack draft saved")),
+  "Saved the Advisory pack draft.",
+  "draft saved",
+);
+eq(
+  activitySentence(event("handoff", "Assigned: Review pricing")),
+  "Picked up an assignment: Review pricing.",
+  "handoff",
+);
+eq(
+  activitySentence(event("query", "Why did rent go up?")),
+  "Raised a query: Why did rent go up?",
+  "query keeps its mark",
+);
 
 const stage = renderToStaticMarkup(
   createElement(
@@ -104,7 +161,12 @@ function api(partial: Partial<MilonTeamFeed>): MilonTeamFeedApi {
 }
 
 const quiet = renderToStaticMarkup(
-  createElement(MilonTeamDesk, { feed: api({}), now: NOW, initialFilter: "analyst", presentation: "agent" }),
+  createElement(MilonTeamDesk, {
+    feed: api({}),
+    now: NOW,
+    initialFilter: "analyst",
+    presentation: "agent",
+  }),
 );
 assert(quiet.includes(">What I noticed<"), "What I noticed is never hidden");
 assert(quiet.includes(NOTICED_EMPTY), "an empty What I noticed says so");
@@ -128,18 +190,34 @@ const busy = renderToStaticMarkup(
 );
 assert(busy.includes(">Recent activity<"), "activity shows under its title");
 eq((busy.match(/data-activity="/g) ?? []).length, 5, "activity shows the latest five");
-assert(busy.includes('data-activity="a0"') && !busy.includes('data-activity="a5"'), "the newest rows come first");
+assert(
+  busy.includes('data-activity="a0"') && !busy.includes('data-activity="a5"'),
+  "the newest rows come first",
+);
 assert(busy.includes(">Show all<"), "more than five rows offers Show all");
 assert(busy.includes("Reviewed the diagnosis."), "activity reads as a past-tense sentence");
 
-const team = renderToStaticMarkup(createElement(MilonTeamDesk, { feed: api({ activity }), now: NOW }));
-assert(team.includes(">Activity<") && !team.includes(">Recent activity<"), "the team desk keeps its own cards");
+const team = renderToStaticMarkup(
+  createElement(MilonTeamDesk, { feed: api({ activity }), now: NOW }),
+);
+assert(
+  team.includes(">Activity<") && !team.includes(">Recent activity<"),
+  "the team desk keeps its own cards",
+);
 eq((team.match(/data-activity="/g) ?? []).length, 7, "the team desk is not capped");
 
 const css = readFileSync("src/components/milon-team/agent-stage.css", "utf8");
-assert(/@media \(min-width: 1280px\)[\s\S]*grid-template-columns: minmax\(0, 2fr\) minmax\(0, 3fr\)/.test(css), "hero and chat sit side by side at 1280px");
+assert(
+  /@media \(min-width: 1280px\)[\s\S]*grid-template-columns: minmax\(0, 2fr\) minmax\(0, 3fr\)/.test(
+    css,
+  ),
+  "hero and chat sit side by side at 1280px",
+);
 assert(css.includes("width: 200px"), "the face is 200px on a laptop");
-assert(/min-width: 861px\) and \(max-width: 1099px\)[\s\S]*?width: 160px/.test(css), "the face is 160px on a small laptop");
+assert(
+  /min-width: 861px\) and \(max-width: 1099px\)[\s\S]*?width: 160px/.test(css),
+  "the face is 160px on a small laptop",
+);
 assert(/max-width: 860px\)[\s\S]*?width: 128px/.test(css), "the face is 128px on a phone");
 assert(!/border-radius: 999px/.test(css), "agent blocks are not pills");
 const deskCss = readFileSync("src/components/milon-team/milon-team-desk.css", "utf8");
