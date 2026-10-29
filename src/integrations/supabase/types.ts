@@ -2757,6 +2757,68 @@ export type Database = {
         }
         Relationships: []
       }
+      tax_form_drafts: {
+        Row: {
+          id: string
+          client_id: string
+          form_code: string
+          tax_year: number
+          period: number | null
+          subject: string | null
+          fields: Json
+          approvals: Json
+          status: string
+          approved_by: string | null
+          approved_by_name: string | null
+          approved_at: string | null
+          downloaded_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          form_code: string
+          tax_year: number
+          period?: number | null
+          subject?: string | null
+          fields?: Json
+          approvals?: Json
+          status?: string
+          approved_by?: string | null
+          approved_by_name?: string | null
+          approved_at?: string | null
+          downloaded_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          form_code?: string
+          tax_year?: number
+          period?: number | null
+          subject?: string | null
+          fields?: Json
+          approvals?: Json
+          status?: string
+          approved_by?: string | null
+          approved_by_name?: string | null
+          approved_at?: string | null
+          downloaded_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tax_form_drafts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       action_items_v: {

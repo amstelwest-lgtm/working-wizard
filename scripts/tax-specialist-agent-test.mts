@@ -8,7 +8,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentStage } from "../src/components/milon-team/agent-stage";
 import { ZaTaxSpecialistPage } from "../src/components/tax-specialist/za-tax-specialist-page";
+import { ZaIrp6Sheet } from "../src/components/tax-specialist/za-irp6-sheet";
 import { TAX_FORM_GALLERY } from "../src/lib/tax-specialist/forms/gallery";
+import { draftActivity } from "../src/lib/tax-specialist/forms/drafts";
+import { IRP6_DEMO_CLIENT, IRP6_DEMO_TODAY } from "../src/lib/tax-specialist/forms/irp6-demo";
 import { askAgentFromHash, askHashForAgent } from "../src/lib/ask-agent";
 import {
   accountantClientRouteSearch,
@@ -226,6 +229,76 @@ for (const path of walk("src")) {
   if (/tax-specialist\/(za-[^/]+\.tsx|forms\/[^/]+\.ts)$/.test(path)) continue;
   assert(!formsImport.test(readFileSync(path, "utf8")), `${path} imports a ZA form module`);
 }
+
+// Part 7c: the IRP6 block opens the sheet for a client; deadlines and activity follow drafts
+const demoClient = { ...IRP6_DEMO_CLIENT, id: "c1" };
+const withClient = renderToStaticMarkup(
+  createElement(ZaTaxSpecialistPage, { client: demoClient, today: IRP6_DEMO_TODAY }),
+);
+eq(
+  withClient.split('class="tax-page-form is-open"').length - 1,
+  1,
+  "with a client the IRP6 block opens the sheet",
+);
+assert(withClient.includes('data-tax-deadlines="client"'), "a client gets its own deadlines");
+assert(withClient.includes("IRP6, year of assessment 2027"), "deadlines name the year");
+assert(
+  /data-tax-deadline="irp6-2"[^]*?26 Feb 2027[^]*?Not started/.test(withClient),
+  "period 2 due date, shifted off the Sunday, with no draft yet",
+);
+const sheetMarkup = renderToStaticMarkup(
+  createElement(ZaIrp6Sheet, {
+    client: demoClient,
+    today: IRP6_DEMO_TODAY,
+    drafts: [],
+    onSaved: () => {},
+    onBack: () => {},
+  }),
+);
+assert(sheetMarkup.includes("2 fields need input before you can download."), "missing line at the top");
+for (const id of ["taxpayer", "estimate", "adjustments", "credits", "result"]) {
+  assert(sheetMarkup.includes(`data-irp6-approve="${id}"`), `${id} has an Approve tick`);
+}
+assert(sheetMarkup.includes("From books sync, as of 1 Oct 2026"), "books source with its date");
+assert(sheetMarkup.includes("From client record"), "client record source");
+assert(sheetMarkup.includes("Needs input"), "needs input source");
+assert(sheetMarkup.includes(">Friday 26 Feb 2027<"), "due date in the header");
+assert(/data-irp6-download="pdf"[^>]*disabled/.test(sheetMarkup), "download waits for input");
+const activityLines = draftActivity([
+  {
+    id: "d1",
+    client_id: "c1",
+    form_code: "IRP6",
+    tax_year: 2027,
+    period: 2,
+    subject: null,
+    fields: {},
+    approvals: {},
+    status: "downloaded",
+    approved_by: "u1",
+    approved_by_name: "Ada Mbeki",
+    approved_at: "2026-10-29T08:00:00.000Z",
+    downloaded_at: "2026-10-29T08:05:00.000Z",
+    created_at: "2026-10-29T07:00:00.000Z",
+    updated_at: "2026-10-29T08:05:00.000Z",
+  },
+]);
+eq(
+  activityLines[0]?.text,
+  "IRP6 2027, period 2 downloaded on 29 Oct 2026. Approved by Ada Mbeki on 29 Oct 2026.",
+  "a downloaded draft shows in Recent activity with who approved it",
+);
+assert(route.includes("taxClient={taxClient}"), "route passes the client to the tax page");
+assert(pane.includes("client={taxClient}"), "pane passes the client on");
+const slot = readFileSync("src/components/tax-specialist/tax-specialist-slot.tsx", "utf8");
+assert(slot.includes("client={client}"), "slot passes the client to the loaded page");
+const migration = readFileSync("supabase/migrations/20261029130000_tax_form_drafts.sql", "utf8");
+assert(
+  migration.includes("has_client_access(auth.uid(), client_id)") &&
+    migration.includes("is_client_writer(auth.uid(), client_id)"),
+  "drafts use the client-table RLS",
+);
+assert(!/sars\.gov\.za|efiling\.co\.za/i.test(sheetMarkup), "no SARS login or submission link");
 
 const agents = readFileSync("src/lib/tax-specialist/agents.ts", "utf8");
 assert(

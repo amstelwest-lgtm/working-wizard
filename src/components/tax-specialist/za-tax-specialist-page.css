@@ -3,6 +3,7 @@
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  scroll-margin-top: 88px;
 }
 
 .tax-page-meta {
@@ -106,7 +107,7 @@ button.tax-page-form:focus-visible {
   color: #fff;
 }
 
-.tax-page table {
+.tax-page .tax-sample-table table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 8px;
@@ -114,26 +115,26 @@ button.tax-page-form:focus-visible {
   font-size: 14px;
 }
 
-.tax-page caption {
+.tax-page .tax-sample-table caption {
   text-align: left;
 }
 
-.tax-page th,
-.tax-page td {
+.tax-page .tax-sample-table th,
+.tax-page .tax-sample-table td {
   padding: 8px 10px;
   border-bottom: 1px solid #dbeafe;
   text-align: left;
   vertical-align: baseline;
 }
 
-.tax-page td:last-child,
-.tax-page th:last-child {
+.tax-page .tax-sample-table td:last-child,
+.tax-page .tax-sample-table th:last-child {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.tax-page tr.is-total td,
+.tax-page .tax-sample-table tr.is-total td,
 .tax-page .is-wait {
   font-weight: 700;
 }
@@ -200,13 +201,13 @@ html.dark .tax-page-form-status.is-ready {
 }
 
 html.dark .tax-page-form-name,
-html.dark .tax-page table,
+html.dark .tax-page .tax-sample-table table,
 html.dark .tax-page-activity {
   color: #f4f7fb;
 }
 
-html.dark .tax-page th,
-html.dark .tax-page td {
+html.dark .tax-page .tax-sample-table th,
+html.dark .tax-page .tax-sample-table td {
   border-bottom-color: #1e3a5f;
 }
 

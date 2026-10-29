@@ -48,6 +48,9 @@ import { XeroConnectCard } from "@/components/xero-connect";
 import { AgentStage } from "@/components/milon-team/agent-stage";
 import { TaxSpecialistPage } from "@/components/tax-specialist/tax-specialist-slot";
 import { isTaxAgent, parseStageAgent, type StageAgentKey } from "@/lib/tax-specialist/agents";
+import { IRP6_DEMO_CLIENT, IRP6_DEMO_TODAY } from "@/lib/tax-specialist/forms/irp6-demo";
+
+const IRP6_HARNESS_CLIENT = { ...IRP6_DEMO_CLIENT, id: "harness-client" };
 import { AgentSection } from "@/components/milon-team/agent-section";
 import { AgentWork } from "@/components/milon-team/agent-work";
 import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
@@ -340,7 +343,7 @@ function BotPane({ agent }: { agent?: string }) {
             taxTab
             chat={chat}
           >
-            <TaxSpecialistPage country="ZA" />
+            <TaxSpecialistPage country="ZA" client={IRP6_HARNESS_CLIENT} today={IRP6_DEMO_TODAY} />
           </AgentStage>
         ) : selected ? (
           <AgentStage

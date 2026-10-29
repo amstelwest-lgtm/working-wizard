@@ -48,17 +48,32 @@ function TaxCardShell({ variant }: { variant: "card" | "desk" | "stage" }) {
   );
 }
 
+/** The client the tax forms are prepared for. */
+export type TaxPageClient = {
+  id: string;
+  name: string;
+  fyStartMonth: number;
+  financials: Record<string, unknown> | null;
+  financialsAsOf: string | null;
+};
+
 type LoadedPage = ComponentType<{
   activity?: Array<{ id: string; text: string; at: string }>;
+  client?: TaxPageClient | null;
+  today?: string;
 }>;
 
 /** The tax agent page sections. Nothing renders, and nothing loads, outside ZA. */
 export function TaxSpecialistPage({
   country,
   activity,
+  client,
+  today,
 }: {
   country: string | null | undefined;
   activity?: Array<{ id: string; text: string; at: string }>;
+  client?: TaxPageClient | null;
+  today?: string;
 }) {
   const [Page, setPage] = useState<LoadedPage | null>(null);
   const enabled = taxSampleEnabled(country);
@@ -82,7 +97,7 @@ export function TaxSpecialistPage({
       </p>
     );
   }
-  return <Page activity={activity} />;
+  return <Page activity={activity} client={client} today={today} />;
 }
 
 export function TaxSpecialistSlot({

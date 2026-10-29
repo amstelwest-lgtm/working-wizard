@@ -2,6 +2,7 @@
  * Tax Specialist agent page sections. Loaded only after a ZA market check,
  * through TaxSpecialistPage in tax-specialist-slot.
  */
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AgentSection } from "@/components/milon-team/agent-section";
 import { ACTIVITY_CAP } from "@/lib/agent-section-copy";
 import {
@@ -22,10 +23,71 @@ import {
   TAX_FORM_STATUS_LABEL,
   type TaxFormCode,
 } from "@/lib/tax-specialist/forms/gallery";
+import {
+  IRP6_PERIODS,
+  irp6DefaultPick,
+  irp6PeriodDates,
+  irp6PeriodLabel,
+  irp6YearEnd,
+  zaToday,
+} from "@/lib/tax-specialist/forms/irp6";
+import {
+  TAX_FORM_DRAFT_STATUS_LABEL,
+  draftActivity,
+  findIrp6Draft,
+  loadTaxFormDrafts,
+  type TaxFormDraft,
+} from "@/lib/tax-specialist/forms/drafts";
+import { ZaIrp6Sheet, type Irp6SheetClient } from "./za-irp6-sheet";
 import "./za-tax-specialist-sample.css";
 import "./za-tax-specialist-page.css";
 
 export type TaxPageActivity = { id: string; text: string; at: string };
+
+function ClientDeadlines({
+  client,
+  today,
+  drafts,
+}: {
+  client: Irp6SheetClient;
+  today: string;
+  drafts: TaxFormDraft[];
+}) {
+  const year = irp6DefaultPick(today, client.fyStartMonth).yearOfAssessment;
+  const yearEnd = irp6YearEnd(year, client.fyStartMonth);
+  return (
+    <div className="tax-sample-table">
+      <table data-tax-deadlines="client">
+        <caption className="tax-sample-kicker">IRP6, year of assessment {year}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Period</th>
+            <th scope="col">Due</th>
+            <th scope="col">Draft</th>
+          </tr>
+        </thead>
+        <tbody>
+          {IRP6_PERIODS.map((period) => {
+            const due = irp6PeriodDates(yearEnd, period).due;
+            const draft = findIrp6Draft(drafts, year, period);
+            return (
+              <tr key={period} data-tax-deadline={`irp6-${period}`}>
+                <td>{irp6PeriodLabel(period)}</td>
+                <td className={due < today ? "is-wait" : undefined}>
+                  {formatSampleDate(due)}
+                  {due < today ? ", passed" : ""}
+                </td>
+                <td data-tax-deadline-status={draft?.status ?? "none"}>
+                  {draft ? TAX_FORM_DRAFT_STATUS_LABEL[draft.status] : "Not started"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function SampleBadge() {
   return (
@@ -96,23 +158,102 @@ function FormGallery({ onOpen }: { onOpen?: (code: TaxFormCode) => void }) {
 export function ZaTaxSpecialistPage({
   activity = [],
   onOpenForm,
+  client = null,
+  today,
 }: {
   activity?: TaxPageActivity[];
   onOpenForm?: (code: TaxFormCode) => void;
+  /** The client the forms are prepared for. Without one, only the sample shows. */
+  client?: Irp6SheetClient | null;
+  /** YYYY-MM-DD in South Africa. Defaults to the clock. */
+  today?: string;
 }) {
-  const recent = [...activity].sort((a, b) => b.at.localeCompare(a.at)).slice(0, ACTIVITY_CAP);
+  const day = today ?? zaToday();
+  const clientId = client?.id ?? null;
+  const [drafts, setDrafts] = useState<TaxFormDraft[] | null>(clientId ? null : []);
+  const [open, setOpen] = useState<TaxFormCode | null>(null);
+
+  useEffect(() => {
+    if (!clientId) return;
+    let live = true;
+    void loadTaxFormDrafts(clientId).then((rows) => {
+      if (live) setDrafts(rows);
+    });
+    return () => {
+      live = false;
+    };
+  }, [clientId]);
+
+  const onSaved = useCallback((row: TaxFormDraft) => {
+    setDrafts((prev) => [
+      row,
+      ...(prev ?? []).filter(
+        (r) =>
+          r.id !== row.id &&
+          !(
+            r.form_code === row.form_code &&
+            r.tax_year === row.tax_year &&
+            r.period === row.period &&
+            r.subject === row.subject
+          ),
+      ),
+    ]);
+  }, []);
+
+  const openForm = (code: TaxFormCode) => {
+    if (code === "IRP6" && client) {
+      setOpen(code);
+      document.querySelector("[data-tax-page]")?.scrollIntoView({ block: "start" });
+    }
+    onOpenForm?.(code);
+  };
+
+  const recent = useMemo(
+    () =>
+      [...activity, ...draftActivity(drafts ?? [])]
+        .sort((a, b) => b.at.localeCompare(a.at))
+        .slice(0, ACTIVITY_CAP),
+    [activity, drafts],
+  );
+
+  if (open === "IRP6" && client) {
+    return (
+      <div className="tax-page" data-tax-page="true" data-tax-open-form="IRP6">
+        {drafts ? (
+          <ZaIrp6Sheet
+            client={client}
+            today={day}
+            drafts={drafts}
+            onSaved={onSaved}
+            onBack={() => setOpen(null)}
+          />
+        ) : (
+          <p className="agent-section-empty" role="status">
+            Loading saved drafts…
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="tax-page" data-tax-page="true">
       <AgentSection section="forms" data-tax-section="forms">
-        <FormGallery onOpen={onOpenForm} />
+        <FormGallery onOpen={client || onOpenForm ? openForm : undefined} />
       </AgentSection>
       <Workings />
       <AgentSection section="deadlines" data-tax-section="deadlines">
-        <div className="tax-page-meta">
-          <SampleBadge />
-          <span>As of {formatSampleDate(SAMPLE_COMPANY.asOf)}</span>
-        </div>
-        <SampleDeadlines />
+        {client ? (
+          <ClientDeadlines client={client} today={day} drafts={drafts ?? []} />
+        ) : (
+          <>
+            <div className="tax-page-meta">
+              <SampleBadge />
+              <span>As of {formatSampleDate(SAMPLE_COMPANY.asOf)}</span>
+            </div>
+            <SampleDeadlines />
+          </>
+        )}
       </AgentSection>
       <AgentSection section="activity" data-tax-section="activity">
         {recent.length ? (

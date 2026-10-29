@@ -11,7 +11,10 @@ import {
 import { clientAgentWork } from "@/lib/agent-work";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import { isTaxAgent, type StageAgentKey } from "@/lib/tax-specialist/agents";
-import { TaxSpecialistPage } from "@/components/tax-specialist/tax-specialist-slot";
+import {
+  TaxSpecialistPage,
+  type TaxPageClient,
+} from "@/components/tax-specialist/tax-specialist-slot";
 import { AgentStage } from "./agent-stage";
 import { AgentSection } from "./agent-section";
 import { AgentWork } from "./agent-work";
@@ -38,6 +41,8 @@ type MilonTeamPaneProps = {
   canonicalRatios?: Record<string, number> | null;
   /** The Ask widget host. An open agent shows it beside the hero; the team desk shows it last. */
   chat?: ReactNode;
+  /** The client the tax agent prepares forms for. */
+  taxClient?: TaxPageClient | null;
 };
 
 export function MilonTeamPane(props: MilonTeamPaneProps) {
@@ -61,6 +66,7 @@ export function MilonTeamPaneView({
   sampleClient = false,
   canonicalRatios = null,
   chat = null,
+  taxClient = null,
   feed,
   live,
   now,
@@ -108,7 +114,7 @@ export function MilonTeamPaneView({
         onSelect={(next) => onSelectAgent?.(next)}
         chat={chat}
       >
-        <TaxSpecialistPage country={marketCountry} />
+        <TaxSpecialistPage country={marketCountry} client={taxClient} />
       </AgentStage>
     );
   }

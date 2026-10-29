@@ -3820,6 +3820,18 @@ function ClientView() {
     () => numberRatioRecord(scorecardRatiosFromFinancials(financials, { fyStartMonth })),
     [financials, fyStartMonth],
   );
+  const taxClientName = client?.name ?? "";
+  const taxFinancialsAsOf = client?.financials_updated_at ?? null;
+  const taxClient = useMemo(
+    () => ({
+      id: clientId,
+      name: taxClientName,
+      fyStartMonth,
+      financials: financials as Record<string, unknown>,
+      financialsAsOf: taxFinancialsAsOf,
+    }),
+    [clientId, taxClientName, fyStartMonth, financials, taxFinancialsAsOf],
+  );
   const homeNeeds = useMemo(() => {
     const planNeeds = homeActionNeeds({
       known: openPlanTitles != null,
@@ -4541,6 +4553,7 @@ function ClientView() {
                         openHomeSection("plan", "open");
                       }}
                       chat={<div id="ask-ai-accountant" className="ask-ai-studio-shell" />}
+                        taxClient={taxClient}
                     />
                     <button
                       type="button"
