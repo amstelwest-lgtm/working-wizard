@@ -52,13 +52,20 @@ export function WeekTable({
   threshold,
   accent,
   heading,
+  density = "regular",
 }: {
   weeks: CashWeekRow[];
   threshold: number;
   accent: string;
   heading: ReactNode;
+  /** Pack pages use compact so the 13 rows share the chart page. The cash report stays regular. */
+  density?: "regular" | "compact";
 }) {
   const market = usePdfMarket();
+  const compact = density === "compact";
+  const cellFont = compact ? 6.5 : 7.5;
+  const rowPad = compact ? 2.5 : 6;
+  const headPad = compact ? 4 : 8;
   const cols = [
     { label: "Week", flex: 1.1 },
     { label: "Opening", flex: 1.4, right: true },
@@ -68,7 +75,7 @@ export function WeekTable({
     { label: "Closing", flex: 1.4, right: true },
   ];
   const header = (
-    <View style={[tbl.headerRow, { backgroundColor: accent }]}>
+    <View style={[tbl.headerRow, { backgroundColor: accent, paddingVertical: headPad }]}>
       {cols.map((c, i) => (
         <Text
           key={i}
@@ -85,20 +92,41 @@ export function WeekTable({
     return (
       <View
         key={i}
-        style={[tbl.row, { backgroundColor: danger ? C.redSoft : i % 2 === 1 ? C.soft : C.white }]}
+        style={[
+          tbl.row,
+          {
+            backgroundColor: danger ? C.redSoft : i % 2 === 1 ? C.soft : C.white,
+            paddingVertical: rowPad,
+          },
+        ]}
       >
-        <Text style={[tbl.cell, { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink }]}>
+        <Text
+          style={[
+            tbl.cell,
+            { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink, fontSize: cellFont },
+          ]}
+        >
           {
             cashForecastWeekRowLabel(w.period_label) // date-ok: week row label, not a calendar span
           }
         </Text>
-        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right" }]}>
+        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", fontSize: cellFont }]}>
           {pdfAmount(w.opening_balance, market)}
         </Text>
-        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.greenDeep }]}>
+        <Text
+          style={[
+            tbl.cell,
+            { flex: 1.4, textAlign: "right", color: C.greenDeep, fontSize: cellFont },
+          ]}
+        >
           {pdfAmount(w.total_receipts, market)}
         </Text>
-        <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.redDeep }]}>
+        <Text
+          style={[
+            tbl.cell,
+            { flex: 1.4, textAlign: "right", color: C.redDeep, fontSize: cellFont },
+          ]}
+        >
           {finiteCash(w.total_payments)
             ? formatReportAmount(w.total_payments, market, { sign: "parens" })
             : "—"}
@@ -109,6 +137,7 @@ export function WeekTable({
             {
               flex: 1.3,
               textAlign: "right",
+              fontSize: cellFont,
               color: netUp ? C.greenDeep : C.redDeep,
             },
           ]}
@@ -122,6 +151,7 @@ export function WeekTable({
               flex: 1.4,
               textAlign: "right",
               fontFamily: "Helvetica-Bold",
+              fontSize: cellFont,
               color: danger ? C.redDeep : C.ink,
             },
           ]}

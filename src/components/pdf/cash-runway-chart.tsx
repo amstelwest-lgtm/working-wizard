@@ -64,10 +64,13 @@ export function RunwayChart({
   weeks,
   threshold,
   accent,
+  markWeek,
 }: {
   weeks: CashRunwayWeek[];
   threshold: number;
   accent: string;
+  /** 1-based week to tag. The cash report leaves this unset. */
+  markWeek?: number | null;
 }) {
   const market = usePdfMarket();
   const values = weeks.map((w) => w.closing_balance);
@@ -121,6 +124,22 @@ export function RunwayChart({
                   },
                 ]}
               />
+              {markWeek === i + 1 ? (
+                <Text
+                  style={{
+                    position: "absolute",
+                    left: i * slot,
+                    width: slot,
+                    bottom: LABEL_H + bottom + h + 2,
+                    fontSize: 5.5,
+                    textAlign: "center",
+                    fontFamily: "Helvetica-Bold",
+                    color: C.redDeep,
+                  }}
+                >
+                  LOW
+                </Text>
+              ) : null}
               <Text style={[ch.weekLabel, { left: i * slot, width: slot }]}>
                 {
                   w.period_label.replace(/^Week /i, "W") // date-ok: week axis label, not a calendar span

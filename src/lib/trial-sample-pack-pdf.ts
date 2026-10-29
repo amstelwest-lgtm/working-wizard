@@ -14,6 +14,12 @@ import type { ResolvedMarket } from "@/lib/market";
 import { trialMarketSelection } from "@/lib/trial-sample-view";
 import { trialReading, type TrialBoard } from "@/lib/trial-demo";
 import { buildSampleAdvisoryPack } from "@/lib/trial-sample-pack";
+import { SAMPLE_BUSINESS_NAME, sampleFinancialsFor } from "@/lib/sample-business";
+import { buildAdvisoryPack, packNarrativeRatios, type PackBooks } from "@/lib/advisory-pack";
+import { scorecardHealthFromFinancials } from "@/lib/health-score";
+import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
+import { trialCashSeries } from "@/lib/trial-sample-view";
+import type { AdvisoryPackContentV2 } from "@/lib/advisory-pack-schema";
 
 const TRIAL_PACK_PROFILE: AccountantProfile = {
   firmName: "Milon",
@@ -35,6 +41,7 @@ export type TrialSamplePackPdfInput = {
   disclosure: string;
   market: ResolvedMarket;
   profile: AccountantProfile;
+  content: AdvisoryPackContentV2;
 };
 
 function filled(value: string | null | undefined): string | null {
@@ -112,8 +119,67 @@ export function trialSamplePackPdfInput(
     pack.sections.find((section) => section.title === "Disclosure")?.body ??
     "Prepared from sample figures. Not reviewed by an accountant.";
 
+  const now = options?.now ?? new Date();
+  const financials = {
+    ...sampleFinancialsFor(board.market),
+    cash: String(trialCashSeries(board.market, now).opening),
+  };
+  const series = trialCashSeries(board.market, now);
+  const books: PackBooks = {
+    financials,
+    cashflow: series.preview,
+    now,
+    market: resolveMarket(trialMarketSelection(board.market)),
+    sourceLabel: "Sample books",
+    assumptions: ["Sample forecast spread from the profit and loss."],
+  };
+  const ratiosRaw = scorecardRatiosFromFinancials(financials);
+  const ratios: Record<string, number> = {};
+  for (const [name, value] of Object.entries(ratiosRaw)) {
+    if (typeof value === "number" && Number.isFinite(value)) ratios[name] = value;
+  }
+  const health = scorecardHealthFromFinancials({ financials, market: books.market ?? undefined });
+  const built = buildAdvisoryPack({
+    clientName: SAMPLE_BUSINESS_NAME,
+    firmName: TRIAL_PACK_PROFILE.firmName,
+    hasFirm: true,
+    periodLabel: "Sample period",
+    priorPeriodLabel: null,
+    figuresAsOf: null,
+    health,
+    ratios,
+    narrativeRatios: packNarrativeRatios(financials, ratios),
+    priorRatios: null,
+    openingBalance: series.opening,
+    closings: series.closing,
+    floor: series.floor,
+    cashRunwayWeeks: null,
+    recommendations: [],
+    dataRequests: [],
+    openActions: 0,
+    overdueActions: 0,
+    now: now.toISOString(),
+    currency: books.market?.currency,
+    market: books.market,
+    books,
+  });
+  if (built.schema !== 2) throw new Error("sample pack did not freeze schema 2");
+  const cashSection = built.sections.find((section) => section.key === "cash");
+  if (cashSection) {
+    cashSection.meaning = `${cashSection.meaning} Opening cash is ${reading.cashOpening}. The low point is ${reading.cashLow}.`;
+  }
+  const profitSection = built.sections.find((section) => section.key === "profit");
+  if (profitSection && reading.grossMargin) {
+    profitSection.meaning = `${profitSection.meaning} Gross margin is ${reading.grossMargin}.`;
+  }
+  const priorities = built.sections.find((section) => section.key === "priorities");
+  if (priorities) {
+    priorities.actions = ["Cut or reprice one operating cost this month.", ...priorities.actions];
+  }
+
   return {
     filename: advisoryPackPdfFilename(pack.clientName, null),
+    content: built,
     clientName: pdfSafeText(pack.clientName),
     period: score ? `SAMPLE · Health ${score}` : "SAMPLE",
     sections: sections.map((section) => ({
@@ -152,7 +218,8 @@ export async function downloadTrialAdvisoryPackPdf(
     AdvisoryPackPDF({
       smeData: { name: input.clientName, period: input.period },
       accountantProfile: input.profile,
-      sections: input.sections,
+      content: input.content,
+      sections: [],
       draftDisclosure: input.disclosure,
       sample: true,
       market: input.market,

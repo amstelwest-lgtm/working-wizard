@@ -8,7 +8,7 @@ import { pillarForRatioName, scorecardHealthFromFinancials } from "@/lib/health-
 import { assessClientMetrics } from "@/lib/client-metrics";
 import { firstClosingBelow, forecastLowestPoint } from "@/lib/cash-forecast-parity";
 import { buildBridgeSteps } from "@/lib/profit-bridge-steps";
-import { buildProfitabilityData, profitabilityStringRecord } from "@/lib/profitability-data";
+import { periodProfitBridge, statementNetProfit } from "@/lib/period-profit";
 import { currentRatioValue, metricDirection, periodMonthsOf } from "@/lib/ratios";
 import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { diagnoseDuPont } from "@/reports/narrative";
@@ -268,6 +268,41 @@ function pillarForRecommendation(rec: Recommendation): HealthPillarId | null {
   }
 }
 
+function profitSnapshot(financials: Record<string, unknown>): {
+  input: {
+    revenue: number;
+    gross_profit: number;
+    operating_profit: number;
+    ebt: number;
+    tax: number;
+    net_profit: number;
+    depreciation: number;
+  };
+  margins: { gross: number | null; operating: number | null; net: number | null };
+} | null {
+  const bridge = periodProfitBridge(financials);
+  if (!(bridge.revenue > 0)) return null;
+  const stated = statementNetProfit(financials);
+  const net = stated ?? bridge.ebit - bridge.interest - bridge.tax;
+  const margin = (amount: number) => (bridge.revenue > 0 ? amount / bridge.revenue : null);
+  return {
+    input: {
+      revenue: bridge.revenue,
+      gross_profit: bridge.grossProfit,
+      operating_profit: bridge.ebit,
+      ebt: bridge.ebit - bridge.interest,
+      tax: bridge.tax,
+      net_profit: net,
+      depreciation: bridge.depreciation,
+    },
+    margins: {
+      gross: margin(bridge.grossProfit),
+      operating: margin(bridge.ebit),
+      net: margin(net),
+    },
+  };
+}
+
 function stepKind(kind: "total" | "decrease" | "subtotal", delta: number): PackProfitStep["kind"] {
   if (kind === "decrease") return delta > 0 ? "increase" : "decrease";
   return "total";
@@ -428,27 +463,23 @@ export function assembleAdvisoryPackV2(args: {
       ? { ...args.base.forecast, weeks: [], floor: finiteOrNull(args.input.floor) }
       : null;
 
-  const profitData = financials
-    ? buildProfitabilityData(
-        profitabilityStringRecord(financials),
-        priorFinancials ? profitabilityStringRecord(priorFinancials) : null,
-      )
-    : null;
-  const profit = profitData
+  const profitNow = financials ? profitSnapshot(financials) : null;
+  const profitPrior = priorFinancials ? profitSnapshot(priorFinancials) : null;
+  const profit = profitNow
     ? {
-        steps: buildBridgeSteps(profitData).map((step) => ({
+        steps: buildBridgeSteps(profitNow.input).map((step) => ({
           key: stepKey(step.label),
           label: step.label,
           amount: step.delta,
           kind: stepKind(step.kind, step.delta),
         })),
         margins: {
-          gross: finiteOrNull(profitData.gross_margin_pct),
-          operating: finiteOrNull(profitData.operating_margin_pct),
-          net: finiteOrNull(profitData.net_margin_pct),
-          priorGross: finiteOrNull(profitData.prior_period?.gross_margin_pct),
-          priorOperating: finiteOrNull(profitData.prior_period?.operating_margin_pct),
-          priorNet: finiteOrNull(profitData.prior_period?.net_margin_pct),
+          gross: profitNow.margins.gross,
+          operating: profitNow.margins.operating,
+          net: profitNow.margins.net,
+          priorGross: profitPrior?.margins.gross ?? null,
+          priorOperating: profitPrior?.margins.operating ?? null,
+          priorNet: profitPrior?.margins.net ?? null,
         },
       }
     : null;

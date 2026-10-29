@@ -4,7 +4,7 @@
  */
 import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
-import { buildBridgeSteps, type ProfitBridgeInput } from "@/lib/profit-bridge-steps";
+import { buildBridgeSteps, type BridgeStep, type ProfitBridgeInput } from "@/lib/profit-bridge-steps";
 import { C, fmtRandCompact } from "@/components/pdf/theme";
 import { formatReportAmount } from "@/lib/market";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
@@ -58,9 +58,18 @@ const brStyles = StyleSheet.create({
   legendText: { fontSize: 6.5, color: C.muted, fontFamily: "Helvetica" },
 });
 
-export function BridgeChart({ d, accent }: { d: ProfitBridgeInput; accent: string }) {
+export function BridgeChart({
+  d,
+  accent,
+  steps: provided,
+}: {
+  d: ProfitBridgeInput;
+  accent: string;
+  /** Frozen steps. When omitted, the chart builds them from `d`. */
+  steps?: BridgeStep[];
+}) {
   const market = usePdfMarket();
-  const steps = buildBridgeSteps(d);
+  const steps = provided ?? buildBridgeSteps(d);
 
   // Scale: 0 .. revenue (floor at 0 for negative running values)
   const maxVal = Math.max(d.revenue, 1);

@@ -8,18 +8,33 @@ import { PDFDocument, type ReportSignoffStamp, type SmeData } from "@/components
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ReportSection } from "@/lib/report-pdf-layout";
-import { C } from "@/components/pdf/theme";
+import { C, resolveTheme } from "@/components/pdf/theme";
 import type { ResolvedMarket } from "@/lib/market";
 import {
   ADVISORY_PACK_DRAFT_DISCLOSURE,
   pdfSafeText,
   type AdvisoryPackPdfSection,
 } from "@/lib/advisory-pack-pdf";
+import { isAdvisoryPackV2, PACK_SCHEMA1_LAYOUT_NOTE } from "@/lib/advisory-pack-schema";
+import type { AdvisoryPackContent } from "@/lib/advisory-pack";
+import { PackCover } from "./advisory-pack/pack-cover";
+import { PackSummary } from "./advisory-pack/pack-summary";
+import { PackHealth } from "./advisory-pack/pack-health";
+import { PackDuPont } from "./advisory-pack/pack-dupont";
+import { PackCash } from "./advisory-pack/pack-cash";
+import { PackProfit } from "./advisory-pack/pack-profit";
+import { PackPriorities } from "./advisory-pack/pack-priorities";
+import { PackNotes } from "./advisory-pack/pack-notes";
 
 export type AdvisoryPackPDFProps = {
   smeData: SmeData;
   accountantProfile: AccountantProfile;
-  sections: AdvisoryPackPdfSection[];
+  sections?: AdvisoryPackPdfSection[];
+  /** Frozen pack. Schema 2 draws the eight-page report. Schema 1 stays text. */
+  content?: AdvisoryPackContent | null;
+  /** Shown on a schema 1 pack so the reader knows charts need a new version. */
+  legacyNote?: boolean;
+  dateLabel?: string;
   /** Exact draft sentence, or null once the pack is signed off. */
   draftDisclosure?: string | null;
   /** Page-1 line for an approval whose figures have moved. Not a draft watermark. */
@@ -76,7 +91,10 @@ function lines(value: string): string[] {
 export function AdvisoryPackPDF({
   smeData,
   accountantProfile,
-  sections,
+  sections = [],
+  content,
+  legacyNote,
+  dateLabel,
   draftDisclosure,
   staleNotice,
   reviewSignoff,
@@ -86,14 +104,18 @@ export function AdvisoryPackPDF({
   market,
 }: AdvisoryPackPDFProps) {
   const notice = staleNotice?.trim() ? pdfSafeText(staleNotice.trim()) : null;
-  const disclosure = notice || reviewSignoff ? null : (draftDisclosure ?? ADVISORY_PACK_DRAFT_DISCLOSURE);
+  const disclosure =
+    notice || reviewSignoff ? null : (draftDisclosure ?? ADVISORY_PACK_DRAFT_DISCLOSURE);
   const stamp = reviewSignoff
     ? { ...reviewSignoff, figuresChanged: reviewSignoff.figuresChanged || Boolean(notice) }
     : null;
+  const modern = content && isAdvisoryPackV2(content) ? content : null;
+  const showLegacyNote = !modern && (legacyNote || content?.schema === 1);
+  const theme = resolveTheme(accountantProfile);
   return (
     <PDFDocument
-      title={`${smeData.name} advisory pack`}
-      subject="Advisory pack"
+      title={`${smeData.name} Advisory Management Report`}
+      subject="Advisory Management Report"
       smeData={smeData}
       accountantProfile={accountantProfile}
       draft={!stamp}
@@ -103,43 +125,69 @@ export function AdvisoryPackPDF({
       sample={sample}
       market={market}
     >
-      <ReportTitle kicker="Advisory" title="Advisory pack" subtitle={smeData.period} />
-      {notice ? (
-        <View style={S.draft}>
-          <Text style={S.draftText}>{notice}</Text>
-        </View>
-      ) : disclosure ? (
-        <View style={S.draft}>
-          <Text style={S.draftText}>{disclosure}</Text>
-        </View>
+      {modern ? (
+        <>
+          <PackCover
+            content={modern}
+            preparedBy={accountantProfile.firmName}
+            accountantName={accountantProfile.accountantName}
+            dateLabel={dateLabel || smeData.period}
+          />
+          <PackSummary content={modern} />
+          <PackHealth content={modern} />
+          <PackDuPont content={modern} />
+          <PackCash content={modern} accent={theme.accent} />
+          <PackProfit content={modern} accent={theme.accent} />
+          <PackPriorities content={modern} />
+          <PackNotes content={modern} />
+        </>
       ) : null}
-      {sections.length === 0 ? (
-        <Text style={S.empty}>This pack has no sections yet.</Text>
-      ) : (
-        sections.map((section, i) => {
-          const body = [
-            ...lines(section.body).map((line, li) => (
-              <Text key={li} style={S.body}>
-                {line}
-              </Text>
-            )),
-            ...(section.bullets ?? []).map((bullet, bi) => (
-              <Text key={`b-${bi}`} style={S.bullet}>
-                {"• "}
-                {pdfSafeText(bullet)}
-              </Text>
-            )),
-          ];
-          return (
-            <ReportSection
-              key={`${section.title}-${i}`}
-              heading={<SectionHeader title={pdfSafeText(section.title)} />}
-              lead={body.slice(0, 2)}
-            >
-              {body.slice(2)}
-            </ReportSection>
-          );
-        })
+      {modern ? null : (
+        <>
+          <ReportTitle kicker="Advisory" title="Advisory pack" subtitle={smeData.period} />
+          {showLegacyNote ? (
+            <View style={S.draft}>
+              <Text style={S.draftText}>{PACK_SCHEMA1_LAYOUT_NOTE}</Text>
+            </View>
+          ) : null}
+          {notice ? (
+            <View style={S.draft}>
+              <Text style={S.draftText}>{notice}</Text>
+            </View>
+          ) : disclosure ? (
+            <View style={S.draft}>
+              <Text style={S.draftText}>{disclosure}</Text>
+            </View>
+          ) : null}
+          {sections.length === 0 ? (
+            <Text style={S.empty}>This pack has no sections yet.</Text>
+          ) : (
+            sections.map((section, i) => {
+              const body = [
+                ...lines(section.body).map((line, li) => (
+                  <Text key={li} style={S.body}>
+                    {line}
+                  </Text>
+                )),
+                ...(section.bullets ?? []).map((bullet, bi) => (
+                  <Text key={`b-${bi}`} style={S.bullet}>
+                    {"• "}
+                    {pdfSafeText(bullet)}
+                  </Text>
+                )),
+              ];
+              return (
+                <ReportSection
+                  key={`${section.title}-${i}`}
+                  heading={<SectionHeader title={pdfSafeText(section.title)} />}
+                  lead={body.slice(0, 2)}
+                >
+                  {body.slice(2)}
+                </ReportSection>
+              );
+            })
+          )}
+        </>
       )}
     </PDFDocument>
   );

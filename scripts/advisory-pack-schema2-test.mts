@@ -6,7 +6,7 @@
 import { assessClientMetrics } from "../src/lib/client-metrics";
 import { scorecardHealthFromFinancials } from "../src/lib/health-score";
 import { buildBridgeSteps } from "../src/lib/profit-bridge-steps";
-import { buildProfitabilityData, profitabilityStringRecord } from "../src/lib/profitability-data";
+import { periodProfitBridge, statementNetProfit } from "../src/lib/period-profit";
 import { metricDirection } from "../src/lib/ratios";
 import { scorecardRatiosFromFinancials } from "../src/lib/scorecard-rows";
 import { sampleFinancialsFor } from "../src/lib/sample-business";
@@ -178,25 +178,33 @@ function checkClient(name: string, financials: Record<string, unknown>, cashflow
     eq(frozen?.label, pillar.label, `${name} ${pillar.id} label`);
   }
 
-  const profit = buildProfitabilityData(profitabilityStringRecord(financials));
-  assert(profit, `${name} waterfall data`);
-  const steps = buildBridgeSteps(profit!);
+  const bridge = periodProfitBridge(financials);
+  const net = statementNetProfit(financials) ?? bridge.ebit - bridge.interest - bridge.tax;
+  const steps = buildBridgeSteps({
+    revenue: bridge.revenue,
+    gross_profit: bridge.grossProfit,
+    operating_profit: bridge.ebit,
+    ebt: bridge.ebit - bridge.interest,
+    tax: bridge.tax,
+    net_profit: net,
+    depreciation: bridge.depreciation,
+  });
   eq(pack.profit?.steps.length, steps.length, `${name} bridge step count`);
   steps.forEach((step, index) => {
     const frozen = pack.profit?.steps[index];
     eq(frozen?.label, step.label, `${name} step ${index} label`);
     eq(frozen?.amount, step.delta, `${name} step ${index} amount`);
   });
-  eq(pack.profit?.margins.gross, profit!.gross_margin_pct, `${name} gross margin`);
-  eq(pack.profit?.margins.operating, profit!.operating_margin_pct, `${name} operating margin`);
-  eq(pack.profit?.margins.net, profit!.net_margin_pct, `${name} net margin`);
+  eq(pack.profit?.margins.gross, bridge.grossProfit / bridge.revenue, `${name} gross margin`);
+  eq(pack.profit?.margins.operating, bridge.ebit / bridge.revenue, `${name} operating margin`);
+  eq(pack.profit?.margins.net, net / bridge.revenue, `${name} net margin`);
 
   const ratios = scorecardRatiosFromFinancials(financials, { fyStartMonth: 3 });
-  const net = ratios["Net Margin"];
+  const netMargin = ratios["Net Margin"];
   const turnover = ratios["Asset Turnover"];
   const multiplier = ratios["Equity Multiplier"];
-  if (typeof net === "number" && typeof turnover === "number" && typeof multiplier === "number") {
-    eq(pack.dupont?.netMargin, net, `${name} dupont margin`);
+  if (typeof netMargin === "number" && typeof turnover === "number" && typeof multiplier === "number") {
+    eq(pack.dupont?.netMargin, netMargin, `${name} dupont margin`);
     eq(pack.dupont?.assetTurnover, turnover, `${name} dupont turnover`);
     eq(pack.dupont?.equityMultiplier, multiplier, `${name} dupont multiplier`);
     assert(pack.dupont?.mainDriver, `${name} names a DuPont driver`);

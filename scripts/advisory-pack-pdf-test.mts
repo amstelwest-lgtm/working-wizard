@@ -23,10 +23,14 @@ assert(
   "draft disclosure sentence",
 );
 assert(
-  advisoryPackPdfFilename("QA US Test LLC", 1) === "QA_US_Test_LLC_Advisory_Pack_v1.pdf",
-  "filename uses the client name",
+  advisoryPackPdfFilename("QA US Test LLC", "Sep 2026") ===
+    "Advisory_Management_Report_QA_US_Test_LLC_Sep_2026.pdf",
+  "filename uses the client name and period",
 );
-assert(advisoryPackPdfFilename("  ", 2) === "Client_Advisory_Pack_v2.pdf", "empty name falls back");
+assert(
+  advisoryPackPdfFilename("  ") === "Advisory_Management_Report_Client.pdf",
+  "empty name falls back",
+);
 assert(pdfSafeText("Prepared by MILŌN.") === "Prepared by Milon.", "macron is WinAnsi-safe");
 
 assert(

@@ -59,11 +59,16 @@ export function pdfSafeText(value: string): string {
     .replace(/\u2014/g, " - ");
 }
 
-export function advisoryPackPdfFilename(clientName: string, version?: number | null): string {
+export function advisoryPackPdfFilename(clientName: string, period?: string | null): string {
   const raw = clientName.trim() || "Client";
   const slug = raw.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "Client";
-  const v = version != null && version > 0 ? `_v${version}` : "";
-  return `${slug}_Advisory_Pack${v}.pdf`;
+  const periodSlug = (period ?? "")
+    .trim()
+    .replace(/[^\w.-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return periodSlug
+    ? `Advisory_Management_Report_${slug}_${periodSlug}.pdf`
+    : `Advisory_Management_Report_${slug}.pdf`;
 }
 
 /**
@@ -195,7 +200,10 @@ export async function downloadAdvisoryPackPdf(input: {
   ]);
 
   const clientName = input.pack.content.clientName.trim() || "Client";
-  const filename = advisoryPackPdfFilename(clientName, input.pack.version);
+  const filename = advisoryPackPdfFilename(
+    clientName,
+    input.pack.period_label || input.pack.content.periodLabel,
+  );
   const stamp = advisoryPackPdfStamp({
     status: input.pack.status,
     reviewedAt: input.pack.reviewed_at,
@@ -257,7 +265,10 @@ export async function downloadAdvisoryPackPdf(input: {
         period: advisoryPackPdfPeriodLine(input.pack, input.market ?? marketForClient(null)),
       },
       accountantProfile: input.profile,
-      sections,
+      content: input.pack.content,
+      legacyNote: input.pack.content.schema !== 2,
+      sections: input.pack.content.schema === 2 ? [] : sections,
+      dateLabel: generatedOn ?? undefined,
       draftDisclosure: stamp || unsignedReady ? null : ADVISORY_PACK_DRAFT_DISCLOSURE,
       draftLabel: stamp ? null : unsignedReady ? SIGNOFF_STATUS_READY : SIGNOFF_STATUS_DRAFT,
       draftMark: stamp ? null : unsignedReady ? "READY FOR REVIEW" : "DRAFT",
