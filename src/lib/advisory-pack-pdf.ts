@@ -202,7 +202,7 @@ export async function downloadAdvisoryPackPdf(input: {
   const clientName = input.pack.content.clientName.trim() || "Client";
   const filename = advisoryPackPdfFilename(
     clientName,
-    input.pack.period_label || input.pack.content.periodLabel,
+    input.pack.period_label || input.pack.content.periodLabel, // date-ok: filename slug, not printed copy
   );
   const stamp = advisoryPackPdfStamp({
     status: input.pack.status,
