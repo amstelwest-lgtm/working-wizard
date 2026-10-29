@@ -348,9 +348,9 @@ async function dropModuleMaps() {
 }
 
 const first = await mountScreen("open", false);
-await waitFor("suggestion is Hand to before the click", () => {
+await waitFor("suggestion is Assign to before the click", () => {
   const scope = document.querySelector("[data-owner-suggestions]");
-  return scope?.querySelector("[data-hand-to-trigger]")?.getAttribute("aria-label") === "Hand to";
+  return scope?.querySelector("[data-hand-to-trigger]")?.getAttribute("aria-label") === "Assign to";
 });
 assert(notes.length === 0, "no hand-off note is seeded");
 assert(!inserted, "the move has no action_items row yet");
@@ -372,17 +372,17 @@ await waitFor("the blank row is on the plan", () =>
 await tick();
 const during = planRowNode();
 assert(
-  !during.textContent?.includes("Handed to"),
+  !during.textContent?.includes("Assigned to"),
   `the plan claimed settled Handed to before the note existed: ${during.textContent?.replace(/\s+/g, " ")}`,
 );
 assert(
-  !during.querySelector("[data-assignment-note]")?.textContent?.includes("Handed to"),
+  !during.querySelector("[data-assignment-note]")?.textContent?.includes("Assigned to"),
   "the byline painted Handed to from the optimistic note alone",
 );
 const pendingNow = during.querySelector("[data-hand-to-pending]");
 const handingNow = during.querySelector("[data-hand-to-trigger]")?.getAttribute("aria-label") ?? "";
 assert(
-  pendingNow instanceof HTMLElement || handingNow.startsWith("Handing to "),
+  pendingNow instanceof HTMLElement || handingNow.startsWith("Assigning to "),
   `the plan row was not Handing or Checking while the note was absent: ${during.textContent?.replace(/\s+/g, " ")}`,
 );
 assert(inserted, "ensure inserted the action row");
@@ -398,7 +398,7 @@ await waitFor(
 );
 for (let i = 0; i < 6; i += 1) await tick();
 const settledHandTo = triggers().filter(
-  (button) => (button.getAttribute("aria-label") ?? "") === "Hand to",
+  (button) => (button.getAttribute("aria-label") ?? "") === "Assign to",
 );
 assert(
   settledHandTo.length === 0,
@@ -411,11 +411,11 @@ for (const node of checking) {
   assert(!(node instanceof HTMLButtonElement), "Checking is a button");
 }
 assert(
-  !planRowNode().textContent?.includes("Handed to"),
+  !planRowNode().textContent?.includes("Assigned to"),
   "reload 1 claimed Handed to without an assignment note",
 );
 assert(
-  !document.body.textContent?.includes("Handed to Milōn Analyst"),
+  !document.body.textContent?.includes("Assigned to Milōn Analyst"),
   "the durable Handed to line is on the reloaded page",
 );
 
@@ -436,11 +436,11 @@ await waitFor("reload 2 shows the stored analyst note", () => {
   return (
     buttons.length > 0 &&
     document.querySelector("[data-hand-to-pending]") == null &&
-    buttons.every((button) => button.getAttribute("aria-label") === "Handed to Milōn Analyst")
+    buttons.every((button) => button.getAttribute("aria-label") === "Assigned to Milōn Analyst")
   );
 });
 assert(
-  planRowNode().textContent?.includes("Handed to Milōn Analyst") === true,
+  planRowNode().textContent?.includes("Assigned to Milōn Analyst") === true,
   "the plan row did not show Handed to Milōn Analyst after the note",
 );
 await third();

@@ -2108,7 +2108,7 @@ function ClientView() {
                 {
                   note:
                     stored.kind === "bot"
-                      ? `Handed to ${stored.name}.`
+                      ? `Assigned to ${stored.name}.`
                       : `Assigned to ${stored.name}.`,
                   at: stored.at,
                 },

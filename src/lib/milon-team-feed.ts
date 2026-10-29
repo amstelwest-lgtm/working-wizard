@@ -891,7 +891,7 @@ export function buildTeamActivity(records: TeamActivityRecords): TeamActivityEve
       id: `handoff:${row.id}`,
       agent: row.agent,
       kind: "handoff",
-      text: clip(`Hand-off: ${label}`, 200),
+      text: clip(`Assigned: ${label}`, 200),
       at: row.at,
       href,
     });

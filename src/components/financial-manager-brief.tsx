@@ -12,11 +12,11 @@ import { HandToMenu } from "@/components/hand-to-menu";
 import { retryHomeHandoff } from "@/components/client-home/retry-handoff";
 import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { ATTENTION_CTA, homeAttentionItems, type AttentionItem } from "@/lib/home-attention";
-import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { assignActionToPerson, commitActionHandoff } from "@/lib/owner-handoff-client";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 import "./financial-manager-brief.css";
+import { assignedToast } from "@/lib/action-handoff";
 
 export type HomeBriefHandoff = {
   id: string;
@@ -67,7 +67,7 @@ function BriefHandControl({
       comingSoon={comingSoon}
       audience={audience}
       onAssignAgent={async (agent) => {
-        const toastId = toast.success(`Handed to ${agentShortName(agent)}`);
+        const toastId = toast.success(assignedToast(agent));
         const result = await commitActionHandoff({
           clientId,
           actionItemId: item.id,

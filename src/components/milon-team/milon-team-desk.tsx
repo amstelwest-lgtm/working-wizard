@@ -24,6 +24,7 @@ import {
   findingPeriod,
   findingSentence,
   handoffParts,
+  handoffSentence,
   headerFromRun,
   isVisibleAgentFinding,
   latestRunByAgent,
@@ -378,12 +379,13 @@ export function MilonTeamDesk({
                     const when = formatAgo(row.at, clock);
                     return (
                       <li key={row.id} className="milon-desk-handoff" data-handoff={row.id}>
-                        <span className="milon-desk-tag">{agentShortName(row.from)}</span>
-                        <span className="milon-desk-handoff-arrow" aria-hidden="true">
-                          →
-                        </span>
-                        <span className="milon-desk-tag">{agentShortName(row.to)}</span>
-                        <p className="milon-desk-handoff-text">{row.text}</p>
+                        <p className="milon-desk-handoff-text">
+                          {handoffSentence(
+                            agentShortName(row.from),
+                            agentShortName(row.to),
+                            row.text,
+                          )}
+                        </p>
                         {when ? <time dateTime={row.at}>{when}</time> : null}
                       </li>
                     );

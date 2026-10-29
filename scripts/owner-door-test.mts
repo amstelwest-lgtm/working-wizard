@@ -1474,7 +1474,7 @@ assert(plan.includes("ownerView"), "the owner rail uses a compact action plan");
 assert(plan.includes("HandToMenu"), "each action has a Hand to control");
 assert(plan.includes("commitActionHandoff"), "handing off commits the assignment");
 assert(
-  door.includes("toast.success(`Handed to ${agentShortName(failed.agent)}`)"),
+  door.includes("toast.success(assignedToast(failed.agent))"),
   "owner door retry confirms the hand-off before the request",
 );
 const handoffClient = readFileSync("src/lib/owner-handoff-client.ts", "utf8");

@@ -479,8 +479,11 @@ assert(
 );
 assert(liveDesk.includes("is-muted"), "the failed line is muted");
 assert(liveDesk.includes("milon-desk-handoff"), "a hand-off is not a finding row");
-assert(liveDesk.includes("Review the cash floor before the next meeting."), "a hand-off keeps the note");
-assert(liveDesk.includes("milon-desk-handoff-arrow"), "a hand-off shows an arrow");
+assert(
+  liveDesk.includes("Analyst asked the Advisor to review the cash floor before the next meeting."),
+  "a hand-off reads as one sentence",
+);
+assert(!liveDesk.includes("milon-desk-handoff-arrow") && !liveDesk.includes("→"), "a hand-off has no arrow");
 assert(liveDesk.indexOf('data-finding="f1"') < liveDesk.indexOf('data-handoff="h1"'), "findings come before hand-offs");
 const findingHtml = liveDesk.slice(liveDesk.indexOf('data-finding="f1"'), liveDesk.indexOf("</li>"));
 assert(findingHtml.includes("Sep figures · checked 8 Oct 2026"), "the finding keeps the checked line");

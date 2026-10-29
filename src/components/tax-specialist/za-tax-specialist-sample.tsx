@@ -290,7 +290,7 @@ function PreviewHomeCard({ onHandOff, onSample }: { onHandOff: () => void; onSam
           data-tax-preview-action="handoff"
           onClick={onHandOff}
         >
-          Hand to Tax Specialist
+          Assign to Tax Specialist
         </button>
       </div>
     </div>
@@ -373,8 +373,8 @@ function Workspace({
         </p>
         {fromFinancialManager ? (
           <p className="tax-sample-banner" data-tax-fm-banner="true">
-            <strong>Hand to Tax Specialist.</strong> The Financial Manager handed this sample pack
-            across. Nothing was filed.
+            <strong>Assigned to Tax Specialist.</strong> The Financial Manager asked the Tax
+            Specialist to prepare this sample pack. Nothing was filed.
           </p>
         ) : null}
         <div className="tax-sample-meta">
@@ -445,7 +445,7 @@ function Workspace({
         </div>
         <div className="tax-sample-actions">
           <button type="button" className="tax-sample-primary" onClick={() => openTaxSample(true)}>
-            Hand to Tax Specialist
+            Assign to Tax Specialist
           </button>
         </div>
       </div>
@@ -501,7 +501,7 @@ export function ZaTaxSpecialistSample({
           onClick={openFromManager}
         >
           <TaxFace size="sm" place="menu" />
-          Hand to Tax Specialist
+          Assign to Tax Specialist
         </button>
         {workspace}
       </>
@@ -515,7 +515,7 @@ export function ZaTaxSpecialistSample({
           <TaxFace size="sm" place="menu" />
           <p>Financial Manager</p>
           <button type="button" onClick={openFromManager}>
-            Hand to Tax Specialist
+            Assign to Tax Specialist
           </button>
         </div>
         {workspace}

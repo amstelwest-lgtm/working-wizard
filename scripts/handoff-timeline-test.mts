@@ -74,7 +74,7 @@ assert(finished && finished.findings.length === 1, "findings attach to the run")
 steps = handoffTimeline({ agentName: "Analyst", run: finished });
 assert(
   steps.map((s) => s.label).join(" | ") ===
-    "Handed to Analyst | Analyst started | Read the P&L and balance sheet | Checked the ratios | Wrote a finding | Finished",
+    "Assigned to Analyst | Analyst started | Read the P&L and balance sheet | Checked the ratios | Wrote a finding | Finished",
   `finished run lists every step: ${steps.map((s) => s.label).join(" | ")}`,
 );
 assert(steps.at(-1)?.detail?.includes("Debtors are 62 days"), "the finish step carries the summary");

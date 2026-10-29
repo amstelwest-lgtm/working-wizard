@@ -151,7 +151,7 @@ const sampleSrc = [
   .join("\n");
 assert(sampleSrc.includes("SAMPLE"), "the workspace is labelled SAMPLE");
 assert(sampleSrc.includes("ITR14") && sampleSrc.includes("IRP6"), "both worksheets are named");
-assert(sampleSrc.includes("Hand to Tax Specialist"), "Financial Manager can hand the pack across");
+assert(sampleSrc.includes("Assign to Tax Specialist"), "Financial Manager can assign the pack");
 assert(
   !sampleSrc.includes("South Africa") && !sampleSrc.includes("ZAR") && !/rand /.test(sampleSrc),
   "pricing needles stay out of the chunk",
@@ -286,7 +286,7 @@ assert(
   "the preview card says what she prepares",
 );
 assert(preview.includes(">Preview<"), "the preview card carries a Preview tag");
-assert(preview.includes("Hand to Tax Specialist"), "the primary action is the hand-off");
+assert(preview.includes("Assign to Tax Specialist"), "the primary action is the assignment");
 assert(preview.includes("See a sample"), "a secondary link opens the sample");
 assert(preview.includes('data-tax-preview-action="handoff"'), "the hand-off is the primary action");
 assert(

@@ -58,7 +58,7 @@ assert(agentKeyFromAssignee("Milōn Analyst") === "analyst", "the assignee label
 assert(agentKeyFromAssignee("Analyst") === "analyst", "the short name is the same agent");
 assert(agentKeyFromAssignee("Ada Mbeki") === null, "a person is not an agent");
 assert(
-  handoffButtonLabel("analyst", false) === "Hand to Milōn Analyst",
+  handoffButtonLabel("analyst", false) === "Assign to Milōn Analyst",
   "an open button names the bot",
 );
 assert(
@@ -67,19 +67,19 @@ assert(
 );
 for (const agent of AGENT_KEYS) {
   const open = handoffButtonLabel(agent, false);
-  assert(open === `Hand to ${agentDisplayName(agent)}`, `one space before ${agentDisplayName(agent)}`);
+  assert(open === `Assign to ${agentDisplayName(agent)}`, `one space before ${agentDisplayName(agent)}`);
   assert(!open.includes("  "), `${agent} label has a double space: ${JSON.stringify(open)}`);
   const handed = handoffTriggerLabel(`  ${agentDisplayName(agent)}  `);
-  assert(handed === `Handed to ${agentDisplayName(agent)}`, handed);
+  assert(handed === `Assigned to ${agentDisplayName(agent)}`, handed);
   assert(!handed.includes("  "), `${agent} trigger has a double space`);
   assert(
-    handoffTriggerLabel(agentDisplayName(agent), true) === `Handed to ${agentShortName(agent)}`,
+    handoffTriggerLabel(agentDisplayName(agent), true) === `Assigned to ${agentShortName(agent)}`,
     "a narrow screen uses the short name",
   );
 }
-assert(handoffTriggerLabel("  Milōn Advisor") === "Handed to Milōn Advisor", "a padded advisor name keeps one space");
-assert(handoffTriggerLabel(null) === "Hand to", "an empty assignee stays Hand to");
-assert(handoffTriggerLabel("  Ada Mbeki  ") === "Hand to Ada Mbeki", "a person stays Hand to");
+assert(handoffTriggerLabel("  Milōn Advisor") === "Assigned to Milōn Advisor", "a padded advisor name keeps one space");
+assert(handoffTriggerLabel(null) === "Assign to", "an empty assignee stays Assign to");
+assert(handoffTriggerLabel("  Ada Mbeki  ") === "Assign to Ada Mbeki", "a person stays Assign to");
 assert(
   handoffProgressCaption("analyst", "queued") === "Analyst is queued",
   "a queued run is waiting",
@@ -94,7 +94,7 @@ const zaMarket = { locale: "en-ZA", timezone: "Africa/Johannesburg" };
 const usMarket = { locale: "en-US", timezone: "America/New_York" };
 const draftId = "5a2b1d31-1b64-49dd-a02a-cdd764714d3d";
 assert(
-  handoffProgressCaption("financial_manager", "succeeded", { draftId }) === "Financial Manager finished",
+  handoffProgressCaption("financial_manager", "succeeded", { draftId }) === "Done by Financial Manager. See result.",
   "a finished run stays on the action when a draft id is present",
 );
 const claimed = handoffProgressCaption("financial_manager", "succeeded", {
@@ -104,7 +104,7 @@ assert(
   claimed === handoffCouldNotDraft("financial_manager", claimed),
   "a succeeded run without a draft id is a failure",
 );
-assert(claimed != null && !claimed.includes("finished"), "finished cannot render without a draft id");
+assert(claimed != null && !claimed.includes("Done by"), "finished cannot render without a draft id");
 assert(
   handoffProgressCaption("financial_manager", "succeeded", {
     at: finishedAt,
@@ -112,7 +112,7 @@ assert(
     draftId,
     market: zaMarket,
     now: handoffNow,
-  }) === "Financial Manager finished · 20:31 SAST",
+  }) === "Done by Financial Manager · 20:31 SAST. See result.",
   "a finished run names the time and the zone, and the draft id is the proof",
 );
 assert(
@@ -121,7 +121,7 @@ assert(
     draftId,
     market: usMarket,
     now: new Date("2026-10-20T05:37:00.000Z"),
-  }) === "Advisor finished · 1:37 AM ET",
+  }) === "Done by Advisor · 1:37 AM ET. See result.",
   "a same-day US finish is the clock and ET",
 );
 assert(
@@ -130,7 +130,7 @@ assert(
     draftId,
     market: zaMarket,
     now: new Date("2026-10-20T05:37:00.000Z"),
-  }) === "Financial Manager finished · 19 Oct 2026, 07:37 SAST",
+  }) === "Done by Financial Manager · 19 Oct 2026, 07:37 SAST. See result.",
   "an earlier ZA finish includes the date and SAST",
 );
 assert(handoffClock(finishedAt, zaMarket, handoffNow) === "20:31 SAST", "same-day ZA clock keeps the zone");
@@ -146,7 +146,7 @@ assert(
   "a failed run does not say finished",
 );
 assert(
-  !String(handoffProgressCaption("advisor", "failed")).includes("finished"),
+  !String(handoffProgressCaption("advisor", "failed")).includes("Done by"),
   "finished cannot render without a draft id",
 );
 const notedAt = "2026-10-19T18:31:00.000Z";
@@ -157,7 +157,7 @@ assert(
 );
 assert(
   formatAssignmentNote({ note: "Handed to Analyst.", at: notedAt, actorLabel: "amstel.west" }, zaMarket, handoffNow) ===
-    "Handed to Analyst · by amstel.west · 20:31 SAST",
+    "Assigned to Analyst · by amstel.west · 20:31 SAST",
   "a hand-off note names the author and the time",
 );
 const analystName = agentDisplayName("analyst");
@@ -171,7 +171,7 @@ assert(
     },
     zaMarket,
     handoffNow,
-  ) === `Handed to ${analystName} · 20:31 SAST`,
+  ) === `Assigned to ${analystName} · 20:31 SAST`,
   "an old hand-off note does not name the bot as the author",
 );
 assert(
@@ -184,7 +184,7 @@ assert(
     },
     zaMarket,
     new Date("2026-10-20T05:37:00.000Z"),
-  ) === "Handed to Financial Manager · 07:37 SAST",
+  ) === "Assigned to Financial Manager · 07:37 SAST",
   "a bot hand-off note hides the author and keeps the zone",
 );
 assert(
@@ -250,7 +250,7 @@ const handoffClient = readFileSync("src/lib/owner-handoff-client.ts", "utf8");
 assert(plan.includes("assignToAgent"), "the button assigns the action");
 assert(plan.includes("commitActionHandoff"), "the button commits the assignment");
 assert(handoffClient.includes("recordHandoffAssignment"), "a switched-off runner still writes the assignee");
-assert(plan.includes("toast.success(`Handed to ${agentShortName(agent)}`)"), "hand-off toasts Handed to");
+assert(plan.includes("toast.success(assignedToast(agent))"), "assigning toasts Assigned to");
 const noDraft = describeActionHandoff({
   actionItemId: "action-1",
   assignee: "Milōn Financial Manager",
@@ -274,7 +274,7 @@ const noDraft = describeActionHandoff({
   now: handoffNow,
 });
 assert(noDraft.draftId === null && noDraft.phase === "failed", "no finding leaves the action failed");
-assert(noDraft.caption != null && !noDraft.caption.includes("finished"), "the row cannot say finished without a draft id");
+assert(noDraft.caption != null && !noDraft.caption.includes("Done by"), "the row cannot say finished without a draft id");
 assert(noDraft.phaseLabel === "Couldn't draft", "the status chip is not Not started");
 const withDraft = describeActionHandoff({
   ...noDraft,
@@ -300,15 +300,15 @@ const withDraft = describeActionHandoff({
   now: handoffNow,
 });
 assert(withDraft.draftId === draftId && withDraft.phase === "draft_ready", "a finding for the run is Draft ready");
-assert(withDraft.caption?.includes("finished") === true, "finished renders once the draft id exists");
+assert(withDraft.caption?.includes("Done by") === true, "finished renders once the draft id exists");
 assert(plan.includes("HandToMenu"), "the row renders Hand to");
 const menu = readFileSync("src/components/hand-to-menu.tsx", "utf8");
-assert(menu.includes("toast.success(`Handed to ${agentShortName(agent)}`)"), "Next moves toasts Handed to once the note is stored");
-const pendingLabel = menu.indexOf("Handing to ${agentShortName(agent)}");
+assert(menu.includes("toast.success(assignedToast(agent))"), "Next moves toasts Assigned to once the note is stored");
+const pendingLabel = menu.indexOf("Assigning to ${agentShortName(agent)}");
 const ensured = menu.indexOf("const actionItemId = await ensure()");
 const notedGate = menu.indexOf("result.noted !== true");
 const finalAssignee = menu.indexOf("setAssignee(agentDisplayName(agent))");
-const successToast = menu.indexOf("toast.success(`Handed to ${agentShortName(agent)}`)");
+const successToast = menu.indexOf("toast.success(assignedToast(agent))");
 assert(
   pendingLabel >= 0 && ensured > pendingLabel,
   "Next moves shows Handing to before the row exists",
@@ -322,7 +322,7 @@ assert(menu.includes("data-hand-to-trigger"), "the control is labelled Hand to")
 assert(menu.includes("handoffTriggerLabel"), "the trigger is one collapsed string");
 assert(menu.includes("hand-to-short"), "a narrow screen can show the short name");
 const labels = readFileSync("src/lib/action-handoff.ts", "utf8");
-assert(labels.includes("Hand to ${name}") && labels.includes('"Hand to"'), "the button says Hand to");
+assert(labels.includes("Assign to ${name}") && labels.includes('"Assign to"'), "the button says Assign to");
 const phaseMarks = plan.match(/data-handoff-phase=\{/g) ?? [];
 assert(phaseMarks.length === 1, "Draft ready is one badge per item");
 const toastCss = readFileSync("src/styles.css", "utf8");
@@ -505,7 +505,7 @@ assert(
   "a cleared owner still shows the hand-off note",
 );
 assert(
-  handoffTriggerLabel("Handing to Analyst…") === "Handing to Analyst…",
+  handoffTriggerLabel("Assigning to Analyst…") === "Assigning to Analyst…",
   "a pending hand-off stays the pending sentence",
 );
 assert(plan.includes("displayedAssignee(item.owner_name, notes)"), "the action row reads the stored hand-off");

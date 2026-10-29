@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { toast } from "sonner";
@@ -7,7 +7,13 @@ import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-sl
 import { useBoundMarketCountry } from "@/contexts/market";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
-import { HANDOFF_CHECKING_LABEL, handoffTriggerLabel } from "@/lib/action-handoff";
+import { Info } from "lucide-react";
+import {
+  ASSIGN_TO_HINT,
+  HANDOFF_CHECKING_LABEL,
+  assignedToast,
+  handoffTriggerLabel,
+} from "@/lib/action-handoff";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import {
@@ -102,6 +108,7 @@ export function HandToMenu({
   const [teamReady, setTeamReady] = useState(Boolean(employees));
   const [menuBox, setMenuBox] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const hintId = useId();
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useRef(`hand-${Math.random().toString(36).slice(2)}`);
 
@@ -208,7 +215,7 @@ export function HandToMenu({
   return (
     <div
       ref={rootRef}
-      className="relative"
+      className="relative inline-flex max-w-full items-center gap-1"
       data-hand-to="true"
       onClick={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
@@ -220,11 +227,22 @@ export function HandToMenu({
         data-hand-to-trigger
         aria-expanded={open}
         aria-label={fullLabel}
+        aria-describedby={hintId}
+        title={ASSIGN_TO_HINT}
         onClick={() => setOpen((value) => !value)}
       >
         <span className="hand-to-full">{fullLabel}</span>
         <span className="hand-to-short">{shortLabel}</span>
       </button>
+      <span
+        id={hintId}
+        className="assign-to-hint inline-flex shrink-0 items-center text-slate-400"
+        title={ASSIGN_TO_HINT}
+        data-assign-hint
+      >
+        <Info className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className="sr-only">{ASSIGN_TO_HINT}</span>
+      </span>
       {open && menuBox
         ? createPortal(
         <div
@@ -434,7 +452,7 @@ export function MoveHandTo({
     previousFace.current = face;
     optimistic.current = true;
     setHandoffError(null);
-    setAssignee(`Handing to ${agentShortName(agent)}…`);
+    setAssignee(`Assigning to ${agentShortName(agent)}…`);
     const actionItemId = await ensure();
     if ("error" in actionItemId) {
       revertPending(actionItemId.error);
@@ -465,7 +483,7 @@ export function MoveHandTo({
     setHandoffError(null);
     setAwaitingNote(false);
     setAssignee(agentDisplayName(agent));
-    toast.success(`Handed to ${agentShortName(agent)}`);
+    toast.success(assignedToast(agent));
   };
 
   const openDraftId = face?.phase === "draft_ready" ? face.draftId : null;

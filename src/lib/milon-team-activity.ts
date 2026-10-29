@@ -735,7 +735,28 @@ export function handoffParts(
   return { from: row.from_agent, to: row.to_agent, text };
 }
 
-/** "Analyst → Advisor: …" for a hand-off. Other message types stay off the desk. */
+const HANDOFF_VERBS = new Set(
+  (
+    "add ask book build call chase check collect compare confirm draft email explain find fix " +
+    "flag follow get look move note pay plan prepare price pull reconcile refresh review run " +
+    "send set share sign update write"
+  ).split(" "),
+);
+
+/** "Analyst asked the Advisor to review the cash floor." No arrow. */
+export function handoffSentence(from: string, to: string, text: string): string {
+  const task = text
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.!]+$/u, "");
+  const first = task.split(" ")[0]?.toLowerCase() ?? "";
+  if (HANDOFF_VERBS.has(first)) {
+    return `${from} asked the ${to} to ${first}${task.slice(first.length)}.`;
+  }
+  return `${from} asked the ${to} to look into this: ${task}.`;
+}
+
+/** "Analyst asked the Advisor to …" for a hand-off. Other message types stay off the desk. */
 export function handoffLine(
   row: Pick<AgentMessageRow, "type" | "from_agent" | "to_agent" | "payload">,
   shortName: (agent: AgentKey) => string,
@@ -751,7 +772,7 @@ export function handoffLine(
     evidence: row.payload,
     storedHealth: readStoredHealthSnapshot(row.payload),
   }).text;
-  return `${shortName(parts.from)} → ${shortName(parts.to)}: ${prose}`;
+  return handoffSentence(shortName(parts.from), shortName(parts.to), prose);
 }
 
 function narrativeSnapshot(

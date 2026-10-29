@@ -240,13 +240,13 @@ const handoffActivity = buildTeamActivity({
 const handed = handoffActivity.find((event) => event.id === "handoff:h1");
 assert(handed?.agent === "financial_manager", "a hand-off is logged on the financial manager");
 assert(handed?.kind === "handoff", "the activity kind is a hand-off");
-assert(handed?.text.startsWith("Hand-off:"), handed?.text ?? "missing hand-off");
+assert(handed?.text.startsWith("Assigned:"), handed?.text ?? "missing hand-off");
 assert(
   handed?.text.includes("Move fixed contracts to variable / usage-based pricing"),
   handed?.text ?? "missing move title",
 );
 const prefixed = handoffActivity.find((event) => event.id === "handoff:h2");
-assert(prefixed?.text === handed?.text, `the Hand-off prefix is not doubled (${prefixed?.text})`);
+assert(prefixed?.text === handed?.text, `the old Hand-off prefix does not leak (${prefixed?.text})`);
 
 assert(activity[0].kind === "signoff" && activity[0].agent === "financial_manager", "latest event is the financial_manager sign-off");
 assert(activity.find((event) => event.id === "approved:p1")?.agent === "analyst", "budget approval is the analyst");

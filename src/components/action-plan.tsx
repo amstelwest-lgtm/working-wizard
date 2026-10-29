@@ -28,7 +28,7 @@ import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { settleWithin } from "@/lib/bounded-load";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { handoffAssigneeName } from "@/lib/owner-handoff";
-import { describeActionHandoff } from "@/lib/action-handoff";
+import { assignedToast, describeActionHandoff } from "@/lib/action-handoff";
 import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
@@ -942,7 +942,7 @@ export default function ActionPlanPanel({
         owner_name: item.owner_name ?? null,
         owner_email: item.owner_email ?? null,
       };
-      const pending = `Handing to ${agentShortName(agent)}…`;
+      const pending = `Assigning to ${agentShortName(agent)}…`;
       setLiveHandoff((current) => ({ ...current, [item.id]: pending }));
       setItems((current) =>
         current.map((row) =>
@@ -993,7 +993,7 @@ export default function ActionPlanPanel({
           row.id === item.id ? { ...row, owner_name: handed } : row,
         ),
       );
-      toast.success(`Handed to ${agentShortName(agent)}`);
+      toast.success(assignedToast(agent));
       void refresh();
     },
     [clientId, refresh],
@@ -2058,7 +2058,7 @@ export default function ActionPlanPanel({
                         toast.error(result.ok ? "Couldn't hand this over" : result.error);
                         return;
                       }
-                      toast.success(`Handed to ${agentShortName(agent)}`);
+                      toast.success(assignedToast(agent));
                     });
                   };
                 })()}
