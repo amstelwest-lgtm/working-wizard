@@ -29,7 +29,11 @@ export const FM_OWN_READS = [
   "get_own_memory",
 ] as const;
 
-export const FM_WRITE_TOOLS = ["record_draft", "send_agent_message"] as const;
+export const FM_WRITE_TOOLS = [
+  "record_draft",
+  "send_agent_message",
+  "propose_figure_adjustment",
+] as const;
 
 export const FM_TOOLS = [...FM_REUSED_READS, ...FM_OWN_READS, ...FM_WRITE_TOOLS] as const;
 
@@ -46,6 +50,7 @@ export const FM_TOOL_LABELS: Record<FmToolName, string> = {
   get_own_memory: "Memory",
   record_draft: "Draft",
   send_agent_message: "Message",
+  propose_figure_adjustment: "Figure proposal",
 };
 
 export function fmToolAllowed(name: string): name is FmToolName {
@@ -74,7 +79,10 @@ export function fmRunOutcome(input: {
   return analystRunOutcome({
     ...input,
     steps: input.steps.map((step) => ({
-      tool: step.tool === "record_draft" ? "record_finding" : step.tool,
+      tool:
+        step.tool === "record_draft" || step.tool === "propose_figure_adjustment"
+          ? "record_finding"
+          : step.tool,
       status: step.status,
     })),
   });

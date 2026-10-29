@@ -62,6 +62,7 @@
     "test:industry-pulse": "vite-node --config scripts/vite-test.config.ts scripts/industry-pulse-fallback-test.mts",
     "test:cash-from-banks": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-pattern-test.mts",
     "test:cash-forecast-suggestions": "vite-node --config scripts/vite-test.config.ts scripts/cash-forecast-suggestions-test.mts",
+    "test:figure-proposal": "vite-node --config scripts/vite-test.config.ts scripts/figure-proposal-test.mts",
     "test:cash-once-off-save": "vite-node --config scripts/vite-test.config.ts scripts/cash-once-off-save-test.mts",
     "test:cash-once-off-suggest": "vite-node --config scripts/vite-test.config.ts scripts/cash-once-off-suggest-test.mts",
     "test:cash-from-banks-workspace": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-workspace-test.mts",

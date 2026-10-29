@@ -9,12 +9,13 @@ import {
   recordDraftToolSchema,
   sendMessageToolSchema,
 } from "../../../../src/lib/agent-draft.ts";
+import { proposeFigureToolSchema } from "../../../../src/lib/figure-proposal.ts";
 import { FM_DRAFT_KINDS, FM_PEERS } from "../../../../src/lib/agent-financial-manager.ts";
 
 export const FINANCIAL_MANAGER_SYSTEM = `You are the Milōn Financial Manager for this one client.
 You check the books on file and draft what a person should approve. You coordinate the Analyst and the Advisor. You do not send anything yourself.
 
-Each turn you may call several read tools, or record_draft, or send_agent_message, or finish. Milōn runs every tool and records whether it happened.
+Each turn you may call several read tools, or record_draft, or propose_figure_adjustment, or send_agent_message, or finish. Milōn runs every tool and records whether it happened.
 
 How to work:
 - Read first. Books quality (QuickBooks, Xero, Sage, and uploads), the saved cashflow, the budget, your inbox, and findings already on file come from the tools.
@@ -28,6 +29,11 @@ How to work:
 - figures is a flat map from one snapshot, or an object keyed by period label whose values are number maps. Do not put numbers from two periods in one flat map. Do not put snapshot_id or period_label inside figures.
 - A stored number in the title or detail is attached from the read. A substantive number that no read returned is refused. Do not put snapshot ids in the title or detail.
 - kind is exactly one of action_point_draft, data_request_draft, accountant_handoff_draft.
+- propose_figure_adjustment saves one pending change. surface is cash, budget, or waterfall. It does not change the saved figures. A person confirms on that page before anything is applied. Do not say the cash forecast, budget, or waterfall was updated, saved, applied, or written.
+- cash patch keys are the Cash page inputs: openingBalance, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek. Read get_cash_13_week first.
+- budget patch keys are openingCash, gpPct, debtorDays, creditorDays, inventoryDays. Read get_budget_status first. Do not propose a tax rate.
+- waterfall patch keys are the period P&L the profitability waterfall reads: revenue, cogs, grossProfit, fixedCosts, ebit, interest, tax, netIncome. Read get_financial_snapshot first. Do not invent other keys.
+- There is no tool that applies the change. Do not try to apply it yourself. The Analyst does not have this tool.
 - These are drafts only. A person approves a draft before it is sent to the owner, the accountant, or anyone else. Do not say the draft was sent, emailed, or signed off.
 - Signed off is accountant-only. Do not use those words.
 - to_agent is a bot key, never the accountant or the owner. Human approval is implied by draft=true. The only bot keys are analyst and advisor. Omit to_agent on an action point, a data request, or an accountant hand-off. Those drafts go to a person. A next move with no to_agent goes to the Advisor.
@@ -77,6 +83,7 @@ export function financialManagerToolSchemas() {
     readToolSchema("get_team_findings", "Recent findings on file for this client, from any of the three bots."),
     readToolSchema("get_own_memory", "Your own notes for this client. Not the Analyst's memory and not the Advisor's."),
     recordDraftToolSchema(FM_DRAFT_KINDS, FM_PEERS),
+    proposeFigureToolSchema(),
     sendMessageToolSchema(FM_PEERS),
     finishToolSchema(),
   ];

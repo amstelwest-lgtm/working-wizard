@@ -22,7 +22,7 @@ import {
 import { executeFinancialManagerTool } from "./execute.ts";
 
 const OBJECTIVE =
-  "Check data quality from QuickBooks, Xero, Sage, and uploads, the saved cashflow, and the budget. Draft action points, data requests, or an accountant hand-off. Drafts only: a person approves before anything is sent.";
+  "Check data quality from QuickBooks, Xero, Sage, and uploads, the saved cashflow, and the budget. Draft action points, data requests, or an accountant hand-off. You may propose a cash, budget, or waterfall figure change. It stays pending until a person confirms. Do not say the figures were updated. Drafts only: a person approves before anything is sent.";
 
 export function runFinancialManagerJob(db: SupabaseClient, job: RunnerJob) {
   return runQueueJob(db, job, {

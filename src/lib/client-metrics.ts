@@ -48,7 +48,8 @@ export const RUNWAY_PROFITABLE_LABEL =
 /**
  * Scenario knobs (collection delay, growth, capex, headcount) are an overlay.
  * Overview, Health, the PDF, and the Bot read the base forecast. The cash tab
- * keeps the knobs in memory until the accountant resets them.
+ * keeps unsaved knobs in memory. A person-confirmed proposal is written back
+ * after this strip (see withConfirmedForecastAdjustments).
  */
 export function baseCashflow<T extends Record<string, unknown>>(cf: T): T {
   return {

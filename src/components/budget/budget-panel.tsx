@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SkeletonBlock } from "@/components/primitives/skeleton-blocks";
+import { FigureProposals, useFigureProposals } from "@/components/figure-proposals";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
@@ -248,6 +249,11 @@ export function BudgetPanel({
     signoffProp ?? null,
   );
   const [signedBudgetSnapshot, setSignedBudgetSnapshot] = useState<unknown>(null);
+  const figureProposals = useFigureProposals({
+    clientId,
+    surface: "budget",
+    enabled: Boolean(clientId) && !readOnly,
+  });
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const skipAutosave = useRef(false);
   const budgetDirty = useRef(false);
@@ -646,6 +652,27 @@ export function BudgetPanel({
     />
   );
 
+  const proposalCard = readOnly ? null : (
+    <FigureProposals
+      surface="budget"
+      proposals={figureProposals.proposals}
+      busyId={figureProposals.busyId}
+      onConfirm={(id) => {
+        void figureProposals.confirm(id).then((applied) => {
+          const next = applied?.budget;
+          if (!next || next.version !== 1) return;
+          skipAutosave.current = true;
+          budgetDirty.current = false;
+          setDoc(next as BudgetDocument);
+          setBudgetUpdatedAt(new Date().toISOString());
+        });
+      }}
+      onReject={(id) => {
+        void figureProposals.reject(id);
+      }}
+    />
+  );
+
   if (!doc) {
     if (readOnly) {
       return (
@@ -661,6 +688,7 @@ export function BudgetPanel({
     }
     return (
       <>
+        {proposalCard}
         <ReviewInputsDrawer>{budgetInputConfig}</ReviewInputsDrawer>
         <div className="space-y-3 rounded-xl border border-dashed border-slate-300 p-6 text-sm dark:border-slate-700">
           <p className="font-semibold text-slate-800 dark:text-slate-100">
@@ -763,6 +791,7 @@ export function BudgetPanel({
           </p>
         </div>
       )}
+      {proposalCard}
       {implausible && !readOnly && (
         <div className="budget-lineup mb-4 rounded-xl border border-[#DBEAFE] bg-[#F4F8FF] px-4 py-3 text-sm text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
           <p className="font-semibold">This budget does not line up with the saved statement</p>

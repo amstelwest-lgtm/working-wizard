@@ -167,6 +167,7 @@ import {
 } from "@/lib/cash-week-overrides";
 import { CashSuggestionCard } from "@/components/cash-suggestion-card";
 import { CashForecastMenu } from "@/components/cash/cash-forecast-menu";
+import { FigureProposals, useFigureProposals } from "@/components/figure-proposals";
 import { PALETTE } from "@/lib/brand-palette";
 import { ForecastLineTable } from "@/components/cash/forecast-line-table";
 import { CashInputAuditTable } from "@/components/cash/cash-input-audit";
@@ -204,6 +205,13 @@ import {
   linesForSilentSave,
   silentForecastKey,
 } from "@/lib/cash-once-off-save";
+import {
+  engineFromConfirmed,
+  NEUTRAL_CASH_FORECAST_ENGINE,
+  readConfirmedForecastAdjustments,
+  withConfirmedForecastAdjustments,
+  type CashForecastEngine,
+} from "@/lib/figure-proposal";
 import {
   onceOffSaveEnabled,
   showSuggestOnceOffs,
@@ -758,6 +766,12 @@ export function CashForecastPanel({
   const [other, setOther] = useState<LineItem[]>(preview?.other ?? DEFAULT_OTHER);
   const [revAdj, setRevAdj] = useState(100); // %
   const [expAdj, setExpAdj] = useState(100); // %
+  const [confirmedEngine, setConfirmedEngine] = useState<CashForecastEngine | null>(null);
+  const figureProposals = useFigureProposals({
+    clientId,
+    surface: "cash",
+    enabled: Boolean(clientId) && !preview && !readOnly,
+  });
   const [collectDelay, setCollectDelay] = useState(0); // weeks shift inflows right
   const [headcountDelta, setHeadcountDelta] = useState(0); // +/- people
   const [avgSalary, setAvgSalary] = useState("0"); // monthly per head
@@ -865,6 +879,7 @@ export function CashForecastPanel({
     setRevenue(payload.revenue as LineItem[]);
     setExpenses(payload.expenses as LineItem[]);
     setOther(payload.other as LineItem[]);
+    setConfirmedEngine(null);
     setRevAdj(payload.revAdj);
     setExpAdj(payload.expAdj);
     setCollectDelay(payload.collectDelay);
@@ -1140,15 +1155,6 @@ export function CashForecastPanel({
             splitCount: 1,
           },
         ]);
-        setRevAdj(100);
-        setExpAdj(100);
-        setCollectDelay(0);
-        setHeadcountDelta(0);
-        setAvgSalary("0");
-        setFixedCostDelta("0");
-        setRevGrowthPct(0);
-        setCapexAmount("0");
-        setCapexWeek(1);
         if (!outlook.estimateLabel) {
           setXeroBankNote(null);
           xeroBankNoteRef.current = null;
@@ -1161,18 +1167,6 @@ export function CashForecastPanel({
         else setRevenue([]);
         if (cf.expenses) setExpenses(cf.expenses);
         if (cf.other) setOther(cf.other);
-        // Scenario knobs (collection delay, growth, capex) are session-only.
-        // A value saved before the base forecast ignored them is leakage, not
-        // the base. Opening this tab always starts on the base.
-        setRevAdj(100);
-        setExpAdj(100);
-        setCollectDelay(0);
-        setHeadcountDelta(0);
-        setAvgSalary("0");
-        setFixedCostDelta("0");
-        setRevGrowthPct(0);
-        setCapexAmount("0");
-        setCapexWeek(1);
       }
       setInputFinancials(
         (data?.financials as Record<string, string | number | null | undefined> | null) ?? null,
@@ -1210,6 +1204,20 @@ export function CashForecastPanel({
         setConfiguredFloor(null);
       }
       setInputAudit(parseCashInputAudit((cf as { inputAudit?: unknown } | null)?.inputAudit));
+      // Unconfirmed what-if knobs are not the base. A confirmed proposal is.
+      // Anything else saved on those keys is leakage and starts back at neutral.
+      const confirmed = readConfirmedForecastAdjustments(cf);
+      const engine = engineFromConfirmed(confirmed);
+      setConfirmedEngine(confirmed ? engine : null);
+      setRevAdj(engine.revAdj);
+      setExpAdj(engine.expAdj);
+      setCollectDelay(engine.collectDelay);
+      setHeadcountDelta(engine.headcountDelta);
+      setAvgSalary(engine.avgSalary);
+      setFixedCostDelta(engine.fixedCostDelta);
+      setRevGrowthPct(engine.revGrowthPct);
+      setCapexAmount(engine.capexAmount);
+      setCapexWeek(engine.capexWeek);
       skipNextAutosave.current = true;
       hydrateOnceOff.current = true;
       setLoaded(true);
@@ -1325,7 +1333,7 @@ export function CashForecastPanel({
         markers.linesSource != null &&
         JSON.stringify({ revenue: silentRevenue, expenses: silentExpenses, other: silentOther }) ===
           markers.linesKey;
-      const payload = {
+      const payload = withConfirmedForecastAdjustments({
         ...(loadedCashflowRef.current ?? {}),
         startDate,
         openingBalance,
@@ -1347,7 +1355,7 @@ export function CashForecastPanel({
                 forecastLinesNote: "Estimated from the P&L",
               }
             : {}),
-      };
+      }, loadedCashflowRef.current);
       const forecastUpdatedAt = new Date().toISOString();
       const assessed = assessClientMetrics({
         financials: inputFinancials,
@@ -1399,7 +1407,7 @@ export function CashForecastPanel({
     const linesUntouched =
       markers.linesSource != null &&
       JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
-    const payload = {
+    const payload = withConfirmedForecastAdjustments({
       ...(loadedCashflowRef.current ?? {}),
       startDate,
       openingBalance,
@@ -1421,7 +1429,7 @@ export function CashForecastPanel({
               forecastLinesNote: "Estimated from the P&L",
             }
           : {}),
-    };
+    }, loadedCashflowRef.current);
     const forecastUpdatedAt = new Date().toISOString();
     const assessed = assessClientMetrics({
       financials: inputFinancials,
@@ -1643,20 +1651,21 @@ export function CashForecastPanel({
     else setOther(patch);
   };
 
+  const baseEngine = confirmedEngine ?? NEUTRAL_CASH_FORECAST_ENGINE;
   const baseCalc = useMemo(
     () =>
       computeScenario({
-        rMul: 1,
-        eMul: 1,
-        shift: 0,
-        headcountDelta: 0,
-        avgSalary: 0,
-        fixedCostDelta: 0,
-        revGrowthPct: 0,
-        capexAmount: 0,
-        capexWeek: 1,
+        rMul: baseEngine.revAdj / 100,
+        eMul: baseEngine.expAdj / 100,
+        shift: baseEngine.collectDelay,
+        headcountDelta: baseEngine.headcountDelta,
+        avgSalary: parseFloat(baseEngine.avgSalary) || 0,
+        fixedCostDelta: parseFloat(baseEngine.fixedCostDelta) || 0,
+        revGrowthPct: baseEngine.revGrowthPct,
+        capexAmount: parseFloat(baseEngine.capexAmount) || 0,
+        capexWeek: baseEngine.capexWeek,
       }),
-    [revenue, expenses, other, openingBalance, singleMonthHistory, recurringPayees],
+    [revenue, expenses, other, openingBalance, singleMonthHistory, recurringPayees, baseEngine],
   );
 
   const updateAt = (
@@ -1744,7 +1753,7 @@ export function CashForecastPanel({
       fixedMonthly: fixed?.amount ?? null,
       at: new Date().toISOString(),
     };
-    const payload = {
+    const payload = withConfirmedForecastAdjustments({
       ...(loadedCashflowRef.current ?? {}),
       startDate,
       openingBalance: nextOpening,
@@ -1753,7 +1762,7 @@ export function CashForecastPanel({
       other,
       ...baseCashflow({}),
       suggestionConfirm: confirmed,
-    };
+    }, loadedCashflowRef.current);
     loadedCashflowRef.current = payload;
     skipNextAutosave.current = true;
     setOpeningBalance(nextOpening);
@@ -1913,13 +1922,13 @@ export function CashForecastPanel({
     JSON.stringify({ revenue, expenses, other }) === xeroCashMarkers.current.linesKey;
   const shownLineSource = linesMatchLoaded ? linesSourceChip : null;
   const scenarioActive =
-    revAdj !== 100 ||
-    expAdj !== 100 ||
-    collectDelay !== 0 ||
-    headcountDelta !== 0 ||
-    (parseFloat(fixedCostDelta) || 0) !== 0 ||
-    revGrowthPct !== 0 ||
-    (parseFloat(capexAmount) || 0) !== 0;
+    revAdj !== baseEngine.revAdj ||
+    expAdj !== baseEngine.expAdj ||
+    collectDelay !== baseEngine.collectDelay ||
+    headcountDelta !== baseEngine.headcountDelta ||
+    (parseFloat(fixedCostDelta) || 0) !== (parseFloat(baseEngine.fixedCostDelta) || 0) ||
+    revGrowthPct !== baseEngine.revGrowthPct ||
+    (parseFloat(capexAmount) || 0) !== (parseFloat(baseEngine.capexAmount) || 0);
 
   const chartData = balanceSeries.map((point) => {
     const floor = Math.round(minimumCash);
@@ -2621,15 +2630,15 @@ export function CashForecastPanel({
   );
 
   const resetScenario = () => {
-    setRevAdj(100);
-    setExpAdj(100);
-    setCollectDelay(0);
-    setHeadcountDelta(0);
-    setAvgSalary("0");
-    setFixedCostDelta("0");
-    setRevGrowthPct(0);
-    setCapexAmount("0");
-    setCapexWeek(1);
+    setRevAdj(baseEngine.revAdj);
+    setExpAdj(baseEngine.expAdj);
+    setCollectDelay(baseEngine.collectDelay);
+    setHeadcountDelta(baseEngine.headcountDelta);
+    setAvgSalary(baseEngine.avgSalary);
+    setFixedCostDelta(baseEngine.fixedCostDelta);
+    setRevGrowthPct(baseEngine.revGrowthPct);
+    setCapexAmount(baseEngine.capexAmount);
+    setCapexWeek(baseEngine.capexWeek);
   };
   const scenarioSliders = (
     <div className="grid gap-5 md:grid-cols-3">
@@ -3455,6 +3464,55 @@ export function CashForecastPanel({
     </div>
   );
 
+  const adoptAppliedCashflow = (cashflow: Record<string, unknown>) => {
+    loadedCashflowRef.current = cashflow;
+    const confirmed = readConfirmedForecastAdjustments(cashflow);
+    const engine = engineFromConfirmed(confirmed);
+    setConfirmedEngine(confirmed ? engine : null);
+    setRevAdj(engine.revAdj);
+    setExpAdj(engine.expAdj);
+    setCollectDelay(engine.collectDelay);
+    setHeadcountDelta(engine.headcountDelta);
+    setAvgSalary(engine.avgSalary);
+    setFixedCostDelta(engine.fixedCostDelta);
+    setRevGrowthPct(engine.revGrowthPct);
+    setCapexAmount(engine.capexAmount);
+    setCapexWeek(engine.capexWeek);
+    if (cashflow.openingBalance != null && cashflow.openingBalance !== "") {
+      skipNextAutosave.current = true;
+      setOpeningBalance(String(cashflow.openingBalance));
+    }
+    const forecastUpdatedAt = new Date().toISOString();
+    setLastForecastAt(forecastUpdatedAt);
+    if (!clientId) return;
+    const assessed = assessClientMetrics({
+      financials: inputFinancials,
+      cashflow,
+      timeZone: market.timezone,
+      fyStartMonth: inputProfile?.fyStartMonth ?? market.fyStartMonthDefault,
+    });
+    void supabase
+      .from("clients")
+      .update({ cash_runway_weeks: persistedRunwayWeeks(assessed.runway) })
+      .eq("id", clientId);
+  };
+  const proposalCard =
+    !clientId || preview || readOnly ? null : (
+      <FigureProposals
+        surface="cash"
+        proposals={figureProposals.proposals}
+        busyId={figureProposals.busyId}
+        onConfirm={(id) => {
+          void figureProposals.confirm(id).then((applied) => {
+            if (applied?.cashflow) adoptAppliedCashflow(applied.cashflow);
+          });
+        }}
+        onReject={(id) => {
+          void figureProposals.reject(id);
+        }}
+      />
+    );
+
   // ── Paged mode: accountant forecast page, one pane per menu item ─────────
   if (paged) {
     const view = activePagedView;
@@ -3536,6 +3594,7 @@ export function CashForecastPanel({
           </div>
         </div>
         <CashForecastMenu value={view} onChange={selectPagedView} auditCount={auditPending} />
+        {proposalCard}
         {sentence ? (
           <p className="cash-paged__sentence" data-cash-pane-sentence>
             {sentence}
@@ -3733,6 +3792,7 @@ export function CashForecastPanel({
     return (
       <div id="wizard-cash-outlook" className="space-y-0">
         {answerStrip}
+        {proposalCard}
         {cashSuggestionCard}
         {onceOffSaveBar}
         {forecastCard}
@@ -3783,6 +3843,7 @@ export function CashForecastPanel({
   return (
     <div id="wizard-cash-outlook" className="space-y-5">
       {answerStrip}
+      {proposalCard}
       {cashSuggestionCard}
       {onceOffSaveBar}
       {readOnly ? null : reviewInputs}

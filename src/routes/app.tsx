@@ -6409,6 +6409,27 @@ function Index() {
                       <ProfitabilityWaterfall
                         clientName={actingClientName ?? undefined}
                         clientId={effectiveClientId ?? undefined}
+                        onFiguresApplied={(next) => {
+                          setV((prev) => {
+                            const merged: Record<string, string> = { ...prev };
+                            for (const key of [
+                              "revenue",
+                              "cogs",
+                              "grossProfit",
+                              "fixedCosts",
+                              "ebit",
+                              "interest",
+                              "tax",
+                              "netIncome",
+                            ]) {
+                              const value = next[key];
+                              if (typeof value === "number" || typeof value === "string") {
+                                merged[key] = String(value);
+                              }
+                            }
+                            return merged as Inputs;
+                          });
+                        }}
                         reviewSignoff={stampFromSignoff(
                           profitabilitySignoff,
                           computeIsStale(
