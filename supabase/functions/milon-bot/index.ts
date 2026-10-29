@@ -5,7 +5,7 @@
  */
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "../ask-ai/sanitizer.ts";
-import { normalizeChatReply, parseChatAgent, scopeHistoryToAgent } from "../_shared/chat-reply.ts";
+import { chatAgentForMarket, normalizeChatReply, parseChatAgent, scopeHistoryToAgent } from "../_shared/chat-reply.ts";
 import { callClaudeRound, type ClaudeMessage, type ClaudeTool } from "./claude.ts";
 import { publicRun, runMilonbotObjective } from "./handler.ts";
 import { buildMilonBotChatPayload, redactToolResult } from "./prompt.ts";
@@ -382,7 +382,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
     );
   }
   const audience = body.audience === "accountant" ? "accountant" : "owner";
-  const agent = parseChatAgent(body.agent);
+  let agent = parseChatAgent(body.agent);
 
   const { data: hasAccess, error: accessErr } = await adminClient.rpc("has_client_access", {
     _user_id: user.id,
@@ -530,6 +530,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
       console.warn("advisory sign-off:", (e as Error).message);
     }
   }
+  agent = chatAgentForMarket(agent, replyPack);
 
   if (createIntent) {
     try {

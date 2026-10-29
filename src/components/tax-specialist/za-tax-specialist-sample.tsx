@@ -4,7 +4,7 @@
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { OwnerAvatar, type AvatarSize } from "@/components/owner-door/owner-avatar";
+import { ChatIcon, OwnerAvatar, type AvatarSize } from "@/components/owner-door/owner-avatar";
 import { fmAvatarClip } from "@/lib/fm-avatar-state";
 import {
   SAMPLE_COMPANY,
@@ -98,7 +98,7 @@ function money(cents: number): string {
   return formatSampleCents(cents);
 }
 
-function Worksheet({
+export function Worksheet({
   caption,
   rows,
 }: {
@@ -131,7 +131,7 @@ function Worksheet({
   );
 }
 
-function computationRows(result: CompanyTaxResult) {
+export function computationRows(result: CompanyTaxResult) {
   const input = SAMPLE_COMPANY.input;
   return [
     { label: "Accounting profit before tax", amount: money(input.accountingProfitCents) },
@@ -167,7 +167,7 @@ function computationRows(result: CompanyTaxResult) {
   ];
 }
 
-function itr14Rows(result: CompanyTaxResult) {
+export function itr14Rows(result: CompanyTaxResult) {
   return [
     { label: "Taxable income", amount: money(result.taxableIncomeCents) },
     { label: "Normal tax at 27%", amount: money(result.taxCents), total: true },
@@ -182,7 +182,7 @@ function itr14Rows(result: CompanyTaxResult) {
   ];
 }
 
-function irp6Rows(result: CompanyTaxResult) {
+export function irp6Rows(result: CompanyTaxResult) {
   const estimate = SAMPLE_COMPANY.input.provisionalEstimateCents;
   return [
     { label: "Estimated taxable income", amount: money(estimate) },
@@ -310,6 +310,85 @@ function paymentLabel(row: TaxDeadline): string {
   return "Not submitted";
 }
 
+function PageHomeCard({ onOpen }: { onOpen: () => void }) {
+  return (
+    <div
+      className="owner-agent"
+      data-agent="tax_specialist"
+      data-agent-card="tax_specialist"
+      data-tax-card="page"
+    >
+      <button
+        type="button"
+        className="owner-agent-open"
+        data-agent-open="tax_specialist"
+        onClick={onOpen}
+      >
+        <span className="owner-portrait">
+          <span className="owner-portrait-chip" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M4.2 2.2h5.2L12.2 5v8.6H4.2z" />
+              <path d="M9.2 2.3V5h2.8" />
+            </svg>
+          </span>
+          <TaxFace size="lg" place="card" />
+        </span>
+        <span className="owner-name">Milōn Tax Specialist</span>
+        <span className="owner-lines">
+          <span className="owner-voice">
+            Prepares SARS forms and tax workings for you to check and file.
+          </span>
+        </span>
+      </button>
+      <button type="button" className="owner-ask" data-ask="tax_specialist" onClick={onOpen}>
+        <ChatIcon />
+        Ask Tax Specialist
+      </button>
+    </div>
+  );
+}
+
+export function SampleDeadlines() {
+  const deadlines = companyTaxDeadlines(SAMPLE_COMPANY.yearEnd);
+  return (
+    <div className="tax-sample-table">
+      <table data-tax-deadlines="true">
+        <caption className="tax-sample-kicker">SAMPLE deadlines</caption>
+        <thead>
+          <tr>
+            <th scope="col">Form</th>
+            <th scope="col">What</th>
+            <th scope="col">Statutory due</th>
+            <th scope="col">Standing</th>
+            <th scope="col">Sample</th>
+          </tr>
+        </thead>
+        <tbody>
+          {deadlines.map((row) => (
+            <tr key={row.id} data-tax-deadline={row.id}>
+              <td>{row.form}</td>
+              <td>{row.label}</td>
+              <td>
+                {formatSampleDate(row.due)} ({row.weekday})
+              </td>
+              <td
+                className={
+                  deadlineStanding(row.due, SAMPLE_COMPANY.asOf) === "upcoming"
+                    ? "is-clear"
+                    : "is-wait"
+                }
+              >
+                {standingLabel(row.due)}
+              </td>
+              <td>{paymentLabel(row)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Workspace({
   audience,
   fromFinancialManager,
@@ -322,7 +401,6 @@ function Workspace({
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const result = sampleCompanyTax();
-  const deadlines = companyTaxDeadlines(SAMPLE_COMPANY.yearEnd);
   const yearStart = yearOfAssessmentStart(SAMPLE_COMPANY.yearEnd);
 
   useEffect(() => {
@@ -408,41 +486,7 @@ function Workspace({
           Statutory last day, before a weekend or public-holiday shift. Compared with{" "}
           {formatSampleDate(SAMPLE_COMPANY.asOf)}.
         </p>
-        <div className="tax-sample-table">
-          <table data-tax-deadlines="true">
-            <caption className="tax-sample-kicker">SAMPLE deadlines</caption>
-            <thead>
-              <tr>
-                <th scope="col">Form</th>
-                <th scope="col">What</th>
-                <th scope="col">Statutory due</th>
-                <th scope="col">Standing</th>
-                <th scope="col">Sample</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deadlines.map((row) => (
-                <tr key={row.id} data-tax-deadline={row.id}>
-                  <td>{row.form}</td>
-                  <td>{row.label}</td>
-                  <td>
-                    {formatSampleDate(row.due)} ({row.weekday})
-                  </td>
-                  <td
-                    className={
-                      deadlineStanding(row.due, SAMPLE_COMPANY.asOf) === "upcoming"
-                        ? "is-clear"
-                        : "is-wait"
-                    }
-                  >
-                    {standingLabel(row.due)}
-                  </td>
-                  <td>{paymentLabel(row)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <SampleDeadlines />
         <div className="tax-sample-actions">
           <button type="button" className="tax-sample-primary" onClick={() => openTaxSample(true)}>
             Assign to Tax Specialist
@@ -457,11 +501,14 @@ export function ZaTaxSpecialistSample({
   variant,
   audience,
   onOpen,
+  onOpenPage,
   sampleClient = false,
 }: {
   variant: TaxSampleVariant;
   audience: TaxSampleAudience;
   onOpen?: () => void;
+  /** Accountant client pages: the home card opens the Tax Specialist page. */
+  onOpenPage?: () => void;
   /** Demo clients keep the sample card. A real client gets the preview card. */
   sampleClient?: boolean;
 }) {
@@ -568,6 +615,8 @@ export function ZaTaxSpecialistSample({
       </>
     );
   }
+
+  if (onOpenPage) return <PageHomeCard onOpen={onOpenPage} />;
 
   if (!sampleClient) {
     return (

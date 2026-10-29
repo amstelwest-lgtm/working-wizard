@@ -4,6 +4,7 @@ import { portalButtonClass } from "@/lib/client-chrome";
 import { supabase } from "@/integrations/supabase/client";
 import { loadStarterMonthlyLabel } from "@/lib/trial-card-price";
 import type { AgentKey } from "@/lib/milon-team-feed";
+import { isTaxAgent } from "@/lib/tax-specialist/agents";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import "./milon-team/milon-team-desk.css";
 import "./practice-agent-thread.css";
@@ -97,7 +98,9 @@ export function PracticeAgentThread({
       <AgentStage
         agent={agent}
         finding={rewriteDraftMonthStamp(finding)}
-        onSelect={onSelectAgent}
+        onSelect={(next) => {
+          if (!isTaxAgent(next)) onSelectAgent(next);
+        }}
         marketCountry={marketCountry}
         audience="accountant"
         chat={

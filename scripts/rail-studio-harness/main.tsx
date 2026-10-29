@@ -150,7 +150,10 @@ const clientRoute = createRoute({
       report: shaped.report,
       filter: shaped.tab ? shaped.filter : search.filter === "overdue" ? "overdue" : undefined,
       agent:
-        search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
+        search.agent === "financial_manager" ||
+        search.agent === "analyst" ||
+        search.agent === "advisor" ||
+        search.agent === "tax_specialist"
           ? search.agent
           : undefined,
       aged: search.aged === 1 || search.aged === "1" ? 1 : undefined,

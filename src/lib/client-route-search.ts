@@ -566,7 +566,7 @@ export function accountantClientTabSearch<T extends object>(
   return next as T;
 }
 
-const NAV_AGENTS = new Set(["financial_manager", "analyst", "advisor"]);
+const NAV_AGENTS = new Set(["financial_manager", "analyst", "advisor", "tax_specialist"]);
 
 export type ClientNavSelection = {
   headingId: string;
@@ -922,7 +922,8 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   if (
     search.agent === "financial_manager" ||
     search.agent === "analyst" ||
-    search.agent === "advisor"
+    search.agent === "advisor" ||
+    search.agent === "tax_specialist"
   ) {
     out.agent = search.agent;
   }

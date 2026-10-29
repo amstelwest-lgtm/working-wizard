@@ -6,6 +6,7 @@ import { formatAdvisorySignoffGrounding } from "../../../src/lib/advisory-signof
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import { chatReplyFormatRules, humanDate } from "../_shared/chat-reply.ts";
 import { productFactsBlock } from "../_shared/product-facts.ts";
+import { TAX_SPECIALIST_CHAT_PERSONA } from "../_shared/agent-prompts/tax-specialist.ts";
 import {
   appendClientIdentity,
   applyRedaction,
@@ -101,7 +102,7 @@ export function formatRatio(
   return `${label}: ${fmtVal}${bench}`;
 }
 
-export type AskAiAgent = "financial_manager" | "analyst" | "advisor";
+export type AskAiAgent = "financial_manager" | "analyst" | "advisor" | "tax_specialist";
 
 /**
  * Role for one agent chat, owner or accountant. Display names stay in
@@ -116,6 +117,8 @@ export function askAiAgentPersona(agent: AskAiAgent, audience: "owner" | "accoun
       return `You are ${whose} analyst. Show what the books already say about profit and who owes the business. Do not write explanatory sentences or walk through the reasoning. Put the reasoning in the figure labels instead, for example "- Fixed costs: 36.4% of revenue, the main drag". Do not coordinate the team.`;
     case "advisor":
       return `You are ${whose} advisor. Suggest the next move ${audience === "accountant" ? "the accountant can raise with the owner" : "the owner can act on"}. Do not coordinate the team.`;
+    case "tax_specialist":
+      return TAX_SPECIALIST_CHAT_PERSONA;
   }
 }
 

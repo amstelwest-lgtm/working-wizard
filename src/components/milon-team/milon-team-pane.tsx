@@ -10,7 +10,8 @@ import {
 } from "@/lib/milon-team-activity";
 import { clientAgentWork } from "@/lib/agent-work";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
-import type { AgentKey } from "@/lib/milon-team-feed";
+import { isTaxAgent, type StageAgentKey } from "@/lib/tax-specialist/agents";
+import { TaxSpecialistPage } from "@/components/tax-specialist/tax-specialist-slot";
 import { AgentStage } from "./agent-stage";
 import { AgentSection } from "./agent-section";
 import { AgentWork } from "./agent-work";
@@ -19,7 +20,7 @@ import { MilonTeamDesk } from "./milon-team-desk";
 type MilonTeamPaneProps = {
   clientId: string;
   /** Home Ask opens this agent's thread. The feed stays off the card stage. */
-  agent?: AgentKey | null;
+  agent?: StageAgentKey | null;
   /** The sentence Home already shows for this agent. Wins over an empty feed. */
   homeFinding?: string | null;
   /** Home sentence for this agent when no run finding is on file. */
@@ -27,7 +28,7 @@ type MilonTeamPaneProps = {
   onOpenApproved?: (target: ApprovedDraftTarget) => void;
   onInvite?: () => void;
   /** Landing cards and the stage switcher both land here. */
-  onSelectAgent?: (agent: AgentKey) => void;
+  onSelectAgent?: (agent: StageAgentKey) => void;
   /** Same market OwnerHome uses for the ZA subtitle and to hide the hand-off strip. */
   marketCountry?: string | null;
   audience?: "owner" | "accountant";
@@ -96,6 +97,21 @@ export function MilonTeamPaneView({
   const heroFinding = agent
     ? { id: homeLine ? null : (filed?.id ?? null), text: finding || null }
     : null;
+  if (isTaxAgent(agent)) {
+    return (
+      <AgentStage
+        agent={agent}
+        finding={homeLine || null}
+        marketCountry={marketCountry}
+        audience={audience}
+        taxTab
+        onSelect={(next) => onSelectAgent?.(next)}
+        chat={chat}
+      >
+        <TaxSpecialistPage country={marketCountry} />
+      </AgentStage>
+    );
+  }
   const desk = (
     <MilonTeamDesk
       feed={feed}
@@ -106,6 +122,7 @@ export function MilonTeamPaneView({
       onOpenApproved={onOpenApproved}
       onInvite={onInvite}
       onOpenAgent={onSelectAgent}
+      onOpenTaxAgent={onSelectAgent ? () => onSelectAgent("tax_specialist") : undefined}
       onRefreshDrafts={live.refresh}
       marketCountry={marketCountry}
       audience={audience}
@@ -128,6 +145,7 @@ export function MilonTeamPaneView({
       finding={finding || null}
       marketCountry={marketCountry}
       audience={audience}
+      taxTab
       onSelect={(next) => onSelectAgent?.(next)}
       chat={chat}
     >

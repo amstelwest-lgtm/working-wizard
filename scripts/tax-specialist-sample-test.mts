@@ -171,12 +171,22 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const staticImport = /from\s+["'][^"']*za-tax-specialist-sample["']/;
+const staticImport = /from\s+["'][^"']*za-tax-specialist-(sample|page)["']/;
 for (const path of walk("src")) {
-  if (path.endsWith("za-tax-specialist-sample.tsx") || path.endsWith("tax-specialist-slot.tsx"))
+  if (
+    path.endsWith("za-tax-specialist-sample.tsx") ||
+    path.endsWith("za-tax-specialist-page.tsx") ||
+    path.endsWith("tax-specialist-slot.tsx")
+  )
     continue;
-  assert(!staticImport.test(readFileSync(path, "utf8")), `${path} static-imports the sample`);
+  assert(!staticImport.test(readFileSync(path, "utf8")), `${path} static-imports a ZA tax module`);
 }
+assert(
+  readFileSync("src/components/tax-specialist/tax-specialist-slot.tsx", "utf8").includes(
+    'import("./za-tax-specialist-page")',
+  ),
+  "the tax agent page loads with a dynamic import",
+);
 
 const owner = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
 assert(

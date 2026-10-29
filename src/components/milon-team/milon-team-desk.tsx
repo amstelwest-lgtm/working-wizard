@@ -42,6 +42,8 @@ import { renderHealthNarrative } from "@/lib/health-snapshot";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
 import { marketForClient } from "@/lib/market";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
+import { taxSampleEnabled } from "@/lib/tax-specialist/enabled";
+import { TAX_AGENT_NAME, TAX_AGENT_ROLE, TAX_AGENT_SHORT_NAME } from "@/lib/tax-specialist/agents";
 import { ACTIVITY_CAP, NOTICED_CAP, NOTICED_EMPTY } from "@/lib/agent-section-copy";
 import { findingTitleKey } from "@/lib/finding-title-key";
 import { AgentSection } from "./agent-section";
@@ -56,6 +58,23 @@ function AgentMark({ agent }: { agent: AgentKey }) {
     <span className="milon-desk-mark" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <path d={agentMarkPath(agent)} />
+      </svg>
+    </span>
+  );
+}
+
+function TaxMark() {
+  return (
+    <span className="milon-desk-mark" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M6.5 3.5h7.5l4 4v13h-11.5z M13.5 3.5v4.5h4.5 M9.5 12.5h5 M9.5 16h5" />
       </svg>
     </span>
   );
@@ -103,6 +122,7 @@ export function MilonTeamDesk({
   onInvite,
   onRefreshDrafts,
   onOpenAgent,
+  onOpenTaxAgent,
   presentation = "team",
   marketCountry = null,
   audience = "accountant",
@@ -120,6 +140,8 @@ export function MilonTeamDesk({
   onRefreshDrafts?: () => void;
   /** A team chip opens that agent's view. The local filter still applies until then. */
   onOpenAgent?: (agent: AgentKey) => void;
+  /** ZA client pages: the Tax Specialist chip opens its page instead of the sample sheet. */
+  onOpenTaxAgent?: () => void;
   /** Agent view hides the last-run chip strip. The stage switcher owns that click. */
   presentation?: "team" | "agent";
   marketCountry?: string | null;
@@ -512,12 +534,30 @@ export function MilonTeamDesk({
                     </button>
                   );
                 })}
-                <TaxSpecialistSlot
-                  country={marketCountry}
-                  variant="desk"
-                  audience={audience}
-                  sampleClient={sampleClient}
-                />
+                  {onOpenTaxAgent && taxSampleEnabled(marketCountry) ? (
+                    <button
+                      type="button"
+                      className="milon-desk-agent"
+                      data-agent-card="tax_specialist"
+                      data-agent-open="tax_specialist"
+                      title={TAX_AGENT_ROLE}
+                      onClick={onOpenTaxAgent}
+                    >
+                      <TaxMark />
+                      <span className="milon-desk-agent-copy">
+                        <strong className="milon-desk-agent-name">{TAX_AGENT_NAME}</strong>
+                        <span className="milon-desk-agent-short">{TAX_AGENT_SHORT_NAME}</span>
+                        <span className="milon-desk-visually-hidden">{TAX_AGENT_ROLE}</span>
+                      </span>
+                    </button>
+                  ) : (
+                    <TaxSpecialistSlot
+                      country={marketCountry}
+                      variant="desk"
+                      audience={audience}
+                      sampleClient={sampleClient}
+                    />
+                  )}
               </div>
             </div>
             )}

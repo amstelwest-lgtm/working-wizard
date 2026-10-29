@@ -283,7 +283,7 @@ export function mountAskAi(container, options) {
   const trialCleanups = [];
 
   const THREAD_PREFIX = "milon-bot-thread:";
-  const THREAD_AGENTS = new Set(["financial_manager", "analyst", "advisor"]);
+  const THREAD_AGENTS = new Set(["financial_manager", "analyst", "advisor", "tax_specialist"]);
 
   function currentClientId() {
     return (

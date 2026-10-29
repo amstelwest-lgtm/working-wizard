@@ -442,7 +442,7 @@ assert(
 
 const stage = readFileSync("src/components/milon-team/agent-stage.tsx", "utf8");
 assert(stage.includes("OwnerAvatar"), "the stage shows the video face");
-assert(stage.includes("agentJobLine"), "the stage shows the role");
+assert(stage.includes("stageAgentJobLine"), "the stage shows the role");
 assert(stage.includes("data-agent-finding"), "the stage shows the latest finding");
 assert(stage.includes("onKeyDown"), "Enter on an agent tab opens that agent");
 

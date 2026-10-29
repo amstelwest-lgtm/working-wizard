@@ -1,0 +1,162 @@
+.tax-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.tax-page-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  color: #3d5270;
+  font-size: 14px;
+}
+
+.tax-page-sample {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid #0b5fff;
+  border-radius: 6px;
+  color: #0b5fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tax-page-forms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tax-page-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 72px;
+  padding: 12px 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.tax-page-form-name {
+  color: #102a43;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tax-page-form-what {
+  color: #3d5270;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tax-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  color: #102a43;
+  font-size: 14px;
+}
+
+.tax-page caption {
+  text-align: left;
+}
+
+.tax-page th,
+.tax-page td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #dbeafe;
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.tax-page td:last-child,
+.tax-page th:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tax-page tr.is-total td,
+.tax-page .is-wait {
+  font-weight: 700;
+}
+
+.tax-page .is-clear {
+  color: #0b5fff;
+  font-weight: 700;
+}
+
+.tax-page .tax-sample-note {
+  margin-top: 4px;
+  padding: 0;
+  background: none;
+  color: #3d5270;
+  font-size: 13px;
+}
+
+.tax-page-more {
+  margin-top: 4px;
+}
+
+.tax-page-more summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: #0b5fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tax-page-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #102a43;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+html.dark .tax-page-meta,
+html.dark .tax-page-form-what,
+html.dark .tax-page .tax-sample-note {
+  color: #c5d4e4;
+}
+
+html.dark .tax-page-form {
+  border-color: #1e3a5f;
+  background: #0b1f33;
+}
+
+html.dark .tax-page-form-name,
+html.dark .tax-page table,
+html.dark .tax-page-activity {
+  color: #f4f7fb;
+}
+
+html.dark .tax-page th,
+html.dark .tax-page td {
+  border-bottom-color: #1e3a5f;
+}
+
+html.dark .tax-page-sample,
+html.dark .tax-page .is-clear,
+html.dark .tax-page-more summary,
+html.dark .tax-page .tax-sample-kicker {
+  border-color: #7fb0ff;
+  color: #7fb0ff;
+}
