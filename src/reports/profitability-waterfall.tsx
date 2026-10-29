@@ -29,7 +29,7 @@ import { profitabilityNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { reportKicker } from "@/lib/report-catalog";
 
-export { statedDepreciation } from "@/components/pdf/profit-bridge";
+export { statedDepreciation } from "@/lib/profit-bridge-steps";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 

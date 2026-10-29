@@ -9,6 +9,7 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ResolvedMarket } from "@/lib/market";
 import {
   packAsGeneratedLabel,
+  packReadableSections,
   packSectionsForPdf,
   packStatusLabel,
   type AdvisoryPack,
@@ -124,7 +125,9 @@ export function advisoryPackPdfStamp(input: {
       firmName: recordedFirm || input.firmName,
     });
   const role = input.reviewedByKind === "owner" ? "Owner" : "Accountant";
-  const signedOffByName = pdfSafeText(recordedOk ? recordedName : isSigner && personal ? personal : role);
+  const signedOffByName = pdfSafeText(
+    recordedOk ? recordedName : isSigner && personal ? personal : role,
+  );
   const signature =
     isSigner && input.signatureDataUrl?.startsWith("data:image/") ? input.signatureDataUrl : null;
   const firmRaw = recordedOk && recordedFirm ? recordedFirm : input.firmName.trim();
@@ -205,11 +208,14 @@ export async function downloadAdvisoryPackPdf(input: {
     recordedSignerName: input.recordedSigner?.name ?? null,
     recordedFirmName: input.recordedSigner?.firmName ?? null,
   });
-  const sections: AdvisoryPackPdfSection[] = packSectionsForPdf(input.pack.content.sections, {
-    signed: Boolean(stamp),
-    firmName: stamp?.firmName ?? input.profile.firmName,
-    liveHealth: input.liveHealth,
-  }).map((s) => ({
+  const sections: AdvisoryPackPdfSection[] = packSectionsForPdf(
+    packReadableSections(input.pack.content),
+    {
+      signed: Boolean(stamp),
+      firmName: stamp?.firmName ?? input.profile.firmName,
+      liveHealth: input.liveHealth,
+    },
+  ).map((s) => ({
     title: s.title,
     body: s.body,
     bullets: s.bullets,
@@ -232,9 +238,7 @@ export async function downloadAdvisoryPackPdf(input: {
           market: input.market,
         })
       : null;
-  const staleNotice = staleSignoff
-    ? [staleSignoff, generatedOn].filter(Boolean).join(" ")
-    : null;
+  const staleNotice = staleSignoff ? [staleSignoff, generatedOn].filter(Boolean).join(" ") : null;
 
   const advisoryState = resolveAdvisorySignoffState({
     version: input.pack.version,

@@ -136,7 +136,7 @@ import {
   type BudgetReviewWorkflow,
 } from "@/lib/budget-pdf";
 import { publishBudgetDocument } from "@/lib/budget.bridges";
-import { periodProfitBridge } from "@/lib/period-profit";
+import { buildProfitabilityData } from "@/lib/profitability-data";
 import { groundPlaybookSteps, withCashFloorIntervention } from "@/lib/intervention-grounding";
 import { formatMoney as formatReportMoney, formatReportAmount } from "@/lib/market/format";
 import type { BudgetDocument } from "@/lib/budget.types";
@@ -1513,116 +1513,7 @@ export function buildWorkingCapitalData(
   return buildWorkingCapitalSlice(fin, rawRatios) as WorkingCapitalData | null;
 }
 
-export function buildProfitabilityData(
-  fin: Record<string, string>,
-  priorFin?: Record<string, string> | null,
-): ProfitabilityData | null {
-  const revenue = getNum(fin, "revenue");
-  const cogs = getNum(fin, "cogs");
-  const ebit = getNum(fin, "ebit");
-  const ebt = getNum(fin, "ebt");
-  const net = getNum(fin, "netIncome");
-  if (!Number.isFinite(revenue) || !Number.isFinite(ebit) || !Number.isFinite(net)) return null;
-  // Never invent GP from 50% of revenue — COGS required for gross margin.
-  if (!Number.isFinite(cogs)) return null;
-  const gp = revenue - cogs;
-  const gmPct = gp / revenue;
-  const omPct = ebit / revenue;
-  const depreciation = periodProfitBridge(fin).depreciation;
-  const ebtVal = Number.isFinite(ebt) ? ebt : ebit;
-  const interestBurden = interestBurdenRatio(ebit, ebtVal);
-  const taxBurden = taxBurdenRatio(ebtVal, net);
-  const tax = Math.max(0, ebtVal - net);
-  const nmPct = net / revenue;
-  const current = {
-    revenue,
-    gross_profit: gp,
-    gross_margin_pct: gmPct,
-    gross_margin_score: Math.round(scoreForRatio("Gross Margin", gmPct)),
-    gross_margin_tier: scoreTier(Math.round(scoreForRatio("Gross Margin", gmPct))),
-    operating_profit: ebit,
-    operating_margin_pct: omPct,
-    operating_margin_score: Math.round(scoreForRatio("Operating Margin", omPct)),
-    operating_margin_tier: scoreTier(Math.round(scoreForRatio("Operating Margin", omPct))),
-    ebt: ebtVal,
-    interest_burden_pct: Number.isFinite(interestBurden) ? interestBurden : undefined,
-    interest_burden_score: Number.isFinite(interestBurden)
-      ? Math.round(scoreForRatio("Interest Burden", interestBurden))
-      : 0,
-    tax,
-    tax_burden_pct: Number.isFinite(taxBurden) ? taxBurden : undefined,
-    tax_burden_score: Number.isFinite(taxBurden)
-      ? Math.round(scoreForRatio("Tax Burden", taxBurden))
-      : 0,
-    net_profit: net,
-    net_margin_pct: nmPct,
-    net_margin_score: Math.round(scoreForRatio("Net Margin", nmPct)),
-    net_margin_tier: scoreTier(Math.round(scoreForRatio("Net Margin", nmPct))),
-    depreciation,
-  };
-
-  let prior_period: ProfitabilityData["prior_period"] | undefined;
-  if (priorFin) {
-    const pRev = getNum(priorFin, "revenue");
-    const pCogs = getNum(priorFin, "cogs");
-    const pEbit = getNum(priorFin, "ebit");
-    const pEbt = getNum(priorFin, "ebt");
-    const pNet = getNum(priorFin, "netIncome");
-    if (
-      Number.isFinite(pRev) &&
-      Number.isFinite(pEbit) &&
-      Number.isFinite(pNet) &&
-      Number.isFinite(pCogs)
-    ) {
-      const pGp = pRev - pCogs;
-      const pDepreciation = periodProfitBridge(priorFin).depreciation;
-      const pEbtVal = Number.isFinite(pEbt) ? pEbt : pEbit;
-      const pInterest = interestBurdenRatio(pEbit, pEbtVal);
-      const pTaxBurden = taxBurdenRatio(pEbtVal, pNet);
-      const pTax = Math.max(0, pEbtVal - pNet);
-      prior_period = {
-        revenue: pRev,
-        gross_profit: pGp,
-        gross_margin_pct: pGp / pRev,
-        gross_margin_score: Math.round(scoreForRatio("Gross Margin", pGp / pRev)),
-        gross_margin_tier: scoreTier(Math.round(scoreForRatio("Gross Margin", pGp / pRev))),
-        operating_profit: pEbit,
-        operating_margin_pct: pEbit / pRev,
-        operating_margin_score: Math.round(scoreForRatio("Operating Margin", pEbit / pRev)),
-        operating_margin_tier: scoreTier(
-          Math.round(scoreForRatio("Operating Margin", pEbit / pRev)),
-        ),
-        ebt: pEbtVal,
-        interest_burden_pct: Number.isFinite(pInterest) ? pInterest : undefined,
-        interest_burden_score: Number.isFinite(pInterest)
-          ? Math.round(scoreForRatio("Interest Burden", pInterest))
-          : 0,
-        tax: pTax,
-        tax_burden_pct: Number.isFinite(pTaxBurden) ? pTaxBurden : undefined,
-        tax_burden_score: Number.isFinite(pTaxBurden)
-          ? Math.round(scoreForRatio("Tax Burden", pTaxBurden))
-          : 0,
-        net_profit: pNet,
-        net_margin_pct: pNet / pRev,
-        net_margin_score: Math.round(scoreForRatio("Net Margin", pNet / pRev)),
-        net_margin_tier: scoreTier(Math.round(scoreForRatio("Net Margin", pNet / pRev))),
-        depreciation: pDepreciation,
-      };
-    }
-  }
-
-  if (
-    prior_period &&
-    priorFiguresAreCopy(
-      { revenue, netIncome: net },
-      { revenue: prior_period.revenue, netIncome: prior_period.net_profit },
-    )
-  ) {
-    prior_period = undefined;
-  }
-
-  return { ...current, prior_period };
-}
+export { buildProfitabilityData };
 
 export function buildLeverageData(
   fin: Record<string, string>,

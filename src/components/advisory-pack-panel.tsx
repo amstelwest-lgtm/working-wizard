@@ -62,10 +62,11 @@ import {
   computeEditStats,
   diffPackSections,
   packAsGeneratedLabel,
+  packReadableSections,
   packSectionsForPdf,
   type AdvisoryPack,
+  type PackReadableSection,
   type PackReview,
-  type PackSection,
 } from "@/lib/advisory-pack";
 import {
   generateAdvisoryPack,
@@ -373,13 +374,13 @@ export function AdvisoryPackPanel({
       "Pack generated",
     );
 
-  const startEdit = (s: PackSection) => {
+  const startEdit = (s: PackReadableSection) => {
     setEditing(s.key);
     setDraftBody(s.body);
     setDraftBullets((s.bullets ?? []).join("\n"));
   };
 
-  const saveEdit = (s: PackSection) =>
+  const saveEdit = (s: PackReadableSection) =>
     run(
       "edit",
       async () => {
@@ -494,7 +495,7 @@ export function AdvisoryPackPanel({
           figuresHash: hashFigures({
             version: pack.version,
             status: pack.status,
-            sections: pack.content.sections.map((s) => s.body),
+            sections: packReadableSections(pack.content).map((s) => s.body),
           }),
           periodLabel: statementSpanLabel({ periodLabel: pack.period_label, market }),
           createdBy: user.id,
@@ -849,7 +850,7 @@ export function AdvisoryPackPanel({
 
       {pack && expanded ? (
         <ol className="advisory-pack__read mt-4 space-y-3">
-          {packSectionsForPdf(pack.content.sections, {
+          {packSectionsForPdf(packReadableSections(pack.content), {
             signed: pack.status === "approved",
             firmName: signoff?.firm_name ?? profile.firmName,
             liveHealth,
