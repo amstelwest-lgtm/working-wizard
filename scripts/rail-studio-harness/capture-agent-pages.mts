@@ -5,7 +5,8 @@
  *   NAME=part1-after AGENTS=advisor SIZES=1366x768 WHEEL=600 npx tsx scripts/rail-studio-harness/capture-agent-pages.mts
  *
  * WHEEL scrolls the wheel with the pointer over the first card before the shot.
- * DARK=1 sets the dark theme. FULL=1 takes a full-page shot.
+ * DARK=1 sets the dark theme. COLLAPSED=1 starts with the rail collapsed.
+ * FULL=1 takes a full-page shot. AGENTS=team shows the team desk.
  */
 import { mkdir } from "node:fs/promises";
 import { chromium } from "playwright";
@@ -27,6 +28,9 @@ const browser = await chromium.launch({ channel: "chrome", headless: true });
 for (const size of sizes) {
   for (const agent of agents) {
     const context = await browser.newContext({ viewport: size });
+    if (process.env.COLLAPSED === "1") {
+      await context.addInitScript(() => localStorage.setItem("milon.accountantNav.collapsed", "1"));
+    }
     if (process.env.DARK === "1") {
       await context.addInitScript(() => localStorage.setItem("theme_pref_v2", "dark"));
     }

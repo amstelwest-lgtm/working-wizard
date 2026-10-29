@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -8,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link } from "@tanstack/react-router";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { RailIcon } from "@/components/chrome-icons";
 import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { SettingsGear } from "@/components/settings-nav-button";
@@ -20,6 +22,13 @@ import {
   writeNavOpen,
   type NavOpenState,
 } from "@/lib/accountant-nav-open";
+import {
+  NAV_COLLAPSED_ATTR,
+  NAV_COLLAPSED_EVENT,
+  isNavToggleKey,
+  readNavCollapsed,
+  writeNavCollapsed,
+} from "@/lib/accountant-nav-collapsed";
 
 export type NavDestination = {
   to:
@@ -79,6 +88,7 @@ function NavLink({
   ariaCurrent,
   headingId,
   bot,
+  title,
   children,
   onClick,
 }: {
@@ -89,6 +99,8 @@ function NavLink({
   ariaCurrent?: "page" | "true";
   headingId?: string;
   bot?: boolean;
+  /** Tooltip while the rail is an icon strip. */
+  title?: string;
   children: ReactNode;
   onClick: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
@@ -107,6 +119,7 @@ function NavLink({
       }
       data-heading-id={headingId}
       data-bot-rail={bot ? "true" : undefined}
+      title={title}
       tabIndex={tabIndex}
       aria-current={ariaCurrent}
       data-nav-current={ariaCurrent === "page" ? "page" : undefined}
@@ -164,6 +177,7 @@ export function AccountantNav({
   const pendingFocus = useRef<string | null>(null);
   const [openIds, setOpenIds] = useState<NavOpenState>(() => openNavGroup({}, selection.headingId));
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useAccountantNavCollapsed();
 
   useLayoutEffect(() => {
     const stored = readNavOpen(browserStorage(), storageKey);
@@ -293,10 +307,21 @@ export function AccountantNav({
       aria-label={label}
       onKeyDown={onKeyDown}
     >
-      <div className="rail-brand" data-shell-wordmark="milon" aria-hidden="true">
-        <span className="brand">
+      <div className="rail-brand" data-shell-wordmark="milon">
+        <span className="brand" aria-hidden="true">
           <span className="gold-text">MILŌN</span>
         </span>
+        <button
+          type="button"
+          className="nav-collapse"
+          aria-label={collapsed ? "Show menu" : "Hide menu"}
+          title={collapsed ? "Show menu ( [ )" : "Hide menu ( [ )"}
+          aria-expanded={!collapsed}
+          aria-controls="accountant-nav"
+          onClick={() => setCollapsed(!collapsed)}
+        >
+          {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+        </button>
       </div>
       {onNavigate ? <DrawerCloseButton onClose={onNavigate} /> : null}
       {back ? (
@@ -305,6 +330,7 @@ export function AccountantNav({
           className="nav-back"
           navId="back"
           tabIndex={tabId === "back" ? 0 : -1}
+          title={collapsed ? back.label : undefined}
           onClick={() => onNavigate?.()}
         >
           <span className="nav-ic" aria-hidden="true">
@@ -335,6 +361,7 @@ export function AccountantNav({
                     ariaCurrent={page ? "page" : collapsedCurrent ? "true" : undefined}
                     headingId={heading.id}
                     bot={heading.bot}
+                    title={collapsed ? heading.label : undefined}
                     onClick={() => closeIfLeaving()}
                   >
                     <span className="nav-ic" aria-hidden="true">
@@ -399,6 +426,7 @@ export function AccountantNav({
           navId="settings"
           tabIndex={tabId === "settings" ? 0 : -1}
           ariaCurrent={settingsActive ? "page" : undefined}
+          title={collapsed ? "Settings" : undefined}
           onClick={() => {
             onSettings?.();
             onNavigate?.();
@@ -410,6 +438,46 @@ export function AccountantNav({
       </div>
     </nav>
   );
+}
+
+/**
+ * Laptop rail collapse. The boot script in __root sets the <html> attribute
+ * before first paint; this keeps it, localStorage, and every mounted rail in
+ * step, and owns the `[` shortcut.
+ */
+export function useAccountantNavCollapsed(): [boolean, (next: boolean) => void] {
+  const [collapsed, setState] = useState(false);
+
+  useLayoutEffect(() => {
+    const sync = () =>
+      setState(document.documentElement.getAttribute(NAV_COLLAPSED_ATTR) === "collapsed");
+    if (readNavCollapsed(browserStorage())) {
+      document.documentElement.setAttribute(NAV_COLLAPSED_ATTR, "collapsed");
+    }
+    sync();
+    window.addEventListener(NAV_COLLAPSED_EVENT, sync);
+    return () => window.removeEventListener(NAV_COLLAPSED_EVENT, sync);
+  }, []);
+
+  const set = useCallback((next: boolean) => {
+    writeNavCollapsed(browserStorage(), next);
+    if (next) document.documentElement.setAttribute(NAV_COLLAPSED_ATTR, "collapsed");
+    else document.documentElement.removeAttribute(NAV_COLLAPSED_ATTR);
+    window.dispatchEvent(new Event(NAV_COLLAPSED_EVENT));
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !isNavToggleKey(event)) return;
+      if (window.matchMedia("(max-width: 860px)").matches) return;
+      event.preventDefault();
+      set(document.documentElement.getAttribute(NAV_COLLAPSED_ATTR) !== "collapsed");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [set]);
+
+  return [collapsed, set];
 }
 
 /** Phone drawer: lock the page, keep Tab inside, and return focus to Menu. */

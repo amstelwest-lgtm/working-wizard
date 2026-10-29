@@ -202,6 +202,8 @@
     "test:accountant-desk-clip": "vite-node --config scripts/vite-test.config.ts scripts/accountant-desk-clip-test.mts",
     "harness:dev": "vite --config scripts/rail-studio-harness/vite.config.ts",
     "test:agent-wheel": "vite-node scripts/rail-studio-harness/check-agent-wheel.mts",
+    "test:nav-collapse": "vite-node scripts/rail-studio-harness/check-nav-collapse.mts",
+    "test:accountant-nav-collapsed": "vite-node --config scripts/vite-test.config.ts scripts/accountant-nav-collapsed-test.mts",
     "test:accountant-studio-clarity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-studio-clarity-test.mts",
     "test:accountant-walkthrough": "vite-node --config scripts/vite-test.config.ts scripts/accountant-walkthrough-test.mts",
     "test:owner-tour": "vite-node --config scripts/vite-test.config.ts scripts/owner-tour-sale-test.mts",

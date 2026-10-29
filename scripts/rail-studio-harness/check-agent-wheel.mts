@@ -31,10 +31,13 @@ async function innerScrollers(page: Page): Promise<string[]> {
     const out: string[] = [];
     const stage = document.querySelector("[data-agent-stage]");
     if (!stage) return ["no agent stage"];
-    for (const el of document.querySelectorAll<HTMLElement>(".deliverable-main, .deliverable-main *")) {
+    for (const el of document.querySelectorAll<HTMLElement>(
+      ".deliverable-main, .deliverable-main *",
+    )) {
       if (el.closest(".ask-ai-thread") && !el.classList.contains("ask-ai-thread")) continue;
       const style = getComputedStyle(el);
-      const scrolls = /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 1;
+      const scrolls =
+        /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 1;
       if (scrolls && !el.classList.contains("ask-ai-thread")) {
         out.push(`${el.tagName.toLowerCase()}.${[...el.classList].join(".")}`);
       }
@@ -67,7 +70,8 @@ async function wheelOver(page: Page, selector: string, label: string) {
   await page.waitForTimeout(250);
   const after = await pageScroll(page);
   const moved = dy > 0 ? after > before : after < before;
-  if (!moved) fail(`${label}: the wheel over ${selector} did not move the page (${before} → ${after})`);
+  if (!moved)
+    fail(`${label}: the wheel over ${selector} did not move the page (${before} → ${after})`);
 }
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
@@ -75,18 +79,27 @@ for (const size of sizes) {
   for (const agent of agents) {
     const label = `${agent} @ ${size.width}×${size.height}`;
     const page = await browser.newPage({ viewport: size });
-    await page.goto(`${base}/milon-team-desk?fixture=live&agent=${agent}`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${base}/milon-team-desk?fixture=live&agent=${agent}`, {
+      waitUntil: "domcontentloaded",
+    });
     await page.waitForSelector(`[data-agent-stage="${agent}"]`, { timeout: 10000 });
     await page.waitForSelector("#ask-ai-accountant textarea", { timeout: 10000 });
     const extra = await innerScrollers(page);
     if (extra.length) fail(`${label}: nested scroll areas on the agent page: ${extra.join(", ")}`);
-    const tall = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight);
-    if (!tall) fail(`${label}: the page is not taller than the viewport, so the check proves nothing`);
+    const tall = await page.evaluate(
+      () => document.documentElement.scrollHeight > window.innerHeight,
+    );
+    if (!tall)
+      fail(`${label}: the page is not taller than the viewport, so the check proves nothing`);
     await wheelOver(page, ".milon-desk-card, .agent-section", `${label} first card`);
     await wheelOver(page, ".owner-presence", `${label} face`);
     await wheelOver(page, ".agent-stage-hero", `${label} hero`);
     await wheelOver(page, ".agent-work-link", `${label} section link`);
-    await wheelOver(page, "#ask-ai-accountant .ask-ai-thread, #ask-ai-accountant textarea", `${label} chat`);
+    await wheelOver(
+      page,
+      "#ask-ai-accountant .ask-ai-thread, #ask-ai-accountant textarea",
+      `${label} chat`,
+    );
     await page.close();
     console.log(`ok ${label}`);
   }
