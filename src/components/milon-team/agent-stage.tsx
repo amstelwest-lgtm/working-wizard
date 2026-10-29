@@ -1,11 +1,11 @@
 /**
- * Open agent view. Same pieces as the owner stage: the video face,
- * the name, the role, the latest finding, and a way to switch agents.
- * The feed and the Ask composer stay as children.
+ * Open agent view, top to bottom: the agent blocks, the hero (face, name,
+ * role, latest finding) beside the chat, then the sections as children.
  */
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { agentDisplayName, agentJobLine, agentShortName } from "@/lib/milon-team";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
+import { askAgentTitle } from "@/lib/agent-section-copy";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import "./agent-stage.css";
@@ -16,6 +16,7 @@ export function AgentStage({
   onSelect,
   marketCountry = null,
   audience = "accountant",
+  chat,
   children,
 }: {
   agent: AgentKey;
@@ -23,24 +24,13 @@ export function AgentStage({
   onSelect: (agent: AgentKey) => void;
   marketCountry?: string | null;
   audience?: "owner" | "accountant";
+  /** The Ask widget host. It renders right after the hero. */
+  chat?: ReactNode;
   children?: ReactNode;
 }) {
+  const chatTitleId = useId();
   return (
     <section className="agent-stage" data-agent-stage={agent}>
-      <div className="agent-stage-hero">
-        <OwnerAvatar
-          agent={agent}
-          variant="character"
-          size="stage"
-          motion="idle"
-          label={agentDisplayName(agent)}
-        />
-        <h1 className="agent-stage-name">{agentDisplayName(agent)}</h1>
-        <p className="agent-stage-role">{agentJobLine(agent)}</p>
-        <p className="agent-stage-finding" data-agent-finding={agent}>
-          {finding?.trim() ? finding : "No finding on file yet."}
-        </p>
-      </div>
       <div className="agent-stage-switch" role="tablist" aria-label="Agents">
         {AGENT_KEYS.map((key) => {
           const selected = key === agent;
@@ -64,6 +54,36 @@ export function AgentStage({
           );
         })}
         <TaxSpecialistSlot country={marketCountry} variant="stage" audience={audience} />
+      </div>
+      <div className={chat ? "agent-stage-top has-chat" : "agent-stage-top"}>
+        <div className="agent-stage-hero">
+          <OwnerAvatar
+            agent={agent}
+            variant="character"
+            size="stage"
+            motion="idle"
+            label={agentDisplayName(agent)}
+          />
+          <div className="agent-stage-copy">
+            <h1 className="agent-stage-name">{agentDisplayName(agent)}</h1>
+            <p className="agent-stage-role">{agentJobLine(agent)}</p>
+            <p className="agent-stage-finding" data-agent-finding={agent}>
+              {finding?.trim() ? finding : "No finding on file yet."}
+            </p>
+          </div>
+        </div>
+        {chat ? (
+          <section
+            className="agent-stage-chat"
+            aria-labelledby={chatTitleId}
+            data-agent-chat={agent}
+          >
+            <h2 className="agent-stage-chat-title" id={chatTitleId}>
+              {askAgentTitle(agentShortName(agent))}
+            </h2>
+            {chat}
+          </section>
+        ) : null}
       </div>
       {children}
     </section>

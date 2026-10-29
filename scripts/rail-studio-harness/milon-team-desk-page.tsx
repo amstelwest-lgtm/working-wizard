@@ -88,7 +88,8 @@ export function MilonTeamDeskPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [search.agent]);
+  const chat = <div id="ask-ai-accountant" className="ask-ai-studio-shell" />;
   return (
     <Frame clientName={empty ? "North Shed" : "Harbour Glass"} onFile={!empty}>
       <div className="tabpane on" id="pane-ask">
@@ -106,6 +107,7 @@ export function MilonTeamDeskPage() {
               onSelectAgent={(next) =>
                 navigate({ search: (prev) => ({ ...prev, agent: next }) as never })
               }
+              chat={chat}
             />
           ) : (
             <MilonTeamDesk
@@ -116,7 +118,7 @@ export function MilonTeamDeskPage() {
               audience="accountant"
             />
           )}
-          <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
+          {search.agent ? null : chat}
         </div>
       </div>
     </Frame>

@@ -4538,8 +4538,8 @@ function ClientView() {
                         }
                         openHomeSection("plan", "open");
                       }}
+                      chat={<div id="ask-ai-accountant" className="ask-ai-studio-shell" />}
                     />
-                    <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
                     <button
                       type="button"
                       id="wizard-open-queries"

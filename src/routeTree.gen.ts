@@ -457,8 +457,8 @@ export interface FileRoutesByFullPath {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
-  '/talk/': typeof TalkIndexRoute
   '/talk/$agent': typeof TalkAgentRoute
+  '/talk/': typeof TalkIndexRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
@@ -523,8 +523,8 @@ export interface FileRoutesByTo {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
-  '/talk': typeof TalkIndexRoute
   '/talk/$agent': typeof TalkAgentRoute
+  '/talk': typeof TalkIndexRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
@@ -591,8 +591,8 @@ export interface FileRoutesById {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
-  '/talk/': typeof TalkIndexRoute
   '/talk/$agent': typeof TalkAgentRoute
+  '/talk/': typeof TalkIndexRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/_authenticated/clients_/queries': typeof AuthenticatedClientsQueriesRoute
   '/_authenticated/founder/metrics': typeof AuthenticatedFounderMetricsRoute
@@ -659,8 +659,8 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
-    | '/talk/'
     | '/talk/$agent'
+    | '/talk/'
     | '/clients/$clientId'
     | '/clients/queries'
     | '/founder/metrics'
@@ -725,8 +725,8 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
-    | '/talk'
     | '/talk/$agent'
+    | '/talk'
     | '/clients/$clientId'
     | '/clients/queries'
     | '/founder/metrics'
@@ -792,8 +792,8 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
-    | '/talk/'
     | '/talk/$agent'
+    | '/talk/'
     | '/_authenticated/clients/$clientId'
     | '/_authenticated/clients_/queries'
     | '/_authenticated/founder/metrics'
@@ -856,8 +856,8 @@ export interface RootRouteChildren {
   JoinTokenRoute: typeof JoinTokenRoute
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
-  TalkIndexRoute: typeof TalkIndexRoute
   TalkAgentRoute: typeof TalkAgentRoute
+  TalkIndexRoute: typeof TalkIndexRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
   ApiResendWebhookRoute: typeof ApiResendWebhookRoute
   ApiSageSyncRoute: typeof ApiSageSyncRoute
@@ -1413,8 +1413,8 @@ const rootRouteChildren: RootRouteChildren = {
   JoinTokenRoute: JoinTokenRoute,
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
-  TalkIndexRoute: TalkIndexRoute,
   TalkAgentRoute: TalkAgentRoute,
+  TalkIndexRoute: TalkIndexRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
   ApiResendWebhookRoute: ApiResendWebhookRoute,
   ApiSageSyncRoute: ApiSageSyncRoute,

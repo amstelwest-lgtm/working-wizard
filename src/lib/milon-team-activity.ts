@@ -7,7 +7,7 @@ import { draftMetricUnit, repairDraftMetricUnits, stripRatioDumpLines } from "./
 import { formatDate, formatMoney, type DateMarket, type MoneyMarket } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
-import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
+import type { AgentKey, TeamActivityEvent, TeamBriefingItem } from "./milon-team-feed";
 import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
 import { canonicalScoreProse, type LiveHealthQuote } from "./score-prose";
 import {
@@ -754,6 +754,55 @@ export function handoffSentence(from: string, to: string, text: string): string 
     return `${from} asked the ${to} to ${first}${task.slice(first.length)}.`;
   }
   return `${from} asked the ${to} to look into this: ${task}.`;
+}
+
+function sentenceEnd(text: string): string {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  return /[.!?]$/u.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+/**
+ * One past-tense sentence for an activity row on an agent page.
+ * The feed stores short labels ("Xero sync · Mar 2026"); this reads them back as prose.
+ */
+export function activitySentence(event: Pick<TeamActivityEvent, "kind" | "text">): string {
+  const text = event.text.replace(/\s+/g, " ").trim();
+  const [head = "", ...rest] = text.split(" · ");
+  const tail = rest.join(" · ");
+  switch (event.kind) {
+    case "sync":
+    case "upload": {
+      const what = event.kind === "upload" ? head.toLowerCase() : head;
+      return sentenceEnd(tail ? `Read the ${what} for ${tail}` : `Read the ${what}`);
+    }
+    case "diagnosis":
+      return "Reviewed the diagnosis.";
+    case "proposal":
+      return sentenceEnd(`Suggested: ${text}`);
+    case "approved":
+      return sentenceEnd(`You approved: ${tail || head}`);
+    case "dismissed": {
+      const draft = /^(.*) draft dismissed$/iu.exec(text);
+      if (draft) return sentenceEnd(`You dismissed the ${draft[1]} draft`);
+      const title = rest[0] ?? head;
+      const note = rest.slice(1).join(" · ");
+      const line = sentenceEnd(`You dismissed: ${title}`);
+      return note ? `${line} ${sentenceEnd(`Note: ${note}`)}` : line;
+    }
+    case "draft_created": {
+      const draft = /^(.*) draft saved$/iu.exec(text);
+      return sentenceEnd(draft ? `Saved the ${draft[1]} draft` : `Saved a draft: ${text}`);
+    }
+    case "data_request":
+      return sentenceEnd(`Asked the client for: ${text}`);
+    case "query":
+      return sentenceEnd(`Raised a query: ${text}`);
+    case "handoff":
+      return sentenceEnd(`Picked up an assignment: ${text.replace(/^assigned:\s*/iu, "")}`);
+    case "signoff":
+    default:
+      return sentenceEnd(text);
+  }
 }
 
 /** "Analyst asked the Advisor to …" for a hand-off. Other message types stay off the desk. */

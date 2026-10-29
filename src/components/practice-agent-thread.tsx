@@ -100,33 +100,37 @@ export function PracticeAgentThread({
         onSelect={onSelectAgent}
         marketCountry={marketCountry}
         audience="accountant"
+        chat={
+          <>
+            {clients.length > 1 ? (
+              <label className="practice-agent-client">
+                Ask about
+                <select
+                  value={clientId}
+                  aria-label="Ask about"
+                  onChange={(event) => setClientId(event.target.value)}
+                >
+                  {clients.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : clients.length === 1 ? (
+              <p className="practice-agent-client">Ask about {clients[0].name}</p>
+            ) : (
+              <p className="practice-agent-client">Add a client to ask about their books.</p>
+            )}
+            {clientId ? (
+              <div className="milon-desk-host">
+                <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
+              </div>
+            ) : null}
+          </>
+        }
       >
         {children}
-        {clients.length > 1 ? (
-          <label className="practice-agent-client">
-            Ask about
-            <select
-              value={clientId}
-              aria-label="Ask about"
-              onChange={(event) => setClientId(event.target.value)}
-            >
-              {clients.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : clients.length === 1 ? (
-          <p className="practice-agent-client">Ask about {clients[0].name}</p>
-        ) : (
-          <p className="practice-agent-client">Add a client to ask about their books.</p>
-        )}
-        {clientId ? (
-          <div className="milon-desk-host">
-            <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
-          </div>
-        ) : null}
       </AgentStage>
     </div>
   );

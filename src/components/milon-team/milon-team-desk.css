@@ -1049,11 +1049,6 @@ body:has(#pane-ask.on) #wizard-notes-pin {
   min-width: 0;
 }
 
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .owner-presence.is-stage {
-  width: min(112px, 28vw);
-  height: min(112px, 28vw);
-}
-
 /* Phone and short tablet: a wrapped breadcrumb or topbar leaves the locked
    desk too short, so cards and activity were clipped under the composer.
    The page scrolls instead and the composer sticks to the bottom. */

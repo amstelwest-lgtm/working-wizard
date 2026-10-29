@@ -46,6 +46,7 @@ import { HEALTH_RING_CAPTION, SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { AgentStage } from "@/components/milon-team/agent-stage";
+import { AgentSection } from "@/components/milon-team/agent-section";
 import { AgentWork } from "@/components/milon-team/agent-work";
 import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
 import { clientAgentWork } from "@/lib/agent-work";
@@ -311,7 +312,8 @@ function BotPane({ agent }: { agent?: string }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selected]);
+  const chat = <div id="ask-ai-accountant" className="ask-ai-studio-shell" />;
   const open = (next: "financial_manager" | "analyst" | "advisor") => {
     void navigate({
       to: "/clients/$clientId",
@@ -329,8 +331,11 @@ function BotPane({ agent }: { agent?: string }) {
             onSelect={open}
             marketCountry="ZA"
             audience="accountant"
+            chat={chat}
           >
-            <AgentWork label="On this client" items={clientAgentWork(selected, CLIENT_ID)} />
+            <AgentSection section="work">
+              <AgentWork items={clientAgentWork(selected, CLIENT_ID)} />
+            </AgentSection>
             <MilonTeamDesk
               feed={feed}
               now={DESK_NOW}
@@ -349,7 +354,7 @@ function BotPane({ agent }: { agent?: string }) {
             audience="accountant"
           />
         )}
-        <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
+        {selected ? null : chat}
       </div>
     </div>
   );

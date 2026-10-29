@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { useMilonTeamFeed, type MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import type { ApprovedDraftTarget } from "@/components/owner-draft-card";
@@ -12,6 +12,7 @@ import { clientAgentWork } from "@/lib/agent-work";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { AgentStage } from "./agent-stage";
+import { AgentSection } from "./agent-section";
 import { AgentWork } from "./agent-work";
 import { MilonTeamDesk } from "./milon-team-desk";
 
@@ -34,6 +35,8 @@ type MilonTeamPaneProps = {
   sampleClient?: boolean;
   /** Live scorecard ratios. Draft sentences quote these. */
   canonicalRatios?: Record<string, number> | null;
+  /** The Ask widget host. An open agent shows it beside the hero; the team desk shows it last. */
+  chat?: ReactNode;
 };
 
 export function MilonTeamPane(props: MilonTeamPaneProps) {
@@ -56,6 +59,7 @@ export function MilonTeamPaneView({
   audience = "accountant",
   sampleClient = false,
   canonicalRatios = null,
+  chat = null,
   feed,
   live,
   now,
@@ -103,7 +107,14 @@ export function MilonTeamPaneView({
       canonicalRatios={canonicalRatios}
     />
   );
-  if (!agent) return desk;
+  if (!agent) {
+    return (
+      <>
+        {desk}
+        {chat}
+      </>
+    );
+  }
   return (
     <AgentStage
       agent={agent}
@@ -111,8 +122,11 @@ export function MilonTeamPaneView({
       marketCountry={marketCountry}
       audience={audience}
       onSelect={(next) => onSelectAgent?.(next)}
+      chat={chat}
     >
-      <AgentWork label="On this client" items={clientAgentWork(agent, clientId)} />
+      <AgentSection section="work">
+        <AgentWork items={clientAgentWork(agent, clientId)} />
+      </AgentSection>
       {desk}
     </AgentStage>
   );
