@@ -20,6 +20,12 @@ import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { askOwnerAgent } from "@/lib/owner-ask";
 import {
+  startBrowserSpeech,
+  VOICE_MISSED,
+  VOICE_UNAVAILABLE,
+  type BrowserSpeechSession,
+} from "@/lib/browser-speech";
+import {
   browserThreadStore,
   emptyOwnerThreads,
   historyFromThread,
@@ -102,26 +108,6 @@ type Signoff = {
   signed_off_at: string;
   firm_name?: string | null;
 };
-
-type SpeechRec = {
-  lang: string;
-  interimResults: boolean;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-
-function speechRecognition(): SpeechRec | null {
-  if (typeof window === "undefined") return null;
-  const host = window as Window & {
-    SpeechRecognition?: new () => SpeechRec;
-    webkitSpeechRecognition?: new () => SpeechRec;
-  };
-  const Ctor = host.SpeechRecognition ?? host.webkitSpeechRecognition;
-  return Ctor ? new Ctor() : null;
-}
 
 function initialsFrom(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -327,7 +313,7 @@ export function OwnerDoor({
   const readQuote = useServerFn(readPriceQuote);
   const readGeo = useServerFn(readRequestGeoCountry);
   const beginCheckout = useServerFn(startOwnerCheckout);
-  const recRef = useRef<SpeechRec | null>(null);
+  const recRef = useRef<BrowserSpeechSession | null>(null);
   const listenGen = useRef(0);
   const threadsRef = useRef(threads);
   const screenRef = useRef(screen);
@@ -1066,37 +1052,35 @@ export function OwnerDoor({
       stopRecording();
       return;
     }
-    const rec = speechRecognition();
-    if (!rec) {
-      setAgentError(heardFor, "Voice is not available in this browser.");
+    const gen = ++listenGen.current;
+    const session = startBrowserSpeech({
+      lang: market.locale || "en",
+      onTranscript: (said) => {
+        if (gen !== listenGen.current) return;
+        if (agentRef.current !== heardFor) return;
+        if (!clientId) return;
+        updateThread(heardFor, clientId, (thread) => ({ ...thread, draft: said }));
+      },
+      onMissed: () => {
+        if (gen !== listenGen.current) return;
+        setListening(false);
+        setTalk((current) => (current?.mode === "listening" ? null : current));
+        setAgentError(heardFor, VOICE_MISSED);
+      },
+      onEnd: () => {
+        if (gen !== listenGen.current) return;
+        setListening(false);
+        setTalk((current) => (current?.mode === "listening" ? null : current));
+      },
+    });
+    if (!session) {
+      setAgentError(heardFor, VOICE_UNAVAILABLE);
       return;
     }
-    const gen = ++listenGen.current;
-    rec.lang = market.locale || "en";
-    rec.interimResults = false;
-    rec.onresult = (event) => {
-      if (gen !== listenGen.current) return;
-      if (agentRef.current !== heardFor) return;
-      const said = event.results[0]?.[0]?.transcript?.trim() ?? "";
-      if (!said || !clientId) return;
-      updateThread(heardFor, clientId, (thread) => ({ ...thread, draft: said }));
-    };
-    rec.onerror = () => {
-      if (gen !== listenGen.current) return;
-      setListening(false);
-      setTalk((current) => (current?.mode === "listening" ? null : current));
-      setAgentError(heardFor, "Voice did not catch that.");
-    };
-    rec.onend = () => {
-      if (gen !== listenGen.current) return;
-      setListening(false);
-      setTalk((current) => (current?.mode === "listening" ? null : current));
-    };
-    recRef.current = rec;
+    recRef.current = session;
     setAgentError(heardFor, null);
     setListening(true);
     setTalk({ agent: heardFor, mode: "listening" });
-    rec.start();
   }
 
   const shown = canonicalOwnerScreen(screen);

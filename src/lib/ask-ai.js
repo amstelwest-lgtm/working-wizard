@@ -52,6 +52,7 @@ import {
   trialEndedBillingHref,
   trialEndedOwnerAsksAccountant,
 } from "./trial-ended-billing.ts";
+import { startBrowserSpeech, VOICE_MISSED, VOICE_UNAVAILABLE } from "./browser-speech.ts";
 
 export {
   routeMilonIntent,
@@ -64,6 +65,8 @@ export {
 const SPARKLES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>`;
 
 const SEND_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>`;
+
+const MIC_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3M8 20h8"/></svg>`;
 
 const TOOL_LABELS = {
   get_invite_status: "Invite status",
@@ -249,6 +252,9 @@ export function mountAskAi(container, options) {
   let boundForecastKey = "";
   let requestGen = 0;
   let trialMountGen = 0;
+  let listening = false;
+  let speechSession = null;
+  let listenGen = 0;
   const trialCleanups = [];
 
   const THREAD_PREFIX = "milon-bot-thread:";
@@ -373,11 +379,72 @@ export function mountAskAi(container, options) {
     history = readThread(id, agent);
   }
 
+  function speechLang() {
+    const lang = typeof navigator !== "undefined" ? navigator.language : "";
+    return lang || "en";
+  }
+
+  function stopSpeech() {
+    listenGen += 1;
+    const session = speechSession;
+    speechSession = null;
+    listening = false;
+    if (session) session.stop();
+  }
+
+  // Speak writes the draft only. Ask / Send is still the thing that submits.
+  function speak() {
+    if (loading) return;
+    if (listening) {
+      stopSpeech();
+      render();
+      return;
+    }
+    const gen = ++listenGen;
+    const session = startBrowserSpeech({
+      lang: speechLang(),
+      onTranscript(said) {
+        if (gen !== listenGen) return;
+        question = said;
+        errorMsg = "";
+        const ta = container.querySelector(".ask-ai-textarea");
+        if (ta) ta.value = said;
+        const sendBtn = container.querySelector(".ask-ai-send");
+        if (sendBtn) sendBtn.disabled = loading || !said.trim();
+      },
+      onMissed() {
+        if (gen !== listenGen) return;
+        listening = false;
+        speechSession = null;
+        errorMsg = VOICE_MISSED;
+        render();
+      },
+      onEnd() {
+        if (gen !== listenGen) return;
+        const wasListening = listening;
+        listening = false;
+        speechSession = null;
+        if (wasListening) render();
+      },
+    });
+    if (!session) {
+      errorMsg = VOICE_UNAVAILABLE;
+      listening = false;
+      render();
+      return;
+    }
+    speechSession = session;
+    errorMsg = "";
+    listening = true;
+    render();
+  }
+
   function refreshThreadFromContext() {
     const id = String(currentClientId() || "");
     const agent = currentAgent();
     const forecastKey = currentForecastKey();
     if (id === boundClientId && agent === boundAgent && forecastKey === boundForecastKey) return;
+    stopSpeech();
     syncThreadClient();
     question = "";
     answer = "";
@@ -599,7 +666,7 @@ export function mountAskAi(container, options) {
       // Textarea
       const ta = document.createElement("textarea");
       ta.className = "ask-ai-textarea";
-      ta.placeholder = placeholder;
+      ta.placeholder = listening ? "Listening." : placeholder;
       ta.value = question;
       ta.disabled = loading;
       ta.addEventListener("input", (e) => {
@@ -650,9 +717,22 @@ export function mountAskAi(container, options) {
         panel.appendChild(chips);
       }
 
-      // Actions row
+      // Actions row. Speak fills the draft; Ask / Send is unchanged.
       const actions = document.createElement("div");
       actions.className = "ask-ai-actions";
+      if (accountant) {
+        const micBtn = document.createElement("button");
+        micBtn.type = "button";
+        micBtn.className = listening ? "ask-ai-mic is-on" : "ask-ai-mic";
+        micBtn.disabled = loading;
+        micBtn.innerHTML = MIC_SVG;
+        mark(micBtn, "aria-pressed", listening ? "true" : "false");
+        mark(micBtn, "aria-label", listening ? "Stop listening" : "Speak");
+        micBtn.addEventListener("click", () => {
+          speak();
+        });
+        actions.appendChild(micBtn);
+      }
       actions.appendChild(sendBtn);
 
       const cancelBtn = document.createElement("button");
@@ -660,6 +740,7 @@ export function mountAskAi(container, options) {
       cancelBtn.className = "ask-ai-cancel";
       cancelBtn.textContent = studio ? "Clear" : "Cancel";
       cancelBtn.addEventListener("click", () => {
+        stopSpeech();
         question = "";
         answer = "";
         precardCap = null;
@@ -1167,6 +1248,7 @@ export function mountAskAi(container, options) {
       : null;
     const q = String(existing ? existing.content : question || "").trim();
     if (!q || loading) return;
+    stopSpeech();
     const turnId = retryId || newTurnId();
     const objective = parseAgentObjective(q);
     const createIntent = persistedCreateIntent(q);
