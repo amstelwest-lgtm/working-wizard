@@ -48,6 +48,11 @@ export type ActionPlanRefreshDetail = {
   error?: string;
   /** Set only after the hand-off write has been awaited. Listeners may drop the cache then. */
   committed?: boolean;
+  /**
+   * The click is in flight and writeAssignment has not stored the note.
+   * Listeners must not paint a durable Handed to from this event.
+   */
+  awaitingNote?: boolean;
 };
 
 export const HANDOFF_FAILED_COPY = "Couldn't hand this over";
@@ -65,6 +70,8 @@ export type OptimisticHandoff = {
     actorLabel: string | null;
     actorType: string | null;
   } | null;
+  /** The assignment note is not stored yet. Do not paint Handed to from this row. */
+  awaitingNote?: boolean;
 };
 
 const optimisticHandoffs = new Map<string, OptimisticHandoff>();
@@ -77,6 +84,75 @@ export function resetHandoffOptimistic(): void {
   blockedSince.clear();
   hiddenNotes.clear();
   handoffErrors.clear();
+}
+
+const AWAITING_NOTE_STORAGE_KEY = "milon-handoff-awaiting-note";
+/** A blank row from this click is not a finished Hand to. Same window as the edge reuse guard. */
+const AWAITING_NOTE_MS = 60_000;
+
+type AwaitingAssignmentNote = {
+  clientId: string;
+  actionItemId: string;
+  since: string;
+};
+
+function readAwaitingAssignmentNotes(now = Date.now()): AwaitingAssignmentNote[] {
+  if (typeof sessionStorage === "undefined") return [];
+  let parsed: unknown;
+  try {
+    const raw = sessionStorage.getItem(AWAITING_NOTE_STORAGE_KEY);
+    parsed = raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const live: AwaitingAssignmentNote[] = [];
+  for (const row of parsed) {
+    if (!row || typeof row !== "object") continue;
+    const record = row as { clientId?: unknown; actionItemId?: unknown; since?: unknown };
+    const clientId = typeof record.clientId === "string" ? record.clientId : "";
+    const actionItemId = typeof record.actionItemId === "string" ? record.actionItemId : "";
+    const since = typeof record.since === "string" ? record.since : "";
+    const stamp = Date.parse(since);
+    if (!clientId || !actionItemId || !Number.isFinite(stamp)) continue;
+    if (now - stamp > AWAITING_NOTE_MS) continue;
+    live.push({ clientId, actionItemId, since });
+  }
+  return live;
+}
+
+function writeAwaitingAssignmentNotes(rows: AwaitingAssignmentNote[]): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    if (rows.length === 0) sessionStorage.removeItem(AWAITING_NOTE_STORAGE_KEY);
+    else sessionStorage.setItem(AWAITING_NOTE_STORAGE_KEY, JSON.stringify(rows));
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Remember a click whose assignment note is not stored yet. A hard reload keeps this; module maps do not. */
+export function rememberAwaitingAssignmentNote(input: AwaitingAssignmentNote): void {
+  const rows = readAwaitingAssignmentNotes().filter((row) => row.actionItemId !== input.actionItemId);
+  rows.push(input);
+  writeAwaitingAssignmentNotes(rows);
+}
+
+export function clearAwaitingAssignmentNote(actionItemId?: string): void {
+  if (!actionItemId) {
+    writeAwaitingAssignmentNotes([]);
+    return;
+  }
+  writeAwaitingAssignmentNotes(
+    readAwaitingAssignmentNotes().filter((row) => row.actionItemId !== actionItemId),
+  );
+}
+
+/** True while this click's assignment note is still absent. Expired clicks become a normal Hand to. */
+export function assignmentNoteStillAwaited(clientId: string, actionItemId: string, now = Date.now()): boolean {
+  return readAwaitingAssignmentNotes(now).some(
+    (row) => row.clientId === clientId && row.actionItemId === actionItemId,
+  );
 }
 
 /** Clicks still on screen. One slot per action, so two cards do not share a pending hand-off. */
@@ -284,18 +360,27 @@ export async function commitActionHandoff(input: {
     since,
     agent: input.agent,
     assigneeName,
-    note,
+    note: null,
+    awaitingNote: true,
   });
-  // Handed to paints with the click time. The signed-in name fills in after.
-  dispatchActionPlanRefresh(working);
+  // The click is in flight. Handed to waits until writeAssignment stores the note.
+  // The signed-in name still fills that note object before the fetch.
+  rememberAwaitingAssignmentNote({
+    clientId: input.clientId,
+    actionItemId: input.actionItemId,
+    since,
+  });
+  dispatchActionPlanRefresh({ ...working, awaitingNote: true });
   const actorLabel = await signedInActorLabel();
   note.actorLabel = actorLabel;
   const fail = (error: string, comingSoon?: boolean): ActionHandoffCommit => {
     const shown = comingSoon ? error : handoffFailureMessage(error);
+    clearAwaitingAssignmentNote(input.actionItemId);
     rejectOptimisticHandoff(input.actionItemId, since, comingSoon ? null : shown);
     dispatchActionPlanRefresh({
       ...working,
       failed: true,
+      awaitingNote: false,
       error: comingSoon ? undefined : shown,
     });
     return comingSoon ? { ok: false, error, comingSoon: true } : { ok: false, error: shown };
@@ -325,10 +410,12 @@ export async function commitActionHandoff(input: {
   } else if (result.reused) {
     suppressOptimisticNote(input.actionItemId, since);
     if (result.runId) attachOptimisticRun(input.actionItemId, since, result.runId);
+    clearAwaitingAssignmentNote(input.actionItemId);
     invalidateMoveAssignments(input.clientId);
     dispatchActionPlanRefresh({
       ...working,
       reused: true,
+      awaitingNote: false,
       runId: result.runId ?? undefined,
       committed: true,
     });
@@ -349,18 +436,22 @@ export async function commitActionHandoff(input: {
       runId: result.runId,
       note,
     });
+    clearAwaitingAssignmentNote(input.actionItemId);
     invalidateMoveAssignments(input.clientId);
     dispatchActionPlanRefresh({
       ...working,
       note,
+      awaitingNote: false,
       runId: result.runId ?? undefined,
       committed: true,
     });
     return { ok: true, noted: true };
   }
+  clearAwaitingAssignmentNote(input.actionItemId);
   invalidateMoveAssignments(input.clientId);
   dispatchActionPlanRefresh({
     ...working,
+    awaitingNote: false,
     runId: result.ok ? result.runId ?? undefined : undefined,
     committed: true,
   });

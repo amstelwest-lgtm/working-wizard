@@ -266,6 +266,7 @@
     "test:action-handoff": "vite-node --config scripts/vite-test.config.ts scripts/action-handoff-test.mts",
     "test:handoff-timeline": "vite-node --config scripts/vite-handoff-reload.config.ts scripts/handoff-timeline-test.mts",
     "test:handoff-reload": "vite-node --config scripts/vite-handoff-reload.config.ts scripts/handoff-reload-test.mts",
+    "test:handoff-first-reload": "vite-node --config scripts/vite-handoff-reload.config.ts scripts/handoff-first-reload-test.mts",
     "test:nudge-cron-vault": "vite-node --config scripts/vite-test.config.ts scripts/nudge-cron-vault-test.mts",
     "test:ratio-briefing": "vite-node --config scripts/vite-test.config.ts scripts/ratio-briefing-test.mts",
     "test:ratio-queries": "vite-node --config scripts/vite-test.config.ts scripts/ratio-queries-test.mts",
