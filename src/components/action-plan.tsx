@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { DEFAULT_PROFILE, useOptionalAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { settleWithin } from "@/lib/bounded-load";
@@ -38,6 +38,8 @@ import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import {
   assignActionToPerson,
+  assignmentNoteStillAwaited,
+  clearAwaitingAssignmentNote,
   clearOptimisticHandoff,
   commitActionHandoff,
   loadActionHandoffRuns,
@@ -178,13 +180,26 @@ function applyOptimisticPlan(input: {
   items: Item[];
   notes: Record<string, AssignmentNoteRow[]>;
   pickups: Record<string, PlanPickup>;
-}): { items: Item[]; notes: Record<string, AssignmentNoteRow[]>; pickups: Record<string, PlanPickup> } {
+}): {
+  items: Item[];
+  notes: Record<string, AssignmentNoteRow[]>;
+  pickups: Record<string, PlanPickup>;
+  awaitingIds: string[];
+} {
   const pendings = readOptimisticHandoffs();
-  if (pendings.length === 0) return { ...input, notes: stripSuppressedNotes(input.notes) };
+  if (pendings.length === 0) {
+    return { ...input, notes: stripSuppressedNotes(input.notes), awaitingIds: [] };
+  }
   let items = input.items;
   let notes = { ...input.notes };
   let pickups = { ...input.pickups };
+  const awaitingIds: string[] = [];
   for (const pending of pendings) {
+    // A click that has not stored its note yet must not become Handed to.
+    if (pending.awaitingNote) {
+      awaitingIds.push(pending.actionItemId);
+      continue;
+    }
     const currentNotes = notes[pending.actionItemId] ?? [];
     const mergedNotes = pending.note ? withPendingNote(currentNotes, pending.note) : currentNotes;
     const landed = Boolean(
@@ -235,7 +250,7 @@ function applyOptimisticPlan(input: {
       };
     }
   }
-  return { items, notes: stripSuppressedNotes(notes), pickups };
+  return { items, notes: stripSuppressedNotes(notes), pickups, awaitingIds };
 }
 type Milestone = {
   id: string;
@@ -630,7 +645,10 @@ export default function ActionPlanPanel({
   focusDraftId = null,
 }: Props) {
   const { market } = useMarketFormat();
-  const { profile, firms, firmId } = useAccountantProfile();
+  const account = useOptionalAccountantProfile();
+  const profile = account?.profile ?? DEFAULT_PROFILE;
+  const firms = account?.firms ?? [];
+  const firmId = account?.firmId ?? null;
   const firmOwnerUserId = firms.find((firm) => firm.id === firmId)?.owner_user_id ?? null;
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -664,6 +682,8 @@ export default function ActionPlanPanel({
   const [pickups, setPickups] = useState<Record<string, { id?: string; agent: AgentKey; status: string; at: string }>>({});
   const [itemNotes, setItemNotes] = useState<Record<string, AssignmentNoteRow[]>>({});
   const [notesReady, setNotesReady] = useState(false);
+  /** Blank row from a click whose assignment note is not stored yet. Not a settled Hand to. */
+  const [noteStillDue, setNoteStillDue] = useState<Record<string, true>>({});
   const draftActivity = useAgentActivity(clientId);
   const draftFindings = useMemo(
     () => draftActivity.findings.filter((row) => row.status === "approved" || draftFindingLabel(row) != null),
@@ -859,6 +879,18 @@ export default function ActionPlanPanel({
       setItemNotes(stripSuppressedNotes(painted.notes));
       setItems(painted.items);
       setPickups(painted.pickups);
+      const due: Record<string, true> = {};
+      for (const item of painted.items) {
+        const stored = latestStoredAssignment(painted.notes[item.id] ?? []);
+        if (stored) {
+          clearAwaitingAssignmentNote(item.id);
+          continue;
+        }
+        if (assignmentNoteStillAwaited(clientId, item.id) || painted.awaitingIds.includes(item.id)) {
+          due[item.id] = true;
+        }
+      }
+      setNoteStillDue(due);
       if (list.length) {
         const ids = list.map((item) => item.id);
         const [{ data: ms }, { data: emails }] = await Promise.all([
@@ -1001,6 +1033,13 @@ export default function ActionPlanPanel({
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
       if (detail?.failed && detail.actionItemId) {
         const id = detail.actionItemId;
+        clearAwaitingAssignmentNote(id);
+        setNoteStillDue((current) => {
+          if (!current[id]) return current;
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
         const prior = priorPlan.current.get(id);
         if (prior && detail.since && prior.since === detail.since) {
           setItems((current) =>
@@ -1032,6 +1071,13 @@ export default function ActionPlanPanel({
       }
       if (detail?.actionItemId && detail.reused) {
         const id = detail.actionItemId;
+        clearAwaitingAssignmentNote(id);
+        setNoteStillDue((current) => {
+          if (!current[id]) return current;
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
         setHandoffErrors((current) => {
           const next = { ...current };
           delete next[id];
@@ -1052,7 +1098,23 @@ export default function ActionPlanPanel({
         void refresh();
         return;
       }
-      if (detail?.since && detail.note && detail.assigneeName && detail.actionItemId) {
+      if (detail?.actionItemId && detail.awaitingNote && !detail.committed) {
+        const id = detail.actionItemId;
+        setNoteStillDue((current) => ({ ...current, [id]: true }));
+        void refresh();
+        return;
+      }
+      if (detail?.committed && detail.actionItemId) {
+        const id = detail.actionItemId;
+        clearAwaitingAssignmentNote(id);
+        setNoteStillDue((current) => {
+          if (!current[id]) return current;
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
+      }
+      if (detail?.since && detail.note && detail.assigneeName && detail.actionItemId && !detail.awaitingNote) {
         const id = detail.actionItemId;
         if (priorPlan.current.get(id)?.since !== detail.since) {
           const snap = planSnap.current;
@@ -1101,6 +1163,17 @@ export default function ActionPlanPanel({
     window.addEventListener("milon-action-plan-refresh", onRefresh);
     return () => window.removeEventListener("milon-action-plan-refresh", onRefresh);
   }, [refresh]);
+
+  // A reload during the gap has no open run, so the activity poll never arms.
+  // Keep asking until the assignment note lands or the click expires.
+  useEffect(() => {
+    const ids = Object.keys(noteStillDue);
+    if (ids.length === 0) return;
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [noteStillDue, refresh]);
 
   const refreshedFinish = useRef(new Set<string>());
   useEffect(() => {
@@ -1963,6 +2036,7 @@ export default function ActionPlanPanel({
                 notes={handoffByItem.get(it.id)?.notes ?? itemNotes[it.id] ?? []}
                 assigneeOverride={liveHandoff[it.id] ?? null}
                 handoffPending={!notesReady}
+                noteStillDue={Boolean(noteStillDue[it.id])}
                 phasePending={!notesReady || draftActivity.loading}
                 phaseLabel={handoffByItem.get(it.id)?.phaseLabel ?? null}
                 draftId={handoffByItem.get(it.id)?.draftId ?? null}
@@ -2542,6 +2616,7 @@ function ItemRow({
   notes = [],
   assigneeOverride = null,
   handoffPending = false,
+  noteStillDue = false,
   phasePending = false,
   phaseLabel = null,
   draftId = null,
@@ -2581,6 +2656,8 @@ function ItemRow({
   assigneeOverride?: string | null;
   /** The assignment note has not been read yet. Hand to stays off. */
   handoffPending?: boolean;
+  /** This click's assignment note is not stored yet. A finished read of the blank row stays pending. */
+  noteStillDue?: boolean;
   /** Notes or the run list are still loading. The chip says Checking. */
   phasePending?: boolean;
   /** Working, Draft ready, Approved, Sent, or Couldn't draft. Replaces Not started / Not sent. */
@@ -2860,7 +2937,7 @@ function ItemRow({
               employees={employees}
               assignee={assigneeOverride ?? displayedAssignee(item.owner_name, notes)}
               comingSoon={comingSoon}
-              pending={handoffPending}
+              pending={handoffPending || noteStillDue}
               audience={isOwner ? "owner" : "accountant"}
               onAssignAgent={onHandOff}
               onAssignPerson={(person) => {

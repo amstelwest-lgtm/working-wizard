@@ -19,6 +19,8 @@ import {
 import {
   ACTION_PLAN_REFRESH_EVENT,
   assignActionToPerson,
+  assignmentNoteStillAwaited,
+  clearAwaitingAssignmentNote,
   commitActionHandoff,
   invalidateMoveAssignments,
   loadClientMoveAssignments,
@@ -301,6 +303,8 @@ export function MoveHandTo({
 }) {
   const [assignee, setAssignee] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  /** Blank action row whose hand-off note is not stored yet. Not a settled Hand to. */
+  const [awaitingNote, setAwaitingNote] = useState(false);
   const [face, setFace] = useState<MoveAssignmentRef | null>(null);
   const optimistic = useRef(false);
   const actionId = useRef<string | null>(null);
@@ -321,15 +325,21 @@ export function MoveHandTo({
   useEffect(() => {
     let cancelled = false;
     setReady(false);
+    setAwaitingNote(false);
     setHandoffError(null);
     void loadClientMoveAssignments(clientId).then((rows) => {
       if (cancelled || optimistic.current) return;
-      setReady(true);
       const match = assignmentForMove(rows, moveKey, title);
-      if (!match) return;
-      actionId.current = match.actionItemId;
-      setFace(match);
-      if (match.assigneeName) setAssignee(match.assigneeName);
+      if (match) {
+        actionId.current = match.actionItemId;
+        setFace(match);
+        if (match.assigneeName) setAssignee(match.assigneeName);
+      }
+      const blankMidHandoff = Boolean(
+        match && !match.assigneeName && assignmentNoteStillAwaited(clientId, match.actionItemId),
+      );
+      setAwaitingNote(blankMidHandoff);
+      if (!blankMidHandoff) setReady(true);
     });
     return () => {
       cancelled = true;
@@ -378,6 +388,29 @@ export function MoveHandTo({
     }, MOVE_STATUS_POLL_MS);
     return () => window.clearInterval(timer);
   }, [clientId, moveKey, title, face?.phase]);
+
+  useEffect(() => {
+    if (!awaitingNote) return;
+    const timer = window.setInterval(() => {
+      if (optimistic.current) return;
+      invalidateMoveAssignments(clientId);
+      void loadClientMoveAssignments(clientId).then((rows) => {
+        if (optimistic.current) return;
+        const match = assignmentForMove(rows, moveKey, title);
+        if (match?.assigneeName) {
+          applyStored(match);
+          clearAwaitingAssignmentNote(match.actionItemId);
+          setAwaitingNote(false);
+          return;
+        }
+        if (!match || !assignmentNoteStillAwaited(clientId, match.actionItemId)) {
+          setAwaitingNote(false);
+          setReady(true);
+        }
+      });
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [awaitingNote, clientId, moveKey, title]);
 
   const ensure = async (): Promise<{ id: string } | { error: string }> => {
     const item = await ensureStrategicMoveItem({ clientId, moveKey, title, outcomeWhy });
@@ -430,6 +463,7 @@ export function MoveHandTo({
     }
     optimistic.current = false;
     setHandoffError(null);
+    setAwaitingNote(false);
     setAssignee(agentDisplayName(agent));
     toast.success(`Handed to ${agentShortName(agent)}`);
   };
