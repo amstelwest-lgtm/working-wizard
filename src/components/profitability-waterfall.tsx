@@ -18,10 +18,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import {
+  derivePeriodWaterfallFallback,
   resolveWaterfallFigures,
   waterfallPrefersStatement,
   type WaterfallFallback,
 } from "@/lib/weekly-inputs";
+import { FigureProposals, useFigureProposals } from "@/components/figure-proposals";
 import { DEFAULT_PROFILE, useOptionalAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketFormat } from "@/contexts/market";
@@ -810,6 +812,8 @@ export function ProfitabilityWaterfall({
   appearance = "classic",
   previousMargins = null,
   onExportReady,
+  canConfirm,
+  onFiguresApplied,
 }: {
   fallback?: WaterfallFallback;
   clientName?: string;
@@ -842,6 +846,9 @@ export function ProfitabilityWaterfall({
   /** Prior-period margins for the premium strip deltas. Absent deltas stay hidden. */
   previousMargins?: PreviousMargins | null;
   onExportReady?: (api: WaterfallExportApi) => void;
+  /** Owner Home profit is a view. Confirm stays on the editable waterfall. */
+  canConfirm?: boolean;
+  onFiguresApplied?: (financials: Record<string, unknown>) => void;
 }) {
   const { weeklyInputs } = useFinancialInputs();
   const accountant = useOptionalAccountantProfile();
@@ -855,6 +862,19 @@ export function ProfitabilityWaterfall({
   const [waterfallOpen, setWaterfallOpen] = useState(false);
   const [display, setDisplay] = useState<"amount" | "percent">("amount");
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [figureOverlay, setFigureOverlay] = useState<WaterfallFallback | null>(null);
+  const fallbackKey = fallback
+    ? [fallback.revenue, fallback.cogs, fallback.fixedCosts, fallback.interest, fallback.tax, fallback.statedNetIncome].join("|")
+    : "";
+  useEffect(() => {
+    setFigureOverlay(null);
+  }, [fallbackKey]);
+  const allowConfirm = canConfirm ?? appearance !== "premium";
+  const figureProposals = useFigureProposals({
+    clientId,
+    surface: "waterfall",
+    enabled: Boolean(clientId) && allowConfirm,
+  });
   useLayoutEffect(() => {
     const query = window.matchMedia("(max-width: 767px)");
     const apply = () => setPhone(query.matches);
@@ -869,9 +889,26 @@ export function ProfitabilityWaterfall({
     return () => cancelAnimationFrame(t);
   }, []);
 
-  const figures = resolveWaterfallFigures(weeklyInputs, fallback, {
-    preferPeriod: waterfallPrefersStatement(fallback, preferPeriod),
+  const figures = resolveWaterfallFigures(weeklyInputs, figureOverlay ?? fallback, {
+    preferPeriod: waterfallPrefersStatement(figureOverlay ?? fallback, preferPeriod),
   });
+  const proposalCard = allowConfirm ? (
+    <FigureProposals
+      surface="waterfall"
+      proposals={figureProposals.proposals}
+      busyId={figureProposals.busyId}
+      onConfirm={(id) => {
+        void figureProposals.confirm(id).then((applied) => {
+          if (!applied?.financials) return;
+          setFigureOverlay(derivePeriodWaterfallFallback(applied.financials));
+          onFiguresApplied?.(applied.financials);
+        });
+      }}
+      onReject={(id) => {
+        void figureProposals.reject(id);
+      }}
+    />
+  ) : null;
   const periodBit = periodLabel?.trim() || null;
   const answerSentence = profitAnswerSentence({
     currency: currencySymbol(market),
@@ -1046,6 +1083,8 @@ export function ProfitabilityWaterfall({
       },
     ];
     return (
+      <>
+      {proposalCard}
       <Card className="pw-card relative overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_8px_24px_rgba(16,42,67,0.06)] print:hidden dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] dark:shadow-none">
         <CardHeader className="border-b border-[#EDF3FC] pb-4 dark:border-slate-800">
           <div className="pw-head">
@@ -1215,10 +1254,13 @@ export function ProfitabilityWaterfall({
           ) : null}
         </CardContent>
       </Card>
+      </>
     );
   }
 
   return (
+    <>
+    {proposalCard}
     <Card className="relative overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_8px_24px_rgba(16,42,67,0.06)] print:hidden dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] dark:shadow-none">
       <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[#0B5FFF]" />
       {showHeader ? (
@@ -1384,5 +1426,6 @@ export function ProfitabilityWaterfall({
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }

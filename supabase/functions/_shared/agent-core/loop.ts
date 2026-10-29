@@ -291,6 +291,18 @@ export function classifyResult(
     };
   }
 
+  if (name === "propose_figure_adjustment") {
+    const happened = rec.proposed === true && rec.status === "pending" && rec.applied !== true;
+    return {
+      status: happened ? "ok" : "error",
+      verified: happened,
+      happened,
+      detail: happened
+        ? "Proposal saved as pending. The saved figures were not changed. A person confirms before it is applied."
+        : "The figure proposal was not saved.",
+    };
+  }
+
   if (name === "draft_deliverable") {
     const happened = rec.draftInserted === true;
     return {

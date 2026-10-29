@@ -12,6 +12,12 @@ import {
   type FmToolName,
 } from "../../../src/lib/agent-financial-manager.ts";
 import {
+  buildFigureProposal,
+  figureBeforeValues,
+  parseFigureProposalArgs,
+  type FigureSurface,
+} from "../../../src/lib/figure-proposal.ts";
+import {
   readBooksQuality,
   readBudgetStatus,
   readCash13Week,
@@ -44,5 +50,77 @@ export async function executeFinancialManagerTool(
   if (tool === "get_own_memory") return readOwnMemory(ctx);
   if (OWN.has(tool)) return { error: "That read is not wired." };
   if (tool === "send_agent_message") return sendAgentMessage(args, ctx, FM_PEERS);
+  if (tool === "propose_figure_adjustment") return proposeFigureAdjustment(args, ctx);
   return recordAgentDraft(args, ctx, FM_PEERS as readonly AgentKey[], FM_DRAFT_KINDS);
+}
+
+const SURFACE_PAGE: Record<FigureSurface, string> = {
+  cash: "Cash forecast page",
+  budget: "Budget page",
+  waterfall: "Profitability waterfall",
+};
+
+/**
+ * Saves a pending proposal. Does not update clients.cashflow, clients.budget,
+ * or clients.financials. A person confirms on the matching page first.
+ */
+async function proposeFigureAdjustment(
+  args: Record<string, unknown>,
+  ctx: AgentToolCtx,
+): Promise<unknown> {
+  const parsed = parseFigureProposalArgs(args);
+  if (!parsed.ok) return { error: parsed.error, tool_blocked: true };
+  const { data: client, error } = await ctx.db
+    .from("clients")
+    .select("cashflow, budget, financials, firm_id")
+    .eq("id", ctx.clientId)
+    .maybeSingle();
+  if (error) return { error: error.message };
+  const stored =
+    parsed.surface === "cash"
+      ? client?.cashflow
+      : parsed.surface === "budget"
+        ? client?.budget
+        : client?.financials;
+  const at = new Date().toISOString();
+  const before = figureBeforeValues(parsed.surface, stored, parsed.patch);
+  const proposal = buildFigureProposal({
+    clientId: ctx.clientId,
+    firmId: (client?.firm_id as string | null) ?? ctx.firmId,
+    runId: ctx.runId,
+    surface: parsed.surface,
+    patch: parsed.patch,
+    beforeValues: before,
+    note: parsed.note,
+    at,
+  });
+  const { data, error: insertError } = await ctx.db
+    .from("figure_proposals")
+    .insert({
+      client_id: proposal.clientId,
+      firm_id: proposal.firmId,
+      proposed_by: proposal.proposedBy,
+      run_id: proposal.runId,
+      surface: proposal.surface,
+      patch: proposal.patch,
+      before_values: proposal.beforeValues,
+      note: proposal.note,
+      status: "pending",
+      created_at: at,
+    })
+    .select("id")
+    .maybeSingle();
+  if (insertError || !data?.id) return { error: insertError?.message || "The proposal was not saved." };
+  return {
+    proposed: true,
+    proposal_id: data.id,
+    status: "pending",
+    applied: false,
+    requires_human_approval: true,
+    client_id: ctx.clientId,
+    surface: parsed.surface,
+    patch: parsed.patch,
+    before_values: before,
+    note: `Waiting for a person to confirm on the ${SURFACE_PAGE[parsed.surface]}. The saved figures were not changed.`,
+  };
 }

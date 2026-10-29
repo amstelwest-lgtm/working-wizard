@@ -1705,6 +1705,65 @@ export type Database = {
           },
         ]
       }
+      figure_proposals: {
+        Row: {
+          id: string
+          client_id: string
+          firm_id: string | null
+          proposed_by: string
+          run_id: string | null
+          surface: string
+          patch: Json
+          before_values: Json
+          note: string | null
+          status: string
+          created_at: string
+          decided_by: string | null
+          decided_at: string | null
+          applied_at: string | null
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          firm_id?: string | null
+          proposed_by: string
+          run_id?: string | null
+          surface: string
+          patch: Json
+          before_values?: Json
+          note?: string | null
+          status?: string
+          created_at?: string
+          decided_by?: string | null
+          decided_at?: string | null
+          applied_at?: string | null
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          firm_id?: string | null
+          proposed_by?: string
+          run_id?: string | null
+          surface?: string
+          patch?: Json
+          before_values?: Json
+          note?: string | null
+          status?: string
+          created_at?: string
+          decided_by?: string | null
+          decided_at?: string | null
+          applied_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "figure_proposals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           business_type: string | null
@@ -2752,6 +2811,14 @@ export type Database = {
       }
     }
     Functions: {
+      apply_figure_proposal: {
+        Args: { p_id: string; p_confirm: boolean }
+        Returns: Json
+      }
+      reject_figure_proposal: {
+        Args: { p_id: string }
+        Returns: Json
+      }
       action_item_health: {
         Args: {
           p_created: string

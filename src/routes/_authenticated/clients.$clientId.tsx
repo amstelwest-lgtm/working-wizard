@@ -5008,6 +5008,36 @@ function ClientView() {
                   </ReviewInputsDrawer>
                   <div id="wizard-profit-walk">
                     <ProfitabilityWaterfall
+                      onFiguresApplied={(next) => {
+                        setFinancials((prev) => {
+                          const merged = { ...prev };
+                          for (const key of [
+                            "revenue",
+                            "cogs",
+                            "grossProfit",
+                            "fixedCosts",
+                            "ebit",
+                            "interest",
+                            "tax",
+                            "netIncome",
+                          ]) {
+                            const value = next[key];
+                            if (typeof value === "number" || typeof value === "string") {
+                              merged[key] = String(value);
+                            }
+                          }
+                          return merged;
+                        });
+                        setClient((current) =>
+                          current
+                            ? {
+                                ...current,
+                                financials: next as typeof current.financials,
+                                financials_updated_at: new Date().toISOString(),
+                              }
+                            : current,
+                        );
+                      }}
                       fallback={waterfallFallback}
                       clientName={client?.name}
                       clientId={client?.id}
