@@ -11,6 +11,7 @@ import {
   FM_REUSED_READS,
   type FmToolName,
 } from "../../../src/lib/agent-financial-manager.ts";
+import { buildPrepareClientReportResult } from "../../../src/lib/client-report-prepare.ts";
 import {
   buildFigureProposal,
   figureBeforeValues,
@@ -51,6 +52,7 @@ export async function executeFinancialManagerTool(
   if (OWN.has(tool)) return { error: "That read is not wired." };
   if (tool === "send_agent_message") return sendAgentMessage(args, ctx, FM_PEERS);
   if (tool === "propose_figure_adjustment") return proposeFigureAdjustment(args, ctx);
+  if (tool === "prepare_client_report") return prepareClientReport(args, ctx);
   return recordAgentDraft(args, ctx, FM_PEERS as readonly AgentKey[], FM_DRAFT_KINDS);
 }
 
@@ -60,6 +62,13 @@ function persistedRunId(value: string | null | undefined): string | null {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
     ? value
     : null;
+}
+
+/** Names the PDF. Does not write clients, drafts, packs, or figure rows. */
+function prepareClientReport(args: Record<string, unknown>, ctx: AgentToolCtx): unknown {
+  const built = buildPrepareClientReportResult(ctx.clientId, args.report_key);
+  if (!built.ok) return { error: built.error, tool_blocked: true };
+  return built.result;
 }
 
 const SURFACE_PAGE: Record<FigureSurface, string> = {
@@ -118,7 +127,8 @@ async function proposeFigureAdjustment(
     })
     .select("id")
     .maybeSingle();
-  if (insertError || !data?.id) return { error: insertError?.message || "The proposal was not saved." };
+  if (insertError || !data?.id)
+    return { error: insertError?.message || "The proposal was not saved." };
   return {
     proposed: true,
     proposal_id: data.id,

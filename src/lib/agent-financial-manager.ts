@@ -33,6 +33,7 @@ export const FM_WRITE_TOOLS = [
   "record_draft",
   "send_agent_message",
   "propose_figure_adjustment",
+  "prepare_client_report",
 ] as const;
 
 export const FM_TOOLS = [...FM_REUSED_READS, ...FM_OWN_READS, ...FM_WRITE_TOOLS] as const;
@@ -51,6 +52,7 @@ export const FM_TOOL_LABELS: Record<FmToolName, string> = {
   record_draft: "Draft",
   send_agent_message: "Message",
   propose_figure_adjustment: "Figure proposal",
+  prepare_client_report: "Client report",
 };
 
 export function fmToolAllowed(name: string): name is FmToolName {
@@ -80,7 +82,9 @@ export function fmRunOutcome(input: {
     ...input,
     steps: input.steps.map((step) => ({
       tool:
-        step.tool === "record_draft" || step.tool === "propose_figure_adjustment"
+        step.tool === "record_draft" ||
+        step.tool === "propose_figure_adjustment" ||
+        step.tool === "prepare_client_report"
           ? "record_finding"
           : step.tool,
       status: step.status,

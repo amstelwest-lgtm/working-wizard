@@ -1,7 +1,13 @@
 /**
  * Shared Milōn Bot product copy + intent routing.
  * One chat surface; two existing backends (ask-ai numbers, milon-bot brain tools).
+ * A Financial Manager report ask is a third path: the Opus runner, not Action Plan PDF.
  */
+import {
+  clientReportKeysInQuestion,
+  isUnnamedClientReportAsk,
+  type ClientReportKey,
+} from "./client-report-prepare.ts";
 
 export const MILON_BOT_TITLE = "Milōn Bot";
 export const MILON_BOT_SUBTITLE = "Grounded in this client's file";
@@ -100,17 +106,63 @@ export function isDeliverableRecommendationQuestion(question: string): boolean {
   return /\b(deliverable|advisory pack|pack)\b/.test(q);
 }
 
+export type FmClientReportRoute = { kind: "named"; key: ClientReportKey } | { kind: "unnamed" };
+
+/**
+ * Accountant Financial Manager thread only. A named rail PDF is prepared by
+ * that runner. An unnamed PDF or client report does not guess and does not
+ * become an Action Plan. Questions and other agents stay on their routes.
+ * The owner thread is not in this slice.
+ */
+export function fmClientReportRoute(input: {
+  question: string;
+  agent?: string | null;
+  audience?: string | null;
+}): FmClientReportRoute | null {
+  if (input.agent !== "financial_manager") return null;
+  if (input.audience !== "accountant") return null;
+  const q = input.question.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!q || isQuestionPrompt(q)) return null;
+  if (
+    /\b(don'?t|do not|never)\s+(create|draft|generate|build|write|make|prepare|produce)\b/.test(q)
+  ) {
+    return null;
+  }
+  if (!/\b(create|draft|generate|build|write|make|prepare|produce)\b/.test(q)) return null;
+  const keys = clientReportKeysInQuestion(input.question);
+  if (keys.length === 1) return { kind: "named", key: keys[0] };
+  if (keys.length > 1) return { kind: "unnamed" };
+  if (isUnnamedClientReportAsk(input.question)) return { kind: "unnamed" };
+  return null;
+}
+
 /**
  * Questions that must write a draft and/or Action Plan rows, not only chat.
  * "create an advisory deliverable / action plan PDF" is the product case.
  * A question ("which deliverable should I prepare?") never writes, even when
  * it contains a create verb and the word deliverable.
+ * On the accountant Financial Manager thread, a named rail PDF or an unnamed
+ * "generate a PDF" / "produce a client report" is not this path.
  */
-export function persistedCreateIntent(question: string): PersistedCreateIntent | null {
+export function persistedCreateIntent(
+  question: string,
+  context?: { agent?: string | null; audience?: string | null },
+): PersistedCreateIntent | null {
+  if (
+    fmClientReportRoute({
+      question,
+      agent: context?.agent,
+      audience: context?.audience,
+    })
+  ) {
+    return null;
+  }
   const q = question.toLowerCase().replace(/\s+/g, " ").trim();
   if (!q) return null;
   if (isQuestionPrompt(q)) return null;
-  if (/\b(don'?t|do not|never)\s+(create|draft|generate|build|write|make|prepare|produce)\b/.test(q)) {
+  if (
+    /\b(don'?t|do not|never)\s+(create|draft|generate|build|write|make|prepare|produce)\b/.test(q)
+  ) {
     return null;
   }
   const verb = /\b(create|draft|generate|build|write|make|prepare|produce)\b/.test(q);

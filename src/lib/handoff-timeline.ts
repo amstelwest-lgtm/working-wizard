@@ -76,6 +76,7 @@ const TOOL_LABELS: Record<string, string> = {
   record_draft: "Wrote a draft for review",
   send_agent_message: "Messaged another bot",
   propose_figure_adjustment: "Proposed a figure change",
+  prepare_client_report: "Prepared a client report for download",
 };
 
 const STOP_LABELS: Record<string, string> = {

@@ -14,11 +14,17 @@ import {
   DRAFT_ADVISORY_PACK_COMMAND,
   DRAFT_ADVISORY_PACK_LABEL,
   deriveMilonBotEndpoint,
+  fmClientReportRoute,
   isDeliverableRecommendationQuestion,
   parseAgentObjective,
   persistedCreateIntent,
   routeMilonIntent,
 } from "./milon-bot-copy.ts";
+import {
+  clientReportChatOutcome,
+  deriveFinancialManagerEndpoint,
+  unnamedClientReportReply,
+} from "./client-report-prepare.ts";
 import { deliverableHandoff } from "./workflow-coach.ts";
 import { friendlyReachMessage } from "./reach-error.ts";
 import {
@@ -357,6 +363,21 @@ export function mountAskAi(container, options) {
           if (turn.trialEnded === true) next.trialEnded = true;
           const proposal = storedProposal(turn.proposal);
           if (proposal) next.proposal = proposal;
+          const download = turn.reportDownload;
+          if (
+            download &&
+            typeof download.href === "string" &&
+            download.href.startsWith("/clients/") &&
+            download.href.includes("action=download")
+          ) {
+            next.reportDownload = {
+              href: download.href,
+              label:
+                typeof download.label === "string" && download.label.trim()
+                  ? download.label.trim().slice(0, 80)
+                  : "Download the report",
+            };
+          }
           return next;
         })
         .slice(-16);
@@ -960,6 +981,7 @@ export function mountAskAi(container, options) {
             mountTrialEnded(bubble);
           } else {
             bubble.innerHTML = renderMarkdown(stripMilonProjection(turn.content));
+            appendReportDownload(bubble, turn);
           }
           if (latestAssistant) {
             decorateLatestAnswer(bubble);
@@ -1018,6 +1040,24 @@ export function mountAskAi(container, options) {
     }
 
     container.appendChild(widget);
+  }
+
+  function appendReportDownload(bubble, turn) {
+    const download = turn && turn.reportDownload;
+    if (!download || typeof download.href !== "string") return;
+    if (!download.href.startsWith("/clients/") || !download.href.includes("action=download"))
+      return;
+    const go = document.createElement("a");
+    go.className = "ask-ai-handoff";
+    go.dataset.reportDownload = "1";
+    go.href = download.href;
+    go.textContent =
+      typeof download.label === "string" && download.label.trim()
+        ? download.label
+        : "Download the report";
+    go.style.textDecoration = "none";
+    go.style.display = "inline-block";
+    bubble.appendChild(go);
   }
 
   function decorateLatestAnswer(answerEl) {
@@ -1367,7 +1407,14 @@ export function mountAskAi(container, options) {
     stopSpeech();
     const turnId = retryId || newTurnId();
     const objective = parseAgentObjective(q);
-    const createIntent = persistedCreateIntent(q);
+    const threadAgent = currentAgent();
+    const threadAudience = accountant ? "accountant" : "owner";
+    const reportRoute = fmClientReportRoute({
+      question: q,
+      agent: threadAgent,
+      audience: threadAudience,
+    });
+    const createIntent = persistedCreateIntent(q, { agent: threadAgent, audience: threadAudience });
     creatingDeliverable = Boolean(createIntent);
     workingObjective = Boolean(objective) && !createIntent;
     pendingIntent = createIntent || objective ? "milon-bot" : routeMilonIntent(q);
@@ -1416,6 +1463,137 @@ export function mountAskAi(container, options) {
     lastQuestion = q;
     const gen = ++requestGen;
     safeRender(q);
+
+    async function askForClientReport(controller, setTimer) {
+      if (reportRoute.kind === "unnamed") return { text: unnamedClientReportReply() };
+      const clientId =
+        container.dataset.clientId ||
+        new URLSearchParams(window.location.search).get("clientId") ||
+        window.__askAiClientId;
+      if (!clientId) throw new Error("No client context found.");
+      const url = deriveFinancialManagerEndpoint(endpoint);
+      if (!url) throw new Error("The Financial Manager runner is not available from this chat.");
+      let token = await getToken();
+      if (!token) throw new Error("Not signed in — please reload and try again.");
+      const body = JSON.stringify({
+        mode: "prepare_client_report",
+        clientId,
+        reportKey: reportRoute.key,
+        message: q,
+        turnId,
+      });
+      const send = (bearer) =>
+        fetch(url, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${bearer}`,
+          },
+          body,
+        });
+      const timeout = new Promise((_, reject) => {
+        const id = setTimeout(() => {
+          controller.abort();
+          const err = new Error(ASK_TIMEOUT_REPLY);
+          err.name = "AbortError";
+          reject(err);
+        }, askTimeoutMs());
+        if (id && typeof id.unref === "function") id.unref();
+        setTimer(id);
+      });
+      const raced = (bearer) => Promise.race([send(bearer), timeout]);
+      let res = await raced(token);
+      const plan = await authRetryPlanFromResponse(res);
+      if (plan) {
+        if (plan === "refresh") {
+          try {
+            const next =
+              typeof refreshSession === "function"
+                ? await refreshSession()
+                : (await supabase.auth.refreshSession()).data?.session?.access_token;
+            if (next) token = next;
+          } catch {
+            /* the one retry still goes out with the token we have */
+          }
+        }
+        res = await raced(token);
+      }
+      let payload = null;
+      if (res && typeof res.json === "function") {
+        try {
+          payload = await res.json();
+        } catch {
+          payload = null;
+        }
+      }
+      const status = typeof res?.status === "number" ? res.status : 0;
+      return clientReportChatOutcome({
+        clientId,
+        key: reportRoute.key,
+        httpOk: Boolean(res?.ok) && status >= 200 && status < 300,
+        body: payload,
+      });
+    }
+
+    if (reportRoute) {
+      const controller = new AbortController();
+      let timer = 0;
+      try {
+        const outcome = await askForClientReport(controller, (id) => {
+          timer = id;
+        });
+        if (gen !== requestGen) return;
+        if (outcome.error) throw new Error(outcome.error);
+        answer = outcome.text;
+        const assistant = { role: "assistant", content: outcome.text };
+        if (outcome.href) {
+          assistant.reportDownload = {
+            href: outcome.href,
+            label: outcome.label || "Download the report",
+          };
+        }
+        const mapped = history.map((item) =>
+          item.role === "user" && item.turnId === turnId
+            ? { role: "user", content: item.content, turnId }
+            : item,
+        );
+        history = [...mapped, assistant];
+        if (history.length > 16) history = history.slice(-16);
+        writeThread(boundClientId || currentClientId(), history);
+      } catch (e) {
+        if (gen !== requestGen) return;
+        const timedOut = Boolean(e && e.name === "AbortError");
+        const message = timedOut
+          ? ASK_TIMEOUT_REPLY
+          : friendlyReachMessage(e, "Something went wrong.") || "Something went wrong.";
+        const trialEnded = !timedOut && signalIsTrialEnded(message, e && e.code);
+        history = history.map((item) =>
+          item.role === "user" && item.turnId === turnId
+            ? {
+                role: "user",
+                content: item.content,
+                turnId,
+                error: message,
+                ...(trialEnded ? { trialEnded: true } : {}),
+              }
+            : item,
+        );
+        writeThread(boundClientId || currentClientId(), history);
+        answer = "";
+        errorMsg = "";
+        if (trialEnded) notifyTrialEnded();
+      } finally {
+        clearTimeout(timer);
+        if (gen !== requestGen) return;
+        loading = false;
+        pendingIntent = null;
+        workingObjective = false;
+        creatingDeliverable = false;
+        safeRender(q);
+      }
+      return;
+    }
 
     const controller = new AbortController();
     let timer = 0;
