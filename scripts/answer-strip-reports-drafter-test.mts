@@ -64,7 +64,7 @@ assert.equal(
 );
 assert.equal(plainSentDate("02 Oct 2026"), "2 Oct 2026");
 assert.equal(plainSentDate("2 Oct 2026"), "2 Oct 2026");
-assert.equal(drafterSectionForHash("pack", "#drafter"), "drafts");
+assert.equal(drafterSectionForHash("pack", "#drafter"), "draft-tool");
 assert.equal(drafterSectionForHash("pack", "#sent-history"), "sent");
 assert.equal(drafterSectionForHash("drafter", "#sent"), "sent");
 
@@ -82,12 +82,16 @@ assert.deepEqual(
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 const reportsAt = clientSrc.indexOf('id="pane-reports"');
 const draftsAt = clientSrc.indexOf('id="reports-drafts"');
+const toolAt = clientSrc.indexOf('id="reports-draft-tool"');
 const pdfsAt = clientSrc.indexOf('id="reports-pdfs"');
 const sentAt = clientSrc.indexOf('id="reports-sent"');
 const planAt = clientSrc.indexOf('id="pane-plan"');
-assert.ok(reportsAt > 0 && draftsAt > reportsAt && pdfsAt > draftsAt && sentAt > pdfsAt && planAt > sentAt);
+assert.ok(
+  reportsAt > 0 && draftsAt > reportsAt && toolAt > draftsAt && pdfsAt > toolAt && sentAt > pdfsAt && planAt > sentAt,
+);
 const reportsPane = clientSrc.slice(reportsAt, planAt);
-const draftsPane = clientSrc.slice(draftsAt, pdfsAt);
+const draftsPane = clientSrc.slice(draftsAt, toolAt);
+const toolPane = clientSrc.slice(toolAt, pdfsAt);
 const sentPane = clientSrc.slice(sentAt, planAt);
 
 assert.ok(reportsPane.includes("ReportsStudioPanel"), "the reports tab still mounts the studio");
@@ -98,11 +102,12 @@ assert.ok(
 );
 assert.equal(reportsPane.includes("DeliverableAnswerStrip"), false, "reports has no sign-off strip");
 assert.equal(reportsPane.includes("Board-ready"), false, "the reports lede leaves the tab");
-assert.ok(draftsPane.includes("AdvisoryPackPanel"), "the pack sits in Drafts");
-assert.ok(draftsPane.includes("RecommendationsPanel"), "recommendations sit in Drafts");
-assert.ok(draftsPane.includes("OutcomesPanel"), "outcomes sit in Drafts");
-assert.ok(draftsPane.includes("AdvisoryDrafter"), "the drafter sits in Drafts");
-assert.equal(draftsPane.includes("AdvisorySentHistory"), false, "sent history leaves Drafts");
+assert.ok(draftsPane.includes("AdvisoryPackPanel"), "the pack sits on Advisory pack");
+assert.ok(draftsPane.includes("RecommendationsPanel"), "recommendations sit on Advisory pack");
+assert.ok(draftsPane.includes("OutcomesPanel"), "outcomes sit on Advisory pack");
+assert.equal(draftsPane.includes("AdvisoryDrafter"), false, "the drafter leaves Advisory pack");
+assert.ok(toolPane.includes("AdvisoryDrafter"), "the drafter sits on Draft tool");
+assert.equal(draftsPane.includes("AdvisorySentHistory"), false, "sent history leaves Advisory pack");
 assert.equal((sentPane.match(/AdvisorySentHistory/g) ?? []).length, 1, "sent history is rendered once");
 
 const studio = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");

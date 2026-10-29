@@ -935,7 +935,7 @@ export function ClientBrainSummary({
           <section className="card pad">
             <span className="eyebrow">On file</span>
             <SectionLead>
-              Snapshots, the budget, and documents already saved for this client. Empty until
+              Snapshots, the budget, and files already saved for this client. Empty until
               figures are uploaded or a budget is saved — use Upload if nothing is here.
             </SectionLead>
             <div className="card-inner-grid">
@@ -1012,7 +1012,7 @@ export function ClientBrainSummary({
             </div>
 
             <div className="brain-divider">
-              <span className="section-kicker">Shared documents</span>
+              <span className="section-kicker">Client library</span>
               <SharedDocumentsList docs={sharedDocs} />
             </div>
 

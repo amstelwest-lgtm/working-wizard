@@ -103,7 +103,8 @@ assert(
     href("advisory pack", studio).includes("section=drafts"),
   "Advisory pack opens Reports drafts",
 );
-assert(href("drafter", studio).includes("section=drafts"), "Advisory drafter opens Reports drafts");
+assert(href("drafter", studio).includes("section=draft-tool"), "Draft tool opens its own Reports page");
+assert(href("draft tool", studio).includes("section=draft-tool"), "Draft tool is findable by that name");
 assert(
   href("actions", studio) === `/clients/${CLIENT}?tab=plan&section=open`,
   "Action Plan is its own rail item",

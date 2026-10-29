@@ -475,7 +475,7 @@ export function SendAgentCard({
                       disabled={busy}
                       onClick={() => onOpenDocument?.(documentPath)}
                     >
-                      Open in Documents
+                      Open in Client library
                     </button>
                   ))}
                 </li>

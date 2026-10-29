@@ -182,7 +182,7 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
     targetId: ".ctable tbody tr, .client-card, [data-client-row]",
     section: "Reports",
     title: "Reports you can brand",
-    body: "Open a client and choose Reports. Drafts, PDFs, and what you have sent sit on one page. The PDFs carry your firm's logo and colours.",
+    body: "Open a client and choose Reports. Advisory pack, Draft tool, the PDFs, and what you have sent each have their own page. The PDFs carry your firm's logo and colours.",
   },
   {
     targetId: "wizard-add-client",

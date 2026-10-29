@@ -174,6 +174,7 @@ export function coachPageForTab(
     case "reports":
       if (
         section === "drafts" ||
+        section === "draft-tool" ||
         section === "pack" ||
         section === "drafter" ||
         section === "advisory"

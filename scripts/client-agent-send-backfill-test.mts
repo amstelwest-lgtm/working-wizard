@@ -180,7 +180,7 @@ const listHtml = renderToStaticMarkup(
   }),
 );
 assert(listHtml.includes('data-open-file="file-1"'), "a copied file can be opened from the list");
-assert(listHtml.includes("Open in Documents"), "the open control names the documents");
+assert(listHtml.includes("Open in Client library"), "the open control names the client library");
 const uncopied = listHtml.slice(listHtml.indexOf('data-send-file="file-2"'));
 assert(!uncopied.includes("data-open-file"), "a file without a copy has no open control");
 
@@ -264,7 +264,7 @@ assert(listFn.includes("documentPath: null"), "a file without a copy says so");
 const panel = read("src/components/send-agent-panel.tsx");
 assert(panel.includes("onOpen={(documentPath)"), "the panel opens a copied file");
 const listUi = read("src/components/accountant-send-files.tsx");
-assert(listUi.includes("Open in Documents"), "the file list offers the copy");
+assert(listUi.includes("Open in Client library"), "the file list offers the copy");
 assert(!listUi.includes("flex-row"), "the file list still stacks vertically");
 
 // ── Migration ────────────────────────────────────────────────────────────────

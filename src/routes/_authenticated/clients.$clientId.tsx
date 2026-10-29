@@ -265,6 +265,7 @@ import {
 } from "@/lib/debt-schedule";
 import { NextStepCard } from "@/components/next-step-card";
 import { DataUpToDate } from "@/components/data-up-to-date";
+import { ConnectionsLibraryUpload } from "@/components/connections-library-upload";
 import {
   dataFreshnessLine,
   evidenceForBriefingTab,
@@ -569,10 +570,11 @@ function crumbSectionLabel(tab: string, section: string): string {
     scorecard: "Health scorecard",
     "budget-pdf": "Budget & variance",
     benchmark: "Benchmark",
-    drafts: "Drafts",
+    drafts: "Advisory pack",
+    "draft-tool": "Draft tool",
     sent: "Sent",
     all: "All reports",
-    documents: "Documents",
+    documents: "Client library",
     connections: "Connections",
     "send-agent": "Send an agent",
   };
@@ -3542,7 +3544,9 @@ function ClientView() {
           const scrollId =
             canonical.tab === "reports" && canonical.section === "drafts"
               ? "reports-drafts"
-              : canonical.tab === "reports" && canonical.section === "sent"
+              : canonical.tab === "reports" && canonical.section === "draft-tool"
+                ? "reports-draft-tool"
+                : canonical.tab === "reports" && canonical.section === "sent"
                 ? "reports-sent"
                 : `pane-${tab}`;
           window.setTimeout(() => {
@@ -4320,20 +4324,20 @@ function ClientView() {
                       title="Books"
                       subtitle={
                         sendAgentFirmAllowed(client.firm_id)
-                          ? "Documents, connections, and Send an agent each have their own page."
-                          : "Documents and connections each have their own page."
+                          ? "Client library, connections, and Send an agent each have their own page."
+                          : "Client library and connections each have their own page."
                       }
                       links={[
                         {
                           id: "documents",
-                          label: "Documents",
+                          label: "Client library",
                           detail: "Figures, files, and what is already on the client record.",
                           search: (prev) => accountantClientTabSearch(prev, "portal", { section: "documents" }),
                         },
                         {
                           id: "connections",
                           label: "Connections",
-                          detail: "Xero, QuickBooks, and Sage.",
+                          detail: "Xero, QuickBooks, Sage, and file upload into Client library.",
                           search: (prev) => accountantClientTabSearch(prev, "portal", { section: "connections" }),
                         },
                         ...(sendAgentFirmAllowed(client.firm_id)
@@ -4366,7 +4370,7 @@ function ClientView() {
                     <ClientSubpageFrame
                       id="documents"
                       eyebrow="Books"
-                      title="Documents"
+                      title="Client library"
                       subtitle="Figures, files, and exports for this client."
                     >
                 <ReviewInputsDrawer hint="Exports">
@@ -4485,6 +4489,7 @@ function ClientView() {
                           openArchive(openQueriesCount > 0 ? "open" : "resolved")
                         }
                       />
+                      <ConnectionsLibraryUpload clientId={clientId} />
                     </ClientSubpageFrame>
                   ) : null}
                 </div>
@@ -5297,6 +5302,7 @@ function ClientView() {
                 <div className={`tabpane${activeTab === "reports" ? " on" : ""}`} id="pane-reports">
                   {activeTab === "reports" &&
                   search.section !== "drafts" &&
+                  search.section !== "draft-tool" &&
                   search.section !== "sent" &&
                   search.section !== "all" &&
                   search.section !== "scorecard" &&
@@ -5308,7 +5314,7 @@ function ClientView() {
                       clientId={clientId}
                       eyebrow="Work"
                       title="Reports"
-                      subtitle="Each report, the drafts, and what has been sent has its own page."
+                      subtitle="Each report, the advisory pack, the draft tool, and what has been sent has its own page."
                       links={[
                         {
                           id: "budget-pdf",
@@ -5363,9 +5369,15 @@ function ClientView() {
                         },
                         {
                           id: "drafts",
-                          label: "Drafts",
-                          detail: "Packs and the drafter, ready for sign-off.",
+                          label: "Advisory pack",
+                          detail: "Packs and recommendations, ready for sign-off.",
                           search: (prev) => accountantClientTabSearch(prev, "reports", { section: "drafts" }),
+                        },
+                        {
+                          id: "draft-tool",
+                          label: "Draft tool",
+                          detail: "Draft a client email, a meeting agenda, or an exec summary.",
+                          search: (prev) => accountantClientTabSearch(prev, "reports", { section: "draft-tool" }),
                         },
                         {
                           id: "sent",
@@ -5386,8 +5398,8 @@ function ClientView() {
                     <ClientSubpageFrame
                       id="drafts"
                       eyebrow="Reports"
-                      title="Drafts"
-                      subtitle="Packs, recommendations, and the drafter. Sign off from this page."
+                      title="Advisory pack"
+                      subtitle="Packs and recommendations. Sign off from this page."
                     >
                       <section id="reports-drafts">
                         <AgentDraftShelf
@@ -5451,6 +5463,17 @@ function ClientView() {
                           refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
                           onChanged={() => setAdvisoryBump((n) => n + 1)}
                         />
+                      </section>
+                    </ClientSubpageFrame>
+                  ) : null}
+                  {activeTab === "reports" && search.section === "draft-tool" ? (
+                    <ClientSubpageFrame
+                      id="draft-tool"
+                      eyebrow="Reports"
+                      title="Draft tool"
+                      subtitle="Draft a client email, a meeting agenda, or an exec summary."
+                    >
+                      <section id="reports-draft-tool">
                         <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
                           <AdvisoryDrafter
                             clientId={client.id}

@@ -98,7 +98,7 @@ lands("reports", { tab: "reports" }, "?tab=reports opens Reports");
 lands("report", { tab: "reports" }, "?tab=report opens Reports");
 lands("advisory", { tab: "reports", section: "drafts" }, "?tab=advisory opens Reports drafts");
 lands("pack", { tab: "reports", section: "drafts" }, "?tab=pack opens Reports drafts");
-lands("drafter", { tab: "reports", section: "drafts" }, "?tab=drafter opens Reports drafts");
+lands("drafter", { tab: "reports", section: "draft-tool" }, "?tab=drafter opens Draft tool");
 lands("reports", { tab: "plan", section: "open" }, "?tab=reports&section=plan opens Open work", {
   section: "plan",
 });
@@ -213,8 +213,8 @@ assert(
   "an explicit Home tab wins over #budget",
 );
 assert(
-  legacyHashDestination({ tab: "deliverables", section: "pack" }, "#drafter")?.section === "drafts",
-  "pack#drafter scrolls to Drafts",
+  legacyHashDestination({ tab: "deliverables", section: "pack" }, "#drafter")?.section === "draft-tool",
+  "pack#drafter opens Draft tool",
 );
 lands("deliverables", { tab: "reports", section: "drafts" }, "a bare Deliverables tab opens Reports drafts");
 lands(
@@ -305,11 +305,26 @@ assert(route.includes('{ id: "home", label: "Home" }'), "Home is a rail item");
 assert(route.includes('label: "Action plan"'), "Action plan is a rail item");
 assert(route.includes('label: "Books"'), "Books is a rail item");
 const drafts = clientNavSearch({ tab: "home" }, "reports", "drafts");
-assert(drafts.tab === "reports" && drafts.section === "drafts", "Drafts opens Reports drafts");
+assert(drafts.tab === "reports" && drafts.section === "drafts", "Advisory pack keeps the drafts section");
 const draftsRail = clientRailSelection({ tab: "reports", section: "drafts" });
 assert(
   draftsRail.headingId === "reports" && draftsRail.subId === "drafts",
-  "Drafts is the Reports sub-item",
+  "Advisory pack is the Reports sub-item",
+);
+const draftTool = clientNavSearch({ tab: "home" }, "reports", "draft-tool");
+assert(
+  draftTool.tab === "reports" && draftTool.section === "draft-tool",
+  "Draft tool opens its own Reports page",
+);
+const draftToolRail = clientRailSelection({ tab: "reports", section: "draft-tool" });
+assert(
+  draftToolRail.headingId === "reports" && draftToolRail.subId === "draft-tool",
+  "Draft tool is its own Reports sub-item",
+);
+const libraryAlias = canonicalizeAccountantSearch({ tab: "portal", section: "library" });
+assert(
+  libraryAlias.tab === "portal" && libraryAlias.section === "documents",
+  "library still opens the Client library section",
 );
 const sent = clientRailSelection({ tab: "reports", section: "sent" });
 assert(sent.headingId === "reports" && sent.subId === "sent", "Sent stays under Reports");
@@ -319,10 +334,11 @@ assert(!route.includes("<SectionTabList"), "the horizontal section row is gone")
 assert(routerHash("#drafter") === "drafter", "a single hash is not doubled");
 assert(routerHash("##drafter") === "drafter", "a doubled hash is collapsed");
 assert(routerHash("") === undefined, "an empty hash is omitted");
-assert(drafterSectionForHash("pack", "##drafter") === "drafts", "a doubled drafter hash opens Drafts");
-assert(drafterSectionForHash("pack", "#drafter") === "drafts", "pack#drafter opens Drafts");
+assert(drafterSectionForHash("pack", "##drafter") === "draft-tool", "a doubled drafter hash opens Draft tool");
+assert(drafterSectionForHash("pack", "#drafter") === "draft-tool", "pack#drafter opens Draft tool");
+assert(drafterSectionForHash("drafts", "#drafter") === "draft-tool", "the pack page still leaves for Draft tool");
 assert(drafterSectionForHash("pack", "#sent-history") === "sent", "sent history hash opens Sent");
-assert(drafterSectionForHash("drafter", "#drafter") === null, "a drafter hash stays on Drafts");
+assert(drafterSectionForHash("drafter", "#drafter") === null, "a drafter hash stays on Draft tool");
 assert(drafterSectionForHash("sent", "#sent") === null, "a sent hash stays on Sent");
 assert(drafterSectionForHash("reports", "#nope") === null, "other hashes stay put");
 assert(route.includes('id="pane-moves"'), "Moves has its own pane");

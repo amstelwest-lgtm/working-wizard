@@ -37,9 +37,11 @@ export const CLIENT_RAIL_TABS = [
 export type ClientRailTab = (typeof CLIENT_RAIL_TABS)[number];
 
 /**
- * One page per side-menu sub-heading. `pack` and `drafter` still rewrite
- * to Drafts. `forecast` and `waterfall` mean the cash / profit pages unless
- * the tab is already Reports, where they are the PDF pages.
+ * One page per side-menu sub-heading. `pack` and `advisory` still rewrite
+ * to the advisory pack (`section=drafts`). `drafter` rewrites to Draft tool
+ * (`section=draft-tool`). `library` rewrites to Client library
+ * (`section=documents`). `forecast` and `waterfall` mean the cash / profit
+ * pages unless the tab is already Reports, where they are the PDF pages.
  */
 export const RAIL_SUBSECTIONS = [
   "score",
@@ -57,6 +59,7 @@ export const RAIL_SUBSECTIONS = [
   "budget-pdf",
   "benchmark",
   "drafts",
+  "draft-tool",
   "drafter",
   "pack",
   "sent",
@@ -130,7 +133,7 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   action: { tab: "plan", section: "open" },
   "action-plan": { tab: "plan", section: "open" },
   tasks: { tab: "plan", section: "open" },
-  drafter: { tab: "reports", section: "drafts" },
+  drafter: { tab: "reports", section: "draft-tool" },
   deliverables: { tab: "reports", section: "drafts" },
   portal: { tab: "portal" },
 };
@@ -145,7 +148,10 @@ function destinationForSection(
   focus: "health" | "pillars" | undefined,
 ): CanonicalClientSearch | null {
   if (section === "reports" || section === "report") return { tab: "reports" };
-  if (section === "pack" || section === "advisory" || section === "drafts" || section === "drafter") {
+  if (section === "drafter" || section === "draft-tool") {
+    return { tab: "reports", section: "draft-tool" };
+  }
+  if (section === "pack" || section === "advisory" || section === "drafts") {
     return { tab: "reports", section: "drafts" };
   }
   if (
@@ -181,7 +187,9 @@ function destinationForSection(
   if (section === "overdue") return { tab: "plan", section: "overdue" };
   if (section === "scorecard") return { tab: "reports", section: "scorecard" };
   if (section === "all") return { tab: "reports", section: "all" };
-  if (section === "documents") return { tab: "portal", section: "documents" };
+  if (section === "documents" || section === "library" || section === "client-library") {
+    return { tab: "portal", section: "documents" };
+  }
   if (section === "send-agent") return { tab: "portal", section: "send-agent" };
   if (section === "sent") return { tab: "reports", section: "sent" };
   if (section === "connections") return { tab: "portal", section: "connections" };
@@ -237,12 +245,10 @@ function explicitRail(
   }
   if (tab === "reports") {
     if (section === "sent") return { tab: "reports", section: "sent" };
-    if (
-      section === "drafts" ||
-      section === "pack" ||
-      section === "advisory" ||
-      section === "drafter"
-    ) {
+    if (section === "draft-tool" || section === "drafter") {
+      return { tab: "reports", section: "draft-tool" };
+    }
+    if (section === "drafts" || section === "pack" || section === "advisory") {
       return { tab: "reports", section: "drafts" };
     }
     if (
@@ -268,7 +274,9 @@ function explicitRail(
   }
   if (tab === "portal") {
     if (section === "connections") return { tab: "portal", section: "connections" };
-    if (section === "documents") return { tab: "portal", section: "documents" };
+    if (section === "documents" || section === "library" || section === "client-library") {
+      return { tab: "portal", section: "documents" };
+    }
     if (section === "send-agent") return { tab: "portal", section: "send-agent" };
     return { tab: "portal" };
   }
@@ -291,6 +299,7 @@ const VIEW_SECTION_ALIAS: Record<string, RailSubsection> = {
   overdue: "overdue",
   scorecard: "scorecard",
   drafts: "drafts",
+  "draft-tool": "draft-tool",
   sent: "sent",
   all: "all",
   documents: "documents",
@@ -366,7 +375,9 @@ export function canonicalizeAccountantSearch(input: {
   if (tab === "desk" || tab === "ask" || tab === "bot" || tab === "milon-bot") return finish({ tab: "home" });
   if (tab === "books") {
     if (section === "connections") return finish({ tab: "portal", section: "connections" });
-    if (section === "documents") return finish({ tab: "portal", section: "documents" });
+    if (section === "documents" || section === "library" || section === "client-library") {
+      return finish({ tab: "portal", section: "documents" });
+    }
     if (section === "send-agent") return finish({ tab: "portal", section: "send-agent" });
     return finish({ tab: "portal" });
   }
@@ -603,6 +614,7 @@ export function clientRailSelection(input: {
       return { headingId: "plan", subId: null };
     case "reports":
       if (section === "sent") return { headingId: "reports", subId: "sent" };
+      if (section === "draft-tool") return { headingId: "reports", subId: "draft-tool" };
       if (section === "drafts") return { headingId: "reports", subId: "drafts" };
       if (
         section === "scorecard" ||
@@ -684,6 +696,7 @@ export function clientNavSearch<T extends object>(
   }
   if (headingId === "reports") {
     if (sub === "drafts") return accountantClientTabSearch(prev, "reports", { section: "drafts" });
+    if (sub === "draft-tool") return accountantClientTabSearch(prev, "reports", { section: "draft-tool" });
     if (sub === "sent") {
       const next = accountantClientTabSearch(prev, "reports", { section: "sent" }) as Record<string, unknown>;
       delete next.report;
@@ -742,7 +755,7 @@ export function routerHash(hash: string | null | undefined): string | undefined 
 export function drafterSectionForHash(
   section: string | null | undefined,
   hash: string | null | undefined,
-): "drafts" | "sent" | null {
+): "draft-tool" | "sent" | null {
   const id = (routerHash(hash) ?? "").toLowerCase();
   if (SENT_HASHES.has(id)) {
     if ((section ?? "").trim() === "sent") return null;
@@ -750,8 +763,8 @@ export function drafterSectionForHash(
   }
   if (!DRAFTER_HASHES.has(id)) return null;
   const current = (section ?? "").trim();
-  if (current === "drafts" || current === "drafter") return null;
-  return "drafts";
+  if (current === "draft-tool" || current === "drafter") return null;
+  return "draft-tool";
 }
 
 const HASH_DESTINATIONS: Record<string, CanonicalClientSearch> = {
@@ -782,6 +795,8 @@ const SECTION_HASHES: Record<string, CanonicalClientSearch> = {
   connections: { tab: "portal", section: "connections" },
   "accounting-connect": { tab: "portal", section: "connections" },
   documents: { tab: "portal", section: "documents" },
+  library: { tab: "portal", section: "documents" },
+  "client-library": { tab: "portal", section: "documents" },
 };
 
 /** `#cash`, `#budget`, `#advisory`, section anchors, and the old drafter hashes. */
@@ -789,7 +804,7 @@ export function railSearchForHash(hash: string | null | undefined): CanonicalCli
   const id = (routerHash(hash) ?? "").toLowerCase();
   if (!id) return null;
   if (SENT_HASHES.has(id)) return { tab: "reports", section: "sent" };
-  if (DRAFTER_HASHES.has(id)) return { tab: "reports", section: "drafts" };
+  if (DRAFTER_HASHES.has(id)) return { tab: "reports", section: "draft-tool" };
   if (id === "waterfall") return { tab: "profit", section: "waterfall" };
   return HASH_DESTINATIONS[id] ?? SECTION_HASHES[id] ?? null;
 }
@@ -811,8 +826,8 @@ export function legacyHashDestination(
   if (DRAFTER_HASHES.has(id) || SENT_HASHES.has(id)) {
     if (homeExplicit) return null;
     if (DRAFTER_HASHES.has(id)) {
-      if (section === "drafts" || section === "drafter") return null;
-      return { tab: "reports", section: "drafts" };
+      if (section === "draft-tool" || section === "drafter") return null;
+      return { tab: "reports", section: "draft-tool" };
     }
     if (section === "sent") return null;
     return { tab: "reports", section: "sent" };

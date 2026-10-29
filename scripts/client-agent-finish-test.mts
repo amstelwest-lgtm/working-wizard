@@ -332,7 +332,7 @@ assert(reviewHandler.includes("reviewed_at: reviewedAt"), "mark reviewed stores 
 assert(!reviewHandler.includes("completed_at:"), "mark reviewed does not change completion");
 
 const panel = read("src/components/send-agent-panel.tsx");
-assert(panel.includes("Open in Documents"), "the panel can open the copied file");
+assert(panel.includes("Open in Client library"), "the panel can open the copied file");
 assert(panel.includes("clientDocumentDownloadUrl"), "open uses the documents link");
 assert(panel.includes("Mark reviewed"), "the panel can mark the send reviewed");
 assert(panel.includes("data-send-agent-received"), "received items are a block of their own");

@@ -18,7 +18,12 @@ export type UploadVisibility = (typeof UPLOAD_VISIBILITIES)[number];
 /** Safe default: nothing leaves the owner's side unless they chose to share. */
 export const DEFAULT_UPLOAD_VISIBILITY: UploadVisibility = "private";
 
-export type UploadSource = "bank_pack" | "cash_pack" | "financial_statement" | "client_agent_send";
+export type UploadSource =
+  | "bank_pack"
+  | "cash_pack"
+  | "financial_statement"
+  | "client_agent_send"
+  | "connections";
 
 export const UPLOAD_VISIBILITY_COPY: Record<
   UploadVisibility,
@@ -56,6 +61,7 @@ export function uploadSourceLabel(source: unknown): string {
   if (source === "cash_pack") return "Bank statements (cash)";
   if (source === "financial_statement") return "Financial statement";
   if (source === "client_agent_send") return "Sent by client (Send an agent)";
+  if (source === "connections") return "Connections";
   return "Upload";
 }
 
@@ -101,6 +107,10 @@ export type ClientDocumentMeta = {
   mime: string;
   source: UploadSource;
   account_label?: string;
+  /** Accountant's document type, when the file came from Connections. */
+  document_type?: string;
+  /** Short note from the Sonnet read. Shown on the Client library row. */
+  summary?: string;
 };
 
 /** Read the meta blob defensively — rows may predate this shape. */
@@ -115,10 +125,13 @@ export function parseDocumentMeta(meta: unknown): Partial<ClientDocumentMeta> {
       m.source === "bank_pack" ||
       m.source === "cash_pack" ||
       m.source === "financial_statement" ||
-      m.source === "client_agent_send"
+      m.source === "client_agent_send" ||
+      m.source === "connections"
         ? m.source
         : undefined,
     account_label: typeof m.account_label === "string" ? m.account_label : undefined,
+    document_type: typeof m.document_type === "string" ? m.document_type : undefined,
+    summary: typeof m.summary === "string" ? m.summary : undefined,
   };
 }
 

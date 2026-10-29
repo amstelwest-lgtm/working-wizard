@@ -18,8 +18,8 @@ export function SharedDocumentsList({ docs }: { docs: ClientArtifact[] }) {
   if (docs.length === 0) {
     return (
       <p className="sub" style={{ margin: "8px 0 0" }}>
-        No documents shared yet. Files the owner marks "Share with accountant" appear here; files
-        they keep private do not.
+        Nothing in the library yet. Files uploaded from Connections, and files the owner marks
+        "Share with accountant", appear here; files they keep private do not.
       </p>
     );
   }
@@ -57,6 +57,11 @@ export function SharedDocumentsList({ docs }: { docs: ClientArtifact[] }) {
                 {meta.bytes != null ? ` · ${formatBytes(meta.bytes)}` : ""}
                 {` · ${dateTime(doc.created_at)}`}
               </span>
+              {meta.summary ? (
+                <span className="brain-meta" style={{ marginTop: 2, display: "block" }}>
+                  {meta.summary}
+                </span>
+              ) : null}
             </span>
             <button
               type="button"
