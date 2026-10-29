@@ -200,6 +200,8 @@
     "test:workflow-coach": "vite-node --config scripts/vite-test.config.ts scripts/workflow-coach-test.mts",
     "test:feature-finder": "vite-node --config scripts/vite-test.config.ts scripts/feature-finder-test.mts",
     "test:accountant-desk-clip": "vite-node --config scripts/vite-test.config.ts scripts/accountant-desk-clip-test.mts",
+    "harness:dev": "vite --config scripts/rail-studio-harness/vite.config.ts",
+    "test:agent-wheel": "vite-node scripts/rail-studio-harness/check-agent-wheel.mts",
     "test:accountant-studio-clarity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-studio-clarity-test.mts",
     "test:accountant-walkthrough": "vite-node --config scripts/vite-test.config.ts scripts/accountant-walkthrough-test.mts",
     "test:owner-tour": "vite-node --config scripts/vite-test.config.ts scripts/owner-tour-sale-test.mts",

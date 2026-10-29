@@ -1,11 +1,12 @@
 import { useMemo } from "react";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
-import { useMilonTeamFeed } from "@/hooks/use-milon-team-feed";
+import { useMilonTeamFeed, type MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import type { ApprovedDraftTarget } from "@/components/owner-draft-card";
 import {
   findingFigureEntries,
   findingSentence,
   isVisibleAgentFinding,
+  type AgentActivitySnapshot,
 } from "@/lib/milon-team-activity";
 import { clientAgentWork } from "@/lib/agent-work";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
@@ -14,19 +15,7 @@ import { AgentStage } from "./agent-stage";
 import { AgentWork } from "./agent-work";
 import { MilonTeamDesk } from "./milon-team-desk";
 
-export function MilonTeamPane({
-  clientId,
-  agent = null,
-  homeFinding = null,
-  findingFallback = null,
-  onOpenApproved,
-  onInvite,
-  onSelectAgent,
-  marketCountry = null,
-  audience = "accountant",
-  sampleClient = false,
-  canonicalRatios = null,
-}: {
+type MilonTeamPaneProps = {
   clientId: string;
   /** Home Ask opens this agent's thread. The feed stays off the card stage. */
   agent?: AgentKey | null;
@@ -45,9 +34,36 @@ export function MilonTeamPane({
   sampleClient?: boolean;
   /** Live scorecard ratios. Draft sentences quote these. */
   canonicalRatios?: Record<string, number> | null;
-}) {
+};
+
+export function MilonTeamPane(props: MilonTeamPaneProps) {
+  const { clientId } = props;
   const feed = useMilonTeamFeed(clientId);
   const live = useAgentActivity(clientId);
+  return <MilonTeamPaneView {...props} feed={feed} live={live} />;
+}
+
+/** The pane without its data hooks. The route and the screenshot harness share it. */
+export function MilonTeamPaneView({
+  clientId,
+  agent = null,
+  homeFinding = null,
+  findingFallback = null,
+  onOpenApproved,
+  onInvite,
+  onSelectAgent,
+  marketCountry = null,
+  audience = "accountant",
+  sampleClient = false,
+  canonicalRatios = null,
+  feed,
+  live,
+  now,
+}: MilonTeamPaneProps & {
+  feed: MilonTeamFeedApi;
+  live: AgentActivitySnapshot & { refresh?: () => void };
+  now?: Date;
+}) {
   const filedFinding = useMemo(() => {
     if (!agent) return "";
     const rows = live.findings
@@ -73,6 +89,7 @@ export function MilonTeamPane({
   const desk = (
     <MilonTeamDesk
       feed={feed}
+      now={now}
       live={live}
       initialFilter={agent ?? "all"}
       presentation={agent ? "agent" : "team"}

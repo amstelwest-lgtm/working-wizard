@@ -4,9 +4,11 @@
  * real chat widget mounted underneath and pointed at a local stub.
  */
 import { useEffect, type ReactNode } from "react";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ClientRail } from "@/components/client-studio-chrome";
 import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
+import { MilonTeamPaneView } from "@/components/milon-team/milon-team-pane";
+import type { AgentKey } from "@/lib/milon-team-feed";
 import "../../public/ask-ai.css";
 import { DESK_NOW, EMPTY_ACTIVITY, LIVE_ACTIVITY, LIVE_NOW, useMilonTeamFeedStub } from "./milon-team-stub";
 
@@ -59,9 +61,10 @@ function Frame({
 }
 
 export function MilonTeamDeskPage() {
-  const search = useSearch({ strict: false }) as { fixture?: string };
+  const search = useSearch({ strict: false }) as { fixture?: string; agent?: AgentKey };
   const empty = search.fixture === "empty";
   const live = search.fixture === "live";
+  const navigate = useNavigate();
   const feed = useMilonTeamFeedStub(empty ? "empty" : live ? "live" : "harbour-glass");
   useEffect(() => {
     const el = document.getElementById("ask-ai-accountant");
@@ -90,13 +93,29 @@ export function MilonTeamDeskPage() {
     <Frame clientName={empty ? "North Shed" : "Harbour Glass"} onFile={!empty}>
       <div className="tabpane on" id="pane-ask">
         <div className="milon-desk-host">
-          <MilonTeamDesk
-            feed={feed}
-            now={live ? LIVE_NOW : DESK_NOW}
-            live={empty ? EMPTY_ACTIVITY : live ? LIVE_ACTIVITY : null}
-            marketCountry="ZA"
-            audience="accountant"
-          />
+          {search.agent ? (
+            <MilonTeamPaneView
+              key={search.agent}
+              clientId="harness-client"
+              agent={search.agent}
+              feed={feed}
+              live={empty ? EMPTY_ACTIVITY : LIVE_ACTIVITY}
+              now={live ? LIVE_NOW : DESK_NOW}
+              marketCountry="ZA"
+              audience="accountant"
+              onSelectAgent={(next) =>
+                navigate({ search: (prev) => ({ ...prev, agent: next }) as never })
+              }
+            />
+          ) : (
+            <MilonTeamDesk
+              feed={feed}
+              now={live ? LIVE_NOW : DESK_NOW}
+              live={empty ? EMPTY_ACTIVITY : live ? LIVE_ACTIVITY : null}
+              marketCountry="ZA"
+              audience="accountant"
+            />
+          )}
           <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
         </div>
       </div>

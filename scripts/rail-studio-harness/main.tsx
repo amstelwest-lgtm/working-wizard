@@ -207,6 +207,13 @@ const teamDeskRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => ({
     fixture:
       search.fixture === "empty" ? "empty" : search.fixture === "live" ? "live" : "populated",
+    agent:
+      search.agent === "financial_manager" ||
+      search.agent === "analyst" ||
+      search.agent === "advisor" ||
+      search.agent === "tax_specialist"
+        ? search.agent
+        : undefined,
   }),
   component: MilonTeamDeskPage,
 });
