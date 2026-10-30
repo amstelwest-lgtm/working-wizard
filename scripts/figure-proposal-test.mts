@@ -10,7 +10,10 @@ import { executeAnalystGate } from "../src/lib/agent-analyst.ts";
 import { ADVISOR_TOOLS, executeAdvisorGate } from "../src/lib/agent-advisor.ts";
 import { FM_TOOLS, executeFinancialManagerGate } from "../src/lib/agent-financial-manager.ts";
 import { classifyResult } from "../supabase/functions/_shared/agent-core/loop.ts";
-import { FINANCIAL_MANAGER_SYSTEM } from "../supabase/functions/_shared/agent-prompts/financial-manager.ts";
+import {
+  FINANCIAL_MANAGER_SYSTEM,
+  financialManagerToolSchemas,
+} from "../supabase/functions/_shared/agent-prompts/financial-manager.ts";
 import { askAiAgentPersona } from "../supabase/functions/ask-ai/prompt.ts";
 import { FigureProposals } from "../src/components/figure-proposals.tsx";
 import { baseCashflow, rollForwardForecast } from "../src/lib/client-metrics.ts";
@@ -167,12 +170,45 @@ function pending(surface: "cash" | "budget" | "waterfall", patch: Record<string,
   });
   assert(classified.happened === true && classified.status === "ok", "a saved proposal happened");
   assert(/not changed/i.test(classified.detail), "the trace says the saved figures were not changed");
+  assert(/Confirm on the Cash forecast page/i.test(classified.detail), "a saved proposal points at Confirm on Cash");
+  assert(/cannot propose/i.test(classified.detail), "the trace forbids saying she cannot propose");
   assert(FINANCIAL_MANAGER_SYSTEM.includes("propose_figure_adjustment"), "the financial manager prompt names the tool");
   assert(/confirm/i.test(FINANCIAL_MANAGER_SYSTEM), "the prompt requires a person to confirm");
   assert(FINANCIAL_MANAGER_SYSTEM.includes("waterfall"), "the prompt covers the profitability waterfall");
   assert(FINANCIAL_MANAGER_SYSTEM.includes("budget"), "the prompt covers the budget");
+  assert(
+    /call propose_figure_adjustment with surface cash and patch capexAmount/.test(FINANCIAL_MANAGER_SYSTEM) &&
+      /capexWeek/.test(FINANCIAL_MANAGER_SYSTEM),
+    "CapEx in a week is a propose_figure_adjustment call",
+  );
+  assert(/Do not refuse/.test(FINANCIAL_MANAGER_SYSTEM), "the prompt does not stall on approval before the call");
+  assert(
+    /netWeek set to that week, and netDelta set to the negative/.test(FINANCIAL_MANAGER_SYSTEM),
+    "a non-CapEx week outflow is a negative net delta",
+  );
+  assert(
+    /Confirm on the Cash forecast page/.test(FINANCIAL_MANAGER_SYSTEM) &&
+      /Never say you cannot propose/.test(FINANCIAL_MANAGER_SYSTEM),
+    "after the call she points at Confirm and does not refuse",
+  );
+  const proposeTool = financialManagerToolSchemas().find((tool) => tool.name === FIGURE_PROPOSAL_TOOL);
+  assert(proposeTool != null, "the runner exposes the proposal tool");
+  const toolText = `${proposeTool?.description ?? ""} ${JSON.stringify(proposeTool?.input_schema ?? {})}`;
+  assert(/capexAmount plus capexWeek/.test(toolText), "the tool description names the CapEx patch");
+  assert(/negative netDelta/.test(toolText), "the tool description names a week outflow");
+  assert(/Do not refuse/.test(toolText), "the tool description forbids stalling before the call");
   const persona = askAiAgentPersona("financial_manager", "accountant");
   assert(/confirm/i.test(persona) && /do not say/i.test(persona), "Ask FM does not claim a live write");
+  assert(
+    /call propose_figure_adjustment with surface cash and patch capexAmount and capexWeek/.test(persona),
+    "Ask FM calls the CapEx proposal instead of waiting",
+  );
+  assert(/negative netDelta/.test(persona), "Ask FM proposes a non-CapEx week outflow");
+  assert(/Confirm on the Cash forecast page/.test(persona) && /cannot propose/.test(persona), "Ask FM points at Confirm");
+  const objective = readFileSync(resolve("supabase/functions/agent-financial-manager/run.ts"), "utf8");
+  assert(/capexAmount and capexWeek/.test(objective), "the runner objective calls the CapEx proposal");
+  assert(/negative netDelta/.test(objective), "the runner objective calls a week outflow");
+  assert(/Do not wait for approval before the call/.test(objective), "the runner objective does not stall");
   const sql = readFileSync(resolve("supabase/migrations/20261029120000_figure_proposals.sql"), "utf8");
   assert(sql.includes("IF p_confirm IS NOT TRUE"), "apply refuses when confirm is not true");
   assert(sql.includes("figure_confirm_required"), "the refusal is named");

@@ -139,6 +139,6 @@ async function proposeFigureAdjustment(
     surface: parsed.surface,
     patch: parsed.patch,
     before_values: before,
-    note: `Waiting for a person to confirm on the ${SURFACE_PAGE[parsed.surface]}. The saved figures were not changed.`,
+    note: `Proposal saved. Tell them to Confirm on the ${SURFACE_PAGE[parsed.surface]}. The saved figures were not changed. Do not say you cannot propose.`,
   };
 }

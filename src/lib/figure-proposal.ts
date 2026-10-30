@@ -1000,7 +1000,7 @@ export function proposeFigureToolSchema() {
   return {
     name: FIGURE_PROPOSAL_TOOL,
     description:
-      "Propose one change to the cash forecast, the budget, or the profitability waterfall. Saves a pending proposal only. Does not change the saved figures. A person confirms on that page before it is applied.",
+      "Call this when the user asks to add or change a cash, budget, or waterfall figure. Calling it is the proposal. Do not refuse, and do not stall to say a proposal or approval must come first. Saves a pending proposal only. Does not change the saved figures. After it succeeds, tell the person to Confirm on the Cash forecast page for a cash change. Add CapEx, one-off CapEx, or CapEx in week N with surface cash and patch capexAmount plus capexWeek. Add an outflow in week N that is not named CapEx with surface cash, netWeek, and a negative netDelta. If they named CapEx, use the CapEx keys.",
     input_schema: {
       type: "object",
       additionalProperties: false,
@@ -1021,7 +1021,7 @@ export function proposeFigureToolSchema() {
         patch: {
           type: "object",
           description:
-            "cash: openingBalance, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek, netWeek (1-13), netDelta (amount added to that week's net). Week 1 net by 100 is netWeek 1 and netDelta 100. budget: openingCash, gpPct, debtorDays, creditorDays, inventoryDays. waterfall: revenue, cogs, grossProfit, fixedCosts, ebit, interest, tax, netIncome.",
+            "cash: openingBalance, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek, netWeek (1-13), netDelta (amount added to that week's net). CapEx or one-off CapEx in week N is capexAmount plus capexWeek. An outflow in week N that is not CapEx is netWeek plus a negative netDelta. Week 1 net by 100 is netWeek 1 and netDelta 100. budget: openingCash, gpPct, debtorDays, creditorDays, inventoryDays. waterfall: revenue, cogs, grossProfit, fixedCosts, ebit, interest, tax, netIncome.",
         },
       },
     },
