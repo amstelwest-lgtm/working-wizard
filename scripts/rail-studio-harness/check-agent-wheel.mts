@@ -1,12 +1,12 @@
 /**
  * Agent pages scroll as one page: the wheel moves the page with the pointer
  * over any card, the face, the hero, or the section links.
- * Expects the harness on 127.0.0.1:4179 (pnpm harness:dev).
+ * Starts its own harness, or uses HARNESS_URL (for example http://127.0.0.1:4179).
  * Run: pnpm test:agent-wheel
  */
-import { chromium, type Page } from "playwright";
+import type { Page } from "playwright";
+import { runOnHarness } from "./harness-run.mts";
 
-const base = "http://127.0.0.1:4179";
 const agents = (process.env.AGENTS ?? "financial_manager,analyst,advisor").split(",");
 const sizes = [
   { width: 1366, height: 768 },
@@ -74,46 +74,49 @@ async function wheelOver(page: Page, selector: string, label: string) {
     fail(`${label}: the wheel over ${selector} did not move the page (${before} → ${after})`);
 }
 
-const browser = await chromium.launch({ channel: "chrome", headless: true });
-for (const size of sizes) {
-  for (const agent of agents) {
-    const label = `${agent} @ ${size.width}×${size.height}`;
-    const page = await browser.newPage({ viewport: size });
-    await page.goto(`${base}/milon-team-desk?fixture=live&agent=${agent}`, {
-      waitUntil: "domcontentloaded",
-    });
-    await page.waitForSelector(`[data-agent-stage="${agent}"]`, { timeout: 10000 });
-    await page.waitForSelector("#ask-ai-accountant textarea", { timeout: 10000 });
-    const fold = await page.evaluate(() => {
-      const bottom = (selector: string) =>
-        document.querySelector(selector)?.getBoundingClientRect().bottom ?? Infinity;
-      return {
-        face: bottom(".agent-stage-hero .owner-presence"),
-        chat: bottom("#ask-ai-accountant textarea"),
-        height: window.innerHeight,
-      };
-    });
-    if (fold.face > fold.height || fold.chat > fold.height)
-      fail(`${label}: the face (${fold.face}) or the chat (${fold.chat}) is below the fold (${fold.height})`);
-    const extra = await innerScrollers(page);
-    if (extra.length) fail(`${label}: nested scroll areas on the agent page: ${extra.join(", ")}`);
-    const tall = await page.evaluate(
-      () => document.documentElement.scrollHeight > window.innerHeight,
-    );
-    if (!tall)
-      fail(`${label}: the page is not taller than the viewport, so the check proves nothing`);
-    await wheelOver(page, ".milon-desk-card, .agent-section", `${label} first card`);
-    await wheelOver(page, ".agent-stage-hero .owner-presence", `${label} face`);
-    await wheelOver(page, ".agent-stage-hero", `${label} hero`);
-    await wheelOver(page, ".agent-work-link", `${label} section link`);
-    await wheelOver(
-      page,
-      "#ask-ai-accountant .ask-ai-thread, #ask-ai-accountant textarea",
-      `${label} chat`,
-    );
-    await page.close();
-    console.log(`ok ${label}`);
+await runOnHarness("agent-wheel", { port: 5201 }, async ({ base, browser }) => {
+  for (const size of sizes) {
+    for (const agent of agents) {
+      const label = `${agent} @ ${size.width}×${size.height}`;
+      const page = await browser.newPage({ viewport: size });
+      await page.goto(`${base}/milon-team-desk?fixture=live&agent=${agent}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await page.waitForSelector(`[data-agent-stage="${agent}"]`, { timeout: 10000 });
+      await page.waitForSelector("#ask-ai-accountant textarea", { timeout: 10000 });
+      const fold = await page.evaluate(() => {
+        const bottom = (selector: string) =>
+          document.querySelector(selector)?.getBoundingClientRect().bottom ?? Infinity;
+        return {
+          face: bottom(".agent-stage-hero .owner-presence"),
+          chat: bottom("#ask-ai-accountant textarea"),
+          height: window.innerHeight,
+        };
+      });
+      if (fold.face > fold.height || fold.chat > fold.height)
+        fail(
+          `${label}: the face (${fold.face}) or the chat (${fold.chat}) is below the fold (${fold.height})`,
+        );
+      const extra = await innerScrollers(page);
+      if (extra.length)
+        fail(`${label}: nested scroll areas on the agent page: ${extra.join(", ")}`);
+      const tall = await page.evaluate(
+        () => document.documentElement.scrollHeight > window.innerHeight,
+      );
+      if (!tall)
+        fail(`${label}: the page is not taller than the viewport, so the check proves nothing`);
+      await wheelOver(page, ".milon-desk-card, .agent-section", `${label} first card`);
+      await wheelOver(page, ".agent-stage-hero .owner-presence", `${label} face`);
+      await wheelOver(page, ".agent-stage-hero", `${label} hero`);
+      await wheelOver(page, ".agent-work-link", `${label} section link`);
+      await wheelOver(
+        page,
+        "#ask-ai-accountant .ask-ai-thread, #ask-ai-accountant textarea",
+        `${label} chat`,
+      );
+      await page.close();
+      console.log(`ok ${label}`);
+    }
   }
-}
-await browser.close();
-console.log("agent-wheel: the page scrolls under the pointer on every agent page");
+  console.log("agent-wheel: the page scrolls under the pointer on every agent page");
+});
