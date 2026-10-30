@@ -305,7 +305,7 @@ export function classifyResult(
       verified: happened,
       happened,
       detail: happened
-        ? "Proposal saved as pending. The saved figures were not changed. A person confirms before it is applied."
+        ? "Proposal saved as pending. The saved figures were not changed. Tell the person to Confirm on the Cash forecast page when the surface is cash. Do not say you cannot propose."
         : "The figure proposal was not saved.",
     };
   }
