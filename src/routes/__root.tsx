@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { NAV_COLLAPSED_BOOT_SCRIPT } from "@/lib/accountant-nav-collapsed";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -280,6 +281,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html: THEME_BOOT_SCRIPT,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: NAV_COLLAPSED_BOOT_SCRIPT,
           }}
         />
         <script

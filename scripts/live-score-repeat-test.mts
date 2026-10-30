@@ -142,7 +142,7 @@ const presence = ownerPresence(
   { overall: 67, weakestLabel: "Profit", weakestScore: 50 },
 );
 const sentence = presence.handoff?.sentence ?? "";
-assert(sentence.startsWith("Advisor → Financial Manager:"), sentence);
+assert(sentence.startsWith("Advisor asked the Financial Manager to"), sentence);
 assert(!/\bstored\b[\s\S]{0,48}\bvs\s+live\b/i.test(sentence), sentence);
 assert(!/\bstored\s+health\b/i.test(sentence), sentence);
 assert(sentence.includes("health 67"), sentence);

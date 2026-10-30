@@ -5,13 +5,80 @@
   min-width: 0;
 }
 
-.agent-stage-hero {
+/* Agent blocks. Square-ish, the open agent filled. */
+.agent-stage-switch {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.agent-stage-switch > button,
+.agent-stage-switch > .tax-sample-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid #c7d7f5;
+  border-radius: 8px;
+  background: #fff;
+  color: #0b5fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+
+.agent-stage-switch > button:hover {
+  border-color: #0b5fff;
+}
+
+.agent-stage-switch > button.is-on {
+  border-color: #0b5fff;
+  background: #0b5fff;
+  color: #fff;
+}
+
+.agent-stage-switch .owner-presence {
+  display: none;
+}
+
+.agent-stage-switch > button:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 3px;
+}
+
+.agent-stage-top {
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.agent-stage-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
+  gap: 20px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.agent-stage .agent-stage-hero .owner-presence.is-stage {
+  width: 200px;
+  height: 200px;
+}
+
+.agent-stage-copy {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  padding: 8px 12px 4px;
-  text-align: center;
+  min-width: 0;
 }
 
 .agent-stage-name {
@@ -37,34 +104,131 @@
   font-weight: 600;
 }
 
-.agent-stage-switch {
+.agent-stage-chat {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
-  justify-content: center;
-}
-
-.agent-stage-switch button {
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid #0b5fff;
-  border-radius: 999px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
   background: #fff;
-  color: #0b5fff;
-  font: inherit;
-  font-size: 13px;
+}
+
+.agent-stage-chat-title {
+  margin: 0;
+  color: #102a43;
+  font-size: 1rem;
   font-weight: 700;
-  cursor: pointer;
+  line-height: 1.3;
 }
 
-.agent-stage-switch button.is-on {
-  background: #0b5fff;
-  color: #fff;
+.agent-stage-chat .milon-desk-host {
+  flex: 1 1 auto;
+  height: auto;
 }
 
-.agent-stage-switch button:focus-visible {
-  outline: 2px solid #0b5fff;
-  outline-offset: 3px;
+.agent-stage-chat #ask-ai-accountant.ask-ai-studio-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding: 8px;
+  border-top: 0;
+  border-radius: 8px;
+}
+
+/* The composer sits at the bottom of the chat card, under the thread. */
+.agent-stage-chat #ask-ai-accountant .ask-ai-widget {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.agent-stage-chat #ask-ai-accountant .ask-ai-panel {
+  flex: 1 1 auto;
+  align-content: end;
+}
+
+.agent-stage-chat .practice-agent-client {
+  justify-content: flex-start;
+}
+
+/* Wide screens: hero and chat side by side, the same height. */
+@media (min-width: 1280px) {
+  .agent-stage-top.has-chat {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: stretch;
+  }
+
+  .agent-stage-top.has-chat .agent-stage-hero {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    align-content: center;
+    text-align: center;
+  }
+
+  .agent-stage-top.has-chat .agent-stage-copy {
+    align-items: center;
+  }
+}
+
+@media (min-width: 861px) and (max-width: 1099px) {
+  .agent-stage .agent-stage-hero .owner-presence.is-stage {
+    width: 160px;
+    height: 160px;
+  }
+}
+
+/* One section on an agent page: title, one purpose line, the content. */
+.agent-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.agent-section-title {
+  margin: 0;
+  color: #102a43;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.agent-section-purpose {
+  margin: 0 0 4px;
+  color: #3d5270;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.agent-section-empty {
+  margin: 0;
+  color: #102a43;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+html.dark .agent-stage-hero,
+html.dark .agent-stage-chat,
+html.dark .agent-section {
+  border-color: #1e3a5f;
+  background: #102a43;
+}
+
+html.dark .agent-stage-chat-title,
+html.dark .agent-section-title,
+html.dark .agent-section-empty {
+  color: #f4f7fb;
+}
+
+html.dark .agent-section-purpose {
+  color: #c5d4e4;
 }
 
 .agent-work {
@@ -107,7 +271,7 @@
   min-height: 44px;
   padding: 12px 14px;
   border: 1px solid #dbeafe;
-  border-radius: 14px;
+  border-radius: 8px;
   background: #fff;
   color: #102a43;
   text-decoration: none;
@@ -158,22 +322,39 @@ html.dark .agent-stage-role {
   color: #c5d4e4;
 }
 
-html.dark .agent-stage-switch button {
+html.dark .agent-stage-switch > button,
+html.dark .agent-stage-switch > .tax-sample-stage {
+  border-color: #1e3a5f;
   background: transparent;
   color: #f4f7fb;
 }
 
-html.dark .agent-stage-switch button.is-on {
+html.dark .agent-stage-switch > button.is-on {
+  border-color: #0b5fff;
   background: #0b5fff;
   color: #fff;
 }
 
+/* Phones: two blocks per row, face above the name. */
 @media (max-width: 767px) {
   .agent-stage-switch {
-    flex-direction: column;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .agent-stage-switch button {
-    width: 100%;
+  .agent-stage-hero {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .agent-stage-copy {
+    align-items: center;
+  }
+}
+
+@media (max-width: 860px) {
+  .agent-stage .agent-stage-hero .owner-presence.is-stage {
+    width: 128px;
+    height: 128px;
   }
 }

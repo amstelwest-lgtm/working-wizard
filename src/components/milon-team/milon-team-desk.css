@@ -6,6 +6,7 @@
 }
 
 .milon-desk-host {
+  --desk-plate: #ffffff;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -39,6 +40,10 @@
   height: auto;
   color: var(--desk-ink);
   min-width: 0;
+}
+
+html.dark .milon-desk-host {
+  --desk-plate: #0b1b2b;
 }
 
 html.dark .milon-desk {
@@ -956,8 +961,8 @@ body:has(#pane-ask.on) #wizard-notes-pin {
   display: none !important;
 }
 
-/* In-client agent pages (Financial Manager, Analyst, Advisor) flow with the
-   document. The team desk keeps the viewport lock. */
+/* In-client agent pages flow with the document, so the page is the one
+   scroll area. The team desk keeps the viewport lock. */
 .accountant-portal:has(.agent-stage) .shell,
 .accountant-portal:has(.agent-stage) .client-workspace,
 .accountant-portal:has(.agent-stage) .deliverable-main,
@@ -992,60 +997,30 @@ body:has(#pane-ask.on) #wizard-notes-pin {
   margin-top: auto;
 }
 
-/* Ask FM fills the viewport. The navy frame is the shell, not an empty band. */
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .shell {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  max-height: 100vh;
-  min-height: 100vh;
-  height: 100dvh;
-  max-height: 100dvh;
-  min-height: 100dvh;
-  overflow: hidden;
-  padding-bottom: 0;
+/* Agent pages scroll as one page. The chat thread is the only inner scroll
+   area, and it hands the wheel back to the page at either end. */
+.accountant-portal:has([data-agent-stage]) .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell {
+  position: relative;
+  bottom: auto;
+  overflow: visible;
 }
 
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .footer-note {
-  margin-top: 0;
-  flex: 0 0 auto;
-  background: var(--pp-canvas, #f4f6fa);
-  padding: 8px 16px 12px;
-}
-
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .client-workspace {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: auto;
-  overflow: hidden;
-  align-items: stretch;
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main,
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) #pane-ask.on,
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host,
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-  max-height: 100%;
-  overflow: hidden;
-}
-
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main {
-  background: var(--pp-canvas, #f4f6fa);
-}
-
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: auto;
-  max-height: 100%;
+.accountant-portal:has([data-agent-stage]) #ask-ai-accountant .ask-ai-thread {
+  max-height: min(60vh, 560px);
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: auto;
+}
+
+.accountant-portal:has([data-agent-stage]) #ask-ai-accountant .ask-ai-textarea,
+.accountant-portal:has([data-agent-stage]) #ask-ai-accountant .ask-ai-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+}
+
+.accountant-portal:has([data-agent-stage]) #ask-ai-accountant .ask-ai-actions {
+  background: var(--desk-plate);
 }
 
 /* The share and notes buttons are hidden on this pane, so the phone pad
@@ -1072,101 +1047,6 @@ body:has(#pane-ask.on) #wizard-notes-pin {
 .agent-work-detail {
   overflow-wrap: anywhere;
   min-width: 0;
-}
-
-/* Open agent inside a client. The stage, activity, thread and composer share
-   the locked column. The stage scrolls as one, so on a laptop-height screen
-   the face, finding and activity cannot push the composer out of reach. */
-@media (min-width: 861px) {
-  /* Notes, banners or a back link above the pane can leave the locked column
-     too short. The pane keeps a floor and the main column scrolls to it. */
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main {
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage) #pane-ask.on {
-    min-height: 380px;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host > .agent-stage {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-gutter: stable;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .agent-stage > .agent-work {
-    flex: 0 0 auto;
-    max-height: 22%;
-    min-height: 0;
-    overflow: auto;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .agent-stage > .milon-desk {
-    display: flex;
-    flex: 1 0 auto;
-    flex-direction: column;
-    min-height: 120px;
-    height: auto;
-    max-height: none;
-    overflow: visible;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
-    .milon-desk-host
-    > #ask-ai-accountant.ask-ai-studio-shell {
-    display: flex;
-    flex: 1 1 240px;
-    flex-direction: column;
-    min-height: 200px;
-    max-height: 46%;
-    overflow: hidden;
-    position: relative;
-    box-shadow: none;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
-    .milon-desk-host
-    #ask-ai-accountant
-    .ask-ai-panel {
-    flex: 1 1 auto;
-    min-height: 0;
-    height: 100%;
-    overflow: hidden;
-    grid-template-rows: minmax(0, 1fr) auto;
-    align-content: stretch;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
-    .milon-desk-host
-    #ask-ai-accountant
-    .ask-ai-thread {
-    max-height: none;
-    min-height: 0;
-    height: auto;
-    overflow: auto;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host > #wizard-open-queries {
-    flex: 0 0 auto;
-  }
-}
-
-.accountant-portal:has(#pane-ask.on):has(.agent-stage) .owner-presence.is-stage {
-  width: min(112px, 28vw);
-  height: min(112px, 28vw);
 }
 
 /* Phone and short tablet: a wrapped breadcrumb or topbar leaves the locked
@@ -1199,40 +1079,11 @@ body:has(#pane-ask.on) #wizard-notes-pin {
     align-items: start;
   }
 
-  .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell,
-  .accountant-portal:has([data-agent-stage]) #ask-ai-accountant.ask-ai-studio-shell {
+  .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell {
     position: sticky;
     bottom: 0;
     z-index: 5;
     padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
-    .milon-desk-host
-    #ask-ai-accountant.ask-ai-studio-shell {
-    display: flex;
-    flex-direction: column;
-    max-height: min(52vh, 480px);
-    overflow: hidden;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
-    .milon-desk-host
-    #ask-ai-accountant
-    .ask-ai-panel {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
-
-  .accountant-portal:has(#pane-ask.on):has(.agent-stage)
-    .milon-desk-host
-    #ask-ai-accountant
-    .ask-ai-thread {
-    max-height: none;
-    min-height: 72px;
-    overflow: auto;
   }
 }
 

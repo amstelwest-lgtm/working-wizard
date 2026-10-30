@@ -16,10 +16,18 @@
 import { calendarDayFromIso, dateOrder } from "../../../src/lib/market/date-presets.ts";
 import { ZA_PROMPT_MONEY_LINE } from "../../../src/lib/prompt-money.ts";
 
-export type ChatAgent = "financial_manager" | "analyst" | "advisor";
+export type ChatAgent = "financial_manager" | "analyst" | "advisor" | "tax_specialist";
 
 export function parseChatAgent(raw: unknown): ChatAgent | null {
-  return raw === "financial_manager" || raw === "analyst" || raw === "advisor" ? raw : null;
+  return raw === "financial_manager" || raw === "analyst" || raw === "advisor" || raw === "tax_specialist"
+    ? raw
+    : null;
+}
+
+/** The Tax Specialist prepares SARS work, so it only answers for a South African client. */
+export function chatAgentForMarket(agent: ChatAgent | null, copyPack: "za" | "us" | null): ChatAgent | null {
+  if (agent === "tax_specialist" && copyPack !== "za") return null;
+  return agent;
 }
 
 /** Prompt block that fixes the reply shape. Dates follow copyPack. Money follows moneyPack. */

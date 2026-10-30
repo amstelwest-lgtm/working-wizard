@@ -151,7 +151,7 @@ const sampleSrc = [
   .join("\n");
 assert(sampleSrc.includes("SAMPLE"), "the workspace is labelled SAMPLE");
 assert(sampleSrc.includes("ITR14") && sampleSrc.includes("IRP6"), "both worksheets are named");
-assert(sampleSrc.includes("Hand to Tax Specialist"), "Financial Manager can hand the pack across");
+assert(sampleSrc.includes("Assign to Tax Specialist"), "Financial Manager can assign the pack");
 assert(
   !sampleSrc.includes("South Africa") && !sampleSrc.includes("ZAR") && !/rand /.test(sampleSrc),
   "pricing needles stay out of the chunk",
@@ -171,12 +171,22 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const staticImport = /from\s+["'][^"']*za-tax-specialist-sample["']/;
+const staticImport = /from\s+["'][^"']*za-tax-specialist-(sample|page)["']/;
 for (const path of walk("src")) {
-  if (path.endsWith("za-tax-specialist-sample.tsx") || path.endsWith("tax-specialist-slot.tsx"))
+  if (
+    path.endsWith("za-tax-specialist-sample.tsx") ||
+    path.endsWith("za-tax-specialist-page.tsx") ||
+    path.endsWith("tax-specialist-slot.tsx")
+  )
     continue;
-  assert(!staticImport.test(readFileSync(path, "utf8")), `${path} static-imports the sample`);
+  assert(!staticImport.test(readFileSync(path, "utf8")), `${path} static-imports a ZA tax module`);
 }
+assert(
+  readFileSync("src/components/tax-specialist/tax-specialist-slot.tsx", "utf8").includes(
+    'import("./za-tax-specialist-page")',
+  ),
+  "the tax agent page loads with a dynamic import",
+);
 
 const owner = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
 assert(
@@ -286,7 +296,7 @@ assert(
   "the preview card says what she prepares",
 );
 assert(preview.includes(">Preview<"), "the preview card carries a Preview tag");
-assert(preview.includes("Hand to Tax Specialist"), "the primary action is the hand-off");
+assert(preview.includes("Assign to Tax Specialist"), "the primary action is the assignment");
 assert(preview.includes("See a sample"), "a secondary link opens the sample");
 assert(preview.includes('data-tax-preview-action="handoff"'), "the hand-off is the primary action");
 assert(

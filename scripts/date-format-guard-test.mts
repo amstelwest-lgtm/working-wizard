@@ -845,12 +845,12 @@ assert.equal(outputs[3], "2 Sep 2026", "ZA client inside a US firm keeps ZA orde
 assert.equal(dataAsOfLabel(NOW, usFirm), "Oct 20, 2026", "the US firm header stays US");
 assert.equal(outputs[4], "Sep 2, 2026", "US client inside a ZA firm keeps US order");
 assert.equal(dataAsOfLabel(NOW, zaFirm), "20 Oct 2026", "the ZA firm header stays ZA");
-assert.equal(outputs[9], "Financial Manager finished · 07:37 SAST");
-assert.equal(outputs[10], "Advisor finished · 1:37 AM ET");
-assert.equal(outputs[11], "Financial Manager finished · 19 Oct 2026, 07:37 SAST");
-assert.equal(outputs[12], "Advisor finished · Oct 19, 2026, 1:37 AM ET");
-assert.equal(outputs[13], "Handed to Financial Manager · 07:37 SAST");
-assert.equal(outputs[14], "Handed to Advisor · 1:37 AM ET");
+assert.equal(outputs[9], "Done by Financial Manager · 07:37 SAST. See result.");
+assert.equal(outputs[10], "Done by Advisor · 1:37 AM ET. See result.");
+assert.equal(outputs[11], "Done by Financial Manager · 19 Oct 2026, 07:37 SAST. See result.");
+assert.equal(outputs[12], "Done by Advisor · Oct 19, 2026, 1:37 AM ET. See result.");
+assert.equal(outputs[13], "Assigned to Financial Manager · 07:37 SAST");
+assert.equal(outputs[14], "Assigned to Advisor · 1:37 AM ET");
 assert.match(outputs[11] ?? "", /\d{1,2} \w+ \d{4}, \d{2}:\d{2} SAST/);
 assert.match(outputs[12] ?? "", /\w+ \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M ET/);
 

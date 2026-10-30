@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { PrecardCapCard } from "@/components/precard-cap-card";
 import {
   AGENT_ORDER,
@@ -15,7 +15,9 @@ import {
 } from "@/lib/milon-team";
 import {
   TODAY_RATIO_CAP,
+  activitySentence,
   checkedStamp,
+  dedupeFindings,
   deskSignoffInvite,
   deskSignoffText,
   deskSourceLabel,
@@ -24,6 +26,7 @@ import {
   findingPeriod,
   findingSentence,
   handoffParts,
+  handoffSentence,
   headerFromRun,
   isVisibleAgentFinding,
   latestRunByAgent,
@@ -39,6 +42,11 @@ import { renderHealthNarrative } from "@/lib/health-snapshot";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
 import { marketForClient } from "@/lib/market";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
+import { taxSampleEnabled } from "@/lib/tax-specialist/enabled";
+import { TAX_AGENT_NAME, TAX_AGENT_ROLE, TAX_AGENT_SHORT_NAME } from "@/lib/tax-specialist/agents";
+import { ACTIVITY_CAP, NOTICED_CAP, NOTICED_EMPTY } from "@/lib/agent-section-copy";
+import { findingTitleKey } from "@/lib/finding-title-key";
+import { AgentSection } from "./agent-section";
 import "./milon-team-desk.css";
 
 type FilterKey = "all" | AgentKey;
@@ -55,6 +63,52 @@ function AgentMark({ agent }: { agent: AgentKey }) {
   );
 }
 
+function TaxMark() {
+  return (
+    <span className="milon-desk-mark" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M6.5 3.5h7.5l4 4v13h-11.5z M13.5 3.5v4.5h4.5 M9.5 12.5h5 M9.5 16h5" />
+      </svg>
+    </span>
+  );
+}
+
+/** Team desk keeps its kicker cards. An open agent gets titled sections. */
+function DeskSection({
+  agentView,
+  section,
+  label,
+  jobs = false,
+  children,
+}: {
+  agentView: boolean;
+  section: "offered" | "activity";
+  label: string;
+  jobs?: boolean;
+  children: ReactNode;
+}) {
+  if (agentView) {
+    return (
+      <AgentSection section={section} data-desk-jobs={jobs ? "true" : undefined}>
+        {children}
+      </AgentSection>
+    );
+  }
+  return (
+    <section className="milon-desk-card" aria-label={label} data-desk-jobs={jobs ? "true" : undefined}>
+      <p className="milon-desk-kicker">{label}</p>
+      {children}
+    </section>
+  );
+}
+
 function matches(agent: AgentKey, filter: FilterKey): boolean {
   return filter === "all" || filter === agent;
 }
@@ -68,11 +122,13 @@ export function MilonTeamDesk({
   onInvite,
   onRefreshDrafts,
   onOpenAgent,
+  onOpenTaxAgent,
   presentation = "team",
   marketCountry = null,
   audience = "accountant",
   sampleClient = false,
   canonicalRatios = null,
+  heroFinding = null,
 }: {
   feed: MilonTeamFeedApi;
   now?: Date;
@@ -84,6 +140,8 @@ export function MilonTeamDesk({
   onRefreshDrafts?: () => void;
   /** A team chip opens that agent's view. The local filter still applies until then. */
   onOpenAgent?: (agent: AgentKey) => void;
+  /** ZA client pages: the Tax Specialist chip opens its page instead of the sample sheet. */
+  onOpenTaxAgent?: () => void;
   /** Agent view hides the last-run chip strip. The stage switcher owns that click. */
   presentation?: "team" | "agent";
   marketCountry?: string | null;
@@ -92,10 +150,13 @@ export function MilonTeamDesk({
   sampleClient?: boolean;
   /** Live scorecard ratios. Draft sentences quote these. */
   canonicalRatios?: Record<string, number> | null;
+  /** What the agent hero already says. What I noticed leaves it out. */
+  heroFinding?: { id: string | null; text: string | null } | null;
 }) {
   const clock = now ?? new Date();
   const [filter, setFilter] = useState<FilterKey>(initialFilter);
-  const [ratiosOpen, setRatiosOpen] = useState(false);
+  const [todayOpen, setTodayOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [blocked, setBlocked] = useState<Record<string, "precard_cap">>({});
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [opened, setOpened] = useState<Record<string, string>>({});
@@ -143,35 +204,83 @@ export function MilonTeamDesk({
     if (result.message) setFailures((current) => ({ ...current, [job.id]: result.message as string }));
   }
 
+  const agentView = presentation === "agent";
   const briefing = feed.briefing.filter((item) => matches(item.agent, filter));
   const jobs = feed.jobs.filter(
     (job) => job.status !== "dismissed" && !dropped[job.id] && matches(job.agent, filter),
   );
   const activity = feed.activity.filter((event) => matches(event.agent, filter));
   const latest = latestRunByAgent(live?.runs ?? []);
-  const findings = (live?.findings ?? [])
-    .filter((row) => isVisibleAgentFinding(row) && matches(row.agent, filter) && row.created_at)
-    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  const visibleFindings = (live?.findings ?? []).filter(
+    (row) => isVisibleAgentFinding(row) && matches(row.agent, filter) && row.created_at,
+  );
   const handoffs = (live?.messages ?? [])
     .map((row) => {
       const parts = handoffParts(row);
       if (!parts || !matches(parts.from, filter)) return null;
       return { id: row.id, at: row.created_at, ...parts };
     })
-    .filter((row): row is { id: string; at: string; from: AgentKey; to: AgentKey; text: string } => Boolean(row))
+    .filter((row): row is { id: string; at: string; from: AgentKey; to: AgentKey; text: string } =>
+      Boolean(row),
+    )
     .sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
   const signoffText = deskSignoffText(feed.signoffLine, feed.signoffOwner === true);
   const signoffInvite = deskSignoffInvite(feed.signoffOwner === true);
-  const { lead, ratios } = splitTodayBriefing(briefing);
-  const visibleRatios = ratiosOpen ? ratios : ratios.slice(0, TODAY_RATIO_CAP);
-  const todayCount = findings.length + handoffs.length + lead.length + ratios.length;
-  const emptyFeed =
-    todayCount === 0 && jobs.length === 0 && activity.length === 0 && !signoffText;
-
   const liveSentence = feed.healthQuote ? renderHealthNarrative(feed.healthQuote) : null;
+
+  // The agent page shows each finding once, newest first, and leaves out what the hero already says.
+  const heroKey = agentView && heroFinding?.text ? findingTitleKey(heroFinding.text) : "";
+  const echoesHero = (text: string) => {
+    const key = findingTitleKey(text);
+    return Boolean(heroKey && key && heroKey.includes(key));
+  };
+  const findings = (
+    agentView
+      ? dedupeFindings(visibleFindings)
+      : [...visibleFindings].sort(
+          (a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id),
+        )
+  )
+    .map((row) => ({
+      row,
+      sentence: findingSentence({
+        title: row.title,
+        detail: row.detail,
+        figures: findingFigureEntries(row.evidence),
+        market: live?.market,
+        canonicalRatios,
+        liveHealth: feed.healthQuote,
+        evidence: row.evidence,
+        writtenAt: row.created_at,
+        figuresUpdatedAt: feed.figuresUpdatedAt,
+      }),
+    }))
+    .filter(
+      ({ row, sentence }) => !agentView || (row.id !== heroFinding?.id && !echoesHero(sentence)),
+    );
+  const findingKeys = new Set(
+    findings.flatMap(({ row, sentence }) => [
+      findingTitleKey(row.title),
+      findingTitleKey(sentence),
+    ]),
+  );
+  const repeatsFinding = (item: TeamBriefingItem) =>
+    agentView &&
+    [item.title, ratioSentence(item.title, item.detail)].some(
+      (text) => findingKeys.has(findingTitleKey(text)) || echoesHero(text),
+    );
+  const split = splitTodayBriefing(briefing);
+  const lead = split.lead.filter((item) => !repeatsFinding(item));
+  const ratios = split.ratios.filter((item) => !repeatsFinding(item));
+  const todayCount = findings.length + handoffs.length + lead.length + ratios.length;
+  const emptyFeed = todayCount === 0 && jobs.length === 0 && activity.length === 0 && !signoffText;
+
   function checkedLine(item: TeamBriefingItem): string | null {
     const stamp = checkedStamp(latest[item.agent], feed.agents[item.agent]?.lastRunAt ?? null);
-    const period = item.id === "health" && feed.healthQuote?.periodLabel ? feed.healthQuote.periodLabel : item.source.asOf;
+    const period =
+      item.id === "health" && feed.healthQuote?.periodLabel
+        ? feed.healthQuote.periodLabel
+        : item.source.asOf;
     return figuresCheckedLine(
       period,
       stamp ?? item.source.asOf,
@@ -179,8 +288,152 @@ export function MilonTeamDesk({
       live?.market ?? marketForClient(null),
     );
   }
+  const visibleActivity = agentView && !activityOpen ? activity.slice(0, ACTIVITY_CAP) : activity;
   const waiting = feed.loading && !feed.error && emptyFeed && presentation !== "agent";
   const quietError = Boolean(feed.error) && emptyFeed;
+
+  // On the agent page every row is the same agent, so the agent tag and source chip would only repeat.
+  const tag = (agent: AgentKey) =>
+    agentView ? null : <span className="milon-desk-tag">{agentShortName(agent)}</span>;
+  const findingRows = findings.map(({ row, sentence }) => {
+    const draft = draftFindingLabel(row);
+    const checked = figuresCheckedLine(
+      feed.healthQuote?.periodLabel ?? findingPeriod(row),
+      row.created_at,
+      clock,
+      live?.market ?? marketForClient(null),
+    );
+    const when = formatAsOf(row.created_at, clock, live?.market ?? marketForClient(null));
+    const meta = (
+      <div className="milon-desk-meta">
+        {checked ? (
+          <span className="milon-desk-why">{checked}</span>
+        ) : when ? (
+          <time dateTime={row.created_at}>{when}</time>
+        ) : null}
+      </div>
+    );
+    if (draft || row.status === "approved") {
+      return (
+        <OwnerDraftCard
+          key={row.id}
+          layout="desk"
+          row={row}
+          sentence={sentence}
+          liveSentence={liveSentence}
+          canonicalRatios={canonicalRatios}
+          figuresUpdatedAt={feed.figuresUpdatedAt}
+          market={live?.market}
+          meta={meta}
+          onOpen={onOpenApproved}
+          onInvite={onInvite}
+          onRefresh={onRefreshDrafts}
+        />
+      );
+    }
+    return (
+      <li
+        key={row.id}
+        className="milon-desk-row"
+        data-finding={row.id}
+        data-finding-agent={row.agent}
+      >
+        <div className="milon-desk-job-copy">
+          {tag(row.agent)}
+          <HealthNarrativeLine
+            text={sentence}
+            liveSentence={liveSentence}
+            className="milon-desk-figure"
+          />
+          {meta}
+        </div>
+      </li>
+    );
+  });
+  const ratioRows = (items: readonly TeamBriefingItem[]) =>
+    items.map((item) => {
+      const checked = checkedLine(item);
+      return (
+        <li
+          key={item.id}
+          className="milon-desk-row"
+          data-severity={item.severity}
+          data-ratio={item.id}
+        >
+          <div className="milon-desk-job-copy">
+            {tag(item.agent)}
+            <p className="milon-desk-figure">{ratioSentence(item.title, item.detail)}</p>
+            <div className="milon-desk-meta">
+              {agentView ? null : (
+                <span className="milon-desk-source">{deskSourceLabel(item)}</span>
+              )}
+              {checked ? <span className="milon-desk-why">{checked}</span> : null}
+            </div>
+          </div>
+        </li>
+      );
+    });
+  const handoffRows = handoffs.map((row) => {
+    const when = formatAgo(row.at, clock);
+    return (
+      <li key={row.id} className="milon-desk-handoff" data-handoff={row.id}>
+        <p className="milon-desk-handoff-text">
+          {handoffSentence(agentShortName(row.from), agentShortName(row.to), row.text)}
+        </p>
+        {when ? <time dateTime={row.at}>{when}</time> : null}
+      </li>
+    );
+  });
+  const leadRows = lead.map((item) => {
+    const checked = checkedLine(item);
+    return (
+      <li
+        key={item.id}
+        className="milon-desk-row"
+        data-severity={item.severity}
+        data-lead={item.id}
+      >
+        <div className="milon-desk-job-copy">
+          {tag(item.agent)}
+          <p className="milon-desk-figure">{item.title}</p>
+          {item.detail ? <p className="milon-desk-hint">{item.detail}</p> : null}
+          <div className="milon-desk-meta">
+            {agentView ? null : <span className="milon-desk-source">{deskSourceLabel(item)}</span>}
+            {checked ? <span className="milon-desk-why">{checked}</span> : null}
+          </div>
+        </div>
+      </li>
+    );
+  });
+  const noticedRows = [...findingRows, ...leadRows, ...ratioRows(ratios), ...handoffRows];
+  const todayRows = agentView
+    ? todayOpen
+      ? noticedRows
+      : noticedRows.slice(0, NOTICED_CAP)
+    : [
+        ...findingRows,
+        ...ratioRows(todayOpen ? ratios : ratios.slice(0, TODAY_RATIO_CAP)),
+        ...handoffRows,
+        ...leadRows,
+      ];
+  const todayMore = agentView ? noticedRows.length > NOTICED_CAP : ratios.length > TODAY_RATIO_CAP;
+
+  const todayList = (
+    <>
+      <ul className="milon-desk-briefing">{todayRows}</ul>
+      {todayMore ? (
+        <button
+          type="button"
+          className="milon-desk-more"
+          aria-expanded={todayOpen}
+          data-noticed-more=""
+          onClick={() => setTodayOpen((open) => !open)}
+        >
+          {todayOpen ? "Show less" : "Show all"}
+        </button>
+      ) : null}
+    </>
+  );
 
   return (
     <div className="milon-desk" data-desk-ready="true" aria-busy={feed.loading || undefined}>
@@ -281,12 +534,30 @@ export function MilonTeamDesk({
                     </button>
                   );
                 })}
-                <TaxSpecialistSlot
-                  country={marketCountry}
-                  variant="desk"
-                  audience={audience}
-                  sampleClient={sampleClient}
-                />
+                  {onOpenTaxAgent && taxSampleEnabled(marketCountry) ? (
+                    <button
+                      type="button"
+                      className="milon-desk-agent"
+                      data-agent-card="tax_specialist"
+                      data-agent-open="tax_specialist"
+                      title={TAX_AGENT_ROLE}
+                      onClick={onOpenTaxAgent}
+                    >
+                      <TaxMark />
+                      <span className="milon-desk-agent-copy">
+                        <strong className="milon-desk-agent-name">{TAX_AGENT_NAME}</strong>
+                        <span className="milon-desk-agent-short">{TAX_AGENT_SHORT_NAME}</span>
+                        <span className="milon-desk-visually-hidden">{TAX_AGENT_ROLE}</span>
+                      </span>
+                    </button>
+                  ) : (
+                    <TaxSpecialistSlot
+                      country={marketCountry}
+                      variant="desk"
+                      audience={audience}
+                      sampleClient={sampleClient}
+                    />
+                  )}
               </div>
             </div>
             )}
@@ -298,129 +569,19 @@ export function MilonTeamDesk({
               </section>
             ) : null}
 
-            {todayCount > 0 ? (
+            {agentView ? (
+              <AgentSection section="noticed">
+                {todayCount > 0 ? todayList : <p className="agent-section-empty">{NOTICED_EMPTY}</p>}
+              </AgentSection>
+            ) : todayCount > 0 ? (
               <section className="milon-desk-card" aria-label="Today">
                 <p className="milon-desk-kicker">Today</p>
-                <ul className="milon-desk-briefing">
-                  {findings.map((row) => {
-                    const sentence = findingSentence({
-                      title: row.title,
-                      detail: row.detail,
-                      figures: findingFigureEntries(row.evidence),
-                      market: live?.market,
-                      canonicalRatios,
-                      liveHealth: feed.healthQuote,
-                      evidence: row.evidence,
-                      writtenAt: row.created_at,
-                      figuresUpdatedAt: feed.figuresUpdatedAt,
-                    });
-                    const draft = draftFindingLabel(row);
-                    const checked = figuresCheckedLine(
-                      feed.healthQuote?.periodLabel ?? findingPeriod(row),
-                      row.created_at,
-                      clock,
-                      live?.market ?? marketForClient(null),
-                    );
-                    const when = formatAsOf(row.created_at, clock, live?.market ?? marketForClient(null));
-                    const meta = (
-                      <div className="milon-desk-meta">
-                        {checked ? (
-                          <span className="milon-desk-why">{checked}</span>
-                        ) : when ? (
-                          <time dateTime={row.created_at}>{when}</time>
-                        ) : null}
-                      </div>
-                    );
-                    if (draft || row.status === "approved") {
-                      return (
-                        <OwnerDraftCard
-                          key={row.id}
-                          layout="desk"
-                          row={row}
-                          sentence={sentence}
-                          liveSentence={liveSentence}
-                          canonicalRatios={canonicalRatios}
-                          figuresUpdatedAt={feed.figuresUpdatedAt}
-                          market={live?.market}
-                          meta={meta}
-                          onOpen={onOpenApproved}
-                          onInvite={onInvite}
-                          onRefresh={onRefreshDrafts}
-                        />
-                      );
-                    }
-                    return (
-                      <li key={row.id} className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent}>
-                        <div className="milon-desk-job-copy">
-                          <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
-                          <HealthNarrativeLine text={sentence} liveSentence={liveSentence} className="milon-desk-figure" />
-                          {meta}
-                        </div>
-                      </li>
-                    );
-                  })}
-                  {visibleRatios.map((item) => {
-                    const checked = checkedLine(item);
-                    return (
-                      <li key={item.id} className="milon-desk-row" data-severity={item.severity} data-ratio={item.id}>
-                        <div className="milon-desk-job-copy">
-                          <span className="milon-desk-tag">{agentShortName(item.agent)}</span>
-                          <p className="milon-desk-figure">{ratioSentence(item.title, item.detail)}</p>
-                          <div className="milon-desk-meta">
-                            <span className="milon-desk-source">{deskSourceLabel(item)}</span>
-                            {checked ? <span className="milon-desk-why">{checked}</span> : null}
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                  {handoffs.map((row) => {
-                    const when = formatAgo(row.at, clock);
-                    return (
-                      <li key={row.id} className="milon-desk-handoff" data-handoff={row.id}>
-                        <span className="milon-desk-tag">{agentShortName(row.from)}</span>
-                        <span className="milon-desk-handoff-arrow" aria-hidden="true">
-                          →
-                        </span>
-                        <span className="milon-desk-tag">{agentShortName(row.to)}</span>
-                        <p className="milon-desk-handoff-text">{row.text}</p>
-                        {when ? <time dateTime={row.at}>{when}</time> : null}
-                      </li>
-                    );
-                  })}
-                  {lead.map((item) => {
-                    const checked = checkedLine(item);
-                    return (
-                      <li key={item.id} className="milon-desk-row" data-severity={item.severity}>
-                        <div className="milon-desk-job-copy">
-                          <span className="milon-desk-tag">{agentShortName(item.agent)}</span>
-                          <p className="milon-desk-figure">{item.title}</p>
-                          {item.detail ? <p className="milon-desk-hint">{item.detail}</p> : null}
-                          <div className="milon-desk-meta">
-                            <span className="milon-desk-source">{deskSourceLabel(item)}</span>
-                            {checked ? <span className="milon-desk-why">{checked}</span> : null}
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {ratios.length > TODAY_RATIO_CAP ? (
-                  <button
-                    type="button"
-                    className="milon-desk-more"
-                    aria-expanded={ratiosOpen}
-                    onClick={() => setRatiosOpen((open) => !open)}
-                  >
-                    {ratiosOpen ? "Show less" : "Show all"}
-                  </button>
-                ) : null}
+                {todayList}
               </section>
             ) : null}
 
             {jobs.length > 0 ? (
-              <section className="milon-desk-card" aria-label="Offered" data-desk-jobs="true">
-                <p className="milon-desk-kicker">Offered</p>
+              <DeskSection agentView={agentView} section="offered" label="Offered" jobs>
                 <ul className="milon-desk-jobs">
                   {jobs.map((job) => {
                     const readyHref = opened[job.id];
@@ -490,25 +651,36 @@ export function MilonTeamDesk({
                     );
                   })}
                 </ul>
-              </section>
+              </DeskSection>
             ) : null}
 
             {activity.length > 0 ? (
-              <section className="milon-desk-card" aria-label="Activity">
-                <p className="milon-desk-kicker">Activity</p>
+              <DeskSection agentView={agentView} section="activity" label="Activity">
                 <ul className="milon-desk-activity">
-                  {activity.map((event) => {
+                  {visibleActivity.map((event) => {
                     const ago = formatAgo(event.at, clock);
+                    const text = agentView ? activitySentence(event) : event.text;
                     return (
-                      <li key={event.id}>
+                      <li key={event.id} data-activity={event.id}>
                         <span className="milon-desk-tag">{agentShortName(event.agent)}</span>
-                        {event.href ? <a href={event.href}>{event.text}</a> : <span>{event.text}</span>}
+                        {event.href ? <a href={event.href}>{text}</a> : <span>{text}</span>}
                         {ago ? <time dateTime={event.at}>{ago}</time> : null}
                       </li>
                     );
                   })}
                 </ul>
-              </section>
+                {agentView && activity.length > ACTIVITY_CAP ? (
+                  <button
+                    type="button"
+                    className="milon-desk-more"
+                    aria-expanded={activityOpen}
+                    data-activity-more=""
+                    onClick={() => setActivityOpen((open) => !open)}
+                  >
+                    {activityOpen ? "Show less" : "Show all"}
+                  </button>
+                ) : null}
+              </DeskSection>
             ) : null}
           </>
         )}

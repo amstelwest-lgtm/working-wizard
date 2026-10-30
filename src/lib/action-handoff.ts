@@ -43,24 +43,38 @@ function oneSpace(text: string): string {
 export function handoffButtonLabel(agent: AgentKey, assigned: boolean, compact = false): string {
   if (assigned) return `Assigned to ${agentShortName(agent)} ✓`;
   const name = compact ? agentShortName(agent) : AGENT_DISPLAY_NAME[agent];
-  return oneSpace(`Hand to ${name}`);
+  return oneSpace(`Assign to ${name}`);
 }
 
 /**
- * Closed Hand to control. A bot assignee reads "Handed to <agent>" so the
- * click paints the new owner. A person, or nobody, stays "Hand to".
+ * Closed Assign to control. A bot assignee reads "Assigned to <agent>" so the
+ * click paints the new owner. A person, or nobody, stays "Assign to".
  * `compact` uses the short name so a 390px row does not clip the label.
  */
+/** One sentence beside the Assign to menu. */
+export const ASSIGN_TO_HINT =
+  "The agent becomes the owner of this task, works on it now, and shows you the result here. Nothing is sent until you approve it.";
+
+/** Toast once an agent has the task. */
+export function assignedToast(agent: AgentKey): string {
+  return `Assigned to ${agentShortName(agent)}. It is working on this now.`;
+}
+
+/** Stored notes keep "Handed to …" for the readers that parse them. People read "Assigned to …". */
+export function assignmentNoteText(note: string): string {
+  return note.replace(/^Handed to /u, "Assigned to ").replace(/^Handing to /u, "Assigning to ");
+}
+
 /** Shown until the stored assignee is known. Not a hand-off control. */
 export const HANDOFF_CHECKING_LABEL = "Checking…";
 
 export function handoffTriggerLabel(assignee: string | null | undefined, compact = false): string {
   const clean = (assignee ?? "").replace(/\s+/g, " ").trim();
-  if (!clean) return "Hand to";
-  if (clean.startsWith("Handing to ")) return clean;
+  if (!clean) return "Assign to";
+  if (clean.startsWith("Assigning to ")) return clean;
   const agent = agentKeyFromAssignee(clean);
   const shown = compact && agent ? agentShortName(agent) : clean;
-  const verb = agent ? "Handed to" : "Hand to";
+  const verb = agent ? "Assigned to" : "Assign to";
   return oneSpace(`${verb} ${shown}`);
 }
 
@@ -151,7 +165,7 @@ export function formatAssignmentNote(
 ): string {
   const stripped = row.note.trim().replace(/\.+$/u, "");
   const friendly = costStopLine(row.note);
-  const body = friendly ?? stripped;
+  const body = friendly ?? assignmentNoteText(stripped);
   const handed = stripped.startsWith("Handed to ");
   const actorNamesBot = agentKeyFromAssignee(row.actorLabel) != null;
   const hideAuthor = handed && (actorNamesBot || row.actorType === "system");
@@ -196,7 +210,7 @@ export function handoffProgressCaption(
     return handoffCouldNotDraft(agent, result);
   }
   const time = detail?.market ? handoffClock(detail.at, detail.market, detail.now ?? new Date()) : null;
-  return time ? `${short} finished · ${time}` : `${short} finished`;
+  return time ? `Done by ${short} · ${time}. See result.` : `Done by ${short}. See result.`;
 }
 
 /**

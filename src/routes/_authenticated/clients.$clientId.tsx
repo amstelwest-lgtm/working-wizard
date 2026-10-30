@@ -365,6 +365,12 @@ import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeD
 import { healthSnapshotFromBooks, readStoredScoreSnapshotHash, renderHealthNarrative } from "@/lib/health-snapshot";
 import { draftStoredFiguresHash, draftStoredHealth, latestFiguresStamp } from "@/lib/draft-figures";
 import type { AgentKey } from "@/lib/milon-team-feed";
+import {
+  isTaxAgent,
+  parseStageAgent,
+  stageAgentDisplayName,
+  type StageAgentKey,
+} from "@/lib/tax-specialist/agents";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
@@ -599,7 +605,7 @@ function ClientCrumb({
   const parent = CRUMB_PARENT[activeTab];
   if (!parent) return null;
   const child = agent
-    ? agentDisplayName(agent as "financial_manager" | "analyst" | "advisor")
+    ? stageAgentDisplayName(agent as StageAgentKey)
     : section
       ? crumbSectionLabel(activeTab, section)
       : null;
@@ -2108,7 +2114,7 @@ function ClientView() {
                 {
                   note:
                     stored.kind === "bot"
-                      ? `Handed to ${stored.name}.`
+                      ? `Assigned to ${stored.name}.`
                       : `Assigned to ${stored.name}.`,
                   at: stored.at,
                 },
@@ -2226,10 +2232,7 @@ function ClientView() {
     el.dataset.forecastKey = forecastPlFingerprint(client.cashflow, client.financials);
     if (client.firm_id) el.dataset.firmId = client.firm_id;
     else delete el.dataset.firmId;
-    const askAgent =
-      search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
-        ? search.agent
-        : "";
+    const askAgent = parseStageAgent(search.agent, clientGateCountry) ?? "";
     if (askAgent) el.dataset.agent = askAgent;
     else delete el.dataset.agent;
     el.dispatchEvent(new Event("ask-ai-context"));
@@ -2279,7 +2282,7 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [client, clientId, activeTab, hasFigures, search.agent]);
+  }, [client, clientId, activeTab, hasFigures, search.agent, clientGateCountry]);
 
   // Autosave debounce ref
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3656,10 +3659,7 @@ function ClientView() {
     const timer = window.setTimeout(() => setOpenPlanTick((n) => n + 1), 400);
     return () => window.clearTimeout(timer);
   }, [assignmentRows, homeActivity.runs]);
-  const homeAgent: AgentKey | null =
-    search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
-      ? search.agent
-      : null;
+  const homeAgent = parseStageAgent(search.agent, clientGateCountry);
   const showHomeThread = activeTab === "overview" && homeAgent != null;
   const pageBack = clientBackTarget({
     tab: activeTab,
@@ -3667,7 +3667,7 @@ function ClientView() {
     agent: homeAgent,
   });
   const openHomeAgent = useCallback(
-    (agent: AgentKey) => {
+    (agent: StageAgentKey) => {
       setActiveTab("overview");
       void navigate({
         to: "/clients/$clientId",
@@ -3819,6 +3819,18 @@ function ClientView() {
   const canonicalRatios = useMemo(
     () => numberRatioRecord(scorecardRatiosFromFinancials(financials, { fyStartMonth })),
     [financials, fyStartMonth],
+  );
+  const taxClientName = client?.name ?? "";
+  const taxFinancialsAsOf = client?.financials_updated_at ?? null;
+  const taxClient = useMemo(
+    () => ({
+      id: clientId,
+      name: taxClientName,
+      fyStartMonth,
+      financials: financials as Record<string, unknown>,
+      financialsAsOf: taxFinancialsAsOf,
+    }),
+    [clientId, taxClientName, fyStartMonth, financials, taxFinancialsAsOf],
   );
   const homeNeeds = useMemo(() => {
     const planNeeds = homeActionNeeds({
@@ -3983,6 +3995,7 @@ function ClientView() {
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => homePagedSearch(prev, next),
+        resetScroll: false,
       });
     },
     [clientId, navigate],
@@ -4200,6 +4213,7 @@ function ClientView() {
                 clientId={clientId}
                 search={search}
                 showSendAgent={sendAgentFirmAllowed(client.firm_id)}
+                marketCountry={clientGateCountry}
                 onNavigate={() => setMobileNavOpen(false)}
               />
               <div className="deliverable-main">
@@ -4251,6 +4265,7 @@ function ClientView() {
                     status={homeStatus}
                     onOpen={openHomeAgent}
                     onAsk={openHomeAgent}
+                    onOpenTaxAgent={() => openHomeAgent("tax_specialist")}
                     signoffLine={homeSignoffLine}
                   />
                   <ClientHomePaged
@@ -4525,7 +4540,7 @@ function ClientView() {
                       sampleClient={Boolean(client.is_demo)}
                       canonicalRatios={canonicalRatios}
                       homeFinding={
-                        homeAgent
+                        homeAgent && !isTaxAgent(homeAgent)
                           ? homeLines[homeAgent].filter((line) => line.trim()).join(" ")
                           : null
                       }
@@ -4538,8 +4553,9 @@ function ClientView() {
                         }
                         openHomeSection("plan", "open");
                       }}
+                      chat={<div id="ask-ai-accountant" className="ask-ai-studio-shell" />}
+                        taxClient={taxClient}
                     />
-                    <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
                     <button
                       type="button"
                       id="wizard-open-queries"
@@ -5119,6 +5135,7 @@ function ClientView() {
                           to: "/clients/$clientId",
                           params: { clientId },
                           search: (prev) => cashPagedSearch(prev, next),
+                                  resetScroll: false,
                         })
                       }
                       clientId={client.id}
@@ -5267,6 +5284,7 @@ function ClientView() {
                           to: "/clients/$clientId",
                           params: { clientId },
                           search: (prev) => budgetPagedSearch(prev, next),
+                                resetScroll: false,
                         })
                       }
                       clientId={client.id}

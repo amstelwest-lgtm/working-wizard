@@ -1,19 +1,25 @@
 import { Link } from "@tanstack/react-router";
 import type { AgentWorkItem } from "@/lib/agent-work";
 
-/** The work behind an open agent. Every row is a link. No skeletons. */
+/** The work behind an open agent. Every row is a link. No skeletons.
+ *  Without a label it sits inside an AgentSection, which owns the heading. */
 export function AgentWork({
   label,
   items,
   empty,
 }: {
-  label: string;
+  label?: string;
   items: readonly AgentWorkItem[];
   empty?: string;
 }) {
   return (
-    <section className="agent-work" aria-label={label} data-agent-work="true">
-      <p className="agent-work-kicker">{label}</p>
+    <div
+      className="agent-work"
+      role={label ? "region" : undefined}
+      aria-label={label}
+      data-agent-work="true"
+    >
+      {label ? <p className="agent-work-kicker">{label}</p> : null}
       {items.length === 0 ? (
         <p className="agent-work-empty">{empty || "Nothing waiting."}</p>
       ) : (
@@ -35,6 +41,6 @@ export function AgentWork({
           ))}
         </ul>
       )}
-    </section>
+    </div>
   );
 }

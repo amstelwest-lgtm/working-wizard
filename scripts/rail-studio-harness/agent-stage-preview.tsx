@@ -68,6 +68,7 @@ export function AgentStagePreview() {
               onSelect={setAgent}
               marketCountry="ZA"
               audience="accountant"
+              chat={<div id="ask-ai-accountant" className="ask-ai-studio-shell" />}
             >
               <section className="milon-desk-card" aria-label="Today">
                 <p className="milon-desk-kicker">Today</p>
@@ -77,7 +78,6 @@ export function AgentStagePreview() {
                 </p>
               </section>
             </AgentStage>
-            <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
             <p className="milon-desk-invite" style={{ margin: "8px 4px 0" }}>
               1 open query
             </p>

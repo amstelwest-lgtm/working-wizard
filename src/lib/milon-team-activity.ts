@@ -7,7 +7,7 @@ import { draftMetricUnit, repairDraftMetricUnits, stripRatioDumpLines } from "./
 import { formatDate, formatMoney, type DateMarket, type MoneyMarket } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
-import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
+import type { AgentKey, TeamActivityEvent, TeamBriefingItem } from "./milon-team-feed";
 import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
 import { canonicalScoreProse, type LiveHealthQuote } from "./score-prose";
 import {
@@ -19,6 +19,7 @@ import {
 } from "./health-snapshot";
 import { figuresMovedAfterDraft, quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
 import { offsetInsideCalendarSpan, repairCalendarFigureLeaks, rewriteDraftMonthStamp } from "./statement-period";
+import { findingTitleKey } from "./finding-title-key";
 
 export const TODAY_RATIO_CAP = 3;
 
@@ -72,6 +73,42 @@ export type AgentFindingRow = {
   superseded_by?: string | null;
   dismissed_reason?: string | null;
 };
+
+function findingSeenAt(row: { created_at: string; last_seen?: string | null }): string {
+  return row.last_seen || row.created_at || "";
+}
+
+/**
+ * One row per agent and finding title, newest first. Titles match on
+ * findingTitleKey, so a re-run that only changed a figure replaces the old row.
+ * Approved rows are never dropped; they point at work that was done.
+ */
+export function dedupeFindings<
+  T extends {
+    id: string;
+    agent: string;
+    title: string;
+    created_at: string;
+    last_seen?: string | null;
+    status?: string | null;
+  },
+>(rows: readonly T[]): T[] {
+  const ordered = [...rows].sort(
+    (a, b) => findingSeenAt(b).localeCompare(findingSeenAt(a)) || b.id.localeCompare(a.id),
+  );
+  const seen = new Set<string>();
+  const kept: T[] = [];
+  for (const row of ordered) {
+    const key = `${row.agent}:${findingTitleKey(row.title)}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      kept.push(row);
+    } else if (row.status === "approved") {
+      kept.push(row);
+    }
+  }
+  return kept;
+}
 
 /** Dismissed and superseded drafts stay off the owner surfaces. Approved rows stay. */
 export function isVisibleAgentFinding(row: {
@@ -735,7 +772,77 @@ export function handoffParts(
   return { from: row.from_agent, to: row.to_agent, text };
 }
 
-/** "Analyst → Advisor: …" for a hand-off. Other message types stay off the desk. */
+const HANDOFF_VERBS = new Set(
+  (
+    "add ask book build call chase check collect compare confirm draft email explain find fix " +
+    "flag follow get look move note pay plan prepare price pull reconcile refresh review run " +
+    "send set share sign update write"
+  ).split(" "),
+);
+
+/** "Analyst asked the Advisor to review the cash floor." No arrow. */
+export function handoffSentence(from: string, to: string, text: string): string {
+  const task = text
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.!]+$/u, "");
+  const first = task.split(" ")[0]?.toLowerCase() ?? "";
+  if (HANDOFF_VERBS.has(first)) {
+    return `${from} asked the ${to} to ${first}${task.slice(first.length)}.`;
+  }
+  return `${from} asked the ${to} to look into this: ${task}.`;
+}
+
+function sentenceEnd(text: string): string {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  return /[.!?]$/u.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+/**
+ * One past-tense sentence for an activity row on an agent page.
+ * The feed stores short labels ("Xero sync · Mar 2026"); this reads them back as prose.
+ */
+export function activitySentence(event: Pick<TeamActivityEvent, "kind" | "text">): string {
+  const text = event.text.replace(/\s+/g, " ").trim();
+  const [head = "", ...rest] = text.split(" · ");
+  const tail = rest.join(" · ");
+  switch (event.kind) {
+    case "sync":
+    case "upload": {
+      const what = event.kind === "upload" ? head.toLowerCase() : head;
+      return sentenceEnd(tail ? `Read the ${what} for ${tail}` : `Read the ${what}`);
+    }
+    case "diagnosis":
+      return "Reviewed the diagnosis.";
+    case "proposal":
+      return sentenceEnd(`Suggested: ${text}`);
+    case "approved":
+      return sentenceEnd(`You approved: ${tail || head}`);
+    case "dismissed": {
+      const draft = /^(.*) draft dismissed$/iu.exec(text);
+      if (draft) return sentenceEnd(`You dismissed the ${draft[1]} draft`);
+      const title = rest[0] ?? head;
+      const note = rest.slice(1).join(" · ");
+      const line = sentenceEnd(`You dismissed: ${title}`);
+      return note ? `${line} ${sentenceEnd(`Note: ${note}`)}` : line;
+    }
+    case "draft_created": {
+      const draft = /^(.*) draft saved$/iu.exec(text);
+      return sentenceEnd(draft ? `Saved the ${draft[1]} draft` : `Saved a draft: ${text}`);
+    }
+    case "data_request":
+      return sentenceEnd(`Asked the client for: ${text}`);
+    case "query":
+      return sentenceEnd(`Raised a query: ${text}`);
+    case "handoff":
+      return sentenceEnd(`Picked up an assignment: ${text.replace(/^assigned:\s*/iu, "")}`);
+    case "signoff":
+    default:
+      return sentenceEnd(text);
+  }
+}
+
+/** "Analyst asked the Advisor to …" for a hand-off. Other message types stay off the desk. */
 export function handoffLine(
   row: Pick<AgentMessageRow, "type" | "from_agent" | "to_agent" | "payload">,
   shortName: (agent: AgentKey) => string,
@@ -751,7 +858,7 @@ export function handoffLine(
     evidence: row.payload,
     storedHealth: readStoredHealthSnapshot(row.payload),
   }).text;
-  return `${shortName(parts.from)} → ${shortName(parts.to)}: ${prose}`;
+  return handoffSentence(shortName(parts.from), shortName(parts.to), prose);
 }
 
 function narrativeSnapshot(

@@ -6,7 +6,7 @@ import {
   clientRailSelection,
 } from "@/lib/client-route-search";
 import { askHashForAgent, searchWithAskAgent } from "@/lib/ask-agent";
-import { agentDisplayName } from "@/lib/milon-team";
+import { stageAgentDisplayName, stageAgentKeys } from "@/lib/tax-specialist/agents";
 
 /** Flat heading list, top to bottom. Kickers are not items. */
 export const CLIENT_RAIL = [
@@ -22,13 +22,11 @@ export const CLIENT_RAIL = [
   { id: "books", label: "Books" },
 ] as const;
 
-const AGENTS = [
-  { id: "financial_manager" as const, label: agentDisplayName("financial_manager") },
-  { id: "analyst" as const, label: agentDisplayName("analyst") },
-  { id: "advisor" as const, label: agentDisplayName("advisor") },
-];
-
-function clientSections(clientId: string, showSendAgent: boolean): NavSection[] {
+function clientSections(
+  clientId: string,
+  showSendAgent: boolean,
+  marketCountry: string | null,
+): NavSection[] {
   const go = (headingId: string, subId?: string | null): NavDestination => ({
     to: "/clients/$clientId",
     params: { clientId },
@@ -47,15 +45,15 @@ function clientSections(clientId: string, showSendAgent: boolean): NavSection[] 
           label: "Home",
           bot: true,
           to: go("home"),
-          items: AGENTS.map((agent) => ({
-            id: agent.id,
-            label: agent.label,
+          items: stageAgentKeys(marketCountry).map((agent) => ({
+            id: agent,
+            label: stageAgentDisplayName(agent),
             to: {
               to: "/clients/$clientId" as const,
               params: { clientId },
-              hash: askHashForAgent(agent.id),
+              hash: askHashForAgent(agent),
               search: (prev: Record<string, unknown>) =>
-                searchWithAskAgent(prev, agent.id) as Record<string, unknown>,
+                searchWithAskAgent(prev, agent) as Record<string, unknown>,
             },
           })),
         },
@@ -170,11 +168,14 @@ export function ClientRail({
   clientId,
   search,
   showSendAgent = false,
+  marketCountry = null,
   onNavigate,
 }: {
   clientId: string;
   search: ClientSearch;
   showSendAgent?: boolean;
+  /** ZA adds the Tax Specialist under Home. */
+  marketCountry?: string | null;
   onNavigate?: () => void;
 }) {
   const selection = clientRailSelection(search);
@@ -182,7 +183,7 @@ export function ClientRail({
   return (
     <AccountantNav
       label="Client workspace"
-      sections={clientSections(clientId, showSendAgent)}
+      sections={clientSections(clientId, showSendAgent, marketCountry)}
       selection={selection}
       storageKey={CLIENT_NAV_OPEN_KEY}
       settingsActive={onClientSettings}

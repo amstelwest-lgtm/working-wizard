@@ -130,7 +130,7 @@ function kindLabel(kind: TeamActivityKind | null): string {
     case "query":
       return "Question logged";
     case "handoff":
-      return "Hand-off";
+      return "Assigned";
     default:
       return "Ran";
   }

@@ -46,6 +46,12 @@ import { HEALTH_RING_CAPTION, SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { AgentStage } from "@/components/milon-team/agent-stage";
+import { TaxSpecialistPage } from "@/components/tax-specialist/tax-specialist-slot";
+import { isTaxAgent, parseStageAgent, type StageAgentKey } from "@/lib/tax-specialist/agents";
+import { IRP6_DEMO_CLIENT, IRP6_DEMO_TODAY } from "@/lib/tax-specialist/forms/irp6-demo";
+
+const IRP6_HARNESS_CLIENT = { ...IRP6_DEMO_CLIENT, id: "harness-client" };
+import { AgentSection } from "@/components/milon-team/agent-section";
 import { AgentWork } from "@/components/milon-team/agent-work";
 import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
 import { clientAgentWork } from "@/lib/agent-work";
@@ -231,7 +237,12 @@ export function RailStudio() {
         </div>
         <div className="client-workspace">
           <DrawerBackdrop open={menuOpen} onClose={() => setMenuOpen(false)} />
-          <ClientRail clientId={clientId} search={search} onNavigate={() => setMenuOpen(false)} />
+          <ClientRail
+            clientId={clientId}
+            search={search}
+            marketCountry="ZA"
+            onNavigate={() => setMenuOpen(false)}
+          />
           <div className="deliverable-main">
             {(() => {
               const back = clientBackTarget({
@@ -289,8 +300,7 @@ export function RailStudio() {
 function BotPane({ agent }: { agent?: string }) {
   const feed = useMilonTeamFeedStub("harbour-glass");
   const navigate = useNavigate();
-  const selected =
-    agent === "financial_manager" || agent === "analyst" || agent === "advisor" ? agent : null;
+  const selected = parseStageAgent(agent, "ZA");
   useEffect(() => {
     const el = document.getElementById("ask-ai-accountant");
     if (!el || el.dataset.askAiMounted === "1") return;
@@ -311,8 +321,9 @@ function BotPane({ agent }: { agent?: string }) {
     return () => {
       cancelled = true;
     };
-  }, []);
-  const open = (next: "financial_manager" | "analyst" | "advisor") => {
+  }, [selected]);
+  const chat = <div id="ask-ai-accountant" className="ask-ai-studio-shell" />;
+  const open = (next: StageAgentKey) => {
     void navigate({
       to: "/clients/$clientId",
       params: { clientId: CLIENT_ID },
@@ -322,15 +333,31 @@ function BotPane({ agent }: { agent?: string }) {
   return (
     <div className="tabpane on" id="pane-ask">
       <div className="milon-desk-host">
-        {selected ? (
+        {selected && isTaxAgent(selected) ? (
+          <AgentStage
+            agent={selected}
+            finding={null}
+            onSelect={open}
+            marketCountry="ZA"
+            audience="accountant"
+            taxTab
+            chat={chat}
+          >
+            <TaxSpecialistPage country="ZA" client={IRP6_HARNESS_CLIENT} today={IRP6_DEMO_TODAY} />
+          </AgentStage>
+        ) : selected ? (
           <AgentStage
             agent={selected}
             finding="Cash is on the 13-week forecast."
             onSelect={open}
             marketCountry="ZA"
             audience="accountant"
+            taxTab
+            chat={chat}
           >
-            <AgentWork label="On this client" items={clientAgentWork(selected, CLIENT_ID)} />
+            <AgentSection section="work">
+              <AgentWork items={clientAgentWork(selected, CLIENT_ID)} />
+            </AgentSection>
             <MilonTeamDesk
               feed={feed}
               now={DESK_NOW}
@@ -347,9 +374,11 @@ function BotPane({ agent }: { agent?: string }) {
             initialFilter="all"
             marketCountry="ZA"
             audience="accountant"
+            onOpenAgent={open}
+            onOpenTaxAgent={() => open("tax_specialist")}
           />
         )}
-        <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
+        {selected ? null : chat}
       </div>
     </div>
   );
@@ -464,7 +493,7 @@ function BriefingPane() {
     signedOn: null,
     market: ZA_MARKET,
   };
-  const open = (agent: AgentKey) => {
+  const open = (agent: StageAgentKey) => {
     void navigate({
       to: "/clients/$clientId",
       params: { clientId: CLIENT_ID },
@@ -508,6 +537,7 @@ function BriefingPane() {
           status={ownerCardStatuses(books)}
           onOpen={open}
           onAsk={open}
+          onOpenTaxAgent={() => open("tax_specialist")}
           signoffLine={signoffStatusLine({ kind: "draft", scopeLabel: "Advisory" })}
         />
         <ClientHomePaged
@@ -517,6 +547,7 @@ function BriefingPane() {
               to: "/clients/$clientId",
               params: { clientId: CLIENT_ID },
               search: (prev) => homePagedSearch(prev, next),
+              resetScroll: false,
             })
           }
           attentionCount={homeAttentionItems(attention).length}
@@ -533,6 +564,7 @@ function BriefingPane() {
                     to: "/clients/$clientId",
                     params: { clientId: CLIENT_ID },
                     search: (prev) => homePagedSearch(prev, "books"),
+                    resetScroll: false,
                   })
                 }
               />

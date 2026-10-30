@@ -1,7 +1,7 @@
 import { toast } from "sonner";
-import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { commitActionHandoff } from "@/lib/owner-handoff-client";
+import { assignedToast } from "@/lib/action-handoff";
 
 /** Same hand-off write as Hand to, for the row's last agent. */
 export function retryHomeHandoff(input: {
@@ -10,7 +10,7 @@ export function retryHomeHandoff(input: {
   title: string;
   agent: AgentKey;
 }) {
-  const toastId = toast.success(`Handed to ${agentShortName(input.agent)}`);
+  const toastId = toast.success(assignedToast(input.agent));
   void commitActionHandoff(input).then((result) => {
     if (!result.ok) toast.error(result.error, { id: toastId });
   });

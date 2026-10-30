@@ -217,6 +217,7 @@ export function OwnerHome({
   firmId = null,
   profileResume = false,
   onResumeProfile,
+  onOpenTaxAgent,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
@@ -232,6 +233,8 @@ export function OwnerHome({
   runState?: Partial<Record<AgentKey, OwnerRunPhase | null>>;
   onOpen: (agent: AgentKey) => void;
   onAsk: (agent: AgentKey) => void;
+  /** ZA accountant client pages: the tax card opens its page. */
+  onOpenTaxAgent?: () => void;
   needs?: OwnerNeedsView;
   handoffErrors?: readonly { actionItemId: string; title: string; message: string }[];
   onRetryHandoff?: (actionItemId: string) => void;
@@ -382,6 +385,7 @@ export function OwnerHome({
             variant="card"
             audience={sampleAudience}
             sampleClient={sampleClient}
+            onOpenPage={onOpenTaxAgent}
           />
         </div>
         {taxCardOn ? null : (

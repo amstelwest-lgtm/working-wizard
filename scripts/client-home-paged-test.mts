@@ -244,6 +244,20 @@ assert(
   menu.includes("cash-menu__tab") && menu.includes('role="tab"'),
   "same block menu as the cash forecast",
 );
+// Switching panes keeps the page where it is: no router scroll reset, and the
+// menu is held on screen while a shorter pane mounts.
+for (const helper of ["homePagedSearch", "cashPagedSearch", "budgetPagedSearch"]) {
+  const at = page.indexOf(`${helper}(prev, next)`);
+  assert(at > 0, `${helper} is used by the route`);
+  assert(
+    page.slice(at, at + 120).includes("resetScroll: false"),
+    `${helper} navigation keeps the scroll position`,
+  );
+}
+assert(
+  container.includes("useLayoutEffect") && container.includes("data-home-paged-spacer"),
+  "the menu is held in place across a pane switch",
+);
 const attentionCss = readFileSync(resolve("src/components/financial-manager-brief.css"), "utf8");
 assert(
   attentionCss.includes("#0b5fff") && !/#(?:16a34a|22c55e|10b981)/i.test(attentionCss),

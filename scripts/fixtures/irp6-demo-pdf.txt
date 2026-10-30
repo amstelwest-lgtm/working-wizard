@@ -1,0 +1,75 @@
+--- page 1
+Mil o n
+IRP6 preparation sheet
+Provisional tax return for a company, prepared for checking
+Client Harbour & Co (Pty) Ltd
+Year of assessment 2027
+Period Period 2, second
+Due 26 Feb 2027
+Prepared 29 Oct 2026
+Status Approved by Ada Mbeki on 29 Oct 2026
+Taxpayer
+Line eFiling field Value Source
+From client record
+Registered name Registered name Harbour & Co (Pty) Ltd
+Typed in
+Income tax reference number Taxpayer reference number 9123456789
+Year of assessment Year of assessment 2027 From client record
+Period Period Period 2, second From client record
+Period end date Working only 28 Feb 2027 From client record
+Estimate
+Line eFiling field Value Source
+Gross income for the full year Gross Income R 6 600 000.00 From books sync, as of 1 Oct
+2026
+(Turnover/Sales/Other
+Income)
+Profit before tax in the books Working only R 700 000.00 From books sync, as of 1 Oct
+2026
+Worked out on this sheet
+Profit before tax for the full year Working only R 1 200 000.00
+R 700 000.00 for 7 months, Mar 2026 to Sep 2026,
+× 12 ÷ 7.
+Worked out on this sheet
+Adjustments, net Working only - R 200 000.00
+Worked out on this sheet
+Estimated taxable income for the full year Estimated taxable income R 1 000 000.00
+Typed in
+Basic amount, from the latest assessment Working only R 950 000.00
+Taxable income on the latest assessment, less any
+taxable capital gain. Needed because the estimate
+is R 1 000 000.00 or less.
+Worked out on this sheet
+Tax on estimated taxable income at 27% Tax on estimated taxable R 270 000.00
+income
+Adjustments
+Description Amount Added or deducted
+Traffic fines, not deductible R 50 000.00 Added
+Wear-and-tear allowance over depreciation R 250 000.00 Deducted
+Credits
+Line eFiling field Value Source
+Employees' tax Employees' tax for this period R 0.00 Typed in
+Normally nil. eFiling needs 0.00 when there is
+none. Twelve months.
+Foreign tax credits Foreign tax credits for this R 0.00 Nil in this version
+period
+Typed in
+Provisional tax paid for period 1 Provisional tax paid for the R 135 000.00
+Period 1 payment. first period
+Prepared by Mil o n for checking. Not a SARS return. Capture and submit on SARS eFiling. Page 1 of 2
+--- page 2
+Result
+Line eFiling field Value Source
+Tax for this period Tax for this period R 270 000.00 Worked out on this sheet
+The tax on the estimate for the full year.
+Worked out on this sheet
+Provisional tax payable for this period Tax payable for this period R 135 000.00
+Worked out on this sheet
+Estimate against the actual figure so far Working only 100%
+Your estimate is 100% of the actual figure so far.
+Checks
+OK. Period end 28 Feb 2027 sits in the year that ends on 28 Feb 2027.
+OK. R 1 200 000.00 + R 50 000.00 added - R 250 000.00 deducted = R 1 000 000.00.
+Look at this. If the latest assessment is for a year that ended more than 18 months before this estimate, SARS adds 8% a year to the basic
+amount. This sheet does not add it.
+OK. Your estimate is 100% of the actual figure so far.
+Prepared by Mil o n for checking. Not a SARS return. Capture and submit on SARS eFiling. Page 2 of 2

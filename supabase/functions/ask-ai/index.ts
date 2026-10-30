@@ -4,7 +4,7 @@ import { classify } from "./classifier.ts";
 import { buildContext } from "./context-builder.ts";
 import { buildPrompt, sealAskAiPrompt } from "./prompt.ts";
 import { callClaude } from "./anthropic.ts";
-import { chatCacheScope, normalizeChatReply, parseChatAgent } from "../_shared/chat-reply.ts";
+import { chatAgentForMarket, chatCacheScope, normalizeChatReply, parseChatAgent } from "../_shared/chat-reply.ts";
 import {
   sealedCacheAnswer,
   cacheHitIsDisplaySafe,
@@ -244,7 +244,8 @@ async function handleAskAi(req: Request): Promise<Response> {
 
   // ── Build context (userClient — RLS enforced on tenant data reads) ────────
   const ctx = await buildContext(userClient, clientId, tier, question);
-  const sealed = sealAskAiPrompt(buildPrompt(question, ctx, tier, audience, agent), {
+  const promptAgent = chatAgentForMarket(agent, ctx.copyPack ?? "za");
+  const sealed = sealAskAiPrompt(buildPrompt(question, ctx, tier, audience, promptAgent), {
     clientName: ctx.clientName ?? ctx.overview?.clientName ?? null,
   });
   const { system, user: userPrompt } = sealed;

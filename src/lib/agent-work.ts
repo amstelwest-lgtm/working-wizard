@@ -149,13 +149,13 @@ export function clientAgentWork(agent: AgentKey, clientId: string): AgentWorkIte
           {
             id: "forecast",
             title: "13-week forecast",
-            detail: "The cash line for this client.",
+            detail: "Expected cash in and out, week by week.",
             search: { tab: "cash", section: "forecast" },
           },
           {
             id: "collections",
             title: "Who to chase",
-            detail: "Debtors to collect.",
+            detail: "Customers who owe money, oldest first.",
             search: { tab: "cash", section: "collections" },
           },
         ]
@@ -164,13 +164,13 @@ export function clientAgentWork(agent: AgentKey, clientId: string): AgentWorkIte
             {
               id: "score",
               title: "Health score",
-              detail: "The score, sign-off, and the PDF.",
+              detail: "The overall score, each pillar, and the PDF report.",
               search: { tab: "health", section: "score" },
             },
             {
               id: "waterfall",
               title: "Profit waterfall",
-              detail: "Where profit goes.",
+              detail: "How revenue turns into profit, step by step.",
               search: { tab: "profit", section: "waterfall" },
             },
           ]
@@ -178,13 +178,13 @@ export function clientAgentWork(agent: AgentKey, clientId: string): AgentWorkIte
             {
               id: "moves",
               title: "Next moves",
-              detail: "What to do next on this client.",
+              detail: "Suggested actions for this client, ranked by impact.",
               search: { tab: "moves" },
             },
             {
               id: "plan",
               title: "Action plan",
-              detail: "Open work and what is overdue.",
+              detail: "Tasks already agreed, who owns them, and what is overdue.",
               search: { tab: "plan" },
             },
           ];

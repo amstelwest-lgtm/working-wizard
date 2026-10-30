@@ -36,7 +36,7 @@ export function ChaseDraftDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-3 sm:items-center"
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/40 p-3 sm:items-center"
       role="presentation"
       onClick={onClose}
     >

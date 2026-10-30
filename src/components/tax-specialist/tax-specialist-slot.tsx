@@ -16,6 +16,7 @@ type Loaded = ComponentType<{
   variant: TaxSampleVariant;
   audience: TaxSampleAudience;
   onOpen?: () => void;
+  onOpenPage?: () => void;
   sampleClient?: boolean;
 }>;
 
@@ -47,17 +48,72 @@ function TaxCardShell({ variant }: { variant: "card" | "desk" | "stage" }) {
   );
 }
 
+/** The client the tax forms are prepared for. */
+export type TaxPageClient = {
+  id: string;
+  name: string;
+  fyStartMonth: number;
+  financials: Record<string, unknown> | null;
+  financialsAsOf: string | null;
+};
+
+type LoadedPage = ComponentType<{
+  activity?: Array<{ id: string; text: string; at: string }>;
+  client?: TaxPageClient | null;
+  today?: string;
+}>;
+
+/** The tax agent page sections. Nothing renders, and nothing loads, outside ZA. */
+export function TaxSpecialistPage({
+  country,
+  activity,
+  client,
+  today,
+}: {
+  country: string | null | undefined;
+  activity?: Array<{ id: string; text: string; at: string }>;
+  client?: TaxPageClient | null;
+  today?: string;
+}) {
+  const [Page, setPage] = useState<LoadedPage | null>(null);
+  const enabled = taxSampleEnabled(country);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    void import("./za-tax-specialist-page").then((mod) => {
+      if (live) setPage(() => mod.ZaTaxSpecialistPage);
+    });
+    return () => {
+      live = false;
+    };
+  }, [enabled]);
+
+  if (!enabled) return null;
+  if (!Page) {
+    return (
+      <p className="agent-section-empty" data-tax-page="loading" role="status">
+        {AGENT_CARD_CHECKING}
+      </p>
+    );
+  }
+  return <Page activity={activity} client={client} today={today} />;
+}
+
 export function TaxSpecialistSlot({
   country,
   variant,
   audience,
   onOpen,
+  onOpenPage,
   sampleClient = false,
 }: {
   country: string | null | undefined;
   variant: TaxSampleVariant;
   audience: TaxSampleAudience;
   onOpen?: () => void;
+  /** Home card only. Opens the agent page instead of the sample sheet. */
+  onOpenPage?: () => void;
   /** Home card only. A demo client gets the sample card. A real client gets the preview card. */
   sampleClient?: boolean;
 }) {
@@ -81,5 +137,13 @@ export function TaxSpecialistSlot({
     return <TaxCardShell variant={variant as "card" | "desk" | "stage"} />;
   }
   if (!Slot) return null;
-  return <Slot variant={variant} audience={audience} onOpen={onOpen} sampleClient={sampleClient} />;
+  return (
+    <Slot
+      variant={variant}
+      audience={audience}
+      onOpen={onOpen}
+      onOpenPage={variant === "card" ? onOpenPage : undefined}
+      sampleClient={sampleClient}
+    />
+  );
 }

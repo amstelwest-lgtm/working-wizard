@@ -48,13 +48,13 @@ export function HandoffTimelineList({ steps }: { steps: TimelineStep[] }) {
 
 /**
  * "What <agent> did": the run's steps and output under a hand-off row.
- * Loads when opened and refreshes while the run is queued or running.
+ * Open by default so the row shows the work. Refreshes while the run is queued or running.
  */
 export function HandoffRunTimeline({
   runId,
   agentName,
   onOpenDraft,
-  defaultOpen = false,
+  defaultOpen = true,
 }: {
   runId: string;
   agentName: string;

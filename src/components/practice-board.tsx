@@ -171,6 +171,7 @@ import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
 import { ownerPresence } from "@/lib/owner-presence";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { askAgentFromHash, askHashForAgent } from "@/lib/ask-agent";
+import { isTaxAgent } from "@/lib/tax-specialist/agents";
 import { PracticeAgentThread } from "@/components/practice-agent-thread";
 import { clientHomeSearch } from "@/lib/client-home-search";
 import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
@@ -1164,7 +1165,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user, restoreFailed } = useAuth();
   const navigate = useNavigate();
   const practiceHash = useRouterState({ select: (s) => s.location.hash });
-  const practiceAgent = askAgentFromHash(practiceHash);
+  const askedAgent = askAgentFromHash(practiceHash);
+  const practiceAgent = isTaxAgent(askedAgent) ? null : askedAgent;
 
   // ── Role guard ────────────────────────────────────────────────────────────
   // Business-client credentials must not sit on the practice portal. Wait for

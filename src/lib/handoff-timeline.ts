@@ -180,7 +180,7 @@ export function handoffTimeline(input: {
       return [
         {
           key: "handed",
-          label: `Handed to ${agentName}`,
+          label: `Assigned to ${agentName}`,
           state: "done",
           at: input.handedAt ?? null,
         },
@@ -188,13 +188,18 @@ export function handoffTimeline(input: {
       ];
     }
     return [
-      { key: "handed", label: `Handed to ${agentName}`, state: "done", at: input.handedAt ?? null },
+      {
+        key: "handed",
+        label: `Assigned to ${agentName}`,
+        state: "done",
+        at: input.handedAt ?? null,
+      },
     ];
   }
   const steps: TimelineStep[] = [];
   const failed = run.status === "failed" || run.status === "dead" || run.status === "cancelled";
   const finished = !handoffRunActive(run.status);
-  steps.push({ key: "queued", label: `Handed to ${agentName}`, state: "done", at: run.queuedAt });
+  steps.push({ key: "queued", label: `Assigned to ${agentName}`, state: "done", at: run.queuedAt });
   if (run.status === "skipped") {
     steps.push({
       key: "skipped",

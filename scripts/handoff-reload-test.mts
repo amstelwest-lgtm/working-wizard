@@ -219,7 +219,7 @@ assert(releaseReads, "the assignment read is held");
 releaseReads();
 await tick();
 await tick();
-assert(triggerLabel() === "Handed to Milōn Financial Manager", `after the read, the label was ${triggerLabel()}`);
+assert(triggerLabel() === "Assigned to Milōn Financial Manager", `after the read, the label was ${triggerLabel()}`);
 await coldAgain();
 
 const { MoveHandTo: FirstMove } = await import("../src/components/hand-to-menu.tsx?reload=1");
@@ -232,7 +232,7 @@ const first = await mount(
   }),
 );
 await tick();
-assert(triggerLabel() === "Handed to Milōn Financial Manager", `seed label was ${triggerLabel()}`);
+assert(triggerLabel() === "Assigned to Milōn Financial Manager", `seed label was ${triggerLabel()}`);
 
 const trigger = document.querySelector("[data-hand-to-trigger]");
 assert(trigger instanceof HTMLButtonElement, "the trigger is a button");
@@ -247,7 +247,7 @@ await act(async () => {
 });
 await tick();
 assert(
-  triggerLabel() === "Handing to Analyst…",
+  triggerLabel() === "Assigning to Analyst…",
   `pending label was ${triggerLabel()} (errors: ${errors.join(" | ") || "none"})`,
 );
 assert(successes.length === 0, "the success toast does not fire while the request is open");
@@ -263,7 +263,7 @@ const second = await mount(
 );
 await tick();
 assert(
-  triggerLabel() === "Handed to Milōn Financial Manager",
+  triggerLabel() === "Assigned to Milōn Financial Manager",
   `a fresh module while the insert is held showed ${triggerLabel()}`,
 );
 assert(successes.length === 0, "a remount while the insert is held does not toast success");
@@ -286,7 +286,7 @@ await mount(
   }),
 );
 await tick();
-assert(triggerLabel() === "Handed to Milōn Analyst", `after the note is stored the reload showed ${triggerLabel()}`);
-assert(successes.includes("Handed to Analyst"), "the success toast fires once noted is true");
+assert(triggerLabel() === "Assigned to Milōn Analyst", `after the note is stored the reload showed ${triggerLabel()}`);
+assert(successes.includes("Assigned to Analyst. It is working on this now."), "the success toast fires once noted is true");
 
 console.log("handoff reload ok");
