@@ -292,7 +292,7 @@ assert(route.includes("taxClient={taxClient}"), "route passes the client to the 
 assert(pane.includes("client={taxClient}"), "pane passes the client on");
 const slot = readFileSync("src/components/tax-specialist/tax-specialist-slot.tsx", "utf8");
 assert(slot.includes("client={client}"), "slot passes the client to the loaded page");
-const migration = readFileSync("supabase/migrations/20261029130000_tax_form_drafts.sql", "utf8");
+const migration = readFileSync("supabase/migrations/20261030120100_tax_form_drafts.sql", "utf8");
 assert(
   migration.includes("has_client_access(auth.uid(), client_id)") &&
     migration.includes("is_client_writer(auth.uid(), client_id)"),

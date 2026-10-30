@@ -115,7 +115,7 @@ for (const path of [
   );
 }
 const migration = readFileSync(
-  "supabase/migrations/20261029120000_agent_findings_title_supersede.sql",
+  "supabase/migrations/20261030120000_agent_findings_title_supersede.sql",
   "utf8",
 );
 assert(
