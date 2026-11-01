@@ -67,6 +67,13 @@ export function budgetPagedSearch(
   return next;
 }
 
+/** Only the year chart and the month table have something worth enlarging. */
+export function budgetPagedEnlargeTarget(view: BudgetPagedView): "chart" | "table" | null {
+  if (view === "overview") return "chart";
+  if (view === "months") return "table";
+  return null;
+}
+
 /** At most one sentence under the menu. */
 export function budgetPagedSentence(view: BudgetPagedView): string {
   switch (view) {

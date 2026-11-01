@@ -4,7 +4,9 @@
  */
 import { readFileSync } from "node:fs";
 import { accountantClientRouteSearch } from "../src/lib/client-route-search.ts";
+import { budgetStackedEnlargeTarget } from "../src/lib/budget-chart-table.ts";
 import {
+  budgetPagedEnlargeTarget,
   budgetPagedSearch,
   budgetPagedSentence,
   budgetPagedViewFromHash,
@@ -83,6 +85,12 @@ for (const view of BUDGET_PAGED_VIEWS) {
   assert(stops.length === 1, `${view} has one sentence: ${sentence}`);
 }
 
+assert(budgetPagedEnlargeTarget("overview") === "chart", "overview enlarges the chart");
+assert(budgetPagedEnlargeTarget("months") === "table", "month by month enlarges the table");
+assert(budgetPagedEnlargeTarget("setup") === null, "setup has no Enlarge");
+assert(budgetStackedEnlargeTarget("chart") === "chart", "chart lens enlarges the chart");
+assert(budgetStackedEnlargeTarget("table") === "table", "table lens enlarges the table");
+
 const menu = readFileSync("src/components/budget/budget-paged-menu.tsx", "utf8");
 assert(menu.includes('className="cash-menu"'), "budget reuses the cash block menu");
 assert(menu.includes('className="cash-menu__tab"'), "budget tabs are the cash block tabs");
@@ -104,6 +112,8 @@ assert(
 assert(simple.includes('data-budget-pane="setup"'), "setup is its own pane");
 assert(simple.includes('data-budget-pane="overview"'), "the year strip is the overview pane");
 assert(simple.includes("hideLensToggle={paged}"), "the chart/table toggle is the menu");
+assert(simple.includes("budgetPagedEnlargeTarget"), "paged panes pick the enlarge target");
+assert(simple.includes("showEnlarge={!paged || paneEnlarge != null}"), "setup does not keep Enlarge");
 assert(simple.includes("quiet={paged}"), "paged panes drop the extra chart sentences");
 assert(simple.includes("<BudgetVerdictStrip"), "sign-off stays on the page");
 assert(simple.includes('title="Year detail"'), "year detail stays in setup");

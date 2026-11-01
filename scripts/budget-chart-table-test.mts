@@ -140,6 +140,11 @@ assert(!workspace.includes("BudgetYearOverviewChart"), "the old year chart stays
 assert(!panel.includes("data-view-mode-toggle"), "the summary pills are gone");
 assert(!route.includes("data-view-mode-toggle"), "the summary toggle is not a second control on the page");
 assert(chart.includes("<ViewToggle"), "chart and table share one toggle");
+assert(chart.includes("<EnlargeButton"), "chart and table share one Enlarge");
+assert(chart.includes("<EnlargeSheet"), "budget uses the cash enlarge sheet");
+assert(chart.includes("budgetStackedEnlargeTarget"), "one enlarge follows the chart or table lens");
+assert((chart.match(/<EnlargeButton/g) ?? []).length === 1, "the budget card has one Enlarge");
+assert(chart.includes('"budget chart"') && chart.includes('"budget table"'), "Enlarge names the lens on screen");
 assert(chart.includes('label: "Chart"') && chart.includes('label: "Table"'), "the toggle names Chart and Table");
 
 for (const src of [simple, workspace]) {

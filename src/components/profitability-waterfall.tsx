@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Download,
   Info,
-  Maximize2,
   Minus,
   PieChart,
   Sparkles,
@@ -1037,6 +1036,12 @@ export function ProfitabilityWaterfall({
 
   const showHeader =
     !hideLead || Boolean(yearToDate?.periodLabel) || Boolean(periodNote) || !hideCardExport;
+  const enlargeControl = (
+    <EnlargeButton
+      label="profitability waterfall"
+      onClick={() => setWaterfallOpen(true)}
+    />
+  );
 
   if (appearance === "premium") {
     const fmtWhole = (n: number) => fmt(n, { maximumFractionDigits: 0 });
@@ -1133,15 +1138,7 @@ export function ProfitabilityWaterfall({
                   Percentage
                 </button>
               </div>
-              <button
-                type="button"
-                className="pw-btn"
-                aria-label="Expand the profitability waterfall"
-                onClick={() => setWaterfallOpen(true)}
-              >
-                <Maximize2 aria-hidden />
-                Expand
-              </button>
+              {enlargeControl}
               {hideCardExport ? null : (
                 <button
                   type="button"
@@ -1293,10 +1290,7 @@ export function ProfitabilityWaterfall({
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-2 sm:max-w-[48%] sm:justify-end">
               {headerAside}
-              <EnlargeButton
-                label="profitability waterfall"
-                onClick={() => setWaterfallOpen(true)}
-              />
+              {enlargeControl}
               {hideCardExport ? null : (
                 <Button
                   size="sm"
@@ -1315,7 +1309,9 @@ export function ProfitabilityWaterfall({
             </div>
           </div>
         </CardHeader>
-      ) : null}
+      ) : (
+        <div className="flex justify-end px-6 pt-6">{enlargeControl}</div>
+      )}
 
       <CardContent className="pb-7 pt-6">
         {revenue === 0 && (

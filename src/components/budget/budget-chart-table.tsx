@@ -8,6 +8,7 @@ import { Info } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useMarketFormat } from "@/contexts/market";
+import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { ViewToggle } from "@/components/ui/view-toggle";
 import { hotelLineDisplayName } from "@/lib/budget-industry";
@@ -24,6 +25,7 @@ import {
   budgetTableRows,
   budgetYtdSentence,
   budgetYtdSignal,
+  budgetStackedEnlargeTarget,
   budgetYtdWithStatement,
   niceBudgetAxis,
   revenueYtd,
@@ -73,6 +75,7 @@ export function BudgetChartTable({
   windowMonths = null,
   hideLensToggle = false,
   quiet = false,
+  showEnlarge = true,
 }: {
   doc: BudgetDocument;
   clientId?: string;
@@ -103,6 +106,8 @@ export function BudgetChartTable({
   hideLensToggle?: boolean;
   /** Paged panes already have their one sentence. */
   quiet?: boolean;
+  /** Setup has nothing to enlarge. Chart and table panes keep the control. */
+  showEnlarge?: boolean;
 }) {
   const { market } = useMarketFormat();
   const money = (n: number) => {
@@ -114,6 +119,8 @@ export function BudgetChartTable({
   const [actualsPending, setActualsPending] = useState(!actualMonths && Boolean(clientId));
   const [uncontrolledLens, setUncontrolledLens] = useState<BudgetLens>("chart");
   const activeLens = lens ?? uncontrolledLens;
+  const enlargeTarget = budgetStackedEnlargeTarget(activeLens);
+  const [enlarged, setEnlarged] = useState(false);
   const selectLens = (next: string) => {
     const value: BudgetLens = next === "table" ? "table" : "chart";
     if (!lens) setUncontrolledLens(value);
@@ -218,17 +225,25 @@ export function BudgetChartTable({
             </p>
           ) : null}
         </div>
-        {hideLensToggle ? null : (
-        <ViewToggle
-          ariaLabel="Budget"
-          value={activeLens}
-          onChange={selectLens}
-          options={[
-            { value: "chart", label: "Chart" },
-            { value: "table", label: "Table" },
-          ]}
-        />
-        )}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {showEnlarge ? (
+            <EnlargeButton
+              label={enlargeTarget === "chart" ? "budget chart" : "budget table"}
+              onClick={() => setEnlarged(true)}
+            />
+          ) : null}
+          {hideLensToggle ? null : (
+            <ViewToggle
+              ariaLabel="Budget"
+              value={activeLens}
+              onChange={selectLens}
+              options={[
+                { value: "chart", label: "Chart" },
+                { value: "table", label: "Table" },
+              ]}
+            />
+          )}
+        </div>
       </div>
       <BudgetRangeTotalsRow totals={totals} money={money} />
       {actualsPending ? (
@@ -236,7 +251,7 @@ export function BudgetChartTable({
           Loading monthly actuals
         </p>
       ) : null}
-      {activeLens === "table" ? (
+      {enlargeTarget === "table" ? (
         <BudgetMonthTable
           doc={doc}
           views={scopedViews}
@@ -248,6 +263,33 @@ export function BudgetChartTable({
       ) : (
         <BudgetMonthChart views={scopedViews} market={market} money={money} signed={signed} />
       )}
+      {showEnlarge ? (
+        <EnlargeSheet
+          open={enlarged}
+          onOpenChange={setEnlarged}
+          title={enlargeTarget === "chart" ? "Budget chart" : "Budget table"}
+        >
+          {enlargeTarget === "table" ? (
+            <BudgetMonthTable
+              doc={doc}
+              views={scopedViews}
+              totals={totals}
+              money={money}
+              market={market}
+              displayTemplateId={displayTemplateId}
+              sheet
+            />
+          ) : (
+            <BudgetMonthChart
+              views={scopedViews}
+              market={market}
+              money={money}
+              signed={signed}
+              fill
+            />
+          )}
+        </EnlargeSheet>
+      ) : null}
     </section>
   );
 }
@@ -309,11 +351,14 @@ function BudgetMonthChart({
   market,
   money,
   signed = false,
+  fill = false,
 }: {
   views: BudgetMonthView[];
   market: Parameters<typeof formatMoneyChartTick>[1];
   money: (n: number) => string;
   signed?: boolean;
+  /** Full-viewport sheet. The card keeps the short chart. */
+  fill?: boolean;
 }) {
   const [narrow, setNarrow] = useState(false);
   useLayoutEffect(() => {
@@ -339,8 +384,15 @@ function BudgetMonthChart({
   const axis = niceBudgetAxis(data.flatMap((row) => [row.budget, row.actual]));
 
   return (
-    <div className="mt-4 min-w-0">
-      <div className="h-[240px] w-full min-w-0 text-[#102A43] dark:text-slate-100" data-budget-axis="chart">
+    <div className={fill ? "flex h-full min-h-[320px] flex-col" : "mt-4 min-w-0"}>
+      <div
+        className={
+          fill
+            ? "h-full min-h-[280px] w-full min-w-0 flex-1 text-[#102A43] dark:text-slate-100"
+            : "h-[240px] w-full min-w-0 text-[#102A43] dark:text-slate-100"
+        }
+        data-budget-axis="chart"
+      >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: narrow ? 8 : 0 }} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" vertical={false} />
@@ -356,7 +408,7 @@ function BudgetMonthChart({
             />
             <YAxis
               stroke="#94a3b8"
-              fontSize={10}
+              fontSize={fill ? 12 : 10}
               tickLine={false}
               axisLine={false}
               domain={axis?.domain}
@@ -379,7 +431,7 @@ function BudgetMonthChart({
                 name === "budget" ? "Budget" : "Actual",
               ]}
             />
-            <Bar dataKey="budget" name="budget" radius={[3, 3, 0, 0]} maxBarSize={18}>
+            <Bar dataKey="budget" name="budget" radius={[3, 3, 0, 0]} maxBarSize={fill ? 28 : 18}>
               {data.map((row) => (
                 <Cell
                   key={row.month}
@@ -388,7 +440,7 @@ function BudgetMonthChart({
                 />
               ))}
             </Bar>
-            <Bar dataKey="actual" name="actual" radius={[3, 3, 0, 0]} maxBarSize={18}>
+            <Bar dataKey="actual" name="actual" radius={[3, 3, 0, 0]} maxBarSize={fill ? 28 : 18}>
               {data.map((row) => (
                 <Cell key={`${row.month}-a`} fill={row.hasActual ? ACTUAL_BAR : "transparent"} />
               ))}
@@ -460,6 +512,7 @@ function BudgetMonthTable({
   money,
   market,
   displayTemplateId = null,
+  sheet = false,
 }: {
   doc: BudgetDocument;
   views: BudgetMonthView[];
@@ -467,6 +520,8 @@ function BudgetMonthTable({
   money: (n: number) => string;
   market: Parameters<typeof formatBudgetMonthYear>[1];
   displayTemplateId?: BudgetTemplateId | null;
+  /** Full-viewport sheet. The card keeps the short scroll frame. */
+  sheet?: boolean;
 }) {
   const rows = budgetTableRows(doc, views, (name, index) =>
     hotelLineDisplayName(displayTemplateId, name, index),
@@ -478,8 +533,13 @@ function BudgetMonthTable({
     `Operating profit ${tileText(totals.operatingProfit, money)}`,
   ].join(" · ");
   return (
-    <div className="mt-4 min-w-0">
-      <ScrollableTable hint="Swipe sideways to see every month." fadeEdge={false}>
+    <div className={sheet ? "h-full min-h-[240px]" : "mt-4 min-w-0"}>
+      <ScrollableTable
+        hint="Swipe sideways to see every month."
+        fadeEdge={false}
+        className={sheet ? "h-full" : undefined}
+        viewportClassName={sheet ? "h-full" : undefined}
+      >
         <table className="budget-grid w-full min-w-[960px] border-separate border-spacing-0 text-xs text-[#0f172a] dark:text-slate-100">
           <thead>
             <tr>

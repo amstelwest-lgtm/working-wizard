@@ -20,6 +20,14 @@ export function budgetLensFromSearch(value: unknown): BudgetLens {
   return value === "table" ? "table" : "chart";
 }
 
+/**
+ * Chart | Table header. One Enlarge, for the lens on screen.
+ * A drafted plan hides the card before this runs.
+ */
+export function budgetStackedEnlargeTarget(lens: BudgetLens): "chart" | "table" {
+  return lens === "table" ? "table" : "chart";
+}
+
 export type BudgetActualMonth = {
   month: string;
   totals: Partial<TaxonomyTotals>;
