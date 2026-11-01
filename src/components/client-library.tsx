@@ -51,7 +51,7 @@ function fileFromUpload(row: ClientDocumentRow): LibraryFile {
     itemKey: typeof raw.item_key === "string" ? raw.item_key : null,
     accountLabel: meta.account_label,
     summary: meta.summary,
-    periodLabel: row.period_label,
+    periodLabel: row.period_label, // date-ok: year bucket only, not a printed range
     bytes: meta.bytes,
     storagePath: row.storage_path,
     origin: "upload",
