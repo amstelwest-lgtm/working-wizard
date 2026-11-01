@@ -151,6 +151,20 @@ assert(profitPane.includes('aria-label="Export PDF"'), "profit export sits on th
 assert(profitPane.includes("hideCardExport"), "the waterfall card does not repeat export");
 assert(!waterfall.includes("ChevronUp"), "the chart collapse chevron is gone");
 assert(!waterfall.includes("ChevronDown"), "the chart collapse chevron is gone");
+assert(waterfall.includes("<EnlargeButton"), "waterfall uses the shared Enlarge control");
+assert(waterfall.includes("<EnlargeSheet"), "waterfall uses the cash enlarge sheet");
+assert(
+  waterfall.includes('label="profitability waterfall"'),
+  "the enlarge control names the waterfall",
+);
+assert(
+  !waterfall.includes("Expand the profitability waterfall"),
+  "the waterfall does not keep a private Expand button",
+);
+assert(
+  (waterfall.match(/enlargeControl/g) ?? []).length >= 4,
+  "premium, the classic header, and the headerless card share one Enlarge",
+);
 assert(ratiosPane.includes("<ReviewInputsDrawer"), "health inputs sit in the shared drawer");
 assert(profitPane.includes("<ReviewInputsDrawer"), "profit inputs sit in the shared drawer");
 assert(ratiosPane.includes("hideCaption"), "the orb does not repeat the sentence");

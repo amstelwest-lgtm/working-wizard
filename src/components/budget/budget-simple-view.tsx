@@ -21,6 +21,7 @@ import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { BudgetChartTable } from "@/components/budget/budget-chart-table";
 import { BudgetPagedMenu } from "@/components/budget/budget-paged-menu";
 import {
+  budgetPagedEnlargeTarget,
   budgetPagedSentence,
   budgetPagedViewFromHash,
   type BudgetPagedView,
@@ -305,6 +306,7 @@ export function BudgetSimpleView({
   );
   const priorOnFile = hasPriorYearFigures(priorYear);
   const pane: BudgetPagedView = view === "months" || view === "setup" ? view : "overview";
+  const paneEnlarge = paged ? budgetPagedEnlargeTarget(pane) : null;
   return (
     <div
       id="wizard-budget-plan"
@@ -358,8 +360,9 @@ export function BudgetSimpleView({
       <BudgetChartTable
         doc={doc}
         clientId={clientId}
-        lens={paged ? (pane === "months" ? "table" : "chart") : lens}
+        lens={paged ? (paneEnlarge === "table" ? "table" : "chart") : lens}
         onLensChange={paged ? undefined : onLensChange}
+        showEnlarge={!paged || paneEnlarge != null}
         actualMonths={actualMonths}
         statementActuals={compared}
         windowMonths={compared?.windowMonths}

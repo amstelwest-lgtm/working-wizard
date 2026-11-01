@@ -1,4 +1,4 @@
-/** One-off: prove the premium Expand sheet renders the waterfall. */
+/** One-off: prove the premium Enlarge sheet renders the waterfall. */
 import { chromium } from "playwright";
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
@@ -9,7 +9,7 @@ page.on("console", (msg) => {
 });
 await page.goto("http://127.0.0.1:4179/owner-door?view=profit", { waitUntil: "networkidle" });
 await page.waitForSelector("[data-owner-ready='true']", { timeout: 20000 });
-await page.getByRole("button", { name: "Expand the profitability waterfall" }).click();
+await page.getByRole("button", { name: "Enlarge profitability waterfall" }).click();
 await page.waitForSelector("[data-waterfall-premium='wide']");
 await page.waitForTimeout(600);
 await page.screenshot({ path: "/opt/cursor/artifacts/screenshots/profit-after-expand-1280.png" });
