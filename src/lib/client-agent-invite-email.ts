@@ -7,11 +7,19 @@
  * There is no contact first-name column on clients, so callers omit firstName.
  */
 import { clientAgentExpiryLabel } from "@/lib/client-agent-link";
+import { missionEmailCopy } from "@/lib/client-agent-missions";
 
 export type ClientAgentInviteEmail = {
   subject: string;
   html: string;
   text: string;
+};
+
+/** Subject, the three body sentences, and the button. The firm note is not a field. */
+export type ClientAgentInviteCopy = {
+  subject: string;
+  sentences: readonly [string, string, string];
+  button: string;
 };
 
 function escapeHtml(value: string): string {
@@ -40,17 +48,30 @@ export function renderClientAgentInviteEmail(input: {
   link: string;
   expiresAt: Date | string;
   firstName?: string | null;
+  copy?: ClientAgentInviteCopy;
 }): ClientAgentInviteEmail {
   const practiceName = clean(input.practiceName) || "Your accountant";
   const link = input.link.trim();
   const expires = clientAgentExpiryLabel(input.expiresAt);
   const name = givenName(input.firstName);
   const greeting = name ? `Hi ${name},` : "Hello,";
-  const subject = `${practiceName} asked for a few documents`;
+  const copy =
+    input.copy ??
+    missionEmailCopy({
+      missionKey: "collect_documents",
+      practiceName,
+      agentShortName: "Tax Specialist",
+    });
+  const subject = clean(copy.subject) || `${practiceName} asked for a few documents`;
+  const sentences = copy.sentences;
+  const button = clean(copy.button) || "Open your document list";
   const safePractice = escapeHtml(practiceName);
   const safeLink = escapeHtml(link);
   const safeExpires = escapeHtml(expires);
   const safeGreeting = escapeHtml(greeting);
+  const safeSubject = escapeHtml(subject);
+  const safeButton = escapeHtml(button);
+  const safeSentences = sentences.map((sentence) => escapeHtml(sentence));
   const html = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
@@ -60,21 +81,21 @@ export function renderClientAgentInviteEmail(input: {
 </head>
 <body style="margin:0;padding:0;background:#ffffff;">
   <div lang="en" dir="ltr" style="margin:0;padding:24px 16px;background:#ffffff;color:#102A43;font-family:Arial,Helvetica,sans-serif;">
-    <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:700;color:#102A43;">${escapeHtml(subject)}</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:700;color:#102A43;">${safeSubject}</h1>
     <p style="margin:0 0 12px;font-size:16px;line-height:24px;color:#102A43;">${safeGreeting}</p>
-    <p style="margin:0 0 12px;font-size:16px;line-height:24px;color:#102A43;">To help with your tax this year, we need a few documents from you.</p>
-    <p style="margin:0 0 12px;font-size:16px;line-height:24px;color:#102A43;">This link opens a short list. You'll be asked to agree before anything is stored.</p>
-    <p style="margin:0 0 20px;font-size:16px;line-height:24px;color:#102A43;">Only send what you have — skip anything that doesn't apply.</p>
+    <p style="margin:0 0 12px;font-size:16px;line-height:24px;color:#102A43;">${safeSentences[0]}</p>
+    <p style="margin:0 0 12px;font-size:16px;line-height:24px;color:#102A43;">${safeSentences[1]}</p>
+    <p style="margin:0 0 20px;font-size:16px;line-height:24px;color:#102A43;">${safeSentences[2]}</p>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px;">
       <tr>
         <td align="center" bgcolor="#0B5FFF" style="border-radius:999px;">
           <!--[if mso]>
           <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${safeLink}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="50%" stroke="f" fillcolor="#0B5FFF">
             <w:anchorlock/>
-            <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Open your document list</center>
+            <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">${safeButton}</center>
           </v:roundrect>
           <![endif]-->
-          <a href="${safeLink}" style="background-color:#0B5FFF;border-radius:999px;color:#ffffff;display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;padding:0 28px;mso-hide:all;">Open your document list</a>
+          <a href="${safeLink}" style="background-color:#0B5FFF;border-radius:999px;color:#ffffff;display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;padding:0 28px;mso-hide:all;">${safeButton}</a>
         </td>
       </tr>
     </table>
@@ -90,13 +111,13 @@ export function renderClientAgentInviteEmail(input: {
     "",
     greeting,
     "",
-    "To help with your tax this year, we need a few documents from you.",
+    sentences[0],
     "",
-    "This link opens a short list. You'll be asked to agree before anything is stored.",
+    sentences[1],
     "",
-    "Only send what you have — skip anything that doesn't apply.",
+    sentences[2],
     "",
-    `Open your document list: ${link}`,
+    `${button}: ${link}`,
     "",
     `This link expires on ${expires}.`,
     "",

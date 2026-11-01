@@ -2,9 +2,9 @@
  * Public /a/<token> actions. Service role only. The raw token is hashed
  * before lookup. The browser uploads straight to a one-time signed URL.
  * Confirm reads the size and the first bytes with the service role.
- * Finish copies the files into the client's documents and emails the firm
- * owner once. The client is never emailed. Chat text and file passwords
- * are not logged.
+ * Finish copies the files into the client's documents and emails the
+ * accountant who pressed Send, once. The client is never emailed.
+ * Chat text and file passwords are not logged.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
@@ -15,8 +15,22 @@ import {
   CLIENT_AGENT_CHAT_FALLBACK,
   CLIENT_AGENT_CHAT_LIMIT,
   CLIENT_AGENT_CHAT_WAIT,
+  MISSION_CHAT_TURN_LIMIT,
   guideDocumentQuestion,
+  guideMissionReply,
+  guideMissionReport,
 } from "@/lib/client-agent-chat";
+import { MISSION_REPORT_INSTRUCTION } from "@/lib/client-agent-mission-prompts";
+import {
+  cleanMissionMessage,
+  cleanUploadLabel,
+  fallbackMissionReport,
+  isMissionKey,
+  missionClientIntro,
+  missionThanks,
+  sendAgentShortName,
+  sendMissionTitle,
+} from "@/lib/client-agent-missions";
 import {
   CLIENT_AGENT_FILE_PASSWORD_KEY,
   filePasswordKey,
@@ -85,6 +99,25 @@ type SendRow = {
   practice_display_name: string | null;
   recipient_first_name: string | null;
   completed_at: string | null;
+  agent: string | null;
+  mission_key: string | null;
+  sent_by: string | null;
+  opened_at: string | null;
+  replied_at: string | null;
+  docs_received_at: string | null;
+  report_mailed_at: string | null;
+  report_summary: string | null;
+};
+
+export type PublicMission = {
+  key: string;
+  title: string;
+  agent: string;
+  agentShortName: string;
+  intro: string;
+  thanks: string;
+  messages: Array<{ role: "client" | "agent"; body: string }>;
+  uploads: Array<{ label: string; mime: string }>;
 };
 
 type ItemRow = {
@@ -109,6 +142,7 @@ export type OpenLinkResult =
       notice: string;
       items: PublicItem[];
       completed: boolean;
+      mission?: PublicMission;
     }
   | ReturnType<typeof closedLink>;
 
@@ -227,31 +261,239 @@ async function loadSend(tokenHash: string): Promise<SendRow | null> {
       .select(columns)
       .eq("token_hash", tokenHash)
       .maybeSingle();
-  const named = await query(
-    "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name, completed_at",
+  const mission = await query(
+    "id, client_id, firm_id, agent, mission_key, sent_by, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name, completed_at, opened_at, replied_at, docs_received_at, report_mailed_at, report_summary",
   );
-  if (!named.error) return named.data;
+  if (!mission.error && mission.data) return missionDefaults(mission.data);
+  if (!mission.error) return null;
+  const named = await query(
+    "id, client_id, firm_id, sent_by, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name, completed_at",
+  );
+  if (!named.error && named.data) return missionDefaults(named.data);
+  if (!named.error) return null;
   const practice = await query(
     "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name, recipient_first_name",
   );
   if (!practice.error && practice.data) {
-    return { ...practice.data, completed_at: null };
+    return missionDefaults({ ...practice.data, completed_at: null });
   }
   const namedPractice = await query(
     "id, client_id, firm_id, expires_at, revoked_at, consent_at, practice_display_name",
   );
   if (!namedPractice.error && namedPractice.data) {
-    return { ...namedPractice.data, recipient_first_name: null, completed_at: null };
+    return missionDefaults({
+      ...namedPractice.data,
+      recipient_first_name: null,
+      completed_at: null,
+    });
   }
   const plain = await query("id, client_id, firm_id, expires_at, revoked_at, consent_at");
   if (plain.error) throw new Error(sendLinkLogLine({ event: "link", reason: "lookup" }));
   if (!plain.data) return null;
-  return {
+  return missionDefaults({
     ...plain.data,
     practice_display_name: null,
     recipient_first_name: null,
     completed_at: null,
+  });
+}
+
+function missionDefaults(row: SendRow): SendRow {
+  return {
+    ...row,
+    agent: row.agent ?? null,
+    mission_key: row.mission_key ?? null,
+    sent_by: row.sent_by ?? null,
+    opened_at: row.opened_at ?? null,
+    replied_at: row.replied_at ?? null,
+    docs_received_at: row.docs_received_at ?? null,
+    report_mailed_at: row.report_mailed_at ?? null,
+    report_summary: row.report_summary ?? null,
   };
+}
+
+async function patchSend(
+  sendId: string,
+  patch: Record<string, unknown>,
+  onlyNull?: string,
+): Promise<boolean> {
+  const update = (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        update: (row: Record<string, unknown>) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => Promise<{ error: DbError }> & {
+            is: (column: string, value: null) => Promise<{ error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_sends")
+    .update(patch)
+    .eq("id", sendId);
+  const result = onlyNull ? await update.is(onlyNull, null) : await update;
+  if (!result.error) return true;
+  const column = onlyNull ?? Object.keys(patch)[0] ?? "";
+  if (column && missingRelation(result.error, column)) return false;
+  return false;
+}
+
+async function markOpened(sendId: string): Promise<void> {
+  await patchSend(sendId, { opened_at: new Date().toISOString() }, "opened_at");
+}
+
+async function loadMissionMessages(
+  sendId: string,
+): Promise<Array<{ role: "client" | "agent"; body: string }>> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            order: (
+              column: string,
+              options: { ascending: boolean },
+            ) => Promise<{ data: Array<Record<string, unknown>> | null; error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_messages")
+    .select("role, body")
+    .eq("send_id", sendId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.flatMap((row) => {
+    const role = row.role === "agent" || row.role === "client" ? row.role : null;
+    const body = typeof row.body === "string" ? row.body : "";
+    if (!role || !body) return [];
+    return [{ role, body }];
+  });
+}
+
+async function loadMissionUploads(sendId: string): Promise<Array<{ label: string; mime: string }>> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => Promise<{ data: Array<Record<string, unknown>> | null; error: DbError }>;
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .select("upload_label, mime, display_name")
+    .eq("send_id", sendId);
+  if (error || !data) return [];
+  return data.flatMap((row) => {
+    const label =
+      (typeof row.upload_label === "string" && row.upload_label) ||
+      (typeof row.display_name === "string" && row.display_name) ||
+      "";
+    if (!label) return [];
+    return [{ label, mime: typeof row.mime === "string" ? row.mime : "" }];
+  });
+}
+
+async function insertMissionMessage(
+  sendId: string,
+  role: "client" | "agent",
+  body: string,
+): Promise<boolean> {
+  const { error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        insert: (row: Record<string, unknown>) => Promise<{ error: DbError }>;
+      };
+    }
+  )
+    .from("client_agent_send_messages")
+    .insert({ send_id: sendId, role, body });
+  return !error;
+}
+
+async function accountEmail(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const looked = await (
+    supabaseAdmin as unknown as {
+      auth: {
+        admin: {
+          getUserById: (
+            id: string,
+          ) => Promise<{ data: { user: { email?: string | null } | null } | null }>;
+        };
+      };
+    }
+  ).auth.admin.getUserById(userId);
+  const email = looked.data?.user?.email?.trim() ?? "";
+  if (!email.includes("@")) return null;
+  return email;
+}
+
+async function rewriteMissionReport(send: SendRow, done: boolean): Promise<string> {
+  const messages = await loadMissionMessages(send.id);
+  const uploads = await loadMissionUploads(send.id);
+  const labels = uploads.map((file) => file.label);
+  const clientLines = messages
+    .filter((message) => message.role === "client")
+    .map((message) => message.body);
+  const fallback = fallbackMissionReport({ clientLines, fileLabels: labels, done });
+  const { data } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            maybeSingle: () => Promise<{
+              data: { mission_prompt: string | null } | null;
+              error: DbError;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_sends")
+    .select("mission_prompt")
+    .eq("id", send.id)
+    .maybeSingle();
+  const prompt = data?.mission_prompt?.trim() || "";
+  const summary = prompt
+    ? await guideMissionReport({
+        instruction: MISSION_REPORT_INSTRUCTION,
+        missionPrompt: prompt,
+        messages,
+        fileLabels: labels,
+        done,
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        model: CLAUDE_MODEL,
+        fallback,
+      })
+    : fallback;
+  await patchSend(send.id, { report_summary: summary.slice(0, 4000) });
+  return summary;
+}
+
+async function noteMissionFile(send: SendRow): Promise<void> {
+  if (!send.docs_received_at) {
+    const stamped = new Date().toISOString();
+    const saved = await patchSend(send.id, { docs_received_at: stamped }, "docs_received_at");
+    if (saved) send.docs_received_at = stamped;
+  }
+  const summary = await rewriteMissionReport(send, Boolean(send.completed_at));
+  if (!send.report_mailed_at) await mailSenderReport(send, summary);
 }
 
 async function loadFirmName(firmId: string): Promise<string | null> {
@@ -353,8 +595,13 @@ async function loadFileMeta(
     if (missingRelation(error, "client_agent_send_files")) return null;
     throw new Error(sendLinkLogLine({ event: "link", reason: "files" }));
   }
-  const grouped = new Map<string, { count: number; passwordSaved: boolean; at: string; names: string[] }>();
-  const rows = [...(data ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+  const grouped = new Map<
+    string,
+    { count: number; passwordSaved: boolean; at: string; names: string[] }
+  >();
+  const rows = [...(data ?? [])].sort((a, b) =>
+    a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0,
+  );
   for (const row of rows) {
     const name = sanitizeClientFileName(row.display_name ?? "");
     const current = grouped.get(row.item_key);
@@ -454,6 +701,7 @@ async function resolveToken(token: string): Promise<Resolved> {
     outcome: decision.outcome,
   });
   if (!decision.public.ok) return decision.public;
+  if (decision.outcome === "ok") await markOpened(send.id);
   return { ok: true, send, tokenHash, ipHash };
 }
 
@@ -464,6 +712,7 @@ async function present(send: SendRow, items: PublicItem[]): Promise<OpenLinkResu
     firmName: await loadFirmName(send.firm_id),
   });
   const firstName = recipientFirstName(send.recipient_first_name);
+  const mission = await publicMission(send, practiceName, firstName.ok ? firstName.name : null);
   return {
     ok: true,
     practiceName,
@@ -475,6 +724,33 @@ async function present(send: SendRow, items: PublicItem[]): Promise<OpenLinkResu
       items,
     }),
     completed: Boolean(send.completed_at),
+    ...(mission ? { mission } : {}),
+  };
+}
+
+async function publicMission(
+  send: SendRow,
+  practiceName: string,
+  firstName: string | null,
+): Promise<PublicMission | null> {
+  if (!isMissionKey(send.mission_key)) return null;
+  const agentShortName = sendAgentShortName(send.agent);
+  const uploads = await loadMissionUploads(send.id);
+  const messages = await loadMissionMessages(send.id);
+  return {
+    key: send.mission_key,
+    title: sendMissionTitle(send.mission_key),
+    agent: send.agent ?? "tax_specialist",
+    agentShortName,
+    intro: missionClientIntro({
+      missionKey: send.mission_key,
+      practiceName,
+      agentShortName,
+      firstName,
+    }),
+    thanks: missionThanks({ agentShortName, practiceName, firstName }),
+    messages,
+    uploads,
   };
 }
 
@@ -660,7 +936,9 @@ function totalFromContentRange(header: string | null): number | null {
 }
 
 /** First bytes only. A full-body response is cancelled. The range total is the object size. */
-async function readObjectPrefix(path: string): Promise<{ bytes: Uint8Array; total: number | null } | null> {
+async function readObjectPrefix(
+  path: string,
+): Promise<{ bytes: Uint8Array; total: number | null } | null> {
   const endpoint = storageEndpoint();
   if (!endpoint) return null;
   const target = `${endpoint.url}/storage/v1/object/${SEND_STORAGE_BUCKET}/${path}`;
@@ -681,7 +959,10 @@ async function readObjectPrefix(path: string): Promise<{ bytes: Uint8Array; tota
     return null;
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
-  return { bytes: bytes.subarray(0, 32), total: totalFromContentRange(response.headers.get("content-range")) };
+  return {
+    bytes: bytes.subarray(0, 32),
+    total: totalFromContentRange(response.headers.get("content-range")),
+  };
 }
 
 async function storedObjectSize(path: string): Promise<number | null> {
@@ -699,7 +980,9 @@ async function storedObjectSize(path: string): Promise<number | null> {
   return objectByteSize({ metadata: match?.metadata ?? undefined });
 }
 
-function objectByteSize(info: { size?: number; metadata?: Record<string, unknown> } | null): number | null {
+function objectByteSize(
+  info: { size?: number; metadata?: Record<string, unknown> } | null,
+): number | null {
   if (!info) return null;
   if (typeof info.size === "number" && Number.isInteger(info.size)) return info.size;
   const meta = info.metadata?.size;
@@ -716,6 +999,7 @@ export const prepareClientAgentUpload = createServerFn({ method: "POST" })
         size: z.number().int(),
         mime: z.string().max(80),
         name: z.string().max(300).optional(),
+        label: z.string().max(240).optional(),
       })
       .parse(input),
   )
@@ -726,7 +1010,7 @@ export const prepareClientAgentUpload = createServerFn({ method: "POST" })
       | { ok: true; path: string; token: string; signedUrl: string; grant: string }
       | ReturnType<typeof closedLink>
     > => {
-  const resolved = await resolveToken(data.token);
+      const resolved = await resolveToken(data.token);
       if (!resolved.ok) return resolved;
       const items = await loadItems(resolved.send.id);
       if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
@@ -747,6 +1031,17 @@ export const prepareClientAgentUpload = createServerFn({ method: "POST" })
         throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
       }
       const displayName = sanitizeClientFileName(data.name ?? "");
+      const labelled = isMissionKey(resolved.send.mission_key)
+        ? cleanUploadLabel(data.label)
+        : null;
+      if (isMissionKey(resolved.send.mission_key) && !labelled?.ok) {
+        return {
+          ok: false,
+          status: 200,
+          reason: "unavailable",
+          body: "Name this file before you upload it.",
+        };
+      }
       const grant = await signUploadGrant(secret, {
         sendId: resolved.send.id,
         itemKey: data.itemKey,
@@ -755,8 +1050,9 @@ export const prepareClientAgentUpload = createServerFn({ method: "POST" })
         mime: data.mime,
         exp: Date.now() + UPLOAD_GRANT_TTL_MS,
         ...(displayName ? { name: displayName } : {}),
+        ...(labelled?.ok ? { label: labelled.label } : {}),
       });
-  return { ok: true, path, token: signed.data.token, signedUrl: signed.data.signedUrl, grant };
+      return { ok: true, path, token: signed.data.token, signedUrl: signed.data.signedUrl, grant };
     },
   );
 
@@ -771,7 +1067,7 @@ export const confirmClientAgentUpload = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }): Promise<{ ok: true } | ReturnType<typeof closedLink>> => {
-  const resolved = await resolveToken(data.token);
+    const resolved = await resolveToken(data.token);
     if (!resolved.ok) return resolved;
     if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
     const items = await loadItems(resolved.send.id);
@@ -808,6 +1104,17 @@ export const confirmClientAgentUpload = createServerFn({ method: "POST" })
       await noteRejected(resolved);
       return decision;
     }
+    const uploadLabel = isMissionKey(resolved.send.mission_key)
+      ? cleanUploadLabel(grant.label)
+      : null;
+    if (isMissionKey(resolved.send.mission_key) && !uploadLabel?.ok) {
+      return {
+        ok: false,
+        status: 200,
+        reason: "unavailable",
+        body: "Name this file before you upload it.",
+      };
+    }
     const existing = await findSendFile(resolved.send.id, data.path);
     if (existing === "missing") {
       const filed = await insertSendFile({
@@ -816,7 +1123,10 @@ export const confirmClientAgentUpload = createServerFn({ method: "POST" })
         storage_path: data.path,
         mime: decision.mime,
         size_bytes: decision.size,
-        display_name: sanitizeClientFileName(grant.name ?? ""),
+        display_name: uploadLabel?.ok
+          ? uploadLabel.label
+          : sanitizeClientFileName(grant.name ?? ""),
+        upload_label: uploadLabel?.ok ? uploadLabel.label : undefined,
       });
       if (filed === "failed") {
         await storage.remove([data.path]);
@@ -842,23 +1152,28 @@ export const confirmClientAgentUpload = createServerFn({ method: "POST" })
     // listing the sends heals a copy this step could not make.
     try {
       const item = items.find((row) => row.itemKey === data.itemKey);
-      const displayName = sanitizeClientFileName(grant.name ?? "");
-      await copySendFileIfMissing({
+      const displayName = uploadLabel?.ok
+        ? uploadLabel.label
+        : sanitizeClientFileName(grant.name ?? "");
+      const copied = await copySendFileIfMissing({
         clientId: resolved.send.client_id,
         sendId: resolved.send.id,
         file: {
           itemKey: data.itemKey,
-          label: item?.label ?? data.itemKey,
+          label: uploadLabel?.ok ? uploadLabel.label : (item?.label ?? data.itemKey),
           sourcePath: data.path,
           mime: decision.mime,
           size: decision.size,
           displayName: displayName || null,
         },
       });
+      if (copied && isMissionKey(resolved.send.mission_key)) {
+        await noteMissionFile(resolved.send);
+      }
     } catch {
       // The upload stands. The copy is retried when the firm opens the file.
     }
-  return { ok: true };
+    return { ok: true };
   });
 
 /**
@@ -902,7 +1217,8 @@ export const removeClientAgentFile = createServerFn({ method: "POST" })
         await deleteSendFileById(row.id);
       }
     }
-    if (previous && pathBelongsToSend(previous, resolved.send.id, data.itemKey)) paths.add(previous);
+    if (previous && pathBelongsToSend(previous, resolved.send.id, data.itemKey))
+      paths.add(previous);
     if (paths.size > 0) await objectStorage().remove([...paths]);
     // A file removed before Finish also leaves the client's documents, so a
     // replaced upload is not kept twice. A sealed archive is never touched.
@@ -998,7 +1314,9 @@ async function findSendFile(sendId: string, path: string): Promise<"present" | "
               column: string,
               value: string,
             ) => {
-              limit: (count: number) => Promise<{ data: Array<{ id: string }> | null; error: DbError }>;
+              limit: (
+                count: number,
+              ) => Promise<{ data: Array<{ id: string }> | null; error: DbError }>;
             };
           };
         };
@@ -1101,6 +1419,7 @@ async function insertSendFile(row: {
   mime: string;
   size_bytes: number;
   display_name?: string;
+  upload_label?: string;
 }): Promise<"stored" | "legacy" | "failed"> {
   const write = (value: Record<string, unknown>) =>
     (
@@ -1120,8 +1439,14 @@ async function insertSendFile(row: {
     size_bytes: row.size_bytes,
   };
   if (row.display_name) payload.display_name = row.display_name;
+  if (row.upload_label) payload.upload_label = row.upload_label;
   const first = await write(payload);
   if (!first.error) return "stored";
+  if (payload.upload_label && missingRelation(first.error, "upload_label")) {
+    delete payload.upload_label;
+    const labelled = await write(payload);
+    if (!labelled.error) return "stored";
+  }
   if (payload.display_name && missingRelation(first.error, "display_name")) {
     delete payload.display_name;
     const second = await write(payload);
@@ -1245,10 +1570,7 @@ export async function releaseClientAgentFilePassword(
   if (error || !data?.length) return null;
   const latest = [...data].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
   if (!latest?.password_iv || !latest.password_box) return null;
-  const plain = await openFilePassword(
-    { iv: latest.password_iv, box: latest.password_box },
-    key,
-  );
+  const plain = await openFilePassword({ iv: latest.password_iv, box: latest.password_box }, key);
   await (
     supabaseAdmin as unknown as {
       from: (name: string) => {
@@ -1446,7 +1768,9 @@ async function markCompleted(sendId: string): Promise<boolean> {
               column: string,
               value: null,
             ) => {
-              select: (cols: string) => Promise<{ data: Array<{ id: string }> | null; error: DbError }>;
+              select: (
+                cols: string,
+              ) => Promise<{ data: Array<{ id: string }> | null; error: DbError }>;
             };
           };
         };
@@ -1463,11 +1787,54 @@ async function markCompleted(sendId: string): Promise<boolean> {
   return false;
 }
 
+async function mailSenderReport(send: SendRow, summary: string): Promise<boolean> {
+  if (send.report_mailed_at) return true;
+  const to = await accountEmail(send.sent_by);
+  if (!to) return false;
+  const uploads = await loadMissionUploads(send.id);
+  const practiceName = practiceDisplayName({
+    firmId: send.firm_id,
+    practiceDisplayName: send.practice_display_name,
+    firmName: await loadFirmName(send.firm_id),
+  });
+  const mailed = await sendClientAgentDone({
+    practiceName,
+    to,
+    clientName: await clientNameOf(send.client_id),
+    received: uploads.length,
+    missing: 0,
+    notes: [summary],
+    link: canonicalAuthUrl(`/clients/${send.client_id}?section=send-agent`),
+    idempotencyKey: clientAgentDoneIdempotencyKey(send.id),
+    apiKey: process.env.RESEND_API_KEY,
+    fromEmail: process.env.RESEND_FROM_EMAIL,
+  });
+  if (!mailed.ok) return false;
+  const stamped = new Date().toISOString();
+  await patchSend(send.id, { report_mailed_at: stamped }, "report_mailed_at");
+  send.report_mailed_at = stamped;
+  return true;
+}
+
+async function completeMissionVisit(
+  send: SendRow,
+): Promise<{ ok: true } | { ok: false; body: string }> {
+  if (!consentReady(send.consent_at)) return { ok: false, body: "Please agree before finishing." };
+  if (send.completed_at) return { ok: true };
+  const summary = await rewriteMissionReport(send, true);
+  const mailed = await mailSenderReport(send, summary);
+  if (!mailed) return { ok: false, body: FINISH_BODY };
+  const marked = await markCompleted(send.id);
+  if (!marked) return { ok: false, body: FINISH_BODY };
+  return { ok: true };
+}
+
 export const completeClientAgentSend = createServerFn({ method: "POST" })
   .inputValidator((input) => tokenInput.parse(input))
   .handler(async ({ data }): Promise<{ ok: true } | { ok: false; body: string }> => {
     const resolved = await resolveToken(data.token);
     if (!resolved.ok) return { ok: false, body: resolved.body };
+    if (resolved.send.mission_key) return completeMissionVisit(resolved.send);
     const items = await loadCompletionItems(resolved.send.id);
     const fileRows = await loadArchiveFileRows(resolved.send.id);
     const decision = completionDecision({
@@ -1499,8 +1866,8 @@ export const completeClientAgentSend = createServerFn({ method: "POST" })
       });
       if (!copied) return { ok: false, body: FINISH_BODY };
     }
-    const owner = await firmOwnerEmail(resolved.send.firm_id);
-    if (!owner) return { ok: false, body: FINISH_BODY };
+    const sender = await accountEmail(resolved.send.sent_by);
+    if (!sender) return { ok: false, body: FINISH_BODY };
     const practiceName = practiceDisplayName({
       firmId: resolved.send.firm_id,
       practiceDisplayName: resolved.send.practice_display_name,
@@ -1508,7 +1875,7 @@ export const completeClientAgentSend = createServerFn({ method: "POST" })
     });
     const mailed = await sendClientAgentDone({
       practiceName,
-      to: owner,
+      to: sender,
       clientName: await clientNameOf(resolved.send.client_id),
       received: decision.received,
       missing: decision.missing,
@@ -1524,26 +1891,81 @@ export const completeClientAgentSend = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const askClientAgentLink = createServerFn({ method: "POST" })
-  .inputValidator((input) =>
-    tokenInput.extend({ message: z.string().max(400) }).parse(input),
+async function answerMission(
+  send: SendRow,
+  raw: string,
+): Promise<{ ok: true; reply: string } | ReturnType<typeof closedLink>> {
+  const cleaned = cleanMissionMessage(raw);
+  if (!cleaned.ok) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
+  const turns = await countChatTurns(send.id);
+  if (turns === null) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
+  if (turns >= MISSION_CHAT_TURN_LIMIT) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
+  const history = await loadMissionMessages(send.id);
+  const { data } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            maybeSingle: () => Promise<{
+              data: { mission_prompt: string | null } | null;
+              error: DbError;
+            }>;
+          };
+        };
+      };
+    }
   )
-  .handler(async ({ data }): Promise<{ ok: true; reply: string } | ReturnType<typeof closedLink>> => {
-    const resolved = await resolveToken(data.token);
-    if (!resolved.ok) return resolved;
-    if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
-    if (!CLIENT_AGENT_CHAT_ENABLED) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
-    const turns = await countChatTurns(resolved.send.id);
-    if (turns === null) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
-    if (turns >= CLIENT_AGENT_CHAT_LIMIT) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
-    const reply = await guideDocumentQuestion({
-      message: data.message,
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      model: CLAUDE_MODEL,
-    });
-    await recordChatTurn(resolved.send.id);
-    return { ok: true, reply };
+    .from("client_agent_sends")
+    .select("mission_prompt")
+    .eq("id", send.id)
+    .maybeSingle();
+  const prompt = data?.mission_prompt?.trim() ?? "";
+  if (!prompt) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
+  const reply = await guideMissionReply({
+    missionPrompt: prompt,
+    history,
+    message: cleaned.body,
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model: CLAUDE_MODEL,
   });
+  const stored = await insertMissionMessage(send.id, "client", cleaned.body);
+  if (!stored) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
+  await insertMissionMessage(send.id, "agent", reply);
+  if (!send.replied_at) {
+    const stamped = new Date().toISOString();
+    const saved = await patchSend(send.id, { replied_at: stamped }, "replied_at");
+    if (saved) send.replied_at = stamped;
+  }
+  await recordChatTurn(send.id);
+  await rewriteMissionReport(send, Boolean(send.completed_at));
+  return { ok: true, reply };
+}
+
+export const askClientAgentLink = createServerFn({ method: "POST" })
+  .inputValidator((input) => tokenInput.extend({ message: z.string().max(2000) }).parse(input))
+  .handler(
+    async ({ data }): Promise<{ ok: true; reply: string } | ReturnType<typeof closedLink>> => {
+      const resolved = await resolveToken(data.token);
+      if (!resolved.ok) return resolved;
+      if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
+      if (isMissionKey(resolved.send.mission_key))
+        return answerMission(resolved.send, data.message);
+      if (!CLIENT_AGENT_CHAT_ENABLED) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
+      const turns = await countChatTurns(resolved.send.id);
+      if (turns === null) return { ok: true, reply: CLIENT_AGENT_CHAT_FALLBACK };
+      if (turns >= CLIENT_AGENT_CHAT_LIMIT) return { ok: true, reply: CLIENT_AGENT_CHAT_WAIT };
+      const reply = await guideDocumentQuestion({
+        message: data.message,
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        model: CLAUDE_MODEL,
+      });
+      await recordChatTurn(resolved.send.id);
+      return { ok: true, reply };
+    },
+  );
 
 async function countChatTurns(sendId: string): Promise<number | null> {
   const since = new Date(Date.now() - SEND_ATTEMPT_WINDOW_MS).toISOString();

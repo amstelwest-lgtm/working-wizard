@@ -10,7 +10,11 @@ import { CANONICAL_APP_ORIGIN, canonicalAuthOrigin } from "@/lib/app-origin";
 import { copiedDocumentPaths, reviewDecision } from "@/lib/client-agent-done";
 import { sendFileDocumentPath, type ArtifactPathRow } from "@/lib/client-agent-send-backfill";
 import { copyMissingSendArtifacts } from "@/lib/client-agent-send-archive.server";
-import { practiceDisplayName, sanitizeClientFileName, sendPracticeDisplayName } from "@/lib/client-agent-link";
+import {
+  practiceDisplayName,
+  sanitizeClientFileName,
+  sendPracticeDisplayName,
+} from "@/lib/client-agent-link";
 import {
   filePasswordKey,
   openFilePassword,
@@ -27,11 +31,20 @@ import {
   type FilePasswordSealResult,
 } from "@/lib/client-agent-file-password-reveal";
 import { sendClientAgentInvite } from "@/lib/client-agent-invite-mail";
+import { fillMissionPrompt } from "@/lib/client-agent-mission-prompts";
 import {
-  SEND_AGENT_SLUG,
+  buildSendFeed,
+  chooseMission,
+  missionContextLines,
+  missionEmailCopy,
+  sendAgentShortName,
+  sendMissionStatus,
+  sendMissionTitle,
+  type SendFeedEvent,
+} from "@/lib/client-agent-missions";
+import {
   SEND_CHECKLIST_KEY,
   agentLink,
-  chooseSendItems,
   newSendToken,
   recipientEmail,
   recipientFirstName,
@@ -40,6 +53,7 @@ import {
   sha256Hex,
 } from "@/lib/client-agent-send";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
+import { parseMarketSelection } from "@/lib/market/parse";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -162,6 +176,15 @@ export type AgentSendFile = {
   hasPassword: boolean;
   /** The shared copy in the client's documents, when the copy exists. */
   documentPath: string | null;
+  mime?: string | null;
+  uploadLabel?: string | null;
+  createdAt?: string | null;
+};
+
+export type AgentSendMessage = {
+  role: "client" | "agent";
+  body: string;
+  createdAt: string;
 };
 
 type LoadedSendFile = AgentSendFile & { storagePath: string | null };
@@ -176,21 +199,59 @@ export type AgentSendRow = {
   open: boolean;
   items: AgentSendItem[];
   files: AgentSendFile[];
+  createdAt?: string;
+  agent?: string | null;
+  missionKey?: string | null;
+  missionTitle?: string;
+  statusLabel?: string;
+  firmNote?: string | null;
+  reportSummary?: string | null;
+  sentBy?: string | null;
+  openedAt?: string | null;
+  viewerIsSender?: boolean;
+  feed?: SendFeedEvent[] | null;
 };
+
+function textOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
 
 function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
   const expiresAt = String(row.expires_at ?? "");
-  const revokedAt = typeof row.revoked_at === "string" ? row.revoked_at : null;
+  const revokedAt = textOrNull(row.revoked_at);
+  const consentAt = textOrNull(row.consent_at);
+  const completedAt = textOrNull(row.completed_at);
+  const openedAt = textOrNull(row.opened_at);
+  const repliedAt = textOrNull(row.replied_at);
+  const docsReceivedAt = textOrNull(row.docs_received_at);
+  const missionKey = textOrNull(row.mission_key);
   return {
     id: String(row.id),
     expiresAt,
     revokedAt,
-    consentAt: typeof row.consent_at === "string" ? row.consent_at : null,
-    completedAt: typeof row.completed_at === "string" ? row.completed_at : null,
-    reviewedAt: typeof row.reviewed_at === "string" ? row.reviewed_at : null,
+    consentAt,
+    completedAt,
+    reviewedAt: textOrNull(row.reviewed_at),
     open: sendStillOpen({ revokedAt, expiresAt }, now),
     items: [],
     files: [],
+    createdAt: textOrNull(row.created_at) ?? undefined,
+    agent: textOrNull(row.agent),
+    missionKey,
+    missionTitle: sendMissionTitle(missionKey),
+    statusLabel: sendMissionStatus({
+      docsReceivedAt,
+      repliedAt,
+      openedAt,
+      completedAt,
+      consentAt,
+    }),
+    firmNote: textOrNull(row.firm_note),
+    reportSummary: textOrNull(row.report_summary),
+    sentBy: textOrNull(row.sent_by),
+    openedAt,
+    viewerIsSender: false,
+    feed: null,
   };
 }
 
@@ -201,7 +262,12 @@ async function loadSendFiles(sendId: string): Promise<LoadedSendFile[]> {
       .eq("send_id", sendId)
       .order("created_at", { ascending: false });
 
-  let found = await load("id, item_key, display_name, password_box, storage_path, created_at");
+  let found = await load(
+    "id, item_key, display_name, password_box, storage_path, created_at, mime, upload_label",
+  );
+  if (found.error && missingSendColumn(found.error, "upload_label")) {
+    found = await load("id, item_key, display_name, password_box, storage_path, created_at");
+  }
   if (found.error && missingSendColumn(found.error, "display_name")) {
     found = await load("id, item_key, password_box, storage_path, created_at");
   }
@@ -226,6 +292,29 @@ async function loadSendFiles(sendId: string): Promise<LoadedSendFile[]> {
         hasPassword: sendFileHasPassword(row.password_box),
         documentPath: null,
         storagePath: typeof row.storage_path === "string" ? row.storage_path : null,
+        mime: typeof row.mime === "string" ? row.mime : null,
+        uploadLabel: typeof row.upload_label === "string" ? row.upload_label : null,
+        createdAt: typeof row.created_at === "string" ? row.created_at : null,
+      },
+    ];
+  });
+}
+
+async function loadSendMessages(sendId: string): Promise<AgentSendMessage[]> {
+  const found = await table("client_agent_send_messages")
+    .select("role, body, created_at")
+    .eq("send_id", sendId)
+    .order("created_at", { ascending: true });
+  if (found.error) return [];
+  return rows(found.data).flatMap((row) => {
+    const role = row.role === "agent" ? "agent" : row.role === "client" ? "client" : null;
+    const body = typeof row.body === "string" ? row.body : "";
+    if (!role || !body) return [];
+    return [
+      {
+        role,
+        body,
+        createdAt: typeof row.created_at === "string" ? row.created_at : "",
       },
     ];
   });
@@ -263,11 +352,25 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
         return { migrated: true, allowed: false, sends: [], contactEmail: null };
       }
 
+      const missionColumns =
+        "id, expires_at, revoked_at, consent_at, created_at, completed_at, reviewed_at, agent, mission_key, firm_note, opened_at, replied_at, docs_received_at, report_summary, sent_by";
       let listed = await table("client_agent_sends")
-        .select("id, expires_at, revoked_at, consent_at, created_at, completed_at, reviewed_at")
+        .select(missionColumns)
         .eq("client_id", data.clientId)
         .eq("firm_id", firm.firmId)
         .order("created_at", { ascending: false });
+      if (
+        listed.error &&
+        /mission_key|firm_note|opened_at|replied_at|docs_received_at|report_summary/.test(
+          listed.error.message,
+        )
+      ) {
+        listed = await table("client_agent_sends")
+          .select("id, expires_at, revoked_at, consent_at, created_at, completed_at, reviewed_at")
+          .eq("client_id", data.clientId)
+          .eq("firm_id", firm.firmId)
+          .order("created_at", { ascending: false });
+      }
       if (listed.error && missingSendColumn(listed.error, "reviewed_at")) {
         listed = await table("client_agent_sends")
           .select("id, expires_at, revoked_at, consent_at, created_at, completed_at")
@@ -381,13 +484,72 @@ export const listClientAgentSends = createServerFn({ method: "GET" })
             ? sendFileDocumentPath(artifactRows as ArtifactPathRow[], send.id, storagePath)
             : null,
         }));
+        const sender = send.sentBy != null && send.sentBy === context.userId;
+        send.viewerIsSender = sender;
+        if (!sender) {
+          send.firmNote = null;
+          send.reportSummary = null;
+          send.feed = null;
+          continue;
+        }
+        const messages = await loadSendMessages(send.id);
+        send.feed = buildSendFeed({
+          createdAt: send.createdAt ?? "",
+          openedAt: send.openedAt,
+          completedAt: send.completedAt,
+          messages,
+          files: send.files.map((file) => ({
+            createdAt: file.createdAt ?? send.createdAt ?? "",
+            label: file.uploadLabel || file.displayName || "File",
+            mime: file.mime || "",
+            fileName: file.uploadLabel || file.displayName || "File",
+            documentPath: file.documentPath,
+          })),
+        });
       }
       return { migrated: true, allowed: true, sends, contactEmail: firm.contactEmail };
     },
   );
 
+async function loadClientFacts(clientId: string): Promise<{
+  name: string;
+  country: "ZA" | "US" | null;
+}> {
+  const { data } = await supabaseAdmin
+    .from("clients")
+    .select("name, market")
+    .eq("id", clientId)
+    .maybeSingle();
+  const name =
+    typeof data?.name === "string" && data.name.trim() ? data.name.trim() : "the business";
+  const country = parseMarketSelection(data?.market)?.country ?? null;
+  return { name, country };
+}
+
+async function loadSenderName(userId: string): Promise<string> {
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", userId)
+    .maybeSingle();
+  const name = typeof data?.full_name === "string" ? data.full_name.trim() : "";
+  return name || "the accountant";
+}
+
+async function forecastOpeningOpen(clientId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("data_requests")
+    .select("id")
+    .eq("client_id", clientId)
+    .eq("rule_key", "forecast_opening_balance")
+    .in("status", ["open", "sent"])
+    .limit(1);
+  if (error || !data?.length) return false;
+  return true;
+}
+
 export type MintAgentSendResult =
-  | { ok: true; sendId: string; url: string; expiresAt: string }
+  | { ok: true; sendId: string; expiresAt: string }
   | { ok: false; reason: "already_open"; sendId: string; expiresAt: string }
   | {
       ok: false;
@@ -396,11 +558,12 @@ export type MintAgentSendResult =
         | "unavailable"
         | "forbidden"
         | "not_allowed"
+        | "not_found"
         | "address"
         | "name"
-        | "empty"
-        | "items"
-        | "other"
+        | "agent"
+        | "mission"
+        | "note"
         | "email";
     };
 
@@ -412,14 +575,10 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
         clientId: z.string().uuid(),
         recipientEmail: z.string().max(200),
         recipientFirstName: z.string().max(80).optional(),
-        items: z
-          .array(
-            z.object({
-              itemKey: z.string().max(80),
-              label: z.string().max(240).optional(),
-            }),
-          )
-          .max(16),
+        agent: z.string().max(40),
+        missionKey: z.string().max(40),
+        firmNote: z.string().max(600).optional(),
+        resendSendId: z.string().uuid().optional(),
       })
       .parse(input),
   )
@@ -432,11 +591,41 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
       return { ok: false, reason: "forbidden" };
     }
 
+    const facts = await loadClientFacts(data.clientId);
+    let agent = data.agent;
+    let missionKey = data.missionKey;
+    let firmNote = data.firmNote ?? null;
+    if (data.resendSendId) {
+      const prior = await table("client_agent_sends")
+        .select("id, client_id, firm_id, agent, mission_key, firm_note")
+        .eq("id", data.resendSendId)
+        .maybeSingle();
+      if (prior.error) {
+        if (missingTable(prior.error) || missingSendColumn(prior.error, "mission_key")) {
+          return { ok: false, reason: "unavailable" };
+        }
+        throw new Error("The link could not be created.");
+      }
+      const row = prior.data;
+      if (!row || row.client_id !== data.clientId || row.firm_id !== firm.firmId) {
+        return { ok: false, reason: "not_found" };
+      }
+      agent = typeof row.agent === "string" ? row.agent : "";
+      missionKey = typeof row.mission_key === "string" ? row.mission_key : "";
+      firmNote = typeof row.firm_note === "string" ? row.firm_note : null;
+    }
+    const chosen = chooseMission({
+      agent,
+      missionKey,
+      country: facts.country,
+      firmNote,
+    });
+    if (!chosen.ok) return { ok: false, reason: chosen.reason };
+
     const existing = await table("client_agent_sends")
       .select("id, expires_at, revoked_at")
       .eq("client_id", data.clientId)
       .eq("firm_id", firm.firmId)
-      .eq("agent", SEND_AGENT_SLUG)
       .is("revoked_at", null)
       .order("created_at", { ascending: false });
     if (existing.error) {
@@ -444,18 +633,29 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
       throw new Error("The link could not be created.");
     }
     const now = new Date();
-    const open = rows(existing.data)
+    const openRows = rows(existing.data)
       .map((row) => parseSend(row, now))
-      .find((row) => row.open);
-    if (open)
+      .filter((row) => row.open);
+    if (!data.resendSendId && openRows.length > 0) {
+      const open = openRows[0];
+      if (!open) return { ok: false, reason: "unavailable" };
       return { ok: false, reason: "already_open", sendId: open.id, expiresAt: open.expiresAt };
+    }
+    if (data.resendSendId) {
+      const revokedAt = now.toISOString();
+      for (const open of openRows) {
+        const revoked = await table("client_agent_sends")
+          .update({ revoked_at: revokedAt })
+          .eq("id", open.id)
+          .eq("client_id", data.clientId);
+        if (revoked.error) throw new Error("The link could not be created.");
+      }
+    }
 
     const to = recipientEmail(data.recipientEmail);
     if (!to) return { ok: false, reason: "address" };
     const firstName = recipientFirstName(data.recipientFirstName);
     if (!firstName.ok) return { ok: false, reason: "name" };
-    const chosen = chooseSendItems(data.items);
-    if (!chosen.ok) return { ok: false, reason: chosen.reason };
 
     const token = newSendToken();
     const tokenHash = await sha256Hex(token);
@@ -466,10 +666,32 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
       practiceDisplayName: storedPracticeName,
       firmName: await loadFirmName(firm.firmId),
     });
+    const forecastOpen =
+      chosen.missionKey === "confirm_balances" ? await forecastOpeningOpen(data.clientId) : false;
+    const missionPrompt = fillMissionPrompt({
+      agent: chosen.agent,
+      missionKey: chosen.missionKey,
+      missionTitle: chosen.title,
+      practiceName,
+      clientName: facts.name,
+      firstName: firstName.name,
+      firmNote: chosen.note,
+      contextLines: missionContextLines({
+        practiceName,
+        businessName: facts.name,
+        senderName: await loadSenderName(context.userId),
+        country: facts.country,
+        missionKey: chosen.missionKey,
+        forecastOpen,
+      }),
+    });
     let sendRow: Record<string, unknown> = {
       firm_id: firm.firmId,
       client_id: data.clientId,
-      agent: SEND_AGENT_SLUG,
+      agent: chosen.agent,
+      mission_key: chosen.missionKey,
+      firm_note: chosen.note,
+      mission_prompt: missionPrompt,
       checklist_key: SEND_CHECKLIST_KEY,
       token_hash: tokenHash,
       sent_by: context.userId,
@@ -493,18 +715,23 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
       }
     }
     if (inserted.error || !inserted.data?.id) {
-      if (missingTable(inserted.error)) return { ok: false, reason: "unavailable" };
+      if (
+        missingTable(inserted.error) ||
+        missingSendColumn(inserted.error, "mission_key") ||
+        missingSendColumn(inserted.error, "mission_prompt")
+      ) {
+        return { ok: false, reason: "unavailable" };
+      }
       throw new Error("The link could not be created.");
     }
     const sendId = String(inserted.data.id);
-    const itemRows = chosen.items.map((item) => ({
+    const saved = await table("client_agent_send_items").insert({
       send_id: sendId,
-      item_key: item.itemKey,
-      label: item.label,
-      totals_only: item.totalsOnly,
+      item_key: "other",
+      label: chosen.title,
+      totals_only: false,
       status: "open",
-    }));
-    const saved = await table("client_agent_send_items").insert(itemRows);
+    });
     if (saved.error) {
       await table("client_agent_sends").delete().eq("id", sendId);
       throw new Error("The link could not be created.");
@@ -517,6 +744,11 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
       link: url,
       expiresAt: String(inserted.data.expires_at ?? expiresAt),
       idempotencyKey: `client-agent-invite/${sendId}`,
+      copy: missionEmailCopy({
+        missionKey: chosen.missionKey,
+        practiceName,
+        agentShortName: sendAgentShortName(chosen.agent),
+      }),
       apiKey: process.env.RESEND_API_KEY,
       fromEmail: process.env.RESEND_FROM_EMAIL,
     });
@@ -527,7 +759,6 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
     return {
       ok: true,
       sendId,
-      url,
       expiresAt: String(inserted.data.expires_at ?? expiresAt),
     };
   });
@@ -602,7 +833,8 @@ export const revealClientAgentFilePassword = createServerFn({ method: "POST" })
     if (send.error) return { ok: false, reason: "unavailable" };
     const clientId = typeof send.data?.client_id === "string" ? send.data.client_id : "";
     const firmId = typeof send.data?.firm_id === "string" ? send.data.firm_id : "";
-    if (!clientId || !firmId || clientId !== data.clientId) return { ok: false, reason: "not_found" };
+    if (!clientId || !firmId || clientId !== data.clientId)
+      return { ok: false, reason: "not_found" };
 
     const firm = await firmOfClient(data.clientId);
     if (!firm.ok || firm.firmId !== firmId) return { ok: false, reason: "not_found" };
@@ -738,7 +970,13 @@ export type ReviewAgentSendResult =
   | { ok: true; reviewedAt: string }
   | {
       ok: false;
-      reason: "forbidden" | "not_allowed" | "not_found" | "not_ready" | "unavailable" | "not_on_firm";
+      reason:
+        | "forbidden"
+        | "not_allowed"
+        | "not_found"
+        | "not_ready"
+        | "unavailable"
+        | "not_on_firm";
     };
 
 export const reviewClientAgentSend = createServerFn({ method: "POST" })

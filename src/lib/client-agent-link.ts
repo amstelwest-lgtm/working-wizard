@@ -8,7 +8,7 @@ import { formatDate } from "@/lib/market/format";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES, sha256Hex } from "./client-agent-send";
 import { SEND_AGENT_FIRM_ALLOWLIST, sendAgentFirmAllowed } from "./client-agent-send-allowlist";
 
-export const SEND_CONSENT_VERSION = "popia-client-agent-2";
+export const SEND_CONSENT_VERSION = "popia-client-agent-3";
 
 /**
  * SA year of assessment 2026 ends on the last day of February 2026.
@@ -124,10 +124,10 @@ export function clientAgentIntro(practiceName: string, expiresAt: Date | string)
   return `Hi, I'm the Tax Specialist for ${practice}. I'll help you gather the documents your accountant needs. It takes about 5 minutes, and you can come back to this link any time before ${expiry}.`;
 }
 
-/** Wording stored against popia-client-agent-2. The practice name is filled in. */
+/** Wording stored against popia-client-agent-3. The practice name is filled in. */
 export function clientConsentNotice(practiceName: string): string {
   const practice = cleanPracticeName(practiceName) || "your accountant";
-  return `I agree that ${practice} may securely store the documents I upload here for my tax file, using Milōn. Medical aid: send the tax certificate totals only.`;
+  return `I agree that ${practice} may securely store what I upload here, and the messages in this chat, for this request, using Milōn.`;
 }
 
 /**
@@ -147,10 +147,9 @@ export function clientAgentChecklistIntro(
 }
 
 /** Thank-you after Next stores completed_at. Nothing is emailed. One paragraph, no second practice line. */
-export function clientAgentThanks(input: {
-  firstName: string | null;
-  practiceName: string;
-}): { text: string } {
+export function clientAgentThanks(input: { firstName: string | null; practiceName: string }): {
+  text: string;
+} {
   const practice = cleanPracticeName(input.practiceName) || "Your accountant";
   const name = (input.firstName ?? "").trim();
   const hello = name ? `Thank you, ${name}.` : "Thank you.";
@@ -382,7 +381,11 @@ export function finishItem(input: {
   const explanation = input.explanation?.trim() ?? "";
   if (!input.hasFile && input.quality === "usable") return { ok: false, reason: "empty" };
   // A file that is incomplete still needs a note. A missing document does not.
-  if (input.hasFile && (input.quality === "incomplete" || input.quality === "poor") && explanation.length === 0) {
+  if (
+    input.hasFile &&
+    (input.quality === "incomplete" || input.quality === "poor") &&
+    explanation.length === 0
+  ) {
     return { ok: false, reason: "explanation" };
   }
   return { ok: true, explanation: explanation.length > 0 ? explanation : null };
@@ -411,7 +414,10 @@ export type PublicChecklistItem = {
 /** A name the client can see. No path, no control characters, capped. */
 export function sanitizeClientFileName(name: string): string {
   const base = name.split(/[/\\]/).pop() ?? "";
-  const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim();
+  const cleaned = base
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   return cleaned.slice(0, 120);
 }
 
@@ -660,6 +666,8 @@ export type UploadGrant = {
   exp: number;
   /** Sanitized client-visible file name. Absent on grants issued before it was stored. */
   name?: string;
+  /** Required label on a mission upload. Absent on a checklist grant. */
+  label?: string;
 };
 
 function b64urlEncode(bytes: Uint8Array): string {
@@ -670,7 +678,8 @@ function b64urlEncode(bytes: Uint8Array): string {
 
 function b64urlDecode(value: string): Uint8Array | null {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) return null;
-  const padded = value.replaceAll("-", "+").replaceAll("_", "/") + "=".repeat((4 - (value.length % 4)) % 4);
+  const padded =
+    value.replaceAll("-", "+").replaceAll("_", "/") + "=".repeat((4 - (value.length % 4)) % 4);
   try {
     const binary = atob(padded);
     const bytes = new Uint8Array(binary.length);
@@ -729,6 +738,7 @@ export async function readUploadGrant(secret: string, token: string): Promise<Up
   if (!Number.isInteger(parsed.size) || !Number.isInteger(parsed.exp)) return null;
   if ((parsed.exp as number) <= Date.now()) return null;
   const name = typeof parsed.name === "string" ? sanitizeClientFileName(parsed.name) : "";
+  const label = typeof parsed.label === "string" ? parsed.label.replace(/\s+/g, " ").trim() : "";
   return {
     sendId: parsed.sendId,
     itemKey: parsed.itemKey,
@@ -737,6 +747,7 @@ export async function readUploadGrant(secret: string, token: string): Promise<Up
     mime: parsed.mime,
     exp: parsed.exp as number,
     ...(name ? { name } : {}),
+    ...(label ? { label: label.slice(0, 200) } : {}),
   };
 }
 
