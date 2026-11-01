@@ -129,12 +129,12 @@ assert(panel.includes("Confirm this address"), "the accountant confirms the emai
 assert(/>\s*Send\s*</.test(panel), "the button is Send");
 assert(panel.includes("recipientEmail: email"), "Send posts the confirmed address");
 assert(panel.includes("recipientFirstName: firstName"), "Send posts the first name");
-assert(panel.includes("items: chosen.items.map"), "Send posts the chosen documents");
-assert(panel.includes('type="checkbox"'), "the dialog picks documents with checkboxes");
-assert(panel.includes("send-agent-other-label"), "other has a label field");
+assert(panel.includes("missionKey: nextMission"), "Send posts the mission");
+assert(panel.includes("Note for the agent (optional)"), "the note is optional");
+assert(!panel.includes('type="checkbox"'), "the physio checklist is gone");
+assert(!panel.includes("TaxPackPanel"), "the tax pack is not on this card");
 assert(panel.includes("min-h-11"), "rows keep a 44px tap target");
-assert(panel.includes("SEND_DEFAULT_ITEM_KEYS"), "the current five start ticked");
-assert(panel.includes("SEND_ITEM_KEYS.map"), "the picker lists every allowed document");
+assert(panel.includes("data-send-agent-resend"), "resend sits on the latest row");
 const effect = panel.slice(panel.indexOf("useEffect"), panel.indexOf("const open"));
 assert(!effect.includes("mint("), "mail is not sent on load");
 const listBody = fn.slice(
@@ -165,22 +165,34 @@ assert(
   "the address is trimmed on the server",
 );
 assert(
-  mintBody.indexOf("sendAgentFirmAllowed") < mintBody.indexOf("chooseSendItems"),
-  "the item list is checked after the allowlist",
+  mintBody.indexOf("sendAgentFirmAllowed") < mintBody.indexOf("chooseMission"),
+  "the mission is checked after the allowlist",
 );
 assert(
-  mintBody.indexOf("chooseSendItems") < mintBody.indexOf(".insert("),
-  "a bad item list is refused before anything is written",
+  mintBody.indexOf("chooseMission") < mintBody.indexOf(".insert("),
+  "a bad mission is refused before anything is written",
 );
-assert(mintBody.includes("label: item.label"), "the chosen label is stored");
-assert(mintBody.includes("totals_only: item.totalsOnly"), "medical aid stays totals only");
+assert(mintBody.includes('item_key: "other"'), "a new send stores the legacy filler key");
+assert(mintBody.includes("mission_prompt: missionPrompt"), "the filled prompt is stored");
+const inviteCall = mintBody.slice(
+  mintBody.indexOf("sendClientAgentInvite"),
+  mintBody.indexOf("if (!mailed.ok)"),
+);
+assert(
+  !inviteCall.includes("firmNote") && !inviteCall.includes("firm_note"),
+  "the email omits the firm note",
+);
 assert(route.includes("<SendAgentPanel"), "the client file mounts the panel");
 assert(route.includes("market={clientMarket}"), "the expiry uses the client market");
 assert(panel.includes("formatDate("), "expiry uses the shared date formatter");
 assert(!panel.includes("toLocaleDateString"), "expiry is not formatted by locale");
 assert(
-  route.includes('detail: "A Tax Specialist invite for this client."'),
-  "the Books link offers the invite",
+  route.includes('detail: "Send one agent to this client for one purpose."'),
+  "the Books link offers the mission",
+);
+assert(
+  route.includes('subtitle="Send one agent to this client for one purpose."'),
+  "the page subtitle names one purpose",
 );
 const nicola = recipientFirstName("  Nicola  ");
 assert(nicola.ok && nicola.name === "Nicola", "the first name is trimmed");
@@ -191,13 +203,18 @@ assert(recipientEmail("  Nicola@Example.com ") === "nicola@example.com", "the ad
 assert(recipientEmail("not-an-email") === null, "a bad address is refused");
 assert(panel.includes("SilentAgentPortrait"), "the portrait is the silent avatar");
 assert(panel.includes("data-send-agent-revoke"), "revoke sits with the link");
-assert(panel.includes('face="tax_specialist"'), "Tax Specialist face");
+assert(panel.includes("sendAgentFace"), "each agent uses its own silent face");
 assert(!panel.includes("flex-row"), "the panel stacks vertically");
 
 const nav = clientNavSearch({ tab: "home" }, "books", "send-agent");
 assert(nav.tab === "portal" && nav.section === "send-agent", "Send an agent is a Books page");
+const homeNav = clientNavSearch({ tab: "home" }, "send-agent");
+assert(
+  homeNav.tab === "portal" && homeNav.section === "send-agent",
+  "the Home heading opens the same page",
+);
 const rail = clientRailSelection({ tab: "portal", section: "send-agent" });
-assert(rail.headingId === "books" && rail.subId === "send-agent", "the rail item is under Books");
+assert(rail.headingId === "send-agent" && rail.subId === null, "the rail item is the Home heading");
 const kept = canonicalizeAccountantSearch({ tab: "portal", section: "send-agent" });
 assert(kept.section === "send-agent", "the section is not dropped");
 
@@ -247,9 +264,15 @@ const custom = chooseSendItems([
 assert(custom.ok, "a custom selection is accepted");
 if (custom.ok) {
   assert(custom.items.length === 2, "only the ticked documents are stored");
-  assert(custom.items[0]?.label === SEND_ITEM_LABELS.bank_statements, "a known label is not overwritten");
+  assert(
+    custom.items[0]?.label === SEND_ITEM_LABELS.bank_statements,
+    "a known label is not overwritten",
+  );
   assert(custom.items[0]?.totalsOnly === false, "bank statements are not totals only");
-  assert(custom.items[1]?.itemKey === "other" && custom.items[1].label === "Trust deed", "other stores the trimmed label");
+  assert(
+    custom.items[1]?.itemKey === "other" && custom.items[1].label === "Trust deed",
+    "other stores the trimmed label",
+  );
   assert(custom.items[1].totalsOnly === false, "other is not totals only");
 }
 

@@ -105,6 +105,7 @@ const RAIL_PATHS: Record<string, ReactNode> = {
     </>
   ),
   caret: <path d="m4.6 6.4 3.4 3.4 3.4-3.4" />,
+  "send-agent": <path d="M2.6 8.2 13.4 3.2 8.4 13.4 7.2 9.2 2.6 8.2z" />,
 };
 
 /** Rail/nav item icon. Unknown ids render nothing (practice rail, future items). */
@@ -151,7 +152,12 @@ export function PeriodPill({
   const { market } = useMarketFormat();
   if (pending) {
     return (
-      <span className="period-pill" data-period-pending="true" aria-busy="true" title="Figures period">
+      <span
+        className="period-pill"
+        data-period-pending="true"
+        aria-busy="true"
+        title="Figures period"
+      >
         <RailIcon id="calendar" />
         <span className="period-pill-pending" aria-hidden="true" />
         <span className="sr-only">Loading period</span>

@@ -3,7 +3,10 @@
  * Does not log the recipient, the given name, the link, or the body.
  */
 import { inviteFromAddress, RESEND_SEND_TIMEOUT_MS } from "@/lib/client-invite-email";
-import { renderClientAgentInviteEmail } from "@/lib/client-agent-invite-email";
+import {
+  renderClientAgentInviteEmail,
+  type ClientAgentInviteCopy,
+} from "@/lib/client-agent-invite-email";
 
 export function clientAgentInviteFrom(practiceName: string, fromRaw?: string | null): string {
   const address = inviteFromAddress(fromRaw);
@@ -23,6 +26,7 @@ export async function sendClientAgentInvite(input: {
   link: string;
   expiresAt: string;
   idempotencyKey: string;
+  copy?: ClientAgentInviteCopy;
   apiKey?: string | null;
   fromEmail?: string | null;
   fetchImpl?: typeof fetch;
@@ -34,6 +38,7 @@ export async function sendClientAgentInvite(input: {
     link: input.link,
     expiresAt: input.expiresAt,
     firstName: input.firstName,
+    copy: input.copy,
   });
   const fetchImpl = input.fetchImpl ?? fetch;
   try {

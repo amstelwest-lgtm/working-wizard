@@ -180,7 +180,12 @@ function destinationForSection(
   if (section === "pillars" || (section === "health" && focus === "pillars")) {
     return { tab: "health", section: "pillars", focus: "pillars" };
   }
-  if (section === "health" || section === "ratios" || section === "today" || section === "today-complex") {
+  if (
+    section === "health" ||
+    section === "ratios" ||
+    section === "today" ||
+    section === "today-complex"
+  ) {
     return { tab: "health", focus: "health" };
   }
   if (section === "collections") return { tab: "cash", section: "collections" };
@@ -331,7 +336,12 @@ function sectionFromView(view: string | null | undefined): string {
 
 /** Report key → its own page. `budget` must not reuse the Budget tab's section. */
 export function reportPdfSection(report: string): RailSubsection | null {
-  if (report === "scorecard" || report === "forecast" || report === "waterfall" || report === "benchmark") {
+  if (
+    report === "scorecard" ||
+    report === "forecast" ||
+    report === "waterfall" ||
+    report === "benchmark"
+  ) {
     return report;
   }
   if (report === "budget") return "budget-pdf";
@@ -387,7 +397,8 @@ export function canonicalizeAccountantSearch(input: {
   // A named agent stays on the search and opens that thread. `?tab=overview&section=cash`
   // still names the section, so a bare overview is the only one that collapses here.
   if (tab === "home" || (tab === "overview" && !section)) return finish({ tab: "home" });
-  if (tab === "desk" || tab === "ask" || tab === "bot" || tab === "milon-bot") return finish({ tab: "home" });
+  if (tab === "desk" || tab === "ask" || tab === "bot" || tab === "milon-bot")
+    return finish({ tab: "home" });
   if (tab === "books") {
     if (section === "connections") return finish({ tab: "portal", section: "connections" });
     if (section === "documents" || section === "library" || section === "client-library") {
@@ -416,7 +427,9 @@ export function canonicalizeAccountantSearch(input: {
   }
 
   if (!tab && section) {
-    return finish(destinationForSection(section, focus) ?? LEGACY_DESTINATIONS[section] ?? { tab: "home" });
+    return finish(
+      destinationForSection(section, focus) ?? LEGACY_DESTINATIONS[section] ?? { tab: "home" },
+    );
   }
 
   return finish(LEGACY_DESTINATIONS[tab] ?? { tab: "home" });
@@ -504,7 +517,11 @@ export function accountantValidatedSearch(search: {
     typeof search.section === "string" ||
     viewNamesPage.length > 0;
   if (!hasAddress) {
-    if (typeof search.report === "string" && search.report.length > 0 && search.report.length <= 64) {
+    if (
+      typeof search.report === "string" &&
+      search.report.length > 0 &&
+      search.report.length <= 64
+    ) {
       const page = reportPdfSection(search.report) ?? "all";
       out.tab = "reports";
       out.section = page;
@@ -653,7 +670,7 @@ export function clientRailSelection(input: {
     case "portal":
       if (section === "connections") return { headingId: "books", subId: "connections" };
       if (section === "documents") return { headingId: "books", subId: "documents" };
-      if (section === "send-agent") return { headingId: "books", subId: "send-agent" };
+      if (section === "send-agent") return { headingId: "send-agent", subId: null };
       return { headingId: "books", subId: null };
     case "settings":
       return { headingId: "settings", subId: null };
@@ -700,12 +717,18 @@ export function clientNavSearch<T extends object>(
   if (headingId === "moves") return accountantClientTabSearch(prev, "moves");
   if (headingId === "plan") {
     if (sub === "overdue") {
-      const next = accountantClientTabSearch(prev, "plan", { section: "overdue" }) as Record<string, unknown>;
+      const next = accountantClientTabSearch(prev, "plan", { section: "overdue" }) as Record<
+        string,
+        unknown
+      >;
       next.filter = "overdue";
       return next as T;
     }
     if (sub === "open") {
-      const next = accountantClientTabSearch(prev, "plan", { section: "open" }) as Record<string, unknown>;
+      const next = accountantClientTabSearch(prev, "plan", { section: "open" }) as Record<
+        string,
+        unknown
+      >;
       delete next.filter;
       return next as T;
     }
@@ -715,9 +738,13 @@ export function clientNavSearch<T extends object>(
   }
   if (headingId === "reports") {
     if (sub === "drafts") return accountantClientTabSearch(prev, "reports", { section: "drafts" });
-    if (sub === "draft-tool") return accountantClientTabSearch(prev, "reports", { section: "draft-tool" });
+    if (sub === "draft-tool")
+      return accountantClientTabSearch(prev, "reports", { section: "draft-tool" });
     if (sub === "sent") {
-      const next = accountantClientTabSearch(prev, "reports", { section: "sent" }) as Record<string, unknown>;
+      const next = accountantClientTabSearch(prev, "reports", { section: "sent" }) as Record<
+        string,
+        unknown
+      >;
       delete next.report;
       delete next.action;
       return next as T;
@@ -729,12 +756,18 @@ export function clientNavSearch<T extends object>(
       sub === "benchmark" ||
       sub === "budget-pdf"
     ) {
-      const next = accountantClientTabSearch(prev, "reports", { section: sub }) as Record<string, unknown>;
+      const next = accountantClientTabSearch(prev, "reports", { section: sub }) as Record<
+        string,
+        unknown
+      >;
       next.report = sub === "budget-pdf" ? "budget" : sub;
       return next as T;
     }
     if (sub === "all") {
-      const next = accountantClientTabSearch(prev, "reports", { section: "all" }) as Record<string, unknown>;
+      const next = accountantClientTabSearch(prev, "reports", { section: "all" }) as Record<
+        string,
+        unknown
+      >;
       delete next.report;
       delete next.action;
       return next as T;
@@ -745,6 +778,9 @@ export function clientNavSearch<T extends object>(
     return next as T;
   }
   if (headingId === "tax") return accountantClientTabSearch(prev, "tax");
+  if (headingId === "send-agent") {
+    return accountantClientTabSearch(prev, "portal", { section: "send-agent" });
+  }
   if (headingId === "books") {
     if (sub === "connections" || sub === "documents" || sub === "send-agent") {
       return accountantClientTabSearch(prev, "portal", { section: sub });
@@ -861,7 +897,8 @@ export function legacyHashDestination(
       : SECTION_HASHES[id];
   if (sectionHash) {
     if (homeExplicit) return null;
-    if (current.tab === sectionHash.tab && (current.section ?? undefined) === sectionHash.section) return null;
+    if (current.tab === sectionHash.tab && (current.section ?? undefined) === sectionHash.section)
+      return null;
     return sectionHash;
   }
   const mapped = HASH_DESTINATIONS[id];
@@ -938,7 +975,8 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     out.agent = search.agent;
   }
   if (search.profile === 1 || search.profile === "1") out.profile = 1;
-  if (typeof search.draft === "string" && /^[0-9a-f-]{36}$/i.test(search.draft)) out.draft = search.draft;
+  if (typeof search.draft === "string" && /^[0-9a-f-]{36}$/i.test(search.draft))
+    out.draft = search.draft;
   if (out.tab === "cash" || out.section === "forecast") {
     const view = search.view === "table" ? "13week" : search.view;
     if (view === "13week" || view === "setup" || view === "audit" || view === "scenario") {

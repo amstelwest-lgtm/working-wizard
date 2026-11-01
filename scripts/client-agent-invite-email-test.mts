@@ -20,11 +20,11 @@ const mail = renderClientAgentInviteEmail({
 
 assert(mail.subject === "Theo's practice asked for a few documents", "subject names the practice");
 assert(
-  mail.html.includes("Only send what you have — skip anything that doesn't apply."),
+  mail.html.includes("Only send what you have. Skip anything that doesn't apply."),
   "html has the skip line",
 );
 assert(
-  mail.text.includes("Only send what you have — skip anything that doesn't apply."),
+  mail.text.includes("Only send what you have. Skip anything that doesn't apply."),
   "text has the skip line",
 );
 assert(
@@ -53,12 +53,18 @@ assert(
   "text greets Hello",
 );
 assert(
-  mail.html.includes("To help with your tax this year, we need a few documents from you."),
-  "html asks for this year's documents",
+  mail.html.includes("To help with your accounts, we need a few documents from you."),
+  "html asks for the documents",
 );
 assert(
-  mail.text.includes("To help with your tax this year, we need a few documents from you."),
-  "text asks for this year's documents",
+  mail.text.includes("To help with your accounts, we need a few documents from you."),
+  "text asks for the documents",
+);
+assert(
+  mail.html.includes(
+    "This link opens a short conversation with our Tax Specialist. You'll be asked to agree before anything is stored.",
+  ),
+  "the second sentence names the agent",
 );
 assert(mail.html.includes("This link expires on 4 Nov 2026."), "html has the expiry");
 assert(mail.text.includes("This link expires on 4 Nov 2026."), "text has the expiry");

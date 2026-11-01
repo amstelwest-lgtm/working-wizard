@@ -41,6 +41,8 @@ import {
   type PublicItem,
 } from "@/lib/client-agent-link.functions";
 import { uploadToClientAgentSignedUrl } from "@/lib/client-agent-upload-browser";
+import { ClientAgentMissionVisit } from "@/components/client-agent-mission-visit";
+import { cleanUploadLabel } from "@/lib/client-agent-missions";
 import { pickedPdfLooksEncrypted } from "@/lib/pdf-password";
 import { avatarPoster, fmClipSources } from "@/lib/fm-avatar-state";
 
@@ -268,10 +270,17 @@ export function ClientAgentLinkScreen({
               ) : null}
             </div>
           ) : (
-            <section className="flex flex-col gap-3 rounded-2xl border border-[#DBEAFE] p-3" data-doc-help="true">
+            <section
+              className="flex flex-col gap-3 rounded-2xl border border-[#DBEAFE] p-3"
+              data-doc-help="true"
+            >
               <h2 className="text-base font-semibold">{CLIENT_AGENT_FAQ_TITLE}</h2>
               {help.map((entry) => (
-                <div key={entry.itemKey} className="flex flex-col gap-1" data-doc-help-item={entry.itemKey}>
+                <div
+                  key={entry.itemKey}
+                  className="flex flex-col gap-1"
+                  data-doc-help-item={entry.itemKey}
+                >
                   <p className="text-sm font-semibold">{entry.label}</p>
                   <p className="text-sm leading-6 text-[#3D5270]">{entry.body}</p>
                 </div>
@@ -367,7 +376,7 @@ export function ClientAgentLinkScreen({
                   multiple
                   accept={SEND_FILE_MIMES.join(",")}
                   disabled={busy}
-                    onChange={(event) => {
+                  onChange={(event) => {
                     const picked = Array.from(event.target.files ?? []);
                     event.target.value = "";
                     const files = picked.filter((file) => file.size <= SEND_FILE_MAX_BYTES);
@@ -414,7 +423,10 @@ export function ClientAgentLinkScreen({
                       Optional note
                       <textarea
                         className="mt-1 min-h-11 w-full rounded-xl border border-[#DBEAFE] p-2 text-sm text-[#102A43]"
-                        value={explanations[item.itemKey] ?? (noteFor === item.itemKey ? explanation : item.explanation ?? "")}
+                        value={
+                          explanations[item.itemKey] ??
+                          (noteFor === item.itemKey ? explanation : (item.explanation ?? ""))
+                        }
                         maxLength={2000}
                         onChange={(event) => {
                           if (onExplanationFor) onExplanationFor(item.itemKey, event.target.value);
@@ -494,6 +506,9 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   const [lockedItems, setLockedItems] = useState<Record<string, boolean>>({});
   const [fileNames, setFileNames] = useState<Record<string, string[]>>({});
   const [thanks, setThanks] = useState(false);
+  const [uploadLabel, setUploadLabel] = useState("");
+  const [missionLocked, setMissionLocked] = useState(false);
+  const [missionPassword, setMissionPassword] = useState("");
 
   const shownView: OpenLinkResult | null = view?.ok
     ? {
@@ -537,7 +552,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   useEffect(() => {
     let alive = true;
     setBusy(true);
-    void openRef.current({ data: { token } })
+    void openRef
+      .current({ data: { token } })
       .then((result) => {
         if (!alive) return;
         setLoadFailed(false);
@@ -577,7 +593,9 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     }
     rememberScroll();
     setBusy(true);
-    setNotice(files.length === accepted.length ? null : "Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
+    setNotice(
+      files.length === accepted.length ? null : "Use a PDF, JPG, PNG, or HEIC up to 20 MB.",
+    );
     try {
       if (mode === "replace" && item.hasFile) {
         const removed = await removeUpload({ data: { token, itemKey: item.itemKey } });
@@ -713,7 +731,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   };
 
   const onAsk = async () => {
-    if (!CLIENT_AGENT_CHAT_ENABLED) return;
+    const missionChat = Boolean(view?.ok && view.mission);
+    if (!missionChat && !CLIENT_AGENT_CHAT_ENABLED) return;
     const message = chatDraft.trim();
     if (!message) return;
     setBusy(true);
@@ -804,6 +823,156 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
       setBusy(false);
     }
   };
+
+  const uploadMission = async (files: File[]) => {
+    const label = cleanUploadLabel(uploadLabel);
+    if (!label.ok) {
+      setNotice("Name this file before you upload it.");
+      return;
+    }
+    const accepted = files.filter((file) => sizeAllowed(file.size));
+    if (accepted.length === 0) {
+      setNotice("Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
+      return;
+    }
+    setBusy(true);
+    setNotice(null);
+    try {
+      let lockedPick = false;
+      for (const file of accepted) {
+        if (clientFileMime(file.type, file.name) === "application/pdf") {
+          try {
+            if (await pickedPdfLooksEncrypted(file)) lockedPick = true;
+          } catch {
+            // Unreadable bytes never block the upload itself.
+          }
+        }
+        const prepared = await prepareUpload({
+          data: {
+            token,
+            itemKey: "other",
+            size: file.size,
+            mime: clientFileMime(file.type, file.name),
+            name: file.name,
+            label: label.label,
+          },
+        });
+        if (!prepared.ok) {
+          setNotice(prepared.body);
+          return;
+        }
+        const placed = await uploadToClientAgentSignedUrl({
+          path: prepared.path,
+          token: prepared.token,
+          file,
+        });
+        if (!placed) {
+          setNotice("The document could not be saved.");
+          return;
+        }
+        const confirmed = await confirmUpload({
+          data: { token, itemKey: "other", path: prepared.path, grant: prepared.grant },
+        });
+        if (!confirmed.ok) {
+          setNotice(confirmed.body);
+          return;
+        }
+      }
+      setUploadLabel("");
+      setMissionLocked(lockedPick);
+      if (lockedPick && missionPassword.trim()) {
+        await savePassword({ data: { token, itemKey: "other", password: missionPassword.trim() } });
+        setMissionLocked(false);
+        setMissionPassword("");
+      } else if (lockedPick) {
+        setNotice(CLIENT_AGENT_PASSWORD_REQUIRED);
+      }
+      setView(await open({ data: { token } }));
+    } catch {
+      setNotice("The document could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (shownView?.ok && shownView.mission) {
+    const mission = shownView.mission;
+    return (
+      <ClientAgentMissionVisit
+        practiceName={shownView.practiceName}
+        mission={mission}
+        consented={shownView.consented}
+        notice={shownView.notice}
+        completed={Boolean(thanks || shownView.completed)}
+        busy={busy}
+        noticeText={notice}
+        messages={
+          chatMessages.length > 0
+            ? chatMessages
+            : mission.messages.map((message) => ({
+                role: message.role === "client" ? "you" : "she",
+                text: message.body,
+              }))
+        }
+        draft={chatDraft}
+        uploadLabel={uploadLabel}
+        onAgree={() => void onAgree()}
+        onDraft={setChatDraft}
+        onAsk={() => void onAsk()}
+        onUploadLabel={setUploadLabel}
+        onUpload={(files) => void uploadMission(files)}
+        passwordPrompt={missionLocked}
+        password={missionPassword}
+        onPassword={setMissionPassword}
+        onSavePassword={() => {
+          void (async () => {
+            const value = missionPassword.trim();
+            if (!value) return;
+            setBusy(true);
+            setNotice(null);
+            try {
+              const saved = await savePassword({
+                data: { token, itemKey: "other", password: value },
+              });
+              if (!saved.ok) {
+                setNotice(saved.body);
+                return;
+              }
+              setMissionLocked(false);
+              setMissionPassword("");
+            } catch {
+              setNotice(CLIENT_AGENT_PASSWORD_UNSAVED);
+            } finally {
+              setBusy(false);
+            }
+          })();
+        }}
+        onDone={() => {
+          void (async () => {
+            if (shownView.completed) {
+              setThanks(true);
+              return;
+            }
+            setBusy(true);
+            setNotice(null);
+            try {
+              const saved = await complete({ data: { token } });
+              if (!saved.ok) {
+                setNotice(saved.body);
+                return;
+              }
+              setThanks(true);
+              setView(await open({ data: { token } }));
+            } catch {
+              setNotice("That could not be saved.");
+            } finally {
+              setBusy(false);
+            }
+          })();
+        }}
+      />
+    );
+  }
 
   return (
     <ClientAgentLinkScreen

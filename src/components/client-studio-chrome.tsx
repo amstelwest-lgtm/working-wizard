@@ -57,6 +57,15 @@ function clientSections(
             },
           })),
         },
+        ...(showSendAgent
+          ? [
+              {
+                id: "send-agent",
+                label: "Send an agent",
+                to: go("send-agent"),
+              },
+            ]
+          : []),
       ],
     },
     {
