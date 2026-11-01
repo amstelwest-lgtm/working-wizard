@@ -673,7 +673,11 @@ assert(
 );
 assert(widgetSrc.includes('mode: "agent"'), "widget can start an objective");
 assert(widgetSrc.includes("parseAgentObjective"), "widget detects the objective prefix");
-assert(widgetSrc.includes("ask-ai-trace"), "widget renders the trace");
+assert(
+  widgetSrc.includes("onLoadDetail") && widgetSrc.includes("howDetailLines"),
+  "the widget loads the run trail only when How I got this is opened",
+);
+assert(!widgetSrc.includes("renderAgentTrace"), "the widget does not paint the long trail on every reply");
 assert(migration.includes("CREATE TABLE IF NOT EXISTS public.milon_bot_runs"), "run table");
 assert(migration.includes("has_client_access"), "run table is readable only with client access");
 assert(!/token text/i.test(migration), "run table has no token column");

@@ -316,6 +316,7 @@ export function OwnerDoor({
   const recRef = useRef<BrowserSpeechSession | null>(null);
   const listenGen = useRef(0);
   const threadsRef = useRef(threads);
+  const howDetailRef = useRef(new Map<string, string[]>());
   const screenRef = useRef(screen);
   const agentRef = useRef(agent);
   const pushedRef = useRef(false);
@@ -1039,9 +1040,12 @@ export function OwnerDoor({
       setAgentError(asked, result.error, result.code);
       return;
     }
+    if (result.howDetail && result.card.how?.detailId) {
+      howDetailRef.current.set(result.card.how.detailId, result.howDetail);
+    }
     updateThread(asked, askedClient, (thread) => ({
       ...thread,
-      messages: [...thread.messages, { role: "agent", text: result.answer }],
+      messages: [...thread.messages, { role: "agent", text: result.answer, card: result.card }],
     }));
     setTalk((current) => (current?.agent === asked && current.mode === "working" ? null : current));
   }
@@ -1185,6 +1189,10 @@ export function OwnerDoor({
             });
           }}
           onBack={closeChat}
+          onLoadDetail={async (id) => {
+            const lines = howDetailRef.current.get(id);
+            return lines?.length ? { lines } : null;
+          }}
         />
       ) : null}
       {railScreen === "accountant" && deliverablesUnavailable ? (

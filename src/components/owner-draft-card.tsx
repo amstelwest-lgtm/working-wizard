@@ -7,6 +7,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { agentShortName } from "@/lib/milon-team";
+import { AgentReplyDecisionStrip } from "@/components/agent-reply/agent-reply-shell";
 import { HealthNarrativeLine } from "@/components/health-narrative-line";
 import { renderHealthNarrative, type HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { useMarket } from "@/contexts/market";
@@ -268,14 +269,25 @@ export function OwnerDraftCard({
           </button>
         </>
       ) : (
-        <>
-          <button type="button" className={layout === "desk" ? "milon-desk-btn primary" : primary ? "btn gold owner-draft-approve" : "owner-btn-secondary owner-draft-approve"} onClick={() => setEditing(true)}>
-            Approve
-          </button>
-          <button type="button" className={layout === "desk" ? "milon-desk-btn ghost" : "owner-draft-dismiss"} onClick={() => void dismiss()}>
-            Dismiss
-          </button>
-        </>
+        <AgentReplyDecisionStrip
+          decision={{ kind: "approve_dismiss", id: row.id, prompt: "" }}
+          disabled={busy}
+          onDecide={(action) => {
+            if (action === "approve") setEditing(true);
+            else void dismiss();
+          }}
+          buttonClassName={(action) =>
+            layout === "desk"
+              ? action === "approve"
+                ? "milon-desk-btn primary"
+                : "milon-desk-btn ghost"
+              : action === "approve"
+                ? primary
+                  ? "btn gold owner-draft-approve"
+                  : "owner-btn-secondary owner-draft-approve"
+                : "owner-draft-dismiss"
+          }
+        />
       )}
     </div>
   ) : null;

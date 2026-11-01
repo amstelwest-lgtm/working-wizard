@@ -615,3 +615,127 @@
   color: #94a3b8;
 }
 .dark .ask-ai-note { color: #8b93a7; }
+
+/* Shared agent reply card. Owner chat and the Ask widget both use it. */
+.agent-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 70ch;
+  color: inherit;
+}
+.agent-reply-headline {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.agent-reply-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-reply-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 10px;
+}
+.agent-reply-kpi-label {
+  font-size: 0.75rem;
+  opacity: 0.72;
+}
+.agent-reply-kpi-value {
+  font-size: 1rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.agent-reply-bullets {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.agent-reply-bullets li + li {
+  margin-top: 4px;
+}
+.agent-reply-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-reply-figure {
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+.agent-reply-decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.agent-reply-decision-btn {
+  border-radius: 8px;
+  padding: 8px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.agent-reply-decision-btn.is-primary {
+  font-weight: 650;
+}
+.agent-reply-decision-prompt {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+.agent-reply-how {
+  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  padding-top: 8px;
+}
+.agent-reply-how-toggle,
+.agent-reply-how-static {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.agent-reply-how-toggle {
+  cursor: pointer;
+}
+.agent-reply-how-kicker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.agent-reply-how-summary {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.agent-reply-how-detail {
+  margin: 8px 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+.agent-reply-how-missing,
+.agent-reply-how-loading {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}

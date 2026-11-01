@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import { formatOwnerReply, ownerReplyPlainText } from "@/lib/owner-reply-format";
+import { agentReplyPlainText, structureAgentReply, type AgentReplyHowDetail } from "@/lib/agent-reply";
 import type { ResolvedMarket } from "@/lib/market";
 import type { FmAvatarClip } from "@/lib/fm-avatar-state";
 import { ownerPlanLine } from "@/lib/owner-plan";
@@ -16,10 +16,11 @@ import type { OwnerMotion } from "@/lib/owner-presence";
 import { browserSpeechPort, createReplySpeech, type ReplySpeech } from "@/lib/owner-reply-speech";
 import { STARTER_TRIAL_ENDED_MESSAGE } from "@/lib/starter-trial-constants";
 import { ChatIcon, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
-import { OwnerReply } from "./owner-reply";
+import { AgentReplyShell } from "@/components/agent-reply/agent-reply-shell";
+import type { OwnerChatMessage } from "@/lib/owner-chat-thread";
 import { OwnerSubscribe } from "./owner-subscribe";
 
-export type OwnerChatTurn = { role: "owner" | "agent"; text: string };
+export type OwnerChatTurn = OwnerChatMessage;
 
 const MOTION_LABEL: Record<OwnerMotion, string> = {
   idle: "Idle",
@@ -53,7 +54,7 @@ export function OwnerChat({
   onListen,
   onSpeech,
   onBack,
-  market,
+  onLoadDetail,
 }: {
   agent: AgentKey;
   variant: AvatarVariant;
@@ -74,6 +75,9 @@ export function OwnerChat({
   onListen: () => void;
   onSpeech?: (speaking: boolean) => void;
   onBack: () => void;
+  /** Loads the stored how-trail for this session. Absent after a reload. */
+  onLoadDetail?: (detailId: string) => Promise<AgentReplyHowDetail | null>;
+  /** The door still passes the market. Dates on the reply are already formatted. */
   market: Pick<ResolvedMarket, "locale" | "timezone">;
 }) {
   const short = agentShortName(agent);
@@ -111,8 +115,9 @@ export function OwnerChat({
     return () => window.removeEventListener("keydown", onKey);
   }, [onBack]);
 
-  function listenTo(messageId: string, text: string) {
-    speech().tap(messageId, ownerReplyPlainText(formatOwnerReply(text, market)), {
+  function listenTo(messageId: string, text: string, card: OwnerChatTurn["card"]) {
+    const reply = card ?? structureAgentReply(text, { agent });
+    speech().tap(messageId, agentReplyPlainText(reply), {
       onPlay: () => {
         setPlayingId(messageId);
         onSpeechRef.current?.(true);
@@ -156,13 +161,16 @@ export function OwnerChat({
             <li key={messageId} className={`owner-turn is-${turn.role}`}>
               {turn.role === "agent" ? (
                 <>
-                  <OwnerReply model={formatOwnerReply(turn.text, market)} />
+                  <AgentReplyShell
+                    reply={turn.card ?? structureAgentReply(turn.text, { agent })}
+                    onLoadDetail={onLoadDetail}
+                  />
                   <button
                     type="button"
                     className="owner-listen"
                     aria-pressed={playing}
                     aria-label={playing ? "Stop listening to this reply" : "Listen to this reply"}
-                    onClick={() => listenTo(messageId, turn.text)}
+                    onClick={() => listenTo(messageId, turn.text, turn.card)}
                   >
                     {playing ? "Stop" : "Listen"}
                   </button>
