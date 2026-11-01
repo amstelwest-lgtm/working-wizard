@@ -266,7 +266,6 @@ import {
 } from "@/lib/debt-schedule";
 import { NextStepCard } from "@/components/next-step-card";
 import { DataUpToDate } from "@/components/data-up-to-date";
-import { ConnectionsLibraryUpload } from "@/components/connections-library-upload";
 import {
   dataFreshnessLine,
   evidenceForBriefingTab,
@@ -4508,7 +4507,6 @@ function ClientView() {
                           openArchive(openQueriesCount > 0 ? "open" : "resolved")
                         }
                       />
-                      <ConnectionsLibraryUpload clientId={clientId} />
                     </ClientSubpageFrame>
                   ) : null}
                 </div>

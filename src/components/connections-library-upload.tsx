@@ -5,7 +5,11 @@
  * and the same archive as the statement and bank packs (`archiveUploads` →
  * client_artifacts). The row shows up on Client library. This does not apply
  * figures to the books — Upload statements still does that.
+ *
+ * The card stays closed until the accountant opens it, in the same chrome as
+ * the Xero, QuickBooks, and Sage rows.
  */
+import "./connections-library-upload.css";
 import { useRef, useState, type DragEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -48,7 +52,13 @@ export function ConnectionsLibraryUpload({ clientId }: { clientId: string }) {
   const [label, setLabel] = useState("Financial statement");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState<{ fileName: string; summary: string } | null>(null);
+
+  const toggle = () => {
+    if (busy) return;
+    setOpen((current) => !current);
+  };
 
   const chooseType = (next: LibraryDocumentTypeId) => {
     const previous = libraryUploadLabel(typeId, "") ?? "";
@@ -176,115 +186,152 @@ export function ConnectionsLibraryUpload({ clientId }: { clientId: string }) {
   return (
     <section
       data-connections-upload
-      className="mt-6 rounded-xl border border-[#DBEAFE] bg-white p-4 text-[#102A43] sm:p-5"
+      data-connections-upload-open={open ? "true" : "false"}
+      className="ledger-connect ledger-connect--panel connections-upload"
+      aria-labelledby="connections-upload-title"
     >
-      <h2 className="text-lg font-semibold tracking-tight">Upload files</h2>
-      <p className="mt-1 max-w-xl text-sm leading-6 text-[#3D5270]">
-        PDF, CSV, or Excel. Name the file, and Milōn reads it into Client library.
-      </p>
-
-      <label className="mt-4 block text-sm font-semibold" htmlFor="library-upload-type">
-        What are you uploading?
-        <select
-          id="library-upload-type"
-          className="mt-1 min-h-11 w-full rounded-lg border border-[#DBEAFE] bg-white px-3 text-sm font-normal text-[#102A43]"
-          value={typeId}
-          disabled={busy}
-          onChange={(event) => chooseType(event.target.value as LibraryDocumentTypeId)}
-        >
-          {LIBRARY_DOCUMENT_TYPES.map((row) => (
-            <option key={row.id} value={row.id}>
-              {row.label}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="mt-3 block text-sm font-semibold" htmlFor="library-upload-label">
-        Label
-        <input
-          id="library-upload-label"
-          className="mt-1 min-h-11 w-full rounded-lg border border-[#DBEAFE] bg-white px-3 text-sm font-normal text-[#102A43]"
-          value={label}
-          maxLength={80}
-          disabled={busy}
-          placeholder={typeId === "other" ? "Name this file" : "Label on the library row"}
-          onChange={(event) => {
-            setLabel(event.target.value);
-            setSaved(null);
-          }}
-        />
-      </label>
-
-      <button
-        type="button"
-        className="mt-4 flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[#DBEAFE] px-6 py-8 text-sm hover:border-[#0B5FFF] disabled:cursor-default disabled:opacity-70"
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={onDrop}
-        disabled={busy}
-      >
-        {busy ? (
-          <>
-            <Loader2 className="h-6 w-6 animate-spin text-[#0B5FFF]" />
-            <span>Reading the file…</span>
-          </>
-        ) : file ? (
-          <>
-            <FileText className="h-6 w-6 text-[#0B5FFF]" />
-            <span className="font-semibold">{file.name}</span>
-            <span className="text-xs text-[#3D5270]">
-              Choose a different file, or save this one.
-            </span>
-          </>
-        ) : (
-          <>
-            <Upload className="h-6 w-6 text-[#0B5FFF]" />
-            <span className="font-semibold">Drop a PDF, CSV, or Excel file</span>
-            <span className="text-xs text-[#3D5270]">One file at a time, up to 32 MB.</span>
-          </>
-        )}
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={LIBRARY_UPLOAD_ACCEPT}
-        className="sr-only"
-        aria-label="Upload a PDF, CSV, or Excel file"
-        onChange={(event) => {
-          take(event.target.files?.[0] ?? null);
-          event.target.value = "";
-        }}
-      />
-
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <div className="ledger-connect--split connections-upload__bar">
         <button
           type="button"
-          className={PRIMARY}
-          disabled={!ready || busy}
-          onClick={() => void run()}
+          className="connections-upload__summary"
+          aria-expanded={open}
+          aria-controls="connections-upload-form"
+          disabled={busy}
+          onClick={toggle}
         >
-          {busy ? "Reading…" : "Read and save to Client library"}
+          <span className="connections-upload__mark" aria-hidden="true">
+            <Upload />
+          </span>
+          <span className="connections-upload__line">
+            <span id="connections-upload-title" className="ledger-connect__name">
+              Upload files
+            </span>
+            <span className="ledger-connect__meta ledger-connect__meta--flush">
+              PDF, CSV, or Excel → Client library
+            </span>
+          </span>
         </button>
-        <Link
-          to="/clients/$clientId"
-          params={{ clientId }}
-          search={(prev) => accountantClientTabSearch(prev, "portal", { section: "documents" })}
-          className="text-sm font-semibold text-[#0B5FFF] underline-offset-2 hover:underline"
+        <button
+          type="button"
+          className="brand-connect brand-connect--upload"
+          aria-expanded={open}
+          disabled={busy}
+          onClick={toggle}
         >
-          Open Client library
-        </Link>
+          <span className="brand-connect__label">{open ? "Close" : "Upload"}</span>
+        </button>
       </div>
 
-      {saved ? (
-        <p
-          role="status"
-          className="mt-4 rounded-lg border border-[#DBEAFE] bg-[#F4F8FF] px-3 py-2 text-sm"
-          data-library-saved
-        >
-          <span className="font-semibold">{saved.fileName}</span> is in Client library.{" "}
-          {saved.summary}
-        </p>
+      {open ? (
+        <div id="connections-upload-form" className="connections-upload__form">
+          <p className="connections-upload__lede">
+            PDF, CSV, or Excel. Name the file, and Milōn reads it into Client library.
+          </p>
+
+          <label className="mt-4 block text-sm font-semibold" htmlFor="library-upload-type">
+            What are you uploading?
+            <select
+              id="library-upload-type"
+              className="mt-1 min-h-11 w-full rounded-lg border border-[#DBEAFE] bg-white px-3 text-sm font-normal text-[#102A43]"
+              value={typeId}
+              disabled={busy}
+              onChange={(event) => chooseType(event.target.value as LibraryDocumentTypeId)}
+            >
+              {LIBRARY_DOCUMENT_TYPES.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="mt-3 block text-sm font-semibold" htmlFor="library-upload-label">
+            Label
+            <input
+              id="library-upload-label"
+              className="mt-1 min-h-11 w-full rounded-lg border border-[#DBEAFE] bg-white px-3 text-sm font-normal text-[#102A43]"
+              value={label}
+              maxLength={80}
+              disabled={busy}
+              placeholder={typeId === "other" ? "Name this file" : "Label on the library row"}
+              onChange={(event) => {
+                setLabel(event.target.value);
+                setSaved(null);
+              }}
+            />
+          </label>
+
+          <button
+            type="button"
+            className="mt-4 flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[#DBEAFE] px-6 py-8 text-sm hover:border-[#0B5FFF] disabled:cursor-default disabled:opacity-70"
+            onClick={() => inputRef.current?.click()}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={onDrop}
+            disabled={busy}
+          >
+            {busy ? (
+              <>
+                <Loader2 className="h-6 w-6 animate-spin text-[#0B5FFF]" />
+                <span>Reading the file…</span>
+              </>
+            ) : file ? (
+              <>
+                <FileText className="h-6 w-6 text-[#0B5FFF]" />
+                <span className="font-semibold">{file.name}</span>
+                <span className="text-xs text-[#3D5270]">
+                  Choose a different file, or save this one.
+                </span>
+              </>
+            ) : (
+              <>
+                <Upload className="h-6 w-6 text-[#0B5FFF]" />
+                <span className="font-semibold">Drop a PDF, CSV, or Excel file</span>
+                <span className="text-xs text-[#3D5270]">One file at a time, up to 32 MB.</span>
+              </>
+            )}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={LIBRARY_UPLOAD_ACCEPT}
+            className="sr-only"
+            aria-label="Upload a PDF, CSV, or Excel file"
+            onChange={(event) => {
+              take(event.target.files?.[0] ?? null);
+              event.target.value = "";
+            }}
+          />
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className={PRIMARY}
+              disabled={!ready || busy}
+              onClick={() => void run()}
+            >
+              {busy ? "Reading…" : "Read and save to Client library"}
+            </button>
+            <Link
+              to="/clients/$clientId"
+              params={{ clientId }}
+              search={(prev) => accountantClientTabSearch(prev, "portal", { section: "documents" })}
+              className="text-sm font-semibold text-[#0B5FFF] underline-offset-2 hover:underline"
+            >
+              Open Client library
+            </Link>
+          </div>
+
+          {saved ? (
+            <p
+              role="status"
+              className="mt-4 rounded-lg border border-[#DBEAFE] bg-[#F4F8FF] px-3 py-2 text-sm"
+              data-library-saved
+            >
+              <span className="font-semibold">{saved.fileName}</span> is in Client library.{" "}
+              {saved.summary}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );

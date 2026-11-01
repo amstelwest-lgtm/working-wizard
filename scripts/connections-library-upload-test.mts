@@ -39,10 +39,16 @@ assert(libraryFileKind({ name: "note.txt", type: "text/plain" }) === null, "plai
 assert(libraryFileKind({ name: "books.ods", type: "" }) === null, "opendocument stays out");
 assert(libraryFileKind({ name: "scan.png", type: "image/png" }) === null, "photos stay out");
 
-assert(libraryUploadLabel("financial_statement", "") === "Financial statement", "blank label uses the type");
+assert(
+  libraryUploadLabel("financial_statement", "") === "Financial statement",
+  "blank label uses the type",
+);
 assert(libraryUploadLabel("tax", "  IRP5 2026  ") === "IRP5 2026", "a custom label wins");
 assert(libraryUploadLabel("other", "   ") === null, "other needs a name");
-assert(libraryUploadLabel("other", "Engagement letter") === "Engagement letter", "other keeps the name");
+assert(
+  libraryUploadLabel("other", "Engagement letter") === "Engagement letter",
+  "other keeps the name",
+);
 assert(libraryUploadLabel("nope", "x") === null, "unknown type is refused");
 
 const summary = libraryProcessingSummary({
@@ -52,10 +58,19 @@ const summary = libraryProcessingSummary({
 });
 assert(summary === "Acme · 2026-03-31. Revenue as printed.", "the library line names the read");
 assert(libraryProcessingSummary({}).length > 0, "an empty read still has a line");
-assert(!librarySaveAfterReadError("ANTHROPIC_API_KEY is not configured."), "a missing key is not archived");
-assert(librarySaveAfterReadError("We couldn't read enough figures from this file to be useful."), "a thin file is still saved");
+assert(
+  !librarySaveAfterReadError("ANTHROPIC_API_KEY is not configured."),
+  "a missing key is not archived",
+);
+assert(
+  librarySaveAfterReadError("We couldn't read enough figures from this file to be useful."),
+  "a thin file is still saved",
+);
 
-const inserted: Array<{ meta: { source?: string; account_label?: string; summary?: string; document_type?: string }; visibility: string }> = [];
+const inserted: Array<{
+  meta: { source?: string; account_label?: string; summary?: string; document_type?: string };
+  visibility: string;
+}> = [];
 const archived = await archiveUploads(
   {
     clientId: "client-1",
@@ -83,13 +98,19 @@ const archived = await archiveUploads(
   },
 );
 assert(archived.archived.length === 1 && archived.failed.length === 0, "the csv is archived");
-assert(inserted[0]?.visibility === "shared", "an accountant upload is shared so Client library can list it");
+assert(
+  inserted[0]?.visibility === "shared",
+  "an accountant upload is shared so Client library can list it",
+);
 assert(inserted[0]?.meta.source === "connections", "the row is a Connections upload");
 assert(inserted[0]?.meta.account_label === "Financial statement", "the label is the document type");
 assert(inserted[0]?.meta.document_type === "financial_statement", "the type id is stored");
 assert(inserted[0]?.meta.summary === summary, "the Sonnet line is stored on the row");
 const parsed = parseDocumentMeta(inserted[0]?.meta);
-assert(parsed.source === "connections" && parsed.summary === summary, "the library reader keeps the summary");
+assert(
+  parsed.source === "connections" && parsed.summary === summary,
+  "the library reader keeps the summary",
+);
 assert(uploadSourceLabel("connections") === "Connections", "the row says Connections");
 
 const pack = canonicalizeAccountantSearch({ tab: "reports", section: "drafts" });
@@ -99,12 +120,21 @@ assert(tool.tab === "reports" && tool.section === "draft-tool", "Draft tool is i
 const drafter = canonicalizeAccountantSearch({ tab: "drafter" });
 assert(drafter.section === "draft-tool", "the old drafter address opens Draft tool");
 const library = canonicalizeAccountantSearch({ tab: "books", section: "client-library" });
-assert(library.tab === "portal" && library.section === "documents", "Client library keeps the documents section");
+assert(
+  library.tab === "portal" && library.section === "documents",
+  "Client library keeps the documents section",
+);
 const marked = clientRailSelection({ tab: "portal", section: "documents" });
-assert(marked.headingId === "books" && marked.subId === "documents", "Client library stays under Books");
+assert(
+  marked.headingId === "books" && marked.subId === "documents",
+  "Client library stays under Books",
+);
 
 const chrome = readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
-assert(chrome.includes('{ id: "documents", label: "Client library" }'), "sidebar says Client library");
+assert(
+  chrome.includes('{ id: "documents", label: "Client library" }'),
+  "sidebar says Client library",
+);
 assert(chrome.includes('{ id: "drafts", label: "Advisory pack" }'), "sidebar says Advisory pack");
 assert(chrome.includes('{ id: "draft-tool", label: "Draft tool" }'), "sidebar says Draft tool");
 assert(!chrome.includes('label: "Documents"'), "the Books item is no longer Documents");
@@ -114,20 +144,43 @@ const route = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.
 assert(route.includes('title="Client library"'), "the page title is Client library");
 assert(route.includes('title="Advisory pack"'), "the pack page title is Advisory pack");
 assert(route.includes('title="Draft tool"'), "the tool page title is Draft tool");
-assert(route.includes("<ConnectionsLibraryUpload"), "Connections mounts the upload");
+assert(route.includes("<DataUpToDate"), "Connections still mounts the books data section");
+const fresh = readFileSync(resolve("src/components/data-up-to-date.tsx"), "utf8");
+const uploadAt = fresh.indexOf("<ConnectionsLibraryUpload");
+assert(uploadAt > fresh.indexOf("<SageConnectCard"), "Upload files sits with the ledger rows");
+assert(uploadAt < fresh.indexOf("<ReviewInputsDrawer"), "Upload files stays out of Review inputs");
 const draftsAt = route.indexOf('id="reports-drafts"');
 const toolAt = route.indexOf('id="reports-draft-tool"');
 const pdfsAt = route.indexOf('id="reports-pdfs"');
 const packPane = route.slice(draftsAt, toolAt);
 const toolPane = route.slice(toolAt, pdfsAt);
-assert(packPane.includes("AdvisoryPackPanel") && !packPane.includes("AdvisoryDrafter"), "the pack list stays on Advisory pack");
-assert(toolPane.includes("AdvisoryDrafter") && !toolPane.includes("AdvisoryPackPanel"), "the drafter is the Draft tool");
+assert(
+  packPane.includes("AdvisoryPackPanel") && !packPane.includes("AdvisoryDrafter"),
+  "the pack list stays on Advisory pack",
+);
+assert(
+  toolPane.includes("AdvisoryDrafter") && !toolPane.includes("AdvisoryPackPanel"),
+  "the drafter is the Draft tool",
+);
 
 const panel = readFileSync(resolve("src/components/connections-library-upload.tsx"), "utf8");
-assert(panel.includes("extractFinancialsFromPDF"), "the read is the existing Sonnet statement path");
+assert(
+  panel.includes("extractFinancialsFromPDF"),
+  "the read is the existing Sonnet statement path",
+);
 assert(panel.includes('source: "connections"'), "the file uses the client-documents archive");
 assert(panel.includes("archiveUploads"), "there is no second store");
-assert(panel.includes('accept={LIBRARY_UPLOAD_ACCEPT}'), "the picker is PDF, CSV, and Excel");
+assert(panel.includes("accept={LIBRARY_UPLOAD_ACCEPT}"), "the picker is PDF, CSV, and Excel");
 assert(panel.includes('section: "documents"'), "Open Client library keeps the documents route");
+assert(panel.includes("const [open, setOpen] = useState(false)"), "the upload card starts closed");
+assert(panel.includes("ledger-connect ledger-connect--panel"), "the card uses the ledger chrome");
+assert(panel.includes("brand-connect brand-connect--upload"), "the row has a Connect-style button");
+assert(
+  panel.includes("PDF, CSV, or Excel → Client library"),
+  "the closed row names the destination",
+);
+assert(panel.includes('open ? "Close" : "Upload"'), "the row button opens and closes the form");
+assert(panel.includes('id="library-upload-type"'), "the type field stays");
+assert(panel.includes('id="library-upload-label"'), "the label field stays");
 
 console.log("connections-library-upload-test: ok");
