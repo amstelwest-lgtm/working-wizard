@@ -16,9 +16,7 @@
  * plus 20261007120000_advisory_pack_stale_signoff.sql (test-guarded).
  */
 import { calendarDayFromIso, dateOrder } from "./market/date-presets.ts";
-import { figureSourcePhrase } from "./ledger-link-copy.ts";
 import { marketForClient } from "./market/scope.ts";
-import { statementSourceOf } from "./statement-period.ts";
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "./advisory-narrative.ts";
 import { ratiosStatementFigures } from "./deliverable-input-config.ts";
 import type { Json } from "../integrations/supabase/types.ts";
@@ -213,6 +211,30 @@ export type PackBooks = {
   sourceLabel?: string | null;
 };
 
+function packSourceLabel(financials: Record<string, unknown>): string {
+  const raw = financials.statementSource;
+  const source = typeof raw === "string" ? raw.trim() : "";
+  switch (source) {
+    case "xero":
+      return "a saved Xero statement";
+    case "qbo":
+      return "a saved QuickBooks statement";
+    case "sage":
+      return "a saved Sage statement";
+    case "upload":
+    case "pdf_upload":
+      return "an uploaded statement";
+    case "financial_statement":
+      return "an imported statement";
+    case "bank_pack":
+      return "a bank import";
+    case "manual":
+      return "figures entered by hand";
+    default:
+      return "figures already on file";
+  }
+}
+
 function finiteKnob(value: unknown): number | null {
   const n = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
   return Number.isFinite(n) ? n : null;
@@ -263,7 +285,7 @@ export function packBooksForGeneration(input: {
     industry: input.industry ?? null,
     market: input.market ?? null,
     assumptions: forecastAssumptionLines(input.cashflow),
-    sourceLabel: figureSourcePhrase(statementSourceOf(financials)),
+    sourceLabel: packSourceLabel(financials),
   };
 }
 
