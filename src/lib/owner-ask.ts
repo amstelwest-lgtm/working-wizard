@@ -3,16 +3,40 @@
  * Numbers stay on ask-ai. Brain jobs stay on milon-bot. The existing router decides.
  */
 import { supabase } from "@/integrations/supabase/client";
-import { parseAskAiBody } from "@/lib/ask-ai-response";
+import { howDetailLines, structureAgentReply, type AgentReply } from "@/lib/agent-reply";
+import { parseAskAiBody, type AskAiProposal, type AskAiTool } from "@/lib/ask-ai-response";
 import { authRetryPlanFromResponse } from "@/lib/edge-auth-retry";
-import { invokeMilonBot } from "@/lib/milon-bot-client";
+import { invokeMilonBot, type MilonBotRun } from "@/lib/milon-bot-client";
 import { routeMilonIntent } from "@/lib/milon-bot-copy";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { OwnerAskHistoryTurn } from "@/lib/owner-chat-thread";
 
 export type OwnerAskResult =
-  | { ok: true; answer: string }
+  | { ok: true; answer: string; card: AgentReply; howDetail: string[] | null }
   | { ok: false; error: string; code?: string };
+
+function cardFor(
+  agent: AgentKey,
+  answer: string,
+  extras: {
+    tools?: AskAiTool[] | null;
+    proposal?: AskAiProposal | null;
+    created?: unknown;
+    run?: { outcomeLabel?: string | null; objective?: unknown; status?: unknown; escalationReason?: unknown; trace?: unknown } | null;
+  },
+): { card: AgentReply; howDetail: string[] | null } {
+  const lines = howDetailLines(extras.run);
+  const howDetailId = lines.length ? `how-${crypto.randomUUID()}` : null;
+  const card = structureAgentReply(answer, {
+    agent,
+    tools: extras.tools,
+    proposal: extras.proposal,
+    created: extras.created,
+    howDetailId,
+    run: extras.run?.outcomeLabel ? { outcomeLabel: extras.run.outcomeLabel } : null,
+  });
+  return { card, howDetail: howDetailId ? lines : null };
+}
 
 export function ownerAskPayload(input: {
   clientId: string;
@@ -70,7 +94,9 @@ export async function askOwnerAgent(input: {
         agent: input.agent,
       });
       const answer = result.answer.trim();
-      return answer ? { ok: true, answer } : { ok: false, error: "No answer came back." };
+      if (!answer) return { ok: false, error: "No answer came back." };
+      const built = cardFor(input.agent, answer, { tools: result.tools, run: result.run });
+      return { ok: true, answer, ...built };
     } catch (err) {
       return {
         ok: false,
@@ -113,6 +139,14 @@ export async function askOwnerAgent(input: {
   }
   const body: unknown = await res.json().catch(() => null);
   const turn = parseAskAiBody(res.status, body, res.ok);
-  if (turn.ok) return { ok: true, answer: turn.answer };
+  if (turn.ok) {
+    const built = cardFor(input.agent, turn.answer, {
+      tools: turn.tools,
+      proposal: turn.proposal,
+      created: turn.created,
+      run: turn.run as MilonBotRun | null,
+    });
+    return { ok: true, answer: turn.answer, ...built };
+  }
   return { ok: false, error: turn.error, ...(turn.code ? { code: turn.code } : {}) };
 }

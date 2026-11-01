@@ -47,6 +47,7 @@ export function PracticeAgentThread({
     let cancelled = false;
     el.dataset.clientId = clientId;
     el.dataset.agent = agent;
+    el.dataset.agentReply = "shell";
     // The chat widget reads this when a trial-ended reply mounts the plan card.
     if (firmId) el.dataset.firmId = firmId;
     else delete el.dataset.firmId;

@@ -34,6 +34,14 @@ import {
   parseAskAiPayload,
 } from "./ask-ai-response.ts";
 import {
+  agentReplyForStorage,
+  agentReplyPlainText,
+  howDetailLines,
+  parseAgentReplyAgent,
+  parseStoredAgentReply,
+  structureAgentReply,
+} from "./agent-reply.ts";
+import {
   PRECARD_CAP_MESSAGE,
   isPrecardLimitKind,
   normalizePrecardTurnId,
@@ -263,6 +271,9 @@ export function mountAskAi(container, options) {
   let answerChips = [];
   let toolHints = [];
   let agentRun = null;
+  const replyRoots = [];
+  const howDetails = new Map();
+  let replyPaint = 0;
   let workingObjective = false;
   let creatingDeliverable = false;
   let proposingFigure = false;
@@ -363,6 +374,8 @@ export function mountAskAi(container, options) {
           if (turn.trialEnded === true) next.trialEnded = true;
           const proposal = storedProposal(turn.proposal);
           if (proposal) next.proposal = proposal;
+          const storedReply = parseStoredAgentReply(turn.reply);
+          if (storedReply) next.reply = agentReplyForStorage(storedReply);
           const download = turn.reportDownload;
           if (
             download &&
@@ -400,7 +413,9 @@ export function mountAskAi(container, options) {
         key,
         JSON.stringify({
           key: forecastKey == null ? currentForecastKey() : forecastKey,
-          turns: turns.slice(-16),
+          turns: turns.slice(-16).map((turn) =>
+            turn && turn.reply ? { ...turn, reply: agentReplyForStorage(turn.reply) } : turn,
+          ),
         }),
       );
     } catch {
@@ -701,15 +716,20 @@ export function mountAskAi(container, options) {
     }
     if (copy.actions.length) {
       const row = document.createElement("div");
-      row.className = "ask-ai-figure-actions";
-      copy.actions.forEach((label) => {
+      row.className = "ask-ai-figure-actions agent-reply-decision";
+      row.dataset.agentDecision = "confirm_reject";
+      [
+        ["confirm", "Confirm", "ask-ai-figure-confirm"],
+        ["reject", "Reject", "ask-ai-figure-reject"],
+      ].forEach(([action, label, className]) => {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = label.indexOf("Confirm") === 0 ? "ask-ai-figure-confirm" : "ask-ai-figure-reject";
+        btn.className = className;
+        btn.dataset.decision = action;
         btn.textContent = label;
         btn.addEventListener("click", () => {
           btn.disabled = true;
-          void decideFigure(proposal, label.indexOf("Confirm") === 0);
+          void decideFigure(proposal, action === "confirm");
         });
         row.appendChild(btn);
       });
@@ -718,7 +738,73 @@ export function mountAskAi(container, options) {
     return card;
   }
 
+  function isHtmlElement(node) {
+    return typeof HTMLElement !== "undefined" && node instanceof HTMLElement;
+  }
+
+  function dropReplyRoots() {
+    while (replyRoots.length) {
+      const root = replyRoots.pop();
+      try {
+        root.unmount();
+      } catch {
+        /* the node is already gone */
+      }
+    }
+  }
+
+  function replyForTurn(turn) {
+    if (turn && turn.reply && turn.reply.headline) return turn.reply;
+    return structureAgentReply(stripMilonProjection(turn.content || ""), {
+      agent: parseAgentReplyAgent(currentAgent()),
+      proposalChips: false,
+    });
+  }
+
+  let reactReply = null;
+  function loadReactReply() {
+    if (!reactReply) {
+      reactReply = Promise.all([
+        import("react"),
+        import("react-dom/client"),
+        import("../components/agent-reply/agent-reply-shell.tsx"),
+      ]).then(([reactMod, domMod, shellMod]) => ({
+        createElement: reactMod.createElement,
+        createRoot: domMod.createRoot,
+        AgentReplyShell: shellMod.AgentReplyShell,
+      }));
+    }
+    return reactReply;
+  }
+
+  function paintReply(bubble, reply) {
+    if (!isHtmlElement(bubble)) {
+      bubble.innerHTML = agentReplyPlainText(reply);
+      return;
+    }
+    const host = document.createElement("div");
+    host.className = "agent-reply-host";
+    const stamp = String(++replyPaint);
+    host.dataset.replyPaint = stamp;
+    bubble.appendChild(host);
+    void loadReactReply().then(({ createElement, createRoot, AgentReplyShell }) => {
+      if (host.dataset.replyPaint !== stamp || !bubble.contains(host)) return;
+      const root = createRoot(host);
+      replyRoots.push(root);
+      root.render(
+        createElement(AgentReplyShell, {
+          reply,
+          onLoadDetail: async (id) => {
+            const lines = howDetails.get(id);
+            return lines && lines.length ? { lines } : null;
+          },
+        }),
+      );
+    });
+  }
+
   function render() {
+    dropReplyRoots();
     dropTrialMounts();
     container.innerHTML = "";
     syncThreadClient();
@@ -754,6 +840,7 @@ export function mountAskAi(container, options) {
     } else {
       const panel = document.createElement("div");
       panel.className = "ask-ai-panel";
+      if (container.dataset.agentReply === "shell") panel.dataset.agentReplyHost = "shell";
 
       if (!hideBrand) {
         const brand = document.createElement("div");
@@ -980,7 +1067,7 @@ export function mountAskAi(container, options) {
           } else if (trialAnswer) {
             mountTrialEnded(bubble);
           } else {
-            bubble.innerHTML = renderMarkdown(stripMilonProjection(turn.content));
+            paintReply(bubble, replyForTurn(turn));
             appendReportDownload(bubble, turn);
           }
           if (latestAssistant) {
@@ -1061,17 +1148,6 @@ export function mountAskAi(container, options) {
   }
 
   function decorateLatestAnswer(answerEl) {
-    if (agentRun && agentRun.objective) {
-      answerEl.appendChild(renderAgentTrace(agentRun));
-    }
-
-    if (toolHints.length > 0) {
-      const hint = document.createElement("p");
-      hint.className = "ask-ai-tools";
-      hint.textContent = toolHints.join(" · ");
-      answerEl.appendChild(hint);
-    }
-
     if (answerChips.length > 0) {
       const chipRow = document.createElement("div");
       chipRow.className = "ask-ai-answer-chips";
@@ -1152,61 +1228,6 @@ export function mountAskAi(container, options) {
       });
       answerEl.appendChild(go);
     }
-  }
-
-  function renderAgentTrace(run) {
-    const wrap = document.createElement("div");
-    wrap.className = "ask-ai-trace";
-
-    const objective = document.createElement("p");
-    objective.className = "ask-ai-trace-objective";
-    objective.textContent = `Objective — ${run.objective}`;
-    wrap.appendChild(objective);
-
-    const list = document.createElement("ol");
-    const steps = Array.isArray(run.trace) ? run.trace : [];
-    steps.forEach((step) => {
-      if (!step || typeof step !== "object") return;
-      const li = document.createElement("li");
-      const verified =
-        step.verified === true
-          ? "verified"
-          : step.verified === false
-            ? "not verified"
-            : step.status;
-      const happened =
-        step.happened === true ? "happened" : step.happened === false ? "did not happen" : "";
-      const head = [step.label || step.tool || "Step", verified, happened]
-        .filter(Boolean)
-        .join(" — ");
-      li.textContent = step.detail ? `${head}. ${step.detail}` : head;
-      list.appendChild(li);
-    });
-    wrap.appendChild(list);
-
-    const outcome = document.createElement("p");
-    outcome.className = "ask-ai-trace-outcome";
-    const extra = run.escalationReason ? ` ${run.escalationReason}` : "";
-    outcome.textContent = `Outcome — ${run.outcomeLabel || run.status || "Stopped"}.${extra}`;
-    wrap.appendChild(outcome);
-
-    if (run.claimRejected) {
-      const note = document.createElement("p");
-      note.className = "ask-ai-trace-note";
-      note.textContent = "A completion claim was rejected because the action was not verified.";
-      wrap.appendChild(note);
-    }
-
-    const questions = Array.isArray(run.questions)
-      ? run.questions.filter((q) => typeof q === "string" && q)
-      : [];
-    if (questions.length) {
-      const waiting = document.createElement("p");
-      waiting.className = "ask-ai-trace-note";
-      waiting.textContent = `Waiting on — ${questions.join(" ")}`;
-      wrap.appendChild(waiting);
-    }
-    return wrap;
   }
 
   async function readTurn(res) {
@@ -1719,9 +1740,24 @@ export function mountAskAi(container, options) {
       const capped = Boolean(turn.precardCap && isPrecardLimitKind(turn.precardCap.limit));
       const hasCard = history.some((item) => capLimitForTurn(item));
       const proposal = storedProposal(turn.proposal);
+      const lines = howDetailLines(turn.run);
+      const howDetailId = lines.length ? `how-${turnId || Date.now()}` : null;
+      if (howDetailId) howDetails.set(howDetailId, lines);
+      const outcome =
+        turn.run && typeof turn.run.outcomeLabel === "string" ? turn.run.outcomeLabel : null;
+      const reply = structureAgentReply(stripMilonProjection(answer), {
+        agent: parseAgentReplyAgent(currentAgent()),
+        tools: turn.tools,
+        created: turn.created,
+        howDetailId,
+        run: outcome ? { outcomeLabel: outcome } : null,
+        proposalChips: false,
+      });
       const assistant = {
         role: "assistant",
         content: answer,
+        reply,
+        ...(howDetailId ? { howDetailId } : {}),
         ...(capped ? { precardCap: { limit: turn.precardCap.limit } } : {}),
         ...(proposal ? { proposal } : {}),
       };

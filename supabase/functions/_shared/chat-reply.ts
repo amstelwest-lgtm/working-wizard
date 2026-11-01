@@ -51,7 +51,8 @@ export function chatReplyFormatRules(
 - Dates look like ${dateExample}. Never write ISO dates such as 2026-09-08.
 - Plain words. No jargon dumps. Hard limit of 120 words in total. Cut detail rather than go over.
 - Use bold sparingly and never for whole sentences. No tables, no code blocks, no headings.
-- Never put list items inline in a sentence. Each bullet or numbered item is on its own line.`;
+- Never put list items inline in a sentence. Each bullet or numbered item is on its own line.
+- Do not write a second account of how you reached the answer. The screen keeps that behind How I got this.`;
 }
 
 /** 2026-09-08 → 8 Sep 2026, or Sep 8, 2026 for a US pack. Null when it is not a real calendar date. */

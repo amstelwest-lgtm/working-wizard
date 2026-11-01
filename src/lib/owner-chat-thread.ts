@@ -2,9 +2,10 @@
  * One owner conversation per client and agent.
  * A legacy shared key is moved onto the agent that wrote it, or the Financial Manager.
  */
+import { agentReplyForStorage, parseStoredAgentReply, type AgentReply } from "@/lib/agent-reply";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 
-export type OwnerChatMessage = { role: "owner" | "agent"; text: string };
+export type OwnerChatMessage = { role: "owner" | "agent"; text: string; card?: AgentReply };
 
 export type OwnerAgentThread = {
   messages: OwnerChatMessage[];
@@ -78,7 +79,12 @@ function parseMessages(value: unknown): OwnerChatMessage[] {
     const role = (row as { role?: unknown }).role;
     const text = (row as { text?: unknown }).text;
     if ((role !== "owner" && role !== "agent") || typeof text !== "string" || !text.trim()) continue;
-    messages.push({ role, text: text.slice(0, 8000) });
+    const card = parseStoredAgentReply((row as { card?: unknown }).card);
+    messages.push({
+      role,
+      text: text.slice(0, 8000),
+      ...(card ? { card: agentReplyForStorage(card) } : {}),
+    });
   }
   return messages.slice(-MESSAGE_CAP);
 }
@@ -149,7 +155,9 @@ export function writeOwnerThread(
   if (!clientId.trim()) return;
   const payload = {
     agent,
-    messages: thread.messages.slice(-MESSAGE_CAP),
+    messages: thread.messages.slice(-MESSAGE_CAP).map((message) =>
+      message.card ? { ...message, card: agentReplyForStorage(message.card) } : message,
+    ),
     draft: thread.draft.slice(0, 4000),
   };
   if (payload.messages.length === 0 && payload.draft === "") {
