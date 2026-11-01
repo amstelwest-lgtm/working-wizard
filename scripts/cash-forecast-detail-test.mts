@@ -4,6 +4,16 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { CashThirteenWeekGrid } from "../src/components/cash-thirteen-week";
+import { distributeForecastLine } from "../src/lib/client-metrics";
+import {
+  applyCashLineSchedule,
+  cashLineFillFrequency,
+  CASH_LINE_FREQUENCY_LABEL,
+} from "../src/lib/cash-line-schedule";
+import { projectForecastFrequency } from "../src/lib/cash-recurring-payees";
 import {
   applyWeekOverrides,
   parseEditableAmount,
@@ -201,5 +211,168 @@ assert(wf.includes("text-[#102A43]"), "waterfall values use navy that survives l
 assert(wf.includes("bg-[#FFFFFF]/90"), "value labels sit on a readable chip");
 assert(wf.includes("profitStepBand"), "waterfall chips use the shared score band");
 assert(!wf.includes('"AT RISK"'), "waterfall does not keep a private AT RISK label");
+
+assert(!gridSrc.includes("SourceChip"), "13-week lines do not render a source chip");
+assert(!gridSrc.includes("figureSourceChipLabel"), "13-week lines do not label assumption chips");
+assert(!gridSrc.includes("openingChip"), "the grid no longer takes a source chip");
+assert(gridSrc.includes("data-cash-line-schedule"), "editable lines show interval and start week");
+assert(gridSrc.includes("Interval for"), "the interval control is named");
+assert(gridSrc.includes("Start week for"), "the start week control is named");
+assert(cashSrc.includes("onSchedule={commitLineSchedule}"), "interval edits use the cash line state");
+assert(cashSrc.includes("applyCashLineSchedule"), "a new cadence clears week overrides and refills");
+assert(!cashSrc.includes("openingChip"), "the cash page no longer passes assumption chips");
+assert(!cashSrc.includes("flowChip"), "receipt and payment chips are gone");
+const ownerDoor = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+const accountantDoor = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+assert(ownerDoor.includes("<CashForecastPanel"), "the owner mounts the shared cash forecast");
+assert(accountantDoor.includes("<CashForecastPanel"), "the accountant mounts the shared cash forecast");
+assert(!ownerDoor.includes("CashThirteenWeekGrid"), "the owner has no second 13-week table");
+assert(!accountantDoor.includes("CashThirteenWeekGrid"), "the accountant has no second 13-week table");
+assert(
+  !Object.values(CASH_LINE_FREQUENCY_LABEL).some((label) => /fortnight/i.test(label)),
+  "the interval list does not invent a fortnight",
+);
+assert(CASH_LINE_FREQUENCY_LABEL["once-off"] === "Once-off", "once-off stays a supported cadence");
+assert(CASH_LINE_FREQUENCY_LABEL["recurring-weekly"] === "Weekly", "weekly stays a supported cadence");
+assert(CASH_LINE_FREQUENCY_LABEL["recurring-monthly"] === "Monthly", "monthly stays a supported cadence");
+
+const cardboard = {
+  id: "cardboard",
+  name: "Mpact Recycling (cardboard)",
+  amount: "31000",
+  frequency: "recurring-weekly",
+  startWeek: 1,
+  splitCount: 1,
+  weekOverrides: { "2": 5 },
+};
+const onceCardboard = applyCashLineSchedule(cardboard, { frequency: "once-off" });
+assert(onceCardboard.weekOverrides == null, "a new interval drops hand-edited weeks");
+assert(onceCardboard.frequency === "once-off", "the receipt stores once-off");
+assert(onceCardboard.scheduleExplicit === true, "choosing an interval keeps that cadence");
+assert(applyCashLineSchedule(cardboard, { startWeek: 4 }).scheduleExplicit !== true, "moving the start week leaves the display rule alone");
+const projectedReceipt = projectForecastFrequency("Mpact Recycling (cardboard)", "once-off", null, {
+  side: "revenue",
+  singleMonth: true,
+});
+assert(projectedReceipt === "recurring-monthly", "an untouched once-off receipt is still assumed monthly");
+assert(
+  cashLineFillFrequency(onceCardboard, projectedReceipt) === "once-off",
+  "an explicit once-off is not rewritten to monthly",
+);
+const onceWeeks = distributeForecastLine(onceCardboard, 13);
+assert(onceWeeks[0] === 31000 && onceWeeks[1] === 0 && onceWeeks[2] === 0, "once-off fills only the start week");
+const laterCardboard = applyCashLineSchedule(onceCardboard, { startWeek: 6 });
+const laterWeeks = distributeForecastLine(laterCardboard, 13);
+assert(laterWeeks[5] === 31000 && laterWeeks[0] === 0, "start week 6 moves the receipt");
+assert(applyCashLineSchedule(laterCardboard, { startWeek: 6 }) === laterCardboard, "the same start week does not rewrite the line");
+
+const scrap = {
+  id: "scrap",
+  name: "Karoo Scrap Metals",
+  amount: "9500",
+  frequency: "recurring-weekly",
+  startWeek: 1,
+  splitCount: 1,
+};
+const scrapLater = applyCashLineSchedule(scrap, { startWeek: 4 });
+const scrapWeeks = distributeForecastLine(scrapLater, 13);
+assert(scrapWeeks.slice(0, 3).every((value) => value === 0), "a payment waits until its start week");
+assert(scrapWeeks.slice(3).every((value) => value === 9500), "a weekly payment fills from the start week");
+const scrapMonth = applyCashLineSchedule(scrapLater, { frequency: "recurring-monthly", startWeek: 1 });
+const scrapMonthWeeks = distributeForecastLine(scrapMonth, 13);
+assert(scrapMonthWeeks[0] === 9500 && scrapMonthWeeks[1] === 0 && scrapMonthWeeks[4] === 9500, "monthly lands on the engine's month weeks");
+
+function cashRow(html: string, key: string): string {
+  const start = html.indexOf(`data-cash-row="${key}"`);
+  if (start < 0) return "";
+  const next = html.indexOf("data-cash-row=", start + 10);
+  return html.slice(start, next === -1 ? undefined : next);
+}
+
+const weekLabels = Array.from({ length: 13 }, (_, index) => `W${index + 1}`);
+const filled = Array.from({ length: 13 }, () => 1000);
+const gridMarkup = renderToStaticMarkup(
+  createElement(CashThirteenWeekGrid, {
+    weeks: weekLabels,
+    opening: 412000,
+    receipts: [
+      {
+        id: "cardboard",
+        name: "Mpact Recycling (cardboard)",
+        vals: filled,
+        bucket: "revenue",
+        schedule: { frequency: "recurring-weekly", startWeek: 1, splitCount: 1 },
+      },
+    ],
+    payments: [
+      {
+        id: "scrap",
+        name: "Karoo Scrap Metals",
+        vals: filled,
+        bucket: "expenses",
+        schedule: { frequency: "split-weeks", startWeek: 2, splitCount: 4 },
+      },
+    ],
+    inflow: filled,
+    outflow: filled,
+    net: filled,
+    closing: filled,
+    floor: 40000,
+    symbol: "R",
+    format: (value) => `R${value}`,
+    onCommit: () => undefined,
+    onSchedule: () => undefined,
+  }),
+);
+assert(!/assumption/i.test(gridMarkup), "the 13-week table does not print an assumption chip");
+for (const key of ["opening", "total-receipts", "total-payments", "net", "closing", "floor"]) {
+  assert(!cashRow(gridMarkup, key).includes("<select"), `${key} has no interval control`);
+}
+const receiptRow = cashRow(gridMarkup, "cardboard");
+const paymentRow = cashRow(gridMarkup, "scrap");
+assert(receiptRow.includes('aria-label="Interval for Mpact Recycling (cardboard)"'), "a receipt has an interval");
+assert(receiptRow.includes('aria-label="Start week for Mpact Recycling (cardboard)"'), "a receipt has a start week");
+assert(receiptRow.includes(">Weekly<") && receiptRow.includes(">Once-off<"), "the receipt lists the engine cadences");
+assert(paymentRow.includes('aria-label="Interval for Karoo Scrap Metals"'), "a payment has an interval");
+assert(paymentRow.includes('aria-label="Start week for Karoo Scrap Metals"'), "a payment has a start week");
+assert(paymentRow.includes('value="2"'), "the payment start week shows week 2");
+assert(paymentRow.includes('aria-label="Number of weeks"'), "split weeks keeps the count control");
+assert(!/fortnight/i.test(gridMarkup), "the dropdown does not offer fortnightly");
+
+const readOnlyMarkup = renderToStaticMarkup(
+  createElement(CashThirteenWeekGrid, {
+    weeks: weekLabels,
+    opening: 412000,
+    receipts: [
+      {
+        id: "cardboard",
+        name: "Mpact Recycling (cardboard)",
+        vals: filled,
+        bucket: "revenue",
+        schedule: { frequency: "recurring-weekly", startWeek: 1, splitCount: 1 },
+      },
+    ],
+    payments: [
+      {
+        id: "scrap",
+        name: "Karoo Scrap Metals",
+        vals: filled,
+        bucket: "expenses",
+        schedule: { frequency: "recurring-monthly", startWeek: 1, splitCount: 1 },
+      },
+    ],
+    inflow: filled,
+    outflow: filled,
+    net: filled,
+    closing: filled,
+    floor: 40000,
+    symbol: "R",
+    format: (value) => `R${value}`,
+    readOnly: true,
+    onCommit: () => undefined,
+  }),
+);
+assert(!readOnlyMarkup.includes("<select"), "a read-only 13-week table keeps the controls off");
+assert(!/assumption/i.test(readOnlyMarkup), "a read-only table also drops the assumption chip");
 
 console.log("cash-forecast-detail-test: all assertions passed");

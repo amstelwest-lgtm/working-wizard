@@ -71,7 +71,8 @@ export function AqaRetest573Preview() {
       <section>
         <h1 className="font-serif text-2xl">Opening cash total</h1>
         <p className="mt-1 text-sm text-[#3D5270]" data-opening-note>
-          Week 1 opens at {money(opening)}. The last week opens at {money(71_628)}. The Total column uses week 1.
+          Week 1 opens at {money(opening)}. The last week opens at {money(71_628)}. The Total column
+          uses week 1.
         </p>
         <div className="mt-3 overflow-hidden rounded-xl border border-[#DBEAFE] bg-white">
           <CashThirteenWeekGrid
@@ -86,8 +87,6 @@ export function AqaRetest573Preview() {
             floor={50_000}
             symbol="R"
             format={(value) => money(value)}
-            openingChip="On file"
-            flowChip=""
             readOnly
             onCommit={() => undefined}
           />
