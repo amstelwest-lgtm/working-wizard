@@ -33,7 +33,8 @@ assert(
 assert(studio.includes("playbookKeyForRatioName"), "ratio notes still open camelCase playbooks");
 assert(studio.includes("ratioActualLine"), "playbook drawer still shows mini actuals");
 assert(studio.includes("No Simplified/Complex switch"), "health is one presentation");
-assert(studio.includes("onAnswerProfile"), "summary can open the profile funnel");
+assert(studio.includes('case "profile"'), "the next step can still open the profile funnel");
+assert(!studio.includes("onAnswerProfile"), "Client library does not host the brain Answer control");
 assert(studio.includes("upsertCurrentPeriodSnapshot"), "bank apply writes a snapshot for Ask AI");
 assert(!studio.includes("<WeeklyInputTable"), "weekly grid removed from accountant Profit");
 

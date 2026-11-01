@@ -343,7 +343,7 @@ import {
 } from "@/lib/spreadsheet-text";
 import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
 import { UploadVisibilityChoice } from "@/components/upload-visibility-choice";
-import { OwnerUploadsPanel } from "@/components/owner-uploads-panel";
+import { ClientLibrary } from "@/components/client-library";
 import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
 import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
 import { QboConnectCard } from "@/components/qbo-connect";
@@ -6922,7 +6922,12 @@ function Index() {
                 </button>
               </div>
               {effectiveClientId && (
-                <OwnerUploadsPanel clientId={effectiveClientId} refreshKey={showFinData} />
+                <ClientLibrary
+                  clientId={effectiveClientId}
+                  audience="owner"
+                  clientHasFirm={Boolean(clientMeta?.firm_id)}
+                  refreshKey={showFinData}
+                />
               )}
               <div>
                 <Button

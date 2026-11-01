@@ -6,8 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
-import { OwnerUploadsPanel } from "@/components/owner-uploads-panel";
-import { SourceDocumentsPanel } from "@/components/source-documents-panel";
+import { ClientLibrary } from "@/components/client-library";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { ownerRunPhase, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { supabase } from "@/integrations/supabase/client";
@@ -1208,18 +1207,10 @@ export function OwnerDoor({
           }
           documents={
             clientId ? (
-              <SourceDocumentsPanel
-                clientId={clientId}
-                surface="upload"
-                viewer={{
-                  clientHasFirm: Boolean(firmId),
-                  isOwner: true,
-                  isFirmMemberWithAccess: false,
-                }}
-              />
+              <ClientLibrary clientId={clientId} audience="owner" clientHasFirm={Boolean(firmId)} />
             ) : null
           }
-          uploads={clientId ? <OwnerUploadsPanel clientId={clientId} /> : null}
+          uploads={null}
           requests={
             clientId ? (
               <DataRequestsPanel
