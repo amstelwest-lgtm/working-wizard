@@ -72,7 +72,12 @@ import {
   type DeliverableInputContext,
 } from "@/lib/deliverable-input-config";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { CashThirteenWeekGrid } from "@/components/cash-thirteen-week";
+import { CashThirteenWeekGrid, type CashWeekLine } from "@/components/cash-thirteen-week";
+import {
+  applyCashLineSchedule,
+  cashLineFillFrequency,
+  type CashLineSchedulePatch,
+} from "@/lib/cash-line-schedule";
 import {
   CASH_FORECAST_CARD_ID,
   cashBalanceSeries,
@@ -238,9 +243,25 @@ type LineItem = {
   splitCount: number;
   /** Absolute per-week amounts from the detailed grid. Formula still fills the rest. */
   weekOverrides?: WeekOverrides;
+  /** Chosen on the 13-week line. The assumed-monthly display leaves it alone. */
+  scheduleExplicit?: boolean;
 };
 
 const WEEKS = 13;
+
+function gridLineSchedule(row: {
+  id?: string;
+  frequency?: string;
+  startWeek?: number;
+  splitCount?: number;
+}): CashWeekLine["schedule"] {
+  if (!row.id || !row.frequency) return undefined;
+  return {
+    frequency: row.frequency,
+    startWeek: row.startWeek ?? 1,
+    splitCount: row.splitCount ?? 1,
+  };
+}
 
 const FREQ_LABEL: Record<Frequency, string> = {
   "recurring-weekly": "Recurring (weekly)",
@@ -282,10 +303,13 @@ function distribute(
   return distributeForecastLine(
     {
       ...line,
-      frequency: projectForecastFrequency(line.name, line.frequency, recurring, {
-        side,
-        singleMonth,
-      }) as LineItem["frequency"],
+      frequency: cashLineFillFrequency(
+        line,
+        projectForecastFrequency(line.name, line.frequency, recurring, {
+          side,
+          singleMonth,
+        }),
+      ) as LineItem["frequency"],
     },
     WEEKS,
     weekDates,
@@ -746,8 +770,6 @@ export function CashForecastPanel({
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [openingSourceChip, setOpeningSourceChip] = useState<string | null>(null);
-  const [openingSourceKey, setOpeningSourceKey] = useState<string | null>(null);
-  const [linesSourceKey, setLinesSourceKey] = useState<string | null>(null);
   const [publishedBankEvidence, setPublishedBankEvidence] = useState(false);
   const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(
     signoffProp ?? null,
@@ -1057,12 +1079,6 @@ export function CashForecastPanel({
       loadedCashflowRef.current = cf ? { ...(cf as Record<string, unknown>) } : null;
       setOpeningSourceChip(openingSourceLabel(cf as Record<string, unknown> | null));
       setLinesSourceChip(forecastLinesSourceLabel(cf as Record<string, unknown> | null));
-      setOpeningSourceKey(
-        typeof cf?.openingBalanceSource === "string" ? cf.openingBalanceSource : null,
-      );
-      setLinesSourceKey(
-        typeof cf?.forecastLinesSource === "string" ? cf.forecastLinesSource : null,
-      );
       const lineNames = [...(cf?.revenue ?? []), ...(cf?.expenses ?? []), ...(cf?.other ?? [])].map(
         (line) => String(line?.name ?? ""),
       );
@@ -1532,14 +1548,21 @@ export function CashForecastPanel({
       revenueLines.map((l) => ({
         id: l.id,
         bucket: "revenue" as const,
-        name: forecastRowLabel(l.name, l.frequency, {
-          side: "revenue",
-          singleMonth: singleMonthHistory,
-        }),
-        onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, {
-          side: "revenue",
-          singleMonth: singleMonthHistory,
-        }),
+        name: l.scheduleExplicit
+          ? l.name
+          : forecastRowLabel(l.name, l.frequency, {
+              side: "revenue",
+              singleMonth: singleMonthHistory,
+            }),
+        onceOff: l.scheduleExplicit
+          ? l.frequency === "once-off"
+          : isProjectedOnceOff(l.name, l.frequency, recurringPayees, {
+              side: "revenue",
+              singleMonth: singleMonthHistory,
+            }),
+        frequency: l.frequency,
+        startWeek: l.startWeek,
+        splitCount: l.splitCount,
         vals: applyWeekOverrides(
           shiftVals(
             distribute(l, "revenue", recurringPayees, singleMonthHistory, weekIsos).map(
@@ -1553,14 +1576,21 @@ export function CashForecastPanel({
     const mapExp = (l: LineItem, bucket: "expenses" | "other") => ({
       id: l.id,
       bucket,
-      name: forecastRowLabel(l.name, l.frequency, {
-        side: bucket,
-        singleMonth: singleMonthHistory,
-      }),
-      onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, {
-        side: bucket,
-        singleMonth: singleMonthHistory,
-      }),
+      name: l.scheduleExplicit
+        ? l.name
+        : forecastRowLabel(l.name, l.frequency, {
+            side: bucket,
+            singleMonth: singleMonthHistory,
+          }),
+      onceOff: l.scheduleExplicit
+        ? l.frequency === "once-off"
+        : isProjectedOnceOff(l.name, l.frequency, recurringPayees, {
+            side: bucket,
+            singleMonth: singleMonthHistory,
+          }),
+      frequency: l.frequency,
+      startWeek: l.startWeek,
+      splitCount: l.splitCount,
       vals: applyWeekOverrides(
         distribute(l, bucket, recurringPayees, singleMonthHistory, weekIsos).map(
           (v) => v * opts.eMul,
@@ -1666,6 +1696,33 @@ export function CashForecastPanel({
     if (bucket === "revenue") setRevenue(patch);
     else if (bucket === "expenses") setExpenses(patch);
     else setOther(patch);
+  };
+
+  const commitLineSchedule = (
+    bucket: "revenue" | "expenses" | "other",
+    id: string,
+    patch: CashLineSchedulePatch,
+  ) => {
+    const apply = (list: LineItem[]) => {
+      let changed = false;
+      const next = list.map((line) => {
+        if (line.id !== id) return line;
+        const updated = applyCashLineSchedule(line, patch, WEEKS);
+        if (updated !== line) changed = true;
+        return updated;
+      });
+      return changed ? next : list;
+    };
+    if (bucket === "revenue") {
+      const next = apply(revenue);
+      if (next !== revenue) setRevenue(next);
+    } else if (bucket === "expenses") {
+      const next = apply(expenses);
+      if (next !== expenses) setExpenses(next);
+    } else {
+      const next = apply(other);
+      if (next !== other) setOther(next);
+    }
   };
 
   const baseEngine = confirmedEngine ?? NEUTRAL_CASH_FORECAST_ENGINE;
@@ -2921,24 +2978,6 @@ export function CashForecastPanel({
     return () => window.removeEventListener("hashchange", revealWeeklyTable);
   }, []);
 
-  const openingUntouched =
-    xeroCashMarkers.current.openingBalance == null ||
-    openingBalance === xeroCashMarkers.current.openingBalance;
-  const openingChipKey = !openingUntouched
-    ? "assumption"
-    : openingSourceKey
-      ? forecastChipSource(openingSourceKey)
-      : bankSeeded
-        ? "bank_pack"
-        : "assumption";
-  const flowChipKey = !linesMatchLoaded
-    ? "assumption"
-    : linesSourceKey
-      ? forecastChipSource(linesSourceKey)
-      : bankSeeded
-        ? "bank_pack"
-        : "assumption";
-
   const runwayAside =
     !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
   // A balance-sheet date, or any non-zero opening on screen, is a real amount.
@@ -3130,12 +3169,14 @@ export function CashForecastPanel({
           name: row.name,
           vals: row.vals,
           bucket: row.id ? ("revenue" as const) : undefined,
+          schedule: gridLineSchedule(row),
         }))}
         payments={baseCalc.expRows.map((row) => ({
           id: row.id ?? row.name,
           name: row.name,
           vals: row.vals,
           bucket: row.id && row.bucket ? row.bucket : undefined,
+          schedule: gridLineSchedule(row),
         }))}
         inflow={baseCalc.inflow}
         outflow={baseCalc.outflow}
@@ -3147,11 +3188,10 @@ export function CashForecastPanel({
         symbol={cur}
         format={fmtR}
         signStyle={simplified ? "minus" : "paren"}
-        openingChip={openingChipKey}
-        flowChip={flowChipKey}
         readOnly={readOnly}
         openingMissing={openingTilesMissing}
         onCommit={commitWeekOverride}
+        onSchedule={commitLineSchedule}
         scrollClassName={scrollClassName}
         palette={layout === "paged" ? "blue" : "warm"}
       />

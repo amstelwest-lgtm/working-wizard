@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { forecastOpeningColumnTotal } from "@/lib/cash-forecast-parity";
 import { cashBalanceSeries } from "@/lib/cash-forecast-view";
-import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
+import {
+  CASH_LINE_FREQUENCY_LABEL,
+  clampCashStartWeek,
+  normalizeCashLineFrequency,
+  type CashLineFrequency,
+  type CashLineSchedulePatch,
+} from "@/lib/cash-line-schedule";
 import { cn } from "@/lib/utils";
 import { parseEditableAmount } from "@/lib/cash-week-overrides";
 import { ownerOutflow } from "@/lib/owner-money";
@@ -13,6 +19,12 @@ export type CashWeekLine = {
   name: string;
   vals: number[];
   bucket?: "revenue" | "expenses" | "other";
+  /** Stored cadence. Editable receipt and payment rows show it under the name. */
+  schedule?: {
+    frequency: string;
+    startWeek: number;
+    splitCount: number;
+  };
 };
 
 type CellKind = "in" | "out" | "signed" | "balance";
@@ -21,7 +33,6 @@ type RowTone = "plain" | "in" | "out" | "net" | "close" | "floor";
 type GridRow = {
   key: string;
   name: string;
-  chip: string;
   values: number[];
   total: number | null;
   kind: CellKind;
@@ -30,6 +41,7 @@ type GridRow = {
   strong?: boolean;
   rule?: boolean;
   editable?: { bucket: "revenue" | "expenses" | "other"; id: string };
+  schedule?: CashWeekLine["schedule"];
 };
 
 function sum(values: number[]): number {
@@ -125,12 +137,62 @@ function ForecastAmountCell({
   );
 }
 
-function SourceChip({ source }: { source: string }) {
-  const label = figureSourceChipLabel(source);
-  if (!label) return null;
+const SCHEDULE_CONTROL =
+  "h-6 rounded border border-[#DBEAFE] bg-white px-1 text-[11px] font-medium normal-case tracking-normal text-[#102A43] outline-none focus-visible:border-[#0B5FFF] dark:border-[#1e3a5f] dark:bg-[#0b1b2b] dark:text-[#F4F7FB]";
+
+function LineScheduleFields({
+  name,
+  schedule,
+  onChange,
+}: {
+  name: string;
+  schedule: NonNullable<CashWeekLine["schedule"]>;
+  onChange: (patch: CashLineSchedulePatch) => void;
+}) {
+  const frequency = normalizeCashLineFrequency(schedule.frequency);
+  const split = frequency === "split-weeks" || frequency === "split-months";
+  const startWeek = clampCashStartWeek(schedule.startWeek);
   return (
-    <span className="inline-flex max-w-full truncate rounded-full border border-[#DBEAFE] bg-[#DBEAFE] px-1.5 py-px text-[11px] font-semibold uppercase tracking-[0.04em] text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#163654] dark:text-[#F4F7FB]">
-      {label}
+    <span className="flex w-full flex-col gap-1" data-cash-line-schedule="">
+      <select
+        aria-label={`Interval for ${name}`}
+        value={frequency}
+        onChange={(event) => onChange({ frequency: event.target.value })}
+        className={cn(SCHEDULE_CONTROL, "w-full")}
+      >
+        {(Object.keys(CASH_LINE_FREQUENCY_LABEL) as CashLineFrequency[]).map((key) => (
+          <option key={key} value={key}>
+            {CASH_LINE_FREQUENCY_LABEL[key]}
+          </option>
+        ))}
+      </select>
+      <label className="flex items-center justify-between gap-1 text-[10px] font-medium normal-case tracking-normal text-slate-500 dark:text-slate-400">
+        Start week
+        <input
+          aria-label={`Start week for ${name}`}
+          type="number"
+          min={1}
+          max={13}
+          inputMode="numeric"
+          value={startWeek}
+          onChange={(event) => onChange({ startWeek: parseInt(event.target.value, 10) || 1 })}
+          className={cn(SCHEDULE_CONTROL, "w-12 text-right tabular-nums")}
+        />
+      </label>
+      {split ? (
+        <label className="flex items-center justify-between gap-1 text-[10px] font-medium normal-case tracking-normal text-slate-500 dark:text-slate-400">
+          {frequency === "split-weeks" ? "# weeks" : "# months"}
+          <input
+            aria-label={frequency === "split-weeks" ? "Number of weeks" : "Number of months"}
+            type="number"
+            min={1}
+            inputMode="numeric"
+            value={Math.max(1, schedule.splitCount || 1)}
+            onChange={(event) => onChange({ splitCount: parseInt(event.target.value, 10) || 1 })}
+            className={cn(SCHEDULE_CONTROL, "w-12 text-right tabular-nums")}
+          />
+        </label>
+      ) : null}
     </span>
   );
 }
@@ -172,9 +234,8 @@ export function CashThirteenWeekGrid({
   symbol,
   format,
   signStyle = "paren",
-  openingChip,
-  flowChip,
   onCommit,
+  onSchedule,
   readOnly = false,
   scrollClassName,
   openingMissing = false,
@@ -195,8 +256,6 @@ export function CashThirteenWeekGrid({
   format: (n: number) => string;
   /** Owner door uses a unicode minus. The accountant grid keeps parentheses. */
   signStyle?: "paren" | "minus";
-  openingChip: string;
-  flowChip: string;
   /** Owner door views the weeks. Editing stays available for the accountant. */
   readOnly?: boolean;
   onCommit: (
@@ -204,6 +263,12 @@ export function CashThirteenWeekGrid({
     id: string,
     weekIndex: number,
     value: number | null,
+  ) => void;
+  /** Interval and start week. Same line state as a figure edit. */
+  onSchedule?: (
+    bucket: "revenue" | "expenses" | "other",
+    id: string,
+    patch: CashLineSchedulePatch,
   ) => void;
   /** Extra classes for the scroll frame. The enlarge sheet fills the viewport. */
   scrollClassName?: string;
@@ -241,13 +306,13 @@ export function CashThirteenWeekGrid({
   const lineRow = (line: CashWeekLine, kind: CellKind, tone: RowTone): GridRow => ({
     key: line.id,
     name: line.name,
-    chip: flowChip,
     values: line.vals,
     total: sum(line.vals),
     kind,
     blankZero: true,
     tone,
     editable: !readOnly && line.bucket ? { bucket: line.bucket, id: line.id } : undefined,
+    schedule: !readOnly && line.bucket ? line.schedule : undefined,
   });
 
   const sections: Array<{ label: string; rows: GridRow[] }> = [
@@ -257,7 +322,6 @@ export function CashThirteenWeekGrid({
         {
           key: "opening",
           name: "Opening cash",
-          chip: openingChip,
           values: openings,
           total: openingMissing ? Number.NaN : forecastOpeningColumnTotal(openings, opening),
           kind: "balance",
@@ -273,7 +337,6 @@ export function CashThirteenWeekGrid({
         {
           key: "total-receipts",
           name: "Total receipts",
-          chip: "",
           values: inflow,
           total: sum(inflow),
           kind: "in",
@@ -290,7 +353,6 @@ export function CashThirteenWeekGrid({
         {
           key: "total-payments",
           name: "Total payments",
-          chip: "",
           values: outflow,
           total: sum(outflow),
           kind: "out",
@@ -307,7 +369,6 @@ export function CashThirteenWeekGrid({
         {
           key: "net",
           name: "Net cash flow",
-          chip: "",
           values: shownNet,
           total: openingMissing ? Number.NaN : sum(net),
           kind: "signed",
@@ -318,7 +379,6 @@ export function CashThirteenWeekGrid({
         {
           key: "closing",
           name: "Closing cash",
-          chip: "",
           values: shownClosing,
           total: openingMissing ? Number.NaN : (closing[WEEKS - 1] ?? null),
           kind: "signed",
@@ -329,7 +389,6 @@ export function CashThirteenWeekGrid({
         {
           key: "floor",
           name: "Runway floor",
-          chip: "",
           values: Array.from({ length: WEEKS }, () => floor),
           total: floor,
           kind: "balance",
@@ -370,7 +429,7 @@ export function CashThirteenWeekGrid({
               <th
                 scope="col"
                 className={cn(
-                  "sticky left-0 top-0 z-40 min-w-[148px] border-b border-[#DBEAFE]/80 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:text-slate-400",
+                  "sticky left-0 top-0 z-40 min-w-[200px] border-b border-[#DBEAFE]/80 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:text-slate-400",
                   stickyShadow,
                   headBg,
                 )}
@@ -426,6 +485,7 @@ export function CashThirteenWeekGrid({
                 symbol={symbol}
                 money={money}
                 onCommit={onCommit}
+                onSchedule={onSchedule}
                 floorNote={section.rows.some((row) => row.key === "floor") ? floorNote : null}
                 openingNote={section.rows.some((row) => row.key === "opening") ? openingNote : null}
                 openingBelow={openingBelow}
@@ -465,6 +525,7 @@ function SectionRows({
   symbol,
   money,
   onCommit,
+  onSchedule,
   floorNote,
   openingNote,
   openingBelow,
@@ -478,6 +539,7 @@ function SectionRows({
   symbol: string;
   money: (value: number, row: GridRow) => string;
   onCommit: CashThirteenWeekGridProps["onCommit"];
+  onSchedule?: CashThirteenWeekGridProps["onSchedule"];
   floorNote?: string | null;
   openingNote?: string | null;
   openingBelow?: boolean;
@@ -510,14 +572,14 @@ function SectionRows({
           <th
             scope="row"
             className={cn(
-              "sticky left-0 z-30 min-w-[148px] border-b border-[#DBEAFE]/70 px-3 py-1.5 text-left align-top dark:border-slate-800",
+              "sticky left-0 z-30 min-w-[200px] border-b border-[#DBEAFE]/70 px-3 py-1.5 text-left align-top dark:border-slate-800",
               stickyShadow,
               toneBg[row.tone],
               row.strong ? "font-bold" : "font-normal",
               row.rule && "border-t border-slate-300/80 dark:border-slate-600",
             )}
           >
-            <span className="flex max-w-[11.5rem] flex-col items-start gap-1 py-0.5">
+            <span className="flex w-full max-w-[13rem] flex-col items-start gap-1 py-0.5">
               <span
                 className={cn(
                   "whitespace-normal text-left text-[12px] leading-snug text-slate-800 dark:text-slate-100",
@@ -537,7 +599,13 @@ function SectionRows({
                   {openingNote}
                 </span>
               ) : null}
-              <SourceChip source={row.chip} />
+              {row.editable && row.schedule && onSchedule ? (
+                <LineScheduleFields
+                  name={row.name}
+                  schedule={row.schedule}
+                  onChange={(patch) => onSchedule(row.editable!.bucket, row.editable!.id, patch)}
+                />
+              ) : null}
             </span>
           </th>
           {row.values.map((value, index) => {
@@ -617,5 +685,10 @@ type CashThirteenWeekGridProps = {
     id: string,
     weekIndex: number,
     value: number | null,
+  ) => void;
+  onSchedule?: (
+    bucket: "revenue" | "expenses" | "other",
+    id: string,
+    patch: CashLineSchedulePatch,
   ) => void;
 };

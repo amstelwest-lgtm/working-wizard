@@ -1,17 +1,13 @@
 import type { ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { CASH_LINE_FREQUENCY_LABEL, type CashLineFrequency } from "@/lib/cash-line-schedule";
 import {
   forecastLineRule,
   forecastRuleLabel,
   isAssumedMonthlyLine,
 } from "@/lib/cash-forecast-rows";
 
-export type ForecastTableFrequency =
-  | "recurring-weekly"
-  | "recurring-monthly"
-  | "once-off"
-  | "split-weeks"
-  | "split-months";
+export type ForecastTableFrequency = CashLineFrequency;
 
 export type ForecastTableLine = {
   id: string;
@@ -24,13 +20,7 @@ export type ForecastTableLine = {
 
 export type ForecastTableSide = "revenue" | "expenses" | "other";
 
-export const FORECAST_TABLE_FREQUENCY: Record<ForecastTableFrequency, string> = {
-  "recurring-weekly": "Weekly",
-  "recurring-monthly": "Monthly",
-  "once-off": "Once-off",
-  "split-weeks": "Split over weeks",
-  "split-months": "Split over months",
-};
+export const FORECAST_TABLE_FREQUENCY = CASH_LINE_FREQUENCY_LABEL;
 
 const GROUPS: { side: ForecastTableSide; label: string; addLabel: string | null }[] = [
   { side: "revenue", label: "Money in", addLabel: "Add money-in line" },

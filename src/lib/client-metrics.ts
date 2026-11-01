@@ -8,6 +8,7 @@
 
 import { applyWeekOverrides, type WeekOverrides } from "./cash-week-overrides.ts";
 import { monthlyOccurrenceWeeks } from "./cash-cadence.ts";
+import { cashLineFillFrequency } from "./cash-line-schedule.ts";
 import { bankHistoryIsSingleMonth, displayForecastFrequency } from "./cash-forecast-rows.ts";
 import { periodProfitBridge } from "./period-profit.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
@@ -828,6 +829,8 @@ type StoredForecastLine = {
   startWeek?: number;
   splitCount?: number;
   weekOverrides?: WeekOverrides;
+  /** Chosen on the 13-week line. The assumed-monthly display leaves it alone. */
+  scheduleExplicit?: boolean;
 };
 
 function formatISODate(d: Date): string {
@@ -1319,7 +1322,10 @@ export function rollForwardForecast(
     side: "revenue" | "expenses" | "other",
   ): StoredForecastLine => ({
     ...line,
-    frequency: displayForecastFrequency(line.name ?? "", line.frequency, { side, singleMonth }),
+    frequency: cashLineFillFrequency(
+      line,
+      displayForecastFrequency(line.name ?? "", line.frequency, { side, singleMonth }),
+    ),
   });
   for (const line of revenue) {
     shiftVals(
