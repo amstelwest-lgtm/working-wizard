@@ -152,12 +152,16 @@ export function OwnerAccountant({
       </section>
       {documents ? (
         <>
-          <h2 className="owner-sub">Documents</h2>
+          <h2 className="owner-sub">Client library</h2>
           {documents}
         </>
       ) : null}
-      <h2 className="owner-sub">Uploads</h2>
-      {uploads}
+      {uploads ? (
+        <>
+          <h2 className="owner-sub">Uploads</h2>
+          {uploads}
+        </>
+      ) : null}
       <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onConnect}>
         Connect your books
       </button>

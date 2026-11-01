@@ -38,7 +38,7 @@ assert(UPLOAD_VISIBILITIES.length === 2, "exactly two choices");
 assert(coerceUploadVisibility("shared") === "shared" && coerceUploadVisibility("nope") === "private", "coerce falls back to private");
 assert(UPLOAD_VISIBILITY_COPY.shared.label === "Share with accountant", "shared label");
 assert(UPLOAD_VISIBILITY_COPY.private.label === "Keep private", "private label");
-assert(/accountant/i.test(UPLOAD_VISIBILITY_COPY.shared.help) && /Client Brain/.test(UPLOAD_VISIBILITY_COPY.shared.help), "shared help explains accountant + brain");
+assert(/accountant/i.test(UPLOAD_VISIBILITY_COPY.shared.help) && /Client library/.test(UPLOAD_VISIBILITY_COPY.shared.help), "shared help explains the accountant sees it in Client library");
 assert(/stays with you/.test(UPLOAD_VISIBILITY_COPY.private.help) && /not see/.test(UPLOAD_VISIBILITY_COPY.private.help), "private help explains it stays with the owner");
 assert(uploadVisibilityLabel("shared") === "Shared with accountant" && uploadVisibilityLabel(undefined) === "Private", "badge labels");
 assert(uploadSourceLabel("bank_pack") === "Bank statements" && uploadSourceLabel("x") === "Upload", "source labels");
@@ -160,7 +160,13 @@ assert(/retainStaged: true/.test(cash) && /source: "cash_pack"/.test(cash), "cas
 const app = read("src/routes/app.tsx");
 assert(/useState<UploadVisibility>\(DEFAULT_UPLOAD_VISIBILITY\)/.test(app), "owner app starts from the private default");
 assert(/<UploadVisibilityChoice[\s\S]*?name="financial-data-visibility"/.test(app), "Financial Data dialog shows the choice");
-assert(/<OwnerUploadsPanel clientId=\{effectiveClientId\}/.test(app), "owner sees which uploads are shared vs private");
+assert(
+  /<ClientLibrary[\s\S]*?audience="owner"/.test(app),
+  "owner sees the client library, including which uploads are shared",
+);
+const libraryUi = read("src/components/client-library.tsx");
+assert(/Make private/.test(libraryUi) && /Share with accountant/.test(libraryUi), "owner can flip visibility from the library");
+assert(/setClientDocumentVisibility/.test(libraryUi) && /clientDocumentDownloadUrl/.test(libraryUi), "the library relabels and downloads through the browser lib");
 assert((app.match(/defaultVisibility: uploadVisibility,\s*onVisibilityChange: setUploadVisibility/g) ?? []).length === 2, "both owner drafters get the documents target");
 assert(/retainStaged: true,\s*\},\s*\}\)\) as MergedExtractionResult;\s*await archiveStatementUpload\(file, staged\.storagePath\)/.test(app), "statement PDF upload archives after extraction, before unstage");
 assert(/source: "financial_statement"/.test(app), "statement uploads are labelled as such");
@@ -170,10 +176,6 @@ assert(/retainStaged: z\.boolean\(\)\.optional\(\)/.test(extract) && /retain: da
 
 const accountantRoute = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert(!/documents=\{/.test(accountantRoute), "accountant drafter keeps its previous behaviour (no owner archive)");
-
-const panel = read("src/components/owner-uploads-panel.tsx");
-assert(/Make private/.test(panel) && /Share with accountant/.test(panel), "owner can flip visibility later");
-assert(/setClientDocumentVisibility/.test(panel) && /clientDocumentDownloadUrl/.test(panel), "owner panel relabels and downloads through the browser lib");
 
 const brain = read("src/components/client-brain-summary.tsx");
 assert(/<SharedDocumentsList docs=\{sharedDocs\}/.test(brain) && /a\.kind === "upload" && a\.storage_path/.test(brain), "Client Brain lists shared uploads (RLS-filtered)");

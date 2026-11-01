@@ -294,7 +294,7 @@ import {
 } from "@/lib/overview-moves-copy";
 import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
-import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
+import { ClientLibrary } from "@/components/client-library";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { attachPillarScore, rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
@@ -1755,12 +1755,6 @@ function ClientView() {
     });
   }
   const statementGrossMargin = statementGrossMarginFraction(financials);
-  const statementFigureFacts = {
-    grossMargin: statementGrossMargin ?? ratios["Gross Margin"],
-    operatingMargin: ratios["Operating Margin"],
-    netMargin: ratios["Net Margin"],
-    periodLabel: figuresPeriodLabel,
-  };
   const clientProfitBridge = periodProfitBridge(financials);
   const debtorDaysForMoves = ratiosStatementFigures(financials).debtorDays;
   const strategicMoves = rankStrategicMoves({
@@ -4350,7 +4344,7 @@ function ClientView() {
                         {
                           id: "documents",
                           label: "Client library",
-                          detail: "Figures, files, and what is already on the client record.",
+                          detail: "Profit and loss, cash and bank, and files from the client, by year.",
                           search: (prev) => accountantClientTabSearch(prev, "portal", { section: "documents" }),
                         },
                         {
@@ -4390,7 +4384,7 @@ function ClientView() {
                       id="documents"
                       eyebrow="Books"
                       title="Client library"
-                      subtitle="Figures, files, and exports for this client."
+                      subtitle="Profit and loss, cash and bank, and what the client sent, by year."
                     >
                 <ReviewInputsDrawer hint="Exports">
                   <div className="briefing-actions deliverables-more" data-bot-entry>
@@ -4453,33 +4447,16 @@ function ClientView() {
                     ) : null}
                   </div>
                 </ReviewInputsDrawer>
-                      <StatementFigures facts={statementFigureFacts} />
-                      <ClientBrainSummary
+                      <ClientLibrary
                         clientId={client.id}
-                        clientName={client.name}
-                        firmId={client.firm_id ?? null}
-                        operatingProfile={client.operating_profile}
-                        market={client.market}
-                        businessType={client.business_type}
-                        onOpenUpload={() => setUploadOpen(true)}
-                        onOpenTab={(tab) => {
-                          const resolved = resolveAccountantTab(tab);
-                          if (resolved) writeAccountantTab(resolved);
-                        }}
-                        onAnswerProfile={() => setProfileOpen(true)}
-                        figureFacts={statementFigureFacts}
-                        renderFrame={({ inputs, body }) => (
-                          <>
-                            {body}
-                            <DeliverableInputConfig
-                              className="mb-5"
-                              clientId={clientId}
-                              deliverableId="summary"
-                              context={deliverableInputContext}
-                            />
-                            {inputs}
-                          </>
-                        )}
+                        audience="accountant"
+                        clientHasFirm={Boolean(client.firm_id)}
+                      />
+                      <DeliverableInputConfig
+                        className="mb-5"
+                        clientId={clientId}
+                        deliverableId="summary"
+                        context={deliverableInputContext}
                       />
                     </ClientSubpageFrame>
                   ) : null}

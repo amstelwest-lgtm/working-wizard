@@ -165,7 +165,7 @@ assert.ok(data.includes('<h2 className="data-fresh__title">{status.title}</h2>')
 assert.ok(data.includes("aria-label={status.title}"), "the section title stays the accessible name");
 assert.ok(!scopes.includes('"books"'), "books does not add a review scope");
 assert.ok(booksPane.includes('deliverableId="summary"'), "configure inputs stays on Books");
-assert.ok(booksPane.includes("{inputs}"), "profile questions move into the drawer");
+assert.ok(!booksPane.includes("{inputs}"), "profile questions are not a Client library pane");
 
 const us = marketForClient({ market: { country: "US", regionCode: "NY" } });
 const za = marketForClient(null);

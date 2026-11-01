@@ -134,10 +134,14 @@ assert(typesSrc.includes("client_brain_questions:"), "types include client_brain
 assert(typesSrc.includes("brain_summary: Json | null"), "types include brain_summary");
 
 assert(clientSrc.includes('"summary"'), "summary is an ActiveTab");
-assert(clientSrc.includes('label: "Books"'), "Books opens Client Brain");
+assert(clientSrc.includes('label: "Books"'), "Books stays the file section");
 assert(clientSrc.includes('id="pane-summary"'), "Summary pane exists");
-assert(clientSrc.includes("ClientBrainSummary"), "panel is mounted");
-assert(clientSrc.includes('from "@/components/client-brain-summary"'), "panel imported");
+assert(!clientSrc.includes("ClientBrainSummary"), "Client brain is not a library pane");
+assert(
+  !clientSrc.includes('from "@/components/client-brain-summary"'),
+  "Client brain stays out of the client library page",
+);
+assert(clientSrc.includes("<ClientLibrary"), "Client library is the documents page");
 assert(!clientSrc.includes("proposeBrain"), "propose is not wired in the fat portal");
 assert(!clientSrc.includes("brain-propose"), "propose fetch lives in the Summary panel");
 assert(!clientSrc.includes("Propose from brain"), "Propose trigger is on the Summary panel");
@@ -177,19 +181,14 @@ assert(
 );
 const summaryPane = clientSrc.slice(clientSrc.indexOf('id="pane-summary"'));
 const summaryOpen = summaryPane.slice(0, summaryPane.indexOf("<DataUpToDate"));
+const libraryPage = summaryOpen.slice(summaryOpen.indexOf('id="documents"'));
+assert(!summaryOpen.includes("<StatementFigures"), "Figures are not a Client library pane");
+assert(!libraryPage.includes("Client brain"), "Client brain is not a library heading");
+assert(libraryPage.includes("<ClientLibrary"), "the documents page mounts the library");
+assert(panelSrc.includes("figureFacts"), "the brain component still accepts the shared margin facts");
 assert(
-  summaryOpen.includes("<StatementFigures"),
-  "statement figures are the first block in the visible summary pane",
-);
-assert(
-  clientSrc.includes('netMargin: ratios["Net Margin"]'),
-  "summary net margin is the same ratio engine as Overview",
-);
-assert(
-  clientSrc.includes("statementGrossMarginFraction") &&
-    clientSrc.includes("grossMargin: statementGrossMargin ?? ratios[\"Gross Margin\"]") &&
-    clientSrc.includes('operatingMargin: ratios["Operating Margin"]'),
-  "summary GM uses the waterfall bridge, and OM stays the Overview ratio",
+  clientSrc.includes("statementGrossMarginFraction"),
+  "profit still uses the waterfall gross margin",
 );
 assert(panelSrc.includes("Sign off"), "GAP/competitor drafts can be signed off");
 assert(

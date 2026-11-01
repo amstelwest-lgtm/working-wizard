@@ -162,6 +162,7 @@ export type ClientDocumentRow = {
   storage_path: string | null;
   visibility: UploadVisibility;
   meta: Json;
+  period_label?: string | null;
   created_by: string | null;
   created_at: string;
 };
@@ -170,7 +171,7 @@ export type ClientDocumentRow = {
 export async function listClientDocuments(clientId: string): Promise<ClientDocumentRow[]> {
   const { data, error } = await supabase
     .from("client_artifacts")
-    .select("id, client_id, storage_path, visibility, meta, created_by, created_at")
+    .select("id, client_id, storage_path, visibility, meta, period_label, created_by, created_at")
     .eq("client_id", clientId)
     .eq("kind", "upload")
     .not("storage_path", "is", null)

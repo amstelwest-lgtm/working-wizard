@@ -31,7 +31,7 @@ export const UPLOAD_VISIBILITY_COPY: Record<
 > = {
   shared: {
     label: "Share with accountant",
-    help: "Your linked accountant can open this file and see it in your Client Brain summary, so their advice can draw on it.",
+    help: "Your linked accountant can open this file and see it in Client library, so their advice can draw on it.",
     badge: "Shared with accountant",
   },
   private: {

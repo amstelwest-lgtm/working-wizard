@@ -77,7 +77,7 @@ export function UploadVisibilityChoice({
         })}
       </div>
       <p className="mt-2 border-t border-amber-900/10 pt-2 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
-        You can change this for any file later under Financial Data → Your uploads.
+        You can change this for any file later in Client library.
       </p>
     </fieldset>
   );

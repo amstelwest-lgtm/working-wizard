@@ -296,12 +296,17 @@ assert(
 );
 
 const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
+const library = readFileSync("src/components/client-library.tsx", "utf8");
 const brain = readFileSync("src/components/client-brain-summary.tsx", "utf8");
-assert(door.includes('surface="upload"'), "owners upload from the documents area");
-assert(brain.includes('surface="review"'), "accountants review on the client portal");
 assert(
-  door.includes("isFirmMemberWithAccess: false"),
-  "the owner door does not treat the owner as the firm approver",
+  library.includes('surface={audience === "owner" ? "upload" : "review"}'),
+  "owners upload and accountants review inside the client library",
+);
+assert(door.includes('audience="owner"'), "the owner door opens the client library");
+assert(brain.includes('surface="review"'), "the brain component still has its review surface");
+assert(
+  library.includes('isFirmMemberWithAccess: audience === "accountant" && clientHasFirm'),
+  "the owner is not treated as the firm approver",
 );
 assert(
   brain.includes("isFirmMemberWithAccess: Boolean(firmId)"),
