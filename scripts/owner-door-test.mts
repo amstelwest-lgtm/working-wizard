@@ -1601,7 +1601,14 @@ assert(plan.includes("OwnerDraftCard"), "Next moves renders a draft card");
 assert(plan.includes("DRAFT_NEEDS_OWNER"), "owner drafts are the ones that can be decided");
 assert(plan.includes('data-owner-drafts='), "Next moves marks the draft section");
 const card = readFileSync("src/components/owner-draft-card.tsx", "utf8");
-assert(card.includes("Approve") && card.includes("Dismiss") && card.includes("Confirm"), "an owner draft can be approved or dismissed");
+const decisionStrip = readFileSync("src/components/agent-reply/agent-reply-shell.tsx", "utf8");
+assert(
+  card.includes("approve_dismiss") &&
+    card.includes("Confirm") &&
+    decisionStrip.includes("Approve") &&
+    decisionStrip.includes("Dismiss"),
+  "an owner draft can be approved or dismissed",
+);
 assert(
   card.includes("(ownerOk || handoffDecision) && !blocked && !approved"),
   "owner buttons stay off unless the firm is deciding a hand-off; an approved row stays quiet",
