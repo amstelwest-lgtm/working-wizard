@@ -10,6 +10,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
+import { ConnectionsLibraryUpload } from "@/components/connections-library-upload";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { XeroConnectCard } from "@/components/xero-connect";
@@ -129,6 +130,7 @@ export function DataUpToDate({
           onSyncComplete={onSageSyncComplete}
           buttonFirst
         />
+        <ConnectionsLibraryUpload clientId={clientId} />
       </div>
       <ReviewInputsDrawer hint={booksDrawerHint(freshness)}>
         <div>
