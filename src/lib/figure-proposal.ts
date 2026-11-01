@@ -935,9 +935,45 @@ function isFigureQuestion(question: string): boolean {
   return false;
 }
 
+function capexAmountFrom(raw: string, suffix: string | undefined): number | null {
+  const n = Number(raw.replace(/[\s,]/g, ""));
+  if (!Number.isFinite(n)) return null;
+  const s = (suffix ?? "").toLowerCase();
+  if (s === "k") return n * 1_000;
+  if (s === "m") return n * 1_000_000;
+  return n;
+}
+
+/** "Propose CapEx of R50 000 in week 6" / "Add R50k capex in W6" is a cash capex patch. */
+function parseCapexAsk(
+  q: string,
+): { surface: FigureSurface; patch: FigureProposal["patch"]; reason: string } | null {
+  const lower = q.toLowerCase();
+  if (!/\bcap-?ex\b/.test(lower)) return null;
+  if (!/\b(propose|add|change|adjust|increase|raise|put|book|plan)\b/.test(lower)) return null;
+  const week = lower.match(/\b(?:week|wk|w)\s*(\d{1,2})\b/);
+  const withoutWeek = week ? lower.replace(week[0], " ") : lower;
+  const amount =
+    withoutWeek.match(/(?:\br|zar|\$|usd)\s*(\d[\d\s,]*(?:\.\d+)?)\s*(k|m)?\b/) ??
+    withoutWeek.match(/\b(\d[\d\s,]*(?:\.\d+)?)\s*(k|m)?\s*(?:rand|of cap-?ex|cap-?ex)\b/) ??
+    withoutWeek.match(/\b(?:of|for)\s+(\d[\d\s,]*(?:\.\d+)?)\s*(k|m)?\b/);
+  if (!week || !amount) return null;
+  const capexWeek = Number(week[1]);
+  const capexAmount = capexAmountFrom(amount[1], amount[2]);
+  if (capexAmount == null || capexAmount <= 0) return null;
+  const parsed = parseFigureProposalArgs({
+    surface: "cash",
+    reason: q.slice(0, 600),
+    patch: { capexAmount, capexWeek },
+  });
+  if (!parsed.ok) return null;
+  return { surface: "cash", patch: parsed.patch, reason: parsed.note };
+}
+
 /**
  * A direct ask to change one figure. Questions and "propose next steps" stay
  * on the numbers chat. Week net ("W1 net by R100") is a cash patch.
+ * CapEx ("Propose CapEx of R50 000 in week 6") is a cash capex patch.
  */
 export function parseFigureProposalAsk(
   question: string,
@@ -945,6 +981,8 @@ export function parseFigureProposalAsk(
   const q = askText(question);
   if (!q || isFigureQuestion(q)) return null;
   if (/\bpropose next steps\b/i.test(q)) return null;
+  const capex = parseCapexAsk(q);
+  if (capex) return capex;
   if (!/\b(propose|change|adjust|increase|decrease|reduce|lower|raise)\b/i.test(q)) return null;
   const lower = q.toLowerCase();
   let surface: FigureSurface | null = null;

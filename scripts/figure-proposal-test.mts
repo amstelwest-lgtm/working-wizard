@@ -281,6 +281,22 @@ const AQA = "Propose changing W1 net by R100 in the cash forecast.";
     canDecide: false,
   });
   assert(owner.actions.length === 0, "a read-only owner does not get Confirm or Reject");
+  for (const ask of [
+    "Propose CapEx of R50 000 in week 6 of the cash forecast.",
+    "Add R50k capex in W6",
+    "Propose a one-off CapEx of R 50,000 in wk 6",
+  ]) {
+    const capex = figureProposalTurn("financial_manager", ask);
+    assert(capex?.kind === "propose" && capex.tool === FIGURE_PROPOSAL_TOOL, `CapEx ask routes to the proposal tool: ${ask}`);
+    if (capex?.kind !== "propose") throw new Error("expected a capex proposal");
+    assert(
+      capex.args.surface === "cash" && capex.args.patch.capexAmount === "50000" && capex.args.patch.capexWeek === 6,
+      `CapEx ask is capexAmount 50000 in week 6: ${ask} -> ${JSON.stringify(capex.args.patch)}`,
+    );
+    assert(capex.args.patch.netDelta == null, "a named CapEx is not a week net change");
+  }
+  assert(figureProposalTurn("financial_manager", "What CapEx is in week 6?") == null, "a CapEx question is not a proposal");
+  assert(figureProposalTurn("analyst", "Propose CapEx of R50 000 in week 6")?.kind === "refuse", "the analyst still refuses CapEx");
   const net = applyWeekNetDelta([10, 20], 1, 100);
   assert(net[0] === 110 && net[1] === 20, "the week net change lands on week 1 only");
   const base = {
