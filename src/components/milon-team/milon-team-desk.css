@@ -481,6 +481,13 @@ html.dark .milon-desk {
   background: #0b5fff;
   box-shadow: none;
 }
+a.milon-desk-btn {
+  display: inline-block;
+  text-decoration: none;
+}
+.milon-desk-report {
+  margin: 0 0 12px;
+}
 .milon-desk-btn.primary:hover {
   background: #2563eb;
 }

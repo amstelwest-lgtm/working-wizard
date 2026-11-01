@@ -196,7 +196,8 @@ assert.equal(tabSrc.split("data-approve").length - 1, 1, "the tab component has 
 assert.ok(tabSrc.includes("hideLine"), "the strip does not repeat the tab line");
 assert.ok(/\n\s*Sign off\n/.test(tabSrc), "the button says Sign off");
 assert.equal(tabSrc.includes("Sign off v"), false, "the version is not on the button");
-assert.ok(panelSrc.includes("Regenerate pack"), "a stale pack promotes regenerate");
+assert.ok(panelSrc.includes("Regenerate report"), "a stale pack promotes regenerate");
+assert.ok(panelSrc.includes("Advisory Management Report"), "the generate strip names the Management Report");
 assert.ok(panelSrc.includes("doGenerate()"), "regenerate keeps the existing handler");
 assert.equal(panelSrc.includes('"Signed off · figures changed"'), false, "the panel does not hard-code the short pill");
 

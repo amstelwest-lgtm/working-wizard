@@ -18,7 +18,7 @@ export const AGENT_SECTION_COPY: Record<AgentSectionKey, { title: string; purpos
   },
   noticed: {
     title: "What I noticed",
-    purpose: "Things I found in this client's latest figures that you should know about.",
+    purpose: "Decisions that still need a yes or no. The written pack is the Management Report.",
   },
   offered: {
     title: "Work I can do for you",

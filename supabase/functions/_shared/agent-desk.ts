@@ -29,12 +29,18 @@ export type AgentToolCtx = AnalystExecCtx & {
 const UPLOAD_SOURCES = ["upload", "pdf_upload", "financial_statement"];
 
 /** The finding is already saved. A failed supersede only leaves an older duplicate visible. */
-async function supersedeQuietly(ctx: AgentToolCtx, keepId: string, title: string): Promise<void> {
+async function supersedeQuietly(
+  ctx: AgentToolCtx,
+  keepId: string,
+  title: string,
+  kind: string,
+): Promise<void> {
   const result = await supersedeOlderFindings(ctx.db, {
     clientId: ctx.clientId,
     agent: ctx.agent,
     keepId,
     title,
+    kind,
   });
   if (result.error) console.warn("agent_findings supersede failed", result.error);
 }
@@ -385,7 +391,7 @@ export async function recordAgentDraft(
       .is("dismissed_reason", null)
       .is("superseded_by", null);
     if (touchError) return { error: touchError.message };
-    await supersedeQuietly(ctx, duplicate.id, prepared.title);
+    await supersedeQuietly(ctx, duplicate.id, prepared.title, prepared.kind);
     for (const key of prepared.recordKeys) ctx.recordedKeys.add(key);
     return {
       recorded: true,
@@ -414,7 +420,7 @@ export async function recordAgentDraft(
     .select("id")
     .maybeSingle();
   if (error || !data?.id) return { error: error?.message || "The draft was not saved." };
-  await supersedeQuietly(ctx, String(data.id), prepared.title);
+  await supersedeQuietly(ctx, String(data.id), prepared.title, prepared.kind);
   for (const key of prepared.recordKeys) ctx.recordedKeys.add(key);
 
   if (!recipient.toAgent) {

@@ -11,6 +11,7 @@ import type { MilonTeamFeedApi } from "../src/hooks/use-milon-team-feed";
 import { findingTitleKey } from "../src/lib/finding-title-key";
 import {
   dedupeFindings,
+  noticedNarrativeHidden,
   type AgentActivitySnapshot,
   type AgentFindingRow,
 } from "../src/lib/milon-team-activity";
@@ -100,6 +101,90 @@ eq(
   supersededFindingIds({ id: "x", title: "42" }, [{ id: "y", title: "41" }]),
   [],
   "an empty key supersedes nothing",
+);
+eq(
+  supersededFindingIds(
+    { id: "hand", title: "Gross margin is 42%.", kind: "accountant_handoff_draft" },
+    [
+      { id: "act", title: "Gross margin is 40%.", kind: "action_point_draft", status: null },
+      { id: "hand-old", title: "Gross margin is 39%.", kind: "accountant_handoff_draft" },
+      { id: "done", title: "Gross margin is 38%.", kind: "action_point_draft", status: "approved" },
+      { id: "ask", title: "Gross margin is 37%.", kind: "data_request_draft" },
+    ],
+  ),
+  ["act", "hand-old"],
+  "a hand-off replaces the twin action point and older hand-offs",
+);
+eq(
+  supersededFindingIds(
+    { id: "act", title: "Gross margin is 42%.", kind: "action_point_draft" },
+    [{ id: "hand", title: "Gross margin is 40%.", kind: "accountant_handoff_draft" }],
+  ),
+  [],
+  "an action point does not replace the hand-off",
+);
+const twins = [
+  finding({
+    id: "twin-act",
+    agent: "financial_manager",
+    kind: "action_point_draft",
+    title: "Gross margin is 40%.",
+    created_at: "2026-10-08T08:00:00.000Z",
+  }),
+  finding({
+    id: "twin-hand",
+    agent: "financial_manager",
+    kind: "accountant_handoff_draft",
+    title: "Gross margin is 42%.",
+    created_at: "2026-10-07T08:00:00.000Z",
+  }),
+  finding({
+    id: "real-act",
+    agent: "financial_manager",
+    kind: "action_point_draft",
+    title: "Chase the oldest invoice.",
+    created_at: "2026-10-06T08:00:00.000Z",
+  }),
+  finding({
+    id: "approved-act",
+    agent: "financial_manager",
+    kind: "action_point_draft",
+    title: "Gross margin is 39%.",
+    created_at: "2026-09-01T08:00:00.000Z",
+    status: "approved",
+  }),
+];
+eq(
+  dedupeFindings(twins).map((row) => row.id),
+  ["twin-hand", "real-act", "approved-act"],
+  "the hand-off replaces the open twin; a different action point and an approved one stay",
+);
+assert(
+  noticedNarrativeHidden(
+    { kind: "advisory_deliverable_draft" },
+    "Margins moved.",
+  ),
+  "an advisory draft is narrative",
+);
+assert(
+  noticedNarrativeHidden({ kind: "next_move_draft" }, "Raise prices."),
+  "a next-move draft is narrative",
+);
+assert(
+  !noticedNarrativeHidden({ kind: "action_point_draft" }, "Chase the oldest invoice."),
+  "an action point stays a decision",
+);
+assert(
+  !noticedNarrativeHidden({ kind: "data_request_draft" }, "Send the latest statement."),
+  "a data request stays a decision",
+);
+assert(
+  !noticedNarrativeHidden({ kind: "accountant_handoff_draft" }, "Confirm payroll."),
+  "a hand-off stays a decision",
+);
+assert(
+  noticedNarrativeHidden({ kind: "note" }, "Figures changed since this was written, regenerate."),
+  "a stale narrative that is not a decision is hidden",
 );
 
 for (const path of [
@@ -230,5 +315,98 @@ assert(
   team.includes('data-finding="gm-old"') && team.includes('data-ratio="ratio:grossMargin"'),
   "the team desk is unchanged",
 );
+
+const draftEvidence = (kind: string) => ({
+  draft: true,
+  requires_human_approval: true,
+  kind,
+  period_label: "Sep 2026",
+});
+const noticed = renderToStaticMarkup(
+  createElement(MilonTeamDesk, {
+    feed: api({ briefing: [] }),
+    now: NOW,
+    initialFilter: "financial_manager",
+    presentation: "agent",
+    audience: "accountant",
+    clientId: "11111111-1111-4111-8111-111111111111",
+    live: {
+      runs: [],
+      messages: [],
+      market: ZA_MARKET,
+      findings: [
+        finding({
+          id: "advisory",
+          agent: "financial_manager",
+          kind: "advisory_deliverable_draft",
+          title: "The written pack already says this.",
+          created_at: "2026-10-08T09:00:00.000Z",
+          evidence: draftEvidence("advisory_deliverable_draft"),
+        }),
+        finding({
+          id: "move",
+          agent: "financial_manager",
+          kind: "next_move_draft",
+          title: "Raise prices next month.",
+          created_at: "2026-10-08T08:00:00.000Z",
+          evidence: draftEvidence("next_move_draft"),
+        }),
+        finding({
+          id: "stale",
+          agent: "financial_manager",
+          kind: "note",
+          title: "Figures changed since this was written, regenerate",
+          created_at: "2026-10-08T07:00:00.000Z",
+        }),
+        finding({
+          id: "chase",
+          agent: "financial_manager",
+          kind: "action_point_draft",
+          title: "Chase the oldest invoice.",
+          created_at: "2026-10-08T06:00:00.000Z",
+          evidence: draftEvidence("action_point_draft"),
+        }),
+        finding({
+          id: "ask",
+          agent: "financial_manager",
+          kind: "data_request_draft",
+          title: "Send the latest statement.",
+          created_at: "2026-10-08T05:00:00.000Z",
+          evidence: draftEvidence("data_request_draft"),
+        }),
+        finding({
+          id: "hand",
+          agent: "financial_manager",
+          kind: "accountant_handoff_draft",
+          title: "Gross margin is 42%.",
+          created_at: "2026-10-08T04:00:00.000Z",
+          evidence: draftEvidence("accountant_handoff_draft"),
+        }),
+        finding({
+          id: "twin",
+          agent: "financial_manager",
+          kind: "action_point_draft",
+          title: "Gross margin is 40%.",
+          created_at: "2026-10-08T10:00:00.000Z",
+          evidence: draftEvidence("action_point_draft"),
+        }),
+      ],
+    },
+  }),
+);
+assert(noticed.includes('data-management-report=""'), "What I noticed links to the Management Report");
+assert(
+  noticed.includes("tab=reports") && noticed.includes("section=drafts") && noticed.includes("#advisory-pack"),
+  "the link opens Reports, Drafts, the pack panel",
+);
+assert(!noticed.includes('data-finding="advisory"'), "an advisory draft is not shown");
+assert(!noticed.includes('data-finding="move"'), "a next-move draft is not shown");
+assert(!noticed.includes('data-finding="stale"'), "a figures-changed narrative is not shown");
+assert(!noticed.includes('data-finding="twin"'), "the twin action point is replaced by the hand-off");
+assert(noticed.includes('data-finding="chase"'), "a real action point stays");
+assert(noticed.includes('data-finding="ask"'), "a data request stays");
+assert(noticed.includes('data-finding="hand"'), "the hand-off stays");
+assert(noticed.includes('data-draft-actions="owner"'), "an action point can be approved or dismissed");
+assert(noticed.includes('data-draft-actions="handoff"'), "the hand-off is a yes or no for the accountant");
 
 console.log("finding-dedupe ok");

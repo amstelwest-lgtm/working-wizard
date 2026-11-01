@@ -1,7 +1,8 @@
 /**
  * One agent draft on the owner door.
- * The owner can approve or dismiss an owner-side draft. Accountant drafts
- * stay read-only. Approve edits the title and detail, then confirms.
+ * The owner can approve or dismiss an owner-side draft. An accountant
+ * hand-off is a yes or no for the firm seat. Other accountant drafts stay
+ * read-only. Approve edits the title and detail, then confirms.
  * The card updates immediately and restores itself if the call fails.
  */
 import { useEffect, useState, type ReactNode } from "react";
@@ -56,6 +57,7 @@ export function OwnerDraftCard({
   onInvite,
   onRefresh,
   primary = true,
+  decisionSeat = "owner",
 }: {
   row: AgentFindingRow;
   layout: "moves" | "desk";
@@ -75,10 +77,16 @@ export function OwnerDraftCard({
   onRefresh?: () => void;
   /** The first decision on a view keeps the gold button. Later ones are outlined. */
   primary?: boolean;
+  /**
+   * The firm seat can approve or dismiss an accountant hand-off.
+   * The owner seat leaves that card as the accountant's decision.
+   */
+  decisionSeat?: "owner" | "firm";
 }) {
   const label = draftFindingLabel(row);
   const kindLabel = draftFindingKindLabel(row);
   const ownerOk = label === DRAFT_NEEDS_OWNER;
+  const handoffDecision = decisionSeat === "firm" && kindLabel === "Accountant hand-off";
   const contextMarket = useMarket().market;
   const market = marketProp ?? contextMarket;
   const figures = findingFigureEntries(row.evidence);
@@ -108,7 +116,7 @@ export function OwnerDraftCard({
   const recordId =
     (optimistic?.phase === "approved" ? optimistic.recordId : null) ?? row.approved_row_id ?? null;
   const link = approved ? approvedLiveLink(table) : null;
-  const showActions = ownerOk && !blocked && !approved;
+  const showActions = (ownerOk || handoffDecision) && !blocked && !approved;
   const fromSnapshot =
     health && row.kind !== "data_request_draft"
       ? findingSentence({
@@ -240,7 +248,7 @@ export function OwnerDraftCard({
   ) : null;
 
   const actions = showActions ? (
-    <div className={layout === "desk" ? "milon-desk-actions milon-desk-draft-actions" : "owner-draft-actions"} data-draft-actions="owner">
+    <div className={layout === "desk" ? "milon-desk-actions milon-desk-draft-actions" : "owner-draft-actions"} data-draft-actions={handoffDecision && !ownerOk ? "handoff" : "owner"}>
       {editing ? (
         <>
           <button type="button" className={layout === "desk" ? "milon-desk-btn primary" : primary ? "btn gold owner-draft-approve" : "owner-btn-secondary owner-draft-approve"} onClick={() => void confirm()}>

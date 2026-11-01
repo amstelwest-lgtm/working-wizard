@@ -211,6 +211,84 @@ export type PackBooks = {
   sourceLabel?: string | null;
 };
 
+function packSourceLabel(financials: Record<string, unknown>): string {
+  const raw = financials.statementSource;
+  const source = typeof raw === "string" ? raw.trim() : "";
+  switch (source) {
+    case "xero":
+      return "a saved Xero statement";
+    case "qbo":
+      return "a saved QuickBooks statement";
+    case "sage":
+      return "a saved Sage statement";
+    case "upload":
+    case "pdf_upload":
+      return "an uploaded statement";
+    case "financial_statement":
+      return "an imported statement";
+    case "bank_pack":
+      return "a bank import";
+    case "manual":
+      return "figures entered by hand";
+    default:
+      return "figures already on file";
+  }
+}
+
+function finiteKnob(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Stored forecast knobs that are not the default. Empty when the cashflow has none. */
+export function forecastAssumptionLines(cashflow: unknown): string[] {
+  if (!cashflow || typeof cashflow !== "object" || Array.isArray(cashflow)) return [];
+  const cf = cashflow as Record<string, unknown>;
+  const lines: string[] = [];
+  const delay = finiteKnob(cf.collectDelay);
+  if (delay != null && delay !== 0) lines.push(`Collections lag by ${delay} weeks.`);
+  const growth = finiteKnob(cf.revGrowthPct);
+  if (growth != null && growth !== 0) lines.push(`Revenue changes by ${growth}% a month.`);
+  const revAdj = finiteKnob(cf.revAdj);
+  if (revAdj != null && revAdj !== 100) lines.push(`Revenue is scaled to ${revAdj}%.`);
+  const expAdj = finiteKnob(cf.expAdj);
+  if (expAdj != null && expAdj !== 100) lines.push(`Expenses are scaled to ${expAdj}%.`);
+  return lines;
+}
+
+/**
+ * Books the Drafts Generate path freezes into schema 2.
+ * Missing financials stay schema 1. The PDF then uses the Cover-to-Notes pages.
+ */
+export function packBooksForGeneration(input: {
+  financials: Record<string, unknown> | null;
+  priorFinancials?: Record<string, unknown> | null;
+  cashflow?: unknown;
+  financialsUpdatedAt?: string | null;
+  fyStartMonth?: number | null;
+  timeZone?: string | null;
+  now?: Date | null;
+  industry?: string | null;
+  market?: ScoreMarket | null;
+}): PackBooks | null {
+  const financials = input.financials;
+  if (!financials || Array.isArray(financials)) return null;
+  const now = input.now && !Number.isNaN(input.now.getTime()) ? input.now : undefined;
+  return {
+    financials,
+    priorFinancials: input.priorFinancials ?? null,
+    cashflow: input.cashflow,
+    financialsUpdatedAt: input.financialsUpdatedAt ?? null,
+    fyStartMonth: input.fyStartMonth ?? null,
+    timeZone: input.timeZone ?? null,
+    now,
+    industry: input.industry ?? null,
+    market: input.market ?? null,
+    assumptions: forecastAssumptionLines(input.cashflow),
+    sourceLabel: packSourceLabel(financials),
+  };
+}
+
 export type AdvisoryPack = {
   id: string;
   client_id: string;

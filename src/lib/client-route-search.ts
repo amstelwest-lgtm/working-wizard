@@ -142,6 +142,16 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   portal: { tab: "portal" },
 };
 
+/**
+ * What I noticed opens this. Reports → Drafts is the Advisory Management
+ * Report: Generate stores schema 2, Export PDF downloads that file.
+ */
+export function managementReportPath(clientId: string): string | null {
+  const id = clientId.trim();
+  if (!id || /[/?#\\\s]/.test(id)) return null;
+  return `/clients/${encodeURIComponent(id)}?tab=reports&section=drafts#advisory-pack`;
+}
+
 function asFocus(value: string | null | undefined): "health" | "pillars" | undefined {
   return value === "health" || value === "pillars" ? value : undefined;
 }

@@ -4,11 +4,11 @@
  * Nothing is deleted. Approved and dismissed rows are left alone.
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { findingTitleKey } from "../../../src/lib/finding-title-key.ts";
+import { findingTitleKey, findingsShareSupersedeKey } from "../../../src/lib/finding-title-key.ts";
 
 export function supersededFindingIds(
-  keep: { id: string; title: string },
-  rows: ReadonlyArray<{ id: unknown; title: unknown; status?: unknown }>,
+  keep: { id: string; title: string; kind?: string | null },
+  rows: ReadonlyArray<{ id: unknown; title: unknown; status?: unknown; kind?: unknown }>,
 ): string[] {
   const key = findingTitleKey(keep.title);
   if (!key) return [];
@@ -19,18 +19,19 @@ export function supersededFindingIds(
         row.status !== "approved" &&
         row.status !== "dismissed" &&
         typeof row.title === "string" &&
-        findingTitleKey(row.title) === key,
+        findingTitleKey(row.title) === key &&
+        findingsShareSupersedeKey(keep.kind, row.kind),
     )
     .map((row) => String(row.id));
 }
 
 export async function supersedeOlderFindings(
   db: SupabaseClient,
-  input: { clientId: string; agent: string; keepId: string; title: string },
+  input: { clientId: string; agent: string; keepId: string; title: string; kind?: string | null },
 ): Promise<{ superseded: string[]; error?: string }> {
   const { data, error } = await db
     .from("agent_findings")
-    .select("id, title, status")
+    .select("id, title, status, kind")
     .eq("client_id", input.clientId)
     .eq("agent", input.agent)
     .is("superseded_by", null)
@@ -38,7 +39,10 @@ export async function supersedeOlderFindings(
     .neq("id", input.keepId)
     .limit(200);
   if (error) return { superseded: [], error: error.message };
-  const ids = supersededFindingIds({ id: input.keepId, title: input.title }, data ?? []);
+  const ids = supersededFindingIds(
+    { id: input.keepId, title: input.title, kind: input.kind },
+    data ?? [],
+  );
   if (ids.length === 0) return { superseded: [] };
   const { error: updateError } = await db
     .from("agent_findings")
