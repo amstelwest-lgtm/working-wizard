@@ -18,6 +18,8 @@ import {
   activitySentence,
   checkedStamp,
   dedupeFindings,
+  dropHandoffTwinActionPoints,
+  noticedNarrativeHidden,
   deskSignoffInvite,
   deskSignoffText,
   deskSourceLabel,
@@ -45,6 +47,7 @@ import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-sl
 import { taxSampleEnabled } from "@/lib/tax-specialist/enabled";
 import { TAX_AGENT_NAME, TAX_AGENT_ROLE, TAX_AGENT_SHORT_NAME } from "@/lib/tax-specialist/agents";
 import { ACTIVITY_CAP, NOTICED_CAP, NOTICED_EMPTY } from "@/lib/agent-section-copy";
+import { managementReportPath } from "@/lib/client-route-search";
 import { findingTitleKey } from "@/lib/finding-title-key";
 import { AgentSection } from "./agent-section";
 import "./milon-team-desk.css";
@@ -123,6 +126,7 @@ export function MilonTeamDesk({
   onRefreshDrafts,
   onOpenAgent,
   onOpenTaxAgent,
+  clientId = null,
   presentation = "team",
   marketCountry = null,
   audience = "accountant",
@@ -142,6 +146,8 @@ export function MilonTeamDesk({
   onOpenAgent?: (agent: AgentKey) => void;
   /** ZA client pages: the Tax Specialist chip opens its page instead of the sample sheet. */
   onOpenTaxAgent?: () => void;
+  /** Opens Reports → Drafts, the Advisory Management Report for this client. */
+  clientId?: string | null;
   /** Agent view hides the last-run chip strip. The stage switcher owns that click. */
   presentation?: "team" | "agent";
   marketCountry?: string | null;
@@ -237,8 +243,10 @@ export function MilonTeamDesk({
   const findings = (
     agentView
       ? dedupeFindings(visibleFindings)
-      : [...visibleFindings].sort(
-          (a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id),
+      : dropHandoffTwinActionPoints(
+          [...visibleFindings].sort(
+            (a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id),
+          ),
         )
   )
     .map((row) => ({
@@ -257,7 +265,8 @@ export function MilonTeamDesk({
     }))
     .filter(
       ({ row, sentence }) => !agentView || (row.id !== heroFinding?.id && !echoesHero(sentence)),
-    );
+    )
+    .filter(({ row, sentence }) => !noticedNarrativeHidden(row, sentence));
   const findingKeys = new Set(
     findings.flatMap(({ row, sentence }) => [
       findingTitleKey(row.title),
@@ -328,6 +337,7 @@ export function MilonTeamDesk({
           onOpen={onOpenApproved}
           onInvite={onInvite}
           onRefresh={onRefreshDrafts}
+          decisionSeat={audience === "owner" ? "owner" : "firm"}
         />
       );
     }
@@ -417,6 +427,7 @@ export function MilonTeamDesk({
         ...leadRows,
       ];
   const todayMore = agentView ? noticedRows.length > NOTICED_CAP : ratios.length > TODAY_RATIO_CAP;
+  const reportHref = clientId ? managementReportPath(clientId) : null;
 
   const todayList = (
     <>
@@ -571,6 +582,13 @@ export function MilonTeamDesk({
 
             {agentView ? (
               <AgentSection section="noticed">
+                {reportHref ? (
+                  <p className="milon-desk-report">
+                    <a className="milon-desk-btn primary" href={reportHref} data-management-report="">
+                      Management Report
+                    </a>
+                  </p>
+                ) : null}
                 {todayCount > 0 ? todayList : <p className="agent-section-empty">{NOTICED_EMPTY}</p>}
               </AgentSection>
             ) : todayCount > 0 ? (

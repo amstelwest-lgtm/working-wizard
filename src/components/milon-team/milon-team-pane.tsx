@@ -135,6 +135,7 @@ export function MilonTeamPaneView({
       sampleClient={sampleClient}
       canonicalRatios={canonicalRatios}
       heroFinding={heroFinding}
+      clientId={clientId}
     />
   );
   if (!agent) {

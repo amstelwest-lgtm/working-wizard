@@ -55,12 +55,18 @@ export type AnalystExecCtx = {
 };
 
 /** The finding is already saved. A failed supersede only leaves an older duplicate visible. */
-async function supersedeAnalystFindings(ctx: AnalystExecCtx, keepId: string, title: string): Promise<void> {
+async function supersedeAnalystFindings(
+  ctx: AnalystExecCtx,
+  keepId: string,
+  title: string,
+  kind: string,
+): Promise<void> {
   const result = await supersedeOlderFindings(ctx.db, {
     clientId: ctx.clientId,
     agent: "analyst",
     keepId,
     title,
+    kind,
   });
   if (result.error) console.warn("agent_findings supersede failed", result.error);
 }
@@ -395,7 +401,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       .eq("id", duplicate.id)
       .is("superseded_by", null);
     if (touchError) return { error: touchError.message };
-    await supersedeAnalystFindings(ctx, duplicate.id, shaped.title);
+    await supersedeAnalystFindings(ctx, duplicate.id, shaped.title, kind);
     for (const key of recordKeys) ctx.recordedKeys.add(key);
     return {
       recorded: true,
@@ -422,7 +428,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     .select("id")
     .maybeSingle();
   if (error || !data?.id) return { error: error?.message || "The finding was not saved." };
-  await supersedeAnalystFindings(ctx, String(data.id), shaped.title);
+  await supersedeAnalystFindings(ctx, String(data.id), shaped.title, kind);
   for (const key of recordKeys) ctx.recordedKeys.add(key);
 
   const { error: messageError } = await ctx.db.from("agent_messages").insert({

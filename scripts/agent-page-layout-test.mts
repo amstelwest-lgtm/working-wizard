@@ -26,6 +26,10 @@ const NOW = new Date("2026-10-08T12:00:00.000Z");
 
 eq(AGENT_SECTION_COPY.work.title, "Where I work", "work title");
 eq(AGENT_SECTION_COPY.noticed.title, "What I noticed", "noticed title");
+assert(
+  AGENT_SECTION_COPY.noticed.purpose.includes("Management Report"),
+  "What I noticed points at the Management Report",
+);
 eq(AGENT_SECTION_COPY.offered.title, "Work I can do for you", "offered title");
 eq(AGENT_SECTION_COPY.activity.title, "Recent activity", "activity title");
 eq(NOTICED_EMPTY, "Nothing new since the last sync.", "noticed empty state");
@@ -170,6 +174,18 @@ const quiet = renderToStaticMarkup(
 );
 assert(quiet.includes(">What I noticed<"), "What I noticed is never hidden");
 assert(quiet.includes(NOTICED_EMPTY), "an empty What I noticed says so");
+assert(quiet.includes("Decisions that still need a yes or no."), "the noticed purpose names the decisions");
+const linked = renderToStaticMarkup(
+  createElement(MilonTeamDesk, {
+    feed: api({}),
+    now: NOW,
+    initialFilter: "analyst",
+    presentation: "agent",
+    clientId: "11111111-1111-4111-8111-111111111111",
+  }),
+);
+assert(linked.includes('data-management-report=""'), "an open agent offers the Management Report");
+assert(linked.includes(">Management Report<"), "the control is labelled Management Report");
 assert(!quiet.includes(">Work I can do for you<"), "an empty offer list is hidden");
 assert(!quiet.includes(">Recent activity<"), "an empty activity list is hidden");
 

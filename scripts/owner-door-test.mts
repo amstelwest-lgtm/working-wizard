@@ -6,7 +6,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { ownerBotLayout } from "../src/components/owner-door/owner-home.tsx";
 import { avatarRhythm } from "../src/components/owner-door/owner-rhythm.ts";
 import { agentShortName } from "../src/lib/milon-team.ts";
-import { emptyAgentActivity, isVisibleAgentFinding, type AgentActivitySnapshot } from "../src/lib/milon-team-activity.ts";
+import {
+  emptyAgentActivity,
+  isVisibleAgentFinding,
+  noticedNarrativeHidden,
+  type AgentActivitySnapshot,
+} from "../src/lib/milon-team-activity.ts";
 import {
   guardOwnerLine,
   ownerAmount,
@@ -1575,6 +1580,19 @@ assert(
   draftFindingKindLabel({ kind: "advisory_deliverable_draft", evidence: nestedEvidence }) === "Advisory",
   "an advisory draft keeps its kind label",
 );
+assert(
+  noticedNarrativeHidden({ kind: "advisory_deliverable_draft" }, "The pack already says this."),
+  "owner What I noticed hides an advisory narrative",
+);
+assert(
+  noticedNarrativeHidden({ kind: "action_point_draft" }, "Figures changed since this was written, regenerate.") ===
+    false,
+  "a stale action point stays a decision",
+);
+assert(
+  noticedNarrativeHidden({ kind: "note" }, "Figures changed since this was written, regenerate."),
+  "owner What I noticed hides a figures-changed narrative",
+);
 assert(isVisibleAgentFinding({ status: "approved" }), "an approved draft stays on the list");
 assert(!isVisibleAgentFinding({ status: "dismissed" }), "a dismissed draft stays hidden");
 assert(!isVisibleAgentFinding({ dismissed_reason: "dismissed by user" }), "a dismissed reason stays hidden");
@@ -1584,7 +1602,11 @@ assert(plan.includes("DRAFT_NEEDS_OWNER"), "owner drafts are the ones that can b
 assert(plan.includes('data-owner-drafts='), "Next moves marks the draft section");
 const card = readFileSync("src/components/owner-draft-card.tsx", "utf8");
 assert(card.includes("Approve") && card.includes("Dismiss") && card.includes("Confirm"), "an owner draft can be approved or dismissed");
-assert(card.includes("ownerOk && !blocked && !approved"), "buttons stay off an accountant draft and an approved row");
+assert(
+  card.includes("(ownerOk || handoffDecision) && !blocked && !approved"),
+  "owner buttons stay off unless the firm is deciding a hand-off; an approved row stays quiet",
+);
+assert(card.includes('decisionSeat === "firm"'), "a hand-off yes or no is the firm seat");
 assert(card.includes("setOptimistic(null)"), "a failed decision rolls the card back");
 assert(!plan.includes("does not enqueue agent_runs"), "the owner view no longer describes the hand-off as a placeholder");
 assert(!plan.includes('.from("agent_runs")'), "the owner view does not insert agent runs itself");

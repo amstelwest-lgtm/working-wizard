@@ -3,6 +3,7 @@
  * for the Chill Pepper books and the Harbour & Co sample statement.
  * Run: pnpm test:advisory-pack-schema2
  */
+import { readFileSync } from "node:fs";
 import { assessClientMetrics } from "../src/lib/client-metrics";
 import { scorecardHealthFromFinancials } from "../src/lib/health-score";
 import { buildBridgeSteps } from "../src/lib/profit-bridge-steps";
@@ -13,6 +14,7 @@ import { sampleFinancialsFor } from "../src/lib/sample-business";
 import { sampleOpeningCash } from "../src/lib/trial-sample-view";
 import {
   buildAdvisoryPack,
+  packBooksForGeneration,
   packNarrativeRatios,
   parsePackContent,
   advisoryPackFiguresChanged,
@@ -287,6 +289,64 @@ checkClient("Harbour & Co", HARBOUR);
     }),
     "a moved health score marks schema 2 stale",
   );
+}
+
+{
+  const books = packBooksForGeneration({
+    financials: { ...CHILL, statementSource: "xero" },
+    priorFinancials: { ...CHILL, revenue: 1_000_000 },
+    cashflow: { ...CHILL_CASH, collectDelay: 2 },
+    financialsUpdatedAt: NOW,
+    fyStartMonth: 3,
+    timeZone: ZA_MARKET.timezone,
+    now: NOW_DATE,
+    industry: "Hospitality",
+    market: ZA_MARKET,
+  });
+  assert(books, "live financials become pack books");
+  eq(books?.fyStartMonth, 3, "fy start month is frozen");
+  eq(books?.industry, "Hospitality", "industry is frozen");
+  eq(books?.sourceLabel, "a saved Xero statement", "statement source is the pack source");
+  eq(books?.priorFinancials?.revenue, 1_000_000, "prior snapshot financials are frozen");
+  assert(
+    books?.assumptions?.some((line) => line.includes("2 weeks")),
+    "a stored collection lag is an assumption",
+  );
+  const slim: PackInputs = {
+    clientName: "Chill Pepper Boutique Hotel",
+    firmName: null,
+    hasFirm: true,
+    periodLabel: "Sep 2026",
+    priorPeriodLabel: null,
+    figuresAsOf: "2026-09-30",
+    health: null,
+    ratios: {},
+    priorRatios: null,
+    openingBalance: null,
+    closings: null,
+    cashRunwayWeeks: null,
+    recommendations: [],
+    dataRequests: [],
+    openActions: 0,
+    overdueActions: 0,
+    now: NOW,
+    currency: "ZAR",
+    market: ZA_MARKET,
+  };
+  eq(buildAdvisoryPack(slim).schema, 1, "generate without books stays schema 1");
+  eq(packBooksForGeneration({ financials: null }), null, "no financials does not invent books");
+  const frozen = buildAdvisoryPack({ ...slim, books: books! });
+  eq(frozen.schema, 2, "gather books freezes schema 2");
+  if (frozen.schema === 2) {
+    eq(
+      frozen.sections.map((section) => section.key).join(","),
+      "summary,health,dupont,cash,profit,priorities,notes",
+      "schema 2 is Cover through Notes, not the old text sections",
+    );
+  }
+  const gather = readFileSync("src/lib/advisory-pack.functions.ts", "utf8");
+  assert(gather.includes("packBooksForGeneration"), "Drafts generate builds books from the client");
+  assert(gather.includes("...(books ? { books } : {})"), "Drafts generate passes books into the pack");
 }
 
 console.log("advisory-pack-schema2: ok");

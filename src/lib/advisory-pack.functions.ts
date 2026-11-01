@@ -30,6 +30,7 @@ import {
   advisoryPackFiguresChanged,
   buildAdvisoryPack,
   computeEditStats,
+  packBooksForGeneration,
   isMissingPackRelation,
   livePackMetrics,
   packNarrativeRatios,
@@ -485,6 +486,26 @@ export async function gatherPackInputs(
     client.financials && typeof client.financials === "object" && !Array.isArray(client.financials)
       ? client.financials
       : null;
+  const snapshotFinancials =
+    current.financials && typeof current.financials === "object" && !Array.isArray(current.financials)
+      ? current.financials
+      : null;
+  const priorFinancials =
+    prior?.financials && typeof prior.financials === "object" && !Array.isArray(prior.financials)
+      ? prior.financials
+      : null;
+  const profile = parseOperatingProfile(client.operating_profile);
+  const books = packBooksForGeneration({
+    financials: financials ?? snapshotFinancials,
+    priorFinancials,
+    cashflow: client.cashflow,
+    financialsUpdatedAt: client.financials_updated_at ?? null,
+    fyStartMonth: overview.fyStartMonth,
+    timeZone: overview.market.timezone,
+    now: Number.isFinite(nowDate.getTime()) ? nowDate : new Date(),
+    industry: clientIndustryDisplay(client.name, profile, profile?.businessTypeId),
+    market: overview.market,
+  });
 
   return {
     clientName: client.name ?? "",
@@ -530,6 +551,7 @@ export async function gatherPackInputs(
       hasAgedCreditors: artifactKinds.has("aged_creditors"),
       openingMissing: storedOpeningIsMissing(client.cashflow),
     },
+    ...(books ? { books } : {}),
   };
 }
 

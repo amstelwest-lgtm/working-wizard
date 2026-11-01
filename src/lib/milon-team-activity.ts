@@ -15,11 +15,18 @@ import {
   reconcileStoredHealthNarrative,
   readStoredHealthSnapshot,
   snapshotFromLiveQuote,
+  splitRegenerateNarrative,
   type HealthScoreSnapshot,
 } from "./health-snapshot";
 import { figuresMovedAfterDraft, quoteLiveScoreOnly, liveOverallFromRecord } from "./draft-figures";
 import { offsetInsideCalendarSpan, repairCalendarFigureLeaks, rewriteDraftMonthStamp } from "./statement-period";
-import { findingTitleKey } from "./finding-title-key";
+import {
+  ACTION_POINT_DRAFT_KIND,
+  HANDOFF_DRAFT_KIND,
+  dedupeFindingGroupKey,
+  findingKindOf,
+  findingTitleKey,
+} from "./finding-title-key";
 
 export const TODAY_RATIO_CAP = 3;
 
@@ -81,7 +88,8 @@ function findingSeenAt(row: { created_at: string; last_seen?: string | null }): 
 /**
  * One row per agent and finding title, newest first. Titles match on
  * findingTitleKey, so a re-run that only changed a figure replaces the old row.
- * Approved rows are never dropped; they point at work that was done.
+ * An action point and a hand-off of the same title stay separate until the
+ * hand-off replaces the open twin. Approved rows are never dropped.
  */
 export function dedupeFindings<
   T extends {
@@ -91,6 +99,7 @@ export function dedupeFindings<
     created_at: string;
     last_seen?: string | null;
     status?: string | null;
+    kind?: string | null;
   },
 >(rows: readonly T[]): T[] {
   const ordered = [...rows].sort(
@@ -99,7 +108,7 @@ export function dedupeFindings<
   const seen = new Set<string>();
   const kept: T[] = [];
   for (const row of ordered) {
-    const key = `${row.agent}:${findingTitleKey(row.title)}`;
+    const key = dedupeFindingGroupKey(row);
     if (!seen.has(key)) {
       seen.add(key);
       kept.push(row);
@@ -107,7 +116,51 @@ export function dedupeFindings<
       kept.push(row);
     }
   }
-  return kept;
+  return dropHandoffTwinActionPoints(kept);
+}
+
+/** An open action point with the same title as a hand-off is the duplicate. Approved rows stay. */
+export function dropHandoffTwinActionPoints<
+  T extends { agent: string; title: string; kind?: string | null; status?: string | null },
+>(rows: readonly T[]): T[] {
+  const handoffTitles = new Set(
+    rows
+      .filter((row) => findingKindOf(row.kind) === HANDOFF_DRAFT_KIND)
+      .map((row) => `${row.agent}:${findingTitleKey(row.title)}`),
+  );
+  return rows.filter((row) => {
+    if (findingKindOf(row.kind) !== ACTION_POINT_DRAFT_KIND) return true;
+    if (row.status === "approved") return true;
+    return !handoffTitles.has(`${row.agent}:${findingTitleKey(row.title)}`);
+  });
+}
+
+const NARRATIVE_NOTICED_KINDS = new Set(["advisory_deliverable_draft", "next_move_draft"]);
+const DECISION_NOTICED_KINDS = new Set([
+  ACTION_POINT_DRAFT_KIND,
+  "data_request_draft",
+  HANDOFF_DRAFT_KIND,
+]);
+
+function noticedFindingKind(row: { kind?: string | null; evidence?: unknown }): string {
+  const column = findingKindOf(row.kind);
+  if (column) return column;
+  if (!row.evidence || typeof row.evidence !== "object" || Array.isArray(row.evidence)) return "";
+  return findingKindOf((row.evidence as Record<string, unknown>).kind);
+}
+
+/**
+ * What I noticed drops narrative drafts the Management Report already says.
+ * Approve, dismiss, and hand-off decisions stay.
+ */
+export function noticedNarrativeHidden(
+  row: { kind?: string | null; evidence?: unknown },
+  sentence: string,
+): boolean {
+  const kind = noticedFindingKind(row);
+  if (NARRATIVE_NOTICED_KINDS.has(kind)) return true;
+  if (DECISION_NOTICED_KINDS.has(kind)) return false;
+  return splitRegenerateNarrative(sentence).action;
 }
 
 /** Dismissed and superseded drafts stay off the owner surfaces. Approved rows stay. */

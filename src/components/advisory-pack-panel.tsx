@@ -482,7 +482,7 @@ export function AdvisoryPackPanel({
         signed,
         filename,
       });
-      toast.success("Advisory pack PDF downloaded");
+      toast.success("Management Report downloaded");
       if (user && signed) {
         const logged = await recordDelivery({
           clientId,
@@ -643,7 +643,7 @@ export function AdvisoryPackPanel({
                   style={{ textTransform: "none", letterSpacing: 0 }}
                   data-generate
                 >
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Regenerate pack
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Regenerate report
                 </button>
               ) : null}
             </>
@@ -738,7 +738,7 @@ export function AdvisoryPackPanel({
                 ) : (
                   <RefreshCw className="h-3.5 w-3.5" aria-hidden />
                 )}
-                Regenerate pack
+                Regenerate report
               </button>
             ) : null}
             {!pack && isWriter && canGenerate ? (
@@ -754,7 +754,7 @@ export function AdvisoryPackPanel({
                 ) : (
                   <RefreshCw className="h-3.5 w-3.5" aria-hidden />
                 )}
-                Generate pack
+                Generate report
               </button>
             ) : null}
           </>
@@ -1091,7 +1091,7 @@ function PackStrip({
   return (
     <section className="answer-strip" data-answer-strip>
       <div className="answer-strip__lead">
-        <h2 className="answer-strip__heading">Advisory pack</h2>
+        <h2 className="answer-strip__heading">Advisory Management Report</h2>
         {sentence ? (
           <p className="answer-strip__sentence" data-signoff-line>
             {sentence}
@@ -1106,7 +1106,7 @@ function PackStrip({
             type="button"
             className="answer-strip__icon"
             aria-label="Export PDF"
-            title="Export PDF"
+            title="Export Management Report"
             data-export-pdf
             disabled={exporting}
             onClick={onExport}
