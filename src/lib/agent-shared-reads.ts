@@ -86,7 +86,7 @@ export function libraryListItem(
     name,
     kind: clipText(row.kind, 80) ?? clipText(row.doc_type, 80),
     document_type: clipText(meta.document_type, 80),
-    period_label: clipText(row.period_label, 80),
+    period_label: clipText(row.period_label, 80), // date-ok: stored label passed through, not reformatted
     status: clipText(row.status, 40) ?? clipText(row.visibility, 40),
     summary: clipText(meta.summary, 240) ?? clipText(row.supplier_name, 120),
     at: row.created_at ?? row.received_at ?? null,
@@ -200,7 +200,7 @@ export function shapeManagementReport(
     id: row.id ?? null,
     version: row.version ?? null,
     status: row.status ?? null,
-    period_label: clipText(row.period_label, 80) ?? clipText(content?.periodLabel, 80),
+    period_label: clipText(row.period_label, 80) ?? clipText(content?.periodLabel, 80), // date-ok: stored label passed through, not reformatted
     updated_at: row.updated_at ?? null,
     schema,
   };
