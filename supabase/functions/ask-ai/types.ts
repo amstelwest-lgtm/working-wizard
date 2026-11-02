@@ -150,6 +150,8 @@ export interface AskAiContext {
   overview?: OverviewBrief | null;
   /** Current advisory pack sign-off. Same reader as the pack strip. */
   advisorySignoff?: AdvisorySignoffGrounding | null;
+  /** Library, tax, Management Report, proposals, sends, and peer findings. */
+  peerContext?: string | null;
 }
 
 export interface AskAiRequest {

@@ -25,6 +25,7 @@ import {
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./overview-brief.ts";
 import { promptMoneyPack } from "../../../src/lib/prompt-money.ts";
+import { loadPeerContextBlock } from "../_shared/agent-shared-reads.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import { adviceChatProductName, adviceChatVolumeUnit, adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
@@ -425,6 +426,15 @@ export async function buildContext(
     };
   }
 
+  let peerContext = "";
+  if (tier !== "none") {
+    try {
+      peerContext = await loadPeerContextBlock(supabase, clientId);
+    } catch (err) {
+      console.warn("peer context:", (err as Error).message);
+    }
+  }
+
   const deliverables =
     tier === "none"
       ? []
@@ -456,5 +466,6 @@ export async function buildContext(
     deliverables,
     overview,
     advisorySignoff,
+    peerContext: peerContext || null,
   };
 }

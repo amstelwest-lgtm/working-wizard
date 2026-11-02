@@ -62,9 +62,13 @@ function assert(cond: boolean, msg: string) {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-// Allow-list: the seven reads plus record_finding. Milonbot writes are refused.
+// Allow-list: the original reads, the shared deliverable reads, inbox, findings, record_finding, and a peer message.
 {
-  assert(ANALYST_TOOLS.length === 8, "seven read tools plus record_finding");
+  assert(ANALYST_TOOLS.includes("get_inbox"), "the analyst can read its inbox");
+  assert(ANALYST_TOOLS.includes("get_team_findings"), "the analyst can read team findings");
+  assert(ANALYST_TOOLS.includes("send_agent_message"), "the analyst can message a peer");
+  assert(ANALYST_TOOLS.includes("list_tax_drafts"), "the analyst can list tax drafts");
+  assert(ANALYST_TOOLS.includes("list_figure_proposals"), "the analyst can read figure proposals");
   for (const name of [
     "get_health",
     "get_ratios",
@@ -73,7 +77,13 @@ const DAY = 24 * 60 * 60 * 1000;
     "get_statement_history",
     "get_data_freshness",
     "get_score_history",
+    "get_inbox",
+    "get_team_findings",
+    "list_client_library",
+    "get_management_report",
+    "list_client_sends",
     "record_finding",
+    "send_agent_message",
   ]) {
     assert(analystToolAllowed(name), `${name} is allowed`);
     assert(executeAnalystGate(name).allowed === true, `${name} passes the gate`);

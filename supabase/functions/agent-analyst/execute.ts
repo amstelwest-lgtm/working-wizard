@@ -17,6 +17,7 @@ import {
   type StoredFigures,
 } from "../../../src/lib/agent-bus.ts";
 import {
+  ANALYST_PEERS,
   dataQualityComparesPeriods,
   executeAnalystGate,
   FINDING_KINDS,
@@ -30,6 +31,8 @@ import {
   statementVariance,
   type AnalystToolName,
 } from "../../../src/lib/agent-analyst.ts";
+import { isSharedDeliverableRead } from "../../../src/lib/agent-shared-reads.ts";
+import { executeSharedDeliverableRead } from "../_shared/agent-shared-reads.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import {
   healthSnapshotFromTool,
@@ -115,6 +118,15 @@ export async function executeAnalystTool(
   const gate = executeAnalystGate(name);
   if (!gate.allowed) return gate;
   const tool: AnalystToolName = gate.name;
+
+  if (isSharedDeliverableRead(tool)) return executeSharedDeliverableRead(tool, args, ctx);
+  if (tool === "get_inbox" || tool === "get_team_findings" || tool === "send_agent_message") {
+    const desk = await import("../_shared/agent-desk.ts");
+    const peerCtx = { ...ctx, agent: "analyst" as const };
+    if (tool === "get_inbox") return desk.readInbox(peerCtx);
+    if (tool === "get_team_findings") return desk.readTeamFindings(peerCtx);
+    return desk.sendAgentMessage(args, peerCtx, ANALYST_PEERS);
+  }
 
   if (tool === "get_statement_history") return readTools(tool, ctx);
 

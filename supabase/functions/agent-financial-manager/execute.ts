@@ -30,6 +30,8 @@ import {
   sendAgentMessage,
   type AgentToolCtx,
 } from "../_shared/agent-desk.ts";
+import { executeSharedDeliverableRead } from "../_shared/agent-shared-reads.ts";
+import { isSharedDeliverableRead } from "../../../src/lib/agent-shared-reads.ts";
 
 const REUSED = new Set<string>(FM_REUSED_READS);
 const OWN = new Set<string>(FM_OWN_READS);
@@ -42,6 +44,7 @@ export async function executeFinancialManagerTool(
   const gate = executeFinancialManagerGate(name);
   if (!gate.allowed) return gate;
   const tool: FmToolName = gate.name;
+  if (isSharedDeliverableRead(tool)) return executeSharedDeliverableRead(tool, args, ctx);
   if (REUSED.has(tool)) return readReusedAnalystTool(tool, ctx);
   if (tool === "get_books_quality") return readBooksQuality(ctx);
   if (tool === "get_cash_13_week") return readCash13Week(ctx);

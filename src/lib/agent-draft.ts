@@ -109,14 +109,14 @@ export type DraftRecipient = {
  * A Financial Manager next move goes to the Advisor.
  * An Advisor draft goes to the Financial Manager.
  */
-export function defaultDraftRecipient(agent: "financial_manager" | "advisor", kind: string): DraftBotKey | null {
-  if (agent === "advisor") return "financial_manager";
+export function defaultDraftRecipient(agent: DraftBotKey, kind: string): DraftBotKey | null {
+  if (agent === "advisor" || agent === "analyst") return "financial_manager";
   if (HUMAN_APPROVER_DRAFT_KINDS.has(kind)) return null;
   return "advisor";
 }
 
 export function resolveDraftRecipient(input: {
-  agent: "financial_manager" | "advisor";
+  agent: DraftBotKey;
   kind: string;
   toAgent: unknown;
   peers: readonly string[];

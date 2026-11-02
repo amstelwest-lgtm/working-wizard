@@ -3,6 +3,10 @@
  * enforces the same list before it executes a tool.
  */
 import { analystRunOutcome, type AnalystToolName } from "./agent-analyst.ts";
+import {
+  SHARED_DELIVERABLE_READS,
+  SHARED_DELIVERABLE_TOOL_LABELS,
+} from "./agent-shared-reads.ts";
 
 /** A normal run saves its draft in 2–3 turns. Later turns are headroom before the cap. */
 export const FM_MAX_ITERATIONS = 6;
@@ -36,7 +40,12 @@ export const FM_WRITE_TOOLS = [
   "prepare_client_report",
 ] as const;
 
-export const FM_TOOLS = [...FM_REUSED_READS, ...FM_OWN_READS, ...FM_WRITE_TOOLS] as const;
+export const FM_TOOLS = [
+  ...FM_REUSED_READS,
+  ...FM_OWN_READS,
+  ...SHARED_DELIVERABLE_READS,
+  ...FM_WRITE_TOOLS,
+] as const;
 
 export type FmToolName = (typeof FM_TOOLS)[number];
 
@@ -49,6 +58,7 @@ export const FM_TOOL_LABELS: Record<FmToolName, string> = {
   get_inbox: "Inbox",
   get_team_findings: "Findings",
   get_own_memory: "Memory",
+  ...SHARED_DELIVERABLE_TOOL_LABELS,
   record_draft: "Draft",
   send_agent_message: "Message",
   propose_figure_adjustment: "Figure proposal",

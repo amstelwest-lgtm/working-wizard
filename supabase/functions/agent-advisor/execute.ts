@@ -21,6 +21,8 @@ import {
   sendAgentMessage,
   type AgentToolCtx,
 } from "../_shared/agent-desk.ts";
+import { executeSharedDeliverableRead } from "../_shared/agent-shared-reads.ts";
+import { isSharedDeliverableRead } from "../../../src/lib/agent-shared-reads.ts";
 
 const REUSED = new Set<string>(ADVISOR_REUSED_READS);
 const OWN = new Set<string>(ADVISOR_OWN_READS);
@@ -33,6 +35,7 @@ export async function executeAdvisorTool(
   const gate = executeAdvisorGate(name);
   if (!gate.allowed) return gate;
   const tool: AdvisorToolName = gate.name;
+  if (isSharedDeliverableRead(tool)) return executeSharedDeliverableRead(tool, args, ctx);
   if (REUSED.has(tool)) return readReusedAnalystTool(tool, ctx);
   if (tool === "get_cash_13_week") return readCash13Week(ctx);
   if (tool === "get_inbox") return readInbox(ctx);

@@ -23,7 +23,7 @@ import { findingDuplicates, numericFigures, refreshedFindingUpdate } from "../..
 import { supersedeOlderFindings } from "./agent-findings-supersede.ts";
 
 export type AgentToolCtx = AnalystExecCtx & {
-  agent: "financial_manager" | "advisor";
+  agent: "financial_manager" | "advisor" | "analyst";
 };
 
 const UPLOAD_SOURCES = ["upload", "pdf_upload", "financial_statement"];

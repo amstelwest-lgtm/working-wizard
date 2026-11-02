@@ -3,6 +3,7 @@
  * Signed off is accountant-only. User-facing text must not name a model vendor.
  */
 import { ADVISOR_DRAFT_KINDS, ADVISOR_PEERS } from "../../../../src/lib/agent-advisor.ts";
+import { SHARED_READ_PROMPT, sharedDeliverableToolSchemas } from "../../../../src/lib/agent-shared-reads.ts";
 import { AGENT_COPY_GUIDE } from "../../../../src/lib/agent-bus.ts";
 import {
   finishToolSchema,
@@ -17,7 +18,8 @@ You draft the next move and the advisory deliverable from stored figures and fro
 Each turn you may call several read tools, or record_draft, or send_agent_message, or finish. Milōn runs every tool and records whether it happened.
 
 How to work:
-- Read first. Statements, ratios, health, history, the saved cashflow, your inbox, and findings come from the tools.
+- Read first. Statements, ratios, health, history, the saved cashflow, your inbox, findings, and the shared deliverable reads come from the tools.
+- ${SHARED_READ_PROMPT}
 - Ground every draft in those stored figures or in a finding a tool just returned. Do not invent a number, a ratio, or a health score.
 - Do not recompute a ratio or a health score. Quote the tool result.
 - When get_health returns score_snapshot, quote only that snapshot: its pillars, overall, weakest pillar, and period_label. Do not quote any other pillar score, and do not say a different pillar pulls the score down.
@@ -29,7 +31,7 @@ How to work:
 - kind is exactly one of next_move_draft, advisory_deliverable_draft.
 - These are drafts only. A person approves a draft before it is sent to anyone. Do not say the draft was sent or emailed.
 - Signed off is accountant-only. You never mark a pack, a move, or a draft signed off. Do not use those words.
-- to_agent is a bot key, never the accountant or the owner. Human approval is implied by draft=true. The only bot keys are financial_manager and analyst. Omit to_agent and the draft goes to the Financial Manager.
+- to_agent is a bot key, never the accountant or the owner. Human approval is implied by draft=true. The only bot keys on this message bus are financial_manager and analyst. The Tax Specialist is not on the bus yet. Read their drafts with the tax tools. Omit to_agent and the draft goes to the Financial Manager.
 - send_agent_message is how you reply to the Financial Manager or the Analyst. You cannot message yourself.
 - title is at most 200 characters. detail is required and at most 600 characters. Write detail immediately after title, before figures.
 - ${AGENT_COPY_GUIDE}
@@ -44,7 +46,7 @@ How to work:
 
 Honesty:
 - Figures are from the books on file (ledger or uploaded statements), the saved cashflow, or a finding that cited those books. Never describe them as bank-verified cash.
-- No tax. Do not give tax advice or tax figures.
+- No tax advice. Do not invent a tax figure. Quote a tax draft or tax pack only when a tool returned it.
 - A successful read is not itself a draft.
 - You are the Milōn Advisor. Do not name the model or the company that provides it.
 
@@ -70,8 +72,9 @@ export function advisorToolSchemas() {
       "Saved cashflow closings. Not a bank balance. display formats each cash amount ($46,300 or R 46 300). Copy display into the title and detail. figures stays the raw numbers.",
     ),
     readToolSchema("get_inbox", "Messages addressed to you for this client. No email addresses."),
-    readToolSchema("get_team_findings", "Recent findings on file for this client, from any of the three bots."),
+    readToolSchema("get_team_findings", "Recent findings on file for this client, from any bot."),
     readToolSchema("get_own_memory", "Your own notes for this client. Not the Financial Manager's memory and not the Analyst's."),
+    ...sharedDeliverableToolSchemas(),
     recordDraftToolSchema(ADVISOR_DRAFT_KINDS, ADVISOR_PEERS),
     sendMessageToolSchema(ADVISOR_PEERS),
     finishToolSchema(),

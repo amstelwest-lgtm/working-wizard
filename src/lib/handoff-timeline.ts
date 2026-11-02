@@ -77,6 +77,15 @@ const TOOL_LABELS: Record<string, string> = {
   send_agent_message: "Messaged another bot",
   propose_figure_adjustment: "Proposed a figure change",
   prepare_client_report: "Prepared a client report for download",
+  list_client_library: "Read the client library",
+  get_client_library_doc: "Opened a library file",
+  list_tax_drafts: "Listed tax drafts",
+  get_tax_draft: "Read a tax draft",
+  list_tax_packs: "Listed tax packs",
+  get_tax_pack: "Read a tax pack",
+  get_management_report: "Read the Management Report",
+  list_figure_proposals: "Read figure proposals",
+  list_client_sends: "Read Send-an-agent intakes",
 };
 
 const STOP_LABELS: Record<string, string> = {
