@@ -323,7 +323,9 @@ assert(taxRail.headingId === "tax" && taxRail.subId === null, "tax-specialist ma
 const taxAlias = routerSearch({ tab: "tax-specialist", section: "open" });
 assert(taxAlias.tab === "tax" && taxAlias.section === undefined, "tax-specialist opens Tax with no section");
 assert(route.includes('id="pane-tax"'), "Tax has its own pane");
-assert(route.includes("<TaxWorkPlaceholder"), "the Tax pane is the placeholder");
+assert(route.includes("<TaxWorkSlot"), "the Tax pane mounts the work slot");
+const taxSlot = readFileSync(resolve("src/components/tax-specialist/tax-work-slot.tsx"), "utf8");
+assert(taxSlot.includes("<TaxWorkPlaceholder"), "outside ZA the slot keeps the empty placeholder");
 const taxHtml = renderToStaticMarkup(createElement(TaxWorkPlaceholder));
 assert(taxHtml.includes('data-subpage="tax"'), "the Tax page is its own subpage");
 assert(taxHtml.includes("No tax deliverables yet"), "the Tax page says there is nothing to review yet");
