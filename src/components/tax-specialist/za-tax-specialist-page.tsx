@@ -33,6 +33,7 @@ import {
 } from "@/lib/tax-specialist/forms/irp6";
 import {
   TAX_FORM_DRAFT_STATUS_LABEL,
+  applySavedDraft,
   draftActivity,
   findIrp6Draft,
   loadTaxFormDrafts,
@@ -185,19 +186,7 @@ export function ZaTaxSpecialistPage({
   }, [clientId]);
 
   const onSaved = useCallback((row: TaxFormDraft) => {
-    setDrafts((prev) => [
-      row,
-      ...(prev ?? []).filter(
-        (r) =>
-          r.id !== row.id &&
-          !(
-            r.form_code === row.form_code &&
-            r.tax_year === row.tax_year &&
-            r.period === row.period &&
-            r.subject === row.subject
-          ),
-      ),
-    ]);
+    setDrafts((prev) => applySavedDraft(prev ?? [], row));
   }, []);
 
   const openForm = (code: TaxFormCode) => {

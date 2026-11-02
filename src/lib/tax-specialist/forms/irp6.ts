@@ -21,6 +21,11 @@ export const IRP6_FOOTER =
 
 /** v1 rate applies from this year end. */
 export const IRP6_FIRST_SUPPORTED_YEAR_END = "2023-03-31";
+/**
+ * Rules vintage stored on a company IRP6 draft. 27% for a year of assessment
+ * ending on or after 31 March 2023. Not the year of assessment itself.
+ */
+export const IRP6_RULES_YEAR = 2023;
 /** Basic amount applies when the estimate is at or under R1 million. */
 export const IRP6_BASIC_AMOUNT_LIMIT_CENTS = 100_000_000;
 

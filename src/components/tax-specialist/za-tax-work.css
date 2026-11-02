@@ -1,0 +1,148 @@
+.tax-work {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+  color: #102a43;
+}
+
+.tax-work-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tax-work-kicker {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #3d5270;
+}
+
+.tax-work-prepare,
+.tax-work-open {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #0b5fff;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tax-work-open {
+  background: #fff;
+  color: #0b5fff;
+  border: 1px solid #0b5fff;
+}
+
+.tax-work-prepare:focus-visible,
+.tax-work-open:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 3px;
+}
+
+.tax-work-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.tax-work-table th,
+.tax-work-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #dbeafe;
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.tax-work-table th {
+  color: #3d5270;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tax-work-return {
+  font-weight: 700;
+}
+
+.tax-work-meta {
+  display: block;
+  margin-top: 2px;
+  color: #3d5270;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.tax-work-history {
+  margin-top: 8px;
+}
+
+.tax-work-history summary {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  color: #0b5fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tax-work-history ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tax-work-history li {
+  padding: 6px 0;
+  border-bottom: 1px solid #dbeafe;
+  color: #3d5270;
+  font-size: 13px;
+}
+
+.tax-work-note {
+  margin: 0;
+  color: #3d5270;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.tax-work-packs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 40rem;
+}
+
+html.dark .tax-work,
+html.dark .tax-work-return {
+  color: #f4f7fb;
+}
+
+html.dark .tax-work-kicker,
+html.dark .tax-work-meta,
+html.dark .tax-work-note,
+html.dark .tax-work-history li,
+html.dark .tax-work-table th {
+  color: #c5d4e4;
+}
+
+html.dark .tax-work-table th,
+html.dark .tax-work-table td,
+html.dark .tax-work-history li {
+  border-bottom-color: #1e3a5f;
+}
+
+html.dark .tax-work-open {
+  background: transparent;
+}

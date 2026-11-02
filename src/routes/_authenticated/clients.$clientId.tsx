@@ -198,7 +198,7 @@ import { askAgentFromHash, searchWithAskAgent } from "@/lib/ask-agent";
 import { ClientRail } from "@/components/client-studio-chrome";
 import { ClientOwnerInviteHost } from "@/components/client-owner-invite-dialog";
 import { ClientBackLink, ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
-import { TaxWorkPlaceholder } from "@/components/tax-work-placeholder";
+import { TaxWorkSlot } from "@/components/tax-specialist/tax-work-slot";
 import { clientBackTarget } from "@/lib/client-back";
 import { useOverlayHistory } from "@/lib/overlay-history";
 import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
@@ -5773,7 +5773,9 @@ function ClientView() {
                 </div>
 
                 <div className={`tabpane${activeTab === "tax" ? " on" : ""}`} id="pane-tax">
-                  {activeTab === "tax" ? <TaxWorkPlaceholder /> : null}
+                  {activeTab === "tax" ? (
+                    <TaxWorkSlot country={clientGateCountry} client={taxClient} />
+                  ) : null}
                 </div>
                 </div>
 
