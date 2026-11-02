@@ -24,6 +24,7 @@ import {
 import { parseDocumentMeta } from "@/lib/client-documents";
 import {
   classifyLibraryFile,
+  clientSendLibraryFlags,
   CLIENT_LIBRARY_DEFAULT_TAB,
   CLIENT_LIBRARY_TAB_LABEL,
   CLIENT_LIBRARY_TAB_SENTENCE,
@@ -41,6 +42,7 @@ import {
 function fileFromUpload(row: ClientDocumentRow): LibraryFile {
   const meta = parseDocumentMeta(row.meta);
   const raw = row.meta && typeof row.meta === "object" ? (row.meta as Record<string, unknown>) : {};
+  const sent = clientSendLibraryFlags(raw);
   return classifyLibraryFile({
     id: row.id,
     name: meta.file_name ?? row.storage_path?.split("/").pop() ?? "File",
@@ -56,6 +58,13 @@ function fileFromUpload(row: ClientDocumentRow): LibraryFile {
     storagePath: row.storage_path,
     origin: "upload",
     uploadId: row.id,
+    ...(sent
+      ? {
+          fromClient: sent.fromClient,
+          needsReview: sent.needsReview,
+          statusLabel: sent.statusLabel,
+        }
+      : {}),
   });
 }
 

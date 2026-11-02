@@ -27,6 +27,8 @@ import {
   sendAgentsForMarket,
   sendMissionStatus,
   sendMissionTitle,
+  sendProgressSteps,
+  uploadLabelOrFileName,
 } from "../src/lib/client-agent-missions.ts";
 import { sendAgentFirmAllowed } from "../src/lib/client-agent-send-allowlist.ts";
 
@@ -96,6 +98,54 @@ assert(
 assert(sendMissionStatus({ repliedAt: "2026-11-01" }) === "Replied", "a reply beats an open");
 assert(sendMissionStatus({ openedAt: "2026-11-01" }) === "Opened", "an open is opened");
 assert(sendMissionStatus({}) === "Sent", "a fresh send is sent");
+
+const freshProgress = sendProgressSteps({
+  opened: false,
+  replied: false,
+  documents: false,
+  reviewed: false,
+});
+assert(freshProgress.find((step) => step.id === "sent")?.state === "done", "sent is already done");
+assert(
+  freshProgress.find((step) => step.id === "opened")?.state === "now",
+  "opening is the next step",
+);
+assert(
+  freshProgress.find((step) => step.id === "documents")?.state === "waiting",
+  "documents wait until the link is open",
+);
+const receivedProgress = sendProgressSteps({
+  opened: true,
+  replied: false,
+  documents: true,
+  reviewed: false,
+});
+assert(
+  receivedProgress.find((step) => step.id === "documents")?.state === "done",
+  "received documents are done",
+);
+assert(
+  receivedProgress.find((step) => step.id === "reviewed")?.state === "now",
+  "review is the next step after documents",
+);
+assert(
+  receivedProgress.find((step) => step.id === "replied")?.state === "waiting",
+  "a missing reply does not block documents",
+);
+const closedProgress = sendProgressSteps({
+  opened: true,
+  replied: true,
+  documents: true,
+  reviewed: true,
+});
+assert(
+  closedProgress.every((step) => step.state === "done"),
+  "a reviewed send has nothing waiting",
+);
+const namedFile = uploadLabelOrFileName("", "statements.pdf");
+assert(namedFile.ok && namedFile.label === "statements", "a blank label uses the file name");
+const typedFile = uploadLabelOrFileName("  Bank statement  ", "statements.pdf");
+assert(typedFile.ok && typedFile.label === "Bank statement", "a typed label wins");
 
 assert(
   contactGreeting("Nicola") === "the client, whose name is Nicola",
@@ -339,6 +389,8 @@ const html = renderToStaticMarkup(
 );
 assert(html.includes('data-agent="financial_manager"'), "the page shows that agent only");
 assert(html.includes("What is this?"), "the upload asks for a label");
+assert(html.includes("Upload documents"), "upload documents is the primary action");
+assert(html.includes("data-upload-documents"), "the upload button is marked");
 assert(html.includes("I&#x27;m done") || html.includes("I'm done"), "the visit ends with I'm done");
 assert(html.includes("data-agent-chat"), "chat is on");
 assert(
@@ -346,6 +398,41 @@ assert(
   "there is no physio checklist",
 );
 assert(html.includes("/avatars/fm/"), "the face is the silent clip");
+assert(!html.includes("data-return-visit"), "a first visit does not talk about sending more");
+
+const again = renderToStaticMarkup(
+  createElement(ClientAgentMissionVisit, {
+    practiceName: "Theo's practice",
+    mission: {
+      key: "collect_documents",
+      title: "Collect documents",
+      agent: "financial_manager",
+      agentShortName: "Financial Manager",
+      intro: "Hi, I'm the Financial Manager at Theo's practice.",
+      thanks: "Thank you. Financial Manager at Theo's practice has what you sent.",
+      messages: [],
+      uploads: [],
+    },
+    consented: true,
+    notice: clientConsentNotice("Theo's practice"),
+    completed: false,
+    returnVisit: true,
+    busy: false,
+    noticeText: null,
+    messages: [],
+    draft: "",
+    uploadLabel: "",
+    onAgree: () => undefined,
+    onDraft: () => undefined,
+    onAsk: () => undefined,
+    onUploadLabel: () => undefined,
+    onUpload: () => undefined,
+    onDone: () => undefined,
+  }),
+);
+assert(again.includes("data-return-visit"), "a return visit says the link is still open");
+assert(again.includes("Upload documents"), "a return visit can upload again");
+assert(!again.includes("data-client-thanks"), "a return visit is not the thank-you screen");
 
 const mint = read("src/lib/client-agent-send.functions.ts");
 const mintBody = mint.slice(

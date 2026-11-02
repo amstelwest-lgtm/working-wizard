@@ -16,9 +16,11 @@ import {
   sendAgentJobLine,
   sendAgentsForMarket,
   sendAgentShortName,
+  sendProgressSteps,
   type MissionKey,
   type SendAgentKey,
   type SendFeedEvent,
+  type SendProgressStep,
 } from "@/lib/client-agent-missions";
 import { formatDate, type DateMarket } from "@/lib/market";
 import {
@@ -351,6 +353,71 @@ export function SendAgentPanel({
   );
 }
 
+function SendProgress({
+  steps,
+  when,
+}: {
+  steps: readonly SendProgressStep[];
+  when: (id: SendProgressStep["id"]) => string | null;
+}) {
+  const current = steps.find((step) => step.state === "now");
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-2xl border border-[#DBEAFE] bg-white p-3"
+      data-send-progress=""
+    >
+      <h3 className="text-base font-semibold">Progress</h3>
+      <p className="text-sm font-semibold" data-send-agent-status="">
+        {current?.detail ?? "Reviewed. Nothing is waiting."}
+      </p>
+      <ol className="flex flex-col border-t border-[#DBEAFE]">
+        {steps.map((step) => {
+          const date = when(step.id);
+          return (
+            <li
+              key={step.id}
+              className="grid grid-cols-[0.75rem_minmax(0,1fr)] gap-3 border-b border-[#DBEAFE] py-3"
+              data-send-progress-step={step.id}
+              data-send-progress-state={step.state}
+            >
+              <span
+                aria-hidden="true"
+                className={
+                  step.state === "done"
+                    ? "mt-1 h-3 w-3 rounded-full bg-[#0B5FFF]"
+                    : step.state === "now"
+                      ? "mt-1 h-3 w-3 rounded-full border-2 border-[#0B5FFF] bg-[#0B5FFF]"
+                      : "mt-1 h-3 w-3 rounded-full border-2 border-[#DBEAFE] bg-white"
+                }
+              />
+              <span className="flex flex-col gap-1">
+                <span
+                  className={
+                    step.state === "waiting"
+                      ? "text-sm text-[#3D5270]"
+                      : "text-sm font-semibold text-[#102A43]"
+                  }
+                >
+                  {step.label}
+                  {step.state === "done"
+                    ? " · Done"
+                    : step.state === "now"
+                      ? " · Now"
+                      : " · Waiting"}
+                </span>
+                <span className="text-sm leading-6 text-[#3D5270]">
+                  {step.detail}
+                  {date ? ` ${date}` : ""}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 function feedLine(event: SendFeedEvent, market: DateMarket): string {
   const when = event.at ? formatDate(event.at, market) : "";
   if (event.kind === "sent") return `Sent ${when}`;
@@ -441,23 +508,44 @@ export function SendAgentCard({
       {loaded && !ready ? (
         <p className="text-sm text-[#3D5270]">Send an agent is not available yet.</p>
       ) : null}
+      <div className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold">Choose who to send</h2>
+        <p className="text-sm leading-6 text-[#3D5270]">
+          Select one agent. The card you click is the person the client will see.
+        </p>
+      </div>
       <div className="flex flex-col gap-3" data-send-agent-picker="">
-        {agents.map((key) => (
-          <button
-            key={key}
-            type="button"
-            className="flex min-h-11 flex-col items-start gap-2 rounded-2xl border border-[#DBEAFE] bg-white p-3 text-left"
-            aria-pressed={agent === key}
-            disabled={!ready || busy}
-            onClick={() => onAgent(key)}
-          >
-            <span className="relative h-16 w-16 overflow-hidden rounded-2xl bg-[#DBEAFE] [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full [&_img]:object-cover [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover">
-              <SilentAgentPortrait face={sendAgentFace(key)} label={sendAgentShortName(key)} />
-            </span>
-            <span className="text-sm font-semibold">{sendAgentShortName(key)}</span>
-            <span className="text-sm leading-6 text-[#3D5270]">{sendAgentJobLine(key)}</span>
-          </button>
-        ))}
+        {agents.map((key) => {
+          const selected = agent === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              className={
+                selected
+                  ? "flex min-h-11 flex-col items-start gap-2 rounded-2xl border-2 border-[#0B5FFF] bg-[#F4F8FF] p-3 text-left"
+                  : "flex min-h-11 flex-col items-start gap-2 rounded-2xl border border-[#DBEAFE] bg-white p-3 text-left"
+              }
+              aria-pressed={selected}
+              data-send-agent-selected={selected ? "true" : "false"}
+              disabled={!ready || busy}
+              onClick={() => onAgent(key)}
+            >
+              <span className="relative h-16 w-16 overflow-hidden rounded-2xl bg-[#DBEAFE] [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full [&_img]:object-cover [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover">
+                <SilentAgentPortrait face={sendAgentFace(key)} label={sendAgentShortName(key)} />
+              </span>
+              <span className="text-sm font-semibold">{sendAgentShortName(key)}</span>
+              <span className="text-sm leading-6 text-[#3D5270]">{sendAgentJobLine(key)}</span>
+              <span
+                className={
+                  selected ? "text-sm font-semibold text-[#0B5FFF]" : "text-sm text-[#3D5270]"
+                }
+              >
+                {selected ? "Selected" : "Select this agent"}
+              </span>
+            </button>
+          );
+        })}
       </div>
       {agent ? (
         <div className="flex flex-col gap-2" data-send-mission="">
@@ -530,12 +618,43 @@ export function SendAgentCard({
             className="flex flex-col gap-3"
             data-send-agent-history={group.key}
           >
-            <h2 className="text-sm font-semibold">{sendAgentShortName(group.key)}</h2>
-            <p className="text-sm" data-send-agent-status="">
-              {latest.statusLabel ?? "Sent"}
-              {latest.createdAt ? ` · ${formatDate(latest.createdAt, market)}` : ""}
+            <h2 className="text-base font-semibold">{sendAgentShortName(group.key)}</h2>
+            <p className="text-sm font-semibold">{latest.missionTitle ?? "Collect documents"}</p>
+            <p className="text-sm text-[#3D5270]" data-send-link-state="">
+              {latest.revokedAt
+                ? `Revoked ${formatDate(latest.revokedAt, market)}`
+                : latest.open
+                  ? `Open until ${formatDate(latest.expiresAt, market)}`
+                  : "This link has expired"}
             </p>
-            <p className="text-sm text-[#3D5270]">{latest.missionTitle ?? "Collect documents"}</p>
+            {latest.files.length > 0 ? (
+              <p className="text-sm text-[#3D5270]">
+                {latest.files.length === 1
+                  ? "1 document in Client library"
+                  : `${latest.files.length} documents in Client library`}
+              </p>
+            ) : null}
+            <SendProgress
+              steps={sendProgressSteps({
+                opened: Boolean(latest.openedAt || latest.consentAt),
+                replied: Boolean(latest.repliedAt),
+                documents: Boolean(latest.docsReceivedAt || latest.completedAt),
+                reviewed: Boolean(latest.reviewedAt),
+              })}
+              when={(id) => {
+                const at =
+                  id === "sent"
+                    ? latest.createdAt
+                    : id === "opened"
+                      ? latest.openedAt || latest.consentAt
+                      : id === "replied"
+                        ? latest.repliedAt
+                        : id === "documents"
+                          ? latest.docsReceivedAt || latest.completedAt
+                          : latest.reviewedAt;
+                return at ? formatDate(at, market) : null;
+              }}
+            />
             {latest.missionKey ? (
               <button
                 type="button"

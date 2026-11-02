@@ -204,6 +204,8 @@ export type AgentSendRow = {
   missionKey?: string | null;
   missionTitle?: string;
   statusLabel?: string;
+  repliedAt?: string | null;
+  docsReceivedAt?: string | null;
   firmNote?: string | null;
   reportSummary?: string | null;
   sentBy?: string | null;
@@ -246,6 +248,8 @@ function parseSend(row: Record<string, unknown>, now: Date): AgentSendRow {
       completedAt,
       consentAt,
     }),
+    repliedAt,
+    docsReceivedAt,
     firmNote: textOrNull(row.firm_note),
     reportSummary: textOrNull(row.report_summary),
     sentBy: textOrNull(row.sent_by),
@@ -979,6 +983,22 @@ export type ReviewAgentSendResult =
         | "not_on_firm";
     };
 
+/** Moves this send's library copies out of Needs review. New uploads stay in review. */
+async function stampSendLibraryReviewed(clientId: string, sendId: string): Promise<void> {
+  const found = await table("client_artifacts").select("id, meta").eq("client_id", clientId);
+  if (found.error) return;
+  for (const row of rows(found.data)) {
+    const id = typeof row.id === "string" ? row.id : "";
+    if (!id || !row.meta || typeof row.meta !== "object") continue;
+    const meta = row.meta as Record<string, unknown>;
+    if (meta.source !== "client_agent_send" || meta.send_id !== sendId) continue;
+    if (meta.reviewed === true) continue;
+    await table("client_artifacts")
+      .update({ meta: { ...meta, reviewed: true } })
+      .eq("id", id);
+  }
+}
+
 export const reviewClientAgentSend = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -1009,13 +1029,19 @@ export const reviewClientAgentSend = createServerFn({ method: "POST" })
       reviewedAt: typeof row?.reviewed_at === "string" ? row.reviewed_at : null,
     });
     if (!decision.ok) return decision;
-    if (decision.already) return { ok: true, reviewedAt: String(row?.reviewed_at) };
-    const reviewedAt = new Date().toISOString();
-    const updated = await table("client_agent_sends")
-      .update({ reviewed_at: reviewedAt })
-      .eq("id", data.sendId)
-      .eq("client_id", data.clientId)
-      .is("reviewed_at", null);
-    if (updated.error) throw new Error("The review could not be saved.");
+    const reviewedAt = decision.already ? String(row?.reviewed_at) : new Date().toISOString();
+    if (!decision.already) {
+      const updated = await table("client_agent_sends")
+        .update({ reviewed_at: reviewedAt })
+        .eq("id", data.sendId)
+        .eq("client_id", data.clientId)
+        .is("reviewed_at", null);
+      if (updated.error) throw new Error("The review could not be saved.");
+    }
+    try {
+      await stampSendLibraryReviewed(data.clientId, data.sendId);
+    } catch {
+      // The review mark stands. A later mark retries the library stamp.
+    }
     return { ok: true, reviewedAt };
   });
