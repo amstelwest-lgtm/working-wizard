@@ -340,6 +340,17 @@ const FEATURES: readonly FeatureDef[] = [
     studio: DATA,
   },
   {
+    id: "client-settings",
+    label: "Settings",
+    hint: "This client",
+    order: 114,
+    scope: "client",
+    synonyms: ["client settings", "file settings", "remove client", "delete client"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "settings" },
+  },
+  {
     id: "invite-owner",
     label: "Invite owner",
     hint: "Owner email",

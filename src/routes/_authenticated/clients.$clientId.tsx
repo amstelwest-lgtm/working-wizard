@@ -189,6 +189,7 @@ import {
   accountantClientRouteSearch,
   accountantClientTabSearch,
   canonicalizeAccountantSearch,
+  clientNavSearch,
   legacyHashDestination,
   legacyPaneForSearch,
   routerHash,
@@ -4156,8 +4157,11 @@ function ClientView() {
                 className="tb-btn settings-gear"
                 onSettings={() => {
                   setMobileNavOpen(false);
-                  openPracticeSettings();
-                  void navigate({ to: "/settings" });
+                  void navigate({
+                    to: "/clients/$clientId",
+                    params: { clientId },
+                    search: (prev) => clientNavSearch(prev, "settings"),
+                  });
                 }}
                 onPlan={() => {
                   setMobileNavOpen(false);
@@ -5433,13 +5437,6 @@ function ClientView() {
                       subtitle="Advisory pack. Generate the report here and export the PDF."
                     >
                       <section id="reports-drafts">
-                        <AgentDraftShelf
-                          findings={homeActivity.findings}
-                          focusId={typeof search.draft === "string" ? search.draft : null}
-                          canonicalRatios={canonicalRatios}
-                          health={liveScoreSnapshot}
-                          onRefresh={homeActivity.refresh}
-                        />
                         <AdvisoryPackPanel
                           className="mb-5"
                           clientId={client.id}
@@ -5475,6 +5472,13 @@ function ClientView() {
                             cash: cashOutlook.opening,
                             healthScore: overallHealth.overall,
                           }}
+                        />
+                        <AgentDraftShelf
+                          findings={homeActivity.findings}
+                          focusId={typeof search.draft === "string" ? search.draft : null}
+                          canonicalRatios={canonicalRatios}
+                          health={liveScoreSnapshot}
+                          onRefresh={homeActivity.refresh}
                         />
                         <RecommendationsPanel
                           className="mb-5"

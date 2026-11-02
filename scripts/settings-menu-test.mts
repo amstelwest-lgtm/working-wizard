@@ -88,9 +88,36 @@ assert(dashboard.includes('hash: "firm-billing"'), "accountant plan opens firm b
 
 const client = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert(client.includes("<SettingsMenu"), "the accountant client Settings control opens the menu");
+const settingsHandler = client.slice(
+  client.indexOf("onSettings={() => {"),
+  client.indexOf("onPlan={() => {"),
+);
+assert(
+  settingsHandler.includes('clientNavSearch(prev, "settings")'),
+  "client Settings opens this client's Settings tab",
+);
+assert(
+  settingsHandler.includes('to: "/clients/$clientId"'),
+  "client Settings stays on the open client",
+);
+assert(!settingsHandler.includes('to: "/settings"'), "client Settings does not open practice settings");
+assert(
+  !settingsHandler.includes("openPracticeSettings"),
+  "client Settings does not switch the portal to practice settings",
+);
+const planHandler = client.slice(client.indexOf("onPlan={() => {"), client.indexOf("onPlan={() => {") + 400);
+assert(planHandler.includes('to: "/settings"'), "Plan and billing still opens practice settings");
 const nav = read("src/components/accountant-nav.tsx");
 assert(client.includes("<ClientRail"), "the client file uses the shared rail");
-assert(nav.includes('to: "/settings"'), "the accountant sidebar Settings item stays a direct link");
+assert(nav.includes('to: "/settings"'), "the practice sidebar Settings item stays a direct link");
+const rail = read("src/components/client-studio-chrome.tsx");
+assert(
+  rail.includes('clientNavSearch(prev, "settings")'),
+  "the client rail Settings item stays on this client",
+);
+const practice = read("src/components/practice-rail.tsx");
+assert(practice.includes("openPracticeSettings"), "practice Settings still opens practice settings");
+assert(!practice.includes("settingsTo"), "the practice rail keeps the /settings destination");
 
 const settings = read("src/components/settings-shell.tsx");
 assert(settings.includes("<SettingsMenu"), "settings keeps a top-right menu");

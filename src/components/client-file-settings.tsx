@@ -5,6 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ClientSubpageFrame } from "@/components/client-subpage";
 import { removeClientConfirm } from "@/lib/archive-client";
+import {
+  deleteClientConfirm,
+  deleteConfirmExpected,
+  deleteConfirmMatches,
+} from "@/lib/delete-client";
 import type { ClientOwnerOnFile, PendingOwnerInvite } from "@/lib/client-owner-invites.functions";
 import { formatDate, type ResolvedMarket } from "@/lib/market";
 
@@ -76,6 +81,94 @@ export function RemoveClientDialog({
   return createPortal(dialog, document.body);
 }
 
+export function DeleteClientDialog({
+  clientName,
+  open,
+  deleting = false,
+  onConfirm,
+  onClose,
+}: {
+  clientName: string;
+  open: boolean;
+  deleting?: boolean;
+  onConfirm: (typedName: string) => void;
+  onClose: () => void;
+}) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const [typed, setTyped] = useState("");
+  const expected = deleteConfirmExpected(clientName);
+  const ready = deleteConfirmMatches(typed, clientName);
+
+  useEffect(() => {
+    if (!open) {
+      setTyped("");
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !deleting) onCloseRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, deleting]);
+
+  if (!open) return null;
+  const dialog = (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onClick={() => {
+        if (!deleting) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-client-title"
+        aria-describedby="delete-client-copy"
+        data-delete-client-dialog=""
+        className="w-full max-w-md rounded-2xl border border-[#DBEAFE] bg-white p-5 text-[#102A43] shadow-lg dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="delete-client-title" className="text-base font-semibold">
+          Delete permanently
+        </h2>
+        <p id="delete-client-copy" className="mt-2 text-sm" data-delete-client-copy="">
+          {deleteClientConfirm(clientName)}
+        </p>
+        <label className="mt-3 block text-sm">
+          Type <span className="font-semibold">{expected}</span> to confirm
+          <input
+            className="mt-1 w-full rounded-md border border-[#DBEAFE] bg-white px-2 py-1.5 text-sm dark:border-[#1e3a5f] dark:bg-transparent"
+            value={typed}
+            autoFocus
+            autoComplete="off"
+            data-delete-client-name=""
+            disabled={deleting}
+            onChange={(event) => setTyped(event.target.value)}
+          />
+        </label>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn gold"
+            data-delete-client-confirm=""
+            disabled={deleting || !ready}
+            onClick={() => onConfirm(typed)}
+          >
+            {deleting ? "Deleting…" : "Delete permanently"}
+          </button>
+          <button type="button" className="btn ghost" onClick={onClose} disabled={deleting}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  if (typeof document === "undefined") return dialog;
+  return createPortal(dialog, document.body);
+}
+
 export function ClientFileSettings({
   clientName,
   market,
@@ -88,6 +181,8 @@ export function ClientFileSettings({
   onRemoveOwner,
   onRemoveClient,
   removingClient = false,
+  onDeleteClient,
+  deletingClient = false,
 }: {
   clientName: string;
   market?: ResolvedMarket;
@@ -100,10 +195,13 @@ export function ClientFileSettings({
   onRemoveOwner?: (owner: ClientOwnerOnFile) => void;
   onRemoveClient?: () => void;
   removingClient?: boolean;
+  onDeleteClient?: (typedName: string) => void;
+  deletingClient?: boolean;
 }) {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [confirmClient, setConfirmClient] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const hasOwner = owners.length > 0;
   const date = (value: string) => (market ? formatDate(value, market) : value);
 
@@ -243,6 +341,14 @@ export function ClientFileSettings({
           >
             Remove client
           </button>
+          <button
+            type="button"
+            className="btn ghost mt-2"
+            data-delete-client=""
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete permanently
+          </button>
         </div>
         <RemoveClientDialog
           clientName={clientName}
@@ -251,6 +357,15 @@ export function ClientFileSettings({
           onConfirm={() => onRemoveClient?.()}
           onClose={() => {
             if (!removingClient) setConfirmClient(false);
+          }}
+        />
+        <DeleteClientDialog
+          clientName={clientName}
+          open={confirmDelete}
+          deleting={deletingClient}
+          onConfirm={(typedName) => onDeleteClient?.(typedName)}
+          onClose={() => {
+            if (!deletingClient) setConfirmDelete(false);
           }}
         />
       </section>
