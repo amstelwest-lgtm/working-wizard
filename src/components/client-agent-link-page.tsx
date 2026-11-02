@@ -42,7 +42,7 @@ import {
 } from "@/lib/client-agent-link.functions";
 import { uploadToClientAgentSignedUrl } from "@/lib/client-agent-upload-browser";
 import { ClientAgentMissionVisit } from "@/components/client-agent-mission-visit";
-import { cleanUploadLabel } from "@/lib/client-agent-missions";
+import { uploadLabelOrFileName } from "@/lib/client-agent-missions";
 import { pickedPdfLooksEncrypted } from "@/lib/pdf-password";
 import { avatarPoster, fmClipSources } from "@/lib/fm-avatar-state";
 
@@ -155,7 +155,8 @@ export function ClientAgentLinkScreen({
 }) {
   const openView = view?.ok ? view : null;
   const ready = openView ? checklistReady(openView.items) : false;
-  const showThanks = Boolean(openView && (thanks || openView.completed));
+  const showThanks = Boolean(openView && thanks);
+  const returnVisit = Boolean(openView?.completed && !thanks);
   const thankYou = openView
     ? clientAgentThanks({
         firstName: openView.firstName ?? null,
@@ -221,6 +222,29 @@ export function ClientAgentLinkScreen({
           <p className="text-sm leading-6 text-[#3D5270]" data-checklist-intro="true">
             {clientAgentChecklistIntro(openView.firstName, openView.practiceName)}
           </p>
+          {returnVisit ? (
+            <p className="text-sm leading-6" data-return-visit="true">
+              This link is still open. You can send more documents.
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className={PRIMARY}
+            data-upload-documents=""
+            disabled={busy || openView.items.length === 0}
+            onClick={() => {
+              const target =
+                openView.items.find((item) => !item.hasFile && !itemNotAvailable(item)) ??
+                openView.items[0];
+              if (!target) return;
+              const input = document.getElementById(`upload-${target.itemKey}`);
+              if (!(input instanceof HTMLInputElement)) return;
+              input.dataset.mode = "add";
+              input.click();
+            }}
+          >
+            Upload documents
+          </button>
           {CLIENT_AGENT_CHAT_ENABLED ? (
             <div className="flex flex-col gap-2" data-agent-chat="true">
               <button type="button" className={QUIET} disabled={busy} onClick={onToggleChat}>
@@ -316,7 +340,12 @@ export function ClientAgentLinkScreen({
                         type="button"
                         className={SECONDARY}
                         disabled={busy}
-                        onClick={() => document.getElementById(`upload-${item.itemKey}`)?.click()}
+                        onClick={() => {
+                          const input = document.getElementById(`upload-${item.itemKey}`);
+                          if (!(input instanceof HTMLInputElement)) return;
+                          input.dataset.mode = "replace";
+                          input.click();
+                        }}
                       >
                         Replace
                       </button>
@@ -378,10 +407,12 @@ export function ClientAgentLinkScreen({
                   disabled={busy}
                   onChange={(event) => {
                     const picked = Array.from(event.target.files ?? []);
+                    const add = event.target.dataset.mode === "add";
+                    event.target.dataset.mode = "";
                     event.target.value = "";
                     const files = picked.filter((file) => file.size <= SEND_FILE_MAX_BYTES);
                     if (files.length === 0) return;
-                    onPickFile(item, files, item.hasFile ? "replace" : undefined);
+                    onPickFile(item, files, !add && item.hasFile ? "replace" : undefined);
                   }}
                 />
                 {item.hasFile ? (
@@ -825,11 +856,6 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   };
 
   const uploadMission = async (files: File[]) => {
-    const label = cleanUploadLabel(uploadLabel);
-    if (!label.ok) {
-      setNotice("Name this file before you upload it.");
-      return;
-    }
     const accepted = files.filter((file) => sizeAllowed(file.size));
     if (accepted.length === 0) {
       setNotice("Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
@@ -847,6 +873,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
             // Unreadable bytes never block the upload itself.
           }
         }
+        const named = uploadLabelOrFileName(uploadLabel, sanitizeClientFileName(file.name));
+        const label = named.ok ? named.label : "Document";
         const prepared = await prepareUpload({
           data: {
             token,
@@ -854,7 +882,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
             size: file.size,
             mime: clientFileMime(file.type, file.name),
             name: file.name,
-            label: label.label,
+            label,
           },
         });
         if (!prepared.ok) {
@@ -903,7 +931,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         mission={mission}
         consented={shownView.consented}
         notice={shownView.notice}
-        completed={Boolean(thanks || shownView.completed)}
+        completed={thanks}
+        returnVisit={Boolean(shownView.completed && !thanks)}
         busy={busy}
         noticeText={notice}
         messages={

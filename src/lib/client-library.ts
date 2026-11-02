@@ -182,6 +182,25 @@ function sourceLabel(input: LibraryFileInput): string {
   return "On file";
 }
 
+/**
+ * A Send-an-agent file belongs in From client, and in Needs review until
+ * the firm marks that send reviewed. `reviewed: true` on the artifact meta
+ * is the only way it leaves the review tab.
+ */
+export function clientSendLibraryFlags(meta: Record<string, unknown> | null | undefined): {
+  fromClient: true;
+  needsReview: boolean;
+  statusLabel: string;
+} | null {
+  if (!meta || meta.source !== "client_agent_send") return null;
+  const reviewed = meta.reviewed === true;
+  return {
+    fromClient: true,
+    needsReview: !reviewed,
+    statusLabel: reviewed ? "Reviewed" : "Waiting to be read",
+  };
+}
+
 export function classifyLibraryFile(input: LibraryFileInput): LibraryFile {
   const type = (input.documentType ?? "").trim().toLowerCase();
   const item = (input.itemKey ?? "").trim().toLowerCase();

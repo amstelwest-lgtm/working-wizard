@@ -113,6 +113,82 @@ export function sendMissionStatus(row: {
   return "Sent";
 }
 
+export type SendProgressState = "done" | "now" | "waiting";
+
+export type SendProgressStep = {
+  id: "sent" | "opened" | "replied" | "documents" | "reviewed";
+  label: string;
+  detail: string;
+  state: SendProgressState;
+};
+
+/**
+ * Accountant progress for one send. Sent is always done.
+ * The highlighted step is the next thing still open: the client opening
+ * the link, documents arriving, then the firm's review. A chat reply is
+ * recorded when it happens and does not block the later steps.
+ */
+export function sendProgressSteps(input: {
+  opened: boolean;
+  replied: boolean;
+  documents: boolean;
+  reviewed: boolean;
+}): SendProgressStep[] {
+  const opened = input.opened || input.replied || input.documents || input.reviewed;
+  const documents = input.documents || input.reviewed;
+  const reviewed = input.reviewed;
+  const now = !opened ? "opened" : !documents ? "documents" : !reviewed ? "reviewed" : null;
+  const state = (id: SendProgressStep["id"], done: boolean): SendProgressState => {
+    if (done) return "done";
+    return now === id ? "now" : "waiting";
+  };
+  return [
+    {
+      id: "sent",
+      label: "Sent",
+      detail: "The email is with the client.",
+      state: "done",
+    },
+    {
+      id: "opened",
+      label: "Opened",
+      detail: opened ? "The client opened the link." : "Waiting for the client to open the link.",
+      state: state("opened", opened),
+    },
+    {
+      id: "replied",
+      label: "Replied",
+      detail: input.replied ? "The client replied in the chat." : "No reply in the chat yet.",
+      state: input.replied ? "done" : "waiting",
+    },
+    {
+      id: "documents",
+      label: "Documents",
+      detail: documents ? "Files are in Client library." : "Waiting for documents.",
+      state: state("documents", documents),
+    },
+    {
+      id: "reviewed",
+      label: "Reviewed",
+      detail: reviewed ? "You marked this reviewed." : "Waiting for your review.",
+      state: state("reviewed", reviewed),
+    },
+  ];
+}
+
+/** A typed name wins. A blank name uses the file name so upload is not blocked. */
+export function uploadLabelOrFileName(
+  typed: string | null | undefined,
+  fileName: string | null | undefined,
+): { ok: true; label: string } | { ok: false } {
+  const named = cleanUploadLabel(typed);
+  if (named.ok) return named;
+  const stem = (fileName ?? "").replace(/\.[^.]+$/, "");
+  const fromStem = cleanUploadLabel(stem);
+  if (fromStem.ok) return fromStem;
+  return cleanUploadLabel(fileName);
+}
+
 /** Four agents in South Africa, three elsewhere. Same rule as stageAgentKeys. */
 export function sendAgentsForMarket(country: string | null | undefined): SendAgentKey[] {
   return stageAgentKeys(country).filter(isSendAgentKey);

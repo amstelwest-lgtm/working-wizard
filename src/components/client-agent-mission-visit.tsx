@@ -1,6 +1,7 @@
 /**
- * Public mission page. One agent, consent, chat, a labelled upload, and I'm done.
+ * Public mission page. One agent, consent, a clear upload, chat, and I'm done.
  * The face is the existing silent clip. No lip-sync.
+ * Finish shows thank-you for this visit. Reopening the same link shows upload again.
  */
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { SEND_FILE_MIMES } from "@/lib/client-agent-send";
@@ -10,6 +11,8 @@ import type { PublicMission } from "@/lib/client-agent-link.functions";
 
 const PRIMARY =
   "inline-flex min-h-11 items-center justify-center rounded-full bg-[#0B5FFF] px-4 text-sm font-semibold text-white hover:bg-[#2563EB] disabled:opacity-60";
+const SECONDARY =
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-[#DBEAFE] bg-white px-4 text-sm font-semibold text-[#102A43] disabled:opacity-60";
 const QUIET =
   "inline-flex min-h-11 items-center text-sm font-semibold text-[#3D5270] underline decoration-[#DBEAFE] underline-offset-4 disabled:opacity-60";
 
@@ -75,6 +78,7 @@ export function ClientAgentMissionVisit({
   onUploadLabel,
   onUpload,
   onDone,
+  returnVisit = false,
   passwordPrompt = false,
   password = "",
   onPassword,
@@ -96,6 +100,8 @@ export function ClientAgentMissionVisit({
   onUploadLabel: (value: string) => void;
   onUpload: (files: File[]) => void;
   onDone: () => void;
+  /** The link was already finished. The client can still send more files. */
+  returnVisit?: boolean;
   passwordPrompt?: boolean;
   password?: string;
   onPassword?: (value: string) => void;
@@ -140,46 +146,21 @@ export function ClientAgentMissionVisit({
           <p className="text-sm leading-6 text-[#3D5270]" data-client-intro="true">
             {mission.intro}
           </p>
-          <div
-            className="flex flex-col gap-2 rounded-2xl border border-[#DBEAFE] p-3"
-            data-agent-chat="true"
-          >
-            {messages.length === 0 ? (
-              <p className="text-sm leading-6 text-[#3D5270]">
-                Reply in a full sentence when you are ready.
-              </p>
-            ) : (
-              messages.map((message, index) => (
-                <p
-                  key={`${message.role}-${index}`}
-                  className="text-sm leading-6"
-                  data-chat-role={message.role}
-                >
-                  {message.text}
-                </p>
-              ))
-            )}
-            <label className="text-sm text-[#3D5270]" htmlFor="mission-reply">
-              Your reply
-            </label>
-            <textarea
-              id="mission-reply"
-              className="min-h-24 rounded-xl border border-[#DBEAFE] px-3 py-2 text-sm"
-              maxLength={2000}
-              value={draft}
-              disabled={busy}
-              onChange={(event) => onDraft(event.target.value)}
-            />
+          {returnVisit ? (
+            <p className="text-sm leading-6" data-return-visit="true">
+              This link is still open. You can send more documents.
+            </p>
+          ) : null}
+          <div className="flex flex-col gap-2" data-mission-upload="true">
             <button
               type="button"
               className={PRIMARY}
-              disabled={busy || !draft.trim()}
-              onClick={onAsk}
+              data-upload-documents=""
+              disabled={busy}
+              onClick={() => document.getElementById("mission-file")?.click()}
             >
-              Reply
+              Upload documents
             </button>
-          </div>
-          <div className="flex flex-col gap-2" data-mission-upload="true">
             <label className="text-sm text-[#3D5270]" htmlFor="mission-upload-label">
               What is this?
             </label>
@@ -191,11 +172,15 @@ export function ClientAgentMissionVisit({
               disabled={busy}
               onChange={(event) => onUploadLabel(event.target.value)}
             />
+            <p className="text-sm leading-6 text-[#3D5270]">
+              A name is optional. The file name is used if you leave this blank.
+            </p>
             <input
-              className="text-sm"
+              id="mission-file"
+              className="sr-only"
               type="file"
               accept={SEND_FILE_MIMES.join(",")}
-              disabled={busy || !uploadLabel.trim()}
+              disabled={busy}
               onChange={(event) => {
                 const files = Array.from(event.target.files ?? []);
                 event.target.value = "";
@@ -238,6 +223,45 @@ export function ClientAgentMissionVisit({
               ))}
             </ul>
           ) : null}
+          <div
+            className="flex flex-col gap-2 rounded-2xl border border-[#DBEAFE] p-3"
+            data-agent-chat="true"
+          >
+            {messages.length === 0 ? (
+              <p className="text-sm leading-6 text-[#3D5270]">
+                Reply in a full sentence when you are ready.
+              </p>
+            ) : (
+              messages.map((message, index) => (
+                <p
+                  key={`${message.role}-${index}`}
+                  className="text-sm leading-6"
+                  data-chat-role={message.role}
+                >
+                  {message.text}
+                </p>
+              ))
+            )}
+            <label className="text-sm text-[#3D5270]" htmlFor="mission-reply">
+              Your reply
+            </label>
+            <textarea
+              id="mission-reply"
+              className="min-h-24 rounded-xl border border-[#DBEAFE] px-3 py-2 text-sm"
+              maxLength={2000}
+              value={draft}
+              disabled={busy}
+              onChange={(event) => onDraft(event.target.value)}
+            />
+            <button
+              type="button"
+              className={SECONDARY}
+              disabled={busy || !draft.trim()}
+              onClick={onAsk}
+            >
+              Reply
+            </button>
+          </div>
           <button type="button" className={`${QUIET} self-start`} disabled={busy} onClick={onDone}>
             I'm done
           </button>

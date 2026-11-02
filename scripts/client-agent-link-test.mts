@@ -1318,6 +1318,55 @@ assert(thanksHtml.includes("/avatars/tax/tax-done"), "the thank-you uses the don
 assert(thanksHtml.includes("data-client-thanks"), "Next shows the thank-you screen");
 assert(!thanksHtml.includes("data-client-next"), "the thank-you screen has no Next button");
 assert(!thanksHtml.includes("Upload"), "the thank-you screen has no upload");
+const returnHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: {
+      ok: true,
+      practiceName: "Theo's practice",
+      expiresAt: lateExpiry,
+      firstName: "Nicola",
+      consented: true,
+      completed: true,
+      notice: practiceNotice,
+      items: [
+        {
+          itemKey: "irp5",
+          label: "IRP5",
+          totalsOnly: false,
+          status: "received",
+          quality: "usable",
+          hasFile: true,
+        },
+      ],
+    },
+    busy: false,
+    notice: null,
+    noteFor: null,
+    explanation: "",
+    thanks: false,
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+  }),
+);
+assert(returnHtml.includes("data-return-visit"), "a finished link still opens");
+assert(returnHtml.includes("Upload documents"), "a finished link can take more documents");
+assert(returnHtml.includes("data-doc-list"), "the document list is back on a return visit");
+assert(!returnHtml.includes("data-client-thanks"), "a return visit is not stuck on thank-you");
+assert(page.includes("data-upload-documents"), "the page leads with Upload documents");
+assert(!page.includes("thanks || openView.completed"), "completion does not lock the page");
+const prepareFn = fn.slice(
+  fn.indexOf("export const prepareClientAgentUpload"),
+  fn.indexOf("export const confirmClientAgentUpload"),
+);
+const confirmFn = fn.slice(
+  fn.indexOf("export const confirmClientAgentUpload"),
+  fn.indexOf("function sendArchiveSealed"),
+);
+assert(!prepareFn.includes("completed_at"), "Finish does not close a new upload");
+assert(!confirmFn.includes("completed_at"), "a stored file is copied after Finish too");
 const plainThanks = clientAgentThanks({ firstName: null, practiceName: "Theo's practice" });
 assert(plainThanks.text.startsWith("Thank you."), "a missing first name still says thank you");
 assert(!plainThanks.text.startsWith("Thank you, "), "a missing first name is not a blank name");

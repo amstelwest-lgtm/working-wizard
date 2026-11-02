@@ -202,6 +202,16 @@ assert(!recipientFirstName("n".repeat(61)).ok, "a long first name is refused");
 assert(recipientEmail("  Nicola@Example.com ") === "nicola@example.com", "the address is trimmed");
 assert(recipientEmail("not-an-email") === null, "a bad address is refused");
 assert(panel.includes("SilentAgentPortrait"), "the portrait is the silent avatar");
+assert(panel.includes("Choose who to send"), "the picker says what the click does");
+assert(panel.includes("Select this agent"), "an unselected card says to select it");
+assert(panel.includes("data-send-agent-selected"), "the selected agent is marked");
+assert(
+  panel.includes('selected ? "Selected" : "Select this agent"'),
+  "the label changes when an agent is selected",
+);
+assert(panel.includes("border-[#0B5FFF]"), "the selected card uses cobalt");
+assert(panel.includes("data-send-progress"), "progress is its own block");
+assert(panel.includes("sendProgressSteps"), "progress uses the stage list");
 assert(panel.includes("data-send-agent-revoke"), "revoke sits with the link");
 assert(panel.includes("sendAgentFace"), "each agent uses its own silent face");
 assert(!panel.includes("flex-row"), "the panel stacks vertically");
