@@ -3,7 +3,12 @@
  * No database, no mail, and no file bytes.
  */
 import { clientDocumentPath } from "@/lib/client-documents";
-import { itemLabel, itemSettled, pathBelongsToSend } from "@/lib/client-agent-link";
+import {
+  itemLabel,
+  itemSettled,
+  libraryDocumentExtension,
+  pathBelongsToSend,
+} from "@/lib/client-agent-link";
 
 const EXT_BY_MIME: Record<string, string> = {
   "application/pdf": "pdf",
@@ -53,7 +58,7 @@ export type CompletionDecision =
     };
 
 export function extensionForAgentMime(mime: string): string | null {
-  return EXT_BY_MIME[mime] ?? null;
+  return EXT_BY_MIME[mime] ?? libraryDocumentExtension(mime);
 }
 
 export function artifactCopyKey(sendId: string, itemKey: string, sourcePath: string): string {

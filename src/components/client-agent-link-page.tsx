@@ -6,13 +6,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import "@/components/owner-door/owner-door.css";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
-import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES } from "@/lib/client-agent-send";
 import {
   CLIENT_AGENT_CHAT_ENABLED,
   CLIENT_AGENT_FAQ_TITLE,
   CLIENT_AGENT_FILE_NOTE,
   CLIENT_AGENT_PASSWORD_REQUIRED,
   CLIENT_AGENT_PASSWORD_UNSAVED,
+  CLIENT_UPLOAD_ACCEPT,
+  FILE_LINK_BODY,
   checklistReady,
   itemNotAvailable,
   clientAgentChecklistIntro,
@@ -22,6 +23,7 @@ import {
   clientAgentItemHelp,
   clientAgentThanks,
   clientFileMime,
+  clientUploadAllowed,
   sanitizeClientFileName,
   sizeAllowed,
   type ItemQuality,
@@ -154,6 +156,7 @@ export function ClientAgentLinkScreen({
   thanks?: boolean;
 }) {
   const openView = view?.ok ? view : null;
+  const showShell = Boolean(openView || loadFailed);
   const ready = openView ? checklistReady(openView.items) : false;
   const showThanks = Boolean(openView && thanks);
   const returnVisit = Boolean(openView?.completed && !thanks);
@@ -167,20 +170,24 @@ export function ClientAgentLinkScreen({
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 bg-white px-4 py-6 text-[#102A43]">
-      <span
-        className="owner-door -ml-3 inline-flex h-[96px] w-[96px] shrink-0 self-start overflow-hidden min-[761px]:-ml-[21.5px] min-[761px]:h-[172px] min-[761px]:w-[172px]"
-        data-client-portrait="tax_specialist"
-      >
-        <TaxSpecialistHero clip={showThanks ? "done" : "curious"} />
-      </span>
+      {showShell ? (
+        <span
+          className="owner-door -ml-3 inline-flex h-[96px] w-[96px] shrink-0 self-start overflow-hidden min-[761px]:-ml-[21.5px] min-[761px]:h-[172px] min-[761px]:w-[172px]"
+          data-client-portrait="tax_specialist"
+        >
+          <TaxSpecialistHero clip={showThanks ? "done" : "curious"} />
+        </span>
+      ) : null}
       {openView ? (
         <p className="text-sm font-semibold" data-practice-name="true">
           {openView.practiceName}
         </p>
       ) : null}
-      <h1 id="agent-link-title" className="text-2xl font-semibold">
-        Tax Specialist
-      </h1>
+      {showShell ? (
+        <h1 id="agent-link-title" className="text-2xl font-semibold">
+          Tax Specialist
+        </h1>
+      ) : null}
       {!view && !loadFailed ? <p className="text-sm text-[#3D5270]">Opening this link.</p> : null}
       {loadFailed ? (
         <div className="flex flex-col gap-3" data-link-retry="true">
@@ -403,16 +410,15 @@ export function ClientAgentLinkScreen({
                   className="sr-only"
                   type="file"
                   multiple
-                  accept={SEND_FILE_MIMES.join(",")}
+                  accept={CLIENT_UPLOAD_ACCEPT}
                   disabled={busy}
                   onChange={(event) => {
                     const picked = Array.from(event.target.files ?? []);
                     const add = event.target.dataset.mode === "add";
                     event.target.dataset.mode = "";
                     event.target.value = "";
-                    const files = picked.filter((file) => file.size <= SEND_FILE_MAX_BYTES);
-                    if (files.length === 0) return;
-                    onPickFile(item, files, !add && item.hasFile ? "replace" : undefined);
+                    if (picked.length === 0) return;
+                    onPickFile(item, picked, !add && item.hasFile ? "replace" : undefined);
                   }}
                 />
                 {item.hasFile ? (
@@ -498,7 +504,11 @@ export function ClientAgentLinkScreen({
           ) : null}
         </div>
       ) : null}
-      {notice ? <p className="text-sm text-[#3D5270]">{notice}</p> : null}
+      {notice ? (
+        <p role="alert" className="text-sm text-[#102A43]">
+          {notice}
+        </p>
+      ) : null}
     </main>
   );
 }
@@ -617,16 +627,16 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   };
 
   const upload = async (item: PublicItem, files: File[], mode?: "replace") => {
-    const accepted = files.filter((file) => sizeAllowed(file.size));
+    const accepted = files.filter(
+      (file) => sizeAllowed(file.size) && clientUploadAllowed(file.type, file.name),
+    );
     if (accepted.length === 0) {
-      setNotice("Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
+      setNotice(FILE_LINK_BODY);
       return;
     }
     rememberScroll();
     setBusy(true);
-    setNotice(
-      files.length === accepted.length ? null : "Use a PDF, JPG, PNG, or HEIC up to 20 MB.",
-    );
+    setNotice(files.length === accepted.length ? null : FILE_LINK_BODY);
     try {
       if (mode === "replace" && item.hasFile) {
         const removed = await removeUpload({ data: { token, itemKey: item.itemKey } });
@@ -665,6 +675,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
           path: prepared.path,
           token: prepared.token,
           file,
+          bucket: prepared.bucket,
+          contentType: clientFileMime(file.type, file.name),
         });
         if (!placed) {
           setNotice("The document could not be saved.");
@@ -856,13 +868,15 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   };
 
   const uploadMission = async (files: File[]) => {
-    const accepted = files.filter((file) => sizeAllowed(file.size));
+    const accepted = files.filter(
+      (file) => sizeAllowed(file.size) && clientUploadAllowed(file.type, file.name),
+    );
     if (accepted.length === 0) {
-      setNotice("Use a PDF, JPG, PNG, or HEIC up to 20 MB.");
+      setNotice(FILE_LINK_BODY);
       return;
     }
     setBusy(true);
-    setNotice(null);
+    setNotice(files.length === accepted.length ? null : FILE_LINK_BODY);
     try {
       let lockedPick = false;
       for (const file of accepted) {
@@ -893,6 +907,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
           path: prepared.path,
           token: prepared.token,
           file,
+          bucket: prepared.bucket,
+          contentType: clientFileMime(file.type, file.name),
         });
         if (!placed) {
           setNotice("The document could not be saved.");

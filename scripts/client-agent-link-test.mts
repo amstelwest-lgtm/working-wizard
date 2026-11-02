@@ -54,6 +54,12 @@ import {
   hashPresentedToken,
   linkLogPath,
   linkPrivacyHeaders,
+  clientFileMime,
+  clientUploadAllowed,
+  confirmLibraryObject,
+  libraryBytesMatch,
+  libraryDocumentMimeAllowed,
+  libraryObjectPath,
   mimeAllowed,
   openLinkView,
   pathBelongsToSend,
@@ -180,6 +186,78 @@ assert(
 );
 
 assert(mimeAllowed("image/heic") && !mimeAllowed("image/gif"), "HEIC is allowed and gif is not");
+assert(
+  !libraryDocumentMimeAllowed("application/pdf") && libraryDocumentMimeAllowed("text/plain"),
+  "text goes to the library bucket and a PDF stays on the send bucket",
+);
+assert(
+  clientFileMime("", "850-second-upload.txt") === "text/plain" &&
+    clientFileMime("text/plain", "850-second-upload.txt") === "text/plain",
+  "a txt upload is text/plain",
+);
+assert(
+  clientFileMime("application/vnd.ms-excel", "books.csv") === "text/csv",
+  "a csv keeps the csv type when the browser calls it Excel",
+);
+assert(
+  clientFileMime(
+    "",
+    "sheet.xlsx",
+  ) === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "an xlsx upload uses the spreadsheet type",
+);
+assert(
+  clientUploadAllowed("", "850-second-upload.txt") &&
+    clientUploadAllowed("", "850-second-upload.pdf") &&
+    !clientUploadAllowed("image/gif", "note.gif"),
+  "text and PDF are accepted and a gif is refused",
+);
+const textBytes = new TextEncoder().encode("QA #850 second file\n");
+assert(libraryBytesMatch("text/plain", textBytes), "plain text bytes are accepted");
+assert(
+  !libraryBytesMatch("text/plain", new TextEncoder().encode("%PDF-1.1\n")),
+  "a PDF renamed to text is refused",
+);
+assert(
+  libraryBytesMatch(
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0, 0]),
+  ),
+  "an xlsx zip prefix is accepted",
+);
+const libraryClient = "11111111-1111-4111-8111-111111111111";
+const libraryArtifact = "22222222-2222-4222-8222-222222222222";
+const libraryPath = libraryObjectPath(libraryClient, libraryArtifact, "text/plain");
+assert(libraryPath === `${libraryClient}/${libraryArtifact}.txt`, "a text file lands as .txt");
+const libraryGrant = {
+  sendId,
+  itemKey: "other",
+  path: libraryPath ?? "",
+  size: textBytes.length,
+  mime: "text/plain",
+  exp: Date.now() + 60_000,
+  label: "850-second-upload",
+};
+const libraryOk = confirmLibraryObject({
+  grant: libraryGrant,
+  claimedPath: libraryGrant.path,
+  sendId,
+  itemKey: "other",
+  clientId: libraryClient,
+  objectSize: textBytes.length,
+  prefix: textBytes,
+});
+assert(libraryOk.ok && libraryOk.mime === "text/plain", "a second txt confirms into the library");
+const libraryPdf = confirmLibraryObject({
+  grant: libraryGrant,
+  claimedPath: libraryGrant.path,
+  sendId,
+  itemKey: "other",
+  clientId: libraryClient,
+  objectSize: textBytes.length,
+  prefix: new TextEncoder().encode("%PDF-1.1\nhello"),
+});
+assert(!libraryPdf.ok && libraryPdf.reason === "mime", "text that is a PDF is refused");
 assert(sizeAllowed(20971520) && !sizeAllowed(20971521), "the cap is 20 MiB");
 const decoded = bytesFromBase64(btoa("a"));
 assert(decoded?.length === 1 && decoded[0] === 97, "file bytes decode from base64");
@@ -961,6 +1039,23 @@ assert(
   "the consent page shows the practice",
 );
 assert(consentHtml.includes("I agree"), "consent renders the agreement button");
+const loadingHtml = renderToStaticMarkup(
+  createElement(ClientAgentLinkScreen, {
+    view: null,
+    busy: true,
+    notice: null,
+    noteFor: null,
+    explanation: "",
+    onAgree: () => undefined,
+    onPickFile: () => undefined,
+    onOpenNote: () => undefined,
+    onExplanation: () => undefined,
+    onSaveNote: () => undefined,
+  }),
+);
+assert(!loadingHtml.includes("Tax Specialist"), "loading does not flash the Tax Specialist shell");
+assert(loadingHtml.includes("Opening this link."), "loading says the link is opening");
+assert(!loadingHtml.includes("data-client-portrait"), "loading does not paint an agent face");
 const checklistHtml = renderToStaticMarkup(
   createElement(ClientAgentLinkScreen, {
     view: {
@@ -1082,7 +1177,8 @@ assert(!unavailableHtml.includes("Try again"), "an unknown link is not a retry")
 const expiredHtml = closedScreen(closedLink("unavailable"));
 assert(expiredHtml.includes(GENERIC_LINK_BODY), "an expired link is not available");
 assert(
-  (checklistHtml.match(/PDF, JPG, PNG or HEIC, up to 20 MB each/g) ?? []).length === 1,
+  (checklistHtml.match(/PDF, JPG, PNG, HEIC, text, CSV, or Excel, up to 20 MB each/g) ?? []).length ===
+    1,
   "file types appear once",
 );
 assert(checklistHtml.includes(CLIENT_AGENT_FILE_NOTE), "the file note is the shared sentence");

@@ -97,6 +97,85 @@ export async function copySendFileToArchive(input: {
   return true;
 }
 
+/**
+ * Records a text, CSV, or Excel file that was uploaded straight into
+ * client-documents. The send bucket cannot store those types. The object
+ * is already at storagePath. A second confirm of the same path is a no-op.
+ */
+export async function recordDirectLibraryFile(input: {
+  clientId: string;
+  sendId: string;
+  itemKey: string;
+  label: string;
+  mime: string;
+  size: number;
+  storagePath: string;
+  displayName: string | null;
+}): Promise<boolean> {
+  const slash = input.storagePath.lastIndexOf("/");
+  const file = slash >= 0 ? input.storagePath.slice(slash + 1) : "";
+  const dot = file.lastIndexOf(".");
+  const artifactId = dot > 0 ? file.slice(0, dot) : "";
+  if (!artifactId) return false;
+  let row: ReturnType<typeof buildClientAgentArtifact>;
+  try {
+    row = buildClientAgentArtifact({
+      artifactId,
+      clientId: input.clientId,
+      sendId: input.sendId,
+      itemKey: input.itemKey,
+      label: input.label,
+      mime: input.mime,
+      size: input.size,
+      sourcePath: input.storagePath,
+      displayName: input.displayName,
+    });
+  } catch {
+    return false;
+  }
+  if (row.storage_path !== input.storagePath) return false;
+  const existing = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            limit: (
+              count: number,
+            ) => Promise<{ data: Array<{ id: string }> | null; error: DbError }>;
+          };
+        };
+      };
+    }
+  )
+    .from("client_artifacts")
+    .select("id")
+    .eq("storage_path", input.storagePath)
+    .limit(1);
+  if (existing.error) return false;
+  if ((existing.data ?? []).length > 0) return true;
+  const inserted = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        insert: (value: Record<string, unknown>) => Promise<{ error: DbError }>;
+      };
+    }
+  )
+    .from("client_artifacts")
+    .insert({
+      id: row.id,
+      client_id: row.client_id,
+      kind: row.kind,
+      storage_path: row.storage_path,
+      visibility: row.visibility,
+      created_by: row.created_by,
+      meta: row.meta,
+    });
+  return !inserted.error;
+}
+
 async function loadArtifactMetaRows(clientId: string): Promise<Array<{ meta: unknown }> | null> {
   const { data, error } = await (
     supabaseAdmin as unknown as {

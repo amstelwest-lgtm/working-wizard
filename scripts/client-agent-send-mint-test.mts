@@ -213,6 +213,13 @@ assert(panel.includes("border-[#0B5FFF]"), "the selected card uses cobalt");
 assert(panel.includes("data-send-progress"), "progress is its own block");
 assert(panel.includes("sendProgressSteps"), "progress uses the stage list");
 assert(panel.includes("data-send-agent-revoke"), "revoke sits with the link");
+assert(panel.includes("Copy link"), "copy link sits with resend and revoke");
+assert(panel.includes("data-send-agent-copy"), "copy link is marked");
+assert(panel.includes("navigator.clipboard.writeText"), "copy link writes the address");
+assert(
+  mintBody.includes("expiresAt: String(inserted.data.expires_at ?? expiresAt),\n      url,"),
+  "mint returns the /a address once, with the send",
+);
 assert(panel.includes("sendAgentFace"), "each agent uses its own silent face");
 assert(!panel.includes("flex-row"), "the panel stacks vertically");
 

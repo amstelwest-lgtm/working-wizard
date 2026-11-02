@@ -49,6 +49,7 @@ import { sendClientAgentDone } from "@/lib/client-agent-done-mail";
 import {
   copySendFileIfMissing,
   copySendFileToArchive,
+  recordDirectLibraryFile,
   removeSendArchiveCopies,
 } from "@/lib/client-agent-send-archive.server";
 import { recipientFirstName } from "@/lib/client-agent-send";
@@ -61,14 +62,18 @@ import {
   CLIENT_AGENT_CHAT_ENABLED,
   CLIENT_AGENT_PASSWORD_UNSAVED,
   closedLink,
+  confirmLibraryObject,
   confirmStoredObject,
   consentReady,
   consentWrite,
+  declareLibraryUpload,
   declareUpload,
   finishItem,
   itemNotAvailable,
   hashClientAddress,
   hashPresentedToken,
+  libraryDocumentMimeAllowed,
+  libraryObjectPath,
   openLinkView,
   pathBelongsToSend,
   practiceDisplayName,
@@ -84,7 +89,9 @@ import {
   type AttemptOutcome,
   type ItemQuality,
   type PublicChecklistItem,
+  type UploadGrant,
 } from "@/lib/client-agent-link";
+import { CLIENT_DOCUMENTS_BUCKET } from "@/lib/client-documents";
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/integrations/supabase/client.server";
 
 type DbError = { message: string } | null;
@@ -378,7 +385,45 @@ async function loadMissionMessages(
   });
 }
 
-async function loadMissionUploads(sendId: string): Promise<Array<{ label: string; mime: string }>> {
+async function loadLibraryUploadLabels(
+  clientId: string,
+  sendId: string,
+): Promise<Array<{ label: string; mime: string }>> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => Promise<{ data: Array<{ meta: unknown }> | null; error: DbError }>;
+        };
+      };
+    }
+  )
+    .from("client_artifacts")
+    .select("meta")
+    .eq("client_id", clientId);
+  if (error || !data) return [];
+  return data.flatMap((row) => {
+    if (!row.meta || typeof row.meta !== "object") return [];
+    const meta = row.meta as Record<string, unknown>;
+    if (meta.source !== "client_agent_send" || meta.send_id !== sendId) return [];
+    const mime = typeof meta.mime === "string" ? meta.mime : "";
+    if (!libraryDocumentMimeAllowed(mime)) return [];
+    const label =
+      (typeof meta.file_name === "string" && meta.file_name) ||
+      (typeof meta.label === "string" && meta.label) ||
+      "";
+    if (!label) return [];
+    return [{ label, mime }];
+  });
+}
+
+async function loadMissionUploads(
+  sendId: string,
+  clientId: string,
+): Promise<Array<{ label: string; mime: string }>> {
   const { data, error } = await (
     supabaseAdmin as unknown as {
       from: (name: string) => {
@@ -394,15 +439,19 @@ async function loadMissionUploads(sendId: string): Promise<Array<{ label: string
     .from("client_agent_send_files")
     .select("upload_label, mime, display_name")
     .eq("send_id", sendId);
-  if (error || !data) return [];
-  return data.flatMap((row) => {
-    const label =
-      (typeof row.upload_label === "string" && row.upload_label) ||
-      (typeof row.display_name === "string" && row.display_name) ||
-      "";
-    if (!label) return [];
-    return [{ label, mime: typeof row.mime === "string" ? row.mime : "" }];
-  });
+  const fromSend =
+    error || !data
+      ? []
+      : data.flatMap((row) => {
+          const label =
+            (typeof row.upload_label === "string" && row.upload_label) ||
+            (typeof row.display_name === "string" && row.display_name) ||
+            "";
+          if (!label) return [];
+          return [{ label, mime: typeof row.mime === "string" ? row.mime : "" }];
+        });
+  const fromLibrary = await loadLibraryUploadLabels(clientId, sendId);
+  return [...fromSend, ...fromLibrary];
 }
 
 async function insertMissionMessage(
@@ -442,7 +491,7 @@ async function accountEmail(userId: string | null): Promise<string | null> {
 
 async function rewriteMissionReport(send: SendRow, done: boolean): Promise<string> {
   const messages = await loadMissionMessages(send.id);
-  const uploads = await loadMissionUploads(send.id);
+  const uploads = await loadMissionUploads(send.id, send.client_id);
   const labels = uploads.map((file) => file.label);
   const clientLines = messages
     .filter((message) => message.role === "client")
@@ -735,7 +784,7 @@ async function publicMission(
 ): Promise<PublicMission | null> {
   if (!isMissionKey(send.mission_key)) return null;
   const agentShortName = sendAgentShortName(send.agent);
-  const uploads = await loadMissionUploads(send.id);
+  const uploads = await loadMissionUploads(send.id, send.client_id);
   const messages = await loadMissionMessages(send.id);
   return {
     key: send.mission_key,
@@ -815,12 +864,12 @@ type ObjectStorage = {
   remove: (paths: string[]) => Promise<{ error: DbError }>;
 };
 
-function objectStorage(): ObjectStorage {
+function objectStorage(bucket: string = SEND_STORAGE_BUCKET): ObjectStorage {
   return (
     supabaseAdmin as unknown as {
-      storage: { from: (bucket: string) => ObjectStorage };
+      storage: { from: (name: string) => ObjectStorage };
     }
-  ).storage.from(SEND_STORAGE_BUCKET);
+  ).storage.from(bucket);
 }
 
 async function loadStoredPath(sendId: string, itemKey: string): Promise<string | null> {
@@ -938,10 +987,11 @@ function totalFromContentRange(header: string | null): number | null {
 /** First bytes only. A full-body response is cancelled. The range total is the object size. */
 async function readObjectPrefix(
   path: string,
+  bucket: string = SEND_STORAGE_BUCKET,
 ): Promise<{ bytes: Uint8Array; total: number | null } | null> {
   const endpoint = storageEndpoint();
   if (!endpoint) return null;
-  const target = `${endpoint.url}/storage/v1/object/${SEND_STORAGE_BUCKET}/${path}`;
+  const target = `${endpoint.url}/storage/v1/object/${bucket}/${path}`;
   const response = await fetch(target, {
     headers: {
       Authorization: `Bearer ${endpoint.key}`,
@@ -965,8 +1015,11 @@ async function readObjectPrefix(
   };
 }
 
-async function storedObjectSize(path: string): Promise<number | null> {
-  const storage = objectStorage();
+async function storedObjectSize(
+  path: string,
+  bucket: string = SEND_STORAGE_BUCKET,
+): Promise<number | null> {
+  const storage = objectStorage(bucket);
   const info = await storage.info(path);
   const fromInfo = info.error ? null : objectByteSize(info.data);
   if (fromInfo != null) return fromInfo;
@@ -1007,26 +1060,46 @@ export const prepareClientAgentUpload = createServerFn({ method: "POST" })
     async ({
       data,
     }): Promise<
-      | { ok: true; path: string; token: string; signedUrl: string; grant: string }
+      | {
+          ok: true;
+          path: string;
+          token: string;
+          signedUrl: string;
+          grant: string;
+          bucket: string;
+        }
       | ReturnType<typeof closedLink>
     > => {
       const resolved = await resolveToken(data.token);
       if (!resolved.ok) return resolved;
       const items = await loadItems(resolved.send.id);
       if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
-      const declared = declareUpload({
-        consented: consentReady(resolved.send.consent_at),
-        size: data.size,
-        mime: data.mime,
-      });
+      const library = libraryDocumentMimeAllowed(data.mime);
+      const declared = library
+        ? declareLibraryUpload({
+            consented: consentReady(resolved.send.consent_at),
+            size: data.size,
+            mime: data.mime,
+          })
+        : declareUpload({
+            consented: consentReady(resolved.send.consent_at),
+            size: data.size,
+            mime: data.mime,
+          });
       if (!declared.ok) {
         await noteRejected(resolved);
         return declared;
       }
       const secret = uploadGrantSecret();
       if (!secret) throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
-      const path = sendStoragePath(resolved.send.id, data.itemKey, crypto.randomUUID());
-      const signed = await objectStorage().createSignedUploadUrl(path, { upsert: false });
+      const objectId = crypto.randomUUID();
+      const libraryPath = library
+        ? libraryObjectPath(resolved.send.client_id, objectId, data.mime)
+        : null;
+      if (library && !libraryPath) return closedLink("mime");
+      const path = libraryPath ?? sendStoragePath(resolved.send.id, data.itemKey, objectId);
+      const bucket = library ? CLIENT_DOCUMENTS_BUCKET : SEND_STORAGE_BUCKET;
+      const signed = await objectStorage(bucket).createSignedUploadUrl(path, { upsert: false });
       if (signed.error || !signed.data?.token || !signed.data.signedUrl) {
         throw new Error(sendLinkLogLine({ event: "link", reason: "upload" }));
       }
@@ -1052,9 +1125,77 @@ export const prepareClientAgentUpload = createServerFn({ method: "POST" })
         ...(displayName ? { name: displayName } : {}),
         ...(labelled?.ok ? { label: labelled.label } : {}),
       });
-      return { ok: true, path, token: signed.data.token, signedUrl: signed.data.signedUrl, grant };
+      return {
+        ok: true,
+        path,
+        token: signed.data.token,
+        signedUrl: signed.data.signedUrl,
+        grant,
+        bucket,
+      };
     },
   );
+
+async function confirmDirectLibraryUpload(
+  resolved: Extract<Resolved, { ok: true }>,
+  data: { path: string; itemKey: string },
+  grant: UploadGrant,
+  items: PublicItem[],
+): Promise<{ ok: true } | ReturnType<typeof closedLink>> {
+  const storage = objectStorage(CLIENT_DOCUMENTS_BUCKET);
+  const prefix = await readObjectPrefix(data.path, CLIENT_DOCUMENTS_BUCKET);
+  const listedSize = await storedObjectSize(data.path, CLIENT_DOCUMENTS_BUCKET);
+  const decision = confirmLibraryObject({
+    grant,
+    claimedPath: data.path,
+    sendId: resolved.send.id,
+    itemKey: data.itemKey,
+    clientId: resolved.send.client_id,
+    objectSize: listedSize ?? prefix?.total ?? null,
+    prefix: prefix?.bytes ?? null,
+  });
+  if (!decision.ok) {
+    if (grant.path.startsWith(`${resolved.send.client_id}/`)) await storage.remove([grant.path]);
+    await noteRejected(resolved);
+    return decision;
+  }
+  const uploadLabel = isMissionKey(resolved.send.mission_key)
+    ? cleanUploadLabel(grant.label)
+    : null;
+  if (isMissionKey(resolved.send.mission_key) && !uploadLabel?.ok) {
+    await storage.remove([grant.path]);
+    return {
+      ok: false,
+      status: 200,
+      reason: "unavailable",
+      body: "Name this file before you upload it.",
+    };
+  }
+  const item = items.find((row) => row.itemKey === data.itemKey);
+  const displayName = uploadLabel?.ok
+    ? uploadLabel.label
+    : sanitizeClientFileName(grant.name ?? "");
+  const recorded = await recordDirectLibraryFile({
+    clientId: resolved.send.client_id,
+    sendId: resolved.send.id,
+    itemKey: data.itemKey,
+    label: uploadLabel?.ok ? uploadLabel.label : (item?.label ?? data.itemKey),
+    mime: decision.mime,
+    size: decision.size,
+    storagePath: data.path,
+    displayName: displayName || null,
+  });
+  if (!recorded) {
+    await storage.remove([data.path]);
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+  try {
+    if (isMissionKey(resolved.send.mission_key)) await noteMissionFile(resolved.send);
+  } catch {
+    // The file is in Client library. Opening the send retries the progress stamp.
+  }
+  return { ok: true };
+}
 
 export const confirmClientAgentUpload = createServerFn({ method: "POST" })
   .inputValidator((input) =>
@@ -1078,9 +1219,15 @@ export const confirmClientAgentUpload = createServerFn({ method: "POST" })
       !grant ||
       grant.path !== data.path ||
       grant.sendId !== resolved.send.id ||
-      grant.itemKey !== data.itemKey ||
-      !pathBelongsToSend(data.path, resolved.send.id, data.itemKey)
+      grant.itemKey !== data.itemKey
     ) {
+      await noteRejected(resolved);
+      return closedLink("unavailable");
+    }
+    if (libraryDocumentMimeAllowed(grant.mime)) {
+      return confirmDirectLibraryUpload(resolved, data, grant, items);
+    }
+    if (!pathBelongsToSend(data.path, resolved.send.id, data.itemKey)) {
       await noteRejected(resolved);
       return closedLink("unavailable");
     }
@@ -1791,7 +1938,7 @@ async function mailSenderReport(send: SendRow, summary: string): Promise<boolean
   if (send.report_mailed_at) return true;
   const to = await accountEmail(send.sent_by);
   if (!to) return false;
-  const uploads = await loadMissionUploads(send.id);
+  const uploads = await loadMissionUploads(send.id, send.client_id);
   const practiceName = practiceDisplayName({
     firmId: send.firm_id,
     practiceDisplayName: send.practice_display_name,

@@ -4,7 +4,7 @@
  * Finish shows thank-you for this visit. Reopening the same link shows upload again.
  */
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
-import { SEND_FILE_MIMES } from "@/lib/client-agent-send";
+import { CLIENT_UPLOAD_ACCEPT } from "@/lib/client-agent-link";
 import { sendAgentFace } from "@/lib/client-agent-missions";
 import { avatarPoster, fmClipSources } from "@/lib/fm-avatar-state";
 import type { PublicMission } from "@/lib/client-agent-link.functions";
@@ -124,7 +124,15 @@ export function ClientAgentMissionVisit({
         {practiceName}
       </p>
       <h1 className="text-2xl font-semibold">{mission.agentShortName}</h1>
-      {noticeText ? <p className="text-sm text-[#3D5270]">{noticeText}</p> : null}
+      {noticeText ? (
+        <p
+          role="alert"
+          data-upload-notice=""
+          className="rounded-xl border border-[#DBEAFE] bg-[#F4F8FF] px-3 py-2 text-sm text-[#102A43]"
+        >
+          {noticeText}
+        </p>
+      ) : null}
       {!consented ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm leading-6 text-[#3D5270]" data-client-intro="true">
@@ -151,7 +159,17 @@ export function ClientAgentMissionVisit({
               This link is still open. You can send more documents.
             </p>
           ) : null}
-          <div className="flex flex-col gap-2" data-mission-upload="true">
+          <div
+            className="flex flex-col gap-2"
+            data-mission-upload="true"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (busy) return;
+              const files = Array.from(event.dataTransfer.files);
+              if (files.length > 0) onUpload(files);
+            }}
+          >
             <button
               type="button"
               className={PRIMARY}
@@ -179,7 +197,7 @@ export function ClientAgentMissionVisit({
               id="mission-file"
               className="sr-only"
               type="file"
-              accept={SEND_FILE_MIMES.join(",")}
+              accept={CLIENT_UPLOAD_ACCEPT}
               disabled={busy}
               onChange={(event) => {
                 const files = Array.from(event.target.files ?? []);
