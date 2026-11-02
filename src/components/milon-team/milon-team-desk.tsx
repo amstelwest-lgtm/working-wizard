@@ -146,7 +146,7 @@ export function MilonTeamDesk({
   onOpenAgent?: (agent: AgentKey) => void;
   /** ZA client pages: the Tax Specialist chip opens its page instead of the sample sheet. */
   onOpenTaxAgent?: () => void;
-  /** Opens Reports → Drafts, the Advisory Management Report for this client. */
+  /** Opens Reports → Advisory pack, the Advisory Management Report for this client. */
   clientId?: string | null;
   /** Agent view hides the last-run chip strip. The stage switcher owns that click. */
   presentation?: "team" | "agent";

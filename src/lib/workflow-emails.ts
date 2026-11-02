@@ -306,7 +306,7 @@ export function workflowEmailHref(
   if (audience === "requested_firm") return `${base}/dashboard#accountant-inbox`;
   if (audience === "accountant") {
     if (kind === "forecast_break") return `${base}/clients/${clientId}?tab=cash&section=forecast`;
-    // Pack mail opens Drafts on the client's Reports page.
+    // Pack mail opens the Advisory pack (the Management Report) on Reports.
     return `${base}/clients/${clientId}?tab=reports&section=drafts`;
   }
   const tab = kind === "forecast_break" ? "cash" : kind === "cycle_restarted" ? "today" : "next";
