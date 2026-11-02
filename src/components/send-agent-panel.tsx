@@ -1,6 +1,7 @@
 /**
  * Accountant action: pick an agent, a mission, an optional note, and send.
- * The invite goes out only when Send is clicked. The raw link is not shown.
+ * The invite goes out only when Send is clicked. Copy link copies the /a
+ * address. The address is not printed on the page.
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -38,6 +39,35 @@ const PRIMARY =
 const SECONDARY =
   "inline-flex min-h-11 items-center justify-center rounded-full border border-[#0B5FFF] bg-white px-4 text-sm font-semibold text-[#102A43] hover:bg-[#F4F8FF] disabled:opacity-60";
 
+const LINK_STORAGE = "milon.send-agent-link.";
+
+function readStoredLink(sendId: string): string | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const value = sessionStorage.getItem(LINK_STORAGE + sendId);
+    if (!value || !value.includes("/a/")) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function storeLink(sendId: string, url: string) {
+  try {
+    sessionStorage.setItem(LINK_STORAGE + sendId, url);
+  } catch {
+    // The button still works until this page is left.
+  }
+}
+
+function forgetLink(sendId: string) {
+  try {
+    sessionStorage.removeItem(LINK_STORAGE + sendId);
+  } catch {
+    // The in-memory copy is cleared either way.
+  }
+}
+
 export function SendAgentPanel({
   clientId,
   market,
@@ -66,6 +96,7 @@ export function SendAgentPanel({
   const [email, setEmail] = useState("");
   const [emailEdited, setEmailEdited] = useState(false);
   const [revealed, setRevealed] = useState<ShownFilePassword | null>(null);
+  const [links, setLinks] = useState<Record<string, string>>({});
   const [passwordBusy, setPasswordBusy] = useState<string | null>(null);
   const [seenClientId, setSeenClientId] = useState(clientId);
   if (seenClientId !== clientId) {
@@ -102,6 +133,30 @@ export function SendAgentPanel({
     }, FILE_PASSWORD_HIDE_MS);
     return () => window.clearTimeout(timer);
   }, [revealedFileId]);
+
+  useEffect(() => {
+    const stored: Record<string, string> = {};
+    for (const send of sends) {
+      const url = readStoredLink(send.id);
+      if (url) stored[send.id] = url;
+    }
+    if (Object.keys(stored).length === 0) return;
+    setLinks((current) => ({ ...stored, ...current }));
+  }, [sends]);
+
+  const onCopyLink = async (sendId: string) => {
+    const url = links[sendId] ?? readStoredLink(sendId);
+    if (!url) {
+      setNotice("Resend the link, then copy it.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotice("Link copied.");
+    } catch {
+      setNotice("The link could not be copied. It is also in the email.");
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -192,6 +247,8 @@ export function SendAgentPanel({
       }
       setNotice("Sent.");
       setFirmNote("");
+      storeLink(result.sendId, result.url);
+      setLinks((current) => ({ ...current, [result.sendId]: result.url }));
       await reload();
     } catch {
       setNotice("The link could not be created.");
@@ -209,6 +266,12 @@ export function SendAgentPanel({
         setNotice("The link could not be revoked.");
         return;
       }
+      forgetLink(sendId);
+      setLinks((current) => {
+        const next = { ...current };
+        delete next[sendId];
+        return next;
+      });
       await reload();
     } catch {
       setNotice("The link could not be revoked.");
@@ -335,6 +398,8 @@ export function SendAgentPanel({
       onMint={() => void onMint()}
       onResend={(sendId) => void onMint(sendId)}
       onRevoke={(sendId) => void onRevoke(sendId)}
+      linkFor={(sendId) => links[sendId] ?? null}
+      onCopyLink={(sendId) => void onCopyLink(sendId)}
       onReview={(sendId) => void onReview(sendId)}
       onOpenDocument={(path) => void onOpenDocument(path)}
       fileList={
@@ -452,6 +517,8 @@ export function SendAgentCard({
   onMint,
   onResend,
   onRevoke,
+  linkFor,
+  onCopyLink,
   onReview,
   onOpenDocument,
   fileList = null,
@@ -479,6 +546,8 @@ export function SendAgentCard({
   onMint: () => void;
   onResend: (sendId: string) => void;
   onRevoke: (sendId: string) => void;
+  linkFor: (sendId: string) => string | null;
+  onCopyLink: (sendId: string) => void;
   onReview: (sendId: string) => void;
   onOpenDocument: (path: string) => void;
   fileList?: ReactNode;
@@ -655,6 +724,17 @@ export function SendAgentCard({
                 return at ? formatDate(at, market) : null;
               }}
             />
+            {latest.open && linkFor(latest.id) ? (
+              <button
+                type="button"
+                className={SECONDARY}
+                data-send-agent-copy=""
+                disabled={busy}
+                onClick={() => onCopyLink(latest.id)}
+              >
+                Copy link
+              </button>
+            ) : null}
             {latest.missionKey ? (
               <button
                 type="button"

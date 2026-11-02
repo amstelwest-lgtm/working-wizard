@@ -432,7 +432,40 @@ const again = renderToStaticMarkup(
 );
 assert(again.includes("data-return-visit"), "a return visit says the link is still open");
 assert(again.includes("Upload documents"), "a return visit can upload again");
+assert(again.includes(".txt"), "a return visit can pick a text file");
 assert(!again.includes("data-client-thanks"), "a return visit is not the thank-you screen");
+const refusedUpload = renderToStaticMarkup(
+  createElement(ClientAgentMissionVisit, {
+    practiceName: "Theo's practice",
+    mission: {
+      key: "collect_documents",
+      title: "Collect documents",
+      agent: "financial_manager",
+      agentShortName: "Financial Manager",
+      intro: "Hi, I'm the Financial Manager at Theo's practice.",
+      thanks: "Thank you.",
+      messages: [],
+      uploads: [],
+    },
+    consented: true,
+    notice: clientConsentNotice("Theo's practice"),
+    completed: false,
+    returnVisit: true,
+    busy: false,
+    noticeText: "Use a PDF, JPG, PNG, HEIC, text, CSV, or Excel file up to 20 MB.",
+    messages: [],
+    draft: "",
+    uploadLabel: "",
+    onAgree: () => undefined,
+    onDraft: () => undefined,
+    onAsk: () => undefined,
+    onUploadLabel: () => undefined,
+    onUpload: () => undefined,
+    onDone: () => undefined,
+  }),
+);
+assert(refusedUpload.includes('role="alert"'), "a refused upload is announced");
+assert(refusedUpload.includes("data-upload-notice"), "a refused upload has a banner");
 
 const mint = read("src/lib/client-agent-send.functions.ts");
 const mintBody = mint.slice(

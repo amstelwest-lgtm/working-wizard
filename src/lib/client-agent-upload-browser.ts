@@ -9,21 +9,27 @@ export async function uploadToClientAgentSignedUrl(input: {
   path: string;
   token: string;
   file: File;
+  bucket?: string;
+  contentType?: string;
 }): Promise<boolean> {
   const url = (import.meta.env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").replace(
     /\/$/,
     "",
   );
   const key =
-    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    "";
   if (!url || !key) return false;
   const client = new StorageClient(`${url}/storage/v1`, {
     apikey: key,
     Authorization: `Bearer ${key}`,
   });
-  const uploaded = await client.from(SEND_STORAGE_BUCKET).uploadToSignedUrl(input.path, input.token, input.file, {
-    contentType: input.file.type || "application/octet-stream",
-    upsert: false,
-  });
+  const uploaded = await client
+    .from(input.bucket || SEND_STORAGE_BUCKET)
+    .uploadToSignedUrl(input.path, input.token, input.file, {
+      contentType: input.contentType || input.file.type || "application/octet-stream",
+      upsert: false,
+    });
   return !uploaded.error;
 }

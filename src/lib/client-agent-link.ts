@@ -62,7 +62,7 @@ export const REVOKED_LINK_BODY =
   "This link was replaced by a newer one. Please open the latest email.";
 export const LIMITED_LINK_BODY = "Please wait a minute and try again.";
 export const CONSENT_LINK_BODY = "Agree at the start of the page before sending a document.";
-export const FILE_LINK_BODY = "Use a PDF, JPG, PNG, or HEIC up to 20 MB.";
+export const FILE_LINK_BODY = "Use a PDF, JPG, PNG, HEIC, text, CSV, or Excel file up to 20 MB.";
 
 export type ClosedLink = {
   ok: false;
@@ -199,7 +199,7 @@ const ITEM_HELP: Record<string, string> = {
   other: "A copy of the order and proof of payments received.",
 };
 
-export const CLIENT_AGENT_FILE_NOTE = "PDF, JPG, PNG or HEIC, up to 20 MB each.";
+export const CLIENT_AGENT_FILE_NOTE = "PDF, JPG, PNG, HEIC, text, CSV, or Excel, up to 20 MB each.";
 
 /** Shown when the password key is missing or not 32 bytes. Nothing is stored. */
 export const CLIENT_AGENT_PASSWORD_UNSAVED = "Couldn't save the password.";
@@ -322,15 +322,91 @@ export function mimeAllowed(mime: string): boolean {
   return (SEND_FILE_MIMES as readonly string[]).includes(mime);
 }
 
-/** Declared type for the signed upload. Magic bytes are checked again on confirm. */
+/**
+ * Text, CSV, and Excel. Client library already stores these. The send
+ * bucket does not, so they are uploaded straight into client-documents.
+ */
+export const LIBRARY_DOCUMENT_MIMES = [
+  "text/plain",
+  "text/csv",
+  "text/tab-separated-values",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel.sheet.macroenabled.12",
+  "application/vnd.oasis.opendocument.spreadsheet",
+] as const;
+
+const LIBRARY_EXT_BY_MIME: Record<(typeof LIBRARY_DOCUMENT_MIMES)[number], string> = {
+  "text/plain": "txt",
+  "text/csv": "csv",
+  "text/tab-separated-values": "tsv",
+  "application/vnd.ms-excel": "xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.ms-excel.sheet.macroenabled.12": "xlsm",
+  "application/vnd.oasis.opendocument.spreadsheet": "ods",
+};
+
+const MIME_BY_UPLOAD_EXT: Record<string, string> = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  heic: "image/heic",
+  txt: "text/plain",
+  csv: "text/csv",
+  tsv: "text/tab-separated-values",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xlsm: "application/vnd.ms-excel.sheet.macroenabled.12",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+};
+
+export const CLIENT_UPLOAD_ACCEPT = [
+  ".pdf",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".heic",
+  ".txt",
+  ".csv",
+  ".tsv",
+  ".xls",
+  ".xlsx",
+  ".xlsm",
+  ".ods",
+  ...SEND_FILE_MIMES,
+  ...LIBRARY_DOCUMENT_MIMES,
+].join(",");
+
+export function libraryDocumentMimeAllowed(mime: string): boolean {
+  return (LIBRARY_DOCUMENT_MIMES as readonly string[]).includes(mime);
+}
+
+export function libraryDocumentExtension(mime: string): string | null {
+  if (!libraryDocumentMimeAllowed(mime)) return null;
+  return LIBRARY_EXT_BY_MIME[mime as (typeof LIBRARY_DOCUMENT_MIMES)[number]] ?? null;
+}
+
+function uploadExtension(name: string): string {
+  const clean = sanitizeClientFileName(name);
+  const dot = clean.lastIndexOf(".");
+  if (dot <= 0 || dot === clean.length - 1) return "";
+  return clean.slice(dot + 1).toLowerCase();
+}
+
+/** Declared type for the signed upload. The leading bytes are checked again on confirm. */
 export function clientFileMime(type: string, name: string): string {
-  if (mimeAllowed(type)) return type;
-  const ext = sanitizeClientFileName(name).split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "pdf") return "application/pdf";
-  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
-  if (ext === "png") return "image/png";
-  if (ext === "heic") return "image/heic";
+  const ext = uploadExtension(name);
+  const fromExt = MIME_BY_UPLOAD_EXT[ext];
+  if (fromExt) return fromExt;
+  if (ext) return "application/octet-stream";
+  if (mimeAllowed(type) || libraryDocumentMimeAllowed(type)) return type;
   return type || "application/octet-stream";
+}
+
+export function clientUploadAllowed(type: string, name: string): boolean {
+  const mime = clientFileMime(type, name);
+  return mimeAllowed(mime) || libraryDocumentMimeAllowed(mime);
 }
 
 export function sizeAllowed(size: number): boolean {
@@ -620,6 +696,103 @@ export function sniffDocumentMime(bytes: Uint8Array): DocumentMime | null {
   return null;
 }
 
+function prefixIsText(bytes: Uint8Array): boolean {
+  if (bytes.length === 0) return false;
+  for (const byte of bytes) {
+    if (byte === 0 || byte === 127) return false;
+    if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) return false;
+  }
+  return sniffDocumentMime(bytes) == null;
+}
+
+function prefixIsZip(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4b &&
+    (bytes[2] === 3 || bytes[2] === 5 || bytes[2] === 7) &&
+    (bytes[3] === 4 || bytes[3] === 6 || bytes[3] === 8)
+  );
+}
+
+function prefixIsOle(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 8 &&
+    bytes[0] === 0xd0 &&
+    bytes[1] === 0xcf &&
+    bytes[2] === 0x11 &&
+    bytes[3] === 0xe0 &&
+    bytes[4] === 0xa1 &&
+    bytes[5] === 0xb1 &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0xe1
+  );
+}
+
+/** Leading bytes of a text, CSV, or Excel file. A PDF or image is not text. */
+export function libraryBytesMatch(mime: string, bytes: Uint8Array): boolean {
+  if (mime === "text/plain" || mime === "text/csv" || mime === "text/tab-separated-values") {
+    return prefixIsText(bytes);
+  }
+  if (mime === "application/vnd.ms-excel") return prefixIsOle(bytes);
+  if (
+    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mime === "application/vnd.ms-excel.sheet.macroenabled.12" ||
+    mime === "application/vnd.oasis.opendocument.spreadsheet"
+  ) {
+    return prefixIsZip(bytes);
+  }
+  return false;
+}
+
+const LIBRARY_OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function libraryObjectPath(
+  clientId: string,
+  artifactId: string,
+  mime: string,
+): string | null {
+  if (!LIBRARY_OBJECT_ID.test(clientId) || !LIBRARY_OBJECT_ID.test(artifactId)) return null;
+  const ext = libraryDocumentExtension(mime);
+  if (!ext) return null;
+  return `${clientId}/${artifactId}.${ext}`;
+}
+
+/**
+ * A library file is already in client-documents. The grant path has to be
+ * that client's object, and the leading bytes have to match the granted type.
+ */
+export function confirmLibraryObject(input: {
+  grant: UploadGrant;
+  claimedPath: string;
+  sendId: string;
+  itemKey: string;
+  clientId: string;
+  objectSize: number | null;
+  prefix: Uint8Array | null;
+}): { ok: true; mime: string; size: number } | ClosedLink {
+  if (input.claimedPath !== input.grant.path) return closedLink("unavailable");
+  if (input.grant.sendId !== input.sendId || input.grant.itemKey !== input.itemKey) {
+    return closedLink("unavailable");
+  }
+  const ext = libraryDocumentExtension(input.grant.mime);
+  if (!ext) return closedLink("mime");
+  const marker = `.${ext}`;
+  const folder = `${input.clientId}/`;
+  if (!input.claimedPath.startsWith(folder) || !input.claimedPath.endsWith(marker)) {
+    return closedLink("unavailable");
+  }
+  const artifactId = input.claimedPath.slice(folder.length, -marker.length);
+  if (libraryObjectPath(input.clientId, artifactId, input.grant.mime) !== input.claimedPath) {
+    return closedLink("unavailable");
+  }
+  if (input.objectSize == null || !sizeAllowed(input.objectSize)) return closedLink("size");
+  if (input.objectSize !== input.grant.size) return closedLink("size");
+  if (!input.prefix || !libraryBytesMatch(input.grant.mime, input.prefix))
+    return closedLink("mime");
+  return { ok: true, mime: input.grant.mime, size: input.objectSize };
+}
+
 export type AcceptFile = { ok: true; mime: DocumentMime; bytes: Uint8Array } | ClosedLink;
 
 /**
@@ -654,6 +827,18 @@ export function declareUpload(input: {
   if (!input.consented) return closedLink("consent");
   if (!sizeAllowed(input.size)) return closedLink("size");
   if (!mimeAllowed(input.mime)) return closedLink("mime");
+  return { ok: true };
+}
+
+/** Text, CSV, or Excel. These never use the send-bucket allow-list. */
+export function declareLibraryUpload(input: {
+  consented: boolean;
+  size: number;
+  mime: string;
+}): { ok: true } | ClosedLink {
+  if (!input.consented) return closedLink("consent");
+  if (!sizeAllowed(input.size)) return closedLink("size");
+  if (!libraryDocumentMimeAllowed(input.mime)) return closedLink("mime");
   return { ok: true };
 }
 

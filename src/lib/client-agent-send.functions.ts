@@ -553,7 +553,7 @@ async function forecastOpeningOpen(clientId: string): Promise<boolean> {
 }
 
 export type MintAgentSendResult =
-  | { ok: true; sendId: string; expiresAt: string }
+  | { ok: true; sendId: string; expiresAt: string; url: string }
   | { ok: false; reason: "already_open"; sendId: string; expiresAt: string }
   | {
       ok: false;
@@ -764,6 +764,7 @@ export const mintClientAgentSend = createServerFn({ method: "POST" })
       ok: true,
       sendId,
       expiresAt: String(inserted.data.expires_at ?? expiresAt),
+      url,
     };
   });
 
