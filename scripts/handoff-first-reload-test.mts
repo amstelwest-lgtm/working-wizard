@@ -6,6 +6,10 @@
  * Pending marker: sessionStorage key milon-handoff-awaiting-note.
  * A hard reload keeps it. moveAssignmentCache and optimisticHandoffs do not.
  * Owner and accountant Hand to share MoveHandTo, HandToMenu, and the plan row.
+ *
+ * US assign: reload 1 can already see a running Advisor run and no note.
+ * The row must say Assigned to Milōn Advisor, and Working · Advisor picked this up.
+ * It must not paint plain Assign to.
  */
 import { Window } from "happy-dom";
 import { createElement, Fragment } from "react";
@@ -72,9 +76,15 @@ const CLIENT = "24844299-1aec-449c-ab45-66ca1b97c3ef";
 const ACTION = "0079314c-5bfb-49ac-adf2-3aae4a4a4c3d";
 const TITLE = "Automate repeat tasks to free people for higher-value work";
 const MOVE = "gpToLabor";
+const US_CLIENT = "353f1dbf-a7ba-4092-878d-792223ba3536";
+const US_ACTION = "327b822c-cf07-4b70-9327-ac94b40842bc";
+const US_TITLE = "Retain more profit instead of drawing dividends until ratio improves";
+const US_MOVE = "fundingStructure";
+let assignmentMode: "za" | "us" = "za";
 
 type Note = { note: string; created_at: string; actor_label: string };
 const notes: Note[] = [];
+const usNotes: Note[] = [];
 let inserted = false;
 let releaseHandoff: ((response: Response) => void) | null = null;
 const handoffGate = new Promise<Response>((resolve) => {
@@ -166,10 +176,93 @@ function noteRows() {
   }));
 }
 
+function usActionRow() {
+  return {
+    id: US_ACTION,
+    plan_id: "plan-us",
+    client_id: US_CLIENT,
+    seq: 9,
+    title: US_TITLE,
+    outcome_why: "Equity buffer determines survival in a downturn",
+    owner_id: null,
+    owner_name: null,
+    owner_email: null,
+    due_date: null,
+    status: "not_started",
+    progress_pct: 0,
+    blocker_note: null,
+    source: "strategic_move",
+    source_move_key: US_MOVE,
+    driver_key: US_MOVE,
+    sent_at: null,
+    completed_at: null,
+    created_at: "2026-11-02T08:00:00.000Z",
+    updated_at: "2026-11-02T08:00:00.000Z",
+  };
+}
+
+function usNoteRows() {
+  return usNotes.map((row) => ({
+    action_item_id: US_ACTION,
+    note: row.note,
+    created_at: row.created_at,
+    actor_label: row.actor_label,
+    actor_type: "owner_app",
+  }));
+}
+
+function usRunRows() {
+  const at = new Date(Date.now() - 15_000).toISOString();
+  return [
+    {
+      id: "run-advisor",
+      action_item_id: US_ACTION,
+      client_id: US_CLIENT,
+      agent: "advisor",
+      status: "running",
+      summary: "",
+      trigger: "on_demand",
+      queued_at: at,
+      started_at: at,
+      finished_at: null,
+    },
+  ];
+}
+
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = requestUrl(input);
   const method = requestMethod(input, init);
   const one = wantsObject(input, init);
+  if (assignmentMode === "us") {
+    if (url.includes("/functions/v1/owner-handoff")) return json({ ok: true, noted: true });
+    if (url.includes("/auth/v1")) {
+      return json({
+        access_token: "test-token",
+        token_type: "bearer",
+        expires_in: 3600,
+        expires_at: 4_000_000_000,
+        refresh_token: "refresh",
+        user: {
+          id: "user-us",
+          email: "aqa.accountant@example.com",
+          user_metadata: { full_name: "AQA Accountant" },
+        },
+      });
+    }
+    if (url.includes("/rest/v1/action_plans")) {
+      const plan = { ...planRow, id: "plan-us", client_id: US_CLIENT };
+      return json(one ? plan : [plan]);
+    }
+    if (url.includes("/rest/v1/action_items")) return json(one ? usActionRow() : [usActionRow()]);
+    if (url.includes("/rest/v1/action_updates")) return json(usNoteRows());
+    if (url.includes("/rest/v1/agent_runs")) return json(usRunRows());
+    if (url.includes("/rest/v1/agent_findings") || url.includes("/rest/v1/agent_messages")) return json([]);
+    if (url.includes("/rest/v1/profiles"))
+      return json(one ? { full_name: "AQA Accountant" } : [{ full_name: "AQA Accountant" }]);
+    if (url.includes("/rest/v1/clients")) return json(one ? { market: "US" } : [{ market: "US" }]);
+    if (url.includes("/rest/v1/rpc/") || url.includes("/rpc/")) return json([]);
+    if (url.includes("/rest/")) return json(one ? null : []);
+  }
   if (url.includes("/functions/v1/owner-handoff")) return handoffGate;
   if (url.includes("/auth/v1")) {
     return json({
@@ -446,3 +539,117 @@ assert(
 await third();
 
 console.log("handoff first reload: blank row stays Checking until the assignment note exists");
+
+assignmentMode = "us";
+usNotes.length = 0;
+window.sessionStorage.removeItem("milon-handoff-awaiting-note");
+await dropModuleMaps();
+const handoffClient = await import("../src/lib/owner-handoff-client.ts");
+handoffClient.invalidateMoveAssignments(US_CLIENT);
+
+async function loadUs(label: "us-1" | "us-2") {
+  if (label === "us-1") {
+    const [planMod, menuMod] = await Promise.all([
+      import("../src/components/action-plan.tsx?reload=us-1"),
+      import("../src/components/hand-to-menu.tsx?reload=us-1"),
+    ]);
+    return { planMod, menuMod };
+  }
+  const [planMod, menuMod] = await Promise.all([
+    import("../src/components/action-plan.tsx?reload=us-2"),
+    import("../src/components/hand-to-menu.tsx?reload=us-2"),
+  ]);
+  return { planMod, menuMod };
+}
+
+async function mountUs(label: "us-1" | "us-2") {
+  const { planMod, menuMod } = await loadUs(label);
+  const Panel = planMod.default as (props: {
+    clientId: string;
+    clientName: string;
+    isOwner: boolean;
+    ownerView: boolean;
+    moves: typeof moves;
+  }) => ReturnType<typeof createElement>;
+  const MoveHandTo = menuMod.MoveHandTo as (props: {
+    clientId: string;
+    moveKey: string;
+    title: string;
+  }) => ReturnType<typeof createElement>;
+  const usMoves = [{ key: US_MOVE, title: US_TITLE, ratioName: "Equity", impactLine: "Keep the profit", health: 40 }];
+  const rootRoute = createRootRoute({
+    component: () =>
+      createElement(
+        Fragment,
+        null,
+        createElement(Panel, {
+          clientId: US_CLIENT,
+          clientName: "AQA J2 US 1020E",
+          isOwner: true,
+          ownerView: false,
+          moves: usMoves,
+        }),
+        createElement(MoveHandTo, { clientId: US_CLIENT, moveKey: US_MOVE, title: US_TITLE }),
+      ),
+  });
+  const router = createRouter({
+    routeTree: rootRoute,
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+    isServer: false,
+  } as never);
+  await router.load();
+  (router as { isServer?: boolean }).isServer = false;
+  (router as { _rendered?: unknown[] })._rendered = [];
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root: Root = createRoot(host);
+  await act(async () => {
+    root.render(createElement(RouterProvider, { router }));
+  });
+  await tick();
+  await tick();
+  return async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  };
+}
+
+function rowText(): string {
+  return document.body.textContent?.replace(/\s+/g, " ") ?? "";
+}
+
+const usFirst = await mountUs("us-1");
+await waitFor("US reload 1 shows the advisor run", () => {
+  const text = rowText();
+  return text.includes("Working") && text.includes("Advisor picked this up") && triggers().length > 0;
+});
+const usLabels = triggers().map((button) => button.getAttribute("aria-label") ?? "");
+assert(
+  usLabels.length > 0 && usLabels.every((label) => label === "Assigned to Milōn Advisor"),
+  `reload 1 painted Assign to while Working · Advisor picked this up: ${usLabels.join(" | ")} :: ${rowText().slice(0, 500)}`,
+);
+assert(!usLabels.includes("Assign to"), "reload 1 settled on plain Assign to");
+assert(
+  rowText().includes("Working · Advisor picked this up"),
+  `the move status did not join Working with the pickup: ${rowText().slice(0, 500)}`,
+);
+await usFirst();
+await dropModuleMaps();
+handoffClient.invalidateMoveAssignments(US_CLIENT);
+
+usNotes.push({
+  note: "Handed to Milōn Advisor.",
+  created_at: "2026-11-02T08:01:04.000Z",
+  actor_label: "AQA Accountant",
+});
+const usSecond = await mountUs("us-2");
+await waitFor("US reload 2 keeps the advisor", () => {
+  const labels = triggers().map((button) => button.getAttribute("aria-label") ?? "");
+  return labels.length > 0 && labels.every((label) => label === "Assigned to Milōn Advisor");
+});
+assert(!triggers().some((button) => button.getAttribute("aria-label") === "Assign to"), "reload 2 reverted to Assign to");
+await usSecond();
+
+console.log("handoff first reload: US assign keeps Advisor on the first read of a running hand-off");

@@ -268,6 +268,8 @@ export type MoveAssignmentRef = {
   /** When the stored hand-off note was written. A blank newer row does not replace it. */
   assignedAt?: string | null;
   runStatus?: string | null;
+  /** Bot on the queued or running hand-off. Null when no run is open. */
+  runAgent?: AgentKey | null;
   draftId?: string | null;
   findingsReady?: boolean;
   /** Shared with the Action plan chip. Working or Draft ready, from every run of this action. */

@@ -13,6 +13,8 @@ import {
   HANDOFF_CHECKING_LABEL,
   assignedToast,
   handoffTriggerLabel,
+  moveHandoffStatusLine,
+  openRunAssignee,
 } from "@/lib/action-handoff";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
@@ -305,6 +307,26 @@ export function HandToMenu({
 
 const MOVE_STATUS_POLL_MS = 5000;
 
+/** Note first. An open run still names the bot when that note has not landed. */
+function shownMoveAssignee(match: MoveAssignmentRef | null): string | null {
+  if (!match) return null;
+  return openRunAssignee({
+    noteName: match.assigneeName,
+    runAgent: match.runAgent,
+    runStatus: match.runStatus,
+  });
+}
+
+/**
+ * Plain Assign to is a finished empty read.
+ * A click still waiting on its note, or a Working run with no name yet, stays pending.
+ */
+function moveStillUnnamed(match: MoveAssignmentRef | null, clientId: string): boolean {
+  if (!match || shownMoveAssignee(match)) return false;
+  const open = match.phase === "working" || match.runStatus === "queued" || match.runStatus === "running";
+  return open || assignmentNoteStillAwaited(clientId, match.actionItemId);
+}
+
 /** Next move, owner and accountant. Creates the plan row if it is not there, then assigns it. */
 export function MoveHandTo({
   clientId,
@@ -335,7 +357,7 @@ export function MoveHandTo({
     if (!match) return;
     actionId.current = match.actionItemId;
     setFace(match);
-    setAssignee(match.assigneeName);
+    setAssignee(shownMoveAssignee(match));
     setReady(true);
     optimistic.current = false;
   };
@@ -348,16 +370,15 @@ export function MoveHandTo({
     void loadClientMoveAssignments(clientId).then((rows) => {
       if (cancelled || optimistic.current) return;
       const match = assignmentForMove(rows, moveKey, title);
+      const shown = shownMoveAssignee(match);
       if (match) {
         actionId.current = match.actionItemId;
         setFace(match);
-        if (match.assigneeName) setAssignee(match.assigneeName);
+        if (shown) setAssignee(shown);
       }
-      const blankMidHandoff = Boolean(
-        match && !match.assigneeName && assignmentNoteStillAwaited(clientId, match.actionItemId),
-      );
-      setAwaitingNote(blankMidHandoff);
-      if (!blankMidHandoff) setReady(true);
+      const unnamed = moveStillUnnamed(match, clientId);
+      setAwaitingNote(unnamed);
+      if (!unnamed) setReady(true);
     });
     return () => {
       cancelled = true;
@@ -415,13 +436,13 @@ export function MoveHandTo({
       void loadClientMoveAssignments(clientId).then((rows) => {
         if (optimistic.current) return;
         const match = assignmentForMove(rows, moveKey, title);
-        if (match?.assigneeName) {
+        if (shownMoveAssignee(match)) {
           applyStored(match);
-          clearAwaitingAssignmentNote(match.actionItemId);
+          if (match?.assigneeName) clearAwaitingAssignmentNote(match.actionItemId);
           setAwaitingNote(false);
           return;
         }
-        if (!match || !assignmentNoteStillAwaited(clientId, match.actionItemId)) {
+        if (!moveStillUnnamed(match, clientId)) {
           setAwaitingNote(false);
           setReady(true);
         }
@@ -543,7 +564,11 @@ export function MoveHandTo({
       ) : null}
       {face?.phase === "working" ? (
         <span data-move-phase="working" className="text-[12px] font-semibold text-[#0B5FFF]">
-          {face.phaseLabel}
+          {moveHandoffStatusLine({
+            phaseLabel: face.phaseLabel,
+            runAgent: face.runAgent,
+            runStatus: face.runStatus,
+          }) ?? face.phaseLabel}
         </span>
       ) : null}
       {face?.phase === "draft_ready" && openDraftId ? (

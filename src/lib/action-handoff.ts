@@ -78,6 +78,23 @@ export function handoffTriggerLabel(assignee: string | null | undefined, compact
   return oneSpace(`${verb} ${shown}`);
 }
 
+/**
+ * Name on Assign to while the hand-off note is still absent.
+ * A stored note wins. An open run still names its bot, so the first reload
+ * does not fall back to plain Assign to while that bot is already Working.
+ */
+export function openRunAssignee(input: {
+  noteName?: string | null;
+  runAgent?: AgentKey | null;
+  runStatus?: string | null;
+}): string | null {
+  const note = (input.noteName ?? "").replace(/\s+/g, " ").trim();
+  if (note) return note;
+  const open = input.runStatus === "queued" || input.runStatus === "running";
+  if (!open || !input.runAgent) return null;
+  return AGENT_DISPLAY_NAME[input.runAgent];
+}
+
 type HandoffMarket = DateMarket;
 
 /**
@@ -355,6 +372,23 @@ export function moveRowStatus(input: {
     return { phase: phase.phase, label: phase.label, draftId: phase.draftId };
   }
   return { phase: null, label: null, draftId: null };
+}
+
+/**
+ * Next moves status beside Assign to.
+ * "Working · Advisor picked this up" once that bot's run is open.
+ */
+export function moveHandoffStatusLine(input: {
+  phaseLabel?: string | null;
+  runAgent?: AgentKey | null;
+  runStatus?: string | null;
+}): string | null {
+  const phase = (input.phaseLabel ?? "").trim();
+  if (!phase) return null;
+  if (phase !== "Working" || !input.runAgent) return phase;
+  const caption = handoffProgressCaption(input.runAgent, input.runStatus);
+  if (!caption) return phase;
+  return `${phase} · ${caption}`;
 }
 
 /** Hide a finish note that claims drafts were recorded when this action has no finding id. */

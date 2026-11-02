@@ -745,7 +745,12 @@ function quietTable(name: string): InOrderQuery {
   return (supabase as unknown as { from(relation: string): InOrderQuery }).from(name);
 }
 
-type MoveRunRow = { id: string; actionItemId: string; status: string };
+type MoveRunRow = { id: string; actionItemId: string; status: string; agent: AgentKey | null };
+
+function runAgentOf(value: unknown): AgentKey | null {
+  if (value === "financial_manager" || value === "analyst" || value === "advisor") return value;
+  return null;
+}
 
 /** Drafts for these runs. A failed read leaves findingsReady false so the row stays Working. */
 async function loadFindingsForRuns(
@@ -813,7 +818,7 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
         .limit(80),
       supabase
         .from("agent_runs")
-        .select("id, action_item_id, status, queued_at")
+        .select("id, action_item_id, agent, status, queued_at")
         .eq("client_id", id)
         .order("queued_at", { ascending: false }),
     ]);
@@ -826,12 +831,12 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
     if (!runsRes.error && Array.isArray(runsRes.data)) {
       for (const row of runsRes.data) {
         if (!row || typeof row !== "object") continue;
-        const record = row as { id?: unknown; action_item_id?: unknown; status?: unknown };
+        const record = row as { id?: unknown; action_item_id?: unknown; status?: unknown; agent?: unknown };
         const actionId = typeof record.action_item_id === "string" ? record.action_item_id : "";
         const runId = typeof record.id === "string" ? record.id : "";
         const status = typeof record.status === "string" ? record.status : "";
         if (!actionId || !runId || !idSet.has(actionId)) continue;
-        runs.push({ id: runId, actionItemId: actionId, status });
+        runs.push({ id: runId, actionItemId: actionId, status, agent: runAgentOf(record.agent) });
       }
     }
     const [assignments, findingsBundle] = await Promise.all([
@@ -845,9 +850,9 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
     };
     const rows: MoveAssignmentRef[] = data.map((row) => {
       const stored = assignments.get(row.id);
-      const runs = activity.runs
-        .filter((run) => run.actionItemId === row.id)
-        .map((run) => ({ id: run.id, action_item_id: run.actionItemId, status: run.status }));
+      const actionRuns = activity.runs.filter((run) => run.actionItemId === row.id);
+      const openRun = actionRuns.find((run) => run.status === "queued" || run.status === "running") ?? null;
+      const runs = actionRuns.map((run) => ({ id: run.id, action_item_id: run.actionItemId, status: run.status }));
       const phase = phaseForAction({
         actionItemId: row.id,
         runs,
@@ -861,7 +866,8 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
         title: row.title ?? "",
         assigneeName: stored?.name ?? null,
         assignedAt: stored?.at ?? null,
-        runStatus: runs.find((run) => run.status === "queued" || run.status === "running")?.status ?? runs[0]?.status ?? null,
+        runStatus: openRun?.status ?? runs[0]?.status ?? null,
+        runAgent: openRun?.agent ?? null,
         draftId: phase.draftId,
         findingsReady: activity.findingsReady,
         phase: phase.phase,

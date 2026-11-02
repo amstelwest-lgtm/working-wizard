@@ -28,7 +28,7 @@ import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { settleWithin } from "@/lib/bounded-load";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { handoffAssigneeName } from "@/lib/owner-handoff";
-import { assignedToast, describeActionHandoff } from "@/lib/action-handoff";
+import { assignedToast, describeActionHandoff, openRunAssignee } from "@/lib/action-handoff";
 import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
@@ -874,6 +874,17 @@ export default function ActionPlanPanel({
         const next: Record<string, PlanPickup> = {};
         for (const [id, run] of runs) next[id] = run;
         loadedPickups = next;
+        shown = shown.map((item) => {
+          if ((item.owner_name ?? "").trim() || item.owner_id) return item;
+          const run = loadedPickups[item.id];
+          const named = openRunAssignee({
+            noteName: null,
+            runAgent: run?.agent ?? null,
+            runStatus: run?.status ?? null,
+          });
+          if (!named) return item;
+          return { ...item, owner_id: null, owner_name: named, owner_email: null };
+        });
       }
       const painted = applyOptimisticPlan({ items: shown, notes: loadedNotes, pickups: loadedPickups });
       setItemNotes(stripSuppressedNotes(painted.notes));
@@ -884,6 +895,16 @@ export default function ActionPlanPanel({
         const stored = latestStoredAssignment(painted.notes[item.id] ?? []);
         if (stored) {
           clearAwaitingAssignmentNote(item.id);
+          continue;
+        }
+        const openRun = painted.pickups[item.id];
+        if (
+          openRunAssignee({
+            noteName: null,
+            runAgent: openRun?.agent ?? null,
+            runStatus: openRun?.status ?? null,
+          })
+        ) {
           continue;
         }
         if (assignmentNoteStillAwaited(clientId, item.id) || painted.awaitingIds.includes(item.id)) {

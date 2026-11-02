@@ -17,7 +17,9 @@ import {
   handoffIsSlow,
   handoffProgressCaption,
   handoffTriggerLabel,
+  moveHandoffStatusLine,
   moveRowStatus,
+  openRunAssignee,
   phaseForAction,
 } from "../src/lib/action-handoff.ts";
 import { agentDisplayName, agentShortName } from "../src/lib/milon-team.ts";
@@ -571,6 +573,28 @@ assert(
 );
 assert(moveLoadMayCache(1, 2) === false, "a read started before the commit is not cached");
 assert(moveLoadMayCache(2, 2) === true, "a read started after the commit may be cached");
+assert(
+  openRunAssignee({ noteName: null, runAgent: "advisor", runStatus: "running" }) === "Milōn Advisor",
+  "an open Advisor run names the assignee before the note is read",
+);
+assert(
+  openRunAssignee({ noteName: "Milōn Analyst", runAgent: "advisor", runStatus: "running" }) === "Milōn Analyst",
+  "a stored note wins over the open run",
+);
+assert(
+  openRunAssignee({ noteName: null, runAgent: "advisor", runStatus: "succeeded" }) === null,
+  "a finished run with no note is not an assignee",
+);
+assert(
+  moveHandoffStatusLine({ phaseLabel: "Working", runAgent: "advisor", runStatus: "running" }) ===
+    "Working · Advisor picked this up",
+  "the move status names the bot that picked the row up",
+);
+assert(
+  handoffTriggerLabel(openRunAssignee({ noteName: null, runAgent: "advisor", runStatus: "running" })) ===
+    "Assigned to Milōn Advisor",
+  "the first read of an open Advisor run does not say Assign to",
+);
 const working = moveRowStatus({ runStatus: "running" });
 assert(working.phase === "working" && working.label === "Working", "an open run shows Working on the move row");
 const ready = moveRowStatus({ runStatus: "succeeded", draftId: "d1" });
