@@ -113,6 +113,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
+import { onlyActiveClients } from "@/lib/archive-client";
 
 import type { RatioResult } from "@/reports/health-scorecard";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
@@ -3628,11 +3629,13 @@ export function ReportsStudio({
     }
     let cancelled = false;
     Promise.all([
-      supabase
-        .from("clients")
-        .select("id, name")
-        .eq("firm_id", firmId)
-        .order("created_at", { ascending: false }),
+      onlyActiveClients(
+        supabase
+          .from("clients")
+          .select("id, name")
+          .eq("firm_id", firmId)
+          .order("created_at", { ascending: false }),
+      ),
       supabase.from("firms").select("market").eq("id", firmId).maybeSingle(),
     ])
       .then(([clientsRes, firmRes]) => {

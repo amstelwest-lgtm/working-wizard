@@ -5,6 +5,7 @@
  */
 
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
+import { isActiveClient } from "@/lib/archive-client";
 import { collapseDuplicateClientShells } from "@/lib/client-display-name";
 import type { StoredCreateEntitlement } from "@/lib/firm-client-create-gate";
 
@@ -75,7 +76,7 @@ export async function countFirmClientsForCreate(
   if (!admin) return null;
   const { data, error } = await admin
     .from("clients")
-    .select("id, name, created_at, financials, cashflow")
+    .select("id, name, created_at, financials, cashflow, active")
     .eq("firm_id", id)
     .eq("is_demo", false);
   if (error || !data) return null;
@@ -86,8 +87,10 @@ export async function countFirmClientsForCreate(
       created_at?: string | null;
       financials?: unknown;
       cashflow?: unknown;
+      active?: boolean | null;
     }>
   ).flatMap((row) => {
+    if (!isActiveClient(row)) return [];
     const clientId = row?.id ? String(row.id) : "";
     if (!clientId) return [];
     return [

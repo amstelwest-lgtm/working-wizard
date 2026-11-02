@@ -17,6 +17,7 @@ import { advisoryPackFiguresChanged, livePackMetrics } from "@/lib/advisory-pack
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
+import { onlyActiveClients } from "@/lib/archive-client";
 import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
 import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
 import { countUnreviewedSends } from "@/lib/client-agent-done";
@@ -117,14 +118,16 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
 
     // RLS scopes this to clients the caller may see; firm membership is
     // checked by the same policies the dashboard relies on.
-    const { data: clientsRaw, error } = await sb
-      .from("clients")
-      .select(
-        "id, name, owner_user_id, firm_id, advisory_state, advisory_cycle_id, next_review_at, financials_updated_at, last_login_at, created_at, financials, cashflow, market, operating_profile",
-      )
-      .eq("firm_id", data.firmId)
-      .order("name")
-      .limit(500);
+    const { data: clientsRaw, error } = await onlyActiveClients(
+      sb
+        .from("clients")
+        .select(
+          "id, name, owner_user_id, firm_id, advisory_state, advisory_cycle_id, next_review_at, financials_updated_at, last_login_at, created_at, financials, cashflow, market, operating_profile",
+        )
+        .eq("firm_id", data.firmId)
+        .order("name")
+        .limit(500),
+    );
     if (error) throw new Error(error.message);
     let clients = (clientsRaw ?? []) as Array<{
       id: string;

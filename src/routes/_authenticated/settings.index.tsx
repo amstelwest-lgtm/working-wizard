@@ -16,6 +16,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { AI_MODEL_DISCLOSURE } from "@/lib/marketing-faq";
 import { supabase } from "@/integrations/supabase/client";
+import { onlyActiveClients } from "@/lib/archive-client";
 import { deleteOwnAccount } from "@/lib/account.functions";
 import {
   firmRenewalStatusLine,
@@ -169,7 +170,9 @@ function SettingsPage() {
           .select("market")
           .eq("id", firmId)
           .maybeSingle();
-        const clientRes = await supabase.from("clients").select("market").eq("firm_id", firmId);
+        const clientRes = await onlyActiveClients(
+          supabase.from("clients").select("market").eq("firm_id", firmId),
+        );
         if (cancelled) return;
         const market = firmRes.error
           ? null

@@ -20,6 +20,7 @@ import {
   rememberPaintedBook,
 } from "@/lib/practice-book-cache";
 import { supabase } from "@/integrations/supabase/client";
+import { onlyActiveClients } from "@/lib/archive-client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
@@ -1455,7 +1456,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             query = query.eq("owner_user_id", userId);
           }
         }
-        const { data: cs, error } = await query;
+        const { data: cs, error } = await onlyActiveClients(query);
         return { isIt, cs, error };
       })(),
       SHELL_GATE_TIMEOUT_MS,

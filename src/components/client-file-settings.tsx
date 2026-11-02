@@ -1,10 +1,80 @@
 /**
  * Client-file Settings. Practice billing and team stay on /settings.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ClientSubpageFrame } from "@/components/client-subpage";
+import { removeClientConfirm } from "@/lib/archive-client";
 import type { ClientOwnerOnFile, PendingOwnerInvite } from "@/lib/client-owner-invites.functions";
 import { formatDate, type ResolvedMarket } from "@/lib/market";
+
+export function RemoveClientDialog({
+  clientName,
+  open,
+  removing = false,
+  onConfirm,
+  onClose,
+}: {
+  clientName: string;
+  open: boolean;
+  removing?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  if (!open) return null;
+  const dialog = (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="remove-client-title"
+        aria-describedby="remove-client-copy"
+        data-remove-client-dialog=""
+        className="w-full max-w-md rounded-2xl border border-[#DBEAFE] bg-white p-5 text-[#102A43] shadow-lg dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="remove-client-title" className="text-base font-semibold">
+          Remove client
+        </h2>
+        <p id="remove-client-copy" className="mt-2 text-sm" data-remove-client-copy="">
+          {removeClientConfirm(clientName)}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn gold"
+            data-remove-client-confirm=""
+            disabled={removing}
+            autoFocus
+            onClick={onConfirm}
+          >
+            {removing ? "Removing…" : "Remove client"}
+          </button>
+          <button type="button" className="btn ghost" onClick={onClose} disabled={removing}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  if (typeof document === "undefined") return dialog;
+  return createPortal(dialog, document.body);
+}
 
 export function ClientFileSettings({
   clientName,
@@ -16,6 +86,8 @@ export function ClientFileSettings({
   onCopyPending,
   onRevokePending,
   onRemoveOwner,
+  onRemoveClient,
+  removingClient = false,
 }: {
   clientName: string;
   market?: ResolvedMarket;
@@ -26,9 +98,12 @@ export function ClientFileSettings({
   onCopyPending?: (row: PendingOwnerInvite) => void;
   onRevokePending?: (row: PendingOwnerInvite) => void;
   onRemoveOwner?: (owner: ClientOwnerOnFile) => void;
+  onRemoveClient?: () => void;
+  removingClient?: boolean;
 }) {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const [confirmClient, setConfirmClient] = useState(false);
   const hasOwner = owners.length > 0;
   const date = (value: string) => (market ? formatDate(value, market) : value);
 
@@ -55,7 +130,9 @@ export function ClientFileSettings({
                 <p className="font-semibold" data-client-owner-name="">
                   {owner.name}
                 </p>
-                {owner.email ? <p className="text-[#3D5270] dark:text-[#C5D4E4]">{owner.email}</p> : null}
+                {owner.email ? (
+                  <p className="text-[#3D5270] dark:text-[#C5D4E4]">{owner.email}</p>
+                ) : null}
                 <p className="text-xs text-[#3D5270] dark:text-[#C5D4E4]">
                   Joined {date(owner.joinedAt)}
                 </p>
@@ -111,7 +188,10 @@ export function ClientFileSettings({
               >
                 {row.ownerName ? <p className="font-semibold">{row.ownerName}</p> : null}
                 <p>{row.email || "No email on this invite"}</p>
-                <p className="text-xs text-[#3D5270] dark:text-[#C5D4E4]" data-pending-invite-status="">
+                <p
+                  className="text-xs text-[#3D5270] dark:text-[#C5D4E4]"
+                  data-pending-invite-status=""
+                >
                   Invite sent {date(row.createdAt)}, not joined yet
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -154,6 +234,25 @@ export function ClientFileSettings({
             Practice settings
           </button>
         </div>
+        <div className="mt-6 border-t border-[#DBEAFE] pt-4 dark:border-[#1e3a5f]">
+          <button
+            type="button"
+            className="btn ghost"
+            data-remove-client=""
+            onClick={() => setConfirmClient(true)}
+          >
+            Remove client
+          </button>
+        </div>
+        <RemoveClientDialog
+          clientName={clientName}
+          open={confirmClient}
+          removing={removingClient}
+          onConfirm={() => onRemoveClient?.()}
+          onClose={() => {
+            if (!removingClient) setConfirmClient(false);
+          }}
+        />
       </section>
     </ClientSubpageFrame>
   );

@@ -56,6 +56,7 @@ import {
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
 import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.server";
+import { isActiveClient } from "@/lib/archive-client";
 import { collapseDuplicateClientShells } from "@/lib/client-display-name";
 
 installMetadataFirmCustomerWrite();
@@ -624,9 +625,13 @@ export async function loadFirmClientCount(input: {
 
 async function listFirmClientMarkets(db: CapDb, firmId: string): Promise<unknown[]> {
   try {
-    const { data, error } = await db.from("clients").select("market").eq("firm_id", firmId);
+    const { data, error } = await db.from("clients").select("market, active").eq("firm_id", firmId);
     if (error) return [];
-    return (data ?? []).map((row) => (row as { market?: unknown } | null)?.market ?? null);
+    return (data ?? []).flatMap((row) => {
+      const record = row as { market?: unknown; active?: boolean | null } | null;
+      if (!record || !isActiveClient(record)) return [];
+      return [record.market ?? null];
+    });
   } catch {
     return [];
   }
@@ -637,11 +642,13 @@ async function countFirmClients(db: CapDb, firmId: string): Promise<number> {
   // name collapse to the oldest, the same set the Clients list shows.
   const { data, error } = await db
     .from("clients")
-    .select("id, name, created_at, financials, cashflow")
+    .select("id, name, created_at, financials, cashflow, active")
     .eq("firm_id", firmId)
     .eq("is_demo", false);
   if (error) throw new Error(error.message);
   const rows = (data ?? []).flatMap((row) => {
+    const record = row as { active?: boolean | null } | null;
+    if (!record || !isActiveClient(record)) return [];
     const id = row?.id ? String(row.id) : "";
     if (!id) return [];
     return [

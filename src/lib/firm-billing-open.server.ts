@@ -7,6 +7,7 @@
 import { emptyFirmUpgradeSnapshot } from "@/lib/firm-band-upgrade";
 import { resolveFirmPriceCurrency } from "@/lib/pricing/market-resolution";
 import type { StoredFirmPlan } from "@/lib/billing-check-failure";
+import { isActiveClient } from "@/lib/archive-client";
 import { collapseDuplicateClientShells } from "@/lib/client-display-name";
 import {
   decideFirmClientCreate,
@@ -105,11 +106,16 @@ type FirmFactsClient = {
 };
 
 async function countStoredClients(supabase: FirmFactsClient, firmId: string): Promise<number> {
-  const selected = supabase.from("clients").select("id, name, created_at, financials, cashflow").eq("firm_id", firmId);
+  const selected = supabase
+    .from("clients")
+    .select("id, name, created_at, financials, cashflow, active")
+    .eq("firm_id", firmId);
   if (typeof selected.eq !== "function") return 0;
   const { data, error } = await selected.eq("is_demo", false);
   if (error) return 0;
   const rows = (data ?? []).flatMap((row) => {
+    const record = row as { active?: boolean | null } | null;
+    if (!record || !isActiveClient(record)) return [];
     const id = row?.id ? String(row.id) : "";
     if (!id) return [];
     return [

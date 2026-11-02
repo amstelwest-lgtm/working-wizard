@@ -10,6 +10,7 @@ import {
   decideFirmBillingEntitlement,
   emailHasEntitlingSubscription,
 } from "@/lib/stripe-entitlement";
+import { onlyActiveClients } from "@/lib/archive-client";
 import { decideSmartLanding, type SmartLanding } from "@/lib/smart-landing";
 
 type UserDb = SupabaseClient<Database>;
@@ -63,12 +64,14 @@ async function sessionEntitled(db: UserDb, userId: string, claims: unknown): Pro
 }
 
 async function firstFirmClientId(db: UserDb): Promise<string | null> {
-  const { data, error } = await db
-    .from("clients")
-    .select("id")
-    .not("firm_id", "is", null)
-    .order("created_at", { ascending: true })
-    .limit(1);
+  const { data, error } = await onlyActiveClients(
+    db
+      .from("clients")
+      .select("id")
+      .not("firm_id", "is", null)
+      .order("created_at", { ascending: true })
+      .limit(1),
+  );
   if (error) return null;
   const id = data?.[0]?.id;
   return typeof id === "string" && id ? id : null;
