@@ -233,7 +233,31 @@ assert(panel.includes("seenClientId !== clientId"), "a client change drops the p
 assert(panel.includes("AccountantSendFileList"), "the file list sits on the send panel");
 assert(!panel.includes("flex-row"), "the panel stacks vertically");
 assert(!panel.includes("console."), "the panel does not log");
-assert(!panel.includes("localStorage") && !panel.includes("sessionStorage"), "the panel does not store the password");
+assert(!panel.includes("localStorage"), "the panel does not store the password in localStorage");
+const storageCalls = [
+  ...panel.matchAll(/sessionStorage\.(getItem|setItem|removeItem)\(([^)]*)\)/g),
+];
+assert(
+  storageCalls.length === 3 && storageCalls.every((match) => match[2]?.includes("LINK_STORAGE")),
+  "sessionStorage is only the copy-link address",
+);
+let panelWithoutLinkStore = panel;
+for (const match of storageCalls) panelWithoutLinkStore = panelWithoutLinkStore.replace(match[0], "");
+assert(
+  !panelWithoutLinkStore.includes("sessionStorage."),
+  "no other sessionStorage call is on the panel",
+);
+const passwordPath = panel.slice(
+  panel.indexOf("const onShowPassword"),
+  panel.indexOf("const onOpenDocument"),
+);
+assert(
+  passwordPath.includes("onSealPassword") &&
+    passwordPath.includes("revealed.password") &&
+    !passwordPath.includes("sessionStorage") &&
+    !passwordPath.includes("localStorage"),
+  "showing, copying, or sealing a password does not touch storage",
+);
 assert(!panel.includes("track("), "the panel does not send the password to analytics");
 assert(listUi.includes("Show password"), "a saved password has a show control");
 assert(listUi.includes('type={shown.visible ? "text" : "password"}'), "the password stays masked until reveal");
