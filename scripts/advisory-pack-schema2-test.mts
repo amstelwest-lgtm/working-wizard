@@ -4,6 +4,9 @@
  * Run: pnpm test:advisory-pack-schema2
  */
 import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ManagementReportView } from "../src/components/management-report-view";
 import { assessClientMetrics } from "../src/lib/client-metrics";
 import { scorecardHealthFromFinancials } from "../src/lib/health-score";
 import { buildBridgeSteps } from "../src/lib/profit-bridge-steps";
@@ -347,6 +350,25 @@ checkClient("Harbour & Co", HARBOUR);
   const gather = readFileSync("src/lib/advisory-pack.functions.ts", "utf8");
   assert(gather.includes("packBooksForGeneration"), "Drafts generate builds books from the client");
   assert(gather.includes("...(books ? { books } : {})"), "Drafts generate passes books into the pack");
+  const panel = readFileSync("src/components/advisory-pack-panel.tsx", "utf8");
+  assert(panel.includes("<ManagementReportView"), "the pack page shows the Management Report");
+  assert(panel.includes("PACK_SCHEMA1_LAYOUT_NOTE"), "a schema 1 pack says to generate the new layout");
+  assert(panel.includes("onExport={modern ?"), "export is the schema 2 Management Report, not the old PDF");
+  const route = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
+  const drafts = route.slice(route.indexOf('id="reports-drafts"'), route.indexOf('id="reports-draft-tool"'));
+  assert(
+    drafts.indexOf("<AdvisoryPackPanel") < drafts.indexOf("<AgentDraftShelf"),
+    "the Management Report leads the Advisory pack page",
+  );
+  const view = renderToStaticMarkup(
+    createElement(ManagementReportView, { content: frozen, market: ZA_MARKET }),
+  );
+  assert(view.includes('data-management-report=""'), "the report is on the page");
+  assert(view.includes('data-pack-schema="2"'), "the report is schema 2");
+  assert(view.includes("Advisory Management Report"), "the report names itself");
+  assert(view.includes("Chill Pepper Boutique Hotel"), "the report names the client");
+  assert(!view.includes("In one line"), "the report is not the old pack sections");
+  assert(!view.includes("Where the business stands"), "the report is not the old prose pack");
 }
 
 console.log("advisory-pack-schema2: ok");

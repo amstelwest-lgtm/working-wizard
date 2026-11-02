@@ -118,6 +118,7 @@ import { SectionCard } from "@/components/primitives";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import {
   accountantClientTabSearch,
+  clientNavSearch,
   legacyHashDestination,
   legacyPaneForSearch,
   routerHash,
@@ -214,7 +215,11 @@ export function RailStudio() {
             className="tb-btn settings-gear"
             onSettings={() => {
               setMenuOpen(false);
-              void navigate({ to: "/settings" });
+              void navigate({
+                to: "/clients/$clientId",
+                params: { clientId },
+                search: (prev) => clientNavSearch(prev, "settings"),
+              });
             }}
             onPlan={() => {
               setMenuOpen(false);

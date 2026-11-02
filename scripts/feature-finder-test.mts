@@ -115,6 +115,15 @@ assert(
   searchFeatures("management report", studio).results[0]?.hint === "Management Report",
   "the finder hint names the Management Report",
 );
+assert(
+  href("settings", studio) === `/clients/${CLIENT}?tab=settings`,
+  "Settings inside a client stays on that client's Settings tab",
+);
+assert(
+  !ids("settings", firm).includes("client-settings"),
+  "practice search does not invent a client Settings tab",
+);
+assert(href("billing", firm) === "/settings", "practice billing still opens practice settings");
 assert(href("drafter", studio).includes("section=draft-tool"), "Draft tool opens its own Reports page");
 assert(href("draft tool", studio).includes("section=draft-tool"), "Draft tool is findable by that name");
 assert(

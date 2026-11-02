@@ -43,6 +43,7 @@ import {
   type LivePackMetrics,
   type PackReview,
 } from "@/lib/advisory-pack";
+import { PACK_SECTION_V2_KEYS } from "@/lib/advisory-pack-schema";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { storedOpeningIsMissing } from "@/lib/client-metrics";
 import { clientIndustryDisplay } from "@/lib/profile-signals";
@@ -666,6 +667,11 @@ const SectionPatch = z.object({
   bullets: z.array(z.string().max(500)).max(20).optional(),
 });
 
+const PACK_REVIEW_SECTIONS = [...PACK_SECTION_KEYS, ...PACK_SECTION_V2_KEYS] as [
+  (typeof PACK_SECTION_KEYS)[number] | (typeof PACK_SECTION_V2_KEYS)[number],
+  ...((typeof PACK_SECTION_KEYS)[number] | (typeof PACK_SECTION_V2_KEYS)[number])[],
+];
+
 export type ReviewPackResult = {
   ok: true;
   pack: AdvisoryPack;
@@ -731,7 +737,7 @@ export const reviewAdvisoryPack = createServerFn({ method: "POST" })
         clientId: z.string().uuid(),
         packId: z.string().uuid(),
         action: z.enum(PACK_APP_ACTIONS),
-        section: z.enum(PACK_SECTION_KEYS).optional(),
+        section: z.enum(PACK_REVIEW_SECTIONS).optional(),
         patch: SectionPatch.optional(),
         note: z.string().max(2000).optional(),
         /** Overview figures the pack panel is showing. Drift on either side blocks sign-off. */
@@ -784,7 +790,14 @@ export const reviewAdvisoryPack = createServerFn({ method: "POST" })
       }
       const next = applySectionPatch(pack.content, data.section, data.patch);
       editStats = computeEditStats(pack.ai_draft, next);
-      after = { ...data.patch };
+      if (next.schema === 2) {
+        const section = next.sections.find((item) => item.key === data.section);
+        after = section
+          ? { meaning: section.meaning, actions: section.actions, verdict: section.verdict ?? null }
+          : { ...data.patch };
+      } else {
+        after = { ...data.patch };
+      }
     } else if (
       data.action === "approve" ||
       data.action === "reject" ||

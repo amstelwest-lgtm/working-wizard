@@ -42,6 +42,7 @@ import { rewriteDraftMonthStamp, statementSpanLabel } from "@/lib/statement-peri
 import { resolveAdvisorySignoffState, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
 import { packAnswerSentence, packDrawerHint, packStripStatus, type PackAnswerStatus } from "@/lib/plan-pack-copy";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
+import { ManagementReportView } from "@/components/management-report-view";
 import { formatReviewDateTime } from "@/lib/market";
 import {
   isSamplePracticeSignoff,
@@ -58,6 +59,8 @@ import {
 import {
   ADVISORY_PACK_STALE_NOTE,
   HIGH_EDIT_RATE,
+  PACK_SCHEMA1_LAYOUT_NOTE,
+  isAdvisoryPackV2,
   advisoryPackSignOffGate,
   computeEditStats,
   diffPackSections,
@@ -205,7 +208,7 @@ export function AdvisoryPackPanel({
   const [note, setNote] = useState("");
   const [showTrail, setShowTrail] = useState(false);
   const [showDraft, setShowDraft] = useState<Record<string, boolean>>({});
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [precardOpen, setPrecardOpen] = useState(false);
   const seq = useRef(0);
@@ -693,6 +696,7 @@ export function AdvisoryPackPanel({
   const headerOwnsSignOff = audience === "accountant" && Boolean(onSignoffAction);
   const packIsStale = advisoryState.status === "signed_stale" || signOffGate.figuresChanged;
   const canRegenerate = Boolean(pack && isWriter && canGenerate);
+  const modern = Boolean(pack && isAdvisoryPackV2(pack.content));
   const sentence = pack
     ? packAnswerSentence({
         periodLabel: statementSpanLabel({ periodLabel: pack.period_label, market }),
@@ -724,7 +728,7 @@ export function AdvisoryPackPanel({
         primary={
           <>
             {primary}
-            {canRegenerate && packIsStale ? (
+            {canRegenerate && packIsStale && modern ? (
               <button
                 type="button"
                 onClick={() => void doGenerate()}
@@ -741,7 +745,7 @@ export function AdvisoryPackPanel({
                 Regenerate report
               </button>
             ) : null}
-            {!pack && isWriter && canGenerate ? (
+            {isWriter && canGenerate && !modern ? (
               <button
                 type="button"
                 onClick={() => void doGenerate()}
@@ -759,7 +763,7 @@ export function AdvisoryPackPanel({
             ) : null}
           </>
         }
-        onExport={pack ? () => void exportPdf() : undefined}
+        onExport={modern ? () => void exportPdf() : undefined}
         exporting={exportingPdf || busy !== null}
       />
       <ReviewInputsDrawer hint={packDrawerHint(pack?.version, canRegenerate && !packIsStale)}>
@@ -779,7 +783,7 @@ export function AdvisoryPackPanel({
               ))}
             </select>
           ) : null}
-          {canRegenerate && !packIsStale ? (
+          {canRegenerate && !packIsStale && modern ? (
             <button
               type="button"
               onClick={() => void doGenerate()}
@@ -846,6 +850,19 @@ export function AdvisoryPackPanel({
         <p className="mt-3 rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-200">
           Changes requested: {pack.review_note}
         </p>
+      ) : null}
+
+      {pack && !modern ? (
+        <p
+          className="mt-3 rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-[12px] font-semibold text-amber-800 dark:text-amber-200"
+          data-pack-legacy-note=""
+        >
+          {PACK_SCHEMA1_LAYOUT_NOTE}
+        </p>
+      ) : null}
+
+      {pack && modern && isAdvisoryPackV2(pack.content) ? (
+        <ManagementReportView content={pack.content} market={market} />
       ) : null}
 
       {pack && expanded ? (

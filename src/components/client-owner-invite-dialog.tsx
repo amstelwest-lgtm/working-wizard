@@ -9,6 +9,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { ClientFileSettings } from "@/components/client-file-settings";
 import { archiveClient } from "@/lib/archive-client";
+import { deleteClientPermanently } from "@/lib/delete-client";
 import { forgetPaintedBooks } from "@/lib/practice-book-cache";
 import { inviteClientOwner } from "@/lib/client-invite.functions";
 import { guardedOwnerInvite } from "@/lib/client-owner-invite";
@@ -394,6 +395,23 @@ export function ClientOwnerInviteHost({
     }
   };
 
+  const onDeleteClient = async (typedName: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteClientPermanently(clientId, typedName, clientName);
+      forgetPaintedBooks();
+      toast.success("Client deleted");
+      void navigate({ to: "/clients" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not delete this client";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onRemoveClient = async () => {
     setBusy(true);
     setError(null);
@@ -443,6 +461,8 @@ export function ClientOwnerInviteHost({
           onRemoveOwner={(owner) => void onRemoveOwner(owner)}
           onRemoveClient={() => void onRemoveClient()}
           removingClient={busy}
+          onDeleteClient={(typedName) => void onDeleteClient(typedName)}
+          deletingClient={busy}
         />
       ) : null}
       <ClientOwnerInviteDialog
