@@ -198,6 +198,7 @@
     "test:milon-bot-parity": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-parity-test.mts",
     "test:agent-foundation": "vite-node --config scripts/vite-test.config.ts scripts/agent-foundation-test.mts",
     "test:agent-analyst": "vite-node --config scripts/vite-test.config.ts scripts/agent-analyst-test.mts",
+    "test:agent-shared-reads": "vite-node --config scripts/vite-test.config.ts scripts/agent-shared-reads-test.mts",
     "test:agent-runners": "vite-node --config scripts/vite-test.config.ts scripts/agent-runners-test.mts",
     "test:agent-copy": "vite-node --config scripts/vite-test.config.ts scripts/agent-copy-test.mts",
     "test:canonical-figures": "vite-node --config scripts/vite-test.config.ts scripts/canonical-figures-test.mts",

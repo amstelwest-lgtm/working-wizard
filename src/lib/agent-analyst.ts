@@ -14,6 +14,10 @@ import {
   type StoredFigures,
 } from "./agent-bus.ts";
 import { CLAUDE_OPUS_55, CLAUDE_SONNET_55 } from "./claude-request.ts";
+import {
+  SHARED_DELIVERABLE_READS,
+  SHARED_DELIVERABLE_TOOL_LABELS,
+} from "./agent-shared-reads.ts";
 
 export const ANALYST_MAX_ITERATIONS = 10;
 
@@ -83,6 +87,8 @@ export function refreshedFindingUpdate(input: {
   };
 }
 
+export const ANALYST_PEERS = ["financial_manager", "advisor"] as const;
+
 export const ANALYST_READ_TOOLS = [
   "get_health",
   "get_ratios",
@@ -91,9 +97,12 @@ export const ANALYST_READ_TOOLS = [
   "get_statement_history",
   "get_data_freshness",
   "get_score_history",
+  "get_inbox",
+  "get_team_findings",
+  ...SHARED_DELIVERABLE_READS,
 ] as const;
 
-export const ANALYST_WRITE_TOOLS = ["record_finding"] as const;
+export const ANALYST_WRITE_TOOLS = ["record_finding", "send_agent_message"] as const;
 
 export const ANALYST_TOOLS = [...ANALYST_READ_TOOLS, ...ANALYST_WRITE_TOOLS] as const;
 
@@ -107,7 +116,11 @@ export const ANALYST_TOOL_LABELS: Record<AnalystToolName, string> = {
   get_statement_history: "History",
   get_data_freshness: "Freshness",
   get_score_history: "Score history",
+  get_inbox: "Inbox",
+  get_team_findings: "Findings",
+  ...SHARED_DELIVERABLE_TOOL_LABELS,
   record_finding: "Finding",
+  send_agent_message: "Message",
 };
 
 const STATEMENT_KEYS = [

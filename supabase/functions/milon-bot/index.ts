@@ -37,6 +37,7 @@ import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/clie
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import { formatOverviewForPrompt } from "../ask-ai/overview-brief.ts";
+import { loadPeerContextBlock } from "../_shared/agent-shared-reads.ts";
 import {
   BOT_MAX_HISTORY,
   BOT_MAX_TOOL_ROUNDS,
@@ -528,6 +529,12 @@ async function handleMilonBot(req: Request): Promise<Response> {
       overviewBlock = overviewBlock ? `${overviewBlock}\n\n${signoff}` : signoff;
     } catch (e) {
       console.warn("advisory sign-off:", (e as Error).message);
+    }
+    try {
+      const peers = await loadPeerContextBlock(userClient, clientId);
+      if (peers.trim()) overviewBlock = overviewBlock ? `${overviewBlock}\n\n${peers}` : peers;
+    } catch (e) {
+      console.warn("peer context:", (e as Error).message);
     }
   }
   agent = chatAgentForMarket(agent, replyPack);

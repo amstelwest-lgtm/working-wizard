@@ -3,6 +3,10 @@
  * The edge function enforces the same list before it executes a tool.
  */
 import { analystRunOutcome, type AnalystToolName } from "./agent-analyst.ts";
+import {
+  SHARED_DELIVERABLE_READS,
+  SHARED_DELIVERABLE_TOOL_LABELS,
+} from "./agent-shared-reads.ts";
 
 /** A normal run saves its draft in 2–3 turns. Later turns are headroom before the cap. */
 export const ADVISOR_MAX_ITERATIONS = 6;
@@ -25,7 +29,12 @@ export const ADVISOR_OWN_READS = ["get_cash_13_week", "get_inbox", "get_team_fin
 
 export const ADVISOR_WRITE_TOOLS = ["record_draft", "send_agent_message"] as const;
 
-export const ADVISOR_TOOLS = [...ADVISOR_REUSED_READS, ...ADVISOR_OWN_READS, ...ADVISOR_WRITE_TOOLS] as const;
+export const ADVISOR_TOOLS = [
+  ...ADVISOR_REUSED_READS,
+  ...ADVISOR_OWN_READS,
+  ...SHARED_DELIVERABLE_READS,
+  ...ADVISOR_WRITE_TOOLS,
+] as const;
 
 export type AdvisorToolName = (typeof ADVISOR_TOOLS)[number];
 
@@ -38,6 +47,7 @@ export const ADVISOR_TOOL_LABELS: Record<AdvisorToolName, string> = {
   get_inbox: "Inbox",
   get_team_findings: "Findings",
   get_own_memory: "Memory",
+  ...SHARED_DELIVERABLE_TOOL_LABELS,
   record_draft: "Draft",
   send_agent_message: "Message",
 };

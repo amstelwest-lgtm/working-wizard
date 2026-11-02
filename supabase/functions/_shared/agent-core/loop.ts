@@ -12,6 +12,7 @@
  */
 
 import { compactJson } from "../../milon-bot/logic.ts";
+import { sharedDeliverableToolSchemas } from "../../../../src/lib/agent-shared-reads.ts";
 
 export const AGENT_MAX_ITERATIONS = 6;
 export const AGENT_REPEAT_LIMIT = 3;
@@ -55,6 +56,15 @@ export const AGENT_TOOLS = [
   "list_blockers",
   "answer_from_brain",
   "get_invite_status",
+  "list_client_library",
+  "get_client_library_doc",
+  "list_tax_drafts",
+  "get_tax_draft",
+  "list_tax_packs",
+  "get_tax_pack",
+  "get_management_report",
+  "list_figure_proposals",
+  "list_client_sends",
   "propose_next_steps",
   "draft_deliverable",
   "create_task_from_recommendation",
@@ -85,6 +95,15 @@ export const AGENT_TOOL_LABELS: Record<AgentToolName, string> = {
   list_blockers: "Blockers",
   answer_from_brain: "Client Brain",
   get_invite_status: "Invite status",
+  list_client_library: "Library",
+  get_client_library_doc: "Library file",
+  list_tax_drafts: "Tax drafts",
+  get_tax_draft: "Tax draft",
+  list_tax_packs: "Tax packs",
+  get_tax_pack: "Tax pack",
+  get_management_report: "Management report",
+  list_figure_proposals: "Figure proposals",
+  list_client_sends: "Client sends",
   propose_next_steps: "Draft next steps",
   draft_deliverable: "Draft pack",
   create_task_from_recommendation: "Create task",
@@ -849,7 +868,9 @@ You investigate a stated objective, then either act inside the tools MILŌN allo
 Each turn you may call several read-only tools, or one action, or finish. You do not execute anything yourself. MILŌN runs every tool and records whether it happened.
 
 How to work:
-- Read first: company, advisory position, health, cash flow, statements, history, recommendations, outcomes, tasks, data requests, brain.
+- Read first: company, advisory position, health, cash flow, statements, history, recommendations, outcomes, tasks, data requests, brain, and the shared client deliverables (library, tax drafts and packs, the schema-2 Management Report, figure proposals, Send-an-agent intakes).
+- Those deliverable reads do not write, confirm, file, or return a token or a file password. Quote them. Do not invent a tax figure.
+- Team findings in the prompt are peer notes. You do not see the other agents' chat transcripts.
 - The advisory position is the product's own next step. Use it. Do not invent a parallel diagnosis.
 - Health, ratios, cash runway, and priority moves come from the tools. Do not recompute them.
 - Drafting next steps or a pack only creates drafts. It does not approve or send them.
@@ -1077,6 +1098,7 @@ export function agentClaudeTools(): ClaudeTool[] {
         additionalProperties: false,
       },
     },
+    ...sharedDeliverableToolSchemas(),
     {
       name: "request_human",
       description:

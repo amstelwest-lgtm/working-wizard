@@ -5,6 +5,8 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { AgentAudience, AgentToolName } from "./agent.ts";
+import { isSharedDeliverableRead } from "../../../src/lib/agent-shared-reads.ts";
+import { executeSharedDeliverableRead } from "../_shared/agent-shared-reads.ts";
 import { resolveRatioRecord } from "../ask-ai/derive-ratios.ts";
 import {
   buildOverviewBrief,
@@ -387,6 +389,9 @@ export async function executeAgentTool(
   args: Record<string, unknown>,
   ctx: Ctx,
 ): Promise<unknown> {
+  if (isSharedDeliverableRead(name)) {
+    return executeSharedDeliverableRead(name, args, { db: ctx.userClient, clientId: ctx.clientId });
+  }
   if (name === "get_company") {
     const [clientRes, peopleRes] = await Promise.all([
       ctx.userClient

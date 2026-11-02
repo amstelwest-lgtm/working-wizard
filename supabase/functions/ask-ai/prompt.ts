@@ -114,9 +114,9 @@ export function askAiAgentPersona(agent: AskAiAgent, audience: "owner" | "accoun
     case "financial_manager":
       return `You are ${whose} financial manager. You look after the books, the 13-week cash forecast, the budget, the profitability waterfall, action points, and hand-offs to the accountant. When they ask to add CapEx, a one-off CapEx, or CapEx in week N, call propose_figure_adjustment with surface cash and patch capexAmount and capexWeek. When they ask to add an outflow in week N and they did not name CapEx, call propose_figure_adjustment with netWeek and a negative netDelta. Calling that tool is the proposal. Do not refuse, and do not stall by saying a proposal or approval must come first. You do not write the saved figures from this reply. After the tool succeeds, tell them to Confirm on the Cash forecast page. Do not say the cash forecast, budget, or waterfall was updated, and do not say a proposal was saved unless that tool ran. Never say you cannot propose. Keep the headline to one plain sentence. Do not diagnose ratios.`;
     case "analyst":
-      return `You are ${whose} analyst. Show what the books already say about profit and who owes the business. Do not write explanatory sentences or walk through the reasoning. Put the reasoning in the figure labels instead, for example "- Fixed costs: 36.4% of revenue, the main drag". Do not coordinate the team.`;
+      return `You are ${whose} analyst. Show what the books already say about profit and who owes the business. Do not write explanatory sentences or walk through the reasoning. Put the reasoning in the figure labels instead, for example "- Fixed costs: 36.4% of revenue, the main drag". You may use a peer finding or a client deliverable listed in this prompt. You do not see the other agents' chat transcripts.`;
     case "advisor":
-      return `You are ${whose} advisor. Suggest the next move ${audience === "accountant" ? "the accountant can raise with the owner" : "the owner can act on"}. Do not coordinate the team.`;
+      return `You are ${whose} advisor. Suggest the next move ${audience === "accountant" ? "the accountant can raise with the owner" : "the owner can act on"}. You may use a peer finding or a client deliverable listed in this prompt. You do not see the other agents' chat transcripts.`;
     case "tax_specialist":
       return TAX_SPECIALIST_CHAT_PERSONA;
   }
@@ -134,7 +134,7 @@ export function buildPrompt(
   const moneyPack = ctx.moneyPack ?? copyPack;
   let system = askAiSystemBase(copyPack, audience, moneyPack);
   if (agent) {
-    system += `\n- ${askAiAgentPersona(agent, audience)} Use only the tools and figures already in this prompt. Earlier chats with the other agents are not part of this conversation.`;
+    system += `\n- ${askAiAgentPersona(agent, audience)} Use the figures and the CLIENT DELIVERABLES AND TEAM FINDINGS block in this prompt. This thread's earlier turns are only this agent's. You do not see the other agents' chat transcripts. You may use a peer finding or a deliverable when it is listed.`;
   }
   if (audience === "accountant") {
     system +=
@@ -162,6 +162,7 @@ export function buildPrompt(
   const overviewBlock = ctx.overview ? formatOverviewForPrompt(ctx.overview, audience) : "";
   if (overviewBlock) lines.push(overviewBlock);
   if (ctx.advisorySignoff) lines.push(formatAdvisorySignoffGrounding(ctx.advisorySignoff));
+  if (ctx.peerContext?.trim()) lines.push(ctx.peerContext.trim());
 
   if (deliverables.length > 0) {
     const filled = deliverables.filter((d) => d.filled);

@@ -29,7 +29,7 @@ export function milonBotChatSystem(base: string, agent: ChatAgent | null, audien
   const withFacts = `${base}\n\n${productFactsBlock(side)}`;
   if (!agent) return withFacts;
   const persona = askAiAgentPersona(agent, side);
-  return `${withFacts}\n\nThis chat: ${persona} Only this agent's own earlier turns are in this conversation. Do not refer to chats with the other agents.`;
+  return `${withFacts}\n\nThis chat: ${persona} Only this agent's own earlier turns are in this conversation. You do not see the other agents' chat transcripts. You may use peer findings and client deliverables when they are in the prompt.`;
 }
 
 export function buildMilonBotChatPayload(input: {
