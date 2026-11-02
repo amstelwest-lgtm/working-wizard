@@ -6,6 +6,7 @@ import { formatAdvisorySignoffGrounding } from "../../../src/lib/advisory-signof
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import { chatReplyFormatRules, humanDate } from "../_shared/chat-reply.ts";
 import { productFactsBlock } from "../_shared/product-facts.ts";
+import { ASK_AI_ANALYST_CHAT_TOOL_LINE } from "../../../src/lib/ask-ai-analyst-tools.ts";
 import { TAX_SPECIALIST_CHAT_PERSONA } from "../_shared/agent-prompts/tax-specialist.ts";
 import {
   appendClientIdentity,
@@ -135,6 +136,7 @@ export function buildPrompt(
   let system = askAiSystemBase(copyPack, audience, moneyPack);
   if (agent) {
     system += `\n- ${askAiAgentPersona(agent, audience)} Use the figures and the CLIENT DELIVERABLES AND TEAM FINDINGS block in this prompt. This thread's earlier turns are only this agent's. You do not see the other agents' chat transcripts. You may use a peer finding or a deliverable when it is listed.`;
+    if (agent === "analyst") system += ` ${ASK_AI_ANALYST_CHAT_TOOL_LINE}`;
   }
   if (audience === "accountant") {
     system +=

@@ -89,6 +89,9 @@ const TOOL_LABELS = {
   propose_next_steps: "Propose",
   draft_deliverable: "Draft",
   answer_from_brain: "Brain",
+  get_inbox: "Inbox",
+  get_team_findings: "Findings",
+  send_agent_message: "Message",
 };
 
 function storedProposal(raw) {
