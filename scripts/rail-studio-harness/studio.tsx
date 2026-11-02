@@ -1499,7 +1499,7 @@ const HARNESS_SECTION_LABEL: Record<string, string> = {
   months: "Month by month",
   open: "Open work",
   overdue: "Overdue",
-  drafts: "Advisory pack",
+  drafts: "Advisory Management Report",
   "draft-tool": "Draft tool",
   sent: "Sent",
   documents: "Client library",
@@ -1595,9 +1595,12 @@ function ReportsPane({ clientId, packView }: { clientId: string; packView?: stri
   return (
     <div className="tabpane on" id="pane-reports">
       <section id="reports-drafts" className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
-          Drafts
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
+          Advisory pack
         </h2>
+        <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
+          Management Report. Generate it here and export the PDF.
+        </p>
       <PaneBoundary label="Advisory pack">
         <AdvisoryPackPanel
           className="mb-5"

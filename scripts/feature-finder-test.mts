@@ -106,6 +106,15 @@ assert(
     href("advisory pack", studio).includes("section=drafts"),
   "Advisory pack opens Reports drafts",
 );
+assert(
+  href("management report", studio).includes("tab=reports") &&
+    href("management report", studio).includes("section=drafts"),
+  "Management Report opens the Advisory pack",
+);
+assert(
+  searchFeatures("management report", studio).results[0]?.hint === "Management Report",
+  "the finder hint names the Management Report",
+);
 assert(href("drafter", studio).includes("section=draft-tool"), "Draft tool opens its own Reports page");
 assert(href("draft tool", studio).includes("section=draft-tool"), "Draft tool is findable by that name");
 assert(

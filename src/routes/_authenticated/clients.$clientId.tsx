@@ -579,7 +579,7 @@ function crumbSectionLabel(tab: string, section: string): string {
     scorecard: "Health scorecard",
     "budget-pdf": "Budget & variance",
     benchmark: "Benchmark",
-    drafts: "Advisory pack",
+    drafts: "Advisory Management Report",
     "draft-tool": "Draft tool",
     sent: "Sent",
     all: "All reports",
@@ -5345,7 +5345,7 @@ function ClientView() {
                       clientId={clientId}
                       eyebrow="Work"
                       title="Reports"
-                      subtitle="Each report, the advisory pack, the draft tool, and what has been sent has its own page."
+                      subtitle="The Advisory pack is the Management Report. Each other report, the draft tool, and what has been sent has its own page."
                       links={[
                         {
                           id: "budget-pdf",
@@ -5401,7 +5401,7 @@ function ClientView() {
                         {
                           id: "drafts",
                           label: "Advisory pack",
-                          detail: "Packs and recommendations, ready for sign-off.",
+                          detail: "The Management Report. Generate it and export the PDF.",
                           search: (prev) => accountantClientTabSearch(prev, "reports", { section: "drafts" }),
                         },
                         {
@@ -5429,8 +5429,8 @@ function ClientView() {
                     <ClientSubpageFrame
                       id="drafts"
                       eyebrow="Reports"
-                      title="Advisory pack"
-                      subtitle="Packs and recommendations. Sign off from this page."
+                      title="Advisory Management Report"
+                      subtitle="Advisory pack. Generate the report here and export the PDF."
                     >
                       <section id="reports-drafts">
                         <AgentDraftShelf

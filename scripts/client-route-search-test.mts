@@ -16,6 +16,7 @@ import {
   clientRailSelection,
   drafterSectionForHash,
   legacyHashDestination,
+  managementReportPath,
   railSearchForHash,
   routerHash,
   type CanonicalClientSearch,
@@ -128,7 +129,7 @@ const reportLink = routerSearch({
   action: "preview",
   filter: "overdue",
 });
-assert(reportLink.section === "drafts" && reportLink.report === "scorecard", "a Reports deep link stays on Drafts");
+assert(reportLink.section === "drafts" && reportLink.report === "scorecard", "a Reports deep link stays on the Advisory pack");
 assert(reportLink.action === "preview", "preview stays on Reports");
 assert(reportLink.filter === undefined, "an Action Plan filter does not stay on Reports");
 const planFilter = routerSearch({ tab: "reports", section: "plan", filter: "overdue" });
@@ -336,6 +337,10 @@ const ownerShell = readFileSync(resolve("src/components/owner-door/owner-shell.t
 assert(!ownerShell.includes('label: "Tax"'), "the owner rail has no Tax item");
 const drafts = clientNavSearch({ tab: "home" }, "reports", "drafts");
 assert(drafts.tab === "reports" && drafts.section === "drafts", "Advisory pack keeps the drafts section");
+assert(
+  managementReportPath("harbour") === "/clients/harbour?tab=reports&section=drafts#advisory-pack",
+  "the Management Report link stays on Reports, the drafts section, and the pack anchor",
+);
 const draftsRail = clientRailSelection({ tab: "reports", section: "drafts" });
 assert(
   draftsRail.headingId === "reports" && draftsRail.subId === "drafts",

@@ -143,8 +143,8 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
 };
 
 /**
- * What I noticed opens this. Reports → Drafts is the Advisory Management
- * Report: Generate stores schema 2, Export PDF downloads that file.
+ * What I noticed opens this. Reports → Advisory pack is the Advisory
+ * Management Report: Generate stores schema 2, Export PDF downloads that file.
  */
 export function managementReportPath(clientId: string): string | null {
   const id = clientId.trim();
@@ -350,7 +350,7 @@ export function reportPdfSection(report: string): RailSubsection | null {
 
 /**
  * A report or plan filter names a sub-page when the address did not already.
- * An explicit section wins (`section=drafts&report=scorecard` stays on Drafts).
+ * An explicit section wins (`section=drafts&report=scorecard` stays on the Advisory pack).
  * An overdue plan filter always opens the overdue page.
  */
 function withNamedPage(

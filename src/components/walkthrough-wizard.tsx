@@ -182,7 +182,7 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
     targetId: ".ctable tbody tr, .client-card, [data-client-row]",
     section: "Reports",
     title: "Reports you can brand",
-    body: "Open a client and choose Reports. Advisory pack, Draft tool, the PDFs, and what you have sent each have their own page. The PDFs carry your firm's logo and colours.",
+    body: "Open a client and choose Reports. Advisory pack is the Management Report. Draft tool, the PDFs, and what you have sent each have their own page. The PDFs carry your firm's logo and colours.",
   },
   {
     targetId: "wizard-add-client",
@@ -283,7 +283,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     targetId: "pane-reports",
     section: "Reports",
     title: "Deliver branded advice",
-    body: "This is the same Reports Studio as the rest of the practice. Sign off Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget first — each stamp carries into the board-ready PDF you generate here.",
+    body: "Advisory pack is the Management Report. Generate it here and export the PDF. This is the same Reports Studio as the rest of the practice. Sign off Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget first — each stamp carries into the board-ready PDF you generate here.",
   },
   {
     tab: "plan",

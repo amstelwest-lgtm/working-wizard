@@ -139,10 +139,27 @@ assert(chrome.includes('{ id: "drafts", label: "Advisory pack" }'), "sidebar say
 assert(chrome.includes('{ id: "draft-tool", label: "Draft tool" }'), "sidebar says Draft tool");
 assert(!chrome.includes('label: "Documents"'), "the Books item is no longer Documents");
 assert(!chrome.includes('label: "Drafts"'), "the Reports item is no longer Drafts");
+const harness = readFileSync(resolve("scripts/rail-studio-harness/studio.tsx"), "utf8");
+const harnessPack = harness.slice(harness.indexOf('id="reports-drafts"'), harness.indexOf('id="reports-pdfs"'));
+assert(harnessPack.includes("Advisory pack"), "the studio pack heading is Advisory pack");
+assert(harnessPack.includes("Management Report"), "the studio pack heading names the Management Report");
+assert(!/\n\s*Drafts\n/.test(harnessPack), "the studio pack heading is not Drafts");
 
 const route = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(route.includes('title="Client library"'), "the page title is Client library");
-assert(route.includes('title="Advisory pack"'), "the pack page title is Advisory pack");
+assert(
+  route.includes('title="Advisory Management Report"'),
+  "the pack page titles the Management Report",
+);
+assert(
+  route.includes("Advisory pack. Generate the report here and export the PDF."),
+  "the pack page names generate and export",
+);
+assert(
+  route.includes("The Management Report. Generate it and export the PDF."),
+  "the Reports list calls the pack the Management Report",
+);
+assert(!route.includes('title="Drafts"'), "the pack page does not title itself Drafts");
 assert(route.includes('title="Draft tool"'), "the tool page title is Draft tool");
 assert(route.includes("<DataUpToDate"), "Connections still mounts the books data section");
 const fresh = readFileSync(resolve("src/components/data-up-to-date.tsx"), "utf8");

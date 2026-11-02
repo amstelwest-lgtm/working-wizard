@@ -397,7 +397,7 @@ const noticed = renderToStaticMarkup(
 assert(noticed.includes('data-management-report=""'), "What I noticed links to the Management Report");
 assert(
   noticed.includes("tab=reports") && noticed.includes("section=drafts") && noticed.includes("#advisory-pack"),
-  "the link opens Reports, Drafts, the pack panel",
+  "the link opens Reports, Advisory pack, the Management Report panel",
 );
 assert(!noticed.includes('data-finding="advisory"'), "an advisory draft is not shown");
 assert(!noticed.includes('data-finding="move"'), "a next-move draft is not shown");
