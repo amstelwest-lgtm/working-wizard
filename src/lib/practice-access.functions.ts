@@ -34,6 +34,7 @@ import {
   sendAccessEmail,
 } from "@/lib/practice-access-email";
 import { inviteSiteUrl } from "@/lib/client-invite-email";
+import { onlyActiveClients } from "@/lib/archive-client";
 import { collapseDuplicateClientShells } from "@/lib/client-display-name";
 
 export type PracticeMember = {
@@ -468,11 +469,13 @@ async function loadPracticeAccess(
     };
   }
 
-  const clientQuery = admin
-    .from("clients")
-    .select("id, name, client_code, owner_user_id, contact_email, created_at, financials, cashflow")
-    .eq("firm_id", firm.id)
-    .order("name");
+  const clientQuery = onlyActiveClients(
+    admin
+      .from("clients")
+      .select("id, name, client_code, owner_user_id, contact_email, created_at, financials, cashflow")
+      .eq("firm_id", firm.id)
+      .order("name"),
+  );
   const assignQuery = admin
     .from("client_practice_access")
     .select(

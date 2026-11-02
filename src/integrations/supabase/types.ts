@@ -1795,6 +1795,7 @@ export type Database = {
           reports_issued_count: number
           is_demo: boolean
           market: Json | null
+          active: boolean
         }
         Insert: {
           business_type?: string | null
@@ -1826,6 +1827,7 @@ export type Database = {
           reports_issued_count?: number
           is_demo?: boolean
           market?: Json | null
+          active?: boolean
         }
         Update: {
           business_type?: string | null
@@ -1857,6 +1859,7 @@ export type Database = {
           reports_issued_count?: number
           is_demo?: boolean
           market?: Json | null
+          active?: boolean
         }
         Relationships: [
           {

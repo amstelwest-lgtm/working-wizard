@@ -4,6 +4,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { onlyActiveClients } from "@/lib/archive-client";
 
 export type FirmClientGateContext = {
   /** Null when the count could not be loaded. 2 means two or more. */
@@ -22,12 +23,14 @@ export type FirstFirmClient = {
  */
 export async function loadFirstFirmClient(): Promise<FirstFirmClient | null> {
   try {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("id, name")
-      .not("firm_id", "is", null)
-      .order("created_at", { ascending: true })
-      .limit(1);
+    const { data, error } = await onlyActiveClients(
+      supabase
+        .from("clients")
+        .select("id, name")
+        .not("firm_id", "is", null)
+        .order("created_at", { ascending: true })
+        .limit(1),
+    );
     if (error) return null;
     const row = data?.[0];
     if (!row?.id) return null;
@@ -40,12 +43,14 @@ export async function loadFirstFirmClient(): Promise<FirstFirmClient | null> {
 
 export async function loadFirmClientGateContext(): Promise<FirmClientGateContext> {
   try {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("id")
-      .not("firm_id", "is", null)
-      .order("created_at", { ascending: true })
-      .limit(2);
+    const { data, error } = await onlyActiveClients(
+      supabase
+        .from("clients")
+        .select("id")
+        .not("firm_id", "is", null)
+        .order("created_at", { ascending: true })
+        .limit(2),
+    );
     if (error) return { firmClientCount: null, firstClientId: null };
     const rows = data ?? [];
     const first = rows[0]?.id;

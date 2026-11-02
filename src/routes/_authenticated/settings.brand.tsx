@@ -12,6 +12,7 @@ import { SettingsShell } from "@/components/settings-shell";
 import { LogoUploader } from "@/components/logo-uploader";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { supabase } from "@/integrations/supabase/client";
+import { onlyActiveClients } from "@/lib/archive-client";
 import { coerceMarketSelection, marketForClient, resolveMarket, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { formatMonthYear } from "@/lib/market/format";
 import { reportDataPeriodLabel, reportPeriodMonthYear } from "@/lib/statement-period";
@@ -83,12 +84,14 @@ function HeaderPreview() {
     let cancelled = false;
     Promise.all([
       supabase.from("firms").select("market").eq("id", firmId).maybeSingle(),
-      supabase
-        .from("clients")
-        .select("name, financials, created_at, market")
-        .eq("firm_id", firmId)
-        .order("created_at", { ascending: false })
-        .limit(1),
+      onlyActiveClients(
+        supabase
+          .from("clients")
+          .select("name, financials, created_at, market")
+          .eq("firm_id", firmId)
+          .order("created_at", { ascending: false })
+          .limit(1),
+      ),
     ]).then(([firmRes, clientRes]) => {
       if (cancelled) return;
       let market: ResolvedMarket = ZA_MARKET;

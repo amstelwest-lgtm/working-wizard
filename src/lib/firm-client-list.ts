@@ -12,6 +12,7 @@
  * only for the rows that still share a name.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { onlyActiveClients } from "@/lib/archive-client";
 import { businessNameFromFinancials } from "@/lib/client-display-name";
 import { finderBusinessName, type FinderClient } from "@/lib/feature-finder-clients";
 
@@ -117,7 +118,7 @@ export async function listFirmClients(input: {
     } else {
       query = query.eq("owner_user_id", userId);
     }
-    const { data, error } = await query;
+    const { data, error } = await onlyActiveClients(query);
     if (error) {
       console.error("feature finder clients:", error.message);
       return [];
