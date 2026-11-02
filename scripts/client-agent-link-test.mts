@@ -31,6 +31,7 @@ import {
   CLIENT_AGENT_PASSWORD_UNSAVED,
   SEND_CONSENT_VERSION,
   SEND_LINK_META,
+  sendLinkTitleName,
   CLIENT_AGENT_CHAT_ENABLED,
   CLIENT_AGENT_FAQ_TITLE,
   checklistReady,
@@ -200,10 +201,8 @@ assert(
   "a csv keeps the csv type when the browser calls it Excel",
 );
 assert(
-  clientFileMime(
-    "",
-    "sheet.xlsx",
-  ) === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  clientFileMime("", "sheet.xlsx") ===
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "an xlsx upload uses the spreadsheet type",
 );
 assert(
@@ -665,6 +664,44 @@ assert(
   "the page meta sends no referrer",
 );
 assert(
+  SEND_LINK_META.some((entry) => "title" in entry && entry.title === "Milōn"),
+  "the route head stays the brand until an agent shell is known",
+);
+assert(
+  !SEND_LINK_META.some((entry) => "title" in entry && entry.title.includes("Tax Specialist")),
+  "the route head does not name the Tax Specialist",
+);
+assert(sendLinkTitleName(null) === null, "a link that is still opening has no agent title");
+assert(sendLinkTitleName({ ok: false }) === null, "a closed link has no agent title");
+assert(
+  sendLinkTitleName({ ok: true }) === "Tax Specialist",
+  "a checklist with no mission is the Tax Specialist",
+);
+assert(
+  sendLinkTitleName({
+    ok: true,
+    mission: { agentShortName: "Financial Manager" },
+  }) === "Financial Manager",
+  "a Financial Manager mission titles the Financial Manager",
+);
+assert(
+  sendLinkTitleName({ ok: true, mission: { agentShortName: "  Analyst " } }) === "Analyst",
+  "a mission title trims the agent name",
+);
+assert(
+  sendLinkTitleName({ ok: true, mission: { agentShortName: "Advisor" } }) === "Advisor",
+  "an Advisor mission titles the Advisor",
+);
+assert(
+  sendLinkTitleName({ ok: true, mission: { agentShortName: "Tax Specialist" } }) ===
+    "Tax Specialist",
+  "a Tax Specialist mission titles the Tax Specialist",
+);
+assert(
+  sendLinkTitleName({ ok: true, mission: { agentShortName: "   " } }) === null,
+  "a blank mission name does not fall back to Tax Specialist",
+);
+assert(
   finishItem({ quality: "incomplete", explanation: "   ", hasFile: true }).ok === false,
   "incomplete needs an explanation",
 );
@@ -834,6 +871,10 @@ assert(
 );
 assert(!page.includes("console."), "the page does not log the file name");
 assert(route.includes("SEND_LINK_META"), "the route uses the noindex meta");
+assert(
+  page.includes("useAgentDocumentTitle(sendLinkTitleName(shownView))"),
+  "the open link sets the tab title from the agent on screen",
+);
 assert(
   server.includes("linkPrivacyHeaders") && server.includes("linkLogPath"),
   "the server sets privacy headers and redacts the path",
@@ -1177,8 +1218,8 @@ assert(!unavailableHtml.includes("Try again"), "an unknown link is not a retry")
 const expiredHtml = closedScreen(closedLink("unavailable"));
 assert(expiredHtml.includes(GENERIC_LINK_BODY), "an expired link is not available");
 assert(
-  (checklistHtml.match(/PDF, JPG, PNG, HEIC, text, CSV, or Excel, up to 20 MB each/g) ?? []).length ===
-    1,
+  (checklistHtml.match(/PDF, JPG, PNG, HEIC, text, CSV, or Excel, up to 20 MB each/g) ?? [])
+    .length === 1,
   "file types appear once",
 );
 assert(checklistHtml.includes(CLIENT_AGENT_FILE_NOTE), "the file note is the shared sentence");

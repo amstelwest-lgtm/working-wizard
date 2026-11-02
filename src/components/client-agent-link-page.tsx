@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import "@/components/owner-door/owner-door.css";
+import { useAgentDocumentTitle } from "@/hooks/use-agent-document-title";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
   CLIENT_AGENT_CHAT_ENABLED,
@@ -25,6 +26,7 @@ import {
   clientFileMime,
   clientUploadAllowed,
   sanitizeClientFileName,
+  sendLinkTitleName,
   sizeAllowed,
   type ItemQuality,
 } from "@/lib/client-agent-link";
@@ -563,6 +565,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         })),
       }
     : view;
+
+  useAgentDocumentTitle(sendLinkTitleName(shownView));
 
   const openRef = useRef(open);
   openRef.current = open;
