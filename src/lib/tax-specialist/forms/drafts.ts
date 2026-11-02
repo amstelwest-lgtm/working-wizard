@@ -1,6 +1,12 @@
 /**
- * Saved tax form drafts on public.tax_form_drafts. Until that table exists the
- * drafts live in this browser, so applying the migration late is safe.
+ * Saved tax form drafts on public.tax_form_drafts.
+ *
+ * A save inserts the next version and points the previous row at it
+ * (supersedes_id on the new row, superseded_by on the old one). Old
+ * versions stay. Until the versioning function exists, a save still
+ * upserts the single row the earlier table allowed, so applying the
+ * migration late does not drop a draft. If the table itself is missing,
+ * the version lives in this browser.
  */
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
@@ -15,6 +21,7 @@ import {
   type Irp6SourceKind,
   zaToday,
 } from "./irp6.ts";
+import { taxFormByCode, type TaxFormCode } from "./registry.ts";
 import { formatSampleDate } from "../sample-compute.ts";
 
 export type TaxFormDraftStatus = "draft" | "approved" | "downloaded";
@@ -25,12 +32,17 @@ export const TAX_FORM_DRAFT_STATUS_LABEL: Record<TaxFormDraftStatus, string> = {
   downloaded: "Downloaded",
 };
 
-export type TaxFormDraftField = { value: string | Irp6Adjustment[]; source: Irp6SourceKind };
+export type TaxFormDraftField = {
+  value: string | Irp6Adjustment[];
+  source: Irp6SourceKind;
+  /** Client file the figure was read from. Absent when the source is not a file. */
+  fileId?: string | null;
+};
 
 export type TaxFormDraft = {
   id: string;
   client_id: string;
-  form_code: "IRP6" | "IRP5";
+  form_code: TaxFormCode;
   tax_year: number;
   period: number | null;
   subject: string | null;
@@ -43,6 +55,14 @@ export type TaxFormDraft = {
   downloaded_at: string | null;
   created_at: string;
   updated_at: string;
+  version: number;
+  /** The version this row replaced. Null on the first version. */
+  supersedes_id: string | null;
+  /** The version that replaced this row. Null on the current version. */
+  superseded_by: string | null;
+  rules_year: number | null;
+  /** field id → client file id. Mirrors fileId on each field. */
+  field_sources: Record<string, string>;
 };
 
 const MISSING_TABLE = /tax_form_drafts|42P01|PGRST205|schema cache/;
@@ -52,8 +72,12 @@ function localRead(clientId: string): TaxFormDraft[] {
   if (typeof localStorage === "undefined") return [];
   try {
     const raw = localStorage.getItem(LOCAL_KEY + clientId);
-    const rows = raw ? (JSON.parse(raw) as TaxFormDraft[]) : [];
-    return Array.isArray(rows) ? rows : [];
+    const rows = raw ? (JSON.parse(raw) as unknown[]) : [];
+    return Array.isArray(rows)
+      ? rows.flatMap((row) =>
+          row && typeof row === "object" ? [asDraft(row as Record<string, unknown>)] : [],
+        )
+      : [];
   } catch {
     return [];
   }
@@ -68,8 +92,8 @@ function localWrite(clientId: string, rows: TaxFormDraft[]): void {
   }
 }
 
-function sameReturn(
-  a: TaxFormDraft,
+export function sameTaxReturn(
+  a: Pick<TaxFormDraft, "form_code" | "tax_year" | "period" | "subject">,
   b: Pick<TaxFormDraft, "form_code" | "tax_year" | "period" | "subject">,
 ): boolean {
   return (
@@ -80,11 +104,39 @@ function sameReturn(
   );
 }
 
+/** A row still in force. A superseded row, including a parked self-pointer, is history. */
+export function isCurrentTaxDraft(row: { superseded_by?: string | null }): boolean {
+  return row.superseded_by == null;
+}
+
+export function fieldSourcesFromFields(
+  fields: Record<string, TaxFormDraftField>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [id, field] of Object.entries(fields)) {
+    const fileId = typeof field?.fileId === "string" ? field.fileId.trim() : "";
+    if (fileId) out[id] = fileId;
+  }
+  return out;
+}
+
 function asDraft(row: Record<string, unknown>): TaxFormDraft {
+  const code = typeof row.form_code === "string" ? row.form_code : "IRP6";
+  const formCode = (taxFormByCode(code)?.code ?? code) as TaxFormCode;
+  const sources =
+    row.field_sources && typeof row.field_sources === "object" && !Array.isArray(row.field_sources)
+      ? (row.field_sources as Record<string, string>)
+      : {};
   return {
     ...(row as unknown as TaxFormDraft),
+    form_code: formCode,
     fields: (row.fields ?? {}) as TaxFormDraft["fields"],
     approvals: (row.approvals ?? {}) as TaxFormDraft["approvals"],
+    version: typeof row.version === "number" && row.version >= 1 ? row.version : 1,
+    supersedes_id: typeof row.supersedes_id === "string" ? row.supersedes_id : null,
+    superseded_by: typeof row.superseded_by === "string" ? row.superseded_by : null,
+    rules_year: typeof row.rules_year === "number" ? row.rules_year : null,
+    field_sources: sources,
   };
 }
 
@@ -104,13 +156,25 @@ export async function loadTaxFormDrafts(clientId: string): Promise<TaxFormDraft[
   const server = Array.isArray(data)
     ? data.map((row) => asDraft(row as Record<string, unknown>))
     : [];
-  const extra = local.filter((row) => !server.some((s) => sameReturn(s, row)));
+  const extra = local.filter((row) => !server.some((s) => sameTaxReturn(s, row)));
   return [...server, ...extra].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 
-export type TaxFormDraftSave = Omit<TaxFormDraft, "id" | "created_at" | "updated_at"> & {
+export type TaxFormDraftSave = Omit<
+  TaxFormDraft,
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "version"
+  | "supersedes_id"
+  | "superseded_by"
+  | "rules_year"
+  | "field_sources"
+> & {
   id?: string;
   created_at?: string;
+  rules_year?: number | null;
+  field_sources?: Record<string, string>;
 };
 
 function newId(): string {
@@ -119,36 +183,154 @@ function newId(): string {
     : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-/** Upsert one return. Returns the saved row, from the server when it answered. */
-export async function saveTaxFormDraft(draft: TaxFormDraftSave): Promise<TaxFormDraft> {
-  const now = new Date().toISOString();
-  const local: TaxFormDraft = {
-    ...draft,
-    id: draft.id ?? newId(),
-    created_at: draft.created_at ?? now,
+/**
+ * The next version of one return. The previous current row is left intact
+ * except for superseded_by. Nothing is written here.
+ */
+export function nextTaxFormVersion(
+  existing: readonly TaxFormDraft[],
+  draft: TaxFormDraftSave,
+  now = new Date().toISOString(),
+): { saved: TaxFormDraft; rest: TaxFormDraft[] } {
+  const current = existing
+    .filter((row) => sameTaxReturn(row, draft) && isCurrentTaxDraft(row))
+    .sort((a, b) => b.version - a.version)[0];
+  const saved: TaxFormDraft = {
+    id: newId(),
+    client_id: draft.client_id,
+    form_code: draft.form_code,
+    tax_year: draft.tax_year,
+    period: draft.period ?? null,
+    subject: draft.subject ?? null,
+    fields: draft.fields,
+    approvals: draft.approvals,
+    status: draft.status,
+    approved_by: draft.approved_by,
+    approved_by_name: draft.approved_by_name,
+    approved_at: draft.approved_at,
+    downloaded_at: draft.downloaded_at,
+    created_at: now,
     updated_at: now,
+    version: (current?.version ?? 0) + 1,
+    supersedes_id: current?.id ?? null,
+    superseded_by: null,
+    rules_year: draft.rules_year ?? null,
+    field_sources: draft.field_sources ?? fieldSourcesFromFields(draft.fields),
   };
-  const { id: _id, created_at: _created, ...payload } = local;
+  const rest = existing.map((row) =>
+    current && row.id === current.id ? { ...row, superseded_by: saved.id } : row,
+  );
+  return { saved, rest };
+}
+
+/** Drop the saved row into a list and mark the previous current version superseded. */
+export function applySavedDraft(prev: readonly TaxFormDraft[], row: TaxFormDraft): TaxFormDraft[] {
+  const rest = prev
+    .filter((item) => item.id !== row.id)
+    .map((item) =>
+      isCurrentTaxDraft(item) && sameTaxReturn(item, row)
+        ? { ...item, superseded_by: row.id }
+        : item,
+    );
+  return [row, ...rest];
+}
+
+function missingRpc(error: { message?: string; code?: string }): boolean {
+  const message = error.message ?? "";
+  const code = error.code ?? "";
+  return (
+    code === "PGRST202" ||
+    code === "42883" ||
+    /save_tax_form_draft_version|Could not find the function/i.test(message)
+  );
+}
+
+function rowFromRpc(data: unknown): Record<string, unknown> | null {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object") return null;
+  return row as Record<string, unknown>;
+}
+
+async function legacyUpsert(draft: TaxFormDraftSave): Promise<TaxFormDraft | null> {
   const { data, error } = await supabase
     .from("tax_form_drafts")
     .upsert(
       {
-        ...payload,
-        fields: payload.fields as unknown as Json,
-        approvals: payload.approvals as unknown as Json,
+        client_id: draft.client_id,
+        form_code: draft.form_code,
+        tax_year: draft.tax_year,
+        period: draft.period,
+        subject: draft.subject,
+        fields: draft.fields as unknown as Json,
+        approvals: draft.approvals as unknown as Json,
+        status: draft.status,
+        approved_by: draft.approved_by,
+        approved_by_name: draft.approved_by_name,
+        approved_at: draft.approved_at,
+        downloaded_at: draft.downloaded_at,
       },
       { onConflict: "client_id,form_code,tax_year,period,subject" },
     )
     .select("*")
     .single();
-  if (error || !data) {
-    if (error && !MISSING_TABLE.test(error.message ?? ""))
-      console.warn("tax_form_drafts save:", error.message);
-    const rows = localRead(draft.client_id).filter((row) => !sameReturn(row, local));
-    localWrite(draft.client_id, [local, ...rows]);
-    return local;
-  }
+  if (error || !data) return null;
   return asDraft(data as Record<string, unknown>);
+}
+
+/** Insert the next version. Returns the saved row, from the server when it answered. */
+export async function saveTaxFormDraft(draft: TaxFormDraftSave): Promise<TaxFormDraft> {
+  const now = new Date().toISOString();
+  const field_sources = draft.field_sources ?? fieldSourcesFromFields(draft.fields);
+  const rules_year = draft.rules_year ?? null;
+  const ready: TaxFormDraftSave = { ...draft, field_sources, rules_year };
+
+  const attempt = () =>
+    supabase.rpc("save_tax_form_draft_version", {
+      p_client_id: ready.client_id,
+      p_form_code: ready.form_code,
+      p_tax_year: ready.tax_year,
+      p_period: ready.period,
+      p_subject: ready.subject,
+      p_fields: ready.fields as unknown as Json,
+      p_approvals: ready.approvals as unknown as Json,
+      p_status: ready.status,
+      p_approved_by: ready.approved_by,
+      p_approved_by_name: ready.approved_by_name,
+      p_approved_at: ready.approved_at,
+      p_downloaded_at: ready.downloaded_at,
+      p_rules_year: rules_year,
+      p_field_sources: field_sources as unknown as Json,
+    });
+
+  let { data, error } = await attempt();
+  if (error?.code === "23505") {
+    const retry = await attempt();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  const savedRow = !error ? rowFromRpc(data) : null;
+  if (savedRow) {
+    const rows = localRead(draft.client_id).filter((row) => !sameTaxReturn(row, ready));
+    localWrite(draft.client_id, rows);
+    return asDraft(savedRow);
+  }
+
+  if (error && missingRpc(error)) {
+    const legacy = await legacyUpsert(ready);
+    if (legacy) {
+      const rows = localRead(draft.client_id).filter((row) => !sameTaxReturn(row, ready));
+      localWrite(draft.client_id, rows);
+      return legacy;
+    }
+  }
+
+  if (error && !MISSING_TABLE.test(error.message ?? "") && !missingRpc(error))
+    console.warn("tax_form_drafts save:", error.message);
+
+  const { saved, rest } = nextTaxFormVersion(localRead(draft.client_id), ready, now);
+  localWrite(draft.client_id, [saved, ...rest]);
+  return saved;
 }
 
 export async function currentApprover(): Promise<{ id: string | null; name: string }> {
@@ -198,13 +380,33 @@ export function irp6InputsFromDraft(draft: TaxFormDraft | null | undefined): Irp
 }
 
 export function findIrp6Draft(
-  drafts: TaxFormDraft[],
+  drafts: readonly TaxFormDraft[],
   yearOfAssessment: number,
   period: Irp6Period,
 ): TaxFormDraft | undefined {
-  return drafts.find(
-    (row) => row.form_code === "IRP6" && row.tax_year === yearOfAssessment && row.period === period,
-  );
+  return drafts
+    .filter(
+      (row) =>
+        isCurrentTaxDraft(row) &&
+        row.form_code === "IRP6" &&
+        row.tax_year === yearOfAssessment &&
+        row.period === period,
+    )
+    .sort((a, b) => b.version - a.version)[0];
+}
+
+export function currentTaxDrafts(drafts: readonly TaxFormDraft[]): TaxFormDraft[] {
+  return drafts.filter((row) => isCurrentTaxDraft(row));
+}
+
+/** Earlier versions of the same return, newest first. The current row is omitted. */
+export function taxDraftHistory(
+  drafts: readonly TaxFormDraft[],
+  current: TaxFormDraft,
+): TaxFormDraft[] {
+  return drafts
+    .filter((row) => row.id !== current.id && sameTaxReturn(row, current))
+    .sort((a, b) => b.version - a.version || b.updated_at.localeCompare(a.updated_at));
 }
 
 /** A saved timestamp as the day in South Africa. */
@@ -213,14 +415,24 @@ export function draftDayLabel(timestamp: string): string {
   return formatSampleDate(Number.isNaN(at.getTime()) ? timestamp.slice(0, 10) : zaToday(at));
 }
 
-/** One Recent activity line per saved return. */
+export function taxDraftTitle(
+  row: Pick<TaxFormDraft, "form_code" | "tax_year" | "period" | "subject">,
+): string {
+  if (row.form_code === "IRP6") return `IRP6 ${row.tax_year}, period ${row.period ?? 1}`;
+  const name = taxFormByCode(row.form_code)?.label ?? row.form_code;
+  if (row.subject) return `${name} ${row.tax_year}, ${row.subject}`;
+  if (row.period != null) return `${name} ${row.tax_year}, period ${row.period}`;
+  return `${name} ${row.tax_year}`;
+}
+
+/** One Recent activity line per current saved return. */
 export function draftActivity(
-  drafts: TaxFormDraft[],
+  drafts: readonly TaxFormDraft[],
 ): Array<{ id: string; text: string; at: string }> {
-  return drafts
+  return currentTaxDrafts(drafts)
     .filter((row) => row.form_code === "IRP6")
     .map((row) => {
-      const what = `IRP6 ${row.tax_year}, period ${row.period ?? 1}`;
+      const what = taxDraftTitle(row);
       const approved =
         row.approved_by_name && row.approved_at
           ? ` Approved by ${row.approved_by_name} on ${draftDayLabel(row.approved_at)}.`

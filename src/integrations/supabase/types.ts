@@ -2760,6 +2760,27 @@ export type Database = {
         }
         Relationships: []
       }
+      tax_form_catalog: {
+        Row: {
+          code: string
+          label: string
+          entity: string
+          status: string
+        }
+        Insert: {
+          code: string
+          label: string
+          entity: string
+          status: string
+        }
+        Update: {
+          code?: string
+          label?: string
+          entity?: string
+          status?: string
+        }
+        Relationships: []
+      }
       tax_form_drafts: {
         Row: {
           id: string
@@ -2777,6 +2798,11 @@ export type Database = {
           downloaded_at: string | null
           created_at: string
           updated_at: string
+          version: number
+          supersedes_id: string | null
+          superseded_by: string | null
+          rules_year: number | null
+          field_sources: Json
         }
         Insert: {
           id?: string
@@ -2794,6 +2820,11 @@ export type Database = {
           downloaded_at?: string | null
           created_at?: string
           updated_at?: string
+          version?: number
+          supersedes_id?: string | null
+          superseded_by?: string | null
+          rules_year?: number | null
+          field_sources?: Json
         }
         Update: {
           id?: string
@@ -2811,6 +2842,11 @@ export type Database = {
           downloaded_at?: string | null
           created_at?: string
           updated_at?: string
+          version?: number
+          supersedes_id?: string | null
+          superseded_by?: string | null
+          rules_year?: number | null
+          field_sources?: Json
         }
         Relationships: [
           {
@@ -2818,6 +2854,27 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tax_form_drafts_form_code_fkey"
+            columns: ["form_code"]
+            isOneToOne: false
+            referencedRelation: "tax_form_catalog"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "tax_form_drafts_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "tax_form_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tax_form_drafts_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "tax_form_drafts"
             referencedColumns: ["id"]
           },
         ]
@@ -2979,6 +3036,25 @@ export type Database = {
       is_client_writer: {
         Args: { _user_id: string; _client_id: string }
         Returns: boolean
+      }
+      save_tax_form_draft_version: {
+        Args: {
+          p_client_id: string
+          p_form_code: string
+          p_tax_year: number
+          p_period: number | null
+          p_subject: string | null
+          p_fields: Json
+          p_approvals: Json
+          p_status: string
+          p_approved_by: string | null
+          p_approved_by_name: string | null
+          p_approved_at: string | null
+          p_downloaded_at: string | null
+          p_rules_year: number | null
+          p_field_sources: Json
+        }
+        Returns: Json
       }
       is_firm_member: {
         Args: { _firm_id: string; _user_id: string }

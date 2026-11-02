@@ -102,6 +102,7 @@ export function TaxPackCard({
   onDraft,
   onApprove,
   onDiscard,
+  showWhenEmpty = false,
 }: {
   drafts: TaxPackDraftRow[];
   canDraft: boolean;
@@ -110,9 +111,11 @@ export function TaxPackCard({
   onDraft: () => void;
   onApprove: (draftId: string) => void;
   onDiscard: (draftId: string) => void;
+  /** Keep the panel on screen when nothing has been drafted yet. */
+  showWhenEmpty?: boolean;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  if (!canDraft && drafts.length === 0) return null;
+  if (!showWhenEmpty && !canDraft && drafts.length === 0) return null;
   return (
     <div className="flex flex-col gap-3" data-tax-pack-panel="">
       <h3 className="text-sm font-semibold">Tax pack</h3>
@@ -128,6 +131,7 @@ export function TaxPackCard({
           Draft tax pack
         </button>
       ) : null}
+      {drafts.length === 0 ? <p className="text-sm text-[#3D5270]">No tax pack yet.</p> : null}
       {drafts.map((draft) => {
         const long = draft.body.length > 600 && !expanded[draft.id];
         return (
@@ -221,7 +225,16 @@ function parseDraftRows(data: unknown): TaxPackDraftRow[] {
 }
 
 /** Loads the client's tax packs and wires drafting and approval. */
-export function TaxPackPanel({ clientId, sendId }: { clientId: string; sendId: string | null }) {
+export function TaxPackPanel({
+  clientId,
+  sendId,
+  showWhenEmpty = false,
+}: {
+  clientId: string;
+  sendId: string | null;
+  /** Show the panel before a pack exists. Draft still waits for a finished send. */
+  showWhenEmpty?: boolean;
+}) {
   const draftPack = useServerFn(draftTaxPackFromSend);
   const [drafts, setDrafts] = useState<TaxPackDraftRow[]>([]);
   const [busy, setBusy] = useState(false);
@@ -298,6 +311,7 @@ export function TaxPackPanel({ clientId, sendId }: { clientId: string; sendId: s
       canDraft={sendId != null}
       busy={busy}
       notice={notice}
+      showWhenEmpty={showWhenEmpty}
       onDraft={() => void onDraft()}
       onApprove={(draftId) => void setStatus(draftId, "draft", "ready")}
       onDiscard={(draftId) => {

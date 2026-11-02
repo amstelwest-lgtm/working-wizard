@@ -31,10 +31,10 @@ import {
   findIrp6Draft,
   irp6DraftFields,
   irp6InputsFromDraft,
-  saveTaxFormDraft,
   type TaxFormDraft,
   type TaxFormDraftStatus,
 } from "@/lib/tax-specialist/forms/drafts";
+import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
 import { formatSampleCents, formatSampleDate } from "@/lib/tax-specialist/sample-compute";
 import "./za-irp6-sheet.css";
 
@@ -215,12 +215,20 @@ export function ZaIrp6Sheet({
   drafts,
   onSaved,
   onBack,
+  backLabel = "All SARS forms",
+  initialYear,
+  initialPeriod,
 }: {
   client: Irp6SheetClient;
   today: string;
   drafts: TaxFormDraft[];
   onSaved: (draft: TaxFormDraft) => void;
   onBack: () => void;
+  /** Where Back returns. The tax page returns to the form list. */
+  backLabel?: string;
+  /** Open a specific return. Defaults to the period due around today. */
+  initialYear?: number;
+  initialPeriod?: Irp6Period;
 }) {
   const initial = useMemo(
     () => irp6DefaultPick(today, client.fyStartMonth),
@@ -230,8 +238,8 @@ export function ZaIrp6Sheet({
     () => irp6YearOptions(today, client.fyStartMonth),
     [today, client.fyStartMonth],
   );
-  const [year, setYear] = useState(initial.yearOfAssessment);
-  const [period, setPeriod] = useState<Irp6Period>(initial.period);
+  const [year, setYear] = useState(initialYear ?? initial.yearOfAssessment);
+  const [period, setPeriod] = useState<Irp6Period>(initialPeriod ?? initial.period);
   const saved = findIrp6Draft(drafts, year, period);
   const [inputs, setInputs] = useState<Irp6Inputs>(() => irp6InputsFromDraft(saved));
   const [approvals, setApprovals] = useState<Approvals>(() => saved?.approvals ?? {});
@@ -302,9 +310,7 @@ export function ZaIrp6Sheet({
     approver: { id: string | null; name: string | null; at: string | null },
     downloadedAt?: string,
   ) => {
-    const row = await saveTaxFormDraft({
-      id: saved?.id,
-      created_at: saved?.created_at,
+    const row = await saveCatalogDraft({
       client_id: client.id,
       form_code: "IRP6",
       tax_year: year,
@@ -432,7 +438,7 @@ export function ZaIrp6Sheet({
     <div className="irp6" data-irp6-sheet="true" data-irp6-status={status}>
       <header className="irp6-head">
         <button type="button" className="irp6-back" onClick={onBack}>
-          ← All SARS forms
+          ← {backLabel}
         </button>
         <div className="irp6-title-row">
           <h2 className="irp6-title">IRP6 preparation sheet</h2>
@@ -792,8 +798,14 @@ export function ZaIrp6Sheet({
         >
           {busy === "save" ? "Saving…" : "Save draft"}
         </button>
-        <span className="irp6-saved" data-irp6-saved={savedAt ?? undefined}>
-          {savedAt ? `Saved ${draftDayLabel(savedAt)}` : "Not saved yet"}
+        <span
+          className="irp6-saved"
+          data-irp6-saved={savedAt ?? undefined}
+          data-irp6-version={saved?.version ?? undefined}
+        >
+          {savedAt
+            ? `Saved ${draftDayLabel(savedAt)}${saved?.version ? `, version ${saved.version}` : ""}`
+            : "Not saved yet"}
         </span>
         {error ? (
           <p className="irp6-field-error" role="alert">
