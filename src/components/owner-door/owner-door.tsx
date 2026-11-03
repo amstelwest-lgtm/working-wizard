@@ -5,7 +5,6 @@
 import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ClientGroupChrome } from "@/components/client-group-chrome";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { ClientLibrary } from "@/components/client-library";
@@ -1107,7 +1106,6 @@ export function OwnerDoor({
       onProfile={onProfile}
       periodLabel={booksPeriodPillLabel(periodEnd, statementSpan)}
     >
-      <ClientGroupChrome clientId={clientId} linkCompanies={false} onOpenCompany={onSwitch} />
       {railScreen === "home" ? (
         <OwnerHome
           variant="character"
