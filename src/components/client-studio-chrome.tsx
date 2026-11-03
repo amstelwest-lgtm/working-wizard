@@ -11,7 +11,7 @@ import { stageAgentDisplayName, stageAgentKeys } from "@/lib/tax-specialist/agen
 /** Flat heading list, top to bottom. Kickers are not items. */
 export const CLIENT_RAIL = [
   { id: "home", label: "Home" },
-  { id: "health", label: "Health" },
+  { id: "health", label: "Diagnose" },
   { id: "cash", label: "Cash flow" },
   { id: "profit", label: "Profit" },
   { id: "budget", label: "Budget" },
@@ -74,7 +74,7 @@ function clientSections(
       headings: [
         {
           id: "health",
-          label: "Health",
+          label: "Diagnose",
           to: go("health"),
           items: subs("health", [
             { id: "score", label: "Score" },

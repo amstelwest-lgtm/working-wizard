@@ -25,7 +25,7 @@ export type OwnerScreen =
 
 const RAIL: { id: string; label: string; screen: OwnerScreen }[] = [
   { id: "home", label: "Home", screen: "home" },
-  { id: "health", label: "Health", screen: "health" },
+  { id: "health", label: "Diagnose", screen: "health" },
   { id: "cash", label: "Cash flow", screen: "cash" },
   { id: "profit", label: "Profit", screen: "profit" },
   { id: "budget", label: "Budget", screen: "budget" },

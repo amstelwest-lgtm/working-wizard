@@ -148,7 +148,7 @@ const FEATURES: readonly FeatureDef[] = [
   },
   {
     id: "health",
-    label: "Health",
+    label: "Diagnose",
     hint: "Health score",
     order: 10,
     scope: "client",

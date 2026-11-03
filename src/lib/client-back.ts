@@ -9,8 +9,8 @@ export function clientBackTarget(input: {
   const parent: Record<string, { label: string; tab: string }> = {
     overview: { label: "Home", tab: "home" },
     ask: { label: "Home", tab: "home" },
-    ratios: { label: "Health", tab: "health" },
-    health: { label: "Health", tab: "health" },
+    ratios: { label: "Diagnose", tab: "health" },
+    health: { label: "Diagnose", tab: "health" },
     cash: { label: "Cash flow", tab: "cash" },
     profit: { label: "Profit", tab: "profit" },
     budget: { label: "Budget", tab: "budget" },

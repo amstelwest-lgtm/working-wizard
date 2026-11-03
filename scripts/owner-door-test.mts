@@ -1258,7 +1258,7 @@ assert(/\.owner-tile p \{[^}]*color: var\(--ink\)/.test(css), "tile sentences us
 const shell = readFileSync("src/components/owner-door/owner-shell.tsx", "utf8");
 assert(shell.includes("<ThemeToggle />"), "the owner shell uses the shared theme toggle");
 assert(shell.split("<ThemeToggle />").length >= 3, "the toggle sits in the header and in the menu");
-assert(shell.includes('label: "Health"'), "health is on the rail");
+assert(shell.includes('label: "Diagnose"'), "diagnose is on the rail");
 assert(shell.includes('label: "Cash flow"'), "cash flow is on the rail");
 assert(shell.includes('label: "Budget"'), "budget is on the rail");
 assert(shell.includes('label: "Profit"'), "profit stays reachable");
@@ -1268,7 +1268,7 @@ assert(!shell.includes('label: "Actions"'), "actions is not a separate rail item
 const railLabels = [...shell.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
 assert(
   railLabels.join(" | ") ===
-    "Home | Health | Cash flow | Profit | Budget | Next moves | Accountant portal",
+    "Home | Diagnose | Cash flow | Profit | Budget | Next moves | Accountant portal",
   `rail order is ${railLabels.join(" | ")}`,
 );
 assert(!shell.includes('label: "Deliverables"'), "Deliverables is not an owner rail item");
