@@ -173,3 +173,12 @@ test("client chrome exposes group status for a group of one", () => {
   assert.match(source, /Group status/);
   assert.doesNotMatch(source, /!groupChromeVisible\(group\.companies\.length\)\) return null/);
 });
+
+test("access confirm can be dismissed without running the RPC", () => {
+  const source = readFileSync(
+    new URL("../src/components/client-group-panel.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /dismissAccessConfirm/);
+  assert.match(source, />\s*Cancel\s*</);
+});
