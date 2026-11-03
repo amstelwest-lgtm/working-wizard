@@ -43,7 +43,13 @@ function TaxCardShell({ variant }: { variant: "card" | "desk" | "stage" }) {
         size={variant === "card" ? "lg" : "sm"}
         motion="idle"
       />
-      <span className="owner-voice">{AGENT_CARD_CHECKING}</span>
+      {variant === "card" ? (
+        <span className="owner-lines" data-status-update="">
+          <span className="owner-voice">{AGENT_CARD_CHECKING}</span>
+        </span>
+      ) : (
+        <span className="owner-voice">{AGENT_CARD_CHECKING}</span>
+      )}
     </div>
   );
 }

@@ -232,7 +232,7 @@ function SampleHomeCard({ onOpen }: { onOpen: () => void }) {
         </span>
         <span className="owner-name">Milōn Tax Specialist</span>
         <span className="owner-status is-idle">SAMPLE</span>
-        <span className="owner-lines">
+        <span className="owner-lines" data-status-update="">
           <span className="owner-voice">
             SAMPLE demo · Harbour & Co — see how company tax at 27% will work
           </span>
@@ -271,7 +271,7 @@ function PreviewHomeCard({ onHandOff, onSample }: { onHandOff: () => void; onSam
         </span>
         <span className="owner-name">Milōn Tax Specialist</span>
         <span className="owner-status is-idle">Preview</span>
-        <span className="owner-lines">
+        <span className="owner-lines" data-status-update="">
           <span className="owner-voice">Prepares ITR14 and IRP6 workings for your sign-off.</span>
         </span>
       </button>
@@ -334,7 +334,7 @@ function PageHomeCard({ onOpen }: { onOpen: () => void }) {
           <TaxFace size="lg" place="card" />
         </span>
         <span className="owner-name">Milōn Tax Specialist</span>
-        <span className="owner-lines">
+        <span className="owner-lines" data-status-update="">
           <span className="owner-voice">
             Prepares SARS forms and tax workings for you to check and file.
           </span>

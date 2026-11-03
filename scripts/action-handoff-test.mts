@@ -112,7 +112,7 @@ assert(
     draftId,
     market: zaMarket,
     now: handoffNow,
-  }) === "Done by Financial Manager · 20:31 SAST. See result.",
+  }) === "Done by Financial Manager · 19 Oct 2026, 20:31 SAST. See result.",
   "a finished run names the time and the zone, and the draft id is the proof",
 );
 assert(
@@ -121,8 +121,8 @@ assert(
     draftId,
     market: usMarket,
     now: new Date("2026-10-20T05:37:00.000Z"),
-  }) === "Done by Advisor · 1:37 AM ET. See result.",
-  "a same-day US finish is the clock and ET",
+  }) === "Done by Advisor · Oct 20, 2026, 1:37 AM ET. See result.",
+  "a same-day US finish includes the date, the clock, and ET",
 );
 assert(
   handoffProgressCaption("financial_manager", "succeeded", {
@@ -133,7 +133,10 @@ assert(
   }) === "Done by Financial Manager · 19 Oct 2026, 07:37 SAST. See result.",
   "an earlier ZA finish includes the date and SAST",
 );
-assert(handoffClock(finishedAt, zaMarket, handoffNow) === "20:31 SAST", "same-day ZA clock keeps the zone");
+assert(
+  handoffClock(finishedAt, zaMarket, handoffNow) === "19 Oct 2026, 20:31 SAST",
+  "same-day ZA hand-off names the date, the clock, and the zone",
+);
 assert(
   botPickupCaption({
     assignee: "theo",
@@ -152,12 +155,12 @@ assert(
 const notedAt = "2026-10-19T18:31:00.000Z";
 assert(
   formatAssignmentNote({ note: "Assigned to theo.", at: notedAt, actorLabel: "amstel.west" }, zaMarket, handoffNow) ===
-    "Assigned to theo · by amstel.west · 20:31 SAST",
+    "Assigned to theo · by amstel.west · 19 Oct 2026, 20:31 SAST",
   "a person note names the author and the time",
 );
 assert(
   formatAssignmentNote({ note: "Handed to Analyst.", at: notedAt, actorLabel: "amstel.west" }, zaMarket, handoffNow) ===
-    "Assigned to Analyst · by amstel.west · 20:31 SAST",
+    "Assigned to Analyst · by amstel.west · 19 Oct 2026, 20:31 SAST",
   "a hand-off note names the author and the time",
 );
 const analystName = agentDisplayName("analyst");
@@ -171,7 +174,7 @@ assert(
     },
     zaMarket,
     handoffNow,
-  ) === `Assigned to ${analystName} · 20:31 SAST`,
+  ) === `Assigned to ${analystName} · 19 Oct 2026, 20:31 SAST`,
   "an old hand-off note does not name the bot as the author",
 );
 assert(
@@ -184,7 +187,7 @@ assert(
     },
     zaMarket,
     new Date("2026-10-20T05:37:00.000Z"),
-  ) === "Assigned to Financial Manager · 07:37 SAST",
+  ) === "Assigned to Financial Manager · 20 Oct 2026, 07:37 SAST",
   "a bot hand-off note hides the author and keeps the zone",
 );
 assert(
@@ -197,7 +200,7 @@ assert(
     },
     zaMarket,
     handoffNow,
-  ) === `${handoffCouldNotFinish("advisor")} · by ${agentDisplayName("advisor")} · 20:31 SAST`,
+  ) === `${handoffCouldNotFinish("advisor")} · by ${agentDisplayName("advisor")} · 19 Oct 2026, 20:31 SAST`,
   "a cost-ceiling finish keeps the agent and hides the raw stop",
 );
 assert(

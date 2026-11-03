@@ -81,8 +81,9 @@ export function handoffTriggerLabel(assignee: string | null | undefined, compact
 type HandoffMarket = DateMarket;
 
 /**
- * When a hand-off or finish happened. Same day in the market zone is
- * "07:37 SAST" / "1:37 AM ET". Any other day includes the date.
+ * When a hand-off or finish happened. Always the calendar day and the clock,
+ * so a same-day row is not only "20:31 SAST".
+ * ZA "19 Oct 2026, 20:31 SAST". US "Oct 19, 2026, 2:31 PM ET".
  * An unreadable stamp stays off the row.
  */
 export function handoffClock(
@@ -91,7 +92,7 @@ export function handoffClock(
   now: Date | string | number = new Date(),
 ): string | null {
   if (!at) return null;
-  return formatEventTime(at, market, now);
+  return formatEventTime(at, market, now, { alwaysDate: true });
 }
 
 /** A queued or running hand-off that has not moved for this long offers Retry. */
@@ -151,7 +152,7 @@ export function handoffIsSlow(
 
 /**
  * One note, with who wrote it and when.
- * "Assigned to theo · by amstel.west · 20:31"
+ * "Assigned to theo · by amstel.west · 19 Oct 2026, 20:31 SAST"
  */
 export function formatAssignmentNote(
   row: {

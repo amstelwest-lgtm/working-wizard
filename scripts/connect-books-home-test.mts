@@ -3,8 +3,9 @@
  * No ledger shows the card. A connected ledger hides it.
  * Run: pnpm test:connect-books-home
  */
+import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
-import { beginLedgerConnect } from "../src/lib/connect-books-start.ts";
+import { armLedgerConnectReturn, beginLedgerConnect } from "../src/lib/connect-books-start.ts";
 import {
   CONNECT_BOOKS_BODY,
   CONNECT_BOOKS_TITLE,
@@ -150,5 +151,40 @@ const started = await beginLedgerConnect({
 });
 assert(started === "redirect", "a configured connect follows the existing auth URL");
 assert(went.includes("login.xero.com"), "redirect uses the URL the connect card already returns");
+
+const target = new EventTarget();
+let released = 0;
+const stop = armLedgerConnectReturn(() => {
+  released += 1;
+}, target);
+target.dispatchEvent(new Event("pageshow"));
+assert(released === 0, "a first paint does not clear Opening");
+target.dispatchEvent(new Event("pagehide"));
+target.dispatchEvent(new Event("pageshow"));
+assert(released === 1, "Back after leaving OAuth returns the connect control to idle");
+target.dispatchEvent(new Event("pageshow"));
+assert(released === 1, "the return listener fires once");
+stop();
+
+const persisted = new EventTarget();
+let persistedReleased = 0;
+armLedgerConnectReturn(() => {
+  persistedReleased += 1;
+}, persisted);
+const back = new Event("pageshow");
+Object.defineProperty(back, "persisted", { value: true });
+persisted.dispatchEvent(back);
+assert(persistedReleased === 1, "a back-forward cache restore clears Opening");
+
+for (const file of [
+  "src/components/use-home-ledger-connect.ts",
+  "src/components/xero-connect.tsx",
+  "src/components/qbo-connect.tsx",
+]) {
+  assert(
+    readFileSync(file, "utf8").includes("armLedgerConnectReturn"),
+    `${file} clears Opening when the browser restores the connect page`,
+  );
+}
 
 console.log("ok  connect books home");

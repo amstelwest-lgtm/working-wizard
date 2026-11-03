@@ -573,11 +573,13 @@ function sameCalendarDay(left: ClockParts, right: ClockParts): boolean {
  * Event line. Same calendar day in the market zone is the clock and zone
  * only: ZA "07:37 SAST", US "1:37 AM ET". Any other day is the full
  * date-time preset: "20 Oct 2026, 07:37 SAST" / "Oct 20, 2026, 1:37 AM ET".
+ * `alwaysDate` keeps that full preset on the same day too.
  */
 export function formatEventTime(
   at: Date | string | number,
   market: DateMarket,
   now: Date | string | number = new Date(),
+  opts?: { alwaysDate?: boolean },
 ): string | null {
   const date = at instanceof Date ? at : new Date(at);
   if (Number.isNaN(date.getTime())) return null;
@@ -596,7 +598,7 @@ export function formatEventTime(
   const zone = parts.zoneName
     ? zoneLabel(parts.zoneName, date, timeZone)
     : offsetFromZone(date, timeZone);
-  if (sameCalendarDay(parts, nowParts)) return `${clock} ${zone}`;
+  if (!opts?.alwaysDate && sameCalendarDay(parts, nowParts)) return `${clock} ${zone}`;
   return dateTimeLabel(
     parts.year,
     parts.month,
