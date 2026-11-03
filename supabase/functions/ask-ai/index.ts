@@ -287,8 +287,8 @@ async function handleAskAi(req: Request): Promise<Response> {
               db: userClient,
               clientId,
               prepareLibraryArtifact: async (artifactId) => {
-                const { ingestLibraryArtifact } = await import("../_shared/library-ingest.ts");
-                await ingestLibraryArtifact(adminClient, artifactId, clientId);
+                const { prepareLibraryRead } = await import("../_shared/prepare-library-read.ts");
+                await prepareLibraryRead(artifactId);
               },
             });
           }

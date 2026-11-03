@@ -6195,6 +6195,7 @@ function ClientView() {
             open={showBankDrafter}
             onClose={() => setShowBankDrafter(false)}
             autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "accountant" } : null}
+            documents={{ clientId, fixedVisibility: "shared" }}
             onApply={async ({ fields, annualised, cashDraft, draft, autoPopulate }) => {
               const asStrings = Object.fromEntries(
                 Object.entries(fields).map(([k, v]) => [k, v != null ? String(v) : ""]),

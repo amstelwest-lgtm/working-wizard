@@ -163,8 +163,8 @@ async function runTool(
       db: ctx.userClient,
       clientId: ctx.clientId,
       prepareLibraryArtifact: async (artifactId) => {
-        const { ingestLibraryArtifact } = await import("../_shared/library-ingest.ts");
-        await ingestLibraryArtifact(ctx.adminClient, artifactId, ctx.clientId);
+        const { prepareLibraryRead } = await import("../_shared/prepare-library-read.ts");
+        await prepareLibraryRead(artifactId);
       },
     });
   }

@@ -49,15 +49,17 @@ import { ingestLibraryArtifacts } from "@/lib/library-ingest-client";
 import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
 
 /**
- * Owner side only: keep the statement pack in the client's documents with an
- * explicit visibility. Accountant callers leave this undefined — nothing is
- * archived and the dialog behaves as before.
+ * Keep the statement pack in Client library. The owner picks visibility.
+ * The accountant passes fixedVisibility so the file is shared and the
+ * owner-only picker stays off.
  */
 export interface UploadDocumentsTarget {
   clientId: string;
   /** Starting choice; the dialog still shows it before anything is read. */
   defaultVisibility?: UploadVisibility;
   onVisibilityChange?: (next: UploadVisibility) => void;
+  /** Stored as-is. The owner visibility picker is not shown. */
+  fixedVisibility?: UploadVisibility;
 }
 
 export interface BankDraftApplyPayload {
@@ -119,11 +121,15 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, doc
   }, [open, autoPopulate?.prefs]);
   const firstUpload = autoPopulate?.firstUpload ?? true;
   const [visibility, setVisibility] = useState<UploadVisibility>(
-    documents?.defaultVisibility ?? DEFAULT_UPLOAD_VISIBILITY,
+    documents?.fixedVisibility ?? documents?.defaultVisibility ?? DEFAULT_UPLOAD_VISIBILITY,
   );
   useEffect(() => {
-    if (open) setVisibility(documents?.defaultVisibility ?? DEFAULT_UPLOAD_VISIBILITY);
-  }, [open, documents?.defaultVisibility]);
+    if (open) {
+      setVisibility(
+        documents?.fixedVisibility ?? documents?.defaultVisibility ?? DEFAULT_UPLOAD_VISIBILITY,
+      );
+    }
+  }, [open, documents?.defaultVisibility, documents?.fixedVisibility]);
   const chooseVisibility = (next: UploadVisibility) => {
     setVisibility(next);
     documents?.onVisibilityChange?.(next);
@@ -369,7 +375,7 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, doc
               </div>
             )}
 
-            {documents && (
+            {documents && !documents.fixedVisibility && (
               <UploadVisibilityChoice
                 value={visibility}
                 onChange={chooseVisibility}

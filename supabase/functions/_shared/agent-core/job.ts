@@ -436,8 +436,8 @@ export async function runQueueJob(
           recordedKeys,
           market: client?.market,
           prepareLibraryArtifact: async (artifactId: string) => {
-            const { ingestLibraryArtifact } = await import("../library-ingest.ts");
-            await ingestLibraryArtifact(db, artifactId, job.clientId);
+            const { prepareLibraryRead } = await import("../prepare-library-read.ts");
+            await prepareLibraryRead(artifactId);
           },
         });
         if (!writes.has(name)) {
