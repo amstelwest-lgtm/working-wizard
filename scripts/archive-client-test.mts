@@ -6,8 +6,12 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { RemoveClientDialog } from "../src/components/client-file-settings";
-import { forgetPaintedBooks, readPaintedBook, rememberPaintedBook } from "../src/lib/practice-book-cache.ts";
+import { ClientFileSettings, RemoveClientDialog } from "../src/components/client-file-settings";
+import {
+  forgetPaintedBooks,
+  readPaintedBook,
+  rememberPaintedBook,
+} from "../src/lib/practice-book-cache.ts";
 import {
   ACTIVE_CLIENTS_OR,
   archiveClient,
@@ -41,7 +45,10 @@ const visible = visibleActiveClients([
 assert(visible.join(",") === "live,legacy", "the active list hides archived rows");
 rememberPaintedBook("archive-user", "archive-firm", [{ id: "archived" }]);
 forgetPaintedBooks();
-assert(readPaintedBook("archive-user", "archive-firm") === null, "archive drops the painted active list");
+assert(
+  readPaintedBook("archive-user", "archive-firm") === null,
+  "archive drops the painted active list",
+);
 assert(ACTIVE_CLIENTS_OR === "active.is.null,active.eq.true", "the query keeps null and true");
 
 const calls: string[] = [];
@@ -114,6 +121,23 @@ assert(dialog.includes('data-remove-client-dialog=""'), "confirm is a dialog");
 assert(dialog.includes(COPY), "the dialog shows the confirm copy");
 assert(dialog.includes('data-remove-client-confirm=""'), "confirm is an explicit action");
 assert(!dialog.toLowerCase().includes("permanently"), "the dialog does not describe a hard delete");
+const removeConfirm = dialog.match(/<button\b[^>]*data-remove-client-confirm=""[^>]*>/);
+assert(removeConfirm, "Remove client confirm is a button");
+assert(
+  removeConfirm[0].includes("bg-[#0B5FFF]"),
+  "the confirm paints its own fill outside .accountant-portal",
+);
+
+const card = renderToStaticMarkup(
+  createElement(ClientFileSettings, {
+    clientName: "Northwind",
+    onInvite: () => {},
+    onPracticeSettings: () => {},
+  }),
+);
+const removeTrigger = card.match(/<button\b[^>]*data-remove-client=""[^>]*>/);
+assert(removeTrigger, "the client card Remove control is a button");
+assert(removeTrigger[0].includes("border-[#0B5FFF]"), "Remove client has a visible control border");
 
 const closed = renderToStaticMarkup(
   createElement(RemoveClientDialog, {
