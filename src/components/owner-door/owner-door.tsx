@@ -1221,6 +1221,7 @@ export function OwnerDoor({
           }
           documents={
             clientId ? (
+              // Shared bank packs the accountant files show up here and are read for the bots.
               <ClientLibrary clientId={clientId} audience="owner" clientHasFirm={Boolean(firmId)} />
             ) : null
           }

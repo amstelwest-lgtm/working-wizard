@@ -83,6 +83,10 @@ export async function runMilonbotObjective(input: {
           audience: input.audience,
           userClient: input.userClient,
           adminClient: input.adminClient,
+          prepareLibraryArtifact: async (artifactId) => {
+            const { prepareLibraryRead } = await import("../_shared/prepare-library-read.ts");
+            await prepareLibraryRead(artifactId);
+          },
         }),
         session,
       );

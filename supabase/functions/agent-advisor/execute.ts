@@ -35,7 +35,13 @@ export async function executeAdvisorTool(
   const gate = executeAdvisorGate(name);
   if (!gate.allowed) return gate;
   const tool: AdvisorToolName = gate.name;
-  if (isSharedDeliverableRead(tool)) return executeSharedDeliverableRead(tool, args, ctx);
+  if (isSharedDeliverableRead(tool)) {
+    return executeSharedDeliverableRead(tool, args, {
+      db: ctx.db,
+      clientId: ctx.clientId,
+      prepareLibraryArtifact: ctx.prepareLibraryArtifact,
+    });
+  }
   if (REUSED.has(tool)) return readReusedAnalystTool(tool, ctx);
   if (tool === "get_cash_13_week") return readCash13Week(ctx);
   if (tool === "get_inbox") return readInbox(ctx);

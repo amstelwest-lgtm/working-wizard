@@ -6,9 +6,13 @@ import { buildPrompt, sealAskAiPrompt } from "./prompt.ts";
 import { callClaude, callClaudeMessages } from "./anthropic.ts";
 import { executeAskAiAnalystChatTool } from "./analyst-chat.ts";
 import {
-  askAiChatToolsForAgent,
+  askAiSessionTools,
+  questionAsksAboutLibrary,
   runAskAiToolSession,
 } from "../../../src/lib/ask-ai-analyst-tools.ts";
+import { executeSharedDeliverableRead } from "../_shared/agent-shared-reads.ts";
+import { isSharedDeliverableRead } from "../../../src/lib/agent-shared-reads.ts";
+import { executeFinancialManagerTool } from "../agent-financial-manager/execute.ts";
 import { redactStructured } from "../_shared/redact-identifiers.ts";
 import { chatAgentForMarket, chatCacheScope, normalizeChatReply, parseChatAgent } from "../_shared/chat-reply.ts";
 import {
@@ -189,7 +193,9 @@ async function handleAskAi(req: Request): Promise<Response> {
 
   // Analyst chat can message a peer and read a live inbox. A cached sentence
   // would skip those tools, including an older "no tools in this session" reply.
-  if (tier === "none" && agent !== "analyst") {
+  const skipDefinitionalCache =
+    agent === "analyst" || agent === "financial_manager" || questionAsksAboutLibrary(question);
+  if (tier === "none" && !skipDefinitionalCache) {
     const canonical = question.toLowerCase().replace(/\s+/g, " ").trim();
     // One cached answer per audience + agent, so one agent's reply never shows up in another's chat.
     const hash = await sha256(`${chatCacheScope(audience, agent)}|${clientId}|${figureKey}|${canonical}`);
@@ -259,9 +265,9 @@ async function handleAskAi(req: Request): Promise<Response> {
   const { system, user: userPrompt } = sealed;
 
   // ── Call Claude Sonnet 5.5 ────────────────────────────────────────────────
-  // Other agents stay a single completion with no tools key. The Analyst
-  // session exposes get_inbox, get_team_findings, and send_agent_message.
-  const chatTools = askAiChatToolsForAgent(promptAgent);
+  // Tax Specialist stays a single completion. Finance chats can read the
+  // library. The Analyst also has inbox tools. The Financial Manager can propose.
+  const chatTools = askAiSessionTools(promptAgent);
   let claudeResult;
   let toolsUsed: Array<{ name: string; status: "ok" | "empty" | "error" }> = [];
   try {
@@ -275,13 +281,36 @@ async function handleAskAi(req: Request): Promise<Response> {
         tools: chatTools,
         complete: (req) =>
           callClaudeMessages(req.system, req.messages, { tools: req.tools, maxTokens: 700 }),
-        execute: (name, args) =>
-          executeAskAiAnalystChatTool(name, args, {
+        execute: async (name, args) => {
+          if (isSharedDeliverableRead(name)) {
+            return executeSharedDeliverableRead(name, args, {
+              db: userClient,
+              clientId,
+              prepareLibraryArtifact: async (artifactId) => {
+                const { prepareLibraryRead } = await import("../_shared/prepare-library-read.ts");
+                await prepareLibraryRead(artifactId);
+              },
+            });
+          }
+          if (name === "propose_figure_adjustment" && promptAgent === "financial_manager") {
+            return executeFinancialManagerTool(name, args, {
+              clientId,
+              runId: "chat",
+              correlationId,
+              firmId: precard.firmId,
+              db: adminClient,
+              pool: [],
+              recordedKeys: new Set(),
+              agent: "financial_manager",
+            });
+          }
+          return executeAskAiAnalystChatTool(name, args, {
             clientId,
             correlationId,
             firmId: precard.firmId,
             db: adminClient,
-          }),
+          });
+        },
         redact: (payload) => redactStructured(payload, sealed.session),
       });
       toolsUsed = claudeResult.toolsUsed;
@@ -308,7 +337,7 @@ async function handleAskAi(req: Request): Promise<Response> {
     });
 
   // ── Cache definitional answers (hash key, service-role write) ─────────────
-  if (tier === "none" && agent !== "analyst" && toolsUsed.length === 0 && claudeResult.text) {
+  if (tier === "none" && !skipDefinitionalCache && toolsUsed.length === 0 && claudeResult.text) {
     const canonical = question.toLowerCase().replace(/\s+/g, " ").trim();
     // One cached answer per audience + agent, so one agent's reply never shows up in another's chat.
     const hash = await sha256(`${chatCacheScope(audience, agent)}|${clientId}|${figureKey}|${canonical}`);

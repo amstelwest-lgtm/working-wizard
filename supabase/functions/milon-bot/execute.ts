@@ -57,6 +57,7 @@ type Ctx = {
   audience: AgentAudience;
   userClient: SupabaseClient;
   adminClient: SupabaseClient;
+  prepareLibraryArtifact?: (artifactId: string) => Promise<void>;
 };
 
 function todayIso(): string {
@@ -390,7 +391,11 @@ export async function executeAgentTool(
   ctx: Ctx,
 ): Promise<unknown> {
   if (isSharedDeliverableRead(name)) {
-    return executeSharedDeliverableRead(name, args, { db: ctx.userClient, clientId: ctx.clientId });
+    return executeSharedDeliverableRead(name, args, {
+      db: ctx.userClient,
+      clientId: ctx.clientId,
+      prepareLibraryArtifact: ctx.prepareLibraryArtifact,
+    });
   }
   if (name === "get_company") {
     const [clientRes, peopleRes] = await Promise.all([

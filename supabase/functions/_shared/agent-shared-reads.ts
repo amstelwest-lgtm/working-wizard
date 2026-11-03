@@ -17,6 +17,7 @@ import {
   taxPackListItem,
   type SharedDeliverableRead,
 } from "../../../src/lib/agent-shared-reads.ts";
+import { libraryReadPending } from "../../../src/lib/library-document-read.ts";
 
 type Row = Record<string, unknown>;
 
@@ -143,27 +144,48 @@ async function listLibrary(db: ReadDb, clientId: string): Promise<unknown> {
   return { empty: false, files };
 }
 
+async function loadArtifact(
+  db: ReadDb,
+  clientId: string,
+  id: string,
+): Promise<{ row: Row | null; error: string | null; missing: boolean }> {
+  const { data, error } = await db
+    .from("client_artifacts")
+    .select("id, kind, period_label, meta, visibility, created_at")
+    .eq("client_id", clientId)
+    .eq("id", id)
+    .maybeSingle();
+  if (missingRelation(error)) return { row: null, error: null, missing: true };
+  if (error) return { row: null, error: error.message ?? "The read failed.", missing: false };
+  return { row: asRow(data), error: null, missing: false };
+}
+
 async function getLibraryDoc(
   db: ReadDb,
   clientId: string,
   args: Record<string, unknown>,
+  prepare?: (artifactId: string) => Promise<void>,
 ): Promise<unknown> {
   if (!isUuid(args.id)) return { error: "id must be the id from list_client_library." };
   const origin =
     args.origin === "source" ? "source" : args.origin === "artifact" ? "artifact" : null;
   if (!origin) return { error: "origin must be artifact or source." };
   if (origin === "artifact") {
-    const { data, error } = await db
-      .from("client_artifacts")
-      .select("id, kind, period_label, meta, visibility, created_at")
-      .eq("client_id", clientId)
-      .eq("id", args.id)
-      .maybeSingle();
-    if (missingRelation(error)) return { empty: true };
-    if (error) return { error: error.message ?? "The read failed." };
-    const row = asRow(data);
-    if (!row) return { empty: true };
-    return { empty: false, file: libraryDocBody(row, "artifact") };
+    let loaded = await loadArtifact(db, clientId, args.id);
+    if (loaded.missing) return { empty: true };
+    if (loaded.error) return { error: loaded.error };
+    if (!loaded.row) return { empty: true };
+    if (prepare && libraryReadPending(loaded.row.meta)) {
+      try {
+        await prepare(args.id);
+        loaded = await loadArtifact(db, clientId, args.id);
+        if (loaded.error) return { error: loaded.error };
+      } catch (err) {
+        console.warn("library ingest failed", err instanceof Error ? err.message : err);
+      }
+    }
+    if (!loaded.row) return { empty: true };
+    return { empty: false, file: libraryDocBody(loaded.row, "artifact") };
   }
   const { data, error } = await db
     .from("source_documents")
@@ -177,7 +199,7 @@ async function getLibraryDoc(
   if (!row) return { empty: true };
   const extracted = (await db
     .from("document_extractions")
-    .select("doc_type, supplier_name, fields, totals_check")
+    .select("doc_type, supplier_name, fields, line_items, totals_check")
     .eq("document_id", args.id)
     .limit(1)) as { data: unknown; error: QueryError };
   if (extracted.error && !missingRelation(extracted.error))
@@ -329,13 +351,19 @@ async function listClientSends(db: ReadDb, clientId: string): Promise<unknown> {
 export async function executeSharedDeliverableRead(
   name: string,
   args: Record<string, unknown>,
-  ctx: { db: SupabaseClient; clientId: string },
+  ctx: {
+    db: SupabaseClient;
+    clientId: string;
+    /** Fills extracted text on an upload that has not been read yet. */
+    prepareLibraryArtifact?: (artifactId: string) => Promise<void>;
+  },
 ): Promise<unknown> {
   if (!isSharedDeliverableRead(name)) return { error: "That read is not shared." };
   const db = dbOf(ctx.db);
   const tool: SharedDeliverableRead = name;
   if (tool === "list_client_library") return listLibrary(db, ctx.clientId);
-  if (tool === "get_client_library_doc") return getLibraryDoc(db, ctx.clientId, args);
+  if (tool === "get_client_library_doc")
+    return getLibraryDoc(db, ctx.clientId, args, ctx.prepareLibraryArtifact);
   if (tool === "list_tax_drafts") return listTaxDrafts(db, ctx.clientId);
   if (tool === "get_tax_draft") return getTaxDraft(db, ctx.clientId, args);
   if (tool === "list_tax_packs") return listTaxPacks(db, ctx.clientId);

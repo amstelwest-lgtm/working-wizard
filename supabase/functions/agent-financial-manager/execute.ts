@@ -44,7 +44,13 @@ export async function executeFinancialManagerTool(
   const gate = executeFinancialManagerGate(name);
   if (!gate.allowed) return gate;
   const tool: FmToolName = gate.name;
-  if (isSharedDeliverableRead(tool)) return executeSharedDeliverableRead(tool, args, ctx);
+  if (isSharedDeliverableRead(tool)) {
+    return executeSharedDeliverableRead(tool, args, {
+      db: ctx.db,
+      clientId: ctx.clientId,
+      prepareLibraryArtifact: ctx.prepareLibraryArtifact,
+    });
+  }
   if (REUSED.has(tool)) return readReusedAnalystTool(tool, ctx);
   if (tool === "get_books_quality") return readBooksQuality(ctx);
   if (tool === "get_cash_13_week") return readCash13Week(ctx);

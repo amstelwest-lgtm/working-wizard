@@ -61,6 +61,7 @@
     "test:onboarding": "vite-node --config scripts/vite-test.config.ts scripts/test-onboarding-rls.mts",
     "test:upload-visibility": "vite-node --config scripts/vite-test.config.ts scripts/upload-visibility-test.mts",
     "test:connections-library-upload": "vite-node --config scripts/vite-test.config.ts scripts/connections-library-upload-test.mts",
+    "test:library-document-read": "vite-node --config scripts/vite-test.config.ts scripts/library-document-read-test.mts",
     "test:upload-visibility-rls": "vite-node --config scripts/vite-test.config.ts scripts/test-upload-visibility-rls.mts",
     "test:invited-member": "vite-node --config scripts/vite-test.config.ts scripts/test-invited-member-flow.mts",
     "test:invite-onboarding": "vite-node --config scripts/vite-test.config.ts scripts/invite-accept-onboarding-test.mts",

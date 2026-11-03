@@ -55,6 +55,8 @@ export type AnalystExecCtx = {
   recordedKeys: Set<string>;
   /** clients.market. Missing means South Africa. */
   market?: unknown;
+  /** Reads an upload that is not in meta yet. Absent in tests. */
+  prepareLibraryArtifact?: (artifactId: string) => Promise<void>;
 };
 
 /** The finding is already saved. A failed supersede only leaves an older duplicate visible. */
@@ -119,7 +121,13 @@ export async function executeAnalystTool(
   if (!gate.allowed) return gate;
   const tool: AnalystToolName = gate.name;
 
-  if (isSharedDeliverableRead(tool)) return executeSharedDeliverableRead(tool, args, ctx);
+  if (isSharedDeliverableRead(tool)) {
+    return executeSharedDeliverableRead(tool, args, {
+      db: ctx.db,
+      clientId: ctx.clientId,
+      prepareLibraryArtifact: ctx.prepareLibraryArtifact,
+    });
+  }
   if (tool === "get_inbox" || tool === "get_team_findings" || tool === "send_agent_message") {
     const desk = await import("../_shared/agent-desk.ts");
     const peerCtx = { ...ctx, agent: "analyst" as const };

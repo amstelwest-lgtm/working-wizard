@@ -4,6 +4,16 @@
  * Pure shaping only. The edge loader talks to the database.
  * Nothing here writes, confirms a proposal, or returns a token or a file password.
  */
+import {
+  figureDraftsFromLibraryRead,
+  LIBRARY_READ_PROMPT,
+  libraryHasReadableContent,
+  readStoredLibrary,
+  sourceExtractionHasBody,
+  sourceLibraryStatement,
+} from "./library-document-read.ts";
+
+export { LIBRARY_READ_PROMPT };
 
 export const SHARED_DELIVERABLE_READS = [
   "list_client_library",
@@ -80,6 +90,13 @@ export function libraryListItem(
     clipText(row.doc_type, 80) ??
     clipText(row.kind, 80) ??
     (origin === "source" ? "Source file" : "File");
+  const read =
+    origin === "artifact"
+      ? libraryHasReadableContent(row.meta ?? meta)
+      : row.read === true ||
+        row.status === "extracted" ||
+        row.status === "proposed" ||
+        Boolean(clipText(row.doc_type, 80));
   return {
     id: row.id,
     origin,
@@ -89,6 +106,7 @@ export function libraryListItem(
     period_label: clipText(row.period_label, 80), // date-ok: stored label passed through, not reformatted
     status: clipText(row.status, 40) ?? clipText(row.visibility, 40),
     summary: clipText(meta.summary, 240) ?? clipText(row.supplier_name, 120),
+    read,
     at: row.created_at ?? row.received_at ?? null,
   };
 }
@@ -98,20 +116,31 @@ export function libraryDocBody(
   origin: "artifact" | "source",
 ): Record<string, unknown> {
   const meta = asRecord(row.meta) ?? {};
-  const base = libraryListItem({ ...row, ...meta }, origin);
+  const base = libraryListItem(row, origin);
   if (origin === "artifact") {
+    const stored = readStoredLibrary(row.meta);
+    const name = typeof base.name === "string" ? base.name : "File";
     return {
       ...base,
       source: clipText(meta.source, 40),
       account_label: clipText(meta.account_label, 120),
-      summary: clipText(meta.summary, 2000),
+      summary: clipText(stored.summary, 500) ?? clipText(meta.summary, 2000),
+      read: stored.status === "read",
+      content: stored.status === "read" ? clipText(stored.text, 12000) : null,
+      statement: stored.statement,
+      figure_drafts: figureDraftsFromLibraryRead(stored, name),
     };
   }
+  const extraction = row.extraction ?? null;
+  const statement = sourceLibraryStatement(extraction);
+  const read = sourceExtractionHasBody(extraction);
   return {
     ...base,
+    read,
     mime: clipText(row.mime, 80),
     supplier_name: clipText(row.supplier_name, 160),
-    extraction: redactDeliverable(row.extraction ?? null),
+    statement,
+    extraction: redactDeliverable(extraction),
   };
 }
 
@@ -312,7 +341,9 @@ export function formatPeerContextBlock(input: PeerContextInput): string {
     const shown = input.library.slice(0, 8).map((file) => {
       const name = clipText(file.name, 80) ?? "File";
       const kind = clipText(file.kind, 40);
-      return kind ? `${name} (${kind})` : name;
+      const read = file.read === true ? "read" : file.read === false ? "not read yet" : null;
+      const bits = [kind, read].filter((bit): bit is string => Boolean(bit));
+      return bits.length ? `${name} (${bits.join(", ")})` : name;
     });
     lines.push(`Library (${input.library.length}): ${shown.join("; ")}`);
   }
@@ -414,7 +445,7 @@ export function sharedDeliverableToolSchemas() {
     {
       name: "get_client_library_doc",
       description:
-        "One library file by id. origin is artifact or source. Summary and extraction only. No file bytes, tokens, or passwords.",
+        "One library file by id. origin is artifact or source. Returns read true with the extracted text and, for a bank statement, transactions and balances. Quote that body. Do not say the file has not been read when read is true. figure_drafts are not saved. No file bytes, tokens, or passwords.",
       input_schema: {
         type: "object",
         properties: {
@@ -457,4 +488,4 @@ export function sharedDeliverableToolSchemas() {
 }
 
 export const SHARED_READ_PROMPT =
-  "Shared reads are list_client_library, get_client_library_doc, list_tax_drafts, get_tax_draft, list_tax_packs, get_tax_pack, get_management_report, list_figure_proposals, and list_client_sends. Every runner has them. They do not write, send, confirm, or file. get_management_report returns the Management Report body when the pack schema is 2. list_figure_proposals reads proposals already saved. list_client_sends never returns a token or a file password. No tax advice. Do not invent a tax figure. Quote a tax draft or tax pack only when a tool returned it.";
+  `Shared reads are list_client_library, get_client_library_doc, list_tax_drafts, get_tax_draft, list_tax_packs, get_tax_pack, get_management_report, list_figure_proposals, and list_client_sends. Every runner has them. They do not write, send, confirm, or file. ${LIBRARY_READ_PROMPT} get_management_report returns the Management Report body when the pack schema is 2. list_figure_proposals reads proposals already saved. list_client_sends never returns a token or a file password. No tax advice. Do not invent a tax figure. Quote a tax draft or tax pack only when a tool returned it.`;

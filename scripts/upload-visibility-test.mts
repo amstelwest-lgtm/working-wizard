@@ -148,7 +148,11 @@ assert(/type="radio"/.test(choice) && /UPLOAD_VISIBILITIES\.map/.test(choice), "
 assert(/data-upload-visibility=\{value\}/.test(choice), "choice exposes the current value for tests");
 
 const bank = read("src/components/bank-statement-drafter.tsx");
-assert(/<UploadVisibilityChoice/.test(bank) && /documents && \(/.test(bank), "bank drafter shows the choice (owner side)");
+assert(
+  /<UploadVisibilityChoice/.test(bank) && /documents && !documents\.fixedVisibility && \(/.test(bank),
+  "bank drafter shows the choice on the owner side only",
+);
+assert(/fixedVisibility\?: UploadVisibility/.test(bank), "accountant can pin shared without showing the picker");
 assert(bank.indexOf("<UploadVisibilityChoice") < bank.indexOf("onClick={runDraft}"), "bank drafter: choice sits before the Draft button");
 assert(/archiveUploads\(\{\s*clientId: documents\.clientId,\s*visibility,\s*source: "bank_pack"/.test(bank), "bank drafter archives with the chosen visibility");
 assert((bank.match(/retainStaged: true/g) ?? []).length === 2 && bank.indexOf("archiveUploads({") < bank.indexOf("await unstage(transportPaths(payloadFiles))"), "bank drafter archives while the staged pack is still retained");
@@ -175,7 +179,11 @@ const extract = read("src/lib/extract-financials.functions.ts");
 assert(/retainStaged: z\.boolean\(\)\.optional\(\)/.test(extract) && /retain: data\.retainStaged/.test(extract), "extractPDFsWithAI honours retainStaged");
 
 const accountantRoute = read("src/routes/_authenticated/clients.$clientId.tsx");
-assert(!/documents=\{/.test(accountantRoute), "accountant drafter keeps its previous behaviour (no owner archive)");
+assert(
+  /documents=\{\{\s*clientId,\s*fixedVisibility:\s*"shared"\s*\}\}/.test(accountantRoute),
+  "accountant bank drafter archives as shared without the owner picker",
+);
+assert(!/defaultVisibility:/.test(accountantRoute), "accountant drafter does not wire owner upload state");
 
 const brain = read("src/components/client-brain-summary.tsx");
 assert(/<SharedDocumentsList docs=\{sharedDocs\}/.test(brain) && /a\.kind === "upload" && a\.storage_path/.test(brain), "Client Brain lists shared uploads (RLS-filtered)");

@@ -357,6 +357,7 @@ import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-br
 import { UploadVisibilityChoice } from "@/components/upload-visibility-choice";
 import { ClientLibrary } from "@/components/client-library";
 import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
+import { ingestLibraryArtifacts } from "@/lib/library-ingest-client";
 import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
@@ -2257,6 +2258,9 @@ function Index() {
     });
     const problem = describeArchiveFailures(archived);
     if (problem) toast.warning(problem);
+    if (archived.archived.length) {
+      void ingestLibraryArtifacts(archived.archived.map((row) => row.id));
+    }
   }, []);
 
   const handleStatementUpload = useCallback(

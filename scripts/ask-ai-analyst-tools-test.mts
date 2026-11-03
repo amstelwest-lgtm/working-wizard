@@ -368,10 +368,10 @@ function chatCtx(db: ReturnType<typeof messageDb>) {
 {
   const index = readFileSync(resolve("supabase/functions/ask-ai/index.ts"), "utf8");
   const anthropic = readFileSync(resolve("supabase/functions/ask-ai/anthropic.ts"), "utf8");
-  assert(index.includes("askAiChatToolsForAgent(promptAgent)"), "ask-ai selects tools for the chat agent");
+  assert(index.includes("askAiSessionTools(promptAgent)"), "ask-ai selects tools for the chat agent");
   assert(index.includes("runAskAiToolSession"), "ask-ai runs the tool session");
   assert(index.includes("callClaudeMessages"), "tool rounds use the messages call");
-  assert(index.includes('agent !== "analyst"'), "analyst replies are not served from the definitional cache");
+  assert(index.includes('agent === "analyst"'), "analyst replies are not served from the definitional cache");
   assert(anthropic.includes("ask-ai-claude-body.ts"), "the model call builds the body without the analyst tool module");
   assert(!anthropic.includes("ask-ai-analyst-tools"), "callClaude does not import the analyst tool list");
   assert(anthropic.includes("opts?.tools"), "the request can carry tools");
