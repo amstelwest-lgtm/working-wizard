@@ -4915,7 +4915,16 @@ function ClientView() {
                     financials={financials}
                     snapshots={snapshots}
                     prior={priorSnapshot?.financials ?? null}
-                    priorLabel={priorSnapshot?.period_label ?? null}
+                    priorLabel={
+                      priorSnapshot
+                        ? statementSpanLabel({
+                            periodStart: readStatementMeta(priorSnapshot.financials, clientMarket).periodStart,
+                            periodEnd: readStatementMeta(priorSnapshot.financials, clientMarket).periodEnd,
+                            periodLabel: priorSnapshot.period_label,
+                            market: clientMarket,
+                          })
+                        : null
+                    }
                     quoted={accountantProfitPeriod?.slice ?? null}
                     periodLabel={profitPeriodLabel}
                     fyStartMonth={fyStartMonth}
@@ -4966,6 +4975,7 @@ function ClientView() {
                     </ClientSubpageFrame>
                     }
                     waterfall={
+                  activeTab === "profit" && search.section === "waterfall" ? (
                   <>
                   <ClientSubpageFrame
                     id="waterfall"
@@ -5096,6 +5106,7 @@ function ClientView() {
                   </div>
                   </ClientSubpageFrame>
                   </>
+                  ) : null
                     }
                   />
                   ) : null}

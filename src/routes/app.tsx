@@ -4888,7 +4888,16 @@ function Index() {
                             financials={v as unknown as Record<string, unknown>}
                             snapshots={history}
                             prior={(ownerPrior?.financials as Record<string, unknown> | null) ?? null}
-                            priorLabel={ownerPrior?.period_label ?? null}
+                            priorLabel={
+                              ownerPrior
+                                ? statementSpanLabel({
+                                    periodStart: readStatementMeta(ownerPrior.financials, boardMarket).periodStart,
+                                    periodEnd: readStatementMeta(ownerPrior.financials, boardMarket).periodEnd,
+                                    periodLabel: ownerPrior.period_label,
+                                    market: boardMarket,
+                                  })
+                                : null
+                            }
                             quoted={ownerProfitPeriod?.slice ?? null}
                             periodLabel={ownerProfitPeriodLabel}
                             fyStartMonth={fyStartMonth}

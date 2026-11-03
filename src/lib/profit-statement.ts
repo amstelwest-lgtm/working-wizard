@@ -13,7 +13,7 @@ import {
   statementNetProfit,
 } from "./period-profit.ts";
 import { presentNumber, statementMonthKeys, statementPeriodBasis } from "./statement-cover.ts";
-import { isMonthStampLabel, storedYearToDateEnd } from "./statement-period.ts";
+import { isMonthStampLabel } from "./statement-period.ts";
 
 export type ProfitFlows = {
   income: number | null;
@@ -148,7 +148,7 @@ function sliceFinancials(slice: FiscalStatementSlice): Record<string, unknown> {
 
 function ytdFinancials(
   current: Record<string, unknown> | null,
-  fyStartMonth: number | null | undefined,
+  _fyStartMonth: number | null | undefined,
 ): { financials: Record<string, unknown> | null; partial: boolean } {
   if (!current) return { financials: null, partial: false };
   const ytdRevenue = num(current, "ytdRevenue");
@@ -158,10 +158,7 @@ function ytdFinancials(
   const ytdStart = day(current.ytdPeriodStart);
   const ytdEnd = day(current.ytdPeriodEnd);
   const sameRange = Boolean(start && end && ytdStart === start && ytdEnd === end);
-  const markedYear = storedYearToDateEnd(current, fyStartMonth, { locale: "en-US" }) != null;
-  if (sameRange || markedYear || (ytdRevenue == null && ytdNet == null && markedYear)) {
-    return { financials: current, partial: false };
-  }
+  if (sameRange) return { financials: current, partial: false };
   if (ytdRevenue == null && ytdNet == null) {
     const basis = statementPeriodBasis(current);
     const months =
@@ -460,7 +457,7 @@ export function profitSeriesPoints(input: {
   const candidates: Candidate[] = [];
   for (const row of input.snapshots ?? []) {
     const end = day(row.periodDate) ?? day(row.period_date) ?? day(row.financials?.periodEnd);
-    const built = candidateFrom(row.financials, end, row.periodLabel ?? row.period_label ?? null);
+    const built = candidateFrom(row.financials, end, null);
     if (built) candidates.push(built);
   }
   const currentEnd = day(input.currentPeriodEnd) ?? day(input.current?.periodEnd);
@@ -496,7 +493,11 @@ export function profitSeriesPoints(input: {
       );
       continue;
     }
-    points.push(pointFrom(`span:${cur.end}`, cur.end, cur.label, "period", cur.flows));
+    const range =
+      keys && keys.length > 1
+        ? `${monthLabel(keys[0]!)}–${monthLabel(keys[keys.length - 1]!)}`
+        : cur.label;
+    points.push(pointFrom(`span:${cur.end}`, cur.end, range, "period", cur.flows));
   }
 
   const byId = new Map<string, ProfitSeriesPoint>();

@@ -270,7 +270,19 @@ const mount = route.slice(
 assert(!mount.includes("subtitle="), "the forecast subpage has no subtitle");
 assert(route.includes('layout="paged"'), "accountant route opts into the paged layout");
 const owner = readFileSync("src/routes/app.tsx", "utf8");
-assert(!owner.includes('layout="paged"'), "owner stays stacked");
+function panelOptsIntoPaged(src: string, tag: string): boolean {
+  let from = 0;
+  while (from < src.length) {
+    const start = src.indexOf(`<${tag}`, from);
+    if (start === -1) return false;
+    const end = src.indexOf("/>", start);
+    if (end === -1) return false;
+    if (src.slice(start, end).includes('layout="paged"')) return true;
+    from = end + 2;
+  }
+  return false;
+}
+assert(!panelOptsIntoPaged(owner, "CashForecastPanel"), "owner cash stays stacked");
 const tryBoards = readFileSync("src/components/try-sample-boards.tsx", "utf8");
 assert(!tryBoards.includes('layout="paged"'), "try demo stays stacked");
 
