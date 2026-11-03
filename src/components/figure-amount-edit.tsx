@@ -99,7 +99,7 @@ export function FigureEditConfirm({
         surface: "waterfall",
         patch: { [pending.key]: pending.after },
         beforeValues: { [pending.key]: pending.before },
-      }).map((line) => line);
+      });
   return (
     <section
       className="mb-3 rounded-xl border border-[#DBEAFE] bg-white p-3 text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]"
