@@ -13,6 +13,18 @@ import {
 import type { ClientOwnerOnFile, PendingOwnerInvite } from "@/lib/client-owner-invites.functions";
 import { formatDate, type ResolvedMarket } from "@/lib/market";
 
+/**
+ * `btn ghost` is a 1px #dbeafe rim, so on the white client card it reads as
+ * text. The confirm dialog is portaled to document.body, outside
+ * `.accountant-portal`, so `.accountant-portal .btn` never reaches it.
+ * These classes paint the control themselves.
+ */
+const clientControl =
+  "inline-flex cursor-pointer items-center justify-center rounded-full px-6 py-2.5 text-[13.5px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] disabled:cursor-not-allowed disabled:opacity-50";
+const clientControlSecondary = `${clientControl} border border-[#0B5FFF] bg-white text-[#102A43] hover:text-[#0B5FFF] focus-visible:outline-[#0B5FFF] dark:border-[#60A5FA] dark:bg-transparent dark:text-[#F4F7FB]`;
+const clientControlPrimary = `${clientControl} bg-[#0B5FFF] text-white hover:bg-[#2563EB] focus-visible:outline-[#0B5FFF]`;
+const clientControlDanger = `${clientControl} bg-[#C43D4B] text-white hover:bg-[#8E2430] focus-visible:outline-[#C43D4B]`;
+
 export function RemoveClientDialog({
   clientName,
   open,
@@ -62,7 +74,7 @@ export function RemoveClientDialog({
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            className="btn gold"
+            className={clientControlPrimary}
             data-remove-client-confirm=""
             disabled={removing}
             autoFocus
@@ -70,7 +82,12 @@ export function RemoveClientDialog({
           >
             {removing ? "Removing…" : "Remove client"}
           </button>
-          <button type="button" className="btn ghost" onClick={onClose} disabled={removing}>
+          <button
+            type="button"
+            className={clientControlSecondary}
+            onClick={onClose}
+            disabled={removing}
+          >
             Cancel
           </button>
         </div>
@@ -151,14 +168,19 @@ export function DeleteClientDialog({
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            className="btn gold"
+            className={clientControlDanger}
             data-delete-client-confirm=""
             disabled={deleting || !ready}
             onClick={() => onConfirm(typed)}
           >
             {deleting ? "Deleting…" : "Delete permanently"}
           </button>
-          <button type="button" className="btn ghost" onClick={onClose} disabled={deleting}>
+          <button
+            type="button"
+            className={clientControlSecondary}
+            onClick={onClose}
+            disabled={deleting}
+          >
             Cancel
           </button>
         </div>
@@ -332,19 +354,21 @@ export function ClientFileSettings({
             Practice settings
           </button>
         </div>
-        <div className="mt-6 border-t border-[#DBEAFE] pt-4 dark:border-[#1e3a5f]">
+        <div className="mt-6 flex flex-wrap gap-2 border-t border-[#DBEAFE] pt-4 dark:border-[#1e3a5f]">
           <button
             type="button"
-            className="btn ghost"
+            className={clientControlSecondary}
             data-remove-client=""
+            disabled={removingClient}
             onClick={() => setConfirmClient(true)}
           >
             Remove client
           </button>
           <button
             type="button"
-            className="btn ghost mt-2"
+            className={clientControlDanger}
             data-delete-client=""
+            disabled={deletingClient}
             onClick={() => setConfirmDelete(true)}
           >
             Delete permanently
