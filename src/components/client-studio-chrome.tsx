@@ -1,4 +1,5 @@
 import { AccountantNav, type NavDestination, type NavSection } from "@/components/accountant-nav";
+import { CompanyGroupRail } from "@/components/client-group-chrome";
 import { CLIENT_NAV_OPEN_KEY } from "@/lib/accountant-nav-open";
 import {
   canonicalizeAccountantSearch,
@@ -205,6 +206,7 @@ export function ClientRail({
       }}
       back={{ label: "All clients", to: { to: "/clients" } }}
       onNavigate={onNavigate}
+      accessory={<CompanyGroupRail linkCompanies activeClientId={clientId} />}
     />
   );
 }
