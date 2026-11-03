@@ -1,7 +1,8 @@
 /**
- * Accountant action: pick an agent, a mission, an optional note, and send.
- * The invite goes out only when Send is clicked. Copy link copies the /a
- * address. The address is not printed on the page.
+ * Accountant action: pick an agent, then a mission on the next step, an
+ * optional note, and send. The invite goes out only when Send is clicked.
+ * Copy link copies the /a address. The address is not printed on the page.
+ * The mission report letter stays off this surface.
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -90,6 +91,7 @@ export function SendAgentPanel({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [agent, setAgent] = useState<SendAgentKey | null>(null);
+  const [surface, setSurface] = useState<"pick" | "mission">("pick");
   const [missionKey, setMissionKey] = useState<MissionKey | null>(null);
   const [firmNote, setFirmNote] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -102,6 +104,9 @@ export function SendAgentPanel({
   if (seenClientId !== clientId) {
     setSeenClientId(clientId);
     setRevealed(null);
+    setSurface("pick");
+    setAgent(null);
+    setMissionKey(null);
   }
   const revealedFileId = revealed?.fileId ?? null;
 
@@ -144,8 +149,10 @@ export function SendAgentPanel({
     setLinks((current) => ({ ...stored, ...current }));
   }, [sends]);
 
+  const linkForSend = (sendId: string) => links[sendId] ?? readStoredLink(sendId);
+
   const onCopyLink = async (sendId: string) => {
-    const url = links[sendId] ?? readStoredLink(sendId);
+    const url = linkForSend(sendId);
     if (!url) {
       setNotice("Resend the link, then copy it.");
       return;
@@ -156,6 +163,15 @@ export function SendAgentPanel({
     } catch {
       setNotice("The link could not be copied. It is also in the email.");
     }
+  };
+
+  const onOpenLink = (sendId: string) => {
+    const url = linkForSend(sendId);
+    if (!url) {
+      setNotice("Resend the link, then open it.");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   useEffect(() => {
@@ -236,7 +252,7 @@ export function SendAgentPanel({
       }
       if (!result.ok && result.reason === "already_open") {
         setNotice(
-          `A link is already active until ${formatDate(result.expiresAt, market)}. Resend it, or revoke it, before sending another.`,
+          `A link is already active until ${formatDate(result.expiresAt, market)}. Resend it, or cancel it, before sending another.`,
         );
         await reload();
         return;
@@ -247,6 +263,9 @@ export function SendAgentPanel({
       }
       setNotice("Sent.");
       setFirmNote("");
+      setSurface("pick");
+      setAgent(null);
+      setMissionKey(null);
       storeLink(result.sendId, result.url);
       setLinks((current) => ({ ...current, [result.sendId]: result.url }));
       await reload();
@@ -278,6 +297,15 @@ export function SendAgentPanel({
     } finally {
       setBusy(false);
     }
+  };
+
+  const onCancel = (sendId: string) => {
+    const send = sends.find((row) => row.id === sendId);
+    if (!send?.open) {
+      setNotice("This link is already closed.");
+      return;
+    }
+    void onRevoke(sendId);
   };
 
   const onShowPassword = async (fileId: string) => {
@@ -384,10 +412,13 @@ export function SendAgentPanel({
       ready={ready}
       loaded={loaded}
       notice={notice}
+      surface={surface}
       onAgent={(next) => {
+        if (next !== agent) setMissionKey(null);
         setAgent(next);
-        setMissionKey(null);
+        setSurface("mission");
       }}
+      onBack={() => setSurface("pick")}
       onMission={setMissionKey}
       onFirmNote={setFirmNote}
       onFirstName={setFirstName}
@@ -397,7 +428,8 @@ export function SendAgentPanel({
       }}
       onMint={() => void onMint()}
       onResend={(sendId) => void onMint(sendId)}
-      onRevoke={(sendId) => void onRevoke(sendId)}
+      onRevoke={(sendId) => onCancel(sendId)}
+      onOpenLink={onOpenLink}
       linkFor={(sendId) => links[sendId] ?? null}
       onCopyLink={(sendId) => void onCopyLink(sendId)}
       onReview={(sendId) => void onReview(sendId)}
@@ -521,6 +553,9 @@ export function SendAgentCard({
   onCopyLink,
   onReview,
   onOpenDocument,
+  onOpenLink,
+  onBack,
+  surface: surfaceProp,
   fileList = null,
 }: {
   country: string | null;
@@ -550,98 +585,428 @@ export function SendAgentCard({
   onCopyLink: (sendId: string) => void;
   onReview: (sendId: string) => void;
   onOpenDocument: (path: string) => void;
+  onOpenLink?: (sendId: string) => void;
+  onBack?: () => void;
+  /** pick is the agent list. mission is the next step. */
+  surface?: "pick" | "mission";
   fileList?: ReactNode;
 }) {
-  const grouped = agents
-    .map((key) => ({
-      key,
-      rows: sends.filter((send) => normalizeSendAgent(send.agent) === key),
-    }))
-    .filter((group) => group.rows.length > 0);
-  const shownIds = new Set(grouped.flatMap((group) => group.rows.map((send) => send.id)));
-  const leftover = sends.filter((send) => !shownIds.has(send.id));
-  if (leftover.length > 0) {
-    const key = normalizeSendAgent(leftover[0]?.agent) ?? "tax_specialist";
-    const existing = grouped.find((group) => group.key === key);
-    if (existing) existing.rows.push(...leftover);
-    else grouped.push({ key, rows: leftover });
-  }
+  const [ownSurface, setOwnSurface] = useState<"pick" | "mission">("pick");
+  const surface = surfaceProp ?? ownSurface;
+  const showMission = surface === "mission" && agent != null;
+  const chooseAgent = (key: SendAgentKey) => {
+    onAgent(key);
+    if (surfaceProp == null) setOwnSurface("mission");
+  };
+  const leaveMission = () => {
+    onBack?.();
+    if (surfaceProp == null) setOwnSurface("pick");
+  };
 
   return (
     <section
-      className="flex flex-col gap-4 text-[#102A43]"
+      className="flex flex-col gap-4 bg-white text-[#102A43]"
       data-send-agent=""
+      data-send-agent-step={showMission ? "mission" : "pick"}
       data-send-market={country ?? "unknown"}
     >
       {!loaded ? <p className="text-sm text-[#3D5270]">Opening Send an agent.</p> : null}
       {loaded && !ready ? (
         <p className="text-sm text-[#3D5270]">Send an agent is not available yet.</p>
       ) : null}
-      <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold">Choose who to send</h2>
-        <p className="text-sm leading-6 text-[#3D5270]">
-          Select one agent. The card you click is the person the client will see.
+      {showMission && agent ? (
+        <MissionStep
+          agent={agent}
+          missions={missions}
+          missionKey={missionKey}
+          firmNote={firmNote}
+          firstName={firstName}
+          email={email}
+          busy={busy}
+          ready={ready}
+          blocked={Boolean(open)}
+          notice={notice}
+          onBack={leaveMission}
+          onMission={onMission}
+          onFirmNote={onFirmNote}
+          onFirstName={onFirstName}
+          onEmail={onEmail}
+          onMint={onMint}
+        />
+      ) : (
+        <>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-base font-semibold">Choose who to send</h2>
+            <p className="text-sm leading-6 text-[#3D5270]">
+              Select one agent. The card you click is the person the client will see.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3" data-send-agent-picker="">
+            {agents.map((key) => {
+              const selected = agent === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={
+                    selected
+                      ? "flex min-h-11 flex-col items-start gap-2 rounded-2xl border-2 border-[#0B5FFF] bg-[#F4F8FF] p-3 text-left"
+                      : "flex min-h-11 flex-col items-start gap-2 rounded-2xl border border-[#DBEAFE] bg-white p-3 text-left"
+                  }
+                  aria-pressed={selected}
+                  data-send-agent-selected={selected ? "true" : "false"}
+                  disabled={!ready || busy}
+                  onClick={() => chooseAgent(key)}
+                >
+                  <span className="relative h-16 w-16 overflow-hidden rounded-2xl bg-[#DBEAFE] [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full [&_img]:object-cover [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover">
+                    <SilentAgentPortrait
+                      face={sendAgentFace(key)}
+                      label={sendAgentShortName(key)}
+                    />
+                  </span>
+                  <span className="text-sm font-semibold">{sendAgentShortName(key)}</span>
+                  <span className="text-sm leading-6 text-[#3D5270]">{sendAgentJobLine(key)}</span>
+                  <span
+                    className={
+                      selected ? "text-sm font-semibold text-[#0B5FFF]" : "text-sm text-[#3D5270]"
+                    }
+                  >
+                    {selected ? "Selected" : "Select this agent"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {notice ? <p className="text-sm text-[#3D5270]">{notice}</p> : null}
+          {sends.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-base font-semibold">Sent missions</h2>
+              {sends.map((send) => (
+                <MissionCard
+                  key={send.id}
+                  send={send}
+                  market={market}
+                  busy={busy}
+                  onOpen={() => {
+                    const known = linkFor(send.id);
+                    if (onOpenLink) onOpenLink(send.id);
+                    else if (known) window.open(known, "_blank", "noopener,noreferrer");
+                  }}
+                  onCopy={() => onCopyLink(send.id)}
+                  onResend={() => onResend(send.id)}
+                  onCancel={() => onRevoke(send.id)}
+                  onReview={() => onReview(send.id)}
+                  onOpenDocument={onOpenDocument}
+                />
+              ))}
+            </div>
+          ) : null}
+          {fileList}
+        </>
+      )}
+    </section>
+  );
+}
+
+const MENU =
+  "inline-flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm font-semibold text-[#102A43] hover:bg-[#F4F8FF] disabled:opacity-60";
+
+function MissionActionMenu({
+  sendId,
+  label,
+  busy,
+  onOpen,
+  onCopy,
+  onResend,
+  onCancel,
+}: {
+  sendId: string;
+  label: string;
+  busy: boolean;
+  onOpen: () => void;
+  onCopy: () => void;
+  onResend: () => void;
+  onCancel: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const run = (action: () => void) => {
+    setOpen(false);
+    action();
+  };
+  return (
+    <div className="flex flex-col gap-2" data-send-mission-actions={sendId}>
+      <button
+        type="button"
+        className={SECONDARY}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`Actions for ${label}`}
+        disabled={busy}
+        onClick={() => setOpen((value) => !value)}
+      >
+        Actions
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="flex flex-col gap-1 rounded-2xl border border-[#DBEAFE] bg-white p-2"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU}
+            data-send-agent-open=""
+            disabled={busy}
+            onClick={() => run(onOpen)}
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU}
+            data-send-agent-copy=""
+            disabled={busy}
+            onClick={() => run(onCopy)}
+          >
+            Copy link
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU}
+            data-send-agent-resend=""
+            disabled={busy}
+            onClick={() => run(onResend)}
+          >
+            Resend
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU}
+            data-send-agent-revoke=""
+            disabled={busy}
+            onClick={() => run(onCancel)}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function missionStage(send: AgentSendRow): string {
+  if (send.revokedAt) return "Cancelled";
+  return send.statusLabel ?? "Sent";
+}
+
+function MissionCard({
+  send,
+  market,
+  busy,
+  onOpen,
+  onCopy,
+  onResend,
+  onCancel,
+  onReview,
+  onOpenDocument,
+}: {
+  send: AgentSendRow;
+  market: DateMarket;
+  busy: boolean;
+  onOpen: () => void;
+  onCopy: () => void;
+  onResend: () => void;
+  onCancel: () => void;
+  onReview: () => void;
+  onOpenDocument: (path: string) => void;
+}) {
+  const agentKey = normalizeSendAgent(send.agent) ?? "tax_specialist";
+  const sentOn = send.createdAt ? formatDate(send.createdAt, market) : null;
+  return (
+    <article
+      className="flex flex-col gap-3 rounded-2xl border border-[#DBEAFE] bg-white p-4 text-[#102A43]"
+      data-send-mission-card={send.id}
+      data-send-agent-history={agentKey}
+    >
+      <p className="text-sm font-semibold text-[#0B5FFF]" data-send-mission-stage="">
+        {missionStage(send)}
+      </p>
+      <h3 className="text-base font-semibold">{sendAgentShortName(send.agent)}</h3>
+      <p className="text-sm font-semibold">{send.missionTitle ?? "Collect documents"}</p>
+      <p className="text-sm text-[#3D5270]" data-send-mission-sent="">
+        {sentOn ? `Sent ${sentOn}` : "Sent"}
+      </p>
+      <p className="text-sm text-[#3D5270]" data-send-link-state="">
+        {send.revokedAt
+          ? `Cancelled ${formatDate(send.revokedAt, market)}`
+          : send.open
+            ? `Open until ${formatDate(send.expiresAt, market)}`
+            : "This link has expired"}
+      </p>
+      {send.files.length > 0 ? (
+        <p className="text-sm text-[#3D5270]">
+          {send.files.length === 1
+            ? "1 document in Client library"
+            : `${send.files.length} documents in Client library`}
         </p>
+      ) : null}
+      <MissionActionMenu
+        sendId={send.id}
+        label={`${sendAgentShortName(send.agent)}, ${send.missionTitle ?? "Collect documents"}`}
+        busy={busy}
+        onOpen={onOpen}
+        onCopy={onCopy}
+        onResend={onResend}
+        onCancel={onCancel}
+      />
+      <SendProgress
+        steps={sendProgressSteps({
+          opened: Boolean(send.openedAt || send.consentAt),
+          replied: Boolean(send.repliedAt),
+          documents: Boolean(send.docsReceivedAt || send.completedAt),
+          reviewed: Boolean(send.reviewedAt),
+        })}
+        when={(id) => {
+          const at =
+            id === "sent"
+              ? send.createdAt
+              : id === "opened"
+                ? send.openedAt || send.consentAt
+                : id === "replied"
+                  ? send.repliedAt
+                  : id === "documents"
+                    ? send.docsReceivedAt || send.completedAt
+                    : send.reviewedAt;
+          return at ? formatDate(at, market) : null;
+        }}
+      />
+      {send.viewerIsSender && send.feed ? (
+        <div className="flex flex-col gap-2" data-send-agent-feed="">
+          {send.feed.map((event, index) => (
+            <div key={`${event.kind}-${index}`} className="flex flex-col gap-1">
+              <p className="text-sm leading-6">{feedLine(event, market)}</p>
+              {event.kind === "file" && event.documentPath ? (
+                <button
+                  type="button"
+                  className={SECONDARY}
+                  disabled={busy}
+                  onClick={() => onOpenDocument(event.documentPath ?? "")}
+                >
+                  Open in Client library
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {send.completedAt ? (
+        <div className="flex flex-col gap-2" data-send-agent-received="">
+          {send.reviewedAt ? (
+            <p className="text-sm text-[#3D5270]">Reviewed</p>
+          ) : (
+            <button
+              type="button"
+              className={PRIMARY}
+              data-mark-reviewed=""
+              disabled={busy}
+              onClick={onReview}
+            >
+              Mark reviewed
+            </button>
+          )}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function MissionStep({
+  agent,
+  missions,
+  missionKey,
+  firmNote,
+  firstName,
+  email,
+  busy,
+  ready,
+  blocked,
+  notice,
+  onBack,
+  onMission,
+  onFirmNote,
+  onFirstName,
+  onEmail,
+  onMint,
+}: {
+  agent: SendAgentKey;
+  missions: readonly MissionKey[];
+  missionKey: MissionKey | null;
+  firmNote: string;
+  firstName: string;
+  email: string;
+  busy: boolean;
+  ready: boolean;
+  blocked: boolean;
+  notice: string | null;
+  onBack: () => void;
+  onMission: (mission: MissionKey) => void;
+  onFirmNote: (value: string) => void;
+  onFirstName: (value: string) => void;
+  onEmail: (value: string) => void;
+  onMint: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4" data-send-mission="">
+      <button
+        type="button"
+        className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-[#0B5FFF]"
+        data-send-agent-back=""
+        onClick={onBack}
+      >
+        Back
+      </button>
+      <span className="relative h-16 w-16 overflow-hidden rounded-2xl bg-[#DBEAFE] [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full [&_img]:object-cover [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover">
+        <SilentAgentPortrait face={sendAgentFace(agent)} label={sendAgentShortName(agent)} />
+      </span>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold">{sendAgentShortName(agent)}</h2>
+        <p className="text-sm leading-6 text-[#3D5270]">{sendAgentJobLine(agent)}</p>
       </div>
-      <div className="flex flex-col gap-3" data-send-agent-picker="">
-        {agents.map((key) => {
-          const selected = agent === key;
+      <h3 className="text-base font-semibold">Choose a mission</h3>
+      <div className="flex flex-col gap-2">
+        {missions.map((key) => {
+          const selected = missionKey === key;
           return (
             <button
               key={key}
               type="button"
               className={
                 selected
-                  ? "flex min-h-11 flex-col items-start gap-2 rounded-2xl border-2 border-[#0B5FFF] bg-[#F4F8FF] p-3 text-left"
-                  : "flex min-h-11 flex-col items-start gap-2 rounded-2xl border border-[#DBEAFE] bg-white p-3 text-left"
+                  ? "flex min-h-11 flex-col items-start gap-1 rounded-2xl border-2 border-[#0B5FFF] bg-[#F4F8FF] p-3 text-left"
+                  : "flex min-h-11 flex-col items-start gap-1 rounded-2xl border border-[#DBEAFE] bg-white p-3 text-left"
               }
               aria-pressed={selected}
-              data-send-agent-selected={selected ? "true" : "false"}
-              disabled={!ready || busy}
-              onClick={() => onAgent(key)}
+              disabled={busy}
+              onClick={() => onMission(key)}
             >
-              <span className="relative h-16 w-16 overflow-hidden rounded-2xl bg-[#DBEAFE] [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full [&_img]:object-cover [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover">
-                <SilentAgentPortrait face={sendAgentFace(key)} label={sendAgentShortName(key)} />
-              </span>
-              <span className="text-sm font-semibold">{sendAgentShortName(key)}</span>
-              <span className="text-sm leading-6 text-[#3D5270]">{sendAgentJobLine(key)}</span>
-              <span
-                className={
-                  selected ? "text-sm font-semibold text-[#0B5FFF]" : "text-sm text-[#3D5270]"
-                }
-              >
-                {selected ? "Selected" : "Select this agent"}
-              </span>
+              <span className="text-sm font-semibold text-[#102A43]">{missionTitle(key)}</span>
             </button>
           );
         })}
       </div>
-      {agent ? (
-        <div className="flex flex-col gap-2" data-send-mission="">
-          {missions.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className={missionKey === key ? PRIMARY : SECONDARY}
-              aria-pressed={missionKey === key}
-              disabled={busy}
-              onClick={() => onMission(key)}
-            >
-              {missionTitle(key)}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {agent && missionKey ? (
+      {missionKey ? (
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm" htmlFor="send-agent-note">
             Note for the agent (optional)
             <textarea
               id="send-agent-note"
-              className="min-h-24 rounded-xl border border-[#DBEAFE] px-3 py-2"
+              className="min-h-24 rounded-xl border border-[#DBEAFE] bg-white px-3 py-2"
               maxLength={500}
               value={firmNote}
-              disabled={busy || Boolean(open)}
+              disabled={busy || blocked}
               onChange={(event) => onFirmNote(event.target.value)}
             />
           </label>
@@ -649,7 +1014,7 @@ export function SendAgentCard({
             Client first name
             <input
               id="send-agent-first-name"
-              className="min-h-11 rounded-xl border border-[#DBEAFE] px-3"
+              className="min-h-11 rounded-xl border border-[#DBEAFE] bg-white px-3"
               value={firstName}
               disabled={busy}
               onChange={(event) => onFirstName(event.target.value)}
@@ -660,16 +1025,21 @@ export function SendAgentCard({
             <input
               id="send-agent-email"
               type="email"
-              className="min-h-11 rounded-xl border border-[#DBEAFE] px-3"
+              className="min-h-11 rounded-xl border border-[#DBEAFE] bg-white px-3"
               value={email}
               disabled={busy}
               onChange={(event) => onEmail(event.target.value)}
             />
           </label>
+          {blocked ? (
+            <p className="text-sm text-[#3D5270]">
+              A link is already open. Go back to resend it or cancel it before sending another.
+            </p>
+          ) : null}
           <button
             type="button"
             className={PRIMARY}
-            disabled={!ready || busy || Boolean(open)}
+            disabled={!ready || busy || blocked}
             onClick={onMint}
           >
             Send
@@ -677,135 +1047,6 @@ export function SendAgentCard({
         </div>
       ) : null}
       {notice ? <p className="text-sm text-[#3D5270]">{notice}</p> : null}
-      {grouped.map((group) => {
-        const latest = group.rows[0];
-        if (!latest) return null;
-        const older = group.rows.slice(1);
-        return (
-          <section
-            key={group.key}
-            className="flex flex-col gap-3"
-            data-send-agent-history={group.key}
-          >
-            <h2 className="text-base font-semibold">{sendAgentShortName(group.key)}</h2>
-            <p className="text-sm font-semibold">{latest.missionTitle ?? "Collect documents"}</p>
-            <p className="text-sm text-[#3D5270]" data-send-link-state="">
-              {latest.revokedAt
-                ? `Revoked ${formatDate(latest.revokedAt, market)}`
-                : latest.open
-                  ? `Open until ${formatDate(latest.expiresAt, market)}`
-                  : "This link has expired"}
-            </p>
-            {latest.files.length > 0 ? (
-              <p className="text-sm text-[#3D5270]">
-                {latest.files.length === 1
-                  ? "1 document in Client library"
-                  : `${latest.files.length} documents in Client library`}
-              </p>
-            ) : null}
-            <SendProgress
-              steps={sendProgressSteps({
-                opened: Boolean(latest.openedAt || latest.consentAt),
-                replied: Boolean(latest.repliedAt),
-                documents: Boolean(latest.docsReceivedAt || latest.completedAt),
-                reviewed: Boolean(latest.reviewedAt),
-              })}
-              when={(id) => {
-                const at =
-                  id === "sent"
-                    ? latest.createdAt
-                    : id === "opened"
-                      ? latest.openedAt || latest.consentAt
-                      : id === "replied"
-                        ? latest.repliedAt
-                        : id === "documents"
-                          ? latest.docsReceivedAt || latest.completedAt
-                          : latest.reviewedAt;
-                return at ? formatDate(at, market) : null;
-              }}
-            />
-            {latest.open && linkFor(latest.id) ? (
-              <button
-                type="button"
-                className={SECONDARY}
-                data-send-agent-copy=""
-                disabled={busy}
-                onClick={() => onCopyLink(latest.id)}
-              >
-                Copy link
-              </button>
-            ) : null}
-            {latest.missionKey ? (
-              <button
-                type="button"
-                className={SECONDARY}
-                data-send-agent-resend=""
-                disabled={busy}
-                onClick={() => onResend(latest.id)}
-              >
-                Resend
-              </button>
-            ) : null}
-            {latest.open ? (
-              <button
-                type="button"
-                className={SECONDARY}
-                data-send-agent-revoke=""
-                disabled={busy}
-                onClick={() => onRevoke(latest.id)}
-              >
-                Revoke
-              </button>
-            ) : null}
-            {latest.viewerIsSender && latest.feed ? (
-              <div className="flex flex-col gap-2" data-send-agent-feed="">
-                {latest.feed.map((event, index) => (
-                  <div key={`${event.kind}-${index}`} className="flex flex-col gap-1">
-                    <p className="text-sm leading-6">{feedLine(event, market)}</p>
-                    {event.kind === "file" && event.documentPath ? (
-                      <button
-                        type="button"
-                        className={SECONDARY}
-                        disabled={busy}
-                        onClick={() => onOpenDocument(event.documentPath ?? "")}
-                      >
-                        Open in Client library
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-                {latest.reportSummary ? (
-                  <p className="text-sm leading-6">{latest.reportSummary}</p>
-                ) : null}
-              </div>
-            ) : null}
-            {latest.completedAt ? (
-              <div className="flex flex-col gap-2" data-send-agent-received="">
-                {latest.reviewedAt ? (
-                  <p className="text-sm text-[#3D5270]">Reviewed</p>
-                ) : (
-                  <button
-                    type="button"
-                    className={PRIMARY}
-                    data-mark-reviewed=""
-                    disabled={busy}
-                    onClick={() => onReview(latest.id)}
-                  >
-                    Mark reviewed
-                  </button>
-                )}
-              </div>
-            ) : null}
-            {older.map((send) => (
-              <p key={send.id} className="text-sm text-[#3D5270]">
-                {send.missionTitle ?? "Collect documents"} · {send.statusLabel ?? "Sent"}
-                {send.createdAt ? ` · ${formatDate(send.createdAt, market)}` : ""}
-              </p>
-            ))}
-          </section>
-        );
-      })}
-      {fileList}
-    </section>
+    </div>
   );
 }

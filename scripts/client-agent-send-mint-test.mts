@@ -222,6 +222,16 @@ assert(
 );
 assert(panel.includes("sendAgentFace"), "each agent uses its own silent face");
 assert(!panel.includes("flex-row"), "the panel stacks vertically");
+assert(!panel.includes("reportSummary"), "the mission letter is not rendered on Send an agent");
+assert(panel.includes('data-send-agent-step={showMission ? "mission" : "pick"}'), "an agent click opens the next step");
+assert(panel.includes("data-send-agent-back"), "the mission step can return to the picker");
+assert(panel.includes("data-send-mission-card"), "each sent mission is a card");
+assert(panel.includes("data-send-mission-stage"), "a card shows the stage");
+assert(panel.includes("data-send-mission-sent"), "a card shows the date sent");
+assert(panel.includes("data-send-agent-open"), "Open sits in the actions menu");
+assert(/>\s*Cancel\s*</.test(panel), "Cancel sits in the actions menu");
+const picker = panel.slice(panel.indexOf("data-send-agent-picker"), panel.indexOf("Sent missions"));
+assert(!picker.includes("data-send-mission"), "missions are not a block under the picker");
 
 const nav = clientNavSearch({ tab: "home" }, "books", "send-agent");
 assert(nav.tab === "portal" && nav.section === "send-agent", "Send an agent is a Books page");
