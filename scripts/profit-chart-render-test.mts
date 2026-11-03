@@ -166,6 +166,10 @@ assert(host.querySelector("[data-profit-row='sales']"), "sales is a row");
 assert(host.querySelector("[data-profit-row='cogs']"), "cost of sales is a row");
 const salesRow = host.querySelector("[data-profit-row='sales']");
 assert(salesRow?.textContent?.includes("51"), "October sales are on the row");
+assert(
+  salesRow?.querySelector("[data-figure-edit='revenue']"),
+  "sales is editable through the revenue field",
+);
 const cogsRow = host.querySelector("[data-profit-row='cogs']");
 assert(cogsRow?.getAttribute("data-profit-row") === "cogs", "cost row is marked");
 assert(cogsRow?.querySelector("[data-favourable='true']"), "a lower cost is favourable");

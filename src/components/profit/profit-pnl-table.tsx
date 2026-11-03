@@ -7,7 +7,7 @@ import {
 } from "@/components/figure-amount-edit";
 import { useMarketFormat } from "@/contexts/market";
 import type { FiscalStatementSlice } from "@/lib/budget-period-types";
-import { waterfallFieldForPnlRow } from "@/lib/figure-edit";
+import { buildPnlFigureEditDraft, waterfallFieldForPnlRow } from "@/lib/figure-edit";
 import { formatMoney, formatReportAmount } from "@/lib/market/format";
 import { ownerMinus } from "@/lib/owner-money";
 import { buildProfitPnl, type ProfitPnlRow } from "@/lib/profit-statement";
@@ -182,8 +182,17 @@ export function ProfitPnlTable({
                           field={field}
                           amount={row.current}
                           display={moneyText(row.current, market, signed)}
-                          className="w-full text-right tabular-nums"
-                          onPropose={edit.propose}
+                          className="w-full select-none text-right tabular-nums"
+                          onPropose={(draft) => {
+                            const mapped = buildPnlFigureEditDraft({
+                              rowId: row.id,
+                              label: row.label,
+                              rowAmount: row.current,
+                              nextAmount: draft.after,
+                              financials: currentFin,
+                            });
+                            if (mapped) edit.propose(mapped);
+                          }}
                         />
                       ) : (
                         moneyText(row.current, market, signed)

@@ -29,6 +29,8 @@ const STEP_FIELD: Record<string, WaterfallFigureKey> = {
 };
 
 const ROW_FIELD: Record<string, WaterfallFigureKey> = {
+  sales: "revenue",
+  "other-income": "revenue",
   "total-income": "revenue",
   cogs: "cogs",
   "total-cogs": "cogs",
@@ -40,12 +42,73 @@ const ROW_FIELD: Record<string, WaterfallFigureKey> = {
   "net-profit": "netIncome",
 };
 
+function storedAmount(fin: Record<string, unknown>, key: string): number | null {
+  const value = fin[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.replace(/,/g, ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export function waterfallFieldForStep(label: string): WaterfallFigureKey | null {
   return STEP_FIELD[label] ?? null;
 }
 
 export function waterfallFieldForPnlRow(id: string): WaterfallFigureKey | null {
   return ROW_FIELD[id] ?? null;
+}
+
+/**
+ * Map a confirmed P&L cell edit onto the waterfall keys clients.financials stores.
+ * Sales and other income are display splits of revenue; the patch always targets revenue.
+ */
+export function buildPnlFigureEditDraft(input: {
+  rowId: string;
+  label: string;
+  rowAmount: number;
+  nextAmount: number;
+  financials: Record<string, unknown> | null | undefined;
+}): FigureEditDraft | null {
+  const key = waterfallFieldForPnlRow(input.rowId);
+  if (!key) return null;
+  const fin = input.financials ?? {};
+  const revenue = storedAmount(fin, "revenue");
+  const otherIncome = storedAmount(fin, "otherIncome") ?? 0;
+
+  if (input.rowId === "sales") {
+    const before = revenue ?? round2(input.rowAmount + otherIncome);
+    return {
+      key: "revenue",
+      label: input.label,
+      before,
+      after: round2(input.nextAmount + otherIncome),
+    };
+  }
+  if (input.rowId === "other-income") {
+    const salesPart =
+      revenue != null ? round2(revenue - otherIncome) : input.rowAmount === otherIncome ? 0 : input.rowAmount;
+    const before = revenue ?? round2(salesPart + otherIncome);
+    return {
+      key: "revenue",
+      label: input.label,
+      before,
+      after: round2(salesPart + input.nextAmount),
+    };
+  }
+
+  const before = storedAmount(fin, key) ?? input.rowAmount;
+  return {
+    key,
+    label: input.label,
+    before,
+    after: input.nextAmount,
+  };
 }
 
 export type FigureEditDraft = {
