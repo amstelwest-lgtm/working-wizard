@@ -56,6 +56,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
 import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
+import { pdfDownloadFilename, pdfPreparedForName } from "@/lib/pdf-download";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { OwnerSignoffMark, ownerSignoffDate } from "@/components/owner-signoff-mark";
@@ -665,6 +666,7 @@ export function ForecastMoreDetail({ children }: { children: ReactNode }) {
 export function CashForecastPanel({
   clientId,
   clientName,
+  businessName,
   simplified,
   canSign,
   hideReadOnlyStamp,
@@ -699,6 +701,8 @@ export function CashForecastPanel({
   onPagedViewChange?: (view: CashPagedView) => void;
   clientId?: string;
   clientName?: string;
+  /** Workspace or statement name. Wins over a placeholder client label. */
+  businessName?: string | null;
   simplified?: boolean;
   /** Accountant view only: show the interactive sign-off control instead of the read-only badge. */
   canSign?: boolean;
@@ -2097,7 +2101,7 @@ export function CashForecastPanel({
       ];
 
       const period = horizonLabel || date(new Date(), { month: "long", year: "numeric" });
-      const name = clientName?.trim() || "Your Business";
+      const name = pdfPreparedForName({ clientName, businessName });
 
       const blob = await pdf(
         CashForecastPDF({
@@ -2118,7 +2122,12 @@ export function CashForecastPanel({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${name.replace(/\s+/g, "_")}_${period.replace(/\s+/g, "_")}_CashForecast.pdf`;
+      a.download = pdfDownloadFilename({
+        clientName,
+        businessName,
+        periodLabel: period,
+        reportName: "CashForecast",
+      });
       document.body.appendChild(a);
       a.click();
       a.remove();

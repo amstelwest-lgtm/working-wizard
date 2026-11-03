@@ -109,6 +109,8 @@ import {
   warnIfDeliveryFailed,
   warnIfPdfArchiveFailed,
 } from "@/lib/advisory-deliveries";
+import { businessNameFromFinancials } from "@/lib/client-display-name";
+import { pdfDownloadFilename, pdfPreparedForName } from "@/lib/pdf-download";
 import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -2150,9 +2152,13 @@ async function loadClientReportData(
     period_date: row.period_date,
     score: row.score,
   }));
+  const reportClientName = pdfPreparedForName({
+    clientName: clientRow?.name,
+    businessName: businessNameFromFinancials(rawFinancials),
+  });
   const baseEmpty = {
     ...EMPTY_CLIENT_DATA,
-    clientName: clientRow?.name ?? "",
+    clientName: reportClientName,
     cashRunwayWeeks: preliminaryWeeks,
     runwayLabel: runwayDisplayLabel(preliminary.runway),
     cashGenerative: preliminary.runway.kind === "cash_generative",
@@ -2305,7 +2311,7 @@ async function loadClientReportData(
 
   return {
     hasData: true,
-    clientName: clientRow.name,
+    clientName: reportClientName,
     cashRunwayWeeks: healthWeeks,
     runwayLabel: runwayDisplayLabel(assessed.runway),
     cashGenerative,
@@ -2477,17 +2483,12 @@ async function renderToBlob(Component: unknown, props: unknown): Promise<Blob> {
   return pdf(element as Parameters<typeof pdf>[0]).toBlob();
 }
 
-function periodFileSlug(label: string): string {
-  return label
-    .replace(/[–—]/g, "-")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_|_$/g, "");
-}
-
 function makeSafeFilename(s: Settings, reportName: string, periodLabel?: string | null): string {
-  const sme = (s.smeName || "Client").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_|_$/g, "");
-  const period = periodFileSlug(periodLabel?.trim() || `${s.periodMonth} ${s.periodYear}`);
-  return `${sme}_${period}_${reportName}.pdf`;
+  return pdfDownloadFilename({
+    clientName: s.smeName,
+    periodLabel: periodLabel?.trim() || `${s.periodMonth} ${s.periodYear}`,
+    reportName,
+  });
 }
 
 // ── Per-report generate functions ──────────────────────────────────────────
@@ -2502,7 +2503,7 @@ function makeSmeWithNote(
 ): { name: string; period: string } {
   const live = dataPeriod?.trim() || `${s.periodMonth} ${s.periodYear}`;
   return {
-    name: s.smeName || "Demo Client",
+    name: s.smeName.trim() ? pdfPreparedForName({ clientName: s.smeName }) : "Demo Client",
     period: isDemo
       ? `${s.periodMonth} ${s.periodYear} · Demo Data — upload financials for real figures`
       : live,
@@ -4136,13 +4137,16 @@ export function ReportsStudio({
       }
 
       const zipBlob = await zip.generateAsync({ type: "blob" });
-      const sme = (settings.smeName || "Client")
-        .replace(/[^a-zA-Z0-9]+/g, "_")
-        .replace(/^_|_$/g, "");
-      const zipPeriod = periodFileSlug(
-        clientData?.dataPeriodLabel || `${settings.periodMonth} ${settings.periodYear}`,
+      triggerDownload(
+        zipBlob,
+        pdfDownloadFilename({
+          clientName: settings.smeName,
+          periodLabel:
+            clientData?.dataPeriodLabel || `${settings.periodMonth} ${settings.periodYear}`,
+          reportName: "Reports",
+          extension: "zip",
+        }),
       );
-      triggerDownload(zipBlob, `${sme}_${zipPeriod}_Reports.zip`);
       toast.success("All reports downloaded as ZIP.");
       await recordReportIssued(clientId);
       await logReportDelivery("zip_all");

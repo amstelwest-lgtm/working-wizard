@@ -67,8 +67,8 @@ assert(
 assert(formatReportAmount(0, US, { fractionDigits: 2 }) === "—", "two-decimal zero is a dash");
 assert(formatReportAmount(9.36, US, { fractionDigits: 2 }) === "$9.36", "US cents stay");
 assert(
-  formatReportAmount(9.36, ZA_MARKET, { fractionDigits: 2 }) === "R 9,36",
-  "ZA cents keep the gap",
+  formatReportAmount(9.36, ZA_MARKET, { fractionDigits: 2 }) === "R 9.36",
+  "ZA PDF cents keep the gap and a period, not a comma decimal",
 );
 
 const exec = readFileSync(resolve("src/components/pdf/exec-summary.tsx"), "utf8");

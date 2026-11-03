@@ -12,6 +12,7 @@ import {
 } from "./date-presets.ts";
 import type { ResolvedMarket } from "./types.ts";
 import { ZA_MARKET } from "./resolve.ts";
+import { formatPdfMoney } from "../pdf-money.ts";
 
 export { formatMonthRange };
 
@@ -150,10 +151,7 @@ export function formatReportAmount(
     const scale = 10 ** digits;
     const scaled = Math.round(value * scale) / scale;
     if (scaled === 0) return "—";
-    const body = formatMoney(Math.abs(scaled), market, {
-      maximumFractionDigits: digits,
-      minimumFractionDigits: digits,
-    });
+    const body = formatPdfMoney(Math.abs(scaled), market, { fractionDigits: digits });
     if (sign === "parens") return `(${body})`;
     if (scaled < 0) return `-${body}`;
     if (sign === "always") return `+${body}`;
