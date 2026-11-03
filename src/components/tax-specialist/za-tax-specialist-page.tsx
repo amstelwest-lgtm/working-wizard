@@ -22,6 +22,7 @@ import {
   TAX_FORM_GALLERY,
   TAX_FORM_STATUS_LABEL,
   type TaxFormCode,
+  type TaxFormEntry,
 } from "@/lib/tax-specialist/forms/gallery";
 import {
   IRP6_PERIODS,
@@ -30,6 +31,7 @@ import {
   irp6PeriodLabel,
   irp6YearEnd,
   zaToday,
+  type Irp6Period,
 } from "@/lib/tax-specialist/forms/irp6";
 import {
   TAX_FORM_DRAFT_STATUS_LABEL,
@@ -41,6 +43,9 @@ import {
 } from "@/lib/tax-specialist/forms/drafts";
 import { loadItr12Open } from "@/lib/tax-specialist/forms/itr12-load";
 import type { Itr12Inputs } from "@/lib/tax-specialist/forms/itr12";
+import { loadIrp6IndividualOpen } from "@/lib/tax-specialist/forms/irp6-individual-load";
+import type { Irp6IndividualInputs } from "@/lib/tax-specialist/forms/irp6-individual";
+import { ZaIrp6IndividualSheet } from "./za-irp6-individual-sheet";
 import { ZaIrp6Sheet, type Irp6SheetClient } from "./za-irp6-sheet";
 import { ZaItr12Sheet } from "./za-itr12-sheet";
 import "./za-tax-specialist-sample.css";
@@ -123,7 +128,7 @@ function Workings() {
   );
 }
 
-function FormGallery({ onOpen }: { onOpen?: (code: TaxFormCode) => void }) {
+function FormGallery({ onOpen }: { onOpen?: (form: TaxFormEntry) => void }) {
   return (
     <ul className="tax-page-forms">
       {TAX_FORM_GALLERY.map((form) => {
@@ -140,12 +145,18 @@ function FormGallery({ onOpen }: { onOpen?: (code: TaxFormCode) => void }) {
           </>
         );
         return (
-          <li key={form.code} data-tax-form={form.code} data-tax-form-status={form.status}>
+          <li
+            key={form.galleryId}
+            data-tax-form={form.galleryId}
+            data-tax-form-code={form.code}
+            data-tax-form-entity={form.entity}
+            data-tax-form-status={form.status}
+          >
             {ready ? (
               <button
                 type="button"
                 className="tax-page-form is-open"
-                onClick={() => onOpen?.(form.code)}
+                onClick={() => onOpen?.(form)}
               >
                 {body}
               </button>
@@ -180,6 +191,11 @@ export function ZaTaxSpecialistPage({
   const [drafts, setDrafts] = useState<TaxFormDraft[] | null>(clientId ? null : []);
   const [open, setOpen] = useState<TaxFormCode | null>(null);
   const [itr12, setItr12] = useState<{ year: number; seed: Itr12Inputs | null } | null>(null);
+  const [individual, setIndividual] = useState<{
+    year: number;
+    period: Irp6Period;
+    seed: Irp6IndividualInputs | null;
+  } | null>(null);
 
   useEffect(() => {
     if (!clientId) return;
@@ -196,19 +212,28 @@ export function ZaTaxSpecialistPage({
     setDrafts((prev) => applySavedDraft(prev ?? [], row));
   }, []);
 
-  const openForm = (code: TaxFormCode) => {
-    if (code === "IRP6" && client) {
-      setOpen(code);
+  const openForm = (form: TaxFormEntry) => {
+    if (form.galleryId === "IRP6-individual" && client && drafts) {
+      void loadIrp6IndividualOpen(client.id, drafts, day).then((next) => {
+        setIndividual(next);
+        setItr12(null);
+        setOpen(null);
+        document.querySelector("[data-tax-page]")?.scrollIntoView({ block: "start" });
+      });
+    } else if (form.code === "IRP6" && client) {
+      setIndividual(null);
+      setOpen("IRP6");
       document.querySelector("[data-tax-page]")?.scrollIntoView({ block: "start" });
     }
-    if (code === "ITR12" && client && drafts) {
+    if (form.code === "ITR12" && client && drafts) {
       void loadItr12Open(client.id, drafts, day).then((next) => {
+        setIndividual(null);
         setItr12(next);
         setOpen("ITR12");
         document.querySelector("[data-tax-page]")?.scrollIntoView({ block: "start" });
       });
     }
-    onOpenForm?.(code);
+    onOpenForm?.(form.code);
   };
 
   const recent = useMemo(
@@ -218,6 +243,26 @@ export function ZaTaxSpecialistPage({
         .slice(0, ACTIVITY_CAP),
     [activity, drafts],
   );
+
+  if (individual && client && drafts) {
+    return (
+      <div className="tax-page" data-tax-page="true" data-tax-open-form="IRP6-individual">
+        <ZaIrp6IndividualSheet
+          key={`${individual.year}-${individual.period}`}
+          client={client}
+          today={day}
+          drafts={drafts}
+          initialYear={individual.year}
+          initialPeriod={individual.period}
+          seed={individual.seed}
+          approverRole={audience === "owner" ? "owner" : "accountant"}
+          backLabel="All SARS forms"
+          onSaved={onSaved}
+          onBack={() => setIndividual(null)}
+        />
+      </div>
+    );
+  }
 
   if (open === "ITR12" && client && itr12 && drafts) {
     return (

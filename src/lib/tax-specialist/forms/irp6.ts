@@ -19,6 +19,9 @@ import {
 export const IRP6_FOOTER =
   "Prepared by Milōn for checking. Not a SARS return. Capture and submit on SARS eFiling.";
 
+/** Natural-person IRP6 drafts. Company IRP6 keeps subject null. */
+export const IRP6_INDIVIDUAL_SUBJECT = "individual";
+
 /** v1 rate applies from this year end. */
 export const IRP6_FIRST_SUPPORTED_YEAR_END = "2023-03-31";
 /**

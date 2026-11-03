@@ -12,6 +12,10 @@ import {
   type Irp6Adjustment,
   type Irp6Sheet,
 } from "@/lib/tax-specialist/forms/irp6";
+import {
+  IRP6_INDIVIDUAL_SECTIONS,
+  type Irp6IndividualSheet,
+} from "@/lib/tax-specialist/forms/irp6-individual";
 import { formatSampleCents, formatSampleDate } from "@/lib/tax-specialist/sample-compute";
 
 Font.registerHyphenationCallback((word) => [word]);
@@ -84,14 +88,14 @@ function pdfText(value: string): string {
   return value.replace(/\u2212/g, "-").replace(/ō/g, "o");
 }
 
-function Footer() {
+function Footer({ tail }: { tail?: string }) {
   return (
     <View style={S.footer} fixed>
       <View style={S.footerText}>
         <Text>Prepared by </Text>
         <MilonMark fontSize={7.5} color={C.muted} bold={false} />
         <Text style={{ marginLeft: 2.2 }}>
-          for checking. Not a SARS return. Capture and submit on SARS eFiling.
+          {`for checking. Not a SARS return. Capture and submit on SARS eFiling.${tail ?? ""}`}
         </Text>
       </View>
       <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
@@ -204,6 +208,85 @@ export function Irp6PDF({
           </View>
         ) : null}
         <Footer />
+      </Page>
+    </Document>
+  );
+}
+
+export function Irp6IndividualPDF({
+  clientName,
+  sheet,
+  approvedByName,
+  approvedAt,
+  preparedOn,
+}: {
+  clientName: string;
+  sheet: Irp6IndividualSheet;
+  approvedByName: string | null;
+  approvedAt: string | null;
+  preparedOn: string;
+}) {
+  const approval =
+    approvedByName && approvedAt
+      ? `Approved by ${approvedByName} on ${formatSampleDate(zaToday(new Date(approvedAt)))}`
+      : "Not approved";
+  return (
+    <Document
+      title={`IRP6 ${clientName} ${sheet.yearOfAssessment} P${sheet.period} individual`}
+      creator="Milōn"
+    >
+      <Page size="A4" style={S.page}>
+        <View style={S.brand}>
+          <MilonMark fontSize={11} color={C.ink} />
+        </View>
+        <Text style={S.title}>IRP6 preparation sheet</Text>
+        <Text style={S.subtitle}>
+          Provisional tax return for an individual, prepared for checking. Not a SARS return.
+        </Text>
+        <Meta label="Client" value={clientName} />
+        <Meta label="Year of assessment" value={String(sheet.yearOfAssessment)} />
+        <Meta label="Period" value={irp6PeriodLabel(sheet.period)} />
+        <Meta label="Due" value={formatSampleDate(sheet.due)} />
+        <Meta label="Prepared" value={formatSampleDate(preparedOn)} />
+        <Meta label="Status" value={approval} />
+        {IRP6_INDIVIDUAL_SECTIONS.map((section) => (
+          <View key={section.id} style={S.section}>
+            <Text style={S.sectionTitle}>{section.title}</Text>
+            <View style={S.head}>
+              <Text style={S.label}>Line</Text>
+              <Text style={S.efiling}>eFiling field</Text>
+              <Text style={S.value}>Value</Text>
+              <Text style={S.source}>Source</Text>
+            </View>
+            {sheet.lines
+              .filter((line) => line.section === section.id)
+              .map((line) => (
+                <View key={line.id} style={S.row}>
+                  <View style={S.label}>
+                    <Text>{pdfText(line.label)}</Text>
+                    {line.note ? <Text style={S.note}>{pdfText(line.note)}</Text> : null}
+                  </View>
+                  <Text style={S.efiling}>{line.efiling ?? "Working only"}</Text>
+                  <Text style={S.value}>{pdfText(line.display || "Needs input")}</Text>
+                  <Text style={S.source}>
+                    {pdfText(line.fileId ? `${line.sourceLabel}` : line.sourceLabel)}
+                  </Text>
+                </View>
+              ))}
+          </View>
+        ))}
+        {sheet.queries.length ? (
+          <View style={S.section}>
+            <Text style={S.sectionTitle}>Queries</Text>
+            {sheet.queries.map((query) => (
+              <Text key={query.id} style={S.check}>
+                {query.resolved ? "Resolved. " : "Open. "}
+                {pdfText(query.text)}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        <Footer tail=" This sheet is not sent to the client." />
       </Page>
     </Document>
   );

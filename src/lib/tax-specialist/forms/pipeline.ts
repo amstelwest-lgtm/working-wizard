@@ -12,11 +12,13 @@ import {
   type TaxFormDraft,
   type TaxFormDraftSave,
 } from "./drafts.ts";
+import { IRP6_INDIVIDUAL_FIELDS, IRP6_INDIVIDUAL_INTAKE } from "./irp6-individual.ts";
 import {
   requireTaxForm,
   taxFormByCode,
   type TaxFormCode,
   type TaxFormDefinition,
+  type TaxFormEntity,
   type TaxFormField,
 } from "./registry.ts";
 
@@ -26,9 +28,24 @@ export type TaxFormSchema = {
   intakeItems: readonly string[];
 };
 
-/** Catalog entry plus the field list and the intake map. Unknown codes throw. */
-export function taxFormSchema(code: string): TaxFormSchema {
+/**
+ * Catalog entry plus the field list and the intake map. Unknown codes throw.
+ * IRP6 with entity "individual" is the second schema on the same code.
+ */
+export function taxFormSchema(code: string, entity?: TaxFormEntity): TaxFormSchema {
   const form = requireTaxForm(code);
+  if (code === "IRP6" && entity === "individual") {
+    const individual: TaxFormDefinition = {
+      ...form,
+      name: "Provisional tax return (individual)",
+      entity: "individual",
+      status: "ready",
+      rulesYear: null,
+      fields: IRP6_INDIVIDUAL_FIELDS,
+      intakeItems: IRP6_INDIVIDUAL_INTAKE,
+    };
+    return { form: individual, fields: individual.fields, intakeItems: individual.intakeItems };
+  }
   return { form, fields: form.fields, intakeItems: form.intakeItems };
 }
 
@@ -44,7 +61,7 @@ export async function saveCatalogDraft(draft: TaxFormDraftSave): Promise<TaxForm
   const form = requireTaxForm(draft.form_code);
   return saveTaxFormDraft({
     ...draft,
-    rules_year: draft.rules_year ?? form.rulesYear,
+    rules_year: draft.rules_year === undefined ? form.rulesYear : draft.rules_year,
     field_sources: draft.field_sources ?? fieldSourcesFromFields(draft.fields),
   });
 }
