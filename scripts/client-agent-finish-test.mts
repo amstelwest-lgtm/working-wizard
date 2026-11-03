@@ -341,7 +341,12 @@ assert(!panel.slice(panel.indexOf("data-send-agent-received")).includes("flex-ro
 const portfolio = read("src/lib/portfolio.functions.ts");
 assert(portfolio.includes("countUnreviewedSends"), "the book counts unreviewed finished links");
 const exceptions = read("src/components/portfolio-exceptions.tsx");
-assert(exceptions.includes('section === "send-agent"'), "needs attention opens the client link");
+assert(
+  exceptions.includes("attentionSearch") &&
+    exceptions.includes("row.section") &&
+    exceptions.includes("canonicalizeAccountantSearch"),
+  "needs attention opens the client link",
+);
 
 const page = read("src/components/client-agent-link-page.tsx");
 assert(page.includes("Finish"), "the button says Finish");
