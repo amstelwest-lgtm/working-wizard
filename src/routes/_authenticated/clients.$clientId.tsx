@@ -279,6 +279,7 @@ import { relatedTabForRatio } from "@/lib/ratio-briefing";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
+import { DraftworxDirtyWorkPanel } from "@/components/draftworx-dirty-work-panel";
 import { SendAgentPanel } from "@/components/send-agent-panel";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
@@ -4639,6 +4640,26 @@ function ClientView() {
                   onOpenForecast={() => openHomeSection("cash", "forecast")}
                   onChanged={() => setAdvisoryBump((n) => n + 1)}
                 />
+
+                {hasFigures ? (
+                  <div className="mb-4">
+                    <DraftworxDirtyWorkPanel
+                      clientId={clientId}
+                      clientName={client?.name}
+                      market={clientMarket}
+                      financials={financials}
+                      financialsSignoff={financialsSignoff}
+                      signoffStale={pageSignoffStale(
+                        financialsSignoff,
+                        client?.financials_updated_at ?? null,
+                      )}
+                      needsTrialBalanceRefresh={needsTrialBalanceRefresh({
+                        live: financials,
+                        snapshots,
+                      })}
+                    />
+                  </div>
+                ) : null}
 
                 {generationTrialOpen ? (
                   <TrialEndedPlanBlock firmId={client.firm_id ?? null} audience="accountant" />
