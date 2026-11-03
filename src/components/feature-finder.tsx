@@ -210,8 +210,8 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
           <DialogTitle className="sr-only">Search {searchLabel}</DialogTitle>
           <DialogDescription className="sr-only">
             {showClients
-              ? "Jump to a client, or to Health, Cash, Budget, Collections, and other product functions."
-              : "Jump to Health, Cash, Budget, and other product functions."}
+              ? "Jump to a client, or to Diagnose, Cash, Budget, Collections, and other product functions."
+              : "Jump to Diagnose, Cash, Budget, and other product functions."}
           </DialogDescription>
           <Command
             shouldFilter={false}

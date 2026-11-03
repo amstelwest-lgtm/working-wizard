@@ -29,6 +29,10 @@ import {
   readNavCollapsed,
   writeNavCollapsed,
 } from "@/lib/accountant-nav-collapsed";
+import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
+
+/** Collapsed-rail tooltips use each heading's `label` (health → {@link HEALTH_PANEL_MENU_LABEL}). */
+export { HEALTH_PANEL_MENU_LABEL };
 
 export type NavDestination = {
   to:

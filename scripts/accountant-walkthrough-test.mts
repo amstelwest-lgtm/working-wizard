@@ -188,7 +188,7 @@ const loadingBook = practiceAgentWork("analyst", {
 });
 assert(loadingBook.items.length === 0 && loadingBook.empty === "Loading the book.", "a loading book is a sentence, not a skeleton");
 assert(clientAgentWork("financial_manager", "c")[0]?.link.search?.section === "forecast", "the client agent links to the cash line");
-assert(clientBackTarget({ tab: "ratios", section: "score" })?.label === "Health", "a score page goes back to Health");
+assert(clientBackTarget({ tab: "ratios", section: "score" })?.label === "Diagnose", "a score page goes back to Diagnose");
 assert(clientBackTarget({ tab: "overview", agent: "analyst" })?.tab === "home", "an agent page goes back to Home");
 assert(clientBackTarget({ tab: "overview" }) === null, "Home has no back target");
 

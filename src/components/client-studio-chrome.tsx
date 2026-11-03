@@ -6,12 +6,13 @@ import {
   clientRailSelection,
 } from "@/lib/client-route-search";
 import { askHashForAgent, searchWithAskAgent } from "@/lib/ask-agent";
+import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
 import { stageAgentDisplayName, stageAgentKeys } from "@/lib/tax-specialist/agents";
 
 /** Flat heading list, top to bottom. Kickers are not items. */
 export const CLIENT_RAIL = [
   { id: "home", label: "Home" },
-  { id: "health", label: "Health" },
+  { id: "health", label: HEALTH_PANEL_MENU_LABEL },
   { id: "cash", label: "Cash flow" },
   { id: "profit", label: "Profit" },
   { id: "budget", label: "Budget" },
@@ -74,7 +75,7 @@ function clientSections(
       headings: [
         {
           id: "health",
-          label: "Health",
+          label: HEALTH_PANEL_MENU_LABEL,
           to: go("health"),
           items: subs("health", [
             { id: "score", label: "Score" },

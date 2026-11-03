@@ -14,6 +14,7 @@
 import type { ClientRailTab } from "@/lib/client-route-search";
 import { OWNER_DOOR_TABS } from "@/lib/owner-app-tab";
 import { COACH_STEPS, type CoachStepId } from "@/lib/workflow-coach";
+import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
 
 export type FeatureAudience = "accountant" | "owner";
 
@@ -148,7 +149,7 @@ const FEATURES: readonly FeatureDef[] = [
   },
   {
     id: "health",
-    label: "Health",
+    label: HEALTH_PANEL_MENU_LABEL,
     hint: "Health score",
     order: 10,
     scope: "client",

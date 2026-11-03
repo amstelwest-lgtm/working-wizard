@@ -5,6 +5,7 @@ import { PeriodPill, RailIcon } from "@/components/chrome-icons";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
 import "./owner-door.css";
 
 export type OwnerScreen =
@@ -25,7 +26,7 @@ export type OwnerScreen =
 
 const RAIL: { id: string; label: string; screen: OwnerScreen }[] = [
   { id: "home", label: "Home", screen: "home" },
-  { id: "health", label: "Health", screen: "health" },
+  { id: "health", label: HEALTH_PANEL_MENU_LABEL, screen: "health" },
   { id: "cash", label: "Cash flow", screen: "cash" },
   { id: "profit", label: "Profit", screen: "profit" },
   { id: "budget", label: "Budget", screen: "budget" },

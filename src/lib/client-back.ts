@@ -1,3 +1,5 @@
+import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
+
 /** Where the header back control on an accountant client page returns. */
 export function clientBackTarget(input: {
   tab?: string | null;
@@ -9,8 +11,8 @@ export function clientBackTarget(input: {
   const parent: Record<string, { label: string; tab: string }> = {
     overview: { label: "Home", tab: "home" },
     ask: { label: "Home", tab: "home" },
-    ratios: { label: "Health", tab: "health" },
-    health: { label: "Health", tab: "health" },
+    ratios: { label: HEALTH_PANEL_MENU_LABEL, tab: "health" },
+    health: { label: HEALTH_PANEL_MENU_LABEL, tab: "health" },
     cash: { label: "Cash flow", tab: "cash" },
     profit: { label: "Profit", tab: "profit" },
     budget: { label: "Budget", tab: "budget" },

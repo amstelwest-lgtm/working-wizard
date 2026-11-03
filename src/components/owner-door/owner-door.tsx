@@ -2,6 +2,7 @@
  * Live owner door. Figures come from the books, the forecast, action points,
  * and accountant sign-offs. Empty reads stay empty.
  */
+import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
@@ -1143,7 +1144,9 @@ export function OwnerDoor({
           onResumeProfile={onResumeProfile}
         />
       ) : null}
-      {railScreen === "health" ? restored?.health : null}
+      {railScreen === "health" ? (
+        <div data-main-menu-panel={HEALTH_PANEL_MENU_LABEL}>{restored?.health}</div>
+      ) : null}
       {railScreen === "cash" ? restored?.cash : null}
       {railScreen === "budget" ? restored?.budget : null}
       {railScreen === "profit" ? restored?.profit : null}

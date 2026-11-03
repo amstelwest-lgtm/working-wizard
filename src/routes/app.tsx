@@ -223,6 +223,7 @@ import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { healthSnapshotFromBooks } from "@/lib/health-snapshot";
+import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
 import { latestFiguresStamp } from "@/lib/draft-figures";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { FindAccountantPanel } from "@/components/find-accountant-panel";
@@ -4701,7 +4702,11 @@ function Index() {
                 }
                 boards={(go) => ({
                   health: (
-                    <section className="owner-pane" data-owner-page="health">
+                    <section
+                      className="owner-pane"
+                      data-owner-page="health"
+                      data-main-menu-panel={HEALTH_PANEL_MENU_LABEL}
+                    >
                       <OwnerPageHead
                         eyebrow="Health"
                         title="Business health"
