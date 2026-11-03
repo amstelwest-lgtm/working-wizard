@@ -48,6 +48,7 @@ import type { Irp6IndividualInputs } from "@/lib/tax-specialist/forms/irp6-indiv
 import { ZaIrp6IndividualSheet } from "./za-irp6-individual-sheet";
 import { ZaIrp6Sheet, type Irp6SheetClient } from "./za-irp6-sheet";
 import { ZaItr12Sheet } from "./za-itr12-sheet";
+import { ZaItr14Sheet } from "./za-itr14-sheet";
 import "./za-tax-specialist-sample.css";
 import "./za-tax-specialist-page.css";
 
@@ -233,6 +234,12 @@ export function ZaTaxSpecialistPage({
         document.querySelector("[data-tax-page]")?.scrollIntoView({ block: "start" });
       });
     }
+    if (form.code === "ITR14" && client) {
+      setIndividual(null);
+      setItr12(null);
+      setOpen("ITR14");
+      document.querySelector("[data-tax-page]")?.scrollIntoView({ block: "start" });
+    }
     onOpenForm?.(form.code);
   };
 
@@ -279,6 +286,28 @@ export function ZaTaxSpecialistPage({
           onSaved={onSaved}
           onBack={() => setOpen(null)}
         />
+      </div>
+    );
+  }
+
+  if (open === "ITR14" && client) {
+    return (
+      <div className="tax-page" data-tax-page="true" data-tax-open-form="ITR14">
+        {drafts ? (
+          <ZaItr14Sheet
+            client={client}
+            today={day}
+            drafts={drafts}
+            approverRole={audience === "owner" ? "owner" : "accountant"}
+            backLabel="All SARS forms"
+            onSaved={onSaved}
+            onBack={() => setOpen(null)}
+          />
+        ) : (
+          <p className="agent-section-empty" role="status">
+            Loading saved drafts…
+          </p>
+        )}
       </div>
     );
   }
