@@ -2,6 +2,8 @@
 .ask-ai-widget {
   font-family: ui-monospace, SF Mono, Menlo, Consolas, monospace;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ask-ai-trigger {
@@ -111,9 +113,13 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ask-ai-chip {
+  max-width: 100%;
+  min-width: 0;
   padding: 4px 12px;
   border-radius: 9999px;
   border: 1px solid rgba(183, 135, 42, 0.3);
@@ -124,6 +130,9 @@
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
   letter-spacing: 0.04em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 .ask-ai-chip:hover {
   border-color: rgba(212, 165, 80, 0.6);
@@ -218,13 +227,17 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
   max-height: min(62vh, 640px);
   overflow-y: auto;
   padding-right: 2px;
 }
 .ask-ai-turn-user {
   align-self: flex-end;
+  min-width: 0;
   max-width: min(100%, 40rem);
+  overflow-wrap: anywhere;
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(148, 163, 184, 0.08);
@@ -235,6 +248,9 @@
   white-space: pre-wrap;
 }
 .ask-ai-answer {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   border-radius: 10px;
   border: 1px solid rgba(183, 135, 42, 0.25);
   background: #f8fafc;
@@ -297,6 +313,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
   margin-top: 8px;
 }
 
@@ -616,24 +634,40 @@
 }
 .dark .ask-ai-note { color: #8b93a7; }
 
-/* Shared agent reply card. Owner chat and the Ask widget both use it. */
+/* Shared agent reply card. Owner chat and the Ask widget both use it.
+   A key figure or chip can be a long token. The row must shrink, and the
+   text stays inside its own card instead of painting over the next one. */
+.agent-reply-host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
 .agent-reply {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 70ch;
+  min-width: 0;
+  max-width: min(70ch, 100%);
+  overflow-wrap: anywhere;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: normal;
   color: inherit;
 }
 .agent-reply-headline {
   margin: 0;
+  min-width: 0;
+  max-width: 100%;
   font-size: 1.05rem;
   font-weight: 650;
   line-height: 1.35;
 }
 .agent-reply-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -643,9 +677,19 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   border-radius: 10px;
+}
+.agent-reply-kpi-label,
+.agent-reply-kpi-value,
+.agent-reply-figure-label,
+.agent-reply-figure-value {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .agent-reply-kpi-label {
   font-size: 0.75rem;
@@ -656,28 +700,70 @@
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
-.agent-reply-bullets {
+.agent-reply-bullets,
+.agent-reply-how-detail {
   margin: 0;
-  padding-left: 1.1rem;
+  padding-left: 1.25rem;
+  list-style: disc outside;
 }
-.agent-reply-bullets li + li {
+.agent-reply-bullets li + li,
+.agent-reply-how-detail li + li {
   margin-top: 4px;
 }
 .agent-reply-figures {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .agent-reply-figure {
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   font-size: 0.8rem;
   line-height: 1.3;
+}
+/* The answer bubble's list rules are more specific than the card's.
+   Keep the figure row and the key-figure grid flush, and keep bullets readable. */
+.ask-ai-answer .agent-reply-kpis,
+.ask-ai-answer .agent-reply-figures,
+.ask-ai-answer .agent-reply-bullets {
+  margin: 0;
+}
+.ask-ai-answer .agent-reply-how-detail {
+  margin: 8px 0 0;
+}
+.ask-ai-answer .agent-reply-kpis,
+.ask-ai-answer .agent-reply-figures {
+  padding: 0;
+}
+.ask-ai-answer .agent-reply-bullets,
+.ask-ai-answer .agent-reply-how-detail {
+  padding-left: 1.25rem;
+}
+.ask-ai-answer .agent-reply li {
+  margin: 0;
+}
+.ask-ai-answer .agent-reply-bullets li + li,
+.ask-ai-answer .agent-reply-how-detail li + li {
+  margin-top: 4px;
+}
+.agent-reply-decision,
+.agent-reply-decision-actions,
+.agent-reply-how,
+.agent-reply-how-summary,
+.agent-reply-decision-prompt {
+  min-width: 0;
+  max-width: 100%;
 }
 .agent-reply-decision-actions {
   display: flex;
@@ -685,9 +771,12 @@
   gap: 8px;
 }
 .agent-reply-decision-btn {
+  max-width: 100%;
   border-radius: 8px;
   padding: 8px 12px;
   font: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 .agent-reply-decision-btn.is-primary {
@@ -708,6 +797,8 @@
   align-items: flex-start;
   gap: 4px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   padding: 0;
   border: 0;
@@ -731,7 +822,7 @@
 }
 .agent-reply-how-detail {
   margin: 8px 0 0;
-  padding-left: 1.1rem;
+  padding-left: 1.25rem;
   font-size: 0.85rem;
 }
 .agent-reply-how-missing,

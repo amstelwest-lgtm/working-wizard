@@ -1,7 +1,9 @@
 /**
  * Shared agent reply card: schema, decision strip, and the collapsed how-line.
+ * The card CSS is shared by owner chat and the accountant Ask widget.
  * Run: pnpm test:agent-reply-format
  */
+import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 import { ADVISOR_TOOL_LABELS } from "../src/lib/agent-advisor.ts";
 import { ANALYST_TOOL_LABELS } from "../src/lib/agent-analyst.ts";
@@ -241,5 +243,41 @@ await act(async () => {
 });
 assert(loads === 1, "closing does not fetch again");
 assert(howHost.querySelector("[data-agent-how-detail]") == null, "closing hides the trail");
+
+const replyCss = readFileSync("public/ask-ai.css", "utf8");
+const ownerCss = readFileSync("src/components/owner-door/owner-door.css", "utf8");
+assert(
+  replyCss.includes("minmax(min(100%, 8.5rem), 1fr)"),
+  "key figures shrink to one column before a card can overflow its row",
+);
+assert(replyCss.includes(".agent-reply-host") && replyCss.includes("min-width: 0"), "the reply host can shrink in a flex thread");
+assert(
+  /\.agent-reply\s*\{[^}]*overflow-wrap:\s*anywhere/.test(replyCss),
+  "reply text wraps inside the card",
+);
+assert(
+  /\.agent-reply-kpi\s*\{[^}]*overflow:\s*hidden/.test(replyCss),
+  "a key figure clips at its own border",
+);
+assert(
+  /\.agent-reply-figure\s*\{[^}]*min-width:\s*0/.test(replyCss) &&
+    /\.agent-reply-figure\s*\{[^}]*overflow-wrap:\s*anywhere/.test(replyCss),
+  "a figure chip wraps instead of covering the next chip",
+);
+assert(
+  replyCss.includes(".ask-ai-answer .agent-reply-kpis") &&
+    replyCss.includes(".ask-ai-answer .agent-reply-figures"),
+  "the accountant answer list rules do not indent the cards",
+);
+assert(
+  /\.ask-ai-chip\s*\{[^}]*overflow-wrap:\s*anywhere/.test(replyCss) &&
+    /\.ask-ai-chip\s*\{[^}]*max-width:\s*100%/.test(replyCss),
+  "suggestion chips stay inside the composer",
+);
+assert(
+  /\.owner-door \.owner-turn\s*\{[^}]*min-width:\s*0/.test(ownerCss) &&
+    /\.owner-door \.owner-turn\s*\{[^}]*overflow-wrap:\s*anywhere/.test(ownerCss),
+  "an owner chat bubble can shrink and wrap",
+);
 
 console.log("agent-reply-format: ok");
