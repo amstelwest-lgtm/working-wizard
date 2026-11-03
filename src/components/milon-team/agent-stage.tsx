@@ -5,6 +5,7 @@
 import { useId, type ReactNode } from "react";
 import { AGENT_KEYS } from "@/lib/milon-team-feed";
 import { askAgentTitle } from "@/lib/agent-section-copy";
+import { useAgentDocumentTitle } from "@/hooks/use-agent-document-title";
 import {
   stageAgentDisplayName,
   stageAgentJobLine,
@@ -38,6 +39,7 @@ export function AgentStage({
   children?: ReactNode;
 }) {
   const chatTitleId = useId();
+  useAgentDocumentTitle(stageAgentShortName(agent));
   const keys = taxTab ? stageAgentKeys(marketCountry) : AGENT_KEYS;
   return (
     <section className="agent-stage" data-agent-stage={agent}>

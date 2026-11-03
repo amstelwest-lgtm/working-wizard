@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useAgentDocumentTitle } from "@/hooks/use-agent-document-title";
 import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
@@ -81,6 +82,7 @@ export function OwnerChat({
   market: Pick<ResolvedMarket, "locale" | "timezone">;
 }) {
   const short = agentShortName(agent);
+  useAgentDocumentTitle(short);
   const speechRef = useRef<ReplySpeech | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const onSpeechRef = useRef(onSpeech);

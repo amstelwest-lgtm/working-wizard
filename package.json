@@ -373,6 +373,7 @@
     "test:try-outreach": "vite-node --config scripts/vite-test.config.ts scripts/render-try-outreach.mts",
     "render:try-outreach": "vite-node --config scripts/vite-test.config.ts scripts/render-try-outreach.mts",
     "test:agent-page-layout": "vite-node --config scripts/vite-test.config.ts scripts/agent-page-layout-test.mts",
+    "test:agent-document-title": "vite-node --config scripts/vite-test.config.ts scripts/agent-document-title-test.mts",
     "test:finding-dedupe": "vite-node --config scripts/vite-test.config.ts scripts/finding-dedupe-test.mts"
   },
   "dependencies": {

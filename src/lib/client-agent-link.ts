@@ -3,6 +3,7 @@
  * The Tax Specialist collects documents. She does not fill in a form
  * or make a SARS claim.
  */
+import { agentDocumentTitle } from "@/lib/agent-document-title";
 import { MONTHS_LONG } from "@/lib/market/date-presets";
 import { formatDate } from "@/lib/market/format";
 import { SEND_FILE_MAX_BYTES, SEND_FILE_MIMES, sha256Hex } from "./client-agent-send";
@@ -988,8 +989,28 @@ export function linkPrivacyHeaders(pathname: string): Record<string, string> | n
   };
 }
 
+/**
+ * Tab title for one open link. The checklist with no mission is the Tax
+ * Specialist. A mission uses the agent on that send. Anything else stays
+ * the brand, so the route head does not name Tax before the shell is known.
+ */
+export function sendLinkTitleName(
+  view:
+    | { ok: true; mission?: { agentShortName?: string | null } | null }
+    | { ok: false }
+    | null
+    | undefined,
+): string | null {
+  if (!view?.ok) return null;
+  if (view.mission) {
+    const named = (view.mission.agentShortName ?? "").replace(/\s+/g, " ").trim();
+    return named || null;
+  }
+  return "Tax Specialist";
+}
+
 export const SEND_LINK_META = [
-  { title: "Tax Specialist — Milōn" },
+  { title: agentDocumentTitle(null) },
   { name: "robots", content: "noindex, nofollow" },
   { name: "referrer", content: "no-referrer" },
 ] as const;
