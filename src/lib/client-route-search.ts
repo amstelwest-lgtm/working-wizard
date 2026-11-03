@@ -51,6 +51,7 @@ export const RAIL_SUBSECTIONS = [
   "collections",
   "payables",
   "waterfall",
+  "pnl",
   "lines",
   "year",
   "months",
@@ -196,6 +197,7 @@ function destinationForSection(
   if (section === "waterfall" || section === "profitability") {
     return { tab: "profit", section: "waterfall" };
   }
+  if (section === "pnl" || section === "pl") return { tab: "profit", section: "pnl" };
   if (section === "profit") return { tab: "profit" };
   if (section === "budget") return { tab: "budget" };
   if (section === "year") return { tab: "budget", section: "year" };
@@ -256,6 +258,7 @@ function explicitRail(
     if (section === "waterfall" || section === "profitability") {
       return { tab: "profit", section: "waterfall" };
     }
+    if (section === "pnl" || section === "pl") return { tab: "profit", section: "pnl" };
     return { tab: "profit" };
   }
   if (tab === "budget") {
@@ -386,7 +389,9 @@ export function canonicalizeAccountantSearch(input: {
   view?: string | null;
 }): CanonicalClientSearch {
   const tab = (input.tab ?? "").trim();
-  const fromView = sectionFromView(input.view);
+  const view = (input.view ?? "").trim();
+  let fromView = sectionFromView(input.view);
+  if (tab === "profit" && (view === "pnl" || view === "table")) fromView = "pnl";
   const section = (input.section ?? "").trim() || fromView;
   const focus = asFocus(input.focus);
   const finish = (result: CanonicalClientSearch) => withNamedPage(result, input);
@@ -633,6 +638,7 @@ export function clientRailSelection(input: {
     case "profit":
       if (section === "lines") return { headingId: "profit", subId: "lines" };
       if (section === "waterfall") return { headingId: "profit", subId: "waterfall" };
+      if (section === "pnl") return { headingId: "profit", subId: "pnl" };
       return { headingId: "profit", subId: null };
     case "budget":
       if (section === "months") return { headingId: "budget", subId: "months" };
@@ -703,8 +709,13 @@ export function clientNavSearch<T extends object>(
     return accountantClientTabSearch(prev, "cash");
   }
   if (headingId === "profit") {
-    if (sub === "lines" || sub === "waterfall") {
-      return accountantClientTabSearch(prev, "profit", { section: sub });
+    if (sub === "lines" || sub === "waterfall" || sub === "pnl") {
+      const next = accountantClientTabSearch(prev, "profit", { section: sub }) as Record<
+        string,
+        unknown
+      >;
+      if (sub === "pnl") delete next.view;
+      return next as T;
     }
     return accountantClientTabSearch(prev, "profit");
   }
@@ -842,6 +853,9 @@ const SECTION_HASHES: Record<string, CanonicalClientSearch> = {
   "product-lines": { tab: "profit", section: "lines" },
   lines: { tab: "profit", section: "lines" },
   "pane-waterfall": { tab: "profit", section: "waterfall" },
+  pnl: { tab: "profit", section: "pnl" },
+  "pane-pnl": { tab: "profit", section: "pnl" },
+  "profit-and-loss": { tab: "profit", section: "pnl" },
   months: { tab: "budget", section: "months" },
   "month-by-month": { tab: "budget", section: "months" },
   year: { tab: "budget", section: "year" },
@@ -1011,10 +1025,9 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
       if (!out.section) out.section = "year";
     }
   }
-  if (out.tab === "profit") {
+  if (out.tab === "profit" && out.section !== "pnl") {
     const view = typeof search.view === "string" ? search.view : "";
-    if (view === "pnl" || view === "table") out.view = "pnl";
-    else if (view === "setup" || view === "inputs") out.view = "setup";
+    if (view === "setup" || view === "inputs") out.view = "setup";
     else if (view === "audit") out.view = "audit";
   }
   if ((!out.tab || out.tab === "home") && (search.view === "progress" || search.view === "books")) {

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -13,6 +13,15 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
+import {
+  FigureAmountButton,
+  FigureEditConfirm,
+  FigureEditProvider,
+  useFigureEdit,
+  useManualFigureEdit,
+} from "@/components/figure-amount-edit";
+import { waterfallFieldForStep } from "@/lib/figure-edit";
+import type { WaterfallFigureKey } from "@/lib/figure-proposal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
@@ -59,6 +68,8 @@ type WfStep = {
   showStatus: boolean;
   /** When set, the chip scores this ratio instead of the running margin. */
   statusRatio?: string;
+  /** Stored period P&L field. Absent on a calculated step such as depreciation. */
+  field?: WaterfallFigureKey;
 };
 
 const COMPACT_LABEL: Record<string, string> = {
@@ -135,6 +146,43 @@ function axisTicks(min: number, max: number): { ticks: number[]; lo: number; hi:
 /** Unicode minus for printed figures on the owner door. */
 function ownerSign(text: string): string {
   return text.replace(/^-/, "−");
+}
+
+function StepAmount({
+  step,
+  amount,
+  display,
+  className,
+  style,
+  dataNeg,
+}: {
+  step: WfStep;
+  amount: number;
+  display: string;
+  className?: string;
+  style?: CSSProperties;
+  dataNeg?: boolean;
+}) {
+  const propose = useFigureEdit();
+  if (!propose || !step.field) {
+    return (
+      <span className={className} style={style} data-neg={dataNeg ? "true" : undefined}>
+        {display}
+      </span>
+    );
+  }
+  return (
+    <FigureAmountButton
+      label={step.label}
+      field={step.field}
+      amount={amount}
+      display={display}
+      className={className}
+      style={style}
+      dataNeg={dataNeg}
+      onPropose={propose}
+    />
+  );
 }
 
 function PremiumWaterfallFigure({
@@ -266,9 +314,13 @@ function PremiumWaterfallFigure({
                   className="absolute left-0 right-0 z-10 flex flex-col items-center gap-0.5 text-center"
                   style={{ bottom: band + ((barBottomPct + barHeightPct) / 100) * chartH + 5 }}
                 >
-                  <span className="pw-figure" data-neg={neg ? "true" : undefined}>
-                    {primary}
-                  </span>
+                  <StepAmount
+                    step={s}
+                    amount={isDec ? spanAbs : s.runningEnd}
+                    display={primary}
+                    className="pw-figure"
+                    dataNeg={neg}
+                  />
                   <span className="pw-figure-sub" data-neg={neg ? "true" : undefined}>
                     {secondary}
                   </span>
@@ -420,11 +472,13 @@ function WaterfallFigure({
                   className={`rounded-sm bg-[#FFFFFF]/90 px-0.5 font-extrabold leading-none tracking-tight dark:bg-[#0b1220]/85 ${fit ? "text-[8px]" : "text-[11px]"}`}
                   style={{ color: isDec || negNet ? "#c0392b" : undefined }}
                 >
-                  <span
+                  <StepAmount
+                    step={s}
+                    amount={value}
+                    display={figure}
                     className={`block whitespace-nowrap ${isDec || negNet ? "" : "text-[#102A43] dark:text-[#F4F7FB]"}`}
-                  >
-                    {figure}
-                  </span>
+                    dataNeg={isDec || negNet}
+                  />
                 </div>
                 <div
                   className={`font-medium leading-none text-[#475569] dark:text-[#94a3b8] ${fit ? "text-[8px]" : "text-[10px]"}`}
@@ -725,7 +779,11 @@ function DetailRows({
                   {s.label}
                 </div>
                 <div className="truncate text-sm font-extrabold tracking-tight text-[#102A43] dark:text-[#F4F7FB]">
-                  {fmt(s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd)}
+                  <StepAmount
+                    step={s}
+                    amount={s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd}
+                    display={fmt(s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd)}
+                  />
                   <span className="ml-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                     {pct(s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd, revenue)}
                   </span>
@@ -754,7 +812,7 @@ function WaterfallPhoneList({
   negative,
   money,
 }: {
-  steps: { label: string; delta: number; runningEnd: number; kind: string }[];
+  steps: WfStep[];
   revenue: number;
   negative: "minus" | "paren";
   money: (n: number) => string;
@@ -777,12 +835,14 @@ function WaterfallPhoneList({
               <span className="min-w-0 text-xs font-bold uppercase leading-tight tracking-wide text-[#1e293b] dark:text-[#e2e8f0]">
                 {s.label}
               </span>
-              <span
+              <StepAmount
+                step={s}
+                amount={isDec ? Math.abs(s.delta) : s.runningEnd}
+                display={valueText}
                 className="shrink-0 text-xs font-extrabold tabular-nums text-[#102A43] dark:text-[#F4F7FB]"
                 style={{ color: isDec || negNet ? "#c0392b" : undefined }}
-              >
-                {valueText}
-              </span>
+                dataNeg={isDec || negNet}
+              />
             </div>
             <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-[#e8eef5] dark:bg-slate-800">
               <div
@@ -922,6 +982,21 @@ export function ProfitabilityWaterfall({
       }}
     />
   ) : null;
+  const manualEdit = useManualFigureEdit({
+    clientId,
+    onApplied: (next) => {
+      setFigureOverlay(derivePeriodWaterfallFallback(next));
+      onFiguresApplied?.(next);
+    },
+  });
+  const editCard = (
+    <FigureEditConfirm
+      pending={manualEdit.pending}
+      busy={manualEdit.busy}
+      onConfirm={() => void manualEdit.confirm()}
+      onReject={manualEdit.reject}
+    />
+  );
   const periodBit = periodLabel?.trim() || null;
   const answerSentence = profitAnswerSentence({
     currency: currencySymbol(market),
@@ -951,7 +1026,7 @@ export function ProfitabilityWaterfall({
   const taxNote = estimatedTaxNote({ clientName, tax, operatingProfit });
   const showDepreciation = Math.abs(depreciation) >= 0.5;
 
-  const steps: WfStep[] = [
+  const rawSteps: WfStep[] = [
     { label: "Revenue", delta: revenue, runningEnd: revenue, kind: "total", showStatus: false },
     {
       label: "Cost of Sales",
@@ -1023,6 +1098,10 @@ export function ProfitabilityWaterfall({
       showStatus: true,
     },
   ];
+  const steps: WfStep[] = rawSteps.map((step) => ({
+    ...step,
+    field: waterfallFieldForStep(step.label) ?? undefined,
+  }));
 
   exportPdfRef.current = () => {
     setExporting(true);
@@ -1103,7 +1182,9 @@ export function ProfitabilityWaterfall({
       },
     ];
     return (
+      <FigureEditProvider onPropose={manualEdit.propose}>
       <>
+      {waterfallOpen ? null : editCard}
       {proposalCard}
       <Card className="pw-card relative overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_8px_24px_rgba(16,42,67,0.06)] print:hidden dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] dark:shadow-none">
         <CardHeader className="border-b border-[#EDF3FC] pb-4 dark:border-slate-800">
@@ -1203,6 +1284,7 @@ export function ProfitabilityWaterfall({
             onOpenChange={setWaterfallOpen}
             title="Profitability waterfall"
           >
+            {editCard}
             <PremiumWaterfallFigure
               steps={steps}
               revenue={revenue}
@@ -1267,11 +1349,14 @@ export function ProfitabilityWaterfall({
         </CardContent>
       </Card>
       </>
+      </FigureEditProvider>
     );
   }
 
   return (
+    <FigureEditProvider onPropose={manualEdit.propose}>
     <>
+    {waterfallOpen ? null : editCard}
     {proposalCard}
     <Card className="relative overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_8px_24px_rgba(16,42,67,0.06)] print:hidden dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] dark:shadow-none">
       <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[#0B5FFF]" />
@@ -1357,12 +1442,14 @@ export function ProfitabilityWaterfall({
                     <span className="min-w-0 text-xs font-bold uppercase leading-tight tracking-wide text-[#1e293b] dark:text-[#e2e8f0]">
                       {s.label}
                     </span>
-                    <span
+                    <StepAmount
+                      step={s}
+                      amount={isDec ? Math.abs(s.delta) : s.runningEnd}
+                      display={valueText}
                       className="shrink-0 text-xs font-extrabold tabular-nums text-[#102A43] dark:text-[#F4F7FB]"
                       style={{ color: isDec || negNet ? "#c0392b" : undefined }}
-                    >
-                      {valueText}
-                    </span>
+                      dataNeg={isDec || negNet}
+                    />
                   </div>
                   <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-[#e8eef5] dark:bg-slate-800">
                     <div
@@ -1401,6 +1488,7 @@ export function ProfitabilityWaterfall({
           onOpenChange={setWaterfallOpen}
           title="Profitability waterfall"
         >
+          {editCard}
           <WaterfallFigure
             steps={steps}
             revenue={revenue}
@@ -1438,5 +1526,6 @@ export function ProfitabilityWaterfall({
       </CardContent>
     </Card>
     </>
+    </FigureEditProvider>
   );
 }

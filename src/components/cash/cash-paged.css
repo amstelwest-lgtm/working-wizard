@@ -10,6 +10,7 @@
   flex-direction: column;
   gap: 14px;
   min-width: 0;
+  max-width: 100%;
   padding: 16px;
   border-radius: 12px;
   background: var(--cash-paged-bg);

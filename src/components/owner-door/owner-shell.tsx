@@ -17,6 +17,7 @@ export type OwnerScreen =
   | "tasks"
   | "actions"
   | "profit"
+  | "pnl"
   | "moves"
   | "accountant"
   | "deliverables"
@@ -223,19 +224,31 @@ export function OwnerShell({
           {RAIL.map((item) => {
             const active = screen === item.screen || (item.screen === "home" && screen === "chat");
             return (
-              <button
-                key={item.id}
-                type="button"
-                className={`tab${active ? " on" : ""}`}
-                aria-label={item.label}
-                aria-current={active ? "page" : undefined}
-                onClick={() => open(item.screen)}
-              >
-                <span className="tab-ic" aria-hidden="true">
-                  <RailIcon id={item.id} />
-                </span>
-                <span className="tab-text">{item.label}</span>
-              </button>
+              <div key={item.id}>
+                <button
+                  type="button"
+                  className={`tab${active ? " on" : ""}`}
+                  aria-label={item.label}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => open(item.screen)}
+                >
+                  <span className="tab-ic" aria-hidden="true">
+                    <RailIcon id={item.id} />
+                  </span>
+                  <span className="tab-text">{item.label}</span>
+                </button>
+                {item.screen === "profit" ? (
+                  <button
+                    type="button"
+                    className={`tab owner-rail-sub${screen === "pnl" ? " on" : ""}`}
+                    aria-label="P&L"
+                    aria-current={screen === "pnl" ? "page" : undefined}
+                    onClick={() => open("pnl")}
+                  >
+                    <span className="tab-text">P&L</span>
+                  </button>
+                ) : null}
+              </div>
             );
           })}
           <RailSettingsButton

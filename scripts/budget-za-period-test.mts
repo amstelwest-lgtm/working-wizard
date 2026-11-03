@@ -33,6 +33,7 @@ import { budgetVersusStatement, seedBudgetFromFinancials } from "../src/lib/budg
 import { createBudgetDocument } from "../src/lib/budget.months";
 import type { BudgetQualification } from "../src/lib/budget.types";
 import { resolveMarket, type ResolvedMarket } from "../src/lib/market";
+import { buildProfitPnl } from "../src/lib/profit-statement";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -155,6 +156,23 @@ const ZA_CLIP_OPERATING = (52_000 * 7) / 9;
 
 // ZA firm year starts in March. January and February sit in the prior year.
 // A clip is an estimate from the longer statement, and says so.
+const liveSheet = buildProfitPnl({ current: JAN_SEP, fyStartMonth: 3 });
+const liveRevenue = liveSheet.rows.find((row) => row.id === "total-income");
+const liveOperating = liveSheet.rows.find((row) => row.id === "operating-profit");
+close(liveRevenue?.current, ZA_CLIP_REVENUE, "live P&L revenue matches the firm-year waterfall");
+close(liveOperating?.current, ZA_CLIP_OPERATING, "live P&L operating profit matches the firm-year waterfall");
+assert(liveSheet.prorated === true, "the live sheet uses the prorated firm year");
+const interestBooks = { ...JAN_SEP, interest: "9000", tax: "4800" };
+const interestSheet = buildProfitPnl({ current: interestBooks, fyStartMonth: 3 });
+const interestFall = fiscalWaterfallFallback(interestBooks, 3);
+const interestRow = interestSheet.rows.find((row) => row.id === "interest");
+close(interestRow?.current, interestFall?.fallback.interest ?? -1, "live P&L interest matches the waterfall");
+close(
+  interestSheet.rows.find((row) => row.id === "net-profit")?.current,
+  interestFall?.fallback.statedNetIncome ?? -1,
+  "live P&L net profit matches the waterfall",
+);
+
 const zaClip = cardsAgree(JAN_SEP, 3, ZA, ZA_CLIP_REVENUE, ZA_CLIP_OPERATING, [
   "Mar\u2013Sep 2026",
   "pro-rated from your Jan\u2013Sep 2026 statement",

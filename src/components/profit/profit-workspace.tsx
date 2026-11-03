@@ -161,6 +161,7 @@ export function ProfitWorkspace({
             priorLabel={priorText}
             fyStartMonth={fyStartMonth}
             signed={signed}
+            clientId={clientId}
           />
         ) : null}
       </div>

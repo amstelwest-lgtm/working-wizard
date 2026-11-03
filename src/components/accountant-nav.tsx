@@ -93,6 +93,7 @@ function NavLink({
   headingId,
   bot,
   title,
+  subId,
   children,
   onClick,
 }: {
@@ -105,6 +106,8 @@ function NavLink({
   bot?: boolean;
   /** Tooltip while the rail is an icon strip. */
   title?: string;
+  /** Sub-page id when this row is a left-nav subheading. */
+  subId?: string;
   children: ReactNode;
   onClick: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
@@ -118,6 +121,7 @@ function NavLink({
       className={className}
       data-nav-row=""
       data-nav-id={navId}
+      data-sub-id={subId}
       data-nav-kind={
         navId.startsWith("sub:") ? "sub" : navId.startsWith("heading:") ? "heading" : navId
       }
@@ -406,6 +410,7 @@ export function AccountantNav({
                             dest={item.to}
                             className="nav-sub-link"
                             navId={id}
+                            subId={item.id}
                             tabIndex={tabId === id ? 0 : -1}
                             ariaCurrent={on ? "page" : undefined}
                             headingId={heading.id}

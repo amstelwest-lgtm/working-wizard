@@ -17,6 +17,8 @@ const chart = readFileSync("src/components/profit/profit-chart.tsx", "utf8");
 const table = readFileSync("src/components/profit/profit-pnl-table.tsx", "utf8");
 const owner = readFileSync("src/routes/app.tsx", "utf8");
 const accountant = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
+const rail = readFileSync("src/components/client-studio-chrome.tsx", "utf8");
+const ownerShell = readFileSync("src/components/owner-door/owner-shell.tsx", "utf8");
 const shape = readFileSync("src/components/profit/chart-shape-toggle.tsx", "utf8");
 
 assert(menu.includes('className="cash-menu"'), "profit reuses the cash block menu");
@@ -33,9 +35,13 @@ assert(chart.includes('ariaLabel="Interval"'), "the chart has week, month, and y
 assert(chart.includes('aria-label="Start date"'), "the chart has a start date");
 assert(chart.includes('data-profit-chart='), "the chart is marked");
 assert(table.includes("Variance (%)"), "the table has a variance percent column");
+assert(table.includes("max-w-full overflow-x-auto"), "the live sheet scrolls inside the page");
+assert(table.includes("Enlarge profit and loss") || table.includes('label="profit and loss"'), "the live sheet can enlarge");
 assert(table.includes("YTD (FY)"), "the table has a year-to-date column");
 assert(shape.includes("Bar chart") && shape.includes("Line chart"), "the toggle names both shapes");
 assert(owner.includes("<ProfitWorkspace"), "the owner profit page uses the shared workspace");
+assert(owner.includes('data-owner-page="pnl"'), "the owner P&L is its own page");
+assert(ownerShell.includes('aria-label="P&L"'), "the owner rail has a P&L subheading");
 assert(owner.includes("fallback={ownerWaterfallFallback}"), "the owner waterfall stays on the same slice");
 assert(accountant.includes("<ProfitWorkspace"), "the accountant profit page uses the shared workspace");
 assert(accountant.includes('id="lines"'), "product lines stay their own frame");
@@ -53,5 +59,14 @@ assert(
   profitPane.indexOf("Edit the period figures on Health.") < profitPane.indexOf('id="wizard-profit-walk"'),
   "the Health link stays above the waterfall",
 );
+assert(profitPane.includes('id="pnl"'), "P&L renders on its own page");
+assert(rail.includes('id: "pnl"'), "P&L is a Profit subheading");
+const waterfallStart = profitPane.indexOf('id="waterfall"');
+const walk = profitPane.indexOf('id="wizard-profit-walk"');
+assert(
+  !profitPane.slice(waterfallStart, walk).includes("ReviewInputsDrawer"),
+  "the waterfall has no Review inputs",
+);
+assert(profitPane.includes("ReviewInputsDrawer"), "Profit setup keeps Review inputs");
 
 console.log("profit-paged-layout-test: all assertions passed");

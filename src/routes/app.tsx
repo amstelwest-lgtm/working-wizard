@@ -165,7 +165,7 @@ import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operati
 import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
-import { budgetProfitFields, statementCoverMonthCount } from "@/lib/budget.bridges";
+import { statementCoverMonthCount } from "@/lib/budget.bridges";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
@@ -328,6 +328,10 @@ const ProfitWorkspace = lazyPanel(
   () => import("@/components/profit/profit-workspace").then((m) => ({ default: m.ProfitWorkspace })),
   "Profit",
 );
+const ProfitPnlTable = lazyPanel(
+  () => import("@/components/profit/profit-pnl-table").then((m) => ({ default: m.ProfitPnlTable })),
+  "P&L",
+);
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
@@ -414,7 +418,7 @@ export const Route = createFileRoute("/app")({
     bot?: "financial_manager" | "analyst" | "advisor";
     bots?: "row" | "stack";
     screen?: "settings" | "accountant" | "plan";
-    section?: "signed";
+    section?: "signed" | "pnl";
     checkout?: "success" | "cancel";
     draft?: string;
   } => {
@@ -427,7 +431,7 @@ export const Route = createFileRoute("/app")({
       bot?: "financial_manager" | "analyst" | "advisor";
       bots?: "row" | "stack";
       screen?: "settings" | "accountant" | "plan";
-      section?: "signed";
+      section?: "signed" | "pnl";
       checkout?: "success" | "cancel";
       draft?: string;
     } = {};
@@ -476,6 +480,10 @@ export const Route = createFileRoute("/app")({
     } else if (rawScreen === "accountant") {
       out.screen = "accountant";
       if (rawSection === "signed") out.section = "signed";
+    }
+    if (rawSection === "pnl" && (out.tab === "profit" || rawTab === "profit") && out.section !== "signed") {
+      out.tab = "profit";
+      out.section = "pnl";
     }
     if (search.checkout === "success" || search.checkout === "cancel") {
       out.checkout = search.checkout;
@@ -4508,6 +4516,26 @@ function Index() {
   const showOwnerDoor = !sampleMode && !isLegacyOwnerBoardTab(searchTab);
   const OwnerHealthOrb = SphereHero;
 
+  function applyOwnerFigures(next: Record<string, unknown>) {
+    setV((prev) => {
+      const merged = { ...prev } as Inputs & Record<string, string>;
+      for (const key of [
+        "revenue",
+        "cogs",
+        "grossProfit",
+        "fixedCosts",
+        "ebit",
+        "interest",
+        "tax",
+        "netIncome",
+      ] as const) {
+        const value = next[key];
+        if (typeof value === "number" || typeof value === "string") merged[key] = String(value);
+      }
+      return merged;
+    });
+  }
+
   return (
     <MarketProvider selection={workspaceMarket}>
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
@@ -4617,7 +4645,7 @@ function Index() {
                 })}
                 history={history}
                 cashflow={clientMeta?.cashflow ?? null}
-                financials={v as unknown as Record<string, unknown>}
+                financials={v as unknown as Record<string, string>}
                 sampleNotice={
                   statementSampleImplausible(v as unknown as Record<string, unknown>)
                     ? implausibleSampleNote(boardMarket)
@@ -4823,20 +4851,7 @@ function Index() {
                               ? (history[0]?.period_date?.slice(0, 7) ?? null)
                               : null
                           }
-                          financials={{
-                            revenue: v.revenue,
-                            cogs: v.cogs,
-                            fixedCosts: v.fixedCosts,
-                            laborCost: v.laborCost,
-                            receivables: v.receivables,
-                            payables: v.payables,
-                            inventory: v.inventory,
-                            operatingCashflow: v.operatingCashflow,
-                            [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
-                            ...(v.periodStart ? { periodStart: v.periodStart } : {}),
-                            ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
-                            ...budgetProfitFields(v),
-                          }}
+                          financials={v as unknown as Record<string, string>}
                           reloadToken={budgetReloadToken}
                         />
                       </Suspense>
@@ -4897,7 +4912,7 @@ function Index() {
                           <ProfitLead periodLabel={ownerProfitPeriodLabel} />
                           <Suspense fallback={<p className="owner-lede">Loading profit…</p>}>
                           <ProfitWorkspace
-                            financials={v as unknown as Record<string, unknown>}
+                            financials={v as unknown as Record<string, string>}
                             snapshots={history}
                             prior={(ownerPrior?.financials as Record<string, unknown> | null) ?? null}
                             priorLabel={
@@ -4962,6 +4977,7 @@ function Index() {
                             preferPeriod={preferStatementPeriod(v)}
                             yearToDate={statementYearLine(v, boardMarket)}
                             statementSource={readStatementMeta(v, boardMarket).statementSource}
+                            onFiguresApplied={applyOwnerFigures}
                           />
                             }
                           />
@@ -4970,6 +4986,58 @@ function Index() {
                       ) : (
                         <>
                           <h1 className="owner-title">Profit</h1>
+                          <p className="owner-lede">Your accountant sets this up</p>
+                          <button
+                            type="button"
+                            className="btn gold owner-ask owner-ask-inline"
+                            onClick={() => go("accountant")}
+                          >
+                            Invite your accountant
+                          </button>
+                        </>
+                      )}
+                    </section>
+                  ),
+                  pnl: (
+                    <section className="owner-pane" data-owner-page="pnl">
+                      {showScoredBoard ? (
+                        <>
+                          {statementSampleImplausible(v as unknown as Record<string, unknown>) ? (
+                            <p className="owner-lede" role="status" data-sample-notice="">
+                              {implausibleSampleNote(boardMarket)}
+                            </p>
+                          ) : null}
+                          <OwnerPageHead
+                            eyebrow="Profit"
+                            title="P&L"
+                            lede="This period against the prior period, with the year to date."
+                          />
+                          <Suspense fallback={<p className="owner-lede">Loading profit…</p>}>
+                            <ProfitPnlTable
+                              financials={v as unknown as Record<string, string>}
+                              prior={(ownerPrior?.financials as Record<string, unknown> | null) ?? null}
+                              priorLabel={
+                                (ownerPrior
+                                  ? statementSpanLabel({
+                                      periodStart: readStatementMeta(ownerPrior.financials, boardMarket).periodStart,
+                                      periodEnd: readStatementMeta(ownerPrior.financials, boardMarket).periodEnd,
+                                      periodLabel: ownerPrior.period_label,
+                                      market: boardMarket,
+                                    })
+                                  : null) ?? "Prior period"
+                              }
+                              quoted={ownerProfitPeriod?.slice ?? null}
+                              currentLabel={ownerProfitPeriodLabel ?? "This period"}
+                              fyStartMonth={fyStartMonth}
+                              clientId={effectiveClientId ?? undefined}
+                              signed
+                              onFiguresApplied={applyOwnerFigures}
+                            />
+                          </Suspense>
+                        </>
+                      ) : (
+                        <>
+                          <h1 className="owner-title">P&L</h1>
                           <p className="owner-lede">Your accountant sets this up</p>
                           <button
                             type="button"
@@ -5588,7 +5656,7 @@ function Index() {
                     className="mt-3"
                     clientId={effectiveClientId}
                     audience="owner"
-                    financials={v as unknown as Record<string, unknown>}
+                    financials={v as unknown as Record<string, string>}
                     refreshKey={`${activeTab}|${advisoryBump}|${firstRunStep ?? ""}`}
                     onUpload={() => setFirstRunStep("first-data")}
                     onOpenForecast={() => setActiveTab("cash")}
@@ -6686,21 +6754,7 @@ function Index() {
                               ? (history[0]?.period_date?.slice(0, 7) ?? null)
                               : null
                           }
-                          financials={{
-                            revenue: v.revenue,
-                            cogs: v.cogs,
-                            fixedCosts: v.fixedCosts,
-                            laborCost: v.laborCost,
-                            receivables: v.receivables,
-                            payables: v.payables,
-                            inventory: v.inventory,
-                            operatingCashflow: v.operatingCashflow,
-                            // Months the P&L covers — without it a quarter seeds as a year.
-                            [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
-                            ...(v.periodStart ? { periodStart: v.periodStart } : {}),
-                            ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
-                            ...budgetProfitFields(v),
-                          }}
+                          financials={v as unknown as Record<string, string>}
                           onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
                           reloadToken={budgetReloadToken}
                         />

@@ -465,7 +465,8 @@ export function BudgetPanel({
     return () => clearTimeout(t);
   }, [clientId, loaded, doc]);
 
-  const figureSource = loadedFinancialsRef.current ?? financials ?? null;
+  // The open books win. The fetched row fills a page that has not loaded them yet.
+  const figureSource = financials ?? loadedFinancialsRef.current ?? null;
   const statementView =
     doc && loadedFor.current === (clientId ?? null)
       ? statementBudgetRead(doc, figureSource as Record<string, unknown> | null)

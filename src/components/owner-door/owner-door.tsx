@@ -242,7 +242,7 @@ export function OwnerDoor({
   sampleClient?: boolean;
   boards?: (
     go: (screen: OwnerScreen) => void,
-  ) => Partial<Record<"health" | "cash" | "budget" | "tasks" | "profit" | "moves", ReactNode>>;
+  ) => Partial<Record<"health" | "cash" | "budget" | "tasks" | "profit" | "pnl" | "moves", ReactNode>>;
   bot?: AgentKey | null;
   onBotChange?: (agent: AgentKey | null, mode: "push" | "replace") => void;
   /** URL screen. Back and forward change this, and the door follows. */
@@ -1150,6 +1150,7 @@ export function OwnerDoor({
       {railScreen === "cash" ? restored?.cash : null}
       {railScreen === "budget" ? restored?.budget : null}
       {railScreen === "profit" ? restored?.profit : null}
+      {railScreen === "pnl" ? restored?.pnl : null}
       {railScreen === "moves" ? restored?.moves : null}
       {railScreen === "chat" && active ? (
         <OwnerChat

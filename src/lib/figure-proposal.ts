@@ -763,6 +763,18 @@ function applyWaterfallPatch(
   return next;
 }
 
+/** In-memory manual edit. Confirm false does not copy the books. */
+export function applyConfirmedWaterfallPatch(
+  financials: Record<string, unknown> | null | undefined,
+  patch: WaterfallFigurePatch,
+  confirm: boolean,
+): { ok: true; financials: Record<string, unknown> } | { ok: false; reason: string } {
+  if (confirm !== true) return { ok: false, reason: "confirm_required" };
+  const parsed = parseWaterfallFigurePatch(patch);
+  if (!parsed.ok) return { ok: false, reason: parsed.error };
+  return { ok: true, financials: applyWaterfallPatch(financials ?? {}, parsed.patch) };
+}
+
 /**
  * One apply path for cash, budget, and the profitability waterfall.
  * Confirm is required. A blocked call does not copy or change the stored books.

@@ -12,7 +12,8 @@ import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { cashPagedSearch, cashPagedViewFromSearch } from "@/lib/cash-paged-view";
 import { BUDGET_PAGED_LABEL, budgetPagedSearch, budgetPagedViewFromSearch } from "@/lib/budget-paged-view";
-import { profitPagedSearch, profitPagedViewFromSearch } from "@/lib/profit-paged-view";
+import { profitPagedSearch, profitPagedSentence, profitPagedViewFromSearch } from "@/lib/profit-paged-view";
+import { ProfitPnlTable } from "@/components/profit/profit-pnl-table";
 import { ProfitWorkspace } from "@/components/profit/profit-workspace";
 import { CollectionsPanel } from "@/components/collections-panel";
 import { PayablesPanel } from "@/components/payables-panel";
@@ -577,6 +578,7 @@ function crumbSectionLabel(tab: string, section: string): string {
     collections: "Who to chase",
     payables: "Who to pay",
     waterfall: "Waterfall",
+    pnl: "P&L",
     lines: "Product lines",
     year: "This year",
     months: "Month by month",
@@ -4928,7 +4930,64 @@ function ClientView() {
 
                 {/* ===== PROFIT TAB ===== */}
                 <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
-                  {activeTab === "profit" ? (
+                  {activeTab === "profit" && search.section === "pnl" ? (
+                  <ClientSubpageFrame
+                    id="pnl"
+                    eyebrow="Profit"
+                    title="P&L"
+                    subtitle={profitPagedSentence("pnl")}
+                  >
+                    <ProfitPnlTable
+                      financials={financials}
+                      prior={priorSnapshot?.financials ?? null}
+                      quoted={accountantProfitPeriod?.slice ?? null}
+                      currentLabel={profitPeriodLabel ?? "This period"}
+                      priorLabel={
+                        (priorSnapshot
+                          ? statementSpanLabel({
+                              periodStart: readStatementMeta(priorSnapshot.financials, clientMarket).periodStart,
+                              periodEnd: readStatementMeta(priorSnapshot.financials, clientMarket).periodEnd,
+                              periodLabel: priorSnapshot.period_label,
+                              market: clientMarket,
+                            })
+                          : null) ?? "Prior period"
+                      }
+                      fyStartMonth={fyStartMonth}
+                      clientId={clientId}
+                      onFiguresApplied={(next) => {
+                        setFinancials((prev) => {
+                          const merged = { ...prev };
+                          for (const key of [
+                            "revenue",
+                            "cogs",
+                            "grossProfit",
+                            "fixedCosts",
+                            "ebit",
+                            "interest",
+                            "tax",
+                            "netIncome",
+                          ]) {
+                            const value = next[key];
+                            if (typeof value === "number" || typeof value === "string") {
+                              merged[key] = String(value);
+                            }
+                          }
+                          return merged;
+                        });
+                        setClient((current) =>
+                          current
+                            ? {
+                                ...current,
+                                financials: next as typeof current.financials,
+                                financials_updated_at: new Date().toISOString(),
+                              }
+                            : current,
+                        );
+                      }}
+                    />
+                  </ClientSubpageFrame>
+                  ) : null}
+                  {activeTab === "profit" && search.section !== "pnl" ? (
                   <ProfitWorkspace
                     view={profitPagedViewFromSearch(search)}
                     onViewChange={(next) => {
@@ -5060,24 +5119,6 @@ function ClientView() {
                       </button>
                     }
                   />
-                  <ReviewInputsDrawer hint={deliverableDrawerHint("profit", deliverableInputContext)}>
-                  <DeliverableInputConfig
-                    className="mb-5"
-                    clientId={clientId}
-                    deliverableId="profit"
-                    context={deliverableInputContext}
-                  />
-                  <p className="sub" style={{ marginTop: 12 }}>
-                    <Link
-                      to="/clients/$clientId"
-                      params={{ clientId }}
-                      search={(prev) => accountantClientTabSearch(prev, "health")}
-                    >
-                      Edit the period figures on Health.
-                    </Link>
-                  </p>
-
-                  </ReviewInputsDrawer>
                   <div id="wizard-profit-walk">
                     <ProfitabilityWaterfall
                       onFiguresApplied={(next) => {

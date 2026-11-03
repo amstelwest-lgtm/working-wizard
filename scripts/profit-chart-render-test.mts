@@ -140,11 +140,23 @@ await act(async () => {
 });
 assert(host.querySelector("[data-chart-shape='bar']"), "bar shape is selected");
 
-const pnl = host.querySelector("[data-profit-menu-tab='pnl']");
-assert(pnl instanceof HTMLButtonElement, "P&L is a menu tab");
+assert(host.querySelector("[data-profit-menu-tab='pnl']") == null, "P&L is not a tab inside Profit");
 await act(async () => {
-  pnl.click();
+  root.render(
+    createElement(
+      "div",
+      null,
+      createElement(ProfitPnlTable, {
+        financials: october,
+        prior: september,
+        currentLabel: "Oct 2026",
+        priorLabel: "Sep 2026",
+        fyStartMonth: 1,
+      }),
+    ),
+  );
 });
+assert(host.querySelector("[aria-label='Enlarge profit and loss']"), "the P&L sheet can enlarge");
 const tableText = host.textContent ?? "";
 assert(tableText.includes("Profit and Loss"), "the P&L table has its title");
 assert(tableText.includes("Oct 2026"), "current period is a column");

@@ -16,6 +16,12 @@ assert.equal(ownerDoorScreen({}), "home", "a bare /app opens Home");
 assert.equal(ownerDoorScreen({ tab: "cash" }), "cash", "/app?tab=cash opens Cash flow");
 assert.equal(ownerDoorScreen({ tab: "health" }), "health", "/app?tab=health opens Health");
 assert.equal(ownerDoorScreen({ tab: "moves" }), "moves", "/app?tab=moves opens Next moves");
+assert.equal(ownerDoorScreen({ tab: "profit", section: "pnl" }), "pnl", "/app?tab=profit&section=pnl opens P&L");
+const pnlSearch = ownerDoorSearch({}, "pnl");
+assert.equal(pnlSearch.tab, "profit");
+assert.equal(pnlSearch.section, "pnl");
+assert.equal(ownerDoorScreen(pnlSearch), "pnl");
+assert.equal(ownerDoorSearch(pnlSearch, "profit").section, undefined, "Profit itself is not the P&L page");
 assert.equal(ownerDoorScreen({ tab: "accountant" }), "accountant", "/app?tab=accountant opens the portal");
 assert.equal(
   ownerDoorScreen({ screen: "accountant", section: "signed" }),

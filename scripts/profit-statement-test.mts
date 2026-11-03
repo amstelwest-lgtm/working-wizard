@@ -3,7 +3,7 @@
  * Run: pnpm test:profit-statement
  */
 import { buildProfitPnl, presentProfitSeries, profitFlows, profitSeriesPoints } from "../src/lib/profit-statement.ts";
-import { profitPagedSearch, profitPagedSentence, profitPagedViewFromSearch, PROFIT_PAGED_VIEWS } from "../src/lib/profit-paged-view.ts";
+import { profitMenuViews, profitPagedSearch, profitPagedSentence, profitPagedViewFromSearch, PROFIT_PAGED_VIEWS } from "../src/lib/profit-paged-view.ts";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) {
@@ -112,14 +112,16 @@ const cumulative = profitSeriesPoints({
 const octoberPoint = cumulative.find((point) => point.id === "2026-10");
 assert(octoberPoint?.span === "month" && octoberPoint.income === 51376, "one new cumulative month is the difference");
 
-assert(PROFIT_PAGED_VIEWS.join(",") === "chart,pnl,waterfall,lines,setup,audit", "profit menu follows cash");
+assert(PROFIT_PAGED_VIEWS.join(",") === "chart,pnl,waterfall,lines,setup,audit", "pnl stays a profit view id");
+assert(profitMenuViews(true).join(",") === "chart,waterfall,lines,setup,audit", "P&L is not a tab inside Profit");
 assert(profitPagedViewFromSearch({}) === "chart", "chart is the landing pane");
 assert(profitPagedViewFromSearch({ section: "waterfall" }) === "waterfall", "the waterfall link stays");
 assert(profitPagedViewFromSearch({ section: "lines" }) === "lines", "product lines stay");
-assert(profitPagedViewFromSearch({ view: "pnl" }) === "pnl", "view=pnl is the table");
+assert(profitPagedViewFromSearch({ section: "pnl" }) === "pnl", "the P&L page is its own section");
+assert(profitPagedViewFromSearch({ view: "pnl" }) === "pnl", "an old view=pnl link still names the table");
 assert(profitPagedViewFromSearch({ view: "audit" }) === "audit", "view=audit is audit inputs");
 const searched = profitPagedSearch({ tab: "profit", section: "waterfall" }, "pnl");
-assert(searched.view === "pnl" && !("section" in searched), "the table clears the waterfall section");
+assert(searched.section === "pnl" && searched.view == null, "P&L is the section page and clears the waterfall");
 for (const view of PROFIT_PAGED_VIEWS) {
   const sentence = profitPagedSentence(view);
   const stops = sentence.split(/[.!?]/).filter((part) => part.trim());
