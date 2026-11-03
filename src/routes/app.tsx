@@ -61,6 +61,7 @@ import { openOwnerSettings } from "@/lib/user-roles";
 import { HeaderShareButton } from "@/components/share";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { OwnerBusinessSwitcher } from "@/components/owner-business-switcher";
+import { ClientGroupChrome } from "@/components/client-group-chrome";
 import {
   boardRoleForWorkspace,
   canOpenOwnerWorkspace,
@@ -5152,6 +5153,11 @@ function Index() {
                         loading={!clientLinkResolved}
                       />
                     ) : null}
+                    <ClientGroupChrome
+                      clientId={effectiveClientId}
+                      linkCompanies={false}
+                      onOpenCompany={switchOwnerWorkspace}
+                    />
                   </div>
                   <div className="founder-app-bar__actions flex shrink-0 items-center gap-1 print:hidden">
                     {/* Keep primary actions visible on phones; park the rest in More */}
