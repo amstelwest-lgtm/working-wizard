@@ -18,10 +18,9 @@ import {
   type Irp6Period,
   type Irp6SectionId,
   type Irp6Sheet,
-  type Irp6SourceKind,
   zaToday,
 } from "./irp6.ts";
-import { taxFormByCode, type TaxFormCode } from "./registry.ts";
+import { taxFormByCode, type TaxFieldSourceKind, type TaxFormCode } from "./registry.ts";
 import { formatSampleDate } from "../sample-compute.ts";
 
 export type TaxFormDraftStatus = "draft" | "approved" | "downloaded";
@@ -33,8 +32,8 @@ export const TAX_FORM_DRAFT_STATUS_LABEL: Record<TaxFormDraftStatus, string> = {
 };
 
 export type TaxFormDraftField = {
-  value: string | Irp6Adjustment[];
-  source: Irp6SourceKind;
+  value: string | Irp6Adjustment[] | unknown[];
+  source: TaxFieldSourceKind;
   /** Client file the figure was read from. Absent when the source is not a file. */
   fileId?: string | null;
 };
@@ -47,7 +46,7 @@ export type TaxFormDraft = {
   period: number | null;
   subject: string | null;
   fields: Record<string, TaxFormDraftField>;
-  approvals: Partial<Record<Irp6SectionId, boolean>>;
+  approvals: Partial<Record<Irp6SectionId | string, boolean>>;
   status: TaxFormDraftStatus;
   approved_by: string | null;
   approved_by_name: string | null;
@@ -430,7 +429,7 @@ export function draftActivity(
   drafts: readonly TaxFormDraft[],
 ): Array<{ id: string; text: string; at: string }> {
   return currentTaxDrafts(drafts)
-    .filter((row) => row.form_code === "IRP6")
+    .filter((row) => row.form_code === "IRP6" || row.form_code === "ITR12")
     .map((row) => {
       const what = taxDraftTitle(row);
       const approved =

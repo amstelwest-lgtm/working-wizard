@@ -138,7 +138,7 @@ for (const form of TAX_FORM_GALLERY) {
   const block = page.slice(at, page.indexOf("</li>", at));
   assert(block.includes(form.name), `${form.code} plain name`);
   assert(block.includes(form.frequency.replace(/&/g, "&amp;")), `${form.code} frequency`);
-  const status = form.code === "IRP6" ? "Ready to prepare" : "Coming soon";
+  const status = form.status === "ready" ? "Ready to prepare" : "Coming soon";
   assert(block.includes(`>${status}<`), `${form.code} says ${status}`);
 }
 assert(
@@ -148,8 +148,8 @@ assert(
 const openable = renderToStaticMarkup(createElement(ZaTaxSpecialistPage, { onOpenForm: () => {} }));
 eq(
   openable.split('class="tax-page-form is-open"').length - 1,
-  1,
-  "only the IRP6 block opens a sheet",
+  TAX_FORM_GALLERY.filter((form) => form.status === "ready").length,
+  "each ready form opens a sheet",
 );
 assert(
   /data-tax-form="ITR14"[^]*?The worksheet is under Tax workings\./.test(page),
@@ -237,9 +237,11 @@ const withClient = renderToStaticMarkup(
 );
 eq(
   withClient.split('class="tax-page-form is-open"').length - 1,
-  1,
-  "with a client the IRP6 block opens the sheet",
+  TAX_FORM_GALLERY.filter((form) => form.status === "ready").length,
+  "with a client each ready form opens a sheet",
 );
+assert(withClient.includes('data-tax-form="ITR12"'), "ITR12 is on the gallery");
+assert(withClient.includes("Ready to prepare"), "ITR12 is ready to prepare");
 assert(withClient.includes('data-tax-deadlines="client"'), "a client gets its own deadlines");
 assert(withClient.includes("IRP6, year of assessment 2027"), "deadlines name the year");
 assert(

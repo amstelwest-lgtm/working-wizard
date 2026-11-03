@@ -3,6 +3,7 @@
  * allow-list all read this list. A new form is a new entry here, not a new
  * product. ZA chunk only.
  */
+import { ITR12_FIELDS, ITR12_RULES_YEAR } from "./itr12.ts";
 import { IRP6_FIELDS, IRP6_RULES_YEAR, type Irp6Field, type Irp6SourceKind } from "./irp6.ts";
 
 export type TaxFormCode = "IRP5" | "EMP201" | "EMP501" | "IRP6" | "ITR14" | "VAT201" | "ITR12";
@@ -20,7 +21,8 @@ export type TaxPeriodModel =
   | "per-employee"
   | "tax-period";
 
-export type TaxFieldSourceKind = Irp6SourceKind;
+/** `file` is a client document cited by id. IRP6 does not use it. */
+export type TaxFieldSourceKind = Irp6SourceKind | "file";
 
 /** Where a field's figure is allowed to come from. A missing source stays blank. */
 export type TaxFieldIntake =
@@ -70,10 +72,7 @@ export const TAX_FORM_STATUS_LABEL: Record<TaxFormStatus, string> = {
   soon: "Coming soon",
 };
 
-/**
- * Documents a finished individual send already asks for. ITR12 field filling
- * is a later phase; the catalog records the mapping now.
- */
+/** Documents a finished individual send already asks for. ITR12 fields read these. */
 export const ITR12_INTAKE_ITEMS = [
   "irp5",
   "it3b",
@@ -182,15 +181,18 @@ export const TAX_FORM_REGISTRY: readonly TaxFormDefinition[] = [
     periodModel: "tax-period",
     intakeItems: [],
   }),
-  soon({
+  {
     code: "ITR12",
     label: "ITR12",
     name: "Individual income tax return",
     frequency: "Yearly",
+    status: "ready",
     entity: "individual",
     periodModel: "yearly",
+    rulesYear: ITR12_RULES_YEAR,
+    fields: ITR12_FIELDS,
     intakeItems: ITR12_INTAKE_ITEMS,
-  }),
+  },
 ];
 
 export function taxFormByCode(code: string): TaxFormDefinition | undefined {

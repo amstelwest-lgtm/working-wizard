@@ -316,7 +316,8 @@
   font-weight: 600;
 }
 
-.irp6-source-tag.is-books {
+.irp6-source-tag.is-books,
+.irp6-source-tag.is-file {
   background: #eaf2ff;
   color: #0b4fd6;
 }
@@ -628,7 +629,8 @@ html.dark .irp6-source-tag {
   color: #c5d4e4;
 }
 
-html.dark .irp6-source-tag.is-books {
+html.dark .irp6-source-tag.is-books,
+html.dark .irp6-source-tag.is-file {
   background: #12305a;
   color: #9cc2ff;
 }

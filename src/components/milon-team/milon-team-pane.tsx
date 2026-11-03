@@ -114,7 +114,7 @@ export function MilonTeamPaneView({
         onSelect={(next) => onSelectAgent?.(next)}
         chat={chat}
       >
-        <TaxSpecialistPage country={marketCountry} client={taxClient} />
+        <TaxSpecialistPage country={marketCountry} client={taxClient} audience={audience} />
       </AgentStage>
     );
   }

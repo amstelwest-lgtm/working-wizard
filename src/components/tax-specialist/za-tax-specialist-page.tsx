@@ -39,7 +39,10 @@ import {
   loadTaxFormDrafts,
   type TaxFormDraft,
 } from "@/lib/tax-specialist/forms/drafts";
+import { loadItr12Open } from "@/lib/tax-specialist/forms/itr12-load";
+import type { Itr12Inputs } from "@/lib/tax-specialist/forms/itr12";
 import { ZaIrp6Sheet, type Irp6SheetClient } from "./za-irp6-sheet";
+import { ZaItr12Sheet } from "./za-itr12-sheet";
 import "./za-tax-specialist-sample.css";
 import "./za-tax-specialist-page.css";
 
@@ -161,6 +164,7 @@ export function ZaTaxSpecialistPage({
   onOpenForm,
   client = null,
   today,
+  audience = "accountant",
 }: {
   activity?: TaxPageActivity[];
   onOpenForm?: (code: TaxFormCode) => void;
@@ -168,11 +172,14 @@ export function ZaTaxSpecialistPage({
   client?: Irp6SheetClient | null;
   /** YYYY-MM-DD in South Africa. Defaults to the clock. */
   today?: string;
+  /** Owners can read a sheet. They cannot approve a section. */
+  audience?: "owner" | "accountant";
 }) {
   const day = today ?? zaToday();
   const clientId = client?.id ?? null;
   const [drafts, setDrafts] = useState<TaxFormDraft[] | null>(clientId ? null : []);
   const [open, setOpen] = useState<TaxFormCode | null>(null);
+  const [itr12, setItr12] = useState<{ year: number; seed: Itr12Inputs | null } | null>(null);
 
   useEffect(() => {
     if (!clientId) return;
@@ -194,6 +201,13 @@ export function ZaTaxSpecialistPage({
       setOpen(code);
       document.querySelector("[data-tax-page]")?.scrollIntoView({ block: "start" });
     }
+    if (code === "ITR12" && client && drafts) {
+      void loadItr12Open(client.id, drafts, day).then((next) => {
+        setItr12(next);
+        setOpen("ITR12");
+        document.querySelector("[data-tax-page]")?.scrollIntoView({ block: "start" });
+      });
+    }
     onOpenForm?.(code);
   };
 
@@ -204,6 +218,25 @@ export function ZaTaxSpecialistPage({
         .slice(0, ACTIVITY_CAP),
     [activity, drafts],
   );
+
+  if (open === "ITR12" && client && itr12 && drafts) {
+    return (
+      <div className="tax-page" data-tax-page="true" data-tax-open-form="ITR12">
+        <ZaItr12Sheet
+          key={itr12.year}
+          client={{ id: client.id, name: client.name }}
+          today={day}
+          drafts={drafts}
+          initialYear={itr12.year}
+          seed={itr12.seed}
+          approverRole={audience === "owner" ? "owner" : "accountant"}
+          backLabel="All SARS forms"
+          onSaved={onSaved}
+          onBack={() => setOpen(null)}
+        />
+      </div>
+    );
+  }
 
   if (open === "IRP6" && client) {
     return (

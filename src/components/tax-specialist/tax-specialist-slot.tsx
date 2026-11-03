@@ -67,6 +67,7 @@ type LoadedPage = ComponentType<{
   activity?: Array<{ id: string; text: string; at: string }>;
   client?: TaxPageClient | null;
   today?: string;
+  audience?: "owner" | "accountant";
 }>;
 
 /** The tax agent page sections. Nothing renders, and nothing loads, outside ZA. */
@@ -75,11 +76,13 @@ export function TaxSpecialistPage({
   activity,
   client,
   today,
+  audience = "accountant",
 }: {
   country: string | null | undefined;
   activity?: Array<{ id: string; text: string; at: string }>;
   client?: TaxPageClient | null;
   today?: string;
+  audience?: "owner" | "accountant";
 }) {
   const [Page, setPage] = useState<LoadedPage | null>(null);
   const enabled = taxSampleEnabled(country);
@@ -103,7 +106,7 @@ export function TaxSpecialistPage({
       </p>
     );
   }
-  return <Page activity={activity} client={client} today={today} />;
+  return <Page activity={activity} client={client} today={today} audience={audience} />;
 }
 
 export function TaxSpecialistSlot({
