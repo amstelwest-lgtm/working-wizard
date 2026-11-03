@@ -106,6 +106,8 @@
     "test:precard-dashboard-crumb": "vite-node --config scripts/vite-test.config.ts scripts/precard-dashboard-crumb-test.mts",
     "test:lighthouse-it": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-it-test.mts",
     "test:practice-access": "vite-node --config scripts/vite-test.config.ts scripts/practice-access-test.mts",
+    "test:client-groups": "vite-node --config scripts/vite-test.config.ts scripts/client-groups-test.mts",
+    "test:client-groups-edge-audit": "vite-node --config scripts/vite-test.config.ts scripts/client-groups-edge-audit-test.mts",
     "test:practice-book-cache": "vite-node --config scripts/vite-test.config.ts scripts/practice-book-cache-test.mts",
     "test:practice-today-digest": "vite-node --config scripts/vite-test.config.ts scripts/practice-today-digest-test.mts",
     "test:staff-invite": "vite-node --config scripts/vite-test.config.ts scripts/staff-invite-landing-test.mts",

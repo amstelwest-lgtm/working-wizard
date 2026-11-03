@@ -163,6 +163,7 @@ export function AccountantNav({
   back,
   onSettings,
   onNavigate,
+  accessory,
 }: {
   label: string;
   sections: NavSection[];
@@ -176,6 +177,8 @@ export function AccountantNav({
   onSettings?: () => void;
   /** Closes the phone drawer when a page is chosen. The chevron only expands. */
   onNavigate?: () => void;
+  /** Extra rail block. Company groups render here and stay empty for a group of one. */
+  accessory?: ReactNode;
 }) {
   const navRef = useRef<HTMLElement>(null);
   const pendingFocus = useRef<string | null>(null);
@@ -423,6 +426,7 @@ export function AccountantNav({
           })}
         </div>
       ))}
+      {accessory}
       <div className="rail-settings">
         <NavLink
           dest={settingsTo ?? { to: "/settings" }}
