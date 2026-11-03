@@ -134,8 +134,10 @@ assert(studio.includes('label: "Team"'), "the rail names the Team group");
 assert(studio.includes('label: "Reports"'), "the rail names Reports");
 const railSrc = readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 assert(
-  railSrc.indexOf('{ id: "home", label: "Home" }') < railSrc.indexOf('{ id: "health", label: "Diagnose" }') &&
-    railSrc.indexOf('{ id: "health", label: "Diagnose" }') < railSrc.indexOf('label: "Reports"'),
+  railSrc.indexOf('{ id: "home", label: "Home" }') <
+    railSrc.indexOf('{ id: "health", label: HEALTH_PANEL_MENU_LABEL }') &&
+    railSrc.indexOf('{ id: "health", label: HEALTH_PANEL_MENU_LABEL }') <
+      railSrc.indexOf('label: "Reports"'),
   "the rail is Home, then Health, then Reports",
 );
 const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");

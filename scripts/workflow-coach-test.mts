@@ -254,7 +254,10 @@ assert(studio.includes('{ id: "home", label: "Home" }'), "left rail reaches Home
 assert(studio.includes('label: "Team"'), "the rail groups Team");
 assert(studio.includes('label: "Action plan"'), "left rail reaches Action plan");
 assert(studio.includes('label: "Books"'), "the rail reaches Books");
-assert(studio.includes('{ id: "health", label: "Diagnose" }'), "the rail reaches Diagnose");
+assert(
+  studio.includes("HEALTH_PANEL_MENU_LABEL") && studio.includes('{ id: "health", label: HEALTH_PANEL_MENU_LABEL }'),
+  "the rail reaches Diagnose",
+);
 assert(studio.includes('{ id: "profit", label: "Profit" }'), "the rail reaches Profit");
 assert(studio.includes('{ id: "cash", label: "Cash flow" }'), "the rail reaches Cash flow");
 assert(studio.includes('{ id: "budget", label: "Budget" }'), "the rail reaches Budget");

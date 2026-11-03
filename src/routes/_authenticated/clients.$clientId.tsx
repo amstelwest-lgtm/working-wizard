@@ -200,6 +200,7 @@ import { ClientOwnerInviteHost } from "@/components/client-owner-invite-dialog";
 import { ClientBackLink, ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
 import { TaxWorkSlot } from "@/components/tax-specialist/tax-work-slot";
 import { clientBackTarget } from "@/lib/client-back";
+import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
 import { useOverlayHistory } from "@/lib/overlay-history";
 import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
 import { hashIsCashDetailAnchor } from "@/lib/cash-forecast-view";
@@ -551,7 +552,7 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
 const CRUMB_PARENT: Record<string, { label: string; tab: string }> = {
   overview: { label: "Home", tab: "home" },
   ask: { label: "Home", tab: "home" },
-  ratios: { label: "Diagnose", tab: "health" },
+  ratios: { label: HEALTH_PANEL_MENU_LABEL, tab: "health" },
   cash: { label: "Cash flow", tab: "cash" },
   profit: { label: "Profit", tab: "profit" },
   budget: { label: "Budget", tab: "budget" },
