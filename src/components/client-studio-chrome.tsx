@@ -21,6 +21,7 @@ export const CLIENT_RAIL = [
   { id: "plan", label: "Action plan" },
   { id: "reports", label: "Reports" },
   { id: "tax", label: "Tax" },
+  { id: "compliance", label: "Compliance" },
   { id: "books", label: "Books" },
 ] as const;
 
@@ -145,6 +146,7 @@ function clientSections(
           ]),
         },
         { id: "tax", label: "Tax", to: go("tax") },
+        { id: "compliance", label: "Compliance", to: go("compliance") },
       ],
     },
     {

@@ -20,6 +20,7 @@ export function clientBackTarget(input: {
     plan: { label: "Action plan", tab: "plan" },
     reports: { label: "Reports", tab: "reports" },
     tax: { label: "Tax", tab: "tax" },
+    compliance: { label: "Compliance", tab: "compliance" },
     summary: { label: "Books", tab: "portal" },
     portal: { label: "Books", tab: "portal" },
   };

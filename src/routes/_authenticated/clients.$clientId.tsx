@@ -283,7 +283,7 @@ import { relatedTabForRatio } from "@/lib/ratio-briefing";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
-import { DraftworxDirtyWorkPanel } from "@/components/draftworx-dirty-work-panel";
+import { CompliancePane } from "@/components/compliance-pane";
 import { SendAgentPanel } from "@/components/send-agent-panel";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
@@ -535,7 +535,8 @@ type ActiveTab =
   | "drafter"
   | "summary"
   | "moves"
-  | "tax";
+  | "tax"
+  | "compliance";
 
 const ACCOUNTANT_TABS: ActiveTab[] = [
   "overview",
@@ -553,6 +554,7 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "advisory",
   "drafter",
   "tax",
+  "compliance",
 ];
 
 const CRUMB_PARENT: Record<string, { label: string; tab: string }> = {
@@ -566,6 +568,7 @@ const CRUMB_PARENT: Record<string, { label: string; tab: string }> = {
   plan: { label: "Action plan", tab: "plan" },
   reports: { label: "Reports", tab: "reports" },
   tax: { label: "Tax", tab: "tax" },
+  compliance: { label: "Compliance", tab: "compliance" },
   summary: { label: "Books", tab: "portal" },
 };
 
@@ -4647,26 +4650,6 @@ function ClientView() {
                   onChanged={() => setAdvisoryBump((n) => n + 1)}
                 />
 
-                {hasFigures ? (
-                  <div className="mb-4">
-                    <DraftworxDirtyWorkPanel
-                      clientId={clientId}
-                      clientName={client?.name}
-                      market={clientMarket}
-                      financials={financials}
-                      financialsSignoff={financialsSignoff}
-                      signoffStale={pageSignoffStale(
-                        financialsSignoff,
-                        client?.financials_updated_at ?? null,
-                      )}
-                      needsTrialBalanceRefresh={needsTrialBalanceRefresh({
-                        live: financials,
-                        snapshots,
-                      })}
-                    />
-                  </div>
-                ) : null}
-
                 {generationTrialOpen ? (
                   <TrialEndedPlanBlock firmId={client.firm_id ?? null} audience="accountant" />
                 ) : null}
@@ -5887,6 +5870,28 @@ function ClientView() {
                 <div className={`tabpane${activeTab === "tax" ? " on" : ""}`} id="pane-tax">
                   {activeTab === "tax" ? (
                     <TaxWorkSlot country={clientGateCountry} client={taxClient} />
+                  ) : null}
+                </div>
+
+                <div className={`tabpane${activeTab === "compliance" ? " on" : ""}`} id="pane-compliance">
+                  {activeTab === "compliance" ? (
+                    <CompliancePane
+                      clientId={clientId}
+                      clientName={client?.name}
+                      market={clientMarket}
+                      financials={financials}
+                      financialsSignoff={financialsSignoff}
+                      signoffStale={pageSignoffStale(
+                        financialsSignoff,
+                        client?.financials_updated_at ?? null,
+                      )}
+                      needsTrialBalanceRefresh={needsTrialBalanceRefresh({
+                        live: financials,
+                        snapshots,
+                      })}
+                      hasFigures={hasFigures}
+                      onImportTrialBalance={() => setUploadOpen(true)}
+                    />
                   ) : null}
                 </div>
                 </div>

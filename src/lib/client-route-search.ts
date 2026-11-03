@@ -31,6 +31,7 @@ export const CLIENT_RAIL_TABS = [
   "plan",
   "reports",
   "tax",
+  "compliance",
   "portal",
   "settings",
 ] as const;
@@ -94,7 +95,8 @@ export type LegacyPaneId =
   | "drafter"
   | "summary"
   | "moves"
-  | "tax";
+  | "tax"
+  | "compliance";
 
 const RAIL_SET = new Set<string>(CLIENT_RAIL_TABS);
 
@@ -129,6 +131,7 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   "strategic-moves": { tab: "moves" },
   tax: { tab: "tax" },
   "tax-specialist": { tab: "tax" },
+  compliance: { tab: "compliance" },
   reports: { tab: "reports" },
   report: { tab: "reports" },
   pack: { tab: "reports", section: "drafts" },
@@ -216,6 +219,7 @@ function destinationForSection(
   if (section === "connections") return { tab: "portal", section: "connections" };
   if (section === "moves" || section === "strategic-moves") return { tab: "moves" };
   if (section === "tax" || section === "tax-specialist") return { tab: "tax" };
+  if (section === "compliance") return { tab: "compliance" };
   if (
     section === "books" ||
     section === "summary" ||
@@ -472,6 +476,8 @@ export function legacyPaneForSearch(search: {
       return "reports";
     case "tax":
       return "tax";
+    case "compliance":
+      return "compliance";
     case "portal":
       return "summary";
     case "settings":
@@ -673,6 +679,8 @@ export function clientRailSelection(input: {
       return { headingId: "reports", subId: null };
     case "tax":
       return { headingId: "tax", subId: null };
+    case "compliance":
+      return { headingId: "compliance", subId: null };
     case "portal":
       if (section === "connections") return { headingId: "books", subId: "connections" };
       if (section === "documents") return { headingId: "books", subId: "documents" };
@@ -789,6 +797,7 @@ export function clientNavSearch<T extends object>(
     return next as T;
   }
   if (headingId === "tax") return accountantClientTabSearch(prev, "tax");
+  if (headingId === "compliance") return accountantClientTabSearch(prev, "compliance");
   if (headingId === "send-agent") {
     return accountantClientTabSearch(prev, "portal", { section: "send-agent" });
   }
