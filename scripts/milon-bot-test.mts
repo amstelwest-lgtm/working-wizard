@@ -187,6 +187,8 @@ assert(BOT_TOOLS.includes("list_blockers"), "blockers tool");
 assert(BOT_TOOLS.includes("propose_next_steps"), "propose tool");
 assert(BOT_TOOLS.includes("draft_deliverable"), "draft tool");
 assert(BOT_TOOLS.includes("answer_from_brain"), "brain answer tool");
+assert(BOT_TOOLS.includes("list_client_library"), "library list tool");
+assert(BOT_TOOLS.includes("get_client_library_doc"), "library read tool");
 assert(isBotToolName("list_blockers") && !isBotToolName("send_email"), "tool allowlist");
 assert(BOT_SYSTEM.includes("Never invent"), "system forbids invention");
 assert(BOT_SYSTEM.includes("not Lighthouse"), "not Lighthouse");

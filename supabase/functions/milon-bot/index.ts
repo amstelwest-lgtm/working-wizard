@@ -37,7 +37,8 @@ import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/clie
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import { formatOverviewForPrompt } from "../ask-ai/overview-brief.ts";
-import { loadPeerContextBlock } from "../_shared/agent-shared-reads.ts";
+import { executeSharedDeliverableRead, loadPeerContextBlock } from "../_shared/agent-shared-reads.ts";
+import { sharedDeliverableToolSchemas } from "../../../src/lib/agent-shared-reads.ts";
 import {
   BOT_MAX_HISTORY,
   BOT_MAX_TOOL_ROUNDS,
@@ -115,6 +116,9 @@ const TOOLS: ClaudeTool[] = [
       additionalProperties: false,
     },
   },
+  ...sharedDeliverableToolSchemas().filter(
+    (tool) => tool.name === "list_client_library" || tool.name === "get_client_library_doc",
+  ),
 ];
 
 type UserClient = SupabaseClient;
@@ -154,6 +158,17 @@ async function runTool(
     adminClient: AdminClient;
   },
 ): Promise<unknown> {
+  if (tool === "list_client_library" || tool === "get_client_library_doc") {
+    return executeSharedDeliverableRead(tool, args, {
+      db: ctx.userClient,
+      clientId: ctx.clientId,
+      prepareLibraryArtifact: async (artifactId) => {
+        const { ingestLibraryArtifact } = await import("../_shared/library-ingest.ts");
+        await ingestLibraryArtifact(ctx.adminClient, artifactId, ctx.clientId);
+      },
+    });
+  }
+
   if (tool === "get_invite_status") {
     const [clientRes, inviteRes] = await Promise.all([
       ctx.userClient.from("clients").select("owner_user_id").eq("id", ctx.clientId).maybeSingle(),

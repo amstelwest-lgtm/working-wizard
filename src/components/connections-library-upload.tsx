@@ -17,6 +17,7 @@ import { FileText, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { extractFinancialsFromPDF } from "@/lib/extractFinancials.server";
 import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
+import { ingestLibraryArtifacts } from "@/lib/library-ingest-client";
 import {
   LIBRARY_DOCUMENT_TYPES,
   LIBRARY_UPLOAD_ACCEPT,
@@ -163,13 +164,19 @@ export function ConnectionsLibraryUpload({ clientId }: { clientId: string }) {
         return;
       }
       if (problem) toast.warning(problem);
+      const ingested = await ingestLibraryArtifacts(archived.archived.map((row) => row.id));
+      const read = ingested.some((row) => row.read);
+      const readSummary = ingested.find((row) => row.summary)?.summary;
+      if (readSummary) summary = readSummary;
       setSaved({ fileName: file.name, summary });
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
       toast.success(
-        readable
-          ? "Saved to Client library."
-          : "Saved to Client library. Milōn could not pull figures from it.",
+        read
+          ? "Saved to Client library. Milōn can read it."
+          : readable
+            ? "Saved to Client library."
+            : "Saved to Client library. Milōn could not read that file.",
       );
     } catch (error) {
       toast.error(

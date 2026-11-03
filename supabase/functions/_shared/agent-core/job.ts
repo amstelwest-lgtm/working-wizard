@@ -97,6 +97,7 @@ export type QueueJobConfig = {
     pool: StoredFigures[];
     recordedKeys: Set<string>;
     market?: unknown;
+    prepareLibraryArtifact?: (artifactId: string) => Promise<void>;
   }) => Promise<unknown>;
 };
 
@@ -434,6 +435,10 @@ export async function runQueueJob(
           pool,
           recordedKeys,
           market: client?.market,
+          prepareLibraryArtifact: async (artifactId: string) => {
+            const { ingestLibraryArtifact } = await import("../library-ingest.ts");
+            await ingestLibraryArtifact(db, artifactId, job.clientId);
+          },
         });
         if (!writes.has(name)) {
           const reads = collectStoredReads(payload, { snapshotId: null, periodLabel: null });

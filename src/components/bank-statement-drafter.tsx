@@ -45,6 +45,7 @@ import { AutoPopulateOptions } from "@/components/auto-populate-options";
 import { defaultAutoPopulatePrefs, type AutoPopulatePrefs } from "@/lib/auto-populate";
 import { UploadVisibilityChoice } from "@/components/upload-visibility-choice";
 import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
+import { ingestLibraryArtifacts } from "@/lib/library-ingest-client";
 import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
 
 /**
@@ -210,6 +211,9 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, doc
         });
         const problem = describeArchiveFailures(archived);
         if (problem) toast.warning(problem);
+        if (archived.archived.length) {
+          void ingestLibraryArtifacts(archived.archived.map((row) => row.id));
+        }
       }
     } catch (e) {
       toast.error(`Drafting failed: ${(e as Error).message}`);

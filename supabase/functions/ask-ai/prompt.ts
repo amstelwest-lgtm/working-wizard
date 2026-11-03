@@ -6,7 +6,7 @@ import { formatAdvisorySignoffGrounding } from "../../../src/lib/advisory-signof
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import { chatReplyFormatRules, humanDate } from "../_shared/chat-reply.ts";
 import { productFactsBlock } from "../_shared/product-facts.ts";
-import { ASK_AI_ANALYST_CHAT_TOOL_LINE } from "../../../src/lib/ask-ai-analyst-tools.ts";
+import { ASK_AI_ANALYST_CHAT_TOOL_LINE, LIBRARY_CHAT_PROMPT } from "../../../src/lib/ask-ai-analyst-tools.ts";
 import { TAX_SPECIALIST_CHAT_PERSONA } from "../_shared/agent-prompts/tax-specialist.ts";
 import {
   appendClientIdentity,
@@ -48,7 +48,7 @@ Rules:
 - Advisory pack sign-off and version come only from the ADVISORY PACK SIGN-OFF block. Quote its Status line. Do not say no sign-off or version is on file when that block is present. Do not create or save a pack version while answering.
 - Offer 1–3 concrete next actions under Next actions.
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
-- Do not invent statement line items. Quote Net profit, Gross profit, Operating profit, Profit before tax, Inventory, and Current ratio when OVERVIEW FIGURES lists them. Do not multiply a margin by revenue in their place. Raw income-statement and balance-sheet lines other than those listed headlines are not provided — use the outputs above.
+- Do not invent statement line items. Quote Net profit, Gross profit, Operating profit, Profit before tax, Inventory, and Current ratio when OVERVIEW FIGURES lists them. Do not multiply a margin by revenue in their place. Raw income-statement and balance-sheet lines other than those listed headlines are not provided — use the outputs above, or a library file the tools have read.
 ${locale}
 ${chatReplyFormatRules(copyPack, moneyPack)}
 
@@ -134,9 +134,16 @@ export function buildPrompt(
   const copyPack = ctx.copyPack ?? "za";
   const moneyPack = ctx.moneyPack ?? copyPack;
   let system = askAiSystemBase(copyPack, audience, moneyPack);
+  if (agent !== "tax_specialist") {
+    system += `\n- ${LIBRARY_CHAT_PROMPT}`;
+  }
   if (agent) {
     system += `\n- ${askAiAgentPersona(agent, audience)} Use the figures and the CLIENT DELIVERABLES AND TEAM FINDINGS block in this prompt. This thread's earlier turns are only this agent's. You do not see the other agents' chat transcripts. You may use a peer finding or a deliverable when it is listed.`;
     if (agent === "analyst") system += ` ${ASK_AI_ANALYST_CHAT_TOOL_LINE}`;
+    if (agent === "financial_manager") {
+      system +=
+        " When a library file returns figure_drafts and the person asks to apply or use those figures, call propose_figure_adjustment with that surface, patch, and reason. It stays pending. Tell them which page to Confirm on. Do not say the books were updated.";
+    }
   }
   if (audience === "accountant") {
     system +=

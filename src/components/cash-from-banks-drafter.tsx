@@ -38,6 +38,7 @@ import { selectionPayload } from "@/lib/market";
 import { UploadVisibilityChoice } from "@/components/upload-visibility-choice";
 import type { UploadDocumentsTarget } from "@/components/bank-statement-drafter";
 import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
+import { ingestLibraryArtifacts } from "@/lib/library-ingest-client";
 import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
 
 interface Props {
@@ -193,6 +194,9 @@ export function CashFromBanksDrafter({
         });
         const problem = describeArchiveFailures(archived);
         if (problem) toast.warning(problem);
+        if (archived.archived.length) {
+          void ingestLibraryArtifacts(archived.archived.map((row) => row.id));
+        }
       }
     } catch (e) {
       toast.error(`Cash draft failed: ${(e as Error).message}`);

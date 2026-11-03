@@ -83,6 +83,10 @@ export async function runMilonbotObjective(input: {
           audience: input.audience,
           userClient: input.userClient,
           adminClient: input.adminClient,
+          prepareLibraryArtifact: async (artifactId) => {
+            const { ingestLibraryArtifact } = await import("../_shared/library-ingest.ts");
+            await ingestLibraryArtifact(input.adminClient, artifactId, input.clientId);
+          },
         }),
         session,
       );

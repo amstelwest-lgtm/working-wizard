@@ -22,6 +22,8 @@ import {
   type ClientDocumentRow,
 } from "@/lib/client-documents-browser";
 import { parseDocumentMeta } from "@/lib/client-documents";
+import { ingestLibraryArtifacts } from "@/lib/library-ingest-client";
+import { libraryReadPending } from "@/lib/library-document-read";
 import {
   classifyLibraryFile,
   clientSendLibraryFlags,
@@ -321,6 +323,7 @@ export function ClientLibrary({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const backfillStarted = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -338,6 +341,15 @@ export function ClientLibrary({
       const [uploads, source] = await Promise.all([uploadsPromise, sourcePromise]);
       setFiles([...uploads.map(fileFromUpload), ...source]);
       setError(null);
+      if (!backfillStarted.current) {
+        const pending = uploads.filter((row) => libraryReadPending(row.meta)).slice(0, 4);
+        if (pending.length) {
+          backfillStarted.current = true;
+          void ingestLibraryArtifacts(pending.map((row) => row.id)).then((rows) => {
+            if (rows.some((row) => row.read)) void load();
+          });
+        }
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "The library could not be loaded.";
       if (/visibility|client_artifacts|42703|42P01/.test(message)) {

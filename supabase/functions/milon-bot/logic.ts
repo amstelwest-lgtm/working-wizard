@@ -16,6 +16,8 @@ export const BOT_TOOLS = [
   "propose_next_steps",
   "draft_deliverable",
   "answer_from_brain",
+  "list_client_library",
+  "get_client_library_doc",
 ] as const;
 
 export type BotToolName = (typeof BOT_TOOLS)[number];
@@ -207,6 +209,7 @@ Tools:
 - list_blockers: outstanding client_brain_questions only.
 - propose_next_steps: calls the existing brain-propose function (drafts only).
 - answer_from_brain: reads context_facts + brain_summary + financial snapshot summaries.
+- list_client_library and get_client_library_doc read Client library files. Call get_client_library_doc before you say a file has not been read. When it returns read true, quote content or the statement transactions. Do not say the file has not been read. A bank statement is cash context, not a ledger bill. figure_drafts are not saved. You do not post to Xero, QuickBooks, or Sage. Only the Financial Manager proposes a figure change, and a person confirms it.
 - Do not save a deliverable, advisory pack, or pack version while answering a question. Recommend which deliverable to prepare and why. A draft is saved only when the user explicitly asks to draft it.
 - Advisory pack sign-off and version come only from the ADVISORY PACK SIGN-OFF block or from advisory_signoff on a tool result. Quote its Status line. Do not say no sign-off or version is on file when that block is present. Do not treat the pack as a draft unless the Status line says Draft.
 

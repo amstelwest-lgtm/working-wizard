@@ -6,8 +6,11 @@
  * keep their own paths.
  */
 import { ANALYST_PEERS } from "./agent-analyst.ts";
+import { sharedDeliverableToolSchemas } from "./agent-shared-reads.ts";
 import { readToolSchema, sendMessageToolSchema } from "./agent-draft.ts";
 import { type AskAiModelMessage } from "./ask-ai-claude-body.ts";
+import { proposeFigureToolSchema } from "./figure-proposal.ts";
+import { LIBRARY_READ_PROMPT } from "./library-document-read.ts";
 
 export const ASK_AI_ANALYST_CHAT_TOOLS = [
   "get_inbox",
@@ -38,6 +41,31 @@ export function askAiAnalystChatToolSchemas(): AskAiToolSchema[] {
 export function askAiChatToolsForAgent(agent: string | null | undefined): AskAiToolSchema[] {
   if (agent !== "analyst") return [];
   return askAiAnalystChatToolSchemas();
+}
+
+const LIBRARY_CHAT_TOOL_NAMES = new Set(["list_client_library", "get_client_library_doc"]);
+
+export function askAiLibraryToolSchemas(): AskAiToolSchema[] {
+  return sharedDeliverableToolSchemas().filter((tool) => LIBRARY_CHAT_TOOL_NAMES.has(tool.name));
+}
+
+/**
+ * Tools for one ask-ai chat. Tax Specialist stays off this list.
+ * The Analyst keeps the messaging tools and can also read the library.
+ * The Financial Manager can read the library and propose a figure. The proposal stays pending.
+ */
+export function askAiSessionTools(agent: string | null | undefined): AskAiToolSchema[] {
+  if (agent === "tax_specialist") return [];
+  const library = askAiLibraryToolSchemas();
+  if (agent === "analyst") return [...askAiAnalystChatToolSchemas(), ...library];
+  if (agent === "financial_manager") return [...library, proposeFigureToolSchema()];
+  return library;
+}
+
+export const LIBRARY_CHAT_PROMPT = LIBRARY_READ_PROMPT;
+
+export function questionAsksAboutLibrary(question: string): boolean {
+  return /\b(library|statements?|uploaded|upload|spreadsheet|transactions?|csv|excel|pdf)\b/i.test(question);
 }
 
 export function isAskAiAnalystChatTool(name: string): name is AskAiAnalystChatTool {
