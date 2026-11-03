@@ -31,17 +31,25 @@ export function GroupStatusDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/50 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#102A43]/45 p-4 backdrop-blur-[2px]"
       role="presentation"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Group status"
-        className="mt-8 w-full max-w-3xl rounded-xl bg-white p-4 shadow-xl dark:bg-[#0f172a]"
+        className="mt-8 w-full max-w-3xl rounded-2xl border border-[#DBEAFE] bg-white p-5 shadow-[0_24px_60px_rgba(16,42,67,0.18)] dark:border-slate-700 dark:bg-[#0f172a]"
       >
-        <div className="mb-3 flex justify-end">
-          <button type="button" className="btn ghost mini" onClick={onClose}>
+        <div className="mb-4 flex items-start justify-between gap-3 border-b border-[#EEF4FF] pb-3 dark:border-white/10">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#486581] dark:text-slate-400">
+              Group status
+            </p>
+            <p className="mt-1 text-sm text-[#486581] dark:text-slate-400">
+              Connection, sync, and access — no consolidated figures.
+            </p>
+          </div>
+          <button type="button" className="btn ghost mini shrink-0" onClick={onClose}>
             Close
           </button>
         </div>
@@ -96,9 +104,7 @@ export function CompanyGroupRail({
 
   return (
     <div className="nav-heading is-open" data-company-groups="">
-      <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-        Groups
-      </div>
+      <span className="rail-kicker">Groups</span>
       {groups.map((group) => {
         const open = openId === group.id;
         return (

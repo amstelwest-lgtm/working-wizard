@@ -256,7 +256,7 @@ html:not(.dark) .accountant-portal .drawer-close:hover {
 
 /* Rail text on charcoal. */
 html:not(.dark) .accountant-portal .deliverable-rail .rail-kicker {
-  color: var(--pp-frame-faint);
+  color: var(--pp-frame-dim);
   letter-spacing: 0.14em;
   font-weight: 600;
   font-size: 11px;
