@@ -159,7 +159,6 @@ jobs:
           bash scripts/apply-source-documents-sql.sh
           bash scripts/apply-client-agent-sends-sql.sh
           bash scripts/apply-client-agent-send-storage-sql.sh
-          bash scripts/apply-client-groups-sql.sh
 
   stripe-price-table:
     name: Stripe price table

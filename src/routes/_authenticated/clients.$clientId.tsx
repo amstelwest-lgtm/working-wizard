@@ -200,7 +200,6 @@ import {
 } from "@/lib/client-route-search";
 import { askAgentFromHash, searchWithAskAgent } from "@/lib/ask-agent";
 import { ClientRail } from "@/components/client-studio-chrome";
-import { ClientGroupChrome } from "@/components/client-group-chrome";
 import { ClientOwnerInviteHost } from "@/components/client-owner-invite-dialog";
 import { ClientBackLink, ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
 import { TaxWorkSlot } from "@/components/tax-specialist/tax-work-slot";
@@ -4226,7 +4225,6 @@ function ClientView() {
                 onNavigate={() => setMobileNavOpen(false)}
               />
               <div className="deliverable-main">
-                <ClientGroupChrome clientId={clientId} linkCompanies />
                 {pageBack && !onClientSettings ? (
                   <ClientBackLink clientId={clientId} label={pageBack.label} tab={pageBack.tab} />
                 ) : null}

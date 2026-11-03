@@ -1,6 +1,5 @@
 import { useRouterState } from "@tanstack/react-router";
 import { AccountantNav, type NavSection } from "@/components/accountant-nav";
-import { CompanyGroupRail } from "@/components/client-group-chrome";
 import { PRACTICE_NAV_OPEN_KEY } from "@/lib/accountant-nav-open";
 import { agentDisplayName } from "@/lib/milon-team";
 import { practiceAgentFromHash, practiceAgentHash } from "@/lib/practice-agent-hash";
@@ -119,7 +118,6 @@ export function PracticeRail({ onNavigate }: { onNavigate?: () => void }) {
       settingsActive={selection.settings}
       onNavigate={onNavigate}
       onSettings={() => openPracticeSettings()}
-      accessory={<CompanyGroupRail linkCompanies />}
     />
   );
 }

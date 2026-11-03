@@ -204,9 +204,6 @@ function settle(
   signal: AbortSignal | undefined,
   callerStack: string,
 ): Promise<{ data: unknown; error: { message: string } | null }> {
-  // Group chrome fetches its own rows. A single-company smoke book has no
-  // group, and these reads must not consume client-row hang attempts.
-  if (callerStack.includes("client-group")) return empty(kind);
   if (isWorkspaceList(table, eqs) && table === "clients") workspaceListWaves += 1;
   if (isInviteOpen(table, eqs)) inviteOpens += 1;
   const workspaceList = isWorkspaceList(table, eqs);
