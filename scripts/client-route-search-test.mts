@@ -297,7 +297,7 @@ assert(
   "the first paint uses the parsed tab and section",
 );
 const railSource = readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
-const railOrder = ["home", "health", "cash", "profit", "budget", "moves", "plan", "reports", "tax", "books"];
+const railOrder = ["home", "health", "cash", "profit", "budget", "moves", "plan", "reports", "tax", "compliance", "books"];
 let railAt = -1;
 for (const id of railOrder) {
   const at = railSource.indexOf(`id: "${id}"`);
@@ -315,6 +315,11 @@ assert(route.includes('{ id: "tax", label: "Tax", to: go("tax") }'), "Tax sits u
 const workGroup = railSource.slice(railSource.indexOf('id: "work"'), railSource.indexOf('id: "file"'));
 assert(workGroup.includes('label: "Tax"'), "Tax is a Work heading");
 assert(workGroup.indexOf('label: "Reports"') < workGroup.indexOf('label: "Tax"'), "Tax follows Reports under Work");
+assert(workGroup.indexOf('label: "Tax"') < workGroup.indexOf('label: "Compliance"'), "Compliance follows Tax under Work");
+assert(
+  workGroup.includes('{ id: "compliance", label: "Compliance", to: go("compliance") }'),
+  "Compliance sits under Work after Tax",
+);
 const taxNav = clientNavSearch({ tab: "reports", section: "drafts", report: "scorecard" }, "tax");
 assert(taxNav.tab === "tax" && taxNav.section === undefined, "opening Tax writes ?tab=tax");
 assert(!("report" in taxNav), "a report link does not stick to Tax");
@@ -323,6 +328,18 @@ assert(taxRail.headingId === "tax" && taxRail.subId === null, "tax-specialist ma
 const taxAlias = routerSearch({ tab: "tax-specialist", section: "open" });
 assert(taxAlias.tab === "tax" && taxAlias.section === undefined, "tax-specialist opens Tax with no section");
 assert(route.includes('id="pane-tax"'), "Tax has its own pane");
+assert(route.includes('id="pane-compliance"'), "Compliance has its own pane");
+assert(route.includes("<CompliancePane"), "the Compliance pane mounts the compliance surface");
+const complianceNav = clientNavSearch({ tab: "reports", section: "drafts", report: "scorecard" }, "compliance");
+assert(
+  complianceNav.tab === "compliance" && complianceNav.section === undefined,
+  "opening Compliance writes ?tab=compliance",
+);
+const complianceRail = clientRailSelection({ tab: "compliance" });
+assert(
+  complianceRail.headingId === "compliance" && complianceRail.subId === null,
+  "compliance marks the Compliance heading",
+);
 assert(route.includes("<TaxWorkSlot"), "the Tax pane mounts the work slot");
 const taxSlot = readFileSync(resolve("src/components/tax-specialist/tax-work-slot.tsx"), "utf8");
 assert(taxSlot.includes("<TaxWorkPlaceholder"), "outside ZA the slot keeps the empty placeholder");
@@ -335,6 +352,7 @@ assert(
 );
 const icons = readFileSync(resolve("src/components/chrome-icons.tsx"), "utf8");
 assert(/tax:\s*\(/.test(icons), "Tax has a rail icon");
+assert(/compliance:\s*\(/.test(icons), "Compliance has a rail icon");
 const ownerShell = readFileSync(resolve("src/components/owner-door/owner-shell.tsx"), "utf8");
 assert(!ownerShell.includes('label: "Tax"'), "the owner rail has no Tax item");
 const drafts = clientNavSearch({ tab: "home" }, "reports", "drafts");

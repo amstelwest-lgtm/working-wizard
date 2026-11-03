@@ -89,7 +89,14 @@ const clientRoute = readFileSync(
   resolve("src/routes/_authenticated/clients.$clientId.tsx"),
   "utf8",
 );
-assert(clientRoute.includes("DraftworxDirtyWorkPanel"), "Health route mounts Draftworx panel");
-assert(clientRoute.includes("draftworx-dirty-work-panel"), "panel import wired");
+assert(clientRoute.includes('id="pane-compliance"'), "Compliance route has its own pane");
+assert(clientRoute.includes("<CompliancePane"), "Compliance pane mounts Draftworx surface");
+assert(clientRoute.includes("compliance-pane"), "compliance pane import wired");
+const ratiosPane = clientRoute.slice(
+  clientRoute.indexOf('id="pane-ratios"'),
+  clientRoute.indexOf('id="pane-profit"'),
+);
+assert(!ratiosPane.includes("DraftworxDirtyWorkPanel"), "Diagnose overview no longer mounts Draftworx");
+assert(!ratiosPane.includes("draftworx-dirty-work-panel"), "Draftworx import removed from Diagnose pane");
 
 console.log("draftworx-dirty-work-test: ok");

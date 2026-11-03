@@ -78,6 +78,13 @@ const RAIL_PATHS: Record<string, ReactNode> = {
       <circle cx="9.4" cy="10.1" r="0.7" />
     </>
   ),
+  compliance: (
+    <>
+      <path d="M4.2 2.2h5.1L12.2 5v8.8H4.2Z" />
+      <path d="M9.2 2.4V5.1h2.8" />
+      <path d="M5.8 8.2 7.4 9.8 10.6 6.6" />
+    </>
+  ),
   books: (
     <>
       <path d="M8 3.4C6.8 2.5 4.9 2.2 2.4 2.4v10.2c2.5-.2 4.4.1 5.6 1 1.2-.9 3.1-1.2 5.6-1V2.4c-2.5-.2-4.4.1-5.6 1Z" />
