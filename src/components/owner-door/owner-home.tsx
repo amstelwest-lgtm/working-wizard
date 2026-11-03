@@ -308,6 +308,8 @@ export function OwnerHome({
                 ? null
                 : (status?.[card.agent] ?? null);
             const motion = card.motion === "idle" ? null : MOTION_LABEL[card.motion];
+            const phase = runState?.[card.agent] ?? null;
+            const activePhase = phase && phase !== "done" ? phase : null;
             return (
               <div
                 key={card.agent}
@@ -348,19 +350,23 @@ export function OwnerHome({
                       {chip.word}
                     </span>
                   ) : null}
-                  <span className="owner-lines">
-                    {brief.map((line, index) => (
-                      <span key={`${card.agent}-${index}`} className="owner-voice">
-                        {voiceNodes(line)}
-                      </span>
-                    ))}
-                  </span>
-                  {runState?.[card.agent] && runState[card.agent] !== "done" ? (
-                    <span className="owner-run-state" data-run-state={runState[card.agent]}>
-                      {ownerRunPhaseLabel(runState[card.agent]!)}
+                  {brief.length > 0 || activePhase || motion ? (
+                    <span className="owner-lines" data-status-update="">
+                      {activePhase ? (
+                        <span className="owner-run-state" data-run-state={activePhase}>
+                          {ownerRunPhaseLabel(activePhase)}
+                        </span>
+                      ) : null}
+                      {motion ? <span className="owner-motion-label">{motion}</span> : null}
+                      {brief.map((line, index) => (
+                        <span key={`${card.agent}-${index}`} className="owner-voice">
+                          {voiceNodes(line)}
+                        </span>
+                      ))}
                     </span>
-                  ) : null}
-                  {motion ? <span className="owner-motion-label">{motion}</span> : null}
+                  ) : (
+                    <span className="owner-lines" />
+                  )}
                 </button>
                 <button
                   type="button"

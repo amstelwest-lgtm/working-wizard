@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { getQboAuthUrl, getQboConfig } from "@/lib/qbo.functions";
 import { getXeroAuthUrl, getXeroConfig } from "@/lib/xero.functions";
 import {
+  armLedgerConnectReturn,
   beginLedgerConnect,
   ledgerConnectError,
   unconfiguredLedgerMessage,
@@ -22,6 +23,15 @@ export function useHomeLedgerConnect(clientId: string) {
   const [busy, setBusy] = useState<LedgerConnectKind | null>(null);
   const busyRef = useRef<LedgerConnectKind | null>(null);
   const returnPath = `/clients/${clientId}`;
+
+  useEffect(
+    () =>
+      armLedgerConnectReturn(() => {
+        busyRef.current = null;
+        setBusy(null);
+      }),
+    [],
+  );
 
   async function start(kind: LedgerConnectKind) {
     if (busyRef.current) return;

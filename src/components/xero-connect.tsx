@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -19,6 +19,7 @@ import { describeLedgerLink } from "@/lib/ledger-link-copy";
 import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
 import type { MoneyMarket } from "@/lib/market/format";
 import { CONNECTION_NOT_CONNECTED } from "@/lib/connection-status-deadline";
+import { armLedgerConnectReturn } from "@/lib/connect-books-start";
 import { useConnectionProbe } from "@/lib/use-connection-probe";
 
 type Props = {
@@ -92,6 +93,7 @@ export function XeroConnectCard({
     },
   });
   const [connecting, setConnecting] = useState(false);
+  useEffect(() => armLedgerConnectReturn(() => setConnecting(false)), []);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [lastSync, setLastSync] = useState<XeroSyncResult["summary"] | null>(null);

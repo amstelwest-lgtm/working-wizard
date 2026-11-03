@@ -30,3 +30,36 @@ export function ledgerConnectError(kind: LedgerConnectKind, err: unknown): strin
   if (err instanceof Error && err.message.trim()) return err.message;
   return kind === "xero" ? "Failed to start Xero OAuth" : "Failed to start OAuth flow";
 }
+
+/**
+ * Browser Back from Xero or QuickBooks restores this document from the
+ * back-forward cache. The connect click already set "opening", and that
+ * React state comes back with the page, so the button stays on Opening
+ * and the picker stays disabled.
+ * pagehide marks the leave. A later pageshow, including a persisted
+ * restore, returns the control to idle. The listener is removed on
+ * unmount and after it fires once.
+ */
+export function armLedgerConnectReturn(
+  release: () => void,
+  target: EventTarget | null = typeof window === "undefined" ? null : window,
+): () => void {
+  if (!target) return () => undefined;
+  let left = false;
+  const onPageHide = () => {
+    left = true;
+  };
+  const onPageShow = (event: Event) => {
+    const persisted = (event as PageTransitionEvent).persisted === true;
+    if (!left && !persisted) return;
+    cleanup();
+    release();
+  };
+  const cleanup = () => {
+    target.removeEventListener("pagehide", onPageHide);
+    target.removeEventListener("pageshow", onPageShow);
+  };
+  target.addEventListener("pagehide", onPageHide);
+  target.addEventListener("pageshow", onPageShow);
+  return cleanup;
+}

@@ -473,6 +473,55 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   overflow-wrap: anywhere;
 }
 
+/* Status update on each Home agent card. White ticket, navy type, cobalt rail. */
+.owner-door .owner-pane[data-owner-home="true"] .owner-lines[data-status-update] {
+  align-items: stretch;
+  gap: 6px;
+  min-height: 0;
+  margin-top: 2px;
+  padding: 10px 12px 11px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--cobalt) 28%, var(--pale));
+  background: var(--on-cobalt);
+  box-shadow: inset 3px 0 0 var(--cobalt);
+  text-align: left;
+  color: var(--navy);
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .owner-lines[data-status-update] .owner-voice {
+  width: auto;
+  max-width: none;
+  overflow: visible;
+  overflow-wrap: break-word;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--navy);
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .owner-lines[data-status-update] .owner-run-state,
+.owner-door .owner-pane[data-owner-home="true"] .owner-lines[data-status-update] .owner-motion-label {
+  display: block;
+  align-self: flex-start;
+  max-width: none;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--cobalt);
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .owner-lines[data-status-update] .owner-run-state[data-run-state="stalled"] {
+  color: var(--navy);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  font-weight: 600;
+}
+
 .owner-door .owner-money,
 .owner-door table,
 .owner-door time,
@@ -675,6 +724,16 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   .owner-door .owner-pane[data-bots="stack"] .owner-ask {
     width: auto;
     min-width: 11rem;
+    margin-top: 0;
+  }
+
+  .owner-door .owner-pane[data-bots="stack"] .owner-agent-open {
+    min-width: 0;
+  }
+
+  .owner-door .owner-pane[data-bots="stack"] .tax-preview-actions {
+    width: auto;
+    flex: none;
     margin-top: 0;
   }
 

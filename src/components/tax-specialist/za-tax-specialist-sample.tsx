@@ -232,7 +232,7 @@ function SampleHomeCard({ onOpen }: { onOpen: () => void }) {
         </span>
         <span className="owner-name">Milōn Tax Specialist</span>
         <span className="owner-status is-idle">SAMPLE</span>
-        <span className="owner-lines">
+        <span className="owner-lines" data-status-update="">
           <span className="owner-voice">
             SAMPLE demo · Harbour & Co — see how company tax at 27% will work
           </span>
@@ -271,7 +271,7 @@ function PreviewHomeCard({ onHandOff, onSample }: { onHandOff: () => void; onSam
         </span>
         <span className="owner-name">Milōn Tax Specialist</span>
         <span className="owner-status is-idle">Preview</span>
-        <span className="owner-lines">
+        <span className="owner-lines" data-status-update="">
           <span className="owner-voice">Prepares ITR14 and IRP6 workings for your sign-off.</span>
         </span>
       </button>
@@ -334,7 +334,7 @@ function PageHomeCard({ onOpen }: { onOpen: () => void }) {
           <TaxFace size="lg" place="card" />
         </span>
         <span className="owner-name">Milōn Tax Specialist</span>
-        <span className="owner-lines">
+        <span className="owner-lines" data-status-update="">
           <span className="owner-voice">
             Prepares SARS forms and tax workings for you to check and file.
           </span>
@@ -604,10 +604,12 @@ export function ZaTaxSpecialistSample({
           <span className="milon-desk-agent-copy">
             <strong className="milon-desk-agent-name">Milōn Tax Specialist</strong>
             <span className="milon-desk-agent-short">Tax Specialist</span>
-            <span className="milon-desk-ran">{sampleClient ? "SAMPLE" : "Preview"}</span>
-            <span className="milon-desk-status is-idle">
-              <i />
-              <span>{sampleClient ? "Company tax at 27%" : "ITR14 and IRP6 workings"}</span>
+            <span className="milon-desk-update" data-status-update="">
+              <span className="milon-desk-ran">{sampleClient ? "SAMPLE" : "Preview"}</span>
+              <span className="milon-desk-status is-idle">
+                <i />
+                <span>{sampleClient ? "Company tax at 27%" : "ITR14 and IRP6 workings"}</span>
+              </span>
             </span>
           </span>
         </button>

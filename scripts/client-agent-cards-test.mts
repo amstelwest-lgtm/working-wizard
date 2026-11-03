@@ -134,6 +134,8 @@ const taxCardAt = zaHtml.indexOf('data-agent-card="tax_specialist"');
 const taxPosterAt = zaHtml.indexOf("/avatars/tax/tax-poster.webp");
 assert(taxCardAt >= 0 && taxPosterAt > taxCardAt, "the tax face sits inside the tax card");
 
+assert(zaHtml.includes('data-status-update=""'), "home status lines sit in the status update");
+assert(usHtml.includes('data-status-update=""'), "the US home uses the same status update");
 assert(zaHtml.includes(ZA_LEDE), "a ZA client counts the tax card in the lede");
 assert(!usHtml.includes(ZA_LEDE) && usHtml.includes(US_LEDE), "a US client keeps the three-agent lede");
 assert(!nullHtml.includes(ZA_LEDE) && nullHtml.includes(US_LEDE), "a null market keeps the three-agent lede");

@@ -133,6 +133,7 @@ export function MilonTeamDesk({
   sampleClient = false,
   canonicalRatios = null,
   heroFinding = null,
+  statusUpdate = true,
 }: {
   feed: MilonTeamFeedApi;
   now?: Date;
@@ -158,6 +159,11 @@ export function MilonTeamDesk({
   canonicalRatios?: Record<string, number> | null;
   /** What the agent hero already says. What I noticed leaves it out. */
   heroFinding?: { id: string | null; text: string | null } | null;
+  /**
+   * Home and the accountant team desk share one status ticket.
+   * The pane turns this on so a last-run line is not loose text under the name.
+   */
+  statusUpdate?: boolean;
 }) {
   const clock = now ?? new Date();
   const [filter, setFilter] = useState<FilterKey>(initialFilter);
@@ -533,13 +539,15 @@ export function MilonTeamDesk({
                         <strong className="milon-desk-agent-name">{name}</strong>
                         <span className="milon-desk-agent-short">{agentShortName(agent)}</span>
                         <span className="milon-desk-visually-hidden">{agentJobLine(agent)}</span>
-                        {ranText ? <span className="milon-desk-ran">{ranText}</span> : null}
-                        <span
-                          className={`milon-desk-status is-${header.tone}${header.pulse ? " is-live" : ""}${header.muted ? " is-muted" : ""}`}
-                          data-run-state={phase ?? undefined}
-                        >
-                          <i />
-                          <span>{header.label}</span>
+                        <span className={statusUpdate ? "milon-desk-update" : undefined} data-status-update={statusUpdate ? "" : undefined}>
+                          {ranText ? <span className="milon-desk-ran">{ranText}</span> : null}
+                          <span
+                            className={`milon-desk-status is-${header.tone}${header.pulse ? " is-live" : ""}${header.muted ? " is-muted" : ""}`}
+                            data-run-state={phase ?? undefined}
+                          >
+                            <i />
+                            <span>{header.label}</span>
+                          </span>
                         </span>
                       </span>
                     </button>
