@@ -44,8 +44,8 @@ eq(
   TAX_FORM_GALLERY.filter((form) => form.status === "ready")
     .map((form) => form.code)
     .join(","),
-  "IRP6",
-  "only company IRP6 is ready to prepare",
+  "IRP6,ITR12",
+  "company IRP6 and individual ITR12 are ready to prepare",
 );
 
 const irp6 = taxFormSchema("IRP6");
@@ -59,10 +59,18 @@ for (const field of IRP6_FIELDS) {
 eq(irp6.form.rulesYear, 2023, "company IRP6 uses the 27% rules vintage");
 
 const itr12 = taxFormSchema("ITR12");
-eq(itr12.fields.length, 0, "ITR12 has no field filling in this phase");
-eq(itr12.form.status, "soon", "ITR12 stays coming soon");
+assert(itr12.fields.length > 0, "ITR12 has a field schema");
+eq(itr12.form.status, "ready", "ITR12 is ready to prepare");
+eq(itr12.form.rulesYear, 2026, "ITR12 uses the cited-sum rules vintage");
+eq(itr12.form.entity, "individual", "ITR12 is the individual return");
 for (const item of ITR12_INTAKE_ITEMS) {
   assert(itr12.intakeItems.includes(item), `ITR12 intake includes ${item}`);
+  assert(
+    itr12.fields.some(
+      (field) => field.intake.from === "checklist" && field.intake.itemKey === item,
+    ),
+    `ITR12 maps ${item} onto a field`,
+  );
 }
 assert(isCatalogForm("VAT201"), "VAT201 is on the catalog");
 assert(!isCatalogForm("IRS1040"), "no US form is on the catalog");
@@ -178,6 +186,8 @@ const board = renderToStaticMarkup(
     packs: createElement("div", { "data-tax-pack-slot": "shown" }, "pack"),
     onPrepareIrp6: () => undefined,
     onOpenIrp6: () => undefined,
+    onPrepareItr12: () => undefined,
+    onOpenItr12: () => undefined,
   }),
 );
 assert(board.includes("IRP6 2027, period 2"), "Work → Tax names the current return");
@@ -185,6 +195,7 @@ assert(board.includes('data-tax-draft-current="true"'), "the current draft is ma
 assert(board.includes('data-tax-draft-readonly="true"'), "the earlier version is read-only");
 assert(board.includes('data-tax-work-open="IRP6"'), "the current IRP6 draft opens");
 assert(board.includes('data-tax-work-prepare="IRP6"'), "the accountant can start an IRP6 draft");
+assert(board.includes('data-tax-work-prepare="ITR12"'), "the accountant can start an ITR12 draft");
 assert(board.includes('data-tax-pack-slot="shown"'), "the tax pack sits on the tax page");
 assert(board.includes("not sent to the client"), "a finished form is not sent to the client");
 eq((board.match(/data-tax-work-open="IRP6"/g) ?? []).length, 1, "history has no second Open");

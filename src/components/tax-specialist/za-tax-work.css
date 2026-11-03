@@ -23,6 +23,12 @@
   color: #3d5270;
 }
 
+.tax-work-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .tax-work-prepare,
 .tax-work-open {
   min-height: 44px;

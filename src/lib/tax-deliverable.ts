@@ -229,6 +229,9 @@ function fileName(files: readonly TaxPackSourceFile[], fileId: string): string {
   return file?.displayName ?? file?.itemKey ?? "sent document";
 }
 
+/** Marks the file id on a rendered figure so a later draft can cite it. */
+export const TAX_PACK_FILE_MARK = " · file ";
+
 function figureLines(
   figures: readonly CitedFigure[],
   files: readonly TaxPackSourceFile[],
@@ -236,7 +239,8 @@ function figureLines(
   return figures.map((figure) => {
     const check = figure.confidence === "uncertain" ? " (check)" : "";
     const note = figure.note ? ` Note: ${figure.note}` : "";
-    return `- ${figure.label}: ${formatRandsFromCents(figure.amountCents)}${check} — source: ${fileName(files, figure.fileId)}.${note}`;
+    const source = `${fileName(files, figure.fileId)}${TAX_PACK_FILE_MARK}${figure.fileId}`;
+    return `- ${figure.label}: ${formatRandsFromCents(figure.amountCents)}${check} — source: ${source}.${note}`;
   });
 }
 
