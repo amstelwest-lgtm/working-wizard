@@ -19,10 +19,14 @@ import {
   type MergedAttention,
 } from "@/lib/portfolio-dashboard";
 import { clientHomeSearch } from "@/lib/client-home-search";
+import { canonicalizeAccountantSearch } from "@/lib/client-route-search";
 
-function clientSearch(section?: string): { tab: "home" } | { tab: "portal"; section: "send-agent" } {
-  if (section === "send-agent") return { tab: "portal", section: "send-agent" };
-  return clientHomeSearch();
+/** Studio page that resolves this row. Overdue plan work opens the Overdue page. */
+function attentionSearch(row: Pick<MergedAttention, "tab" | "section" | "overdue">) {
+  return canonicalizeAccountantSearch({
+    tab: row.tab,
+    section: row.section ?? (row.tab === "plan" && row.overdue ? "overdue" : undefined),
+  });
 }
 
 type Props = {
@@ -30,7 +34,7 @@ type Props = {
   refreshKey?: string | number;
   className?: string;
   /**
-   * Practice home: skip the all-clear card. Render a thin strip only when a
+   * Practice home: skip the all-clear card. Render call-cards only when a
    * client actually needs a human today.
    */
   hideWhenClear?: boolean;
@@ -101,28 +105,52 @@ export function PortfolioExceptions({
   if (!firmId) return null;
 
   if (hideWhenClear) {
-    const merged = needsAttentionToday(queue ?? mergeNeedsAttention(healthItems ?? [], data?.rows ?? []));
+    const merged = needsAttentionToday(
+      queue ?? mergeNeedsAttention(healthItems ?? [], data?.rows ?? []),
+    );
     if ((!data && loading && merged.length === 0) || merged.length === 0) return null;
-    const shown = merged.slice(0, 6);
+    const shown = showHeading ? merged.slice(0, 6) : merged;
     const more = merged.length - shown.length;
     const list = (
-        <ul>
-          {shown.map((row, index) => (
-            <li key={row.clientId} className="attn-strip-row" data-client={row.clientId} data-reason={row.reason}>
-              <Link
-                to="/clients/$clientId"
-                params={{ clientId: row.clientId }}
-                search={clientSearch(row.section)}
-                className="attn-strip-name"
-              >
-                {index + 1}. {row.name}
-              </Link>
-              <span className="attn-strip-reason">{row.reason}</span>
-              {row.detail ? <span className="attn-strip-detail">{row.detail}</span> : null}
-              {wantsChase(row) ? (
+      <ul className={showHeading ? "flex flex-col gap-2" : "mt-3 flex flex-col gap-2"}>
+        {shown.map((row) => {
+          const search = attentionSearch(row);
+          const extra = row.detail.trim();
+          const showDetail = extra.length > 0 && !row.reason.includes(extra);
+          const chase = wantsChase(row);
+          const why = showDetail ? `${row.reason} · ${extra}` : row.reason;
+          return (
+            <li
+              key={row.clientId}
+                className="flex items-stretch gap-3 rounded-xl border border-[color:var(--line)] bg-white px-3.5 py-3 dark:bg-[#102A43]"
+              data-client={row.clientId}
+              data-reason={row.reason}
+            >
+              <span
+                className={`w-1 shrink-0 self-stretch rounded-full ${
+                  row.bucket === "review" ? "bg-[#C43D4B]" : "bg-[#B7791F]"
+                }`}
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1 self-center">
+                <Link
+                  to="/clients/$clientId"
+                  params={{ clientId: row.clientId }}
+                  search={search}
+                    className="block truncate text-[15px] font-bold no-underline hover:underline"
+                >
+                  {row.name}
+                </Link>
+                <p className="attn-strip-reason mb-0 mt-0.5 truncate" title={why}>
+                  {row.reason}
+                  {showDetail ? <span className="attn-strip-detail"> · {extra}</span> : null}
+                </p>
+              </div>
+              {chase ? (
                 <button
                   type="button"
-                  className="attn-strip-go"
+                  className="btn gold mini self-center shrink-0"
+                  aria-label={`Chase ${row.name}`}
                   onClick={() => onChase?.(row.clientId, row.name)}
                 >
                   {todayAttentionAction(row)}
@@ -131,29 +159,47 @@ export function PortfolioExceptions({
                 <Link
                   to="/clients/$clientId"
                   params={{ clientId: row.clientId }}
-                  search={clientSearch(row.section)}
-                  className="attn-strip-go"
+                  search={search}
+                  className="btn gold mini self-center shrink-0"
+                  aria-label={`Open ${row.name}`}
                 >
                   {todayAttentionAction(row)}
                 </Link>
               )}
             </li>
-          ))}
-          {more > 0 ? (
-            <li className="attn-strip-more">and {more} more in the client list</li>
-          ) : null}
-        </ul>
+          );
+        })}
+        {more > 0 ? (
+          <li>
+            <Link to="/practice/needs-attention" className="btn ghost mini">
+              See {more} more
+            </Link>
+          </li>
+        ) : null}
+      </ul>
     );
     if (!showHeading) return list;
     return (
       <section
-        className={["attn-strip", className].filter(Boolean).join(" ")}
+        className={[
+          "rounded-2xl border border-[color:var(--line)] bg-white p-4 shadow-sm dark:bg-[#102A43]",
+          className,
+        ]
+          .filter(Boolean)
+          .join(" ")}
         id="needs-attention"
         aria-label="Needs attention today"
         data-attention={merged.length}
         data-today="true"
       >
-        <h2>Needs attention today</h2>
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="m-0 text-[15px] font-bold leading-tight text-[#102A43] dark:text-[#F4F7FB]">
+            Needs attention today
+          </h2>
+          <span className="text-[12px] font-semibold tabular-nums text-[#3D5270] dark:text-[#9FB3C8]">
+            {merged.length === 1 ? "1 client" : `${merged.length} clients`}
+          </span>
+        </div>
         {list}
       </section>
     );
@@ -243,7 +289,7 @@ export function PortfolioExceptions({
                       key={e.kind}
                       to="/clients/$clientId"
                       params={{ clientId: r.clientId }}
-                      search={clientSearch(e.section)}
+                      search={canonicalizeAccountantSearch({ tab: e.tab, section: e.section })}
                       className={`inline-flex items-center gap-1 rounded-full border px-2 py-[2px] text-[10.5px] font-semibold ${SEV_CLASS[e.severity]}`}
                       data-exception={e.kind}
                     >

@@ -2403,8 +2403,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           />
         ) : null}
         {view === "needs-attention" ? (
-          <section className="attn-strip mb-3" id="needs-attention" aria-label="Needs attention today">
-            <h2>Needs attention today</h2>
+          <section className="mb-3 rounded-2xl border border-[color:var(--line)] bg-white p-4 shadow-sm dark:bg-[#102A43]" id="needs-attention" aria-label="Needs attention today">
+            <h2 className="m-0 text-[15px] font-bold leading-tight text-[#102A43] dark:text-[#F4F7FB]">Needs attention today</h2>
             {attentionView === "list" ? (
               <PortfolioExceptions
                 firmId={firmId}
@@ -2414,7 +2414,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 onChase={(clientId, name) => openChase(clientId, name)}
               />
             ) : (
-              <p className="sub">
+              <p className="sub mt-2">
                 {attentionView === "clear" ? "Nothing needs attention." : "Checking the book…"}
               </p>
             )}
