@@ -64,21 +64,6 @@ export type ProfitSeriesPoint = {
 
 export type ProfitInterval = "week" | "month" | "year";
 
-export const PROFIT_SERIES = [
-  { id: "income-expenses", label: "Income vs Expenses" },
-  { id: "sales", label: "Sales" },
-  { id: "cogs", label: "Cost of Sales" },
-  { id: "other-income", label: "Other Income" },
-  { id: "expenses", label: "Expenses" },
-  { id: "break-even", label: "Break-Even" },
-] as const;
-
-export type ProfitSeriesId = (typeof PROFIT_SERIES)[number]["id"];
-
-export function isProfitSeriesId(value: unknown): value is ProfitSeriesId {
-  return PROFIT_SERIES.some((series) => series.id === value);
-}
-
 const EMPTY_FLOWS: ProfitFlows = {
   income: null,
   sales: null,
@@ -568,29 +553,4 @@ export function presentProfitSeries(
     note = "This statement is one span. Monthly amounts appear when each month is on file.";
   }
   return { points: filtered, note };
-}
-
-export function profitSeriesKeys(id: ProfitSeriesId): Array<keyof ProfitFlows> {
-  switch (id) {
-    case "income-expenses":
-      return ["income", "expenses"];
-    case "sales":
-      return ["sales"];
-    case "cogs":
-      return ["cogs"];
-    case "other-income":
-      return ["otherIncome"];
-    case "expenses":
-      return ["expenses"];
-    case "break-even":
-      return ["sales", "breakEven"];
-  }
-}
-
-export function profitSeriesHasValues(
-  points: readonly ProfitSeriesPoint[],
-  id: ProfitSeriesId,
-): boolean {
-  const keys = profitSeriesKeys(id);
-  return points.some((point) => keys.some((key) => point[key] != null));
 }

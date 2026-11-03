@@ -125,19 +125,13 @@ await act(async () => {
 });
 
 const text = host.textContent ?? "";
-assert(text.includes("Income vs Expenses"), "series tabs include income versus expenses");
-assert(text.includes("Break-Even"), "series tabs include break-even");
+assert(!text.includes("Income vs Expenses"), "there is no income versus expenses tab");
+assert(!text.includes("Break-Even"), "there is no break-even tab");
+assert(!host.querySelector("[data-profit-series]"), "there is no series menu");
+assert(host.querySelector("[data-profit-chart-series='profit']"), "the chart shows profit");
 assert(host.querySelector("[data-chart-shape='line']"), "the chart opens as a line");
-assert(host.querySelector("[data-profit-series-tab='sales']"), "sales is a series tab");
 assert(host.querySelector("[aria-label='Start date']"), "start date is on the chart");
 assert(text.includes("Month"), "month is the default interval label");
-
-const expenses = host.querySelector("[data-profit-series-tab='expenses']");
-assert(expenses instanceof HTMLButtonElement, "expenses tab is a button");
-await act(async () => {
-  expenses.click();
-});
-assert(host.querySelector("[data-profit-chart-series='expenses']"), "expenses series is selected");
 
 const bar = host.querySelector("[data-chart-shape-option='bar']");
 assert(bar instanceof HTMLButtonElement, "bar toggle is a button");

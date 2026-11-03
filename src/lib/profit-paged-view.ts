@@ -54,7 +54,7 @@ export function profitPagedSearch(
 export function profitPagedSentence(view: ProfitPagedView): string {
   switch (view) {
     case "chart":
-      return "Income and expenses across the year.";
+      return "Profit across the year.";
     case "pnl":
       return "This period against the prior period, with the year to date.";
     case "waterfall":
