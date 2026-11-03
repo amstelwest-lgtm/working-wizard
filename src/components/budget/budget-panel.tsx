@@ -29,6 +29,7 @@ import {
 } from "@/lib/budget.bridges";
 import { fiscalStatementSlice } from "@/lib/budget-period";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
+import { parseCashInputAudit } from "@/lib/cash-input-audit";
 import { applyTemplateChange } from "@/lib/budget.model-change";
 import { industryBudgetTemplate } from "@/lib/budget-industry";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
@@ -92,7 +93,9 @@ function budgetDocFromStoredRow(row: StoredBudgetRow | null): {
     }),
     row.cashflow,
   );
-  return { doc: next, changed: budgetPlanFiguresChanged(normalized, next) };
+  const inputAudit = parseCashInputAudit((budget as { inputAudit?: unknown }).inputAudit);
+  const doc = Object.keys(inputAudit).length ? { ...next, inputAudit } : next;
+  return { doc, changed: budgetPlanFiguresChanged(normalized, doc) };
 }
 
 function scheduleIdle(work: () => void): () => void {

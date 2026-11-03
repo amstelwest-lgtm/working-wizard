@@ -9,9 +9,12 @@ import {
 export function BudgetPagedMenu({
   value,
   onChange,
+  auditCount = 0,
 }: {
   value: BudgetPagedView;
   onChange: (view: BudgetPagedView) => void;
+  /** Inputs still waiting for approval. Zero hides the badge. */
+  auditCount?: number;
 }) {
   const buttons = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -67,6 +70,15 @@ export function BudgetPagedMenu({
             onClick={() => onChange(view)}
           >
             {BUDGET_PAGED_LABEL[view]}
+            {view === "audit" && auditCount > 0 ? (
+              <span
+                className="cash-menu__badge"
+                data-budget-audit-badge=""
+                aria-label={`${auditCount} to approve`}
+              >
+                {auditCount}
+              </span>
+            ) : null}
           </button>
         );
       })}

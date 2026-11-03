@@ -11,7 +11,9 @@ import { completeDeliverablePdfItems, downloadActionPlanPdf } from "@/lib/action
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { cashPagedSearch, cashPagedViewFromSearch } from "@/lib/cash-paged-view";
-import { budgetPagedSearch, budgetPagedViewFromSearch } from "@/lib/budget-paged-view";
+import { BUDGET_PAGED_LABEL, budgetPagedSearch, budgetPagedViewFromSearch } from "@/lib/budget-paged-view";
+import { profitPagedSearch, profitPagedViewFromSearch } from "@/lib/profit-paged-view";
+import { ProfitWorkspace } from "@/components/profit/profit-workspace";
 import { CollectionsPanel } from "@/components/collections-panel";
 import { PayablesPanel } from "@/components/payables-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
@@ -4905,29 +4907,37 @@ function ClientView() {
 
                 {/* ===== PROFIT TAB ===== */}
                 <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
-                  {activeTab === "profit" && search.section !== "waterfall" && search.section !== "lines" ? (
-                    <ClientSectionOverview
-                      clientId={clientId}
-                      eyebrow="Profit"
-                      title="Profit"
-                      subtitle="The waterfall and the product lines each have their own page."
-                      links={[
-                        {
-                          id: "waterfall",
-                          label: "Waterfall",
-                          detail: "Where profit goes, from revenue down to the bottom line.",
-                          search: (prev) => accountantClientTabSearch(prev, "profit", { section: "waterfall" }),
-                        },
-                        {
-                          id: "lines",
-                          label: "Product lines",
-                          detail: "Revenue and gross profit by product line.",
-                          search: (prev) => accountantClientTabSearch(prev, "profit", { section: "lines" }),
-                        },
-                      ]}
-                    />
-                  ) : null}
-                  {activeTab === "profit" && search.section === "lines" ? (
+                  {activeTab === "profit" ? (
+                  <ProfitWorkspace
+                    view={profitPagedViewFromSearch(search)}
+                    onViewChange={(next) => {
+                      void navigate({
+                        to: "/clients/$clientId",
+                        params: { clientId },
+                        search: (prev) => profitPagedSearch(prev, next),
+                        resetScroll: false,
+                      });
+                    }}
+                    financials={financials}
+                    snapshots={snapshots}
+                    prior={priorSnapshot?.financials ?? null}
+                    priorLabel={
+                      priorSnapshot
+                        ? statementSpanLabel({
+                            periodStart: readStatementMeta(priorSnapshot.financials, clientMarket).periodStart,
+                            periodEnd: readStatementMeta(priorSnapshot.financials, clientMarket).periodEnd,
+                            periodLabel: priorSnapshot.period_label,
+                            market: clientMarket,
+                          })
+                        : null
+                    }
+                    quoted={accountantProfitPeriod?.slice ?? null}
+                    periodLabel={profitPeriodLabel}
+                    fyStartMonth={fyStartMonth}
+                    clientId={clientId}
+                    canApprove
+                    includeLines
+                    lines={
                     <ClientSubpageFrame
                       id="lines"
                       eyebrow="Profit"
@@ -4943,8 +4953,35 @@ function ClientView() {
                         incentive="Answer these to build revenue and gross profit per product line."
                       />
                     </ClientSubpageFrame>
-                  ) : null}
-                  {activeTab === "profit" && search.section === "waterfall" ? (
+                    }
+                    setup={
+                    <ClientSubpageFrame
+                      id="profit-setup"
+                      eyebrow="Profit"
+                      title="Profit setup"
+                      subtitle="Set the period and the sources for this profit."
+                    >
+                      <ReviewInputsDrawer hint={deliverableDrawerHint("profit", deliverableInputContext)}>
+                        <DeliverableInputConfig
+                          className="mb-5"
+                          clientId={clientId}
+                          deliverableId="profit"
+                          context={deliverableInputContext}
+                        />
+                        <p className="sub" style={{ marginTop: 12 }}>
+                          <Link
+                            to="/clients/$clientId"
+                            params={{ clientId }}
+                            search={(prev) => accountantClientTabSearch(prev, "health")}
+                          >
+                            Edit the period figures on Health.
+                          </Link>
+                        </p>
+                      </ReviewInputsDrawer>
+                    </ClientSubpageFrame>
+                    }
+                    waterfall={
+                  activeTab === "profit" && search.section === "waterfall" ? (
                   <>
                   <ClientSubpageFrame
                     id="waterfall"
@@ -5075,6 +5112,9 @@ function ClientView() {
                   </div>
                   </ClientSubpageFrame>
                   </>
+                  ) : null
+                    }
+                  />
                   ) : null}
                 </div>
 
@@ -5257,10 +5297,12 @@ function ClientView() {
                     eyebrow="Budget"
                     title={
                       budgetPagedViewFromSearch(search) === "setup"
-                        ? "Setup"
-                        : budgetPagedViewFromSearch(search) === "months"
-                          ? "Month by month"
-                          : "This year"
+                        ? BUDGET_PAGED_LABEL.setup
+                        : budgetPagedViewFromSearch(search) === "audit"
+                          ? BUDGET_PAGED_LABEL.audit
+                          : budgetPagedViewFromSearch(search) === "months"
+                            ? "Month by month"
+                            : "This year"
                     }
                     subtitle={null}
                   >

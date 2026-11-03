@@ -5,6 +5,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
+import { CashInputAuditTable } from "@/components/cash/cash-input-audit";
+import { ownerSignoffDate } from "@/components/owner-signoff-mark";
+import { useAuth } from "@/hooks/use-auth";
+import { budgetAuditRows } from "@/lib/budget-input-audit";
+import {
+  approveCashInputs,
+  cashAuditInitials,
+  cashAuditPendingCount,
+  parseCashInputAudit,
+  unapproveCashInputs,
+} from "@/lib/cash-input-audit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
@@ -180,6 +191,7 @@ export function BudgetSimpleView({
   onPagedViewChange?: (view: BudgetPagedView) => void;
 }) {
   const { market } = useMarket();
+  const { user } = useAuth();
   const money = (n: number) => {
     const text = fmtBudgetMoney(n, market);
     return role === "owner" ? ownerMinus(text) : text;
@@ -189,7 +201,7 @@ export function BudgetSimpleView({
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const [focusMonth, setFocusMonth] = useState(() => currentBudgetMonth(months));
   const [sameEveryMonth, setSameEveryMonth] = useState(false);
-  const paged = layout === "paged" && role === "accountant" && !readOnly;
+  const paged = layout === "paged";
   const [localPagedView, setLocalPagedView] = useState<BudgetPagedView>("overview");
   const view = pagedView ?? localPagedView;
   const onPagedViewChangeRef = useRef(onPagedViewChange);
@@ -305,7 +317,19 @@ export function BudgetSimpleView({
     [compared],
   );
   const priorOnFile = hasPriorYearFigures(priorYear);
-  const pane: BudgetPagedView = view === "months" || view === "setup" ? view : "overview";
+  const pane: BudgetPagedView = view;
+  const auditRows = budgetAuditRows(doc, money);
+  const inputAudit = parseCashInputAudit(doc.inputAudit);
+  const auditPending = cashAuditPendingCount(auditRows, inputAudit);
+  const signerInitials = cashAuditInitials(
+    (user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ??
+      (user?.user_metadata as { name?: string } | null)?.name,
+    user?.email,
+  );
+  const saveAudit = (next: ReturnType<typeof approveCashInputs>) => {
+    if (readOnly) return;
+    onChange({ ...doc, inputAudit: next, updatedAt: new Date().toISOString() });
+  };
   const paneEnlarge = paged ? budgetPagedEnlargeTarget(pane) : null;
   return (
     <div
@@ -345,17 +369,17 @@ export function BudgetSimpleView({
       />
       {paged ? (
         <>
-          <BudgetPagedMenu value={pane} onChange={selectPagedView} />
+          <BudgetPagedMenu value={pane} onChange={selectPagedView} auditCount={auditPending} />
           <p className="cash-paged__sentence" data-budget-pane-sentence>
             {budgetPagedSentence(pane)}
           </p>
         </>
       ) : null}
       <div
-        id={paged && pane !== "setup" ? `budget-pane-${pane === "months" ? "months" : "overview"}` : undefined}
-        role={paged && pane !== "setup" ? "tabpanel" : undefined}
-        data-budget-pane={paged ? (pane === "months" ? "months" : "overview") : undefined}
-        hidden={paged && pane === "setup"}
+        id={paged && (pane === "overview" || pane === "months") ? `budget-pane-${pane}` : undefined}
+        role={paged && (pane === "overview" || pane === "months") ? "tabpanel" : undefined}
+        data-budget-pane={paged && (pane === "overview" || pane === "months") ? pane : undefined}
+        hidden={paged && pane !== "overview" && pane !== "months"}
       >
       <BudgetChartTable
         doc={doc}
@@ -389,6 +413,45 @@ export function BudgetSimpleView({
         signed={role === "owner"}
         periodLabel={headline.label ?? compared?.label ?? null}
       />
+      </div>
+      <div
+        id={paged ? "budget-pane-audit" : undefined}
+        role={paged ? "tabpanel" : undefined}
+        data-budget-pane="audit"
+        hidden={!paged || pane !== "audit"}
+      >
+        {paged && pane === "audit" ? (
+          <CashInputAuditTable
+            rows={auditRows}
+            audit={inputAudit}
+            canApprove={!readOnly && role === "accountant"}
+            saving={false}
+            approvedOn={(iso) => ownerSignoffDate(iso, market.timezone, market)}
+            viewerId={user?.id ?? null}
+            viewerInitials={signerInitials}
+            onApprove={(key) =>
+              saveAudit(
+                approveCashInputs(inputAudit, auditRows, {
+                  by: user?.id ?? null,
+                  at: new Date().toISOString(),
+                  initials: signerInitials || null,
+                  keys: [key],
+                }),
+              )
+            }
+            onApproveAll={() =>
+              saveAudit(
+                approveCashInputs(inputAudit, auditRows, {
+                  by: user?.id ?? null,
+                  at: new Date().toISOString(),
+                  initials: signerInitials || null,
+                }),
+              )
+            }
+            onUnapprove={(key) => saveAudit(unapproveCashInputs(inputAudit, [key]))}
+            onEdit={() => selectPagedView("setup")}
+          />
+        ) : null}
       </div>
       {readOnly || paged ? null : (
       <p className="text-sm font-semibold text-[#102A43] dark:text-slate-100">

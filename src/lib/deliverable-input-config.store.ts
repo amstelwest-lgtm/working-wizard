@@ -5,6 +5,7 @@
  * on the existing clients.cashflow / clients.budget blobs.
  */
 
+import { parseCashInputAudit, type CashInputAudit } from "@/lib/cash-input-audit";
 import {
   DELIVERABLE_INPUT_IDS,
   type DeliverableInputId,
@@ -13,7 +14,10 @@ import {
 
 export const DELIVERABLE_INPUT_STORAGE_PREFIX = "milon.deliverableInputConfig:";
 
-export type StoredDeliverableInputs = Partial<Record<DeliverableInputId, DeliverableInputState>>;
+export type StoredDeliverableInputs = Partial<Record<DeliverableInputId, DeliverableInputState>> & {
+  /** Profit audit approvals. Kept beside the checklists so a statement sync cannot drop them. */
+  profitAudit?: CashInputAudit;
+};
 
 export function deliverableInputStorageKey(clientId: string): string {
   return `${DELIVERABLE_INPUT_STORAGE_PREFIX}${clientId.trim()}`;
@@ -55,6 +59,11 @@ export function parseDeliverableInputState(raw: unknown): DeliverableInputState 
   return { checkedSources: checked, assumptionValues: values, appliedFingerprint: applied };
 }
 
+function profitAuditFrom(raw: unknown): CashInputAudit | undefined {
+  const audit = parseCashInputAudit(raw);
+  return Object.keys(audit).length ? audit : undefined;
+}
+
 export function parseStoredDeliverableInputs(raw: unknown): StoredDeliverableInputs {
   const o = asRecord(raw);
   if (!o) return {};
@@ -63,6 +72,8 @@ export function parseStoredDeliverableInputs(raw: unknown): StoredDeliverableInp
     const parsed = parseDeliverableInputState(o[id]);
     if (parsed) out[id] = parsed;
   }
+  const profitAudit = profitAuditFrom(o.profitAudit);
+  if (profitAudit) out.profitAudit = profitAudit;
   return out;
 }
 
