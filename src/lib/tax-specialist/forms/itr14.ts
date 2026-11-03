@@ -742,7 +742,10 @@ function moneyText(cents: number | null): { display: string; plain: string } {
 function sourceLabel(kind: Irp6SourceKind | "missing", asOf: string | null): string {
   if (kind === "books") {
     const day = isoDay(asOf);
-    return day ? `From books sync, as of ${formatSampleDate(day)}` : "From books sync";
+    return day
+      ? // date-ok: formatSampleDate prints the ZA calendar day
+        `From books sync, as of ${formatSampleDate(day)}`
+      : "From books sync";
   }
   if (kind === "client") return "From client record";
   if (kind === "input") return "Typed by the accountant";
