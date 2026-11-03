@@ -182,3 +182,13 @@ test("access confirm can be dismissed without running the RPC", () => {
   assert.match(source, /dismissAccessConfirm/);
   assert.match(source, />\s*Cancel\s*</);
 });
+
+test("company groups use the shared rail kicker on the navy rail", () => {
+  const chrome = readFileSync(
+    new URL("../src/components/client-group-chrome.tsx", import.meta.url),
+    "utf8",
+  );
+  const shine = readFileSync(new URL("../src/styles/premium-shine.css", import.meta.url), "utf8");
+  assert.match(chrome, /className="rail-kicker">Groups/);
+  assert.match(shine, /\.deliverable-rail \.rail-kicker[\s\S]*--pp-frame-dim/);
+});

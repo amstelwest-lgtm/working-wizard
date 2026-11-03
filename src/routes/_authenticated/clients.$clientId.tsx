@@ -14,6 +14,7 @@ import { cashPagedSearch, cashPagedViewFromSearch } from "@/lib/cash-paged-view"
 import { BUDGET_PAGED_LABEL, budgetPagedSearch, budgetPagedViewFromSearch } from "@/lib/budget-paged-view";
 import { profitPagedSearch, profitPagedSentence, profitPagedViewFromSearch } from "@/lib/profit-paged-view";
 import { ProfitPnlTable } from "@/components/profit/profit-pnl-table";
+import { ProfitSetupFigures } from "@/components/profit/profit-setup-figures";
 import { ProfitWorkspace } from "@/components/profit/profit-workspace";
 import { CollectionsPanel } from "@/components/collections-panel";
 import { PayablesPanel } from "@/components/payables-panel";
@@ -5026,6 +5027,44 @@ function ClientView() {
                       title="Profit setup"
                       subtitle="Set the period and the sources for this profit."
                     >
+                      <ProfitSetupFigures
+                        financials={financials}
+                        clientId={clientId}
+                        onFiguresApplied={(next) => {
+                          setFinancials((prev) => {
+                            const merged = { ...prev };
+                            for (const key of [
+                              "revenue",
+                              "cogs",
+                              "grossProfit",
+                              "fixedCosts",
+                              "laborCost",
+                              "labourCost",
+                              "depreciation",
+                              "ebitda",
+                              "ebit",
+                              "interest",
+                              "tax",
+                              "netIncome",
+                            ]) {
+                              const value = next[key];
+                              if (typeof value === "number" || typeof value === "string") {
+                                merged[key] = String(value);
+                              }
+                            }
+                            return merged;
+                          });
+                          setClient((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  financials: next as typeof current.financials,
+                                  financials_updated_at: new Date().toISOString(),
+                                }
+                              : current,
+                          );
+                        }}
+                      />
                       <ReviewInputsDrawer hint={deliverableDrawerHint("profit", deliverableInputContext)}>
                         <DeliverableInputConfig
                           className="mb-5"

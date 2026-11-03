@@ -40,13 +40,15 @@ assert(table.includes("Enlarge profit and loss") || table.includes('label="profi
 assert(table.includes("YTD (FY)"), "the table has a year-to-date column");
 assert(shape.includes("Bar chart") && shape.includes("Line chart"), "the toggle names both shapes");
 assert(owner.includes("<ProfitWorkspace"), "the owner profit page uses the shared workspace");
+assert(owner.includes("<ProfitSetupFigures"), "owner profit setup exposes typed figure entry");
 assert(owner.includes('data-owner-page="pnl"'), "the owner P&L is its own page");
 assert(ownerShell.includes('aria-label="P&L"'), "the owner rail has a P&L subheading");
 assert(owner.includes("fallback={ownerWaterfallFallback}"), "the owner waterfall stays on the same slice");
 assert(accountant.includes("<ProfitWorkspace"), "the accountant profit page uses the shared workspace");
 assert(accountant.includes('id="lines"'), "product lines stay their own frame");
 assert(accountant.includes('scope="profitability"'), "profit keeps one sign-off strip");
-assert(accountant.includes("Edit the period figures on Health."), "figures are still edited on Health");
+assert(accountant.includes("<ProfitSetupFigures"), "profit setup exposes typed figure entry");
+assert(accountant.includes("Edit the period figures on Health."), "health still covers broader ratio figures");
 
 const profitStart = accountant.indexOf('id="pane-profit"');
 const profitEnd = accountant.indexOf('id="pane-cash"');

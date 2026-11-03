@@ -33,10 +33,13 @@ import {
   FIGURE_PROPOSAL_TOOL,
 } from "../src/lib/figure-proposal.ts";
 import { buildPnlFigureEditDraft, pnlRowIsFigureEditable, applyConfirmedFigureEditPatch, waterfallFieldForPnlRow } from "../src/lib/figure-edit.ts";
+import { ProfitSetupFigures } from "../src/components/profit/profit-setup-figures.tsx";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
 }
+
+const CHILL = "79c4c485-9fa7-4499-9139-e1bb7cb40649";
 
 assert(waterfallFieldForPnlRow("sales") === "revenue", "sales maps to revenue");
 assert(waterfallFieldForPnlRow("labor") == null, "labor is not a waterfall patch row");
@@ -86,7 +89,26 @@ assert(pnlRowIsFigureEditable("labor"), "wages row is editable on the P&L");
   assert(String(applied.financials.fixedCosts) === "95000", "fixedCosts stays wages plus operating");
 }
 
-const CHILL = "79c4c485-9fa7-4499-9139-e1bb7cb40649";
+{
+  const markup = renderToStaticMarkup(
+    createElement(ProfitSetupFigures, {
+      financials: {
+        revenue: "200000",
+        cogs: "80000",
+        grossProfit: "120000",
+        fixedCosts: "90000",
+        laborCost: "50000",
+        ebit: "30000",
+      },
+      clientId: CHILL,
+    }),
+  );
+  assert(markup.includes('data-profit-setup-figures=""'), "profit setup renders the figure entry section");
+  assert(markup.includes('data-profit-setup-row="sales"'), "sales is a typed row");
+  assert(markup.includes('data-profit-setup-row="labor"'), "wages are a typed row");
+  assert(markup.includes("Period figures"), "profit setup names the manual entry block");
+}
+
 const AT = "2026-10-29T12:00:00.000Z";
 
 const cashBooks = {

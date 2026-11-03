@@ -333,6 +333,7 @@ const ProfitPnlTable = lazyPanel(
   () => import("@/components/profit/profit-pnl-table").then((m) => ({ default: m.ProfitPnlTable })),
   "P&L",
 );
+import { ProfitSetupFigures } from "@/components/profit/profit-setup-figures";
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
@@ -4961,9 +4962,18 @@ function Index() {
                               />
                             }
                             setup={
-                              <p className="owner-lede">
-                                Your accountant sets the period and the sources. The figures on the chart are the statement on file.
-                              </p>
+                              <>
+                                <ProfitSetupFigures
+                                  financials={v as unknown as Record<string, unknown>}
+                                  clientId={effectiveClientId ?? undefined}
+                                  signed
+                                  onFiguresApplied={applyOwnerFigures}
+                                />
+                                <p className="owner-lede">
+                                  Your accountant sets the period and the sources. The figures on the
+                                  chart are the statement on file.
+                                </p>
+                              </>
                             }
                             waterfall={
                           <ProfitabilityWaterfall

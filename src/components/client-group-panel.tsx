@@ -124,20 +124,22 @@ export function ClientGroupPanel({
   }
 
   return (
-    <div className="space-y-4 text-slate-800 dark:text-slate-100" data-group-panel={groupId}>
-      <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+    <div className="space-y-5 text-[#102A43] dark:text-slate-100" data-group-panel={groupId}>
+      <header className="border-b border-[#EEF4FF] pb-4 dark:border-white/10">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#486581] dark:text-slate-400">
           Group
         </p>
-        <h2 className="text-xl font-semibold">{groupName}</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[#102A43] dark:text-slate-50">
+          {groupName}
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#486581] dark:text-slate-400">
           Status only. Figures stay on each company. This page does not add them up.
         </p>
       </header>
 
       {banner ? (
         <p
-          className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+          className="rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
           data-company-count-banner=""
           role="status"
         >
@@ -146,46 +148,64 @@ export function ClientGroupPanel({
       ) : null}
 
       {message ? (
-        <p className="text-sm" role="status">
+        <p
+          className="rounded-xl border border-[#DBEAFE] bg-[#F4F8FF] px-4 py-3 text-sm text-[#102A43] dark:border-slate-600 dark:bg-slate-800"
+          role="status"
+        >
           {message}
         </p>
       ) : null}
 
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="text-[11px] uppercase tracking-wide text-slate-500">
-            <th className="py-1 pr-2 font-semibold">Company</th>
-            <th className="py-1 pr-2 font-semibold">Type</th>
-            <th className="py-1 pr-2 font-semibold">Connection</th>
-            <th className="py-1 pr-2 font-semibold">Last sync</th>
-            <th className="py-1 pr-2 font-semibold">Year-end</th>
-            <th className="py-1 font-semibold">Open work</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.company.id} className="border-t border-slate-200 dark:border-white/10">
-              <td className="py-2 pr-2">
-                <button
-                  type="button"
-                  className="font-medium underline-offset-2 hover:underline"
-                  onClick={() => {
-                    setSelected(row.company.id);
-                    onOpenCompany?.(row.company.id);
-                  }}
-                >
-                  {row.company.name}
-                </button>
-              </td>
-              <td className="py-2 pr-2">{entityLabel(row.company.entityType)}</td>
-              <td className="py-2 pr-2">{row.health}</td>
-              <td className="py-2 pr-2">{row.lastSync}</td>
-              <td className="py-2 pr-2">{yearEndLabel(row.company.yearEndMonth)}</td>
-              <td className="py-2">{openWorkLabel(row.company.openQueries)}</td>
+      <div className="overflow-x-auto rounded-xl border border-[#DBEAFE] dark:border-white/10">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead>
+            <tr className="bg-[#F4F8FF] text-[11px] uppercase tracking-[0.12em] text-[#486581] dark:bg-slate-900 dark:text-slate-400">
+              <th className="px-3 py-2.5 font-bold">Company</th>
+              <th className="px-3 py-2.5 font-bold">Type</th>
+              <th className="px-3 py-2.5 font-bold">Connection</th>
+              <th className="px-3 py-2.5 font-bold">Last sync</th>
+              <th className="px-3 py-2.5 font-bold">Year-end</th>
+              <th className="px-3 py-2.5 font-bold">Open work</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.company.id}
+                className="border-t border-[#EEF4FF] dark:border-white/10"
+              >
+                <td className="px-3 py-2.5">
+                  <button
+                    type="button"
+                    className="font-semibold text-[#0B5FFF] underline-offset-2 hover:underline"
+                    onClick={() => {
+                      setSelected(row.company.id);
+                      onOpenCompany?.(row.company.id);
+                    }}
+                  >
+                    {row.company.name}
+                  </button>
+                </td>
+                <td className="px-3 py-2.5 text-[#486581] dark:text-slate-300">
+                  {entityLabel(row.company.entityType)}
+                </td>
+                <td className="px-3 py-2.5">
+                  <span className="inline-flex rounded-full bg-[#EEF4FF] px-2.5 py-0.5 text-xs font-semibold text-[#102A43] dark:bg-white/10 dark:text-slate-100">
+                    {row.health}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5 tabular-nums text-[#486581] dark:text-slate-300">
+                  {row.lastSync}
+                </td>
+                <td className="px-3 py-2.5 text-[#486581] dark:text-slate-300">
+                  {yearEndLabel(row.company.yearEndMonth)}
+                </td>
+                <td className="px-3 py-2.5">{openWorkLabel(row.company.openQueries)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {active ? (
         <EntityForm
@@ -197,9 +217,9 @@ export function ClientGroupPanel({
         />
       ) : null}
 
-      <section>
-        <h3 className="text-sm font-semibold">Ownership</h3>
-        <p className="text-xs text-slate-500">
+      <section className="space-y-2 rounded-xl border border-[#DBEAFE] p-4 dark:border-white/10">
+        <h3 className="text-sm font-bold text-[#102A43] dark:text-slate-50">Ownership</h3>
+        <p className="text-xs leading-relaxed text-[#486581] dark:text-slate-400">
           Who holds whom. Stored for later reporting. Not consolidated.
         </p>
         {edges.length === 0 ? (
@@ -296,7 +316,7 @@ function EntityForm({
 
   return (
     <form
-      className="grid gap-2 rounded-lg border border-slate-200 p-3 dark:border-white/10"
+      className="grid gap-3 rounded-xl border border-[#DBEAFE] bg-[#F8FBFF] p-4 dark:border-white/10 dark:bg-slate-900/40"
       onSubmit={(event) => {
         event.preventDefault();
         onSave({
@@ -566,8 +586,8 @@ function GroupActions({
   const owners = members.map((member) => member.userId);
 
   return (
-    <section className="space-y-3">
-      <h3 className="text-sm font-semibold">Companies</h3>
+    <section className="space-y-4 rounded-xl border border-[#EEF4FF] p-4 dark:border-white/10">
+      <h3 className="text-sm font-bold text-[#102A43] dark:text-slate-50">Companies</h3>
       <form
         className="grid gap-2"
         onSubmit={(event) => {
@@ -738,10 +758,10 @@ function GroupActions({
 
       {preview && pending && pendingFn ? (
         <div
-          className="rounded-lg border border-slate-300 p-3 text-sm dark:border-white/15"
+          className="rounded-xl border border-[#DBEAFE] bg-white p-4 text-sm shadow-sm dark:border-white/15 dark:bg-slate-900/50"
           data-access-confirm=""
         >
-          <p className="font-semibold">Who this changes</p>
+          <p className="font-bold text-[#102A43] dark:text-slate-50">Who this changes</p>
           <ul className="mt-1 list-disc pl-4">
             {preview.gains.map((line) => (
               <li key={line}>{line}</li>

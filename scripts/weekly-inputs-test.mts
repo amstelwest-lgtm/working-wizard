@@ -90,8 +90,12 @@ assert(
   "accountant Profit tab keeps period profitability inputs only — weekly stays on the owner board",
 );
 assert(
+  accountantSrc.includes("<ProfitSetupFigures"),
+  "accountant Profit setup exposes typed figure entry",
+);
+assert(
   accountantSrc.includes("Edit the period figures on Health."),
-  "accountant Profit links period figures to Health",
+  "accountant Profit still links broader ratio figures to Health",
 );
 {
   const profitStart = accountantSrc.indexOf('id="pane-profit"');
