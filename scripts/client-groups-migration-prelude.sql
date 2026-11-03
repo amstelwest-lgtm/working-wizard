@@ -78,9 +78,17 @@ INSERT INTO public.firms (id, name, owner_user_id) VALUES
   ('33333333-3333-4333-8333-333333333333', 'North Firm', '22222222-2222-4222-8222-222222222222')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.firm_memberships (firm_id, user_id, role) VALUES
-  ('33333333-3333-4333-8333-333333333333', '22222222-2222-4222-8222-222222222222', 'owner')
-ON CONFLICT (firm_id, user_id) DO NOTHING;
+INSERT INTO public.firm_memberships (firm_id, user_id, role)
+SELECT
+  '33333333-3333-4333-8333-333333333333'::uuid,
+  '22222222-2222-4222-8222-222222222222'::uuid,
+  'owner'
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM public.firm_memberships fm
+  WHERE fm.firm_id = '33333333-3333-4333-8333-333333333333'::uuid
+    AND fm.user_id = '22222222-2222-4222-8222-222222222222'::uuid
+);
 
 -- These two rows exist before the migration. Backfill must give each its own group.
 INSERT INTO public.clients (id, name, owner_user_id, firm_id) VALUES
