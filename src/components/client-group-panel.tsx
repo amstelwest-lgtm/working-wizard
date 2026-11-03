@@ -556,6 +556,13 @@ function GroupActions({
     setConfirmed(false);
   }
 
+  function dismissAccessConfirm() {
+    setPreview(null);
+    setPending(null);
+    setPendingFn(null);
+    setConfirmed(false);
+  }
+
   const owners = members.map((member) => member.userId);
 
   return (
@@ -751,21 +758,29 @@ function GroupActions({
             />
             I confirm this access change
           </label>
-          <button
-            type="button"
-            className="btn gold mini mt-2"
-            disabled={!confirmed || busy}
-            onClick={() => {
-              const fn = pendingFn;
-              const args = pending;
-              setPreview(null);
-              setPending(null);
-              setPendingFn(null);
-              void onRun(fn, args, "Group updated.");
-            }}
-          >
-            Confirm
-          </button>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn gold mini"
+              disabled={!confirmed || busy}
+              onClick={() => {
+                const fn = pendingFn;
+                const args = pending;
+                dismissAccessConfirm();
+                void onRun(fn, args, "Group updated.");
+              }}
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              className="btn ghost mini"
+              disabled={busy}
+              onClick={dismissAccessConfirm}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       ) : null}
       <p className="text-[11px] text-slate-400">

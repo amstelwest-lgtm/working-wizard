@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ClientGroupPanel } from "@/components/client-group-panel";
 import { companyCountBanner, groupChromeVisible } from "@/lib/client-groups";
-import { loadRailGroups, type GroupNav } from "@/lib/client-group-client";
+import { loadClientGroupNav, loadRailGroups, type GroupNav } from "@/lib/client-group-client";
 
 function CountChip({ count }: { count: number }) {
   return (
@@ -162,7 +162,7 @@ export function CompanyGroupRail({
   );
 }
 
-/** Switcher, plan banner, and status. Renders nothing for a group of one. */
+/** Switcher and plan banner for multi-company groups; Group status for groups of one too. */
 export function ClientGroupChrome({
   clientId,
   linkCompanies,
@@ -172,20 +172,17 @@ export function ClientGroupChrome({
   linkCompanies: boolean;
   onOpenCompany?: (clientId: string) => void;
 }) {
-  const [groups, setGroups] = useState<GroupNav[]>([]);
+  const [group, setGroup] = useState<GroupNav | null>(null);
   const [statusId, setStatusId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!clientId) {
-      setGroups([]);
+      setGroup(null);
       return;
     }
     let cancel = false;
-    void loadRailGroups().then((next) => {
-      if (!cancel)
-        setGroups(
-          next.filter((group) => group.companies.some((company) => company.id === clientId)),
-        );
+    void loadClientGroupNav(clientId).then((next) => {
+      if (!cancel) setGroup(next);
     });
     return () => {
       cancel = true;
@@ -193,49 +190,51 @@ export function ClientGroupChrome({
   }, [clientId]);
 
   const navigate = useNavigate();
-  const group = groups[0];
-  if (!group || !groupChromeVisible(group.companies.length)) return null;
+  if (!group) return null;
+  const multi = groupChromeVisible(group.companies.length);
   const banner = companyCountBanner(group.billable);
 
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2" data-company-switcher="">
-      <label className="text-xs text-slate-500">
-        Company
-        {linkCompanies ? (
-          <select
-            className="ml-2 rounded border bg-transparent px-2 py-1 text-sm text-inherit"
-            value={clientId ?? ""}
-            onChange={(event) => {
-              const next = event.target.value;
-              if (next && next !== clientId) {
-                void navigate({ to: "/clients/$clientId", params: { clientId: next } });
-              }
-            }}
-          >
-            {group.companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <select
-            className="ml-2 rounded border bg-transparent px-2 py-1 text-sm text-inherit"
-            value={clientId ?? ""}
-            onChange={(event) => {
-              const next = event.target.value;
-              if (next && next !== clientId) onOpenCompany?.(next);
-            }}
-          >
-            {group.companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </label>
-      <CountChip count={group.companies.length} />
+      {multi ? (
+        <label className="text-xs text-slate-500">
+          Company
+          {linkCompanies ? (
+            <select
+              className="ml-2 rounded border bg-transparent px-2 py-1 text-sm text-inherit"
+              value={clientId ?? ""}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (next && next !== clientId) {
+                  void navigate({ to: "/clients/$clientId", params: { clientId: next } });
+                }
+              }}
+            >
+              {group.companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              className="ml-2 rounded border bg-transparent px-2 py-1 text-sm text-inherit"
+              value={clientId ?? ""}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (next && next !== clientId) onOpenCompany?.(next);
+              }}
+            >
+              {group.companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
+      ) : null}
+      {multi ? <CountChip count={group.companies.length} /> : null}
       <button type="button" className="btn ghost mini" onClick={() => setStatusId(group.id)}>
         Group status
       </button>
