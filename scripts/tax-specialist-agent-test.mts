@@ -94,11 +94,18 @@ assert(zaTab.includes('data-agent-open="tax_specialist"'), "ZA client pages show
 assert(!zaTab.includes('data-agent-card="tax_specialist"'), "the tab replaces the sample opener");
 const usTab = stage({ marketCountry: "US", taxTab: true });
 assert(!usTab.includes("tax_specialist"), "US pages show no tax block");
-const practice = stage({ marketCountry: "ZA" });
+const practice = readFileSync("src/components/practice-board.tsx", "utf8");
 assert(
-  !practice.includes('data-agent-open="tax_specialist"'),
-  "practice pages keep the sample opener",
+  practice.includes("parseStageAgent(askAgentFromHash(practiceHash), firmCountry)"),
+  "practice Home keeps the tax hash on ZA firms",
 );
+assert(practice.includes("taxClients={zaTaxClients}"), "practice Home passes the ZA book to the tax page");
+const practiceThread = readFileSync("src/components/practice-agent-thread.tsx", "utf8");
+assert(
+  practiceThread.includes('import("@/components/tax-specialist/za-tax-practice-page")'),
+  "practice tax page loads lazily",
+);
+assert(practiceThread.includes("taxTab"), "practice tax thread uses the agent tabs");
 
 const taxStage = stage({ agent: "tax_specialist", marketCountry: "ZA", taxTab: true });
 assert(taxStage.includes('data-agent-stage="tax_specialist"'), "tax stage renders");

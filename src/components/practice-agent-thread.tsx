@@ -1,45 +1,77 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { AgentStage } from "@/components/milon-team/agent-stage";
 import { portalButtonClass } from "@/lib/client-chrome";
 import { supabase } from "@/integrations/supabase/client";
 import { loadStarterMonthlyLabel } from "@/lib/trial-card-price";
-import type { AgentKey } from "@/lib/milon-team-feed";
-import { isTaxAgent } from "@/lib/tax-specialist/agents";
+import {
+  isTaxAgent,
+  type StageAgentKey,
+} from "@/lib/tax-specialist/agents";
+import type { PracticeTaxPageClient } from "@/lib/tax-specialist/practice-tax-client";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import "./milon-team/milon-team-desk.css";
 import "./practice-agent-thread.css";
 
 export type PracticeThreadClient = { id: string; name: string };
 
+type LoadedTaxPractice = ComponentType<{
+  clients: readonly PracticeTaxPageClient[];
+  selectedClientId: string;
+  onSelectClient: (clientId: string) => void;
+  marketCountry: string | null;
+  audience?: "owner" | "accountant";
+}>;
+
 /**
  * Practice Home thread for one agent. The hash `#ask-financial-manager`
- * (and the analyst / advisor hashes) is the address. The cards stay off
+ * (and the analyst / advisor / tax hashes) is the address. The cards stay off
  * while this is mounted.
  */
 export function PracticeAgentThread({
   agent,
   finding,
   clients,
+  taxClients = [],
   onBack,
   onSelectAgent,
   marketCountry = null,
   firmId = null,
   children,
 }: {
-  agent: AgentKey;
+  agent: StageAgentKey;
   finding: string;
+  /** Clients the Ask widget can use. */
   clients: PracticeThreadClient[];
+  /** ZA clients for the Tax Specialist portfolio. */
+  taxClients?: readonly PracticeTaxPageClient[];
   onBack: () => void;
-  onSelectAgent: (agent: AgentKey) => void;
+  onSelectAgent: (agent: StageAgentKey) => void;
   marketCountry?: string | null;
   firmId?: string | null;
   children?: ReactNode;
 }) {
-  const [clientId, setClientId] = useState(clients[0]?.id ?? "");
+  const taxMode = isTaxAgent(agent);
+  const askClients = taxMode
+    ? taxClients.map((row) => ({ id: row.id, name: row.name }))
+    : clients;
+  const [clientId, setClientId] = useState(askClients[0]?.id ?? "");
+  const [TaxPracticePage, setTaxPracticePage] = useState<LoadedTaxPractice | null>(null);
+
   useEffect(() => {
-    if (clients.some((row) => row.id === clientId)) return;
-    setClientId(clients[0]?.id ?? "");
-  }, [clients, clientId]);
+    if (askClients.some((row) => row.id === clientId)) return;
+    setClientId(askClients[0]?.id ?? "");
+  }, [askClients, clientId]);
+
+  useEffect(() => {
+    if (!taxMode) return;
+    let live = true;
+    void import("@/components/tax-specialist/za-tax-practice-page").then((mod) => {
+      if (live) setTaxPracticePage(() => mod.ZaTaxPracticePage);
+    });
+    return () => {
+      live = false;
+    };
+  }, [taxMode]);
 
   useEffect(() => {
     const el = document.getElementById("ask-ai-accountant");
@@ -91,6 +123,71 @@ export function PracticeAgentThread({
     };
   }, [clientId, agent, firmId]);
 
+  const chat = (
+    <>
+      {askClients.length > 1 ? (
+        <label className="practice-agent-client">
+          Ask about
+          <select
+            value={clientId}
+            aria-label="Ask about"
+            onChange={(event) => setClientId(event.target.value)}
+          >
+            {askClients.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : askClients.length === 1 ? (
+        <p className="practice-agent-client">Ask about {askClients[0].name}</p>
+      ) : (
+        <p className="practice-agent-client">
+          {taxMode ? "Add a South African client to prepare tax forms." : "Add a client to ask about their books."}
+        </p>
+      )}
+      {clientId ? (
+        <div className="milon-desk-host">
+          <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
+        </div>
+      ) : null}
+    </>
+  );
+
+  if (taxMode) {
+    return (
+      <div className="practice-agent-thread" data-practice-agent-thread={agent}>
+        <button type="button" className={portalButtonClass("secondary")} data-agent-back="" onClick={onBack}>
+          Back to the team
+        </button>
+        <AgentStage
+          agent={agent}
+          finding={rewriteDraftMonthStamp(finding)}
+          onSelect={(next) => onSelectAgent(next)}
+          marketCountry={marketCountry}
+          audience="accountant"
+          taxTab
+          chat={chat}
+        >
+          {TaxPracticePage ? (
+            <TaxPracticePage
+              clients={taxClients}
+              selectedClientId={clientId}
+              onSelectClient={setClientId}
+              marketCountry={marketCountry}
+              audience="accountant"
+            />
+          ) : (
+            <p className="agent-section-empty" data-tax-practice="loading" role="status">
+              Loading the Tax Specialist…
+            </p>
+          )}
+        </AgentStage>
+      </div>
+    );
+  }
+
   return (
     <div className="practice-agent-thread" data-practice-agent-thread={agent}>
       <button type="button" className={portalButtonClass("secondary")} data-agent-back="" onClick={onBack}>
@@ -99,40 +196,10 @@ export function PracticeAgentThread({
       <AgentStage
         agent={agent}
         finding={rewriteDraftMonthStamp(finding)}
-        onSelect={(next) => {
-          if (!isTaxAgent(next)) onSelectAgent(next);
-        }}
+        onSelect={(next) => onSelectAgent(next)}
         marketCountry={marketCountry}
         audience="accountant"
-        chat={
-          <>
-            {clients.length > 1 ? (
-              <label className="practice-agent-client">
-                Ask about
-                <select
-                  value={clientId}
-                  aria-label="Ask about"
-                  onChange={(event) => setClientId(event.target.value)}
-                >
-                  {clients.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : clients.length === 1 ? (
-              <p className="practice-agent-client">Ask about {clients[0].name}</p>
-            ) : (
-              <p className="practice-agent-client">Add a client to ask about their books.</p>
-            )}
-            {clientId ? (
-              <div className="milon-desk-host">
-                <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
-              </div>
-            ) : null}
-          </>
-        }
+        chat={chat}
       >
         {children}
       </AgentStage>
