@@ -32,9 +32,31 @@ import {
   withConfirmedForecastAdjustments,
   FIGURE_PROPOSAL_TOOL,
 } from "../src/lib/figure-proposal.ts";
+import { buildPnlFigureEditDraft, waterfallFieldForPnlRow } from "../src/lib/figure-edit.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
+}
+
+assert(waterfallFieldForPnlRow("sales") === "revenue", "sales maps to revenue");
+assert(waterfallFieldForPnlRow("labor") == null, "labor is not a waterfall patch row");
+{
+  const solo = buildPnlFigureEditDraft({
+    rowId: "sales",
+    label: "Sales",
+    rowAmount: 1_215_000,
+    nextAmount: 1_220_000,
+    financials: { revenue: "1215000" },
+  });
+  assert(solo?.key === "revenue" && solo.before === 1_215_000 && solo.after === 1_220_000, "solo sales edits revenue");
+  const split = buildPnlFigureEditDraft({
+    rowId: "sales",
+    label: "Sales",
+    rowAmount: 100,
+    nextAmount: 110,
+    financials: { revenue: "120", otherIncome: "20" },
+  });
+  assert(split?.before === 120 && split.after === 130, "sales keeps other income on revenue");
 }
 
 const CHILL = "79c4c485-9fa7-4499-9139-e1bb7cb40649";
