@@ -4,6 +4,7 @@
  * product. ZA chunk only.
  */
 import { ITR12_FIELDS, ITR12_RULES_YEAR } from "./itr12.ts";
+import { ITR14_FIELDS, ITR14_RULES_YEAR, type Itr14Field } from "./itr14.ts";
 import { IRP6_FIELDS, IRP6_RULES_YEAR, type Irp6Field, type Irp6SourceKind } from "./irp6.ts";
 
 export type TaxFormCode = "IRP5" | "EMP201" | "EMP501" | "IRP6" | "ITR14" | "VAT201" | "ITR12";
@@ -96,6 +97,41 @@ function irp6Intake(field: Irp6Field): TaxFieldIntake {
   return { from: "worked" };
 }
 
+function itr14Intake(field: Itr14Field): TaxFieldIntake {
+  if (field.source === "books") {
+    const read: Partial<Record<Itr14Field["id"], string>> = {
+      grossIncome: "clients.financials revenue",
+      accountingProfit: "clients.financials profit before tax",
+      depreciationAddBack: "clients.financials depreciation",
+      turnover: "clients.financials revenue",
+      costOfSales: "clients.financials cogs",
+      totalAssets: "clients.financials total assets",
+      equity: "clients.financials equity",
+      liabilities: "clients.financials liabilities",
+      fixedAssets: "clients.financials fixed assets",
+      accountTrialBalance: "clients.financials account lines",
+    };
+    return { from: "books", read: read[field.id] ?? "clients.financials" };
+  }
+  if (field.source === "client") return { from: "client-record" };
+  if (field.source === "input") return { from: "accountant" };
+  if (field.source === "nil") return { from: "nil" };
+  return { from: "worked" };
+}
+
+function itr14Schema(): readonly TaxFormField[] {
+  return ITR14_FIELDS.map((field) => ({
+    id: field.id,
+    section: field.section,
+    label: field.label,
+    efiling: field.efiling,
+    type: field.type,
+    required: field.required,
+    source: field.source,
+    intake: itr14Intake(field),
+  }));
+}
+
 function irp6Schema(): readonly TaxFormField[] {
   return IRP6_FIELDS.map((field) => ({
     id: field.id,
@@ -165,16 +201,18 @@ export const TAX_FORM_REGISTRY: readonly TaxFormDefinition[] = [
     fields: irp6Schema(),
     intakeItems: [],
   },
-  soon({
+  {
     code: "ITR14",
     label: "ITR14",
     name: "Company income tax return",
     frequency: "Yearly",
-    note: "The worksheet is under Tax workings.",
+    status: "ready",
     entity: "company",
     periodModel: "yearly",
+    rulesYear: ITR14_RULES_YEAR,
+    fields: itr14Schema(),
     intakeItems: [],
-  }),
+  },
   soon({
     code: "VAT201",
     label: "VAT201",

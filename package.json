@@ -193,6 +193,7 @@
     "test:tax-irp6-individual": "vite-node --config scripts/vite-test.config.ts scripts/tax-irp6-individual-test.mts",
     "test:tax-form-pipeline": "vite-node --config scripts/vite-test.config.ts scripts/tax-form-pipeline-test.mts",
     "test:tax-itr12": "vite-node --config scripts/vite-test.config.ts scripts/tax-itr12-test.mts",
+    "test:tax-itr14": "vite-node --config scripts/vite-test.config.ts scripts/tax-itr14-test.mts",
     "test:theme-pref": "vite-node --config scripts/vite-test.config.ts scripts/theme-pref-test.mts",
     "test:palette-contrast": "vite-node --config scripts/vite-test.config.ts scripts/palette-contrast-test.mts",
     "test:firm-brand": "vite-node --config scripts/vite-test.config.ts scripts/firm-brand-test.mts",

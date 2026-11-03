@@ -151,10 +151,7 @@ eq(
   TAX_FORM_GALLERY.filter((form) => form.status === "ready").length,
   "each ready form opens a sheet",
 );
-assert(
-  /data-tax-form="ITR14"[^]*?The worksheet is under Tax workings\./.test(page),
-  "ITR14 points at the worksheet",
-);
+assert(/data-tax-form="ITR14"[^]*?Ready to prepare/.test(page), "ITR14 is ready to prepare");
 assert(page.includes("Harbour"), "workings use the Harbour & Co sample");
 assert(
   page.split('data-tax-sample-label="true"').length - 1 >= 2,
@@ -257,7 +254,10 @@ const sheetMarkup = renderToStaticMarkup(
     onBack: () => {},
   }),
 );
-assert(sheetMarkup.includes("2 fields need input before you can download."), "missing line at the top");
+assert(
+  sheetMarkup.includes("2 fields need input before you can download."),
+  "missing line at the top",
+);
 for (const id of ["taxpayer", "estimate", "adjustments", "credits", "result"]) {
   assert(sheetMarkup.includes(`data-irp6-approve="${id}"`), `${id} has an Approve tick`);
 }

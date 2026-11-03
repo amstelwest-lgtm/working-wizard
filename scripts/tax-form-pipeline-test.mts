@@ -49,8 +49,8 @@ eq(
   TAX_FORM_GALLERY.filter((form) => form.status === "ready")
     .map((form) => form.galleryId)
     .join(","),
-  "IRP6,IRP6-individual,ITR12",
-  "company IRP6, individual IRP6, and ITR12 are ready to prepare",
+  "IRP6,IRP6-individual,ITR14,ITR12",
+  "company IRP6, individual IRP6, ITR14, and ITR12 are ready to prepare",
 );
 const individualFace = TAX_FORM_GALLERY.find((form) => form.galleryId === "IRP6-individual");
 eq(individualFace?.code, "IRP6", "individual IRP6 reuses the IRP6 form code");
@@ -92,6 +92,19 @@ for (const item of ITR12_INTAKE_ITEMS) {
     `ITR12 maps ${item} onto a field`,
   );
 }
+const itr14 = taxFormSchema("ITR14");
+eq(itr14.form.status, "ready", "ITR14 is ready to prepare");
+eq(itr14.form.entity, "company", "ITR14 is the company return");
+eq(itr14.form.rulesYear, 2023, "ITR14 uses the 27% rules vintage");
+assert(itr14.fields.length > 0, "ITR14 has a field schema");
+assert(
+  itr14.fields.every((field) => field.efiling == null),
+  "ITR14 does not invent eFiling field names",
+);
+assert(
+  itr14.fields.some((field) => field.id === "accountingProfit" && field.intake.from === "books"),
+  "ITR14 reads profit before tax from the books",
+);
 assert(isCatalogForm("VAT201"), "VAT201 is on the catalog");
 assert(!isCatalogForm("IRS1040"), "no US form is on the catalog");
 let unknown = false;
@@ -210,6 +223,8 @@ const board = renderToStaticMarkup(
     onOpenIrp6Individual: () => undefined,
     onPrepareItr12: () => undefined,
     onOpenItr12: () => undefined,
+    onPrepareItr14: () => undefined,
+    onOpenItr14: () => undefined,
   }),
 );
 assert(board.includes("IRP6 2027, period 2"), "Work → Tax names the current return");
@@ -222,6 +237,7 @@ assert(
   "the accountant can start an individual IRP6 draft",
 );
 assert(board.includes('data-tax-work-prepare="ITR12"'), "the accountant can start an ITR12 draft");
+assert(board.includes('data-tax-work-prepare="ITR14"'), "the accountant can start an ITR14 draft");
 assert(board.includes('data-tax-pack-slot="shown"'), "the tax pack sits on the tax page");
 assert(board.includes("not sent to the client"), "a finished form is not sent to the client");
 eq((board.match(/data-tax-work-open="IRP6"/g) ?? []).length, 1, "history has no second Open");

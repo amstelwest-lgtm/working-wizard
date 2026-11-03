@@ -434,7 +434,9 @@ export function draftActivity(
   drafts: readonly TaxFormDraft[],
 ): Array<{ id: string; text: string; at: string }> {
   return currentTaxDrafts(drafts)
-    .filter((row) => row.form_code === "IRP6" || row.form_code === "ITR12")
+    .filter(
+      (row) => row.form_code === "IRP6" || row.form_code === "ITR12" || row.form_code === "ITR14",
+    )
     .map((row) => {
       const what = taxDraftTitle(row);
       const approved =
