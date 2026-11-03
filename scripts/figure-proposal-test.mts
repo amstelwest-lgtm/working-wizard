@@ -32,7 +32,7 @@ import {
   withConfirmedForecastAdjustments,
   FIGURE_PROPOSAL_TOOL,
 } from "../src/lib/figure-proposal.ts";
-import { buildPnlFigureEditDraft, waterfallFieldForPnlRow } from "../src/lib/figure-edit.ts";
+import { buildPnlFigureEditDraft, pnlRowIsFigureEditable, applyConfirmedFigureEditPatch, waterfallFieldForPnlRow } from "../src/lib/figure-edit.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -40,6 +40,7 @@ function assert(cond: unknown, msg: string) {
 
 assert(waterfallFieldForPnlRow("sales") === "revenue", "sales maps to revenue");
 assert(waterfallFieldForPnlRow("labor") == null, "labor is not a waterfall patch row");
+assert(pnlRowIsFigureEditable("labor"), "wages row is editable on the P&L");
 {
   const solo = buildPnlFigureEditDraft({
     rowId: "sales",
@@ -57,6 +58,32 @@ assert(waterfallFieldForPnlRow("labor") == null, "labor is not a waterfall patch
     financials: { revenue: "120", otherIncome: "20" },
   });
   assert(split?.before === 120 && split.after === 130, "sales keeps other income on revenue");
+  const wages = buildPnlFigureEditDraft({
+    rowId: "labor",
+    label: "Wages and salaries",
+    rowAmount: 50_000,
+    nextAmount: 55_000,
+    financials: {
+      revenue: "200000",
+      cogs: "80000",
+      grossProfit: "120000",
+      fixedCosts: "90000",
+      laborCost: "50000",
+      ebit: "30000",
+    },
+  });
+  assert(
+    wages?.apply?.laborCost === 55_000 && wages.apply.fixedCosts === 95_000,
+    "wages update laborCost and recompute fixedCosts from the other opex line",
+  );
+  const applied = applyConfirmedFigureEditPatch(
+    { fixedCosts: "90000", laborCost: "50000", ebit: "30000" },
+    wages!.apply!,
+    true,
+  );
+  if (!applied.ok) throw new Error("wages patch should apply");
+  assert(String(applied.financials.laborCost) === "55000", "laborCost is stored");
+  assert(String(applied.financials.fixedCosts) === "95000", "fixedCosts stays wages plus operating");
 }
 
 const CHILL = "79c4c485-9fa7-4499-9139-e1bb7cb40649";

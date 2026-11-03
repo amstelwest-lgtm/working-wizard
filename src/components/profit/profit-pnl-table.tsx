@@ -7,7 +7,7 @@ import {
 } from "@/components/figure-amount-edit";
 import { useMarketFormat } from "@/contexts/market";
 import type { FiscalStatementSlice } from "@/lib/budget-period-types";
-import { buildPnlFigureEditDraft, waterfallFieldForPnlRow } from "@/lib/figure-edit";
+import { buildPnlFigureEditDraft, pnlRowIsFigureEditable, waterfallFieldForPnlRow } from "@/lib/figure-edit";
 import { formatMoney, formatReportAmount } from "@/lib/market/format";
 import { ownerMinus } from "@/lib/owner-money";
 import { buildProfitPnl, type ProfitPnlRow } from "@/lib/profit-statement";
@@ -137,6 +137,7 @@ export function ProfitPnlTable({
             const section =
               row.section && built.rows[index - 1]?.section !== row.section ? row.section : null;
             const field = waterfallFieldForPnlRow(row.id);
+            const editable = row.current != null && pnlRowIsFigureEditable(row.id);
             return (
               <Fragment key={row.id}>
                 {section ? (
@@ -176,18 +177,18 @@ export function ProfitPnlTable({
                       {row.label}
                     </th>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {field && row.current != null ? (
+                      {editable ? (
                         <FigureAmountButton
                           label={row.label}
-                          field={field}
-                          amount={row.current}
+                          field={field ?? "fixedCosts"}
+                          amount={row.current!}
                           display={moneyText(row.current, market, signed)}
                           className="w-full select-none text-right tabular-nums"
                           onPropose={(draft) => {
                             const mapped = buildPnlFigureEditDraft({
                               rowId: row.id,
                               label: row.label,
-                              rowAmount: row.current,
+                              rowAmount: row.current!,
                               nextAmount: draft.after,
                               financials: currentFin,
                             });

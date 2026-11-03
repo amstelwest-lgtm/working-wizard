@@ -15,7 +15,9 @@ import {
   applyConfirmedWaterfallPatch,
   type WaterfallFigureKey,
   type WaterfallFigurePatch,
+  WATERFALL_FIGURE_KEYS,
 } from "@/lib/figure-proposal";
+import { profitFlows, pnlExpenseParts } from "@/lib/profit-statement";
 
 const STEP_FIELD: Record<string, WaterfallFigureKey> = {
   Revenue: "revenue",
@@ -60,6 +62,21 @@ export function waterfallFieldForStep(label: string): WaterfallFigureKey | null 
   return STEP_FIELD[label] ?? null;
 }
 
+const PNL_OPEX_LINE_ROWS = new Set(["labor", "opex", "depreciation"]);
+
+/** Extra clients.financials keys a confirmed P&L line edit may write. */
+const PNL_LINE_FINANCIAL_KEYS = new Set([
+  "laborCost",
+  "labourCost",
+  "depreciation",
+  "ebitda",
+  "otherIncome",
+]);
+
+export function pnlRowIsFigureEditable(rowId: string): boolean {
+  return waterfallFieldForPnlRow(rowId) != null || PNL_OPEX_LINE_ROWS.has(rowId);
+}
+
 export function waterfallFieldForPnlRow(id: string): WaterfallFigureKey | null {
   return ROW_FIELD[id] ?? null;
 }
@@ -75,9 +92,51 @@ export function buildPnlFigureEditDraft(input: {
   nextAmount: number;
   financials: Record<string, unknown> | null | undefined;
 }): FigureEditDraft | null {
+  const fin = input.financials ?? {};
+
+  if (PNL_OPEX_LINE_ROWS.has(input.rowId)) {
+    const parts = pnlExpenseParts(fin, profitFlows(fin)?.expenses ?? null);
+    const fixedBefore = storedAmount(fin, "fixedCosts");
+    if (input.rowId === "labor") {
+      const operating =
+        parts.operating ??
+        round2((fixedBefore ?? input.rowAmount) - (parts.labor ?? input.rowAmount));
+      const laborBefore = parts.labor ?? input.rowAmount;
+      const laborAfter = input.nextAmount;
+      return {
+        key: "fixedCosts",
+        label: input.label,
+        before: laborBefore,
+        after: laborAfter,
+        apply: { laborCost: laborAfter, fixedCosts: round2(laborAfter + operating) },
+      };
+    }
+    if (input.rowId === "opex") {
+      const labor = parts.labor ?? storedAmount(fin, "laborCost") ?? 0;
+      const operatingBefore = parts.operating ?? input.rowAmount;
+      return {
+        key: "fixedCosts",
+        label: input.label,
+        before: operatingBefore,
+        after: input.nextAmount,
+        apply: { fixedCosts: round2(labor + input.nextAmount) },
+      };
+    }
+    const depBefore = parts.depreciation ?? input.rowAmount;
+    const apply: Record<string, number> = { depreciation: input.nextAmount };
+    const ebit = storedAmount(fin, "ebit");
+    if (ebit != null) apply.ebitda = round2(ebit + input.nextAmount);
+    return {
+      key: "fixedCosts",
+      label: input.label,
+      before: depBefore,
+      after: input.nextAmount,
+      apply,
+    };
+  }
+
   const key = waterfallFieldForPnlRow(input.rowId);
   if (!key) return null;
-  const fin = input.financials ?? {};
   const revenue = storedAmount(fin, "revenue");
   const otherIncome = storedAmount(fin, "otherIncome") ?? 0;
 
@@ -116,7 +175,47 @@ export type FigureEditDraft = {
   label: string;
   before: number;
   after: number;
+  /** When set, confirm writes these financials fields (e.g. wages plus recomputed fixedCosts). */
+  apply?: Record<string, number>;
 };
+
+function mergeFigureEditPatch(
+  financials: Record<string, unknown>,
+  patch: Record<string, number>,
+): Record<string, unknown> {
+  const waterfallPatch: WaterfallFigurePatch = {};
+  const linePatch: Record<string, number> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (!Number.isFinite(value)) continue;
+    if ((WATERFALL_FIGURE_KEYS as readonly string[]).includes(key)) {
+      waterfallPatch[key as WaterfallFigureKey] = value;
+    } else if (PNL_LINE_FINANCIAL_KEYS.has(key)) {
+      linePatch[key] = value;
+    }
+  }
+  const merged = applyConfirmedWaterfallPatch(financials, waterfallPatch, true);
+  if (!merged.ok) throw new Error(merged.reason);
+  const next = { ...merged.financials };
+  for (const [key, value] of Object.entries(linePatch)) {
+    const existing = financials[key];
+    next[key] = typeof existing === "string" ? String(value) : value;
+  }
+  return next;
+}
+
+export function applyConfirmedFigureEditPatch(
+  financials: Record<string, unknown> | null | undefined,
+  patch: Record<string, number>,
+  confirm: boolean,
+): { ok: true; financials: Record<string, unknown> } | { ok: false; reason: string } {
+  if (confirm !== true) return { ok: false, reason: "confirm_required" };
+  if (!Object.keys(patch).length) return { ok: false, reason: "empty_patch" };
+  try {
+    return { ok: true, financials: mergeFigureEditPatch(financials ?? {}, patch) };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : "invalid_patch" };
+  }
+}
 
 /**
  * Read the stored P&L, merge the confirmed patch, and write that blob.
@@ -125,9 +224,13 @@ export type FigureEditDraft = {
  */
 export async function saveConfirmedWaterfallPatch(
   clientId: string,
-  patch: WaterfallFigurePatch,
+  patch: WaterfallFigurePatch | Record<string, number>,
 ): Promise<{ ok: true; financials: Record<string, unknown> } | { ok: false; reason: string }> {
-  const checked = applyConfirmedWaterfallPatch({}, patch, true);
+  const keys = Object.keys(patch);
+  const useLineMerge = keys.some((key) => PNL_LINE_FINANCIAL_KEYS.has(key));
+  const checked = useLineMerge
+    ? applyConfirmedFigureEditPatch({}, patch as Record<string, number>, true)
+    : applyConfirmedWaterfallPatch({}, patch as WaterfallFigurePatch, true);
   if (!checked.ok) return checked;
   const { data: row, error: readError } = await supabase
     .from("clients")
@@ -139,7 +242,9 @@ export async function saveConfirmedWaterfallPatch(
     row?.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
       ? (row.financials as Record<string, unknown>)
       : {};
-  const merged = applyConfirmedWaterfallPatch(server, patch, true);
+  const merged = useLineMerge
+    ? applyConfirmedFigureEditPatch(server, patch as Record<string, number>, true)
+    : applyConfirmedWaterfallPatch(server, patch as WaterfallFigurePatch, true);
   if (!merged.ok) return merged;
   const seen = financialsWriteRev(server);
   const stamped = withFinancialsWriteRev(merged.financials);
