@@ -1,10 +1,14 @@
 /**
  * ZA advisory PDF polish: money has no comma decimals, Prepared for uses a
- * real client name, and the download filename drops the pro-rated sentence.
+ * real client name, the download filename drops the pro-rated sentence, and
+ * the Milōn wordmark keeps U+014D.
  * Run: pnpm test:pdf-za-polish
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { getDocumentProxy } from "unpdf";
+import { isProductBrandName, MILON_WORDMARK } from "../src/components/pdf/milon-wordmark";
 import { formatReportAmount } from "../src/lib/market/format";
 import { ZA_MARKET } from "../src/lib/market/resolve";
 import { formatPdfMoney } from "../src/lib/pdf-money";
@@ -102,3 +106,100 @@ assert(waterfallSrc.includes("pdfDownloadFilename"), "waterfall download uses th
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
 assert(!cashSrc.includes("Your Business"), "cash PDF still hardcodes Your Business");
 assert(cashSrc.includes("pdfDownloadFilename"), "cash download uses the short filename");
+
+assert(MILON_WORDMARK === "Mil\u014Dn", "the wordmark constant is the macron form");
+assert(isProductBrandName(""), "an empty firm is the product wordmark");
+assert(isProductBrandName("Milon"), "ASCII Milon is not a custom firm");
+assert(isProductBrandName("Mil\u014Dn"), "the macron name is the product wordmark");
+assert(isProductBrandName("MILON ADVISORY"), "the old header fallback is the product wordmark");
+assert(!isProductBrandName("Harbour Accounting"), "a real firm name stays on the header");
+
+const footer = readFileSync(resolve("src/components/pdf/report-footer.tsx"), "utf8");
+const glyphs = readFileSync(resolve("src/components/pdf/glyphs.tsx"), "utf8");
+const pdfSources = [
+  "src/components/pdf/report-footer.tsx",
+  "src/components/pdf/report-header.tsx",
+  "src/components/pdf/glyphs.tsx",
+  "src/components/pdf/pdf-document.tsx",
+  "src/components/pdf/milon-wordmark.ts",
+  "src/components/pdf/milon-font.ts",
+];
+for (const rel of pdfSources) {
+  const src = readFileSync(resolve(rel), "utf8");
+  assert(!src.includes("Prepared with Milon"), `${rel} still contains Prepared with Milon`);
+}
+assert(/<MilonMark\b[^>]*\bmacron\b/.test(footer), "footer wordmark is the ASCII o fallback");
+assert(/<MilonMark\b[^>]*\bmacron\b/.test(header), "header wordmark is the ASCII o fallback");
+const macronBranch = glyphs.slice(glyphs.indexOf("if (macron)"));
+assert(macronBranch.includes("MILON_WORDMARK"), "the macron branch does not set U+014D");
+assert(
+  !macronBranch.slice(0, macronBranch.indexOf("const family")).includes(">o<"),
+  "the macron branch still paints an ASCII o",
+);
+
+type TextItem = { str: string };
+
+async function pageText(buf: Buffer): Promise<string> {
+  const pdf = await getDocumentProxy(new Uint8Array(buf));
+  const lines: string[] = [];
+  for (let n = 1; n <= pdf.numPages; n += 1) {
+    const page = await pdf.getPage(n);
+    const content = await page.getTextContent();
+    lines.push((content.items as TextItem[]).map((item) => item.str).join(" "));
+  }
+  return lines.join("\n").replace(/\s+/g, " ");
+}
+
+function assertMacronBrand(text: string, label: string) {
+  assert(
+    text.includes("Prepared with Mil\u014Dn"),
+    `${label} footer is not Prepared with Milōn: ${text}`,
+  );
+  const tokens = text.match(/Mil[oōOŌ]n/g) ?? [];
+  assert(tokens.length > 0, `${label} shows no brand`);
+  for (const token of tokens) {
+    assert(/ō|Ō/.test(token), `${label} brand is ASCII ${token}`);
+  }
+}
+
+const emptyProfile = {
+  firmName: "",
+  logoUrl: null,
+  primaryColor: "#102A43",
+  secondaryColor: "#16213e",
+  accentColor: "#0f3460",
+  accountantName: "",
+  accountantEmail: "",
+  tagline: null,
+  signatureDataUrl: null,
+};
+
+async function renderedBrand(firmName: string): Promise<string> {
+  const { renderToBuffer, View } = await import("@react-pdf/renderer");
+  const { PDFDocument } = await import("../src/components/pdf/pdf-document.tsx");
+  const buf = await renderToBuffer(
+    createElement(PDFDocument, {
+      title: "Profitability waterfall",
+      smeData: { name: "Harbour Cafe", period: "Mar–Sep 2026" },
+      accountantProfile: { ...emptyProfile, firmName },
+      market: ZA_MARKET,
+      children: createElement(View),
+    }) as Parameters<typeof renderToBuffer>[0],
+  );
+  return pageText(buf);
+}
+
+const owner = await renderedBrand("");
+assertMacronBrand(owner, "owner PDF");
+assert(!/\bMilon\b/.test(owner), `owner PDF still has ASCII Milon: ${owner}`);
+
+const productName = await renderedBrand("Milon");
+assertMacronBrand(productName, "product-name brand");
+assert(
+  !/\bMilon\b/.test(productName),
+  `product-name brand still prints ASCII Milon: ${productName}`,
+);
+
+const accountant = await renderedBrand("Harbour Accounting");
+assertMacronBrand(accountant, "accountant PDF");
+assert(accountant.includes("HARBOUR ACCOUNTING"), `custom firm missing: ${accountant}`);
