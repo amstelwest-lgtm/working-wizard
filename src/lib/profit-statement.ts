@@ -183,7 +183,8 @@ type PickLine = {
   read: (flows: ProfitFlows, fin: Record<string, unknown> | null) => number | null;
 };
 
-function expenseParts(
+/** P&L expense section lines. Operating is the residual after wages when both show. */
+export function pnlExpenseParts(
   fin: Record<string, unknown> | null,
   expenses: number | null,
 ): {
@@ -266,7 +267,7 @@ function lineDefs(): PickLine[] {
       label: "Wages and salaries",
       kind: "expense",
       emphasis: false,
-      read: (flows, fin) => expenseParts(fin, flows.expenses).labor,
+      read: (flows, fin) => pnlExpenseParts(fin, flows.expenses).labor,
     },
     {
       id: "opex",
@@ -274,7 +275,7 @@ function lineDefs(): PickLine[] {
       label: "Operating expenses",
       kind: "expense",
       emphasis: false,
-      read: (flows, fin) => expenseParts(fin, flows.expenses).operating,
+      read: (flows, fin) => pnlExpenseParts(fin, flows.expenses).operating,
     },
     {
       id: "depreciation",
@@ -282,7 +283,7 @@ function lineDefs(): PickLine[] {
       label: "Depreciation",
       kind: "expense",
       emphasis: false,
-      read: (flows, fin) => expenseParts(fin, flows.expenses).depreciation,
+      read: (flows, fin) => pnlExpenseParts(fin, flows.expenses).depreciation,
     },
     {
       id: "total-expenses",
@@ -290,7 +291,7 @@ function lineDefs(): PickLine[] {
       label: "Total expenses",
       kind: "total",
       emphasis: true,
-      read: (flows, fin) => expenseParts(fin, flows.expenses).total,
+      read: (flows, fin) => pnlExpenseParts(fin, flows.expenses).total,
     },
     {
       id: "operating-profit",

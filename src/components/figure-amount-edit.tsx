@@ -62,7 +62,7 @@ export function useManualFigureEdit(input: {
     }
     setBusy(true);
     const result = await saveConfirmedWaterfallPatch(input.clientId, {
-      [pending.key]: pending.after,
+      ...(pending.apply ?? { [pending.key]: pending.after }),
     });
     setBusy(false);
     if (!result.ok) {
@@ -93,11 +93,13 @@ export function FigureEditConfirm({
   onReject: () => void;
 }) {
   if (!pending) return null;
-  const lines = figureDeltaLines({
-    surface: "waterfall",
-    patch: { [pending.key]: pending.after },
-    beforeValues: { [pending.key]: pending.before },
-  });
+  const lines = pending.apply
+    ? [{ key: "line", text: `${pending.label} ${pending.before} → ${pending.after}` }]
+    : figureDeltaLines({
+        surface: "waterfall",
+        patch: { [pending.key]: pending.after },
+        beforeValues: { [pending.key]: pending.before },
+      });
   return (
     <section
       className="mb-3 rounded-xl border border-[#DBEAFE] bg-white p-3 text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]"

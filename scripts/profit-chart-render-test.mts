@@ -74,6 +74,7 @@ const october = {
   cogs: 267,
   grossProfit: 51109,
   fixedCosts: 18000,
+  laborCost: 10000,
   ebit: 33109,
   netIncome: 33109,
 };
@@ -170,6 +171,8 @@ assert(
   salesRow?.querySelector("[data-figure-edit='revenue']"),
   "sales is editable through the revenue field",
 );
+const wagesRow = host.querySelector("[data-profit-row='labor']");
+assert(wagesRow?.querySelector("[data-figure-edit='fixedCosts']"), "wages use the confirm path");
 const cogsRow = host.querySelector("[data-profit-row='cogs']");
 assert(cogsRow?.getAttribute("data-profit-row") === "cogs", "cost row is marked");
 assert(cogsRow?.querySelector("[data-favourable='true']"), "a lower cost is favourable");
