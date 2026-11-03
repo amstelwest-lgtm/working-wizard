@@ -22,10 +22,10 @@ function assert(cond: unknown, msg: string): asserts cond {
 }
 
 assert(
-  BUDGET_PAGED_VIEWS.join(",") === "overview,months,setup",
-  "budget panes are the current cards: overview, months, setup",
+  BUDGET_PAGED_VIEWS.join(",") === "overview,months,setup,audit",
+  "budget panes follow cash: overview, months, setup, audit",
 );
-assert(!BUDGET_PAGED_VIEWS.includes("audit" as never), "budget has no audit pane to invent");
+assert(BUDGET_PAGED_VIEWS.includes("audit"), "budget audit sits with setup, like cash");
 
 assert(budgetPagedViewFromSearch({ section: "year" }) === "overview", "This year is Overview");
 assert(
@@ -41,6 +41,8 @@ assert(
   "view=setup wins",
 );
 assert(budgetPagedViewFromSearch({ view: "engine" }) === "setup", "engine is the setup pane");
+assert(budgetPagedViewFromSearch({ view: "audit" }) === "audit", "view=audit is the audit pane");
+assert(budgetPagedViewFromSearch({ section: "year", view: "audit" }) === "audit", "audit wins on the year");
 
 const tableRoute = accountantClientRouteSearch({ tab: "budget", view: "table" });
 assert(
@@ -78,6 +80,8 @@ const toSetup = budgetPagedSearch({ tab: "budget", section: "months" }, "setup")
 assert(toSetup.section === "months" && toSetup.view === "setup", "setup keeps the current section");
 const toMonths = budgetPagedSearch({ tab: "budget", section: "year", view: "setup" }, "months");
 assert(toMonths.section === "months" && !("view" in toMonths), "months drops the setup view");
+const toAudit = budgetPagedSearch({ tab: "budget", section: "months" }, "audit");
+assert(toAudit.section === "months" && toAudit.view === "audit", "audit keeps the current section");
 
 for (const view of BUDGET_PAGED_VIEWS) {
   const sentence = budgetPagedSentence(view);
@@ -88,6 +92,7 @@ for (const view of BUDGET_PAGED_VIEWS) {
 assert(budgetPagedEnlargeTarget("overview") === "chart", "overview enlarges the chart");
 assert(budgetPagedEnlargeTarget("months") === "table", "month by month enlarges the table");
 assert(budgetPagedEnlargeTarget("setup") === null, "setup has no Enlarge");
+assert(budgetPagedEnlargeTarget("audit") === null, "audit has no Enlarge");
 assert(budgetStackedEnlargeTarget("chart") === "chart", "chart lens enlarges the chart");
 assert(budgetStackedEnlargeTarget("table") === "table", "table lens enlarges the table");
 
@@ -101,10 +106,9 @@ assert(/\.cash-menu__tab \{[^}]*border-radius: 8px/.test(css), "shared menu tabs
 assert(/\.cash-menu__tab\[aria-selected="true"\][^}]*#0b5fff/.test(css), "active tab is cobalt");
 
 const simple = readFileSync("src/components/budget/budget-simple-view.tsx", "utf8");
-assert(
-  simple.includes('layout === "paged" && role === "accountant" && !readOnly'),
-  "paging is accountant-only and skips the read-only board",
-);
+assert(simple.includes('layout === "paged"'), "owner and accountant share the paged menu");
+assert(simple.includes('data-budget-pane="audit"'), "audit is its own pane");
+assert(simple.includes("ChartShapeToggle") === false && readFileSync("src/components/budget/budget-chart-table.tsx", "utf8").includes("ChartShapeToggle"), "the overview chart has the shared bar|line toggle");
 assert(
   (simple.match(/data-budget-pane-sentence/g) ?? []).length === 1,
   "one sentence under the menu",
@@ -132,7 +136,8 @@ assert(
   "the accountant budget reads the pane from the address",
 );
 const owner = readFileSync("src/routes/app.tsx", "utf8");
-assert(!owner.includes('layout="paged"'), "owner budget and cash stay stacked");
+assert((owner.match(/layout="paged"/g) ?? []).length === 2, "both owner budget mounts use the paged menu");
+assert(!owner.includes("<CashForecastPanel\n                          layout=\"paged\""), "owner cash stays on its own menu");
 const tryBoards = readFileSync("src/components/try-sample-boards.tsx", "utf8");
 assert(!tryBoards.includes('layout="paged"'), "try demo stays stacked");
 

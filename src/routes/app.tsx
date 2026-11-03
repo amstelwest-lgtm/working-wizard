@@ -321,6 +321,10 @@ const BudgetPanel = lazyPanel(
   () => import("@/components/budget/budget-panel").then((m) => ({ default: m.BudgetPanel })),
   "Budget",
 );
+const ProfitWorkspace = lazyPanel(
+  () => import("@/components/profit/profit-workspace").then((m) => ({ default: m.ProfitWorkspace })),
+  "Profit",
+);
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
@@ -4765,6 +4769,7 @@ function Index() {
                           clientId={effectiveClientId ?? undefined}
                           clientName={actingClientName ?? undefined}
                           simplified
+                          layout="paged"
                           role="owner"
                           canSign={false}
                           hideReadOnlyStamp
@@ -4878,6 +4883,35 @@ function Index() {
                             </p>
                           ) : null}
                           <ProfitLead periodLabel={ownerProfitPeriodLabel} />
+                          <Suspense fallback={<p className="owner-lede">Loading profit…</p>}>
+                          <ProfitWorkspace
+                            financials={v as unknown as Record<string, unknown>}
+                            snapshots={history}
+                            prior={(ownerPrior?.financials as Record<string, unknown> | null) ?? null}
+                            priorLabel={ownerPrior?.period_label ?? null}
+                            quoted={ownerProfitPeriod?.slice ?? null}
+                            periodLabel={ownerProfitPeriodLabel}
+                            fyStartMonth={fyStartMonth}
+                            clientId={effectiveClientId ?? undefined}
+                            signed
+                            canApprove={false}
+                            includeLines
+                            lines={
+                              <ProductMixPanel
+                                totalRevenue={
+                                  resolveWaterfallFigures(weeklyInputs, ownerWaterfallFallback, {
+                                    preferPeriod: preferStatementPeriod(v),
+                                  }).revenue
+                                }
+                                incentive="Answer these to build revenue and gross profit per product line."
+                              />
+                            }
+                            setup={
+                              <p className="owner-lede">
+                                Your accountant sets the period and the sources. The figures on the chart are the statement on file.
+                              </p>
+                            }
+                            waterfall={
                           <ProfitabilityWaterfall
                             appearance="premium"
                             previousMargins={priorMarginsFromFinancials(
@@ -4908,6 +4942,9 @@ function Index() {
                             yearToDate={statementYearLine(v, boardMarket)}
                             statementSource={readStatementMeta(v, boardMarket).statementSource}
                           />
+                            }
+                          />
+                          </Suspense>
                         </>
                       ) : (
                         <>
@@ -6603,6 +6640,7 @@ function Index() {
                           clientId={effectiveClientId ?? undefined}
                           clientName={actingClientName ?? undefined}
                           simplified={viewMode === "simplified"}
+                          layout="paged"
                           onViewModeChange={setViewMode}
                           role={
                             userRole === "accountant" || userRole === "firm_admin"

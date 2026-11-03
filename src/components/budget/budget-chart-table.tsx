@@ -6,7 +6,19 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Info } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { ChartShapeToggle, type ChartShape } from "@/components/profit/chart-shape-toggle";
 import { useMarketFormat } from "@/contexts/market";
 import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
@@ -118,6 +130,7 @@ export function BudgetChartTable({
   const [loaded, setLoaded] = useState<BudgetActualMonth[]>(actualMonths ? [...actualMonths] : []);
   const [actualsPending, setActualsPending] = useState(!actualMonths && Boolean(clientId));
   const [uncontrolledLens, setUncontrolledLens] = useState<BudgetLens>("chart");
+  const [shape, setShape] = useState<ChartShape>("bar");
   const activeLens = lens ?? uncontrolledLens;
   const enlargeTarget = budgetStackedEnlargeTarget(activeLens);
   const [enlarged, setEnlarged] = useState(false);
@@ -202,6 +215,7 @@ export function BudgetChartTable({
     <section
       className="budget-lens min-w-0 max-w-full rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50"
       data-budget-lens={activeLens}
+      data-budget-shape={shape}
       data-budget-paint="ready"
       aria-label="Budget chart and table"
       aria-busy={actualsPending || undefined}
@@ -232,6 +246,7 @@ export function BudgetChartTable({
               onClick={() => setEnlarged(true)}
             />
           ) : null}
+          {activeLens === "chart" ? <ChartShapeToggle value={shape} onChange={setShape} /> : null}
           {hideLensToggle ? null : (
             <ViewToggle
               ariaLabel="Budget"
@@ -261,7 +276,7 @@ export function BudgetChartTable({
           displayTemplateId={displayTemplateId}
         />
       ) : (
-        <BudgetMonthChart views={scopedViews} market={market} money={money} signed={signed} />
+        <BudgetMonthChart views={scopedViews} market={market} money={money} signed={signed} shape={shape} />
       )}
       {showEnlarge ? (
         <EnlargeSheet
@@ -285,6 +300,7 @@ export function BudgetChartTable({
               market={market}
               money={money}
               signed={signed}
+              shape={shape}
               fill
             />
           )}
@@ -352,6 +368,7 @@ function BudgetMonthChart({
   money,
   signed = false,
   fill = false,
+  shape = "bar",
 }: {
   views: BudgetMonthView[];
   market: Parameters<typeof formatMoneyChartTick>[1];
@@ -359,6 +376,7 @@ function BudgetMonthChart({
   signed?: boolean;
   /** Full-viewport sheet. The card keeps the short chart. */
   fill?: boolean;
+  shape?: ChartShape;
 }) {
   const [narrow, setNarrow] = useState(false);
   useLayoutEffect(() => {
@@ -394,6 +412,19 @@ function BudgetMonthChart({
         data-budget-axis="chart"
       >
         <ResponsiveContainer width="100%" height="100%">
+          {shape === "line" ? (
+          <LineChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: narrow ? 8 : 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" vertical={false} />
+            <XAxis dataKey="label" stroke="#94a3b8" tickLine={false} axisLine={false} interval={0} height={narrow ? 40 : 4} tick={narrow ? BudgetMonthTick : false} />
+            <YAxis stroke="#94a3b8" fontSize={fill ? 12 : 10} tickLine={false} axisLine={false} domain={axis?.domain} ticks={axis?.ticks} allowDecimals={false} tickFormatter={(value) => tick(Number(value))} width={56} />
+            <Tooltip
+              contentStyle={{ background: "rgba(17,24,39,0.95)", border: "1px solid rgba(11,95,255,0.35)", borderRadius: 10, fontSize: 12, color: "#f1f5f9" }}
+              formatter={(value: number, name: string) => [money(value), name === "budget" ? "Budget" : "Actual"]}
+            />
+            <Line type="monotone" dataKey="budget" name="budget" stroke={BUDGET_BAR} strokeWidth={2.5} dot={false} />
+            <Line type="monotone" dataKey="actual" name="actual" stroke={ACTUAL_BAR} strokeWidth={2.5} connectNulls={false} dot={{ r: 3, fill: ACTUAL_BAR }} />
+          </LineChart>
+          ) : (
           <BarChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: narrow ? 8 : 0 }} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" vertical={false} />
             <XAxis
@@ -446,6 +477,7 @@ function BudgetMonthChart({
               ))}
             </Bar>
           </BarChart>
+          )}
         </ResponsiveContainer>
       </div>
       <div className="mt-2 flex min-w-0" aria-hidden="true">

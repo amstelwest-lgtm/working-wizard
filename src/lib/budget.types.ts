@@ -216,6 +216,11 @@ export type BudgetDocument = {
    */
   statementDepreciation?: number;
   showInventoryDays: boolean;
+  /**
+   * Per-input approvals. Same shape as the cash forecast audit.
+   * Stored on this jsonb document, so no extra column is required.
+   */
+  inputAudit?: import("./cash-input-audit.ts").CashInputAudit;
   /** Participative challenge / note log (Phase 4). */
   notes?: Array<{
     id: string;

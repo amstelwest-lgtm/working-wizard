@@ -932,7 +932,16 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   action?: "preview" | "download";
   agent?: string;
   profile?: number;
-  view?: "chart" | "table" | "13week" | "setup" | "audit" | "scenario" | "progress" | "books";
+  view?:
+    | "chart"
+    | "table"
+    | "13week"
+    | "setup"
+    | "audit"
+    | "scenario"
+    | "progress"
+    | "books"
+    | "pnl";
   invite?: "owner";
   draft?: string;
 } {
@@ -953,7 +962,16 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     action?: "preview" | "download";
     agent?: string;
     profile?: number;
-    view?: "chart" | "table" | "13week" | "setup" | "audit" | "scenario" | "progress" | "books";
+    view?:
+      | "chart"
+      | "table"
+      | "13week"
+      | "setup"
+      | "audit"
+      | "scenario"
+      | "progress"
+      | "books"
+      | "pnl";
     invite?: "owner";
     draft?: string;
   } = {};
@@ -988,7 +1006,16 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     if (view === "setup" || view === "engine" || view === "inputs") {
       out.view = "setup";
       if (!out.section) out.section = "year";
+    } else if (view === "audit") {
+      out.view = "audit";
+      if (!out.section) out.section = "year";
     }
+  }
+  if (out.tab === "profit") {
+    const view = typeof search.view === "string" ? search.view : "";
+    if (view === "pnl" || view === "table") out.view = "pnl";
+    else if (view === "setup" || view === "inputs") out.view = "setup";
+    else if (view === "audit") out.view = "audit";
   }
   if ((!out.tab || out.tab === "home") && (search.view === "progress" || search.view === "books")) {
     out.view = search.view;

@@ -56,3 +56,23 @@ export async function saveServerDeliverableInput(
     console.warn("deliverable_inputs save:", error.message);
   }
 }
+
+/** Merge a partial blob (profit audit) without dropping the other deliverables. */
+export async function saveServerDeliverableInputs(
+  clientId: string,
+  patch: StoredDeliverableInputs,
+): Promise<boolean> {
+  if (!clientId.trim()) return false;
+  const read = await readServer(clientId);
+  if (!read.ok) return false;
+  const next = { ...(read.value ?? {}), ...patch };
+  const { error } = await supabase
+    .from("clients")
+    .update({ deliverable_inputs: next as never })
+    .eq("id", clientId);
+  if (error && !MISSING_COLUMN.test(error.message ?? "")) {
+    console.warn("deliverable_inputs save:", error.message);
+    return false;
+  }
+  return !error || MISSING_COLUMN.test(error.message ?? "");
+}

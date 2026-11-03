@@ -4,14 +4,15 @@
  * `?view=setup` is the drivers pane and does not replace those section links.
  */
 
-export const BUDGET_PAGED_VIEWS = ["overview", "months", "setup"] as const;
+export const BUDGET_PAGED_VIEWS = ["overview", "months", "setup", "audit"] as const;
 
 export type BudgetPagedView = (typeof BUDGET_PAGED_VIEWS)[number];
 
 export const BUDGET_PAGED_LABEL: Record<BudgetPagedView, string> = {
   overview: "Overview",
   months: "Month by month",
-  setup: "Setup",
+  setup: "Budget setup",
+  audit: "Audit inputs",
 };
 
 export function isBudgetPagedView(value: unknown): value is BudgetPagedView {
@@ -24,6 +25,7 @@ export function budgetPagedViewFromSearch(input: {
   view?: string | null;
 }): BudgetPagedView {
   const view = (input.view ?? "").trim();
+  if (view === "audit") return "audit";
   if (view === "setup" || view === "engine" || view === "inputs") return "setup";
   if (input.section === "months" || view === "table") return "months";
   return "overview";
@@ -57,9 +59,9 @@ export function budgetPagedSearch(
     delete next.view;
     return next;
   }
-  if (view === "setup") {
+  if (view === "setup" || view === "audit") {
     if (next.section !== "year" && next.section !== "months") next.section = "year";
-    next.view = "setup";
+    next.view = view;
     return next;
   }
   next.section = "year";
@@ -83,5 +85,7 @@ export function budgetPagedSentence(view: BudgetPagedView): string {
       return "Every month in the budget, next to actuals.";
     case "setup":
       return "Set the drivers, working capital and sources for this budget.";
+    case "audit":
+      return "Approve each input before you sign off the budget.";
   }
 }
