@@ -17,6 +17,7 @@ import {
   type Irp6Inputs,
   type Irp6Period,
   type Irp6SectionId,
+  IRP6_INDIVIDUAL_SUBJECT,
   type Irp6Sheet,
   zaToday,
 } from "./irp6.ts";
@@ -388,6 +389,7 @@ export function findIrp6Draft(
       (row) =>
         isCurrentTaxDraft(row) &&
         row.form_code === "IRP6" &&
+        (row.subject ?? null) == null &&
         row.tax_year === yearOfAssessment &&
         row.period === period,
     )
@@ -417,6 +419,9 @@ export function draftDayLabel(timestamp: string): string {
 export function taxDraftTitle(
   row: Pick<TaxFormDraft, "form_code" | "tax_year" | "period" | "subject">,
 ): string {
+  if (row.form_code === "IRP6" && row.subject === IRP6_INDIVIDUAL_SUBJECT) {
+    return `IRP6 ${row.tax_year}, period ${row.period ?? 1} (individual)`;
+  }
   if (row.form_code === "IRP6") return `IRP6 ${row.tax_year}, period ${row.period ?? 1}`;
   const name = taxFormByCode(row.form_code)?.label ?? row.form_code;
   if (row.subject) return `${name} ${row.tax_year}, ${row.subject}`;

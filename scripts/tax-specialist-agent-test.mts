@@ -128,13 +128,13 @@ for (const title of ["SARS forms", "Tax workings", "Deadlines", "Recent activity
 }
 // Part 7b: the form gallery, in Theo's order, with code, name, frequency and status
 eq(
-  TAX_FORM_GALLERY.map((form) => form.code).join(","),
-  "IRP5,EMP201,EMP501,IRP6,ITR14,VAT201,ITR12",
+  TAX_FORM_GALLERY.map((form) => form.galleryId).join(","),
+  "IRP5,EMP201,EMP501,IRP6,IRP6-individual,ITR14,VAT201,ITR12",
   "gallery order",
 );
 for (const form of TAX_FORM_GALLERY) {
-  const at = page.indexOf(`data-tax-form="${form.code}"`);
-  assert(at >= 0, `${form.code} block`);
+  const at = page.indexOf(`data-tax-form="${form.galleryId}"`);
+  assert(at >= 0, `${form.galleryId} block`);
   const block = page.slice(at, page.indexOf("</li>", at));
   assert(block.includes(form.name), `${form.code} plain name`);
   assert(block.includes(form.frequency.replace(/&/g, "&amp;")), `${form.code} frequency`);

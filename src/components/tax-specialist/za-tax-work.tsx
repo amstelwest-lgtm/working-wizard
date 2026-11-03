@@ -20,8 +20,14 @@ import {
 } from "@/lib/tax-specialist/forms/drafts";
 import { loadItr12Open } from "@/lib/tax-specialist/forms/itr12-load";
 import type { Itr12Inputs } from "@/lib/tax-specialist/forms/itr12";
+import { loadIrp6IndividualOpen } from "@/lib/tax-specialist/forms/irp6-individual-load";
+import {
+  IRP6_INDIVIDUAL_SUBJECT,
+  type Irp6IndividualInputs,
+} from "@/lib/tax-specialist/forms/irp6-individual";
 import { irp6DefaultPick, zaToday, type Irp6Period } from "@/lib/tax-specialist/forms/irp6";
 import { ZaIrp6Sheet } from "./za-irp6-sheet";
+import { ZaIrp6IndividualSheet } from "./za-irp6-individual-sheet";
 import { ZaItr12Sheet } from "./za-itr12-sheet";
 import "./za-tax-work.css";
 
@@ -72,17 +78,23 @@ export function TaxWorkBoard({
   packs,
   onPrepareIrp6,
   onOpenIrp6,
+  onPrepareIrp6Individual,
+  onOpenIrp6Individual,
   onPrepareItr12,
   onOpenItr12,
   preparingItr12 = false,
+  preparingIrp6Individual = false,
 }: {
   drafts: readonly TaxFormDraft[];
   packs: ReactNode;
   onPrepareIrp6: () => void;
   onOpenIrp6: (draft: TaxFormDraft) => void;
+  onPrepareIrp6Individual: () => void;
+  onOpenIrp6Individual: (draft: TaxFormDraft) => void;
   onPrepareItr12: () => void;
   onOpenItr12: (draft: TaxFormDraft) => void;
   preparingItr12?: boolean;
+  preparingIrp6Individual?: boolean;
 }) {
   const current = currentTaxDrafts(drafts).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   return (
@@ -102,6 +114,15 @@ export function TaxWorkBoard({
             <button
               type="button"
               className="tax-work-prepare"
+              data-tax-work-prepare="IRP6-individual"
+              disabled={preparingIrp6Individual}
+              onClick={onPrepareIrp6Individual}
+            >
+              {preparingIrp6Individual ? "Preparing individual IRP6…" : "Prepare individual IRP6"}
+            </button>
+            <button
+              type="button"
+              className="tax-work-prepare"
               data-tax-work-prepare="ITR12"
               disabled={preparingItr12}
               onClick={onPrepareItr12}
@@ -115,7 +136,7 @@ export function TaxWorkBoard({
             id="tax-drafts-empty"
             dashed
             title="No tax form drafts yet"
-            description="Prepare IRP6 or ITR12 when you are ready. A new save keeps the earlier version."
+            description="Prepare a company IRP6, an individual IRP6, or an ITR12 when you are ready. A new save keeps the earlier version."
           />
         ) : (
           <table className="tax-work-table">
@@ -162,7 +183,16 @@ export function TaxWorkBoard({
                     <td>{TAX_FORM_DRAFT_STATUS_LABEL[row.status]}</td>
                     <td data-tax-draft-version={row.version}>{row.version}</td>
                     <td>
-                      {row.form_code === "IRP6" ? (
+                      {row.form_code === "IRP6" && row.subject === IRP6_INDIVIDUAL_SUBJECT ? (
+                        <button
+                          type="button"
+                          className="tax-work-open"
+                          data-tax-work-open="IRP6-individual"
+                          onClick={() => onOpenIrp6Individual(row)}
+                        >
+                          Open
+                        </button>
+                      ) : row.form_code === "IRP6" ? (
                         <button
                           type="button"
                           className="tax-work-open"
@@ -205,7 +235,13 @@ export function ZaTaxWork({ client }: { client: TaxWorkClient }) {
   const [sendId, setSendId] = useState<string | null>(null);
   const [open, setOpen] = useState<{ year: number; period: Irp6Period } | null>(null);
   const [itr12, setItr12] = useState<{ year: number; seed: Itr12Inputs | null } | null>(null);
+  const [individual, setIndividual] = useState<{
+    year: number;
+    period: Irp6Period;
+    seed: Irp6IndividualInputs | null;
+  } | null>(null);
   const [preparingItr12, setPreparingItr12] = useState(false);
+  const [preparingIndividual, setPreparingIndividual] = useState(false);
 
   useEffect(() => {
     if (!client.id) return;
@@ -232,6 +268,32 @@ export function ZaTaxWork({ client }: { client: TaxWorkClient }) {
       .then((next) => setItr12(next))
       .finally(() => setPreparingItr12(false));
   };
+
+  const prepareIndividual = () => {
+    if (!drafts || preparingIndividual) return;
+    setPreparingIndividual(true);
+    void loadIrp6IndividualOpen(client.id, drafts, zaToday())
+      .then((next) => setIndividual(next))
+      .finally(() => setPreparingIndividual(false));
+  };
+
+  if (individual && drafts) {
+    return (
+      <ZaIrp6IndividualSheet
+        key={`${individual.year}-${individual.period}`}
+        client={client}
+        today={zaToday()}
+        drafts={drafts}
+        initialYear={individual.year}
+        initialPeriod={individual.period}
+        seed={individual.seed}
+        approverRole="accountant"
+        backLabel="Tax drafts"
+        onSaved={onSaved}
+        onBack={() => setIndividual(null)}
+      />
+    );
+  }
 
   if (itr12 && drafts) {
     return (
@@ -283,6 +345,11 @@ export function ZaTaxWork({ client }: { client: TaxWorkClient }) {
             setOpen({ year: pick.yearOfAssessment, period: pick.period });
           }}
           onOpenIrp6={(row) => setOpen({ year: row.tax_year, period: asPeriod(row.period) })}
+          onPrepareIrp6Individual={prepareIndividual}
+          preparingIrp6Individual={preparingIndividual}
+          onOpenIrp6Individual={(row) =>
+            setIndividual({ year: row.tax_year, period: asPeriod(row.period), seed: null })
+          }
           onPrepareItr12={prepareItr12}
           preparingItr12={preparingItr12}
           onOpenItr12={(row) => setItr12({ year: row.tax_year, seed: null })}

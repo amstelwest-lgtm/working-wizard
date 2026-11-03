@@ -64,8 +64,11 @@ export type TaxFormDefinition = {
 
 export type TaxFormEntry = Pick<
   TaxFormDefinition,
-  "code" | "label" | "name" | "frequency" | "status" | "note"
->;
+  "code" | "label" | "name" | "frequency" | "status" | "note" | "entity"
+> & {
+  /** Stable gallery row. Individual IRP6 shares the company form code. */
+  galleryId: string;
+};
 
 export const TAX_FORM_STATUS_LABEL: Record<TaxFormStatus, string> = {
   ready: "Ready to prepare",
@@ -205,12 +208,38 @@ export function requireTaxForm(code: string): TaxFormDefinition {
   return form;
 }
 
-/** Gallery rows, in catalog order. The page does not keep a second list. */
-export const TAX_FORM_GALLERY: readonly TaxFormEntry[] = TAX_FORM_REGISTRY.map((form) => ({
-  code: form.code,
-  label: form.label,
-  name: form.name,
-  frequency: form.frequency,
-  status: form.status,
-  note: form.note,
-}));
+function galleryFace(
+  form: TaxFormDefinition,
+  extra?: Partial<TaxFormEntry> & { galleryId: string },
+): TaxFormEntry {
+  return {
+    code: form.code,
+    label: form.label,
+    name: form.name,
+    frequency: form.frequency,
+    status: form.status,
+    note: form.note,
+    entity: form.entity,
+    galleryId: form.code,
+    ...extra,
+  };
+}
+
+/**
+ * Gallery rows, in catalog order. Individual IRP6 is a second face of the
+ * IRP6 code (subject "individual" on the draft). The database allow-list
+ * stays the one IRP6 row.
+ */
+export const TAX_FORM_GALLERY: readonly TaxFormEntry[] = TAX_FORM_REGISTRY.flatMap((form) => {
+  if (form.code !== "IRP6") return [galleryFace(form)];
+  return [
+    galleryFace(form),
+    galleryFace(form, {
+      galleryId: "IRP6-individual",
+      entity: "individual",
+      name: "Provisional tax return (individual)",
+      status: "ready",
+      note: undefined,
+    }),
+  ];
+});

@@ -36,17 +36,26 @@ function eq(actual: unknown, expected: unknown, msg: string) {
 }
 
 eq(
-  TAX_FORM_GALLERY.map((form) => form.code).join(","),
   TAX_FORM_REGISTRY.map((form) => form.code).join(","),
-  "the gallery is the catalog, in the same order",
+  "IRP5,EMP201,EMP501,IRP6,ITR14,VAT201,ITR12",
+  "the catalog codes stay the database allow-list",
+);
+eq(
+  TAX_FORM_GALLERY.map((form) => form.galleryId).join(","),
+  "IRP5,EMP201,EMP501,IRP6,IRP6-individual,ITR14,VAT201,ITR12",
+  "the gallery adds individual IRP6 after company IRP6",
 );
 eq(
   TAX_FORM_GALLERY.filter((form) => form.status === "ready")
-    .map((form) => form.code)
+    .map((form) => form.galleryId)
     .join(","),
-  "IRP6,ITR12",
-  "company IRP6 and individual ITR12 are ready to prepare",
+  "IRP6,IRP6-individual,ITR12",
+  "company IRP6, individual IRP6, and ITR12 are ready to prepare",
 );
+const individualFace = TAX_FORM_GALLERY.find((form) => form.galleryId === "IRP6-individual");
+eq(individualFace?.code, "IRP6", "individual IRP6 reuses the IRP6 form code");
+eq(individualFace?.entity, "individual", "the gallery face is the individual return");
+eq(individualFace?.status, "ready", "individual IRP6 is ready to prepare");
 
 const irp6 = taxFormSchema("IRP6");
 eq(irp6.fields.length, IRP6_FIELDS.length, "IRP6 schema is the live field list");
@@ -57,6 +66,17 @@ for (const field of IRP6_FIELDS) {
   eq(mapped?.efiling ?? null, field.efiling, `${field.id} keeps its eFiling name`);
 }
 eq(irp6.form.rulesYear, 2023, "company IRP6 uses the 27% rules vintage");
+eq(irp6.form.entity, "company", "the default IRP6 schema stays the company return");
+
+const individualIrp6 = taxFormSchema("IRP6", "individual");
+assert(individualIrp6.fields.length > 0, "individual IRP6 has a second schema");
+eq(individualIrp6.form.code, "IRP6", "the second schema keeps the IRP6 code");
+eq(individualIrp6.form.entity, "individual", "the second schema is the individual return");
+eq(individualIrp6.form.status, "ready", "individual IRP6 is ready on the schema");
+eq(individualIrp6.form.rulesYear, null, "the year of assessment picks the rate table");
+for (const item of ITR12_INTAKE_ITEMS) {
+  assert(individualIrp6.intakeItems.includes(item), `individual IRP6 intake includes ${item}`);
+}
 
 const itr12 = taxFormSchema("ITR12");
 assert(itr12.fields.length > 0, "ITR12 has a field schema");
@@ -186,6 +206,8 @@ const board = renderToStaticMarkup(
     packs: createElement("div", { "data-tax-pack-slot": "shown" }, "pack"),
     onPrepareIrp6: () => undefined,
     onOpenIrp6: () => undefined,
+    onPrepareIrp6Individual: () => undefined,
+    onOpenIrp6Individual: () => undefined,
     onPrepareItr12: () => undefined,
     onOpenItr12: () => undefined,
   }),
@@ -195,6 +217,10 @@ assert(board.includes('data-tax-draft-current="true"'), "the current draft is ma
 assert(board.includes('data-tax-draft-readonly="true"'), "the earlier version is read-only");
 assert(board.includes('data-tax-work-open="IRP6"'), "the current IRP6 draft opens");
 assert(board.includes('data-tax-work-prepare="IRP6"'), "the accountant can start an IRP6 draft");
+assert(
+  board.includes('data-tax-work-prepare="IRP6-individual"'),
+  "the accountant can start an individual IRP6 draft",
+);
 assert(board.includes('data-tax-work-prepare="ITR12"'), "the accountant can start an ITR12 draft");
 assert(board.includes('data-tax-pack-slot="shown"'), "the tax pack sits on the tax page");
 assert(board.includes("not sent to the client"), "a finished form is not sent to the client");
