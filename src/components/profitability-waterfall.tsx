@@ -27,6 +27,7 @@ import { DEFAULT_PROFILE, useOptionalAccountantProfile } from "@/contexts/accoun
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol, formatMonthYear } from "@/lib/market";
+import { pdfDownloadFilename, pdfPreparedForName } from "@/lib/pdf-download";
 import { yearToDateTitle } from "@/lib/statement-period";
 import {
   hashFigures,
@@ -501,6 +502,8 @@ async function exportPDF(opts: {
   firmId?: string | null;
   market?: import("@/lib/market").ResolvedMarket;
   periodLabel?: string | null;
+  /** Workspace or statement name. Wins over a placeholder client label. */
+  businessName?: string | null;
 }) {
   const { revenue, costOfSales, fixedCosts, interest, tax } = opts;
   const depreciation = opts.depreciation ?? 0;
@@ -516,7 +519,10 @@ async function exportPDF(opts: {
 
   const now = new Date();
   const period = opts.periodLabel?.trim() || formatMonthYear(now, opts.market?.timezone);
-  const name = opts.clientName?.trim() || "Your Business";
+  const name = pdfPreparedForName({
+    clientName: opts.clientName,
+    businessName: opts.businessName,
+  });
 
   const profitabilityData = {
     revenue,
@@ -544,7 +550,12 @@ async function exportPDF(opts: {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${name.replace(/\s+/g, "_")}_${period.replace(/\s+/g, "_")}_ProfitabilityWaterfall.pdf`;
+  a.download = pdfDownloadFilename({
+    clientName: opts.clientName,
+    businessName: opts.businessName,
+    periodLabel: period,
+    reportName: "ProfitabilityWaterfall",
+  });
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -798,6 +809,7 @@ function WaterfallPhoneList({
 export function ProfitabilityWaterfall({
   fallback,
   clientName,
+  businessName,
   clientId,
   reviewSignoff = null,
   periodLabel = null,
@@ -816,6 +828,8 @@ export function ProfitabilityWaterfall({
 }: {
   fallback?: WaterfallFallback;
   clientName?: string;
+  /** Workspace or statement name. Wins over a placeholder client label. */
+  businessName?: string | null;
   clientId?: string;
   reviewSignoff?: ReportSignoffStamp | null;
   /** Explicit statement range, "1 Sep 2026 – 21 Sep 2026". */
@@ -1015,6 +1029,7 @@ export function ProfitabilityWaterfall({
     void exportPDF({
       clientId,
       clientName,
+      businessName,
       revenue,
       costOfSales,
       fixedCosts,

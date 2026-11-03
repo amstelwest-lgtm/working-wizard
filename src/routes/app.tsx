@@ -183,6 +183,8 @@ import {
   resolveWaterfallFigures,
 } from "@/lib/weekly-inputs";
 import { fiscalWaterfallFallback } from "@/lib/budget-period";
+import { businessNameFromFinancials } from "@/lib/client-display-name";
+import { pdfPreparedForName } from "@/lib/pdf-download";
 import {
   figuresPeriodLabelFrom,
   ownerBootPeriodPill,
@@ -4493,6 +4495,11 @@ function Index() {
     );
   }
 
+  const ownerReportClientName = pdfPreparedForName({
+    clientName: actingClientName,
+    businessName: ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name,
+    entityName: businessNameFromFinancials(v),
+  });
   const showOwnerDoor = !sampleMode && !isLegacyOwnerBoardTab(searchTab);
   const OwnerHealthOrb = SphereHero;
 
@@ -4742,7 +4749,7 @@ function Index() {
                       <Suspense fallback={<p className="owner-lede">Loading cash forecast…</p>}>
                         <CashForecastPanel
                           clientId={effectiveClientId ?? undefined}
-                          clientName={actingClientName ?? undefined}
+                          clientName={ownerReportClientName}
                           simplified
                           canSign={false}
                           hideReadOnlyStamp
@@ -4893,7 +4900,7 @@ function Index() {
                               />
                             }
                             negative="minus"
-                            clientName={actingClientName ?? undefined}
+                            clientName={ownerReportClientName}
                             clientId={effectiveClientId ?? undefined}
                             reviewSignoff={stampFromSignoff(
                               profitabilitySignoff,
@@ -6407,7 +6414,7 @@ function Index() {
                     />
                     <div id="wizard-profit-walk">
                       <ProfitabilityWaterfall
-                        clientName={actingClientName ?? undefined}
+                        clientName={ownerReportClientName}
                         clientId={effectiveClientId ?? undefined}
                         onFiguresApplied={(next) => {
                           setV((prev) => {
@@ -6579,7 +6586,7 @@ function Index() {
                       >
                         <CashForecastPanel
                           clientId={effectiveClientId ?? undefined}
-                          clientName={actingClientName ?? undefined}
+                          clientName={ownerReportClientName}
                           simplified={viewMode === "simplified"}
                           canSign={
                             (userRole === "accountant" || userRole === "firm_admin") &&

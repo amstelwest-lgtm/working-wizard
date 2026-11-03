@@ -154,7 +154,7 @@ import { parseBudgetDocument } from "@/lib/budget-pdf";
 import { budgetSeededFromStatement, budgetVersusStatement, statementBudgetRead, statementCoverMonthCount } from "@/lib/budget.bridges";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
 import { planAnswerSentence } from "@/lib/plan-pack-copy";
-import { loadClientDisplayNames } from "@/lib/client-display-name";
+import { businessNameFromFinancials, loadClientDisplayNames } from "@/lib/client-display-name";
 import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
   FinancialInputsContext,
@@ -169,6 +169,7 @@ import {
   hasWeeklyProfitFigures,
 } from "@/lib/weekly-inputs";
 import { fiscalStatementSlice, fiscalWaterfallFallback } from "@/lib/budget-period";
+import { pdfPreparedForName } from "@/lib/pdf-download";
 import { emptyProductMix, type ProductMix, hasProductMixAnswer } from "@/lib/product-mix";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
@@ -2213,6 +2214,10 @@ function ClientView() {
   const waterfallFallback =
     accountantProfitPeriod?.fallback ?? derivePeriodWaterfallFallback(financials);
   const profitPeriodLabel = accountantProfitPeriod?.slice.label ?? figuresPeriodLabel;
+  const reportClientName = pdfPreparedForName({
+    clientName: client?.name,
+    businessName: businessNameFromFinancials(client?.financials ?? financials),
+  });
 
   // ── Milōn Bot widget mount (same widget the owner app uses) ─────────────
   useEffect(() => {
@@ -5047,7 +5052,7 @@ function ClientView() {
                         );
                       }}
                       fallback={waterfallFallback}
-                      clientName={client?.name}
+                      clientName={reportClientName}
                       clientId={client?.id}
                       periodLabel={profitPeriodLabel}
                       preferPeriod={statementDated}
@@ -5122,7 +5127,7 @@ function ClientView() {
                         })
                       }
                       clientId={client.id}
-                      clientName={client.name}
+                      clientName={reportClientName}
                       canSign
                       hideReadOnlyStamp
                       hideInlineSignOff
