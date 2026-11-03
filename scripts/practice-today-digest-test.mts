@@ -77,5 +77,7 @@ assert(src.includes("needsAttentionToday"), "the strip uses the ranked queue");
 assert(src.includes("todayAttentionAction"), "the one-click label comes from the shared helper");
 assert(src.includes("{row.reason}"), "the row prints the existing reason");
 assert(src.includes('id="needs-attention"'), "it stays the one attention strip");
+assert(src.includes("canonicalizeAccountantSearch"), "open goes to the studio page for that row");
+assert(src.includes("btn gold mini"), "the action is a practice button");
 
 console.log("practice-today-digest ok");

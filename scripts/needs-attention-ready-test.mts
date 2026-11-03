@@ -71,7 +71,7 @@ const board = readFileSync(resolve("src/components/practice-board.tsx"), "utf8")
 const pageAt = board.indexOf('{view === "needs-attention" ? (');
 assert(pageAt > 0, "the needs-attention page has its own block");
 const page = board.slice(pageAt, pageAt + 900);
-const headingAt = page.indexOf("<h2>Needs attention today</h2>");
+const headingAt = page.search(/<h2\b[^>]*>\s*Needs attention today\s*<\/h2>/);
 const splitAt = page.indexOf('attentionView === "list"');
 assert(headingAt > 0 && splitAt > headingAt, "the heading is present before the loading, list, and clear split");
 assert(page.includes("Checking the book…"), "loading copy sits with the heading");
