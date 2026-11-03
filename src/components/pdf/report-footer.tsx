@@ -12,9 +12,13 @@ import { SAMPLE_STAMP_LINE, SAMPLE_STAMP_WORD } from "@/lib/pdf-sample";
 import { pdfSignoffBadgeLine, signoffFooterSegments } from "@/lib/review-signoff-stamp";
 import { C, resolveTheme } from "./theme";
 import { MilonMark } from "./glyphs";
+import { registerMilonWordmarkFont } from "./milon-font";
+import { isProductBrandName } from "./milon-wordmark";
 import type { ReportSignoffStamp } from "./pdf-document";
 import { usePdfMarket } from "./pdf-market";
 import { usePdfSample } from "./pdf-frame";
+
+registerMilonWordmarkFont();
 
 type Props = {
   profile: AccountantProfile;
@@ -103,10 +107,12 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
         />
 
         <View style={styles.brandBlock}>
-          {theme.firmName ? <Text style={styles.firmName}>{theme.firmName}</Text> : null}
+          {theme.firmName && !isProductBrandName(theme.firmName) ? (
+            <Text style={styles.firmName}>{theme.firmName}</Text>
+          ) : null}
           <View style={styles.milonRow}>
             <Text style={styles.milon}>Prepared with</Text>
-            <MilonMark fontSize={6.5} />
+            <MilonMark fontSize={6.5} macron />
           </View>
         </View>
       </View>

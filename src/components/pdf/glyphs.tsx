@@ -7,6 +7,7 @@
  */
 
 import { View, Text, Svg, Polygon, Path } from "@react-pdf/renderer";
+import { MILON_WORDMARK, MILON_WORDMARK_FONT } from "./milon-wordmark";
 import { C } from "./theme";
 
 export type ArrowDir = "up" | "down" | "flat";
@@ -56,20 +57,40 @@ export function CheckMark({ size = 9, color = C.greenDeep }: { size?: number; co
 }
 
 /**
- * "Milōn" wordmark — the macron over the o is a hairline, because ō (U+014D)
- * is missing from Helvetica. The column is the glyph advance of "o" so the
- * bar sits on the letter, not on the gap beside it.
+ * "Milōn" wordmark.
+ *
+ * `macron` sets U+014D in Noto Sans. Call `registerMilonWordmarkFont` first
+ * (the report header and footer do). Helvetica cannot encode ō, so the
+ * default draws a hairline over an "o" for callers that stay on Helvetica.
  * Helvetica advance widths (em): o 0.556, bold o 0.611.
  */
 export function MilonMark({
   fontSize = 6.5,
   color = C.gold,
   bold = true,
+  macron = false,
 }: {
   fontSize?: number;
   color?: string;
   bold?: boolean;
+  /** Real ō (U+014D). Requires the wordmark font registered by the report frame. */
+  macron?: boolean;
 }) {
+  if (macron) {
+    return (
+      <Text
+        style={{
+          fontSize,
+          fontFamily: MILON_WORDMARK_FONT,
+          fontWeight: bold ? 700 : 400,
+          color,
+        }}
+      >
+        {MILON_WORDMARK}
+      </Text>
+    );
+  }
+
   const family = bold ? "Helvetica-Bold" : "Helvetica";
   const advance = bold ? 0.611 : 0.556;
   const col = fontSize * advance;

@@ -7,6 +7,7 @@ import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { pdfFooterReserve, reportPaperSize } from "@/lib/report-pdf-layout";
 import { ReportHeader } from "./report-header";
 import { ReportFooter } from "./report-footer";
+import { isProductBrandName, MILON_WORDMARK } from "./milon-wordmark";
 import { DemoWatermark, DraftWatermark, SampleWatermark } from "./watermark";
 import { PdfMarketContext } from "./pdf-market";
 import { PdfDraftContext, PdfDraftLabelContext, PdfSampleContext, PdfSignoffContext } from "./pdf-frame";
@@ -89,7 +90,11 @@ export function PDFDocument({
               <Document
                 title={title}
                 subject={subject}
-                author={accountantProfile.firmName || "Milōn"}
+                author={
+                  isProductBrandName(accountantProfile.firmName)
+                    ? MILON_WORDMARK
+                    : accountantProfile.firmName
+                }
                 creator="Milōn"
                 producer="Milōn PDF Engine"
               >

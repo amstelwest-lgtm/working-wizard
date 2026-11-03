@@ -10,6 +10,10 @@ import { View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { C, resolveTheme } from "./theme";
 import { MilonMark } from "./glyphs";
+import { registerMilonWordmarkFont } from "./milon-font";
+import { isProductBrandName } from "./milon-wordmark";
+
+registerMilonWordmarkFont();
 
 type Props = {
   profile: AccountantProfile;
@@ -59,10 +63,9 @@ const styles = StyleSheet.create({
   },
 });
 
-/** Empty brand, and the old ASCII fallback, draw the macron wordmark. */
+/** Empty brand, and a product-name fallback, draw the macron wordmark. */
 function genericPdfBrand(name: string): boolean {
-  const trimmed = name.trim();
-  return !trimmed || trimmed.toUpperCase() === "MILON ADVISORY";
+  return isProductBrandName(name);
 }
 
 export function ReportHeader({ profile, smeName, period, fixed }: Props) {
@@ -82,7 +85,7 @@ export function ReportHeader({ profile, smeName, period, fixed }: Props) {
             </>
           ) : (
             <>
-              <MilonMark fontSize={14} color={C.ink} />
+              <MilonMark fontSize={14} color={C.ink} macron />
               {theme.tagline ? <Text style={styles.tagline}>{theme.tagline}</Text> : null}
             </>
           )}
