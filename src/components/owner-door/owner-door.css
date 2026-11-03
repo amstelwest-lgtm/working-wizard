@@ -559,6 +559,12 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   font-size: 14px;
 }
 
+.owner-door .deliverable-rail .owner-rail-sub {
+  min-height: 36px;
+  padding-left: 44px;
+  font-size: 14px;
+}
+
 /* Active item is a solid highlight. The token pass recolours this neutral fill. */
 .owner-door.accountant-portal .deliverable-rail .tab.on {
   color: var(--cobalt);

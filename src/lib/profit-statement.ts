@@ -4,6 +4,7 @@
  * client_financial_snapshots. Nothing here fetches, and a multi-month
  * statement is not split into invented months.
  */
+import { fiscalWaterfallFallback } from "./budget-period.ts";
 import type { FiscalStatementSlice } from "./budget-period-types.ts";
 import { MONTHS } from "./market/date-presets.ts";
 import {
@@ -351,8 +352,19 @@ export function buildProfitPnl(input: {
   fyStartMonth?: number | null;
 }): { rows: ProfitPnlRow[]; prorated: boolean } {
   const raw = input.current ?? null;
-  const prorated = Boolean(input.quoted?.prorated);
-  const currentFin = prorated && input.quoted ? sliceFinancials(input.quoted) : raw;
+  const firmYear =
+    raw && input.fyStartMonth != null
+      ? fiscalWaterfallFallback(raw, input.fyStartMonth)
+      : null;
+  const prorated = Boolean(firmYear?.slice.prorated ?? input.quoted?.prorated);
+  // Same scaled blob the waterfall bridge reads. A thin slice drops interest,
+  // tax, and depreciation, so the sheet and the waterfall would disagree.
+  const currentFin =
+    prorated && firmYear
+      ? firmYear.financials
+      : prorated && input.quoted
+        ? sliceFinancials(input.quoted)
+        : raw;
   const priorFin = prorated ? null : (input.prior ?? null);
   const ytd = ytdFinancials(prorated ? raw : currentFin, input.fyStartMonth);
   const currentFlows = profitFlows(currentFin) ?? EMPTY_FLOWS;

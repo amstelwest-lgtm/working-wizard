@@ -5,7 +5,15 @@
  */
 import { OWNER_BOARD_TABS } from "@/lib/next-step";
 
-export const OWNER_DOOR_TABS = ["home", "health", "cash", "profit", "budget", "moves", "accountant"] as const;
+export const OWNER_DOOR_TABS = [
+  "home",
+  "health",
+  "cash",
+  "profit",
+  "budget",
+  "moves",
+  "accountant",
+] as const;
 
 export type OwnerDoorTab = (typeof OWNER_DOOR_TABS)[number];
 
@@ -14,7 +22,7 @@ const LEGACY_BOARD_TABS = new Set(["today", "waterfall", "next", "tasks"]);
 export type OwnerAppSearch = {
   tab?: string;
   screen?: "settings" | "accountant" | "plan";
-  section?: "signed";
+  section?: "signed" | "pnl";
   bot?: string;
 };
 
@@ -35,13 +43,32 @@ export function ownerDoorScreen(search: {
   tab?: string | null;
   screen?: string | null;
   bot?: string | null;
-}): "home" | "chat" | "health" | "cash" | "profit" | "budget" | "moves" | "accountant" | "plan" | "settings" {
+  section?: string | null;
+}):
+  | "home"
+  | "chat"
+  | "health"
+  | "cash"
+  | "profit"
+  | "pnl"
+  | "budget"
+  | "moves"
+  | "accountant"
+  | "plan"
+  | "settings" {
   if (search.bot) return "chat";
   if (search.screen === "settings" || search.tab === "settings") return "settings";
   if (search.screen === "plan" || search.tab === "plan") return "plan";
   if (search.screen === "accountant" || search.tab === "accountant") return "accountant";
   const tab = search.tab ?? "";
-  if (tab === "health" || tab === "cash" || tab === "profit" || tab === "budget" || tab === "moves") {
+  if (tab === "profit" && search.section === "pnl") return "pnl";
+  if (
+    tab === "health" ||
+    tab === "cash" ||
+    tab === "profit" ||
+    tab === "budget" ||
+    tab === "moves"
+  ) {
     return tab;
   }
   return "home";
@@ -52,13 +79,19 @@ export function ownerDoorSearch<T>(prev: T, screen: string): T {
   const next = { ...prev } as T & OwnerAppSearch;
   delete next.bot;
   if (screen === "settings") {
-    delete next.section;
+    if (next.section !== "pnl") delete next.section;
     next.screen = "settings";
     return next as T;
   }
   if (screen === "plan") {
-    delete next.section;
+    if (next.section !== "pnl") delete next.section;
     next.screen = "plan";
+    return next as T;
+  }
+  if (screen === "pnl") {
+    delete next.screen;
+    next.tab = "profit";
+    next.section = "pnl";
     return next as T;
   }
   if (screen === "accountant" || screen === "deliverables") {

@@ -152,6 +152,8 @@ function scalePresentFinancials(
 
 export type FiscalWaterfall = {
   slice: FiscalStatementSlice;
+  /** Scaled statement the waterfall bridge and the live P&L both read. */
+  financials: Record<string, unknown>;
   fallback: WaterfallFallback;
   /** Operating profit the waterfall draws. Null when EBIT is not on the statement. */
   operatingProfit: number | null;
@@ -173,6 +175,7 @@ export function fiscalWaterfallFallback(
   const fallback = derivePeriodWaterfallFallback(scaled);
   return {
     slice,
+    financials: scaled,
     fallback,
     operatingProfit: slice.operatingProfit,
   };

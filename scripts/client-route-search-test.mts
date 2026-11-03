@@ -507,6 +507,16 @@ const cashParent = clientRailSelection({ tab: "cash" });
 assert(cashParent.headingId === "cash" && cashParent.subId === null, "Cash flow overview marks the parent");
 const linesRail = clientRailSelection({ tab: "profit", section: "lines" });
 assert(linesRail.headingId === "profit" && linesRail.subId === "lines", "Product lines marks its sub-item");
+const pnlViaView = accountantClientRouteSearch({ tab: "profit", view: "pnl" });
+assert(
+  pnlViaView.tab === "profit" && pnlViaView.section === "pnl" && pnlViaView.view === undefined,
+  "?tab=profit&view=pnl opens the P&L page",
+);
+const pnlRail = clientRailSelection({ tab: "profit", section: "pnl" });
+assert(pnlRail.headingId === "profit" && pnlRail.subId === "pnl", "P&L marks its sub-item");
+const pnlNav = clientNavSearch({ tab: "profit", view: "setup" }, "profit", "pnl");
+assert(pnlNav.section === "pnl" && pnlNav.view == null, "opening P&L drops a setup lens");
+assert(route.includes('id="pnl"'), "P&L renders on its own page");
 assert(route.includes('id="lines"'), "Product lines renders on its own page");
 assert(!route.includes("<span className=\"eyebrow\">Product lines</span>"), "Product lines is not left inside the profit page");
 

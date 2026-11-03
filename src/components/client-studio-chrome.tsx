@@ -98,6 +98,7 @@ function clientSections(
           to: go("profit"),
           items: subs("profit", [
             { id: "waterfall", label: "Waterfall" },
+            { id: "pnl", label: "P&L" },
             { id: "lines", label: "Product lines" },
           ]),
         },

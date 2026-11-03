@@ -1,7 +1,8 @@
 /**
  * Profit page: one pane per menu item, opening on the chart.
- * Waterfall and product lines keep their section links.
- * `?view=pnl|setup|audit` are the other panes and do not replace those sections.
+ * Waterfall, the live P&L, and product lines are left-nav pages (`section`).
+ * P&L is not a tab inside Profit. `?view=pnl` still names that page.
+ * `?view=setup|audit` stay panes on the Profit page.
  */
 
 export const PROFIT_PAGED_VIEWS = ["chart", "pnl", "waterfall", "lines", "setup", "audit"] as const;
@@ -27,11 +28,14 @@ export function profitPagedViewFromSearch(input: {
   view?: string | null;
 }): ProfitPagedView {
   const view = (input.view ?? "").trim();
+  const section = (input.section ?? "").trim();
+  if (section === "pnl" || section === "pl") return "pnl";
   if (view === "audit") return "audit";
   if (view === "setup" || view === "inputs") return "setup";
-  if (view === "pnl" || view === "table") return "pnl";
-  if (input.section === "lines") return "lines";
-  if (input.section === "waterfall" || input.section === "profitability") return "waterfall";
+  if (view === "pnl" || (view === "table" && section !== "lines" && section !== "waterfall"))
+    return "pnl";
+  if (section === "lines") return "lines";
+  if (section === "waterfall" || section === "profitability") return "waterfall";
   return "chart";
 }
 
@@ -44,7 +48,7 @@ export function profitPagedSearch(
   delete next.view;
   if (view === "waterfall") next.section = "waterfall";
   else if (view === "lines") next.section = "lines";
-  else if (view === "pnl") next.view = "pnl";
+  else if (view === "pnl") next.section = "pnl";
   else if (view === "setup") next.view = "setup";
   else if (view === "audit") next.view = "audit";
   return next;
@@ -68,9 +72,13 @@ export function profitPagedSentence(view: ProfitPagedView): string {
   }
 }
 
-/** Same block order as cash: graph, detail, setup, audit. Waterfall and lines sit between. */
+/**
+ * Chart, waterfall, lines, setup, audit. P&L is its own left-nav page,
+ * so it is not a tab inside this menu.
+ */
 export function profitMenuViews(includeLines: boolean): ProfitPagedView[] {
-  return includeLines
+  const views = includeLines
     ? [...PROFIT_PAGED_VIEWS]
     : PROFIT_PAGED_VIEWS.filter((view) => view !== "lines");
+  return views.filter((view) => view !== "pnl");
 }

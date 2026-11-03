@@ -20,6 +20,7 @@ import { baseCashflow, rollForwardForecast } from "../src/lib/client-metrics.ts"
 import { parseAskAiBody } from "../src/lib/ask-ai-response.ts";
 import { routeMilonIntent } from "../src/lib/milon-bot-copy.ts";
 import {
+  applyConfirmedWaterfallPatch,
   applyFigureProposal,
   applyWeekNetDelta,
   buildFigureProposal,
@@ -160,6 +161,13 @@ function pending(surface: "cash" | "budget" | "waterfall", patch: Record<string,
   const rejected = rejectFigureProposal(pending("waterfall", { tax: 1000 }, waterfallBooks), { at: AT });
   const after = applyFigureProposal(rejected.proposal, { financials: waterfallBooks }, { confirm: true });
   assert(after.applied === false && after.financials === waterfallBooks, "reject leaves the waterfall figures unchanged");
+  const manual = applyConfirmedWaterfallPatch(waterfallBooks, { revenue: 10 }, false);
+  if (manual.ok) throw new Error("a manual edit does not build a blob without confirm");
+  assert(manual.reason === "confirm_required", "a manual edit names confirm");
+  const manualOk = applyConfirmedWaterfallPatch(waterfallBooks, { revenue: 10 }, true);
+  if (!manualOk.ok) throw new Error("confirm should apply");
+  assert(manualOk.financials.revenue === "10", "confirm keeps the string already on the P&L");
+  assert(manualOk.financials.cogs === "80000", "confirm leaves the other P&L fields");
 }
 
 {
