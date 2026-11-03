@@ -766,7 +766,8 @@ export function computeIrp6Individual(input: {
       return {
         source: "books",
         sourceLabel: day
-          ? `From books, full year to ${formatSampleDate(practiceBooks.periodEnd)}, as of ${formatSampleDate(day)}`
+          ? // date-ok: formatSampleDate prints the ZA calendar day
+            `From books, full year to ${formatSampleDate(practiceBooks.periodEnd)}, as of ${formatSampleDate(day)}`
           : `From books, full year to ${formatSampleDate(practiceBooks.periodEnd)}`,
         fileId: null,
       };
