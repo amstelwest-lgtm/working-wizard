@@ -604,10 +604,12 @@ export function ZaTaxSpecialistSample({
           <span className="milon-desk-agent-copy">
             <strong className="milon-desk-agent-name">Milōn Tax Specialist</strong>
             <span className="milon-desk-agent-short">Tax Specialist</span>
-            <span className="milon-desk-ran">{sampleClient ? "SAMPLE" : "Preview"}</span>
-            <span className="milon-desk-status is-idle">
-              <i />
-              <span>{sampleClient ? "Company tax at 27%" : "ITR14 and IRP6 workings"}</span>
+            <span className="milon-desk-update" data-status-update="">
+              <span className="milon-desk-ran">{sampleClient ? "SAMPLE" : "Preview"}</span>
+              <span className="milon-desk-status is-idle">
+                <i />
+                <span>{sampleClient ? "Company tax at 27%" : "ITR14 and IRP6 workings"}</span>
+              </span>
             </span>
           </span>
         </button>

@@ -136,6 +136,7 @@ export function MilonTeamPaneView({
       canonicalRatios={canonicalRatios}
       heroFinding={heroFinding}
       clientId={clientId}
+      statusUpdate
     />
   );
   if (!agent) {
