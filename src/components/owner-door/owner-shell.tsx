@@ -6,6 +6,7 @@ import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
+import { CompanyGroupRail } from "@/components/client-group-chrome";
 import "./owner-door.css";
 
 export type OwnerScreen =
@@ -251,6 +252,12 @@ export function OwnerShell({
               </div>
             );
           })}
+          <CompanyGroupRail
+            clientIds={workspaces.map((workspace) => workspace.clientId)}
+            activeClientId={activeClientId}
+            linkCompanies={false}
+            onOpenCompany={onSwitch}
+          />
           <RailSettingsButton
             active={screen === "settings"}
             onClick={() => {
