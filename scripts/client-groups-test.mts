@@ -163,3 +163,13 @@ test("the group panel does not total money", () => {
   assert.equal(/totalRevenue|netIncome|cashBalance|\.sum\(/.test(source), false);
   assert.match(source, /Status only/);
 });
+
+test("client chrome exposes group status for a group of one", () => {
+  const source = readFileSync(
+    new URL("../src/components/client-group-chrome.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /loadClientGroupNav/);
+  assert.match(source, /Group status/);
+  assert.doesNotMatch(source, /!groupChromeVisible\(group\.companies\.length\)\) return null/);
+});

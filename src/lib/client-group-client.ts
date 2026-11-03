@@ -172,11 +172,26 @@ export function companiesToNav(
   return nav.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function loadRailGroups(clientIds?: readonly string[]): Promise<GroupNav[]> {
+export async function loadRailGroups(
+  clientIds?: readonly string[],
+  options?: { includeSingles?: boolean },
+): Promise<GroupNav[]> {
   const companies = await loadCompanies(clientIds);
   if (!companies) return [];
   const names = await loadGroupNames([...new Set(companies.map((company) => company.groupId))]);
-  return companiesToNav(companies, names);
+  return companiesToNav(companies, names, options);
+}
+
+/** Current client's group, including a group of one (Group status / Add company entry). */
+export async function loadClientGroupNav(clientId: string): Promise<GroupNav | null> {
+  const companies = await loadCompanies();
+  if (!companies) return null;
+  const company = companies.find((row) => row.id === clientId);
+  if (!company) return null;
+  const inGroup = companies.filter((row) => row.groupId === company.groupId);
+  const names = await loadGroupNames([company.groupId]);
+  const nav = companiesToNav(inGroup, names, { includeSingles: true });
+  return nav[0] ?? null;
 }
 
 export type OwnershipEdgeRow = {
