@@ -165,7 +165,7 @@ import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operati
 import { scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
-import { statementCoverMonthCount } from "@/lib/budget.bridges";
+import { budgetProfitFields, statementCoverMonthCount } from "@/lib/budget.bridges";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
@@ -4851,7 +4851,20 @@ function Index() {
                               ? (history[0]?.period_date?.slice(0, 7) ?? null)
                               : null
                           }
-                          financials={v as unknown as Record<string, string>}
+                          financials={{
+                            revenue: v.revenue,
+                            cogs: v.cogs,
+                            fixedCosts: v.fixedCosts,
+                            laborCost: v.laborCost,
+                            receivables: v.receivables,
+                            payables: v.payables,
+                            inventory: v.inventory,
+                            operatingCashflow: v.operatingCashflow,
+                            [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
+                            ...(v.periodStart ? { periodStart: v.periodStart } : {}),
+                            ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
+                            ...budgetProfitFields(v),
+                          }}
                           reloadToken={budgetReloadToken}
                         />
                       </Suspense>
@@ -6754,7 +6767,20 @@ function Index() {
                               ? (history[0]?.period_date?.slice(0, 7) ?? null)
                               : null
                           }
-                          financials={v as unknown as Record<string, string>}
+                          financials={{
+                            revenue: v.revenue,
+                            cogs: v.cogs,
+                            fixedCosts: v.fixedCosts,
+                            laborCost: v.laborCost,
+                            receivables: v.receivables,
+                            payables: v.payables,
+                            inventory: v.inventory,
+                            operatingCashflow: v.operatingCashflow,
+                            [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
+                            ...(v.periodStart ? { periodStart: v.periodStart } : {}),
+                            ...(v.periodEnd ? { periodEnd: v.periodEnd } : {}),
+                            ...budgetProfitFields(v),
+                          }}
                           onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
                           reloadToken={budgetReloadToken}
                         />
