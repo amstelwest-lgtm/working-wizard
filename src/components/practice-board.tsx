@@ -172,7 +172,11 @@ import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
 import { ownerPresence } from "@/lib/owner-presence";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { askAgentFromHash, askHashForAgent } from "@/lib/ask-agent";
-import { isTaxAgent } from "@/lib/tax-specialist/agents";
+import { isTaxAgent, parseStageAgent } from "@/lib/tax-specialist/agents";
+import {
+  clientTaxMarketEnabled,
+  practiceTaxPageClient,
+} from "@/lib/tax-specialist/practice-tax-client";
 import { PracticeAgentThread } from "@/components/practice-agent-thread";
 import { clientHomeSearch } from "@/lib/client-home-search";
 import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
@@ -1166,8 +1170,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user, restoreFailed } = useAuth();
   const navigate = useNavigate();
   const practiceHash = useRouterState({ select: (s) => s.location.hash });
-  const askedAgent = askAgentFromHash(practiceHash);
-  const practiceAgent = isTaxAgent(askedAgent) ? null : askedAgent;
 
   // ── Role guard ────────────────────────────────────────────────────────────
   // Business-client credentials must not sit on the practice portal. Wait for
@@ -1219,6 +1221,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, headerName, firmMarket } =
     useAccountantProfile();
+  const firmCountry = parseMarketSelection(firmMarket)?.country ?? null;
+  const practiceAgent = parseStageAgent(askAgentFromHash(practiceHash), firmCountry);
   const openBillingRequired = () => {
     const pending = firmBillingResumeIntent(firmMarket, peekPendingCheckout());
     stashPendingCheckout(pending);
@@ -2096,6 +2100,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     return firmReportsHomeClient(clientRows);
   }, [firmReportsLine, clientRows]);
   const dashAgent = view === "home" ? practiceAgent : null;
+  const zaTaxClients = useMemo(
+    () => clientRows.filter((row) => clientTaxMarketEnabled(row.market)).map(practiceTaxPageClient),
+    [clientRows],
+  );
 
   const scatterClients = useMemo(
     () =>
@@ -2245,9 +2253,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             {dashAgent ? (
               <PracticeAgentThread
                 agent={dashAgent}
-                finding={(practiceLines[dashAgent] ?? []).filter((line) => line.trim()).join(" ")}
+                finding={
+                  !dashAgent || isTaxAgent(dashAgent)
+                    ? ""
+                    : (practiceLines[dashAgent] ?? []).filter((line) => line.trim()).join(" ")
+                }
                 clients={clientRows.map((row) => ({ id: row.id, name: row.name }))}
-                marketCountry={parseMarketSelection(firmMarket)?.country ?? null}
+                taxClients={zaTaxClients}
+                marketCountry={firmCountry}
                 firmId={firmId}
                 onBack={() => {
                   void navigate({ to: "/dashboard", hash: "" });
@@ -2256,6 +2269,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                   void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
                 }}
               >
+                {isTaxAgent(dashAgent) ? null : (
                 <AgentWork
                   label="On the book"
                   {...practiceAgentWork(dashAgent, {
@@ -2269,6 +2283,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                     followUps: followUpItems,
                   })}
                 />
+                )}
               </PracticeAgentThread>
             ) : loading && !bookTimedOut ? (
               <DashboardSkeleton className="py-8" />
@@ -2291,6 +2306,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               }}
               onAsk={(agent) => {
                 void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
+              }}
+              onOpenTaxAgent={() => {
+                void navigate({ to: "/dashboard", hash: askHashForAgent("tax_specialist") });
               }}
             />
             {firmReportsLine && firmReportsClientId ? (

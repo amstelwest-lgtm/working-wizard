@@ -1,0 +1,93 @@
+.tax-practice {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.tax-practice-summary {
+  margin: 0 0 12px;
+  color: #3d5270;
+  font-size: 0.95rem;
+}
+
+.tax-practice-clients {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tax-practice-clients > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 12px 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.tax-practice-pick {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tax-practice-pick.is-on {
+  outline: 2px solid #2563eb;
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.tax-practice-name {
+  font-weight: 600;
+  color: #102a43;
+}
+
+.tax-practice-ready {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tax-practice-form-tag {
+  font-size: 0.82rem;
+  color: #3d5270;
+}
+
+.tax-practice-open {
+  font-size: 0.9rem;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.tax-practice-open:hover {
+  text-decoration: underline;
+}
+
+html.dark .tax-practice-summary,
+html.dark .tax-practice-form-tag {
+  color: #c5d4e4;
+}
+
+html.dark .tax-practice-clients > li {
+  background: #102a43;
+  border-color: #1e3a5f;
+}
+
+html.dark .tax-practice-name {
+  color: #f4f7fb;
+}
