@@ -252,11 +252,10 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
     let budget = agent === "tax_specialist" ? 1 : fmIdleBudget(Math.random());
     let flourish: FmIdleFlourish = fmIdleFlourish(Math.random());
     let queued: FmAvatarClip = desired;
-    // tax-idle is almost a still, and so are calm, pleased, and handoff at sheet size.
-    // curious is the tax clip that actually moves. Play it once, then hold the last frame.
-    const taxOpensStill =
-      agent === "tax_specialist" && desired === "idle" ||
-      (agent === "tax_specialist" && desired === "handoff");
+    // tax-idle is almost a still at sheet size. On a hand-off, curious moves once,
+    // then hold the last frame. Home and stage bot cards loop idle flourishes like
+    // the other agents instead of freezing after the intro.
+    const taxOpensStill = agent === "tax_specialist" && desired === "handoff";
     let intro: FmAvatarClip | null = taxOpensStill ? "curious" : null;
     const restOnIntro = intro != null;
     let fade = 0;
