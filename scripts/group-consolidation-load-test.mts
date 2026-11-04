@@ -4,9 +4,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  companyPeriodCoverage,
   memberConsolidationInput,
+  membersAtAlignedPeriod,
   membersFromLoadedFigures,
   normalizeFinancialScalars,
+  overlappingPeriodDates,
 } from "../src/lib/group-consolidation-load.ts";
 import { buildGroupConsolidation } from "../src/lib/group-consolidation.ts";
 import type { GroupCompany } from "../src/lib/client-group-client.ts";
@@ -78,4 +81,76 @@ test("memberConsolidationInput prefers snapshot financials over live", () => {
     { revenue: "1" },
   );
   assert.equal(input.financials.revenue, "99");
+});
+
+test("overlappingPeriodDates is the intersection of on-file period ends", () => {
+  const coverages = [
+    companyPeriodCoverage(company("a", "Alpha"), [
+      { client_id: "a", period_date: "2026-06-30", created_at: "2026-06-01", financials: {} },
+      { client_id: "a", period_date: "2026-03-31", created_at: "2026-03-01", financials: {} },
+    ], null),
+    companyPeriodCoverage(company("b", "Beta"), [
+      { client_id: "b", period_date: "2026-06-30", created_at: "2026-06-01", financials: {} },
+      { client_id: "b", period_date: "2026-09-30", created_at: "2026-09-01", financials: {} },
+    ], null),
+  ];
+  assert.deepEqual(overlappingPeriodDates(coverages), ["2026-06-30"]);
+});
+
+test("membersAtAlignedPeriod sums mismatched currents at a shared snapshot date", () => {
+  const snapshotsByClient = new Map([
+    [
+      "a",
+      [
+        {
+          client_id: "a",
+          period_date: "2026-09-04",
+          created_at: "2026-09-05",
+          financials: { revenue: "100", totalAssets: "200", netIncome: "10" },
+        },
+        {
+          client_id: "a",
+          period_date: "2026-06-30",
+          created_at: "2026-07-01",
+          financials: { revenue: "80", totalAssets: "150", netIncome: "8" },
+        },
+      ],
+    ],
+    [
+      "b",
+      [
+        {
+          client_id: "b",
+          period_date: "2026-11-02",
+          created_at: "2026-11-03",
+          financials: { revenue: "50", totalAssets: "90", netIncome: "5" },
+        },
+        {
+          client_id: "b",
+          period_date: "2026-06-30",
+          created_at: "2026-07-01",
+          financials: { revenue: "40", totalAssets: "70", netIncome: "4" },
+        },
+      ],
+    ],
+  ]);
+  const liveByClient = new Map<string, unknown>();
+  const defaultMembers = membersFromLoadedFigures(
+    [company("a", "Alpha"), company("b", "Beta")],
+    snapshotsByClient,
+    liveByClient,
+  );
+  assert.equal(buildGroupConsolidation(defaultMembers).ok, false);
+
+  const aligned = membersAtAlignedPeriod(
+    [company("a", "Alpha"), company("b", "Beta")],
+    snapshotsByClient,
+    liveByClient,
+    "2026-06-30",
+  );
+  const result = buildGroupConsolidation(aligned);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.combined.revenue, "120");
+  assert.equal(result.periodDate, "2026-06-30");
 });

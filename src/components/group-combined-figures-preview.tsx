@@ -7,11 +7,14 @@ import {
   GROUP_CONSOLIDATION_LIMITS,
   buildGroupConsolidation,
   type CompanyConsolidationInput,
+  type GroupConsolidationBlocker,
 } from "@/lib/group-consolidation";
 import {
   GROUP_COMBINED_FIGURE_LABELS,
   describeGroupConsolidationBlocker,
-  loadGroupConsolidationMembers,
+  loadGroupConsolidationBundle,
+  membersAtAlignedPeriod,
+  type GroupConsolidationFigureBundle,
 } from "@/lib/group-consolidation-load";
 
 function parseAmount(raw: string | undefined): number | null {
@@ -19,6 +22,10 @@ function parseAmount(raw: string | undefined): number | null {
   if (!text) return null;
   const n = Number(text.replace(/,/g, ""));
   return Number.isFinite(n) ? n : null;
+}
+
+function hasPeriodMismatch(blockers: readonly GroupConsolidationBlocker[]): boolean {
+  return blockers.some((blocker) => blocker.kind === "period_mismatch");
 }
 
 export function GroupCombinedFiguresPreview({
@@ -29,16 +36,18 @@ export function GroupCombinedFiguresPreview({
   onOpenCompany?: (clientId: string) => void;
 }) {
   const { money, market } = useMarketFormat();
-  const [members, setMembers] = useState<CompanyConsolidationInput[] | null>(null);
+  const [bundle, setBundle] = useState<GroupConsolidationFigureBundle | null>(null);
+  const [alignedPeriod, setAlignedPeriod] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancel = false;
-    setMembers(null);
+    setBundle(null);
+    setAlignedPeriod(null);
     setLoadError(null);
-    void loadGroupConsolidationMembers(companies)
+    void loadGroupConsolidationBundle(companies)
       .then((next) => {
-        if (!cancel) setMembers(next);
+        if (!cancel) setBundle(next);
       })
       .catch(() => {
         if (!cancel) setLoadError("Combined figures could not be loaded.");
@@ -48,20 +57,52 @@ export function GroupCombinedFiguresPreview({
     };
   }, [companies]);
 
+  const defaultResult = useMemo(
+    () => (bundle ? buildGroupConsolidation(bundle.members) : null),
+    [bundle],
+  );
+
+  useEffect(() => {
+    if (!bundle || alignedPeriod) return;
+    if (defaultResult?.ok) return;
+    if (!defaultResult || !hasPeriodMismatch(defaultResult.blockers)) return;
+    if (bundle.overlappingPeriodDates.length === 1) {
+      setAlignedPeriod(bundle.overlappingPeriodDates[0] ?? null);
+    }
+  }, [alignedPeriod, bundle, defaultResult]);
+
+  const activeMembers = useMemo((): CompanyConsolidationInput[] | null => {
+    if (!bundle) return null;
+    if (!alignedPeriod) return bundle.members;
+    return membersAtAlignedPeriod(
+      companies,
+      bundle.snapshotsByClient,
+      bundle.liveByClient,
+      alignedPeriod,
+    );
+  }, [alignedPeriod, bundle, companies]);
+
   const nameById = useMemo(
     () => new Map(companies.map((company) => [company.id, company.name])),
     [companies],
   );
 
   const result = useMemo(
-    () => (members ? buildGroupConsolidation(members) : null),
-    [members],
+    () => (activeMembers ? buildGroupConsolidation(activeMembers) : null),
+    [activeMembers],
   );
 
   const previewKeys = useMemo(() => {
     if (!result?.ok) return GROUP_ADDITIVE_SCALAR_KEYS.slice();
     return GROUP_ADDITIVE_SCALAR_KEYS.filter((key) => result.combined[key] != null);
   }, [result]);
+
+  const showPeriodAlign =
+    bundle &&
+    defaultResult &&
+    !defaultResult.ok &&
+    hasPeriodMismatch(defaultResult.blockers) &&
+    !defaultResult.blockers.some((blocker) => blocker.kind === "currency_mismatch");
 
   return (
     <section
@@ -90,8 +131,57 @@ export function GroupCombinedFiguresPreview({
         </p>
       ) : null}
 
-      {!members && !loadError ? (
+      {!bundle && !loadError ? (
         <p className="text-sm text-[#486581] dark:text-slate-400">Loading figures…</p>
+      ) : null}
+
+      {showPeriodAlign ? (
+        <div
+          className="space-y-2 rounded-lg border border-[#DBEAFE] bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-slate-950/40"
+          data-group-period-align=""
+        >
+          <p className="font-semibold text-[#102A43] dark:text-slate-50">Align period end</p>
+          <p className="text-xs leading-relaxed text-[#486581] dark:text-slate-400">
+            Each company can keep its own current statement. Choose a period end that exists on
+            file for every company to preview combined totals without changing books.
+          </p>
+          <ul className="text-xs text-[#486581] dark:text-slate-400">
+            {bundle.coverages.map((row) => (
+              <li key={row.clientId}>
+                <span className="font-medium text-[#102A43] dark:text-slate-200">{row.name}</span>
+                {" · current "}
+                {row.currentPeriodDate
+                  ? formatCalendarDay(row.currentPeriodDate, market)
+                  : "period not set"}
+              </li>
+            ))}
+          </ul>
+          {bundle.overlappingPeriodDates.length > 0 ? (
+            <label className="mt-1 block text-xs text-[#486581] dark:text-slate-400">
+              Shared period end on file
+              <select
+                className="mt-1 w-full max-w-md rounded border border-[#DBEAFE] bg-white px-2 py-1.5 text-sm text-[#102A43] dark:border-white/15 dark:bg-slate-900 dark:text-slate-100"
+                value={alignedPeriod ?? ""}
+                onChange={(event) => {
+                  const next = event.target.value.trim();
+                  setAlignedPeriod(next || null);
+                }}
+              >
+                <option value="">Select period end…</option>
+                {bundle.overlappingPeriodDates.map((day) => (
+                  <option key={day} value={day}>
+                    {formatCalendarDay(day, market)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="text-xs text-amber-900 dark:text-amber-100">
+              No shared period end on file across these companies. Upload or sync statements to
+              the same period end, then return here.
+            </p>
+          )}
+        </div>
       ) : null}
 
       {result && !result.ok ? (
@@ -114,6 +204,7 @@ export function GroupCombinedFiguresPreview({
         <>
           <p className="text-xs text-[#486581] dark:text-slate-400">
             Period end {formatCalendarDay(result.periodDate, market)}
+            {alignedPeriod ? " · aligned preview" : ""}
             {result.currency ? ` · ${result.currency}` : ""}
           </p>
           <div className="overflow-x-auto rounded-lg border border-[#DBEAFE] bg-white dark:border-white/10 dark:bg-slate-950/40">
@@ -121,7 +212,7 @@ export function GroupCombinedFiguresPreview({
               <thead>
                 <tr className="bg-[#F4F8FF] text-[11px] uppercase tracking-[0.12em] text-[#486581] dark:bg-slate-900 dark:text-slate-400">
                   <th className="px-3 py-2 font-bold">Line</th>
-                  {members?.map((member) => (
+                  {activeMembers?.map((member) => (
                     <th key={member.clientId} className="px-3 py-2 font-bold">
                       <button
                         type="button"
@@ -145,7 +236,7 @@ export function GroupCombinedFiguresPreview({
                       className="border-t border-[#EEF4FF] dark:border-white/10"
                     >
                       <td className="px-3 py-2 text-[#486581] dark:text-slate-300">{label}</td>
-                      {members?.map((member) => {
+                      {activeMembers?.map((member) => {
                         const n = parseAmount(member.financials[key]);
                         return (
                           <td

@@ -207,4 +207,6 @@ test("group status panel wires combined figures preview for multi-company groups
   assert.match(panel, /groupChromeVisible\(companies\.length\)/);
   assert.match(preview, /Combined figures \(preview\)/);
   assert.match(preview, /buildGroupConsolidation/);
+  assert.match(preview, /data-group-period-align/);
+  assert.match(preview, /membersAtAlignedPeriod/);
 });
