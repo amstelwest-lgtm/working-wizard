@@ -46,7 +46,7 @@ export function GroupStatusDialog({
               Group status
             </p>
             <p className="mt-1 text-sm text-[#486581] dark:text-slate-400">
-              Connection, sync, and access — no consolidated figures.
+              Connection, sync, and access — plus an optional combined figures preview.
             </p>
           </div>
           <button type="button" className="btn ghost mini shrink-0" onClick={onClose}>

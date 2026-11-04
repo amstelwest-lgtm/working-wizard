@@ -12,6 +12,7 @@ import {
   yearEndLabel,
   type EntityType,
 } from "@/lib/client-groups";
+import { GroupCombinedFiguresPreview } from "@/components/group-combined-figures-preview";
 import {
   callGroupRpc,
   companiesToNav,
@@ -25,6 +26,7 @@ import {
   type GroupCompany,
   type OwnershipEdgeRow,
 } from "@/lib/client-group-client";
+import { groupChromeVisible } from "@/lib/client-groups";
 
 type StatusRow = {
   company: GroupCompany;
@@ -133,7 +135,8 @@ export function ClientGroupPanel({
           {groupName}
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#486581] dark:text-slate-400">
-          Status only. Figures stay on each company. This page does not add them up.
+          Connection, sync, and access per company. When every company shares currency and period,
+          a read-only combined preview appears below — not audited group accounts.
         </p>
       </header>
 
@@ -206,6 +209,10 @@ export function ClientGroupPanel({
           </tbody>
         </table>
       </div>
+
+      {groupChromeVisible(companies.length) ? (
+        <GroupCombinedFiguresPreview companies={companies} onOpenCompany={onOpenCompany} />
+      ) : null}
 
       {active ? (
         <EntityForm
