@@ -7,6 +7,16 @@ import type { FaqItem } from "./seo";
 export const ACCOUNTING_SOFTWARE_ANSWER =
   "Milōn is not a ledger, so you keep your existing accounting system and books. Connect QuickBooks Online or Xero. Sage is coming soon. Or upload the financial statements you already have — PDF, Excel, CSV, or a bank statement — and Milōn turns them into a financial health score, a 13-week cash forecast, and ranked next moves you can review and act on.";
 
+export const HOMEPAGE_FAQ_AI_TRAINING_QUESTION =
+  "Is my clients' financial data used to train AI models?";
+
+/** Visible answer body. The homepage renders the Privacy link; JSON-LD appends the www URL. */
+export const HOMEPAGE_FAQ_AI_TRAINING_ANSWER =
+  "No. Milōn filters sensitive client identifiers (company names, tax IDs, account numbers) before any AI model call. Amounts stay so the health score, ratios and drafts use real figures. Client data is not used to train models.";
+
+export const HOMEPAGE_FAQ_AI_TRAINING_JSONLD_SUFFIX =
+  " Full detail: https://www.milonfinance.com/privacy.";
+
 /** Visible /faq answer and FAQPage schema for this question must stay identical. */
 export const LEDGER_CONNECT_QUESTION = "Does Milōn work with QuickBooks or Xero?";
 
@@ -71,6 +81,10 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
     question: "What does the AI finance team do, and what's left to me?",
     answer:
       "Milōn Financial Manager runs the team: clean books data from QuickBooks or Xero. Sage is coming soon. The 13-week cash view, the budget, the action points, and the hand-off to you stay with the firm. Milōn Analyst turns the health score, ratios and variances into a diagnosis of why margins moved and where cash is leaking. Milōn Advisor writes the next moves and the advisory deliverables, ready for sign-off. That prep comes off your plate. You review, edit and approve every pack, so the client gets advice they can trust.",
+  },
+  {
+    question: HOMEPAGE_FAQ_AI_TRAINING_QUESTION,
+    answer: HOMEPAGE_FAQ_AI_TRAINING_ANSWER + HOMEPAGE_FAQ_AI_TRAINING_JSONLD_SUFFIX,
   },
   {
     question: "What happens when the trial ends?",

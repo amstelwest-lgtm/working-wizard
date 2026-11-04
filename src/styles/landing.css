@@ -999,6 +999,14 @@ html[data-landing="1"] .trust-link{
   text-decoration:underline;
   text-underline-offset:3px;
 }
+html[data-landing="1"] .trust-privacy{
+  flex:1 1 100%;
+  margin:0;
+  max-width:42em;
+  font-size:14px;
+  line-height:1.5;
+  color:var(--navy);
+}
 html[data-landing="1"] .live-pill{
   text-transform:none;
   letter-spacing:.04em;
@@ -1010,6 +1018,7 @@ html[data-landing="1"] .live-pill{
     gap:14px 16px;
   }
   html[data-landing="1"] .trust-link{grid-column:1 / -1}
+  html[data-landing="1"] .trust-privacy{grid-column:1 / -1}
 }
 html[data-landing="1"] #watch{padding:64px 0 40px}
 html[data-landing="1"] .watch-grid{

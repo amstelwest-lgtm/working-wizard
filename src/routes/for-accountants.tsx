@@ -133,6 +133,11 @@ function ForAccountantsPage() {
           and receipts. A named person approves before anything is posted to QuickBooks or Xero.
           Sage is coming soon. Nothing posts on its own.
         </li>
+        <li>
+          Client data stays controlled: sensitive identifiers are filtered before AI model calls,
+          and we don&apos;t train models on your clients&apos; figures.{" "}
+          <a href="/privacy">Privacy</a>
+        </li>
       </ul>
 
       <h2>The gap this actually closes</h2>

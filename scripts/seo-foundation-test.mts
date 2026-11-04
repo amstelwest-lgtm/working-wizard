@@ -323,7 +323,7 @@ assert(landing.includes('href="/about"'), "landing links to about");
 assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
 assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
 assert(landing.includes("faqPageJson(homepageFaqItems(false))"), "landing FAQ schema stays on the US answers");
-assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ is five questions");
+assert(HOMEPAGE_FAQ_ITEMS.length === 6, "homepage FAQ is six questions");
 const ledgerFaq = HOMEPAGE_FAQ_ITEMS.find((item) => item.question.startsWith("Do I need QuickBooks"));
 assert(ledgerFaq != null, "homepage FAQ still has the ledger question");
 assert(
