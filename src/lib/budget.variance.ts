@@ -6,6 +6,7 @@
 import type { BudgetMonthResult } from "@/lib/budget.types";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
 import { formatMoneyCompact, formatReportAmount } from "@/lib/market/format";
+import { costMagnitude } from "@/lib/period-profit";
 
 export type ActualsSource = "pdf" | "qbo" | "xero" | "manual";
 export type ActualsStatus = "draft" | "confirmed";
@@ -111,7 +112,10 @@ export function normalizeTaxonomyTotals(
     const n = Number(t[k]);
     t[k] = Number.isFinite(n) ? n : 0;
   }
-  if (!t.grossProfit && (t.revenue || t.cogs)) {
+  if (t.revenue > 0 && t.cogs !== 0) {
+    t.cogs = costMagnitude(t.cogs);
+  }
+  if (t.revenue || t.cogs) {
     t.grossProfit = t.revenue - t.cogs;
   }
   const bucketSum =
@@ -264,7 +268,8 @@ export function actualsFromExtraction(
   const month = monthOverride || monthFromPeriod(periodStart, periodEnd);
 
   const revenue = num(is?.revenue);
-  const cogs = num(is?.cogs);
+  let cogs = num(is?.cogs);
+  if (revenue > 0 && cogs !== 0) cogs = costMagnitude(cogs);
   const grossProfit = num(is?.gross_profit) || revenue - cogs;
   const labor = num(is?.labor_cost);
   const fixed = num(is?.fixed_costs);

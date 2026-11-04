@@ -18,6 +18,7 @@ import {
   SHARED_DELIVERABLE_READS,
   SHARED_DELIVERABLE_TOOL_LABELS,
 } from "./agent-shared-reads.ts";
+import { persistReconciledFindingCopy, type HealthScoreSnapshot } from "./health-snapshot.ts";
 
 export const ANALYST_MAX_ITERATIONS = 10;
 
@@ -67,23 +68,31 @@ export function refreshedFindingUpdate(input: {
   existingSeverity: string;
   existingEvidence: Record<string, unknown> | null;
   nextEvidence: Record<string, unknown>;
+  liveSnapshot?: HealthScoreSnapshot | null;
 }): Record<string, unknown> {
   const agreed = higherFindingSeverity(input.existingSeverity, input.severity) ?? input.existingSeverity;
   const existing = input.existingEvidence ?? {};
   const incoming = { ...input.nextEvidence };
   delete incoming.draft;
   delete incoming.requires_human_approval;
-  return {
+  const mergedEvidence = {
+    ...existing,
+    ...incoming,
+    status: agentCopyStatus(agreed),
+    metrics: input.nextEvidence.metrics,
+  };
+  const persisted = persistReconciledFindingCopy({
     title: input.title,
     detail: input.detail,
+    evidence: mergedEvidence,
+    live: input.liveSnapshot ?? null,
+  });
+  return {
+    title: persisted.title,
+    detail: persisted.detail ?? "",
     last_seen: input.seenAt,
     severity: agreed,
-    evidence: {
-      ...existing,
-      ...incoming,
-      status: agentCopyStatus(agreed),
-      metrics: input.nextEvidence.metrics,
-    },
+    evidence: mergedEvidence,
   };
 }
 

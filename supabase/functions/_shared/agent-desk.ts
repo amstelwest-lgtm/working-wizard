@@ -8,7 +8,7 @@ import { executeAnalystTool, type AnalystExecCtx } from "../agent-analyst/execut
 import { displayAmounts, moneyMarketFromClient, type AgentKey } from "../../../src/lib/agent-bus.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
-import { loadHealthScoreSnapshot, snapshotEvidenceFields } from "../../../src/lib/health-snapshot.ts";
+import { loadHealthScoreSnapshot, persistReconciledFindingCopy, snapshotEvidenceFields } from "../../../src/lib/health-snapshot.ts";
 import { preferStatementSnapshot } from "../../../src/lib/statement-import-plan.ts";
 import { booksQualityFigures, savedBudgetFigures, savedCashflowFigures } from "../../../src/lib/agent-books.ts";
 import {
@@ -227,6 +227,16 @@ export async function recordAgentDraft(
   if (liveSnapshot) {
     prepared.evidence = { ...prepared.evidence, ...snapshotEvidenceFields(liveSnapshot) };
   }
+  const reconciledCopy = persistReconciledFindingCopy({
+    title: prepared.title,
+    detail: prepared.detail,
+    evidence: prepared.evidence,
+    live: liveSnapshot,
+  });
+  if (reconciledCopy.changed || reconciledCopy.title !== prepared.title || reconciledCopy.detail !== prepared.detail) {
+    prepared.title = reconciledCopy.title;
+    prepared.detail = reconciledCopy.detail ?? "";
+  }
 
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: recent, error: recentError } = await ctx.db
@@ -274,6 +284,7 @@ export async function recordAgentDraft(
         existingSeverity: duplicate.severity,
         existingEvidence: asRecord(kept?.evidence),
         nextEvidence: prepared.evidence as Record<string, unknown>,
+        liveSnapshot,
       }))
       .eq("id", duplicate.id)
       .is("dismissed_reason", null)

@@ -82,4 +82,8 @@ assert(mapped.totals.revenue === 120000, "extract revenue");
 assert(mapped.totals.overheadsPeople === 15000, "labor→people");
 assert(mapped.totals.overheadsOther === 10000, "fixed−labor→other");
 
+const creditCogs = normalizeTaxonomyTotals({ revenue: 90_000, cogs: -40_000 });
+assert(creditCogs.cogs === 40_000, `credit COGS magnitude ${creditCogs.cogs}`);
+assert(creditCogs.grossProfit === 50_000, `credit COGS gross profit ${creditCogs.grossProfit}`);
+
 console.log("budget-variance-test: ok");
