@@ -229,6 +229,14 @@ function assertCardNumbers(text: string, where: string) {
   assert(!/profit[^.]{0,48}weakest/i.test(text), `${where} still says profit is weakest: ${text}`);
 }
 
+const staleGm = findingSentence({
+  title:
+    "Gross margin is 104.6%. Profit is the weakest pillar at 58, against an overall health score of 75.",
+  liveHealth: live,
+  canonicalRatios: { "Gross Margin": 95.4 },
+});
+assert(staleGm.includes(FIGURES_CHANGED_REGENERATE), `stale gross margin: ${staleGm}`);
+
 const accountant1020 = findingSentence({
   title: title1020,
   detail: detail1020,

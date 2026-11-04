@@ -651,6 +651,38 @@ export function citedHealthDisagreement(
   return differ;
 }
 
+function liveGrossMarginPct(canonicalRatios?: Record<string, number> | null): number | null {
+  const raw = canonicalRatios?.["Gross Margin"] ?? canonicalRatios?.grossMargin;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  return raw > 0 && raw <= 1 ? raw * 100 : raw;
+}
+
+/**
+ * True when the sentence cites a gross margin that is not on the score card.
+ * Null when it cites no margin.
+ */
+export function citedGrossMarginDisagreement(
+  text: string,
+  canonicalRatios?: Record<string, number> | null,
+): boolean | null {
+  const live = liveGrossMarginPct(canonicalRatios);
+  if (live == null) return null;
+  const patterns = [
+    /\bgross margin(?:\s+is|\s+at|\s+of|\s+stands at)?\s+(\d+(?:\.\d+)?)\s*%/gi,
+    /\bGM(?:\s+is|\s+at)?\s+(\d+(?:\.\d+)?)\s*%/gi,
+  ];
+  let claims = 0;
+  let differ = false;
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      claims += 1;
+      if (Math.abs(Number(match[1]) - live) > 0.6) differ = true;
+    }
+  }
+  if (claims === 0) return null;
+  return differ;
+}
+
 /**
  * Stale only when the sentence cites a score the live snapshot does not have.
  * A missing hash, an engine prefix, or a period string cannot force it.
@@ -664,6 +696,7 @@ export function reconcileStoredHealthNarrative(input: {
   storedHash?: string | null;
   storedHealth?: HealthScoreSnapshot | null;
   forceStale?: boolean;
+  canonicalRatios?: Record<string, number> | null;
 }): ReconciledHealthNarrative {
   const text = input.text.replace(/\s+/g, " ").trim();
   if (!text) return { text: "", stale: false, regenerate: false };
@@ -672,6 +705,8 @@ export function reconcileStoredHealthNarrative(input: {
   if (isHistoricalScoreNote(text) && !healthClaimsDisagree(text, live)) {
     return { text, stale: false, regenerate: false };
   }
+  const margin = citedGrossMarginDisagreement(text, input.canonicalRatios);
+  if (margin === true) return { text: staleHealthNarrative(live), stale: true, regenerate: true };
   const cited = citedHealthDisagreement(text, live);
   if (cited === true) return { text: staleHealthNarrative(live), stale: true, regenerate: true };
   return { text, stale: false, regenerate: false };

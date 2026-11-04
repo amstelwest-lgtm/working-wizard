@@ -48,5 +48,5 @@ export function interestOfRevenueSentence(
   if (!row) return null;
   const label = usableClip(clip)?.label;
   const period = label ? ` ${label}.` : "";
-  return `Interest on the P&L is ${row.percent.toFixed(1)}% of revenue (${money(row.interest)}).${period}`;
+  return `Interest on the P&L is ${row.percent.toFixed(1)}% of revenue ${money(row.interest)}.${period}`;
 }

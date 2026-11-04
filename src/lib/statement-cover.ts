@@ -194,6 +194,26 @@ export function statementPeriodBasis(
   return { kind: "unknown" };
 }
 
+/**
+ * Budget scoring and the firm-year slice treat a statement that has flow lines
+ * but no stored cover like ratios do: {@link periodMonthsOf} months (12 when
+ * missing). PDF and strict period readers keep {@link statementPeriodBasis}.
+ */
+export function budgetComparisonPeriodBasis(
+  fin: Record<string, unknown> | null | undefined,
+): StatementPeriodBasis {
+  const basis = statementPeriodBasis(fin);
+  if (basis.kind !== "unknown" || !fin) return basis;
+  const flow = (key: string): string | number | null | undefined =>
+    fin[key] as string | number | null | undefined;
+  const hasFlows =
+    presentNumber(flow("revenue")) != null ||
+    presentNumber(flow("cogs"), flow("cost_of_sales")) != null ||
+    presentNumber(flow("ebit")) != null;
+  if (!hasFlows) return basis;
+  return { kind: "stored", months: periodMonthsOf(fin) };
+}
+
 /** Month count for a comparison. Null when the period is not on file — not 12. */
 export function statementCoverMonthCount(
   fin: Record<string, unknown> | null | undefined,

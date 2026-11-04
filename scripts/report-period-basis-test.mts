@@ -346,10 +346,10 @@ assert(unknownModel.fullYearNote.includes("not on file"), unknownModel.fullYearN
 const unknownRevenue = unknownModel.summary.find((row) => row.label === "Revenue");
 assert(unknownRevenue?.actual == null, "unknown-period actuals are not paired with a year of budget");
 const versusUnknown = budgetVersusStatement(doc, unknownFin, ZA_MARKET);
-assert(versusUnknown?.periodKnown === false, "on-screen period is unknown");
-assert(versusUnknown?.budgetRevenue == null, "on-screen does not invent a 12-month budget");
-assert(budgetComparisonNote(versusUnknown) === STATEMENT_PERIOD_UNKNOWN_NOTE, budgetComparisonNote(versusUnknown) ?? "");
-assert(statementCoverMonthCount(unknownFin) == null, "an unknown prior year is not counted as 12");
+assert(versusUnknown?.periodKnown === true, "on-screen budget scores undated flows with the ratio default cover");
+assert(versusUnknown?.budgetRevenue != null, "on-screen compares against the plan window");
+assert(budgetComparisonNote(versusUnknown) == null, "a real variance is not labelled unknown");
+assert(statementCoverMonthCount(unknownFin) == null, "strict period readers stay unknown");
 assert(periodMonthsOf(unknownFin) === 12, "ratios still default a missing cover to 12");
 
 const outsideFin = {
