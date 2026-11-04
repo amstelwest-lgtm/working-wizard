@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMarketFormat } from "@/contexts/market";
 import { formatCalendarDay } from "@/lib/market/format";
-import type { GroupCompany } from "@/lib/client-group-client";
+import type { GroupCompany, OwnershipEdgeRow } from "@/lib/client-group-client";
 import {
   GROUP_ADDITIVE_SCALAR_KEYS,
   GROUP_CONSOLIDATION_LIMITS,
@@ -16,6 +16,10 @@ import {
   membersAtAlignedPeriod,
   type GroupConsolidationFigureBundle,
 } from "@/lib/group-consolidation-load";
+import {
+  buildEliminationsStub,
+  describeIntercompanyCandidatePair,
+} from "@/lib/group-eliminations";
 
 function parseAmount(raw: string | undefined): number | null {
   const text = String(raw ?? "").trim();
@@ -30,9 +34,11 @@ function hasPeriodMismatch(blockers: readonly GroupConsolidationBlocker[]): bool
 
 export function GroupCombinedFiguresPreview({
   companies,
+  ownershipEdges = [],
   onOpenCompany,
 }: {
   companies: readonly GroupCompany[];
+  ownershipEdges?: readonly OwnershipEdgeRow[];
   onOpenCompany?: (clientId: string) => void;
 }) {
   const { money, market } = useMarketFormat();
@@ -96,6 +102,11 @@ export function GroupCombinedFiguresPreview({
     if (!result?.ok) return GROUP_ADDITIVE_SCALAR_KEYS.slice();
     return GROUP_ADDITIVE_SCALAR_KEYS.filter((key) => result.combined[key] != null);
   }, [result]);
+
+  const eliminationsStub = useMemo(
+    () => buildEliminationsStub(ownershipEdges),
+    [ownershipEdges],
+  );
 
   const showPeriodAlign =
     bundle &&
@@ -255,6 +266,33 @@ export function GroupCombinedFiguresPreview({
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div
+            className="space-y-2 rounded-lg border border-dashed border-[#C9D8F0] bg-[#F4F8FF]/80 px-3 py-2 dark:border-white/15 dark:bg-slate-900/30"
+            data-group-eliminations-stub=""
+          >
+            <p className="text-xs font-semibold text-[#102A43] dark:text-slate-100">
+              Intercompany eliminations (planned)
+            </p>
+            <p className="text-xs leading-relaxed text-[#486581] dark:text-slate-400">
+              {eliminationsStub.headline}. {eliminationsStub.detail}
+            </p>
+            <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-[#486581] dark:text-slate-500">
+              {eliminationsStub.notAppliedReasons.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            {eliminationsStub.candidatePairs.length > 0 ? (
+              <ul className="mt-1 space-y-0.5 text-xs text-[#486581] dark:text-slate-300">
+                {eliminationsStub.candidatePairs.map((pair) => (
+                  <li key={pair.edgeId}>
+                    {describeIntercompanyCandidatePair(pair, nameById)}
+                    <span className="text-[#829AB1] dark:text-slate-500"> · metadata only</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </>
       ) : null}
