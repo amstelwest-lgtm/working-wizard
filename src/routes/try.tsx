@@ -10,7 +10,8 @@ export const Route = createFileRoute("/try")({
       { title: "Try a sample — Milōn" },
       {
         name: "description",
-        content: "A sample health score, findings, and a 13-week cash line. No books to connect.",
+        content:
+          "Sample health score, analyst findings, profit, cash, advisory, and sign-off — no books to connect.",
       },
       { name: "theme-color", content: "#ffffff" },
     ],

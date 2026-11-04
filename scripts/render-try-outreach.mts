@@ -93,7 +93,12 @@ function assertOutlookSafe(html: string, text: string) {
   assertNoImageOnlyLinks(html);
   assertLayoutTables(html);
 
-  for (const name of ["Milōn Financial Manager", "Milōn Analyst", "Milōn Advisor"]) {
+  for (const name of [
+    "Milōn Financial Manager",
+    "Milōn Analyst",
+    "Milōn Advisor",
+    "Milōn Tax Specialist",
+  ]) {
     if (!html.includes(name) || !text.includes(name)) fail(`missing agent name ${name}`);
   }
   if (/whatsapp/i.test(html) || /whatsapp/i.test(text)) fail("outreach mentions WhatsApp");
@@ -152,6 +157,9 @@ const required = [
   "Holds the 13-week cash line and the profit bridge.",
   "Reads the ratios, the margins, and what is drifting.",
   "Turns that reading into the next move.",
+  "Prepares company tax worksheets for you to check",
+  "On /try you walk",
+  "Advisory pack with a PDF download",
   WARM_DEMO_WORDMARK,
   "Georgia",
 ];
