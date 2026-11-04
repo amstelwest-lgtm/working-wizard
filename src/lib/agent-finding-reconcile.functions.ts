@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
+  guardReconciledFindingWrite,
   loadHealthScoreSnapshot,
   persistReconciledFindingCopy,
   snapshotEvidenceFields,
@@ -25,7 +26,15 @@ type LooseSb = {
 
 export const reconcileHealthFindingNarrative = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ findingId: z.string().uuid() }).parse(input))
+  .inputValidator((input) =>
+    z
+      .object({
+        findingId: z.string().uuid(),
+        liveSentence: z.string().min(1),
+        scoreSnapshotHash: z.string().min(1),
+      })
+      .parse(input),
+  )
   .handler(async ({ data, context }) => {
     const userId = context.userId;
     if (!userId) throw new Error("Not authenticated");
@@ -78,15 +87,20 @@ export const reconcileHealthFindingNarrative = createServerFn({ method: "POST" }
       canonicalRatios,
     });
 
-    if (!persisted.changed) {
-      throw new Error("Nothing to regenerate");
-    }
+    const guard = guardReconciledFindingWrite({
+      server: live,
+      clientHash: data.scoreSnapshotHash,
+      liveSentence: data.liveSentence,
+      title: persisted.title,
+    });
+    if (!guard.write) throw new Error(guard.error);
+    if (!persisted.changed) throw new Error("Nothing to regenerate");
 
     const seenAt = new Date().toISOString();
     const { data: updated, error: updateError } = await supabaseAdmin
       .from("agent_findings")
       .update({
-        title: persisted.title,
+        title: guard.title,
         detail: persisted.detail,
         last_seen: seenAt,
         evidence: mergedEvidence as never,
@@ -101,7 +115,7 @@ export const reconcileHealthFindingNarrative = createServerFn({ method: "POST" }
     return {
       ok: true as const,
       findingId: data.findingId,
-      title: persisted.title,
+      title: guard.title,
       lastSeen: seenAt,
     };
   });
