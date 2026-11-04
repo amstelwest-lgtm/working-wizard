@@ -109,6 +109,8 @@ const dupont = readFileSync(resolve("src/components/pdf/dupont.tsx"), "utf8");
 assert(dupont.includes("wrap={false}") && dupont.includes("minPresenceAhead={PDF_CARD_MIN_PRESENCE}"), "DuPont cards do not split the header from the body");
 const scorecard = readFileSync(resolve("src/reports/health-scorecard.tsx"), "utf8");
 assert(scorecard.includes("wrap={false}") && scorecard.includes("minPresenceAhead={PDF_CARD_MIN_PRESENCE}"), "scorecard cards are unbreakable");
+assert(scorecard.includes("compactTail"), "short final pillar avoids inflated keep-with-next");
+assert(scorecard.includes('dense'), "scorecard ratio detail uses dense spacing");
 assert(!scorecard.includes("<View break"), "ratio detail flows under DuPont instead of a hard page break");
 assert(scorecard.includes("<SectionHeader"), "ratio headings use the keep-with-next section header");
 for (const file of [

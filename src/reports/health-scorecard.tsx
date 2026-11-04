@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   tierDesc: { fontSize: 8.5, fontFamily: "Helvetica", color: C.body, lineHeight: 1.5 },
   // Pillar grid
   pillarGridRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
-  pillarSection: { marginBottom: 10 },
+  pillarSection: { marginBottom: 2 },
 });
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -335,7 +335,7 @@ export function HealthScorecardPDF({
 
       {/* DuPont pointer strip */}
       {hasDuPont && (
-        <View style={{ marginTop: 6 }} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
+        <View style={{ marginTop: 2 }} wrap={false} minPresenceAhead={PDF_CARD_MIN_PRESENCE}>
           <DuPontStrip
             levers={levers}
             diagnosis={dupont}
@@ -347,7 +347,7 @@ export function HealthScorecardPDF({
         </View>
       )}
 
-      {pillarData.filter((pillar) => pillar.ratios.length > 0).map(({ pillar, score, ratios }) => {
+      {pillarData.filter((pillar) => pillar.ratios.length > 0).map(({ pillar, score, ratios }, sectionIndex, sections) => {
         const rendered = ratios.map((r, i) => {
           const spelled = spellLabor(r.ratio_name, market ?? ZA_MARKET);
           const percent = r.formatted_value.split(" · ")[0] ?? r.formatted_value;
@@ -380,14 +380,31 @@ export function HealthScorecardPDF({
               statusLabel={missingFigure ? NOT_ENOUGH_DATA : undefined}
               priorScore={r.prior_period_score}
               isAlternate={i % 2 === 1}
+              dense
             />
           );
         });
+        const rowCount = rendered.length;
+        const isLastSection = sectionIndex === sections.length - 1;
+        // ReportSection reserves heading + two full rows before the block may start.
+        // A short final pillar (often Cash) fits on the prior page in practice but
+        // was pushed to a sparse third page; keep it as one wrap={false} block instead.
+        const compactTail = isLastSection && rowCount > 0 && rowCount <= 4;
+        if (compactTail) {
+          return (
+            <View key={pillar} style={styles.pillarSection} wrap={false}>
+              <SectionHeader title={pillarLabel(pillar)} score={score ?? undefined} dense />
+              {rendered}
+            </View>
+          );
+        }
         return (
           <ReportSection
             key={pillar}
             style={styles.pillarSection}
-            heading={<SectionHeader title={pillarLabel(pillar)} score={score ?? undefined} />}
+            heading={
+              <SectionHeader title={pillarLabel(pillar)} score={score ?? undefined} dense />
+            }
             lead={rendered.slice(0, 2)}
           >
             {rendered.slice(2)}

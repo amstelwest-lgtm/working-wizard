@@ -26,6 +26,8 @@ type Props = {
   /** Optional historical values (oldest → newest) for a trend sparkline. */
   trend?: (number | null | undefined)[];
   isAlternate?: boolean;
+  /** Slightly tighter row padding (scorecard ratio detail). */
+  dense?: boolean;
 };
 
 const styles = StyleSheet.create({
@@ -69,6 +71,7 @@ export function RatioRow({
   priorScore,
   trend,
   isAlternate = false,
+  dense = false,
 }: Props) {
   const tier = TIER_META[healthTier] ?? TIER_META.at_risk;
   const missing = Boolean(unscored) || healthScore == null || !Number.isFinite(healthScore);
@@ -87,6 +90,7 @@ export function RatioRow({
       style={[
         styles.row,
         { backgroundColor: isAlternate ? C.soft : C.white },
+        dense ? { paddingVertical: 5 } : null,
       ]}
     >
       <Text style={[styles.name, { flex: 3 }]}>{ratioName}</Text>

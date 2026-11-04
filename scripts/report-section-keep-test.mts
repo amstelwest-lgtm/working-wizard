@@ -10,6 +10,7 @@ import { varianceIsZeroPair, variancePctCell } from "../src/lib/budget.variance"
 import { buildBudgetPdfModel, illustrativeBudgetPack } from "../src/lib/budget-pdf";
 import { resolveMarket, ZA_MARKET, type ResolvedMarket } from "../src/lib/market/resolve";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "../src/lib/scorecard-rows";
+import { scorecardHealthFromFinancials } from "../src/lib/health-score";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
@@ -77,7 +78,11 @@ for (const file of REPORTS) {
   assert(src.includes("ReportSection"), `${file} uses the shared section primitive`);
   const headers = src.split("<SectionHeader").length - 1;
   const wrapped = src.split("heading={<SectionHeader").length - 1;
-  assert(headers > 0 && headers === wrapped, `${file} passes every section header through ReportSection`);
+  if (file.endsWith("health-scorecard.tsx")) {
+    assert(src.includes("compactTail"), `${file} keeps a compact final pillar block`);
+  } else {
+    assert(headers > 0 && headers === wrapped, `${file} passes every section header through ReportSection`);
+  }
 }
 
 function norm(line: string): string {
@@ -553,6 +558,52 @@ async function main() {
       }
     }
   }
+
+  const chillFinancials = {
+    revenue: "1215000",
+    cogs: "-56000",
+    ebit: "56800",
+    ebitda: "126800",
+    ebt: "37000",
+    netIncome: "27010",
+    laborCost: "426000",
+    fixedCosts: "",
+    payables: "38000",
+    receivables: "21500",
+    inventory: "14200",
+    equity: "54600",
+    totalAssets: "331600",
+    periodMonths: "12",
+  };
+  const chillRaw = scorecardRatiosFromFinancials(chillFinancials, { fyStartMonth: 3 });
+  const chillRatios = buildScorecardRatioResults(chillRaw, ZA_MARKET, {
+    equity: 54600,
+    periodMonths: 12,
+    cashFlowKnown: false,
+  });
+  const chillHealth = scorecardHealthFromFinancials({
+    financials: chillFinancials,
+    fyStartMonth: 3,
+    market: ZA_MARKET,
+  });
+  const { HealthScorecardPDF } = await import("../src/reports/health-scorecard.js");
+  const chillBuf = await renderToBuffer(
+    createElement(HealthScorecardPDF, {
+      smeData: { name: "Chill Pepper Boutique Hotel", period: "November 2026" },
+      ratioResults: chillRatios,
+      overallHealth: chillHealth,
+      accountantProfile: ACCOUNTANT,
+      draft: true,
+      market: ZA_MARKET,
+    }),
+  );
+  const chillPdf = await getDocumentProxy(new Uint8Array(chillBuf));
+  assert(chillPdf.numPages === 2, `Chill Pepper scorecard should be two pages, got ${chillPdf.numPages}`);
+  const chillPages = await pageLines(chillBuf);
+  assertSectionsStayTogether("chill-pepper/scorecard", chillPages);
+  const lastPage = chillPages[chillPages.length - 1]?.join("\n") ?? "";
+  assert(/debtor days/i.test(lastPage), "cash pillar rows stay on the last page with the other ratios");
+
   console.log("report-section-keep: ok");
 }
 
