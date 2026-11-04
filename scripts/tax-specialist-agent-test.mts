@@ -78,6 +78,13 @@ eq(
 eq(askAgentFromHash("#ask-tax-specialist"), "tax_specialist", "hash opens the tax page");
 eq(askHashForAgent("tax_specialist"), "ask-tax-specialist", "tax page hash");
 
+const practiceTaxRoute = readFileSync("src/routes/_authenticated/practice_.tax.tsx", "utf8");
+assert(practiceTaxRoute.includes('to: "/dashboard"'), "practice tax deep link lands on Home");
+assert(
+  practiceTaxRoute.includes("askHashForAgent(TAX_AGENT)"),
+  "ZA firms keep the tax hash on redirect",
+);
+
 // Stage: a real tab on ZA client pages, the sample opener elsewhere
 const stage = (props: Record<string, unknown>) =>
   renderToStaticMarkup(

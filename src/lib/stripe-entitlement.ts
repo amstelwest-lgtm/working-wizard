@@ -229,10 +229,15 @@ export function isTeamSettingsPath(pathname: string): boolean {
   return path === "/settings/team";
 }
 
-/** Home, the client list, and the practice overview. Not a client file. */
+/** Home, the client list, the practice overview, and the tax deep link. Not a client file. */
 export function isPracticeShellPath(pathname: string): boolean {
   const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-  return path === "/dashboard" || path === "/practice" || path === "/clients";
+  return (
+    path === "/dashboard" ||
+    path === "/practice" ||
+    path === "/practice/tax" ||
+    path === "/clients"
+  );
 }
 
 /** `/clients/:id` — Overview and the scored figures live on this file. */

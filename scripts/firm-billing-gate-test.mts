@@ -77,6 +77,8 @@ assert(isPracticeShellPath("/practice"), "Practice is a practice shell path");
 assert(isPracticeShellPath("/clients"), "the client list is a practice shell path");
 assert(isPracticeShellPath("/clients/"), "a trailing slash does not leave the client list");
 assert(!isPracticeShellPath("/clients/second"), "a client file is not the practice shell");
+assert(isPracticeShellPath("/practice/tax"), "the tax deep link opens like Home before billing settles");
+assert(!isPracticeShellPath("/practice/insights"), "other practice routes stay gated until entitlement");
 assert(isFirmProductPath("/clients/abc"), "client workspace is firm product");
 assert(isFirmProductPath("/reports"), "reports is firm product");
 assert(!isFirmProductPath("/settings/team"), "team settings stay open with the rest of settings");
