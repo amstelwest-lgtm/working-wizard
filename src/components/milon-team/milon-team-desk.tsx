@@ -42,7 +42,7 @@ import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMute
 import { OwnerDraftCard, type ApprovedDraftTarget } from "@/components/owner-draft-card";
 import { SourceCheckChip } from "@/components/source-check-chip";
 import { HealthNarrativeLine } from "@/components/health-narrative-line";
-import { renderHealthNarrative } from "@/lib/health-snapshot";
+import { healthSnapshotHash, renderHealthNarrative } from "@/lib/health-snapshot";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
 import { marketForClient } from "@/lib/market";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
@@ -241,6 +241,7 @@ export function MilonTeamDesk({
   const signoffText = deskSignoffText(feed.signoffLine, feed.signoffOwner === true);
   const signoffInvite = deskSignoffInvite(feed.signoffOwner === true);
   const liveSentence = feed.healthQuote ? renderHealthNarrative(feed.healthQuote) : null;
+  const scoreSnapshotHash = feed.healthQuote ? healthSnapshotHash(feed.healthQuote) : null;
 
   // The agent page shows each finding once, newest first, and leaves out what the hero already says.
   const heroKey = agentView && heroFinding?.text ? findingTitleKey(heroFinding.text) : "";
@@ -341,6 +342,7 @@ export function MilonTeamDesk({
           row={row}
           sentence={sentence}
           liveSentence={liveSentence}
+          scoreSnapshotHash={scoreSnapshotHash}
           canonicalRatios={canonicalRatios}
           figuresUpdatedAt={feed.figuresUpdatedAt}
           market={live?.market}
@@ -364,6 +366,7 @@ export function MilonTeamDesk({
           <HealthNarrativeLine
             text={sentence}
             liveSentence={liveSentence}
+            scoreSnapshotHash={scoreSnapshotHash}
             findingId={row.id}
             onReconciled={onRefreshDrafts}
             className="milon-desk-figure"

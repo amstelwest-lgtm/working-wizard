@@ -4,7 +4,18 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { persistReconciledFindingCopy, renderHealthNarrative, snapshotEvidenceFields } from "../src/lib/health-snapshot.ts";
+import { liveHealthFromBooks } from "../src/lib/health-score.ts";
+import { pageHealthScoreSnapshot } from "../src/lib/page-health-snapshot.ts";
+import { figuresPeriodLabelFrom } from "../src/lib/statement-period.ts";
+import {
+  FIGURES_CHANGED_RELOAD,
+  guardReconciledFindingWrite,
+  healthSnapshotFromBooks,
+  healthSnapshotHash,
+  persistReconciledFindingCopy,
+  renderHealthNarrative,
+  snapshotEvidenceFields,
+} from "../src/lib/health-snapshot.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
 import { draftWhenLabel } from "../src/lib/milon-team-activity.ts";
 
@@ -74,6 +85,123 @@ const alreadyFresh = persistReconciledFindingCopy({
 });
 assert(!alreadyFresh.changed, "already-fresh stored copy is not rewritten");
 
+const server57 = {
+  overall: 57,
+  pillars: [
+    { id: "profit" as const, label: "Profit", score: 60 },
+    { id: "assets" as const, label: "Assets", score: 84 },
+    { id: "financing" as const, label: "Financing", score: 60 },
+    { id: "cash" as const, label: "Cash", score: 25 },
+  ],
+  weakestLabel: "Cash",
+  weakestScore: 25,
+  periodLabel: "Full year on file",
+};
+const serverSentence = renderHealthNarrative(server57);
+const clientSentence = renderHealthNarrative(live);
+assert(serverSentence.includes("57"), serverSentence);
+assert(clientSentence.includes("54"), clientSentence);
+assert(serverSentence !== clientSentence, "57 and 54 sentences differ");
+const wouldWrite = persistReconciledFindingCopy({
+  title: staleProfitTitle,
+  detail: null,
+  evidence: snapshotEvidenceFields(server57),
+  live: server57,
+});
+assert(wouldWrite.changed, "server snapshot alone would persist a new title");
+assert(wouldWrite.title === serverSentence, wouldWrite.title);
+assert(wouldWrite.title !== clientSentence, "ungarded persist disagrees with the client sentence");
+const refused = guardReconciledFindingWrite({
+  server: server57,
+  clientHash: healthSnapshotHash(live),
+  liveSentence: clientSentence,
+  title: wouldWrite.title,
+});
+assert(refused.write === false, "57 vs 54 refuses the write");
+assert(refused.error === FIGURES_CHANGED_RELOAD, refused.error);
+const aligned = guardReconciledFindingWrite({
+  server: live,
+  clientHash: healthSnapshotHash(live),
+  liveSentence: clientSentence,
+  title: clientSentence,
+});
+assert(aligned.write === true, "matching snapshot still writes");
+assert(aligned.title === clientSentence, aligned.write ? aligned.title : aligned.error);
+assert(!aligned.title.includes("57"), aligned.title);
+
+const undatedBooks = {
+  revenue: 1_200_000,
+  cogs: 60_000,
+  ebit: 180_000,
+  ebt: 160_000,
+  netIncome: 120_000,
+  ebitda: 200_000,
+  operatingCashflow: 80_000,
+  totalAssets: 900_000,
+  equity: 500_000,
+  receivables: 20_000,
+  inventory: 15_000,
+  payables: 40_000,
+  cash: 1_000,
+  fixedCosts: 200_000,
+  variableCosts: 400_000,
+  laborCost: 180_000,
+  employees: 12,
+  top5Revenue: 300_000,
+  currentAssets: 36_000,
+  currentLiabilities: 80_000,
+  periodMonths: 12,
+};
+const undatedCash = { openingBalance: "1000", openingBalanceSource: "xero" };
+const scoredAt = new Date("2026-11-04T12:00:00.000Z");
+const pageSnap = pageHealthScoreSnapshot({
+  financials: undatedBooks,
+  cashflow: undatedCash,
+  financialsUpdatedAt: "2026-10-19T08:00:00.000Z",
+  market: { country: "ZA" },
+  clientName: "Chill Hotel",
+  snapshots: [
+    {
+      period_label: "Nov 2026",
+      period_date: "2026-11-01",
+      created_at: "2026-11-02T00:00:00.000Z",
+    },
+  ],
+  now: scoredAt,
+});
+const thinHealth = liveHealthFromBooks({
+  financials: undatedBooks,
+  cashflow: undatedCash,
+  financialsUpdatedAt: "2026-10-19T08:00:00.000Z",
+  market: ZA_MARKET,
+});
+const thinSnap = healthSnapshotFromBooks({
+  health: thinHealth,
+  periodLabel: figuresPeriodLabelFrom(undatedBooks, null, ZA_MARKET),
+});
+assert(pageSnap != null && thinSnap != null, "page and thin snapshots score");
+assert(pageSnap.periodLabel === "Full year on file", pageSnap.periodLabel ?? "");
+assert(healthSnapshotHash(pageSnap) !== healthSnapshotHash(thinSnap), "page scope is not the thin loader");
+const pageSentence = renderHealthNarrative(pageSnap);
+const thinSentence = renderHealthNarrative(thinSnap);
+assert(pageSentence !== thinSentence, "page scope changes the sentence the card shows");
+const pageWrite = guardReconciledFindingWrite({
+  server: pageSnap,
+  clientHash: healthSnapshotHash(pageSnap),
+  liveSentence: pageSentence,
+  title: pageSentence,
+});
+assert(pageWrite.write === true, "same-scope snapshot writes the client sentence");
+assert(pageWrite.title === pageSentence, pageWrite.write ? pageWrite.title : pageWrite.error);
+const scopeRefuse = guardReconciledFindingWrite({
+  server: thinSnap,
+  clientHash: healthSnapshotHash(pageSnap),
+  liveSentence: pageSentence,
+  title: thinSentence,
+});
+assert(scopeRefuse.write === false, "thin snapshot still refuses the card hash");
+assert(scopeRefuse.error === FIGURES_CHANGED_RELOAD, scopeRefuse.error);
+
 const createdAt = "2026-10-19T08:00:00.000Z";
 const seenAt = "2026-11-04T16:30:00.000Z";
 const when = draftWhenLabel(createdAt, seenAt, ZA_MARKET);
@@ -81,11 +209,36 @@ assert(when.includes("Updated"), when);
 
 const src = readFileSync(resolve("src/lib/agent-finding-reconcile.functions.ts"), "utf8");
 const healthLine = readFileSync(resolve("src/components/health-narrative-line.tsx"), "utf8");
+const card = readFileSync(resolve("src/components/owner-draft-card.tsx"), "utf8");
+const desk = readFileSync(resolve("src/components/milon-team/milon-team-desk.tsx"), "utf8");
+const feed = readFileSync(resolve("src/hooks/use-milon-team-feed.ts"), "utf8");
 assert(src.includes("reconcileHealthFindingNarrative"), "server fn exists");
 assert(src.includes("Nothing to regenerate"), "no-op regen throws before last_seen bump");
 assert(src.includes("last_seen"), "persist bumps last_seen when changed");
 assert(src.includes("supabaseAdmin"), "persist uses admin client");
+assert(src.includes("loadPageHealthScoreSnapshot"), "regen loads the Health page snapshot");
+assert(!src.includes("loadHealthScoreSnapshot("), "regen does not use the thin loader");
+assert(src.includes("scoreSnapshotHash"), "client snapshot hash is required");
+assert(src.includes("liveSentence"), "client live sentence is required");
+const guardAt = src.indexOf("if (!guard.write) throw new Error(guard.error)");
+const updateAt = src.indexOf(".update(");
+assert(
+  guardAt !== -1 && updateAt !== -1 && guardAt < updateAt,
+  "hash mismatch throws before the write",
+);
 assert(healthLine.includes("reconcileHealthFindingNarrative"), "Regenerate calls the server fn");
 assert(healthLine.includes("toast.error"), "Regenerate surfaces errors");
+assert(healthLine.includes("scoreSnapshotHash"), "Regenerate sends the snapshot hash");
+assert(healthLine.includes("setShown(result.title)"), "Regenerate paints the saved title");
+assert(healthLine.includes("result.title !== liveSentence"), "a disagreeing title is toasted");
+assert(
+  !healthLine.includes("result.title === liveSentence ? result.title : liveSentence"),
+  "silent liveSentence fallback is gone",
+);
+assert(card.includes("healthSnapshotHash"), "draft card hashes the snapshot it rendered");
+assert(card.includes("scoreSnapshotHash={snapshotHash}"), "draft card sends that hash");
+assert(desk.includes("scoreSnapshotHash={scoreSnapshotHash}"), "desk sends the quote hash");
+assert(feed.includes("pageHealthScoreSnapshot"), "Analyst card hashes the Health page snapshot");
+assert(feed.includes("next.healthQuote = cardHealth"), "feed quote is that snapshot");
 
 console.log("agent-finding-reconcile-test: ok");

@@ -11,6 +11,9 @@ import { MONTHS } from "./market/date-presets.ts";
 
 export const FIGURES_CHANGED_REGENERATE = "Figures changed since this was written, regenerate";
 
+/** Regen refused because the card's snapshot is not the one the server would store. */
+export const FIGURES_CHANGED_RELOAD = "Figures changed — reload";
+
 /**
  * Bumped when the same books produce a different liveHealthFromBooks result.
  * 1 is the scorer the 1020B narrative was written against (Cash 78).
@@ -772,6 +775,25 @@ export function persistReconciledFindingCopy(input: {
     return { title: storedTitle, detail: storedDetail, changed: false };
   }
   return { title: clean, detail: null, changed: true };
+}
+
+/**
+ * The card sends the hash and sentence it rendered. A server snapshot with
+ * different figures must not be written. Matching figures return the title.
+ */
+export function guardReconciledFindingWrite(input: {
+  server: HealthScoreSnapshot;
+  clientHash: string;
+  liveSentence: string;
+  title: string;
+}): { write: true; title: string } | { write: false; error: string } {
+  const sentence = input.liveSentence.replace(/\s+/g, " ").trim();
+  const title = input.title.replace(/\s+/g, " ").trim();
+  const hash = input.clientHash.trim();
+  if (!sentence || !hash || hash !== healthSnapshotHash(input.server) || title !== sentence) {
+    return { write: false, error: FIGURES_CHANGED_RELOAD };
+  }
+  return { write: true, title };
 }
 
 export function healthSnapshotPromptBlock(snapshot: HealthScoreSnapshot): string {
