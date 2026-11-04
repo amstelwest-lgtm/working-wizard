@@ -9,7 +9,8 @@ export type AgentSectionKey =
   | "activity"
   | "forms"
   | "workings"
-  | "deadlines";
+  | "deadlines"
+  | "portfolio";
 
 export const AGENT_SECTION_COPY: Record<AgentSectionKey, { title: string; purpose: string }> = {
   work: {
@@ -40,6 +41,11 @@ export const AGENT_SECTION_COPY: Record<AgentSectionKey, { title: string; purpos
   deadlines: {
     title: "Deadlines",
     purpose: "The next SARS dates for this client.",
+  },
+  portfolio: {
+    title: "Clients on the book",
+    purpose:
+      "South African clients you can prepare SARS forms for. Pick one to work here, or open their client file.",
   },
 };
 
