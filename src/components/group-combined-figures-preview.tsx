@@ -23,6 +23,10 @@ import {
 import { buildFxStub, describeMemberCurrency } from "@/lib/group-fx";
 import { buildControlStub, describeControlOwnershipCandidate } from "@/lib/group-control";
 import { buildGroupHealthStub } from "@/lib/group-health";
+import {
+  buildIntercompanyFlagsStub,
+  describeIntercompanyFlagCandidate,
+} from "@/lib/group-intercompany-flags";
 import { buildNciStub, describeNciOwnershipCandidate } from "@/lib/group-nci";
 
 function parseAmount(raw: string | undefined): number | null {
@@ -131,6 +135,23 @@ export function GroupCombinedFiguresPreview({
 
   const controlStub = useMemo(() => buildControlStub(ownershipEdges), [ownershipEdges]);
 
+  const memberClientIds = useMemo(
+    () =>
+      activeMembers
+        ? activeMembers.map((member) => member.clientId)
+        : companies.map((company) => company.id),
+    [activeMembers, companies],
+  );
+
+  const intercompanyFlagsStub = useMemo(
+    () =>
+      buildIntercompanyFlagsStub({
+        edges: ownershipEdges,
+        memberClientIds,
+      }),
+    [memberClientIds, ownershipEdges],
+  );
+
   const showConsolidationStubs =
     activeMembers &&
     activeMembers.length >= 2 &&
@@ -143,6 +164,8 @@ export function GroupCombinedFiguresPreview({
   const showNciStub = showConsolidationStubs && nciStub;
   const showHealthStub = showConsolidationStubs && healthStub;
   const showControlStub = showConsolidationStubs && controlStub;
+  const showIntercompanyFlagsStub =
+    showConsolidationStubs && intercompanyFlagsStub.flagsPlanned;
 
   const showPeriodAlign =
     bundle &&
@@ -440,6 +463,35 @@ export function GroupCombinedFiguresPreview({
               {controlStub.candidateEdges.map((candidate) => (
                 <li key={candidate.edgeId}>
                   {describeControlOwnershipCandidate(candidate, nameById)}
+                  <span className="text-[#829AB1] dark:text-slate-500"> · metadata only</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showIntercompanyFlagsStub ? (
+        <div
+          className="space-y-2 rounded-lg border border-dashed border-[#C9D8F0] bg-[#F4F8FF]/80 px-3 py-2 dark:border-white/15 dark:bg-slate-900/30"
+          data-group-intercompany-flags-stub=""
+        >
+          <p className="text-xs font-semibold text-[#102A43] dark:text-slate-100">
+            Intercompany flags (planned)
+          </p>
+          <p className="text-xs leading-relaxed text-[#486581] dark:text-slate-400">
+            {intercompanyFlagsStub.headline}. {intercompanyFlagsStub.detail}
+          </p>
+          <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-[#486581] dark:text-slate-500">
+            {intercompanyFlagsStub.notAppliedReasons.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          {intercompanyFlagsStub.candidateFlags.length > 0 ? (
+            <ul className="mt-1 space-y-0.5 text-xs text-[#486581] dark:text-slate-300">
+              {intercompanyFlagsStub.candidateFlags.map((candidate) => (
+                <li key={candidate.edgeId}>
+                  {describeIntercompanyFlagCandidate(candidate, nameById)}
                   <span className="text-[#829AB1] dark:text-slate-500"> · metadata only</span>
                 </li>
               ))}
