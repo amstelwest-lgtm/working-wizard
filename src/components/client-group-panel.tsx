@@ -211,7 +211,11 @@ export function ClientGroupPanel({
       </div>
 
       {groupChromeVisible(companies.length) ? (
-        <GroupCombinedFiguresPreview companies={companies} onOpenCompany={onOpenCompany} />
+        <GroupCombinedFiguresPreview
+          companies={companies}
+          ownershipEdges={edges}
+          onOpenCompany={onOpenCompany}
+        />
       ) : null}
 
       {active ? (
