@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import type { ResolvedMarket } from "@/lib/market/types";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import {
-  buildDraftworxWorkingPaperChecklist,
-  draftworxDirtyWorkEnabled,
-  draftworxExportFileName,
-  draftworxTrialBalanceCsv,
+  buildWorkingPaperChecklist,
+  workingPaperExportFileName,
+  workingPaperTrialBalanceCsv,
+  workingPaperVendorForMarket,
   type WorkingPaperCheckStatus,
+  type WorkingPaperVendor,
 } from "@/lib/draftworx-dirty-work";
 import { readStatementMeta } from "@/lib/statement-period";
 
@@ -39,7 +40,16 @@ function statusClass(status: WorkingPaperCheckStatus): string {
   }
 }
 
-export function DraftworxDirtyWorkPanel({
+function vendorTitle(vendor: WorkingPaperVendor): string {
+  return vendor === "draftworx" ? "Draftworx working papers" : "Caseware working papers";
+}
+
+function vendorImportHint(vendor: WorkingPaperVendor): string {
+  const product = vendor === "draftworx" ? "Draftworx" : "Caseware";
+  return `${product}'s Working Trial Balance import`;
+}
+
+export function WorkingPaperDirtyWorkPanel({
   clientId,
   clientName,
   market,
@@ -56,43 +66,46 @@ export function DraftworxDirtyWorkPanel({
   signoffStale?: boolean;
   needsTrialBalanceRefresh?: boolean;
 }) {
-  if (!draftworxDirtyWorkEnabled(market)) return null;
+  const vendor = workingPaperVendorForMarket(market);
+  if (!vendor) return null;
 
   const checklist = useMemo(
     () =>
-      buildDraftworxWorkingPaperChecklist({
+      buildWorkingPaperChecklist({
         financials,
         market,
+        vendor,
         financialsSignoff,
         signoffStale,
         needsTrialBalanceRefresh,
       }),
-    [financials, market, financialsSignoff, signoffStale, needsTrialBalanceRefresh],
+    [financials, market, vendor, financialsSignoff, signoffStale, needsTrialBalanceRefresh],
   );
 
   const openCount = checklist.filter((item) => item.status === "todo" || item.status === "warn").length;
   const meta = readStatementMeta(financials ?? {}, market);
+  const product = vendor === "draftworx" ? "Draftworx" : "Caseware";
 
   const downloadCsv = () => {
-    const csv = draftworxTrialBalanceCsv(financials, clientName ?? "Client", market);
+    const csv = workingPaperTrialBalanceCsv(financials, clientName ?? "Client", market, vendor);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = draftworxExportFileName(clientName ?? "client", meta.periodEnd);
+    anchor.download = workingPaperExportFileName(clientName ?? "client", meta.periodEnd, vendor);
     anchor.click();
     URL.revokeObjectURL(url);
   };
 
   return (
     <CollapsibleGoldCard
-      id={`draftworx-dirty-work-${clientId}`}
+      id={`${vendor}-dirty-work-${clientId}`}
       icon={ClipboardCheck}
-      title="Draftworx working papers"
+      title={vendorTitle(vendor)}
       subtitle={
         openCount
           ? `${openCount} item${openCount === 1 ? "" : "s"} before the summary TB is file-ready`
-          : "Summary checklist and export for Draftworx Excel import"
+          : `Summary checklist and export for ${product} Excel import`
       }
       defaultOpen={openCount > 0}
       headerRight={
@@ -114,9 +127,9 @@ export function DraftworxDirtyWorkPanel({
       <p className="text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">
         Milōn builds a <strong>summary</strong> trial balance from figures already on this client —
         not your general ledger. Save the CSV, open it in Excel (.xlsx), and map Account Number,
-        Account Name, Debit, and Credit in Draftworx&apos;s Working Trial Balance import.
+        Account Name, Debit, and Credit in {vendorImportHint(vendor)}.
       </p>
-      <ul className="mt-4 space-y-2" aria-label="Draftworx working paper checklist">
+      <ul className="mt-4 space-y-2" aria-label={`${product} working paper checklist`}>
         {checklist.map((item) => (
           <li
             key={item.id}
@@ -141,3 +154,6 @@ export function DraftworxDirtyWorkPanel({
     </CollapsibleGoldCard>
   );
 }
+
+/** @deprecated Use WorkingPaperDirtyWorkPanel — kept for import stability. */
+export const DraftworxDirtyWorkPanel = WorkingPaperDirtyWorkPanel;
