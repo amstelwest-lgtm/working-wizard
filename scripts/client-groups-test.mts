@@ -155,13 +155,14 @@ test("connection health is status only", () => {
   );
 });
 
-test("the group panel does not total money", () => {
+test("the group panel routes combined totals through preview helper only", () => {
   const source = readFileSync(
     new URL("../src/components/client-group-panel.tsx", import.meta.url),
     "utf8",
   );
   assert.equal(/totalRevenue|netIncome|cashBalance|\.sum\(/.test(source), false);
-  assert.match(source, /Status only/);
+  assert.match(source, /GroupCombinedFiguresPreview/);
+  assert.match(source, /read-only combined preview/);
 });
 
 test("client chrome exposes group status for a group of one", () => {
@@ -191,4 +192,19 @@ test("company groups use the shared rail kicker on the navy rail", () => {
   const shine = readFileSync(new URL("../src/styles/premium-shine.css", import.meta.url), "utf8");
   assert.match(chrome, /className="rail-kicker">Groups/);
   assert.match(shine, /\.deliverable-rail \.rail-kicker[\s\S]*--pp-frame-dim/);
+});
+
+test("group status panel wires combined figures preview for multi-company groups", () => {
+  const panel = readFileSync(
+    new URL("../src/components/client-group-panel.tsx", import.meta.url),
+    "utf8",
+  );
+  const preview = readFileSync(
+    new URL("../src/components/group-combined-figures-preview.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(panel, /GroupCombinedFiguresPreview/);
+  assert.match(panel, /groupChromeVisible\(companies\.length\)/);
+  assert.match(preview, /Combined figures \(preview\)/);
+  assert.match(preview, /buildGroupConsolidation/);
 });
