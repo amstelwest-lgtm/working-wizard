@@ -296,27 +296,27 @@ html.dark .milon-desk {
   opacity: 0.72;
 }
 
-/* Same status ticket as Home: white, navy type, cobalt rail. The card grid stays. */
+/* Same plain status copy as Home — no nested ticket shell. */
 .milon-desk-update {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   max-width: 100%;
-  margin-top: 6px;
-  padding: 6px 8px 7px 10px;
-  border-radius: 10px;
-  border: 1px solid #dbeafe;
-  background: #ffffff;
-  box-shadow: inset 3px 0 0 #0b5fff;
-  color: #102a43;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #3d5270;
 }
 
 .milon-desk-update .milon-desk-ran,
 .milon-desk-update .milon-desk-status {
   margin: 0;
-  color: #102a43;
+  color: inherit;
 }
 
 .milon-desk-update .milon-desk-status {

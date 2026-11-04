@@ -435,6 +435,21 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
 
 .owner-door .owner-pane[data-owner-home="true"] .owner-agent-open {
   flex: 1;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .owner-name,
+.owner-door .owner-pane[data-owner-home="true"] .owner-status {
+  align-self: flex-start;
+  text-align: left;
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .owner-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
 }
 
 .owner-door .owner-agent-open:focus-visible {
@@ -463,6 +478,7 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   flex: 1;
   width: 100%;
   min-height: 2.7em;
+  align-items: flex-start;
 }
 
 .owner-door .owner-pane[data-owner-home="true"] .owner-voice {
@@ -473,19 +489,18 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   overflow-wrap: anywhere;
 }
 
-/* Status update on each Home agent card. White ticket, navy type, cobalt rail. */
+/* Status summaries on Home agent cards — plain type on the card, no nested shell. */
 .owner-door .owner-pane[data-owner-home="true"] .owner-lines[data-status-update] {
-  align-items: stretch;
-  gap: 6px;
+  gap: 4px;
   min-height: 0;
-  margin-top: 2px;
-  padding: 10px 12px 11px 14px;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--cobalt) 28%, var(--pale));
-  background: var(--on-cobalt);
-  box-shadow: inset 3px 0 0 var(--cobalt);
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   text-align: left;
-  color: var(--navy);
+  color: var(--ink-dim);
 }
 
 .owner-door .owner-pane[data-owner-home="true"] .owner-lines[data-status-update] .owner-voice {
@@ -494,10 +509,10 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   overflow: visible;
   overflow-wrap: break-word;
   text-align: left;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 500;
-  line-height: 1.4;
-  color: var(--navy);
+  line-height: 1.45;
+  color: var(--ink-dim);
 }
 
 .owner-door .owner-pane[data-owner-home="true"] .owner-lines[data-status-update] .owner-run-state,
@@ -506,20 +521,18 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   align-self: flex-start;
   max-width: none;
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  line-height: 1.3;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
   text-align: left;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--cobalt);
 }
 
 .owner-door .owner-pane[data-owner-home="true"] .owner-lines[data-status-update] .owner-run-state[data-run-state="stalled"] {
-  color: var(--navy);
-  letter-spacing: 0.01em;
-  text-transform: none;
-  font-weight: 600;
+  color: var(--ink-dim);
+  font-weight: 500;
 }
 
 .owner-door .owner-money,

@@ -1,66 +1,81 @@
+import { useMemo } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { AccountantNav, type NavSection } from "@/components/accountant-nav";
 import { CompanyGroupRail } from "@/components/client-group-chrome";
+import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { PRACTICE_NAV_OPEN_KEY } from "@/lib/accountant-nav-open";
 import { agentDisplayName } from "@/lib/milon-team";
+import { parseMarketSelection } from "@/lib/market/parse";
 import { practiceAgentFromHash, practiceAgentHash } from "@/lib/practice-agent-hash";
+import { stageAgentShortName, TAX_AGENT } from "@/lib/tax-specialist/agents";
+import { taxSampleEnabled } from "@/lib/tax-specialist/enabled";
 import { openPracticeSettings } from "@/lib/user-roles";
 
 const home = (hash = "") => ({ to: "/dashboard" as const, hash });
 const clients = (hash = "") => ({ to: "/clients" as const, hash });
 const practice = (hash = "") => ({ to: "/practice" as const, hash });
 
-const SECTIONS: NavSection[] = [
-  {
-    id: "team",
-    label: "Team",
-    headings: [
-      {
-        id: "home",
-        label: "Home",
-        to: home(),
-        bot: true,
-        items: [
-          {
-            id: "financial_manager",
-            label: agentDisplayName("financial_manager"),
-            to: home(practiceAgentHash("financial_manager")),
-          },
-          { id: "analyst", label: agentDisplayName("analyst"), to: home(practiceAgentHash("analyst")) },
-          { id: "advisor", label: agentDisplayName("advisor"), to: home(practiceAgentHash("advisor")) },
-        ],
-      },
-    ],
-  },
-  {
-    id: "book",
-    label: "Book",
-    headings: [
-      {
-        id: "clients",
-        label: "Clients",
-        to: clients(),
-        items: [
-          { id: "all", label: "All clients", to: clients("clients-table") },
-          { id: "queries", label: "Open queries", to: { to: "/clients/queries" } },
-          { id: "add", label: "Add client", to: clients("wizard-add-client") },
-        ],
-      },
-      {
-        id: "practice",
-        label: "Practice",
-        to: practice(),
-        items: [
-          { id: "attention", label: "Needs attention", to: { to: "/practice/needs-attention" } },
-          { id: "follow", label: "Follow up", to: { to: "/practice/follow-up" } },
-          { id: "insights", label: "Insights", to: { to: "/practice/insights" } },
-          { id: "marketplace", label: "Marketplace", to: { to: "/practice/marketplace" } },
-          { id: "playbooks", label: "Playbooks", to: { to: "/practice/playbooks" } },
-        ],
-      },
-    ],
-  },
-];
+function practiceSections(taxRail: boolean): NavSection[] {
+  const homeItems = [
+    {
+      id: "financial_manager",
+      label: agentDisplayName("financial_manager"),
+      to: home(practiceAgentHash("financial_manager")),
+    },
+    { id: "analyst", label: agentDisplayName("analyst"), to: home(practiceAgentHash("analyst")) },
+    { id: "advisor", label: agentDisplayName("advisor"), to: home(practiceAgentHash("advisor")) },
+  ];
+  if (taxRail) {
+    homeItems.push({
+      id: TAX_AGENT,
+      label: stageAgentShortName(TAX_AGENT),
+      to: home(practiceAgentHash(TAX_AGENT)),
+    });
+  }
+  return [
+    {
+      id: "team",
+      label: "Team",
+      headings: [
+        {
+          id: "home",
+          label: "Home",
+          to: home(),
+          bot: true,
+          items: homeItems,
+        },
+      ],
+    },
+    {
+      id: "book",
+      label: "Book",
+      headings: [
+        {
+          id: "clients",
+          label: "Clients",
+          to: clients(),
+          items: [
+            { id: "all", label: "All clients", to: clients("clients-table") },
+            { id: "queries", label: "Open queries", to: { to: "/clients/queries" } },
+            { id: "add", label: "Add client", to: clients("wizard-add-client") },
+          ],
+        },
+        {
+          id: "practice",
+          label: "Practice",
+          to: practice(),
+          items: [
+            { id: "attention", label: "Needs attention", to: { to: "/practice/needs-attention" } },
+            { id: "follow", label: "Follow up", to: { to: "/practice/follow-up" } },
+            { id: "insights", label: "Insights", to: { to: "/practice/insights" } },
+            { id: "marketplace", label: "Marketplace", to: { to: "/practice/marketplace" } },
+            { id: "playbooks", label: "Playbooks", to: { to: "/practice/playbooks" } },
+          ],
+        },
+      ],
+    },
+  ];
+}
 
 const CLIENT_HASH: Record<string, string> = {
   "clients-table": "all",
@@ -98,6 +113,9 @@ function practiceSelection(pathname: string, hash: string) {
   if (path === "/practice") {
     return { headingId: "practice", subId: null, settings: false };
   }
+  if (path === "/practice/tax") {
+    return { headingId: "home", subId: "tax_specialist", settings: false };
+  }
   if (path === "/dashboard" || path === "/desk") {
     const subId = practiceAgentFromHash(bare);
     return { headingId: "home", subId, settings: false };
@@ -107,13 +125,16 @@ function practiceSelection(pathname: string, hash: string) {
 
 /** Practice nav: Team (Home) and Book (Clients, Practice), with Settings pinned. */
 export function PracticeRail({ onNavigate }: { onNavigate?: () => void }) {
+  const { firmMarket } = useAccountantProfile();
+  const firmCountry = parseMarketSelection(firmMarket)?.country ?? null;
+  const sections = useMemo(() => practiceSections(taxSampleEnabled(firmCountry)), [firmCountry]);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hash = useRouterState({ select: (s) => s.location.hash });
   const selection = practiceSelection(pathname, hash ?? "");
   return (
     <AccountantNav
       label="Practice"
-      sections={SECTIONS}
+      sections={sections}
       selection={selection}
       storageKey={PRACTICE_NAV_OPEN_KEY}
       settingsActive={selection.settings}
