@@ -12,6 +12,7 @@ import {
   badgeMonthFromPeriod,
   healthSnapshotHash,
   healthSnapshotPromptBlock,
+  persistReconciledFindingCopy,
   presentHealthNarrative,
   renderHealthNarrative,
   renderHealthNarrativeLead,
@@ -19,7 +20,8 @@ import {
   staleHealthNarrative,
   type HealthScoreSnapshot,
 } from "../src/lib/health-snapshot.ts";
-import { figuresCheckedLine, findingSentence } from "../src/lib/milon-team-activity.ts";
+import { figuresCheckedLine, findingSentence, draftWhenLabel } from "../src/lib/milon-team-activity.ts";
+import { refreshedFindingUpdate } from "../src/lib/agent-analyst.ts";
 import { presentLiveDraft } from "../src/lib/draft-figures.ts";
 import { ownerPresence } from "../src/lib/owner-presence.ts";
 import { presentHomeDraftTitle } from "../src/lib/owner-needs.ts";
@@ -457,5 +459,33 @@ const knownPeriod = ownerBootPeriodPill({
 });
 assert(!knownPeriod.pending, "known books are not pending");
 assert(knownPeriod.label === "Sep 2026", knownPeriod.label ?? "missing");
+
+const storedWithMarker = `${renderHealthNarrative(live)} ${FIGURES_CHANGED_REGENERATE}.`;
+const evidence = snapshotEvidenceFields(live);
+const persisted = persistReconciledFindingCopy({
+  title: storedWithMarker,
+  detail: null,
+  evidence,
+  live,
+});
+assert(persisted.changed, "reconciled regen copy is persisted");
+assert(!persisted.title.includes(FIGURES_CHANGED_REGENERATE), persisted.title);
+assert(persisted.title.includes(String(live.overall)), persisted.title);
+
+const createdAt = "2026-10-19T08:00:00.000Z";
+const regenSeen = "2026-11-04T16:00:00.000Z";
+const when = draftWhenLabel(createdAt, regenSeen, ZA_MARKET);
+assert(when.includes("Updated"), `regen bumps Updated label: ${when}`);
+const regenPatch = refreshedFindingUpdate({
+  title: persisted.title,
+  detail: "",
+  seenAt: regenSeen,
+  severity: "watch",
+  existingSeverity: "watch",
+  existingEvidence: evidence,
+  nextEvidence: { ...evidence, status: "attention" },
+  liveSnapshot: live,
+});
+assert(regenPatch.last_seen === regenSeen, "dedupe refresh sets last_seen");
 
 console.log("health-narrative-snapshot ok");

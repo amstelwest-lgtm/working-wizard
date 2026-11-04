@@ -724,6 +724,52 @@ export function reconcileStoredHealthNarrative(input: {
   return { text, stale: false, regenerate: false };
 }
 
+function findingProse(title: string, detail: string | null | undefined): string {
+  const head = title.replace(/\s+/g, " ").trim();
+  const body = (detail ?? "").replace(/\s+/g, " ").trim();
+  if (!body || body === head || head.includes(body)) return head;
+  return `${head.replace(/[.!?]$/, "")}. ${body}`;
+}
+
+/**
+ * When a regen save matches the live score snapshot, persist the reconciled
+ * sentence instead of leaving the regenerate marker in the row.
+ */
+export function persistReconciledFindingCopy(input: {
+  title: string;
+  detail: string | null | undefined;
+  evidence: unknown;
+  live: HealthScoreSnapshot | null | undefined;
+  canonicalRatios?: Record<string, number> | null;
+}): { title: string; detail: string | null; changed: boolean } {
+  const storedTitle = input.title.replace(/\s+/g, " ").trim();
+  const storedDetail = (input.detail ?? "").replace(/\s+/g, " ").trim() || null;
+  const storedText = findingProse(storedTitle, storedDetail);
+  if (!storedText || !input.live) {
+    return { title: storedTitle, detail: storedDetail, changed: false };
+  }
+  const reconciled = reconcileStoredHealthNarrative({
+    text: storedText,
+    live: input.live,
+    evidence: input.evidence,
+    storedHealth: readStoredHealthSnapshot(input.evidence),
+    storedHash: readStoredScoreSnapshotHash(input.evidence),
+    canonicalRatios: input.canonicalRatios,
+  });
+  if (reconciled.regenerate) {
+    return { title: storedTitle, detail: storedDetail, changed: false };
+  }
+  const clean = reconciled.text.replace(/\s+/g, " ").trim();
+  if (!clean || clean === storedText) {
+    return { title: storedTitle, detail: storedDetail, changed: false };
+  }
+  const hadRegen = splitRegenerateNarrative(storedText).action;
+  if (!hadRegen && clean === storedText) {
+    return { title: storedTitle, detail: storedDetail, changed: false };
+  }
+  return { title: clean, detail: null, changed: true };
+}
+
 export function healthSnapshotPromptBlock(snapshot: HealthScoreSnapshot): string {
   const pillars = snapshot.pillars.map((pillar) => `${pillar.label} ${pillar.score}`).join(", ");
   return `Live score snapshot ${healthSnapshotHash(snapshot)}. Quote only these figures. Period: ${snapshot.periodLabel ?? "unknown"}. Overall ${snapshot.overall}. ${pillars}. Weakest: ${snapshot.weakestLabel} ${snapshot.weakestScore}. Do not quote any other pillar score, overall, or period.`;

@@ -7,6 +7,7 @@ import { budgetVersusStatement } from "../src/lib/budget.bridges";
 import { fiscalStatementSlice } from "../src/lib/budget-period";
 import { budgetComparisonPeriodBasis } from "../src/lib/statement-cover";
 import { yearMoneyFromFiscalSlice } from "../src/lib/budget-year-compare";
+import { normalizeTaxonomyTotals } from "../src/lib/budget.variance";
 import { interestOfRevenueSentence } from "../src/lib/cash-interest-note";
 import { FIGURES_CHANGED_REGENERATE } from "../src/lib/health-snapshot";
 import { findingSentence } from "../src/lib/milon-team-activity";
@@ -51,6 +52,13 @@ assert(slice != null && Math.abs((slice.operatingProfit ?? 0) - 56_800) < 1, "op
 assert(slice.cogs === 56_000, `COGS uses cost magnitude like the P&L, got ${slice.cogs}`);
 const year = yearMoneyFromFiscalSlice(slice);
 assert(year?.cogs === 56_000, `year strip COGS ${year?.cogs}`);
+
+const monthActual = normalizeTaxonomyTotals({ revenue: 101_250, cogs: -56_000 });
+assert(monthActual.cogs === 56_000, `monthly actual COGS ${monthActual.cogs}`);
+assert(Math.abs(monthActual.grossProfit - 45_250) < 1, `monthly gross profit ${monthActual.grossProfit}`);
+const monthViews = budgetMonthViews(doc, [{ month: "2026-03", totals: { revenue: 101_250, cogs: -56_000 } }]);
+const march = monthViews.find((row) => row.month === "2026-03");
+assert(march?.actual?.cogs === 56_000, `chart month COGS ${march?.actual?.cogs}`);
 
 const planZeros = budgetStatementDisplayTotals({
   periodKnown: false,

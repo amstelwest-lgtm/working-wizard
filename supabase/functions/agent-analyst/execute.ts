@@ -37,6 +37,7 @@ import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 import {
   healthSnapshotFromTool,
   loadHealthScoreSnapshot,
+  persistReconciledFindingCopy,
   snapshotEvidenceFields,
 } from "../../../src/lib/health-snapshot.ts";
 import { earlierStatementNote } from "../../../src/lib/statement-import-plan.ts";
@@ -354,6 +355,15 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     status: agentCopyStatus(storedSeverity),
     ...(liveSnapshot ? snapshotEvidenceFields(liveSnapshot) : {}),
   };
+  const reconciledCopy = persistReconciledFindingCopy({
+    title: shaped.title,
+    detail: shaped.detail,
+    evidence,
+    live: liveSnapshot,
+    canonicalRatios: canonicalQuoteRatios(ctx.pool),
+  });
+  const recordTitle = reconciledCopy.title;
+  const recordDetail = reconciledCopy.detail ?? "";
   const warning = cited.warning;
   const recordKeys = [
     findingRecordKey({
@@ -410,18 +420,19 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     const { error: touchError } = await ctx.db
       .from("agent_findings")
       .update(refreshedFindingUpdate({
-        title: shaped.title,
-        detail: shaped.detail,
+        title: recordTitle,
+        detail: recordDetail,
         seenAt,
         severity: storedSeverity,
         existingSeverity: duplicate.severity,
         existingEvidence: asRecord(kept?.evidence),
         nextEvidence: evidence as Record<string, unknown>,
+        liveSnapshot,
       }))
       .eq("id", duplicate.id)
       .is("superseded_by", null);
     if (touchError) return { error: touchError.message };
-    await supersedeAnalystFindings(ctx, duplicate.id, shaped.title, kind);
+    await supersedeAnalystFindings(ctx, duplicate.id, recordTitle, kind);
     for (const key of recordKeys) ctx.recordedKeys.add(key);
     return {
       recorded: true,
@@ -440,15 +451,15 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       run_id: ctx.runId,
       kind,
       severity: storedSeverity,
-      title: shaped.title,
-      detail: shaped.detail,
+      title: recordTitle,
+      detail: recordDetail,
       evidence,
       last_seen: new Date().toISOString(),
     })
     .select("id")
     .maybeSingle();
   if (error || !data?.id) return { error: error?.message || "The finding was not saved." };
-  await supersedeAnalystFindings(ctx, String(data.id), shaped.title, kind);
+  await supersedeAnalystFindings(ctx, String(data.id), recordTitle, kind);
   for (const key of recordKeys) ctx.recordedKeys.add(key);
 
   const { error: messageError } = await ctx.db.from("agent_messages").insert({
@@ -463,7 +474,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     payload: {
       finding_id: data.id,
       kind,
-      title: shaped.title,
+      title: recordTitle,
       severity: storedSeverity,
     },
     correlation_id: ctx.correlationId,
