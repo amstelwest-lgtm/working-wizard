@@ -14,6 +14,8 @@ type Props = {
   title: string;
   score?: number;
   color?: string;
+  /** Tighter margins for dense ratio tables (scorecard detail). */
+  dense?: boolean;
 };
 
 const styles = StyleSheet.create({
@@ -50,9 +52,12 @@ const styles = StyleSheet.create({
   rule: { height: 0.75, backgroundColor: C.line },
 });
 
-export function SectionHeader({ title, score, color = C.blueDeep }: Props) {
+export function SectionHeader({ title, score, color = C.blueDeep, dense }: Props) {
+  const wrapperStyle = dense
+    ? [styles.wrapper, { marginTop: 8, marginBottom: 5 }]
+    : styles.wrapper;
   return (
-    <View style={styles.wrapper} wrap={false}>
+    <View style={wrapperStyle} wrap={false}>
       <View style={styles.row}>
         <View style={styles.left}>
           <View style={[styles.tick, { backgroundColor: color }]} />
