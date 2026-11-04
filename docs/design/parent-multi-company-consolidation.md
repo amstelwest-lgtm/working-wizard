@@ -35,6 +35,7 @@ Comments on `client_groups` and `ownership_edges` state they are **not consolida
 | Currency | UI stub + blocker | Mixed currency still blocks combined totals; preview shows **planned** FX card only — no rates or translation (`data-group-fx-stub`) |
 | Ownership / NCI | UI stub | **Planned** NCI card from `ownership_edges` metadata — `ownership_pct` not applied to line items (`data-group-nci-stub`) |
 | Group Health / ratios / Analyst | UI stub | **Planned** group Health card only — ratios and Analyst narrative stay **per `client_id`**; no group compute (`data-group-health-stub`; keep off Budget/Analyst persist) |
+| Intercompany flags (L1) | UI stub | **Planned** IC flags card from in-group `ownership_edges` only — no IC journals (`data-group-intercompany-flags-stub`; omit card when nothing to flag) |
 | Side-by-side compare | Missing | Not requested as the end state; also not built |
 | Agents | By design | `client-groups.ts` — agents stay on **one company** |
 | SQL consolidation store | Missing | No `group_financial_snapshots` or materialized group books (prefer client-side rollup from existing snapshots first) |

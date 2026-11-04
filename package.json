@@ -116,6 +116,7 @@
     "test:group-nci": "vite-node --config scripts/vite-test.config.ts scripts/group-nci-test.mts",
     "test:group-health": "vite-node --config scripts/vite-test.config.ts scripts/group-health-test.mts",
     "test:group-control": "vite-node --config scripts/vite-test.config.ts scripts/group-control-test.mts",
+    "test:group-intercompany-flags": "vite-node --config scripts/vite-test.config.ts scripts/group-intercompany-flags-test.mts",
     "test:client-groups-edge-audit": "vite-node --config scripts/vite-test.config.ts scripts/client-groups-edge-audit-test.mts",
     "test:practice-book-cache": "vite-node --config scripts/vite-test.config.ts scripts/practice-book-cache-test.mts",
     "test:practice-today-digest": "vite-node --config scripts/vite-test.config.ts scripts/practice-today-digest-test.mts",
