@@ -12,9 +12,9 @@ import { buildTrialBoard, trialReading } from "../src/lib/trial-demo";
 
 export const TRY_OUTREACH_SUBJECT = "Meet your AI finance team";
 export const TRY_OUTREACH_OPENING =
-  "Milōn gives accountants and their business-owner clients an AI finance team: the Financial Manager, the Analyst and the Advisor. We've loaded a sample business's financial statements. The agents analyze them and give a health score, key ratios and next steps.";
+  "Milōn is AI finance software for accountants and their business-owner clients — a health score and ratio panel, analyst findings, a profit bridge, a 13-week cash forecast, an advisory pack you sign off in the browser, and company tax workings the Tax Specialist prepares for your review. This email opens a labelled sample: statements are loaded, the team analyzes them, and you walk every deliverable on /try.";
 export const TRY_OUTREACH_PREVIEW =
-  "The Milōn AI finance team: the Financial Manager, the Analyst and the Advisor. Sample statements are loaded. The agents analyze them and give a health score, key ratios and next steps.";
+  "Four Milōn agents on one sample: health score, findings, profit, cash, advisory, and tax — sign-off ready in the browser.";
 export const TRY_OUTREACH_TRY_URL = "https://www.milonfinance.com/try?utm_source=email";
 export const TRY_OUTREACH_CTA_LABEL = "Talk to your AI finance team";
 /**
@@ -41,7 +41,7 @@ export const WARM_DEMO_WORDMARK = "MILŌN";
 export const WARM_DEMO_WORDMARK_FONT =
   'Georgia, "Palatino Linotype", Palatino, "Times New Roman", serif';
 
-export type WarmDemoAgent = "financial_manager" | "analyst" | "advisor";
+export type WarmDemoAgent = "financial_manager" | "analyst" | "advisor" | "tax_specialist";
 
 /** TODO(Eng1): one-agent link. Financial Manager is the default. */
 export const WARM_DEMO_AGENT: WarmDemoAgent = "financial_manager";
@@ -56,6 +56,7 @@ export function warmDemoCtaUrl(agent: WarmDemoAgent = WARM_DEMO_AGENT): string {
     financial_manager: TRY_OUTREACH_TRY_URL,
     analyst: TRY_OUTREACH_TRY_URL,
     advisor: TRY_OUTREACH_TRY_URL,
+    tax_specialist: TRY_OUTREACH_TRY_URL,
   };
   return oneAgentHref[agent];
 }
@@ -73,6 +74,19 @@ const AGENTS = [
     name: "Milōn Advisor",
     line: "Turns that reading into the next move.",
   },
+  {
+    name: "Milōn Tax Specialist",
+    line: "Prepares company tax worksheets for you to check — Milōn does not file for you.",
+  },
+] as const;
+
+/** Live text on /try — no images, Outlook-safe. */
+export const TRY_OUTREACH_WALKTHROUGH = [
+  "Health score with pillars and ratios",
+  "Analyst findings on the sample figures",
+  "Profit report and 13-week cash forecast to sign off",
+  "Advisory pack with a PDF download",
+  "Company tax computation on the sample (where the product includes tax)",
 ] as const;
 
 const INK = "#102A43";
@@ -107,6 +121,9 @@ export const TRY_OUTREACH_TEXT = [
   TRY_OUTREACH_OPENING,
   "",
   ...AGENTS.map((agent) => `${agent.name}. ${agent.line}`),
+  "",
+  "On /try you walk:",
+  ...TRY_OUTREACH_WALKTHROUGH.map((line) => `- ${line}`),
   "",
   TRY_OUTREACH_EXAMPLE_ALT,
   TRY_OUTREACH_EXAMPLE_NOTE,
@@ -304,6 +321,35 @@ export default function TryOutreachEmail() {
                               {agent.line}
                             </p>
                           </Fragment>
+                        ))}
+
+                        <h2
+                          className="ink"
+                          style={{
+                            margin: "28px 0 0",
+                            fontFamily: FONT,
+                            fontSize: 16,
+                            lineHeight: "22px",
+                            fontWeight: 700,
+                            color: INK,
+                          }}
+                        >
+                          On /try you walk
+                        </h2>
+                        {TRY_OUTREACH_WALKTHROUGH.map((line) => (
+                          <p
+                            key={line}
+                            className="muted"
+                            style={{
+                              margin: "8px 0 0",
+                              fontFamily: FONT,
+                              fontSize: 15,
+                              lineHeight: "22px",
+                              color: MUTED,
+                            }}
+                          >
+                            {line}
+                          </p>
                         ))}
 
                         <h2

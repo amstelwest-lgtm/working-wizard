@@ -596,9 +596,15 @@ assert(
 assert(talk.includes("fm-idle"), "the FM portrait uses the idle clip");
 assert(!talk.includes("<audio"), "the FM stays silent — no audio element");
 assert(
-  talk.includes("Financial Manager") && talk.includes("Analyst") && talk.includes("Advisor"),
-  "the three-agent team is named",
+  talk.includes("Financial Manager") &&
+    talk.includes("Analyst") &&
+    talk.includes("Advisor") &&
+    talk.includes("Tax Specialist"),
+  "the four-agent team is named",
 );
+assert(!talk.includes("data-try-schedule"), "schedule waits until the walkthrough finishes");
+const startHtml = renderToStaticMarkup(createElement(TryScreen, { phase: "start" }));
+assert(!startHtml.includes("Schedule a call"), "start does not offer booking yet");
 assert(talk.includes(TRIAL_CTA_LABEL), "the trial CTA is on the page");
 assert(talk.includes(esc(TRIAL_SIGNUP_HREF)), "the trial CTA links to the signup route");
 assert(talk.includes(esc(TRIAL_SIGNUP_SENTENCE)), "the trial terms are stated");
@@ -718,6 +724,7 @@ const doneTalk = renderToStaticMarkup(
   }),
 );
 assert(!doneTalk.includes("try-reply"), "no replies remain once all three are picked");
+assert(doneTalk.includes("data-try-schedule"), "booking opens after the US walkthrough");
 assert(doneTalk.includes(TRIAL_CTA_LABEL), "the conversation ends on the trial CTA");
 assert(!/whatsapp/i.test(html), "no WhatsApp");
 assert(

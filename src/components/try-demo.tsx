@@ -22,7 +22,11 @@ import type { MarketId } from "@/lib/market/types";
 const TrySampleBoards = lazy(() =>
   import("@/components/try-sample-boards").then((mod) => ({ default: mod.TrySampleBoards })),
 );
+const TryTaxBoard = lazy(() =>
+  import("@/components/try-tax-board").then((mod) => ({ default: mod.TryTaxBoard })),
+);
 import { AGENT_DISPLAY_NAME } from "@/lib/milon-team-names";
+import { TAX_AGENT_NAME, TAX_AGENT_SHORT_NAME } from "@/lib/tax-specialist/agents";
 import { SAMPLE_BUSINESS_NAME } from "@/lib/sample-business";
 import { TRIAL_CASH_OPENING_LINE } from "@/lib/trial-sample-view";
 import { FIRM_TRIAL_CARD_LINE, firmUsdListPrice } from "@/lib/stripe-plans";
@@ -44,38 +48,53 @@ const FACES = [
   { folder: "fm", agent: "financial_manager", role: "Financial Manager" },
   { folder: "analyst", agent: "analyst", role: "Analyst" },
   { folder: "advisor", agent: "advisor", role: "Advisor" },
+  { folder: "tax", agent: "tax_specialist", role: TAX_AGENT_SHORT_NAME },
 ] as const;
 
 /** Conversation topics the Financial Manager offers after the reveal. */
-export type TryTopic = "profit" | "cash" | "advisory";
+export type TryTopic = "profit" | "cash" | "advisory" | "tax";
 
 export const TRY_TOPICS: readonly TryTopic[] = ["profit", "cash", "advisory"] as const;
+
+export function tryTopicsForMarket(market: MarketId): readonly TryTopic[] {
+  return market === "ZA" ? (["profit", "cash", "advisory", "tax"] as const) : TRY_TOPICS;
+}
+
+export function tryWalkthroughComplete(picks: readonly TryTopic[], market: MarketId): boolean {
+  return tryTopicsForMarket(market).every((topic) => picks.includes(topic));
+}
 
 export const TRY_TOPIC_LABEL: Record<TryTopic, string> = {
   profit: "Profit report",
   cash: "Cash forecast",
   advisory: "Advisory pack",
+  tax: "Company tax",
 };
 
 const TOPIC_USER_LINE: Record<TryTopic, string> = {
   profit: "Show me the profit report.",
   cash: "Show me the cash forecast.",
   advisory: "Show me the advisory pack.",
+  tax: "Show me the company tax worksheet.",
 };
 
-const TOPIC_FM_REPLY: Record<TryTopic, string> = {
+const TOPIC_FM_REPLY: Record<"profit" | "cash", string> = {
   profit: `Here it is — ${SAMPLE_BUSINESS_NAME}'s revenue walked down to net profit, step by step. I hold the profit bridge; the Analyst reads the margins.`,
   cash: `Here's the 13-week cash line. ${TRIAL_CASH_OPENING_LINE} The weeks follow the monthly run-rate, estimated from the profit and loss.`,
-  advisory: `Here's the advisory pack for ${SAMPLE_BUSINESS_NAME}, labelled SAMPLE. The Advisor turned this diagnosis into moves. Sign it off here — nothing is written to a live client.`,
 };
 
-export const FM_INTRO = `We've diagnosed ${SAMPLE_BUSINESS_NAME}'s financials. The profitability report and the 13-week cash forecast are built and waiting for your sign-off. Where should we start — the profit report, the cash forecast, or the advisory pack based on this diagnosis?`;
+const TOPIC_ADVISOR_REPLY = `Here's the advisory pack for ${SAMPLE_BUSINESS_NAME}, labelled SAMPLE. I turned the diagnosis into moves. Sign it off here — nothing is written to a live client.`;
+
+const TOPIC_TAX_REPLY =
+  "Here's the SAMPLE company tax computation — line by line, ready for your review and sign-off. Milōn does not file or submit anything.";
+
+export const FM_INTRO = `We've diagnosed ${SAMPLE_BUSINESS_NAME}'s financials — health score, ratios, and findings are on this page. On a live client, the Milōn team works like this: I hold the profit bridge and the 13-week cash line; the Analyst reads the margins; the Advisor turns the reading into moves; the ${TAX_AGENT_SHORT_NAME} prepares tax workings for your sign-off. The sample deliverables below are built and waiting. Where should we start?`;
 
 const FM_CLOSING =
   "That's the sample end to end. On a live client, the team prepares all of this from the books — and you sign off.";
 
 const TRY_OPENING =
-  "This is Milōn's AI finance team: the Financial Manager, the Analyst and the Advisor. We've loaded a sample business's financial statements. The agents analyze them and give a health score, key ratios and next steps.";
+  "This is Milōn's AI finance team — the Financial Manager, the Analyst, the Advisor, and the Tax Specialist. We've loaded a sample business's financial statements. The team analyzes them and walks a health score, findings, and sign-off-ready reports.";
 
 export type TryScreenProps = {
   phase: TryPhase;
@@ -200,6 +219,18 @@ function Face({
 
 /** The Financial Manager's portrait. Silent — idle motion only, always muted. */
 function FmPortrait({ large }: { large?: boolean }) {
+  return <AgentPortrait folder="fm" label={AGENT_DISPLAY_NAME.financial_manager} large={large} />;
+}
+
+function AgentPortrait({
+  folder,
+  label,
+  large,
+}: {
+  folder: string;
+  label: string;
+  large?: boolean;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   const reduced = usePrefersReducedMotion();
   const [live, setLive] = useState(false);
@@ -220,7 +251,8 @@ function FmPortrait({ large }: { large?: boolean }) {
     else video.addEventListener("canplay", start, { once: true });
     return () => video.removeEventListener("playing", onPlaying);
   }, [reduced]);
-  const poster = "/avatars/fm/fm-poster.webp";
+  const poster = `/avatars/${folder}/${folder}-poster.webp`;
+  const clip = folder === "fm" ? "idle" : "idle";
   return (
     <div className={large ? "try-portrait try-portrait-lg" : "try-portrait try-portrait-sm"}>
       <img src={poster} alt="" width={512} height={512} />
@@ -236,12 +268,46 @@ function FmPortrait({ large }: { large?: boolean }) {
           poster={poster}
           width={512}
           height={512}
-          aria-label={`${AGENT_DISPLAY_NAME.financial_manager}, listening`}
+          aria-label={`${label}, listening`}
         >
-          <source src="/avatars/fm/fm-idle.webm" type="video/webm" />
-          <source src="/avatars/fm/fm-idle.mp4" type="video/mp4" />
+          <source src={`/avatars/${folder}/${folder}-${clip}.webm`} type="video/webm" />
+          <source src={`/avatars/${folder}/${folder}-${clip}.mp4`} type="video/mp4" />
         </video>
       ) : null}
+    </div>
+  );
+}
+
+function AgentBubble({
+  folder,
+  role,
+  children,
+  intro,
+}: {
+  folder: string;
+  role: string;
+  children: React.ReactNode;
+  intro?: boolean;
+}) {
+  const name =
+    folder === "fm"
+      ? AGENT_DISPLAY_NAME.financial_manager
+      : folder === "analyst"
+        ? AGENT_DISPLAY_NAME.analyst
+        : folder === "advisor"
+          ? AGENT_DISPLAY_NAME.advisor
+          : folder === "tax"
+            ? TAX_AGENT_NAME
+            : role;
+  return (
+    <div className={intro ? "try-turn try-turn-fm try-turn-intro" : "try-turn try-turn-fm"}>
+      <AgentPortrait folder={folder} label={name} large={intro} />
+      <div className="try-bubble try-bubble-fm">
+        <p className="try-bubble-who">
+          <span>Milōn</span> {role}
+        </p>
+        <p className="try-bubble-text">{children}</p>
+      </div>
     </div>
   );
 }
@@ -284,13 +350,17 @@ function TryConversation({
   picks,
   board,
   onPick,
+  onBookCall,
 }: {
   picks: TryTopic[];
   board: TrialBoard | null;
   onPick?: (topic: TryTopic) => void;
+  onBookCall?: (input: TryCallInput) => Promise<TryCallResult>;
 }) {
   const market = (board?.market ?? "US") as MarketId;
-  const remaining = TRY_TOPICS.filter((topic) => !picks.includes(topic));
+  const topics = tryTopicsForMarket(market);
+  const remaining = topics.filter((topic) => !picks.includes(topic));
+  const walkthroughDone = tryWalkthroughComplete(picks, market);
   return (
     <section
       className="try-card try-chat"
@@ -320,10 +390,26 @@ function TryConversation({
                 <p className="try-bubble-text">{TOPIC_USER_LINE[topic]}</p>
               </div>
             </div>
-            <FmBubble>{TOPIC_FM_REPLY[topic]}</FmBubble>
+            {topic === "advisory" ? (
+              <AgentBubble folder="advisor" role="Advisor">
+                {TOPIC_ADVISOR_REPLY}
+              </AgentBubble>
+            ) : topic === "tax" ? (
+              <AgentBubble folder="tax" role={TAX_AGENT_SHORT_NAME}>
+                {TOPIC_TAX_REPLY}
+              </AgentBubble>
+            ) : (
+              <FmBubble>{TOPIC_FM_REPLY[topic]}</FmBubble>
+            )}
             {topic === "advisory" && board ? (
               <div className="try-chat-board">
                 <TryAdvisorySample board={board} />
+              </div>
+            ) : topic === "tax" ? (
+              <div className="try-chat-board">
+                <Suspense fallback={<p className="try-status">Working from the sample figures.</p>}>
+                  <TryTaxBoard />
+                </Suspense>
               </div>
             ) : topic === "advisory" ? null : (
               <div className="try-chat-board">
@@ -365,13 +451,14 @@ function TryConversation({
         </div>
       ) : null}
       <div className="try-chat-close">
-        {remaining.length === 0 ? <p className="try-chat-close-line">{FM_CLOSING}</p> : null}
+        {walkthroughDone ? <p className="try-chat-close-line">{FM_CLOSING}</p> : null}
         <p className="try-value">{TRIAL_VALUE_PROP}</p>
         <TrialCta quiet className="try-cta-close" />
         <p className="try-trial-terms">
           {FIRM_TRIAL_CARD_LINE} Then {firmUsdListPrice("starter", "month")}/mo.
         </p>
       </div>
+      {walkthroughDone ? <TrySchedule onBook={onBookCall} /> : null}
     </section>
   );
 }
@@ -478,11 +565,9 @@ function TurnstileBox({ siteKey, onToken }: { siteKey: string; onToken: (token: 
 
 function Frame({
   phase,
-  onBookCall,
   children,
 }: {
   phase: TryPhase;
-  onBookCall?: (input: TryCallInput) => Promise<TryCallResult>;
   children: React.ReactNode;
 }) {
   return (
@@ -495,7 +580,6 @@ function Frame({
           <span className="try-stamp">SAMPLE</span>
         </div>
         {children}
-        <TrySchedule onBook={onBookCall} />
         <p className="try-sign">The MILŌN Team</p>
       </div>
       <div className="try-ctabar" aria-label="Start a free trial">
@@ -605,7 +689,7 @@ function SampleGateForm({
 export function TryScreen(props: TryScreenProps) {
   if (props.phase === "start") {
     return (
-      <Frame phase="start" onBookCall={props.onBookCall}>
+      <Frame phase="start">
         <p className="try-kicker">Sample</p>
         <h1 className="try-title try-title-hero">See a health score on sample figures.</h1>
         <p className="try-lead">{TRY_OPENING}</p>
@@ -628,7 +712,7 @@ export function TryScreen(props: TryScreenProps) {
 
   if (props.phase === "gate") {
     return (
-      <Frame phase="gate" onBookCall={props.onBookCall}>
+      <Frame phase="gate">
         <p className="try-kicker">Sample</p>
         <h1 className="try-title">Where should we send this?</h1>
         <p className="try-lead">
@@ -648,7 +732,7 @@ export function TryScreen(props: TryScreenProps) {
 
   const board = props.board;
   return (
-    <Frame phase={props.phase} onBookCall={props.onBookCall}>
+    <Frame phase={props.phase}>
       <p className="try-kicker">Sample</p>
       <h1 className="try-title">Sample health score</h1>
       <p className="try-lead">{TRY_OPENING}</p>
@@ -710,6 +794,9 @@ export function TryScreen(props: TryScreenProps) {
       {props.phase === "findings" ? (
         <section className="try-card" aria-label="Findings" data-try-findings="true">
           <h2 className="try-kicker">Findings</h2>
+          <AgentBubble folder="analyst" role="Analyst">
+            Three notes from the sample figures — ready for your sign-off with the client.
+          </AgentBubble>
           <TeamRow thinking={props.findingsPending} />
           <p className="try-status" aria-live="polite">
             {props.findingsPending
@@ -748,7 +835,12 @@ export function TryScreen(props: TryScreenProps) {
         </section>
       ) : null}
 
-      <TryConversation picks={props.picks ?? []} board={board ?? null} onPick={props.onPickTopic} />
+      <TryConversation
+        picks={props.picks ?? []}
+        board={board ?? null}
+        onPick={props.onPickTopic}
+        onBookCall={props.onBookCall}
+      />
 
       {props.runsLeft != null ? (
         <p className="try-runs">Sample runs left: {props.runsLeft}</p>
