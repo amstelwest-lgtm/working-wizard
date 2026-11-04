@@ -35,8 +35,8 @@ function PrivacyPage() {
       eyebrow="Privacy"
       title={
         <>
-          Your figures stay <span className="mk-gold">yours</span>. We say what we keep, and what
-          the AI never sees.
+          Your figures stay <span className="mk-gold">yours</span>. Sensitive client details are
+          filtered before any AI model call, and we do not train models on your client data.
         </>
       }
       lead={
@@ -138,7 +138,12 @@ function PrivacyPage() {
       </p>
 
       <h2>How AI is used</h2>
-      <p>Milōn Bot prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.</p>
+      <p>
+        Milōn prepares draft recommendations for accountant review. Before any AI model call, we
+        filter sensitive client identifiers (company names, tax IDs, account numbers) out of the text
+        we send — amounts stay so the workings stay real. Uploaded PDF statements are read as-is to
+        extract the figures. Client data is not used to train models.
+      </p>
       <p>
         Milōn uses AI. It is powered by <strong>Milōn Bot</strong>. {AI_IDENTIFIERS_LINE}{" "}
         <MarketCopy
@@ -160,7 +165,13 @@ function PrivacyPage() {
           We do not store card details. Card numbers are collected by Stripe. {FIRM_TRIAL_SENTENCE}{" "}
           on Starter. {FIRM_TRIAL_CARD_NOTE} Milōn never stores the card number.
         </li>
-        <li>We do not use your financials to train a public model of our own.</li>
+        <li>
+          We do not use your client financials to train AI models — ours or a third party&apos;s.
+        </li>
+        <li>
+          We do not send unfiltered sensitive identifiers (company names, tax IDs, account numbers)
+          into model calls.
+        </li>
       </ul>
 
       <h2>How long we keep it</h2>

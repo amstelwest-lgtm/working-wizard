@@ -5,6 +5,11 @@
  * Nothing here writes, confirms a proposal, or returns a token or a file password.
  */
 import {
+  MANAGEMENT_HABITS_BOT_READ_PROMPT,
+  parseManagementHabitRuleArtifact,
+  type ManagementHabitRuleRow,
+} from "./client-management-habits-rules.ts";
+import {
   figureDraftsFromLibraryRead,
   LIBRARY_READ_PROMPT,
   libraryHasReadableContent,
@@ -18,6 +23,7 @@ export { LIBRARY_READ_PROMPT };
 export const SHARED_DELIVERABLE_READS = [
   "list_client_library",
   "get_client_library_doc",
+  "list_client_management_rules",
   "list_tax_drafts",
   "get_tax_draft",
   "list_tax_packs",
@@ -32,6 +38,7 @@ export type SharedDeliverableRead = (typeof SHARED_DELIVERABLE_READS)[number];
 export const SHARED_DELIVERABLE_TOOL_LABELS: Record<SharedDeliverableRead, string> = {
   list_client_library: "Library",
   get_client_library_doc: "Library file",
+  list_client_management_rules: "Management habits rules",
   list_tax_drafts: "Tax drafts",
   get_tax_draft: "Tax draft",
   list_tax_packs: "Tax packs",
@@ -141,6 +148,31 @@ export function libraryDocBody(
     supplier_name: clipText(row.supplier_name, 160),
     statement,
     extraction: redactDeliverable(extraction),
+  };
+}
+
+export function managementRuleListItem(rule: ManagementHabitRuleRow): Record<string, unknown> {
+  return {
+    id: rule.id,
+    pillar: rule.pillar,
+    label: rule.label,
+    body: clipText(rule.body, 2000),
+    author_name: rule.author_name,
+    edited_at: rule.edited_at,
+    firm_id: rule.firm_id,
+  };
+}
+
+export function listManagementRulesPayload(rules: readonly ManagementHabitRuleRow[]): Record<string, unknown> {
+  return {
+    view: "management / habits view",
+    pillars: ["reality", "habits", "expectations"],
+    rules: rules.map((rule) => managementRuleListItem(rule)),
+    citation_format: "Library rule: <id> (Reality|Habits|Expectations — <label>)",
+    hard_no: [
+      "Not Compliance or statutory filing.",
+      "Does not write to Xero, QuickBooks, Sage, or any ledger.",
+    ],
   };
 }
 
@@ -322,6 +354,7 @@ export function clientSendItem(
 
 export type PeerContextInput = {
   library: Array<Record<string, unknown>>;
+  managementRules: Array<Record<string, unknown>>;
   taxDrafts: Array<Record<string, unknown>>;
   taxPacks: Array<Record<string, unknown>>;
   report: Record<string, unknown> | null;
@@ -346,6 +379,21 @@ export function formatPeerContextBlock(input: PeerContextInput): string {
       return bits.length ? `${name} (${bits.join(", ")})` : name;
     });
     lines.push(`Library (${input.library.length}): ${shown.join("; ")}`);
+  }
+  if (input.managementRules.length > 0) {
+    const parsed = input.managementRules
+      .map((row) => {
+        const id = typeof row.id === "string" ? row.id : "";
+        const pillar = clipText(row.pillar, 20);
+        const label = clipText(row.label, 80);
+        const body = clipText(row.body, 120);
+        if (!id || !label) return null;
+        return `${id} · ${pillar ?? "?"} · ${label}${body ? `: ${body}` : ""}`;
+      })
+      .filter((line): line is string => Boolean(line));
+    if (parsed.length) {
+      lines.push(`Management / habits rules (${input.managementRules.length}): ${parsed.slice(0, 8).join("; ")}`);
+    }
   }
   if (input.taxDrafts.length > 0) {
     const shown = input.taxDrafts
@@ -457,6 +505,10 @@ export function sharedDeliverableToolSchemas() {
       },
     },
     readSchema(
+      "list_client_management_rules",
+      "Reality / Habits / Expectations templates for this client (management / habits view, firm IP). Not Compliance. Does not post to the ledger.",
+    ),
+    readSchema(
       "list_tax_drafts",
       "IRP6 and IRP5 drafts on file: form, year, period, status. Does not include the field values.",
     ),
@@ -488,4 +540,4 @@ export function sharedDeliverableToolSchemas() {
 }
 
 export const SHARED_READ_PROMPT =
-  `Shared reads are list_client_library, get_client_library_doc, list_tax_drafts, get_tax_draft, list_tax_packs, get_tax_pack, get_management_report, list_figure_proposals, and list_client_sends. Every runner has them. They do not write, send, confirm, or file. ${LIBRARY_READ_PROMPT} get_management_report returns the Management Report body when the pack schema is 2. list_figure_proposals reads proposals already saved. list_client_sends never returns a token or a file password. No tax advice. Do not invent a tax figure. Quote a tax draft or tax pack only when a tool returned it.`;
+  `Shared reads are list_client_library, get_client_library_doc, list_client_management_rules, list_tax_drafts, get_tax_draft, list_tax_packs, get_tax_pack, get_management_report, list_figure_proposals, and list_client_sends. Every runner has them. They do not write, send, confirm, or file. ${LIBRARY_READ_PROMPT} ${MANAGEMENT_HABITS_BOT_READ_PROMPT} get_management_report returns the Management Report body when the pack schema is 2. list_figure_proposals reads proposals already saved. list_client_sends never returns a token or a file password. No tax advice. Do not invent a tax figure. Quote a tax draft or tax pack only when a tool returned it.`;

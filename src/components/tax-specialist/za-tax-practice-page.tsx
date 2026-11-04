@@ -8,6 +8,7 @@ import { accountantClientRouteSearch } from "@/lib/client-route-search";
 import {
   TAX_FORM_GALLERY,
   TAX_FORM_STATUS_LABEL,
+  portfolioReadyForms,
 } from "@/lib/tax-specialist/forms/gallery";
 import {
   TaxSpecialistPage,
@@ -17,7 +18,7 @@ import type { PracticeTaxPageClient } from "@/lib/tax-specialist/practice-tax-cl
 import "./za-tax-specialist-page.css";
 import "./za-tax-practice-page.css";
 
-const READY_FORMS = TAX_FORM_GALLERY.filter((form) => form.status === "ready");
+const READY_FORMS = portfolioReadyForms(TAX_FORM_GALLERY);
 
 function readyFormsSummary(): string {
   if (READY_FORMS.length === 0) return "No forms are ready to prepare yet.";

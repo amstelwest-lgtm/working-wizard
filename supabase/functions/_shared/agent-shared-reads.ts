@@ -10,6 +10,7 @@ import {
   isSharedDeliverableRead,
   libraryDocBody,
   libraryListItem,
+  listManagementRulesPayload,
   shapeManagementReport,
   taxDraftBody,
   taxDraftListItem,
@@ -17,6 +18,7 @@ import {
   taxPackListItem,
   type SharedDeliverableRead,
 } from "../../../src/lib/agent-shared-reads.ts";
+import { parseManagementHabitRuleArtifact } from "../../../src/lib/client-management-habits-rules.ts";
 import { libraryReadPending } from "../../../src/lib/library-document-read.ts";
 
 type Row = Record<string, unknown>;
@@ -348,6 +350,32 @@ async function listClientSends(db: ReadDb, clientId: string): Promise<unknown> {
   return { empty: false, sends: sends.map((row) => clientSendItem(row, items)) };
 }
 
+async function listManagementRules(db: ReadDb, clientId: string): Promise<unknown> {
+  const { rows, error } = await readList(
+    db,
+    "client_artifacts",
+    "id, client_id, meta, created_by, created_at, visibility, kind",
+    clientId,
+    80,
+    ["kind", "note"],
+  );
+  if (error) return { error };
+  const rules = rows
+    .filter((row) => row.visibility === "shared")
+    .map((row) =>
+      parseManagementHabitRuleArtifact({
+        id: String(row.id ?? ""),
+        client_id: String(row.client_id ?? clientId),
+        meta: row.meta as never,
+        created_by: (row.created_by as string | null) ?? null,
+        created_at: (row.created_at as string | null) ?? null,
+      }),
+    )
+    .filter((rule): rule is NonNullable<typeof rule> => Boolean(rule));
+  if (rules.length === 0) return { empty: true, rules: [] };
+  return { empty: false, ...listManagementRulesPayload(rules) };
+}
+
 export async function executeSharedDeliverableRead(
   name: string,
   args: Record<string, unknown>,
@@ -364,6 +392,7 @@ export async function executeSharedDeliverableRead(
   if (tool === "list_client_library") return listLibrary(db, ctx.clientId);
   if (tool === "get_client_library_doc")
     return getLibraryDoc(db, ctx.clientId, args, ctx.prepareLibraryArtifact);
+  if (tool === "list_client_management_rules") return listManagementRules(db, ctx.clientId);
   if (tool === "list_tax_drafts") return listTaxDrafts(db, ctx.clientId);
   if (tool === "get_tax_draft") return getTaxDraft(db, ctx.clientId, args);
   if (tool === "list_tax_packs") return listTaxPacks(db, ctx.clientId);
@@ -376,8 +405,9 @@ export async function executeSharedDeliverableRead(
 /** Same lists the chat prompt shows. A missing table is an empty section, not a failed turn. */
 export async function loadPeerContextBlock(db: SupabaseClient, clientId: string): Promise<string> {
   const read = dbOf(db);
-  const [library, drafts, packs, report, proposals, sends, findings] = await Promise.all([
+  const [library, managementRules, drafts, packs, report, proposals, sends, findings] = await Promise.all([
     listLibrary(read, clientId),
+    listManagementRules(read, clientId),
     listTaxDrafts(read, clientId),
     listTaxPacks(read, clientId),
     getManagementReport(read, clientId),
@@ -398,6 +428,8 @@ export async function loadPeerContextBlock(db: SupabaseClient, clientId: string)
     })(),
   ]);
   const libraryRows = asRecordList(library, "files");
+  const managementPayload = asRow(managementRules);
+  const managementRows = Array.isArray(managementPayload?.rules) ? asRows(managementPayload.rules) : [];
   const draftRows = asRecordList(drafts, "drafts");
   const packRows = asRecordList(packs, "packs");
   const proposalRows = asRecordList(proposals, "proposals");
@@ -405,6 +437,7 @@ export async function loadPeerContextBlock(db: SupabaseClient, clientId: string)
   const reportRow = asRow(report);
   return formatPeerContextBlock({
     library: libraryRows,
+    managementRules: managementRows,
     taxDrafts: draftRows,
     taxPacks: packRows,
     report: reportRow && reportRow.empty === true ? null : reportRow,

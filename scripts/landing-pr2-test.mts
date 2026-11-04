@@ -104,7 +104,7 @@ assert(css.includes(".fc-1{") && css.includes("top:300px"), "desktop float card 
 assert(index.includes("<details"), "FAQ items are details");
 assert(index.includes("<summary>"), "FAQ items have a summary");
 assert(index.includes('href="/faq"'), "FAQ links to all questions");
-assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ keeps the selling answers only");
+assert(HOMEPAGE_FAQ_ITEMS.length === 6, "homepage FAQ keeps the selling answers only");
 assert(HOMEPAGE_FAQ_ITEMS[0]?.question === "Does Milōn replace the accountant?", "accountant objection is first");
 assert(
   HOMEPAGE_FAQ_ITEMS.some((item) => item.question === HOMEPAGE_COST_QUESTION),

@@ -337,7 +337,7 @@ export function ZaTaxSpecialistPage({
       <AgentSection section="forms" data-tax-section="forms">
         <FormGallery onOpen={client || onOpenForm ? openForm : undefined} />
       </AgentSection>
-      <Workings />
+      {client ? null : <Workings />}
       <AgentSection section="deadlines" data-tax-section="deadlines">
         {client ? (
           <ClientDeadlines client={client} today={day} drafts={drafts ?? []} />

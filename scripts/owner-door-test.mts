@@ -1163,9 +1163,19 @@ assert(
 assert(video.includes('"ended"'), "the next clip starts when the current one ends");
 assert(video.includes("avatarClipAtEnd"), "the swap uses the file's own last frame");
 assert(video.includes("incoming.loop = false"), "a clip ends so the next one can start");
-assert(video.includes('agent === "tax_specialist" && desired === "idle"'), "tax opens on a moving flourish");
-assert(video.includes('"curious"'), "the tax sheet opens on the curious clip");
-assert(video.includes('restOnIntro && playing === "curious"'), "the tax flourish plays once and then holds");
+assert(
+  video.includes('agent === "tax_specialist" && desired === "handoff"'),
+  "tax hand-off opens on a moving flourish",
+);
+assert(video.includes('"curious"'), "the tax hand-off opens on the curious clip");
+assert(
+  video.includes('restOnIntro && playing === "curious"'),
+  "the tax hand-off flourish plays once and then holds",
+);
+assert(
+  !/tax_specialist" && desired === "idle"/.test(video),
+  "tax home cards loop like the other agents instead of freezing on idle",
+);
 assert(video.includes("holdLastFrame"), "the last frame stays up so the hand-off is not blank");
 assert(!video.includes("currentTime < 0.15"), "clips do not switch mid-play");
 assert(!video.includes("121"), "the player does not assume a 121-frame clip");
