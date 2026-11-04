@@ -364,6 +364,8 @@ export function MilonTeamDesk({
           <HealthNarrativeLine
             text={sentence}
             liveSentence={liveSentence}
+            findingId={row.id}
+            onReconciled={onRefreshDrafts}
             className="milon-desk-figure"
           />
           {meta}

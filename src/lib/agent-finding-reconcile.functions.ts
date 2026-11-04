@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   loadHealthScoreSnapshot,
   persistReconciledFindingCopy,
@@ -78,7 +79,7 @@ export const reconcileHealthFindingNarrative = createServerFn({ method: "POST" }
     });
 
     const seenAt = new Date().toISOString();
-    const { error: updateError } = await context.supabase
+    const { data: updated, error: updateError } = await supabaseAdmin
       .from("agent_findings")
       .update({
         title: persisted.title,
@@ -86,9 +87,12 @@ export const reconcileHealthFindingNarrative = createServerFn({ method: "POST" }
         last_seen: seenAt,
         evidence: mergedEvidence as never,
       })
-      .eq("id", data.findingId);
+      .eq("id", data.findingId)
+      .select("id")
+      .single();
 
     if (updateError) throw new Error(updateError.message);
+    if (!updated?.id) throw new Error("Finding update did not persist");
 
     return {
       ok: true as const,

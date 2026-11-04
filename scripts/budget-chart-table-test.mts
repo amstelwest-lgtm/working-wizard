@@ -99,6 +99,20 @@ const views = budgetMonthViews(doc, [
 ]);
 const empty = revenueYtd(budgetMonthViews(doc, []), "2026-10");
 assert(empty.actual == null, "no uploaded months leave actuals blank");
+const paceViews = budgetMonthViews(doc, [], {
+  revenue: "120000",
+  cogs: "45000",
+  operating_expenses: "42000",
+});
+const marchPace = paceViews.find((row) => row.month === "2026-03");
+assert(marchPace?.actual?.revenue === 10_000, `statement pace revenue ${marchPace?.actual?.revenue}`);
+assert(marchPace?.actual?.cogs === 3_750, `statement pace cogs ${marchPace?.actual?.cogs}`);
+const stored = budgetMonthViews(
+  doc,
+  [{ month: "2026-03", totals: { revenue: 99, cogs: 1 } }],
+  { revenue: "120000", cogs: "45000", operating_expenses: "42000" },
+);
+assert(stored.find((row) => row.month === "2026-03")?.actual?.revenue === 99, "stored month rows win over statement fallback");
 const ytd = revenueYtd(views, "2026-10");
 assert(ytd.actual === 9_000_000, "year to date sums months that have actuals");
 const later = revenueYtd(views, "2026-02");

@@ -826,6 +826,7 @@ export function BudgetPanel({
         periodCaption={periodCaption}
         uniformNote={uniformNote}
         actuals={actuals}
+        periodFinancials={figureSource as Record<string, unknown> | null}
         unmappedReview={unmapped}
         onClearUnmapped={() => setUnmapped(null)}
         onChangeModel={beginModelChange}

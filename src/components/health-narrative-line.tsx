@@ -3,6 +3,7 @@
  * stays off the screen until Regenerate paints the snapshot sentence.
  */
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { FIGURES_CHANGED_REGENERATE, splitRegenerateNarrative } from "@/lib/health-snapshot";
 import { reconcileHealthFindingNarrative } from "@/lib/agent-finding-reconcile.functions";
@@ -37,8 +38,9 @@ export function HealthNarrativeLine({
         const result = await reconcile({ data: { findingId } });
         setShown(result.title || liveSentence);
         onReconciled?.();
-      } catch {
-        setShown(liveSentence);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not save regenerated narrative";
+        toast.error(message);
       } finally {
         setBusy(false);
       }

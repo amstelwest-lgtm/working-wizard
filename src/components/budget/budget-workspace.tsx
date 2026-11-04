@@ -93,6 +93,7 @@ export function BudgetWorkspace({
   openingBalanceMissing = false,
   periodCaption = null,
   uniformNote = null,
+  periodFinancials = null,
   layout = "stacked",
   pagedView,
   onPagedViewChange,
@@ -131,6 +132,8 @@ export function BudgetWorkspace({
   openingBalanceMissing?: boolean;
   periodCaption?: string | null;
   uniformNote?: string | null;
+  /** Saved statement on the client. Month table falls back to statement pace when month actuals are empty. */
+  periodFinancials?: Record<string, unknown> | null;
   /** Accountant client budget. Owner and try stay stacked. */
   layout?: "stacked" | "paged";
   pagedView?: BudgetPagedView;
@@ -176,6 +179,7 @@ export function BudgetWorkspace({
           openingBalanceMissing={openingBalanceMissing}
           periodCaption={periodCaption}
           uniformNote={uniformNote}
+          periodFinancials={periodFinancials}
           layout={layout}
           pagedView={pagedView}
           onPagedViewChange={onPagedViewChange}
@@ -212,6 +216,7 @@ export function BudgetWorkspace({
       openingBalanceMissing={openingBalanceMissing}
       periodCaption={periodCaption}
       uniformNote={uniformNote}
+      periodFinancials={periodFinancials}
     />
   );
 }
@@ -333,6 +338,7 @@ function BudgetComplexWorkspace({
   openingBalanceMissing = false,
   periodCaption = null,
   uniformNote = null,
+  periodFinancials = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -360,6 +366,7 @@ function BudgetComplexWorkspace({
   openingBalanceMissing?: boolean;
   periodCaption?: string | null;
   uniformNote?: string | null;
+  periodFinancials?: Record<string, unknown> | null;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
@@ -475,6 +482,7 @@ function BudgetComplexWorkspace({
         displayTemplateId={displayTemplateId}
         periodCaption={periodCaption}
         uniformNote={uniformNote}
+        periodFinancials={periodFinancials}
       />
       {nestInDrawer(
         drawer,
