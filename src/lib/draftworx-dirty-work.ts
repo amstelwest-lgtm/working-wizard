@@ -1,9 +1,9 @@
 /**
- * Draftworx-oriented working-paper helpers for ZA accountant dirty work.
+ * Working-paper helpers for accountant dirty work (ZA Draftworx, US Caseware).
  *
  * v1 maps Milōn's aggregated period financials to a summary trial balance
  * (lead-schedule level), not a full general ledger. The CSV is shaped for
- * Draftworx Excel import (Account Number, Account Name, Debit, Credit).
+ * Excel import (Account Number, Account Name, Debit, Credit).
  */
 
 import { coherentEquity, equityCrossCheck, explicitLiabilityTotal } from "./equity-coherence.ts";
@@ -30,6 +30,14 @@ export type DraftworxSummaryRow = {
 };
 
 export const DRAFTWORX_TB_CSV_HEADER = "Account Number,Account Name,Debit,Credit,Milōn note";
+
+export const WORKING_PAPER_TB_CSV_HEADER = DRAFTWORX_TB_CSV_HEADER;
+
+export type WorkingPaperVendor = "draftworx" | "caseware";
+
+function vendorProductName(vendor: WorkingPaperVendor): string {
+  return vendor === "draftworx" ? "Draftworx" : "Caseware";
+}
 
 function finite(raw: unknown): number | null {
   if (typeof raw === "number" && Number.isFinite(raw)) return raw;
@@ -71,13 +79,33 @@ export function draftworxDirtyWorkEnabled(market: Pick<ResolvedMarket, "country"
   return market.country === "ZA";
 }
 
-export function buildDraftworxWorkingPaperChecklist(input: {
+/** True when this client market should see Caseware dirty-work surfaces. */
+export function casewareDirtyWorkEnabled(market: Pick<ResolvedMarket, "country">): boolean {
+  return market.country === "US";
+}
+
+export function workingPaperVendorForMarket(
+  market: Pick<ResolvedMarket, "country">,
+): WorkingPaperVendor | null {
+  if (market.country === "ZA") return "draftworx";
+  if (market.country === "US") return "caseware";
+  return null;
+}
+
+/** ZA Draftworx or US Caseware — used to gate Work → Compliance. */
+export function complianceDirtyWorkEnabled(market: Pick<ResolvedMarket, "country">): boolean {
+  return workingPaperVendorForMarket(market) != null;
+}
+
+export function buildWorkingPaperChecklist(input: {
   financials: Record<string, unknown> | null | undefined;
   market: ResolvedMarket;
+  vendor: WorkingPaperVendor;
   financialsSignoff?: ClientReviewSignoff | null;
   signoffStale?: boolean;
   needsTrialBalanceRefresh?: boolean;
 }): WorkingPaperCheckItem[] {
+  const product = vendorProductName(input.vendor);
   const fin = input.financials ?? {};
   const meta = readStatementMeta(fin, input.market);
   const equityResolved = coherentEquity(fin);
@@ -135,7 +163,7 @@ export function buildDraftworxWorkingPaperChecklist(input: {
         ? "Need total assets and liabilities (or payables total) on the balance sheet."
         : equationOk
           ? "Summary totals tie within 1%."
-          : "Totals do not tie within 1% — reconcile before sign-off in Draftworx.",
+          : `Totals do not tie within 1% — reconcile before sign-off in ${product}.`,
   });
 
   items.push({
@@ -150,7 +178,7 @@ export function buildDraftworxWorkingPaperChecklist(input: {
     label: "Derived equity flagged for partner review",
     status: equityResolved.derived ? "warn" : equityResolved.equity ? "pass" : "todo",
     detail: equityResolved.derived
-      ? "Equity was plugged from assets − liabilities. Confirm in Draftworx before final sign-off."
+      ? `Equity was plugged from assets − liabilities. Confirm in ${product} before final sign-off.`
       : equityResolved.equity
         ? "Equity is typed or reported, not plugged."
         : "Equity is blank — import or type balance-sheet lines.",
@@ -173,7 +201,7 @@ export function buildDraftworxWorkingPaperChecklist(input: {
     detail: !signed
       ? "No sign-off yet."
       : input.signoffStale
-        ? "Figures changed after sign-off — re-review before exporting to Draftworx."
+        ? `Figures changed after sign-off — re-review before exporting to ${product}.`
         : "Sign-off is current for the figures on file.",
   });
 
@@ -191,15 +219,27 @@ export function buildDraftworxWorkingPaperChecklist(input: {
     label: "Trial balance import complete (no stale gaps)",
     status: input.needsTrialBalanceRefresh ? "warn" : hasFigures ? "pass" : "todo",
     detail: input.needsTrialBalanceRefresh
-      ? "Operating expenses or cash were blank on the last TB import — re-import before Draftworx."
+      ? `Operating expenses or cash were blank on the last TB import — re-import before ${product}.`
       : "No known stale trial-balance gaps on this file.",
   });
 
   return items;
 }
 
+export function buildDraftworxWorkingPaperChecklist(
+  input: Omit<Parameters<typeof buildWorkingPaperChecklist>[0], "vendor">,
+): WorkingPaperCheckItem[] {
+  return buildWorkingPaperChecklist({ ...input, vendor: "draftworx" });
+}
+
+export function buildCasewareWorkingPaperChecklist(
+  input: Omit<Parameters<typeof buildWorkingPaperChecklist>[0], "vendor">,
+): WorkingPaperCheckItem[] {
+  return buildWorkingPaperChecklist({ ...input, vendor: "caseware" });
+}
+
 /** Summary TB rows from aggregated Milōn financials (not GL detail). */
-export function draftworxSummaryTrialBalanceRows(
+export function summaryTrialBalanceRows(
   financials: Record<string, unknown> | null | undefined,
 ): DraftworxSummaryRow[] {
   const fin = financials ?? {};
@@ -213,7 +253,7 @@ export function draftworxSummaryTrialBalanceRows(
 
   const assets = finite(fin.totalAssets);
   if (assets != null) {
-    pushBalanceRow(rows, "1999", "Total assets (summary)", assets, "Milōn total — not a Draftworx control total");
+    pushBalanceRow(rows, "1999", "Total assets (summary)", assets, "Milōn total — not a control total");
   }
 
   pushBalanceRow(rows, "2000", "Trade and other payables", -(finite(fin.payables) ?? 0));
@@ -243,22 +283,30 @@ export function draftworxSummaryTrialBalanceRows(
   return rows;
 }
 
+export function draftworxSummaryTrialBalanceRows(
+  financials: Record<string, unknown> | null | undefined,
+): DraftworxSummaryRow[] {
+  return summaryTrialBalanceRows(financials);
+}
+
 function csvEscape(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
 }
 
-export function draftworxTrialBalanceCsv(
+export function workingPaperTrialBalanceCsv(
   financials: Record<string, unknown> | null | undefined,
   clientName: string,
-  market: ResolvedMarket = ZA_MARKET,
+  market: ResolvedMarket,
+  vendor: WorkingPaperVendor,
 ): string {
-  const rows = draftworxSummaryTrialBalanceRows(financials);
+  const rows = summaryTrialBalanceRows(financials);
   const meta = readStatementMeta(financials ?? {}, market);
-  const banner = `# Milōn summary trial balance for Draftworx Excel import — ${clientName.trim() || "Client"} — ${meta.periodLabel ?? "period not set"} — not a full GL`;
+  const product = vendorProductName(vendor);
+  const banner = `# Milōn summary trial balance for ${product} Excel import — ${clientName.trim() || "Client"} — ${meta.periodLabel ?? "period not set"} — not a full GL`;
   const lines = [
     banner,
-    DRAFTWORX_TB_CSV_HEADER,
+    WORKING_PAPER_TB_CSV_HEADER,
     ...rows.map((row) =>
       [
         csvEscape(row.accountNumber),
@@ -272,12 +320,41 @@ export function draftworxTrialBalanceCsv(
   return `${lines.join("\n")}\n`;
 }
 
-export function draftworxExportFileName(clientName: string, periodEnd: string | null): string {
+export function draftworxTrialBalanceCsv(
+  financials: Record<string, unknown> | null | undefined,
+  clientName: string,
+  market: ResolvedMarket = ZA_MARKET,
+): string {
+  return workingPaperTrialBalanceCsv(financials, clientName, market, "draftworx");
+}
+
+export function casewareTrialBalanceCsv(
+  financials: Record<string, unknown> | null | undefined,
+  clientName: string,
+  market: ResolvedMarket,
+): string {
+  return workingPaperTrialBalanceCsv(financials, clientName, market, "caseware");
+}
+
+export function workingPaperExportFileName(
+  clientName: string,
+  periodEnd: string | null,
+  vendor: WorkingPaperVendor,
+): string {
   const slug = (clientName.trim() || "client")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 40);
   const date = (periodEnd ?? new Date().toISOString().slice(0, 10)).slice(0, 10);
-  return `milon-draftworx-summary-tb-${slug}-${date}.csv`;
+  const prefix = vendor === "draftworx" ? "milon-draftworx-summary-tb" : "milon-caseware-summary-tb";
+  return `${prefix}-${slug}-${date}.csv`;
+}
+
+export function draftworxExportFileName(clientName: string, periodEnd: string | null): string {
+  return workingPaperExportFileName(clientName, periodEnd, "draftworx");
+}
+
+export function casewareExportFileName(clientName: string, periodEnd: string | null): string {
+  return workingPaperExportFileName(clientName, periodEnd, "caseware");
 }

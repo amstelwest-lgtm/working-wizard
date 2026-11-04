@@ -90,7 +90,7 @@ const clientRoute = readFileSync(
   "utf8",
 );
 assert(clientRoute.includes('id="pane-compliance"'), "Compliance route has its own pane");
-assert(clientRoute.includes("<CompliancePane"), "Compliance pane mounts Draftworx surface");
+assert(clientRoute.includes("<CompliancePane"), "Compliance pane mounts working-paper surface");
 assert(clientRoute.includes("compliance-pane"), "compliance pane import wired");
 const ratiosPane = clientRoute.slice(
   clientRoute.indexOf('id="pane-ratios"'),

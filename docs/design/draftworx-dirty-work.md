@@ -22,7 +22,7 @@ South African accountants spend hours in **Draftworx** (and sometimes Caseware) 
 - Full GL / account-code import from Sage, Xero, or Pastel.
 - Draftworx Cloud API or direct Caseware round-trip.
 - Auto-ticking Draftworx lead sheets or agent-run file mutations.
-- US Caseware-first path (only show card for `market.country === "ZA"` today).
+- US Caseware path on Work → Compliance (`market.country === "US"`) — see [caseware-dirty-work.md](./caseware-dirty-work.md).
 - Send-an-agent mission type for “prepare Draftworx pack” (Eng1 `/a` missions).
 - Persisted checklist state in Postgres (v1 is recompute on load).
 

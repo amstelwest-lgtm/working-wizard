@@ -1,8 +1,8 @@
 import { ClientSubpageFrame } from "@/components/client-subpage";
-import { DraftworxDirtyWorkPanel } from "@/components/draftworx-dirty-work-panel";
+import { WorkingPaperDirtyWorkPanel } from "@/components/draftworx-dirty-work-panel";
 import { EmptyState } from "@/components/primitives/empty-state";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
-import { draftworxDirtyWorkEnabled } from "@/lib/draftworx-dirty-work";
+import { complianceDirtyWorkEnabled, workingPaperVendorForMarket } from "@/lib/draftworx-dirty-work";
 import type { ResolvedMarket } from "@/lib/market/types";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 
@@ -27,7 +27,9 @@ export function CompliancePane({
   hasFigures: boolean;
   onImportTrialBalance: () => void;
 }) {
-  const enabled = draftworxDirtyWorkEnabled(market);
+  const enabled = complianceDirtyWorkEnabled(market);
+  const vendor = workingPaperVendorForMarket(market);
+  const productLabel = vendor === "caseware" ? "Caseware" : "Draftworx";
 
   return (
     <ClientSubpageFrame id="compliance" eyebrow="Work" title="Compliance">
@@ -36,21 +38,21 @@ export function CompliancePane({
           id="compliance-unavailable"
           dashed
           title="Compliance tools are not available here yet"
-          description="Draftworx working-paper helpers are limited to South African client files."
+          description="Working-paper helpers are limited to South African (Draftworx) and US (Caseware) client files."
         />
       ) : !hasFigures ? (
         <EmptyState
           id="compliance-no-figures"
           dashed
           title="Import figures first"
-          description="Load a trial balance on Diagnose, then return here for Draftworx checklist and summary export."
+          description={`Load a trial balance on Diagnose, then return here for ${productLabel} checklist and summary export.`}
         />
       ) : (
         <>
           {needsTrialBalanceRefresh ? (
             <TrialBalanceRefreshPrompt onImport={onImportTrialBalance} />
           ) : null}
-          <DraftworxDirtyWorkPanel
+          <WorkingPaperDirtyWorkPanel
             clientId={clientId}
             clientName={clientName}
             market={market}
