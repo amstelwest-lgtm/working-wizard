@@ -21,6 +21,7 @@ import {
   describeIntercompanyCandidatePair,
 } from "@/lib/group-eliminations";
 import { buildFxStub, describeMemberCurrency } from "@/lib/group-fx";
+import { buildGroupHealthStub } from "@/lib/group-health";
 import { buildNciStub, describeNciOwnershipCandidate } from "@/lib/group-nci";
 
 function parseAmount(raw: string | undefined): number | null {
@@ -117,6 +118,16 @@ export function GroupCombinedFiguresPreview({
 
   const nciStub = useMemo(() => buildNciStub(ownershipEdges), [ownershipEdges]);
 
+  const healthStub = useMemo(
+    () =>
+      buildGroupHealthStub({
+        memberCount: activeMembers?.length ?? 0,
+        consolidationOk: result?.ok ?? false,
+        combined: result?.ok ? result.combined : null,
+      }),
+    [activeMembers, result],
+  );
+
   const showConsolidationStubs =
     activeMembers &&
     activeMembers.length >= 2 &&
@@ -127,6 +138,7 @@ export function GroupCombinedFiguresPreview({
 
   const showFxStub = showConsolidationStubs && fxStub;
   const showNciStub = showConsolidationStubs && nciStub;
+  const showHealthStub = showConsolidationStubs && healthStub;
 
   const showPeriodAlign =
     bundle &&
@@ -368,6 +380,37 @@ export function GroupCombinedFiguresPreview({
                 </li>
               ))}
             </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showHealthStub ? (
+        <div
+          className="space-y-2 rounded-lg border border-dashed border-[#C9D8F0] bg-[#F4F8FF]/80 px-3 py-2 dark:border-white/15 dark:bg-slate-900/30"
+          data-group-health-stub=""
+        >
+          <p className="text-xs font-semibold text-[#102A43] dark:text-slate-100">
+            Group Health (planned)
+          </p>
+          <p className="text-xs leading-relaxed text-[#486581] dark:text-slate-400">
+            {healthStub.headline}. {healthStub.detail}
+          </p>
+          <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-[#486581] dark:text-slate-500">
+            {healthStub.notAppliedReasons.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          {healthStub.combinedInputLabels.length > 0 ? (
+            <p className="text-[11px] text-[#486581] dark:text-slate-400">
+              Combined inputs on file: {healthStub.combinedInputLabels.join(" · ")}
+            </p>
+          ) : null}
+          {healthStub.plannedRatioLabels.length > 0 ? (
+            <p className="text-[11px] text-[#486581] dark:text-slate-400">
+              Planned group ratios ({healthStub.plannedRatioLabels.length}):{" "}
+              {healthStub.plannedRatioLabels.slice(0, 6).join(" · ")}
+              {healthStub.plannedRatioLabels.length > 6 ? " · …" : ""}
+            </p>
           ) : null}
         </div>
       ) : null}
