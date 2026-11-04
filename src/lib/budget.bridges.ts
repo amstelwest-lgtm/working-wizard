@@ -118,12 +118,13 @@ export function statementMonthActuals(
   const annual = annualiseBudgetFinancials(
     withCostAliases(periodFinancials as Record<string, string | number | null | undefined>),
   );
+  const bridge = periodProfitBridge(annual);
   const month = (value: number | null) => (value == null ? 0 : round2(value / 12));
   const actuals: BudgetActuals = {
     label,
     revenue: month(presentNumber(annual.revenue)),
-    cogs: month(presentNumber(annual.cogs)),
-    fixedCosts: month(presentNumber(annual.fixedCosts)),
+    cogs: month(bridge.cogs),
+    fixedCosts: month(bridge.operatingExpenses),
   };
   if (!(actuals.revenue || actuals.cogs || actuals.fixedCosts)) return null;
   return actuals;

@@ -488,4 +488,12 @@ const regenPatch = refreshedFindingUpdate({
 });
 assert(regenPatch.last_seen === regenSeen, "dedupe refresh sets last_seen");
 
+const stripOnly = persistReconciledFindingCopy({
+  title: `${renderHealthNarrative(live)} ${FIGURES_CHANGED_REGENERATE}.`,
+  detail: null,
+  evidence,
+  live,
+});
+assert(stripOnly.changed, "stripping the regenerate marker counts as a persist");
+
 console.log("health-narrative-snapshot ok");

@@ -26,6 +26,7 @@ import {
   figuresCheckedLine,
   findingFigureEntries,
   findingPeriod,
+  findingSeenAt,
   findingSentence,
   handoffParts,
   handoffSentence,
@@ -315,7 +316,7 @@ export function MilonTeamDesk({
     const draft = draftFindingLabel(row);
     const checked = figuresCheckedLine(
       feed.healthQuote?.periodLabel ?? findingPeriod(row),
-      row.created_at,
+      findingSeenAt(row),
       clock,
       live?.market ?? marketForClient(null),
     );

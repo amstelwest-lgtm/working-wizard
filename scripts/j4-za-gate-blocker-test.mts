@@ -60,6 +60,15 @@ const monthViews = budgetMonthViews(doc, [{ month: "2026-03", totals: { revenue:
 const march = monthViews.find((row) => row.month === "2026-03");
 assert(march?.actual?.cogs === 56_000, `chart month COGS ${march?.actual?.cogs}`);
 
+const twisted = normalizeTaxonomyTotals({
+  revenue: 101_250,
+  cogs: 213_687,
+  grossProfit: 96_583,
+});
+const twistedViews = budgetMonthViews(doc, [{ month: "2026-04", totals: twisted }]);
+const april = twistedViews.find((row) => row.month === "2026-04");
+assert(april?.actual && Math.abs(april.actual.cogs - 4_667) < 2, `twisted month COGS ${april?.actual?.cogs}`);
+
 const planZeros = budgetStatementDisplayTotals({
   periodKnown: false,
   planTotals: budgetRangeTotals(budgetMonthViews(doc, [])),
