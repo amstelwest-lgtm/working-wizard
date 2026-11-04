@@ -46,7 +46,6 @@ test("membersFromLoadedFigures uses pickCurrent snapshot then live periodEnd", (
           {
             client_id: "a",
             period_date: "2026-06-30",
-            period_label: "Jun 2026",
             created_at: "2026-06-01T00:00:00Z",
             financials: { revenue: "100" },
           },
@@ -59,7 +58,6 @@ test("membersFromLoadedFigures uses pickCurrent snapshot then live periodEnd", (
         {
           revenue: "50",
           periodEnd: "2026-06-30",
-          periodLabel: "Jun 2026",
         },
       ],
     ]),
@@ -75,7 +73,6 @@ test("memberConsolidationInput prefers snapshot financials over live", () => {
     company("a", "Alpha"),
     {
       period_date: "2026-06-30",
-      period_label: "Jun 2026",
       financials: { revenue: "99" },
     },
     { revenue: "1" },

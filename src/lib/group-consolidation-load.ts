@@ -3,7 +3,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { pickCurrentSnapshot } from "@/lib/financial-snapshots";
+import { periodLabelFromDate, pickCurrentSnapshot } from "@/lib/financial-snapshots";
 import type { GroupCompany } from "@/lib/client-group-client";
 import type {
   CompanyConsolidationInput,
@@ -12,7 +12,6 @@ import type {
 
 type SnapshotRow = {
   client_id: string;
-  period_label: string | null;
   period_date: string | null;
   created_at: string | null;
   financials: unknown;
@@ -35,14 +34,9 @@ function livePeriodDate(financials: Record<string, string | undefined>): string 
   return null;
 }
 
-function livePeriodLabel(financials: Record<string, string | undefined>): string | null {
-  const label = financials.periodLabel?.trim();
-  return label || null;
-}
-
 export function memberConsolidationInput(
   company: Pick<GroupCompany, "id" | "name" | "currency">,
-  snapshot: Pick<SnapshotRow, "period_date" | "period_label" | "financials"> | null,
+  snapshot: Pick<SnapshotRow, "period_date" | "financials"> | null,
   liveFinancials: unknown,
 ): CompanyConsolidationInput {
   const live = normalizeFinancialScalars(liveFinancials);
@@ -51,7 +45,7 @@ export function memberConsolidationInput(
     : null;
   const financials = fromSnapshot && Object.keys(fromSnapshot).length > 0 ? fromSnapshot : live;
   const periodDate = snapshot?.period_date?.trim() || livePeriodDate(live) || null;
-  const periodLabel = snapshot?.period_label?.trim() || livePeriodLabel(live) || null;
+  const periodLabel = periodDate ? periodLabelFromDate(periodDate) : null;
   return {
     clientId: company.id,
     name: company.name,
@@ -87,7 +81,7 @@ export async function loadGroupConsolidationMembers(
     supabase.from("clients").select("id, financials").in("id", ids),
     supabase
       .from("client_financial_snapshots")
-      .select("client_id, period_label, period_date, created_at, financials")
+      .select("client_id, period_date, created_at, financials")
       .in("client_id", ids)
       .order("period_date", { ascending: false })
       .limit(Math.max(ids.length * 8, 16)),

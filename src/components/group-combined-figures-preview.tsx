@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMarketFormat } from "@/contexts/market";
+import { formatCalendarDay } from "@/lib/market/format";
 import type { GroupCompany } from "@/lib/client-group-client";
 import {
   GROUP_ADDITIVE_SCALAR_KEYS,
@@ -27,7 +28,7 @@ export function GroupCombinedFiguresPreview({
   companies: readonly GroupCompany[];
   onOpenCompany?: (clientId: string) => void;
 }) {
-  const { money } = useMarketFormat();
+  const { money, market } = useMarketFormat();
   const [members, setMembers] = useState<CompanyConsolidationInput[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -112,8 +113,7 @@ export function GroupCombinedFiguresPreview({
       {result?.ok ? (
         <>
           <p className="text-xs text-[#486581] dark:text-slate-400">
-            {result.periodLabel ? `${result.periodLabel} · ` : ""}
-            Period end {result.periodDate}
+            Period end {formatCalendarDay(result.periodDate, market)}
             {result.currency ? ` · ${result.currency}` : ""}
           </p>
           <div className="overflow-x-auto rounded-lg border border-[#DBEAFE] bg-white dark:border-white/10 dark:bg-slate-950/40">
