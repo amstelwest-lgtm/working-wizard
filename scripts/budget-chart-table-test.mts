@@ -5,6 +5,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
+import { budgetComparisonPeriodBasis } from "../src/lib/statement-cover";
+import { fiscalStatementSlice } from "../src/lib/budget-period";
 import { budgetWindowLabel, createBudgetDocument, fyMonths } from "../src/lib/budget.months";
 import {
   budgetUniformNote,
@@ -19,6 +21,7 @@ import {
   budgetPeriodTotalCell,
   budgetPlanIsSet,
   budgetRangeTotals,
+  budgetStatementDisplayTotals,
   budgetTableRows,
   budgetYtdSentence,
   budgetYtdSignal,
@@ -352,5 +355,15 @@ for (let i = 0; i < 40; i++) {
 }
 const perPass = (performance.now() - started) / 40;
 assert(perPass < 50, `budget derivation is ${perPass.toFixed(2)}ms, expected under 50ms`);
+
+const chill = { revenue: 1_215_000, cogs: -56_000, ebit: 56_800, netIncome: 27_010 };
+assert(budgetComparisonPeriodBasis(chill).kind === "stored", "undated flows score as stored cover");
+const chillSlice = fiscalStatementSlice(chill, 3);
+assert(chillSlice != null && Math.abs((chillSlice.revenue ?? 0) - 1_215_000) < 1, "chill slice revenue");
+const unscored = budgetStatementDisplayTotals({
+  periodKnown: false,
+  planTotals: { revenue: 0, expenses: 0, net: 0 },
+});
+assert(unscored.revenue == null && unscored.operatingProfit == null, "unscored tiles are blank");
 
 console.log("budget chart table ok");

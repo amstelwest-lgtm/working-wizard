@@ -179,7 +179,7 @@ const wfInterest = periodProfitBridge(
   zaWaterfall.fallback as unknown as Record<string, unknown>,
 ).interest;
 assert(
-  zaInterest === `Interest on the P&L is 0.9% of revenue (${money(wfInterest)}). ${LABEL}.`,
+  zaInterest === `Interest on the P&L is 0.9% of revenue ${money(wfInterest)}. ${LABEL}.`,
   `ZA interest clipped to the waterfall (${money(wfInterest)}): ${zaInterest}`,
 );
 assert(!zaInterest.includes("R 3 600"), "ZA interest is not the raw 3 600");
@@ -190,7 +190,7 @@ const usInterest = interestOfRevenueSentence(
   firmYearInterestClip(JAN_SEP, US.fyStartMonthDefault),
 );
 assert(
-  usInterest === "Interest on the P&L is 0.9% of revenue ($3,600).",
+  usInterest === "Interest on the P&L is 0.9% of revenue $3,600.",
   `US interest unchanged: ${usInterest}`,
 );
 assert(

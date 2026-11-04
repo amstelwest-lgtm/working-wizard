@@ -231,6 +231,7 @@ export function presentLiveDraft(base: string, live?: DraftLiveFigures | null): 
     storedHash: live?.storedScoreHash,
     storedHealth: live?.storedHealth ?? null,
     forceStale: moved,
+    canonicalRatios: ratios,
   });
   if (health.regenerate) {
     return { text: health.text, stale: true, refresh: true, regenerate: true };

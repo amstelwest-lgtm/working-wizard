@@ -35,6 +35,7 @@
     "test:home-profit-period": "vite-node --config scripts/vite-test.config.ts scripts/home-profit-period-test.mts",
     "test:j4-za-firm-year-label": "vite-node --config scripts/vite-test.config.ts scripts/j4-za-firm-year-label-test.mts",
     "test:j4-za-analyst-prorata": "vite-node --config scripts/vite-test.config.ts scripts/j4-za-analyst-prorata-label-test.mts",
+    "test:j4-za-gate": "vite-node --config scripts/vite-test.config.ts scripts/j4-za-gate-blocker-test.mts",
     "test:answer-strip-cash-budget": "vite-node --config scripts/vite-test.config.ts scripts/answer-strip-cash-budget-test.mts",
     "test:answer-strip-health-profit": "vite-node --config scripts/vite-test.config.ts scripts/answer-strip-health-profit-test.mts",
     "test:answer-strip-collections-payables": "vite-node --config scripts/vite-test.config.ts scripts/answer-strip-collections-payables-test.mts",

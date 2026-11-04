@@ -10,7 +10,8 @@
  * A blank line stays null. It is not stored as 0.
  */
 
-import { budgetCoverWindowLabel, statementPeriodBasis } from "@/lib/budget.bridges";
+import { budgetCoverWindowLabel } from "@/lib/budget.bridges";
+import { budgetComparisonPeriodBasis } from "@/lib/statement-cover";
 import { proratedPeriodLabel } from "@/lib/firm-year-label";
 import { firmFyContaining, fyMonths } from "@/lib/budget.months";
 import { statementNetProfit } from "@/lib/period-profit";
@@ -68,7 +69,7 @@ export function fiscalOverlap(
   fyStartMonth: number,
 ): { keys: string[]; statementMonths: number; scale: number } | null {
   if (!fin) return null;
-  const basis = statementPeriodBasis(fin);
+  const basis = budgetComparisonPeriodBasis(fin);
   if (basis.kind === "unknown") return null;
   if (basis.kind === "stored") {
     return { keys: [], statementMonths: basis.months, scale: 1 };
@@ -119,7 +120,7 @@ export function fiscalStatementSlice(
   );
   const operatingProfit = scaleAmount(presentAmount(fin, "ebit"), scale);
   const net = statementNetProfit(fin);
-  const basis = statementPeriodBasis(fin);
+  const basis = budgetComparisonPeriodBasis(fin);
   const statementKeys = basis.kind === "dated" ? basis.keys : [];
   return {
     // A clip says it is pro-rated from the statement. An unclipped period keeps its label.

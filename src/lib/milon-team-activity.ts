@@ -740,6 +740,7 @@ export function findingSentence(input: {
     evidence: input.evidence,
     figures: input.figures,
     forceStale: moved,
+    canonicalRatios: input.canonicalRatios,
   }).text;
   if (!text) return "";
   if (!/[.!?]$/.test(text)) text = `${text}.`;

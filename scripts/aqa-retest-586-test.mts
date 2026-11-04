@@ -376,9 +376,9 @@ const storedBudget = {
 const raw = budgetVersusStatement(storedBudget, chill, ZA_MARKET);
 const shown = statementBudgetRead(storedBudget, chill);
 const seededCompare = budgetVersusStatement(shown.doc, chill, ZA_MARKET);
-assert(raw != null && raw.periodKnown === false, "chill has no statement period, so it is not scored as a year");
-assert(raw.seededFromActuals === false, "the stored plan is not the statement seed");
-assert(raw.budgetEbit == null, `an unknown period is not scored, got ${raw.budgetEbit}`);
+assert(raw != null && raw.periodKnown === true, "chill scores the on-file statement as a full year");
+assert(raw.windowMonths.length === 12, `twelve budget months, got ${raw.windowMonths.length}`);
+assert(Math.abs(raw.revenue - 1_215_000) < 1, `revenue actual ${raw.revenue}`);
 assert(seededCompare != null && seededCompare.seededFromActuals === true, "the reseed is the statement itself");
 assert(
   seededCompare.budgetEbit != null && seededCompare.budgetEbit > 0,

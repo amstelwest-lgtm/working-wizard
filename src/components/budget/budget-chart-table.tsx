@@ -25,7 +25,6 @@ import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { ViewToggle } from "@/components/ui/view-toggle";
 import { hotelLineDisplayName } from "@/lib/budget-industry";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
-import { budgetStatementTiles } from "@/lib/budget-period";
 import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import type { BudgetTemplateId } from "@/lib/budget.types";
 import { ownerMinus } from "@/lib/owner-money";
@@ -34,6 +33,7 @@ import {
   budgetPeriodTotalCell,
   budgetPlanIsSet,
   budgetRangeTotals,
+  budgetStatementDisplayTotals,
   budgetTableRows,
   budgetYtdSentence,
   budgetYtdSignal,
@@ -101,6 +101,8 @@ export function BudgetChartTable({
     revenue?: number | null;
     budgetRevenue?: number | null;
     period?: FiscalStatementSlice | null;
+    periodKnown?: boolean;
+    outsidePlan?: boolean;
   } | null;
   /** Owner view hides a $0 draft instead of drawing an empty axis. */
   readOnly?: boolean;
@@ -185,12 +187,12 @@ export function BudgetChartTable({
   }, [views, windowMonths]);
   const planTotals = useMemo(() => budgetRangeTotals(scopedViews), [scopedViews]);
   const totals = useMemo(() => {
-    if (statementActuals?.period) return budgetStatementTiles(statementActuals.period);
-    return {
-      revenue: planTotals.revenue,
-      expenses: planTotals.expenses,
-      operatingProfit: planTotals.net,
-    };
+    return budgetStatementDisplayTotals({
+      period: statementActuals?.period,
+      periodKnown: statementActuals?.periodKnown,
+      outsidePlan: statementActuals?.outsidePlan,
+      planTotals,
+    });
   }, [statementActuals, planTotals]);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const through = currentBudgetMonth(months);
