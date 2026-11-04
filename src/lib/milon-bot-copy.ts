@@ -9,7 +9,7 @@ import {
   type ClientReportKey,
 } from "./client-report-prepare.ts";
 
-import { MILON_AGENT_MISSION } from "./milon-mission";
+import { MILON_AGENT_MISSION } from "./milon-mission.ts";
 
 export const MILON_BOT_TITLE = "Milōn Bot";
 export const MILON_BOT_SUBTITLE = "Grounded in this client's file";
