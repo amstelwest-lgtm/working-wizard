@@ -31,6 +31,11 @@ import {
   type CallDraft,
   type Mail,
 } from "@/lib/trial-followup";
+import {
+  renderTryOutreachEmail,
+  tryOutreachAlertDedupeKey,
+  tryOutreachVisitorMail,
+} from "@/lib/try-outreach-mail";
 
 const VISITOR_COOKIE = "milon_try_visitor";
 
@@ -241,6 +246,19 @@ export async function alertTrialStart(input: {
     claim: (kind, key) => claimAlert(kind, key, { country: input.country, email: input.email }),
     send: sender(),
   });
+  try {
+    const body = await renderTryOutreachEmail();
+    const outreach = tryOutreachVisitorMail(input.email, body);
+    await deliverLeadAlert({
+      kind: "trial_start",
+      dedupeKey: tryOutreachAlertDedupeKey(input.email),
+      mail: outreach,
+      claim: (kind, key) => claimAlert(kind, key, { country: input.country, email: input.email }),
+      send: sender(),
+    });
+  } catch {
+    /* The sample still opens when outreach cannot be rendered or sent. */
+  }
 }
 
 export const noteTrialDemoView = createServerFn({ method: "POST" }).handler(async () => {
