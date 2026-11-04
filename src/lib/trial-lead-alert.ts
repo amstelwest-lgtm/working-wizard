@@ -15,6 +15,7 @@ export type Mail = {
   html: string;
   text: string;
   idempotencyKey: string;
+  headers?: Record<string, string>;
 };
 
 function escapeHtml(value: string): string {
@@ -98,6 +99,7 @@ export async function sendTeamMail(
         subject: mail.subject,
         html: mail.html,
         text: mail.text,
+        ...(mail.headers ? { headers: mail.headers } : {}),
       }),
     });
     if (!res.ok) return { ok: false, error: `Resend ${res.status}` };

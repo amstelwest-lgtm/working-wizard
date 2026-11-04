@@ -49,7 +49,12 @@ import {
 import { buildSampleAdvisoryPack } from "../src/lib/trial-sample-pack";
 import { buildTrialBoard } from "../src/lib/trial-demo";
 import { TrySignoffMark } from "../src/components/try-signoff";
-import { TRY_OUTREACH_SIGNUP_URL, TRY_OUTREACH_TEXT } from "../emails/try-outreach";
+import {
+  renderTryOutreachEmail,
+  tryOutreachAlertDedupeKey,
+  tryOutreachVisitorMail,
+} from "../src/lib/try-outreach-mail";
+import { TRY_OUTREACH_SIGNUP_URL, TRY_OUTREACH_SUBJECT, TRY_OUTREACH_TEXT } from "../emails/try-outreach";
 
 function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
@@ -432,6 +437,60 @@ assert(alertSends === 2, "demo view and trial start are separate alerts");
 assert(startMail.to === "amstel.west@gmail.com", "trial start goes to the founder");
 assert(startMail.from.includes("team@milonfinance.com"), "trial start is from team@");
 
+const outreachBody = await renderTryOutreachEmail();
+const visitorOutreach = tryOutreachVisitorMail("ada@example.com", outreachBody);
+assert(visitorOutreach.to === "ada@example.com", "outreach goes to the visitor");
+assert(visitorOutreach.subject === TRY_OUTREACH_SUBJECT, "outreach uses the warm demo subject");
+assert(
+  visitorOutreach.text.includes("On /try you walk:"),
+  "outreach text includes the product walkthrough",
+);
+assert(
+  outreachBody.html.includes("Meet your AI finance team"),
+  "outreach html includes the warm demo headline",
+);
+assert(
+  visitorOutreach.headers?.["List-Unsubscribe"]?.includes("unsubscribe"),
+  "outreach carries list-unsubscribe",
+);
+let outreachSends = 0;
+const outreachDedupe = tryOutreachAlertDedupeKey("ada@example.com");
+const outreachFirst = await deliverLeadAlert({
+  kind: "trial_start",
+  dedupeKey: outreachDedupe,
+  mail: visitorOutreach,
+  claim: async (kind, key) => {
+    const id = `${kind}:${key}`;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  },
+  send: async (mail) => {
+    assert(mail.to === "ada@example.com", "gate outreach is addressed to the lead");
+    outreachSends += 1;
+    return { ok: true };
+  },
+});
+const outreachAgain = await deliverLeadAlert({
+  kind: "trial_start",
+  dedupeKey: outreachDedupe,
+  mail: visitorOutreach,
+  claim: async (kind, key) => !seen.has(`${kind}:${key}`),
+  send: async () => {
+    outreachSends += 1;
+    return { ok: true };
+  },
+});
+assert(outreachFirst.sent && !outreachFirst.deduped, "the first gate outreach sends");
+assert(outreachAgain.deduped && !outreachAgain.sent, "outreach does not duplicate for the same email");
+assert(outreachSends === 1, "one visitor outreach on gate");
+
+const followupSrc = readFileSync(join(root, "src/lib/trial-followup.functions.ts"), "utf8");
+assert(
+  followupSrc.includes("tryOutreachVisitorMail") && followupSrc.includes("renderTryOutreachEmail"),
+  "alertTrialStart sends the warm demo outreach to the visitor",
+);
+
 let fetchCalls = 0;
 const skipped = await sendTeamMail(startMail, {
   apiKey: "",
@@ -456,6 +515,25 @@ assert(sentMail.ok, "a configured key posts the mail");
 assert(resendBodies[0]?.includes("team@milonfinance.com"), "the Resend payload is from team@");
 assert(resendBodies[0]?.includes("amstel.west@gmail.com"), "the Resend payload is to the founder");
 assert(!resendBodies[0]?.includes("re_test_only"), "the api key stays out of the body");
+
+const outreachResendBodies: string[] = [];
+const outreachSent = await sendTeamMail(visitorOutreach, {
+  apiKey: "re_test_only",
+  fetchImpl: async (input, init) => {
+    assert(String(input) === "https://api.resend.com/emails", "outreach goes to Resend");
+    outreachResendBodies.push(String(init?.body ?? ""));
+    return new Response("{}", { status: 200 });
+  },
+});
+assert(outreachSent.ok, "outreach posts with a configured key");
+const outreachPayload = JSON.parse(outreachResendBodies[0] ?? "{}") as {
+  to?: string[];
+  subject?: string;
+  headers?: Record<string, string>;
+};
+assert(outreachPayload.to?.[0] === "ada@example.com", "Resend sends outreach to the visitor");
+assert(outreachPayload.subject === TRY_OUTREACH_SUBJECT, "Resend uses the outreach subject");
+assert(outreachPayload.headers?.["List-Unsubscribe"], "Resend carries list-unsubscribe headers");
 
 const consent = googleConsentUrl({ clientId: "client", redirectUri: "http://127.0.0.1:8787" });
 assert(consent.includes("access_type=offline"), "consent asks for offline access");
