@@ -58,8 +58,10 @@ function books(patch: Partial<OwnerBooks> = {}): OwnerBooks {
 assert(practiceAgentFromHash("#ask-financial-manager") === "financial_manager", "FM hash opens the manager");
 assert(practiceAgentFromHash("ask-analyst") === "analyst", "analyst hash opens the analyst");
 assert(practiceAgentFromHash("ask-advisor") === "advisor", "advisor hash opens the advisor");
+assert(practiceAgentFromHash("ask-tax-specialist") === "tax_specialist", "tax hash opens the tax specialist");
 assert(practiceAgentFromHash("clients-table") === null, "a clients hash is not an agent");
 assert(practiceAgentHash("financial_manager") === "ask-financial-manager", "the manager hash is stable");
+assert(practiceAgentHash("tax_specialist") === "ask-tax-specialist", "the tax hash is stable");
 
 const above = books({
   cashOutlook: { opening: 46300, closing: [46300], floor: 36900, dipsBelowFloorWeek: null },

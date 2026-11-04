@@ -60,6 +60,7 @@ import { Route as AuthenticatedPracticeInsightsRouteImport } from './routes/_aut
 import { Route as AuthenticatedPracticeMarketplaceRouteImport } from './routes/_authenticated/practice_.marketplace'
 import { Route as AuthenticatedPracticeNeedsAttentionRouteImport } from './routes/_authenticated/practice_.needs-attention'
 import { Route as AuthenticatedPracticePlaybooksRouteImport } from './routes/_authenticated/practice_.playbooks'
+import { Route as AuthenticatedPracticeTaxRouteImport } from './routes/_authenticated/practice_.tax'
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports.index'
 import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
@@ -338,6 +339,12 @@ const AuthenticatedPracticePlaybooksRoute =
     path: '/practice/playbooks',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedPracticeTaxRoute =
+  AuthenticatedPracticeTaxRouteImport.update({
+    id: '/practice_/tax',
+    path: '/practice/tax',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedReportsIndexRoute =
   AuthenticatedReportsIndexRouteImport.update({
     id: '/reports/',
@@ -457,8 +464,8 @@ export interface FileRoutesByFullPath {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
-  '/talk/': typeof TalkIndexRoute
   '/talk/$agent': typeof TalkAgentRoute
+  '/talk/': typeof TalkIndexRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
@@ -467,6 +474,7 @@ export interface FileRoutesByFullPath {
   '/practice/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
   '/practice/needs-attention': typeof AuthenticatedPracticeNeedsAttentionRoute
   '/practice/playbooks': typeof AuthenticatedPracticePlaybooksRoute
+  '/practice/tax': typeof AuthenticatedPracticeTaxRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
@@ -523,8 +531,8 @@ export interface FileRoutesByTo {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
-  '/talk': typeof TalkIndexRoute
   '/talk/$agent': typeof TalkAgentRoute
+  '/talk': typeof TalkIndexRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
@@ -533,6 +541,7 @@ export interface FileRoutesByTo {
   '/practice/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
   '/practice/needs-attention': typeof AuthenticatedPracticeNeedsAttentionRoute
   '/practice/playbooks': typeof AuthenticatedPracticePlaybooksRoute
+  '/practice/tax': typeof AuthenticatedPracticeTaxRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
@@ -591,8 +600,8 @@ export interface FileRoutesById {
   '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
-  '/talk/': typeof TalkIndexRoute
   '/talk/$agent': typeof TalkAgentRoute
+  '/talk/': typeof TalkIndexRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/_authenticated/clients_/queries': typeof AuthenticatedClientsQueriesRoute
   '/_authenticated/founder/metrics': typeof AuthenticatedFounderMetricsRoute
@@ -601,6 +610,7 @@ export interface FileRoutesById {
   '/_authenticated/practice_/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
   '/_authenticated/practice_/needs-attention': typeof AuthenticatedPracticeNeedsAttentionRoute
   '/_authenticated/practice_/playbooks': typeof AuthenticatedPracticePlaybooksRoute
+  '/_authenticated/practice_/tax': typeof AuthenticatedPracticeTaxRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
@@ -659,8 +669,8 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
-    | '/talk/'
     | '/talk/$agent'
+    | '/talk/'
     | '/clients/$clientId'
     | '/clients/queries'
     | '/founder/metrics'
@@ -669,6 +679,7 @@ export interface FileRouteTypes {
     | '/practice/marketplace'
     | '/practice/needs-attention'
     | '/practice/playbooks'
+    | '/practice/tax'
     | '/reports/demo'
     | '/settings/brand'
     | '/settings/team'
@@ -725,8 +736,8 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
-    | '/talk'
     | '/talk/$agent'
+    | '/talk'
     | '/clients/$clientId'
     | '/clients/queries'
     | '/founder/metrics'
@@ -735,6 +746,7 @@ export interface FileRouteTypes {
     | '/practice/marketplace'
     | '/practice/needs-attention'
     | '/practice/playbooks'
+    | '/practice/tax'
     | '/reports/demo'
     | '/settings/brand'
     | '/settings/team'
@@ -792,8 +804,8 @@ export interface FileRouteTypes {
     | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
-    | '/talk/'
     | '/talk/$agent'
+    | '/talk/'
     | '/_authenticated/clients/$clientId'
     | '/_authenticated/clients_/queries'
     | '/_authenticated/founder/metrics'
@@ -802,6 +814,7 @@ export interface FileRouteTypes {
     | '/_authenticated/practice_/marketplace'
     | '/_authenticated/practice_/needs-attention'
     | '/_authenticated/practice_/playbooks'
+    | '/_authenticated/practice_/tax'
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
     | '/_authenticated/settings/team'
@@ -856,8 +869,8 @@ export interface RootRouteChildren {
   JoinTokenRoute: typeof JoinTokenRoute
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
-  TalkIndexRoute: typeof TalkIndexRoute
   TalkAgentRoute: typeof TalkAgentRoute
+  TalkIndexRoute: typeof TalkIndexRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
   ApiResendWebhookRoute: typeof ApiResendWebhookRoute
   ApiSageSyncRoute: typeof ApiSageSyncRoute
@@ -1228,6 +1241,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPracticePlaybooksRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/practice_/tax': {
+      id: '/_authenticated/practice_/tax'
+      path: '/practice/tax'
+      fullPath: '/practice/tax'
+      preLoaderRoute: typeof AuthenticatedPracticeTaxRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/reports/': {
       id: '/_authenticated/reports/'
       path: '/reports'
@@ -1342,6 +1362,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPracticeMarketplaceRoute: typeof AuthenticatedPracticeMarketplaceRoute
   AuthenticatedPracticeNeedsAttentionRoute: typeof AuthenticatedPracticeNeedsAttentionRoute
   AuthenticatedPracticePlaybooksRoute: typeof AuthenticatedPracticePlaybooksRoute
+  AuthenticatedPracticeTaxRoute: typeof AuthenticatedPracticeTaxRoute
   AuthenticatedReportsDemoRoute: typeof AuthenticatedReportsDemoRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
   AuthenticatedSettingsTeamRoute: typeof AuthenticatedSettingsTeamRoute
@@ -1364,6 +1385,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPracticeNeedsAttentionRoute:
     AuthenticatedPracticeNeedsAttentionRoute,
   AuthenticatedPracticePlaybooksRoute: AuthenticatedPracticePlaybooksRoute,
+  AuthenticatedPracticeTaxRoute: AuthenticatedPracticeTaxRoute,
   AuthenticatedReportsDemoRoute: AuthenticatedReportsDemoRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
   AuthenticatedSettingsTeamRoute: AuthenticatedSettingsTeamRoute,
@@ -1413,8 +1435,8 @@ const rootRouteChildren: RootRouteChildren = {
   JoinTokenRoute: JoinTokenRoute,
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
-  TalkIndexRoute: TalkIndexRoute,
   TalkAgentRoute: TalkAgentRoute,
+  TalkIndexRoute: TalkIndexRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
   ApiResendWebhookRoute: ApiResendWebhookRoute,
   ApiSageSyncRoute: ApiSageSyncRoute,
