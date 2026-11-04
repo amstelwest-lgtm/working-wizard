@@ -55,6 +55,7 @@ import { formatMoneyChartTick } from "@/lib/market/format";
 import type { VarianceSignal } from "@/lib/budget.variance";
 
 const MONTHLY_ACTUALS_TIMEOUT_MS = 8_000;
+const BUDGET_BAR = "#38BDF8";
 const BUDGET_ONLY = "#94a3b8";
 const ACTUAL_BAR = "#3d4f66";
 
