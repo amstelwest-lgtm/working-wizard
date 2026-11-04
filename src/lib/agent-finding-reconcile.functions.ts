@@ -7,7 +7,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   guardReconciledFindingWrite,
-  loadHealthScoreSnapshot,
+  loadPageHealthScoreSnapshot,
   persistReconciledFindingCopy,
   snapshotEvidenceFields,
 } from "@/lib/health-snapshot";
@@ -56,7 +56,7 @@ export const reconcileHealthFindingNarrative = createServerFn({ method: "POST" }
     if (accessError) throw new Error(accessError.message);
     if (!access) throw new Error("You do not have access to this client");
 
-    const live = await loadHealthScoreSnapshot(sb, String(row.client_id));
+    const live = await loadPageHealthScoreSnapshot(sb, String(row.client_id));
     if (!live) throw new Error("Live health snapshot is not available");
 
     const { data: clientRow } = await sb
