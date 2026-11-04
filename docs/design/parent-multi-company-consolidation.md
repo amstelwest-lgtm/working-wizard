@@ -31,10 +31,10 @@ Comments on `client_groups` and `ownership_edges` state they are **not consolida
 |------------|--------|-------|
 | Combined P&L / BS / cash | Missing | No route, component, or RPC totals money at group level |
 | Period rollup | Missing | Companies can differ on `year_end_month` and snapshot `period_date`; no group reporting period picker |
-| Intercompany eliminations | Missing | `ownership_edges` is metadata only; no IC account map or elimination journal |
-| Currency | Partial | `clients.currency` exists; **no FX** — mixed-currency groups cannot consolidate truthfully |
-| Ownership / NCI | Missing | `ownership_pct` not applied to line items |
-| Group Health / ratios / Analyst | Missing | Ratios and narrative are **per `client_id`**; group view would need a separate compute path (keep off Budget/Analyst persist) |
+| Intercompany eliminations | UI stub | Combined preview shows **planned** eliminations card only — no IC journals (`data-group-eliminations-stub`) |
+| Currency | UI stub + blocker | Mixed currency still blocks combined totals; preview shows **planned** FX card only — no rates or translation (`data-group-fx-stub`) |
+| Ownership / NCI | UI stub | **Planned** NCI card from `ownership_edges` metadata — `ownership_pct` not applied to line items (`data-group-nci-stub`) |
+| Group Health / ratios / Analyst | UI stub | **Planned** group Health card only — ratios and Analyst narrative stay **per `client_id`**; no group compute (`data-group-health-stub`; keep off Budget/Analyst persist) |
 | Side-by-side compare | Missing | Not requested as the end state; also not built |
 | Agents | By design | `client-groups.ts` — agents stay on **one company** |
 | SQL consolidation store | Missing | No `group_financial_snapshots` or materialized group books (prefer client-side rollup from existing snapshots first) |
