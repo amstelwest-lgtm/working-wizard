@@ -117,7 +117,10 @@ const TOOLS: ClaudeTool[] = [
     },
   },
   ...sharedDeliverableToolSchemas().filter(
-    (tool) => tool.name === "list_client_library" || tool.name === "get_client_library_doc",
+    (tool) =>
+      tool.name === "list_client_library" ||
+      tool.name === "get_client_library_doc" ||
+      tool.name === "list_client_management_rules",
   ),
 ];
 
@@ -158,7 +161,11 @@ async function runTool(
     adminClient: AdminClient;
   },
 ): Promise<unknown> {
-  if (tool === "list_client_library" || tool === "get_client_library_doc") {
+  if (
+    tool === "list_client_library" ||
+    tool === "get_client_library_doc" ||
+    tool === "list_client_management_rules"
+  ) {
     return executeSharedDeliverableRead(tool, args, {
       db: ctx.userClient,
       clientId: ctx.clientId,

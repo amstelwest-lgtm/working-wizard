@@ -6,6 +6,7 @@
  */
 
 import { stripUnsafeMarkup } from "./owner-reply-format.ts";
+import { libraryRuleChipsFromText } from "./client-management-habits-rules.ts";
 import { figureDeltaLines, FIGURE_SURFACES, type FigureSurface } from "./figure-proposal.ts";
 
 export const AGENT_REPLY_AGENTS = ["financial_manager", "analyst", "advisor", "tax_specialist"] as const;
@@ -51,6 +52,8 @@ export type AgentReplyProposal = {
 
 export type AgentReplySources = {
   agent?: AgentReplyAgent | null;
+  /** Full model text so library rule citations can become chips. */
+  rawText?: string | null;
   tools?: Array<{ name?: string | null; status?: string | null }> | null;
   proposal?: AgentReplyProposal | null;
   /** Skip proposal chips when another card already shows the patch. */
@@ -92,6 +95,7 @@ const TOOL_LABELS: Record<string, string> = {
   record_finding: "Finding",
   list_client_library: "Library",
   get_client_library_doc: "Library file",
+  list_client_management_rules: "Management habits rules",
   list_tax_drafts: "Tax drafts",
   get_tax_draft: "Tax draft",
   list_tax_packs: "Tax packs",
@@ -280,6 +284,7 @@ function figureChips(sources: AgentReplySources): AgentReplyFigureChip[] {
     for (const chip of chipsFromProposal(sources.proposal)) push(chip);
   }
   for (const chip of chipsFromCreated(sources.created)) push(chip);
+  for (const chip of libraryRuleChipsFromText(sources.rawText ?? "")) push(chip);
   return out;
 }
 
@@ -343,7 +348,7 @@ export function structureAgentReply(raw: string, sources: AgentReplySources = {}
     bullets: card.bullets,
     decision: decisionOf(sources),
     how: howOf(sources),
-    figures: figureChips(sources),
+    figures: figureChips({ ...sources, rawText: text }),
   };
 }
 

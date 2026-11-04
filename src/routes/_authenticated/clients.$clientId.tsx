@@ -4475,6 +4475,7 @@ function ClientView() {
                         clientId={client.id}
                         audience="accountant"
                         clientHasFirm={Boolean(client.firm_id)}
+                        firmId={client.firm_id ?? null}
                       />
                       <DeliverableInputConfig
                         className="mb-5"
