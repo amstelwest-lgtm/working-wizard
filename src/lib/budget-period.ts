@@ -14,7 +14,7 @@ import { budgetCoverWindowLabel } from "@/lib/budget.bridges";
 import { budgetComparisonPeriodBasis } from "@/lib/statement-cover";
 import { proratedPeriodLabel } from "@/lib/firm-year-label";
 import { firmFyContaining, fyMonths } from "@/lib/budget.months";
-import { statementNetProfit } from "@/lib/period-profit";
+import { costMagnitude, statementNetProfit } from "@/lib/period-profit";
 import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { derivePeriodWaterfallFallback, type WaterfallFallback } from "@/lib/weekly-inputs";
 
@@ -107,10 +107,15 @@ export function fiscalStatementSlice(
   if (!overlap) return null;
   const scale = overlap.scale;
   const revenue = scaleAmount(presentAmount(fin, "revenue"), scale);
-  const cogs = scaleAmount(
-    presentAmount(fin, "cogs") ?? presentAmount(fin, "cost_of_sales"),
-    scale,
-  );
+  const rawCogs = presentAmount(fin, "cogs") ?? presentAmount(fin, "cost_of_sales");
+  const scaledRevenue = revenue;
+  const cogs =
+    rawCogs == null
+      ? null
+      : scaleAmount(
+          scaledRevenue != null && scaledRevenue > 0 ? costMagnitude(rawCogs) : rawCogs,
+          scale,
+        );
   const statedGross = scaleAmount(presentAmount(fin, "grossProfit"), scale);
   const grossProfit =
     statedGross != null ? statedGross : revenue != null && cogs != null ? revenue - cogs : null;

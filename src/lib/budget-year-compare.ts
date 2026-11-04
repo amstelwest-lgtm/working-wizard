@@ -1,6 +1,6 @@
 /** This budget year against a prior period. Missing prior figures stay blank. */
 
-import { statementNetProfit } from "@/lib/period-profit";
+import { costMagnitude, statementNetProfit } from "@/lib/period-profit";
 
 export type BudgetYearMoney = {
   revenue: number | null;
@@ -58,7 +58,9 @@ export function yearMoneyFromFinancials(
 ): BudgetYearMoney | null {
   if (!financials) return null;
   const revenue = numberField(financials, "revenue");
-  const cogs = numberField(financials, "cogs") ?? numberField(financials, "cost_of_sales");
+  const rawCogs = numberField(financials, "cogs") ?? numberField(financials, "cost_of_sales");
+  const cogs =
+    rawCogs != null && revenue != null && revenue > 0 ? costMagnitude(rawCogs) : rawCogs;
   const expenses =
     numberField(financials, "fixedCosts") ?? numberField(financials, "operating_expenses");
   const snakeNet = numberField(financials, "net_income");
@@ -150,7 +152,9 @@ export function ownerYearFromStatement(
 ): BudgetYearMoney | null {
   if (!actuals) return null;
   const revenue = finite(actuals.revenue) ? actuals.revenue : null;
-  const cogs = finite(actuals.cogs) ? actuals.cogs : null;
+  const rawCogs = finite(actuals.cogs) ? actuals.cogs : null;
+  const cogs =
+    rawCogs != null && revenue != null && revenue > 0 ? costMagnitude(rawCogs) : rawCogs;
   const expenses = finite(actuals.fixedCosts) ? actuals.fixedCosts : null;
   const netProfit = finite(actuals.netProfit) ? actuals.netProfit : null;
   const operatingProfit = finite(actuals.ebit) ? actuals.ebit : null;

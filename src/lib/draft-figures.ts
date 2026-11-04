@@ -100,7 +100,7 @@ export function sourceCheckForDeliverable(
   figuresUpdatedAt: string | null | undefined,
 ): { state: SourceCheckState; label: string } {
   const moved = figuresMovedAfterDraft(writtenAt, figuresUpdatedAt);
-  const state: SourceCheckState = moved === false ? "matched" : "stale";
+  const state: SourceCheckState = moved === true ? "stale" : "matched";
   return { state, label: sourceCheckLabel(state) };
 }
 

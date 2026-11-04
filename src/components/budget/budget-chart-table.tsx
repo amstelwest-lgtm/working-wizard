@@ -3,7 +3,7 @@
  * Actuals are the month rows the variance panel already loads. Nothing here
  * writes a budget.
  */
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Info } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -50,9 +50,11 @@ import type { BudgetDocument } from "@/lib/budget.types";
 import { MONTHS } from "@/lib/market/date-presets";
 import { currentBudgetMonth, formatBudgetMonthYear, fyMonths } from "@/lib/budget.months";
 import { listBudgetMonthActuals } from "@/lib/budget-actuals.functions";
+import { settleWithin } from "@/lib/bounded-load";
 import { formatMoneyChartTick } from "@/lib/market/format";
 import type { VarianceSignal } from "@/lib/budget.variance";
 
+const MONTHLY_ACTUALS_TIMEOUT_MS = 8_000;
 const BUDGET_BAR = "#38BDF8";
 const BUDGET_ONLY = "#94a3b8";
 const ACTUAL_BAR = "#3d4f66";
@@ -129,8 +131,11 @@ export function BudgetChartTable({
     return signed ? ownerMinus(text) : text;
   };
   const listActuals = useServerFn(listBudgetMonthActuals);
+  const listActualsRef = useRef(listActuals);
+  listActualsRef.current = listActuals;
   const [loaded, setLoaded] = useState<BudgetActualMonth[]>(actualMonths ? [...actualMonths] : []);
   const [actualsPending, setActualsPending] = useState(!actualMonths && Boolean(clientId));
+  const [actualsError, setActualsError] = useState(false);
   const [uncontrolledLens, setUncontrolledLens] = useState<BudgetLens>("chart");
   const [shape, setShape] = useState<ChartShape>("bar");
   const activeLens = lens ?? uncontrolledLens;
@@ -145,35 +150,43 @@ export function BudgetChartTable({
   useEffect(() => {
     if (actualMonths) {
       setLoaded([...actualMonths]);
+      setActualsError(false);
+      setActualsPending(false);
       return;
     }
     if (!clientId) {
       setLoaded([]);
+      setActualsError(false);
       setActualsPending(false);
       return;
     }
     let cancelled = false;
     setActualsPending(true);
-    listActuals({ data: { clientId, fyStart: doc.fyStart } })
-      .then((res) => {
-        if (cancelled) return;
+    setActualsError(false);
+    void (async () => {
+      const settled = await settleWithin(
+        listActualsRef.current({ data: { clientId, fyStart: doc.fyStart } }),
+        MONTHLY_ACTUALS_TIMEOUT_MS,
+      );
+      if (cancelled) return;
+      if (settled.status === "value") {
         setLoaded(
-          (res.actuals ?? []).map((row) => ({
+          (settled.value.actuals ?? []).map((row) => ({
             month: row.month,
             totals: row.totals,
           })),
         );
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded([]);
-      })
-      .finally(() => {
-        if (!cancelled) setActualsPending(false);
-      });
+        setActualsError(false);
+      } else {
+        setLoaded([]);
+        setActualsError(true);
+      }
+      setActualsPending(false);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [actualMonths, clientId, doc.fyStart, listActuals]);
+  }, [actualMonths, clientId, doc.fyStart]);
 
   const views = useMemo(() => budgetMonthViews(doc, loaded), [doc, loaded]);
   const scopedViews = useMemo(() => {
@@ -266,6 +279,10 @@ export function BudgetChartTable({
       {actualsPending ? (
         <p className="sr-only" role="status">
           Loading monthly actuals
+        </p>
+      ) : actualsError ? (
+        <p className="mt-3 text-[13px] text-[#3D5270] dark:text-slate-400" data-budget-actuals="error">
+          Monthly actuals could not load. The chart shows the budget only.
         </p>
       ) : null}
       {enlargeTarget === "table" ? (

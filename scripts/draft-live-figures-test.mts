@@ -134,6 +134,8 @@ const matched = sourceCheckForDeliverable("2026-10-20T18:00:00.000Z", "2026-10-2
 assert(matched.state === "matched" && matched.label === sourceCheckLabel("matched"), matched.label);
 const staleBooks = sourceCheckForDeliverable("2026-10-20T08:00:00.000Z", "2026-10-20T18:00:00.000Z");
 assert(staleBooks.state === "stale" && staleBooks.label === sourceCheckLabel("stale"), staleBooks.label);
+const missingClock = sourceCheckForDeliverable("2026-10-21T09:00:00.000Z", null);
+assert(missingClock.state === "matched", "a regen without a figures clock is not marked stale");
 
 const handoffCopy =
   "Hand-off: Move fixed contracts to variable / usage-based pricing. Cash is 12 and health is 40.";

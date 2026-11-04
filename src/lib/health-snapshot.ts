@@ -705,6 +705,18 @@ export function reconcileStoredHealthNarrative(input: {
   if (isHistoricalScoreNote(text) && !healthClaimsDisagree(text, live)) {
     return { text, stale: false, regenerate: false };
   }
+  const storedSnap = input.storedHealth ?? readStoredHealthSnapshot(input.evidence);
+  if (storedSnap && !healthSnapshotsDiffer(storedSnap, live)) {
+    const marginCheck = citedGrossMarginDisagreement(text, input.canonicalRatios);
+    const citedCheck = citedHealthDisagreement(text, live);
+    if (marginCheck !== true && citedCheck !== true) {
+      const parts = splitRegenerateNarrative(text);
+      const clean = parts.action
+        ? parts.lead.trim() || renderHealthNarrative(live)
+        : text;
+      return { text: clean, stale: false, regenerate: false };
+    }
+  }
   const margin = citedGrossMarginDisagreement(text, input.canonicalRatios);
   if (margin === true) return { text: staleHealthNarrative(live), stale: true, regenerate: true };
   const cited = citedHealthDisagreement(text, live);
