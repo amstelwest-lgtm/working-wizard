@@ -21,6 +21,7 @@ import {
   describeIntercompanyCandidatePair,
 } from "@/lib/group-eliminations";
 import { buildFxStub, describeMemberCurrency } from "@/lib/group-fx";
+import { buildNciStub, describeNciOwnershipCandidate } from "@/lib/group-nci";
 
 function parseAmount(raw: string | undefined): number | null {
   const text = String(raw ?? "").trim();
@@ -114,14 +115,18 @@ export function GroupCombinedFiguresPreview({
     [activeMembers],
   );
 
-  const showFxStub =
-    fxStub &&
+  const nciStub = useMemo(() => buildNciStub(ownershipEdges), [ownershipEdges]);
+
+  const showConsolidationStubs =
     activeMembers &&
     activeMembers.length >= 2 &&
     (result?.ok ||
       (result &&
         !result.ok &&
         result.blockers.some((blocker) => blocker.kind === "currency_mismatch")));
+
+  const showFxStub = showConsolidationStubs && fxStub;
+  const showNciStub = showConsolidationStubs && nciStub;
 
   const showPeriodAlign =
     bundle &&
@@ -332,6 +337,35 @@ export function GroupCombinedFiguresPreview({
             <ul className="mt-1 space-y-0.5 text-xs text-[#486581] dark:text-slate-300">
               {fxStub.memberCurrencies.map((row) => (
                 <li key={row.clientId}>{describeMemberCurrency(row, nameById)}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showNciStub ? (
+        <div
+          className="space-y-2 rounded-lg border border-dashed border-[#C9D8F0] bg-[#F4F8FF]/80 px-3 py-2 dark:border-white/15 dark:bg-slate-900/30"
+          data-group-nci-stub=""
+        >
+          <p className="text-xs font-semibold text-[#102A43] dark:text-slate-100">
+            NCI / ownership (planned)
+          </p>
+          <p className="text-xs leading-relaxed text-[#486581] dark:text-slate-400">
+            {nciStub.headline}. {nciStub.detail}
+          </p>
+          <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-[#486581] dark:text-slate-500">
+            {nciStub.notAppliedReasons.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          {nciStub.candidateHoldings.length > 0 ? (
+            <ul className="mt-1 space-y-0.5 text-xs text-[#486581] dark:text-slate-300">
+              {nciStub.candidateHoldings.map((candidate) => (
+                <li key={candidate.edgeId}>
+                  {describeNciOwnershipCandidate(candidate, nameById)}
+                  <span className="text-[#829AB1] dark:text-slate-500"> · metadata only</span>
+                </li>
               ))}
             </ul>
           ) : null}
