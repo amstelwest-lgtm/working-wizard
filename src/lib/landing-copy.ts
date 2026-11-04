@@ -4,7 +4,12 @@ import { OWNER_MONTHLY_USD_LABEL } from "@/lib/owner-plan";
 import type { FaqItem } from "@/lib/seo";
 import { PRICING_OWNER_BAR_US, PRICING_TRIAL_AFTER } from "@/lib/public-pricing-lines";
 import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
+import {
+  FINANCE_FUNCTION_PURPOSE,
+  MILON_ORG_MISSION_LANDING,
+} from "@/lib/milon-mission";
 
+export { FINANCE_FUNCTION_PURPOSE, MILON_ORG_MISSION_LANDING } from "@/lib/milon-mission";
 export { PRICING_OWNER_BAR_US, PRICING_TRIAL_AFTER };
 
 /** Empty unless VITE_WALKTHROUGH_URL is set. The hero slot stays unrendered. */

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MarketingShell } from "@/components/marketing-shell";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
+import { MILON_ORG_MISSION_LANDING } from "@/lib/milon-mission";
 import { visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
@@ -30,12 +31,7 @@ function AboutPage() {
       geoZa={geoZa}
       eyebrow="About"
       title={<>Why Milōn exists</>}
-      lead={
-        <>
-          Financial information should not be useful only to people with specialist financial
-          training or access to expensive finance teams.
-        </>
-      }
+      lead={<>{MILON_ORG_MISSION_LANDING}</>}
       ctaTitle={<>See it on your own figures</>}
       ctaBody={<>{saPricing?.ownerEarly ?? OWNER_PLAN_EARLY_US}</>}
     >

@@ -2,6 +2,7 @@
  * Plan and trial facts are in every agent chat, on both sides.
  * Run: pnpm test:product-facts-prompt
  */
+import { MILON_AGENT_MISSION } from "../src/lib/milon-mission.ts";
 import { ownerPlanFreeLine } from "../src/lib/owner-plan.ts";
 import {
   FIRM_TRIAL_CARD_LINE,
@@ -32,6 +33,8 @@ function assertFacts(system: string, audience: "owner" | "accountant", label: st
     system.includes("Never say the plan or the trial is not on file."),
     `${label} forbids a not-on-file plan answer`,
   );
+  assert(system.includes("MILŌN MISSION"), `${label} names the mission block`);
+  assert(system.includes(MILON_AGENT_MISSION), `${label} quotes the agent mission`);
   assert(system.includes("accountant firm's plan"), `${label} names the accountant firm's plan`);
   assert(!/\$\d/.test(system.slice(system.indexOf("PRODUCT FACTS"))), `${label} facts have no dollar amount`);
   assert(!/\bZAR\b/.test(system), `${label} never says ZAR`);

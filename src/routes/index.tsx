@@ -89,6 +89,7 @@ import {
   HERO_WALKTHROUGH_LABEL,
   FAQ_MORE_LEAD,
   FAQ_MORE_LINK,
+  FINANCE_FUNCTION_PURPOSE,
   FINANCE_TEAM,
   HOW_STEP_03,
   NAV_TRIAL_ARIA,
@@ -2620,9 +2621,7 @@ function LandingPage() {
             forecast cash, and turn analysis into action.
           </p>
           <p className="sub" style={{ marginTop: 18 }}>
-            Milōn gives accountants a way to install that capability for their clients: an AI
-            finance team that does the heavy analytical work, while the accountant stays in control
-            of the advice.
+            {FINANCE_FUNCTION_PURPOSE}
           </p>
           <p className="sub" style={{ marginTop: 18 }}>
             One shared workspace: AI prepares the analysis, and the accountant reviews and signs

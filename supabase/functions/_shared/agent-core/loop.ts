@@ -12,6 +12,7 @@
  */
 
 import { compactJson } from "../../milon-bot/logic.ts";
+import { MILON_AGENT_MISSION } from "../../../../src/lib/milon-mission.ts";
 import { sharedDeliverableToolSchemas } from "../../../../src/lib/agent-shared-reads.ts";
 
 export const AGENT_MAX_ITERATIONS = 6;
@@ -865,6 +866,7 @@ export function formatAgentPrompt(ctx: AgentReasonContext): string {
 }
 
 export const AGENT_SYSTEM = `You are Milonbot, MILŌN's financial operator for this one client.
+Purpose: ${MILON_AGENT_MISSION.charAt(0).toLowerCase()}${MILON_AGENT_MISSION.slice(1)} from the numbers already on file.
 You investigate a stated objective, then either act inside the tools MILŌN allows or stop.
 
 Each turn you may call several read-only tools, or one action, or finish. You do not execute anything yourself. MILŌN runs every tool and records whether it happened.

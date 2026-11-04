@@ -27,6 +27,7 @@ import { marketForClient } from "../src/lib/market/scope.ts";
 import { parseMarketSelection } from "../src/lib/market/parse.ts";
 import { SHELL_GATE_TIMEOUT_MS } from "../src/lib/shell-gate.ts";
 import { emptyAgentActivity } from "../src/lib/milon-team-activity.ts";
+import { MILON_HOME_LEDE, MILON_HOME_LEDE_ZA } from "../src/lib/milon-mission.ts";
 import { ownerHomeLines, ownerAnswerTiles, type OwnerBooks } from "../src/lib/owner-answers.ts";
 import { ownerPresence } from "../src/lib/owner-presence.ts";
 import { figuresPeriodLabelFrom, statementSpanLabel } from "../src/lib/statement-period.ts";
@@ -36,8 +37,8 @@ function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
 }
 
-const ZA_LEDE = "Your agents are watching the books — ask them anything, any time.";
-const US_LEDE = "Three agents watching the books — ask them anything, any time.";
+const ZA_LEDE = MILON_HOME_LEDE_ZA;
+const US_LEDE = MILON_HOME_LEDE;
 const AGENTS = ["financial_manager", "analyst", "advisor"] as const;
 
 assert(SHELL_GATE_TIMEOUT_MS === 8_000, "the client home deadline is 8 seconds");
