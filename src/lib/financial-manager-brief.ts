@@ -81,7 +81,8 @@ export type BriefDraft = {
   createdAt?: string | null;
   /** True when the stored sentence or its hash no longer matches the live books. */
   refresh?: boolean;
-  /** Snapshot sentence. Shown only after Regenerate. */
+  /** Latest upload or ledger sync on the client. Paired with createdAt for source check. */
+  figuresUpdatedAt?: string | null;
   liveSentence?: string | null;
 };
 
@@ -411,13 +412,20 @@ export function buildFinancialManagerBrief(input: {
     const text = presented.text || body?.text || "";
     if (!text) return [];
     const refresh = presented.refresh || presented.stale || Boolean(body?.refresh || body?.stale);
-    return [{
-      id: row.id,
-      title: text,
-      label: row.label ?? null,
-      refresh,
-      liveSentence: presented.regenerate && input.healthSnapshot ? renderHealthNarrative(input.healthSnapshot) : null,
-    }];
+    return [
+      {
+        id: row.id,
+        title: text,
+        label: row.label ?? null,
+        refresh,
+        createdAt: row.createdAt ?? null,
+        figuresUpdatedAt: input.figuresUpdatedAt ?? null,
+        liveSentence:
+          presented.regenerate && input.healthSnapshot
+            ? renderHealthNarrative(input.healthSnapshot)
+            : null,
+      },
+    ];
   });
   const chaseAction = actions.find((action) => action.button === "chase");
   const chase: ChaseDraftInput | null =

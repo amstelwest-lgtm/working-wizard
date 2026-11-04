@@ -3,7 +3,7 @@
  * each with one button. Built from the Financial Manager brief and the Home counts.
  * Order: books, cash, open actions, chase, drafts, the rest of the plan, reports.
  */
-import { DRAFT_OUT_OF_DATE } from "@/lib/draft-figures";
+import { sourceCheckForDeliverable } from "@/lib/draft-figures";
 import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { splitRegenerateNarrative } from "@/lib/health-snapshot";
 
@@ -27,6 +27,7 @@ export type AttentionItem =
       detail: string | null;
       draftId: string;
       chip: string | null;
+      sourceCheckState?: "matched" | "stale";
     }
   | { key: string; kind: "plan"; label: string; title: string }
   | { key: string; kind: "reports"; label: string; title: string };
@@ -97,7 +98,7 @@ export function homeAttentionItems(input: {
   }
   for (const draft of brief.drafts.slice(0, HOME_ATTENTION_DRAFTS)) {
     const parts = splitRegenerateNarrative(draft.title);
-    const stale = parts.action || Boolean(draft.refresh);
+    const sourceCheck = sourceCheckForDeliverable(draft.createdAt, draft.figuresUpdatedAt);
     items.push({
       key: `draft-${draft.id}`,
       kind: "draft",
@@ -105,7 +106,8 @@ export function homeAttentionItems(input: {
       title: draft.label ? `${draft.label} draft` : "Draft to review",
       detail: parts.lead || null,
       draftId: draft.id,
-      chip: stale ? DRAFT_OUT_OF_DATE : null,
+      chip: `Source check · ${sourceCheck.label}`,
+      sourceCheckState: sourceCheck.state,
     });
   }
   const planHeading = input.planHeading?.trim() ?? "";

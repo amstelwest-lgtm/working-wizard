@@ -71,6 +71,11 @@
   white-space: nowrap;
 }
 
+.home-attn__chip[data-source-check="stale"] {
+  color: #003d99;
+  background: rgba(11, 95, 255, 0.14);
+}
+
 .home-attn__action {
   grid-column: 3;
   justify-self: end;

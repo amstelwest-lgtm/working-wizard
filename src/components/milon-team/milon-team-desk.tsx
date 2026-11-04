@@ -39,6 +39,7 @@ import {
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard, type ApprovedDraftTarget } from "@/components/owner-draft-card";
+import { SourceCheckChip } from "@/components/source-check-chip";
 import { HealthNarrativeLine } from "@/components/health-narrative-line";
 import { renderHealthNarrative } from "@/lib/health-snapshot";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
@@ -321,6 +322,9 @@ export function MilonTeamDesk({
     const when = formatAsOf(row.created_at, clock, live?.market ?? marketForClient(null));
     const meta = (
       <div className="milon-desk-meta">
+        {draft || row.status === "approved" ? (
+          <SourceCheckChip writtenAt={row.created_at} figuresUpdatedAt={feed.figuresUpdatedAt} />
+        ) : null}
         {checked ? (
           <span className="milon-desk-why">{checked}</span>
         ) : when ? (
@@ -621,6 +625,10 @@ export function MilonTeamDesk({
                     const showCap =
                       !ready && (jobCapped || (feed.precard.capped && job.status === "proposed" && job.canApprove));
                     const noData = !ready && job.status === "proposed" && !job.canApprove && job.blockedReason === "no_data";
+                    const deliverableReady =
+                      ready ||
+                      job.status === "awaiting_signoff" ||
+                      job.status === "signed_off";
                     return (
                       <li key={job.id} className="milon-desk-job" data-job={job.id} data-job-status={job.status}>
                         <div className="milon-desk-job-line">
@@ -628,6 +636,12 @@ export function MilonTeamDesk({
                             <span className="milon-desk-tag">{agentShortName(job.agent)}</span>
                             <p>{job.title}</p>
                             {job.summary ? <p className="milon-desk-why">{job.summary}</p> : null}
+                            {deliverableReady ? (
+                              <SourceCheckChip
+                                writtenAt={job.createdAt}
+                                figuresUpdatedAt={feed.figuresUpdatedAt}
+                              />
+                            ) : null}
                           </div>
                           {job.status === "drafting" ? <span className="milon-desk-spinner" role="status" aria-label="Drafting" /> : null}
                         </div>

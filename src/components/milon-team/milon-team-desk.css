@@ -346,6 +346,13 @@ html.dark .milon-desk {
   }
 }
 
+.milon-desk-source[data-source-check="stale"],
+.home-attn__chip[data-source-check="stale"] {
+  color: #003d99;
+  background: rgba(11, 95, 255, 0.14);
+  border-color: rgba(11, 95, 255, 0.35);
+}
+
 .milon-desk-tag,
 .milon-desk-source {
   display: inline-flex;
