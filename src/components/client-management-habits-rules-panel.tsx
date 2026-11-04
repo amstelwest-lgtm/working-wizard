@@ -9,6 +9,7 @@ import {
   listManagementHabitRules,
   saveManagementHabitRule,
 } from "@/lib/client-management-habits-rules-browser";
+import { agentDisplayName } from "@/lib/milon-team";
 import {
   MANAGEMENT_HABITS_HARD_NO,
   MANAGEMENT_HABITS_VIEW_LABEL,
@@ -107,8 +108,9 @@ export function ClientManagementHabitsRulesPanel({
         {MANAGEMENT_HABITS_VIEW_LABEL}
       </h3>
       <p className="cash-paged__sentence">
-        Client-scoped Reality, Habits, and Expectations templates — firm IP for Milōn Financial Manager,
-        Analyst, and Advisor. Not Compliance and not a second set of books.
+        Client-scoped Reality, Habits, and Expectations templates — firm IP for{" "}
+        {agentDisplayName("financial_manager")}, {agentDisplayName("analyst")}, and{" "}
+        {agentDisplayName("advisor")}. Not Compliance and not a second set of books.
       </p>
       <ul className="client-library__meta" data-management-habits-guard="">
         {MANAGEMENT_HABITS_HARD_NO.map((line) => (
