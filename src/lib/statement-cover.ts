@@ -204,10 +204,12 @@ export function budgetComparisonPeriodBasis(
 ): StatementPeriodBasis {
   const basis = statementPeriodBasis(fin);
   if (basis.kind !== "unknown" || !fin) return basis;
+  const flow = (key: string): string | number | null | undefined =>
+    fin[key] as string | number | null | undefined;
   const hasFlows =
-    presentNumber(fin.revenue) != null ||
-    presentNumber(fin.cogs, fin.cost_of_sales) != null ||
-    presentNumber(fin.ebit) != null;
+    presentNumber(flow("revenue")) != null ||
+    presentNumber(flow("cogs"), flow("cost_of_sales")) != null ||
+    presentNumber(flow("ebit")) != null;
   if (!hasFlows) return basis;
   return { kind: "stored", months: periodMonthsOf(fin) };
 }
