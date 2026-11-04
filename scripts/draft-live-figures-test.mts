@@ -10,6 +10,8 @@ import { prepareDraftRecord } from "../src/lib/agent-draft.ts";
 import {
   DRAFT_OUT_OF_DATE,
   draftFiguresHash,
+  sourceCheckForDeliverable,
+  sourceCheckLabel,
 } from "../src/lib/draft-figures.ts";
 import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief.ts";
 import type { AgentFindingRow } from "../src/lib/milon-team-activity.ts";
@@ -123,7 +125,15 @@ if (recorded.ok) {
 const ownerHome = readFileSync(resolve("src/components/owner-door/owner-home.tsx"), "utf8");
 const accountantAttention = readFileSync(resolve("src/lib/home-attention.ts"), "utf8");
 assert(ownerHome.includes("DRAFT_OUT_OF_DATE"), "the owner home shows the out-of-date state");
-assert(accountantAttention.includes("DRAFT_OUT_OF_DATE"), "a draft on Needs attention shows the out-of-date state");
+assert(
+  accountantAttention.includes("sourceCheckForDeliverable"),
+  "Needs attention shows source check on draft rows",
+);
+
+const matched = sourceCheckForDeliverable("2026-10-20T18:00:00.000Z", "2026-10-20T18:00:00.000Z");
+assert(matched.state === "matched" && matched.label === sourceCheckLabel("matched"), matched.label);
+const staleBooks = sourceCheckForDeliverable("2026-10-20T08:00:00.000Z", "2026-10-20T18:00:00.000Z");
+assert(staleBooks.state === "stale" && staleBooks.label === sourceCheckLabel("stale"), staleBooks.label);
 
 const handoffCopy =
   "Hand-off: Move fixed contracts to variable / usage-based pricing. Cash is 12 and health is 40.";

@@ -84,6 +84,26 @@ export function figuresMovedAfterDraft(
   return figures > written;
 }
 
+export type SourceCheckState = "matched" | "stale";
+
+/** Plain label for UI chips. Stale covers a later books sync or a missing clock. */
+export function sourceCheckLabel(state: SourceCheckState): string {
+  return state === "matched" ? "Matched" : "Stale · needs recon";
+}
+
+/**
+ * Whether figures behind a deliverable still align with the latest upload or ledger sync.
+ * Uses the same clocks as figuresMovedAfterDraft; does not compare hashes or sign-off.
+ */
+export function sourceCheckForDeliverable(
+  writtenAt: string | null | undefined,
+  figuresUpdatedAt: string | null | undefined,
+): { state: SourceCheckState; label: string } {
+  const moved = figuresMovedAfterDraft(writtenAt, figuresUpdatedAt);
+  const state: SourceCheckState = moved === false ? "matched" : "stale";
+  return { state, label: sourceCheckLabel(state) };
+}
+
 /** Stable hash of the live margins and, when known, the live overall. */
 export function draftFiguresHash(input: {
   ratios?: Record<string, number> | null;

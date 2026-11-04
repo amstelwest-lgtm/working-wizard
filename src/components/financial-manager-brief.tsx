@@ -209,7 +209,13 @@ export function FinancialManagerBrief({
                   ) : null}
                 </div>
                 {chip ? (
-                  <span className="home-attn__chip" data-attention-chip="">
+                  <span
+                    className="home-attn__chip"
+                    data-attention-chip=""
+                    data-source-check={
+                      "sourceCheckState" in item ? item.sourceCheckState : undefined
+                    }
+                  >
                     {chip}
                   </span>
                 ) : null}
