@@ -135,7 +135,13 @@ assert(!homeVisible.includes(DISCLOSURE), "homepage FAQ does not carry the discl
 assert(!/claude/i.test(homeVisible), "homepage FAQ does not name Claude");
 
 const privacy = readFileSync(resolve("src/routes/privacy.tsx"), "utf8");
-assert(count(privacy, DISCLOSURE) === 1, "/privacy contains the disclosure sentence exactly once");
+assert(
+  privacy.replace(/\s+/g, " ").includes(
+    "Before any AI model call, we filter sensitive client identifiers",
+  ),
+  "/privacy How AI lead names the identifier filter",
+);
+assert(count(privacy, DISCLOSURE) === 0, "/privacy no longer uses the legacy disclosure sentence");
 
 const accountants = readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8");
 assert(accountants.includes("showSaPricing"), "for-accountants threads the server geo gate");

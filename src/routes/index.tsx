@@ -104,6 +104,7 @@ import {
   PROOF_H2,
   PROOF_SECURITY_FACTS,
   TRUST_ITEMS,
+  HOME_TRUST_PRIVACY_LINE,
   WALKTHROUGH_URL,
   WATCH_EYEBROW,
   WATCH_SUB,
@@ -113,6 +114,10 @@ import {
   proofImageSrcSet,
 } from "@/lib/landing-copy";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
+import {
+  HOMEPAGE_FAQ_AI_TRAINING_ANSWER,
+  HOMEPAGE_FAQ_AI_TRAINING_QUESTION,
+} from "@/lib/marketing-faq";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
 import { OwnerInviteSignupPanel } from "@/components/owner-invite-signup-panel";
 import { OwnerInviteSigninOverlay } from "@/components/owner-invite-signin-overlay";
@@ -2231,6 +2236,12 @@ function LandingPage() {
               <span>{item}</span>
             </div>
           ))}
+          <p className="trust-privacy">
+            {HOME_TRUST_PRIVACY_LINE}{" "}
+            <a className="trust-link" href="/privacy">
+              How we handle data →
+            </a>
+          </p>
         </div>
       </div>
 
@@ -2688,7 +2699,16 @@ function LandingPage() {
                 <summary>
                   <h3>{item.question}</h3>
                 </summary>
-                <p>{item.answer}</p>
+                <p>
+                  {item.question === HOMEPAGE_FAQ_AI_TRAINING_QUESTION ? (
+                    <>
+                      {HOMEPAGE_FAQ_AI_TRAINING_ANSWER} Full detail:{" "}
+                      <a href="/privacy">Privacy</a>.
+                    </>
+                  ) : (
+                    item.answer
+                  )}
+                </p>
               </details>
             ))}
           </div>
