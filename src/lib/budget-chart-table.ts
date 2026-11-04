@@ -7,6 +7,7 @@ import type { BudgetDocument, BudgetMonthResult } from "@/lib/budget.types";
 import { budgetStatementTiles } from "@/lib/budget-period";
 import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { computeBudgetMonths } from "@/lib/budget.compute";
+import { statementMonthActuals } from "@/lib/budget.bridges";
 import { fyMonths } from "@/lib/budget.months";
 import {
   normalizeTaxonomyTotals,
@@ -108,13 +109,31 @@ export function budgetChartDomain(
   return [floor < 0 ? -nice : 0, nice];
 }
 
+/** Flat statement pace for every FY month when no stored month actuals exist. */
+export function statementPaceBudgetMonths(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, unknown> | null | undefined,
+): BudgetActualMonth[] {
+  const pace = statementMonthActuals(periodFinancials, "Statement pace");
+  if (!pace) return [];
+  const totals = normalizeTaxonomyTotals({
+    revenue: pace.revenue,
+    cogs: pace.cogs,
+    overheadsTotal: pace.fixedCosts,
+  });
+  return fyMonths(doc.fyStart).map((month) => ({ month, totals }));
+}
+
 export function budgetMonthViews(
   doc: BudgetDocument,
   actuals: readonly BudgetActualMonth[],
+  periodFinancials?: Record<string, unknown> | null,
 ): BudgetMonthView[] {
   const results = computeBudgetMonths(doc, doc.activeScenario);
+  const monthRows =
+    actuals.length > 0 ? actuals : statementPaceBudgetMonths(doc, periodFinancials);
   const byMonth = new Map(
-    actuals.map((row) => [row.month, normalizeTaxonomyTotals(row.totals)]),
+    monthRows.map((row) => [row.month, normalizeTaxonomyTotals(row.totals)]),
   );
   return results.map((budget) => {
     const actual = byMonth.get(budget.month) ?? null;

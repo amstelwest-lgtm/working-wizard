@@ -45,6 +45,8 @@ const src = readFileSync(resolve("src/lib/agent-finding-reconcile.functions.ts")
 const healthLine = readFileSync(resolve("src/components/health-narrative-line.tsx"), "utf8");
 assert(src.includes("reconcileHealthFindingNarrative"), "server fn exists");
 assert(src.includes("last_seen"), "persist bumps last_seen");
+assert(src.includes("supabaseAdmin"), "persist uses admin client");
 assert(healthLine.includes("reconcileHealthFindingNarrative"), "Regenerate calls the server fn");
+assert(healthLine.includes("toast.error"), "Regenerate surfaces errors");
 
 console.log("agent-finding-reconcile-test: ok");

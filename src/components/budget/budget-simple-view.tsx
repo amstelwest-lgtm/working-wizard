@@ -150,6 +150,7 @@ export function BudgetSimpleView({
   openingBalanceMissing = false,
   periodCaption = null,
   uniformNote = null,
+  periodFinancials = null,
   layout = "stacked",
   pagedView,
   onPagedViewChange,
@@ -185,6 +186,7 @@ export function BudgetSimpleView({
   openingBalanceMissing?: boolean;
   periodCaption?: string | null;
   uniformNote?: string | null;
+  periodFinancials?: Record<string, unknown> | null;
   /** Accountant client budget. Owner and try stay stacked. */
   layout?: "stacked" | "paged";
   pagedView?: BudgetPagedView;
@@ -395,6 +397,7 @@ export function BudgetSimpleView({
         displayTemplateId={displayTemplateId}
         periodCaption={periodCaption}
         uniformNote={uniformNote}
+        periodFinancials={periodFinancials}
         hideLensToggle={paged}
         quiet={paged}
       />

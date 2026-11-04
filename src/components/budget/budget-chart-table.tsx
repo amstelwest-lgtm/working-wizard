@@ -81,6 +81,7 @@ export function BudgetChartTable({
   onLensChange,
   actualMonths,
   statementActuals = null,
+  periodFinancials = null,
   readOnly = false,
   signed = false,
   displayTemplateId = null,
@@ -106,6 +107,8 @@ export function BudgetChartTable({
     periodKnown?: boolean;
     outsidePlan?: boolean;
   } | null;
+  /** Saved statement figures. Used for month-table pace when stored month actuals are empty. */
+  periodFinancials?: Record<string, unknown> | null;
   /** Owner view hides a $0 draft instead of drawing an empty axis. */
   readOnly?: boolean;
   /** Owner door uses one unicode minus. The accountant table keeps its formatter. */
@@ -188,7 +191,10 @@ export function BudgetChartTable({
     };
   }, [actualMonths, clientId, doc.fyStart]);
 
-  const views = useMemo(() => budgetMonthViews(doc, loaded), [doc, loaded]);
+  const views = useMemo(
+    () => budgetMonthViews(doc, loaded, periodFinancials),
+    [doc, loaded, periodFinancials],
+  );
   const scopedViews = useMemo(() => {
     // No window means the whole plan. An empty window is a statement that
     // is not scored, so the chart does not total the year in its place.
