@@ -36,7 +36,7 @@ export function HealthNarrativeLine({
       setBusy(true);
       try {
         const result = await reconcile({ data: { findingId } });
-        setShown(result.title || liveSentence);
+        setShown(result.title === liveSentence ? result.title : liveSentence);
         onReconciled?.();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Could not save regenerated narrative";

@@ -757,7 +757,11 @@ export function persistReconciledFindingCopy(input: {
     canonicalRatios: input.canonicalRatios,
   });
   if (reconciled.regenerate) {
-    return { title: storedTitle, detail: storedDetail, changed: false };
+    const freshTitle = renderHealthNarrative(input.live).replace(/\s+/g, " ").trim();
+    if (!freshTitle || citedHealthDisagreement(freshTitle, input.live) === true) {
+      return { title: storedTitle, detail: storedDetail, changed: false };
+    }
+    return { title: freshTitle, detail: null, changed: true };
   }
   const clean = reconciled.text.replace(/\s+/g, " ").trim();
   if (!clean) {
