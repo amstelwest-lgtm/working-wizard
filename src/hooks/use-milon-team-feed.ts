@@ -18,7 +18,7 @@ import { parseRecommendationRow } from "@/lib/recommendations";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { resolveMarket, ZA_MARKET } from "@/lib/market/resolve";
 import { marketForClient } from "@/lib/market/scope";
-import { pageHealthScoreSnapshot } from "@/lib/health-snapshot";
+import { pageHealthScoreSnapshot } from "@/lib/page-health-snapshot";
 import { readStatementMeta, statementSpanLabel } from "@/lib/statement-period";
 import { isPrecardCapFailure, PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "@/lib/precard-cap";
 import {
@@ -372,13 +372,11 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
         operatingProfile: client?.operating_profile,
         clientName: client?.name ?? null,
         snapshots: snapshots.map((row) => ({
-          period_label: row.period_label,
-          period_date: row.period_date,
+          ...row,
           financials:
             row.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
               ? (row.financials as Record<string, unknown>)
               : null,
-          created_at: row.created_at,
         })),
       });
       if (cardHealth) next.healthQuote = cardHealth;

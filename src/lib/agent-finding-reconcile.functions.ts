@@ -7,10 +7,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   guardReconciledFindingWrite,
-  loadPageHealthScoreSnapshot,
   persistReconciledFindingCopy,
   snapshotEvidenceFields,
 } from "@/lib/health-snapshot";
+import { loadPageHealthScoreSnapshot } from "@/lib/page-health-snapshot";
 import { overviewRatios } from "@/lib/health-score";
 
 type LooseSb = {

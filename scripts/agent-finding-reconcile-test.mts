@@ -5,13 +5,13 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { liveHealthFromBooks } from "../src/lib/health-score.ts";
+import { pageHealthScoreSnapshot } from "../src/lib/page-health-snapshot.ts";
 import { figuresPeriodLabelFrom } from "../src/lib/statement-period.ts";
 import {
   FIGURES_CHANGED_RELOAD,
   guardReconciledFindingWrite,
   healthSnapshotFromBooks,
   healthSnapshotHash,
-  pageHealthScoreSnapshot,
   persistReconciledFindingCopy,
   renderHealthNarrative,
   snapshotEvidenceFields,
