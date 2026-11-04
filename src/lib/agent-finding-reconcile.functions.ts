@@ -78,6 +78,10 @@ export const reconcileHealthFindingNarrative = createServerFn({ method: "POST" }
       canonicalRatios,
     });
 
+    if (!persisted.changed) {
+      throw new Error("Nothing to regenerate");
+    }
+
     const seenAt = new Date().toISOString();
     const { data: updated, error: updateError } = await supabaseAdmin
       .from("agent_findings")
