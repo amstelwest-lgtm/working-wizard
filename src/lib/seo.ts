@@ -78,7 +78,7 @@ export const SEO_PAGES = {
     path: "/about",
     title: "About Milōn: An AI Finance Team Accountants Sign Off",
     description:
-      "Why Milōn exists: financial bots create sellable work for accountants from prepared client numbers. Three AI agents; an accountant signs off. QuickBooks and Xero. Sage is coming soon.",
+      "Why Milōn exists: financial bots create sellable work for accountants from prepared numbers. Three AI agents; accountant sign-off. QuickBooks, Xero.",
     image: HOME_OG,
     imageAlt: HOME_OG_ALT,
   },
