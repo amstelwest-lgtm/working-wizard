@@ -18,6 +18,7 @@ import { parseRecommendationRow } from "@/lib/recommendations";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { resolveMarket, ZA_MARKET } from "@/lib/market/resolve";
 import { marketForClient } from "@/lib/market/scope";
+import { pageHealthScoreSnapshot } from "@/lib/page-health-snapshot";
 import { readStatementMeta, statementSpanLabel } from "@/lib/statement-period";
 import { isPrecardCapFailure, PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "@/lib/precard-cap";
 import {
@@ -106,7 +107,8 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
           supabase
             .from("clients")
             .select(
-              "firm_id, name, business_type, operating_profile, financials, cashflow, brain_summary, brain_summary_updated_at, last_forecast_at, market, financial_year_start_month",
+              // financials_updated_at is on the row the Health page reads. It is not in the generated clients type.
+              "firm_id, name, business_type, operating_profile, financials, cashflow, financials_updated_at, brain_summary, brain_summary_updated_at, last_forecast_at, market, financial_year_start_month" as "firm_id, name, business_type, operating_profile, financials, cashflow, brain_summary, brain_summary_updated_at, last_forecast_at, market, financial_year_start_month",
             )
             .eq("id", id)
             .maybeSingle(),
@@ -358,6 +360,26 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
         figuresUpdatedAt,
         error: signoffError || errors[0] || null,
       });
+      const figuresStamp = (client as unknown as { financials_updated_at?: unknown } | null)?.financials_updated_at;
+      const cardHealth = pageHealthScoreSnapshot({
+        financials:
+          client?.financials && typeof client.financials === "object" && !Array.isArray(client.financials)
+            ? (client.financials as Record<string, unknown>)
+            : null,
+        cashflow: client?.cashflow,
+        financialsUpdatedAt: typeof figuresStamp === "string" ? figuresStamp : null,
+        market: client?.market,
+        operatingProfile: client?.operating_profile,
+        clientName: client?.name ?? null,
+        snapshots: snapshots.map((row) => ({
+          ...row,
+          financials:
+            row.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
+              ? (row.financials as Record<string, unknown>)
+              : null,
+        })),
+      });
+      if (cardHealth) next.healthQuote = cardHealth;
 
       if (!cancelled) {
         setSignoffOwner(

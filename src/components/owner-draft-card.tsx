@@ -9,7 +9,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { agentShortName } from "@/lib/milon-team";
 import { AgentReplyDecisionStrip } from "@/components/agent-reply/agent-reply-shell";
 import { HealthNarrativeLine } from "@/components/health-narrative-line";
-import { renderHealthNarrative, type HealthScoreSnapshot } from "@/lib/health-snapshot";
+import {
+  healthSnapshotHash,
+  renderHealthNarrative,
+  type HealthScoreSnapshot,
+} from "@/lib/health-snapshot";
 import { useMarket } from "@/contexts/market";
 import {
   approvedLiveLink,
@@ -49,6 +53,7 @@ export function OwnerDraftCard({
   layout,
   sentence,
   liveSentence = null,
+  scoreSnapshotHash = null,
   health = null,
   figuresUpdatedAt = null,
   meta,
@@ -65,6 +70,8 @@ export function OwnerDraftCard({
   sentence?: string;
   /** Snapshot sentence shown after Regenerate. The stored row is not rewritten. */
   liveSentence?: string | null;
+  /** Hash of the snapshot the card rendered, when `health` is not passed. */
+  scoreSnapshotHash?: string | null;
   /** Live score snapshot. Score claims that disagree with it are not shown. */
   health?: HealthScoreSnapshot | null;
   /** Latest upload or ledger sync. A draft written after this keeps its sentence. */
@@ -133,6 +140,7 @@ export function OwnerDraftCard({
         })
       : "";
   const replacement = liveSentence ?? (health ? renderHealthNarrative(health) : null);
+  const snapshotHash = health ? healthSnapshotHash(health) : scoreSnapshotHash;
   const shownLead =
     approved && optimistic?.phase === "approved"
       ? title
@@ -312,6 +320,7 @@ export function OwnerDraftCard({
           <HealthNarrativeLine
             text={shownLead}
             liveSentence={replacement}
+            scoreSnapshotHash={snapshotHash}
             findingId={row.id}
             onReconciled={onRefresh}
             className="milon-desk-figure"
@@ -343,6 +352,7 @@ export function OwnerDraftCard({
         <HealthNarrativeLine
           text={shownLead}
           liveSentence={replacement}
+          scoreSnapshotHash={snapshotHash}
           findingId={row.id}
           onReconciled={onRefresh}
           className="text-sm font-semibold text-slate-900 dark:text-slate-100"
