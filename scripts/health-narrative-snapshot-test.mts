@@ -399,6 +399,16 @@ const ownerDraft = findingSentence({
 assert(ownerDraft.includes("overall health score of 72"), ownerDraft);
 assert(!ownerDraft.includes(FIGURES_CHANGED_REGENERATE), `owner 72 stays: ${ownerDraft}`);
 
+const regenNote = findingSentence({
+  title: staleHealthNarrative(live),
+  evidence: snapshotEvidenceFields(live),
+  liveHealth: live,
+  writtenAt: "2026-10-21T09:00:00.000Z",
+  figuresUpdatedAt: "2026-10-20T13:23:11.753Z",
+});
+assert(regenNote.includes("Cash is the weakest pillar at 34"), regenNote);
+assert(!regenNote.includes(FIGURES_CHANGED_REGENERATE), `regen clears stale marker: ${regenNote}`);
+
 const mixed = ownerPresence(
   {
     runs: [],

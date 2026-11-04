@@ -6,6 +6,7 @@ import { budgetStatementDisplayTotals, budgetRangeTotals, budgetMonthViews } fro
 import { budgetVersusStatement } from "../src/lib/budget.bridges";
 import { fiscalStatementSlice } from "../src/lib/budget-period";
 import { budgetComparisonPeriodBasis } from "../src/lib/statement-cover";
+import { yearMoneyFromFiscalSlice } from "../src/lib/budget-year-compare";
 import { interestOfRevenueSentence } from "../src/lib/cash-interest-note";
 import { FIGURES_CHANGED_REGENERATE } from "../src/lib/health-snapshot";
 import { findingSentence } from "../src/lib/milon-team-activity";
@@ -47,6 +48,9 @@ assert(Math.abs((versus?.revenue ?? 0) - 1_215_000) < 1, `actual revenue ${versu
 
 const slice = fiscalStatementSlice(chill, 3);
 assert(slice != null && Math.abs((slice.operatingProfit ?? 0) - 56_800) < 1, "operating profit on slice");
+assert(slice.cogs === 56_000, `COGS uses cost magnitude like the P&L, got ${slice.cogs}`);
+const year = yearMoneyFromFiscalSlice(slice);
+assert(year?.cogs === 56_000, `year strip COGS ${year?.cogs}`);
 
 const planZeros = budgetStatementDisplayTotals({
   periodKnown: false,

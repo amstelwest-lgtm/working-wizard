@@ -163,6 +163,8 @@ assert(!chart.includes(">Only<"), "budget-only months do not say Only");
 assert(chart.includes("Budget only"), "the legend still names budget-only months");
 assert(read("src/styles/accountant-portal.css").includes(".budget-grid__money{white-space:nowrap"), "money cells do not wrap");
 assert(chart.includes("data-budget-paint=\"ready\""), "the chart paints before monthly actuals return");
+assert(chart.includes("settleWithin"), "monthly actuals cannot hang forever");
+assert(chart.includes("data-budget-actuals=\"error\""), "a failed actuals read shows budget-only copy");
 assert(!chart.includes("data-view-mode-toggle"), "the chart toggle is not the drawer toggle");
 assert(toggle.includes('role="tablist"'), "the toggle is a tablist");
 assert(toggle.includes('role="tab"'), "each option is a tab");

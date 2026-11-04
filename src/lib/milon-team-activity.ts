@@ -14,6 +14,7 @@ import {
   badgeMonthFromPeriod,
   reconcileStoredHealthNarrative,
   readStoredHealthSnapshot,
+  readStoredScoreSnapshotHash,
   snapshotFromLiveQuote,
   splitRegenerateNarrative,
   type HealthScoreSnapshot,
@@ -741,6 +742,8 @@ export function findingSentence(input: {
     figures: input.figures,
     forceStale: moved,
     canonicalRatios: input.canonicalRatios,
+    storedHealth: readStoredHealthSnapshot(input.evidence),
+    storedHash: readStoredScoreSnapshotHash(input.evidence),
   }).text;
   if (!text) return "";
   if (!/[.!?]$/.test(text)) text = `${text}.`;
