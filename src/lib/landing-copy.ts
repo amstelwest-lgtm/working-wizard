@@ -56,6 +56,10 @@ export const TRUST_BOOKS =
 
 export const TRUST_ITEMS = [TRUST_PREP, TRUST_HANDOFF, TRUST_FEE, TRUST_BOOKS] as const;
 
+/** One line under the homepage trust strip — privacy filter + no training. */
+export const HOME_TRUST_PRIVACY_LINE =
+  "Sensitive client details are filtered before AI model calls. We don't train models on your client data.";
+
 export const HOW_STEP_03 =
   "Your Milōn finance team turns the analysis and business context into clear recommendations, a 13-week cash forecast, and an action plan.";
 
