@@ -3,6 +3,7 @@ import { founderPortalLinks } from "@/styles/app-route-styles";
 import { OwnerDoor } from "@/components/owner-door/owner-door";
 import { OwnerShell } from "@/components/owner-door/owner-shell";
 import { cashFloorForHome } from "@/lib/owner-answers";
+import { MILON_HOME_LEDE } from "@/lib/milon-mission";
 import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
@@ -4687,6 +4688,7 @@ function Index() {
                 )}
                 firmId={clientMeta?.firm_id ?? null}
                 sampleClient={Boolean(clientMeta?.is_demo)}
+                homeLede={MILON_HOME_LEDE}
                 workspaces={ownerWorkspaces}
                 onSwitch={switchOwnerWorkspace}
                 onConnect={() => setShowFinData(true)}

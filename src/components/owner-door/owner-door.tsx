@@ -92,6 +92,7 @@ import {
 } from "@/lib/owner-needs";
 import { financialsHomeSignoffLine } from "@/components/owner-signoff-mark";
 import { OwnerHome } from "./owner-home";
+import { MILON_HOME_LEDE } from "@/lib/milon-mission";
 import { canonicalOwnerScreen, OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
 import {
   ownerCheckoutHref,
@@ -171,6 +172,7 @@ export function OwnerDoor({
   sampleNotice = null,
   planTick = 0,
   financials = null,
+  homeLede = MILON_HOME_LEDE,
 }: {
   clientId: string | null;
   businessName: string;
@@ -256,6 +258,8 @@ export function OwnerDoor({
   planTick?: number;
   /** Live books. Home drafts quote the same ratios as the scorecard. */
   financials?: Record<string, unknown> | null;
+  /** Mission-aligned home subtitle. Same constant as accountant practice home. */
+  homeLede?: string;
 }) {
   const openedBot = ownerBotKey(bot);
   const [screen, setScreen] = useState<OwnerScreen>(
@@ -1111,6 +1115,7 @@ export function OwnerDoor({
       {railScreen === "home" ? (
         <OwnerHome
           variant="character"
+          lede={homeLede}
           presence={presence}
           lines={ownerHomeLines(tiles, topMove, assignedAgent, handedTitle)}
           signoffLine={homeSignoffLine}

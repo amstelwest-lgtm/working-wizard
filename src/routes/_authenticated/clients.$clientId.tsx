@@ -327,7 +327,6 @@ import { financialsHomeSignoffLine } from "@/components/owner-signoff-mark";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
 import { ClientAgentStandby } from "@/components/client-agent-standby";
 import { OwnerHome } from "@/components/owner-door/owner-home";
-import { MILON_HOME_LEDE } from "@/lib/milon-mission";
 import { AgentDraftShelf } from "@/components/agent-draft-shelf";
 import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/financial-manager-brief";
 import { retryHomeHandoff } from "@/components/client-home/retry-handoff";
@@ -4267,7 +4266,6 @@ function ClientView() {
                 <div className="owner-door" data-client-home="true">
                   <OwnerHome
                     title="Your whole finance team"
-                    lede={MILON_HOME_LEDE}
                     variant="character"
                     showInvite={false}
                     audience="accountant"
