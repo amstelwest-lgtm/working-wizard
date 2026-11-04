@@ -760,11 +760,11 @@ export function persistReconciledFindingCopy(input: {
     return { title: storedTitle, detail: storedDetail, changed: false };
   }
   const clean = reconciled.text.replace(/\s+/g, " ").trim();
-  if (!clean || clean === storedText) {
+  if (!clean) {
     return { title: storedTitle, detail: storedDetail, changed: false };
   }
   const hadRegen = splitRegenerateNarrative(storedText).action;
-  if (!hadRegen && clean === storedText) {
+  if (clean === storedText && !hadRegen) {
     return { title: storedTitle, detail: storedDetail, changed: false };
   }
   return { title: clean, detail: null, changed: true };

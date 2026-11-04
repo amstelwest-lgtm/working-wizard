@@ -142,8 +142,8 @@ export function OwnerDraftCard({
           ? sentence
           : copy.lead;
   const shownContext = !approved && !editing ? copy.context : null;
-  const when =
-    layout === "moves" ? draftWhenLabel(row.created_at, row.last_seen, market) : null;
+  const whenLabel = draftWhenLabel(row.created_at, row.last_seen, market);
+  const when = layout === "moves" || layout === "desk" ? whenLabel : null;
 
   function fail(result: { hideButtons: boolean; message?: string; refresh?: boolean; invite?: boolean }, restoreEdit: boolean) {
     setOptimistic(null);
@@ -309,7 +309,13 @@ export function OwnerDraftCard({
       <li className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent} data-finding-draft={label ? "true" : undefined} data-draft={row.id}>
         <div className="milon-desk-job-copy">
           <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
-          <HealthNarrativeLine text={shownLead} liveSentence={replacement} className="milon-desk-figure" />
+          <HealthNarrativeLine
+            text={shownLead}
+            liveSentence={replacement}
+            findingId={row.id}
+            onReconciled={onRefresh}
+            className="milon-desk-figure"
+          />
           {shownContext ? (
             <p className="milon-desk-draft-context" data-draft-context={shownContext}>
               {shownContext}
@@ -317,6 +323,11 @@ export function OwnerDraftCard({
           ) : null}
           {editor}
           {status}
+          {when ? (
+            <p className="milon-desk-hint" data-draft-when={when}>
+              {when}
+            </p>
+          ) : null}
           {meta}
           {actions}
           {notice}
@@ -332,6 +343,8 @@ export function OwnerDraftCard({
         <HealthNarrativeLine
           text={shownLead}
           liveSentence={replacement}
+          findingId={row.id}
+          onReconciled={onRefresh}
           className="text-sm font-semibold text-slate-900 dark:text-slate-100"
         />
       )}

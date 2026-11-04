@@ -82,7 +82,7 @@ export type AgentFindingRow = {
   dismissed_reason?: string | null;
 };
 
-function findingSeenAt(row: { created_at: string; last_seen?: string | null }): string {
+export function findingSeenAt(row: { created_at: string; last_seen?: string | null }): string {
   return row.last_seen || row.created_at || "";
 }
 

@@ -86,4 +86,12 @@ const creditCogs = normalizeTaxonomyTotals({ revenue: 90_000, cogs: -40_000 });
 assert(creditCogs.cogs === 40_000, `credit COGS magnitude ${creditCogs.cogs}`);
 assert(creditCogs.grossProfit === 50_000, `credit COGS gross profit ${creditCogs.grossProfit}`);
 
+const chillMonth = normalizeTaxonomyTotals({
+  revenue: 101_250,
+  cogs: 213_687,
+  grossProfit: 96_583,
+});
+assert(Math.abs(chillMonth.cogs - 4_667) < 2, `Chill-sized month COGS ${chillMonth.cogs}`);
+assert(Math.abs(chillMonth.grossProfit - 96_583) < 1, `Chill-sized month GP ${chillMonth.grossProfit}`);
+
 console.log("budget-variance-test: ok");

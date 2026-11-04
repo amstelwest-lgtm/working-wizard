@@ -6,7 +6,7 @@
 import type { BudgetMonthResult } from "@/lib/budget.types";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
 import { formatMoneyCompact, formatReportAmount } from "@/lib/market/format";
-import { costMagnitude } from "@/lib/period-profit";
+import { costMagnitude, periodProfitBridge } from "@/lib/period-profit";
 
 export type ActualsSource = "pdf" | "qbo" | "xero" | "manual";
 export type ActualsStatus = "draft" | "confirmed";
@@ -115,7 +115,18 @@ export function normalizeTaxonomyTotals(
   if (t.revenue > 0 && t.cogs !== 0) {
     t.cogs = costMagnitude(t.cogs);
   }
-  if (t.revenue || t.cogs) {
+  if (t.revenue > 0) {
+    const bridgeFields: Record<string, unknown> = {
+      revenue: t.revenue,
+      cogs: t.cogs,
+    };
+    if (partial?.grossProfit != null || Math.abs(t.grossProfit) >= 0.5) {
+      bridgeFields.grossProfit = t.grossProfit;
+    }
+    const bridge = periodProfitBridge(bridgeFields);
+    t.cogs = bridge.cogs;
+    t.grossProfit = bridge.grossProfit;
+  } else if (t.revenue || t.cogs) {
     t.grossProfit = t.revenue - t.cogs;
   }
   const bucketSum =
