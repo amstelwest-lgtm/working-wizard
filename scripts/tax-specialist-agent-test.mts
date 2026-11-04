@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AgentStage } from "../src/components/milon-team/agent-stage";
 import { ZaTaxSpecialistPage } from "../src/components/tax-specialist/za-tax-specialist-page";
 import { ZaIrp6Sheet } from "../src/components/tax-specialist/za-irp6-sheet";
-import { TAX_FORM_GALLERY } from "../src/lib/tax-specialist/forms/gallery";
+import { TAX_FORM_GALLERY, portfolioReadyForms } from "../src/lib/tax-specialist/forms/gallery";
 import { draftActivity } from "../src/lib/tax-specialist/forms/drafts";
 import { IRP6_DEMO_CLIENT, IRP6_DEMO_TODAY } from "../src/lib/tax-specialist/forms/irp6-demo";
 import { askAgentFromHash, askHashForAgent } from "../src/lib/ask-agent";
@@ -247,11 +247,30 @@ eq(
 assert(withClient.includes('data-tax-form="ITR12"'), "ITR12 is on the gallery");
 assert(withClient.includes("Ready to prepare"), "ITR12 is ready to prepare");
 assert(withClient.includes('data-tax-deadlines="client"'), "a client gets its own deadlines");
+assert(!withClient.includes('data-tax-section="workings"'), "a client file drops the SAMPLE workings");
+assert(!withClient.includes("Harbour"), "a client file does not show the Harbour sample");
+assert(
+  withClient.split('data-tax-sample-label="true"').length - 1 === 0,
+  "a client file has no Sample badges",
+);
 assert(withClient.includes("IRP6, year of assessment 2027"), "deadlines name the year");
 assert(
   /data-tax-deadline="irp6-2"[^]*?26 Feb 2027[^]*?Not started/.test(withClient),
   "period 2 due date, shifted off the Sunday, with no draft yet",
 );
+const practicePage = readFileSync("src/components/tax-specialist/za-tax-practice-page.tsx", "utf8");
+assert(
+  practicePage.includes("portfolioReadyForms"),
+  "practice portfolio dedupes ready forms by code",
+);
+eq(
+  portfolioReadyForms(TAX_FORM_GALLERY)
+    .map((form) => form.code)
+    .filter((code) => code === "IRP6").length,
+  1,
+  "portfolio keeps one IRP6 chip",
+);
+
 const sheetMarkup = renderToStaticMarkup(
   createElement(ZaIrp6Sheet, {
     client: demoClient,
