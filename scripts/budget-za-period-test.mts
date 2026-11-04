@@ -229,7 +229,7 @@ assert(
   "the tile is the firm-year clip, not the rounded plan",
 );
 const chart = readFileSync("src/components/budget/budget-chart-table.tsx", "utf8");
-assert(chart.includes("budgetStatementTiles(statementActuals.period)"), "tiles read the firm-year slice");
+assert(chart.includes("budgetStatementDisplayTotals"), "tiles read the firm-year slice or stay blank");
 assert(chart.includes('amount == null ? "—"'), "a missing tile stays a dash");
 
 // A statement that already sits in the March year is not scaled again.

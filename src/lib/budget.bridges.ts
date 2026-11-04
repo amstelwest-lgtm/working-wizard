@@ -17,6 +17,7 @@ import {
   statementCoverMonthCount,
   statementMonthKeys,
   statementPeriodBasis,
+  budgetComparisonPeriodBasis,
   type StatementPeriodBasis,
   withCostAliases,
 } from "@/lib/statement-cover";
@@ -67,6 +68,7 @@ export {
   statementCoverMonthCount,
   statementMonthKeys,
   statementPeriodBasis,
+  budgetComparisonPeriodBasis,
 };
 export type { StatementPeriodBasis };
 
@@ -1150,7 +1152,7 @@ export function budgetVersusStatement(
   const endMonth = meta.periodEnd?.slice(0, 7) ?? "";
   const endInFy = /^\d{4}-\d{2}$/.test(endMonth) && fy.includes(endMonth);
   const window = varianceWindowKeys(
-    statementPeriodBasis(periodFinancials),
+    budgetComparisonPeriodBasis(periodFinancials),
     fy,
     endInFy ? endMonth : "",
   );

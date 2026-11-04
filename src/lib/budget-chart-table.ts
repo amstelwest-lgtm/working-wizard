@@ -4,6 +4,8 @@
  * recalculate a budget or write actuals.
  */
 import type { BudgetDocument, BudgetMonthResult } from "@/lib/budget.types";
+import { budgetStatementTiles } from "@/lib/budget-period";
+import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { fyMonths } from "@/lib/budget.months";
 import {
@@ -217,6 +219,24 @@ export function budgetRangeTotals(views: readonly BudgetMonthView[]): BudgetRang
     net += row.budget.ebit;
   }
   return { revenue, expenses, net };
+}
+
+/** Tiles for Budget vs actual. Unscored comparisons stay blank, not plan zeros. */
+export function budgetStatementDisplayTotals(input: {
+  period?: FiscalStatementSlice | null;
+  periodKnown?: boolean;
+  outsidePlan?: boolean;
+  planTotals: BudgetRangeTotals;
+}): { revenue: number | null; expenses: number | null; operatingProfit: number | null } {
+  if (input.period) return budgetStatementTiles(input.period);
+  if (input.periodKnown === false || input.outsidePlan) {
+    return { revenue: null, expenses: null, operatingProfit: null };
+  }
+  return {
+    revenue: input.planTotals.revenue,
+    expenses: input.planTotals.expenses,
+    operatingProfit: input.planTotals.net,
+  };
 }
 
 /**

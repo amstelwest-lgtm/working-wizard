@@ -119,7 +119,7 @@ assert(interest != null, "interest is a P&L fact");
 assert(interest!.interest === 19_800, `interest ${interest!.interest}`);
 assert(interest!.percent.toFixed(1) === "1.6", interest!.percent.toFixed(1));
 const interestSentence = interestOfRevenueSentence(chillFinancials, money);
-assert(interestSentence === `Interest on the P&L is 1.6% of revenue (${money(19_800)}).`, interestSentence ?? "");
+assert(interestSentence === `Interest on the P&L is 1.6% of revenue ${money(19_800)}.`, interestSentence ?? "");
 assert(interestOfRevenue({ revenue: 100, ebit: 10 }) == null, "a missing interest fact stays hidden");
 
 const waiting = practiceHomeLines({

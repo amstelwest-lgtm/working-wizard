@@ -19,7 +19,8 @@ function moneyText(
 ): string {
   if (amount == null) return "—";
   if (signed) return ownerMinus(formatMoney(amount, market));
-  return formatReportAmount(amount, market, { sign: "parens" });
+  if (amount < 0) return formatReportAmount(amount, market, { sign: "parens" });
+  return formatMoney(amount, market);
 }
 
 function VarianceCell({
