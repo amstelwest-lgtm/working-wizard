@@ -5,6 +5,7 @@
  */
 
 import { chatReplyFormatRules } from "../_shared/chat-reply.ts";
+import { MILON_AGENT_MISSION } from "../../../src/lib/milon-mission.ts";
 
 export const BOT_RATE_LIMIT = 30;
 export const BOT_MAX_TOOL_ROUNDS = 4;
@@ -202,6 +203,7 @@ export function buildBrainAnswer(input: {
 
 function botSystemBody(copyPack: "za" | "us", moneyPack: "za" | "us" = copyPack): string {
   return `You are Milōn Bot — the in-app copilot for this client's numbers and Client Brain.
+Purpose: ${MILON_AGENT_MISSION.charAt(0).toLowerCase()}${MILON_AGENT_MISSION.slice(1)} from the numbers already on file.
 You help the accountant or owner act on what is already on file for THIS client only.
 You are not Lighthouse (founder outreach). Do not pretend to send email or run founder outreach.
 

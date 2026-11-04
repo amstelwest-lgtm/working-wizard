@@ -163,6 +163,7 @@ import { AgentWork } from "@/components/milon-team/agent-work";
 import { practiceAgentWork } from "@/lib/agent-work";
 import { useOverlayHistory } from "@/lib/overlay-history";
 import { OwnerHome } from "@/components/owner-door/owner-home";
+import { MILON_HOME_LEDE } from "@/lib/milon-mission";
 import {
   firmReportsHomeClient,
   firmReportsHomeLine,
@@ -2291,6 +2292,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             <>
             <OwnerHome
               title="Your whole finance team"
+              lede={MILON_HOME_LEDE}
               firmId={firmId}
               showInvite={false}
               variant="character"

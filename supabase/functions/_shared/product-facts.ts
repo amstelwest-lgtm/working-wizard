@@ -3,6 +3,7 @@
  * Built from the trial constants. No prices, so a US prompt never receives a
  * rand amount and a ZA prompt never receives a converted dollar amount.
  */
+import { milonMissionPromptBlock } from "../../../src/lib/milon-mission.ts";
 import { ownerPlanFreeLine } from "../../../src/lib/owner-plan.ts";
 import {
   FIRM_TRIAL_CARD_LINE,
@@ -34,8 +35,9 @@ function firmFactLines(): string[] {
  */
 export function productFactsBlock(audience: ProductFactsAudience): string {
   const firm = firmFactLines().map((line) => `- ${line}`);
+  const mission = milonMissionPromptBlock();
   if (audience === "accountant") {
-    return ["PRODUCT FACTS", "This is the accountant firm's plan.", ...firm, PLAN_RULE].join("\n");
+    return ["PRODUCT FACTS", "This is the accountant firm's plan.", ...firm, PLAN_RULE, "", mission].join("\n");
   }
   return [
     "PRODUCT FACTS",
@@ -45,5 +47,7 @@ export function productFactsBlock(audience: ProductFactsAudience): string {
     `- ${ownerPlanFreeLine()}`,
     "Do not invent an owner price.",
     PLAN_RULE,
+    "",
+    mission,
   ].join("\n");
 }

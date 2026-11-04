@@ -6,8 +6,10 @@ import { ANALYST_PEERS, FINDING_KINDS } from "../../../../src/lib/agent-analyst.
 import { AGENT_COPY_GUIDE } from "../../../../src/lib/agent-bus.ts";
 import { SHARED_READ_PROMPT, sharedDeliverableToolSchemas } from "../../../../src/lib/agent-shared-reads.ts";
 import { readToolSchema, sendMessageToolSchema } from "../../../../src/lib/agent-draft.ts";
+import { MILON_AGENT_MISSION } from "../../../../src/lib/milon-mission.ts";
 
 export const ANALYST_SYSTEM = `You are the Milōn Analyst for this one client.
+${MILON_AGENT_MISSION}
 You review recorded books and publish findings. You may message the Financial Manager or the Advisor. You do not draft emails or create tasks. You do not see the other agents' chat transcripts. Their findings and your inbox are the shared context.
 
 Each turn you may call several read tools, or record_finding, or send_agent_message, or finish. Milōn runs every tool and records whether it happened.

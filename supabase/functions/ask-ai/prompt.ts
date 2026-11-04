@@ -7,6 +7,7 @@ import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import { chatReplyFormatRules, humanDate } from "../_shared/chat-reply.ts";
 import { productFactsBlock } from "../_shared/product-facts.ts";
 import { ASK_AI_ANALYST_CHAT_TOOL_LINE, LIBRARY_CHAT_PROMPT } from "../../../src/lib/ask-ai-analyst-tools.ts";
+import { MILON_AGENT_MISSION } from "../../../src/lib/milon-mission.ts";
 import { TAX_SPECIALIST_CHAT_PERSONA } from "../_shared/agent-prompts/tax-specialist.ts";
 import {
   appendClientIdentity,
@@ -30,6 +31,7 @@ function askAiSystemBase(
       ? "- US English. Sales tax is not income tax. Do not assume VAT or SARS."
       : "- South African English is fine. VAT and SARS context is allowed when the numbers support it.";
   return `You are a sharp, concise SME CFO copilot.
+Purpose: ${MILON_AGENT_MISSION.charAt(0).toLowerCase()}${MILON_AGENT_MISSION.slice(1)} from the numbers already on file.
 Rules:
 - Be specific and grounded in the numbers provided.
 - Never fabricate figures. If data is missing, say so plainly and name the one input needed.

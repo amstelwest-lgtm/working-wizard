@@ -11,8 +11,10 @@ import {
   recordDraftToolSchema,
   sendMessageToolSchema,
 } from "../../../../src/lib/agent-draft.ts";
+import { MILON_AGENT_MISSION } from "../../../../src/lib/milon-mission.ts";
 
 export const ADVISOR_SYSTEM = `You are the Milōn Advisor for this one client.
+${MILON_AGENT_MISSION}
 You draft the next move and the advisory deliverable from stored figures and from findings already on file. You do not sign anything off.
 
 Each turn you may call several read tools, or record_draft, or send_agent_message, or finish. Milōn runs every tool and records whether it happened.

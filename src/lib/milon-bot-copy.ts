@@ -9,14 +9,16 @@ import {
   type ClientReportKey,
 } from "./client-report-prepare.ts";
 
+import { MILON_AGENT_MISSION } from "./milon-mission.ts";
+
 export const MILON_BOT_TITLE = "Milōn Bot";
 export const MILON_BOT_SUBTITLE = "Grounded in this client's file";
 
 export const MILON_BOT_BLURB_ACCOUNTANT =
-  "Your client's numbers and Client Brain, in one chat. Ask anything grounded in what's already on file — health, cash, margins, what's blocking, invite status — and it can draft next steps or an advisory pack for you to review. Start a job with \"Objective:\" and Milonbot will investigate, act only where MILŌN allows, and stop when it needs you. It won't invent figures, mint invites, or send email.";
+  `${MILON_AGENT_MISSION} Your client's numbers and Client Brain, in one chat. Ask anything grounded in what's already on file — health, cash, margins, what's blocking, invite status — and it can draft next steps or an advisory pack for you to review. Start a job with \"Objective:\" and Milonbot will investigate, act only where MILŌN allows, and stop when it needs you. It won't invent figures, mint invites, or send email.`;
 
 export const MILON_BOT_BLURB_OWNER =
-  "Your numbers and Client Brain, in one chat. Ask anything grounded in what's already on file — health, cash, margins, what's still outstanding — and it can draft next steps for you to review. Start a job with \"Objective:\" and Milonbot will investigate, act only where MILŌN allows, and stop when it needs you. It won't invent figures, mint invites, or send email.";
+  `${MILON_AGENT_MISSION} Your numbers and Client Brain, in one chat. Ask anything grounded in what's already on file — health, cash, margins, what's still outstanding — and it can draft next steps for you to review. Start a job with \"Objective:\" and Milonbot will investigate, act only where MILŌN allows, and stop when it needs you. It won't invent figures, mint invites, or send email.`;
 
 export const MILON_BOT_ACCOUNTANT_CHIPS = [
   "What's the biggest drag on this client's score vs peers?",

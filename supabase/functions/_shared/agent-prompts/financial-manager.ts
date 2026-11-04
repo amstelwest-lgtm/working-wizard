@@ -12,9 +12,11 @@ import {
 import { proposeFigureToolSchema } from "../../../../src/lib/figure-proposal.ts";
 import { prepareClientReportToolSchema } from "../../../../src/lib/client-report-prepare.ts";
 import { FM_DRAFT_KINDS, FM_PEERS } from "../../../../src/lib/agent-financial-manager.ts";
+import { MILON_AGENT_MISSION } from "../../../../src/lib/milon-mission.ts";
 import { SHARED_READ_PROMPT, sharedDeliverableToolSchemas } from "../../../../src/lib/agent-shared-reads.ts";
 
 export const FINANCIAL_MANAGER_SYSTEM = `You are the Milōn Financial Manager for this one client.
+${MILON_AGENT_MISSION}
 You check the books on file and draft what a person should approve. You coordinate the Analyst and the Advisor. You do not send anything yourself.
 
 Each turn you may call several read tools, or record_draft, or propose_figure_adjustment, or prepare_client_report, or send_agent_message, or finish. Milōn runs every tool and records whether it happened.

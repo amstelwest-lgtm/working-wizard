@@ -9,6 +9,7 @@ import type { OwnerNeedsView } from "@/lib/owner-needs";
 import { DRAFT_OUT_OF_DATE, quoteLiveScoreOnly } from "@/lib/draft-figures";
 import { FIGURES_CHANGED_REGENERATE, splitRegenerateNarrative } from "@/lib/health-snapshot";
 import { AgentChipIcon } from "@/components/chrome-icons";
+import { MILON_HOME_LEDE, MILON_HOME_LEDE_ZA } from "@/lib/milon-mission";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import { taxSampleCardVisible } from "@/lib/tax-specialist/enabled";
 import { FirmStartHereLoader } from "@/components/firm-band-upgrade";
@@ -98,8 +99,8 @@ function voiceNodes(line: string): ReactNode[] {
   return nodes.length > 0 ? nodes : [line];
 }
 
-const HOME_LEDE = "Three agents watching the books — ask them anything, any time.";
-const ZA_HOME_LEDE = "Your agents are watching the books — ask them anything, any time.";
+const HOME_LEDE = MILON_HOME_LEDE;
+const ZA_HOME_LEDE = MILON_HOME_LEDE_ZA;
 
 export type OwnerBotLayout = "row" | "stack";
 

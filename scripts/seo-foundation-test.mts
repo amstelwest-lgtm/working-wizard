@@ -492,7 +492,7 @@ assert(
 );
 assert(
   SEO_PAGES.about.description ===
-    "Why Milōn exists: three AI agents give small businesses a finance function, and a qualified accountant signs off. QuickBooks and Xero. Sage is coming soon.",
+    "Why Milōn exists: financial bots create sellable work for accountants from prepared numbers. Three AI agents; accountant sign-off. QuickBooks, Xero.",
   "about description is product-forward",
 );
 assert(
