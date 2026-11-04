@@ -154,6 +154,7 @@ function fakeDb(tables: Record<string, Bucket>) {
 {
   const block = formatPeerContextBlock({
     library: [{ name: "bank.pdf", kind: "bank_statement" }],
+    managementRules: [{ id: "a", pillar: "reality", label: "Buffer", body: "Keep six weeks." }],
     taxDrafts: [{ form_code: "IRP6", tax_year: 2026, period: 1, status: "draft" }],
     taxPacks: [{ status: "draft", preview: "Income cited from the bank file." }],
     report: {
@@ -169,6 +170,7 @@ function fakeDb(tables: Record<string, Bucket>) {
   });
   for (const line of [
     "Library",
+    "Management / habits rules",
     "IRP6",
     "Tax packs",
     "schema 2",

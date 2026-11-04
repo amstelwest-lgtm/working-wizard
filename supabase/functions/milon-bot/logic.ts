@@ -18,6 +18,7 @@ export const BOT_TOOLS = [
   "answer_from_brain",
   "list_client_library",
   "get_client_library_doc",
+  "list_client_management_rules",
 ] as const;
 
 export type BotToolName = (typeof BOT_TOOLS)[number];

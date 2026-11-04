@@ -204,6 +204,7 @@
     "test:date-format-guard": "vite-node --config scripts/vite-test.config.ts scripts/date-format-guard-test.mts",
     "test:client-brain": "vite-node --config scripts/vite-test.config.ts scripts/client-brain-summary-test.mts",
     "test:client-library": "vite-node --config scripts/vite-test.config.ts scripts/client-library-test.mts",
+    "test:client-management-habits-rules": "vite-node --config scripts/vite-test.config.ts scripts/client-management-habits-rules-test.mts",
     "test:clients-list-figures": "vite-node --config scripts/vite-test.config.ts scripts/clients-list-figures-test.mts",
     "test:milon-bot": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-test.mts",
     "test:milon-bot-agent": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-agent-test.mts",

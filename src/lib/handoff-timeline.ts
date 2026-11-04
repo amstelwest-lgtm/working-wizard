@@ -79,6 +79,7 @@ const TOOL_LABELS: Record<string, string> = {
   prepare_client_report: "Prepared a client report for download",
   list_client_library: "Read the client library",
   get_client_library_doc: "Opened a library file",
+  list_client_management_rules: "Read management habits rules",
   list_tax_drafts: "Listed tax drafts",
   get_tax_draft: "Read a tax draft",
   list_tax_packs: "Listed tax packs",

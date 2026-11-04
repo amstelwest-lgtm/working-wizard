@@ -24,6 +24,7 @@ import {
 import { parseDocumentMeta } from "@/lib/client-documents";
 import { ingestLibraryArtifacts } from "@/lib/library-ingest-client";
 import { libraryReadPending } from "@/lib/library-document-read";
+import { ClientManagementHabitsRulesPanel } from "@/components/client-management-habits-rules-panel";
 import {
   classifyLibraryFile,
   clientSendLibraryFlags,
@@ -309,11 +310,13 @@ export function ClientLibrary({
   clientId,
   audience,
   clientHasFirm = false,
+  firmId = null,
   refreshKey,
 }: {
   clientId: string;
   audience: "accountant" | "owner";
   clientHasFirm?: boolean;
+  firmId?: string | null;
   refreshKey?: unknown;
 }) {
   const { date } = useMarketFormat();
@@ -418,29 +421,38 @@ export function ClientLibrary({
   if (error) return <p className="client-library__empty">{error}</p>;
 
   return (
-    <ClientLibraryView
-      files={files}
-      tab={tab}
-      query={query}
-      onTab={setTab}
-      onQuery={setQuery}
-      audience={audience}
-      formatWhen={(iso) => date(iso)}
-      busyId={busyId}
-      onOpen={(file) => void open(file)}
-      onVisibility={audience === "owner" ? (file) => void flip(file) : undefined}
-      onRemove={audience === "owner" ? (file) => void remove(file) : undefined}
-      reviewQueue={
-        <SourceDocumentsPanel
+    <>
+      {audience === "accountant" ? (
+        <ClientManagementHabitsRulesPanel
           clientId={clientId}
-          surface={audience === "owner" ? "upload" : "review"}
-          viewer={{
-            clientHasFirm,
-            isOwner: audience === "owner",
-            isFirmMemberWithAccess: audience === "accountant" && clientHasFirm,
-          }}
+          firmId={firmId}
+          formatWhen={(iso) => date(iso)}
         />
-      }
-    />
+      ) : null}
+      <ClientLibraryView
+        files={files}
+        tab={tab}
+        query={query}
+        onTab={setTab}
+        onQuery={setQuery}
+        audience={audience}
+        formatWhen={(iso) => date(iso)}
+        busyId={busyId}
+        onOpen={(file) => void open(file)}
+        onVisibility={audience === "owner" ? (file) => void flip(file) : undefined}
+        onRemove={audience === "owner" ? (file) => void remove(file) : undefined}
+        reviewQueue={
+          <SourceDocumentsPanel
+            clientId={clientId}
+            surface={audience === "owner" ? "upload" : "review"}
+            viewer={{
+              clientHasFirm,
+              isOwner: audience === "owner",
+              isFirmMemberWithAccess: audience === "accountant" && clientHasFirm,
+            }}
+          />
+        }
+      />
+    </>
   );
 }
