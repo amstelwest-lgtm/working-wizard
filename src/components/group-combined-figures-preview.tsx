@@ -27,6 +27,11 @@ import {
   buildIntercompanyFlagsStub,
   describeIntercompanyFlagCandidate,
 } from "@/lib/group-intercompany-flags";
+import {
+  buildPeriodCurrencyGateStub,
+  describeGateMemberCurrency,
+  describeGateMemberYearEnd,
+} from "@/lib/group-period-currency-gate";
 import { buildNciStub, describeNciOwnershipCandidate } from "@/lib/group-nci";
 
 function parseAmount(raw: string | undefined): number | null {
@@ -152,6 +157,15 @@ export function GroupCombinedFiguresPreview({
     [memberClientIds, ownershipEdges],
   );
 
+  const periodCurrencyGateStub = useMemo(
+    () =>
+      buildPeriodCurrencyGateStub({
+        companies,
+        members: activeMembers ?? [],
+      }),
+    [activeMembers, companies],
+  );
+
   const showConsolidationStubs =
     activeMembers &&
     activeMembers.length >= 2 &&
@@ -166,6 +180,8 @@ export function GroupCombinedFiguresPreview({
   const showControlStub = showConsolidationStubs && controlStub;
   const showIntercompanyFlagsStub =
     showConsolidationStubs && intercompanyFlagsStub.flagsPlanned;
+  const showPeriodCurrencyGateStub =
+    showConsolidationStubs && periodCurrencyGateStub.gateNeeded;
 
   const showPeriodAlign =
     bundle &&
@@ -494,6 +510,46 @@ export function GroupCombinedFiguresPreview({
                   {describeIntercompanyFlagCandidate(candidate, nameById)}
                   <span className="text-[#829AB1] dark:text-slate-500"> · metadata only</span>
                 </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showPeriodCurrencyGateStub ? (
+        <div
+          className="space-y-2 rounded-lg border border-dashed border-[#C9D8F0] bg-[#F4F8FF]/80 px-3 py-2 dark:border-white/15 dark:bg-slate-900/30"
+          data-group-period-currency-gate-stub=""
+        >
+          <p className="text-xs font-semibold text-[#102A43] dark:text-slate-100">
+            Year-end / currency (planned)
+          </p>
+          <p className="text-xs leading-relaxed text-[#486581] dark:text-slate-400">
+            {periodCurrencyGateStub.headline}. {periodCurrencyGateStub.detail}
+          </p>
+          <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-[#486581] dark:text-slate-500">
+            {periodCurrencyGateStub.notAppliedReasons.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          {periodCurrencyGateStub.plannedBlockReasons.length > 0 ? (
+            <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-amber-950 dark:text-amber-100">
+              {periodCurrencyGateStub.plannedBlockReasons.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+          {periodCurrencyGateStub.mixedYearEnd ? (
+            <ul className="mt-1 space-y-0.5 text-xs text-[#486581] dark:text-slate-300">
+              {periodCurrencyGateStub.memberYearEnds.map((row) => (
+                <li key={row.clientId}>{describeGateMemberYearEnd(row, nameById)}</li>
+              ))}
+            </ul>
+          ) : null}
+          {periodCurrencyGateStub.mixedCurrency ? (
+            <ul className="mt-1 space-y-0.5 text-xs text-[#486581] dark:text-slate-300">
+              {periodCurrencyGateStub.memberCurrencies.map((row) => (
+                <li key={row.clientId}>{describeGateMemberCurrency(row, nameById)}</li>
               ))}
             </ul>
           ) : null}
