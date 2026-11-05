@@ -27,6 +27,8 @@ import {
   statementSampleImplausible,
 } from "../src/lib/operating-profit-display.ts";
 import { ownerAnswerTiles, ownerCardStatuses, type OwnerBooks } from "../src/lib/owner-answers.ts";
+import { buildProfitabilityData, profitabilityStringRecord } from "../src/lib/profitability-data.ts";
+import { buildBridgeSteps } from "../src/lib/profit-bridge-steps.ts";
 import { periodProfitBridge, statedNetIsUsable } from "../src/lib/period-profit.ts";
 import { operatingCycleDays } from "../src/lib/ratios.ts";
 import { FULL_YEAR_ON_FILE, figuresPeriodLabelFrom } from "../src/lib/statement-period.ts";
@@ -138,6 +140,28 @@ const annualCost = bridge.cogs + bridge.operatingExpenses + bridge.depreciation;
 const outflows = periodOperatingOutflows(chill);
 assert(Math.abs(bridge.operatingExpenses - 1_102_200) < 1, `opex ${bridge.operatingExpenses}`);
 assert(Math.abs(bridge.grossProfit / bridge.revenue - 0.954) < 0.01, "gross margin is the bridge");
+
+const chillPdf = buildProfitabilityData(profitabilityStringRecord(chill));
+assert(chillPdf != null, "Chill profitability PDF data");
+assert(chillPdf.gross_profit <= chillPdf.revenue + 1, `PDF GP ${chillPdf.gross_profit} vs rev ${chillPdf.revenue}`);
+assert(chillPdf.gross_margin_pct <= 1.001, `PDF gross margin ${chillPdf.gross_margin_pct}`);
+assert(chillPdf.operating_profit === chill.ebit, "PDF operating profit stays on EBIT");
+assert(chillPdf.net_profit === chill.netIncome, "PDF net stays on stored net");
+assert(
+  Math.abs(chillPdf.gross_profit - bridge.grossProfit) < 1,
+  "PDF GP matches the shared period bridge",
+);
+const cogsStep = buildBridgeSteps({
+  revenue: chillPdf.revenue,
+  gross_profit: chillPdf.gross_profit,
+  operating_profit: chillPdf.operating_profit,
+  ebt: chillPdf.ebt,
+  tax: chillPdf.tax,
+  net_profit: chillPdf.net_profit,
+  depreciation: chillPdf.depreciation,
+}).find((step) => step.label === "COGS");
+assert(cogsStep && cogsStep.delta < 0, "PDF COGS draws as a cost step");
+
 assert(outflows != null && Math.abs(outflows - annualCost) < 1, `one cost source ${outflows} vs ${annualCost}`);
 assert(Math.abs(annualCost / 12 - 96_516.67) < 1, `monthly cost ${annualCost / 12}`);
 

@@ -53,10 +53,11 @@ export function buildProfitabilityData(
   if (!Number.isFinite(revenue) || !Number.isFinite(ebit) || !Number.isFinite(net)) return null;
   // Never invent GP from 50% of revenue — COGS required for gross margin.
   if (!Number.isFinite(cogs)) return null;
-  const gp = revenue - cogs;
-  const gmPct = gp / revenue;
+  const bridge = periodProfitBridge(fin);
+  const gp = bridge.grossProfit;
+  const gmPct = revenue > 0 ? gp / revenue : NaN;
   const omPct = ebit / revenue;
-  const depreciation = periodProfitBridge(fin).depreciation;
+  const depreciation = bridge.depreciation;
   const ebtVal = Number.isFinite(ebt) ? ebt : ebit;
   const interestBurden = interestBurdenRatio(ebit, ebtVal);
   const taxBurden = taxBurdenRatio(ebtVal, net);
@@ -102,8 +103,9 @@ export function buildProfitabilityData(
       Number.isFinite(pNet) &&
       Number.isFinite(pCogs)
     ) {
-      const pGp = pRev - pCogs;
-      const pDepreciation = periodProfitBridge(priorFin).depreciation;
+      const pBridge = periodProfitBridge(priorFin);
+      const pGp = pBridge.grossProfit;
+      const pDepreciation = pBridge.depreciation;
       const pEbtVal = Number.isFinite(pEbt) ? pEbt : pEbit;
       const pInterest = interestBurdenRatio(pEbit, pEbtVal);
       const pTaxBurden = taxBurdenRatio(pEbtVal, pNet);
