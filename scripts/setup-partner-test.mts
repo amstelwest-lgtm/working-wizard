@@ -67,14 +67,14 @@ assert(followups.length <= SETUP_PARTNER_MAX_FOLLOWUPS, "follow-up cap");
 
 const map = parseWorkflowMapJson(
   JSON.stringify({
-    todaysFlow: ["Bookkeeper posts daily"],
+    todaysFlow: ["Finance admin posts daily"],
     milonCoverage: [{ agent: "Financial Manager", owns: "Close pack" }],
     gaps: ["Manual payroll journal"],
     checklist: ["Connect Xero"],
   }),
   { bookkeeper: "Client admin" },
 );
-assert(map.todaysFlow[0] === "Bookkeeper posts daily", "parsed map flow");
+assert(map.todaysFlow[0] === "Finance admin posts daily", "parsed map flow");
 
 const rows = setupPartnerBrainRows({
   firmId: firmA,

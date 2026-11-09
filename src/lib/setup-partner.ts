@@ -139,9 +139,9 @@ export function buildSetupPartnerSummary(input: {
     input.ledger.hasUpload;
   const no_ledger = !connected;
   const period =
-    typeof snap?.period_label === "string"
+    typeof snap?.period_label === "string" // date-ok: month stamp passthrough for onboarding summary only
       ? snap.period_label
-      : typeof bq?.period_label === "string"
+      : typeof bq?.period_label === "string" // date-ok: month stamp passthrough for onboarding summary only
         ? bq.period_label
         : null;
   const messy = Boolean(figures?.messy_accounts ?? figures?.uncoded_volume);
