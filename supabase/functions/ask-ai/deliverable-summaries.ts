@@ -11,6 +11,12 @@ import { MONTHS_LONG } from "../../../src/lib/market/date-presets.ts";
 import { moveFactorLabel, strategicMovePillar } from "../../../src/lib/move-pillars.ts";
 import { periodProfitBridge, statementNetProfitFromSteps } from "../../../src/lib/period-profit.ts";
 import {
+  derivePeriodWaterfallFallback,
+  parseWeeklyInputs,
+  resolveWaterfallFigures,
+  waterfallPrefersStatement,
+} from "../../../src/lib/weekly-inputs.ts";
+import {
   baseCashflow,
   cashScreenFloor,
   rollForwardForecast,
@@ -262,45 +268,18 @@ export function extractWaterfallFigures(
   financials: Record<string, unknown> | null,
   fyStartMonth?: number | null,
 ): WaterfallFigures {
-  const weeklyRaw = financials?.weeklyInputs;
-  const weeks =
-    weeklyRaw && typeof weeklyRaw === "object" && !Array.isArray(weeklyRaw)
-      ? (weeklyRaw as { weeks?: Record<string, Record<string, unknown>> }).weeks ?? {}
-      : {};
-  let wRev = 0;
-  let wCogs = 0;
-  let wFixed = 0;
-  let wInt = 0;
-  let wTax = 0;
-  for (const row of Object.values(weeks)) {
-    if (!row || typeof row !== "object") continue;
-    wRev += num(row.revenue);
-    wCogs += num(row.costOfSales);
-    wFixed += num(row.fixedCosts);
-    wInt += num(row.interest);
-    wTax += num(row.tax);
-  }
-  const hasWeekly = wRev > 0 || wCogs > 0;
-  if (hasWeekly) {
-    return {
-      revenue: wRev,
-      costOfSales: wCogs,
-      fixedCosts: wFixed,
-      interest: wInt,
-      tax: wTax,
-      statedNetIncome: null,
-      source: "weekly",
-    };
-  }
-
-  // Same bridge the profitability waterfall uses. Interest is that charge
-  // divided by revenue, not the DuPont interest-burden multiple.
+  // Same bridge the profitability waterfall and buildProfitabilityData use.
   // A statement that crosses the firm-year start is scaled first, the same
   // slice the Budget cards and the profit waterfall draw.
   const firmYear =
     financials && fyStartMonth != null ? firmYearStatement(financials, fyStartMonth) : null;
   const clipped = firmYear?.applied === true ? firmYear : null;
   const sourceFin = clipped ? clipped.financials : (financials ?? {});
+  const periodFallback = derivePeriodWaterfallFallback(sourceFin);
+  const weekly = parseWeeklyInputs(financials?.weeklyInputs);
+  const resolved = resolveWaterfallFigures(weekly, periodFallback, {
+    preferPeriod: waterfallPrefersStatement(periodFallback),
+  });
   const bridge = periodProfitBridge(sourceFin);
   const statedRaw = sourceFin.netIncome;
   const statedNet =
@@ -309,16 +288,30 @@ export function extractWaterfallFigures(
       : statedRaw == null || String(statedRaw).trim() === ""
         ? null
         : Number(String(statedRaw).replace(/,/g, ""));
+  const fixedCosts =
+    resolved.source === "period"
+      ? resolved.fixedCosts + (resolved.depreciation ?? 0)
+      : resolved.fixedCosts;
   return {
-    revenue: bridge.revenue,
-    costOfSales: bridge.cogs,
-    fixedCosts: bridge.operatingExpenses + bridge.depreciation,
-    interest: bridge.interest,
-    tax: bridge.tax,
-    statedNetIncome: statedNet != null && Number.isFinite(statedNet) ? statedNet : null,
-    source: "period",
+    revenue: resolved.revenue,
+    costOfSales: resolved.costOfSales,
+    fixedCosts,
+    interest: resolved.interest,
+    tax: resolved.tax,
+    statedNetIncome:
+      resolved.source === "weekly"
+        ? null
+        : statedNet != null && Number.isFinite(statedNet)
+          ? statedNet
+          : null,
+    source: resolved.source,
     periodLabel: clipped?.slice.label ?? null,
-    quotedGrossProfit: clipped?.slice.grossProfit ?? null,
+    quotedGrossProfit:
+      clipped?.slice.grossProfit != null
+        ? clipped.slice.grossProfit
+        : resolved.source === "period"
+          ? bridge.grossProfit
+          : null,
     quotedNetProfit: clipped?.slice.netProfit ?? null,
   };
 }
@@ -326,7 +319,12 @@ export function extractWaterfallFigures(
 export function summarizeWaterfall(figures: WaterfallFigures): WaterfallSummary | null {
   const { revenue, costOfSales, fixedCosts, interest, tax, source } = figures;
   if (!(revenue > 0 || costOfSales > 0)) return null;
-  const gp = revenue - costOfSales;
+  const fromQuote =
+    figures.quotedGrossProfit != null && Number.isFinite(figures.quotedGrossProfit)
+      ? figures.quotedGrossProfit
+      : null;
+  const gpRaw = fromQuote ?? revenue - costOfSales;
+  const gp = revenue > 0 ? Math.min(gpRaw, revenue) : gpRaw;
   const ebit = gp - fixedCosts;
   const ebt = ebit - interest;
   const ni = statementNetProfitFromSteps({

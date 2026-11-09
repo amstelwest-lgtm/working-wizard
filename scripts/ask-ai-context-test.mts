@@ -21,6 +21,7 @@ import {
   summarizeProductLines,
   summarizeWaterfall,
 } from "../supabase/functions/ask-ai/deliverable-summaries.ts";
+import { buildProfitabilityData } from "../src/lib/profitability-data.ts";
 import { buildPrompt } from "../supabase/functions/ask-ai/prompt.ts";
 import type { AskAiContext, RatioRow } from "../supabase/functions/ask-ai/types.ts";
 import {
@@ -93,17 +94,45 @@ const weeklyFigures = extractWaterfallFigures({
       "2026-W35": { revenue: 100_000, costOfSales: 40_000, fixedCosts: 20_000, interest: 2_000, tax: 6_000 },
     },
   },
-  revenue: 9_999_999,
   inventory: 500_000,
   receivables: 250_000,
 });
-assert(weeklyFigures.source === "weekly", "weekly wins over period");
+assert(weeklyFigures.source === "weekly", "weekly is used when there is no statement revenue");
 assert(weeklyFigures.revenue === 100_000, "weekly revenue");
 const waterfall = summarizeWaterfall(weeklyFigures);
 assert(waterfall?.hasData === true, "waterfall filled");
 assert(waterfall?.steps.find((s) => s.label === "Gross profit")?.pctOfRevenue === 60, "GP 60%");
 assert(waterfall?.steps.find((s) => s.label === "Net income")?.pctOfRevenue === 32, "NI 32%");
 assert(!JSON.stringify(waterfall).includes("100000"), "waterfall has no raw amounts");
+
+const statementWins = extractWaterfallFigures({
+  weeklyInputs: {
+    weeks: {
+      "2026-W35": { revenue: 100_000, costOfSales: 40_000, fixedCosts: 20_000 },
+    },
+  },
+  revenue: "1215000",
+  cogs: "-56000",
+  ebit: "56800",
+  netIncome: "27010",
+});
+assert(statementWins.source === "period", "stored statement wins over a partial week grid");
+const statementWaterfall = summarizeWaterfall(statementWins);
+const gpPct = statementWaterfall?.steps.find((s) => s.label === "Gross profit")?.pctOfRevenue;
+assert(gpPct != null && Math.abs(gpPct - 95.4) < 0.2, `FM waterfall GP matches stored bridge (${gpPct})`);
+assert(gpPct != null && gpPct <= 100, "gross profit % never exceeds revenue");
+const storedProfit = buildProfitabilityData({
+  revenue: "1215000",
+  cogs: "-56000",
+  ebit: "56800",
+  netIncome: "27010",
+});
+assert(storedProfit != null, "profitability data on file");
+assert(
+  Math.abs((storedProfit.gross_margin_pct * 100) - (gpPct ?? 0)) < 0.2,
+  "FM context GP matches buildProfitabilityData",
+);
+assert(storedProfit.gross_profit <= storedProfit.revenue, "stored gross profit is at most revenue");
 
 const cash = summarizeCashForecast(
   {
