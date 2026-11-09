@@ -4319,19 +4319,19 @@ function ClientView() {
                           syncLine={homeNeeds.syncLines[0] ?? null}
                           onManage={() => openHomeSection("portal", "connections")}
                           connect={
-                            <>
-                              <ConnectBooksHomeCard
-                                bare
-                                busy={ledgerConnect.busy}
-                                showSage={!isUsCopy(gateMarket)}
-                                onXero={ledgerConnect.startXero}
-                                onQuickBooks={ledgerConnect.startQuickBooks}
-                                onSage={() => setShowSageDialog(true)}
-                              />
-                              <div className="mt-4">
-                                <SetupPartnerPanel clientId={clientId} />
-                              </div>
-                            </>
+                            <ConnectBooksHomeCard
+                              bare
+                              busy={ledgerConnect.busy}
+                              showSage={!isUsCopy(gateMarket)}
+                              onXero={ledgerConnect.startXero}
+                              onQuickBooks={ledgerConnect.startQuickBooks}
+                              onSage={() => setShowSageDialog(true)}
+                            />
+                          }
+                          setupPartner={
+                            <div className="mt-4">
+                              <SetupPartnerPanel clientId={clientId} />
+                            </div>
                           }
                         />
                       ),
