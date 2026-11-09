@@ -24,7 +24,7 @@ import {
 import { buildProfitabilityData } from "../src/lib/profitability-data.ts";
 import { buildPrompt } from "../supabase/functions/ask-ai/prompt.ts";
 import type { AskAiContext, RatioRow } from "../supabase/functions/ask-ai/types.ts";
-import { storedIndustryForAdvice } from "../src/lib/profile-signals.ts";
+import { storedIndustryForAdvice } from "../src/lib/advice-industry.ts";
 import {
   buildOverviewBrief,
   formatOverviewForPrompt,
@@ -494,13 +494,18 @@ const noHeadline = buildOverviewBrief({
 assert(noHeadline.netProfit == null, "missing net income is not invented");
 assert(!formatOverviewForPrompt(noHeadline, "owner").includes("Net profit:"), "no stored net profit, no net-profit line");
 
-const hotelIndustry = storedIndustryForAdvice(
-  { templateId: "hospitality_rooms", businessTypeId: "hospitality" },
-  "hospitality",
-);
+const hotelIndustry = storedIndustryForAdvice({
+  templateId: "hospitality_rooms",
+  businessTypeId: "hospitality",
+  businessType: "hospitality",
+});
 assert(hotelIndustry === "Hospitality", `boutique hotel profile uses stored hospitality: ${hotelIndustry}`);
 assert(
-  storedIndustryForAdvice({ templateId: "day_labour", businessTypeId: "hospitality" }, "hospitality") === "Hospitality",
+  storedIndustryForAdvice({
+    templateId: "day_labour",
+    businessTypeId: "hospitality",
+    businessType: "hospitality",
+  }) === "Hospitality",
   "stored hospitality wins over labour template id",
 );
 const hotelCtx: AskAiContext = {

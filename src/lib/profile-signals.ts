@@ -158,21 +158,6 @@ export function profileIndustryLabel(
   return TEMPLATE_INDUSTRY_LABEL[profile.templateId] ?? fallback;
 }
 
-/**
- * Industry string for ask-ai and other advice prompts — only stored client fields
- * (`clients.business_type`, then operating-profile template). No name or cost-mix guessing.
- */
-export function storedIndustryForAdvice(
-  profile: { templateId?: string | null; businessTypeId?: string | null } | null | undefined,
-  businessType?: string | null,
-): string {
-  const raw = (businessType ?? profile?.businessTypeId ?? "").trim().toLowerCase();
-  if (raw && BUSINESS_TYPE_LABEL[raw]) return BUSINESS_TYPE_LABEL[raw];
-  const template = profile?.templateId ? TEMPLATE_INDUSTRY_LABEL[profile.templateId] : undefined;
-  if (template) return template;
-  return "industry not set";
-}
-
 /** Friendly names for the legacy `business_type` id. Never the raw id. */
 const BUSINESS_TYPE_LABEL: Record<string, string> = {
   service: "Service business",

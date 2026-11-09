@@ -39,6 +39,45 @@ const INDUSTRY_LABEL: Record<string, string> = {
   day_labour: "Labour & staffing",
 };
 
+/** Legacy `clients.business_type` ids — not industry templates. */
+const BUSINESS_TYPE_INDUSTRY: Record<string, string> = {
+  service: "Service business",
+  product: "Product business",
+  saas: "SaaS & software",
+  marketplace: "Marketplaces & platforms",
+  asset_heavy: "Asset-based business",
+  distribution: "Wholesale & distribution",
+  retail: "Retail",
+  manufacturing: "Manufacturing",
+  project: "Project-based services",
+  franchise: "Franchise",
+  subscription: "Subscription business",
+  agency: "Agency",
+  logistics: "Transport & logistics",
+  hospitality: "Hospitality",
+  healthcare: "Healthcare practices",
+  construction: "Construction & contracting",
+  hybrid: "Mixed model",
+  professional: "Professional services",
+  other: "General SME",
+};
+
+/**
+ * Industry for advice prompts — stored `clients.business_type`, then operating
+ * template id. No client-name or cost-mix guessing.
+ */
+export function storedIndustryForAdvice(input: {
+  templateId?: string | null;
+  businessType?: string | null;
+  businessTypeId?: string | null;
+}): string {
+  const raw = (input.businessType ?? input.businessTypeId ?? "").trim().toLowerCase();
+  if (raw && BUSINESS_TYPE_INDUSTRY[raw]) return BUSINESS_TYPE_INDUSTRY[raw];
+  const templateId = (input.templateId ?? "").trim();
+  if (templateId && INDUSTRY_LABEL[templateId]) return INDUSTRY_LABEL[templateId];
+  return "industry not set";
+}
+
 const HOTEL_NAME = /\b(hotels?|lodges?|guesthouses?|b\s*&\s*b)\b/i;
 const SERVICE_LABEL = /labour|staffing|professional services|project-based|retainer/i;
 
