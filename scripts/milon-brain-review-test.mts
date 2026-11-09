@@ -90,6 +90,13 @@ assert(migration.includes("pattern_key"), "pattern_key column");
 assert(migration.includes("is_milon_ops"), "ops helper");
 assert(migration.includes("milon_brain_rules_pending_pattern_key_idx"), "idempotent unique index");
 assert(migration.includes("layer = 'private'"), "private select scoped");
+assert(
+  migration.includes("milon_brain_rules_firm_insert") &&
+    migration.includes("layer = 'private'") &&
+    migration.includes("status = 'active'") &&
+    migration.includes("pattern_key IS NULL"),
+  "INSERT policy pins private active rows without pattern_key",
+);
 
 const edge = read("supabase/functions/milon-brain-review/index.ts");
 assert(edge.includes("runBrainReviewScan"), "on-demand review scan");

@@ -41,6 +41,7 @@ AS $$
       SELECT 1
       FROM auth.users u
       WHERE u.id = _user_id
+        AND u.email_confirmed_at IS NOT NULL
         AND lower(u.email::text) = ANY (
           ARRAY[
             'amstel.west@gmail.com'
@@ -53,6 +54,9 @@ REVOKE ALL ON FUNCTION public.is_milon_ops(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_milon_ops(uuid) TO authenticated, service_role;
 
 GRANT UPDATE ON TABLE public.milon_brain_rules TO authenticated;
+
+DROP POLICY IF EXISTS milon_brain_rules_firm_insert ON public.milon_brain_rules;
+CREATE POLICY milon_brain_rules_firm_insert ON public.milon_brain_rules FOR INSERT TO authenticated WITH CHECK (layer = 'private' AND status = 'active' AND firm_id IS NOT NULL AND pattern_key IS NULL AND (public.is_firm_member((SELECT auth.uid()), firm_id) OR EXISTS (SELECT 1 FROM public.firms f WHERE f.id = milon_brain_rules.firm_id AND f.owner_user_id = (SELECT auth.uid()))));
 
 DROP POLICY IF EXISTS milon_brain_rules_firm_select ON public.milon_brain_rules;
 CREATE POLICY milon_brain_rules_firm_select
