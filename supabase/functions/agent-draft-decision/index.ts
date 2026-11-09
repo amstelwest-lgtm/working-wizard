@@ -27,6 +27,7 @@ import {
   type DraftDecision,
   type RepeatDecision,
 } from "../../../src/lib/agent-draft-decision.ts";
+import { milonBrainRuleInsert } from "../../../src/lib/milon-brain-rules.ts";
 
 const DECISION_KINDS = new Set<string>(DRAFT_DECISION_KINDS);
 
@@ -170,6 +171,17 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (dismissError) return json({ ok: false, error: "decision_not_saved" }, 500);
     if (!dismissed) return await reread(admin, row.id, decision);
+    await captureMilonBrainRule(admin, {
+      firmId,
+      clientId: row.client_id,
+      taskType: row.kind,
+      findingId: row.id,
+      decision: "dismissed",
+      title: row.title,
+      detail: row.detail,
+      dismissedReason: DISMISSED_BY_USER,
+      approverId: user.id,
+    });
     return json({
       ok: true,
       finding_id: row.id,
@@ -244,6 +256,17 @@ Deno.serve(async (req) => {
     if (markError) return json({ ok: false, error: "decision_not_saved" }, 500);
     return await reread(admin, row.id, decision);
   }
+
+  await captureMilonBrainRule(admin, {
+    firmId,
+    clientId: row.client_id,
+    taskType: row.kind,
+    findingId: row.id,
+    decision: "approved",
+    title: text.title,
+    detail: text.detail,
+    approverId: user.id,
+  });
 
   return json({
     ok: true,
@@ -359,6 +382,40 @@ function decidedJson(
         }
       : { dismissed_reason: prior.dismissedReason }),
   });
+}
+
+async function captureMilonBrainRule(
+  admin: Admin,
+  input: {
+    firmId: string | null;
+    clientId: string;
+    taskType: string;
+    findingId: string;
+    decision: "approved" | "dismissed";
+    title: string;
+    detail?: string | null;
+    dismissedReason?: string | null;
+    approverId: string;
+  },
+): Promise<void> {
+  if (!input.firmId) return;
+  try {
+    const row = milonBrainRuleInsert({
+      firmId: input.firmId,
+      clientId: input.clientId,
+      taskType: input.taskType,
+      findingId: input.findingId,
+      decision: input.decision,
+      title: input.title,
+      detail: input.detail,
+      dismissedReason: input.dismissedReason,
+      approverId: input.approverId,
+    });
+    const { error } = await admin.from("milon_brain_rules").insert(row);
+    if (error) console.error("milon_brain_rule_capture_failed", error.message);
+  } catch (err) {
+    console.error("milon_brain_rule_capture_failed", err);
+  }
 }
 
 async function reread(

@@ -45,6 +45,8 @@ import {
   handoffFinishNote,
 } from "../../../../src/lib/owner-handoff.ts";
 import { agentDisplayNameFromKey } from "../../../../src/lib/milon-team-names.ts";
+import { FM_DRAFT_KINDS } from "../../../../src/lib/agent-financial-manager.ts";
+import { loadMilonBrainRulesPromptBlock } from "../agent-shared-reads.ts";
 
 export type RunnerJob = {
   msgId: number | null;
@@ -334,8 +336,24 @@ export async function runQueueJob(
     p_run_id: existing.run_id,
   });
 
-  const { data: client } = await db.from("clients").select("firm_id, market").eq("id", job.clientId).maybeSingle();
+  const { data: client } = await db
+    .from("clients")
+    .select("firm_id, market, name")
+    .eq("id", job.clientId)
+    .maybeSingle();
   const firmId = (client?.firm_id as string | null) ?? null;
+  const milonBrainRulesBlock =
+    config.agent === "financial_manager"
+      ? await loadMilonBrainRulesPromptBlock(db, {
+          firmId,
+          clientId: job.clientId,
+          taskTypes: FM_DRAFT_KINDS,
+          subject: {
+            clientName: (client?.name as string | null) ?? null,
+          },
+        })
+      : "";
+  const systemPrefix = config.system + zaPromptMoneyLine(client?.market) + milonBrainRulesBlock;
   const { data: memory } = await db
     .from("agent_memory")
     .select("value")
@@ -395,7 +413,7 @@ export async function runQueueJob(
           p_run_id: existing.run_id,
         });
         const round = await callClaudeRound(
-          config.system + zaPromptMoneyLine(client?.market),
+          systemPrefix,
           agentTurnMessages(ctx),
           config.toolSchemas(),
           {

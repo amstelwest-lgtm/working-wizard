@@ -247,6 +247,8 @@ const seeAt = fn.indexOf('if (!firmMember && ownerUserId !== user.id)');
 assert(seeAt > 0 && seeAt < priorAt, "a caller who cannot see the client learns nothing about the decision");
 assert(fn.includes('.delete().eq("id", recordId)'), "a lost approve deletes the row it just inserted");
 assert(fn.includes("23505"), "an open accountant request is not linked to someone else's row");
+assert(fn.includes("captureMilonBrainRule"), "a successful decision captures a milon brain rule");
+assert(fn.includes("milon_brain_rule_capture_failed"), "a failed capture is logged and does not fail the decision");
 
 assert(migration.includes("approved_by") && migration.includes("approved_row_id"), "approve stores who and which row");
 assert(migration.includes("'approved', 'dismissed'") || migration.includes("'approved'") && migration.includes("'dismissed'"), "status is approved or dismissed");

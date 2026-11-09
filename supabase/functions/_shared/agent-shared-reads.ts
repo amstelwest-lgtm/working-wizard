@@ -20,6 +20,19 @@ import {
 } from "../../../src/lib/agent-shared-reads.ts";
 import { parseManagementHabitRuleArtifact } from "../../../src/lib/client-management-habits-rules.ts";
 import { libraryReadPending } from "../../../src/lib/library-document-read.ts";
+import {
+  dedupeMilonBrainRules,
+  formatMilonBrainRulesPromptBlock,
+  MILON_BRAIN_RULES_PROMPT_LIMIT,
+  milonBrainRulesPromptLines,
+  orderMilonBrainRulesNewestFirst,
+  type MilonBrainRuleRow,
+} from "../../../src/lib/milon-brain-rules.ts";
+import {
+  applyRedaction,
+  createRedactionSession,
+  type IdentifierSubject,
+} from "./redact-identifiers.ts";
 
 type Row = Record<string, unknown>;
 
@@ -451,4 +464,71 @@ function asRecordList(payload: unknown, key: string): Row[] {
   const row = asRow(payload);
   if (!row || !Array.isArray(row[key])) return [];
   return asRows(row[key]);
+}
+
+function parseMilonBrainRuleRow(row: Row): MilonBrainRuleRow | null {
+  const firmId = typeof row.firm_id === "string" ? row.firm_id : "";
+  const taskType = typeof row.task_type === "string" ? row.task_type : "";
+  const ruleText = typeof row.rule_text === "string" ? row.rule_text : "";
+  const decision = row.decision;
+  if (!firmId || !taskType || !ruleText) return null;
+  if (decision !== "approved" && decision !== "dismissed" && decision !== "corrected") return null;
+  return {
+    id: typeof row.id === "string" ? row.id : undefined,
+    firm_id: firmId,
+    client_id: (row.client_id as string | null) ?? null,
+    task_type: taskType,
+    source_event: typeof row.source_event === "string" ? row.source_event : "",
+    source_row_id: (row.source_row_id as string | null) ?? null,
+    decision,
+    rule_text: ruleText,
+    approver_id: (row.approver_id as string | null) ?? null,
+    layer: typeof row.layer === "string" ? row.layer : undefined,
+    status: typeof row.status === "string" ? row.status : undefined,
+    created_at: typeof row.created_at === "string" ? row.created_at : undefined,
+  };
+}
+
+/** Active private rules for one firm/client/task set. Missing table → empty (no failed turn). */
+export async function loadMilonBrainRulesPromptBlock(
+  db: SupabaseClient,
+  input: {
+    firmId: string | null;
+    clientId: string;
+    taskTypes: readonly string[];
+    subject?: IdentifierSubject;
+  },
+): Promise<string> {
+  if (!input.firmId || input.taskTypes.length === 0) return "";
+  const read = dbOf(db);
+  const taskList = [...input.taskTypes];
+  const { data, error } = (await read
+    .from("milon_brain_rules")
+    .select(
+      "id, firm_id, client_id, task_type, source_event, source_row_id, decision, rule_text, approver_id, layer, status, created_at",
+    )
+    .eq("firm_id", input.firmId)
+    .eq("status", "active")
+    .eq("layer", "private")
+    .in("task_type", taskList)
+    .order("created_at", { ascending: false })
+    .limit(MILON_BRAIN_RULES_PROMPT_LIMIT * 2)) as { data: unknown; error: QueryError };
+  if (missingRelation(error)) return "";
+  if (error) {
+    console.error("milon_brain_rules_load_failed", error.message ?? error);
+    return "";
+  }
+  const parsed = asRows(data)
+    .map(parseMilonBrainRuleRow)
+    .filter((row): row is MilonBrainRuleRow => Boolean(row))
+    .filter(
+      (row) => row.client_id == null || row.client_id === input.clientId,
+    );
+  const ordered = orderMilonBrainRulesNewestFirst(parsed);
+  const deduped = dedupeMilonBrainRules(ordered).slice(0, MILON_BRAIN_RULES_PROMPT_LIMIT);
+  if (deduped.length === 0) return "";
+  const lines = milonBrainRulesPromptLines(deduped);
+  const block = formatMilonBrainRulesPromptBlock(lines);
+  const session = createRedactionSession(input.subject);
+  return applyRedaction(block, session);
 }
