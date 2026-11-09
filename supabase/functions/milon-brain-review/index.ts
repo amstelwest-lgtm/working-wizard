@@ -12,6 +12,7 @@ import {
   MILON_BRAIN_LAYER_MILON_WIDE,
   MILON_BRAIN_LAYER_PRIVATE,
   MILON_BRAIN_REVIEW_DEFAULT_DAYS,
+  MILON_BRAIN_STATUS_ACTIVE,
   MILON_BRAIN_STATUS_PENDING,
   MILON_BRAIN_TASK_FEATURE_IDEA,
   nextBrainReviewStatus,
@@ -69,7 +70,7 @@ async function loadPrivateRules(
   return (data ?? []) as BrainReviewPrivateRow[];
 }
 
-export async function runBrainReviewScan(
+async function runBrainReviewScan(
   admin: SupabaseClient,
   input: { days?: number },
 ): Promise<{ groupsMatched: number; created: number; skippedExisting: number }> {
@@ -117,7 +118,7 @@ export async function runBrainReviewScan(
   return { groupsMatched: groups.length, created, skippedExisting };
 }
 
-export async function listBrainReviewQueue(admin: SupabaseClient): Promise<BrainReviewQueueItem[]> {
+async function listBrainReviewQueue(admin: SupabaseClient): Promise<BrainReviewQueueItem[]> {
   const [pendingRes, ideasRes] = await Promise.all([
     admin
       .from("milon_brain_rules")
@@ -162,7 +163,7 @@ export async function listBrainReviewQueue(admin: SupabaseClient): Promise<Brain
   return [...lessonItems, ...ideaItems];
 }
 
-export async function decideBrainReviewRow(
+async function decideBrainReviewRow(
   admin: SupabaseClient,
   input: { id: string; decision: "approve" | "reject"; approverId: string },
 ): Promise<{ ok: true; status: string }> {
@@ -246,7 +247,7 @@ Deno.serve(async (req) => {
       decision,
       approverId: user.id,
     });
-    return json({ ok: true, id, ...decided });
+    return json({ ...decided, ok: true, id });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message === "not_found") return json({ ok: false, error: "not_found" }, 404);
