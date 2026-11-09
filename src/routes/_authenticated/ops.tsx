@@ -47,6 +47,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LighthousePanel } from "@/components/lighthouse-panel";
 import { parseLighthouseTab } from "@/lib/lighthouse-tab";
 import { isPilotFlagVisible } from "@/lib/ops-pilot-flags";
+import { MilonBrainReviewOpsPanel } from "@/components/milon-brain-review-ops";
 
 const LighthouseItPanel = lazy(() =>
   import("@/components/lighthouse-it").then((m) => ({ default: m.LighthouseItPanel })),
@@ -653,15 +654,18 @@ function OwnerOpsPage() {
               </Suspense>
             ) : itPane === "pilot" && !itOnly ? (
               dash ? (
-                <PilotKnobs
-                  flags={flags}
-                  flagEntries={flagEntries}
-                  notes={notes}
-                  setFlags={setFlags}
-                  setNotes={setNotes}
-                  saveFlags={saveFlags}
-                  saveNotes={saveNotes}
-                />
+                <>
+                  <PilotKnobs
+                    flags={flags}
+                    flagEntries={flagEntries}
+                    notes={notes}
+                    setFlags={setFlags}
+                    setNotes={setNotes}
+                    saveFlags={saveFlags}
+                    saveNotes={saveNotes}
+                  />
+                  <MilonBrainReviewOpsPanel />
+                </>
               ) : (
                 <div className="flex items-center gap-2 py-16 text-sm text-[var(--ops-ink-dim)]">
                   <Loader2 className="h-4 w-4 animate-spin text-[var(--ops-amber)]" /> Loading
