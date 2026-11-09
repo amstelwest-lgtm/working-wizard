@@ -216,6 +216,7 @@ import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/com
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { ConnectBooksHomeCard } from "@/components/connect-books-card";
+import { SetupPartnerPanel } from "@/components/setup-partner-panel";
 import { useHomeLedgerConnect } from "@/components/use-home-ledger-connect";
 import { XERO_BANK_RECONNECT, connectBooksHomeVisible } from "@/lib/connect-books-copy";
 import { QboConnectCard } from "@/components/qbo-connect";
@@ -4318,14 +4319,19 @@ function ClientView() {
                           syncLine={homeNeeds.syncLines[0] ?? null}
                           onManage={() => openHomeSection("portal", "connections")}
                           connect={
-                            <ConnectBooksHomeCard
-                              bare
-                              busy={ledgerConnect.busy}
-                              showSage={!isUsCopy(gateMarket)}
-                              onXero={ledgerConnect.startXero}
-                              onQuickBooks={ledgerConnect.startQuickBooks}
-                              onSage={() => setShowSageDialog(true)}
-                            />
+                            <>
+                              <ConnectBooksHomeCard
+                                bare
+                                busy={ledgerConnect.busy}
+                                showSage={!isUsCopy(gateMarket)}
+                                onXero={ledgerConnect.startXero}
+                                onQuickBooks={ledgerConnect.startQuickBooks}
+                                onSage={() => setShowSageDialog(true)}
+                              />
+                              <div className="mt-4">
+                                <SetupPartnerPanel clientId={clientId} />
+                              </div>
+                            </>
                           }
                         />
                       ),
