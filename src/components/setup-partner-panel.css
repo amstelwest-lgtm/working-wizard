@@ -1,0 +1,136 @@
+.setup-partner {
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #102a43;
+  padding: 1rem 1.1rem 1.2rem;
+}
+
+.setup-partner__eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #0b5fff;
+  margin: 0 0 0.35rem;
+}
+
+.setup-partner__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.setup-partner__lede {
+  margin: 0 0 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #334e68;
+}
+
+.setup-partner__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-partner__nav button {
+  text-align: left;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #fff;
+  color: #102a43;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.65rem;
+}
+
+.setup-partner__nav button[data-active="true"] {
+  border-color: #0b5fff;
+  background: #eff6ff;
+  color: #0b5fff;
+}
+
+.setup-partner__summary ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.setup-partner__question {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.setup-partner__answer {
+  width: 100%;
+  min-height: 4.5rem;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.82rem;
+  color: #102a43;
+  resize: vertical;
+}
+
+.setup-partner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.setup-partner__primary {
+  border: none;
+  border-radius: 999px;
+  background: #0b5fff;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.45rem 0.9rem;
+}
+
+.setup-partner__primary:disabled {
+  opacity: 0.55;
+}
+
+.setup-partner__ghost {
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  background: #fff;
+  color: #102a43;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.85rem;
+}
+
+.setup-partner__map h3 {
+  margin: 0.65rem 0 0.25rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #0b5fff;
+}
+
+.setup-partner__map ul {
+  margin: 0 0 0.35rem;
+  padding-left: 1.1rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.setup-partner__error {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: #b91c1c;
+}
+
+.setup-partner__done {
+  font-size: 0.82rem;
+  line-height: 1.45;
+}

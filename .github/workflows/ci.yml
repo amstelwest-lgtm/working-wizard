@@ -92,6 +92,8 @@ jobs:
         run: deno check --no-lock supabase/functions/extract-source-document/index.ts
       - name: deno check prospect-talk
         run: deno check --no-lock supabase/functions/prospect-talk/index.ts
+      - name: deno check setup-partner
+        run: deno check --no-lock supabase/functions/setup-partner/index.ts
 
   # Blocking: prod deploys these entries with Deno defaults and no package.json,
   # so tsconfig `@/*` paths are not available. Copy supabase/ and src/ to a
