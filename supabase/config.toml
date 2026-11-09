@@ -68,6 +68,10 @@ verify_jwt = true
 [functions.agent-draft-decision]
 verify_jwt = true
 
+# Brain P1 pattern review. Ops JWT (is_milon_ops). Service role writes candidates.
+[functions.milon-brain-review]
+verify_jwt = true
+
 # Cron dispatcher. Service-role JWT. The schedule is inserted inactive.
 [functions.agent-dispatch]
 verify_jwt = true

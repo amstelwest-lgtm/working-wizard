@@ -12,7 +12,7 @@ export type MilonBrainDecision = "approved" | "dismissed" | "corrected";
 
 export type MilonBrainRuleRow = {
   id?: string;
-  firm_id: string;
+  firm_id: string | null;
   client_id: string | null;
   task_type: string;
   source_event: string;
@@ -22,6 +22,7 @@ export type MilonBrainRuleRow = {
   approver_id: string | null;
   layer?: string;
   status?: string;
+  pattern_key?: string | null;
   created_at?: string;
 };
 
