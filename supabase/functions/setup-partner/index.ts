@@ -2,7 +2,7 @@
  * Setup Partner — summary reads, one model call per turn, confirm → private brain rules.
  * No ledger writes. JWT required (verify_jwt).
  */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   SETUP_PARTNER_MAX_OUTPUT_TOKENS,
   SETUP_PARTNER_MODEL_TURN_CAP,
@@ -80,7 +80,9 @@ async function loadSummary(db: AgentToolCtx["db"], clientId: string, market: unk
   return buildSetupPartnerSummary({ ledger, booksQuality, snapshot, ratios });
 }
 
-async function retirePriorOnboarding(admin: ReturnType<typeof createClient>, firmId: string, clientId: string) {
+type AdminClient = SupabaseClient<any, "public", any>;
+
+async function retirePriorOnboarding(admin: AdminClient, firmId: string, clientId: string) {
   const { error } = await admin
     .from("milon_brain_rules")
     .update({ status: "retired" })
@@ -119,7 +121,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
-  const adminClient = createClient(supabaseUrl, serviceKey);
+  const adminClient: AdminClient = createClient(supabaseUrl, serviceKey);
 
   const authResult = await authenticateEdgeUser({ token, auth: userClient.auth });
   if (!authResult.ok) return respond(authResult.body, authResult.status);
