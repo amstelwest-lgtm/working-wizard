@@ -28,7 +28,11 @@ import { promptMoneyPack } from "../../../src/lib/prompt-money.ts";
 import { loadPeerContextBlock } from "../_shared/agent-shared-reads.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
-import { adviceChatProductName, adviceChatVolumeUnit, adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
+import {
+  adviceChatProductName,
+  adviceChatVolumeUnit,
+  storedIndustryForAdvice,
+} from "../../../src/lib/advice-industry.ts";
 import {
   assessClientMetrics,
   runwayDisplayLabel,
@@ -159,9 +163,9 @@ export async function buildContext(
         operating:
           op && typeof op === "object" && op.version === 1
             ? {
-                industry: adviceIndustryLabel({
-                  clientName,
-                  templateId: typeof op.templateId === "string" ? op.templateId : "",
+                industry: storedIndustryForAdvice({
+                  templateId: typeof op.templateId === "string" ? op.templateId : null,
+                  businessTypeId: typeof op.businessTypeId === "string" ? op.businessTypeId : null,
                   businessType: typeof data.business_type === "string" ? data.business_type : null,
                 }),
                 volumeUnit: adviceChatVolumeUnit({

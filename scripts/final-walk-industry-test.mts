@@ -253,7 +253,7 @@ assert(vatStripped === "Starter plan" && !vatStripped.includes("$") && !/vat/i.t
 const css = read("src/styles/accountant-portal.css");
 assert(css.includes("max-width:420px") && css.includes("padding-bottom"), "the narrow practice page clears the share button");
 const context = read("supabase/functions/ask-ai/context-builder.ts");
-assert(context.includes("adviceIndustryLabel"), "advice context uses the client's industry");
+assert(context.includes("storedIndustryForAdvice"), "advice context uses the client's stored industry");
 const sphere = read("src/components/sphere-hero.tsx");
 assert(!sphere.includes("These are the first three"), "an empty potential impact block is not shown");
 assert(sphere.includes("See all recommended moves"), "the recommended-moves button stays");

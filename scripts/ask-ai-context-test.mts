@@ -24,6 +24,7 @@ import {
 import { buildProfitabilityData } from "../src/lib/profitability-data.ts";
 import { buildPrompt } from "../supabase/functions/ask-ai/prompt.ts";
 import type { AskAiContext, RatioRow } from "../supabase/functions/ask-ai/types.ts";
+import { storedIndustryForAdvice } from "../src/lib/advice-industry.ts";
 import {
   buildOverviewBrief,
   formatOverviewForPrompt,
@@ -48,6 +49,8 @@ const builderSrc = readFileSync(
 const promptSrc = readFileSync(resolve("supabase/functions/ask-ai/prompt.ts"), "utf8");
 
 assert(builderSrc.includes("operating_profile"), "loads company profile");
+assert(builderSrc.includes("storedIndustryForAdvice"), "uses stored client industry");
+assert(!builderSrc.includes("adviceIndustryLabel"), "does not infer industry from client name");
 assert(builderSrc.includes("client_financial_snapshots"), "loads ratios");
 assert(builderSrc.includes("action_plans"), "loads action plan");
 assert(builderSrc.includes("action_items"), "loads action tasks");
@@ -490,5 +493,55 @@ const noHeadline = buildOverviewBrief({
 });
 assert(noHeadline.netProfit == null, "missing net income is not invented");
 assert(!formatOverviewForPrompt(noHeadline, "owner").includes("Net profit:"), "no stored net profit, no net-profit line");
+
+const hotelIndustry = storedIndustryForAdvice({
+  templateId: "hospitality_rooms",
+  businessTypeId: "hospitality",
+  businessType: "hospitality",
+});
+assert(hotelIndustry === "Hospitality", `boutique hotel profile uses stored hospitality: ${hotelIndustry}`);
+assert(
+  storedIndustryForAdvice({
+    templateId: "day_labour",
+    businessTypeId: "hospitality",
+    businessType: "hospitality",
+  }) === "Hospitality",
+  "stored hospitality wins over labour template id",
+);
+const hotelCtx: AskAiContext = {
+  profile: {
+    client_id: "c1",
+    entity_type: null,
+    business_type: "hospitality",
+    annual_revenue: null,
+    operating: {
+      industry: hotelIndustry,
+      volumeUnit: "room_nights",
+      debtorDaysDefault: 14,
+      costShape: "payroll_heavy",
+      seasonality: "strong",
+      inventoryIntensity: "light",
+      customerConcentration: "diverse",
+      debtPosition: "light",
+      ownerGoal: "lift_margins",
+      payMotion: "time_delivery",
+      fyStartMonth: 3,
+    },
+  },
+  profileQuestions: [],
+  scores: null,
+  ratios: [],
+  playbook: [],
+  copyPack: "za",
+  waterfall: null,
+  cashForecast: null,
+  productLines: [],
+  nextSteps: [],
+  actionPlan: null,
+  deliverables: [],
+};
+const hotelPrompt = buildPrompt("How is payroll?", hotelCtx, "full", "owner");
+assert(hotelPrompt.user.includes("Business model: Hospitality"), "prompt names stored hospitality industry");
+assert(!/labour\s*&\s*staffing/i.test(hotelPrompt.user), "prompt does not default industry to staffing");
 
 console.log("ask-ai-context-test: all assertions passed");
