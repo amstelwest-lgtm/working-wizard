@@ -48,8 +48,10 @@ import {
   FM_AVATAR_CLIPS,
   FM_AVATAR_VERSION,
   avatarClipAtEnd,
+  avatarHandoffCuriousIntro,
   AVATAR_FOLDERS,
   avatarPoster,
+  avatarSingleIdleBudget,
   displayFmClip,
   fmAvatarClip,
   fmClipSources,
@@ -1173,10 +1175,13 @@ assert(
 assert(video.includes('"ended"'), "the next clip starts when the current one ends");
 assert(video.includes("avatarClipAtEnd"), "the swap uses the file's own last frame");
 assert(video.includes("incoming.loop = false"), "a clip ends so the next one can start");
+assert(avatarHandoffCuriousIntro("tax_specialist", "handoff"), "tax hand-off opens on a moving flourish");
 assert(
-  video.includes('agent === "tax_specialist" && desired === "handoff"'),
-  "tax hand-off opens on a moving flourish",
+  avatarHandoffCuriousIntro("setup_partner", "handoff"),
+  "implementation manager hand-off opens on a moving flourish",
 );
+assert(avatarSingleIdleBudget("tax_specialist"), "tax idle budget is one");
+assert(avatarSingleIdleBudget("setup_partner"), "implementation manager idle budget is one");
 assert(video.includes('"curious"'), "the tax hand-off opens on the curious clip");
 assert(
   video.includes('restOnIntro && playing === "curious"'),
