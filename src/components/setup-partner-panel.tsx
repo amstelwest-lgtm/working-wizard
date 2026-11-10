@@ -15,6 +15,7 @@ import {
   fetchSetupPartnerSummary,
   phraseSetupPartnerFollowup,
 } from "@/lib/setup-partner-client";
+import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 
 type Phase = "summary" | "interview" | "map" | "done";
 
@@ -169,7 +170,7 @@ export function SetupPartnerPanel({ clientId }: Props) {
   if (!clientId) {
     return (
       <section className="setup-partner" data-setup-partner="empty" aria-label={SETUP_PARTNER_DISPLAY_NAME}>
-        <p className="setup-partner__lede">Select a client to run Setup Partner.</p>
+        <p className="setup-partner__lede">Select a client to run {SETUP_PARTNER_DISPLAY_NAME}.</p>
       </section>
     );
   }
@@ -183,8 +184,19 @@ export function SetupPartnerPanel({ clientId }: Props) {
 
   return (
     <section className="setup-partner" data-setup-partner="" aria-label={SETUP_PARTNER_DISPLAY_NAME}>
-      <p className="setup-partner__eyebrow">Onboarding</p>
-      <h2 className="setup-partner__title">{SETUP_PARTNER_DISPLAY_NAME}</h2>
+      <div className="setup-partner__head">
+        <OwnerAvatar
+          agent="setup_partner"
+          variant="character"
+          size="sm"
+          motion="idle"
+          label={SETUP_PARTNER_DISPLAY_NAME}
+        />
+        <div className="setup-partner__head-text">
+          <p className="setup-partner__eyebrow">Onboarding</p>
+          <h2 className="setup-partner__title">{SETUP_PARTNER_DISPLAY_NAME}</h2>
+        </div>
+      </div>
       <p className="setup-partner__lede">
         Learn how finance runs today, map Milōn agents to each step, and save confirmed workflow rules. No ledger
         writes.

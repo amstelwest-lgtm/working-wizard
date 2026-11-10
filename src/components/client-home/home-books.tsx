@@ -11,7 +11,7 @@ export function HomeBooks({
   ledger: string | null;
   syncLine: string | null;
   connect: ReactNode;
-  /** Shown with Books whether or not a ledger is connected (e.g. Setup Partner). */
+  /** Shown with Books whether or not a ledger is connected (e.g. Implementation Manager). */
   setupPartner?: ReactNode;
   onManage: () => void;
 }) {

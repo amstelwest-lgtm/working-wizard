@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import {
   SETUP_PARTNER_ALLOWED_TOOLS,
+  SETUP_PARTNER_DISPLAY_NAME,
   SETUP_PARTNER_FIXED_QUESTIONS,
   SETUP_PARTNER_MAX_BRAIN_ROWS,
   SETUP_PARTNER_MAX_FOLLOWUPS,
@@ -18,6 +19,11 @@ import {
   setupPartnerFollowups,
 } from "../src/lib/setup-partner.ts";
 import { filterMilonBrainRulesForPrompt } from "../src/lib/milon-brain-rules.ts";
+import {
+  AVATAR_FOLDERS,
+  avatarPoster,
+  fmClipSources,
+} from "../src/lib/fm-avatar-state.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -31,6 +37,17 @@ const firmA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const firmB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const clientA = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 
+assert(SETUP_PARTNER_DISPLAY_NAME === "Implementation Manager", "display name");
+assert(AVATAR_FOLDERS.setup_partner === "implementation-manager", "avatar folder");
+assert(
+  fmClipSources("idle", "setup_partner").webm ===
+    "/avatars/implementation-manager/implementation-manager-idle.webm",
+  "idle clip href",
+);
+assert(
+  avatarPoster("setup_partner").webp === "/avatars/implementation-manager/implementation-manager-poster.webp",
+  "poster webp href",
+);
 assert(SETUP_PARTNER_FIXED_QUESTIONS.length >= 8 && SETUP_PARTNER_FIXED_QUESTIONS.length <= 10, "fixed question count");
 
 const emptySummary = buildSetupPartnerSummary({
@@ -109,6 +126,7 @@ const prompt = read("supabase/functions/setup-partner/firm-interview-prompt.ts")
 assert(prompt.startsWith("// Edit this file to change the Implementation Manager interview playbook\n"), "playbook comment");
 assert(prompt.includes("Nothing posts to Xero"), "prompt forbids ledger writes");
 assert(prompt.includes("accountant firm"), "firm interview prompt");
+assert(prompt.includes("Implementation Manager"), "prompt names Implementation Manager");
 const promptEntry = read("supabase/functions/_shared/agent-prompts/setup-partner.ts");
 assert(promptEntry.includes("firm-interview-prompt.ts"), "one swappable prompt file");
 

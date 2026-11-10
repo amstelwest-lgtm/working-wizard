@@ -5,7 +5,7 @@
 import { clipMilonBrainRuleText, type MilonBrainRuleRow } from "./milon-brain-rules.ts";
 
 export const SETUP_PARTNER_AGENT_KEY = "setup_partner" as const;
-export const SETUP_PARTNER_DISPLAY_NAME = "Setup Partner";
+export const SETUP_PARTNER_DISPLAY_NAME = "Implementation Manager";
 export const SETUP_PARTNER_SOURCE_EVENT = "setup_partner_confirm";
 export const SETUP_PARTNER_TASK_WORKFLOW = "onboarding_workflow";
 export const SETUP_PARTNER_TASK_FEATURE = "feature_idea";

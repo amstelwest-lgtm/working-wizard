@@ -6,6 +6,22 @@
   padding: 1rem 1.1rem 1.2rem;
 }
 
+.setup-partner__head {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  margin-bottom: 0.35rem;
+}
+
+.setup-partner__head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.setup-partner__head .owner-presence {
+  flex-shrink: 0;
+}
+
 .setup-partner__eyebrow {
   font-size: 10px;
   font-weight: 700;

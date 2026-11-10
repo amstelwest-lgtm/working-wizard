@@ -36,9 +36,17 @@ export const AVATAR_FOLDERS = {
   analyst: "analyst",
   advisor: "advisor",
   tax_specialist: "tax",
+  setup_partner: "implementation-manager",
 } as const;
 
 export type AvatarFace = keyof typeof AVATAR_FOLDERS;
+
+/** Still poster only. Video clips are not shipped for this face. */
+export const AVATAR_POSTER_ONLY: ReadonlySet<AvatarFace> = new Set(["setup_partner"]);
+
+export function avatarPosterOnly(agent: AvatarFace): boolean {
+  return AVATAR_POSTER_ONLY.has(agent);
+}
 
 /**
  * Clips are 24fps and 120 frames (5s). The end check uses the file's own

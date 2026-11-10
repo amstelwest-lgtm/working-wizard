@@ -15,6 +15,7 @@ import {
   FM_CROSSFADE_MS,
   avatarClipAtEnd,
   avatarPoster,
+  avatarPosterOnly,
   fmClipSources,
   fmIdleBudget,
   fmIdleFlourish,
@@ -472,7 +473,7 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
     retargetRef.current(clip);
   }, [clip]);
 
-  const play = !reduced && near;
+  const play = !reduced && near && !avatarPosterOnly(agent);
   const poster = avatarPoster(agent);
   const clipClass = (index: 0 | 1) =>
     [slot === index ? "is-on" : "", hold === index ? "is-hold" : ""].filter(Boolean).join(" ") ||
