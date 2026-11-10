@@ -49,24 +49,96 @@ export type SetupPartnerWorkflowMap = {
   checklist: string[];
 };
 
-/** Practice workflow. A client answer is an example, not the subject. */
+/** Per-client interview. One client, not the practice. */
 export const SETUP_PARTNER_FIXED_QUESTIONS: readonly { id: string; prompt: string }[] = [
-  { id: "close", prompt: "How does the practice run month-end close across clients?" },
-  { id: "review", prompt: "Who reviews the draft pack before it goes out?" },
-  { id: "sign_off", prompt: "How does sign-off work, and who is allowed to sign?" },
-  { id: "deadlines", prompt: "How does the firm track filing deadlines and client due dates?" },
-  { id: "reporting", prompt: "How does the firm deliver client reports today?" },
-  { id: "tools", prompt: "Which ledgers and spreadsheets does the practice use?" },
+  { id: "bookkeeper", prompt: "Who handles day-to-day bookkeeping for this client?" },
+  { id: "approvals", prompt: "Who approves payments and major purchases?" },
   {
-    id: "handoff",
-    prompt: "Where does work still sit outside Milōn (email, folders, other tools)?",
+    id: "outside_tools",
+    prompt: "Besides the ledger, which spreadsheets or tools do you rely on?",
   },
-  {
-    id: "example",
-    prompt: "Give one client only as an example of a step the firm still does by hand.",
-  },
-  { id: "extra", prompt: "Anything else about how the practice runs finance work?" },
+  { id: "invoicing", prompt: "How are customer invoices raised and sent?" },
+  { id: "bills", prompt: "How are supplier bills captured and paid?" },
+  { id: "close_calendar", prompt: "When does month-end close usually finish?" },
+  { id: "payroll", prompt: "Who runs payroll, and how is it posted to the ledger?" },
+  { id: "vat", prompt: "Who prepares VAT or sales tax filings?" },
+  { id: "pain", prompt: "What is the biggest month-end bottleneck right now?" },
+  { id: "extra", prompt: "Anything else about how finance runs today?" },
 ];
+
+/** Firm interview. The practice across its clients, not one end client. */
+export const FIRM_SETUP_QUESTIONS: readonly { id: string; prompt: string; followUp: string }[] = [
+  {
+    id: "mix",
+    prompt: "How many clients are on the book, and which industries and sizes make up most of it?",
+    followUp: "Give a count, the top two industries, and whether most are small or mid-sized.",
+  },
+  {
+    id: "ledgers",
+    prompt: "Which clients are on Xero, QuickBooks, Sage, or another ledger?",
+    followUp:
+      "Name the ledger for the majority, and the exception if one group uses something else.",
+  },
+  {
+    id: "cadence",
+    prompt: "What do you send clients each month, and on which day does it go out?",
+    followUp: "Name the pack and the day it usually leaves.",
+  },
+  {
+    id: "chain",
+    prompt: "Who prepares the pack, who reviews it, and who is allowed to sign off?",
+    followUp: "Name the roles, even if one person does more than one.",
+  },
+  {
+    id: "deadlines",
+    prompt: "Which deadlines do you track, and where is that list kept?",
+    followUp: "Name the filings and the place: a spreadsheet, a diary, or a tool.",
+  },
+  {
+    id: "sources",
+    prompt:
+      "Where do source documents arrive — email, WhatsApp, Dext, a portal, or somewhere else?",
+    followUp: "Name the main channel, and one other if a group of clients uses it.",
+  },
+  {
+    id: "tools",
+    prompt: "Which spreadsheets and other tools does the practice still run the work in?",
+    followUp: "Name the spreadsheet or tool the month cannot close without.",
+  },
+  {
+    id: "time_sink",
+    prompt: "Where does the team lose the most time each month?",
+    followUp: "Point at one step, not a general complaint.",
+  },
+  {
+    id: "pricing",
+    prompt:
+      "What do you sell clients, and how is it priced — fixed fee, advisory, packs, or a mix?",
+    followUp: "Name the main offer and whether the fee is fixed or hourly.",
+  },
+  {
+    id: "team",
+    prompt:
+      "How many people are in the firm, and who does the books, the review, and client reporting?",
+    followUp: "Give the headcount and who prepares versus who reviews.",
+  },
+];
+
+/** One follow-up, only when the firm answer does not pin the step down. */
+export function firmAnswerIsVague(answer: string): boolean {
+  const text = answer.replace(/\s+/g, " ").trim();
+  if (!text) return true;
+  if (/^(it depends|depends|varies|not sure|unsure|same)\b/i.test(text)) return true;
+  return text.split(" ").length < 4;
+}
+
+export function setupQuestionsForAnswers(
+  answers: Record<string, string>,
+): readonly { id: string; prompt: string }[] {
+  const firm = new Set(FIRM_SETUP_QUESTIONS.map((row) => row.id));
+  if (Object.keys(answers).some((id) => firm.has(id))) return FIRM_SETUP_QUESTIONS;
+  return SETUP_PARTNER_FIXED_QUESTIONS;
+}
 
 export type SetupPartnerFollowupTemplate = {
   id: string;
@@ -301,24 +373,25 @@ export function fallbackWorkflowMap(
   answers: Record<string, string>,
   country?: SetupPartnerCountry | null,
 ): SetupPartnerWorkflowMap {
-  const flow = SETUP_PARTNER_FIXED_QUESTIONS.map((q) => {
-    const answer = (answers[q.id] ?? "").trim();
-    if (!answer) return null;
-    return `${q.prompt} → ${answer}`;
-  }).filter((line): line is string => Boolean(line));
-  const bottleneck = (answers.extra ?? answers.pain ?? "").trim();
+  const flow = setupQuestionsForAnswers(answers)
+    .map((q) => {
+      const answer = (answers[q.id] ?? "").trim();
+      if (!answer) return null;
+      return `${q.prompt} → ${answer}`;
+    })
+    .filter((line): line is string => Boolean(line));
+  const bottleneck = (answers.time_sink ?? answers.extra ?? answers.pain ?? "").trim();
+  const told = Object.values(answers).join(" ");
+  const checklist = /\b(xero|quickbooks|qbo|sage)\b/i.test(told)
+    ? []
+    : ["Connect Xero, QuickBooks, or Sage where the firm keeps the books."];
   return {
     todaysFlow: flow.length ? flow : ["Practice month-end close, review, and sign-off."],
     milonCoverage: setupPartnerCoverage(country),
     gaps: bottleneck
       ? [`Practice bottleneck: ${bottleneck}`]
       : ["Confirm the hand-offs the firm still does manually."],
-    checklist: [
-      "Connect Xero, QuickBooks, or Sage where the firm keeps the books.",
-      "Name who reviews and who signs off.",
-      "Agree deadline tracking for the practice.",
-      "Note one client only as an example of the firm workflow.",
-    ],
+    checklist,
   };
 }
 

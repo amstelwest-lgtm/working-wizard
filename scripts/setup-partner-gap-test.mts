@@ -3,7 +3,7 @@
  * Run: pnpm test:setup-partner-gap
  */
 import { readFileSync } from "node:fs";
-import { SETUP_PARTNER_FIXED_QUESTIONS } from "../src/lib/setup-partner.ts";
+import { FIRM_SETUP_QUESTIONS, SETUP_PARTNER_FIXED_QUESTIONS } from "../src/lib/setup-partner.ts";
 import {
   PRODUCT_GAPS_SINCE_YESTERDAY_SQL,
   bespokeLogRow,
@@ -245,11 +245,14 @@ assert(
 );
 assert(sql.includes("seen="), "query also honours a merge timestamp");
 
-const prompts = SETUP_PARTNER_FIXED_QUESTIONS.map((row) => row.prompt).join(" ");
-assert(/month-end close/i.test(prompts), "interview asks about close");
-assert(/sign-off/i.test(prompts), "interview asks about sign-off");
-assert(/client reports/i.test(prompts), "interview asks about reporting");
-assert(!/supplier bills/i.test(prompts), "interview is not the end-client business");
+const prompts = FIRM_SETUP_QUESTIONS.map((row) => row.prompt).join(" ");
+assert(/send clients each month/i.test(prompts), "firm interview asks what goes out");
+assert(/sign off/i.test(prompts), "firm interview asks about sign-off");
+assert(/client reporting/i.test(prompts), "firm interview asks about reporting");
+assert(!/supplier bills/i.test(prompts), "firm interview is not one end client");
+const clientPrompts = SETUP_PARTNER_FIXED_QUESTIONS.map((row) => row.prompt).join(" ");
+assert(/this client/i.test(clientPrompts), "per-client interview stays on this client");
+assert(/supplier bills/i.test(clientPrompts), "per-client interview asks about supplier bills");
 
 const edge = read("supabase/functions/setup-partner/index.ts");
 assert(edge.includes("buildPracticeImplementationPlan"), "confirm returns a plan");

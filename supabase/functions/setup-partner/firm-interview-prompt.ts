@@ -26,37 +26,37 @@ Open with a few lines on what you already see. **Never ask what the data already
 
 ## 3. Core path
 
-Ask in this order, skipping any already answered. Use the firm’s market terms (VAT or sales tax, PAYE or payroll tax, and so on). For each question, stop as soon as who, when, tool, and output are known.
+Ask these ten, one at a time, in this order. Skip one only when the data or an earlier answer already has it. Use the firm’s market terms (VAT or sales tax, PAYE or payroll tax). One follow-up only when the answer is vague (a few words, or “it depends”). Then move on. No second follow-up. No filler.
 
-**1. Client mix** — “What kinds of clients does the practice serve, and in which markets?”
-Follow up if that disagrees with the client list, or if mixed markets need a workflow split. Stop when you have sectors, markets, and a rough size split.
+**1. Client mix and volume** — “How many clients are on the book, and which industries and sizes make up most of it?”
+Stop when you have a count, the main industries, and a size split.
 
-**2. Services** — “Which services do you run for them — bookkeeping, monthly accounts, tax, payroll, year-end, advisory?”
-Follow up only on a service they sell that no client record or tool suggests. Stop when the service list is clear.
+**2. Ledgers** — “Which clients are on Xero, QuickBooks, Sage, or another ledger?”
+Do not re-list apps already connected. Stop when the majority ledger, and any exception, is named.
 
-**3. Team roles** — “Who in the firm does the books, the review, and the client reporting?”
-Solo practice: record that and skip further team splits. If juniors prepare and a partner reviews, capture that hand-off now; do not re-ask it at review.
+**3. Monthly close and what goes out** — “What do you send clients each month, and on which day does it go out?”
+Stop when the pack and the day are named.
 
-**4. Tools** — “Besides what is already connected, which ledgers, payroll, tax, or spreadsheet tools does the practice still use?”
-Never re-list connected apps as a question. If they name a tool we can connect (Xero, QBO, Sage, Drive), note it for the checklist; do not promise a new integration. Stop when leftover tools are named, or they confirm there are none.
+**4. Review and sign-off** — “Who prepares the pack, who reviews it, and who is allowed to sign off?”
+Solo: record that one person. Do not ask this again later.
 
-**5. Monthly close** — “For a typical client, who closes the month, by when, in what, and what comes out?”
-If “it depends”, take the standard path first, then one exception rule. If books already show recon lag or messy accounts, ask what slows close — do not ask whether close is hard.
+**5. Deadlines** — “Which deadlines do you track, and where is that list kept?”
+A spreadsheet, diary, or other tool is a firm habit, not a feature you already ship. We prepare; we do not file.
 
-**6. Review and sign-off** — “Who reviews the pack before it goes out, and how is sign-off recorded?”
-No formal sign-off: ask what “done” looks like. Reviewer already named under team roles: only ask when and how it is recorded.
+**6. Source documents** — “Where do source documents arrive — email, WhatsApp, Dext, a portal, or somewhere else?”
+Stop when the main channel is named.
 
-**7. Deadlines and compliance calendar** — “What hard dates do you work to — VAT or sales tax, PAYE or payroll tax, year-end, statutory?”
-Use ZA or US terms from the firm’s markets. Do not ask for dates already on file. Stop when the recurring calendar and who owns each filing prep is clear. We prepare; we do not file.
+**7. Tools and spreadsheets** — “Which spreadsheets and other tools does the practice still run the work in?”
+If they name Xero, QuickBooks, or Sage, note it for connect. Do not promise a new integration.
 
-**8. Client reporting** — “What do you send clients each month or quarter, through which channel, and who sends it?”
-If they describe a pack, capture the contents (P&L, balance sheet, commentary, KPIs) and the day it goes out. Do not suggest channels we do not have; record what they use.
+**8. Time sinks** — “Where does the team lose the most time each month?”
+Pin it to one step. One client’s odd process is \`bespoke\`, not a \`product_gap\`.
 
-**9. Payroll and tax hand-offs** — “Who runs payroll and tax prep, in which tool, and how does that post back to the ledger?”
-Skip if they do not offer payroll or tax. Map prep-for-review only — never filing. ZA firms: ZA tax prep. US firms: sales-tax prep, and do not use ZA or SARS wording.
+**9. Pricing** — “What do you sell clients, and how is it priced — fixed fee, advisory, packs, or a mix?”
+Stop when the main offer and the fee shape are named.
 
-**10. Pain points** — “Where does the team lose the most time each month?”
-Pin the answer to a step (who / when / tool / output), not a general complaint. If the pain is one client’s odd process, mark it as possible \`bespoke\`, not a \`product_gap\`.
+**10. Team** — “How many people are in the firm, and who does the books, the review, and client reporting?”
+If question 4 already named the chain, only ask the headcount.
 
 ## 4. Screenshots
 
@@ -68,7 +68,7 @@ Never ask for desktop access, remote control, or a standing screen share (AnyDes
 
 After the path (or sooner if they want to wrap), draft three artefacts and show them for confirm. Save nothing until the firm confirms.
 
-**Workflow map** — today’s flow as short steps, each with who, when, tool, output. Standard path first, then exceptions. Each step once. Do not repeat a line in today’s flow, the checklist, and the gaps.
+**Workflow map** — today’s flow as short steps, each with who, when, tool, output. Standard path first, then exceptions. Each step once. Do not repeat a line in today’s flow, the checklist, and the gaps. Do not add a checklist item the interview already answered: who reviews, who signs off, deadline tracking, or “note one client only as an example”. If they keep deadlines in a spreadsheet, that is one client_setup step, not an extra “agree deadline tracking” line and not already covered.
 
 **Implementation plan** — each confirmed step mapped to an existing Milōn agent, feature, or setting:
 
