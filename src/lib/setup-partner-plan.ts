@@ -264,6 +264,38 @@ export function buildPracticeImplementationPlan(
   return { steps };
 }
 
+/**
+ * Rebuild saved steps from active firm-level setup_partner_confirm rules.
+ * Those rows are the client_setup bucket only. The step sentence is the text
+ * before the fit note, and the bucket is the same classifier that wrote it.
+ * Covered steps are not stored. Product gaps and bespoke logs use other sources.
+ */
+export function practicePlanFromConfirmRules(
+  rows: readonly {
+    rule_text?: string | null;
+    client_id?: string | null;
+    source_event?: string | null;
+    status?: string | null;
+  }[],
+): PracticeImplementationPlan {
+  const steps: PracticePlanStep[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (row.client_id) continue;
+    if (row.source_event && row.source_event !== SETUP_PARTNER_SOURCE_EVENT) continue;
+    if (row.status && row.status !== "active") continue;
+    const text = (row.rule_text ?? "").replace(/\s+/g, " ").trim();
+    if (!text.startsWith("Practice: ")) continue;
+    let step = text.slice("Practice: ".length);
+    const mark = step.lastIndexOf(" — ");
+    if (mark > 0) step = step.slice(0, mark).trim();
+    if (!step || seen.has(step.toLowerCase())) continue;
+    seen.add(step.toLowerCase());
+    steps.push(classifyPracticeStep(step));
+  }
+  return { steps };
+}
+
 /** Firm-wide private rules. client_id stays null so the rule is not pinned to one example client. */
 export function clientSetupBrainRows(input: {
   firmId: string;

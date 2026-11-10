@@ -17,6 +17,7 @@ import {
   setupPartnerMapUserPrompt,
   setupPartnerPhraseUserPrompt,
   setupPartnerScreenshotNotes,
+  type SetupPartnerCountry,
   type SetupPartnerSummary,
   type SetupPartnerWorkflowMap,
 } from "../../../src/lib/setup-partner.ts";
@@ -49,6 +50,7 @@ import {
   readPrecardGate,
   recordPrecardUse,
 } from "../_shared/precard-cap-gate.ts";
+import { parseMarketSelection } from "../../../src/lib/market/parse.ts";
 import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../../../src/lib/precard-cap.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
@@ -78,6 +80,20 @@ function json(body: unknown, status = 200, corsHeaders?: Record<string, string>)
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function coverageCountry(market: unknown): SetupPartnerCountry | null {
+  return parseMarketSelection(market)?.country ?? null;
+}
+
+function coverageMarketNote(country: SetupPartnerCountry | null): string {
+  if (country === "US") {
+    return "Firm country: US. In milonCoverage, Tax Specialist owns sales-tax prep for accountant review (no filing). Do not write ZA or SARS.";
+  }
+  if (country === "ZA") {
+    return "Firm country: ZA. In milonCoverage, Tax Specialist owns ZA tax prep for accountant review (no filing).";
+  }
+  return "Firm country is unset. In milonCoverage, Tax Specialist owns tax prep for accountant review (no filing). Do not write ZA or SARS.";
 }
 
 async function loadSummary(
@@ -433,8 +449,9 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         ? await loadSummary(userClient, clientId, market)
         : firmSetupPartnerSummary();
     }
+    const country = coverageCountry(market);
     const userPrompt = applyRedaction(
-      setupPartnerMapUserPrompt(summary, answers, setupPartnerScreenshotNotes(body.screenshots)),
+      `${setupPartnerMapUserPrompt(summary, answers, setupPartnerScreenshotNotes(body.screenshots))}\n\n${coverageMarketNote(country)}`,
       session,
     );
     try {
@@ -452,11 +469,11 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         });
       }
       const text = rehydrateModelOutput(res.text, session);
-      const map = parseWorkflowMapJson(text, answers);
+      const map = parseWorkflowMapJson(text, answers, country);
       return respond({ map, modelTurns: modelTurns + 1 });
     } catch (err) {
       console.error("setup_partner_map_failed", err instanceof Error ? err.message : err);
-      const map = parseWorkflowMapJson("", answers);
+      const map = parseWorkflowMapJson("", answers, country);
       return respond({ map, modelTurns: modelTurns + 1, skippedModel: true });
     }
   }
