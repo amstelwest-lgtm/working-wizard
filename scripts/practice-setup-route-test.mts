@@ -5,8 +5,10 @@
 import { readFileSync } from "node:fs";
 import { fallbackWorkflowMap, parseWorkflowMapJson } from "../src/lib/setup-partner.ts";
 import {
+  buildPracticeImplementationPlan,
   classifyPracticeStep,
   clientSetupBrainRows,
+  practiceBucketLabel,
   practicePlanFromConfirmRules,
 } from "../src/lib/setup-partner-plan.ts";
 
@@ -56,9 +58,27 @@ assert(
   "coverage uses the firm country",
 );
 assert(panel.includes("Saving…"), "confirm shows Saving while the request is in flight");
-assert(panel.includes('toast.success("Saved for the practice.")'), "success uses the toast helper");
-assert(panel.includes("toast.error(message)"), "a failed confirm toasts");
+assert(
+  panel.includes('setupToast("Saved for the practice.", "status")'),
+  "success uses the toast helper with a status role",
+);
+assert(
+  panel.includes('setupToast(message, "alert")'),
+  "a failed confirm toasts with an alert role",
+);
 assert(panel.includes('role="alert"'), "the error paragraph stays");
+assert(route.includes("<Toaster"), "this route mounts the toast helper's Toaster");
+assert(route.includes("PRACTICE_SETUP_TOASTER_ID"), "confirm and the route share one toaster");
+const avatarCss = read("src/components/setup-partner-panel.css");
+assert(
+  avatarCss.includes("width: 80px") && avatarCss.includes("height: 80px"),
+  "one avatar at 80px",
+);
+assert(
+  avatarCss.includes(".setup-partner__head .owner-fm-face video") &&
+    avatarCss.includes("position: absolute"),
+  "poster and clips overlay instead of stacking",
+);
 assert(panel.includes("Redo interview"), "a saved plan can be redone");
 assert(panel.includes("fetchFirmSetupPlan"), "saved rules load through the existing client");
 assert(
@@ -121,7 +141,39 @@ assert(
   "covered steps are not stored on the confirm rules",
 );
 
+testDedupeLabelsAndReviewer();
+
 await runPanel();
+
+/** One case: dedupe by key, human bucket labels, reviewer and sign-off are client setup. */
+function testDedupeLabelsAndReviewer() {
+  const reviewer = classifyPracticeStep("Name the reviewer");
+  const signOff = classifyPracticeStep("Name who signs off");
+  const sheet = classifyPracticeStep("Deadlines are kept in a spreadsheet");
+  assert(reviewer.bucket === "client_setup", `reviewer bucket: ${reviewer.bucket}`);
+  assert(signOff.bucket === "client_setup", `sign-off bucket: ${signOff.bucket}`);
+  assert(sheet.bucket === "client_setup", `spreadsheet deadlines bucket: ${sheet.bucket}`);
+  assert(reviewer.bucket !== "bespoke" && signOff.bucket !== "bespoke", "not bespoke");
+
+  const line = "Want management packs and cash forecasts";
+  const plan = buildPracticeImplementationPlan({
+    todaysFlow: [line, line],
+    milonCoverage: [],
+    gaps: [line],
+    checklist: [],
+  });
+  assert(plan.steps.length === 1, `covered line deduped, got ${plan.steps.length}`);
+  assert(plan.steps[0]?.bucket === "covered", "management packs are already covered");
+  assert(practiceBucketLabel("covered") === "Already covered", "covered label");
+  assert(practiceBucketLabel("client_setup") === "Client setup", "client setup label");
+  assert(practiceBucketLabel("product_gap") === "Product gap", "product gap label");
+  assert(practiceBucketLabel("bespoke") === "Bespoke", "bespoke label");
+  assert(
+    `${plan.steps[0]?.step} — ${practiceBucketLabel(plan.steps[0]!.bucket)}` ===
+      "Want management packs and cash forecasts — Already covered",
+    "the done list maps the bucket",
+  );
+}
 
 console.log("practice-setup-route-test: ok");
 
@@ -231,12 +283,20 @@ async function runPanel() {
   const errors: string[] = [];
   const originalSuccess = toast.success.bind(toast);
   const originalError = toast.error.bind(toast);
+  const toastText = (message: unknown) => {
+    if (typeof message === "string") return message;
+    if (message && typeof message === "object" && "props" in message) {
+      const children = (message as { props?: { children?: unknown } }).props?.children;
+      if (typeof children === "string") return children;
+    }
+    return String(message);
+  };
   toast.success = ((message: unknown, data?: unknown) => {
-    successes.push(String(message));
+    successes.push(toastText(message));
     return originalSuccess(message as string, data as never);
   }) as typeof toast.success;
   toast.error = ((message: unknown, data?: unknown) => {
-    errors.push(String(message));
+    errors.push(toastText(message));
     return originalError(message as string, data as never);
   }) as typeof toast.error;
 
@@ -378,7 +438,7 @@ async function runPanel() {
     "existing rules open on the saved plan",
   );
   assert(
-    document.body.textContent?.includes("Who signs the pack — client_setup"),
+    document.body.textContent?.includes("Who signs the pack — Client setup"),
     "saved step and bucket are shown",
   );
   assert(
@@ -451,7 +511,7 @@ async function runPanel() {
     "success keeps the saved line",
   );
   assert(
-    document.body.textContent?.includes("Who signs the pack — client_setup"),
+    document.body.textContent?.includes("Who signs the pack — Client setup"),
     "success keeps the step and bucket",
   );
   assert(successes.includes("Saved for the practice."), "success toasts");

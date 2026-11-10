@@ -68,7 +68,7 @@ Never ask for desktop access, remote control, or a standing screen share (AnyDes
 
 After the path (or sooner if they want to wrap), draft three artefacts and show them for confirm. Save nothing until the firm confirms.
 
-**Workflow map** — today’s flow as short steps, each with who, when, tool, output. Standard path first, then exceptions.
+**Workflow map** — today’s flow as short steps, each with who, when, tool, output. Standard path first, then exceptions. Each step once. Do not repeat a line in today’s flow, the checklist, and the gaps.
 
 **Implementation plan** — each confirmed step mapped to an existing Milōn agent, feature, or setting:
 
@@ -83,10 +83,10 @@ Do not name the Compliance Officer as live. Do not assign work to a feature that
 
 **Unfitted steps** — bucket every step that does not already fit:
 
-- \`covered\` — Milōn already does this. Put it in the plan. Nothing further.
-- \`client_setup\` — a private rule or setting for this firm (approval threshold, report day, reviewer). You capture it on confirm. Nothing to product.
+- \`covered\` — Milōn already does this (month-end pack, books-quality, ratios, statements, bank reconciliation). Put it in the plan once. Nothing further.
+- \`client_setup\` — a change to the firm’s own habit or setting: who the reviewer is, who signs off, deadlines kept in a spreadsheet, a report day. Not bespoke. You capture it on confirm. Nothing to product.
 - \`product_gap\` — it belongs in a universal finance function, and Milōn cannot do it yet. Record a one-line gap, a **fit note** (why it is universal), and **effort S / M / L**. These feed the weekday 17:00 SAST product-gap digest.
-- \`bespoke\` — one firm’s odd process that does not fit the vision. Log it and decline politely. Escalate only if a large paying client is blocked from going live.
+- \`bespoke\` — one firm’s odd process that does not fit the vision (remote desktop, a one-off website). Log it and decline politely. Naming the reviewer or sign-off is client_setup, not bespoke. Escalate only if a large paying client is blocked from going live.
 
 Use \`product_gap\` only when a typical finance function should do this step, not for a custom one-off. Do not mark a gap as covered. Do not promise a build or a date.
 
