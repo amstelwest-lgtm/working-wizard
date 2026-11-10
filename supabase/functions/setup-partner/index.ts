@@ -11,6 +11,7 @@ import {
   SETUP_PARTNER_TASK_FEATURE,
   SETUP_PARTNER_TASK_WORKFLOW,
   buildSetupPartnerSummary,
+  firmSetupPartnerSummary,
   ledgerStatusFromBooksQuality,
   parseWorkflowMapJson,
   setupPartnerMapUserPrompt,
@@ -106,16 +107,37 @@ async function loadSummary(
 
 type AdminClient = SupabaseClient<any, "public", any>;
 
-async function retirePriorOnboarding(admin: AdminClient, firmId: string, clientId: string) {
-  const { error } = await admin
+async function retirePriorOnboarding(admin: AdminClient, firmId: string, clientId: string | null) {
+  let query = admin
     .from("milon_brain_rules")
     .update({ status: "retired" })
     .eq("firm_id", firmId)
-    .or(`client_id.eq.${clientId},client_id.is.null`)
     .eq("source_event", SETUP_PARTNER_SOURCE_EVENT)
     .in("task_type", [SETUP_PARTNER_TASK_WORKFLOW, SETUP_PARTNER_TASK_FEATURE])
     .eq("status", "active");
+  query = clientId
+    ? query.or(`client_id.eq.${clientId},client_id.is.null`)
+    : query.is("client_id", null);
+  const { error } = await query;
   if (error) console.error("setup_partner_retire_failed", error.message);
+}
+
+async function callerCanUseFirm(
+  admin: AdminClient,
+  userId: string,
+  firmId: string,
+): Promise<boolean> {
+  const { data: member, error } = await admin.rpc("is_firm_member", {
+    _user_id: userId,
+    _firm_id: firmId,
+  });
+  if (!error && member === true) return true;
+  const { data: firm } = await admin
+    .from("firms")
+    .select("owner_user_id")
+    .eq("id", firmId)
+    .maybeSingle();
+  return firm?.owner_user_id === userId;
 }
 
 async function upsertProductGap(
@@ -123,7 +145,7 @@ async function upsertProductGap(
   input: {
     step: PracticePlanStep;
     firmId: string;
-    clientId: string;
+    clientId: string | null;
     approverId: string;
     seenAt: string;
   },
@@ -222,6 +244,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
   let body: {
     action?: unknown;
     clientId?: unknown;
+    firmId?: unknown;
     template?: unknown;
     summary?: unknown;
     answers?: unknown;
@@ -236,29 +259,52 @@ async function handleSetupPartner(req: Request): Promise<Response> {
   }
 
   const action = typeof body.action === "string" ? body.action : "";
-  const clientId = typeof body.clientId === "string" ? body.clientId : "";
-  if (!isUuid(clientId)) return respond({ error: "clientId is required" }, 400);
+  const clientIdRaw = typeof body.clientId === "string" ? body.clientId : "";
+  const firmIdRaw = typeof body.firmId === "string" ? body.firmId : "";
+  let clientId: string | null = null;
+  let firmId = "";
+  let market: unknown = null;
+  let clientName = "Practice";
 
-  const { data: hasAccess, error: accessErr } = await adminClient.rpc("has_client_access", {
-    _user_id: user.id,
-    _client_id: clientId,
-  });
-  if (accessErr) {
-    console.error("has_client_access error:", accessErr.message);
-    return respond({ error: "Access check failed" }, 500);
+  if (isUuid(clientIdRaw)) {
+    clientId = clientIdRaw;
+    const { data: hasAccess, error: accessErr } = await adminClient.rpc("has_client_access", {
+      _user_id: user.id,
+      _client_id: clientId,
+    });
+    if (accessErr) {
+      console.error("has_client_access error:", accessErr.message);
+      return respond({ error: "Access check failed" }, 500);
+    }
+    if (!hasAccess) return respond({ error: "Client not accessible" }, 403);
+
+    const { data: clientRow, error: clientErr } = await adminClient
+      .from("clients")
+      .select("firm_id, market, name")
+      .eq("id", clientId)
+      .maybeSingle();
+    if (clientErr || !clientRow) return respond({ error: "Client not found" }, 404);
+    firmId = typeof clientRow.firm_id === "string" ? clientRow.firm_id : "";
+    market = clientRow.market;
+    clientName = typeof clientRow.name === "string" ? clientRow.name : "Client";
+  } else if (isUuid(firmIdRaw)) {
+    const allowed = await callerCanUseFirm(adminClient, user.id, firmIdRaw);
+    if (!allowed) return respond({ error: "Firm not accessible" }, 403);
+    const { data: firmRow, error: firmErr } = await adminClient
+      .from("firms")
+      .select("name, market")
+      .eq("id", firmIdRaw)
+      .maybeSingle();
+    if (firmErr || !firmRow) return respond({ error: "Firm not found" }, 404);
+    firmId = firmIdRaw;
+    market = firmRow.market;
+    clientName = typeof firmRow.name === "string" && firmRow.name ? firmRow.name : "Practice";
+  } else {
+    return respond({ error: "clientId or firmId is required" }, 400);
   }
-  if (!hasAccess) return respond({ error: "Client not accessible" }, 403);
-
-  const { data: clientRow, error: clientErr } = await adminClient
-    .from("clients")
-    .select("firm_id, market, name")
-    .eq("id", clientId)
-    .maybeSingle();
-  if (clientErr || !clientRow) return respond({ error: "Client not found" }, 404);
-  const firmId = typeof clientRow.firm_id === "string" ? clientRow.firm_id : "";
-  const market = clientRow.market;
 
   if (action === "summary") {
+    if (!clientId) return respond({ summary: firmSetupPartnerSummary() });
     const summary = await loadSummary(userClient, clientId, market);
     return respond({ summary });
   }
@@ -328,7 +374,11 @@ async function handleSetupPartner(req: Request): Promise<Response> {
 
   let precard;
   try {
-    precard = await readPrecardGate({ db: adminClient, clientId, kind: "bot" });
+    precard = await readPrecardGate(
+      clientId
+        ? { db: adminClient, clientId, kind: "bot" }
+        : { db: adminClient, firmId, kind: "bot" },
+    );
   } catch (err) {
     console.error("precard check failed", err instanceof Error ? err.message : err);
     return respond({ error: "Could not check the plan." }, 503);
@@ -344,7 +394,6 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     );
   }
 
-  const clientName = typeof clientRow.name === "string" ? clientRow.name : "Client";
   const session = createRedactionSession({ clientName });
 
   if (action === "phrase_followup") {
@@ -379,7 +428,11 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         ? (body.answers as Record<string, string>)
         : {};
     let summary = body.summary as SetupPartnerSummary | undefined;
-    if (!summary) summary = await loadSummary(userClient, clientId, market);
+    if (!summary) {
+      summary = clientId
+        ? await loadSummary(userClient, clientId, market)
+        : firmSetupPartnerSummary();
+    }
     const userPrompt = applyRedaction(
       setupPartnerMapUserPrompt(summary, answers, setupPartnerScreenshotNotes(body.screenshots)),
       session,

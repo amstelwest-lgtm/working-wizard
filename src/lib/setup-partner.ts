@@ -136,9 +136,7 @@ export function buildSetupPartnerSummary(input: {
   const snap = asRecord(input.snapshot);
   const snapFigures = asRecord(snap?.figures);
   const revenue =
-    num(snapFigures?.revenue) ??
-    num(figures?.revenue) ??
-    num(asRecord(input.ratios)?.revenue);
+    num(snapFigures?.revenue) ?? num(figures?.revenue) ?? num(asRecord(input.ratios)?.revenue);
   const connected =
     input.ledger.xero.connected ||
     input.ledger.qbo.connected ||
@@ -178,9 +176,27 @@ export function buildSetupPartnerSummary(input: {
     if (apHint) bullets.push("Payables: ageing suggests stretched supplier timing.");
     if (reconHint) bullets.push("Sync or reconciliation may be behind last week.");
   }
-  if (bullets.length === 0) bullets.push("Connected books with limited automated signals — rely on the interview.");
+  if (bullets.length === 0)
+    bullets.push("Connected books with limited automated signals — rely on the interview.");
   const headline = no_ledger ? "No ledger yet" : "Ledger and books snapshot";
   return { headline, ledger: input.ledger, signals, bullets, no_ledger };
+}
+
+const EMPTY_LEDGER_SIDE = { connected: false, sync_status: null, last_synced_at: null };
+
+/** Firm interview context. No client books. */
+export function firmSetupPartnerSummary(): SetupPartnerSummary {
+  return buildSetupPartnerSummary({
+    ledger: {
+      xero: EMPTY_LEDGER_SIDE,
+      qbo: EMPTY_LEDGER_SIDE,
+      sage: EMPTY_LEDGER_SIDE,
+      hasUpload: false,
+    },
+    booksQuality: { figures: {} },
+    snapshot: { empty: true },
+    ratios: { empty: true },
+  });
 }
 
 function formatMoney(value: number): string {
@@ -250,7 +266,10 @@ export function fallbackWorkflowMap(answers: Record<string, string>): SetupPartn
   };
 }
 
-export function parseWorkflowMapJson(text: string, answers: Record<string, string>): SetupPartnerWorkflowMap {
+export function parseWorkflowMapJson(
+  text: string,
+  answers: Record<string, string>,
+): SetupPartnerWorkflowMap {
   const trimmed = text.trim();
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
@@ -267,7 +286,8 @@ export function parseWorkflowMapJson(text: string, answers: Record<string, strin
         const rec = asRecord(row);
         if (!rec) continue;
         const agent = typeof rec.agent === "string" ? rec.agent : "";
-        const owns = typeof rec.owns === "string" ? rec.owns : typeof rec.steps === "string" ? rec.steps : "";
+        const owns =
+          typeof rec.owns === "string" ? rec.owns : typeof rec.steps === "string" ? rec.steps : "";
         if (agent && owns) milonCoverage.push({ agent, owns });
       }
     }

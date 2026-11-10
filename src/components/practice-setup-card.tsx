@@ -1,10 +1,14 @@
 import { Link } from "@tanstack/react-router";
 
 /**
- * Firm Home entry. Opens the practice interview on one example client.
- * Does not render Setup Partner itself.
+ * Firm Home entry. Opens the practice interview, not a client.
+ * The example client id is unused so the Home board call site stays put.
  */
-export function PracticeSetupCard({ exampleClientId }: { exampleClientId: string | null }) {
+export function PracticeSetupCard({
+  exampleClientId: _exampleClientId,
+}: {
+  exampleClientId: string | null;
+}) {
   return (
     <section
       className="mb-3 rounded-2xl border border-[color:var(--line)] bg-white p-4 shadow-sm dark:bg-[#102A43]"
@@ -15,21 +19,11 @@ export function PracticeSetupCard({ exampleClientId }: { exampleClientId: string
         Set up your practice
       </h2>
       <p className="sub mt-1 mb-2">
-        Map how the firm closes, reviews, signs off, and reports. One client is only an example.
-        Connected books and the interview. No desktop access.
+        Map how the firm closes, reviews, signs off, and reports. No desktop access.
       </p>
-      {exampleClientId ? (
-        <Link
-          to="/clients/$clientId"
-          params={{ clientId: exampleClientId }}
-          search={{ tab: "home", view: "books" }}
-          className="btn ghost mini"
-        >
-          Set up your practice
-        </Link>
-      ) : (
-        <p className="sub m-0">Add a client to use as an example.</p>
-      )}
+      <Link to="/practice/setup" className="btn ghost mini">
+        Set up your practice
+      </Link>
     </section>
   );
 }
