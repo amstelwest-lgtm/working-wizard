@@ -3,7 +3,12 @@
  * Run: pnpm test:practice-setup-route
  */
 import { readFileSync } from "node:fs";
-import { fallbackWorkflowMap, parseWorkflowMapJson } from "../src/lib/setup-partner.ts";
+import {
+  FIRM_SETUP_QUESTIONS,
+  SETUP_PARTNER_FIXED_QUESTIONS,
+  fallbackWorkflowMap,
+  parseWorkflowMapJson,
+} from "../src/lib/setup-partner.ts";
 import {
   buildPracticeImplementationPlan,
   classifyPracticeStep,
@@ -69,15 +74,14 @@ assert(
 assert(panel.includes('role="alert"'), "the error paragraph stays");
 assert(route.includes("<Toaster"), "this route mounts the toast helper's Toaster");
 assert(route.includes("PRACTICE_SETUP_TOASTER_ID"), "confirm and the route share one toaster");
-const avatarCss = read("src/components/setup-partner-panel.css");
+assert(panel.includes('size="stage"'), "firm page uses the agent stage face");
+assert(panel.includes("agent-stage-hero"), "firm page uses the agent hero layout");
+assert(panel.includes("owner-door.css"), "firm page loads the same avatar layout as other agents");
+assert(!panel.includes("setup-partner__head"), "firm page does not use the small header face");
+const stageCss = read("src/components/milon-team/agent-stage.css");
 assert(
-  avatarCss.includes("width: 80px") && avatarCss.includes("height: 80px"),
-  "one avatar at 80px",
-);
-assert(
-  avatarCss.includes(".setup-partner__head .owner-fm-face video") &&
-    avatarCss.includes("position: absolute"),
-  "poster and clips overlay instead of stacking",
+  stageCss.includes("width: 200px") && stageCss.includes("height: 200px"),
+  "stage face is 200px",
 );
 assert(panel.includes("Redo interview"), "a saved plan can be redone");
 assert(panel.includes("fetchFirmSetupPlan"), "saved rules load through the existing client");
@@ -141,9 +145,75 @@ assert(
   "covered steps are not stored on the confirm rules",
 );
 
+testFirmInterviewAndDeadlineBucket();
 testDedupeLabelsAndReviewer();
 
 await runPanel();
+
+/** Firm topics, restored client wording, checklist dedupe, spreadsheet deadlines. */
+function testFirmInterviewAndDeadlineBucket() {
+  const firm = FIRM_SETUP_QUESTIONS.map((row) => row.prompt).join(" ");
+  assert(
+    FIRM_SETUP_QUESTIONS.length >= 8 && FIRM_SETUP_QUESTIONS.length <= 10,
+    "firm question count",
+  );
+  assert(/how many clients/i.test(firm) && /industries/i.test(firm), "client mix and volume");
+  assert(/Xero, QuickBooks, Sage/i.test(firm), "ledgers per client");
+  assert(
+    /send clients each month/i.test(firm) && /which day/i.test(firm),
+    "close and deliverable cadence",
+  );
+  assert(
+    /who prepares/i.test(firm) && /who reviews/i.test(firm) && /sign off/i.test(firm),
+    "review chain",
+  );
+  assert(
+    /deadlines do you track/i.test(firm) && /where is that list kept/i.test(firm),
+    "deadline tracking",
+  );
+  assert(/email, WhatsApp, Dext/i.test(firm), "where source documents arrive");
+  assert(/spreadsheets and other tools/i.test(firm), "tools and spreadsheets");
+  assert(/lose the most time/i.test(firm), "pain and time sinks");
+  assert(/fixed fee, advisory, packs/i.test(firm), "pricing and what they sell");
+  assert(
+    /how many people/i.test(firm) && /client reporting/i.test(firm),
+    "team roles and headcount",
+  );
+  const client = SETUP_PARTNER_FIXED_QUESTIONS.map((row) => row.prompt).join(" ");
+  assert(/for this client/i.test(client), "per-client path keeps client wording");
+  assert(/supplier bills/i.test(client), "per-client path asks about this client's bills");
+  assert(
+    !/how many clients are on the book/i.test(client),
+    "per-client path is not the firm interview",
+  );
+  const checklist = fallbackWorkflowMap({ deadlines: "Kept in a spreadsheet" }).checklist.join(" ");
+  assert(!/name who reviews/i.test(checklist), "fallback does not ask the review question again");
+  assert(!/agree deadline tracking/i.test(checklist), "fallback does not add deadline tracking");
+  assert(!/note one client only/i.test(checklist), "fallback does not ask for one example client");
+  const plan = buildPracticeImplementationPlan({
+    todaysFlow: ["Deadlines are kept in a spreadsheet", "The partner reviews and signs off"],
+    milonCoverage: [],
+    gaps: [],
+    checklist: [
+      "Agree deadline tracking for the practice",
+      "Name who reviews and who signs off.",
+      "Note one client only as an example of the firm workflow.",
+    ],
+  });
+  const deadlineSteps = plan.steps.filter((step) => /deadline/i.test(step.step));
+  assert(deadlineSteps.length === 1, `one deadline step, got ${deadlineSteps.length}`);
+  assert(deadlineSteps[0]?.bucket === "client_setup", "spreadsheet deadlines are client setup");
+  assert(
+    !plan.steps.some((step) => step.bucket === "covered" && /deadline/i.test(step.step)),
+    "agree deadline tracking is not already covered",
+  );
+  assert(
+    !plan.steps.some((step) =>
+      /note one client only|name who reviews and who signs off/i.test(step.step),
+    ),
+    "answered checklist lines are dropped",
+  );
+}
 
 /** One case: dedupe by key, human bucket labels, reviewer and sign-off are client setup. */
 function testDedupeLabelsAndReviewer() {
@@ -277,7 +347,7 @@ async function runPanel() {
   } = await import("@tanstack/react-router");
   const { toast } = await import("sonner");
   const { PracticeSetupInterview } = await import("../src/components/practice-setup-panel.tsx");
-  const { SETUP_PARTNER_FIXED_QUESTIONS } = await import("../src/lib/setup-partner.ts");
+  const { FIRM_SETUP_QUESTIONS: firmQuestions } = await import("../src/lib/setup-partner.ts");
 
   const successes: string[] = [];
   const errors: string[] = [];
@@ -381,7 +451,7 @@ async function runPanel() {
   }
 
   async function answerAll() {
-    for (let i = 0; i < SETUP_PARTNER_FIXED_QUESTIONS.length; i += 1) {
+    for (let i = 0; i < firmQuestions.length; i += 1) {
       const box = document.querySelector("textarea");
       assert(box instanceof HTMLTextAreaElement, `question ${i} has an answer box`);
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
@@ -457,9 +527,7 @@ async function runPanel() {
   });
   await waitForPhase("interview");
   assert(
-    document.body.textContent?.includes(
-      "How does the practice run month-end close across clients?",
-    ),
+    document.body.textContent?.includes("How many clients are on the book"),
     "redo opens the interview",
   );
   await unmountSaved();

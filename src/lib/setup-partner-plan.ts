@@ -194,6 +194,16 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
       effort: "L",
     });
   }
+  if (/agree deadline tracking/i.test(text)) {
+    return stepOf(text, {
+      stepType: "firm_setting",
+      capability: "practice-setup",
+      covers: "Practice setup — where the firm keeps deadline tracking",
+      bucket: "client_setup",
+      fitNote: FIT_SETUP,
+      effort: "S",
+    });
+  }
   if (SETTING_RE.test(text) || TOOLS_RE.test(text) || FIRM_HABIT_RE.test(text)) {
     const tools = TOOLS_RE.test(text) || /\bspreadsheet\b/i.test(text);
     return stepOf(text, {
@@ -281,13 +291,29 @@ export function dedupePracticeSteps(steps: readonly PracticePlanStep[]): Practic
   return out;
 }
 
+/** Generic checklist lines the interview already answered. Not a second step. */
+export function redundantSetupLine(step: string, others: string): boolean {
+  if (/note one client only/i.test(step)) return true;
+  if (
+    /name who reviews and who signs off/i.test(step) &&
+    /review|sign-?off|signs off/i.test(others)
+  ) {
+    return true;
+  }
+  if (/agree deadline tracking/i.test(step) && /deadline|spreadsheet/i.test(others)) return true;
+  return false;
+}
+
 export function buildPracticeImplementationPlan(
   map: SetupPartnerWorkflowMap,
 ): PracticeImplementationPlan {
+  const raw = [...map.todaysFlow, ...map.checklist, ...map.gaps]
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
   const steps: PracticePlanStep[] = [];
-  for (const line of [...map.todaysFlow, ...map.checklist, ...map.gaps]) {
-    const step = line.replace(/\s+/g, " ").trim();
-    if (!step) continue;
+  for (const step of raw) {
+    const others = raw.filter((line) => line !== step).join("\n");
+    if (redundantSetupLine(step, others)) continue;
     steps.push(classifyPracticeStep(step));
   }
   return { steps: dedupePracticeSteps(steps) };

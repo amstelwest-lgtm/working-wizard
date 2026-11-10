@@ -2,11 +2,14 @@ import { createElement, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import "./setup-partner-panel.css";
+import "@/components/owner-door/owner-door.css";
+import "@/components/milon-team/agent-stage.css";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { parseMarketSelection } from "@/lib/market/parse";
 import {
-  SETUP_PARTNER_FIXED_QUESTIONS,
+  FIRM_SETUP_QUESTIONS,
+  firmAnswerIsVague,
   firmSetupPartnerSummary,
   setupPartnerMapPromptBlock,
   withMarketCoverage,
@@ -57,6 +60,7 @@ export function PracticeSetupInterview({
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState("");
+  const [followUp, setFollowUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [booting, setBooting] = useState(Boolean(firmId));
@@ -93,6 +97,7 @@ export function PracticeSetupInterview({
     setIndex(0);
     setAnswers({});
     setDraft("");
+    setFollowUp(false);
     setMap(null);
     setPlan(null);
     setError(null);
@@ -106,21 +111,34 @@ export function PracticeSetupInterview({
         data-practice-setup-panel="waiting"
         aria-label={IMPLEMENTATION_MANAGER_LABEL}
       >
-        <PracticeSetupHead />
+        <PracticeSetupHero />
         <p className="setup-partner__lede">Loading your practice.</p>
       </section>
     );
   }
 
-  const question = SETUP_PARTNER_FIXED_QUESTIONS[index];
+  const question = FIRM_SETUP_QUESTIONS[index];
+  const prompt = followUp && question?.followUp ? question.followUp : question?.prompt;
 
   const advance = async () => {
     if (!question) return;
-    const nextAnswers = { ...answers, [question.id]: draft.trim() };
+    const text = draft.trim();
+    if (!followUp && question.followUp && firmAnswerIsVague(text)) {
+      setAnswers({ ...answers, [question.id]: text });
+      setFollowUp(true);
+      setDraft("");
+      return;
+    }
+    const prior = answers[question.id]?.trim() ?? "";
+    const nextAnswers = {
+      ...answers,
+      [question.id]: followUp && prior ? `${prior} ${text}` : text,
+    };
     setAnswers(nextAnswers);
+    setFollowUp(false);
     const nextIndex = index + 1;
-    if (nextIndex < SETUP_PARTNER_FIXED_QUESTIONS.length) {
-      const nextId = SETUP_PARTNER_FIXED_QUESTIONS[nextIndex]?.id ?? "";
+    if (nextIndex < FIRM_SETUP_QUESTIONS.length) {
+      const nextId = FIRM_SETUP_QUESTIONS[nextIndex]?.id ?? "";
       setIndex(nextIndex);
       setDraft(nextAnswers[nextId] ?? "");
       return;
@@ -171,16 +189,13 @@ export function PracticeSetupInterview({
       data-practice-setup-phase={booting ? "loading" : phase}
       aria-label={IMPLEMENTATION_MANAGER_LABEL}
     >
-      <PracticeSetupHead />
-      <p className="setup-partner__lede">
-        Map how the firm closes, reviews, signs off, and reports. No desktop access.
-      </p>
+      <PracticeSetupHero />
 
       {booting ? <p className="setup-partner__lede">Loading your practice.</p> : null}
 
-      {!booting && phase === "interview" && question ? (
+      {!booting && phase === "interview" && question && prompt ? (
         <div>
-          <p className="setup-partner__question">{question.prompt}</p>
+          <p className="setup-partner__question">{prompt}</p>
           <textarea
             className="setup-partner__answer"
             value={draft}
@@ -264,19 +279,23 @@ function setupToast(message: string, role: "status" | "alert") {
   return createElement("span", { role }, message);
 }
 
-function PracticeSetupHead() {
+function PracticeSetupHero() {
   return (
-    <div className="setup-partner__head">
-      <OwnerAvatar
-        agent="setup_partner"
-        variant="character"
-        size="sm"
-        motion="idle"
-        label={IMPLEMENTATION_MANAGER_LABEL}
-      />
-      <div className="setup-partner__head-text">
-        <p className="setup-partner__eyebrow">Practice</p>
-        <h2 className="setup-partner__title">{IMPLEMENTATION_MANAGER_LABEL}</h2>
+    <div className="agent-stage">
+      <div className="agent-stage-hero">
+        <OwnerAvatar
+          agent="setup_partner"
+          variant="character"
+          size="stage"
+          motion="idle"
+          label={IMPLEMENTATION_MANAGER_LABEL}
+        />
+        <div className="agent-stage-copy">
+          <h1 className="agent-stage-name">{IMPLEMENTATION_MANAGER_LABEL}</h1>
+          <p className="agent-stage-role">
+            Map how the firm closes, reviews, signs off, and reports. No desktop access.
+          </p>
+        </div>
       </div>
     </div>
   );
