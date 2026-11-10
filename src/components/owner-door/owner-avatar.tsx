@@ -124,7 +124,9 @@ export function OwnerAvatar({
                 <svg viewBox="0 0 80 80" className="owner-presence-svg">
                   <circle className="stage" cx="40" cy="40" r="30" />
                   <circle className="shimmer" cx="40" cy="40" r="30" />
-                  {variant === "orb" && agent !== "tax_specialist" ? <OrbSigil agent={agent} /> : null}
+                  {variant === "orb" && agent !== "tax_specialist" && agent !== "setup_partner" ? (
+                    <OrbSigil agent={agent} />
+                  ) : null}
                   <g className="work-spin">
                     <circle className="work-arc" cx="40" cy="40" r="33" />
                   </g>

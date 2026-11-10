@@ -36,9 +36,20 @@ export const AVATAR_FOLDERS = {
   analyst: "analyst",
   advisor: "advisor",
   tax_specialist: "tax",
+  setup_partner: "implementation-manager",
 } as const;
 
 export type AvatarFace = keyof typeof AVATAR_FOLDERS;
+
+/** Idle-loop budget of 1 — same player tuning as the tax face. */
+export function avatarSingleIdleBudget(agent: AvatarFace): boolean {
+  return agent === "tax_specialist" || agent === "setup_partner";
+}
+
+/** On handoff, play curious once then hold the last frame (tax + Implementation Manager). */
+export function avatarHandoffCuriousIntro(agent: AvatarFace, clip: FmAvatarClip): boolean {
+  return avatarSingleIdleBudget(agent) && clip === "handoff";
+}
 
 /**
  * Clips are 24fps and 120 frames (5s). The end check uses the file's own

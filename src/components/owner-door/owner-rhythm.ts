@@ -73,6 +73,24 @@ export function avatarRhythm(agent: AvatarFace): Rhythm {
       shimmer: "5.6s",
     };
   }
+  if (agent === "setup_partner") {
+    return {
+      breathe: "5.3s",
+      breatheDelay: "-2.1s",
+      drift: "9s",
+      driftDelay: "-1.9s",
+      driftX: "2px",
+      driftY: "-2px",
+      micro: "12.5s",
+      microDelay: "-2.8s",
+      blink: "6.2s",
+      blinkDelay: "-0.9s",
+      glance: "8.4s",
+      glanceDelay: "-2.2s",
+      orbit: "19s",
+      shimmer: "5.4s",
+    };
+  }
   return {
     breathe: "4.2s",
     breatheDelay: "-0.35s",

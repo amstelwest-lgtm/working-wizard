@@ -25,7 +25,7 @@ async function invokeSetupPartner<T>(body: Record<string, unknown>): Promise<T> 
   if (!res.ok) {
     if (payload.code === PRECARD_CAP_CODE)
       throw precardCapError(isPrecardLimitKind(payload.limit) ? payload.limit : "pack");
-    throw new Error(payload.error || `Setup Partner failed (${res.status})`);
+    throw new Error(payload.error || `Implementation Manager failed (${res.status})`);
   }
   return payload;
 }
