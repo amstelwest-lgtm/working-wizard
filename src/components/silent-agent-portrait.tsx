@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
   avatarPoster,
-  avatarPosterOnly,
   fmClipSources,
   type AvatarFace,
   type FmAvatarClip,
@@ -51,7 +50,7 @@ export function SilentAgentPortrait({
   return (
     <div className={large ? "talk-portrait talk-portrait-lg" : "talk-portrait"}>
       <img src={poster.webp} alt="" width={512} height={512} />
-      {!reduced && !avatarPosterOnly(face) ? (
+      {!reduced ? (
         <video
           key={clip}
           ref={videoRef}

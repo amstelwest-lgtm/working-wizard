@@ -41,11 +41,14 @@ export const AVATAR_FOLDERS = {
 
 export type AvatarFace = keyof typeof AVATAR_FOLDERS;
 
-/** Still poster only. Video clips are not shipped for this face. */
-export const AVATAR_POSTER_ONLY: ReadonlySet<AvatarFace> = new Set(["setup_partner"]);
+/** Idle-loop budget of 1 — same player tuning as the tax face. */
+export function avatarSingleIdleBudget(agent: AvatarFace): boolean {
+  return agent === "tax_specialist" || agent === "setup_partner";
+}
 
-export function avatarPosterOnly(agent: AvatarFace): boolean {
-  return AVATAR_POSTER_ONLY.has(agent);
+/** On handoff, play curious once then hold the last frame (tax + Implementation Manager). */
+export function avatarHandoffCuriousIntro(agent: AvatarFace, clip: FmAvatarClip): boolean {
+  return avatarSingleIdleBudget(agent) && clip === "handoff";
 }
 
 /**

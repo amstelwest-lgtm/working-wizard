@@ -1132,6 +1132,16 @@ assert(
   "the tax poster stays at the stable filename",
 );
 assert(!fmClipSources("handoff", "tax_specialist").webm.includes("?"), "tax filenames stay unversioned");
+assert(AVATAR_FOLDERS.setup_partner === "implementation-manager", "implementation manager folder");
+assert(
+  fmClipSources("working", "setup_partner").mp4 ===
+    "/avatars/implementation-manager/implementation-manager-working.mp4",
+  "implementation manager clips use the implementation-manager prefix",
+);
+assert(
+  avatarPoster("setup_partner").jpg === "/avatars/implementation-manager/implementation-manager-poster.jpg",
+  "implementation manager poster jpg",
+);
 for (const folder of ["fm", "analyst", "advisor", "tax"] as const) {
   for (const name of FM_AVATAR_CLIPS) {
     assert(existsSync(`public/avatars/${folder}/${folder}-${name}.webm`), `${folder} ${name} webm is shipped`);
