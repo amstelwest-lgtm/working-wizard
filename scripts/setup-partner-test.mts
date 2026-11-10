@@ -106,7 +106,8 @@ assert(edge.includes("readBooksQuality"), "summary reuses books quality read");
 assert(!edge.includes("getXeroStatus"), "no new xero write path");
 
 const prompt = read("supabase/functions/setup-partner/firm-interview-prompt.ts");
-assert(prompt.includes("never post"), "prompt forbids ledger writes");
+assert(prompt.startsWith("// Edit this file to change the Implementation Manager interview playbook\n"), "playbook comment");
+assert(prompt.includes("Nothing posts to Xero"), "prompt forbids ledger writes");
 assert(prompt.includes("accountant firm"), "firm interview prompt");
 const promptEntry = read("supabase/functions/_shared/agent-prompts/setup-partner.ts");
 assert(promptEntry.includes("firm-interview-prompt.ts"), "one swappable prompt file");

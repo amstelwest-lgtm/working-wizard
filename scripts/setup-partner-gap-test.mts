@@ -265,7 +265,8 @@ assert(
 );
 const prompt = read("supabase/functions/setup-partner/firm-interview-prompt.ts");
 assert(prompt.includes("accountant firm"), "firm interview prompt");
-assert(/no desktop access/i.test(prompt), "prompt states no desktop access");
+assert(prompt.includes("Never ask for desktop access"), "prompt states no desktop access");
+assert(prompt.includes("No remote desktop"), "prompt declines remote desktop");
 assert(prompt.includes("screenshot"), "prompt allows screenshot notes");
 const panel = read("src/components/setup-partner-panel.tsx");
 assert(!panel.includes("product_gap") && !panel.includes("dedupe_key"), "plan stays off the panel");
