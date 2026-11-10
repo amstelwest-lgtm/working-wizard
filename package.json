@@ -229,6 +229,7 @@
     "test:milon-brain-rules": "vite-node --config scripts/vite-test.config.ts scripts/milon-brain-rules-test.mts",
     "test:milon-brain-review": "vite-node --config scripts/vite-test.config.ts scripts/milon-brain-review-test.mts",
     "test:setup-partner": "vite-node --config scripts/vite-test.config.ts scripts/setup-partner-test.mts",
+    "test:setup-partner-gap": "vite-node --config scripts/vite-test.config.ts scripts/setup-partner-gap-test.mts",
     "test:agent-draft-decision": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-test.mts",
     "test:agent-draft-decision-client": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-client-test.mts",
     "test:claude-model": "vite-node --config scripts/vite-test.config.ts scripts/claude-model-default-test.mts",

@@ -105,8 +105,11 @@ assert(edge.includes("milon_brain_rules"), "confirm inserts brain rules");
 assert(edge.includes("readBooksQuality"), "summary reuses books quality read");
 assert(!edge.includes("getXeroStatus"), "no new xero write path");
 
-const prompt = read("supabase/functions/_shared/agent-prompts/setup-partner.ts");
+const prompt = read("supabase/functions/setup-partner/firm-interview-prompt.ts");
 assert(prompt.includes("never post"), "prompt forbids ledger writes");
+assert(prompt.includes("accountant firm"), "firm interview prompt");
+const promptEntry = read("supabase/functions/_shared/agent-prompts/setup-partner.ts");
+assert(promptEntry.includes("firm-interview-prompt.ts"), "one swappable prompt file");
 
 const panel = read("src/components/setup-partner-panel.tsx");
 assert(panel.includes("Confirm workflow map"), "explicit confirm control");

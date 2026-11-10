@@ -88,3 +88,7 @@ verify_jwt = true
 # and writes leads with the service role.
 [functions.prospect-talk]
 verify_jwt = false
+
+# Firm onboarding interview. Caller JWT. Service role writes product gaps.
+[functions.setup-partner]
+verify_jwt = true
