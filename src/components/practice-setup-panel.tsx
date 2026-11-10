@@ -1,14 +1,22 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import "./setup-partner-panel.css";
+import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { parseMarketSelection } from "@/lib/market/parse";
 import {
   SETUP_PARTNER_FIXED_QUESTIONS,
   firmSetupPartnerSummary,
   setupPartnerMapPromptBlock,
+  withMarketCoverage,
   type SetupPartnerWorkflowMap,
 } from "@/lib/setup-partner";
-import { buildSetupPartnerFirmMap, confirmSetupPartnerFirmMap } from "@/lib/setup-partner-client";
+import {
+  buildSetupPartnerFirmMap,
+  confirmSetupPartnerFirmMap,
+  fetchFirmSetupPlan,
+} from "@/lib/setup-partner-client";
 import type { PracticeImplementationPlan } from "@/lib/setup-partner-plan";
 
 /** User-facing name. Internal ids stay setup_partner. */
@@ -16,17 +24,73 @@ export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
 
 type Phase = "interview" | "map" | "done";
 
+type BuildMap = typeof buildSetupPartnerFirmMap;
+type ConfirmMap = typeof confirmSetupPartnerFirmMap;
+type LoadSaved = (firmId: string) => Promise<PracticeImplementationPlan | null>;
+
 export function PracticeSetupPanel() {
-  const { firmId } = useAccountantProfile();
+  const { firmId, firmMarket } = useAccountantProfile();
+  return <PracticeSetupInterview firmId={firmId} firmMarket={firmMarket} />;
+}
+
+export function PracticeSetupInterview({
+  firmId,
+  firmMarket,
+  buildMap = buildSetupPartnerFirmMap,
+  confirmMap = confirmSetupPartnerFirmMap,
+  loadSaved = fetchFirmSetupPlan,
+}: {
+  firmId: string | null;
+  firmMarket: unknown;
+  buildMap?: BuildMap;
+  confirmMap?: ConfirmMap;
+  loadSaved?: LoadSaved;
+}) {
   const [phase, setPhase] = useState<Phase>("interview");
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [booting, setBooting] = useState(Boolean(firmId));
   const [error, setError] = useState<string | null>(null);
   const [modelTurns, setModelTurns] = useState(0);
   const [map, setMap] = useState<SetupPartnerWorkflowMap | null>(null);
   const [plan, setPlan] = useState<PracticeImplementationPlan | null>(null);
+  const country = parseMarketSelection(firmMarket)?.country ?? null;
+  const visibleMap = map ? withMarketCoverage(map, country) : null;
+
+  useEffect(() => {
+    if (!firmId) return;
+    let cancel = false;
+    setBooting(true);
+    void loadSaved(firmId)
+      .then((saved) => {
+        if (cancel || !saved || saved.steps.length === 0) return;
+        setPlan(saved);
+        setPhase("done");
+      })
+      .catch(() => {
+        // A missed read still opens the interview.
+      })
+      .finally(() => {
+        if (!cancel) setBooting(false);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [firmId, loadSaved]);
+
+  const redo = () => {
+    setPhase("interview");
+    setIndex(0);
+    setAnswers({});
+    setDraft("");
+    setMap(null);
+    setPlan(null);
+    setError(null);
+    setModelTurns(0);
+  };
 
   if (!firmId) {
     return (
@@ -35,7 +99,7 @@ export function PracticeSetupPanel() {
         data-practice-setup-panel="waiting"
         aria-label={IMPLEMENTATION_MANAGER_LABEL}
       >
-        <h2 className="setup-partner__title">{IMPLEMENTATION_MANAGER_LABEL}</h2>
+        <PracticeSetupHead />
         <p className="setup-partner__lede">Loading your practice.</p>
       </section>
     );
@@ -57,7 +121,7 @@ export function PracticeSetupPanel() {
     setLoading(true);
     setError(null);
     try {
-      const built = await buildSetupPartnerFirmMap({
+      const built = await buildMap({
         firmId,
         answers: nextAnswers,
         summary: firmSetupPartnerSummary(),
@@ -74,17 +138,20 @@ export function PracticeSetupPanel() {
   };
 
   const confirm = async () => {
-    if (!map) return;
-    setLoading(true);
+    if (!visibleMap || saving) return;
+    setSaving(true);
     setError(null);
     try {
-      const saved = await confirmSetupPartnerFirmMap(firmId, map);
+      const saved = await confirmMap(firmId, visibleMap);
       setPlan(saved.plan);
       setPhase("done");
+      toast.success("Saved for the practice.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Confirm failed");
+      const message = err instanceof Error ? err.message : "Confirm failed";
+      setError(message);
+      toast.error(message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -92,15 +159,17 @@ export function PracticeSetupPanel() {
     <section
       className="setup-partner"
       data-practice-setup-panel=""
+      data-practice-setup-phase={booting ? "loading" : phase}
       aria-label={IMPLEMENTATION_MANAGER_LABEL}
     >
-      <p className="setup-partner__eyebrow">Practice</p>
-      <h2 className="setup-partner__title">{IMPLEMENTATION_MANAGER_LABEL}</h2>
+      <PracticeSetupHead />
       <p className="setup-partner__lede">
         Map how the firm closes, reviews, signs off, and reports. No desktop access.
       </p>
 
-      {phase === "interview" && question ? (
+      {booting ? <p className="setup-partner__lede">Loading your practice.</p> : null}
+
+      {!booting && phase === "interview" && question ? (
         <div>
           <p className="setup-partner__question">{question.prompt}</p>
           <textarea
@@ -122,18 +191,18 @@ export function PracticeSetupPanel() {
         </div>
       ) : null}
 
-      {phase === "map" && map ? (
+      {!booting && phase === "map" && visibleMap ? (
         <div className="setup-partner__map">
-          <pre className="sr-only">{setupPartnerMapPromptBlock(map)}</pre>
+          <pre className="sr-only">{setupPartnerMapPromptBlock(visibleMap)}</pre>
           <h3>Today&apos;s flow</h3>
           <ul>
-            {map.todaysFlow.map((line) => (
+            {visibleMap.todaysFlow.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
           <h3>Milōn coverage</h3>
           <ul>
-            {map.milonCoverage.map((row) => (
+            {visibleMap.milonCoverage.map((row) => (
               <li key={`${row.agent}-${row.owns}`}>
                 {row.agent}: {row.owns}
               </li>
@@ -143,16 +212,16 @@ export function PracticeSetupPanel() {
             <button
               type="button"
               className="setup-partner__primary"
-              disabled={loading}
+              disabled={saving}
               onClick={() => void confirm()}
             >
-              Confirm workflow map
+              {saving ? "Saving…" : "Confirm workflow map"}
             </button>
           </div>
         </div>
       ) : null}
 
-      {phase === "done" ? (
+      {!booting && phase === "done" ? (
         <div>
           <p className="setup-partner__done">Saved for the practice.</p>
           {plan && plan.steps.length > 0 ? (
@@ -164,7 +233,12 @@ export function PracticeSetupPanel() {
               ))}
             </ul>
           ) : null}
-          <Link to="/practice">Back to practice</Link>
+          <div className="setup-partner__actions">
+            <button type="button" className="setup-partner__ghost" onClick={redo}>
+              Redo interview
+            </button>
+            <Link to="/practice">Back to practice</Link>
+          </div>
         </div>
       ) : null}
 
@@ -174,5 +248,23 @@ export function PracticeSetupPanel() {
         </p>
       ) : null}
     </section>
+  );
+}
+
+function PracticeSetupHead() {
+  return (
+    <div className="setup-partner__head">
+      <OwnerAvatar
+        agent="setup_partner"
+        variant="character"
+        size="sm"
+        motion="idle"
+        label={IMPLEMENTATION_MANAGER_LABEL}
+      />
+      <div className="setup-partner__head-text">
+        <p className="setup-partner__eyebrow">Practice</p>
+        <h2 className="setup-partner__title">{IMPLEMENTATION_MANAGER_LABEL}</h2>
+      </div>
+    </div>
   );
 }

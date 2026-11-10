@@ -238,8 +238,69 @@ export function ledgerStatusFromBooksQuality(raw: unknown): SetupPartnerLedgerSt
   };
 }
 
+export type SetupPartnerCountry = "US" | "ZA";
+
+const MARKET_LEAK = /\bZA\b|\bSARS\b/;
+
+/** Tax line for the coverage list. Omitted country keeps the legacy ZA line. */
+export function setupPartnerTaxOwns(country?: SetupPartnerCountry | null): string {
+  if (country === "US") return "Sales-tax prep for accountant review (no filing).";
+  if (country === null) return "Tax prep for accountant review (no filing).";
+  return "ZA tax prep for accountant review (no filing).";
+}
+
+export function setupPartnerCoverage(
+  country?: SetupPartnerCountry | null,
+): Array<{ agent: string; owns: string }> {
+  return [
+    { agent: "Financial Manager", owns: "Month-end pack, drafts, and books-quality checks." },
+    { agent: "Analyst", owns: "Ratios, variance, and client reporting." },
+    { agent: "Advisor", owns: "Deadlines, narrative moves, and owner questions." },
+    { agent: "Tax Specialist", owns: setupPartnerTaxOwns(country) },
+  ];
+}
+
+function scrubCoverageRow(
+  row: { agent: string; owns: string },
+  country: SetupPartnerCountry | null,
+): { agent: string; owns: string } | null {
+  const blob = `${row.agent} ${row.owns}`;
+  if (!MARKET_LEAK.test(blob)) return row;
+  if (/tax/i.test(row.agent)) return { agent: row.agent, owns: setupPartnerTaxOwns(country) };
+  const owns = row.owns
+    .replace(/\bZA tax prep\b/gi, "Sales-tax prep")
+    .replace(/\bSARS\b/g, "")
+    .replace(/\bZA\b/g, "US")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;])/g, "$1")
+    .trim();
+  if (!owns) return null;
+  return { agent: row.agent.replace(/\bZA\b/g, "US"), owns };
+}
+
+/**
+ * US and unset markets never keep ZA or SARS in the coverage list.
+ * An explicit ZA firm keeps the model's lines. An omitted country is unchanged.
+ */
+export function withMarketCoverage(
+  map: SetupPartnerWorkflowMap,
+  country?: SetupPartnerCountry | null,
+): SetupPartnerWorkflowMap {
+  if (country === "ZA" || country === undefined) return map;
+  const milonCoverage = map.milonCoverage
+    .map((row) => scrubCoverageRow(row, country))
+    .filter((row): row is { agent: string; owns: string } => row != null);
+  return {
+    ...map,
+    milonCoverage: milonCoverage.length ? milonCoverage : setupPartnerCoverage(country),
+  };
+}
+
 /** Default workflow map when the model JSON parse fails. */
-export function fallbackWorkflowMap(answers: Record<string, string>): SetupPartnerWorkflowMap {
+export function fallbackWorkflowMap(
+  answers: Record<string, string>,
+  country?: SetupPartnerCountry | null,
+): SetupPartnerWorkflowMap {
   const flow = SETUP_PARTNER_FIXED_QUESTIONS.map((q) => {
     const answer = (answers[q.id] ?? "").trim();
     if (!answer) return null;
@@ -248,12 +309,7 @@ export function fallbackWorkflowMap(answers: Record<string, string>): SetupPartn
   const bottleneck = (answers.extra ?? answers.pain ?? "").trim();
   return {
     todaysFlow: flow.length ? flow : ["Practice month-end close, review, and sign-off."],
-    milonCoverage: [
-      { agent: "Financial Manager", owns: "Month-end pack, drafts, and books-quality checks." },
-      { agent: "Analyst", owns: "Ratios, variance, and client reporting." },
-      { agent: "Advisor", owns: "Deadlines, narrative moves, and owner questions." },
-      { agent: "Tax Specialist", owns: "ZA tax prep for accountant review (no filing)." },
-    ],
+    milonCoverage: setupPartnerCoverage(country),
     gaps: bottleneck
       ? [`Practice bottleneck: ${bottleneck}`]
       : ["Confirm the hand-offs the firm still does manually."],
@@ -269,11 +325,12 @@ export function fallbackWorkflowMap(answers: Record<string, string>): SetupPartn
 export function parseWorkflowMapJson(
   text: string,
   answers: Record<string, string>,
+  country?: SetupPartnerCountry | null,
 ): SetupPartnerWorkflowMap {
   const trimmed = text.trim();
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
-  if (start < 0 || end <= start) return fallbackWorkflowMap(answers);
+  if (start < 0 || end <= start) return fallbackWorkflowMap(answers, country);
   try {
     const raw = JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
     const todaysFlow = stringList(raw.todaysFlow ?? raw.todays_flow);
@@ -291,15 +348,18 @@ export function parseWorkflowMapJson(
         if (agent && owns) milonCoverage.push({ agent, owns });
       }
     }
-    const base = fallbackWorkflowMap(answers);
-    return {
-      todaysFlow: todaysFlow.length ? todaysFlow : base.todaysFlow,
-      milonCoverage: milonCoverage.length ? milonCoverage : base.milonCoverage,
-      gaps: gaps.length ? gaps : base.gaps,
-      checklist: checklist.length ? checklist : base.checklist,
-    };
+    const base = fallbackWorkflowMap(answers, country);
+    return withMarketCoverage(
+      {
+        todaysFlow: todaysFlow.length ? todaysFlow : base.todaysFlow,
+        milonCoverage: milonCoverage.length ? milonCoverage : base.milonCoverage,
+        gaps: gaps.length ? gaps : base.gaps,
+        checklist: checklist.length ? checklist : base.checklist,
+      },
+      country,
+    );
   } catch {
-    return fallbackWorkflowMap(answers);
+    return fallbackWorkflowMap(answers, country);
   }
 }
 

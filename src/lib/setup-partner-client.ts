@@ -1,7 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
 import { PRECARD_CAP_CODE, isPrecardLimitKind, precardCapError } from "@/lib/precard-cap";
-import type { SetupPartnerSummary, SetupPartnerWorkflowMap } from "@/lib/setup-partner";
-import type { PracticeImplementationPlan } from "@/lib/setup-partner-plan";
+import {
+  SETUP_PARTNER_SOURCE_EVENT,
+  SETUP_PARTNER_TASK_WORKFLOW,
+  type SetupPartnerSummary,
+  type SetupPartnerWorkflowMap,
+} from "@/lib/setup-partner";
+import {
+  practicePlanFromConfirmRules,
+  type PracticeImplementationPlan,
+} from "@/lib/setup-partner-plan";
 
 async function invokeSetupPartner<T>(body: Record<string, unknown>): Promise<T> {
   const { data: sess } = await supabase.auth.getSession();
@@ -94,6 +102,42 @@ export async function buildSetupPartnerFirmMap(input: {
     modelTurns: input.modelTurns,
   });
   return { map: body.map, modelTurns: body.modelTurns };
+}
+
+type ConfirmRuleRow = {
+  rule_text: string | null;
+  client_id: string | null;
+  source_event: string | null;
+  status: string | null;
+};
+
+type RuleQuery = Promise<{
+  data: ConfirmRuleRow[] | null;
+  error: { message: string } | null;
+}> & {
+  eq: (column: string, value: string) => RuleQuery;
+  is: (column: string, value: null) => RuleQuery;
+};
+
+/** Active firm-level setup_partner_confirm rules. RLS scopes this to the caller's firm. */
+export async function fetchFirmSetupPlan(
+  firmId: string,
+): Promise<PracticeImplementationPlan | null> {
+  const builder = (
+    supabase as unknown as {
+      from: (table: string) => { select: (columns: string) => RuleQuery };
+    }
+  ).from("milon_brain_rules");
+  const { data, error } = await builder
+    .select("rule_text, client_id, source_event, status")
+    .eq("firm_id", firmId)
+    .is("client_id", null)
+    .eq("source_event", SETUP_PARTNER_SOURCE_EVENT)
+    .eq("status", "active")
+    .eq("task_type", SETUP_PARTNER_TASK_WORKFLOW);
+  if (error) throw new Error(error.message);
+  const plan = practicePlanFromConfirmRules(data ?? []);
+  return plan.steps.length ? plan : null;
 }
 
 export async function confirmSetupPartnerFirmMap(

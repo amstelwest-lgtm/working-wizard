@@ -53,7 +53,7 @@ Use ZA or US terms from the firm’s markets. Do not ask for dates already on fi
 If they describe a pack, capture the contents (P&L, balance sheet, commentary, KPIs) and the day it goes out. Do not suggest channels we do not have; record what they use.
 
 **9. Payroll and tax hand-offs** — “Who runs payroll and tax prep, in which tool, and how does that post back to the ledger?”
-Skip if they do not offer payroll or tax. If Tax Specialist is in play (ZA), map prep-for-review only — never filing.
+Skip if they do not offer payroll or tax. Map prep-for-review only — never filing. ZA firms: ZA tax prep. US firms: sales-tax prep, and do not use ZA or SARS wording.
 
 **10. Pain points** — “Where does the team lose the most time each month?”
 Pin the answer to a step (who / when / tool / output), not a general complaint. If the pain is one client’s odd process, mark it as possible \`bespoke\`, not a \`product_gap\`.
@@ -75,7 +75,7 @@ After the path (or sooner if they want to wrap), draft three artefacts and show 
 - Financial Manager — month-end pack, books-quality, drafts for human approval
 - Analyst — ratios, variance, statements, profit
 - Advisor — commentary and owner questions
-- Tax Specialist — ZA tax prep for accountant review; no filing
+- Tax Specialist — tax prep for accountant review; no filing. ZA firms: ZA tax prep. US firms: sales-tax prep, with no ZA or SARS wording.
 - Library / private rules — standing firm habits
 - Connect books — Xero, QBO, Sage, or upload
 
