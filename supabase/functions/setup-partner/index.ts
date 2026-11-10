@@ -1,6 +1,7 @@
 /**
- * Setup Partner — summary reads, one model call per turn, confirm → private brain rules.
- * No ledger writes. JWT required (verify_jwt).
+ * Setup Partner — firm interview, one model call per turn, confirm → practice plan.
+ * client_setup is a private brain rule. product_gap merges on dedupe_key via service role.
+ * Bespoke is logged only. No ledger writes. JWT required (verify_jwt).
  */
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -12,19 +13,35 @@ import {
   buildSetupPartnerSummary,
   ledgerStatusFromBooksQuality,
   parseWorkflowMapJson,
-  setupPartnerBrainRows,
   setupPartnerMapUserPrompt,
   setupPartnerPhraseUserPrompt,
+  setupPartnerScreenshotNotes,
   type SetupPartnerSummary,
   type SetupPartnerWorkflowMap,
 } from "../../../src/lib/setup-partner.ts";
+import {
+  bespokeLogRow,
+  buildPracticeImplementationPlan,
+  clientSetupBrainRows,
+  mergeProductGap,
+  productGapInsertRow,
+  type PracticePlanStep,
+} from "../../../src/lib/setup-partner-plan.ts";
 import {
   SETUP_PARTNER_MAP_SYSTEM,
   SETUP_PARTNER_PHRASE_SYSTEM,
 } from "../_shared/agent-prompts/setup-partner.ts";
 import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
-import { readBooksQuality, readReusedAnalystTool, type AgentToolCtx } from "../_shared/agent-desk.ts";
-import { applyRedaction, createRedactionSession, rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
+import {
+  readBooksQuality,
+  readReusedAnalystTool,
+  type AgentToolCtx,
+} from "../_shared/agent-desk.ts";
+import {
+  applyRedaction,
+  createRedactionSession,
+  rehydrateModelOutput,
+} from "../_shared/redact-identifiers.ts";
 import { callClaude } from "../ask-ai/anthropic.ts";
 import {
   finishPrecardAttempt,
@@ -51,7 +68,10 @@ function buildCorsHeaders(requestOrigin: string | null): Record<string, string> 
 function json(body: unknown, status = 200, corsHeaders?: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...(corsHeaders ?? { "Access-Control-Allow-Origin": "*" }), "Content-Type": "application/json" },
+    headers: {
+      ...(corsHeaders ?? { "Access-Control-Allow-Origin": "*" }),
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -59,7 +79,11 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-async function loadSummary(db: AgentToolCtx["db"], clientId: string, market: unknown): Promise<SetupPartnerSummary> {
+async function loadSummary(
+  db: AgentToolCtx["db"],
+  clientId: string,
+  market: unknown,
+): Promise<SetupPartnerSummary> {
   const ctx: AgentToolCtx = {
     agent: "financial_manager",
     clientId,
@@ -87,11 +111,79 @@ async function retirePriorOnboarding(admin: AdminClient, firmId: string, clientI
     .from("milon_brain_rules")
     .update({ status: "retired" })
     .eq("firm_id", firmId)
-    .eq("client_id", clientId)
+    .or(`client_id.eq.${clientId},client_id.is.null`)
     .eq("source_event", SETUP_PARTNER_SOURCE_EVENT)
     .in("task_type", [SETUP_PARTNER_TASK_WORKFLOW, SETUP_PARTNER_TASK_FEATURE])
     .eq("status", "active");
   if (error) console.error("setup_partner_retire_failed", error.message);
+}
+
+async function upsertProductGap(
+  admin: AdminClient,
+  input: {
+    step: PracticePlanStep;
+    firmId: string;
+    clientId: string;
+    approverId: string;
+    seenAt: string;
+  },
+): Promise<"created" | "merged" | "failed"> {
+  const sighting = {
+    dedupeKey: input.step.dedupe_key,
+    capability: input.step.capability,
+    stepType: input.step.step_type,
+    effort: input.step.effort,
+    fitNote: input.step.fit_note,
+    firmId: input.firmId,
+    clientId: input.clientId,
+    seenAt: input.seenAt,
+  };
+  const readExisting = async () => {
+    const { data, error } = await admin
+      .from("milon_brain_rules")
+      .select("id, rule_text")
+      .eq("layer", "milon_wide")
+      .eq("status", "pending")
+      .eq("task_type", SETUP_PARTNER_TASK_FEATURE)
+      .eq("pattern_key", input.step.dedupe_key)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data;
+  };
+  const writeMerge = async (id: string, ruleText: string | null) => {
+    const merged = mergeProductGap(ruleText, sighting);
+    const { error } = await admin
+      .from("milon_brain_rules")
+      .update({ rule_text: merged.rule_text })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+  };
+  try {
+    const existing = await readExisting();
+    if (existing?.id) {
+      await writeMerge(
+        String(existing.id),
+        typeof existing.rule_text === "string" ? existing.rule_text : null,
+      );
+      return "merged";
+    }
+    const row = productGapInsertRow({ ...sighting, approverId: input.approverId });
+    const { error } = await admin.from("milon_brain_rules").insert(row);
+    if (error) {
+      if (error.code !== "23505") throw new Error(error.message);
+      const raced = await readExisting();
+      if (!raced?.id) throw new Error(error.message);
+      await writeMerge(
+        String(raced.id),
+        typeof raced.rule_text === "string" ? raced.rule_text : null,
+      );
+      return "merged";
+    }
+    return "created";
+  } catch (err) {
+    console.error("setup_partner_gap_write_failed", err instanceof Error ? err.message : err);
+    return "failed";
+  }
 }
 
 Deno.serve((req: Request) =>
@@ -135,6 +227,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     answers?: unknown;
     map?: unknown;
     modelTurns?: unknown;
+    screenshots?: unknown;
   };
   try {
     body = await req.json();
@@ -174,12 +267,12 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     const map = body.map as SetupPartnerWorkflowMap | undefined;
     if (!map || !Array.isArray(map.todaysFlow)) return respond({ error: "map is required" }, 400);
     if (!firmId) return respond({ error: "Client has no firm" }, 400);
+    const plan = buildPracticeImplementationPlan(map);
     await retirePriorOnboarding(adminClient, firmId, clientId);
-    const rows = setupPartnerBrainRows({
+    const rows = clientSetupBrainRows({
       firmId,
-      clientId,
       approverId: user.id,
-      map,
+      steps: plan.steps,
     });
     let inserted = 0;
     for (const row of rows) {
@@ -190,10 +283,45 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       }
       inserted += 1;
     }
-    return respond({ ok: true, inserted, attempted: rows.length });
+    const seenAt = new Date().toISOString();
+    let productCreated = 0;
+    let productMerged = 0;
+    for (const step of plan.steps) {
+      if (step.bucket !== "product_gap") continue;
+      const outcome = await upsertProductGap(adminClient, {
+        step,
+        firmId,
+        clientId,
+        approverId: user.id,
+        seenAt,
+      });
+      if (outcome === "created") productCreated += 1;
+      else if (outcome === "merged") productMerged += 1;
+    }
+    let bespokeLogged = 0;
+    for (const step of plan.steps) {
+      if (step.bucket !== "bespoke") continue;
+      const row = bespokeLogRow({ firmId, clientId, approverId: user.id, step });
+      const { error } = await adminClient.from("milon_brain_rules").insert(row);
+      if (error) {
+        console.error("setup_partner_bespoke_log_failed", error.message);
+        continue;
+      }
+      console.info("setup_partner_bespoke", firmId, step.dedupe_key);
+      bespokeLogged += 1;
+    }
+    return respond({
+      ok: true,
+      inserted,
+      attempted: rows.length,
+      plan,
+      productGaps: { created: productCreated, merged: productMerged },
+      bespokeLogged,
+    });
   }
 
-  const modelTurns = typeof body.modelTurns === "number" && body.modelTurns >= 0 ? body.modelTurns : 0;
+  const modelTurns =
+    typeof body.modelTurns === "number" && body.modelTurns >= 0 ? body.modelTurns : 0;
   if (modelTurns >= SETUP_PARTNER_MODEL_TURN_CAP) {
     return respond({ error: "Session turn cap reached", code: "setup_partner_cap" }, 429);
   }
@@ -207,7 +335,11 @@ async function handleSetupPartner(req: Request): Promise<Response> {
   }
   if (!precard.allowed) {
     return respond(
-      { error: precard.message || PRECARD_CAP_MESSAGE, code: PRECARD_CAP_CODE, limit: precard.limit },
+      {
+        error: precard.message || PRECARD_CAP_MESSAGE,
+        code: PRECARD_CAP_CODE,
+        limit: precard.limit,
+      },
       403,
     );
   }
@@ -249,7 +381,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     let summary = body.summary as SetupPartnerSummary | undefined;
     if (!summary) summary = await loadSummary(userClient, clientId, market);
     const userPrompt = applyRedaction(
-      setupPartnerMapUserPrompt(summary, answers),
+      setupPartnerMapUserPrompt(summary, answers, setupPartnerScreenshotNotes(body.screenshots)),
       session,
     );
     try {

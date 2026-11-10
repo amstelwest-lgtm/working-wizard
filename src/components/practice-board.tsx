@@ -184,6 +184,7 @@ import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/cli
 import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
 import type { ChaseDraftInput } from "@/lib/chase-draft";
 import { KpiTrendline } from "@/components/kpi-trendline";
+import { PracticeSetupCard } from "@/components/practice-setup-card";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -2371,6 +2372,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             Add your first client
           </button>
         ) : null}
+        {!bookLoading ? <PracticeSetupCard exampleClientId={clientRows[0]?.id ?? null} /> : null}
 
         {/* ===== STATS STRIP ===== */}
         <div className="stats-strip" id="wizard-practice-board">

@@ -49,17 +49,23 @@ export type SetupPartnerWorkflowMap = {
   checklist: string[];
 };
 
+/** Practice workflow. A client answer is an example, not the subject. */
 export const SETUP_PARTNER_FIXED_QUESTIONS: readonly { id: string; prompt: string }[] = [
-  { id: "bookkeeper", prompt: "Who handles day-to-day bookkeeping for this client?" },
-  { id: "approvals", prompt: "Who approves payments and major purchases?" },
-  { id: "outside_tools", prompt: "Besides the ledger, which spreadsheets or tools do you rely on?" },
-  { id: "invoicing", prompt: "How are customer invoices raised and sent?" },
-  { id: "bills", prompt: "How are supplier bills captured and paid?" },
-  { id: "close_calendar", prompt: "When does month-end close usually finish?" },
-  { id: "payroll", prompt: "Who runs payroll, and how is it posted to the ledger?" },
-  { id: "vat", prompt: "Who prepares VAT or sales tax filings?" },
-  { id: "pain", prompt: "What is the biggest month-end bottleneck right now?" },
-  { id: "extra", prompt: "Anything else about how finance runs today?" },
+  { id: "close", prompt: "How does the practice run month-end close across clients?" },
+  { id: "review", prompt: "Who reviews the draft pack before it goes out?" },
+  { id: "sign_off", prompt: "How does sign-off work, and who is allowed to sign?" },
+  { id: "deadlines", prompt: "How does the firm track filing deadlines and client due dates?" },
+  { id: "reporting", prompt: "How does the firm deliver client reports today?" },
+  { id: "tools", prompt: "Which ledgers and spreadsheets does the practice use?" },
+  {
+    id: "handoff",
+    prompt: "Where does work still sit outside Milōn (email, folders, other tools)?",
+  },
+  {
+    id: "example",
+    prompt: "Give one client only as an example of a step the firm still does by hand.",
+  },
+  { id: "extra", prompt: "Anything else about how the practice runs finance work?" },
 ];
 
 export type SetupPartnerFollowupTemplate = {
@@ -72,27 +78,28 @@ export const SETUP_PARTNER_FOLLOWUP_TEMPLATES: readonly SetupPartnerFollowupTemp
   {
     id: "no_ledger",
     when: (s) => s.no_ledger,
-    template: "With no ledger connected yet, where do invoices and bank activity live today?",
+    template: "With no ledger on this example client, how does the practice collect the numbers?",
   },
   {
     id: "messy_chart",
     when: (s) => s.signals.messy_accounts,
-    template: "Books-quality flags messy accounts — who cleans up coding before close?",
+    template:
+      "Books-quality flags messy accounts on this example — who in the firm cleans coding before review?",
   },
   {
     id: "ar_aged",
     when: (s) => s.signals.ar_aged_hint,
-    template: "Aged receivables look heavy — how do you chase overdue customers?",
+    template: "Aged receivables on this example — how does the practice chase overdue customers?",
   },
   {
     id: "ap_aged",
     when: (s) => s.signals.ap_aged_hint,
-    template: "Payables ageing is stretched — who schedules supplier payments?",
+    template: "Payables ageing on this example — who in the firm schedules supplier payments?",
   },
   {
     id: "recon_lag",
     when: (s) => s.signals.recon_lag_hint,
-    template: "Bank reconciliation looks behind — what slows matching each week?",
+    template: "Bank reconciliation looks behind on this example — what slows the firm's matching?",
   },
 ];
 
@@ -222,22 +229,23 @@ export function fallbackWorkflowMap(answers: Record<string, string>): SetupPartn
     if (!answer) return null;
     return `${q.prompt} → ${answer}`;
   }).filter((line): line is string => Boolean(line));
+  const bottleneck = (answers.extra ?? answers.pain ?? "").trim();
   return {
-    todaysFlow: flow.length ? flow : ["Capture roles and approvals from the interview."],
+    todaysFlow: flow.length ? flow : ["Practice month-end close, review, and sign-off."],
     milonCoverage: [
       { agent: "Financial Manager", owns: "Month-end pack, drafts, and books-quality checks." },
-      { agent: "Analyst", owns: "Ratios, variance, and statement reads." },
-      { agent: "Advisor", owns: "Narrative moves and owner questions." },
+      { agent: "Analyst", owns: "Ratios, variance, and client reporting." },
+      { agent: "Advisor", owns: "Deadlines, narrative moves, and owner questions." },
       { agent: "Tax Specialist", owns: "ZA tax prep for accountant review (no filing)." },
     ],
-    gaps: (answers.pain ?? "").trim()
-      ? [`Month-end pain: ${answers.pain.trim()}`]
-      : ["Confirm hand-offs the team still does manually."],
+    gaps: bottleneck
+      ? [`Practice bottleneck: ${bottleneck}`]
+      : ["Confirm the hand-offs the firm still does manually."],
     checklist: [
-      "Connect or refresh Xero, QuickBooks, or Sage when ready.",
-      "Upload the latest monthly pack if books are offline.",
-      "Confirm who approves payments in writing.",
-      "Agree a target close date with the client.",
+      "Connect Xero, QuickBooks, or Sage where the firm keeps the books.",
+      "Name who reviews and who signs off.",
+      "Agree deadline tracking for the practice.",
+      "Note one client only as an example of the firm workflow.",
     ],
   };
 }
@@ -282,6 +290,7 @@ function stringList(value: unknown): string[] {
     .filter((row) => row.length > 0);
 }
 
+/** Legacy row builder. Confirm now writes client_setup rows from the practice plan. */
 export function setupPartnerBrainRows(input: {
   firmId: string;
   clientId: string;
@@ -346,18 +355,43 @@ export function setupPartnerPhraseUserPrompt(template: string): string {
   );
 }
 
-export function setupPartnerMapUserPrompt(summary: SetupPartnerSummary, answers: Record<string, string>): string {
+export function setupPartnerScreenshotNotes(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const note = item.replace(/\s+/g, " ").trim().slice(0, 240);
+    if (!note) continue;
+    out.push(note);
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
+export function setupPartnerMapUserPrompt(
+  summary: SetupPartnerSummary,
+  answers: Record<string, string>,
+  screenshots: readonly string[] = [],
+): string {
   const answerLines = Object.entries(answers)
     .filter(([, v]) => v.trim())
     .map(([k, v]) => `${k}: ${v.trim()}`);
+  const shots = screenshots
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 4);
   return [
     "Return JSON only with keys: todaysFlow (string[]), milonCoverage ({agent, owns}[]), gaps (string[]), checklist (string[]).",
-    "No ledger writes. Name Milōn agents: Financial Manager, Analyst, Advisor, Tax Specialist.",
+    "This is the accountant firm's practice workflow, not one end-client business. Client detail is an example only.",
+    "No ledger writes. No desktop access. Name Milōn agents: Financial Manager, Analyst, Advisor, Tax Specialist.",
     "",
     "Data summary:",
     ...summary.bullets.map((b) => `- ${b}`),
     "",
     "Interview answers:",
     ...answerLines,
+    "",
+    "Screenshot notes (optional):",
+    ...(shots.length ? shots.map((line) => `- ${line}`) : ["- none"]),
   ].join("\n");
 }
