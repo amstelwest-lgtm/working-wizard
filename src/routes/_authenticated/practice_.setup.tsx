@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Toaster } from "sonner";
 import { PracticeRail } from "@/components/practice-rail";
-import { PracticeSetupPanel } from "@/components/practice-setup-panel";
+import { PRACTICE_SETUP_TOASTER_ID, PracticeSetupPanel } from "@/components/practice-setup-panel";
 
 export const Route = createFileRoute("/_authenticated/practice_/setup")({
   component: PracticeSetupPage,
@@ -17,6 +18,13 @@ function PracticeSetupPage() {
           <PracticeRail />
           <div className="deliverable-main">
             <PracticeSetupPanel />
+            <Toaster
+              id={PRACTICE_SETUP_TOASTER_ID}
+              position="top-right"
+              richColors
+              offset={16}
+              style={{ zIndex: 200 }}
+            />
           </div>
         </div>
       </main>

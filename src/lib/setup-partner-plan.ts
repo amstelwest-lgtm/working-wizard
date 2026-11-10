@@ -43,6 +43,9 @@ const BESPOKE_RE =
   /\b(desktop|remote desktop|anydesk|teamviewer|screen ?share|whatsapp|bespoke|one-off|one off|custom website|marketing campaign|legal case)\b/i;
 const SETTING_RE = /^(who|when|which|where)\b/i;
 const TOOLS_RE = /\b(xero|quickbooks|qbo|sage|spreadsheet|tools used|ledger connection)\b/i;
+/** Naming the reviewer or sign-off, or a habit the firm still keeps itself. Not bespoke. */
+const FIRM_HABIT_RE =
+  /\b(reviewer|who reviews|names? the reviewer|sign-?off|sign off|signs off|kept in a spreadsheet)\b/i;
 const FINANCE_RE =
   /\b(invoice|bill|vat|tax|cash|reconcil\w*|journal|ledger|report|budget|forecast|payable|receivable|bank)\b/i;
 
@@ -191,14 +194,14 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
       effort: "L",
     });
   }
-  if (SETTING_RE.test(text) || TOOLS_RE.test(text)) {
-    const tools = TOOLS_RE.test(text);
+  if (SETTING_RE.test(text) || TOOLS_RE.test(text) || FIRM_HABIT_RE.test(text)) {
+    const tools = TOOLS_RE.test(text) || /\bspreadsheet\b/i.test(text);
     return stepOf(text, {
       stepType: tools ? "tools" : "firm_setting",
       capability: tools ? "ledger-connections" : "practice-setup",
       covers: tools
         ? "Ledger connections (Xero, QuickBooks, Sage) or a spreadsheet the firm still uses"
-        : "Practice setup — the firm answers this once",
+        : "Practice setup — who reviews, who signs off, and how the firm keeps its own habits",
       bucket: "client_setup",
       fitNote: FIT_SETUP,
       effort: "S",
@@ -248,20 +251,46 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
   });
 }
 
+const BUCKET_LABEL: Record<PracticeGapBucket, string> = {
+  covered: "Already covered",
+  client_setup: "Client setup",
+  product_gap: "Product gap",
+  bespoke: "Bespoke",
+};
+
+export function practiceBucketLabel(bucket: PracticeGapBucket): string {
+  return BUCKET_LABEL[bucket];
+}
+
+/**
+ * One row per dedupe_key. client_setup and bespoke share a key across different
+ * sentences, so those stay distinct by the step text.
+ */
+export function dedupePracticeSteps(steps: readonly PracticePlanStep[]): PracticePlanStep[] {
+  const seen = new Set<string>();
+  const out: PracticePlanStep[] = [];
+  for (const step of steps) {
+    const id =
+      step.bucket === "client_setup" || step.bucket === "bespoke"
+        ? `${step.dedupe_key}\n${step.step.toLowerCase()}`
+        : step.dedupe_key;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(step);
+  }
+  return out;
+}
+
 export function buildPracticeImplementationPlan(
   map: SetupPartnerWorkflowMap,
 ): PracticeImplementationPlan {
-  const seen = new Set<string>();
   const steps: PracticePlanStep[] = [];
   for (const line of [...map.todaysFlow, ...map.checklist, ...map.gaps]) {
     const step = line.replace(/\s+/g, " ").trim();
     if (!step) continue;
-    const key = step.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
     steps.push(classifyPracticeStep(step));
   }
-  return { steps };
+  return { steps: dedupePracticeSteps(steps) };
 }
 
 /**
@@ -293,7 +322,7 @@ export function practicePlanFromConfirmRules(
     seen.add(step.toLowerCase());
     steps.push(classifyPracticeStep(step));
   }
-  return { steps };
+  return { steps: dedupePracticeSteps(steps) };
 }
 
 /** Firm-wide private rules. client_id stays null so the rule is not pinned to one example client. */

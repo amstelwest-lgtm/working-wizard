@@ -18,8 +18,61 @@
   min-width: 0;
 }
 
+/* One face. The player mounts a poster and two clips; without this they stack at intrinsic size. */
 .setup-partner__head .owner-presence {
-  flex-shrink: 0;
+  position: relative;
+  display: inline-grid;
+  width: 80px;
+  height: 80px;
+  flex: none;
+}
+
+.setup-partner__head .owner-drift,
+.setup-partner__head .owner-breathe,
+.setup-partner__head .owner-micro,
+.setup-partner__head .owner-presence-avatar {
+  display: grid;
+  width: 100%;
+  height: 100%;
+}
+
+.setup-partner__head .owner-presence-avatar {
+  position: relative;
+  place-items: center;
+}
+
+.setup-partner__head .owner-fm-face {
+  position: absolute;
+  left: 12.5%;
+  top: 12.5%;
+  width: 75%;
+  height: 75%;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.setup-partner__head .owner-fm-face video,
+.setup-partner__head .owner-fm-face .owner-fm-poster,
+.setup-partner__head .owner-fm-face img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.setup-partner__head .owner-fm-face video {
+  opacity: 0;
+}
+
+.setup-partner__head .owner-fm-face video.is-on,
+.setup-partner__head .owner-fm-face video.is-hold {
+  opacity: 1;
+}
+
+.setup-partner__head .owner-fm-face.is-live .owner-fm-poster {
+  visibility: hidden;
 }
 
 .setup-partner__eyebrow {

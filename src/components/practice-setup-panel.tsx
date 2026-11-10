@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createElement, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import "./setup-partner-panel.css";
@@ -17,10 +17,17 @@ import {
   confirmSetupPartnerFirmMap,
   fetchFirmSetupPlan,
 } from "@/lib/setup-partner-client";
-import type { PracticeImplementationPlan } from "@/lib/setup-partner-plan";
+import {
+  dedupePracticeSteps,
+  practiceBucketLabel,
+  type PracticeImplementationPlan,
+} from "@/lib/setup-partner-plan";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
+
+/** This route's Toaster. App chrome also mounts one; this id keeps a single toast. */
+export const PRACTICE_SETUP_TOASTER_ID = "practice-setup";
 
 type Phase = "interview" | "map" | "done";
 
@@ -67,7 +74,7 @@ export function PracticeSetupInterview({
     void loadSaved(firmId)
       .then((saved) => {
         if (cancel || !saved || saved.steps.length === 0) return;
-        setPlan(saved);
+        setPlan({ steps: dedupePracticeSteps(saved.steps) });
         setPhase("done");
       })
       .catch(() => {
@@ -143,13 +150,15 @@ export function PracticeSetupInterview({
     setError(null);
     try {
       const saved = await confirmMap(firmId, visibleMap);
-      setPlan(saved.plan);
+      setPlan(saved.plan ? { steps: dedupePracticeSteps(saved.plan.steps) } : null);
       setPhase("done");
-      toast.success("Saved for the practice.");
+      toast.success(setupToast("Saved for the practice.", "status"), {
+        toasterId: PRACTICE_SETUP_TOASTER_ID,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Confirm failed";
       setError(message);
-      toast.error(message);
+      toast.error(setupToast(message, "alert"), { toasterId: PRACTICE_SETUP_TOASTER_ID });
     } finally {
       setSaving(false);
     }
@@ -228,7 +237,7 @@ export function PracticeSetupInterview({
             <ul>
               {plan.steps.map((step) => (
                 <li key={`${step.dedupe_key}-${step.step}`}>
-                  {step.step} — {step.bucket}
+                  {step.step} — {practiceBucketLabel(step.bucket)}
                 </li>
               ))}
             </ul>
@@ -249,6 +258,10 @@ export function PracticeSetupInterview({
       ) : null}
     </section>
   );
+}
+
+function setupToast(message: string, role: "status" | "alert") {
+  return createElement("span", { role }, message);
 }
 
 function PracticeSetupHead() {
