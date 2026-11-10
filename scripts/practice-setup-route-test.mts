@@ -7,6 +7,8 @@ import {
   FIRM_SETUP_QUESTIONS,
   SETUP_PARTNER_FIXED_QUESTIONS,
   fallbackWorkflowMap,
+  firmAnswerIsVague,
+  mergeFirmAnswer,
   parseWorkflowMapJson,
 } from "../src/lib/setup-partner.ts";
 import {
@@ -74,14 +76,19 @@ assert(
 assert(panel.includes('role="alert"'), "the error paragraph stays");
 assert(route.includes("<Toaster"), "this route mounts the toast helper's Toaster");
 assert(route.includes("PRACTICE_SETUP_TOASTER_ID"), "confirm and the route share one toaster");
-assert(panel.includes('size="stage"'), "firm page uses the agent stage face");
-assert(panel.includes("agent-stage-hero"), "firm page uses the agent hero layout");
+assert(panel.includes('size="lg"'), "firm page uses the dashboard card face size");
+assert(panel.includes("owner-portrait"), "firm page uses the agent card portrait");
+assert(panel.includes("owner-agent"), "firm page uses the agent card");
 assert(panel.includes("owner-door.css"), "firm page loads the same avatar layout as other agents");
-assert(!panel.includes("setup-partner__head"), "firm page does not use the small header face");
-const stageCss = read("src/components/milon-team/agent-stage.css");
+const faceCss = read("src/components/owner-door/owner-door.css");
 assert(
-  stageCss.includes("width: 200px") && stageCss.includes("height: 200px"),
-  "stage face is 200px",
+  faceCss.includes(".owner-presence.is-lg") && faceCss.includes("width: 172px"),
+  "card face box is 172px",
+);
+const shine = read("src/styles/premium-shine.css");
+assert(
+  shine.includes(".owner-portrait") && shine.includes("linear-gradient"),
+  "card uses the blue gradient tile",
 );
 assert(panel.includes("Redo interview"), "a saved plan can be redone");
 assert(panel.includes("fetchFirmSetupPlan"), "saved rules load through the existing client");
@@ -146,6 +153,7 @@ assert(
 );
 
 testFirmInterviewAndDeadlineBucket();
+testFollowUpBottleneckAndIntake();
 testDedupeLabelsAndReviewer();
 
 await runPanel();
@@ -212,6 +220,48 @@ function testFirmInterviewAndDeadlineBucket() {
       /note one client only|name who reviews and who signs off/i.test(step.step),
     ),
     "answered checklist lines are dropped",
+  );
+}
+
+/** Clear answers skip the follow-up. Vague ones get one. No doubled text. */
+function testFollowUpBottleneckAndIntake() {
+  assert(!firmAnswerIsVague("QBO and Xero"), "a named ledger is not a follow-up");
+  assert(!firmAnswerIsVague("Fixed monthly fee"), "a named fee is not a follow-up");
+  assert(!firmAnswerIsVague("The partner reviews"), "a named role is not a follow-up");
+  assert(firmAnswerIsVague(""), "an empty answer follows up");
+  assert(firmAnswerIsVague("various stuff"), "various stuff follows up");
+  assert(firmAnswerIsVague("it depends"), "it depends follows up");
+  assert(firmAnswerIsVague("n/a"), "n/a follows up");
+  assert(firmAnswerIsVague("not sure"), "not sure follows up");
+  assert(
+    mergeFirmAnswer("QBO and Xero", "QBO and Xero") === "QBO and Xero",
+    "identical follow-up is not repeated",
+  );
+  assert(
+    mergeFirmAnswer("various stuff", "Excel and Google Drive") === "Excel and Google Drive",
+    "a vague parent is replaced by the specific follow-up",
+  );
+  assert(
+    mergeFirmAnswer("QBO", "Xero for the smaller clients") === "QBO; Xero for the smaller clients",
+    "a clear parent keeps the follow-up after a semicolon",
+  );
+  const intake = classifyPracticeStep("clients email receipts and statements");
+  assert(intake.bucket === "client_setup", `document intake bucket: ${intake.bucket}`);
+  const mix = classifyPracticeStep("Mostly retail and construction industries");
+  assert(mix.bucket === "client_setup", `client mix bucket: ${mix.bucket}`);
+  const plan = buildPracticeImplementationPlan({
+    todaysFlow: ["We do bank rec before the pack goes out"],
+    milonCoverage: [],
+    gaps: ["Practice bottleneck: bank rec"],
+    checklist: [],
+  });
+  assert(
+    plan.steps.some((step) => /bank rec/i.test(step.step) && step.bucket === "client_setup"),
+    "bank rec is client setup",
+  );
+  assert(
+    !plan.steps.some((step) => /practice bottleneck/i.test(step.step)),
+    "the bottleneck is not a second product gap",
   );
 }
 

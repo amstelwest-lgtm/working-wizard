@@ -45,7 +45,7 @@ const SETTING_RE = /^(who|when|which|where)\b/i;
 const TOOLS_RE = /\b(xero|quickbooks|qbo|sage|spreadsheet|tools used|ledger connection)\b/i;
 /** Naming the reviewer or sign-off, or a habit the firm still keeps itself. Not bespoke. */
 const FIRM_HABIT_RE =
-  /\b(reviewer|who reviews|names? the reviewer|sign-?off|sign off|signs off|kept in a spreadsheet)\b/i;
+  /\b(reviewer|who reviews|names? the reviewer|sign-?off|sign off|signs off|kept in a spreadsheet|bank rec|bank reconciliation|e-?mails?|whatsapp|dext|receipts?|source documents?|industries|on the book)\b/i;
 const FINANCE_RE =
   /\b(invoice|bill|vat|tax|cash|reconcil\w*|journal|ledger|report|budget|forecast|payable|receivable|bank)\b/i;
 
@@ -301,6 +301,8 @@ export function redundantSetupLine(step: string, others: string): boolean {
     return true;
   }
   if (/agree deadline tracking/i.test(step) && /deadline|spreadsheet/i.test(others)) return true;
+  const bottleneck = step.match(/^practice bottleneck:\s*(.+)$/i)?.[1]?.trim() ?? "";
+  if (bottleneck && others.toLowerCase().includes(bottleneck.toLowerCase())) return true;
   return false;
 }
 

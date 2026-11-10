@@ -124,12 +124,75 @@ export const FIRM_SETUP_QUESTIONS: readonly { id: string; prompt: string; follow
   },
 ];
 
-/** One follow-up, only when the firm answer does not pin the step down. */
+const CLEAR_FIRM_ANSWER =
+  /\b(xero|qbo|quickbooks|sage|excel|google|dext|whatsapp|e-?mail|portal|fixed|hourly|advisory|retainer|partner|manager|bookkeeper|junior|senior|director|accountant|owner)\b|\d/i;
+
+const VAGUE_FIRM_ANSWER =
+  /^(it depends|depends|varies|various|stuff|things|not sure|unsure|n\/a|na|same|idk|tbd|whatever|maybe|sometimes)\b/i;
+
+const VAGUE_FILLER = new Set([
+  "various",
+  "stuff",
+  "things",
+  "whatever",
+  "misc",
+  "some",
+  "many",
+  "few",
+  "other",
+  "others",
+  "etc",
+  "and",
+  "or",
+  "the",
+  "a",
+  "an",
+  "of",
+  "to",
+  "it",
+  "depends",
+  "varies",
+  "not",
+  "sure",
+  "unsure",
+  "same",
+  "maybe",
+  "sometimes",
+  "just",
+  "like",
+  "kind",
+  "sort",
+]);
+
+/**
+ * Follow up only when the answer is empty or vague.
+ * A ledger, tool, fee type, number, or role is enough to move on.
+ */
 export function firmAnswerIsVague(answer: string): boolean {
   const text = answer.replace(/\s+/g, " ").trim();
   if (!text) return true;
-  if (/^(it depends|depends|varies|not sure|unsure|same)\b/i.test(text)) return true;
-  return text.split(" ").length < 4;
+  if (CLEAR_FIRM_ANSWER.test(text)) return false;
+  if (VAGUE_FIRM_ANSWER.test(text)) return true;
+  const words = text
+    .toLowerCase()
+    .split(" ")
+    .map((word) => word.replace(/[^a-z0-9]/g, ""))
+    .filter(Boolean);
+  if (words.length <= 2) return true;
+  return words.every((word) => word.length < 3 || VAGUE_FILLER.has(word));
+}
+
+/** Join a follow-up without repeating the parent. A vague parent is replaced. */
+export function mergeFirmAnswer(parent: string, followUp: string): string {
+  const first = parent.replace(/\s+/g, " ").trim();
+  const second = followUp.replace(/\s+/g, " ").trim();
+  if (!first) return second;
+  if (!second) return first;
+  if (first.toLowerCase() === second.toLowerCase()) return first;
+  if (first.toLowerCase().includes(second.toLowerCase())) return first;
+  if (second.toLowerCase().includes(first.toLowerCase())) return second;
+  if (firmAnswerIsVague(first) && !firmAnswerIsVague(second)) return second;
+  return `${first}; ${second}`;
 }
 
 export function setupQuestionsForAnswers(

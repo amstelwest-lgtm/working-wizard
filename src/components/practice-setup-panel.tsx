@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import "./setup-partner-panel.css";
 import "@/components/owner-door/owner-door.css";
-import "@/components/milon-team/agent-stage.css";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { parseMarketSelection } from "@/lib/market/parse";
@@ -11,6 +10,7 @@ import {
   FIRM_SETUP_QUESTIONS,
   firmAnswerIsVague,
   firmSetupPartnerSummary,
+  mergeFirmAnswer,
   setupPartnerMapPromptBlock,
   withMarketCoverage,
   type SetupPartnerWorkflowMap,
@@ -132,7 +132,7 @@ export function PracticeSetupInterview({
     const prior = answers[question.id]?.trim() ?? "";
     const nextAnswers = {
       ...answers,
-      [question.id]: followUp && prior ? `${prior} ${text}` : text,
+      [question.id]: followUp && prior ? mergeFirmAnswer(prior, text) : text,
     };
     setAnswers(nextAnswers);
     setFollowUp(false);
@@ -281,20 +281,28 @@ function setupToast(message: string, role: "status" | "alert") {
 
 function PracticeSetupHero() {
   return (
-    <div className="agent-stage">
-      <div className="agent-stage-hero">
-        <OwnerAvatar
-          agent="setup_partner"
-          variant="character"
-          size="stage"
-          motion="idle"
-          label={IMPLEMENTATION_MANAGER_LABEL}
-        />
-        <div className="agent-stage-copy">
-          <h1 className="agent-stage-name">{IMPLEMENTATION_MANAGER_LABEL}</h1>
-          <p className="agent-stage-role">
-            Map how the firm closes, reviews, signs off, and reports. No desktop access.
-          </p>
+    <div className="owner-door">
+      <div className="owner-pane" data-owner-home="true">
+        <div className="owner-agents">
+          <div className="owner-agent" data-agent="setup_partner" data-agent-card="setup_partner">
+            <div className="owner-agent-open">
+              <span className="owner-portrait">
+                <OwnerAvatar
+                  agent="setup_partner"
+                  variant="character"
+                  size="lg"
+                  motion="idle"
+                  label={IMPLEMENTATION_MANAGER_LABEL}
+                />
+              </span>
+              <span className="owner-name">{IMPLEMENTATION_MANAGER_LABEL}</span>
+              <span className="owner-lines">
+                <span className="owner-voice">
+                  Map how the firm closes, reviews, signs off, and reports. No desktop access.
+                </span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
