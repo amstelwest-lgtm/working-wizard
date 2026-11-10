@@ -45,7 +45,9 @@ html:not(.dark) {
 html:not(.dark) .accountant-portal {
   font-family: var(--pp-sans);
   font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
   letter-spacing: 0.002em;
 }
 html:not(.dark) .owner-door {
@@ -396,7 +398,9 @@ html:not(.dark) .reports-studio .report-card__rule {
     transparent
   );
 }
-html:not(.dark) .accountant-portal:not(.owner-door) [class*="bg-gradient-to-r"][class*="from-[#2563EB]"] {
+html:not(.dark)
+  .accountant-portal:not(.owner-door)
+  [class*="bg-gradient-to-r"][class*="from-[#2563EB]"] {
   height: 2px;
   background-image: linear-gradient(
     90deg,
@@ -638,6 +642,9 @@ html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold:
   --pp-tint: var(--ice);
 }
 .owner-door .owner-agent[data-agent="tax_specialist"] .owner-portrait {
+  --pp-tint: var(--cobalt);
+}
+.owner-door .owner-agent[data-agent="setup_partner"] .owner-portrait {
   --pp-tint: var(--cobalt);
 }
 .owner-door .owner-portrait {
