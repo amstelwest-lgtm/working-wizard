@@ -1144,7 +1144,7 @@ assert(
   avatarPoster("setup_partner").jpg === "/avatars/implementation-manager/implementation-manager-poster.jpg",
   "implementation manager poster jpg",
 );
-for (const folder of ["fm", "analyst", "advisor", "tax"] as const) {
+for (const folder of ["fm", "analyst", "advisor", "tax", "implementation-manager"] as const) {
   for (const name of FM_AVATAR_CLIPS) {
     assert(existsSync(`public/avatars/${folder}/${folder}-${name}.webm`), `${folder} ${name} webm is shipped`);
     assert(existsSync(`public/avatars/${folder}/${folder}-${name}.mp4`), `${folder} ${name} mp4 is shipped`);
