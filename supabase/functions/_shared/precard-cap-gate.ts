@@ -25,7 +25,10 @@ type GateResult = {
 type GateDb = {
   from: (table: string) => {
     select: (columns: string) => {
-      eq: (column: string, value: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
         maybeSingle: () => Promise<GateResult>;
       };
     };
@@ -38,14 +41,24 @@ type GateDb = {
 
 export async function readPrecardGate(input: {
   db: unknown;
-  clientId: string;
+  clientId?: string;
+  firmId?: string;
   kind: PrecardLimitKind;
 }): Promise<PrecardGateResult> {
   const db = input.db as GateDb;
-  const client = await db.from("clients").select("firm_id").eq("id", input.clientId).maybeSingle();
-  if (client.error) throw new Error(client.error.message);
-  const firmId = client.data?.firm_id;
-  if (typeof firmId !== "string" || !firmId) {
+  let firmId = input.firmId ?? null;
+  if (!firmId) {
+    if (!input.clientId) return { allowed: true, applies: false, remaining: null, firmId: null };
+    const client = await db
+      .from("clients")
+      .select("firm_id")
+      .eq("id", input.clientId)
+      .maybeSingle();
+    if (client.error) throw new Error(client.error.message);
+    const fromClient = client.data?.firm_id;
+    firmId = typeof fromClient === "string" && fromClient ? fromClient : null;
+  }
+  if (!firmId) {
     return { allowed: true, applies: false, remaining: null, firmId: null };
   }
 
@@ -81,7 +94,10 @@ function countFromRpc(data: unknown): number | null {
 
 /** True when the idempotent RPC is not deployed yet. Charging still works; a retry can double-count until the migration is applied. */
 function missingOnceRpc(message: string): boolean {
-  return /increment_precard_usage_once/i.test(message) && /does not exist|schema cache|could not find/i.test(message);
+  return (
+    /increment_precard_usage_once/i.test(message) &&
+    /does not exist|schema cache|could not find/i.test(message)
+  );
 }
 
 /**
@@ -130,7 +146,10 @@ export async function recordPrecardUse(
  * before that charge. One left stays visible so the last-question line
  * can show; zero is the cap card, not a counter.
  */
-export function precardMessagesLeft(nextCount: number | null, fallbackRemaining: number | null): number | null {
+export function precardMessagesLeft(
+  nextCount: number | null,
+  fallbackRemaining: number | null,
+): number | null {
   let left: number | null = null;
   if (typeof nextCount === "number" && Number.isFinite(nextCount)) {
     left = PRECARD_BOT_LIMIT - Math.floor(nextCount);

@@ -60,6 +60,7 @@ import { Route as AuthenticatedPracticeInsightsRouteImport } from './routes/_aut
 import { Route as AuthenticatedPracticeMarketplaceRouteImport } from './routes/_authenticated/practice_.marketplace'
 import { Route as AuthenticatedPracticeNeedsAttentionRouteImport } from './routes/_authenticated/practice_.needs-attention'
 import { Route as AuthenticatedPracticePlaybooksRouteImport } from './routes/_authenticated/practice_.playbooks'
+import { Route as AuthenticatedPracticeSetupRouteImport } from './routes/_authenticated/practice_.setup'
 import { Route as AuthenticatedPracticeTaxRouteImport } from './routes/_authenticated/practice_.tax'
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports.index'
 import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
@@ -339,6 +340,12 @@ const AuthenticatedPracticePlaybooksRoute =
     path: '/practice/playbooks',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedPracticeSetupRoute =
+  AuthenticatedPracticeSetupRouteImport.update({
+    id: '/practice_/setup',
+    path: '/practice/setup',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedPracticeTaxRoute =
   AuthenticatedPracticeTaxRouteImport.update({
     id: '/practice_/tax',
@@ -474,6 +481,7 @@ export interface FileRoutesByFullPath {
   '/practice/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
   '/practice/needs-attention': typeof AuthenticatedPracticeNeedsAttentionRoute
   '/practice/playbooks': typeof AuthenticatedPracticePlaybooksRoute
+  '/practice/setup': typeof AuthenticatedPracticeSetupRoute
   '/practice/tax': typeof AuthenticatedPracticeTaxRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
@@ -541,6 +549,7 @@ export interface FileRoutesByTo {
   '/practice/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
   '/practice/needs-attention': typeof AuthenticatedPracticeNeedsAttentionRoute
   '/practice/playbooks': typeof AuthenticatedPracticePlaybooksRoute
+  '/practice/setup': typeof AuthenticatedPracticeSetupRoute
   '/practice/tax': typeof AuthenticatedPracticeTaxRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
@@ -679,6 +688,7 @@ export interface FileRouteTypes {
     | '/practice/marketplace'
     | '/practice/needs-attention'
     | '/practice/playbooks'
+    | '/practice/setup'
     | '/practice/tax'
     | '/reports/demo'
     | '/settings/brand'
@@ -746,6 +756,7 @@ export interface FileRouteTypes {
     | '/practice/marketplace'
     | '/practice/needs-attention'
     | '/practice/playbooks'
+    | '/practice/setup'
     | '/practice/tax'
     | '/reports/demo'
     | '/settings/brand'
@@ -814,6 +825,7 @@ export interface FileRouteTypes {
     | '/_authenticated/practice_/marketplace'
     | '/_authenticated/practice_/needs-attention'
     | '/_authenticated/practice_/playbooks'
+    | '/_authenticated/practice_/setup'
     | '/_authenticated/practice_/tax'
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
@@ -1241,6 +1253,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPracticePlaybooksRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/practice_/setup': {
+      id: '/_authenticated/practice_/setup'
+      path: '/practice/setup'
+      fullPath: '/practice/setup'
+      preLoaderRoute: typeof AuthenticatedPracticeSetupRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/practice_/tax': {
       id: '/_authenticated/practice_/tax'
       path: '/practice/tax'
@@ -1362,6 +1381,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPracticeMarketplaceRoute: typeof AuthenticatedPracticeMarketplaceRoute
   AuthenticatedPracticeNeedsAttentionRoute: typeof AuthenticatedPracticeNeedsAttentionRoute
   AuthenticatedPracticePlaybooksRoute: typeof AuthenticatedPracticePlaybooksRoute
+  AuthenticatedPracticeSetupRoute: typeof AuthenticatedPracticeSetupRoute
   AuthenticatedPracticeTaxRoute: typeof AuthenticatedPracticeTaxRoute
   AuthenticatedReportsDemoRoute: typeof AuthenticatedReportsDemoRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
@@ -1385,6 +1405,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPracticeNeedsAttentionRoute:
     AuthenticatedPracticeNeedsAttentionRoute,
   AuthenticatedPracticePlaybooksRoute: AuthenticatedPracticePlaybooksRoute,
+  AuthenticatedPracticeSetupRoute: AuthenticatedPracticeSetupRoute,
   AuthenticatedPracticeTaxRoute: AuthenticatedPracticeTaxRoute,
   AuthenticatedReportsDemoRoute: AuthenticatedReportsDemoRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
