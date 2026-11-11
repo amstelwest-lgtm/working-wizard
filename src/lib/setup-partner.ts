@@ -71,22 +71,125 @@ export const FIRM_INTERVIEW_TURN_CAP = 15;
 
 export type FirmInterviewMessage = { role: "user" | "assistant"; content: string };
 
-/** One model turn. `done` means there is enough to map the workflow. */
+function stripFences(text: string): string {
+  return text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function unescapeJsonString(value: string): string {
+  return value.replace(/\\n/g, " ").replace(/\\"/g, '"').replace(/\\\\/g, "\\").trim();
+}
+
+/** One question only. Empty when the text is raw, truncated, or unfinished. */
+export function oneInterviewQuestion(value: string): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text || text.includes("{") || text.includes('"question"') || text.includes("```")) return "";
+  const mark = text.search(/[.?](?:\s|$)/);
+  if (mark < 0) return "";
+  const sentence = text.slice(0, mark + 1).trim();
+  return sentence.length >= 8 ? sentence : "";
+}
+
+function questionFromJsonSlice(raw: string): { question: string; done: boolean } | null {
+  const qMatch = raw.match(/"question"\s*:\s*"((?:\\.|[^"\\])*)/);
+  const done = /"done"\s*:\s*true/.test(raw) || /"ready"\s*:\s*true/.test(raw);
+  if (!qMatch && !done) return null;
+  const question = oneInterviewQuestion(qMatch ? unescapeJsonString(qMatch[1]) : "");
+  if (done && !question) return { question: "", done: true };
+  if (!question) return { question: "", done: false };
+  return { question, done };
+}
+
+/** One model turn. Never returns raw JSON. `done` means there is enough to map. */
 export function parseFirmInterviewTurn(text: string): { question: string; done: boolean } {
-  const trimmed = text.trim();
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
+  const raw = stripFences(text);
+  const sliced = questionFromJsonSlice(raw);
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
   if (start >= 0 && end > start) {
     try {
-      const raw = JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
-      const done = raw.done === true || raw.ready === true;
-      const question = typeof raw.question === "string" ? raw.question.trim() : "";
-      if (done || question) return { question, done };
+      const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+      const done = parsed.done === true || parsed.ready === true;
+      const question = oneInterviewQuestion(typeof parsed.question === "string" ? parsed.question : "");
+      if (done && !question) return { question: "", done: true };
+      if (question) return { question, done };
     } catch {
-      /* The model spoke in prose. Use that as the one question. */
+      /* Truncated or fenced JSON is handled by the field scan. */
     }
   }
-  return { question: trimmed, done: false };
+  if (sliced) return sliced;
+  const prose = oneInterviewQuestion(raw);
+  return { question: prose, done: false };
+}
+
+export function answersFromTranscript(transcript: string): string[] {
+  return transcript
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => /^A:/i.test(line))
+    .map((line) => line.replace(/^A:\s*/i, "").trim())
+    .filter((line) => line && !line.includes("{") && !line.includes('"question"'));
+}
+
+export function parseStructuredWorkflow(
+  text: string,
+): { todaysFlow: string[]; checklist: string[] } | null {
+  const raw = stripFences(text);
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+    const steps = Array.isArray(parsed.steps) ? parsed.steps : [];
+    const todaysFlow = steps
+      .map((step) => {
+        if (typeof step === "string") return oneInterviewQuestion(step) || step.trim();
+        if (!step || typeof step !== "object") return "";
+        const row = step as Record<string, unknown>;
+        const title = typeof row.step === "string" ? row.step.trim() : "";
+        if (!title || title.includes("{")) return "";
+        const bits = [row.who, row.tool, row.cadence, row.pain]
+          .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+          .map((part) => part.trim());
+        return bits.length ? `${title} — ${bits.join("; ")}` : title;
+      })
+      .filter((line) => line && !line.includes('"question"'));
+    const checklist = Array.isArray(parsed.checklist)
+      ? parsed.checklist.filter(
+          (line): line is string =>
+            typeof line === "string" && line.trim().length > 0 && !line.includes("{"),
+        )
+      : [];
+    if (!todaysFlow.length) return null;
+    return { todaysFlow, checklist };
+  } catch {
+    return null;
+  }
+}
+
+/** Structured steps when the model returns them, otherwise one step per answer. */
+export function workflowMapFromInterview(
+  transcript: string,
+  modelText: string | null,
+  country?: SetupPartnerCountry | null,
+): SetupPartnerWorkflowMap {
+  const structured = modelText ? parseStructuredWorkflow(modelText) : null;
+  const oneBlob =
+    structured?.todaysFlow.length === 1 &&
+    (structured.todaysFlow[0].includes("A:") || structured.todaysFlow[0].length > 240);
+  const todaysFlow =
+    structured?.todaysFlow.length && !oneBlob
+      ? structured.todaysFlow
+      : answersFromTranscript(transcript);
+  return {
+    todaysFlow: todaysFlow.length ? todaysFlow : ["Practice month-end close, review, and sign-off."],
+    milonCoverage: setupPartnerCoverage(country),
+    gaps: [],
+    checklist: structured?.checklist ?? [],
+  };
 }
 
 export function firmInterviewShouldStop(modelTurns: number, done: boolean): boolean {

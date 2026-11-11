@@ -2313,6 +2313,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               onOpenTaxAgent={() => {
                 void navigate({ to: "/dashboard", hash: askHashForAgent("tax_specialist") });
               }}
+              extraCard={<PracticeSetupCard embedded exampleClientId={clientRows[0]?.id ?? null} />}
             />
             {firmReportsLine && firmReportsClientId ? (
               <Link
@@ -2372,8 +2373,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             Add your first client
           </button>
         ) : null}
-        {!bookLoading ? <PracticeSetupCard exampleClientId={clientRows[0]?.id ?? null} /> : null}
-
         {/* ===== STATS STRIP ===== */}
         <div className="stats-strip" id="wizard-practice-board">
           {bookLoading ? (

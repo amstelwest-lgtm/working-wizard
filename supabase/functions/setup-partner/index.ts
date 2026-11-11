@@ -17,6 +17,7 @@ import {
   ledgerStatusFromBooksQuality,
   parseFirmInterviewTurn,
   parseWorkflowMapJson,
+  workflowMapFromInterview,
   setupPartnerMapUserPrompt,
   setupPartnerPhraseUserPrompt,
   setupPartnerScreenshotNotes,
@@ -227,6 +228,68 @@ async function upsertProductGap(
     console.error("setup_partner_gap_write_failed", err instanceof Error ? err.message : err);
     return "failed";
   }
+}
+
+function hasPnl(financials: unknown): boolean {
+  if (!financials || typeof financials !== "object") return false;
+  const row = financials as Record<string, unknown>;
+  if (row.profit_and_loss || row.pnl) return true;
+  const figures = row.figures;
+  if (figures && typeof figures === "object") {
+    const nested = figures as Record<string, unknown>;
+    if (nested.revenue != null || nested.profit_and_loss != null || nested.net_profit != null) {
+      return true;
+    }
+  }
+  return typeof row.revenue === "number";
+}
+
+async function firmLedgerContext(admin: SupabaseClient, firmId: string): Promise<string> {
+  const { data, error } = await admin
+    .from("clients")
+    .select("id, name, market, financials")
+    .eq("firm_id", firmId)
+    .limit(12);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  if (!rows.length) return "Connected data: no clients on file. No ledger is known from Milōn.";
+  const ids = rows.map((row) => String((row as { id?: unknown }).id ?? "")).filter(Boolean);
+  const tables = [
+    ["xero_connections", "Xero"],
+    ["qbo_connections", "QuickBooks"],
+    ["sage_connections", "Sage"],
+  ] as const;
+  const byClient = new Map<string, string[]>();
+  for (const [table, label] of tables) {
+    if (!ids.length) break;
+    const { data: links, error: linkError } = await admin
+      .from(table)
+      .select("client_id, last_synced_at, sync_status")
+      .in("client_id", ids);
+    if (linkError) continue;
+    for (const link of links ?? []) {
+      const id = String((link as { client_id?: unknown }).client_id ?? "");
+      const syncedAt = (link as { last_synced_at?: unknown }).last_synced_at;
+      const status = (link as { sync_status?: unknown }).sync_status;
+      const synced = typeof syncedAt === "string" && syncedAt ? syncedAt.slice(0, 10) : "never";
+      const connected = status !== "disconnected" && status !== "error";
+      const line = connected
+        ? `${label} connected, last sync ${synced}`
+        : `${label} not connected`;
+      byClient.set(id, [...(byClient.get(id) ?? []), line]);
+    }
+  }
+  const lines = rows.map((row) => {
+    const rec = row as { id?: unknown; name?: unknown; market?: unknown; financials?: unknown };
+    const name = typeof rec.name === "string" && rec.name ? rec.name : "Client";
+    const country =
+      rec.market && typeof rec.market === "object" && "country" in rec.market
+        ? String((rec.market as { country?: unknown }).country ?? "")
+        : "";
+    const books = byClient.get(String(rec.id ?? "")) ?? ["ledger not connected"];
+    return `- ${name}${country ? ` (${country})` : ""}: ${books.join("; ")}; has P&L ${hasPnl(rec.financials) ? "yes" : "no"}`;
+  });
+  return `Connected books already in Milōn. Do not ask for a provider, connection, last sync, or whether a P&L exists when it is listed:\n${lines.join("\n")}`;
 }
 
 Deno.serve((req: Request) =>
@@ -463,27 +526,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       .filter(Boolean);
     let connected = "Connected data: unavailable.";
     try {
-      const { data, error } = await adminClient
-        .from("clients")
-        .select("name, market")
-        .eq("firm_id", firmId)
-        .limit(30);
-      if (!error) {
-        const rows = data ?? [];
-        connected =
-          rows.length === 0
-            ? "Connected data: no clients on file. No ledger is known from Milōn."
-            : `Connected data already in Milōn (${rows.length} clients):\n${rows
-                .map((row) => {
-                  const name = typeof row.name === "string" && row.name ? row.name : "Client";
-                  const country =
-                    row.market && typeof row.market === "object" && "country" in row.market
-                      ? String((row.market as { country?: unknown }).country ?? "")
-                      : "";
-                  return `- ${name}${country ? ` (${country})` : ""}`;
-                })
-                .join("\n")}`;
-      }
+      connected = await firmLedgerContext(adminClient, firmId);
     } catch (err) {
       console.error("setup_partner_context_failed", err instanceof Error ? err.message : err);
     }
@@ -493,16 +536,26 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       "Conversation so far:",
       lines.length ? lines.join("\n") : "(none yet)",
       "",
-      'Return JSON only: {"question":"one open question","done":false}. Set done true and question to "" when you can map the workflow.',
+      'Return JSON only: {"question":"exactly one open question","done":false}. One sentence. One question mark. Set done true and question to "" when you can map the workflow.',
     ].join("\n");
-    try {
-      const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
+    const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
+    let attempts = 0;
+    const ask = async () => {
+      attempts += 1;
       const res = await callClaude(SETUP_PARTNER_MAP_SYSTEM, userPrompt, {
-        maxTokens: 280,
+        maxTokens: 1024,
         temperature: 0.4,
         model: interviewModel,
         timeoutMs: 25_000,
       });
+      return parseFirmInterviewTurn(rehydrateModelOutput(res.text, session));
+    };
+    try {
+      let parsed = await ask();
+      if (!parsed.done && !parsed.question && attempts < 2) parsed = await ask();
+      if (!parsed.done && !parsed.question) {
+        return respond({ error: "No question came back. Retry.", retry: true }, 503);
+      }
       if (precard.firmId) {
         await finishPrecardAttempt({
           decision: precard,
@@ -512,8 +565,6 @@ async function handleSetupPartner(req: Request): Promise<Response> {
           },
         });
       }
-      const text = rehydrateModelOutput(res.text, session);
-      const parsed = parseFirmInterviewTurn(text);
       const nextTurns = modelTurns + 1;
       const done = firmInterviewShouldStop(nextTurns, parsed.done);
       return respond({
@@ -524,6 +575,22 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       });
     } catch (err) {
       console.error("setup_partner_turn_failed", err instanceof Error ? err.message : err);
+      try {
+        if (attempts >= 2) throw err;
+        const parsed = await ask();
+        if (parsed.question || parsed.done) {
+          const nextTurns = modelTurns + 1;
+          const done = firmInterviewShouldStop(nextTurns, parsed.done);
+          return respond({
+            question: done ? "" : parsed.question,
+            done,
+            modelTurns: nextTurns,
+            model: interviewModel,
+          });
+        }
+      } catch (retryErr) {
+        console.error("setup_partner_turn_retry_failed", retryErr instanceof Error ? retryErr.message : retryErr);
+      }
       const message = err instanceof Error ? err.message : "The interview failed. Retry.";
       return respond({ error: message, retry: true }, 503);
     }
@@ -541,6 +608,23 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         : firmSetupPartnerSummary();
     }
     const country = coverageCountry(market);
+    const transcript = typeof answers.transcript === "string" ? answers.transcript.trim() : "";
+    if (!clientId && transcript) {
+      const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
+      let modelText: string | null = null;
+      try {
+        const res = await callClaude(
+          "Turn the interview into workflow steps. JSON only with keys steps (array of {step, who, tool, cadence, pain}) and checklist (string[]). One step per distinct answer. Do not paste the transcript as one step.",
+          transcript,
+          { maxTokens: 1200, model: interviewModel, timeoutMs: 25_000 },
+        );
+        modelText = rehydrateModelOutput(res.text, session);
+      } catch (err) {
+        console.error("setup_partner_structure_failed", err instanceof Error ? err.message : err);
+      }
+      const map = workflowMapFromInterview(transcript, modelText, country);
+      return respond({ map, modelTurns: modelTurns + 1, structured: Boolean(modelText) });
+    }
     const userPrompt = applyRedaction(
       `${setupPartnerMapUserPrompt(summary, answers, setupPartnerScreenshotNotes(body.screenshots))}\n\n${coverageMarketNote(country)}`,
       session,

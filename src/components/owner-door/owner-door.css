@@ -1743,6 +1743,25 @@ html.dark .owner-status.is-attention {
   visibility: hidden;
 }
 
+/* Implementation Manager: one face. Inactive clips stay out of the layout. */
+.owner-agent[data-agent="setup_partner"] .owner-fm-face video:not(.is-on):not(.is-hold) {
+  display: none;
+}
+
+.owner-agent[data-agent="setup_partner"] .owner-fm-face.is-live .owner-fm-poster {
+  display: none;
+}
+
+.owner-door[data-im-card="solo"] .owner-pane {
+  max-width: none;
+  margin-inline: 0;
+}
+
+.owner-door[data-im-card="solo"] .owner-agents {
+  grid-template-columns: minmax(0, 320px);
+  justify-content: start;
+}
+
 .owner-presence.is-advisor .mark {
   stroke: var(--navy);
   stroke-width: 1.6;
