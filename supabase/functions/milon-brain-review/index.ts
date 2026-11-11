@@ -19,6 +19,7 @@ import {
   type BrainReviewPrivateRow,
   type BrainReviewQueueItem,
 } from "../../../src/lib/milon-brain-review.ts";
+import { SETUP_PARTNER_INTERVIEW_TASK } from "../../../src/lib/firm-interview-draft.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -65,6 +66,7 @@ async function loadPrivateRules(
     .eq("status", MILON_BRAIN_STATUS_ACTIVE)
     .gte("created_at", sinceIso)
     .neq("task_type", MILON_BRAIN_TASK_FEATURE_IDEA)
+    .neq("task_type", SETUP_PARTNER_INTERVIEW_TASK)
     .limit(5000);
   if (error) throw new Error(error.message);
   return (data ?? []) as BrainReviewPrivateRow[];

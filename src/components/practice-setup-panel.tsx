@@ -17,9 +17,11 @@ import {
   type SetupPartnerCountry,
   type SetupPartnerWorkflowMap,
 } from "@/lib/setup-partner";
+import type { FirmInterviewDraft } from "@/lib/firm-interview-draft";
 import {
   buildSetupPartnerFirmMap,
   confirmSetupPartnerFirmMap,
+  fetchFirmInterviewDraft,
   fetchFirmSetupPlan,
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
@@ -42,6 +44,7 @@ type Phase = "interview" | "map" | "done";
 type BuildMap = typeof buildSetupPartnerFirmMap;
 type ConfirmMap = typeof confirmSetupPartnerFirmMap;
 type LoadSaved = (firmId: string) => Promise<PracticeImplementationPlan | null>;
+type LoadDraft = (firmId: string) => Promise<FirmInterviewDraft | null>;
 type AskTurn = (input: {
   firmId: string;
   messages: FirmInterviewMessage[];
@@ -59,6 +62,7 @@ export function PracticeSetupInterview({
   buildMap = buildSetupPartnerFirmMap,
   confirmMap = confirmSetupPartnerFirmMap,
   loadSaved = fetchFirmSetupPlan,
+  loadDraft = fetchFirmInterviewDraft,
   askTurn = firmInterviewTurn,
 }: {
   firmId: string | null;
@@ -66,6 +70,7 @@ export function PracticeSetupInterview({
   buildMap?: BuildMap;
   confirmMap?: ConfirmMap;
   loadSaved?: LoadSaved;
+  loadDraft?: LoadDraft;
   askTurn?: AskTurn;
 }) {
   const [phase, setPhase] = useState<Phase>("interview");
@@ -161,12 +166,19 @@ export function PracticeSetupInterview({
     if (!firmId) return;
     let cancel = false;
     setBooting(true);
-    void loadSaved(firmId)
-      .then((saved) => {
+    void Promise.all([loadSaved(firmId), loadDraft(firmId)])
+      .then(([saved, draft]) => {
         if (cancel) return;
         if (saved && saved.steps.length > 0) {
           setPlan({ steps: dedupePracticeSteps(saved.steps) });
           setPhase("done");
+          return;
+        }
+        if (draft?.question) {
+          setMessages(draft.messages);
+          setQuestion(draft.question);
+          setModelTurns(draft.modelTurns);
+          setPhase("interview");
           return;
         }
         return requestTurn([], 0);
@@ -182,7 +194,7 @@ export function PracticeSetupInterview({
     };
     // The first question loads with the firm. Later turns are explicit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, loadSaved]);
+  }, [firmId, loadSaved, loadDraft]);
 
   const redo = () => {
     setPhase("interview");
@@ -255,6 +267,15 @@ export function PracticeSetupInterview({
 
       {!booting && phase === "interview" ? (
         <div>
+          {messages.some((message) => message.content !== question) ? (
+            <ol className="setup-partner__transcript">
+              {messages.map((message, index) =>
+                message.content === question && index === messages.length - 1 ? null : (
+                  <li key={`${message.role}-${index}`}>{message.content}</li>
+                ),
+              )}
+            </ol>
+          ) : null}
           {question ? <p className="setup-partner__question">{question}</p> : null}
           <textarea
             className="setup-partner__answer"
