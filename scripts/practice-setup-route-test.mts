@@ -303,19 +303,59 @@ const roundTrip = [
     bucket: "bespoke" as const,
   },
 ];
-const roundRows = clientSetupBrainRows({
+const confirmed = buildPracticeImplementationPlan({
+  todaysFlow: roundTrip.map((row) => row.step),
+  milonCoverage: [],
+  gaps: [],
+  checklist: [],
+});
+assert(confirmed.steps.length === roundTrip.length, "confirm keeps one stored step per bucket");
+const inserted = clientSetupBrainRows({
   firmId,
   approverId: "11111111-1111-1111-1111-111111111111",
-  steps: roundTrip.map((row) => ({ ...classifyPracticeStep(row.step), step: row.step, bucket: row.bucket })),
+  steps: confirmed.steps,
 });
-const roundBack = practicePlanFromConfirmRules(roundRows);
+assert(inserted.length === roundTrip.length, "confirm inserts one milon_brain_rules row per step");
+for (const row of inserted) {
+  assert(
+    row.client_id === null && row.layer === "private" && row.status === "active" && row.decision === "approved",
+    "a confirmed step is a firm private rule",
+  );
+  assert(
+    row.source_event === SETUP_PARTNER_SOURCE_EVENT && row.task_type === SETUP_PARTNER_TASK_WORKFLOW,
+    "a confirmed step is the workflow rule setup-partner inserts",
+  );
+  assert(row.rule_text.startsWith("Practice: "), "rule_text is the stored Practice line");
+}
+// Reload sees the columns fetchFirmSetupPlan selects, not the in-memory plan.
+const stored = JSON.parse(
+  JSON.stringify(
+    inserted.map((row) => ({
+      rule_text: row.rule_text,
+      client_id: row.client_id,
+      source_event: row.source_event,
+      status: row.status,
+    })),
+  ),
+) as { rule_text: string; client_id: string | null; source_event: string; status: string }[];
+const roundBack = practicePlanFromConfirmRules(stored);
 for (const row of roundTrip) {
+  const label = row.step.split(" — ")[0] ?? "";
+  const detail = row.step.slice(label.length + " — ".length);
+  const saved = stored.find((item) => item.rule_text.includes(label) && item.rule_text.includes(detail));
+  assert(
+    saved?.rule_text.includes(` [|${row.bucket}]`) && saved.rule_text.includes(` — `),
+    `${row.bucket} rule_text keeps the label, the detail, and the bucket`,
+  );
   const found = roundBack.steps.find((step) => step.step === row.step);
-  const detail = row.step.split(" — ")[1] ?? "";
-  assert(found, `reload keeps ${row.bucket}`);
-  assert(found?.bucket === row.bucket, `${row.bucket} bucket survives`);
-  assert(found?.step.includes(detail), `${row.bucket} detail survives`);
-  assert(found?.step.startsWith(row.step.split(" — ")[0]), `${row.bucket} label survives`);
+  assert(found?.bucket === row.bucket, `${row.bucket} bucket survives reload`);
+  assert(found?.step.startsWith(label), `${row.bucket} label survives reload`);
+  assert(found?.step.includes(detail), `${row.bucket} detail survives reload`);
+  assert(
+    `${found?.step} — ${found ? practiceBucketLabel(found.bucket) : ""}` ===
+      `${row.step} — ${practiceBucketLabel(row.bucket)}`,
+    `${row.bucket} row still shows the detail after the dash`,
+  );
 }
 
 testFirmInterviewAndDeadlineBucket();
