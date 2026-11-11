@@ -10,6 +10,7 @@ import {
   AGENT_COPY_GUIDE,
   agentCopyStatus,
   attachCitedEvidence,
+  citedFigureMatches,
   citedNumbers,
   displayAmounts,
   draftMetricUnit,
@@ -138,6 +139,12 @@ assert(
 
 assert(citedNumbers("R 13 846").map((n) => n.value).join(",") === "13846", "R 13 846 is one amount");
 assert(citedNumbers("closes at -R 41,793").map((n) => n.value).join(",") === "-41793", "a minus before R keeps the sign");
+assert(
+  citedNumbers("R 40,000-R 50,000").map((n) => n.value).join(",") === "40000,50000",
+  "a range does not put a minus on the second amount",
+);
+assert(citedFigureMatches(97050, 0, -97049.5), "97,050 matches a closing of -97049.5");
+assert(citedFigureMatches(97000, 0, -97049.5, 1000), "R97k matches a closing near 97,050");
 assert(citedNumbers("$13,846").map((n) => n.value).join(",") === "13846", "$13,846 is one amount");
 assert(citedNumbers("Gross margin is 60%").map((n) => n.value).join(",") === "60", "60% is the percent form of 0.6");
 

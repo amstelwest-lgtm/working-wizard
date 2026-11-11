@@ -90,7 +90,9 @@ export function PracticeSetupCard({
       to="/practice/setup"
       askLabel="Set up practice"
       chip={<ImplementationManagerChip />}
-      status={<span className="owner-status is-attention">{chip}</span>}
+      status={
+        <span className={chip === "Done" ? "owner-status" : "owner-status is-attention"}>{chip}</span>
+      }
       lines={
         <span className="owner-lines" data-status-update="">
           <span className="owner-voice">{CAPTION}</span>

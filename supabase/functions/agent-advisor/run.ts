@@ -7,6 +7,7 @@ import { runQueueJob, type RunnerJob } from "../_shared/agent-core/job.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 import { ADVISOR_SYSTEM, advisorToolSchemas } from "../_shared/agent-prompts/advisor.ts";
 import { modelForAgent } from "../../../src/lib/claude-request.ts";
+import { ADVISOR_DRAFT_NUDGE } from "../../../src/lib/owner-handoff.ts";
 import {
   ADVISOR_COST_CEILING_USD,
   ADVISOR_DRAFT_KINDS,
@@ -36,6 +37,7 @@ export function runAdvisorJob(db: SupabaseClient, job: RunnerJob) {
     fallbackDraftKind: ADVISOR_DRAFT_KINDS[0],
     costCeilingUsd: ADVISOR_COST_CEILING_USD,
     model: modelForAgent("advisor", { standard: CLAUDE_MODEL }),
+    draftNudge: ADVISOR_DRAFT_NUDGE,
     runOutcome: advisorRunOutcome,
     execute: executeAdvisorTool,
   });

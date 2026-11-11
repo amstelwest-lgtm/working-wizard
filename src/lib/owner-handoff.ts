@@ -349,22 +349,72 @@ export function handoffClaimsDraftsRecorded(text: string | null | undefined): bo
   return /drafts are recorded/i.test(text ?? "");
 }
 
+export const ADVISOR_DRAFT_NUDGE =
+  "Draft the action now with record_draft, or state why you cannot.";
+
+type HandoffStep = { tool?: string | null; status?: string | null; detail?: string | null };
+
+function stepDetail(step: HandoffStep): string {
+  return (step.detail ?? "").replace(/\s+/g, " ").trim();
+}
+
+/** A record_draft that saved a new row for this run. A deduped hand-off does not. */
+export function handoffDraftWasSaved(step: HandoffStep): boolean {
+  if (step.tool !== "record_draft" || step.status !== "ok") return false;
+  return !/"deduped"\s*:\s*true/.test(stepDetail(step));
+}
+
+/** Reads plus only a hand-off or a deduped finding. The action itself was not drafted. */
+export function handoffNeedsDraftNudge(steps: readonly HandoffStep[]): boolean {
+  if (steps.some(handoffDraftWasSaved)) return false;
+  if (steps.some((step) => step.tool === "record_draft" && step.status !== "ok")) return false;
+  return steps.some(
+    (step) =>
+      step.tool === "record_draft" || step.tool === "send_agent_message" || step.tool === "record_finding",
+  );
+}
+
+const HANDOFF_AGENT: Record<string, string> = {
+  financial_manager: "Financial Manager",
+  analyst: "Analyst",
+  advisor: "Advisor",
+};
+
+/** "Advisor passed this to the Financial Manager: <finding title>". */
+export function handoffPassedAlongReason(displayName: string, steps: readonly HandoffStep[]): string | null {
+  const handoff = [...steps].reverse().find((step) => /"to_agent"\s*:/.test(stepDetail(step)));
+  if (!handoff) return null;
+  const detail = stepDetail(handoff);
+  const agent = detail.match(/"to_agent"\s*:\s*"([a-z_]+)"/)?.[1] ?? "";
+  const who = HANDOFF_AGENT[agent] ?? "";
+  const title = detail.match(/"title"\s*:\s*"((?:\\.|[^"\\])*)"/)?.[1]?.replace(/\\"/g, '"').trim() ?? "";
+  const short = displayName.replace(/^Milōn\s+/u, "").trim() || "Advisor";
+  if (who && title) return `${short} passed this to the ${who}: ${title}`.slice(0, 400);
+  if (who) return `${short} passed this to the ${who}`;
+  return null;
+}
+
 /**
  * Why a finished hand-off has no draft. A refused record_draft lives on the
- * trace. An empty summary is not a reason.
+ * trace. A deduped hand-off names who it was passed to. An empty summary is not a reason.
  */
 export function handoffDraftFailureReason(input: {
   summary?: string | null;
-  steps?: readonly { tool?: string | null; status?: string | null; detail?: string | null }[];
+  steps?: readonly HandoffStep[];
 }): string {
-  const failed = (input.steps ?? []).find((step) => {
+  const steps = input.steps ?? [];
+  const failed = steps.find((step) => {
     const tool = step.tool ?? "";
-    const detail = step.detail?.replace(/\s+/g, " ").trim() ?? "";
+    const detail = stepDetail(step);
     return (tool === "record_draft" || tool === "record_finding") && step.status !== "ok" && detail.length > 0;
   });
-  if (failed?.detail) return failed.detail.replace(/\s+/g, " ").trim().slice(0, 400);
+  if (failed?.detail) return stepDetail(failed).slice(0, 400);
   const summary = (input.summary ?? "").replace(/\s+/g, " ").trim();
-  if (summary && !handoffClaimsDraftsRecorded(summary)) return summary.slice(0, 400);
+  if (summary && !handoffClaimsDraftsRecorded(summary) && !/no draft was saved/i.test(summary)) {
+    return summary.slice(0, 400);
+  }
+  const passed = handoffPassedAlongReason("Advisor", steps);
+  if (passed) return passed;
   return "no draft was saved for this action";
 }
 
@@ -376,7 +426,7 @@ export function handoffCouldNotDraftSentence(displayName: string, reason?: strin
   const short = finishedRole(displayName);
   const raw = (reason ?? "").replace(/\s+/g, " ").trim();
   const already = raw.toLowerCase().startsWith(`${short.toLowerCase()} couldn't draft this`);
-  if (already) return raw.replace(/\.+$/u, "").slice(0, 500);
+  if (already || /passed this to the /i.test(raw)) return raw.replace(/\.+$/u, "").slice(0, 500);
   const generic = !raw || handoffClaimsDraftsRecorded(raw);
   const why = generic ? "no draft was saved for this action" : raw.replace(/\.+$/u, "");
   return `${short} couldn't draft this, ${why}`.slice(0, 500);

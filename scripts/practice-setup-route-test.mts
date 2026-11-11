@@ -31,6 +31,8 @@ import {
 } from "../src/lib/firm-interview-draft.ts";
 import { practiceSetupCardStatus } from "../src/components/practice-setup-card.tsx";
 import {
+  cleanFlowLine,
+  practiceConfirmRuleText,
   buildPracticeImplementationPlan,
   classifyPracticeStep,
   clientSetupBrainRows,
@@ -260,6 +262,28 @@ assert(
 assert(
   restored.steps.some((step) => step.bucket === "covered"),
   "the already covered step reloads",
+);
+assert(restored.steps[0]?.step === "Who signs the pack", "reloaded rows keep the confirmed order");
+const coveredText = "We prepare a quarterly management pack";
+const coveredRule = practiceConfirmRuleText(
+  coveredText,
+  "Already in Milōn: Financial Manager: month-end close pack",
+);
+const coveredBack = practicePlanFromConfirmRules([
+  { rule_text: coveredRule, client_id: null, source_event: "setup_partner_confirm", status: "active" },
+]);
+assert(coveredBack.steps[0]?.step === coveredText, "an already covered row keeps its step text");
+assert(!coveredBack.steps[0]?.step.startsWith("—"), "the step is not only the fit note");
+const longDetail = `The person who prepares the work was the bookkeeper, and the reviewer signs the pack the next morning. ${"Extra detail. ".repeat(40)}`;
+const longRule = practiceConfirmRuleText("Who prepares the work", longDetail);
+assert(longRule.includes("Who prepares the work"), "a long detail does not drop the step");
+assert(!longRule.endsWith("was"), "a detail is not cut mid-sentence");
+assert(!/ —\s*$/.test(longRule), "an empty detail is not left after the dash");
+assert(!longRule.endsWith(";"), "a saved detail does not dangle a semicolon");
+assert(
+  cleanFlowLine("Not stated. The bookkeeper posts the supplier bill the same day.") ===
+    "The bookkeeper posts the supplier bill the same day.",
+  "Not stated drops when the answer is in the line",
 );
 
 testFirmInterviewAndDeadlineBucket();

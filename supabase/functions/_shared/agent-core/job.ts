@@ -87,6 +87,8 @@ export type QueueJobConfig = {
    * The Advisor passes the global Sonnet default. Omitted uses edgeModelForAgent.
    */
   model?: string;
+  /** One extra Advisor turn when the model hands off and never drafts the action. */
+  draftNudge?: string;
   runOutcome: (input: {
     stopReason: string;
     steps: Array<{ tool: string | null; status: string }>;
@@ -441,6 +443,7 @@ export async function runQueueJob(
       allowedTools: config.allowedTools,
       toolLabels: config.toolLabels,
       rethrowReasonerErrors: true,
+      draftNudge: config.draftNudge,
       reason: async (ctx) => {
         const drafted = runnerEarlyFinish(recordedKeys.size);
         if (drafted) return { kind: "stop", reason: drafted.reason, summary: drafted.summary };

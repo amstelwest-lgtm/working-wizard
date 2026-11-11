@@ -850,7 +850,7 @@ export function citedNumbers(text: string): CitedNumber[] {
     if (!Number.isFinite(mantissa)) continue;
     const frac = numeric.includes(".") ? (numeric.split(".")[1] ?? "") : "";
     const before = cleaned.slice(Math.max(0, (match.index ?? 0) - 2), match.index ?? 0);
-    const signed = /[\u2010-\u2015\-]\s*$/.test(before);
+    const signed = /(?:^|[^\d])[\u2010-\u2015\-]\s*$/.test(before);
     const value = (signed ? -Math.abs(mantissa) : mantissa) * scale;
     out.push({ raw, value, decimals: frac.length, scale });
   }
@@ -878,9 +878,11 @@ export function citedFigureMatches(claimed: number, decimals: number, stored: nu
   if (scale !== 1 && scale > 0) {
     const mantissa = claimed / scale;
     if (matchesAtPrecision(mantissa, decimals, stored / scale)) return true;
+    if (decimals === 0 && Math.round(Math.abs(stored) / scale) === Math.abs(mantissa)) return true;
     return decimals === 0 && Math.trunc(Math.abs(stored) / scale) === Math.abs(mantissa);
   }
   if (matchesAtPrecision(claimed, decimals, stored)) return true;
+  if (decimals === 0 && Math.round(Math.abs(stored)) === Math.abs(Math.round(claimed))) return true;
   if (matchesAtPrecision(claimed, decimals, stored * 100)) return true;
   // A bare 412 is the thousands (or millions) form of a stored revenue. Scores and day counts stay below 100.
   if (decimals === 0 && Math.abs(claimed) >= 100) {

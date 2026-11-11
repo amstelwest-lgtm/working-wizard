@@ -185,13 +185,18 @@ function stepOf(
 const COVERED_WORK_RE =
   /\b(month-?end|management packs?|bookkeeping|cash reporting|profit reporting|cash and profit)\b/i;
 
+/** Drop a note word without eating the answer that follows it. */
+export function cleanFlowLine(step: string): string {
+  let text = step.replace(/\s+/g, " ").trim();
+  text = text.replace(/\b(?:Not stated|Still unclear|asked twice)\b\s*[:;,]?\s*\.?\s*/gi, "");
+  text = text.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+  text = text.replace(/[;,]+\s*$/g, "").replace(/^[—–-]\s*/g, "").trim();
+  return text;
+}
+
 /** Drop interviewer notes before a step is saved or shown. */
 export function accountantFacingStep(step: string): string {
-  return step
-    .replace(/\b(?:Not stated|Still unclear|asked twice)\b[^.]*(?:\.|$)/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .replace(/\s+([,.;])/g, "$1")
-    .trim();
+  return cleanFlowLine(step);
 }
 
 /** Deterministic bucket for one practice workflow step. */
@@ -235,7 +240,7 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
         capability: row.capability,
         covers: row.covers,
         bucket: "covered",
-        fitNote: `Already in Milōn: ${row.covers}.`,
+        fitNote: `Already in Milōn: ${row.covers.replace(/\s+—\s+/g, ": ")}.`,
         effort: "S",
       });
     }
@@ -244,7 +249,7 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
       capability: "analyst",
       covers: "Analyst — cash and profit reporting",
       bucket: "covered",
-      fitNote: "Already in Milōn: Analyst — cash and profit reporting.",
+      fitNote: "Already in Milōn: Analyst: cash and profit reporting.",
       effort: "S",
     });
   }
@@ -279,7 +284,7 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
       capability: row.capability,
       covers: row.covers,
       bucket: "covered",
-      fitNote: `Already in Milōn: ${row.covers}.`,
+      fitNote: `Already in Milōn: ${row.covers.replace(/\s+—\s+/g, ": ")}.`,
       effort: "S",
     });
   }
@@ -325,9 +330,9 @@ export function dedupePracticeSteps(steps: readonly PracticePlanStep[]): Practic
   const out: PracticePlanStep[] = [];
   for (const step of steps) {
     const id =
-      step.bucket === "client_setup" || step.bucket === "bespoke"
-        ? `${step.dedupe_key}\n${step.step.toLowerCase()}`
-        : step.dedupe_key;
+      step.bucket === "product_gap"
+        ? step.dedupe_key
+        : `${step.dedupe_key}\n${step.step.toLowerCase()}`;
     if (seen.has(id)) continue;
     seen.add(id);
     out.push(step);
@@ -389,13 +394,40 @@ export function practicePlanFromConfirmRules(
     const text = (row.rule_text ?? "").replace(/\s+/g, " ").trim();
     if (!text.startsWith("Practice: ")) continue;
     let step = text.slice("Practice: ".length);
-    const mark = step.lastIndexOf(" — ");
+    const mark = step.indexOf(" — ");
     if (mark > 0) step = step.slice(0, mark).trim();
     if (!step || seen.has(step.toLowerCase())) continue;
     seen.add(step.toLowerCase());
     steps.push(classifyPracticeStep(step));
   }
   return { steps: dedupePracticeSteps(steps) };
+}
+
+function clipAtSentence(text: string, max: number): string {
+  const clean = text.replace(/[;]+\s*$/g, "").trim();
+  if (clean.length <= max) return clean;
+  const slice = clean.slice(0, max);
+  const end = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("; "));
+  if (end < 20) return "";
+  return slice.slice(0, end + 1).replace(/[;\s]+$/g, "").trim();
+}
+
+/** Step text stays whole. A fit note is dropped rather than cut mid-sentence. */
+export function practiceConfirmRuleText(step: string, fit: string): string {
+  const cleanStep = cleanFlowLine(step);
+  const cleanFit = cleanFlowLine(fit).replace(/[;]+\s*$/g, "").trim();
+  if (!cleanStep) return "";
+  const head = `Practice: ${cleanStep}`;
+  if (head.length > 500) {
+    const cut = clipAtSentence(head, 500);
+    return cut || head.slice(0, head.lastIndexOf(" ", 500)).trim();
+  }
+  if (!cleanFit) return head;
+  const full = `${head} — ${cleanFit}`;
+  if (full.length <= 500) return full;
+  const room = 500 - head.length - 3;
+  const clipped = room >= 24 ? clipAtSentence(cleanFit, room) : "";
+  return clipped ? `${head} — ${clipped}` : head;
 }
 
 /** Firm-wide private rules. client_id stays null so the rule is not pinned to one example client. */
@@ -406,7 +438,7 @@ export function clientSetupBrainRows(input: {
 }): MilonBrainRuleRow[] {
   const rows: MilonBrainRuleRow[] = [];
   for (const step of input.steps) {
-    const rule_text = clipMilonBrainRuleText(`Practice: ${step.step} — ${step.fit_note}`);
+    const rule_text = practiceConfirmRuleText(step.step, step.fit_note);
     if (!rule_text) continue;
     rows.push({
       firm_id: input.firmId,
