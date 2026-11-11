@@ -86,6 +86,19 @@ export function PracticeSetupInterview({
     country === "US" || country === "ZA" ? country : null;
   const visibleMap = map ? withMarketCoverage(map, marketCountry) : null;
   const preview = visibleMap ? buildPracticeImplementationPlan(visibleMap) : null;
+  const filledMap = visibleMap
+    ? {
+        ...visibleMap,
+        checklist: visibleMap.checklist.length
+          ? visibleMap.checklist
+          : (preview?.steps.filter((step) => step.bucket === "client_setup").map((step) => step.step) ??
+            []),
+        gaps: visibleMap.gaps.length
+          ? visibleMap.gaps
+          : (preview?.steps.filter((step) => step.bucket === "product_gap").map((step) => step.step) ??
+            []),
+      }
+    : null;
 
   const mapFrom = async (history: FirmInterviewMessage[], turns: number) => {
     if (!firmId) return;
@@ -198,7 +211,7 @@ export function PracticeSetupInterview({
         data-practice-setup-panel="waiting"
         aria-label={IMPLEMENTATION_MANAGER_LABEL}
       >
-        <PracticeSetupHero status="Not started" />
+        <PracticeSetupHero status="Not started" metric="Takes ~10 min" />
         <p className="setup-partner__lede">Loading your practice.</p>
       </section>
     );
@@ -240,7 +253,10 @@ export function PracticeSetupInterview({
       data-practice-setup-phase={booting ? "loading" : phase}
         aria-label={IMPLEMENTATION_MANAGER_LABEL}
       >
-        <PracticeSetupHero status={heroStatus(phase)} />
+        <PracticeSetupHero
+          status={heroStatus(phase, booting)}
+          metric={heroMetric(phase, preview?.steps.length ?? plan?.steps.length ?? 0)}
+        />
 
       {booting ? <p className="setup-partner__lede">Loading your practice.</p> : null}
 
@@ -290,7 +306,7 @@ export function PracticeSetupInterview({
 
       {!booting && phase === "map" && visibleMap ? (
         <div className="setup-partner__map">
-          <pre className="sr-only">{setupPartnerMapPromptBlock(visibleMap)}</pre>
+          <pre className="sr-only">{setupPartnerMapPromptBlock(filledMap ?? visibleMap)}</pre>
           <h3>Today&apos;s flow</h3>
           <ul>
             {visibleMap.todaysFlow.map((line) => (
@@ -305,6 +321,26 @@ export function PracticeSetupInterview({
               </li>
             ))}
           </ul>
+          {filledMap && filledMap.gaps.length > 0 ? (
+            <>
+              <h3>Gaps</h3>
+              <ul>
+                {filledMap.gaps.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {filledMap && filledMap.checklist.length > 0 ? (
+            <>
+              <h3>Setup checklist</h3>
+              <ul>
+                {filledMap.checklist.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           {preview && preview.steps.length > 0 ? (
             <>
               <h3>Buckets</h3>
@@ -364,13 +400,21 @@ function setupToast(message: string, role: "status" | "alert") {
   return createElement("span", { role }, message);
 }
 
-function heroStatus(phase: Phase): string {
+function heroStatus(phase: Phase, booting: boolean): string {
   if (phase === "done") return "Saved";
   if (phase === "map") return "Map ready";
-  return "Not started";
+  if (booting) return "Not started";
+  return "In progress";
 }
 
-function PracticeSetupHero({ status }: { status: string }) {
+function heroMetric(phase: Phase, steps: number): string {
+  if ((phase === "map" || phase === "done") && steps > 0) {
+    return `${steps} step${steps === 1 ? "" : "s"} mapped`;
+  }
+  return "Takes ~10 min";
+}
+
+function PracticeSetupHero({ status, metric }: { status: string; metric: string }) {
   return (
     <div className="owner-door" data-im-card="solo">
       <div className="owner-pane" data-owner-home="true">
@@ -386,7 +430,7 @@ function PracticeSetupHero({ status }: { status: string }) {
                 <span className="owner-voice">
                   Map how the firm closes, reviews, signs off, and reports.
                 </span>
-                <span className="owner-money">{status}</span>
+                <span className="owner-money">{metric}</span>
               </span>
             }
           />

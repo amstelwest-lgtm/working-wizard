@@ -426,6 +426,20 @@ export function stockSittingApplies(
 const UNSET_GOAL = /^(?:not set|n\/a|none|unset|tbd|goal not set|—|-)?$/i;
 const DEBT_GUIDANCE = /target a d\/e below 1/i;
 
+/** One row per displayed title. "Target a D/E below 1×" is the debt-to-equity action. */
+export function dedupeActionTitles(titles: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of titles) {
+    const title = actionDisplayTitle(raw);
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) continue;
+    seen.add(key);
+    out.push(title);
+  }
+  return out;
+}
+
 /** Stored guidance and lowercase titles render as an action title. */
 export function actionDisplayTitle(title: string | null | undefined): string {
   const text = (title ?? "").trim();
@@ -580,9 +594,11 @@ export function rankStrategicMoves(input: {
         input.weakestPillar != null && strategicMovePillar(entry.key) === input.weakestPillar ? 4 : 1;
       const score =
         urgency * entry.impact * profilePriorityWeight(input.profile, entry.ratioName) * inWeakest;
-      const actions = debtorsAlreadyHealthy
-        ? entry.actions.filter((action) => !RECEIVABLES_STEP.test(action))
-        : [...entry.actions];
+      const actions = dedupeActionTitles(
+        debtorsAlreadyHealthy
+          ? entry.actions.filter((action) => !RECEIVABLES_STEP.test(action))
+          : entry.actions,
+      );
       return {
         ...entry,
         title: rankedMoveTitle(entry),

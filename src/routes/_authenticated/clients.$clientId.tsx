@@ -216,6 +216,7 @@ import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/com
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { ConnectBooksHomeCard } from "@/components/connect-books-card";
+import { useSageComingSoon } from "@/lib/use-sage-coming-soon";
 import { SetupPartnerPanel } from "@/components/setup-partner-panel";
 import { useHomeLedgerConnect } from "@/components/use-home-ledger-connect";
 import { XERO_BANK_RECONNECT, connectBooksHomeVisible } from "@/lib/connect-books-copy";
@@ -771,6 +772,7 @@ function ClientView() {
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showXeroDialog, setShowXeroDialog] = useState(false);
   const [showSageDialog, setShowSageDialog] = useState(false);
+  const sageSoon = useSageComingSoon();
   const ledgerConnect = useHomeLedgerConnect(clientId);
 
   // QBO / Xero OAuth return — callbacks land here for accountants.
@@ -4323,6 +4325,7 @@ function ClientView() {
                               bare
                               busy={ledgerConnect.busy}
                               showSage={!isUsCopy(gateMarket)}
+                              sageSoon={sageSoon}
                               onXero={ledgerConnect.startXero}
                               onQuickBooks={ledgerConnect.startQuickBooks}
                               onSage={() => setShowSageDialog(true)}
@@ -6255,9 +6258,10 @@ function ClientView() {
                     />
                     {!isUsCopy(gateMarket) ? (
                       <FirstDataChoice
-                        label="Connect Sage"
-                        hint="Sage Business Cloud Accounting (South Africa)"
+                        label={sageSoon ? "Sage · Coming soon" : "Connect Sage"}
+                        hint={sageSoon ? "Sage is not available yet" : "Sage Business Cloud Accounting (South Africa)"}
                         onClick={() => {
+                          if (sageSoon) return;
                           setFirstDataOpen(false);
                           setShowSageDialog(true);
                         }}

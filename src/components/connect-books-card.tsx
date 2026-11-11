@@ -11,6 +11,8 @@ type Props = {
   onSage: () => void;
   /** US clients do not get the Sage flow the portal already hides. */
   showSage?: boolean;
+  /** Credentials are unset. The button stays in the list and does not open an error. */
+  sageSoon?: boolean;
   busy?: "xero" | "qbo" | null;
   /** Inside a Home pane that already draws the card. */
   bare?: boolean;
@@ -26,6 +28,7 @@ export function ConnectBooksHomeCard({
   onQuickBooks,
   onSage,
   showSage = true,
+  sageSoon = false,
   busy = null,
   bare = false,
 }: Props) {
@@ -65,11 +68,12 @@ export function ConnectBooksHomeCard({
             type="button"
             className="connect-books-card__primary"
             data-connect-books="sage"
-            aria-label="Connect Sage"
-            disabled={busy != null}
-            onClick={onSage}
+            aria-label={sageSoon ? "Sage, coming soon" : "Connect Sage"}
+            disabled={busy != null || sageSoon}
+            data-sage-provider={sageSoon ? "soon" : "ready"}
+            onClick={sageSoon ? undefined : onSage}
           >
-            Sage
+            {sageSoon ? "Coming soon" : "Sage"}
           </button>
         ) : null}
       </div>

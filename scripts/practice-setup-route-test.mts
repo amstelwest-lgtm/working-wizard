@@ -352,6 +352,19 @@ function testQuestionFallbacksNeverShowJson() {
   const prose = parseFirmInterviewTurn("Who prepares the management pack?");
   assert(prose.question === "Who prepares the management pack?", `prose, got ${prose.question}`);
   assert(!prose.question.includes("{"), "prose shows no brace");
+  const many = parseFirmInterviewTurn(
+    "Who closes the month, who reviews it, and what do they sign?",
+  );
+  assert(many.question === "Who closes the month?", `one ask, got ${many.question}`);
+  assert(parseFirmInterviewTurn("Please upload a sample pack.").question === "", "no upload request");
+  assert(parseFirmInterviewTurn("Do you close on the sixth?").question === "", "no closed question");
+  const pack = classifyPracticeStep("We prepare a quarterly management pack");
+  const books = classifyPracticeStep("Bookkeeping review before the pack goes out");
+  const cash = classifyPracticeStep("Cash and profit reporting goes to the partner");
+  assert(pack.bucket === "covered" && books.bucket === "covered" && cash.bucket === "covered", "known agent work is covered");
+  const noted = classifyPracticeStep("Not stated. Still unclear after it was asked twice. We run the month-end close.");
+  assert(!/not stated|still unclear|asked twice/i.test(noted.step), "internal notes stay off the plan");
+  assert(noted.bucket === "covered", "the month-end step stays covered");
 
   const unfinished = interviewTurnFromModel({
     text: '{"question":"Walk me through how the jun',

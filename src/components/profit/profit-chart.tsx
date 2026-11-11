@@ -18,7 +18,8 @@ import { formatMoneyChartTick, formatMoneyCompact } from "@/lib/market/format";
 import { ownerMinus } from "@/lib/owner-money";
 import {
   presentProfitSeries,
-  profitSeriesPoints,
+  profitChartPoints,
+  profitChartValue,
   type ProfitInterval,
   type ProfitSeriesPoint,
   type ProfitSnapshot,
@@ -32,9 +33,9 @@ function defaultStart(points: readonly ProfitSeriesPoint[]): string {
   return `${latest.sort.slice(0, 4)}-01-01`;
 }
 
-/** Net profit when the statement has it. Otherwise operating profit. */
+/** Net profit, then operating profit, then gross profit. */
 function chartProfit(point: ProfitSeriesPoint): number | null {
-  return point.netProfit ?? point.operatingProfit;
+  return profitChartValue(point);
 }
 
 export function ProfitChart({
@@ -56,7 +57,7 @@ export function ProfitChart({
   const [start, setStart] = useState("");
   const allPoints = useMemo(
     () =>
-      profitSeriesPoints({
+      profitChartPoints({
         snapshots,
         current: financials,
         currentPeriodEnd,

@@ -2373,6 +2373,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             Add your first client
           </button>
         ) : null}
+        <Link to="/practice/setup" className="btn gold" data-practice-setup-link="">
+          Set up your practice
+        </Link>
         {/* ===== STATS STRIP ===== */}
         <div className="stats-strip" id="wizard-practice-board">
           {bookLoading ? (

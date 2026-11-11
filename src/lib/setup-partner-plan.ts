@@ -124,7 +124,7 @@ const COVERED: readonly {
     covers: "Advisor — deadline reminders",
   },
   {
-    re: /\b(client reports?|board reports?|management packs?|management reports?)\b/i,
+    re: /\b(client reports?|board reports?|management packs?|management reports?|bookkeeping|cash reporting|profit reporting|cash and profit)\b/i,
     capability: "analyst",
     stepType: "client_reporting",
     covers: "Analyst — client reporting",
@@ -181,9 +181,31 @@ function stepOf(
   };
 }
 
+const COVERED_WORK_RE =
+  /\b(month-?end|management packs?|bookkeeping|cash reporting|profit reporting|cash and profit)\b/i;
+
+/** Drop interviewer notes before a step is saved or shown. */
+export function accountantFacingStep(step: string): string {
+  return step
+    .replace(/\b(?:Not stated|Still unclear|asked twice)\b[^.]*(?:\.|$)/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;])/g, "$1")
+    .trim();
+}
+
 /** Deterministic bucket for one practice workflow step. */
 export function classifyPracticeStep(step: string): PracticePlanStep {
-  const text = step.replace(/\s+/g, " ").trim();
+  const text = accountantFacingStep(step.replace(/\s+/g, " ").trim());
+  if (!text) {
+    return stepOf(step, {
+      stepType: "bespoke",
+      capability: "bespoke",
+      covers: "Not a Milōn capability",
+      bucket: "bespoke",
+      fitNote: FIT_BESPOKE,
+      effort: "L",
+    });
+  }
   if (BESPOKE_RE.test(text)) {
     return stepOf(text, {
       stepType: "bespoke",
@@ -201,6 +223,27 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
       covers: "Practice setup — where the firm keeps deadline tracking",
       bucket: "client_setup",
       fitNote: FIT_SETUP,
+      effort: "S",
+    });
+  }
+  if (COVERED_WORK_RE.test(text)) {
+    for (const row of COVERED) {
+      if (!row.re.test(text)) continue;
+      return stepOf(text, {
+        stepType: row.stepType,
+        capability: row.capability,
+        covers: row.covers,
+        bucket: "covered",
+        fitNote: `Already in Milōn: ${row.covers}.`,
+        effort: "S",
+      });
+    }
+    return stepOf(text, {
+      stepType: "reporting",
+      capability: "analyst",
+      covers: "Analyst — cash and profit reporting",
+      bucket: "covered",
+      fitNote: "Already in Milōn: Analyst — cash and profit reporting.",
       effort: "S",
     });
   }
@@ -316,6 +359,7 @@ export function buildPracticeImplementationPlan(
   for (const step of raw) {
     const others = raw.filter((line) => line !== step).join("\n");
     if (redundantSetupLine(step, others)) continue;
+    if (!accountantFacingStep(step)) continue;
     steps.push(classifyPracticeStep(step));
   }
   return { steps: dedupePracticeSteps(steps) };

@@ -426,7 +426,24 @@ export function handoffFinding(input: {
   for (const [key, value] of Object.entries(input.figures ?? {})) {
     if (typeof value === "number" && Number.isFinite(value)) figures[key] = value;
   }
-  if (Object.keys(figures).length === 0) return null;
+  const summary = input.summary.replace(/\s+/g, " ").trim();
+  if (!summary || handoffClaimsDraftsRecorded(summary)) return null;
+  if (Object.keys(figures).length === 0) {
+    if (summary.length < 12 || !/[.?!]/.test(summary)) return null;
+    return {
+      title: summary.slice(0, 200),
+      detail: summary.slice(0, 2000),
+      severity: "info",
+      evidence: {
+        figures: {},
+        period_label: input.periodLabel,
+        snapshot_id: input.snapshotId,
+        metrics: [],
+        status: "attention",
+        uncited: true,
+      },
+    };
+  }
   const market = input.market ?? moneyMarketFromClient(null);
   const polished = polishAgentCopy({
     text: input.summary,

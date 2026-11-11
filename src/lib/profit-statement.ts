@@ -461,6 +461,34 @@ function pointFrom(
  * adds exactly one month becomes that month (later minus earlier). Any
  * wider span stays one point.
  */
+/** Net, then operating, then gross. Revenue alone is not profit. */
+export function profitChartValue(flows: {
+  netProfit: number | null;
+  operatingProfit: number | null;
+  grossProfit: number | null;
+}): number | null {
+  return flows.netProfit ?? flows.operatingProfit ?? flows.grossProfit;
+}
+
+/**
+ * Dated statements when they carry a profit figure.
+ * A P&L on file with no period end still charts as one point.
+ */
+export function profitChartPoints(input: {
+  snapshots?: readonly ProfitSnapshot[] | null;
+  current?: Record<string, unknown> | null;
+  currentPeriodEnd?: string | null;
+  currentLabel?: string | null;
+}): ProfitSeriesPoint[] {
+  const dated = profitSeriesPoints(input);
+  if (dated.some((point) => profitChartValue(point) != null)) return dated;
+  const flows = profitFlows(input.current);
+  if (!flows || profitChartValue(flows) == null) return dated;
+  const sort = dated[dated.length - 1]?.sort ?? "0001-01-01";
+  const label = input.currentLabel?.trim() || "This period";
+  return [pointFrom("current", sort, label, "period", flows)];
+}
+
 export function profitSeriesPoints(input: {
   snapshots?: readonly ProfitSnapshot[] | null;
   current?: Record<string, unknown> | null;

@@ -364,6 +364,7 @@ import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-d
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { SageConnectCard } from "@/components/sage-connect";
+import { useSageComingSoon } from "@/lib/use-sage-coming-soon";
 import { QBO_CONNECT_SUBCOPY, XERO_BANK_RECONNECT } from "@/lib/connect-books-copy";
 import { Button } from "@/components/ui/button";
 import { HEALTH_RING_CAPTION, SphereHero } from "@/components/sphere-hero";
@@ -3502,6 +3503,7 @@ function Index() {
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showXeroDialog, setShowXeroDialog] = useState(false);
   const [showSageDialog, setShowSageDialog] = useState(false);
+  const sageSoon = useSageComingSoon();
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [showCashFromBanks, setShowCashFromBanks] = useState(false);
   const [bankCashDraft, setBankCashDraft] = useState<
@@ -7002,7 +7004,10 @@ function Index() {
                   <button
                     type="button"
                     id="owner-connect-sage"
+                    disabled={sageSoon}
+                    data-sage-provider={sageSoon ? "soon" : "ready"}
                     onClick={() => {
+                      if (sageSoon) return;
                       setShowFinData(false);
                       setShowSageDialog(true);
                     }}
@@ -7010,11 +7015,12 @@ function Index() {
                   >
                     <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                       <Plug2 className="h-4 w-4" />
-                      Connect Sage
+                      {sageSoon ? "Sage · Coming soon" : "Connect Sage"}
                     </span>
                     <span className="text-xs text-slate-600 dark:text-slate-400">
-                      Sage Business Cloud Accounting (South Africa). Email, password, and Company
-                      ID.
+                      {sageSoon
+                        ? "Sage is not available yet."
+                        : "Sage Business Cloud Accounting (South Africa). Email, password, and Company ID."}
                     </span>
                   </button>
                 ) : null}

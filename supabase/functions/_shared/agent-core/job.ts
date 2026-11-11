@@ -203,7 +203,11 @@ async function recordHandoffFinish(
           evidence: finding.evidence as FindingEvidence,
         })
       : null;
-    if (finding && cited?.ok) {
+    const uncited =
+      finding != null &&
+      (finding.evidence as { uncited?: boolean }).uncited === true &&
+      cited?.ok !== true;
+    if (finding && (cited?.ok || uncited)) {
       const { data: actionRow } = await db
         .from("action_items")
         .select("title")
@@ -224,7 +228,8 @@ async function recordHandoffFinish(
         (actionTitle && handoffDraftIsDuplicate(actionTitle, existingTitles)) ||
         (!actionTitle && existingTitles.some((title) => title.trim() === labelled.trim()));
       if (!duplicate) {
-        const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
+        const drafted = cited?.ok ? cited.evidence : (finding.evidence as FindingEvidence);
+        const metrics = evidenceMetrics(drafted.figures, drafted.period_label, market);
         const severity = severityWithFloor("info", metrics);
         const liveSnapshot = await loadHealthScoreSnapshot(db, input.clientId, input.market);
         const { error: findingError } = await db.from("agent_findings").insert({
@@ -236,7 +241,7 @@ async function recordHandoffFinish(
           title: labelled,
           detail: finding.detail,
           evidence: withDraftFlags({
-            ...cited.evidence,
+            ...(cited?.ok ? cited.evidence : (finding.evidence as FindingEvidence)),
             metrics,
             status: agentCopyStatus(severity),
             ...(liveSnapshot ? snapshotEvidenceFields(liveSnapshot) : {}),

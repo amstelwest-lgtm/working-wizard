@@ -52,7 +52,7 @@ export function PracticeSetupCard({
       lines={
         <span className="owner-lines" data-status-update="">
           <span className="owner-voice">{CAPTION}</span>
-          <span className="owner-money">Not started</span>
+          <span className="owner-money">Takes ~10 min</span>
         </span>
       }
     />

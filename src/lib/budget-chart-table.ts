@@ -240,22 +240,47 @@ export function budgetRangeTotals(views: readonly BudgetMonthView[]): BudgetRang
   return { revenue, expenses, net };
 }
 
-/** Tiles for Budget vs actual. Unscored comparisons stay blank, not plan zeros. */
+/** The chart plots expenses when every revenue figure is empty and expenses are not. */
+export function budgetChartAmount(view: BudgetMonthView, series: "revenue" | "expenses"): number {
+  if (series === "expenses") {
+    return view.budget.cogs + view.budget.overheads + view.budget.depreciation;
+  }
+  return view.budget.revenue;
+}
+
+export function budgetChartSeries(views: readonly BudgetMonthView[]): "revenue" | "expenses" {
+  let revenue = 0;
+  let expenses = 0;
+  for (const row of views) {
+    revenue += Math.abs(row.budget.revenue) + Math.abs(row.actual?.revenue ?? 0);
+    expenses += Math.abs(budgetChartAmount(row, "expenses"));
+  }
+  return revenue < 1 && expenses >= 1 ? "expenses" : "revenue";
+}
+
+/** Tiles for Budget vs actual. The visible plan is the same source as the table. */
 export function budgetStatementDisplayTotals(input: {
   period?: FiscalStatementSlice | null;
   periodKnown?: boolean;
   outsidePlan?: boolean;
   planTotals: BudgetRangeTotals;
 }): { revenue: number | null; expenses: number | null; operatingProfit: number | null } {
-  if (input.period) return budgetStatementTiles(input.period);
+  const planHas =
+    Math.abs(input.planTotals.revenue) >= 1 ||
+    Math.abs(input.planTotals.expenses) >= 1 ||
+    Math.abs(input.planTotals.net) >= 1;
   if (input.periodKnown === false || input.outsidePlan) {
     return { revenue: null, expenses: null, operatingProfit: null };
   }
-  return {
-    revenue: input.planTotals.revenue,
-    expenses: input.planTotals.expenses,
-    operatingProfit: input.planTotals.net,
-  };
+  if (planHas) {
+    return {
+      revenue: input.planTotals.revenue,
+      expenses: input.planTotals.expenses,
+      operatingProfit: input.planTotals.net,
+    };
+  }
+  if (input.period) return budgetStatementTiles(input.period);
+  return { revenue: null, expenses: null, operatingProfit: null };
 }
 
 /**

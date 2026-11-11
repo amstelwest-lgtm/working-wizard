@@ -15,7 +15,9 @@ import {
 } from "../src/lib/budget.bridges";
 import { marketForClient } from "../src/lib/market/scope";
 import {
+  budgetChartAmount,
   budgetChartDomain,
+  budgetChartSeries,
   budgetLensFromSearch,
   budgetMonthViews,
   budgetPeriodTotalCell,
@@ -381,5 +383,20 @@ const unscored = budgetStatementDisplayTotals({
   planTotals: { revenue: 0, expenses: 0, net: 0 },
 });
 assert(unscored.revenue == null && unscored.operatingProfit == null, "unscored tiles are blank");
+const expenseMonths = [
+  {
+    month: "2026-01",
+    budget: { revenue: 0, cogs: 10_000, overheads: 5_750, depreciation: 0 },
+    actual: null,
+    revenue: null,
+  },
+] as unknown as Parameters<typeof budgetChartSeries>[0];
+assert(budgetChartSeries(expenseMonths) === "expenses", "an expense budget is not charted as $0 revenue");
+assert(budgetChartAmount(expenseMonths[0]!, "expenses") === 15_750, "the month label uses the expense total");
+const sameSource = budgetStatementDisplayTotals({
+  period: { revenue: 549_000, operatingProfit: 189_000, label: "FY", months: [] } as never,
+  planTotals: { revenue: 0, expenses: 189_000, net: -189_000 },
+});
+assert(sameSource.expenses === 189_000, "header expenses match the table");
 
 console.log("budget chart table ok");

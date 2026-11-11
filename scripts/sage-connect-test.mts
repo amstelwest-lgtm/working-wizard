@@ -316,7 +316,8 @@ assert(read("src/components/connect-books-card.tsx").includes('data-connect-book
 assert(card.includes("Email"), "card asks for email");
 assert(card.includes("Password"), "card asks for password");
 assert(card.includes("Company ID"), "card asks for Company ID");
-assert(card.includes("SAGE_CONNECTION_UNAVAILABLE"), "an unconfigured Sage card uses the generic message");
+assert(card.includes("Coming soon"), "an unconfigured Sage card says coming soon");
+assert(!card.includes("Sage connection not available yet"), "an unconfigured Sage card does not show the error");
 assert(
   read("src/lib/sage.ts").includes('SAGE_CONNECTION_UNAVAILABLE = "Sage connection not available yet"'),
   "the generic Sage message does not name an environment variable",
@@ -343,7 +344,7 @@ assert(owner.includes('id="owner-connect-sage"'), "owner data sources show Conne
 assert(owner.includes('id="owner-header-sage"'), "owner header shows Sage next to Xero");
 assert(owner.includes("Connect Sage"), "owner first-data offers Sage");
 assert(studio.includes("<SageConnectCard"), "accountant studio mounts Sage connect");
-assert(studio.includes('label="Connect Sage"'), "accountant Other ways offers Sage");
+assert(studio.includes("Connect Sage"), "accountant Other ways offers Sage");
 assert(read("src/components/data-up-to-date.tsx").includes('id="accounting-connect"'), "Sage sits on the Books connect surface");
 assert(!studio.slice(studio.indexOf('id="pane-ratios"'), studio.indexOf('id="pane-profit"')).includes("<SageConnectCard"), "Health does not host Sage");
 assert(briefing.includes('id="client-connect-sage"'), "briefing shows Connect Sage");
