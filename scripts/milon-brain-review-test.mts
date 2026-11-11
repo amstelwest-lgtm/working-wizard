@@ -102,6 +102,7 @@ const edge = read("supabase/functions/milon-brain-review/index.ts");
 assert(edge.includes("runBrainReviewScan"), "on-demand review scan");
 assert(edge.includes("is_milon_ops"), "edge checks ops");
 assert(edge.includes("approver_id"), "approver logged on decide");
+assert(edge.includes('.neq("task_type", SETUP_PARTNER_INTERVIEW_TASK)'), "interview drafts are not mined into cross-firm lessons");
 
 assert(
   isBrainReviewRowDecidable({
