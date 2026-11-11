@@ -160,10 +160,25 @@ export function ProfitChart({
                 >
                   <LabelList
                     dataKey="profit"
-                    position="top"
-                    formatter={(value: number) => (value == null ? "" : tick(value))}
-                    fill={PROFIT_COLOR}
-                    fontSize={11}
+                    content={(props) => {
+                      const x = Number(props.x);
+                      const y = Number(props.y);
+                      const value = props.value;
+                      if (!Number.isFinite(x) || !Number.isFinite(y) || value == null || value === "") return null;
+                      const first = props.index === 0;
+                      return (
+                        <text
+                          x={first ? x + 10 : x}
+                          y={y - 8}
+                          textAnchor={first ? "start" : "middle"}
+                          fill={PROFIT_COLOR}
+                          fontSize={11}
+                          data-profit-point-label={first ? "clear-axis" : "top"}
+                        >
+                          {tick(Number(value))}
+                        </text>
+                      );
+                    }}
                   />
                 </Line>
               </LineChart>

@@ -97,6 +97,22 @@ export function questionHasMultipleAsks(value: string): boolean {
   return (value.match(/\?/g) ?? []).length > 1;
 }
 
+const SECOND_ASK = /\band\s+(?:who|what|when|where|why|how|which|whom)\b/i;
+const INTERROGATIVE = /^(?:who|what|when|where|why|how|which|whom)\b/i;
+
+/**
+ * The first reply should be asked again. More than one '?', a second ask
+ * joined with "and", or a line that does not start with an interrogative.
+ * The text itself is not cut.
+ */
+export function questionShouldRegenerate(value: string): boolean {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (questionHasMultipleAsks(text)) return true;
+  if (SECOND_ASK.test(text)) return true;
+  return !INTERROGATIVE.test(text);
+}
+
 /**
  * The question as the model wrote it. Whitespace is collapsed. Nothing else
  * is cut: a comma stays, and a second sentence stays.
@@ -158,7 +174,7 @@ export const ASK_QUESTION_TOOL = {
       question: {
         type: "string",
         description:
-          "Exactly one open question. Exactly one question mark. Do not add a second ask after a comma. Empty when done is true.",
+          "Exactly one open question. Start with who, what, when, where, why, or how. Exactly one question mark. Do not join a second ask with and. Do not use an imperative. Empty when done is true.",
       },
       done: { type: "boolean" },
     },
@@ -231,7 +247,7 @@ export function interviewTurnFromModel(
   const turn = hideRawQuestion(
     fromTool && (fromTool.question || fromTool.done) ? fromTool : parseFirmInterviewTurn(input.text ?? ""),
   );
-  const multiple = questionHasMultipleAsks(turn.question);
+  const multiple = questionShouldRegenerate(turn.question);
   if (multiple && !opts?.asIs) return { question: "", done: turn.done, multiple: true };
   return { ...turn, multiple };
 }

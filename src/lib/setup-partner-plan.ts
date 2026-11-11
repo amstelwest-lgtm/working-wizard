@@ -369,9 +369,8 @@ export function buildPracticeImplementationPlan(
 
 /**
  * Rebuild saved steps from active firm-level setup_partner_confirm rules.
- * Those rows are the client_setup bucket only. The step sentence is the text
- * before the fit note, and the bucket is the same classifier that wrote it.
- * Covered steps are not stored. Product gaps and bespoke logs use other sources.
+ * Every confirmed bucket is stored. The step sentence is the text before the
+ * fit note, and the bucket is the same classifier that wrote it.
  */
 export function practicePlanFromConfirmRules(
   rows: readonly {
@@ -407,7 +406,6 @@ export function clientSetupBrainRows(input: {
 }): MilonBrainRuleRow[] {
   const rows: MilonBrainRuleRow[] = [];
   for (const step of input.steps) {
-    if (step.bucket !== "client_setup") continue;
     const rule_text = clipMilonBrainRuleText(`Practice: ${step.step} — ${step.fit_note}`);
     if (!rule_text) continue;
     rows.push({

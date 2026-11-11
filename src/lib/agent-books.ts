@@ -36,6 +36,8 @@ export function savedCashflowFigures(raw: unknown): SavedBookFigures {
   const figures: Record<string, number> = { horizon_weeks: CASH_FORECAST_WEEKS };
   const opening = Number.parseFloat(typeof record.openingBalance === "string" ? record.openingBalance : "");
   if (Number.isFinite(opening)) figures.opening_balance = opening;
+  const capex = Number.parseFloat(typeof record.capexAmount === "string" ? record.capexAmount : "");
+  if (Number.isFinite(capex)) figures.capex_amount = capex;
   let lowest = closings[0] ?? 0;
   let lowestWeek = 1;
   closings.forEach((value, index) => {

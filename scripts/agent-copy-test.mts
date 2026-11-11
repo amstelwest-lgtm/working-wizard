@@ -137,6 +137,7 @@ assert(
 );
 
 assert(citedNumbers("R 13 846").map((n) => n.value).join(",") === "13846", "R 13 846 is one amount");
+assert(citedNumbers("closes at -R 41,793").map((n) => n.value).join(",") === "-41793", "a minus before R keeps the sign");
 assert(citedNumbers("$13,846").map((n) => n.value).join(",") === "13846", "$13,846 is one amount");
 assert(citedNumbers("Gross margin is 60%").map((n) => n.value).join(",") === "60", "60% is the percent form of 0.6");
 
@@ -147,6 +148,25 @@ const cashCited = attachCitedEvidence({
   evidence: { snapshot_id: null, period_label: "saved cashflow", figures: { cash: 13846 } },
 });
 assert(cashCited.ok === true, "R 13 846 matches stored 13846 and the floor is not a missing figure");
+const cashflowCited = attachCitedEvidence({
+  title: "The saved cashflow bottoms at -R 97,050 in week 11.",
+  detail: "Week 1 closes at -R 41,793. The R 50 000 CapEx takes the closing to -R 95,895. Opening balance is R 44,480.",
+  pool: [
+    {
+      snapshotId: null,
+      periodLabel: "saved cashflow",
+      figures: {
+        opening_balance: 44480,
+        week_1_closing: -41793,
+        week_6_closing: -95895,
+        lowest_closing: -97050,
+        capex_amount: 50000,
+      },
+    },
+  ],
+  evidence: { snapshot_id: null, period_label: "saved cashflow", figures: {} },
+});
+assert(cashflowCited.ok === true, "signed cashflow amounts and capex match the saved cashflow");
 
 const percentCited = attachCitedEvidence({
   title: "Gross margin is 60%.",

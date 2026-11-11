@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ActionPlanAutomation } from "../src/components/action-plan-automation";
 import {
   addDays,
+  duplicateActionIds,
   planAutomation,
   suggestOwner,
   type AutomationItem,
@@ -143,6 +144,13 @@ const debt = planAutomation(
   TODAY,
 );
 assert(debt.duplicates.length === 1 && debt.duplicates[0]?.dropIds[0] === "row-4", "display titles that match are one action");
+assert(
+  duplicateActionIds([
+    { id: "row-2", title: "Bring debt-to-equity under the target" },
+    { id: "row-4", title: "Target a D/E below 1× for conservative businesses, below 2× for growth" },
+  ]).join(",") === "row-4",
+  "the actions table flags the second debt-to-equity row",
+);
 const debtMarkup = renderToStaticMarkup(
   createElement(ActionPlanAutomation, {
     rows: debt.rows,

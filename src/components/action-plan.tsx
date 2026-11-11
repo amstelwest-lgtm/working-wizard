@@ -68,7 +68,7 @@ import {
 } from "@/lib/action-plan-counts";
 import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from "@/lib/plan-confidence-display";
 import { practiceRoleLabel } from "@/lib/practice-access";
-import { planAutomation, type ActionAutomationRow } from "@/lib/action-plan-automation";
+import { duplicateActionIds, planAutomation, type ActionAutomationRow } from "@/lib/action-plan-automation";
 import {
   actionDisplayTitle,
   actionPlanPillarTiles,
@@ -2012,6 +2012,7 @@ export default function ActionPlanPanel({
             {filtered.map((it) => (
               <ItemRow
                 key={it.id}
+                duplicateTitle={duplicateActionIds(filtered).includes(it.id)}
                 item={it}
                 focused={it.id === focusedItemId}
                 employees={employees}
@@ -2619,6 +2620,7 @@ function ItemRow({
   noteStillDue = false,
   phasePending = false,
   phaseLabel = null,
+  duplicateTitle = false,
   draftId = null,
   onOpenDraft,
   focused,
@@ -2662,6 +2664,7 @@ function ItemRow({
   phasePending?: boolean;
   /** Working, Draft ready, Approved, Sent, or Couldn't draft. Replaces Not started / Not sent. */
   phaseLabel?: string | null;
+  duplicateTitle?: boolean;
   draftId?: string | null;
   onOpenDraft?: (draftId: string) => void;
 }) {
@@ -2739,6 +2742,11 @@ function ItemRow({
             }
           >
             {actionDisplayTitle(stripMilonProjection(item.title))}
+            {duplicateTitle ? (
+              <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400" data-action-duplicate="">
+                Duplicate
+              </span>
+            ) : null}
           </button>
         )}
         <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">

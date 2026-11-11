@@ -638,7 +638,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       "Conversation so far:",
       lines.length ? lines.join("\n") : "(none yet)",
       "",
-      "Call the ask_question tool. One sentence. One question mark. Set done true and question to an empty string when you can map the workflow. Do not write JSON in the message.",
+      "Call the ask_question tool. Start with who, what, when, where, why, or how. One sentence. One question mark. Do not join a second ask with and. Set done true and question to an empty string when you can map the workflow. Do not write JSON in the message.",
     ].join("\n");
     const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
     let attempts = 0;

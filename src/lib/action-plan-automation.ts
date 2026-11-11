@@ -74,6 +74,19 @@ export function actionTitleKey(title: string): string {
   return actionDisplayTitle(title).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+/** Later rows whose display title already appeared. The first row stays the one shown plain. */
+export function duplicateActionIds(rows: readonly { id: string; title: string }[]): string[] {
+  const seen = new Set<string>();
+  const duplicates: string[] = [];
+  for (const row of rows) {
+    const key = actionTitleKey(row.title);
+    if (!key) continue;
+    if (seen.has(key)) duplicates.push(row.id);
+    else seen.add(key);
+  }
+  return duplicates;
+}
+
 export function addDays(iso: string, days: number): string | null {
   const time = Date.parse(iso);
   if (!Number.isFinite(time)) return null;
