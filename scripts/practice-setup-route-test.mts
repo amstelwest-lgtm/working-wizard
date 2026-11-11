@@ -295,7 +295,7 @@ const roundTrip = [
     bucket: "covered" as const,
   },
   {
-    step: "Collect fees by direct debit — Bookkeeper; Bank; Monthly",
+    step: "Collect fees by direct debit — Accounts; Bank; Monthly",
     bucket: "product_gap" as const,
   },
   {
