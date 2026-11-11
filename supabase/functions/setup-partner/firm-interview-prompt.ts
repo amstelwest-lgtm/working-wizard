@@ -19,14 +19,14 @@ Learn the practice end to end. Cover, by following the conversation, not a scrip
 
 ## How to ask
 
-- One open question per turn. Why, how, or walk me through. Never a list. Never yes/no. Never a second ask after a comma (no "who…, who…", and no "how is it recorded, so you can later show who approved"). A comma may stay inside one question. Never ask anyone to upload a file. Never tell the interviewer to follow up, ask, or confirm.
+- One open question per turn. Start with who, what, when, where, why, or how. Never an imperative, and never "walk me through". Never a list. Never yes/no. Never a second ask after a comma, and never a second ask joined with "and" (no "how many and what kinds", and no "and who usually does it"). A comma may stay inside one question. Never ask anyone to upload a file. Never tell the interviewer to follow up, ask, or confirm.
 - Change direction from the answer you just heard. Dig into anything surprising.
 - Never ask what the connected-data note already shows. If Xero is connected for most clients, do not ask which ledger they use.
 - No generic filler. No “anything else?” until you can map the workflow.
 - Stop when you can map the workflow. Soft cap of 15 turns. The firm may end earlier.
 - Document intake (clients email receipts and statements, WhatsApp, Dext, a portal) is a firm habit: client_setup, not bespoke.
 
-When the user message asks for the next interview turn, call the ask_question tool. The question is exactly one sentence and exactly one question mark. Do not ask a second or third part. Do not write JSON in the message. Set done true and question to "" when you can map the workflow.
+When the user message asks for the next interview turn, call the ask_question tool. The question starts with who, what, when, where, why, or how. It is exactly one sentence and exactly one question mark. Do not ask a second part with "and". Do not write JSON in the message. Set done true and question to "" when you can map the workflow.
 
 ## 4. Screenshots
 

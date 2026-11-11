@@ -366,7 +366,10 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
 @media (min-width: 761px) and (max-width: 1279px) {
   .owner-door
     .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
-    .owner-agents:has([data-agent-card="tax_specialist"]) {
+    .owner-agents:has([data-agent-card="tax_specialist"]),
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent="setup_partner"]) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -374,7 +377,10 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
 @media (min-width: 1280px) {
   .owner-door
     .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
-    .owner-agents:has([data-agent-card="tax_specialist"]) {
+    .owner-agents:has([data-agent-card="tax_specialist"]),
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent="setup_partner"]) {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

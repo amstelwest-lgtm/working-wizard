@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
 import { HomeBotCard } from "@/components/owner-door/home-bot-card";
+import { useOptionalAccountantProfile } from "@/contexts/accountant-profile";
+import { fetchFirmInterviewDraft, fetchFirmSetupPlan } from "@/lib/setup-partner-client";
 
 const LABEL = "Implementation Manager";
 const CAPTION = "Map how the firm closes, reviews, signs off, and reports.";
@@ -28,6 +31,18 @@ export function ImplementationManagerChip() {
   );
 }
 
+export type PracticeSetupCardStatus = "Not started" | "In progress" | "Done";
+
+/** Draft wins over a saved plan. A plan with no draft is Done. */
+export function practiceSetupCardStatus(input: {
+  draft: boolean;
+  plan: boolean;
+}): PracticeSetupCardStatus {
+  if (input.draft) return "In progress";
+  if (input.plan) return "Done";
+  return "Not started";
+}
+
 /**
  * Firm Home entry. The same bot card as Financial Manager, Analyst, and Advisor.
  * Opens the practice interview, not a client.
@@ -40,6 +55,33 @@ export function PracticeSetupCard({
   /** Render the tile only, for the home agent grid. */
   embedded?: boolean;
 }) {
+  const profile = useOptionalAccountantProfile();
+  const practiceFirmId = profile?.firmId ?? null;
+  const [status, setStatus] = useState<PracticeSetupCardStatus | null>(null);
+  useEffect(() => {
+    if (!practiceFirmId) {
+      setStatus("Not started");
+      return;
+    }
+    let cancel = false;
+    void Promise.all([fetchFirmSetupPlan(practiceFirmId), fetchFirmInterviewDraft(practiceFirmId)])
+      .then(([plan, draft]) => {
+        if (cancel) return;
+        setStatus(
+          practiceSetupCardStatus({
+            draft: Boolean(draft?.question),
+            plan: Boolean(plan && plan.steps.length > 0),
+          }),
+        );
+      })
+      .catch(() => {
+        if (!cancel) setStatus("Not started");
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [practiceFirmId]);
+  const chip = status ?? "Not started";
   const card = (
     <HomeBotCard
       agent="setup_partner"
@@ -48,12 +90,11 @@ export function PracticeSetupCard({
       to="/practice/setup"
       askLabel="Set up practice"
       chip={<ImplementationManagerChip />}
-      status={<span className="owner-status is-attention">Not started</span>}
+      status={<span className="owner-status is-attention">{chip}</span>}
       lines={
         <span className="owner-lines" data-status-update="">
-          <span className="owner-voice">
-            {CAPTION} <strong className="owner-money">Takes ~10 min</strong>
-          </span>
+          <span className="owner-voice">{CAPTION}</span>
+          <span className="owner-voice">Takes ~10 min</span>
         </span>
       }
     />

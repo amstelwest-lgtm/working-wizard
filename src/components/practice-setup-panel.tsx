@@ -10,7 +10,7 @@ import {
   firmInterviewTranscript,
   firmSetupPartnerSummary,
   firmInterviewUserError,
-  interviewTurnFromModel,
+  questionAsWritten,
   setupPartnerMapPromptBlock,
   withMarketCoverage,
   type FirmInterviewMessage,
@@ -146,7 +146,7 @@ export function PracticeSetupInterview({
         await mapFrom(history, next.modelTurns);
         return;
       }
-      const asked = interviewTurnFromModel({ text: next.question }).question;
+      const asked = questionAsWritten(next.question);
       if (!asked) {
         setTurnError("No question came back. Retry.");
         return;
@@ -169,16 +169,16 @@ export function PracticeSetupInterview({
     void Promise.all([loadSaved(firmId), loadDraft(firmId)])
       .then(([saved, draft]) => {
         if (cancel) return;
-        if (saved && saved.steps.length > 0) {
-          setPlan({ steps: dedupePracticeSteps(saved.steps) });
-          setPhase("done");
-          return;
-        }
         if (draft?.question) {
           setMessages(draft.messages);
           setQuestion(draft.question);
           setModelTurns(draft.modelTurns);
           setPhase("interview");
+          return;
+        }
+        if (saved && saved.steps.length > 0) {
+          setPlan({ steps: dedupePracticeSteps(saved.steps) });
+          setPhase("done");
           return;
         }
         return requestTurn([], 0);

@@ -14,6 +14,7 @@ import {
   firmInterviewShouldStop,
   firmInterviewUserError,
   interviewTurnFromModel,
+  questionShouldRegenerate,
   parseFirmInterviewTurn,
   parseWorkflowMapJson,
   SETUP_PARTNER_SOURCE_EVENT,
@@ -28,6 +29,7 @@ import {
   SETUP_PARTNER_INTERVIEW_EVENT,
   SETUP_PARTNER_INTERVIEW_TASK,
 } from "../src/lib/firm-interview-draft.ts";
+import { practiceSetupCardStatus } from "../src/components/practice-setup-card.tsx";
 import {
   buildPracticeImplementationPlan,
   classifyPracticeStep,
@@ -46,13 +48,29 @@ function read(path: string): string {
 
 const card = read("src/components/practice-setup-card.tsx");
 assert(card.includes('to="/practice/setup"'), "card opens the firm setup route");
-assert(!card.includes("firmId"), "the home card does not take a firm id");
+assert(!card.includes("firmId?:") && !card.includes("firmId:"), "the home card does not take a firm id");
 assert(!card.includes("/clients/"), "card does not deep-link a client");
 assert(!card.includes("view=books"), "card does not open client books");
 assert(card.includes("owner-status") && card.includes("Not started"), "home card has a status chip");
 assert(card.includes("ImplementationManagerChip"), "home card has the icon badge");
-assert(card.includes("owner-money"), "home card has a metric line");
+assert(card.includes("Takes ~10 min"), "home card has a metric line");
+assert(!card.includes("owner-money"), "the metric uses the same voice as the other cards");
+assert(
+  read("src/components/owner-door/owner-door.css").includes(
+    '.owner-agents:has([data-agent="setup_partner"])',
+  ),
+  "four home cards share one row on a wide desktop",
+);
 assert(card.includes("Set up practice"), "home card CTA matches the agent ask");
+assert(
+  practiceSetupCardStatus({ draft: true, plan: true }) === "In progress",
+  "a draft wins over a saved plan on the chip",
+);
+assert(practiceSetupCardStatus({ draft: false, plan: true }) === "Done", "a plan with no draft is Done");
+assert(
+  practiceSetupCardStatus({ draft: false, plan: false }) === "Not started",
+  "neither a draft nor a plan is Not started",
+);
 assert(card.includes("embedded"), "home card can sit in the agent grid");
 
 const route = read("src/routes/_authenticated/practice_.setup.tsx");
@@ -231,22 +249,17 @@ const firmId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const savedRows = clientSetupBrainRows({
   firmId,
   approverId: "11111111-1111-1111-1111-111111111111",
-  steps: [classifyPracticeStep("Who signs the pack")],
+  steps: [classifyPracticeStep("Who signs the pack"), classifyPracticeStep("Month-end close pack")],
 });
-assert(
-  savedRows.length === 1 && savedRows[0]?.client_id === null,
-  "confirm stores a firm-level rule",
-);
+assert(savedRows.length === 2 && savedRows.every((row) => row.client_id === null), "confirm stores every bucket");
 const restored = practicePlanFromConfirmRules(savedRows);
-assert(restored.steps[0]?.step === "Who signs the pack", "the saved step text round-trips");
-assert(restored.steps[0]?.bucket === "client_setup", "the saved step's bucket round-trips");
 assert(
-  clientSetupBrainRows({
-    firmId,
-    approverId: "11111111-1111-1111-1111-111111111111",
-    steps: [classifyPracticeStep("Month-end close pack")],
-  }).length === 0,
-  "covered steps are not stored on the confirm rules",
+  restored.steps.some((step) => step.step === "Who signs the pack" && step.bucket === "client_setup"),
+  "the client setup step reloads",
+);
+assert(
+  restored.steps.some((step) => step.bucket === "covered"),
+  "the already covered step reloads",
 );
 
 testFirmInterviewAndDeadlineBucket();
@@ -433,6 +446,22 @@ function testQuestionFallbacksNeverShowJson() {
   assert(doubled.question === "" && doubled.multiple, "more than one ask regenerates");
   const kept = interviewTurnFromModel({ text: "Who closes the month? Who reviews it?" }, { asIs: true });
   assert(kept.question === "Who closes the month? Who reviews it?", "the second reply is used as-is");
+  const joined = interviewTurnFromModel({ text: "How many clients do you have and what kinds?" });
+  assert(joined.question === "" && joined.multiple, "and joining two asks regenerates");
+  const imperative = interviewTurnFromModel({ text: "Walk me through how a typical client month ends." });
+  assert(imperative.question === "" && imperative.multiple, "an imperative regenerates");
+  const imperativeKept = interviewTurnFromModel(
+    { text: "Walk me through how a typical client month ends." },
+    { asIs: true },
+  );
+  assert(
+    imperativeKept.question === "Walk me through how a typical client month ends.",
+    "the second imperative is used as-is",
+  );
+  assert(
+    !questionShouldRegenerate("When a partner signs off by WhatsApp voice note, what happens next?"),
+    "one interrogative question stays",
+  );
   const pack = classifyPracticeStep("We prepare a quarterly management pack");
   const books = classifyPracticeStep("Bookkeeping review before the pack goes out");
   const cash = classifyPracticeStep("Cash and profit reporting goes to the partner");
@@ -461,8 +490,13 @@ function testQuestionFallbacksNeverShowJson() {
   const unfinished = interviewTurnFromModel({
     text: '{"question":"Walk me through how the jun',
   });
-  assert(unfinished.question === "Walk me through how the jun", "an unfinished question is not cut");
-  assert(!unfinished.question.includes("{"), "the fragment shows no brace");
+  assert(unfinished.question === "" && unfinished.multiple, "an unfinished imperative regenerates");
+  const unfinishedKept = interviewTurnFromModel(
+    { text: '{"question":"Walk me through how the jun' },
+    { asIs: true },
+  );
+  assert(unfinishedKept.question === "Walk me through how the jun", "an unfinished question is not cut");
+  assert(!unfinishedKept.question.includes("{"), "the fragment shows no brace");
 
   const fromTool = interviewTurnFromModel({
     text: '{"question":"this raw JSON must not render"',
@@ -1025,4 +1059,31 @@ async function runPanel() {
     "the next turn sends the new answer",
   );
   await unmountResume();
+
+  let savedPlanAsks = 0;
+  const unmountOverPlan = await mount({
+    loadSaved: async () => ({ steps: [savedStep] }),
+    loadDraft: async () => resumeDraft,
+    buildMap: async () => buildGate,
+    confirmMap: async () => confirmGate,
+    askTurn: async () => {
+      savedPlanAsks += 1;
+      return { question: "Who reviews the pack?", done: false, modelTurns: 3 };
+    },
+  });
+  await waitForPhase("interview");
+  assert(savedPlanAsks === 0, "a draft over a saved plan does not ask again");
+  assert(
+    document.querySelector(".setup-partner__question")?.textContent === resumeQuestion,
+    "a draft wins over the saved plan",
+  );
+  assert(
+    !document.body.textContent?.includes("Saved for the practice."),
+    "the old plan is not shown while a draft is active",
+  );
+  const redoOverPlan = [...document.querySelectorAll("button")].find(
+    (button) => button.textContent === "Redo interview",
+  );
+  assert(!(redoOverPlan instanceof HTMLButtonElement), "the saved plan's redo is not the current screen");
+  await unmountOverPlan();
 }
