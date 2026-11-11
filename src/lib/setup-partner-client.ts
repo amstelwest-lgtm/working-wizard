@@ -88,6 +88,30 @@ export async function confirmSetupPartnerMap(
   return { ok: body.ok, inserted: body.inserted };
 }
 
+export type FirmInterviewTurn = {
+  question: string;
+  done: boolean;
+  modelTurns: number;
+};
+
+export async function firmInterviewTurn(input: {
+  firmId: string;
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  modelTurns: number;
+}): Promise<FirmInterviewTurn> {
+  const body = await invokeSetupPartner<FirmInterviewTurn>({
+    action: "firm_turn",
+    firmId: input.firmId,
+    messages: input.messages,
+    modelTurns: input.modelTurns,
+  });
+  return {
+    question: body.question ?? "",
+    done: Boolean(body.done),
+    modelTurns: body.modelTurns,
+  };
+}
+
 export async function buildSetupPartnerFirmMap(input: {
   firmId: string;
   answers: Record<string, string>;

@@ -23,7 +23,13 @@ export interface ClaudeResponse {
 export async function callClaude(
   system: string,
   user: string,
-  opts?: { maxTokens?: number; temperature?: number; tools?: AskAiClaudeTool[] },
+  opts?: {
+    maxTokens?: number;
+    temperature?: number;
+    tools?: AskAiClaudeTool[];
+    model?: string;
+    timeoutMs?: number;
+  },
 ): Promise<ClaudeResponse> {
   return callClaudeMessages(system, [{ role: "user", content: user }], opts);
 }
@@ -31,7 +37,13 @@ export async function callClaude(
 export async function callClaudeMessages(
   system: string,
   messages: AskAiModelMessage[],
-  opts?: { maxTokens?: number; temperature?: number; tools?: AskAiClaudeTool[] },
+  opts?: {
+    maxTokens?: number;
+    temperature?: number;
+    tools?: AskAiClaudeTool[];
+    model?: string;
+    timeoutMs?: number;
+  },
 ): Promise<ClaudeResponse> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) {
@@ -41,24 +53,33 @@ export async function callClaudeMessages(
   }
 
   const t0 = Date.now();
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(
-      askAiClaudeRequestBody({
-        model: CLAUDE_MODEL,
-        system,
-        messages,
-        maxTokens: opts?.maxTokens ?? 512,
-        temperature: opts?.temperature ?? 0.3,
-        tools: opts?.tools,
-      }),
-    ),
-  });
+  let res: Response;
+  try {
+    res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      signal: opts?.timeoutMs ? AbortSignal.timeout(opts.timeoutMs) : undefined,
+      body: JSON.stringify(
+        askAiClaudeRequestBody({
+          model: opts?.model || CLAUDE_MODEL,
+          system,
+          messages,
+          maxTokens: opts?.maxTokens ?? 512,
+          temperature: opts?.temperature ?? 0.3,
+          tools: opts?.tools,
+        }),
+      ),
+    });
+  } catch (err) {
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new Error("The interview timed out. Retry.");
+    }
+    throw err;
+  }
 
   if (res.status === 429) throw new Error("Rate limit reached — try again in a moment.");
   if (!res.ok) {

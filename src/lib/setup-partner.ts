@@ -66,140 +66,44 @@ export const SETUP_PARTNER_FIXED_QUESTIONS: readonly { id: string; prompt: strin
   { id: "extra", prompt: "Anything else about how finance runs today?" },
 ];
 
-/** Firm interview. The practice across its clients, not one end client. */
-export const FIRM_SETUP_QUESTIONS: readonly { id: string; prompt: string; followUp: string }[] = [
-  {
-    id: "mix",
-    prompt: "How many clients are on the book, and which industries and sizes make up most of it?",
-    followUp: "Give a count, the top two industries, and whether most are small or mid-sized.",
-  },
-  {
-    id: "ledgers",
-    prompt: "Which clients are on Xero, QuickBooks, Sage, or another ledger?",
-    followUp:
-      "Name the ledger for the majority, and the exception if one group uses something else.",
-  },
-  {
-    id: "cadence",
-    prompt: "What do you send clients each month, and on which day does it go out?",
-    followUp: "Name the pack and the day it usually leaves.",
-  },
-  {
-    id: "chain",
-    prompt: "Who prepares the pack, who reviews it, and who is allowed to sign off?",
-    followUp: "Name the roles, even if one person does more than one.",
-  },
-  {
-    id: "deadlines",
-    prompt: "Which deadlines do you track, and where is that list kept?",
-    followUp: "Name the filings and the place: a spreadsheet, a diary, or a tool.",
-  },
-  {
-    id: "sources",
-    prompt:
-      "Where do source documents arrive — email, WhatsApp, Dext, a portal, or somewhere else?",
-    followUp: "Name the main channel, and one other if a group of clients uses it.",
-  },
-  {
-    id: "tools",
-    prompt: "Which spreadsheets and other tools does the practice still run the work in?",
-    followUp: "Name the spreadsheet or tool the month cannot close without.",
-  },
-  {
-    id: "time_sink",
-    prompt: "Where does the team lose the most time each month?",
-    followUp: "Point at one step, not a general complaint.",
-  },
-  {
-    id: "pricing",
-    prompt:
-      "What do you sell clients, and how is it priced — fixed fee, advisory, packs, or a mix?",
-    followUp: "Name the main offer and whether the fee is fixed or hourly.",
-  },
-  {
-    id: "team",
-    prompt:
-      "How many people are in the firm, and who does the books, the review, and client reporting?",
-    followUp: "Give the headcount and who prepares versus who reviews.",
-  },
-];
+/** Soft cap for the live firm interview. The firm can map earlier. */
+export const FIRM_INTERVIEW_TURN_CAP = 15;
 
-const CLEAR_FIRM_ANSWER =
-  /\b(xero|qbo|quickbooks|sage|excel|google|dext|whatsapp|e-?mail|portal|fixed|hourly|advisory|retainer|partner|manager|bookkeeper|junior|senior|director|accountant|owner)\b|\d/i;
+export type FirmInterviewMessage = { role: "user" | "assistant"; content: string };
 
-const VAGUE_FIRM_ANSWER =
-  /^(it depends|depends|varies|various|stuff|things|not sure|unsure|n\/a|na|same|idk|tbd|whatever|maybe|sometimes)\b/i;
-
-const VAGUE_FILLER = new Set([
-  "various",
-  "stuff",
-  "things",
-  "whatever",
-  "misc",
-  "some",
-  "many",
-  "few",
-  "other",
-  "others",
-  "etc",
-  "and",
-  "or",
-  "the",
-  "a",
-  "an",
-  "of",
-  "to",
-  "it",
-  "depends",
-  "varies",
-  "not",
-  "sure",
-  "unsure",
-  "same",
-  "maybe",
-  "sometimes",
-  "just",
-  "like",
-  "kind",
-  "sort",
-]);
-
-/**
- * Follow up only when the answer is empty or vague.
- * A ledger, tool, fee type, number, or role is enough to move on.
- */
-export function firmAnswerIsVague(answer: string): boolean {
-  const text = answer.replace(/\s+/g, " ").trim();
-  if (!text) return true;
-  if (CLEAR_FIRM_ANSWER.test(text)) return false;
-  if (VAGUE_FIRM_ANSWER.test(text)) return true;
-  const words = text
-    .toLowerCase()
-    .split(" ")
-    .map((word) => word.replace(/[^a-z0-9]/g, ""))
-    .filter(Boolean);
-  if (words.length <= 2) return true;
-  return words.every((word) => word.length < 3 || VAGUE_FILLER.has(word));
+/** One model turn. `done` means there is enough to map the workflow. */
+export function parseFirmInterviewTurn(text: string): { question: string; done: boolean } {
+  const trimmed = text.trim();
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      const raw = JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
+      const done = raw.done === true || raw.ready === true;
+      const question = typeof raw.question === "string" ? raw.question.trim() : "";
+      if (done || question) return { question, done };
+    } catch {
+      /* The model spoke in prose. Use that as the one question. */
+    }
+  }
+  return { question: trimmed, done: false };
 }
 
-/** Join a follow-up without repeating the parent. A vague parent is replaced. */
-export function mergeFirmAnswer(parent: string, followUp: string): string {
-  const first = parent.replace(/\s+/g, " ").trim();
-  const second = followUp.replace(/\s+/g, " ").trim();
-  if (!first) return second;
-  if (!second) return first;
-  if (first.toLowerCase() === second.toLowerCase()) return first;
-  if (first.toLowerCase().includes(second.toLowerCase())) return first;
-  if (second.toLowerCase().includes(first.toLowerCase())) return second;
-  if (firmAnswerIsVague(first) && !firmAnswerIsVague(second)) return second;
-  return `${first}; ${second}`;
+export function firmInterviewShouldStop(modelTurns: number, done: boolean): boolean {
+  return done || modelTurns >= FIRM_INTERVIEW_TURN_CAP;
+}
+
+export function firmInterviewTranscript(messages: readonly FirmInterviewMessage[]): string {
+  return messages
+    .map((row) => `${row.role === "assistant" ? "Q" : "A"}: ${row.content.trim()}`)
+    .filter((line) => !line.endsWith(":"))
+    .join("\n");
 }
 
 export function setupQuestionsForAnswers(
   answers: Record<string, string>,
 ): readonly { id: string; prompt: string }[] {
-  const firm = new Set(FIRM_SETUP_QUESTIONS.map((row) => row.id));
-  if (Object.keys(answers).some((id) => firm.has(id))) return FIRM_SETUP_QUESTIONS;
+  if ((answers.transcript ?? "").trim()) return [{ id: "transcript", prompt: "Interview" }];
   return SETUP_PARTNER_FIXED_QUESTIONS;
 }
 

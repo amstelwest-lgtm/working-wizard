@@ -386,12 +386,13 @@ assert(client.includes("action_updates"), "the fallback writes an action note");
 assert(!client.includes(".insert({\n      agent:"), "the client does not insert agent_runs");
 
 const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
-assert(home.includes("data-agent-card={card.agent}"), "each finance-team card is addressable");
+const homeCard = readFileSync("src/components/owner-door/home-bot-card.tsx", "utf8");
+assert(homeCard.includes("data-agent-card={agent}"), "each finance-team card is addressable");
 assert(
   home.includes("onOpen(card.agent)") && home.includes("onAsk(card.agent)"),
   "the card and Ask open the agent",
 );
-assert(home.includes('event.key !== "Enter"'), "Enter on a card opens the agent");
+assert(homeCard.includes('event.key !== "Enter"'), "Enter on a card opens the agent");
 
 const clientPage = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 assert(
