@@ -17,7 +17,10 @@ import {
   handoffCollisionResult,
   handoffDecision,
   HANDOFF_OPEN_WINDOW_MS,
-  handoffNoteWrite,
+  handoffNoteById,
+  handoffNoteMemoryKey,
+  handoffTrackedNotes,
+  handoffTrackedNotesValue,
   handoffRequestNote,
   handoffRunToKeep,
   personAssignmentNote,
@@ -72,7 +75,43 @@ async function recentActionRuns(
 
 type AdminClient = SupabaseClient<any, "public", any>;
 
-/** Stores this row's assignee and appends a note. Older notes are left in place. */
+async function readHandoffNoteIds(
+  admin: AdminClient,
+  agent: string,
+  clientId: string,
+  actionItemId: string,
+) {
+  const { data } = await admin
+    .from("agent_memory")
+    .select("value")
+    .eq("agent", agent)
+    .eq("client_id", clientId)
+    .eq("key", handoffNoteMemoryKey(actionItemId))
+    .maybeSingle();
+  return handoffTrackedNotes(data?.value);
+}
+
+async function storeHandoffNoteIds(
+  admin: AdminClient,
+  agent: string,
+  clientId: string,
+  actionItemId: string,
+  ids: ReturnType<typeof handoffTrackedNotes>,
+): Promise<void> {
+  const { error } = await admin.from("agent_memory").upsert(
+    {
+      agent,
+      client_id: clientId,
+      key: handoffNoteMemoryKey(actionItemId),
+      value: handoffTrackedNotesValue(ids),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "agent,client_id,key" },
+  );
+  if (error) console.warn("handoff note id", error.message);
+}
+
+/** Stores this row's assignee. A tracked note id is updated. A person assignment inserts. */
 async function writeAssignment(
   admin: AdminClient,
   input: {
@@ -82,6 +121,8 @@ async function writeAssignment(
     actorType: "system" | "owner_app";
     actorLabel: string;
     note: string;
+    trackedId?: string | null;
+    onInserted?: (id: string) => Promise<void>;
   },
 ): Promise<string | null> {
   const { error: ownerError } = await admin
@@ -89,34 +130,26 @@ async function writeAssignment(
     .update({ owner_id: input.ownerId, sent_at: null })
     .eq("id", input.actionItemId);
   if (ownerError) return "assignee_not_stored";
-  const { data: priorNotes } = await admin
-    .from("action_updates")
-    .select("id, note")
-    .eq("action_item_id", input.actionItemId)
-    .order("created_at", { ascending: false })
-    .limit(12);
-  const noteWrite = handoffNoteWrite(
-    (priorNotes ?? []).flatMap((row) => {
-      const id = (row as { id?: unknown }).id;
-      const prior = (row as { note?: unknown }).note;
-      return typeof id === "string" ? [{ id, note: typeof prior === "string" ? prior : null }] : [];
-    }),
-    input.note,
-  );
+  const noteWrite = handoffNoteById(input.trackedId, input.note);
   if (noteWrite.action === "skip") return null;
   if (noteWrite.action === "update") {
     const { error: noteError } = await admin.from("action_updates").update({ note: input.note }).eq("id", noteWrite.id);
     if (noteError) return "note_not_written";
     return null;
   }
-  const { error: noteError } = await admin.from("action_updates").insert({
-    action_item_id: input.actionItemId,
-    client_id: input.clientId,
-    actor_type: input.actorType,
-    actor_label: input.actorLabel,
-    note: input.note,
-  });
-  if (noteError) return "note_not_written";
+  const { data: created, error: noteError } = await admin
+    .from("action_updates")
+    .insert({
+      action_item_id: input.actionItemId,
+      client_id: input.clientId,
+      actor_type: input.actorType,
+      actor_label: input.actorLabel,
+      note: input.note,
+    })
+    .select("id")
+    .maybeSingle();
+  if (noteError || typeof created?.id !== "string") return "note_not_written";
+  if (input.onInserted) await input.onInserted(created.id);
   return null;
 }
 
@@ -252,6 +285,7 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (settingError) return json({ error: "runner_check_failed" }, 500);
   if (!runnerEnabled(setting?.value)) {
+    const tracked = await readHandoffNoteIds(admin, decision.agent, clientId, actionItemId);
     const failed = await writeAssignment(admin, {
       clientId,
       actionItemId,
@@ -259,6 +293,11 @@ Deno.serve(async (req) => {
       actorType: "owner_app",
       actorLabel: handoffActor,
       note: handoffRequestNote(decision.displayName),
+      trackedId: tracked.assignmentId,
+      onInserted: async (id) => {
+        tracked.assignmentId = id;
+        await storeHandoffNoteIds(admin, decision.agent, clientId, actionItemId, tracked);
+      },
     });
     if (failed) return json({ error: failed }, 500);
     return json({
@@ -381,6 +420,7 @@ Deno.serve(async (req) => {
   // Commit the assignee before the slow agent call. A reload during agent_invoke
   // already sees this note. If the call fails, the note stays and the run is
   // marked failed below.
+  const tracked = await readHandoffNoteIds(admin, decision.agent, clientId, actionItemId);
   const failed = await writeAssignment(admin, {
     clientId,
     actionItemId,
@@ -388,6 +428,11 @@ Deno.serve(async (req) => {
     actorType: "owner_app",
     actorLabel: handoffActor,
     note: handoffRequestNote(decision.displayName),
+    trackedId: tracked.assignmentId,
+    onInserted: async (id) => {
+      tracked.assignmentId = id;
+      await storeHandoffNoteIds(admin, decision.agent, clientId, actionItemId, tracked);
+    },
   });
   if (failed) return json({ error: failed, runId }, 500);
 

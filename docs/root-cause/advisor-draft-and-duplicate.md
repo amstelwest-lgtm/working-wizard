@@ -38,3 +38,9 @@ The 11 Nov 20:42 SAST Advisor run `2bced2f2-284f-4185-aa1f-0776c1c07d8f` finishe
 ## How the follow-up is verified
 
 A targeted retry whose only writes are deduped hand-offs asks once, with tool choice left on auto, to draft the action or state why it cannot. The first hand-off does not get that nudge. Handing the finding to the Financial Manager stays legitimate, and the note names it, for example "Advisor passed this to the Financial Manager: <finding title>". A stored -97049.5 matches a cited 97,050 or R97k, within half a percent or at that display unit. A fabricated amount that is not that figure is still refused. `R 40,000-R 50,000` stays two positive amounts.
+
+## Addendum 3: why a retry still added two notes
+
+One Retry writes two notes. `owner-handoff` inserts `Handed to Milōn Advisor.` when the run is queued. `recordHandoffFinish` then inserts the outcome, `Advisor couldn't draft this…` or `Advisor passed this to the Financial Manager…`. That is the jump from 5 to 7 and from 7 to 9.
+
+#930 updated a note in place only when the new text also said `couldn't draft this`, and it skipped `Handed to` only when no later note contained `finished`. The pass-along sentence does not say `couldn't draft this`, so it was inserted. An earlier `Advisor finished: Drafts are recorded…` sentence contains `finished`, so the `Handed to` skip did not fire and that note was inserted too. A retry now updates the queue note and the outcome note by the ids stored for that action. It does not match on the note text.

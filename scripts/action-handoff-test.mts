@@ -16,6 +16,7 @@ import {
   handoffCouldNotFinish,
   handoffIsSlow,
   handoffProgressCaption,
+  handoffSettledPill,
   handoffTriggerLabel,
   moveRowStatus,
   phaseForAction,
@@ -649,4 +650,11 @@ assert(movesCall.includes("onOpenDraft={openDraft}"), "the accountant Moves tab 
 const ownerShell = readFileSync("src/routes/app.tsx", "utf8");
 assert(ownerShell.includes("onOpenDraft="), "the owner action plan opens the draft");
 
+assert(
+  handoffSettledPill(
+    "failed",
+    "Advisor passed this to the Financial Manager: Reduce short-term debt by refinancing into longer-term facilities",
+  ) === "Handed to Financial Manager",
+  "a hand-off pill does not say Couldn't draft",
+);
 console.log("action-handoff ok");

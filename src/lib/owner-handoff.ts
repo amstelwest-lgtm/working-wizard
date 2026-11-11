@@ -386,7 +386,11 @@ const HANDOFF_AGENT: Record<string, string> = {
 };
 
 /** "Advisor passed this to the Financial Manager: <finding title>". */
-export function handoffPassedAlongReason(displayName: string, steps: readonly HandoffStep[]): string | null {
+export function handoffPassedAlongReason(
+  displayName: string,
+  steps: readonly HandoffStep[],
+  actionTitle?: string | null,
+): string | null {
   const handoff = [...steps].reverse().find((step) => /"to_agent"\s*:/.test(stepDetail(step)));
   if (!handoff) return null;
   const detail = stepDetail(handoff);
@@ -394,8 +398,14 @@ export function handoffPassedAlongReason(displayName: string, steps: readonly Ha
   const who = HANDOFF_AGENT[agent] ?? "";
   const title = detail.match(/"title"\s*:\s*"((?:\\.|[^"\\])*)"/)?.[1]?.replace(/\\"/g, '"').trim() ?? "";
   const short = displayName.replace(/^Milōn\s+/u, "").trim() || "Advisor";
-  if (who && title) return `${short} passed this to the ${who}: ${title}`.slice(0, 400);
-  if (who) return `${short} passed this to the ${who}`;
+  const action = (actionTitle ?? "").replace(/\s+/g, " ").trim();
+  const findingAboutAction =
+    Boolean(action) &&
+    Boolean(title) &&
+    (title.toLowerCase().includes(action.toLowerCase()) || action.toLowerCase().includes(title.toLowerCase()));
+  if (who && findingAboutAction) return `${short} passed this to the ${who}: ${title}`.slice(0, 400);
+  if (who && action) return `${short} passed this to the ${who}: ${action}`.slice(0, 400);
+  if (who) return `${short} passed this to the ${who} for review`;
   return null;
 }
 
@@ -406,6 +416,7 @@ export function handoffPassedAlongReason(displayName: string, steps: readonly Ha
 export function handoffDraftFailureReason(input: {
   summary?: string | null;
   steps?: readonly HandoffStep[];
+  actionTitle?: string | null;
 }): string {
   const steps = input.steps ?? [];
   const failed = steps.find((step) => {
@@ -418,7 +429,7 @@ export function handoffDraftFailureReason(input: {
   if (summary && !handoffClaimsDraftsRecorded(summary) && !/no draft was saved/i.test(summary)) {
     return summary.slice(0, 400);
   }
-  const passed = handoffPassedAlongReason("Advisor", steps);
+  const passed = handoffPassedAlongReason("Advisor", steps, input.actionTitle);
   if (passed) return passed;
   return "no draft was saved for this action";
 }
@@ -437,32 +448,78 @@ export function handoffCouldNotDraftSentence(displayName: string, reason?: strin
   return `${short} couldn't draft this, ${why}`.slice(0, 500);
 }
 
+export type HandoffNoteIds = {
+  assignmentId: string | null;
+  outcomeId: string | null;
+};
+
+export type HandoffNoteRow = { id: string; note: string };
+
+/** The agent_memory key that holds the note ids for one action. */
+export function handoffNoteMemoryKey(actionItemId: string): string {
+  return `handoff_note:${actionItemId}`;
+}
+
+export function handoffTrackedNotes(value: unknown): HandoffNoteIds {
+  const row = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return {
+    assignmentId: typeof row.assignment_id === "string" && row.assignment_id.trim() ? row.assignment_id : null,
+    outcomeId: typeof row.outcome_id === "string" && row.outcome_id.trim() ? row.outcome_id : null,
+  };
+}
+
+export function handoffTrackedNotesValue(ids: HandoffNoteIds): {
+  assignment_id: string | null;
+  outcome_id: string | null;
+} {
+  return { assignment_id: ids.assignmentId, outcome_id: ids.outcomeId };
+}
+
 /**
- * A retry should not add another copy of the same hand-off or failure note.
- * A new failure reason updates the existing failure note.
- * `existingNewestFirst` is newest first.
+ * Update the note id already stored for this action, or insert when there is none.
+ * The wording of the note is not consulted.
  */
-export function handoffNoteWrite(
-  existingNewestFirst: readonly { id: string; note: string | null }[],
+export function handoffNoteById(
+  trackedId: string | null | undefined,
   next: string,
-): { action: "insert" } | { action: "skip" } | { action: "update"; id: string } {
+): { action: "skip" } | { action: "insert" } | { action: "update"; id: string } {
   const text = next.replace(/\s+/g, " ").trim();
   if (!text) return { action: "skip" };
-  const rows = existingNewestFirst
-    .map((row) => ({ id: row.id, note: (row.note ?? "").replace(/\s+/g, " ").trim() }))
-    .filter((row) => row.id && row.note);
-  if (/couldn't draft this/i.test(text)) {
-    const prior = rows.find((row) => /couldn't draft this/i.test(row.note));
-    if (prior) return prior.note === text ? { action: "skip" } : { action: "update", id: prior.id };
-  }
-  if (text.startsWith("Handed to ")) {
-    const handedAt = rows.findIndex((row) => row.note === text);
-    if (handedAt >= 0) {
-      const newerSuccess = rows.slice(0, handedAt).some((row) => / finished/i.test(row.note));
-      if (!newerSuccess) return { action: "skip" };
-    }
-  }
+  const id = (trackedId ?? "").trim();
+  if (id) return { action: "update", id };
   return { action: "insert" };
+}
+
+function writeTrackedNote(
+  notes: HandoffNoteRow[],
+  ids: HandoffNoteIds,
+  slot: "assignmentId" | "outcomeId",
+  text: string,
+  mintedId: string,
+): number {
+  const decision = handoffNoteById(ids[slot], text);
+  if (decision.action === "skip") return 0;
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (decision.action === "update") {
+    const row = notes.find((note) => note.id === decision.id);
+    if (row) row.note = clean;
+    return 0;
+  }
+  notes.push({ id: mintedId, note: clean });
+  ids[slot] = mintedId;
+  return 1;
+}
+
+/** Queue note, then outcome note. The return is how many rows were inserted. */
+export function applyHandoffAttempt(
+  notes: HandoffNoteRow[],
+  ids: HandoffNoteIds,
+  input: { assignment: string; outcome: string; assignmentId: string; outcomeId: string },
+): number {
+  return (
+    writeTrackedNote(notes, ids, "assignmentId", input.assignment, input.assignmentId) +
+    writeTrackedNote(notes, ids, "outcomeId", input.outcome, input.outcomeId)
+  );
 }
 
 /** Finish note. A run with no finding does not say finished. */
