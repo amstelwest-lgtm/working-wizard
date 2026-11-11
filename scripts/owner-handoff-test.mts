@@ -11,12 +11,15 @@ import {
   handoffDecision,
   handoffCouldNotDraftSentence,
   handoffDraftFailureReason,
+  handoffNeedsDraftNudge,
   handoffNoteWrite,
+  handoffPassedAlongReason,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
   handoffCollisionResult,
   handoffFinding,
   handoffInputs,
+  handoffIsTargetedRetry,
   handoffNeedsFreshRun,
   handoffRunToKeep,
   planHandoffRun,
@@ -136,6 +139,43 @@ const updatedFail = handoffNoteWrite(retryNotes, handoffCouldNotDraftSentence("A
 assert(updatedFail.action === "update" && updatedFail.id === "fail-1", "a retry updates the failure note");
 const skippedHand = handoffNoteWrite(retryNotes, "Handed to Milōn Advisor.");
 assert(skippedHand.action === "skip", "a retry does not add another Handed to note");
+const handedOff = [
+  {
+    tool: "record_draft",
+    status: "ok",
+    detail:
+      '{"recorded":true,"deduped":true,"title":"The saved cashflow goes negative from week 1","to_agent":"financial_manager"}',
+  },
+];
+assert(handoffNeedsDraftNudge(handedOff), "a deduped hand-off is not a draft of this action");
+assert(
+  handoffPassedAlongReason("Advisor", handedOff) ===
+    "Advisor passed this to the Financial Manager: The saved cashflow goes negative from week 1",
+  "the note names the hand-off",
+);
+assert(
+  handoffDraftFailureReason({ summary: "Drafts are recorded. A person approves them before anything is sent.", steps: handedOff }) ===
+    "Advisor passed this to the Financial Manager: The saved cashflow goes negative from week 1",
+  "a deduped hand-off replaces the generic sentence",
+);
+assert(
+  !handoffNeedsDraftNudge([
+    ...handedOff,
+    { tool: "record_draft", status: "ok", detail: '{"recorded":true}' },
+  ]),
+  "a saved draft does not ask again",
+);
+assert(readFileSync("supabase/functions/agent-advisor/run.ts", "utf8").includes("draftNudge:"), "the advisor run can nudge once");
+assert(handoffIsTargetedRetry(handoffAgainInputs("action-1", "run-1")), "a second hand-off is a targeted retry");
+assert(!handoffIsTargetedRetry(handoffInputs("action-1")), "the first hand-off is not a retry");
+assert(
+  readFileSync("supabase/functions/_shared/agent-core/job.ts", "utf8").includes("handoffIsTargetedRetry"),
+  "the nudge runs only on a targeted retry",
+);
+assert(
+  readFileSync("supabase/functions/_shared/agent-core/job.ts", "utf8").includes('toolChoice: { type: "auto" }'),
+  "the nudge turn does not force a named tool",
+);
 const undated = handoffFinding({
   summary: "The partner reviews the pack before it goes out.",
   figures: {},

@@ -850,7 +850,7 @@ export function citedNumbers(text: string): CitedNumber[] {
     if (!Number.isFinite(mantissa)) continue;
     const frac = numeric.includes(".") ? (numeric.split(".")[1] ?? "") : "";
     const before = cleaned.slice(Math.max(0, (match.index ?? 0) - 2), match.index ?? 0);
-    const signed = /[\u2010-\u2015\-]\s*$/.test(before);
+    const signed = /(?:^|[^\d])[\u2010-\u2015\-]\s*$/.test(before);
     const value = (signed ? -Math.abs(mantissa) : mantissa) * scale;
     out.push({ raw, value, decimals: frac.length, scale });
   }
@@ -869,18 +869,35 @@ function sameCitedNumber(claimed: number, stored: number): boolean {
 }
 
 /**
+ * Display rounding of this stored figure only. Within half a percent of it,
+ * or equal once both are rounded to the cited unit (R97k is the thousands).
+ * A nearby but different amount does not match.
+ */
+function displayRoundMatch(claimed: number, stored: number, scale: number): boolean {
+  const basis = Math.abs(stored);
+  const shown = Math.abs(claimed);
+  if (!(basis >= 100) || !Number.isFinite(shown)) return false;
+  if (Math.abs(shown - basis) / basis <= 0.005) return true;
+  if (scale > 1 && Math.round(basis / scale) === Math.round(shown / scale)) return true;
+  return false;
+}
+
+/**
  * A cited number matches a stored figure when it is that figure rounded or
  * truncated to the cited precision, including the percent form (×100).
- * An integer also matches within ±0.5.
+ * An integer also matches within ±0.5, or as the display rounding of that
+ * same figure. It does not match a different figure that is merely close.
  */
 export function citedFigureMatches(claimed: number, decimals: number, stored: number, scale = 1): boolean {
   if (!Number.isFinite(claimed) || !Number.isFinite(stored)) return false;
   if (scale !== 1 && scale > 0) {
     const mantissa = claimed / scale;
     if (matchesAtPrecision(mantissa, decimals, stored / scale)) return true;
-    return decimals === 0 && Math.trunc(Math.abs(stored) / scale) === Math.abs(mantissa);
+    if (decimals === 0 && Math.round(Math.abs(stored) / scale) === Math.abs(mantissa)) return true;
+    return displayRoundMatch(claimed, stored, scale);
   }
   if (matchesAtPrecision(claimed, decimals, stored)) return true;
+  if (displayRoundMatch(claimed, stored, scale)) return true;
   if (matchesAtPrecision(claimed, decimals, stored * 100)) return true;
   // A bare 412 is the thousands (or millions) form of a stored revenue. Scores and day counts stay below 100.
   if (decimals === 0 && Math.abs(claimed) >= 100) {

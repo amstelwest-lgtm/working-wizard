@@ -28,6 +28,7 @@ import {
 import { ImplementationManagerChip } from "@/components/practice-setup-card";
 import {
   buildPracticeImplementationPlan,
+  cleanFlowLine,
   dedupePracticeSteps,
   practiceBucketLabel,
   type PracticeImplementationPlan,
@@ -323,7 +324,7 @@ export function PracticeSetupInterview({
           <pre className="sr-only">{setupPartnerMapPromptBlock(filledMap ?? visibleMap)}</pre>
           <h3>Today&apos;s flow</h3>
           <ul>
-            {visibleMap.todaysFlow.map((line) => (
+            {visibleMap.todaysFlow.map(cleanFlowLine).filter(Boolean).map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>

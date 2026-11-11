@@ -14,6 +14,7 @@
 import { compactJson } from "../../milon-bot/logic.ts";
 import { MILON_AGENT_MISSION } from "../../../../src/lib/milon-mission.ts";
 import { sharedDeliverableToolSchemas } from "../../../../src/lib/agent-shared-reads.ts";
+import { handoffNeedsDraftNudge } from "../../../../src/lib/owner-handoff.ts";
 
 export const AGENT_MAX_ITERATIONS = 6;
 export const AGENT_REPEAT_LIMIT = 3;
@@ -554,8 +555,16 @@ export async function runAgentLoop(input: {
   toolLabels?: Readonly<Record<string, string>>;
   /** Milonbot leaves this unset. A caller that sets it handles model failures itself. */
   rethrowReasonerErrors?: boolean;
+  /**
+   * One extra turn when a hand-off run stops without drafting the action.
+   * Tool choice stays whatever the caller already uses.
+   */
+  draftNudge?: string;
 }): Promise<AgentRun> {
   const max = input.maxIterations ?? AGENT_MAX_ITERATIONS;
+  let limit = max;
+  let objective = input.objective;
+  let nudged = false;
   const allowed = new Set<string>(input.allowedTools ?? AGENT_TOOLS);
   const steps: AgentStep[] = [];
   const exchanges: AgentToolExchange[] = [];
@@ -712,14 +721,14 @@ export async function runAgentLoop(input: {
     };
   }
 
-  for (let iteration = 1; iteration <= max; iteration++) {
+  for (let iteration = 1; iteration <= limit; iteration++) {
     let decision: AgentDecision;
     try {
       decision = await input.reason({
-        objective: input.objective,
+        objective,
         audience: input.audience,
         iteration,
-        maxIterations: max,
+        maxIterations: limit,
         transcript: steps,
         allowedTools: input.allowedTools ?? AGENT_TOOLS,
         exchanges,
@@ -753,6 +762,12 @@ export async function runAgentLoop(input: {
           reason: "insufficient_information",
           summary: decision.summary || "Stopped. The stop reason was not one MILŌN accepts.",
         };
+      }
+      if (!nudged && input.draftNudge && handoffNeedsDraftNudge(steps)) {
+        nudged = true;
+        objective = `${input.objective}\n\n${input.draftNudge}`;
+        if (iteration === limit) limit += 1;
+        continue;
       }
       const reconciled = reconcileStop(steps, decision);
       return stop(reconciled.decision, reconciled.claimRejected);

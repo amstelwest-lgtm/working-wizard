@@ -296,6 +296,7 @@ export async function recordAgentDraft(
       recorded: true,
       deduped: true,
       finding_id: duplicate.id,
+      title: prepared.title,
       to_agent: recipient.toAgent,
       evidence: prepared.evidence,
       ...(recipient.normalised ? { normalised_to_agent: true } : {}),
@@ -326,6 +327,7 @@ export async function recordAgentDraft(
     return {
       recorded: true,
       finding_id: data.id,
+      title: prepared.title,
       to_agent: null,
       evidence: prepared.evidence,
       ...(recipient.normalised ? { normalised_to_agent: true } : {}),
@@ -349,6 +351,7 @@ export async function recordAgentDraft(
   return {
     recorded: true,
     finding_id: data.id,
+    title: prepared.title,
     to_agent: recipient.toAgent,
     evidence: prepared.evidence,
     ...(recipient.normalised ? { normalised_to_agent: true } : {}),

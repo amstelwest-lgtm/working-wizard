@@ -147,6 +147,7 @@ type RuleQuery = Promise<{
 }> & {
   eq: (column: string, value: string) => RuleQuery;
   is: (column: string, value: null) => RuleQuery;
+  order: (column: string, options: { ascending: boolean }) => RuleQuery;
 };
 
 /** Active firm-level setup_partner_confirm rules. RLS scopes this to the caller's firm. */
@@ -164,7 +165,8 @@ export async function fetchFirmSetupPlan(
     .is("client_id", null)
     .eq("source_event", SETUP_PARTNER_SOURCE_EVENT)
     .eq("status", "active")
-    .eq("task_type", SETUP_PARTNER_TASK_WORKFLOW);
+    .eq("task_type", SETUP_PARTNER_TASK_WORKFLOW)
+    .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
   const plan = practicePlanFromConfirmRules(data ?? []);
   return plan.steps.length ? plan : null;
