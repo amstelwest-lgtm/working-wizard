@@ -286,7 +286,7 @@ function testInterviewParseAndStructuredMap() {
   const fenced = parseFirmInterviewTurn(
     '```json\n{"question":"Who closes the month? Who reviews it?","done":false}\n```',
   );
-  assert(fenced.question === "Who closes the month?", `one question, got ${fenced.question}`);
+  assert(fenced.question === "", `two questions regenerate, got ${fenced.question}`);
   assert(!fenced.question.includes("{") && !fenced.question.includes('"question"'), "no raw JSON");
   const prose = parseFirmInterviewTurn("Who prepares the management pack?");
   assert(prose.question === "Who prepares the management pack?", "prose falls back to the question");
@@ -346,7 +346,7 @@ function testQuestionFallbacksNeverShowJson() {
   const fenced = parseFirmInterviewTurn(
     '```json\n{"question":"Who closes the month? Who reviews it?","done":false}\n```',
   );
-  assert(fenced.question === "Who closes the month?", `fenced JSON, got ${fenced.question}`);
+  assert(fenced.question === "", `fenced double ask regenerates, got ${fenced.question}`);
   assert(!fenced.question.includes("{"), "fenced JSON shows no brace");
 
   const prose = parseFirmInterviewTurn("Who prepares the management pack?");
@@ -355,7 +355,17 @@ function testQuestionFallbacksNeverShowJson() {
   const many = parseFirmInterviewTurn(
     "Who closes the month, who reviews it, and what do they sign?",
   );
-  assert(many.question === "Who closes the month?", `one ask, got ${many.question}`);
+  assert(
+    many.question === "Who closes the month, who reviews it, and what do they sign?",
+    `a comma stays inside one question, got ${many.question}`,
+  );
+  const voice = parseFirmInterviewTurn(
+    "When a partner signs off by WhatsApp voice note, what happens next?",
+  );
+  assert(
+    voice.question === "When a partner signs off by WhatsApp voice note, what happens next?",
+    `the voice-note question survives, got ${voice.question}`,
+  );
   assert(parseFirmInterviewTurn("Please upload a sample pack.").question === "", "no upload request");
   assert(parseFirmInterviewTurn("Do you close on the sixth?").question === "", "no closed question");
   const pack = classifyPracticeStep("We prepare a quarterly management pack");
@@ -365,6 +375,22 @@ function testQuestionFallbacksNeverShowJson() {
   const noted = classifyPracticeStep("Not stated. Still unclear after it was asked twice. We run the month-end close.");
   assert(!/not stated|still unclear|asked twice/i.test(noted.step), "internal notes stay off the plan");
   assert(noted.bucket === "covered", "the month-end step stays covered");
+  const planNotes = buildPracticeImplementationPlan({
+    todaysFlow: [
+      "Follow up: the answer was about the quarterly pack instead.",
+      "Pain points weren't stated anywhere in the interview. Ask about them directly.",
+      "Follow up: the receipts and inbox answer was given twice.",
+      "Confirm how often the pack goes out.",
+      "We prepare a quarterly management pack",
+    ],
+    milonCoverage: [],
+    gaps: [],
+    checklist: [],
+  });
+  assert(
+    planNotes.steps.length === 1 && planNotes.steps[0]?.bucket === "covered",
+    "interviewer notes are not plan rows",
+  );
 
   const unfinished = interviewTurnFromModel({
     text: '{"question":"Walk me through how the jun',
@@ -377,11 +403,14 @@ function testQuestionFallbacksNeverShowJson() {
     toolUses: [
       {
         name: ASK_QUESTION_TOOL.name,
-        input: { question: "Who closes the month? And who reviews it?", done: false },
+        input: { question: "When a partner signs off by WhatsApp voice note, what happens next?", done: false },
       },
     ],
   });
-  assert(fromTool.question === "Who closes the month?", `tool question, got ${fromTool.question}`);
+  assert(
+    fromTool.question === "When a partner signs off by WhatsApp voice note, what happens next?",
+    `tool question, got ${fromTool.question}`,
+  );
   assert(!fromTool.question.includes("{"), "the tool question shows no brace");
 
   const ugly = firmInterviewUserError('Claude error (400): {"type":"error","message":"bad json"}');

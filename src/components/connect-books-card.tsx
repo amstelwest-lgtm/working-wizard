@@ -73,13 +73,13 @@ export function ConnectBooksHomeCard({
             data-sage-provider={sageSoon ? "soon" : "ready"}
             onClick={sageSoon ? undefined : onSage}
           >
-            {sageSoon ? "Coming soon" : "Sage"}
+            {sageSoon ? "Sage · Coming soon" : "Sage"}
           </button>
         ) : null}
       </div>
       {showSage ? (
         <p className="connect-books-card__note" data-connect-books-note="sage">
-          {SAGE_NOT_SYNCED_HINT}
+          {sageSoon ? "Sage is not available yet." : SAGE_NOT_SYNCED_HINT}
         </p>
       ) : null}
     </section>

@@ -227,14 +227,18 @@ export type BudgetRangeTotals = {
   net: number;
 };
 
-/** Revenue, expenses (cost of sales + overheads + depreciation) and net for the months on screen. */
+/**
+ * Revenue, expenses, and net for the months on screen.
+ * Expenses are overheads and depreciation. Cost of sales stays on its own
+ * table row, so the header Expenses tile can match that row.
+ */
 export function budgetRangeTotals(views: readonly BudgetMonthView[]): BudgetRangeTotals {
   let revenue = 0;
   let expenses = 0;
   let net = 0;
   for (const row of views) {
     revenue += row.budget.revenue;
-    expenses += row.budget.cogs + row.budget.overheads + row.budget.depreciation;
+    expenses += row.budget.overheads + row.budget.depreciation;
     net += row.budget.ebit;
   }
   return { revenue, expenses, net };

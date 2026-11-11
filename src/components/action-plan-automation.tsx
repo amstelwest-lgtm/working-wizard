@@ -66,9 +66,11 @@ export function ActionPlanAutomation({
 }) {
   const { market } = useMarketFormat();
   const open = rows.filter((row) => row.followUp !== "done");
-  const needsConfirm = open.filter((row) => row.ownerSuggested || row.dueSuggested);
+  const hidden = new Set(duplicates.flatMap((group) => group.dropIds));
+  const shown = open.filter((row) => !hidden.has(row.id));
+  const needsConfirm = shown.filter((row) => row.ownerSuggested || row.dueSuggested);
   const waitingOnly = onInviteOwner
-    ? open.filter(
+    ? shown.filter(
         (row) =>
           row.followUp === "waiting" && !row.ownerSuggested && !row.dueSuggested && !row.overdue,
       )
@@ -77,7 +79,7 @@ export function ActionPlanAutomation({
     !needsConfirm.length &&
     !duplicates.length &&
     !contradictions.length &&
-    !open.some((row) => row.overdue) &&
+    !shown.some((row) => row.overdue) &&
     !waitingOnly.length
   ) {
     return null;
@@ -111,9 +113,9 @@ export function ActionPlanAutomation({
           ))}
         </ul>
       ) : null}
-      {open.some((row) => row.overdue && !row.ownerSuggested && !row.dueSuggested) ? (
+      {shown.some((row) => row.overdue && !row.ownerSuggested && !row.dueSuggested) ? (
         <ul className="mt-2 space-y-1 text-sm">
-          {open
+          {shown
             .filter((row) => row.overdue && !row.ownerSuggested && !row.dueSuggested)
             .map((row) => (
               <li key={`overdue-${row.id}`}>

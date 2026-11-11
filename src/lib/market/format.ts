@@ -100,7 +100,7 @@ export function formatMoneyCompact(n: number, market: MoneyMarket = ZA_MARKET): 
  * stay on one line. Recharts wraps tick text on ordinary spaces.
  */
 export function formatMoneyChartTick(n: number, market: MoneyMarket = ZA_MARKET): string {
-  return formatMoneyCompact(n, market).replace(/ /g, "");
+  return formatMoneyCompact(n, market).replace(/ /g, "").replace(/\.0(?=[km])/gi, "");
 }
 
 export type ReportAmountOptions = {

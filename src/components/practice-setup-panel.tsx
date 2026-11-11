@@ -26,6 +26,11 @@ import {
 } from "@/lib/setup-partner-client";
 import { ImplementationManagerChip } from "@/components/practice-setup-card";
 import {
+  clearFirmInterviewDraft,
+  readFirmInterviewDraft,
+  writeFirmInterviewDraft,
+} from "@/lib/firm-interview-draft";
+import {
   buildPracticeImplementationPlan,
   dedupePracticeSteps,
   practiceBucketLabel,
@@ -172,8 +177,18 @@ export function PracticeSetupInterview({
       .then((saved) => {
         if (cancel) return;
         if (saved && saved.steps.length > 0) {
+          clearFirmInterviewDraft(firmId);
           setPlan({ steps: dedupePracticeSteps(saved.steps) });
           setPhase("done");
+          return;
+        }
+        const draft = readFirmInterviewDraft(firmId);
+        if (draft && draft.phase !== "done") {
+          setMessages(draft.messages);
+          setModelTurns(draft.modelTurns);
+          setQuestion(draft.question);
+          if (draft.map) setMap(draft.map);
+          setPhase(draft.phase === "map" ? "map" : "interview");
           return;
         }
         return requestTurn([], 0);
@@ -190,6 +205,27 @@ export function PracticeSetupInterview({
     // The first question loads with the firm. Later turns are explicit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firmId, loadSaved]);
+
+  useEffect(() => {
+    if (!firmId || booting) return;
+    if (phase === "done") {
+      clearFirmInterviewDraft(firmId);
+      return;
+    }
+    if (!messages.length && !question) return;
+    writeFirmInterviewDraft(firmId, {
+      messages,
+      modelTurns,
+      phase,
+      question,
+      map,
+    });
+  }, [firmId, booting, phase, messages, modelTurns, question, map]);
+
+  const startOver = () => {
+    if (firmId) clearFirmInterviewDraft(firmId);
+    redo();
+  };
 
   const redo = () => {
     setPhase("interview");
@@ -290,6 +326,9 @@ export function PracticeSetupInterview({
               onClick={() => void mapFrom(messages, modelTurns)}
             >
               That's enough, map it
+            </button>
+            <button type="button" className="setup-partner__ghost" onClick={startOver}>
+              Start over
             </button>
             {turnError ? (
               <button
@@ -428,9 +467,9 @@ function PracticeSetupHero({ status, metric }: { status: string; metric: string 
             lines={
               <span className="owner-lines" data-status-update="">
                 <span className="owner-voice">
-                  Map how the firm closes, reviews, signs off, and reports.
+                  Map how the firm closes, reviews, signs off, and reports.{" "}
+                  <strong className="owner-money">{metric}</strong>
                 </span>
-                <span className="owner-money">{metric}</span>
               </span>
             }
           />

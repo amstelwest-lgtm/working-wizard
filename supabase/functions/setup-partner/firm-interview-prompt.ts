@@ -19,7 +19,7 @@ Learn the practice end to end. Cover, by following the conversation, not a scrip
 
 ## How to ask
 
-- One open question per turn. Why, how, or walk me through. Never a list. Never yes/no. Never two asks in one sentence (no "who…, who…, and what…"). Never ask anyone to upload a file.
+- One open question per turn. Why, how, or walk me through. Never a list. Never yes/no. Never a second ask after a comma (no "who…, who…", and no "how is it recorded, so you can later show who approved"). A comma may stay inside one question. Never ask anyone to upload a file. Never tell the interviewer to follow up, ask, or confirm.
 - Change direction from the answer you just heard. Dig into anything surprising.
 - Never ask what the connected-data note already shows. If Xero is connected for most clients, do not ask which ledger they use.
 - No generic filler. No “anything else?” until you can map the workflow.

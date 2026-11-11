@@ -39,6 +39,8 @@ import {
 } from "../../../../src/lib/agent-draft.ts";
 import {
   HANDOFF_COST_STOP,
+  handoffCouldNotDraftSentence,
+  handoffDraftFailureReason,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
   handoffFinding,
@@ -162,7 +164,14 @@ async function rememberRun(
 async function recordHandoffFinish(
   db: SupabaseClient,
   config: QueueJobConfig,
-  input: { runId: string; clientId: string; summary: string; pool: StoredFigures[]; market?: unknown },
+  input: {
+    runId: string;
+    clientId: string;
+    summary: string;
+    pool: StoredFigures[];
+    market?: unknown;
+    steps?: readonly { tool?: string | null; status?: string | null; detail?: string | null }[];
+  },
 ) {
   const { data: run, error } = await db
     .from("agent_runs")
@@ -187,6 +196,7 @@ async function recordHandoffFinish(
     return count ?? 0;
   };
   let findingCount = await countFindings();
+  let blocked = "";
   if (findingCount === 0) {
     const finding = handoffFinding({
       summary: input.summary,
@@ -207,6 +217,11 @@ async function recordHandoffFinish(
       finding != null &&
       (finding.evidence as { uncited?: boolean }).uncited === true &&
       cited?.ok !== true;
+    if (!finding) {
+      blocked = handoffDraftFailureReason({ summary: input.summary, steps: input.steps });
+    } else if (cited && cited.ok === false && !uncited) {
+      blocked = cited.error;
+    }
     if (finding && (cited?.ok || uncited)) {
       const { data: actionRow } = await db
         .from("action_items")
@@ -248,19 +263,31 @@ async function recordHandoffFinish(
           }),
           last_seen: new Date().toISOString(),
         });
-        if (findingError) console.warn("handoff finding", findingError.message);
+        if (findingError) {
+          blocked = findingError.message;
+          console.warn("handoff finding", findingError.message);
+        }
+      } else if (!blocked) {
+        blocked = "A draft for this action is already on file.";
       }
     }
     findingCount = await countFindings();
   }
   if (findingCount == null) return;
-  const note = handoffFinishNote({
-    displayName,
-    summary: input.summary,
-    findingCount,
-    market,
-    figures: stored?.figures,
-  });
+  const reason =
+    findingCount === 0
+      ? blocked || handoffDraftFailureReason({ summary: input.summary, steps: input.steps })
+      : "";
+  const note =
+    findingCount === 0
+      ? handoffCouldNotDraftSentence(displayName, reason)
+      : handoffFinishNote({
+          displayName,
+          summary: input.summary,
+          findingCount,
+          market,
+          figures: stored?.figures,
+        });
   const { error: noteError } = await db.from("action_updates").insert({
     action_item_id: actionItemId,
     client_id: input.clientId,
@@ -272,7 +299,7 @@ async function recordHandoffFinish(
   if (findingCount === 0) {
     const { error: summaryError } = await db
       .from("agent_runs")
-      .update({ summary: note, status: "partial", stop_reason: "no_draft" })
+      .update({ summary: note, error: reason, status: "partial", stop_reason: "no_draft" })
       .eq("id", input.runId);
     if (summaryError) console.warn("handoff summary", summaryError.message);
   }
@@ -525,6 +552,11 @@ export async function runQueueJob(
       summary,
       pool,
       market: client?.market,
+      steps: result.trace.map((step) => ({
+        tool: step.tool,
+        status: step.status,
+        detail: step.detail,
+      })),
     });
     await archive(db, config.queue, job.msgId);
     return { status: partial ? "partial" : "succeeded", runId: existing.run_id };

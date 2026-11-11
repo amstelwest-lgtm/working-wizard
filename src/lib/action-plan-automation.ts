@@ -1,3 +1,5 @@
+import { actionDisplayTitle } from "@/lib/strategic-moves";
+
 /**
  * Suggested owner, due date, follow-up, and duplicate/contradiction checks.
  * Suggestions are labelled for the accountant to confirm. Nothing is dropped
@@ -69,7 +71,7 @@ const SIDES: { id: string; test: RegExp; opposite: string; reason: string }[] = 
 ];
 
 export function actionTitleKey(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return actionDisplayTitle(title).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 export function addDays(iso: string, days: number): string | null {

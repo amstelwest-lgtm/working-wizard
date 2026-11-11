@@ -9,6 +9,8 @@ import {
   handoffAgainInputs,
   handoffAssigneeName,
   handoffDecision,
+  handoffCouldNotDraftSentence,
+  handoffDraftFailureReason,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
   handoffCollisionResult,
@@ -107,6 +109,24 @@ assert(job.includes("handoffDraftTitle"), "a finished hand-off labels its draft"
 assert(job.includes("handoffDraftIsDuplicate"), "a finished hand-off skips a duplicate draft");
 
 assert(handoffFinding({ summary: "Cash", figures: {}, periodLabel: null, snapshotId: null }) === null, "a fragment with no figures is not a finding");
+const refused = handoffDraftFailureReason({
+  summary: "",
+  steps: [
+    {
+      tool: "record_draft",
+      status: "error",
+      detail: "The title or detail cites 1.5, which is not in the books that were read.",
+    },
+  ],
+});
+assert(
+  refused === "The title or detail cites 1.5, which is not in the books that were read.",
+  "a refused draft keeps the tool error",
+);
+assert(
+  !handoffCouldNotDraftSentence("Advisor", refused).includes("no draft was saved"),
+  "the action row shows the citation error",
+);
 const undated = handoffFinding({
   summary: "The partner reviews the pack before it goes out.",
   figures: {},

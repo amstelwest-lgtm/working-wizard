@@ -96,15 +96,25 @@ function unescapeJsonString(value: string): string {
 export function oneInterviewQuestion(value: string): string {
   const text = value.replace(/\s+/g, " ").trim();
   if (!text || text.includes("{") || text.includes('"question"') || text.includes(FENCE)) return "";
+  const marks = text.match(/\?/g);
+  if (marks && marks.length > 1) return "";
   const mark = text.search(/[.?](?:\s|$)/);
   if (mark < 0) return "";
-  let sentence = text.slice(0, mark + 1).trim();
-  const split = sentence.split(/,\s*(?:and\s+)?(?=who\b|what\b|when\b|where\b|why\b|how\b)/i)[0]?.trim() ?? sentence;
-  sentence = split.endsWith("?") || split.endsWith(".") ? split : `${split.replace(/[, ]+$/, "")}?`;
+  const sentence = text.slice(0, mark + 1).trim();
   if (sentence.length < 8) return "";
   if (/\bupload\b/i.test(sentence)) return "";
   if (/^(?:do|does|did|is|are|was|were|have|has|can|will)\b/i.test(sentence)) return "";
   return sentence;
+}
+
+/** Advice to the interviewer is not a workflow step. */
+export function isInterviewerNote(step: string): boolean {
+  const text = step.replace(/\s+/g, " ").trim();
+  if (!text) return true;
+  if (/^(?:follow up|ask|confirm)\b/i.test(text)) return true;
+  if (/\bthe interview\b/i.test(text)) return true;
+  if (/\bthe answer\b/i.test(text)) return true;
+  return false;
 }
 
 function questionFromJsonSlice(raw: string): { question: string; done: boolean } | null {
@@ -235,12 +245,13 @@ export function answersFromTranscript(transcript: string): string[] {
     .map((line) => line.trim())
     .filter((line) => /^A:/i.test(line))
     .map((line) => line.replace(/^A:\s*/i, "").trim())
-    .filter((line) => line && !line.includes("{") && !line.includes('"question"'));
+    .filter((line) => line && !line.includes("{") && !line.includes('"question"') && !isInterviewerNote(line));
 }
 
 function cleanWorkflowLine(value: string): string {
   const text = value.replace(/\s+/g, " ").trim();
   if (!text || text.includes("{") || text.includes(FENCE) || text.includes('"question"')) return "";
+  if (isInterviewerNote(text)) return "";
   return text;
 }
 

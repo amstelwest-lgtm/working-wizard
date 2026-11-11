@@ -290,9 +290,9 @@ assert(
 assert(cashChecklistSourceChip("pl", {}) === null, "an unknown P&L source stays blank");
 
 const zaTick = formatMoneyChartTick(30000);
-assert(zaTick === "R30.0k", zaTick);
+assert(zaTick === "R30k", zaTick);
 assert(!zaTick.includes(" "), "axis tick has no breakable space");
 const usTick = formatMoneyChartTick(30000, us);
-assert(usTick === "$30.0k", usTick);
+assert(usTick === "$30k", usTick);
 
 console.log("cash-forecast-parity-test: all assertions passed");
