@@ -175,6 +175,11 @@ export function handoffAgainInputs(actionItemId: string, previousRunId: string):
   return `${handoffInputs(actionItemId)}:again:${previousRunId}`;
 }
 
+/** A second hand-off of the same action. The first run is not a retry. */
+export function handoffIsTargetedRetry(inputs: string): boolean {
+  return inputs.includes(":again:");
+}
+
 export type HandoffNewestRun = { id: string; status: string };
 
 export type HandoffRunPlan =

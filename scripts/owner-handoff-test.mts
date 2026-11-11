@@ -19,6 +19,7 @@ import {
   handoffCollisionResult,
   handoffFinding,
   handoffInputs,
+  handoffIsTargetedRetry,
   handoffNeedsFreshRun,
   handoffRunToKeep,
   planHandoffRun,
@@ -165,6 +166,12 @@ assert(
   "a saved draft does not ask again",
 );
 assert(readFileSync("supabase/functions/agent-advisor/run.ts", "utf8").includes("draftNudge:"), "the advisor run can nudge once");
+assert(handoffIsTargetedRetry(handoffAgainInputs("action-1", "run-1")), "a second hand-off is a targeted retry");
+assert(!handoffIsTargetedRetry(handoffInputs("action-1")), "the first hand-off is not a retry");
+assert(
+  readFileSync("supabase/functions/_shared/agent-core/job.ts", "utf8").includes("handoffIsTargetedRetry"),
+  "the nudge runs only on a targeted retry",
+);
 assert(
   readFileSync("supabase/functions/_shared/agent-core/job.ts", "utf8").includes('toolChoice: { type: "auto" }'),
   "the nudge turn does not force a named tool",

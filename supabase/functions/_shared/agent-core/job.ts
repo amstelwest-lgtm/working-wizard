@@ -41,6 +41,7 @@ import {
   HANDOFF_COST_STOP,
   handoffCouldNotDraftSentence,
   handoffDraftFailureReason,
+  handoffIsTargetedRetry,
   handoffNoteWrite,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
@@ -443,7 +444,7 @@ export async function runQueueJob(
       allowedTools: config.allowedTools,
       toolLabels: config.toolLabels,
       rethrowReasonerErrors: true,
-      draftNudge: config.draftNudge,
+      draftNudge: config.draftNudge && handoffIsTargetedRetry(job.inputs) ? config.draftNudge : undefined,
       reason: async (ctx) => {
         const drafted = runnerEarlyFinish(recordedKeys.size);
         if (drafted) return { kind: "stop", reason: drafted.reason, summary: drafted.summary };
