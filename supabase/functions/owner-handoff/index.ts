@@ -17,6 +17,7 @@ import {
   handoffCollisionResult,
   handoffDecision,
   HANDOFF_OPEN_WINDOW_MS,
+  handoffNoteWrite,
   handoffRequestNote,
   handoffRunToKeep,
   personAssignmentNote,
@@ -88,6 +89,26 @@ async function writeAssignment(
     .update({ owner_id: input.ownerId, sent_at: null })
     .eq("id", input.actionItemId);
   if (ownerError) return "assignee_not_stored";
+  const { data: priorNotes } = await admin
+    .from("action_updates")
+    .select("id, note")
+    .eq("action_item_id", input.actionItemId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+  const noteWrite = handoffNoteWrite(
+    (priorNotes ?? []).flatMap((row) => {
+      const id = (row as { id?: unknown }).id;
+      const prior = (row as { note?: unknown }).note;
+      return typeof id === "string" ? [{ id, note: typeof prior === "string" ? prior : null }] : [];
+    }),
+    input.note,
+  );
+  if (noteWrite.action === "skip") return null;
+  if (noteWrite.action === "update") {
+    const { error: noteError } = await admin.from("action_updates").update({ note: input.note }).eq("id", noteWrite.id);
+    if (noteError) return "note_not_written";
+    return null;
+  }
   const { error: noteError } = await admin.from("action_updates").insert({
     action_item_id: input.actionItemId,
     client_id: input.clientId,

@@ -41,6 +41,7 @@ import {
   HANDOFF_COST_STOP,
   handoffCouldNotDraftSentence,
   handoffDraftFailureReason,
+  handoffNoteWrite,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
   handoffFinding,
@@ -288,14 +289,33 @@ async function recordHandoffFinish(
           market,
           figures: stored?.figures,
         });
-  const { error: noteError } = await db.from("action_updates").insert({
-    action_item_id: actionItemId,
-    client_id: input.clientId,
-    actor_type: "system",
-    actor_label: displayName,
+  const { data: priorNotes } = await db
+    .from("action_updates")
+    .select("id, note")
+    .eq("action_item_id", actionItemId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+  const noteWrite = handoffNoteWrite(
+    (priorNotes ?? []).flatMap((row) => {
+      const id = (row as { id?: unknown }).id;
+      const prior = (row as { note?: unknown }).note;
+      return typeof id === "string" ? [{ id, note: typeof prior === "string" ? prior : null }] : [];
+    }),
     note,
-  });
-  if (noteError) console.warn("handoff note", noteError.message);
+  );
+  if (noteWrite.action === "update") {
+    const { error: noteError } = await db.from("action_updates").update({ note }).eq("id", noteWrite.id);
+    if (noteError) console.warn("handoff note", noteError.message);
+  } else if (noteWrite.action === "insert") {
+    const { error: noteError } = await db.from("action_updates").insert({
+      action_item_id: actionItemId,
+      client_id: input.clientId,
+      actor_type: "system",
+      actor_label: displayName,
+      note,
+    });
+    if (noteError) console.warn("handoff note", noteError.message);
+  }
   if (findingCount === 0) {
     const { error: summaryError } = await db
       .from("agent_runs")

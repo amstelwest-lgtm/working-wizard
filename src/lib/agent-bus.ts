@@ -839,16 +839,20 @@ function scaleOfSuffix(suffix: string): number {
 export function citedNumbers(text: string): CitedNumber[] {
   // A hyphen between numbers is a range, not a minus. "30-60" must not become -60.
   const cleaned = stripCitationNoise(text).replace(/(\d)\s*[\u2010-\u2015\-]\s*(?=\d)/g, "$1 ");
-  const matches = cleaned.match(CITED_NUMBER) ?? [];
+  const matches = cleaned.matchAll(CITED_NUMBER);
   const out: CitedNumber[] = [];
-  for (const raw of matches) {
+  for (const match of matches) {
+    const raw = match[0];
     const suffix = raw.trim().match(/[kmb]\s*$/i)?.[0]?.toLowerCase() ?? "";
     const scale = scaleOfSuffix(suffix);
     const numeric = raw.replace(/[R$£€\s]/gi, "").replace(/[kmb]$/i, "").replace(/,/g, "");
     const mantissa = Number(numeric);
     if (!Number.isFinite(mantissa)) continue;
     const frac = numeric.includes(".") ? (numeric.split(".")[1] ?? "") : "";
-    out.push({ raw, value: mantissa * scale, decimals: frac.length, scale });
+    const before = cleaned.slice(Math.max(0, (match.index ?? 0) - 2), match.index ?? 0);
+    const signed = /[\u2010-\u2015\-]\s*$/.test(before);
+    const value = (signed ? -Math.abs(mantissa) : mantissa) * scale;
+    out.push({ raw, value, decimals: frac.length, scale });
   }
   return out;
 }

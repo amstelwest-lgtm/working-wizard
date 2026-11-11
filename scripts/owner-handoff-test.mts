@@ -11,6 +11,7 @@ import {
   handoffDecision,
   handoffCouldNotDraftSentence,
   handoffDraftFailureReason,
+  handoffNoteWrite,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
   handoffCollisionResult,
@@ -127,6 +128,14 @@ assert(
   !handoffCouldNotDraftSentence("Advisor", refused).includes("no draft was saved"),
   "the action row shows the citation error",
 );
+const retryNotes = [
+  { id: "fail-1", note: "Advisor couldn't draft this, no draft was saved for this action" },
+  { id: "hand-1", note: "Handed to Milōn Advisor." },
+];
+const updatedFail = handoffNoteWrite(retryNotes, handoffCouldNotDraftSentence("Advisor", refused));
+assert(updatedFail.action === "update" && updatedFail.id === "fail-1", "a retry updates the failure note");
+const skippedHand = handoffNoteWrite(retryNotes, "Handed to Milōn Advisor.");
+assert(skippedHand.action === "skip", "a retry does not add another Handed to note");
 const undated = handoffFinding({
   summary: "The partner reviews the pack before it goes out.",
   figures: {},

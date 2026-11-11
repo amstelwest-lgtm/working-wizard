@@ -456,6 +456,15 @@ function deskWritesLiveRecords(src: string): boolean {
   });
   assert(cash.empty === false, "a saved cashflow is readable");
   assert(cash.figures.opening_balance === 1000, "opening cash is the stored opening");
+  const withCapex = savedCashflowFigures({
+    openingBalance: "44480",
+    capexAmount: "50000",
+    capexWeek: "6",
+    revenue: [{ amount: "100", frequency: "once-off", startWeek: 1 }],
+    expenses: [],
+    other: [],
+  });
+  assert(withCapex.figures.capex_amount === 50000, "saved capex is a cashflow figure");
   assert(cash.figures.week_1_closing === 1100, "week 1 closing is the saved cashflow reading");
   assert(cash.figures.horizon_weeks === 13, "the horizon is the product's 13 weeks");
   assert(/not a bank/i.test(cash.note), "cash copy does not claim a bank balance");

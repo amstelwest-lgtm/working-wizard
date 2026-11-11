@@ -382,6 +382,34 @@ export function handoffCouldNotDraftSentence(displayName: string, reason?: strin
   return `${short} couldn't draft this, ${why}`.slice(0, 500);
 }
 
+/**
+ * A retry should not add another copy of the same hand-off or failure note.
+ * A new failure reason updates the existing failure note.
+ * `existingNewestFirst` is newest first.
+ */
+export function handoffNoteWrite(
+  existingNewestFirst: readonly { id: string; note: string | null }[],
+  next: string,
+): { action: "insert" } | { action: "skip" } | { action: "update"; id: string } {
+  const text = next.replace(/\s+/g, " ").trim();
+  if (!text) return { action: "skip" };
+  const rows = existingNewestFirst
+    .map((row) => ({ id: row.id, note: (row.note ?? "").replace(/\s+/g, " ").trim() }))
+    .filter((row) => row.id && row.note);
+  if (/couldn't draft this/i.test(text)) {
+    const prior = rows.find((row) => /couldn't draft this/i.test(row.note));
+    if (prior) return prior.note === text ? { action: "skip" } : { action: "update", id: prior.id };
+  }
+  if (text.startsWith("Handed to ")) {
+    const handedAt = rows.findIndex((row) => row.note === text);
+    if (handedAt >= 0) {
+      const newerSuccess = rows.slice(0, handedAt).some((row) => / finished/i.test(row.note));
+      if (!newerSuccess) return { action: "skip" };
+    }
+  }
+  return { action: "insert" };
+}
+
 /** Finish note. A run with no finding does not say finished. */
 export function handoffFinishNote(input: {
   displayName: string;
