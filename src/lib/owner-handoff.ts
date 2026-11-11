@@ -386,7 +386,11 @@ const HANDOFF_AGENT: Record<string, string> = {
 };
 
 /** "Advisor passed this to the Financial Manager: <finding title>". */
-export function handoffPassedAlongReason(displayName: string, steps: readonly HandoffStep[]): string | null {
+export function handoffPassedAlongReason(
+  displayName: string,
+  steps: readonly HandoffStep[],
+  actionTitle?: string | null,
+): string | null {
   const handoff = [...steps].reverse().find((step) => /"to_agent"\s*:/.test(stepDetail(step)));
   if (!handoff) return null;
   const detail = stepDetail(handoff);
@@ -394,8 +398,14 @@ export function handoffPassedAlongReason(displayName: string, steps: readonly Ha
   const who = HANDOFF_AGENT[agent] ?? "";
   const title = detail.match(/"title"\s*:\s*"((?:\\.|[^"\\])*)"/)?.[1]?.replace(/\\"/g, '"').trim() ?? "";
   const short = displayName.replace(/^Milōn\s+/u, "").trim() || "Advisor";
-  if (who && title) return `${short} passed this to the ${who}: ${title}`.slice(0, 400);
-  if (who) return `${short} passed this to the ${who}`;
+  const action = (actionTitle ?? "").replace(/\s+/g, " ").trim();
+  const findingAboutAction =
+    Boolean(action) &&
+    Boolean(title) &&
+    (title.toLowerCase().includes(action.toLowerCase()) || action.toLowerCase().includes(title.toLowerCase()));
+  if (who && findingAboutAction) return `${short} passed this to the ${who}: ${title}`.slice(0, 400);
+  if (who && action) return `${short} passed this to the ${who}: ${action}`.slice(0, 400);
+  if (who) return `${short} passed this to the ${who} for review`;
   return null;
 }
 
@@ -406,6 +416,7 @@ export function handoffPassedAlongReason(displayName: string, steps: readonly Ha
 export function handoffDraftFailureReason(input: {
   summary?: string | null;
   steps?: readonly HandoffStep[];
+  actionTitle?: string | null;
 }): string {
   const steps = input.steps ?? [];
   const failed = steps.find((step) => {
@@ -418,7 +429,7 @@ export function handoffDraftFailureReason(input: {
   if (summary && !handoffClaimsDraftsRecorded(summary) && !/no draft was saved/i.test(summary)) {
     return summary.slice(0, 400);
   }
-  const passed = handoffPassedAlongReason("Advisor", steps);
+  const passed = handoffPassedAlongReason("Advisor", steps, input.actionTitle);
   if (passed) return passed;
   return "no draft was saved for this action";
 }
@@ -451,17 +462,12 @@ export function handoffNoteWrite(
   const rows = existingNewestFirst
     .map((row) => ({ id: row.id, note: (row.note ?? "").replace(/\s+/g, " ").trim() }))
     .filter((row) => row.id && row.note);
-  if (/couldn't draft this/i.test(text)) {
-    const prior = rows.find((row) => /couldn't draft this/i.test(row.note));
+  const outcome = (note: string) => /couldn't draft this/i.test(note) || /passed this to the /i.test(note);
+  if (outcome(text)) {
+    const prior = rows.find((row) => outcome(row.note));
     if (prior) return prior.note === text ? { action: "skip" } : { action: "update", id: prior.id };
   }
-  if (text.startsWith("Handed to ")) {
-    const handedAt = rows.findIndex((row) => row.note === text);
-    if (handedAt >= 0) {
-      const newerSuccess = rows.slice(0, handedAt).some((row) => / finished/i.test(row.note));
-      if (!newerSuccess) return { action: "skip" };
-    }
-  }
+  if (text.startsWith("Handed to ") && rows.some((row) => row.note === text)) return { action: "skip" };
   return { action: "insert" };
 }
 

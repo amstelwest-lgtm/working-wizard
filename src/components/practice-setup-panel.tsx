@@ -439,7 +439,9 @@ function PracticeSetupHero({ status, metric }: { status: string; metric: string 
             name={IMPLEMENTATION_MANAGER_LABEL}
             label={IMPLEMENTATION_MANAGER_LABEL}
             chip={<ImplementationManagerChip />}
-            status={<span className="owner-status is-attention">{status}</span>}
+            status={
+              <span className={status === "Saved" ? "owner-status" : "owner-status is-attention"}>{status}</span>
+            }
             lines={
               <span className="owner-lines" data-status-update="">
                 <span className="owner-voice">

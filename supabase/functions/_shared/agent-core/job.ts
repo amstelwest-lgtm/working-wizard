@@ -199,6 +199,12 @@ async function recordHandoffFinish(
     }
     return count ?? 0;
   };
+  const { data: actionRow } = await db
+    .from("action_items")
+    .select("title")
+    .eq("id", actionItemId)
+    .maybeSingle();
+  const actionTitle = typeof actionRow?.title === "string" ? actionRow.title : "";
   let findingCount = await countFindings();
   let blocked = "";
   if (findingCount === 0) {
@@ -222,17 +228,11 @@ async function recordHandoffFinish(
       (finding.evidence as { uncited?: boolean }).uncited === true &&
       cited?.ok !== true;
     if (!finding) {
-      blocked = handoffDraftFailureReason({ summary: input.summary, steps: input.steps });
+      blocked = handoffDraftFailureReason({ summary: input.summary, steps: input.steps, actionTitle });
     } else if (cited && cited.ok === false && !uncited) {
       blocked = cited.error;
     }
     if (finding && (cited?.ok || uncited)) {
-      const { data: actionRow } = await db
-        .from("action_items")
-        .select("title")
-        .eq("id", actionItemId)
-        .maybeSingle();
-      const actionTitle = typeof actionRow?.title === "string" ? actionRow.title : "";
       const labelled = actionTitle ? handoffDraftTitle(actionTitle) : finding.title;
       const { data: priorDrafts } = await db
         .from("agent_findings")
@@ -280,7 +280,7 @@ async function recordHandoffFinish(
   if (findingCount == null) return;
   const reason =
     findingCount === 0
-      ? blocked || handoffDraftFailureReason({ summary: input.summary, steps: input.steps })
+      ? blocked || handoffDraftFailureReason({ summary: input.summary, steps: input.steps, actionTitle })
       : "";
   const note =
     findingCount === 0

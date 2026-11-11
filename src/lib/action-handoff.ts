@@ -243,6 +243,14 @@ export function botPickupCaption(input: {
 export type HandoffPhase = "working" | "draft_ready" | "approved" | "sent" | "failed";
 
 /** Chip and sent-column label. Null leaves the ordinary health and Not sent labels. */
+/** A settled hand-off names who received it. It is not a failed draft. */
+export function handoffSettledPill(phase: HandoffPhase | null | undefined, note?: string | null): string | null {
+  const raw = (note ?? "").replace(/\s+/g, " ").trim();
+  const handed = raw.match(/passed this to the ([A-Za-z][A-Za-z ]*?)(?::| for review|$)/i);
+  if (handed?.[1]) return `Handed to ${handed[1].trim()}`;
+  return handoffPhaseLabel(phase);
+}
+
 export function handoffPhaseLabel(phase: HandoffPhase | null | undefined): string | null {
   if (phase === "working") return "Working";
   if (phase === "draft_ready") return "Draft ready";
@@ -458,7 +466,7 @@ export function describeActionHandoff<T extends { note: string | null; at: strin
     run: run ? { status: run.status, at: run.at, agent: run.agent } : null,
     draftId,
     phase,
-    phaseLabel: handoffPhaseLabel(phase),
+    phaseLabel: handoffSettledPill(phase, result?.text ?? live?.summary),
     notes: assignmentNotesForDraft(input.notes, draftId),
   };
 }

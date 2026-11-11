@@ -139,6 +139,15 @@ const updatedFail = handoffNoteWrite(retryNotes, handoffCouldNotDraftSentence("A
 assert(updatedFail.action === "update" && updatedFail.id === "fail-1", "a retry updates the failure note");
 const skippedHand = handoffNoteWrite(retryNotes, "Handed to Milōn Advisor.");
 assert(skippedHand.action === "skip", "a retry does not add another Handed to note");
+const passedNote = handoffNoteWrite(
+  retryNotes,
+  "Advisor passed this to the Financial Manager: Reduce short-term debt by refinancing into longer-term facilities",
+);
+assert(passedNote.action === "update" && passedNote.id === "fail-1", "a retry updates the earlier outcome note");
+assert(
+  [skippedHand.action, passedNote.action].filter((action) => action === "insert").length === 0,
+  "one retry does not insert two notes",
+);
 const handedOff = [
   {
     tool: "record_draft",
@@ -150,13 +159,26 @@ const handedOff = [
 assert(handoffNeedsDraftNudge(handedOff), "a deduped hand-off is not a draft of this action");
 assert(
   handoffPassedAlongReason("Advisor", handedOff) ===
-    "Advisor passed this to the Financial Manager: The saved cashflow goes negative from week 1",
-  "the note names the hand-off",
+    "Advisor passed this to the Financial Manager for review",
+  "a deduped finding title is not used when the action is unknown",
 );
 assert(
-  handoffDraftFailureReason({ summary: "Drafts are recorded. A person approves them before anything is sent.", steps: handedOff }) ===
-    "Advisor passed this to the Financial Manager: The saved cashflow goes negative from week 1",
-  "a deduped hand-off replaces the generic sentence",
+  handoffPassedAlongReason(
+    "Advisor",
+    handedOff,
+    "Reduce short-term debt by refinancing into longer-term facilities",
+  ) ===
+    "Advisor passed this to the Financial Manager: Reduce short-term debt by refinancing into longer-term facilities",
+  "an unrelated deduped finding does not name the note",
+);
+assert(
+  handoffDraftFailureReason({
+    summary: "Drafts are recorded. A person approves them before anything is sent.",
+    steps: handedOff,
+    actionTitle: "Reduce short-term debt by refinancing into longer-term facilities",
+  }) ===
+    "Advisor passed this to the Financial Manager: Reduce short-term debt by refinancing into longer-term facilities",
+  "a deduped hand-off replaces the generic sentence with this action",
 );
 assert(
   !handoffNeedsDraftNudge([

@@ -285,6 +285,38 @@ assert(
     "The bookkeeper posts the supplier bill the same day.",
   "Not stated drops when the answer is in the line",
 );
+const roundTrip = [
+  {
+    step: "Clients send invoices and bank statements to the firm as PDF email attachments — Clients; Email (PDF attachments); Monthly",
+    bucket: "client_setup" as const,
+  },
+  {
+    step: "We prepare a quarterly management pack — Partner; Xero; Monthly",
+    bucket: "covered" as const,
+  },
+  {
+    step: "Collect fees by direct debit — Bookkeeper; Bank; Monthly",
+    bucket: "product_gap" as const,
+  },
+  {
+    step: "Remote desktop into the client's machine — Partner; AnyDesk; Ad hoc",
+    bucket: "bespoke" as const,
+  },
+];
+const roundRows = clientSetupBrainRows({
+  firmId,
+  approverId: "11111111-1111-1111-1111-111111111111",
+  steps: roundTrip.map((row) => ({ ...classifyPracticeStep(row.step), step: row.step, bucket: row.bucket })),
+});
+const roundBack = practicePlanFromConfirmRules(roundRows);
+for (const row of roundTrip) {
+  const found = roundBack.steps.find((step) => step.step === row.step);
+  const detail = row.step.split(" — ")[1] ?? "";
+  assert(found, `reload keeps ${row.bucket}`);
+  assert(found?.bucket === row.bucket, `${row.bucket} bucket survives`);
+  assert(found?.step.includes(detail), `${row.bucket} detail survives`);
+  assert(found?.step.startsWith(row.step.split(" — ")[0]), `${row.bucket} label survives`);
+}
 
 testFirmInterviewAndDeadlineBucket();
 testFollowUpBottleneckAndIntake();

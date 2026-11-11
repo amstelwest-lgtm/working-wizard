@@ -393,12 +393,11 @@ export function practicePlanFromConfirmRules(
     if (row.status && row.status !== "active") continue;
     const text = (row.rule_text ?? "").replace(/\s+/g, " ").trim();
     if (!text.startsWith("Practice: ")) continue;
-    let step = text.slice("Practice: ".length);
-    const mark = step.indexOf(" — ");
-    if (mark > 0) step = step.slice(0, mark).trim();
-    if (!step || seen.has(step.toLowerCase())) continue;
-    seen.add(step.toLowerCase());
-    steps.push(classifyPracticeStep(step));
+    const parsed = parsePracticeConfirmRule(text.slice("Practice: ".length));
+    if (!parsed.step || seen.has(parsed.step.toLowerCase())) continue;
+    seen.add(parsed.step.toLowerCase());
+    const classified = classifyPracticeStep(parsed.step);
+    steps.push(parsed.bucket ? { ...classified, step: parsed.step, bucket: parsed.bucket } : { ...classified, step: parsed.step });
   }
   return { steps: dedupePracticeSteps(steps) };
 }
@@ -412,12 +411,42 @@ function clipAtSentence(text: string, max: number): string {
   return slice.slice(0, end + 1).replace(/[;\s]+$/g, "").trim();
 }
 
-/** Step text stays whole. A fit note is dropped rather than cut mid-sentence. */
-export function practiceConfirmRuleText(step: string, fit: string): string {
+const FIT_NOTE_STARTS = [
+  "Firm setting for the practice.",
+  "Fits the universal finance function.",
+  "Outside the universal finance function.",
+  "Already in Milōn:",
+];
+
+const PRACTICE_BUCKETS = ["covered", "client_setup", "product_gap", "bespoke"] as const;
+
+/** Drop a stored fit note. Leave a detail that sits after an em dash in the step. */
+function stripStoredFitNote(text: string): string {
+  const mark = text.lastIndexOf(" — ");
+  if (mark <= 0) return text.trim();
+  const tail = text.slice(mark + 3).trim();
+  if (!FIT_NOTE_STARTS.some((start) => tail.startsWith(start))) return text.trim();
+  return text.slice(0, mark).trim();
+}
+
+export function parsePracticeConfirmRule(body: string): { step: string; bucket: PracticeGapBucket | null } {
+  let text = body.trim();
+  let bucket: PracticeGapBucket | null = null;
+  const marked = text.match(/ \[\|(covered|client_setup|product_gap|bespoke)\]/);
+  if (marked && marked.index != null && (PRACTICE_BUCKETS as readonly string[]).includes(marked[1])) {
+    bucket = marked[1] as PracticeGapBucket;
+    text = `${text.slice(0, marked.index)} ${text.slice(marked.index + marked[0].length)}`.trim();
+  }
+  return { step: stripStoredFitNote(text), bucket };
+}
+
+/** Step text stays whole, including the detail after an em dash. A fit note is dropped rather than cut mid-sentence. */
+export function practiceConfirmRuleText(step: string, fit: string, bucket?: PracticeGapBucket): string {
   const cleanStep = cleanFlowLine(step);
   const cleanFit = cleanFlowLine(fit).replace(/[;]+\s*$/g, "").trim();
   if (!cleanStep) return "";
-  const head = `Practice: ${cleanStep}`;
+  const marked = bucket ? `${cleanStep} [|${bucket}]` : cleanStep;
+  const head = `Practice: ${marked}`;
   if (head.length > 500) {
     const cut = clipAtSentence(head, 500);
     return cut || head.slice(0, head.lastIndexOf(" ", 500)).trim();
@@ -438,7 +467,7 @@ export function clientSetupBrainRows(input: {
 }): MilonBrainRuleRow[] {
   const rows: MilonBrainRuleRow[] = [];
   for (const step of input.steps) {
-    const rule_text = practiceConfirmRuleText(step.step, step.fit_note);
+    const rule_text = practiceConfirmRuleText(step.step, step.fit_note, step.bucket);
     if (!rule_text) continue;
     rows.push({
       firm_id: input.firmId,
