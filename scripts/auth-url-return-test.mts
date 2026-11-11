@@ -153,10 +153,13 @@ const verify = read("supabase/templates/verify.html");
 const config = read("supabase/config.toml");
 const magicFold = magic.toLowerCase();
 assert(magic.includes("Sign in to Milōn"), "the magic-link template is the sign-in mail");
+assert(magic.includes("one-time sign-in link"), "the sign-in mail explains the link");
 assert(
-  magic.includes("Use the button below to sign in. The link expires soon and works once."),
-  "the sign-in mail has its own short line and does not invent an expiry duration",
+  magic.includes("The link expires soon and works once."),
+  "the sign-in mail does not invent an expiry duration",
 );
+assert(magic.includes(">Sign in</a>"), "the sign-in button is labelled Sign in");
+assert(magic.includes(">Milōn</p>"), "the sign-in mail signs off as Milōn");
 assert(magic.includes("{{ .ConfirmationURL }}"), "the sign-in button uses ConfirmationURL");
 assert(magic.includes("{{ .Token }}"), "the sign-in mail shows the 6-digit code");
 assert(magic.includes("#0B5FFF") && magic.includes("#102A43") && magic.includes("#DBEAFE"), "sign-in mail uses brand v1.1");
