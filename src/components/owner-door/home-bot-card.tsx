@@ -79,7 +79,18 @@ export function HomeBotCard({
           {face}
         </Link>
       ) : (
-        <button type="button" className="owner-agent-open" data-agent-open={agent} onClick={onOpen}>
+        <button
+          type="button"
+          className="owner-agent-open"
+          data-agent-open={agent}
+          onClick={onOpen}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            if (!onOpen) return;
+            event.preventDefault();
+            onOpen();
+          }}
+        >
           {face}
         </button>
       )}
