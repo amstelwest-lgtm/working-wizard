@@ -7,6 +7,12 @@ import {
   type SetupPartnerWorkflowMap,
 } from "@/lib/setup-partner";
 import {
+  interviewDraftFromRuleText,
+  SETUP_PARTNER_INTERVIEW_EVENT,
+  SETUP_PARTNER_INTERVIEW_TASK,
+  type FirmInterviewDraft,
+} from "@/lib/firm-interview-draft";
+import {
   practicePlanFromConfirmRules,
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
@@ -162,6 +168,36 @@ export async function fetchFirmSetupPlan(
   if (error) throw new Error(error.message);
   const plan = practicePlanFromConfirmRules(data ?? []);
   return plan.steps.length ? plan : null;
+}
+
+type DraftQuery = Promise<{
+  data: Array<{ rule_text: string | null }> | null;
+  error: { message: string } | null;
+}> & {
+  eq: (column: string, value: string) => DraftQuery;
+  is: (column: string, value: null) => DraftQuery;
+  order: (column: string, options: { ascending: boolean }) => DraftQuery;
+  limit: (count: number) => DraftQuery;
+};
+
+/** Active in-progress interview for this firm. Not a confirmed plan row. */
+export async function fetchFirmInterviewDraft(firmId: string): Promise<FirmInterviewDraft | null> {
+  const builder = (
+    supabase as unknown as {
+      from: (table: string) => { select: (columns: string) => DraftQuery };
+    }
+  ).from("milon_brain_rules");
+  const { data, error } = await builder
+    .select("rule_text")
+    .eq("firm_id", firmId)
+    .is("client_id", null)
+    .eq("source_event", SETUP_PARTNER_INTERVIEW_EVENT)
+    .eq("status", "active")
+    .eq("task_type", SETUP_PARTNER_INTERVIEW_TASK)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return interviewDraftFromRuleText(data?.[0]?.rule_text);
 }
 
 export async function confirmSetupPartnerFirmMap(

@@ -16,9 +16,18 @@ import {
   interviewTurnFromModel,
   parseFirmInterviewTurn,
   parseWorkflowMapJson,
+  SETUP_PARTNER_SOURCE_EVENT,
+  SETUP_PARTNER_TASK_WORKFLOW,
   workflowMapFromInterview,
   workflowMapFromModel,
 } from "../src/lib/setup-partner.ts";
+import {
+  interviewDraftFromRuleText,
+  interviewDraftWithQuestion,
+  interviewDraftWrite,
+  SETUP_PARTNER_INTERVIEW_EVENT,
+  SETUP_PARTNER_INTERVIEW_TASK,
+} from "../src/lib/firm-interview-draft.ts";
 import {
   buildPracticeImplementationPlan,
   classifyPracticeStep,
@@ -37,6 +46,7 @@ function read(path: string): string {
 
 const card = read("src/components/practice-setup-card.tsx");
 assert(card.includes('to="/practice/setup"'), "card opens the firm setup route");
+assert(!card.includes("firmId"), "the home card does not take a firm id");
 assert(!card.includes("/clients/"), "card does not deep-link a client");
 assert(!card.includes("view=books"), "card does not open client books");
 assert(card.includes("owner-status") && card.includes("Not started"), "home card has a status chip");
@@ -70,6 +80,58 @@ const tree = read("src/routeTree.gen.ts");
 assert(tree.includes("'/practice/setup'"), "route tree publishes /practice/setup");
 
 const edge = read("supabase/functions/setup-partner/index.ts");
+assert(edge.includes("saveFirmInterviewDraft"), "each turn is saved on the existing brain row");
+assert(edge.includes("clearFirmInterviewDraft"), "confirm clears the in-progress interview");
+assert(
+  SETUP_PARTNER_INTERVIEW_EVENT !== SETUP_PARTNER_SOURCE_EVENT &&
+    SETUP_PARTNER_INTERVIEW_TASK !== SETUP_PARTNER_TASK_WORKFLOW,
+  "the interview row is not a confirmed plan row",
+);
+{
+  const question = "When a partner signs off by WhatsApp voice note, what happens next?";
+  const answer = "The bookkeeper posts the supplier bill the same day.";
+  const saved = interviewDraftWrite(null, {
+    firmId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    approverId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    draft: interviewDraftWithQuestion(
+      [
+        { role: "assistant", content: "Walk me through month end." },
+        { role: "user", content: answer },
+      ],
+      question,
+      2,
+    ),
+  });
+  assert(saved.kind === "insert", "the first turn inserts one rule");
+  assert(
+    saved.kind === "insert" && saved.row.task_type === SETUP_PARTNER_INTERVIEW_TASK,
+    "task stays the interview task",
+  );
+  const reloaded = interviewDraftFromRuleText(saved.kind === "insert" ? saved.row.rule_text : "");
+  assert(reloaded?.question === question, "reload keeps the question as written");
+  assert(
+    reloaded?.messages.some((message) => message.content === answer),
+    "reload keeps the earlier answer",
+  );
+  assert(reloaded?.modelTurns === 2, "reload keeps the turn count");
+  const updated = interviewDraftWrite("rule-1", {
+    firmId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    approverId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    draft: reloaded!,
+  });
+  assert(updated.kind === "update" && updated.id === "rule-1", "the next turn updates the same row");
+  assert(
+    practicePlanFromConfirmRules([
+      {
+        rule_text: saved.kind === "insert" ? saved.row.rule_text : "",
+        client_id: null,
+        source_event: SETUP_PARTNER_INTERVIEW_EVENT,
+        status: "active",
+      },
+    ]).steps.length === 0,
+    "an interview row is not a confirmed plan",
+  );
+}
 assert(edge.includes("clientId or firmId is required"), "firm mode does not require a client");
 assert(edge.includes("has_client_access"), "client mode still checks client access");
 assert(edge.includes("coverageMarketNote"), "build_map tells the model the firm country");
@@ -126,6 +188,7 @@ assert(
 );
 assert(panel.includes("Redo interview"), "a saved plan can be redone");
 assert(panel.includes("fetchFirmSetupPlan"), "saved rules load through the existing client");
+assert(panel.includes("fetchFirmInterviewDraft"), "an in-progress interview reloads on boot");
 assert(
   panel.includes('agent="setup_partner"'),
   "firm page mounts the Implementation Manager avatar",
@@ -659,6 +722,14 @@ async function runPanel() {
       inserted: number;
       plan: { steps: (typeof savedStep)[] } | null;
     }>;
+    loadDraft?: (
+      firmId: string,
+    ) => Promise<ReturnType<typeof interviewDraftFromRuleText>>;
+    askTurn?: (input: {
+      firmId: string;
+      messages: Array<{ role: "user" | "assistant"; content: string }>;
+      modelTurns: number;
+    }) => Promise<{ question: string; done: boolean; modelTurns: number }>;
   }) {
     const rootRoute = createRootRoute({
       component: () => createElement(Outlet),
@@ -671,13 +742,16 @@ async function runPanel() {
           firmId,
           firmMarket: usMarket,
           loadSaved: props.loadSaved,
+          loadDraft: props.loadDraft ?? (async () => null),
           buildMap: props.buildMap,
           confirmMap: props.confirmMap,
-          askTurn: async ({ modelTurns }) => ({
-            question: "Walk me through how a typical client month ends.",
-            done: modelTurns > 0,
-            modelTurns: modelTurns + 1,
-          }),
+          askTurn:
+            props.askTurn ??
+            (async ({ modelTurns }) => ({
+              question: "Walk me through how a typical client month ends.",
+              done: modelTurns > 0,
+              modelTurns: modelTurns + 1,
+            })),
         }),
     });
     const practiceRoute = createRoute({
@@ -876,4 +950,79 @@ async function runPanel() {
     "a failure does not show saved",
   );
   await unmountFail();
+
+  const resumeQuestion = "When a partner signs off by WhatsApp voice note, what happens next?";
+  const resumeAnswer = "The bookkeeper posts the supplier bill the same day.";
+  const resumeSaved = interviewDraftWrite(null, {
+    firmId,
+    approverId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    draft: interviewDraftWithQuestion(
+      [
+        { role: "assistant", content: "Walk me through month end." },
+        { role: "user", content: resumeAnswer },
+      ],
+      resumeQuestion,
+      2,
+    ),
+  });
+  const resumeDraft = interviewDraftFromRuleText(
+    resumeSaved.kind === "insert" ? resumeSaved.row.rule_text : "",
+  );
+  assert(resumeDraft, "the saved interview reloads");
+  let resumeAsks = 0;
+  let resumeSent: Array<{ role: string; content: string }> = [];
+  const unmountResume = await mount({
+    loadSaved: async () => null,
+    loadDraft: async () => resumeDraft,
+    buildMap: async () => buildGate,
+    confirmMap: async () => confirmGate,
+    askTurn: async (input) => {
+      resumeAsks += 1;
+      resumeSent = input.messages;
+      return {
+        question: "Who reviews the pack?",
+        done: false,
+        modelTurns: input.modelTurns + 1,
+      };
+    },
+  });
+  await waitForPhase("interview");
+  assert(resumeAsks === 0, "reload does not ask for a new question");
+  assert(
+    document.querySelector(".setup-partner__question")?.textContent === resumeQuestion,
+    "resume shows the same question",
+  );
+  assert(
+    document.querySelector(".setup-partner__transcript")?.textContent?.includes(resumeAnswer),
+    "resume keeps the transcript",
+  );
+  const resumeBox = document.querySelector("textarea");
+  assert(resumeBox instanceof HTMLTextAreaElement, "the answer box is ready");
+  const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  await act(async () => {
+    setValue?.call(resumeBox, "The partner replies in the thread.");
+    resumeBox.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const resumeNext = [...document.querySelectorAll("button")].find(
+    (button) => button.textContent === "Next",
+  );
+  assert(resumeNext instanceof HTMLButtonElement && !resumeNext.disabled, "resume can continue");
+  await act(async () => {
+    resumeNext.click();
+  });
+  await settle();
+  assert(resumeAsks === 1, "the next turn is the first model call");
+  assert(
+    resumeSent.some((message) => message.content === resumeAnswer),
+    "the next turn sends the earlier answer",
+  );
+  assert(
+    resumeSent.some((message) => message.content === resumeQuestion),
+    "the next turn sends the restored question",
+  );
+  assert(
+    resumeSent.at(-1)?.content === "The partner replies in the thread.",
+    "the next turn sends the new answer",
+  );
+  await unmountResume();
 }

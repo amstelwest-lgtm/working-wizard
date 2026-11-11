@@ -35,12 +35,10 @@ export function ImplementationManagerChip() {
 export function PracticeSetupCard({
   exampleClientId: _exampleClientId,
   embedded = false,
-  firmId: _firmId = null,
 }: {
   exampleClientId?: string | null;
   /** Render the tile only, for the home agent grid. */
   embedded?: boolean;
-  firmId?: string | null;
 }) {
   const card = (
     <HomeBotCard

@@ -60,6 +60,14 @@ import {
   readPrecardGate,
   recordPrecardUse,
 } from "../_shared/precard-cap-gate.ts";
+import {
+  SETUP_PARTNER_INTERVIEW_EVENT,
+  SETUP_PARTNER_INTERVIEW_TASK,
+  interviewDraftWithQuestion,
+  interviewDraftWrite,
+  type FirmInterviewDraft,
+  type FirmInterviewDraftMessage,
+} from "../../../src/lib/firm-interview-draft.ts";
 import { parseMarketSelection } from "../../../src/lib/market/parse.ts";
 import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../../../src/lib/precard-cap.ts";
 
@@ -132,6 +140,59 @@ async function loadSummary(
 }
 
 type AdminClient = SupabaseClient<any, "public", any>;
+
+function draftMessages(raw: unknown): FirmInterviewDraftMessage[] {
+  if (!Array.isArray(raw)) return [];
+  const out: FirmInterviewDraftMessage[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const rec = row as { role?: unknown; content?: unknown };
+    if (rec.role !== "user" && rec.role !== "assistant") continue;
+    if (typeof rec.content !== "string") continue;
+    out.push({ role: rec.role, content: rec.content });
+  }
+  return out;
+}
+
+async function saveFirmInterviewDraft(
+  admin: AdminClient,
+  input: { firmId: string; approverId: string; draft: FirmInterviewDraft },
+) {
+  const { data, error } = await admin
+    .from("milon_brain_rules")
+    .select("id")
+    .eq("firm_id", input.firmId)
+    .is("client_id", null)
+    .eq("source_event", SETUP_PARTNER_INTERVIEW_EVENT)
+    .eq("task_type", SETUP_PARTNER_INTERVIEW_TASK)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const existingId = data?.[0]?.id ? String(data[0].id) : null;
+  const write = interviewDraftWrite(existingId, input);
+  if (write.kind === "update") {
+    const { error: updateError } = await admin
+      .from("milon_brain_rules")
+      .update({ rule_text: write.rule_text, approver_id: input.approverId })
+      .eq("id", write.id);
+    if (updateError) throw new Error(updateError.message);
+    return;
+  }
+  const { error: insertError } = await admin.from("milon_brain_rules").insert(write.row);
+  if (insertError) throw new Error(insertError.message);
+}
+
+async function clearFirmInterviewDraft(admin: AdminClient, firmId: string) {
+  const { error } = await admin
+    .from("milon_brain_rules")
+    .delete()
+    .eq("firm_id", firmId)
+    .is("client_id", null)
+    .eq("source_event", SETUP_PARTNER_INTERVIEW_EVENT)
+    .eq("task_type", SETUP_PARTNER_INTERVIEW_TASK);
+  if (error) throw new Error(error.message);
+}
 
 async function retirePriorOnboarding(admin: AdminClient, firmId: string, clientId: string | null) {
   let query = admin
@@ -445,6 +506,16 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       console.info("setup_partner_bespoke", firmId, step.dedupe_key);
       bespokeLogged += 1;
     }
+    if (!clientId) {
+      try {
+        await clearFirmInterviewDraft(adminClient, firmId);
+      } catch (err) {
+        console.error(
+          "setup_partner_interview_clear_failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
     return respond({
       ok: true,
       inserted,
@@ -519,6 +590,33 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       return respond({ question: "", done: true, modelTurns });
     }
     const history = Array.isArray(body.messages) ? body.messages : [];
+    const remembered = draftMessages(history);
+    const persistQuestion = async (question: string, turns: number) => {
+      try {
+        await saveFirmInterviewDraft(adminClient, {
+          firmId,
+          approverId: user.id,
+          draft: interviewDraftWithQuestion(remembered, question, turns),
+        });
+      } catch (err) {
+        console.error(
+          "setup_partner_interview_save_failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    };
+    const replyTurn = async (parsed: { question: string; done: boolean }, turnsSoFar: number) => {
+      const nextTurns = turnsSoFar + 1;
+      const done = firmInterviewShouldStop(nextTurns, parsed.done);
+      const question = done ? "" : parsed.question;
+      if (question) await persistQuestion(question, nextTurns);
+      return respond({
+        question,
+        done,
+        modelTurns: nextTurns,
+        model: interviewModel,
+      });
+    };
     const lines = history
       .map((row) => {
         if (!row || typeof row !== "object") return "";
@@ -579,28 +677,14 @@ async function handleSetupPartner(req: Request): Promise<Response> {
           },
         });
       }
-      const nextTurns = modelTurns + 1;
-      const done = firmInterviewShouldStop(nextTurns, parsed.done);
-      return respond({
-        question: done ? "" : parsed.question,
-        done,
-        modelTurns: nextTurns,
-        model: interviewModel,
-      });
+      return replyTurn(parsed, modelTurns);
     } catch (err) {
       console.error("setup_partner_turn_failed", err instanceof Error ? err.message : err);
       try {
         if (attempts >= 2) throw err;
         const parsed = await ask(false);
         if (parsed.question || parsed.done) {
-          const nextTurns = modelTurns + 1;
-          const done = firmInterviewShouldStop(nextTurns, parsed.done);
-          return respond({
-            question: done ? "" : parsed.question,
-            done,
-            modelTurns: nextTurns,
-            model: interviewModel,
-          });
+          return replyTurn(parsed, modelTurns);
         }
       } catch (retryErr) {
         console.error("setup_partner_turn_retry_failed", retryErr instanceof Error ? retryErr.message : retryErr);
