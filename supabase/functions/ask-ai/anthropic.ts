@@ -8,6 +8,7 @@ import {
   type AskAiClaudeTool,
   type AskAiModelMessage,
 } from "../../../src/lib/ask-ai-claude-body.ts";
+import type { ClaudeToolChoice } from "../../../src/lib/claude-request.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
@@ -27,6 +28,7 @@ export async function callClaude(
     maxTokens?: number;
     temperature?: number;
     tools?: AskAiClaudeTool[];
+    toolChoice?: ClaudeToolChoice;
     model?: string;
     timeoutMs?: number;
   },
@@ -41,6 +43,7 @@ export async function callClaudeMessages(
     maxTokens?: number;
     temperature?: number;
     tools?: AskAiClaudeTool[];
+    toolChoice?: ClaudeToolChoice;
     model?: string;
     timeoutMs?: number;
   },
@@ -71,6 +74,7 @@ export async function callClaudeMessages(
           maxTokens: opts?.maxTokens ?? 512,
           temperature: opts?.temperature ?? 0.3,
           tools: opts?.tools,
+          toolChoice: opts?.toolChoice,
         }),
       ),
     });

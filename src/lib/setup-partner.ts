@@ -103,6 +103,96 @@ function questionFromJsonSlice(raw: string): { question: string; done: boolean }
   return { question, done };
 }
 
+/** Shown when a turn cannot be made into a question. Never includes model output. */
+export const FIRM_INTERVIEW_RETRY = "No question came back. Retry.";
+
+export function firmInterviewUserError(message: string): string {
+  const text = message.replace(/\s+/g, " ").trim();
+  if (!text || text.includes("{") || text.includes("`") || text.includes('"question"')) {
+    return FIRM_INTERVIEW_RETRY;
+  }
+  return text;
+}
+
+export const ASK_QUESTION_TOOL = {
+  name: "ask_question",
+  description: "Ask the next interview question, or mark the interview ready to map.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      question: {
+        type: "string",
+        description: "Exactly one question. One sentence. Empty when done is true.",
+      },
+      done: { type: "boolean" },
+    },
+    required: ["question", "done"],
+  },
+};
+
+export const EXTRACT_WORKFLOW_TOOL = {
+  name: "extract_workflow",
+  description: "Turn the interview into one workflow step per answer, plus checklist lines.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      steps: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            step: { type: "string" },
+            who: { type: "string" },
+            tool: { type: "string" },
+            cadence: { type: "string" },
+            pain: { type: "string" },
+          },
+          required: ["step"],
+        },
+      },
+      checklist: { type: "array", items: { type: "string" } },
+    },
+    required: ["steps", "checklist"],
+  },
+};
+
+export type ModelToolUse = { name?: string; input?: unknown };
+
+function turnFromToolInput(input: unknown): { question: string; done: boolean } | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const row = input as Record<string, unknown>;
+  if (typeof row.question !== "string" && row.done !== true) return null;
+  const done = row.done === true;
+  const question = oneInterviewQuestion(typeof row.question === "string" ? row.question : "");
+  if (done && !question) return { question: "", done: true };
+  if (!question) return { question: "", done: false };
+  return { question, done };
+}
+
+function hideRawQuestion(turn: { question: string; done: boolean }): { question: string; done: boolean } {
+  if (turn.question.includes("{") || turn.question.includes("`") || turn.question.includes('"question"')) {
+    return { question: "", done: turn.done };
+  }
+  return turn;
+}
+
+/**
+ * Prefer the ask_question tool input. Otherwise read prose or fenced or
+ * truncated JSON. The question is empty when nothing clean can be kept.
+ */
+export function interviewTurnFromModel(input: {
+  text?: string;
+  toolUses?: readonly ModelToolUse[];
+}): { question: string; done: boolean } {
+  const named = input.toolUses?.find((row) => row.name === ASK_QUESTION_TOOL.name);
+  const fromTool = named ? turnFromToolInput(named.input) : null;
+  if (fromTool && (fromTool.question || fromTool.done)) return hideRawQuestion(fromTool);
+  return hideRawQuestion(parseFirmInterviewTurn(input.text ?? ""));
+}
+
 /** One model turn. Never returns raw JSON. `done` means there is enough to map. */
 export function parseFirmInterviewTurn(text: string): { question: string; done: boolean } {
   const raw = stripFences(text);
@@ -134,6 +224,39 @@ export function answersFromTranscript(transcript: string): string[] {
     .filter((line) => line && !line.includes("{") && !line.includes('"question"'));
 }
 
+function cleanWorkflowLine(value: string): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text || text.includes("{") || text.includes("`") || text.includes('"question"')) return "";
+  return text;
+}
+
+function workflowFromRecord(
+  parsed: Record<string, unknown>,
+): { todaysFlow: string[]; checklist: string[] } | null {
+  const steps = Array.isArray(parsed.steps) ? parsed.steps : [];
+  const todaysFlow = steps
+    .map((step) => {
+      if (typeof step === "string") return cleanWorkflowLine(step);
+      if (!step || typeof step !== "object") return "";
+      const row = step as Record<string, unknown>;
+      const title = typeof row.step === "string" ? cleanWorkflowLine(row.step) : "";
+      if (!title) return "";
+      const bits = [row.who, row.tool, row.cadence, row.pain]
+        .filter((part): part is string => typeof part === "string" && cleanWorkflowLine(part).length > 0)
+        .map((part) => cleanWorkflowLine(part));
+      return bits.length ? `${title} — ${bits.join("; ")}` : title;
+    })
+    .filter(Boolean);
+  const checklist = Array.isArray(parsed.checklist)
+    ? parsed.checklist
+        .filter((line): line is string => typeof line === "string")
+        .map((line) => cleanWorkflowLine(line))
+        .filter(Boolean)
+    : [];
+  if (!todaysFlow.length) return null;
+  return { todaysFlow, checklist };
+}
+
 export function parseStructuredWorkflow(
   text: string,
 ): { todaysFlow: string[]; checklist: string[] } | null {
@@ -143,31 +266,38 @@ export function parseStructuredWorkflow(
   if (start < 0 || end <= start) return null;
   try {
     const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
-    const steps = Array.isArray(parsed.steps) ? parsed.steps : [];
-    const todaysFlow = steps
-      .map((step) => {
-        if (typeof step === "string") return oneInterviewQuestion(step) || step.trim();
-        if (!step || typeof step !== "object") return "";
-        const row = step as Record<string, unknown>;
-        const title = typeof row.step === "string" ? row.step.trim() : "";
-        if (!title || title.includes("{")) return "";
-        const bits = [row.who, row.tool, row.cadence, row.pain]
-          .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
-          .map((part) => part.trim());
-        return bits.length ? `${title} — ${bits.join("; ")}` : title;
-      })
-      .filter((line) => line && !line.includes('"question"'));
-    const checklist = Array.isArray(parsed.checklist)
-      ? parsed.checklist.filter(
-          (line): line is string =>
-            typeof line === "string" && line.trim().length > 0 && !line.includes("{"),
-        )
-      : [];
-    if (!todaysFlow.length) return null;
-    return { todaysFlow, checklist };
+    return workflowFromRecord(parsed);
   } catch {
     return null;
   }
+}
+
+function workflowFromToolInput(
+  input: unknown,
+): { todaysFlow: string[]; checklist: string[] } | null {
+  if (typeof input === "string") return parseStructuredWorkflow(input);
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  return workflowFromRecord(input as Record<string, unknown>);
+}
+
+/** Tool input first, then model text, then one step per answer. */
+export function workflowMapFromModel(input: {
+  transcript: string;
+  text?: string | null;
+  toolUses?: readonly ModelToolUse[];
+  country?: SetupPartnerCountry | null;
+}): SetupPartnerWorkflowMap {
+  const named = input.toolUses?.find((row) => row.name === EXTRACT_WORKFLOW_TOOL.name);
+  const fromTool = named ? workflowFromToolInput(named.input) : null;
+  if (fromTool) {
+    return {
+      todaysFlow: fromTool.todaysFlow,
+      milonCoverage: setupPartnerCoverage(input.country),
+      gaps: [],
+      checklist: fromTool.checklist,
+    };
+  }
+  return workflowMapFromInterview(input.transcript, input.text ?? null, input.country);
 }
 
 /** Structured steps when the model returns them, otherwise one step per answer. */

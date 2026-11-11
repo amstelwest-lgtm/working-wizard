@@ -15,9 +15,13 @@ import {
   firmInterviewShouldStop,
   firmSetupPartnerSummary,
   ledgerStatusFromBooksQuality,
-  parseFirmInterviewTurn,
+  ASK_QUESTION_TOOL,
+  EXTRACT_WORKFLOW_TOOL,
+  FIRM_INTERVIEW_RETRY,
+  firmInterviewUserError,
+  interviewTurnFromModel,
   parseWorkflowMapJson,
-  workflowMapFromInterview,
+  workflowMapFromModel,
   setupPartnerMapUserPrompt,
   setupPartnerPhraseUserPrompt,
   setupPartnerScreenshotNotes,
@@ -536,7 +540,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       "Conversation so far:",
       lines.length ? lines.join("\n") : "(none yet)",
       "",
-      'Return JSON only: {"question":"exactly one open question","done":false}. One sentence. One question mark. Set done true and question to "" when you can map the workflow.',
+      "Call the ask_question tool. One sentence. One question mark. Set done true and question to an empty string when you can map the workflow. Do not write JSON in the message.",
     ].join("\n");
     const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
     let attempts = 0;
@@ -547,14 +551,19 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         temperature: 0.4,
         model: interviewModel,
         timeoutMs: 25_000,
+        tools: [ASK_QUESTION_TOOL],
+        toolChoice: { type: "tool", name: ASK_QUESTION_TOOL.name },
       });
-      return parseFirmInterviewTurn(rehydrateModelOutput(res.text, session));
+      return interviewTurnFromModel({
+        text: rehydrateModelOutput(res.text, session),
+        toolUses: res.toolUses,
+      });
     };
     try {
       let parsed = await ask();
       if (!parsed.done && !parsed.question && attempts < 2) parsed = await ask();
       if (!parsed.done && !parsed.question) {
-        return respond({ error: "No question came back. Retry.", retry: true }, 503);
+        return respond({ error: FIRM_INTERVIEW_RETRY, retry: true }, 503);
       }
       if (precard.firmId) {
         await finishPrecardAttempt({
@@ -591,7 +600,9 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       } catch (retryErr) {
         console.error("setup_partner_turn_retry_failed", retryErr instanceof Error ? retryErr.message : retryErr);
       }
-      const message = err instanceof Error ? err.message : "The interview failed. Retry.";
+      const message = firmInterviewUserError(
+        err instanceof Error ? err.message : FIRM_INTERVIEW_RETRY,
+      );
       return respond({ error: message, retry: true }, 503);
     }
   }
@@ -612,17 +623,30 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     if (!clientId && transcript) {
       const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
       let modelText: string | null = null;
+      let toolUses: Array<{ name: string; input: Record<string, unknown> }> = [];
       try {
         const res = await callClaude(
-          "Turn the interview into workflow steps. JSON only with keys steps (array of {step, who, tool, cadence, pain}) and checklist (string[]). One step per distinct answer. Do not paste the transcript as one step.",
+          "Call the extract_workflow tool. One step per distinct answer, with who, tool, cadence, and pain. Do not paste the transcript as one step, and do not write JSON in the message.",
           transcript,
-          { maxTokens: 1200, model: interviewModel, timeoutMs: 25_000 },
+          {
+            maxTokens: 1200,
+            model: interviewModel,
+            timeoutMs: 25_000,
+            tools: [EXTRACT_WORKFLOW_TOOL],
+            toolChoice: { type: "tool", name: EXTRACT_WORKFLOW_TOOL.name },
+          },
         );
         modelText = rehydrateModelOutput(res.text, session);
+        toolUses = res.toolUses;
       } catch (err) {
         console.error("setup_partner_structure_failed", err instanceof Error ? err.message : err);
       }
-      const map = workflowMapFromInterview(transcript, modelText, country);
+      const map = workflowMapFromModel({
+        transcript,
+        text: modelText,
+        toolUses,
+        country,
+      });
       return respond({ map, modelTurns: modelTurns + 1, structured: Boolean(modelText) });
     }
     const userPrompt = applyRedaction(

@@ -9,7 +9,8 @@ import { parseMarketSelection } from "@/lib/market/parse";
 import {
   firmInterviewTranscript,
   firmSetupPartnerSummary,
-  parseFirmInterviewTurn,
+  firmInterviewUserError,
+  interviewTurnFromModel,
   setupPartnerMapPromptBlock,
   withMarketCoverage,
   workflowMapFromInterview,
@@ -103,10 +104,21 @@ export function PracticeSetupInterview({
       const blob = built.map.todaysFlow.join("\n");
       const collapsed =
         built.map.todaysFlow.length <= 1 && (blob.includes("A:") || blob.length > 400);
-      setMap(collapsed ? workflowMapFromInterview(transcript, null, marketCountry) : built.map);
+      const nextMap = collapsed
+        ? workflowMapFromInterview(transcript, null, marketCountry)
+        : built.map;
+      setMap({
+        ...nextMap,
+        todaysFlow: nextMap.todaysFlow.filter((line) => !line.includes("{") && !line.includes("`")),
+        checklist: nextMap.checklist.filter((line) => !line.includes("{") && !line.includes("`")),
+      });
       setPhase("map");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not build the practice map");
+      setError(
+        firmInterviewUserError(
+          err instanceof Error ? err.message : "Could not build the practice map",
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -123,7 +135,7 @@ export function PracticeSetupInterview({
         await mapFrom(history, next.modelTurns);
         return;
       }
-      const asked = parseFirmInterviewTurn(next.question).question;
+      const asked = interviewTurnFromModel({ text: next.question }).question;
       if (!asked) {
         setTurnError("No question came back. Retry.");
         return;
@@ -131,7 +143,9 @@ export function PracticeSetupInterview({
       setMessages([...history, { role: "assistant", content: asked }]);
       setQuestion(asked);
     } catch (err) {
-      setTurnError(err instanceof Error ? err.message : "The interview failed. Retry.");
+      setTurnError(
+        firmInterviewUserError(err instanceof Error ? err.message : "The interview failed. Retry."),
+      );
     } finally {
       setLoading(false);
     }

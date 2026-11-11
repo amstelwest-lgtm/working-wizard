@@ -3,13 +3,21 @@
  * Run: pnpm test:practice-setup-route
  */
 import { readFileSync } from "node:fs";
+import { askAiClaudeRequestBody } from "../src/lib/ask-ai-claude-body.ts";
+import { CLAUDE_OPUS_55 } from "../src/lib/claude-request.ts";
 import {
   SETUP_PARTNER_FIXED_QUESTIONS,
   fallbackWorkflowMap,
+  ASK_QUESTION_TOOL,
+  EXTRACT_WORKFLOW_TOOL,
+  FIRM_INTERVIEW_RETRY,
   firmInterviewShouldStop,
+  firmInterviewUserError,
+  interviewTurnFromModel,
   parseFirmInterviewTurn,
   parseWorkflowMapJson,
   workflowMapFromInterview,
+  workflowMapFromModel,
 } from "../src/lib/setup-partner.ts";
 import {
   buildPracticeImplementationPlan,
@@ -182,6 +190,7 @@ testFirmInterviewAndDeadlineBucket();
 testFollowUpBottleneckAndIntake();
 testDedupeLabelsAndReviewer();
 testInterviewParseAndStructuredMap();
+testQuestionFallbacksNeverShowJson();
 
 await runPanel();
 
@@ -312,10 +321,103 @@ function testInterviewParseAndStructuredMap() {
   assert(!map.todaysFlow.some((line) => line.startsWith("Interview")), "the transcript is not one blob");
   assert(map.todaysFlow.length >= 4, `one step per answer, got ${map.todaysFlow.length}`);
   const edge = read("supabase/functions/setup-partner/index.ts");
-  assert(edge.includes("maxTokens: 1024"), "a turn has room to finish the JSON");
+  assert(edge.includes("maxTokens: 1024"), "a turn has room to finish");
   assert(edge.includes("firmLedgerContext") && edge.includes("has P&L"), "turns see connected books");
-  assert(edge.includes("workflowMapFromInterview"), "the map is structured from the transcript");
+  assert(edge.includes("workflowMapFromModel"), "the map is structured from the transcript");
   assert(edge.includes("attempts >= 2"), "a failed turn retries once");
+  assert(
+    edge.includes("ASK_QUESTION_TOOL") && edge.includes("EXTRACT_WORKFLOW_TOOL"),
+    "both model calls use a tool",
+  );
+  assert(edge.includes('type: "tool"'), "the request asks for that tool");
+}
+
+/** Truncated JSON, fenced JSON, and prose each stay free of a raw brace. */
+function testQuestionFallbacksNeverShowJson() {
+  const truncated = parseFirmInterviewTurn(
+    '{"question":"Partner sign-off by WhatsApp voice note is interesting. Walk me through what happens after a partner sends one: how does the jun',
+  );
+  assert(
+    truncated.question === "Partner sign-off by WhatsApp voice note is interesting.",
+    `truncated JSON, got ${truncated.question}`,
+  );
+  assert(!truncated.question.includes("{"), "truncated JSON shows no brace");
+
+  const fenced = parseFirmInterviewTurn(
+    '```json\n{"question":"Who closes the month? Who reviews it?","done":false}\n```',
+  );
+  assert(fenced.question === "Who closes the month?", `fenced JSON, got ${fenced.question}`);
+  assert(!fenced.question.includes("{"), "fenced JSON shows no brace");
+
+  const prose = parseFirmInterviewTurn("Who prepares the management pack?");
+  assert(prose.question === "Who prepares the management pack?", `prose, got ${prose.question}`);
+  assert(!prose.question.includes("{"), "prose shows no brace");
+
+  const unfinished = interviewTurnFromModel({
+    text: '{"question":"Walk me through how the jun',
+  });
+  assert(unfinished.question === "", "an unfinished fragment falls back to empty");
+  assert(!unfinished.question.includes("{"), "the fragment shows no brace");
+
+  const fromTool = interviewTurnFromModel({
+    text: '{"question":"this raw JSON must not render"',
+    toolUses: [
+      {
+        name: ASK_QUESTION_TOOL.name,
+        input: { question: "Who closes the month? And who reviews it?", done: false },
+      },
+    ],
+  });
+  assert(fromTool.question === "Who closes the month?", `tool question, got ${fromTool.question}`);
+  assert(!fromTool.question.includes("{"), "the tool question shows no brace");
+
+  const ugly = firmInterviewUserError('Claude error (400): {"type":"error","message":"bad json"}');
+  assert(ugly === FIRM_INTERVIEW_RETRY, "a JSON error becomes the retry line");
+  assert(!ugly.includes("{"), "the retry line shows no brace");
+
+  const extracted = workflowMapFromModel({
+    transcript: "A: Clients email receipts and bank statements to a shared inbox",
+    text: '{"question":"not this"}',
+    toolUses: [
+      {
+        name: EXTRACT_WORKFLOW_TOOL.name,
+        input: {
+          steps: [
+            {
+              step: "Clients email receipts and bank statements to a shared inbox",
+              who: "clients",
+              tool: "email",
+              cadence: "weekly",
+              pain: "shared inbox",
+            },
+          ],
+          checklist: [],
+        },
+      },
+    ],
+    country: "US",
+  });
+  assert(
+    extracted.todaysFlow[0]?.startsWith("Clients email receipts"),
+    "the extraction tool supplies the step",
+  );
+  assert(!JSON.stringify(extracted.todaysFlow).includes("{"), "extracted steps show no brace");
+
+  const opusBody = askAiClaudeRequestBody({
+    model: CLAUDE_OPUS_55,
+    system: "interview",
+    messages: [{ role: "user", content: "Continue." }],
+    maxTokens: 1024,
+    tools: [ASK_QUESTION_TOOL],
+    toolChoice: { type: "tool", name: ASK_QUESTION_TOOL.name },
+  });
+  const toolNames = (opusBody.tools as Array<{ name: string }>).map((tool) => tool.name);
+  assert(toolNames[0] === "ask_question", "the Opus request carries ask_question");
+  assert(
+    (opusBody.tool_choice as { type?: string } | undefined)?.type === "auto",
+    "Opus 5.5 is offered the tool as auto, which is the forced call it accepts",
+  );
+  assert(!("name" in ((opusBody.tool_choice as object | undefined) ?? {})), "Opus is not sent a tool name");
 }
 
 /** One case: dedupe by key, human bucket labels, reviewer and sign-off are client setup. */
