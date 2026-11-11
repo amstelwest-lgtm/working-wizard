@@ -5,7 +5,7 @@
  * Add to Action Plan). Does not send email.
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { actionDisplayTitle } from "../../../src/lib/strategic-moves.ts";
+import { actionDisplayTitle } from "../../../src/lib/action-title.ts";
 import {
   formatOverviewForPrompt,
   overviewFactLines,
