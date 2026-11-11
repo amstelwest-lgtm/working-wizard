@@ -255,6 +255,27 @@ export function handoffHandedLabel(who: string): string {
   return `Handed to ${who}`;
 }
 
+/**
+ * Detail-panel face for one action. The assignee is unchanged.
+ * A handed-off item shows who has it, unless the owner set a status other than Not started.
+ */
+export function handoffDrawerFace(input: {
+  phaseLabel: string | null | undefined;
+  status: string;
+}): { headerLine: string | null; chipLabel: string | null; statusOverride: boolean } {
+  const headerLine = (input.phaseLabel ?? "").trim();
+  const prefix = "Handed to ";
+  if (!headerLine.startsWith(prefix)) return { headerLine: null, chipLabel: null, statusOverride: false };
+  const who = headerLine.slice(prefix.length).trim();
+  if (!who) return { headerLine: null, chipLabel: null, statusOverride: false };
+  const statusOverride = input.status !== "not_started";
+  return {
+    headerLine,
+    chipLabel: statusOverride ? null : `With ${who}`,
+    statusOverride,
+  };
+}
+
 /** A settled hand-off names who received it. It is not a failed draft. */
 export function handoffSettledPill(phase: HandoffPhase | null | undefined, note?: string | null): string | null {
   const who = handoffPassedRecipient(note);
