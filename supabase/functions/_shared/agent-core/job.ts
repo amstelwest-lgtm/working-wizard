@@ -42,7 +42,10 @@ import {
   handoffCouldNotDraftSentence,
   handoffDraftFailureReason,
   handoffIsTargetedRetry,
-  handoffNoteWrite,
+  handoffNoteById,
+  handoffNoteMemoryKey,
+  handoffTrackedNotes,
+  handoffTrackedNotesValue,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
   handoffFinding,
@@ -292,32 +295,48 @@ async function recordHandoffFinish(
           market,
           figures: stored?.figures,
         });
-  const { data: priorNotes } = await db
-    .from("action_updates")
-    .select("id, note")
-    .eq("action_item_id", actionItemId)
-    .order("created_at", { ascending: false })
-    .limit(12);
-  const noteWrite = handoffNoteWrite(
-    (priorNotes ?? []).flatMap((row) => {
-      const id = (row as { id?: unknown }).id;
-      const prior = (row as { note?: unknown }).note;
-      return typeof id === "string" ? [{ id, note: typeof prior === "string" ? prior : null }] : [];
-    }),
-    note,
-  );
+  const memoryKey = handoffNoteMemoryKey(actionItemId);
+  const { data: memory } = await db
+    .from("agent_memory")
+    .select("value")
+    .eq("agent", config.agent)
+    .eq("client_id", input.clientId)
+    .eq("key", memoryKey)
+    .maybeSingle();
+  const tracked = handoffTrackedNotes(memory?.value);
+  const noteWrite = handoffNoteById(tracked.outcomeId, note);
+  const rememberOutcome = async (outcomeId: string) => {
+    tracked.outcomeId = outcomeId;
+    const { error: memoryError } = await db.from("agent_memory").upsert(
+      {
+        agent: config.agent,
+        client_id: input.clientId,
+        key: memoryKey,
+        value: handoffTrackedNotesValue(tracked),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "agent,client_id,key" },
+    );
+    if (memoryError) console.warn("handoff note id", memoryError.message);
+  };
   if (noteWrite.action === "update") {
     const { error: noteError } = await db.from("action_updates").update({ note }).eq("id", noteWrite.id);
     if (noteError) console.warn("handoff note", noteError.message);
   } else if (noteWrite.action === "insert") {
-    const { error: noteError } = await db.from("action_updates").insert({
-      action_item_id: actionItemId,
-      client_id: input.clientId,
-      actor_type: "system",
-      actor_label: displayName,
-      note,
-    });
+    const { data: created, error: noteError } = await db
+      .from("action_updates")
+      .insert({
+        action_item_id: actionItemId,
+        client_id: input.clientId,
+        actor_type: "system",
+        actor_label: displayName,
+        note,
+      })
+      .select("id")
+      .maybeSingle();
     if (noteError) console.warn("handoff note", noteError.message);
+    const createdId = typeof created?.id === "string" ? created.id : "";
+    if (createdId) await rememberOutcome(createdId);
   }
   if (findingCount === 0) {
     const { error: summaryError } = await db

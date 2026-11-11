@@ -448,27 +448,78 @@ export function handoffCouldNotDraftSentence(displayName: string, reason?: strin
   return `${short} couldn't draft this, ${why}`.slice(0, 500);
 }
 
+export type HandoffNoteIds = {
+  assignmentId: string | null;
+  outcomeId: string | null;
+};
+
+export type HandoffNoteRow = { id: string; note: string };
+
+/** The agent_memory key that holds the note ids for one action. */
+export function handoffNoteMemoryKey(actionItemId: string): string {
+  return `handoff_note:${actionItemId}`;
+}
+
+export function handoffTrackedNotes(value: unknown): HandoffNoteIds {
+  const row = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return {
+    assignmentId: typeof row.assignment_id === "string" && row.assignment_id.trim() ? row.assignment_id : null,
+    outcomeId: typeof row.outcome_id === "string" && row.outcome_id.trim() ? row.outcome_id : null,
+  };
+}
+
+export function handoffTrackedNotesValue(ids: HandoffNoteIds): {
+  assignment_id: string | null;
+  outcome_id: string | null;
+} {
+  return { assignment_id: ids.assignmentId, outcome_id: ids.outcomeId };
+}
+
 /**
- * A retry should not add another copy of the same hand-off or failure note.
- * A new failure reason updates the existing failure note.
- * `existingNewestFirst` is newest first.
+ * Update the note id already stored for this action, or insert when there is none.
+ * The wording of the note is not consulted.
  */
-export function handoffNoteWrite(
-  existingNewestFirst: readonly { id: string; note: string | null }[],
+export function handoffNoteById(
+  trackedId: string | null | undefined,
   next: string,
-): { action: "insert" } | { action: "skip" } | { action: "update"; id: string } {
+): { action: "skip" } | { action: "insert" } | { action: "update"; id: string } {
   const text = next.replace(/\s+/g, " ").trim();
   if (!text) return { action: "skip" };
-  const rows = existingNewestFirst
-    .map((row) => ({ id: row.id, note: (row.note ?? "").replace(/\s+/g, " ").trim() }))
-    .filter((row) => row.id && row.note);
-  const outcome = (note: string) => /couldn't draft this/i.test(note) || /passed this to the /i.test(note);
-  if (outcome(text)) {
-    const prior = rows.find((row) => outcome(row.note));
-    if (prior) return prior.note === text ? { action: "skip" } : { action: "update", id: prior.id };
-  }
-  if (text.startsWith("Handed to ") && rows.some((row) => row.note === text)) return { action: "skip" };
+  const id = (trackedId ?? "").trim();
+  if (id) return { action: "update", id };
   return { action: "insert" };
+}
+
+function writeTrackedNote(
+  notes: HandoffNoteRow[],
+  ids: HandoffNoteIds,
+  slot: "assignmentId" | "outcomeId",
+  text: string,
+  mintedId: string,
+): number {
+  const decision = handoffNoteById(ids[slot], text);
+  if (decision.action === "skip") return 0;
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (decision.action === "update") {
+    const row = notes.find((note) => note.id === decision.id);
+    if (row) row.note = clean;
+    return 0;
+  }
+  notes.push({ id: mintedId, note: clean });
+  ids[slot] = mintedId;
+  return 1;
+}
+
+/** Queue note, then outcome note. The return is how many rows were inserted. */
+export function applyHandoffAttempt(
+  notes: HandoffNoteRow[],
+  ids: HandoffNoteIds,
+  input: { assignment: string; outcome: string; assignmentId: string; outcomeId: string },
+): number {
+  return (
+    writeTrackedNote(notes, ids, "assignmentId", input.assignment, input.assignmentId) +
+    writeTrackedNote(notes, ids, "outcomeId", input.outcome, input.outcomeId)
+  );
 }
 
 /** Finish note. A run with no finding does not say finished. */

@@ -12,7 +12,8 @@ import {
   handoffCouldNotDraftSentence,
   handoffDraftFailureReason,
   handoffNeedsDraftNudge,
-  handoffNoteWrite,
+  applyHandoffAttempt,
+  handoffNoteById,
   handoffPassedAlongReason,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
@@ -131,23 +132,56 @@ assert(
   !handoffCouldNotDraftSentence("Advisor", refused).includes("no draft was saved"),
   "the action row shows the citation error",
 );
-const retryNotes = [
-  { id: "fail-1", note: "Advisor couldn't draft this, no draft was saved for this action" },
-  { id: "hand-1", note: "Handed to Milōn Advisor." },
-];
-const updatedFail = handoffNoteWrite(retryNotes, handoffCouldNotDraftSentence("Advisor", refused));
-assert(updatedFail.action === "update" && updatedFail.id === "fail-1", "a retry updates the failure note");
-const skippedHand = handoffNoteWrite(retryNotes, "Handed to Milōn Advisor.");
-assert(skippedHand.action === "skip", "a retry does not add another Handed to note");
-const passedNote = handoffNoteWrite(
-  retryNotes,
-  "Advisor passed this to the Financial Manager: Reduce short-term debt by refinancing into longer-term facilities",
-);
-assert(passedNote.action === "update" && passedNote.id === "fail-1", "a retry updates the earlier outcome note");
+assert(handoffNoteById("outcome-1", "A later sentence with none of the old phrases.")?.action === "update", "a stored id is updated");
 assert(
-  [skippedHand.action, passedNote.action].filter((action) => action === "insert").length === 0,
-  "one retry does not insert two notes",
+  handoffNoteById("outcome-1", "A later sentence with none of the old phrases.") &&
+    (handoffNoteById("outcome-1", "anything") as { id?: string }).id === "outcome-1",
+  "the update uses that id",
 );
+assert(handoffNoteById(null, "A first sentence.").action === "insert", "a missing id inserts one note");
+const notes: { id: string; note: string }[] = [];
+const ids = { assignmentId: null as string | null, outcomeId: null as string | null };
+const first = applyHandoffAttempt(notes, ids, {
+  assignment: "Queued with the books bot.",
+  outcome: "Needs a person to look.",
+  assignmentId: "assign-1",
+  outcomeId: "outcome-1",
+});
+assert(first === 2 && notes.length === 2, "the first hand-off stores the queue note and the outcome");
+const sameIds = notes.map((row) => row.id).join(",");
+for (const wording of [
+  { assignment: "Back with the books bot.", outcome: "Still with the practice." },
+  {
+    assignment: "Handed to Milōn Advisor.",
+    outcome: "Advisor couldn't draft this, no draft was saved for this action",
+  },
+]) {
+  const before = notes.length;
+  const added = applyHandoffAttempt(notes, ids, {
+    assignment: wording.assignment,
+    outcome: wording.outcome,
+    assignmentId: "assign-new",
+    outcomeId: "outcome-new",
+  });
+  assert(added === 0 && notes.length === before, "one retry adds no note");
+  assert(notes.map((row) => row.id).join(",") === sameIds, "the retry updates the stored ids");
+}
+assert(notes[0]?.note === "Handed to Milōn Advisor." && notes[1]?.note.includes("couldn't draft this"), "the stored rows take the new wording");
+ids.outcomeId = null;
+const beforeOne = notes.length;
+const one = applyHandoffAttempt(notes, ids, {
+  assignment: "Queued again without a phrase to match.",
+  outcome: "A fresh outcome with no familiar words.",
+  assignmentId: "assign-new",
+  outcomeId: "outcome-2",
+});
+assert(one === 1 && notes.length === beforeOne + 1, "a retry with no outcome id adds one note");
+assert(notes[0]?.id === "assign-1" && notes.at(-1)?.id === "outcome-2", "the new note is the outcome row");
+const writer = readFileSync("src/lib/owner-handoff.ts", "utf8");
+const byId = writer.slice(writer.indexOf("export function handoffNoteById"), writer.indexOf("function writeTrackedNote"));
+assert(byId.includes("trackedId") && !/couldn't draft this|finished|Handed to/.test(byId), "the id write does not match note text");
+assert(job.includes("handoffNoteById") && job.includes('.eq("id", noteWrite.id)'), "the runner updates the stored outcome id");
+assert(!job.includes("handoffNoteWrite"), "the runner does not match notes by text");
 const handedOff = [
   {
     tool: "record_draft",
