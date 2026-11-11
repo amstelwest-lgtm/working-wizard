@@ -14,20 +14,15 @@ import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-sl
 import { taxSampleCardVisible } from "@/lib/tax-specialist/enabled";
 import { FirmStartHereLoader } from "@/components/firm-band-upgrade";
 import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
-import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
+import { HandoffBeam, type AvatarVariant } from "./owner-avatar";
+import { HomeBotCard } from "./home-bot-card";
 import "./owner-door.css";
 
 function narrativeMarker(line: string): boolean {
   return splitRegenerateNarrative(line).action;
 }
 
-function DraftNeedsCell({
-  needs,
-  onOpen,
-}: {
-  needs: OwnerNeedsView;
-  onOpen: () => void;
-}) {
+function DraftNeedsCell({ needs, onOpen }: { needs: OwnerNeedsView; onOpen: () => void }) {
   const [lines, setLines] = useState(needs.draftLines);
   useEffect(() => {
     setLines(needs.draftLines);
@@ -312,46 +307,30 @@ export function OwnerHome({
             const phase = runState?.[card.agent] ?? null;
             const activePhase = phase && phase !== "done" ? phase : null;
             return (
-              <div
+              <HomeBotCard
                 key={card.agent}
-                className="owner-agent"
-                data-agent={card.agent}
-                data-agent-card={card.agent}
-              >
-                <button
-                  type="button"
-                  className="owner-agent-open"
-                  data-agent-open={card.agent}
-                  onClick={() => onOpen(card.agent)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") return;
-                    event.preventDefault();
-                    onOpen(card.agent);
-                  }}
-                >
-                  <span className="owner-portrait">
-                    <span className="owner-portrait-chip" aria-hidden="true">
-                      <AgentChipIcon agent={card.agent} />
-                    </span>
-                    <OwnerAvatar
-                      agent={card.agent}
-                      variant={variant}
-                      size="lg"
-                      share
-                      motion={card.motion}
-                      lookAt={card.lookAt}
-                      fmClip={card.fmClip}
-                      label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
-                    />
-                  </span>
-                  <span className="owner-name">{agentDisplayName(card.agent)}</span>
-                  {chip ? (
+                agent={card.agent}
+                name={agentDisplayName(card.agent)}
+                label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
+                variant={variant}
+                motion={card.motion}
+                lookAt={card.lookAt}
+                fmClip={card.fmClip}
+                share
+                chip={<AgentChipIcon agent={card.agent} />}
+                askLabel={`Ask ${agentShortName(card.agent)}`}
+                onOpen={() => onOpen(card.agent)}
+                onAsk={() => onAsk(card.agent)}
+                status={
+                  chip ? (
                     <span className={`owner-status is-${chip.tone}`}>
                       <StatusIcon />
                       {chip.word}
                     </span>
-                  ) : null}
-                  {brief.length > 0 || activePhase || motion ? (
+                  ) : null
+                }
+                lines={
+                  brief.length > 0 || activePhase || motion ? (
                     <span className="owner-lines" data-status-update="">
                       {activePhase ? (
                         <span className="owner-run-state" data-run-state={activePhase}>
@@ -367,24 +346,9 @@ export function OwnerHome({
                     </span>
                   ) : (
                     <span className="owner-lines" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  className="owner-ask"
-                  data-ask={card.agent}
-                  data-agent-open={card.agent}
-                  onClick={() => onAsk(card.agent)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") return;
-                    event.preventDefault();
-                    onAsk(card.agent);
-                  }}
-                >
-                  <ChatIcon />
-                  Ask {agentShortName(card.agent)}
-                </button>
-              </div>
+                  )
+                }
+              />
             );
           })}
           <TaxSpecialistSlot
@@ -415,7 +379,11 @@ export function OwnerHome({
           {handoffErrors.map((row) => (
             <p key={row.actionItemId} className="owner-lede" data-handoff-error>
               {row.title}: {row.message} ·{" "}
-              <button type="button" data-handoff-retry onClick={() => onRetryHandoff?.(row.actionItemId)}>
+              <button
+                type="button"
+                data-handoff-retry
+                onClick={() => onRetryHandoff?.(row.actionItemId)}
+              >
                 Retry
               </button>
             </p>

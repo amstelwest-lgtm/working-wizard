@@ -3,22 +3,22 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import "./setup-partner-panel.css";
 import "@/components/owner-door/owner-door.css";
-import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
+import { HomeBotCard } from "@/components/owner-door/home-bot-card";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { parseMarketSelection } from "@/lib/market/parse";
 import {
-  FIRM_SETUP_QUESTIONS,
-  firmAnswerIsVague,
+  firmInterviewTranscript,
   firmSetupPartnerSummary,
-  mergeFirmAnswer,
   setupPartnerMapPromptBlock,
   withMarketCoverage,
+  type FirmInterviewMessage,
   type SetupPartnerWorkflowMap,
 } from "@/lib/setup-partner";
 import {
   buildSetupPartnerFirmMap,
   confirmSetupPartnerFirmMap,
   fetchFirmSetupPlan,
+  firmInterviewTurn,
 } from "@/lib/setup-partner-client";
 import {
   dedupePracticeSteps,
@@ -37,6 +37,11 @@ type Phase = "interview" | "map" | "done";
 type BuildMap = typeof buildSetupPartnerFirmMap;
 type ConfirmMap = typeof confirmSetupPartnerFirmMap;
 type LoadSaved = (firmId: string) => Promise<PracticeImplementationPlan | null>;
+type AskTurn = (input: {
+  firmId: string;
+  messages: FirmInterviewMessage[];
+  modelTurns: number;
+}) => Promise<{ question: string; done: boolean; modelTurns: number }>;
 
 export function PracticeSetupPanel() {
   const { firmId, firmMarket } = useAccountantProfile();
@@ -49,27 +54,76 @@ export function PracticeSetupInterview({
   buildMap = buildSetupPartnerFirmMap,
   confirmMap = confirmSetupPartnerFirmMap,
   loadSaved = fetchFirmSetupPlan,
+  askTurn = firmInterviewTurn,
 }: {
   firmId: string | null;
   firmMarket: unknown;
   buildMap?: BuildMap;
   confirmMap?: ConfirmMap;
   loadSaved?: LoadSaved;
+  askTurn?: AskTurn;
 }) {
   const [phase, setPhase] = useState<Phase>("interview");
-  const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [messages, setMessages] = useState<FirmInterviewMessage[]>([]);
+  const [question, setQuestion] = useState("");
   const [draft, setDraft] = useState("");
-  const [followUp, setFollowUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [booting, setBooting] = useState(Boolean(firmId));
   const [error, setError] = useState<string | null>(null);
+  const [turnError, setTurnError] = useState<string | null>(null);
   const [modelTurns, setModelTurns] = useState(0);
   const [map, setMap] = useState<SetupPartnerWorkflowMap | null>(null);
   const [plan, setPlan] = useState<PracticeImplementationPlan | null>(null);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
   const visibleMap = map ? withMarketCoverage(map, country) : null;
+
+  const mapFrom = async (history: FirmInterviewMessage[], turns: number) => {
+    if (!firmId) return;
+    setLoading(true);
+    setError(null);
+    setTurnError(null);
+    try {
+      const built = await buildMap({
+        firmId,
+        answers: { transcript: firmInterviewTranscript(history) },
+        summary: firmSetupPartnerSummary(),
+        modelTurns: turns,
+      });
+      setModelTurns(built.modelTurns);
+      setMap(built.map);
+      setPhase("map");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not build the practice map");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestTurn = async (history: FirmInterviewMessage[], turns: number) => {
+    if (!firmId) return;
+    setLoading(true);
+    setTurnError(null);
+    try {
+      const next = await askTurn({ firmId, messages: history, modelTurns: turns });
+      setModelTurns(next.modelTurns);
+      if (next.done) {
+        await mapFrom(history, next.modelTurns);
+        return;
+      }
+      const asked = next.question.trim();
+      if (!asked) {
+        setTurnError("No question came back. Retry.");
+        return;
+      }
+      setMessages([...history, { role: "assistant", content: asked }]);
+      setQuestion(asked);
+    } catch (err) {
+      setTurnError(err instanceof Error ? err.message : "The interview failed. Retry.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!firmId) return;
@@ -77,12 +131,16 @@ export function PracticeSetupInterview({
     setBooting(true);
     void loadSaved(firmId)
       .then((saved) => {
-        if (cancel || !saved || saved.steps.length === 0) return;
-        setPlan({ steps: dedupePracticeSteps(saved.steps) });
-        setPhase("done");
+        if (cancel) return;
+        if (saved && saved.steps.length > 0) {
+          setPlan({ steps: dedupePracticeSteps(saved.steps) });
+          setPhase("done");
+          return;
+        }
+        return requestTurn([], 0);
       })
       .catch(() => {
-        // A missed read still opens the interview.
+        if (!cancel) setTurnError("The interview failed. Retry.");
       })
       .finally(() => {
         if (!cancel) setBooting(false);
@@ -90,18 +148,21 @@ export function PracticeSetupInterview({
     return () => {
       cancel = true;
     };
+    // The first question loads with the firm. Later turns are explicit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firmId, loadSaved]);
 
   const redo = () => {
     setPhase("interview");
-    setIndex(0);
-    setAnswers({});
+    setMessages([]);
+    setQuestion("");
     setDraft("");
-    setFollowUp(false);
     setMap(null);
     setPlan(null);
     setError(null);
+    setTurnError(null);
     setModelTurns(0);
+    void requestTurn([], 0);
   };
 
   if (!firmId) {
@@ -117,49 +178,13 @@ export function PracticeSetupInterview({
     );
   }
 
-  const question = FIRM_SETUP_QUESTIONS[index];
-  const prompt = followUp && question?.followUp ? question.followUp : question?.prompt;
-
   const advance = async () => {
-    if (!question) return;
     const text = draft.trim();
-    if (!followUp && question.followUp && firmAnswerIsVague(text)) {
-      setAnswers({ ...answers, [question.id]: text });
-      setFollowUp(true);
-      setDraft("");
-      return;
-    }
-    const prior = answers[question.id]?.trim() ?? "";
-    const nextAnswers = {
-      ...answers,
-      [question.id]: followUp && prior ? mergeFirmAnswer(prior, text) : text,
-    };
-    setAnswers(nextAnswers);
-    setFollowUp(false);
-    const nextIndex = index + 1;
-    if (nextIndex < FIRM_SETUP_QUESTIONS.length) {
-      const nextId = FIRM_SETUP_QUESTIONS[nextIndex]?.id ?? "";
-      setIndex(nextIndex);
-      setDraft(nextAnswers[nextId] ?? "");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const built = await buildMap({
-        firmId,
-        answers: nextAnswers,
-        summary: firmSetupPartnerSummary(),
-        modelTurns,
-      });
-      setModelTurns(built.modelTurns);
-      setMap(built.map);
-      setPhase("map");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not build the practice map");
-    } finally {
-      setLoading(false);
-    }
+    if (!text || !question) return;
+    const history: FirmInterviewMessage[] = [...messages, { role: "user", content: text }];
+    setMessages(history);
+    setDraft("");
+    await requestTurn(history, modelTurns);
   };
 
   const confirm = async () => {
@@ -193,24 +218,46 @@ export function PracticeSetupInterview({
 
       {booting ? <p className="setup-partner__lede">Loading your practice.</p> : null}
 
-      {!booting && phase === "interview" && question && prompt ? (
+      {!booting && phase === "interview" ? (
         <div>
-          <p className="setup-partner__question">{prompt}</p>
+          {question ? <p className="setup-partner__question">{question}</p> : null}
           <textarea
             className="setup-partner__answer"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Short answer"
+            placeholder="Walk through it"
           />
+          {turnError ? (
+            <p className="setup-partner__error" role="alert">
+              {turnError}
+            </p>
+          ) : null}
           <div className="setup-partner__actions">
             <button
               type="button"
               className="setup-partner__primary"
-              disabled={loading || !draft.trim()}
+              disabled={loading || !draft.trim() || !question}
               onClick={() => void advance()}
             >
               {loading ? "Working…" : "Next"}
             </button>
+            <button
+              type="button"
+              className="setup-partner__ghost"
+              disabled={loading}
+              onClick={() => void mapFrom(messages, modelTurns)}
+            >
+              That's enough, map it
+            </button>
+            {turnError ? (
+              <button
+                type="button"
+                className="setup-partner__ghost"
+                onClick={() => void requestTurn(messages, modelTurns)}
+              >
+                Retry
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -284,25 +331,19 @@ function PracticeSetupHero() {
     <div className="owner-door">
       <div className="owner-pane" data-owner-home="true">
         <div className="owner-agents">
-          <div className="owner-agent" data-agent="setup_partner" data-agent-card="setup_partner">
-            <div className="owner-agent-open">
-              <span className="owner-portrait">
-                <OwnerAvatar
-                  agent="setup_partner"
-                  variant="character"
-                  size="lg"
-                  motion="idle"
-                  label={IMPLEMENTATION_MANAGER_LABEL}
-                />
-              </span>
-              <span className="owner-name">{IMPLEMENTATION_MANAGER_LABEL}</span>
+          <HomeBotCard
+            agent="setup_partner"
+            name={IMPLEMENTATION_MANAGER_LABEL}
+            label={IMPLEMENTATION_MANAGER_LABEL}
+            askLabel="Set up your practice"
+            lines={
               <span className="owner-lines">
                 <span className="owner-voice">
                   Map how the firm closes, reviews, signs off, and reports. No desktop access.
                 </span>
               </span>
-            </div>
-          </div>
+            }
+          />
         </div>
       </div>
     </div>

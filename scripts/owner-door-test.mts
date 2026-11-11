@@ -1254,9 +1254,12 @@ assert(css.includes(".owner-door .owner-btn-secondary:disabled"), "a secondary b
 assert(css.includes(".owner-door .owner-btn-tertiary:hover"), "a tertiary button has a hover state");
 assert(!css.includes("Inter"), "the owner shell does not force Inter");
 const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
-assert(home.includes('className="owner-ask"'), "home ask is the outlined button");
-assert(home.includes("owner-status"), "a problem card shows a status chip");
-assert(home.includes('className="owner-money"'), "home amounts are bold");
+const homeCard = readFileSync("src/components/owner-door/home-bot-card.tsx", "utf8");
+const homeUi = home + homeCard;
+assert(home.includes("HomeBotCard"), "home renders the shared bot card");
+assert(homeUi.includes('className="owner-ask"'), "home ask is the outlined button");
+assert(homeUi.includes("owner-status"), "a problem card shows a status chip");
+assert(homeUi.includes('className="owner-money"'), "home amounts are bold");
 assert(home.includes("ownerHomeLines") === false && home.includes("lines["), "home reads the bot lines");
 assert(ownerMoney(-1200, ZA_MARKET) === "−R 1 200", "a rand loss uses one unicode minus");
 assert(ownerMoney(-1200, usd) === "−$1,200", "a dollar loss uses the same minus");

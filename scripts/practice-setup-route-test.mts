@@ -4,11 +4,10 @@
  */
 import { readFileSync } from "node:fs";
 import {
-  FIRM_SETUP_QUESTIONS,
   SETUP_PARTNER_FIXED_QUESTIONS,
   fallbackWorkflowMap,
-  firmAnswerIsVague,
-  mergeFirmAnswer,
+  firmInterviewShouldStop,
+  parseFirmInterviewTurn,
   parseWorkflowMapJson,
 } from "../src/lib/setup-partner.ts";
 import {
@@ -76,10 +75,18 @@ assert(
 assert(panel.includes('role="alert"'), "the error paragraph stays");
 assert(route.includes("<Toaster"), "this route mounts the toast helper's Toaster");
 assert(route.includes("PRACTICE_SETUP_TOASTER_ID"), "confirm and the route share one toaster");
-assert(panel.includes('size="lg"'), "firm page uses the dashboard card face size");
-assert(panel.includes("owner-portrait"), "firm page uses the agent card portrait");
-assert(panel.includes("owner-agent"), "firm page uses the agent card");
-assert(panel.includes("owner-door.css"), "firm page loads the same avatar layout as other agents");
+assert(panel.includes("HomeBotCard"), "firm page reuses the home bot card");
+assert(
+  read("src/components/practice-setup-card.tsx").includes("HomeBotCard"),
+  "home entry reuses the home bot card",
+);
+assert(
+  read("src/components/owner-door/owner-home.tsx").includes("HomeBotCard"),
+  "home bots use the same card",
+);
+assert(!panel.includes("FIRM_SETUP_QUESTIONS"), "the firm path has no fixed question list");
+assert(panel.includes("That's enough, map it"), "the firm can end the interview");
+assert(panel.includes("Retry"), "a failed turn can be retried");
 const faceCss = read("src/components/owner-door/owner-door.css");
 assert(
   faceCss.includes(".owner-presence.is-lg") && faceCss.includes("width: 172px"),
@@ -160,33 +167,14 @@ await runPanel();
 
 /** Firm topics, restored client wording, checklist dedupe, spreadsheet deadlines. */
 function testFirmInterviewAndDeadlineBucket() {
-  const firm = FIRM_SETUP_QUESTIONS.map((row) => row.prompt).join(" ");
-  assert(
-    FIRM_SETUP_QUESTIONS.length >= 8 && FIRM_SETUP_QUESTIONS.length <= 10,
-    "firm question count",
-  );
-  assert(/how many clients/i.test(firm) && /industries/i.test(firm), "client mix and volume");
-  assert(/Xero, QuickBooks, Sage/i.test(firm), "ledgers per client");
-  assert(
-    /send clients each month/i.test(firm) && /which day/i.test(firm),
-    "close and deliverable cadence",
-  );
-  assert(
-    /who prepares/i.test(firm) && /who reviews/i.test(firm) && /sign off/i.test(firm),
-    "review chain",
-  );
-  assert(
-    /deadlines do you track/i.test(firm) && /where is that list kept/i.test(firm),
-    "deadline tracking",
-  );
-  assert(/email, WhatsApp, Dext/i.test(firm), "where source documents arrive");
-  assert(/spreadsheets and other tools/i.test(firm), "tools and spreadsheets");
-  assert(/lose the most time/i.test(firm), "pain and time sinks");
-  assert(/fixed fee, advisory, packs/i.test(firm), "pricing and what they sell");
-  assert(
-    /how many people/i.test(firm) && /client reporting/i.test(firm),
-    "team roles and headcount",
-  );
+  const brief = read("supabase/functions/setup-partner/firm-interview-prompt.ts");
+  assert(brief.includes("universal finance function"), "vision brief names the product");
+  assert(/open question/i.test(brief) && /Never yes\/no/i.test(brief), "open questions only");
+  assert(/clients and segments/i.test(brief), "brief covers clients");
+  assert(/prepares, who reviews/i.test(brief), "brief covers the review chain");
+  assert(/price and sell/i.test(brief), "brief covers pricing");
+  assert(/bottlenecks/i.test(brief), "brief covers bottlenecks");
+  assert(!panel.includes("FIRM_SETUP_QUESTIONS"), "firm path does not walk a fixed list");
   const client = SETUP_PARTNER_FIXED_QUESTIONS.map((row) => row.prompt).join(" ");
   assert(/for this client/i.test(client), "per-client path keeps client wording");
   assert(/supplier bills/i.test(client), "per-client path asks about this client's bills");
@@ -223,28 +211,17 @@ function testFirmInterviewAndDeadlineBucket() {
   );
 }
 
-/** Clear answers skip the follow-up. Vague ones get one. No doubled text. */
+/** One model question per turn, an early stop, intake stays client setup. */
 function testFollowUpBottleneckAndIntake() {
-  assert(!firmAnswerIsVague("QBO and Xero"), "a named ledger is not a follow-up");
-  assert(!firmAnswerIsVague("Fixed monthly fee"), "a named fee is not a follow-up");
-  assert(!firmAnswerIsVague("The partner reviews"), "a named role is not a follow-up");
-  assert(firmAnswerIsVague(""), "an empty answer follows up");
-  assert(firmAnswerIsVague("various stuff"), "various stuff follows up");
-  assert(firmAnswerIsVague("it depends"), "it depends follows up");
-  assert(firmAnswerIsVague("n/a"), "n/a follows up");
-  assert(firmAnswerIsVague("not sure"), "not sure follows up");
-  assert(
-    mergeFirmAnswer("QBO and Xero", "QBO and Xero") === "QBO and Xero",
-    "identical follow-up is not repeated",
+  const first = parseFirmInterviewTurn(
+    '{"question":"Walk me through a typical month.","done":false}',
   );
-  assert(
-    mergeFirmAnswer("various stuff", "Excel and Google Drive") === "Excel and Google Drive",
-    "a vague parent is replaced by the specific follow-up",
-  );
-  assert(
-    mergeFirmAnswer("QBO", "Xero for the smaller clients") === "QBO; Xero for the smaller clients",
-    "a clear parent keeps the follow-up after a semicolon",
-  );
+  assert(first.question === "Walk me through a typical month." && !first.done, "one question");
+  assert(!first.question.includes("\n"), "the turn is not a question list");
+  const ended = parseFirmInterviewTurn('{"question":"","done":true}');
+  assert(ended.done && ended.question === "", "the model can end the interview");
+  assert(firmInterviewShouldStop(15, false), "the soft cap stops the interview");
+  assert(!firmInterviewShouldStop(3, false), "an early turn continues");
   const intake = classifyPracticeStep("clients email receipts and statements");
   assert(intake.bucket === "client_setup", `document intake bucket: ${intake.bucket}`);
   const mix = classifyPracticeStep("Mostly retail and construction industries");
@@ -397,7 +374,6 @@ async function runPanel() {
   } = await import("@tanstack/react-router");
   const { toast } = await import("sonner");
   const { PracticeSetupInterview } = await import("../src/components/practice-setup-panel.tsx");
-  const { FIRM_SETUP_QUESTIONS: firmQuestions } = await import("../src/lib/setup-partner.ts");
 
   const successes: string[] = [];
   const errors: string[] = [];
@@ -471,6 +447,11 @@ async function runPanel() {
           loadSaved: props.loadSaved,
           buildMap: props.buildMap,
           confirmMap: props.confirmMap,
+          askTurn: async ({ modelTurns }) => ({
+            question: "Walk me through how a typical client month ends.",
+            done: modelTurns > 0,
+            modelTurns: modelTurns + 1,
+          }),
         }),
     });
     const practiceRoute = createRoute({
@@ -501,25 +482,24 @@ async function runPanel() {
   }
 
   async function answerAll() {
-    for (let i = 0; i < firmQuestions.length; i += 1) {
-      const box = document.querySelector("textarea");
-      assert(box instanceof HTMLTextAreaElement, `question ${i} has an answer box`);
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-      assert(setter, "textarea value setter");
-      await act(async () => {
-        setter.call(box, `Answer ${i} from the partner`);
-        box.dispatchEvent(new Event("input", { bubbles: true }));
-        box.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-      const next = [...document.querySelectorAll("button")].find((button) =>
-        /^(Next|Working…)$/.test(button.textContent ?? ""),
-      );
-      assert(next instanceof HTMLButtonElement, `question ${i} has Next`);
-      assert(!next.disabled, `question ${i} Next is enabled`);
-      await act(async () => {
-        next.click();
-      });
+    await waitForPhase("interview");
+    for (let i = 0; i < 20; i += 1) {
+      await settle();
+      if (document.querySelector(".setup-partner__question")?.textContent?.trim()) break;
     }
+    const asked = document.querySelectorAll(".setup-partner__question");
+    assert(asked.length === 1, "one question per turn");
+    assert(
+      asked[0]?.textContent === "Walk me through how a typical client month ends.",
+      "the mocked model asked one open question",
+    );
+    const enough = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent === "That's enough, map it",
+    );
+    assert(enough instanceof HTMLButtonElement, "the firm can end early");
+    await act(async () => {
+      enough.click();
+    });
   }
 
   function coverageText(): string {
@@ -577,7 +557,7 @@ async function runPanel() {
   });
   await waitForPhase("interview");
   assert(
-    document.body.textContent?.includes("How many clients are on the book"),
+    document.body.textContent?.includes("Walk me through how a typical client month ends."),
     "redo opens the interview",
   );
   await unmountSaved();

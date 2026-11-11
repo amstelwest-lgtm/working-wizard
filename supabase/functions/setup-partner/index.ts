@@ -11,8 +11,11 @@ import {
   SETUP_PARTNER_TASK_FEATURE,
   SETUP_PARTNER_TASK_WORKFLOW,
   buildSetupPartnerSummary,
+  FIRM_INTERVIEW_TURN_CAP,
+  firmInterviewShouldStop,
   firmSetupPartnerSummary,
   ledgerStatusFromBooksQuality,
+  parseFirmInterviewTurn,
   parseWorkflowMapJson,
   setupPartnerMapUserPrompt,
   setupPartnerPhraseUserPrompt,
@@ -45,6 +48,8 @@ import {
   rehydrateModelOutput,
 } from "../_shared/redact-identifiers.ts";
 import { callClaude } from "../ask-ai/anthropic.ts";
+import { CLAUDE_OPUS_55 } from "../../../src/lib/claude-request.ts";
+import { edgeModelForAgent } from "../_shared/claude-model.ts";
 import {
   finishPrecardAttempt,
   readPrecardGate,
@@ -267,6 +272,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     map?: unknown;
     modelTurns?: unknown;
     screenshots?: unknown;
+    messages?: unknown;
   };
   try {
     body = await req.json();
@@ -435,6 +441,91 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     } catch (err) {
       console.error("setup_partner_phrase_failed", err instanceof Error ? err.message : err);
       return respond({ question: template, modelTurns: modelTurns + 1, skippedModel: true });
+    }
+  }
+
+  if (action === "firm_turn") {
+    if (clientId) return respond({ error: "firm_turn is the practice interview" }, 400);
+    const modelTurns =
+      typeof body.modelTurns === "number" && body.modelTurns >= 0 ? body.modelTurns : 0;
+    if (firmInterviewShouldStop(modelTurns, false) && modelTurns >= FIRM_INTERVIEW_TURN_CAP) {
+      return respond({ question: "", done: true, modelTurns });
+    }
+    const history = Array.isArray(body.messages) ? body.messages : [];
+    const lines = history
+      .map((row) => {
+        if (!row || typeof row !== "object") return "";
+        const rec = row as { role?: unknown; content?: unknown };
+        const role = rec.role === "assistant" ? "Q" : "A";
+        const content = typeof rec.content === "string" ? rec.content.trim() : "";
+        return content ? `${role}: ${content}` : "";
+      })
+      .filter(Boolean);
+    let connected = "Connected data: unavailable.";
+    try {
+      const { data, error } = await adminClient
+        .from("clients")
+        .select("name, market")
+        .eq("firm_id", firmId)
+        .limit(30);
+      if (!error) {
+        const rows = data ?? [];
+        connected =
+          rows.length === 0
+            ? "Connected data: no clients on file. No ledger is known from Milōn."
+            : `Connected data already in Milōn (${rows.length} clients):\n${rows
+                .map((row) => {
+                  const name = typeof row.name === "string" && row.name ? row.name : "Client";
+                  const country =
+                    row.market && typeof row.market === "object" && "country" in row.market
+                      ? String((row.market as { country?: unknown }).country ?? "")
+                      : "";
+                  return `- ${name}${country ? ` (${country})` : ""}`;
+                })
+                .join("\n")}`;
+      }
+    } catch (err) {
+      console.error("setup_partner_context_failed", err instanceof Error ? err.message : err);
+    }
+    const userPrompt = [
+      connected,
+      "",
+      "Conversation so far:",
+      lines.length ? lines.join("\n") : "(none yet)",
+      "",
+      'Return JSON only: {"question":"one open question","done":false}. Set done true and question to "" when you can map the workflow.',
+    ].join("\n");
+    try {
+      const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
+      const res = await callClaude(SETUP_PARTNER_MAP_SYSTEM, userPrompt, {
+        maxTokens: 280,
+        temperature: 0.4,
+        model: interviewModel,
+        timeoutMs: 25_000,
+      });
+      if (precard.firmId) {
+        await finishPrecardAttempt({
+          decision: precard,
+          succeeded: true,
+          record: async () => {
+            await recordPrecardUse(adminClient, precard.firmId!, "bot");
+          },
+        });
+      }
+      const text = rehydrateModelOutput(res.text, session);
+      const parsed = parseFirmInterviewTurn(text);
+      const nextTurns = modelTurns + 1;
+      const done = firmInterviewShouldStop(nextTurns, parsed.done);
+      return respond({
+        question: done ? "" : parsed.question,
+        done,
+        modelTurns: nextTurns,
+        model: interviewModel,
+      });
+    } catch (err) {
+      console.error("setup_partner_turn_failed", err instanceof Error ? err.message : err);
+      const message = err instanceof Error ? err.message : "The interview failed. Retry.";
+      return respond({ error: message, retry: true }, 503);
     }
   }
 
