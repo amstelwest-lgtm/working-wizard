@@ -157,45 +157,8 @@ jobs:
           PGPASSWORD: postgres
           PGDATABASE: postgres
         run: |
-          # The runner cannot resolve azure.archive.ubuntu.com, so apt cannot
-          # install postgresql-client. Use psql from the postgres service
-          # container. -f files stay on the runner and are piped in.
-          cid="$(docker ps --format '{{.ID}} {{.Image}}' | awk '/postgres/ {print $1; exit}')"
-          if [[ -z "${cid}" ]]; then
-            echo "postgres service container not found"
-            exit 1
-          fi
-          mkdir -p "${RUNNER_TEMP}/pgbin"
-          cat > "${RUNNER_TEMP}/pgbin/psql" << 'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          args=()
-          file=""
-          while [[ $# -gt 0 ]]; do
-            case "$1" in
-              -f)
-                file="${2:-}"
-                shift 2
-                ;;
-              *)
-                args+=("$1")
-                shift
-                ;;
-            esac
-          done
-          if [[ -n "${file}" ]]; then
-            docker exec -i \
-              -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE \
-              "${PG_CID}" psql "${args[@]}" < "${file}"
-          else
-            docker exec -i \
-              -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE \
-              "${PG_CID}" psql "${args[@]}" </dev/null
-          fi
-          EOF
-          chmod +x "${RUNNER_TEMP}/pgbin/psql"
-          export PG_CID="${cid}"
-          export PATH="${RUNNER_TEMP}/pgbin:${PATH}"
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
           bash scripts/clients-rls-initplan-check.sh
           bash scripts/apply-source-documents-sql.sh
           bash scripts/apply-client-agent-sends-sql.sh
