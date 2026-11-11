@@ -71,22 +71,31 @@ export const FIRM_INTERVIEW_TURN_CAP = 15;
 
 export type FirmInterviewMessage = { role: "user" | "assistant"; content: string };
 
+const FENCE = String.fromCharCode(96).repeat(3);
+const JSON_QUOTE = String.fromCharCode(34);
+const JSON_SLASH = String.fromCharCode(92);
+
 function stripFences(text: string): string {
-  return text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
+  const fenced = text.trim();
+  const withoutOpen = fenced.replace(new RegExp("^" + FENCE + "(?:json)?\\s*", "i"), "");
+  return withoutOpen.replace(new RegExp("\\s*" + FENCE + "$", "i"), "").trim();
 }
 
 function unescapeJsonString(value: string): string {
-  return value.replace(/\\n/g, " ").replace(/\\"/g, '"').replace(/\\\\/g, "\\").trim();
+  return value
+    .split(JSON_SLASH + "n")
+    .join(" ")
+    .split(JSON_SLASH + JSON_QUOTE)
+    .join(JSON_QUOTE)
+    .split(JSON_SLASH + JSON_SLASH)
+    .join(JSON_SLASH)
+    .trim();
 }
 
 /** One question only. Empty when the text is raw, truncated, or unfinished. */
 export function oneInterviewQuestion(value: string): string {
   const text = value.replace(/\s+/g, " ").trim();
-  if (!text || text.includes("{") || text.includes('"question"') || text.includes("```")) return "";
+  if (!text || text.includes("{") || text.includes('"question"') || text.includes(FENCE)) return "";
   const mark = text.search(/[.?](?:\s|$)/);
   if (mark < 0) return "";
   const sentence = text.slice(0, mark + 1).trim();
@@ -108,7 +117,7 @@ export const FIRM_INTERVIEW_RETRY = "No question came back. Retry.";
 
 export function firmInterviewUserError(message: string): string {
   const text = message.replace(/\s+/g, " ").trim();
-  if (!text || text.includes("{") || text.includes("`") || text.includes('"question"')) {
+  if (!text || text.includes("{") || text.includes(FENCE) || text.includes('"question"')) {
     return FIRM_INTERVIEW_RETRY;
   }
   return text;
@@ -173,7 +182,7 @@ function turnFromToolInput(input: unknown): { question: string; done: boolean } 
 }
 
 function hideRawQuestion(turn: { question: string; done: boolean }): { question: string; done: boolean } {
-  if (turn.question.includes("{") || turn.question.includes("`") || turn.question.includes('"question"')) {
+  if (turn.question.includes("{") || turn.question.includes(FENCE) || turn.question.includes('"question"')) {
     return { question: "", done: turn.done };
   }
   return turn;
@@ -226,7 +235,7 @@ export function answersFromTranscript(transcript: string): string[] {
 
 function cleanWorkflowLine(value: string): string {
   const text = value.replace(/\s+/g, " ").trim();
-  if (!text || text.includes("{") || text.includes("`") || text.includes('"question"')) return "";
+  if (!text || text.includes("{") || text.includes(FENCE) || text.includes('"question"')) return "";
   return text;
 }
 
