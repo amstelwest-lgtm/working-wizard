@@ -2,7 +2,7 @@
  * Profit P&L and the year chart read the statement and snapshots already on file.
  * Run: pnpm test:profit-statement
  */
-import { buildProfitPnl, presentProfitSeries, profitFlows, profitSeriesPoints } from "../src/lib/profit-statement.ts";
+import { buildProfitPnl, presentProfitSeries, profitChartPoints, profitFlows, profitSeriesPoints } from "../src/lib/profit-statement.ts";
 import { profitMenuViews, profitPagedSearch, profitPagedSentence, profitPagedViewFromSearch, PROFIT_PAGED_VIEWS } from "../src/lib/profit-paged-view.ts";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -111,6 +111,12 @@ const cumulative = profitSeriesPoints({
 });
 const octoberPoint = cumulative.find((point) => point.id === "2026-10");
 assert(octoberPoint?.span === "month" && octoberPoint.income === 51376, "one new cumulative month is the difference");
+const undated = profitChartPoints({
+  current: { revenue: 40000, cogs: 10000, grossProfit: 30000 },
+  currentLabel: "This period",
+});
+assert(undated.length === 1 && undated[0]?.grossProfit === 30000, "a P&L with no period end still charts");
+assert((undated[0]?.netProfit ?? undated[0]?.operatingProfit ?? undated[0]?.grossProfit) === 30000, "gross profit is the chart value");
 
 assert(PROFIT_PAGED_VIEWS.join(",") === "chart,pnl,waterfall,lines,setup,audit", "pnl stays a profit view id");
 assert(profitMenuViews(true).join(",") === "chart,waterfall,lines,setup,audit", "P&L is not a tab inside Profit");

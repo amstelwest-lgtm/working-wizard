@@ -29,6 +29,8 @@ import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import type { BudgetTemplateId } from "@/lib/budget.types";
 import { ownerMinus } from "@/lib/owner-money";
 import {
+  budgetChartAmount,
+  budgetChartSeries,
   budgetMonthViews,
   budgetPeriodTotalCell,
   budgetPlanIsSet,
@@ -415,15 +417,20 @@ function BudgetMonthChart({
     const text = formatMoneyChartTick(n, market);
     return signed ? ownerMinus(text) : text;
   };
-  const data = views.map((row) => ({
-    month: row.month,
-    label: shortMonth(row.month),
-    budget: row.budget.revenue,
-    actual: row.actual ? row.actual.revenue : null,
-    hasActual: Boolean(row.actual),
-    signal: row.revenue?.signal ?? null,
-    delta: row.revenue?.delta ?? null,
-  }));
+  const series = budgetChartSeries(views);
+  const data = views.map((row) => {
+    const amount = budgetChartAmount(row, series);
+    return {
+      month: row.month,
+      label: shortMonth(row.month),
+      amountLabel: money(amount),
+      budget: series === "expenses" ? amount : row.budget.revenue,
+      actual: series === "expenses" ? null : row.actual ? row.actual.revenue : null,
+      hasActual: series === "expenses" ? amount !== 0 : Boolean(row.actual),
+      signal: series === "expenses" ? null : (row.revenue?.signal ?? null),
+      delta: series === "expenses" ? null : (row.revenue?.delta ?? null),
+    };
+  });
   const axis = niceBudgetAxis(data.flatMap((row) => [row.budget, row.actual]));
 
   return (
@@ -527,15 +534,14 @@ function BudgetMonthChart({
         {data.map((row) => (
           <div key={row.month} className="min-w-0 flex-1 px-0.5 text-center">
             <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{row.label}</div>
-            {row.delta == null ? (
-              <div className="truncate text-[10px] text-slate-500/40" title="Budget only" aria-label="Budget only">
-                –
-              </div>
-            ) : (
+            <div className="truncate text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200" data-budget-month-value="">
+              {row.amountLabel}
+            </div>
+            {row.delta != null && Math.abs(row.delta) >= 1 ? (
               <div className={`truncate text-sm font-semibold tabular-nums ${tone(row.signal)}`}>
                 {row.delta > 0 ? `+${tick(row.delta)}` : tick(row.delta)}
               </div>
-            )}
+            ) : null}
           </div>
         ))}
       </div>

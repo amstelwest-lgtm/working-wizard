@@ -14,7 +14,7 @@ import { readStoredScoreSnapshotHash, type HealthScoreSnapshot } from "@/lib/hea
 import { homeStatementsLine } from "@/lib/books-answer";
 import { canonicalScoreProse } from "@/lib/score-prose";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
-import { actionDisplayTitle } from "@/lib/strategic-moves";
+import { actionDisplayTitle, dedupeActionTitles } from "@/lib/strategic-moves";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
 import { openPlanTitles } from "@/lib/open-plan-home";
 
@@ -60,7 +60,7 @@ export function homeActionNeeds(input: {
 }): { heading: string; lines: string[] } {
   if (!input.known) return { heading: "Action plan", lines: ["Checking the action plan."] };
   if (input.unavailable) return { heading: "Action plan", lines: ["Open actions aren't available yet."] };
-  const titles = input.titles.map((title) => actionDisplayTitle(title)).filter(Boolean);
+  const titles = dedupeActionTitles(input.titles);
   const next = input.nextAction?.trim() ?? "";
   if (titles.length === 0 && next) return { heading: "Next", lines: [next] };
   if (titles.length === 0) return { heading: "Action plan", lines: ["No open work."] };
@@ -79,7 +79,7 @@ export function actionPreviewLine(shown: number, total: number): string | null {
 
 /** Same open-action sentence the Financial Manager card and the hub count. */
 export function openActionSentence(titles: readonly string[]): string | null {
-  const clean = titles.map((title) => actionDisplayTitle(title)).filter(Boolean);
+  const clean = dedupeActionTitles(titles);
   if (clean.length === 0) return null;
   if (clean.length === 1) return clean[0]!;
   return `${clean.length} open actions.`;

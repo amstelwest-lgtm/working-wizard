@@ -106,7 +106,15 @@ const job = readFileSync("supabase/functions/_shared/agent-core/job.ts", "utf8")
 assert(job.includes("handoffDraftTitle"), "a finished hand-off labels its draft");
 assert(job.includes("handoffDraftIsDuplicate"), "a finished hand-off skips a duplicate draft");
 
-assert(handoffFinding({ summary: "Cash", figures: {}, periodLabel: null, snapshotId: null }) === null, "empty figures are not a finding");
+assert(handoffFinding({ summary: "Cash", figures: {}, periodLabel: null, snapshotId: null }) === null, "a fragment with no figures is not a finding");
+const undated = handoffFinding({
+  summary: "The partner reviews the pack before it goes out.",
+  figures: {},
+  periodLabel: null,
+  snapshotId: null,
+});
+assert(undated?.title.includes("reviews the pack"), "a finished summary is still a draft when no figures were pooled");
+assert(undated?.evidence && (undated.evidence as { uncited?: boolean }).uncited === true, "that draft does not invent figures");
 const finding = handoffFinding({
   summary: "Cash is the lever.",
   figures: { cash: 1200, nope: Number.NaN },

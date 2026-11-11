@@ -98,8 +98,13 @@ export function oneInterviewQuestion(value: string): string {
   if (!text || text.includes("{") || text.includes('"question"') || text.includes(FENCE)) return "";
   const mark = text.search(/[.?](?:\s|$)/);
   if (mark < 0) return "";
-  const sentence = text.slice(0, mark + 1).trim();
-  return sentence.length >= 8 ? sentence : "";
+  let sentence = text.slice(0, mark + 1).trim();
+  const split = sentence.split(/,\s*(?:and\s+)?(?=who\b|what\b|when\b|where\b|why\b|how\b)/i)[0]?.trim() ?? sentence;
+  sentence = split.endsWith("?") || split.endsWith(".") ? split : `${split.replace(/[, ]+$/, "")}?`;
+  if (sentence.length < 8) return "";
+  if (/\bupload\b/i.test(sentence)) return "";
+  if (/^(?:do|does|did|is|are|was|were|have|has|can|will)\b/i.test(sentence)) return "";
+  return sentence;
 }
 
 function questionFromJsonSlice(raw: string): { question: string; done: boolean } | null {
@@ -693,20 +698,17 @@ export function setupPartnerBrainRows(input: {
 }
 
 export function setupPartnerMapPromptBlock(map: SetupPartnerWorkflowMap): string {
-  const lines = [
-    "Today's flow:",
-    ...map.todaysFlow.map((l) => `- ${l}`),
-    "",
-    "Milōn coverage:",
-    ...map.milonCoverage.map((r) => `- ${r.agent}: ${r.owns}`),
-    "",
-    "Gaps:",
-    ...map.gaps.map((l) => `- ${l}`),
-    "",
-    "Setup checklist:",
-    ...map.checklist.map((l) => `- ${l}`),
-  ];
-  return lines.join("\n");
+  const section = (title: string, lines: readonly string[]) =>
+    lines.length ? [title, ...lines.map((line) => `- ${line}`), ""] : [];
+  return [
+    ...section("Today's flow:", map.todaysFlow),
+    ...section(
+      "Milōn coverage:",
+      map.milonCoverage.map((row) => `${row.agent}: ${row.owns}`),
+    ),
+    ...section("Gaps:", map.gaps),
+    ...section("Setup checklist:", map.checklist),
+  ].join("\n");
 }
 
 export function setupPartnerPhraseUserPrompt(template: string): string {

@@ -154,7 +154,8 @@ assert(qbo.includes('id: "qbo"') && qbo.includes("useConnectionProbe"), "QuickBo
 assert(sage.includes('id: "sage"') && sage.includes("comingSoon: true"), "Sage uses the shared probe and stays coming soon");
 assert(xero.includes('id: "xero"') && xero.includes("useConnectionProbe"), "Xero uses the same deadline path");
 assert(qbo.includes("CONNECTION_NOT_CONNECTED"), "QuickBooks shows Not connected");
-assert(sage.includes("SAGE_CONNECTION_UNAVAILABLE"), "Sage keeps the coming-soon copy");
+assert(sage.includes("Coming soon"), "Sage keeps the coming-soon copy");
+assert(!sage.includes("Sage connection not available yet"), "Sage does not show the unavailable error");
 assert(!qbo.includes("loadingStatus && configured === null"), "QuickBooks does not wait forever on checking");
 assert(!sage.includes("loadingStatus && configured === null"), "Sage does not wait forever on checking");
 

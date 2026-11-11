@@ -11,7 +11,7 @@ import {
 } from "@/lib/sage.functions";
 import { Unlink, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
-import { SAGE_CONNECTION_UNAVAILABLE, sageSyncPopulatedFields } from "@/lib/sage";
+import { sageSyncPopulatedFields } from "@/lib/sage";
 import { SAGE_NOT_SYNCED_HINT } from "@/lib/connect-books-copy";
 import { useConnectionProbe } from "@/lib/use-connection-probe";
 
@@ -148,7 +148,7 @@ export function SageConnectCard({
     return (
       <div className="ledger-connect ledger-connect--dashed" data-sage-connect="soon" data-connection-state="coming_soon">
         <p className="ledger-connect__kicker">Sage Accounting</p>
-        <p className="ledger-connect__body">{SAGE_CONNECTION_UNAVAILABLE}</p>
+        <p className="ledger-connect__body">Coming soon</p>
       </div>
     );
   }
