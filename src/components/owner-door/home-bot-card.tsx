@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import "@/components/owner-door/owner-door.css";
 import { ChatIcon, OwnerAvatar, type AvatarVariant } from "@/components/owner-door/owner-avatar";
 import type { AvatarFace, FmAvatarClip } from "@/lib/fm-avatar-state";
 import type { AgentKey } from "@/lib/milon-team-feed";

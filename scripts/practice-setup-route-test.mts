@@ -3,12 +3,21 @@
  * Run: pnpm test:practice-setup-route
  */
 import { readFileSync } from "node:fs";
+import { askAiClaudeRequestBody } from "../src/lib/ask-ai-claude-body.ts";
+import { CLAUDE_OPUS_55 } from "../src/lib/claude-request.ts";
 import {
   SETUP_PARTNER_FIXED_QUESTIONS,
   fallbackWorkflowMap,
+  ASK_QUESTION_TOOL,
+  EXTRACT_WORKFLOW_TOOL,
+  FIRM_INTERVIEW_RETRY,
   firmInterviewShouldStop,
+  firmInterviewUserError,
+  interviewTurnFromModel,
   parseFirmInterviewTurn,
   parseWorkflowMapJson,
+  workflowMapFromInterview,
+  workflowMapFromModel,
 } from "../src/lib/setup-partner.ts";
 import {
   buildPracticeImplementationPlan,
@@ -30,6 +39,11 @@ const card = read("src/components/practice-setup-card.tsx");
 assert(card.includes('to="/practice/setup"'), "card opens the firm setup route");
 assert(!card.includes("/clients/"), "card does not deep-link a client");
 assert(!card.includes("view=books"), "card does not open client books");
+assert(card.includes("owner-status") && card.includes("Not started"), "home card has a status chip");
+assert(card.includes("ImplementationManagerChip"), "home card has the icon badge");
+assert(card.includes("owner-money"), "home card has a metric line");
+assert(card.includes("Set up practice"), "home card CTA matches the agent ask");
+assert(card.includes("embedded"), "home card can sit in the agent grid");
 
 const route = read("src/routes/_authenticated/practice_.setup.tsx");
 assert(
@@ -87,6 +101,19 @@ assert(
 assert(!panel.includes("FIRM_SETUP_QUESTIONS"), "the firm path has no fixed question list");
 assert(panel.includes("That's enough, map it"), "the firm can end the interview");
 assert(panel.includes("Retry"), "a failed turn can be retried");
+assert(!panel.includes("askLabel"), "the setup page has no second CTA");
+assert(panel.includes('data-im-card="solo"'), "the setup card aligns to the content edge");
+assert(panel.includes("Buckets"), "buckets show before confirm");
+assert(
+  read("src/components/practice-board.tsx").includes("extraCard={<PracticeSetupCard embedded"),
+  "firm home puts the card in the agent grid",
+);
+assert(
+  !read("src/components/practice-board.tsx").includes(
+    "{!bookLoading ? <PracticeSetupCard",
+  ),
+  "the card is not a strip above Open queries",
+);
 const faceCss = read("src/components/owner-door/owner-door.css");
 assert(
   faceCss.includes(".owner-presence.is-lg") && faceCss.includes("width: 172px"),
@@ -162,6 +189,8 @@ assert(
 testFirmInterviewAndDeadlineBucket();
 testFollowUpBottleneckAndIntake();
 testDedupeLabelsAndReviewer();
+testInterviewParseAndStructuredMap();
+testQuestionFallbacksNeverShowJson();
 
 await runPanel();
 
@@ -240,6 +269,155 @@ function testFollowUpBottleneckAndIntake() {
     !plan.steps.some((step) => /practice bottleneck/i.test(step.step)),
     "the bottleneck is not a second product gap",
   );
+}
+
+/** Truncated model JSON never becomes the question, and a transcript becomes buckets. */
+function testInterviewParseAndStructuredMap() {
+  const truncated = parseFirmInterviewTurn(
+    '{"question":"Partner sign-off by WhatsApp voice note is interesting. Walk me through what happens after a partner sends one: how does the jun',
+  );
+  assert(
+    truncated.question === "Partner sign-off by WhatsApp voice note is interesting.",
+    `truncated JSON keeps the finished sentence, got ${truncated.question}`,
+  );
+  assert(!truncated.question.includes("{") && !truncated.question.includes("how does the jun"), "the cut tail is dropped");
+  const fragment = parseFirmInterviewTurn('{"question":"Walk me through how the jun');
+  assert(fragment.question === "", "an unfinished fragment is not stored");
+  const fenced = parseFirmInterviewTurn(
+    '```json\n{"question":"Who closes the month? Who reviews it?","done":false}\n```',
+  );
+  assert(fenced.question === "Who closes the month?", `one question, got ${fenced.question}`);
+  assert(!fenced.question.includes("{") && !fenced.question.includes('"question"'), "no raw JSON");
+  const prose = parseFirmInterviewTurn("Who prepares the management pack?");
+  assert(prose.question === "Who prepares the management pack?", "prose falls back to the question");
+  const transcript = [
+    "Q: How do documents arrive?",
+    "A: Clients email receipts and bank statements to a shared inbox",
+    "Q: Where is VAT?",
+    "A: VAT is tracked on a spreadsheet",
+    "Q: How does sign-off work?",
+    "A: Partner sign-off by WhatsApp voice note",
+    "Q: What is close?",
+    "A: We run the month-end close",
+    "Q: Payroll?",
+    "A: Payroll journals are posted by hand",
+  ].join("\n");
+  const map = workflowMapFromInterview(transcript, null, "US");
+  const plan = buildPracticeImplementationPlan(map);
+  assert(
+    plan.steps.some((step) => step.bucket === "client_setup"),
+    "document intake is client setup",
+  );
+  assert(
+    plan.steps.some((step) => step.bucket === "covered"),
+    "month-end close is covered",
+  );
+  assert(
+    plan.steps.some((step) => step.bucket === "product_gap"),
+    "payroll is a product gap",
+  );
+  const dumped = JSON.stringify({ map, plan });
+  assert(!dumped.includes('{"question"') && !dumped.includes("```"), "no raw JSON in the map");
+  assert(!map.todaysFlow.some((line) => line.startsWith("Interview")), "the transcript is not one blob");
+  assert(map.todaysFlow.length >= 4, `one step per answer, got ${map.todaysFlow.length}`);
+  const edge = read("supabase/functions/setup-partner/index.ts");
+  assert(edge.includes("maxTokens: 1024"), "a turn has room to finish");
+  assert(edge.includes("firmLedgerContext") && edge.includes("has P&L"), "turns see connected books");
+  assert(edge.includes("workflowMapFromModel"), "the map is structured from the transcript");
+  assert(edge.includes("attempts >= 2"), "a failed turn retries once");
+  assert(
+    edge.includes("ASK_QUESTION_TOOL") && edge.includes("EXTRACT_WORKFLOW_TOOL"),
+    "both model calls use a tool",
+  );
+  assert(edge.includes('type: "tool"'), "the request asks for that tool");
+}
+
+/** Truncated JSON, fenced JSON, and prose each stay free of a raw brace. */
+function testQuestionFallbacksNeverShowJson() {
+  const truncated = parseFirmInterviewTurn(
+    '{"question":"Partner sign-off by WhatsApp voice note is interesting. Walk me through what happens after a partner sends one: how does the jun',
+  );
+  assert(
+    truncated.question === "Partner sign-off by WhatsApp voice note is interesting.",
+    `truncated JSON, got ${truncated.question}`,
+  );
+  assert(!truncated.question.includes("{"), "truncated JSON shows no brace");
+
+  const fenced = parseFirmInterviewTurn(
+    '```json\n{"question":"Who closes the month? Who reviews it?","done":false}\n```',
+  );
+  assert(fenced.question === "Who closes the month?", `fenced JSON, got ${fenced.question}`);
+  assert(!fenced.question.includes("{"), "fenced JSON shows no brace");
+
+  const prose = parseFirmInterviewTurn("Who prepares the management pack?");
+  assert(prose.question === "Who prepares the management pack?", `prose, got ${prose.question}`);
+  assert(!prose.question.includes("{"), "prose shows no brace");
+
+  const unfinished = interviewTurnFromModel({
+    text: '{"question":"Walk me through how the jun',
+  });
+  assert(unfinished.question === "", "an unfinished fragment falls back to empty");
+  assert(!unfinished.question.includes("{"), "the fragment shows no brace");
+
+  const fromTool = interviewTurnFromModel({
+    text: '{"question":"this raw JSON must not render"',
+    toolUses: [
+      {
+        name: ASK_QUESTION_TOOL.name,
+        input: { question: "Who closes the month? And who reviews it?", done: false },
+      },
+    ],
+  });
+  assert(fromTool.question === "Who closes the month?", `tool question, got ${fromTool.question}`);
+  assert(!fromTool.question.includes("{"), "the tool question shows no brace");
+
+  const ugly = firmInterviewUserError('Claude error (400): {"type":"error","message":"bad json"}');
+  assert(ugly === FIRM_INTERVIEW_RETRY, "a JSON error becomes the retry line");
+  assert(!ugly.includes("{"), "the retry line shows no brace");
+
+  const extracted = workflowMapFromModel({
+    transcript: "A: Clients email receipts and bank statements to a shared inbox",
+    text: '{"question":"not this"}',
+    toolUses: [
+      {
+        name: EXTRACT_WORKFLOW_TOOL.name,
+        input: {
+          steps: [
+            {
+              step: "Clients email receipts and bank statements to a shared inbox",
+              who: "clients",
+              tool: "email",
+              cadence: "weekly",
+              pain: "shared inbox",
+            },
+          ],
+          checklist: [],
+        },
+      },
+    ],
+    country: "US",
+  });
+  assert(
+    extracted.todaysFlow[0]?.startsWith("Clients email receipts"),
+    "the extraction tool supplies the step",
+  );
+  assert(!JSON.stringify(extracted.todaysFlow).includes("{"), "extracted steps show no brace");
+
+  const opusBody = askAiClaudeRequestBody({
+    model: CLAUDE_OPUS_55,
+    system: "interview",
+    messages: [{ role: "user", content: "Continue." }],
+    maxTokens: 1024,
+    tools: [ASK_QUESTION_TOOL],
+    toolChoice: { type: "tool", name: ASK_QUESTION_TOOL.name },
+  });
+  const toolNames = (opusBody.tools as Array<{ name: string }>).map((tool) => tool.name);
+  assert(toolNames[0] === "ask_question", "the Opus request carries ask_question");
+  assert(
+    (opusBody.tool_choice as { type?: string } | undefined)?.type === "auto",
+    "Opus 5.5 is offered the tool as auto, which is the forced call it accepts",
+  );
+  assert(!("name" in ((opusBody.tool_choice as object | undefined) ?? {})), "Opus is not sent a tool name");
 }
 
 /** One case: dedupe by key, human bucket labels, reviewer and sign-off are client setup. */

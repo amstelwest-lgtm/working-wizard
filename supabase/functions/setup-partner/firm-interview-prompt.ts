@@ -26,7 +26,7 @@ Learn the practice end to end. Cover, by following the conversation, not a scrip
 - Stop when you can map the workflow. Soft cap of 15 turns. The firm may end earlier.
 - Document intake (clients email receipts and statements, WhatsApp, Dext, a portal) is a firm habit: client_setup, not bespoke.
 
-When the user message asks for the next interview turn, reply with JSON only: {"question":"one open question","done":false}. Set done true and question to "" when you can map the workflow.
+When the user message asks for the next interview turn, call the ask_question tool. The question is exactly one sentence and exactly one question mark. Do not ask a second or third part. Do not write JSON in the message. Set done true and question to "" when you can map the workflow.
 
 ## 4. Screenshots
 

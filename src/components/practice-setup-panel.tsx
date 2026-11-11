@@ -9,9 +9,13 @@ import { parseMarketSelection } from "@/lib/market/parse";
 import {
   firmInterviewTranscript,
   firmSetupPartnerSummary,
+  firmInterviewUserError,
+  interviewTurnFromModel,
   setupPartnerMapPromptBlock,
   withMarketCoverage,
+  workflowMapFromInterview,
   type FirmInterviewMessage,
+  type SetupPartnerCountry,
   type SetupPartnerWorkflowMap,
 } from "@/lib/setup-partner";
 import {
@@ -20,7 +24,9 @@ import {
   fetchFirmSetupPlan,
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
+import { ImplementationManagerChip } from "@/components/practice-setup-card";
 import {
+  buildPracticeImplementationPlan,
   dedupePracticeSteps,
   practiceBucketLabel,
   type PracticeImplementationPlan,
@@ -76,7 +82,10 @@ export function PracticeSetupInterview({
   const [map, setMap] = useState<SetupPartnerWorkflowMap | null>(null);
   const [plan, setPlan] = useState<PracticeImplementationPlan | null>(null);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
-  const visibleMap = map ? withMarketCoverage(map, country) : null;
+  const marketCountry: SetupPartnerCountry | null =
+    country === "US" || country === "ZA" ? country : null;
+  const visibleMap = map ? withMarketCoverage(map, marketCountry) : null;
+  const preview = visibleMap ? buildPracticeImplementationPlan(visibleMap) : null;
 
   const mapFrom = async (history: FirmInterviewMessage[], turns: number) => {
     if (!firmId) return;
@@ -91,10 +100,25 @@ export function PracticeSetupInterview({
         modelTurns: turns,
       });
       setModelTurns(built.modelTurns);
-      setMap(built.map);
+      const transcript = firmInterviewTranscript(history);
+      const blob = built.map.todaysFlow.join("\n");
+      const collapsed =
+        built.map.todaysFlow.length <= 1 && (blob.includes("A:") || blob.length > 400);
+      const nextMap = collapsed
+        ? workflowMapFromInterview(transcript, null, marketCountry)
+        : built.map;
+      setMap({
+        ...nextMap,
+        todaysFlow: nextMap.todaysFlow.filter((line) => !line.includes("{") && !line.includes("`")),
+        checklist: nextMap.checklist.filter((line) => !line.includes("{") && !line.includes("`")),
+      });
       setPhase("map");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not build the practice map");
+      setError(
+        firmInterviewUserError(
+          err instanceof Error ? err.message : "Could not build the practice map",
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -111,7 +135,7 @@ export function PracticeSetupInterview({
         await mapFrom(history, next.modelTurns);
         return;
       }
-      const asked = next.question.trim();
+      const asked = interviewTurnFromModel({ text: next.question }).question;
       if (!asked) {
         setTurnError("No question came back. Retry.");
         return;
@@ -119,7 +143,9 @@ export function PracticeSetupInterview({
       setMessages([...history, { role: "assistant", content: asked }]);
       setQuestion(asked);
     } catch (err) {
-      setTurnError(err instanceof Error ? err.message : "The interview failed. Retry.");
+      setTurnError(
+        firmInterviewUserError(err instanceof Error ? err.message : "The interview failed. Retry."),
+      );
     } finally {
       setLoading(false);
     }
@@ -172,7 +198,7 @@ export function PracticeSetupInterview({
         data-practice-setup-panel="waiting"
         aria-label={IMPLEMENTATION_MANAGER_LABEL}
       >
-        <PracticeSetupHero />
+        <PracticeSetupHero status="Not started" />
         <p className="setup-partner__lede">Loading your practice.</p>
       </section>
     );
@@ -212,9 +238,9 @@ export function PracticeSetupInterview({
       className="setup-partner"
       data-practice-setup-panel=""
       data-practice-setup-phase={booting ? "loading" : phase}
-      aria-label={IMPLEMENTATION_MANAGER_LABEL}
-    >
-      <PracticeSetupHero />
+        aria-label={IMPLEMENTATION_MANAGER_LABEL}
+      >
+        <PracticeSetupHero status={heroStatus(phase)} />
 
       {booting ? <p className="setup-partner__lede">Loading your practice.</p> : null}
 
@@ -279,6 +305,18 @@ export function PracticeSetupInterview({
               </li>
             ))}
           </ul>
+          {preview && preview.steps.length > 0 ? (
+            <>
+              <h3>Buckets</h3>
+              <ul>
+                {preview.steps.map((step) => (
+                  <li key={`${step.dedupe_key}-${step.step}`}>
+                    {step.step} — {practiceBucketLabel(step.bucket)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           <div className="setup-partner__actions">
             <button
               type="button"
@@ -326,21 +364,29 @@ function setupToast(message: string, role: "status" | "alert") {
   return createElement("span", { role }, message);
 }
 
-function PracticeSetupHero() {
+function heroStatus(phase: Phase): string {
+  if (phase === "done") return "Saved";
+  if (phase === "map") return "Map ready";
+  return "Not started";
+}
+
+function PracticeSetupHero({ status }: { status: string }) {
   return (
-    <div className="owner-door">
+    <div className="owner-door" data-im-card="solo">
       <div className="owner-pane" data-owner-home="true">
         <div className="owner-agents">
           <HomeBotCard
             agent="setup_partner"
             name={IMPLEMENTATION_MANAGER_LABEL}
             label={IMPLEMENTATION_MANAGER_LABEL}
-            askLabel="Set up your practice"
+            chip={<ImplementationManagerChip />}
+            status={<span className="owner-status is-attention">{status}</span>}
             lines={
-              <span className="owner-lines">
+              <span className="owner-lines" data-status-update="">
                 <span className="owner-voice">
-                  Map how the firm closes, reviews, signs off, and reports. No desktop access.
+                  Map how the firm closes, reviews, signs off, and reports.
                 </span>
+                <span className="owner-money">{status}</span>
               </span>
             }
           />

@@ -274,7 +274,7 @@ assert(prompt.includes("screenshot"), "prompt allows screenshot notes");
 const panel = read("src/components/setup-partner-panel.tsx");
 assert(!panel.includes("product_gap") && !panel.includes("dedupe_key"), "plan stays off the panel");
 const card = read("src/components/practice-setup-card.tsx");
-assert(card.includes("Set up your practice"), "practice home card");
+assert(card.includes("Set up practice"), "practice home card");
 assert(!card.includes("setup-partner-panel"), "card does not render the panel");
 assert(
   read("src/components/practice-board.tsx").includes("<PracticeSetupCard"),

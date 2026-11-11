@@ -214,6 +214,7 @@ export function OwnerHome({
   profileResume = false,
   onResumeProfile,
   onOpenTaxAgent,
+  extraCard = null,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
@@ -260,6 +261,8 @@ export function OwnerHome({
   /** Unfinished first-run profile. Home can open it again. */
   profileResume?: boolean;
   onResumeProfile?: () => void;
+  /** Extra tile in the same agent grid. Practice Home passes Implementation Manager. */
+  extraCard?: ReactNode;
 }) {
   const handoff = presence.handoff;
   const handoffSentence = handoff ? quoteLiveScoreOnly(handoff.sentence) : null;
@@ -351,6 +354,7 @@ export function OwnerHome({
               />
             );
           })}
+          {extraCard}
           <TaxSpecialistSlot
             country={marketCountry}
             variant="card"
