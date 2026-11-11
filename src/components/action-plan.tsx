@@ -27,8 +27,8 @@ import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { settleWithin } from "@/lib/bounded-load";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
-import { handoffAssigneeName } from "@/lib/owner-handoff";
-import { assignedToast, describeActionHandoff } from "@/lib/action-handoff";
+import { handoffAssigneeName, handoffCommitError } from "@/lib/owner-handoff";
+import { assignedToast, describeActionHandoff, handoffRowChip, handoffRowShowsNotSent } from "@/lib/action-handoff";
 import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
@@ -968,7 +968,8 @@ export default function ActionPlanPanel({
         );
         return;
       }
-      if (!result.ok || result.noted !== true) {
+      const handoffError = handoffCommitError(result);
+      if (handoffError) {
         setLiveHandoff((current) => {
           const next = { ...current };
           delete next[item.id];
@@ -983,7 +984,7 @@ export default function ActionPlanPanel({
             [item.id]: { ...current[item.id], [agent]: true },
           }));
         }
-        toast.error(result.ok ? "Couldn't hand this over" : result.error);
+        toast.error(handoffError);
         return;
       }
       const handed = agentDisplayName(agent);
@@ -2055,10 +2056,12 @@ export default function ActionPlanPanel({
                       title: it.title,
                       agent,
                     }).then((result) => {
-                      if (!result.ok || result.noted !== true) {
-                        toast.error(result.ok ? "Couldn't hand this over" : result.error);
+                      const handoffError = handoffCommitError(result);
+                      if (handoffError) {
+                        toast.error(handoffError);
                         return;
                       }
+                      if (result.ok && result.reused) return;
                       toast.success(assignedToast(agent));
                     });
                   };
@@ -2676,6 +2679,14 @@ function ItemRow({
   const [pickOwner, setPickOwner] = useState(false);
   const exp = expectedPct(item);
   const msDone = milestones.filter((m) => m.is_done).length;
+  const rowAssignee = assigneeOverride ?? displayedAssignee(item.owner_name, notes);
+  const chipLabel = handoffRowChip({
+    phasePending,
+    phaseLabel,
+    assigneeName: rowAssignee,
+    healthLabel: h.label,
+  });
+  const chipIsHandoff = chipLabel !== h.label;
 
   return (
     <div
@@ -2913,7 +2924,7 @@ function ItemRow({
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
               <Mail className="h-3 w-3" /> Sent
             </span>
-          ) : !lastFailed && !phaseLabel ? (
+          ) : !lastFailed && handoffRowShowsNotSent(phaseLabel, rowAssignee) ? (
             <span className="text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500">
               Not sent
             </span>
@@ -2930,10 +2941,10 @@ function ItemRow({
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0">
         <span
           className="rounded-md px-2.5 py-1 text-[11px] font-bold"
-          style={{ color: phasePending || phaseLabel ? "#0B5FFF" : h.color, background: phasePending || phaseLabel ? "rgba(11,95,255,0.12)" : h.bg }}
-          data-handoff-phase={phasePending ? "checking" : phaseLabel ?? undefined}
+          style={{ color: chipIsHandoff ? "#0B5FFF" : h.color, background: chipIsHandoff ? "rgba(11,95,255,0.12)" : h.bg }}
+          data-handoff-phase={phasePending ? "checking" : phaseLabel ?? (chipLabel === "Working" ? "working" : undefined)}
         >
-          {phasePending ? "Checking…" : phaseLabel ?? h.label}
+          {chipLabel}
         </span>
         <ChevronRight className="h-3.5 w-3.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600" />
       </div>

@@ -10,6 +10,8 @@ import {
   describeActionHandoff,
   formatAssignmentNote,
   HANDOFF_COST_STOP,
+  handoffRowChip,
+  handoffRowShowsNotSent,
   handoffButtonLabel,
   handoffClock,
   handoffCouldNotDraft,
@@ -25,7 +27,7 @@ import { agentDisplayName, agentShortName } from "../src/lib/milon-team.ts";
 import { AGENT_KEYS } from "../src/lib/milon-team-feed.ts";
 import { HANDOFF_RUN_WAIT_MS, pollAfterTick } from "../src/lib/agent-activity-poll.ts";
 import { deskSignoffText } from "../src/lib/milon-team-activity.ts";
-import { assignmentForMove, moveLoadMayCache, moveRowMatches } from "../src/lib/owner-handoff.ts";
+import { assignmentForMove, handoffCommitError, moveLoadMayCache, moveRowMatches } from "../src/lib/owner-handoff.ts";
 import { displayedAssignee, latestStoredAssignment } from "../src/lib/open-plan-home.ts";
 
 function assert(cond: unknown, message: string): asserts cond {
@@ -310,7 +312,7 @@ const menu = readFileSync("src/components/hand-to-menu.tsx", "utf8");
 assert(menu.includes("toast.success(assignedToast(agent))"), "Next moves toasts Assigned to once the note is stored");
 const pendingLabel = menu.indexOf("Assigning to ${agentShortName(agent)}");
 const ensured = menu.indexOf("const actionItemId = await ensure()");
-const notedGate = menu.indexOf("result.noted !== true");
+const notedGate = menu.indexOf("handoffCommitError(result)");
 const finalAssignee = menu.indexOf("setAssignee(agentDisplayName(agent))");
 const successToast = menu.indexOf("toast.success(assignedToast(agent))");
 assert(
@@ -657,4 +659,64 @@ assert(
   ) === "Handed to Financial Manager",
   "a hand-off pill does not say Couldn't draft",
 );
+
+const chillAction = "a518b7e6-b5dd-4ffe-91f9-813590f72d47";
+const passAlong =
+  "Advisor passed this to the Financial Manager: Reduce short-term debt by refinancing into longer-term facilities";
+const queuedResponse = { ok: true as const, noted: true, reused: false, runId: "run-retry", status: "queued" };
+const alreadyHanded = { ok: true as const, noted: false, reused: true, runId: "run-open", status: "running" };
+const settledRun = {
+  id: "run-retry",
+  agent: "advisor" as const,
+  status: "partial",
+  summary: passAlong,
+  error: passAlong,
+  stop_reason: "no_draft",
+  action_item_id: chillAction,
+  finished_at: "2026-11-11T22:10:00.000Z",
+};
+const settled = describeActionHandoff({
+  actionItemId: chillAction,
+  assignee: "Milōn Advisor",
+  sentAt: null,
+  notes: [
+    { note: `Advisor finished: ${HANDOFF_COST_STOP}`, at: "2026-11-05T08:00:00.000Z" },
+    { note: passAlong, at: "2026-11-11T22:10:01.000Z" },
+  ],
+  storedRun: { id: settledRun.id, agent: "advisor", status: settledRun.status, at: settledRun.finished_at },
+  runs: [settledRun],
+  findings: [],
+  findingsReady: true,
+});
+assert(settled.phaseLabel === "Handed to Financial Manager", "the settled pill names the hand-off");
+assert(settled.caption === "Handed to Financial Manager", "the row label is the same hand-off");
+assert(!settled.caption?.includes("couldn't"), "a hand-off row does not offer the failure line");
+const summaryOnly = describeActionHandoff({
+  actionItemId: chillAction,
+  assignee: "Milōn Advisor",
+  sentAt: null,
+  notes: [{ note: `Advisor finished: ${HANDOFF_COST_STOP}`, at: "2026-11-05T08:00:00.000Z" }],
+  storedRun: { id: settledRun.id, agent: "advisor", status: "partial", at: settledRun.finished_at },
+  runs: [{ ...settledRun, summary: passAlong, error: "" }],
+  findings: [],
+  findingsReady: true,
+});
+assert(
+  summaryOnly.phaseLabel === "Handed to Financial Manager" && summaryOnly.caption === summaryOnly.phaseLabel,
+  "agent_runs.summary beats an older finished note",
+);
+assert(handoffCommitError(queuedResponse) === null, "a queued owner-handoff response is not an error toast");
+assert(handoffCommitError(alreadyHanded) === null, "an already-handed retry is not Couldn't hand this over");
+assert(
+  handoffCommitError({ ok: false, error: "run_insert_failed" }) === "Couldn't hand this over",
+  "a real hand-off error still uses the plain toast",
+);
+assert(
+  handoffRowChip({ phaseLabel: null, assigneeName: "Milōn Advisor", healthLabel: "Off track" }) === "Working",
+  "a bot hand-off does not flash Off track",
+);
+assert(!handoffRowShowsNotSent(null, "Milōn Advisor"), "a bot hand-off does not flash Not sent");
+assert(handoffRowChip({ phaseLabel: settled.phaseLabel, assigneeName: "Milōn Advisor", healthLabel: "Off track" }) === settled.phaseLabel, "a settled hand-off replaces Off track");
+assert(plan.includes("handoffCommitError"), "the owner Retry button uses the shared result");
+assert(menu.includes("handoffCommitError"), "accountant Hand to uses the shared result");
 console.log("action-handoff ok");

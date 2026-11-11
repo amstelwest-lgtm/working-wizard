@@ -133,7 +133,11 @@ async function writeAssignment(
   const noteWrite = handoffNoteById(input.trackedId, input.note);
   if (noteWrite.action === "skip") return null;
   if (noteWrite.action === "update") {
-    const { error: noteError } = await admin.from("action_updates").update({ note: input.note }).eq("id", noteWrite.id);
+    const { error: noteError } = await admin
+      .from("action_updates")
+      .update({ note: input.note })
+      .eq("id", noteWrite.id)
+      .eq("client_id", input.clientId);
     if (noteError) return "note_not_written";
     return null;
   }

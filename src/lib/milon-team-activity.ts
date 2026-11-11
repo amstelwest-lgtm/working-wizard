@@ -47,6 +47,8 @@ export type AgentRunRow = {
   client_id: string;
   status: AgentRunStatus | string;
   summary?: string;
+  error?: string | null;
+  stop_reason?: string | null;
   /** sync and upload are ingest. Other triggers are ordinary work. */
   trigger?: string | null;
   queued_at: string;
