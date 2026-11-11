@@ -130,4 +130,30 @@ const empty = renderToStaticMarkup(
 );
 assert(empty === "", "an empty plan renders nothing");
 
+const debt = planAutomation(
+  [
+    item({ id: "row-2", title: "Bring debt-to-equity under the target" }),
+    item({
+      id: "row-4",
+      title: "Target a D/E below 1× for conservative businesses, below 2× for growth",
+      createdAt: "2026-10-02T00:00:00.000Z",
+    }),
+  ],
+  TEAM,
+  TODAY,
+);
+assert(debt.duplicates.length === 1 && debt.duplicates[0]?.dropIds[0] === "row-4", "display titles that match are one action");
+const debtMarkup = renderToStaticMarkup(
+  createElement(ActionPlanAutomation, {
+    rows: debt.rows,
+    duplicates: debt.duplicates,
+    contradictions: debt.contradictions,
+    canEdit: true,
+    onConfirm: () => {},
+    onDrop: () => {},
+  }),
+);
+const confirms = debtMarkup.match(/>Confirm</g) ?? [];
+assert(confirms.length === 1, `Suggested — confirm keeps one debt row, got ${confirms.length}`);
+
 console.log("action-plan-automation ok");

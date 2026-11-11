@@ -4,6 +4,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import { currentQuarterLabel, defaultTargetDate } from "@/lib/action-plan-counts";
+import { actionDisplayTitle } from "@/lib/strategic-moves";
 
 export async function ensureStrategicMoveItem(input: {
   clientId: string;
@@ -49,6 +50,21 @@ export async function ensureStrategicMoveItem(input: {
   if (existingError) return { ok: false, error: existingError.message };
   const already = existing?.[0]?.id;
   if (typeof already === "string" && already) return { ok: true, actionItemId: already };
+
+  const wanted = actionDisplayTitle(input.title).toLowerCase();
+  if (wanted) {
+    const { data: titled, error: titledError } = await supabase
+      .from("action_items")
+      .select("id, title")
+      .eq("client_id", input.clientId)
+      .neq("status", "done")
+      .limit(80);
+    if (titledError) return { ok: false, error: titledError.message };
+    const same = (titled ?? []).find(
+      (row) => actionDisplayTitle(typeof row.title === "string" ? row.title : "").toLowerCase() === wanted,
+    );
+    if (same && typeof same.id === "string") return { ok: true, actionItemId: same.id };
+  }
 
   const { data: maxSeq } = await supabase
     .from("action_items")

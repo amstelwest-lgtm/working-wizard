@@ -35,10 +35,12 @@ export function ImplementationManagerChip() {
 export function PracticeSetupCard({
   exampleClientId: _exampleClientId,
   embedded = false,
+  firmId: _firmId = null,
 }: {
   exampleClientId?: string | null;
   /** Render the tile only, for the home agent grid. */
   embedded?: boolean;
+  firmId?: string | null;
 }) {
   const card = (
     <HomeBotCard
@@ -51,8 +53,9 @@ export function PracticeSetupCard({
       status={<span className="owner-status is-attention">Not started</span>}
       lines={
         <span className="owner-lines" data-status-update="">
-          <span className="owner-voice">{CAPTION}</span>
-          <span className="owner-money">Takes ~10 min</span>
+          <span className="owner-voice">
+            {CAPTION} <strong className="owner-money">Takes ~10 min</strong>
+          </span>
         </span>
       }
     />

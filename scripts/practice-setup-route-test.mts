@@ -256,9 +256,9 @@ function testFollowUpBottleneckAndIntake() {
   const mix = classifyPracticeStep("Mostly retail and construction industries");
   assert(mix.bucket === "client_setup", `client mix bucket: ${mix.bucket}`);
   const plan = buildPracticeImplementationPlan({
-    todaysFlow: ["We do bank rec before the pack goes out"],
+    todaysFlow: ["We do bank rec before the pack goes out", "Practice bottleneck: bank rec"],
     milonCoverage: [],
-    gaps: ["Practice bottleneck: bank rec"],
+    gaps: [],
     checklist: [],
   });
   assert(
@@ -277,16 +277,17 @@ function testInterviewParseAndStructuredMap() {
     '{"question":"Partner sign-off by WhatsApp voice note is interesting. Walk me through what happens after a partner sends one: how does the jun',
   );
   assert(
-    truncated.question === "Partner sign-off by WhatsApp voice note is interesting.",
-    `truncated JSON keeps the finished sentence, got ${truncated.question}`,
+    truncated.question.startsWith("Partner sign-off by WhatsApp voice note is interesting."),
+    `truncated JSON keeps the model text, got ${truncated.question}`,
   );
-  assert(!truncated.question.includes("{") && !truncated.question.includes("how does the jun"), "the cut tail is dropped");
+  assert(truncated.question.includes("how does the jun"), "the question is not cut mid-sentence");
+  assert(!truncated.question.includes("{"), "truncated JSON shows no brace");
   const fragment = parseFirmInterviewTurn('{"question":"Walk me through how the jun');
-  assert(fragment.question === "", "an unfinished fragment is not stored");
+  assert(fragment.question === "Walk me through how the jun", "an unfinished question is not rewritten");
   const fenced = parseFirmInterviewTurn(
     '```json\n{"question":"Who closes the month? Who reviews it?","done":false}\n```',
   );
-  assert(fenced.question === "Who closes the month?", `one question, got ${fenced.question}`);
+  assert(fenced.question === "Who closes the month? Who reviews it?", `model text stays whole, got ${fenced.question}`);
   assert(!fenced.question.includes("{") && !fenced.question.includes('"question"'), "no raw JSON");
   const prose = parseFirmInterviewTurn("Who prepares the management pack?");
   assert(prose.question === "Who prepares the management pack?", "prose falls back to the question");
@@ -337,16 +338,13 @@ function testQuestionFallbacksNeverShowJson() {
   const truncated = parseFirmInterviewTurn(
     '{"question":"Partner sign-off by WhatsApp voice note is interesting. Walk me through what happens after a partner sends one: how does the jun',
   );
-  assert(
-    truncated.question === "Partner sign-off by WhatsApp voice note is interesting.",
-    `truncated JSON, got ${truncated.question}`,
-  );
+  assert(truncated.question.includes("how does the jun"), `truncated JSON, got ${truncated.question}`);
   assert(!truncated.question.includes("{"), "truncated JSON shows no brace");
 
   const fenced = parseFirmInterviewTurn(
     '```json\n{"question":"Who closes the month? Who reviews it?","done":false}\n```',
   );
-  assert(fenced.question === "Who closes the month?", `fenced JSON, got ${fenced.question}`);
+  assert(fenced.question === "Who closes the month? Who reviews it?", `fenced JSON, got ${fenced.question}`);
   assert(!fenced.question.includes("{"), "fenced JSON shows no brace");
 
   const prose = parseFirmInterviewTurn("Who prepares the management pack?");
@@ -355,9 +353,23 @@ function testQuestionFallbacksNeverShowJson() {
   const many = parseFirmInterviewTurn(
     "Who closes the month, who reviews it, and what do they sign?",
   );
-  assert(many.question === "Who closes the month?", `one ask, got ${many.question}`);
-  assert(parseFirmInterviewTurn("Please upload a sample pack.").question === "", "no upload request");
-  assert(parseFirmInterviewTurn("Do you close on the sixth?").question === "", "no closed question");
+  assert(
+    many.question === "Who closes the month, who reviews it, and what do they sign?",
+    `a comma stays inside one question, got ${many.question}`,
+  );
+  const voice = parseFirmInterviewTurn(
+    "When a partner signs off by WhatsApp voice note, what happens next?",
+  );
+  assert(
+    voice.question === "When a partner signs off by WhatsApp voice note, what happens next?",
+    `the voice-note question survives, got ${voice.question}`,
+  );
+  const doubled = interviewTurnFromModel({
+    text: "Who closes the month? Who reviews it?",
+  });
+  assert(doubled.question === "" && doubled.multiple, "more than one ask regenerates");
+  const kept = interviewTurnFromModel({ text: "Who closes the month? Who reviews it?" }, { asIs: true });
+  assert(kept.question === "Who closes the month? Who reviews it?", "the second reply is used as-is");
   const pack = classifyPracticeStep("We prepare a quarterly management pack");
   const books = classifyPracticeStep("Bookkeeping review before the pack goes out");
   const cash = classifyPracticeStep("Cash and profit reporting goes to the partner");
@@ -365,11 +377,28 @@ function testQuestionFallbacksNeverShowJson() {
   const noted = classifyPracticeStep("Not stated. Still unclear after it was asked twice. We run the month-end close.");
   assert(!/not stated|still unclear|asked twice/i.test(noted.step), "internal notes stay off the plan");
   assert(noted.bucket === "covered", "the month-end step stays covered");
+  const planNotes = buildPracticeImplementationPlan({
+    todaysFlow: [
+      "Follow up: the answer was about the quarterly pack instead.",
+      "Pain points weren't stated anywhere in the interview. Ask about them directly.",
+      "Follow up: the receipts and inbox answer was given twice.",
+      "Confirm how often the pack goes out.",
+      "We prepare a quarterly management pack",
+    ],
+    milonCoverage: [],
+    gaps: [],
+    checklist: ["Confirm how often the pack goes out."],
+    gaps: ["Follow up: the receipts and inbox answer was given twice."],
+  });
+  assert(
+    planNotes.steps.length === 1 && planNotes.steps[0]?.bucket === "covered",
+    "only workflow steps are plan rows",
+  );
 
   const unfinished = interviewTurnFromModel({
     text: '{"question":"Walk me through how the jun',
   });
-  assert(unfinished.question === "", "an unfinished fragment falls back to empty");
+  assert(unfinished.question === "Walk me through how the jun", "an unfinished question is not cut");
   assert(!unfinished.question.includes("{"), "the fragment shows no brace");
 
   const fromTool = interviewTurnFromModel({
@@ -377,11 +406,14 @@ function testQuestionFallbacksNeverShowJson() {
     toolUses: [
       {
         name: ASK_QUESTION_TOOL.name,
-        input: { question: "Who closes the month? And who reviews it?", done: false },
+        input: { question: "When a partner signs off by WhatsApp voice note, what happens next?", done: false },
       },
     ],
   });
-  assert(fromTool.question === "Who closes the month?", `tool question, got ${fromTool.question}`);
+  assert(
+    fromTool.question === "When a partner signs off by WhatsApp voice note, what happens next?",
+    `tool question, got ${fromTool.question}`,
+  );
   assert(!fromTool.question.includes("{"), "the tool question shows no brace");
 
   const ugly = firmInterviewUserError('Claude error (400): {"type":"error","message":"bad json"}');
@@ -403,8 +435,9 @@ function testQuestionFallbacksNeverShowJson() {
               cadence: "weekly",
               pain: "shared inbox",
             },
+            { step: "Follow up: the answer was about the quarterly pack instead." },
           ],
-          checklist: [],
+          checklist: ["Confirm how often the pack goes out."],
         },
       },
     ],
@@ -414,6 +447,8 @@ function testQuestionFallbacksNeverShowJson() {
     extracted.todaysFlow[0]?.startsWith("Clients email receipts"),
     "the extraction tool supplies the step",
   );
+  assert(extracted.todaysFlow.length === 1, "a follow-up note is not a saved step");
+  assert(extracted.checklist.length === 0 && extracted.gaps.length === 0, "checklist and gaps are not persisted");
   assert(!JSON.stringify(extracted.todaysFlow).includes("{"), "extracted steps show no brace");
 
   const opusBody = askAiClaudeRequestBody({

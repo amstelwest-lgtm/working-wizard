@@ -5,6 +5,7 @@
  * Add to Action Plan). Does not send email.
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { actionDisplayTitle } from "../../../src/lib/action-title.ts";
 import {
   formatOverviewForPrompt,
   overviewFactLines,
@@ -142,13 +143,25 @@ async function insertActions(
   const ids: string[] = [];
   const { data: existing } = await client
     .from("action_items")
-    .select("id, source_move_key, seq")
+    .select("id, source_move_key, seq, title")
     .eq("plan_id", planId);
-  const rows = (existing ?? []) as Array<{ id: string; source_move_key: string | null; seq: number }>;
+  const rows = (existing ?? []) as Array<{
+    id: string;
+    source_move_key: string | null;
+    seq: number;
+    title: string | null;
+  }>;
   const byKey = new Map(rows.filter((r) => r.source_move_key).map((r) => [r.source_move_key as string, r.id]));
+  const byTitle = new Map(
+    rows.flatMap((row) => {
+      const key = actionDisplayTitle(row.title ?? "").toLowerCase();
+      return key ? [[key, row.id] as const] : [];
+    }),
+  );
   let seq = rows.reduce((max, r) => Math.max(max, r.seq ?? 0), 0);
   for (const action of actions) {
-    const already = byKey.get(action.sourceMoveKey);
+    const titled = byTitle.get(actionDisplayTitle(action.title).toLowerCase());
+    const already = byKey.get(action.sourceMoveKey) ?? titled;
     if (already) {
       ids.push(already);
       continue;
@@ -171,7 +184,10 @@ async function insertActions(
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    if (data?.id) ids.push(String(data.id));
+    if (data?.id) {
+      ids.push(String(data.id));
+      byTitle.set(actionDisplayTitle(action.title).toLowerCase(), String(data.id));
+    }
   }
   return ids;
 }

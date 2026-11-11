@@ -13,7 +13,6 @@ import {
   interviewTurnFromModel,
   setupPartnerMapPromptBlock,
   withMarketCoverage,
-  workflowMapFromInterview,
   type FirmInterviewMessage,
   type SetupPartnerCountry,
   type SetupPartnerWorkflowMap,
@@ -113,13 +112,7 @@ export function PracticeSetupInterview({
         modelTurns: turns,
       });
       setModelTurns(built.modelTurns);
-      const transcript = firmInterviewTranscript(history);
-      const blob = built.map.todaysFlow.join("\n");
-      const collapsed =
-        built.map.todaysFlow.length <= 1 && (blob.includes("A:") || blob.length > 400);
-      const nextMap = collapsed
-        ? workflowMapFromInterview(transcript, null, marketCountry)
-        : built.map;
+      const nextMap = built.map;
       setMap({
         ...nextMap,
         todaysFlow: nextMap.todaysFlow.filter((line) => !line.includes("{") && !line.includes("`")),
@@ -428,9 +421,9 @@ function PracticeSetupHero({ status, metric }: { status: string; metric: string 
             lines={
               <span className="owner-lines" data-status-update="">
                 <span className="owner-voice">
-                  Map how the firm closes, reviews, signs off, and reports.
+                  Map how the firm closes, reviews, signs off, and reports.{" "}
+                  <strong className="owner-money">{metric}</strong>
                 </span>
-                <span className="owner-money">{metric}</span>
               </span>
             }
           />

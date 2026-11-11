@@ -147,8 +147,8 @@ export function SageConnectCard({
   if (gate === "coming_soon" || configured === false) {
     return (
       <div className="ledger-connect ledger-connect--dashed" data-sage-connect="soon" data-connection-state="coming_soon">
-        <p className="ledger-connect__kicker">Sage Accounting</p>
-        <p className="ledger-connect__body">Coming soon</p>
+        <p className="ledger-connect__kicker">Sage · Coming soon</p>
+        <p className="ledger-connect__body">Sage is not available yet.</p>
       </div>
     );
   }

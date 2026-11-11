@@ -298,7 +298,11 @@ assert(
 const alignedViews = budgetMonthViews(presented.doc, []);
 const totals = budgetRangeTotals(alignedViews);
 assert(totals.revenue > 0 && totals.expenses >= 0, "the visible range has revenue and expenses");
-assert(Math.abs(totals.net - (totals.revenue - totals.expenses)) < 1, "net is revenue less expenses");
+const alignedCogs = alignedViews.reduce((sum, row) => sum + row.budget.cogs, 0);
+assert(
+  Math.abs(totals.net - (totals.revenue - alignedCogs - totals.expenses)) < 1,
+  "net is revenue less cost of sales and expenses",
+);
 const alignedRows = budgetTableRows(presented.doc, alignedViews);
 const revenueRow = alignedRows.find((row) => row.id === "revenue");
 assert(revenueRow != null, "revenue row is on the table");
@@ -398,5 +402,23 @@ const sameSource = budgetStatementDisplayTotals({
   planTotals: { revenue: 0, expenses: 189_000, net: -189_000 },
 });
 assert(sameSource.expenses === 189_000, "header expenses match the table");
+const aqaMonths = [
+  { cogs: 85_500, overheads: 94_500 },
+  { cogs: 85_500, overheads: 94_500 },
+].map((row, index) => ({
+  month: `2026-0${index + 1}`,
+  actual: null,
+  revenue: null,
+  budget: {
+    revenue: 45_778,
+    cogs: row.cogs,
+    overheads: row.overheads,
+    depreciation: 0,
+    ebit: 45_778 - row.cogs - row.overheads,
+  },
+})) as unknown as Parameters<typeof budgetRangeTotals>[0];
+const aqa = budgetRangeTotals(aqaMonths);
+assert(aqa.expenses === 189_000, `header Expenses excludes cost of sales, got ${aqa.expenses}`);
+assert(aqa.expenses !== 171_000 + 189_000, "header Expenses is not cost of sales plus overheads");
 
 console.log("budget chart table ok");

@@ -9,8 +9,10 @@ import { PILLAR_LABELS, type HealthPillarId } from "@/lib/health-score";
 import { moveFactorLabel, strategicMovePillar } from "@/lib/move-pillars";
 import { profilePriorityWeight } from "@/lib/profile-signals";
 import { factorDisplayName } from "@/lib/score-prose";
+import { actionDisplayTitle, dedupeActionTitles } from "@/lib/action-title";
 
 export { moveFactorLabel, strategicMovePillar };
+export { actionDisplayTitle, dedupeActionTitles };
 
 export type StrategicCynefin = "Clear" | "Complicated" | "Complex" | "Chaotic";
 export type StrategicEisenhower = "Do" | "Decide" | "Delegate" | "Delete";
@@ -424,31 +426,6 @@ export function stockSittingApplies(
 }
 
 const UNSET_GOAL = /^(?:not set|n\/a|none|unset|tbd|goal not set|—|-)?$/i;
-const DEBT_GUIDANCE = /target a d\/e below 1/i;
-
-/** One row per displayed title. "Target a D/E below 1×" is the debt-to-equity action. */
-export function dedupeActionTitles(titles: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of titles) {
-    const title = actionDisplayTitle(raw);
-    const key = title.toLowerCase();
-    if (!title || seen.has(key)) continue;
-    seen.add(key);
-    out.push(title);
-  }
-  return out;
-}
-
-/** Stored guidance and lowercase titles render as an action title. */
-export function actionDisplayTitle(title: string | null | undefined): string {
-  const text = (title ?? "").trim();
-  if (!text) return "";
-  if (DEBT_GUIDANCE.test(text)) return "Bring debt-to-equity under the target";
-  const first = text.charAt(0);
-  if (first >= "a" && first <= "z") return first.toUpperCase() + text.slice(1);
-  return text;
-}
 
 /** A goal that is blank or still a placeholder is not overdue, even with a past date. */
 export function planGoalIsOverdue(

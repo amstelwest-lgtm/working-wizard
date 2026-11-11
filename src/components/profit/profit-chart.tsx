@@ -127,7 +127,7 @@ export function ProfitChart({
         <div className="mt-4 h-[300px] w-full min-w-0" data-profit-axis="chart">
           <ResponsiveContainer width="100%" height="100%">
             {shape === "line" ? (
-              <LineChart data={data} margin={{ top: 22, right: 12, left: 0, bottom: 0 }}>
+              <LineChart data={data} margin={{ top: 28, right: 36, left: 8, bottom: 0 }}>
                 <CartesianGrid
                   strokeDasharray="3 3"
                   stroke="rgba(148,163,184,0.35)"
@@ -146,7 +146,7 @@ export function ProfitChart({
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(value) => tick(Number(value))}
-                  width={56}
+                  width={72}
                 />
                 <Tooltip formatter={(value: number) => [compact(Number(value)), "Profit"]} />
                 <Line
@@ -161,7 +161,7 @@ export function ProfitChart({
                   <LabelList
                     dataKey="profit"
                     position="top"
-                    formatter={(value: number) => (value == null ? "" : compact(value))}
+                    formatter={(value: number) => (value == null ? "" : tick(value))}
                     fill={PROFIT_COLOR}
                     fontSize={11}
                   />
@@ -187,7 +187,7 @@ export function ProfitChart({
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(value) => tick(Number(value))}
-                  width={56}
+                  width={72}
                 />
                 <Tooltip formatter={(value: number) => [compact(Number(value)), "Profit"]} />
                 <Bar

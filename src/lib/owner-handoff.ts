@@ -350,6 +350,25 @@ export function handoffClaimsDraftsRecorded(text: string | null | undefined): bo
 }
 
 /**
+ * Why a finished hand-off has no draft. A refused record_draft lives on the
+ * trace. An empty summary is not a reason.
+ */
+export function handoffDraftFailureReason(input: {
+  summary?: string | null;
+  steps?: readonly { tool?: string | null; status?: string | null; detail?: string | null }[];
+}): string {
+  const failed = (input.steps ?? []).find((step) => {
+    const tool = step.tool ?? "";
+    const detail = step.detail?.replace(/\s+/g, " ").trim() ?? "";
+    return (tool === "record_draft" || tool === "record_finding") && step.status !== "ok" && detail.length > 0;
+  });
+  if (failed?.detail) return failed.detail.replace(/\s+/g, " ").trim().slice(0, 400);
+  const summary = (input.summary ?? "").replace(/\s+/g, " ").trim();
+  if (summary && !handoffClaimsDraftsRecorded(summary)) return summary.slice(0, 400);
+  return "no draft was saved for this action";
+}
+
+/**
  * The row says this when a hand-off ended without a finding for that action.
  * A reason that is only "drafts are recorded" is replaced: that sentence is not a draft.
  */

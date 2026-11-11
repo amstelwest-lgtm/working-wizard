@@ -12,6 +12,7 @@ import {
   SETUP_PARTNER_SOURCE_EVENT,
   SETUP_PARTNER_TASK_FEATURE,
   SETUP_PARTNER_TASK_WORKFLOW,
+  isInterviewerNote,
   type SetupPartnerWorkflowMap,
 } from "./setup-partner.ts";
 
@@ -352,7 +353,7 @@ export function redundantSetupLine(step: string, others: string): boolean {
 export function buildPracticeImplementationPlan(
   map: SetupPartnerWorkflowMap,
 ): PracticeImplementationPlan {
-  const raw = [...map.todaysFlow, ...map.checklist, ...map.gaps]
+  const raw = [...map.todaysFlow]
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
   const steps: PracticePlanStep[] = [];
@@ -360,6 +361,7 @@ export function buildPracticeImplementationPlan(
     const others = raw.filter((line) => line !== step).join("\n");
     if (redundantSetupLine(step, others)) continue;
     if (!accountantFacingStep(step)) continue;
+    if (isInterviewerNote(step)) continue;
     steps.push(classifyPracticeStep(step));
   }
   return { steps: dedupePracticeSteps(steps) };
