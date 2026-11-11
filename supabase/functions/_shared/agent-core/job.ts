@@ -320,7 +320,11 @@ async function recordHandoffFinish(
     if (memoryError) console.warn("handoff note id", memoryError.message);
   };
   if (noteWrite.action === "update") {
-    const { error: noteError } = await db.from("action_updates").update({ note }).eq("id", noteWrite.id);
+    const { error: noteError } = await db
+      .from("action_updates")
+      .update({ note })
+      .eq("id", noteWrite.id)
+      .eq("client_id", input.clientId);
     if (noteError) console.warn("handoff note", noteError.message);
   } else if (noteWrite.action === "insert") {
     const { data: created, error: noteError } = await db

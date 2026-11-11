@@ -18,6 +18,7 @@ import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import {
   assignmentForMove,
+  handoffCommitError,
   handoffFailureMessage,
   normalizeMoveLabel,
   type MoveAssignmentRef,
@@ -475,8 +476,9 @@ export function MoveHandTo({
       setFace(previousFace.current);
       return;
     }
-    if (!result.ok || result.noted !== true) {
-      revertPending(result.ok ? "Couldn't hand this over" : handoffFailureMessage(result.error));
+    const handoffError = handoffCommitError(result);
+    if (handoffError) {
+      revertPending(handoffError);
       return;
     }
     optimistic.current = false;

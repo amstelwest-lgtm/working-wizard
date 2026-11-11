@@ -9,6 +9,7 @@ import {
   handoffAgainInputs,
   handoffAssigneeName,
   handoffDecision,
+  handoffCommitError,
   handoffCouldNotDraftSentence,
   handoffDraftFailureReason,
   handoffNeedsDraftNudge,
@@ -181,6 +182,12 @@ const writer = readFileSync("src/lib/owner-handoff.ts", "utf8");
 const byId = writer.slice(writer.indexOf("export function handoffNoteById"), writer.indexOf("function writeTrackedNote"));
 assert(byId.includes("trackedId") && !/couldn't draft this|finished|Handed to/.test(byId), "the id write does not match note text");
 assert(job.includes("handoffNoteById") && job.includes('.eq("id", noteWrite.id)'), "the runner updates the stored outcome id");
+assert(job.includes('.eq("client_id", input.clientId)'), "an outcome note update is limited to this client");
+assert(
+  readFileSync("supabase/functions/owner-handoff/index.ts", "utf8").includes('.eq("client_id", input.clientId)'),
+  "a queue note update is limited to this client",
+);
+assert(handoffCommitError({ ok: true, noted: false, reused: true }) === null, "reused is a successful hand-off");
 assert(!job.includes("handoffNoteWrite"), "the runner does not match notes by text");
 const handedOff = [
   {

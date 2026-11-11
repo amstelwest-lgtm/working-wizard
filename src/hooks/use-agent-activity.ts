@@ -38,7 +38,9 @@ const FINDING_COLUMNS =
 
 async function fetchClientRuns(clientId: string): Promise<AgentRunRow[]> {
   const runsRes = await table("agent_runs")
-    .select("id, agent, client_id, status, summary, trigger, queued_at, started_at, finished_at, action_item_id")
+    .select(
+            "id, agent, client_id, status, summary, error, stop_reason, trigger, queued_at, started_at, finished_at, action_item_id",
+          )
     .eq("client_id", clientId)
     .order("queued_at", { ascending: false })
     .limit(ROW_LIMIT);
@@ -98,6 +100,8 @@ function parseRun(row: Record<string, unknown>): AgentRunRow | null {
     client_id: typeof row.client_id === "string" ? row.client_id : "",
     status: typeof row.status === "string" ? row.status : "",
     summary: typeof row.summary === "string" ? row.summary : "",
+    error: textOrNull(row.error),
+    stop_reason: textOrNull(row.stop_reason),
     trigger: textOrNull(row.trigger),
     queued_at: row.queued_at,
     started_at: textOrNull(row.started_at),
@@ -192,7 +196,9 @@ export function useAgentActivity(
     async function load() {
       const [runsRes, findingsRes, messagesRes, clientRes] = await Promise.all([
         table("agent_runs")
-          .select("id, agent, client_id, status, summary, trigger, queued_at, started_at, finished_at, action_item_id")
+          .select(
+            "id, agent, client_id, status, summary, error, stop_reason, trigger, queued_at, started_at, finished_at, action_item_id",
+          )
           .eq("client_id", id)
           .order("queued_at", { ascending: false })
           .limit(ROW_LIMIT),

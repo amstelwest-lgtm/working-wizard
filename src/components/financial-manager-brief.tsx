@@ -17,6 +17,7 @@ import { assignActionToPerson, commitActionHandoff } from "@/lib/owner-handoff-c
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 import "./financial-manager-brief.css";
 import { assignedToast } from "@/lib/action-handoff";
+import { handoffCommitError } from "@/lib/owner-handoff";
 
 export type HomeBriefHandoff = {
   id: string;
@@ -74,11 +75,13 @@ function BriefHandControl({
           title: item.title,
           agent,
         });
-        if (!result.ok) {
-          if (result.comingSoon) setComingSoon((current) => ({ ...current, [agent]: true }));
-          toast.error(result.error, { id: toastId });
+        const handoffError = handoffCommitError(result);
+        if (handoffError) {
+          if (!result.ok && result.comingSoon) setComingSoon((current) => ({ ...current, [agent]: true }));
+          toast.error(handoffError, { id: toastId });
           return;
         }
+        if (result.ok && result.reused) toast.dismiss(toastId);
       }}
       onAssignPerson={async (person) => {
         const result = await assignActionToPerson({

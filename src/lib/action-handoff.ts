@@ -243,12 +243,46 @@ export function botPickupCaption(input: {
 export type HandoffPhase = "working" | "draft_ready" | "approved" | "sent" | "failed";
 
 /** Chip and sent-column label. Null leaves the ordinary health and Not sent labels. */
+/** Who a pass-along sentence names. An older "finished" note does not match. */
+export function handoffPassedRecipient(text: string | null | undefined): string | null {
+  const raw = (text ?? "").replace(/\s+/g, " ").trim();
+  const handed = raw.match(/passed this to the ([A-Za-z][A-Za-z ]*?)(?::| for review|$)/i);
+  const who = handed?.[1]?.trim() ?? "";
+  return who || null;
+}
+
+export function handoffHandedLabel(who: string): string {
+  return `Handed to ${who}`;
+}
+
 /** A settled hand-off names who received it. It is not a failed draft. */
 export function handoffSettledPill(phase: HandoffPhase | null | undefined, note?: string | null): string | null {
-  const raw = (note ?? "").replace(/\s+/g, " ").trim();
-  const handed = raw.match(/passed this to the ([A-Za-z][A-Za-z ]*?)(?::| for review|$)/i);
-  if (handed?.[1]) return `Handed to ${handed[1].trim()}`;
+  const who = handoffPassedRecipient(note);
+  if (who) return handoffHandedLabel(who);
   return handoffPhaseLabel(phase);
+}
+
+/**
+ * Health label while a bot hand-off has no phase yet. Off track and Not sent
+ * are the action's own labels, and they must not flash in that gap.
+ */
+export function handoffRowChip(input: {
+  phasePending?: boolean;
+  phaseLabel?: string | null;
+  assigneeName?: string | null;
+  healthLabel: string;
+}): string {
+  if (input.phasePending) return "Checking…";
+  if (input.phaseLabel) return input.phaseLabel;
+  if (agentKeyFromAssignee(input.assigneeName)) return "Working";
+  return input.healthLabel;
+}
+
+/** Not sent is the idle sent column. A bot hand-off in flight keeps it blank. */
+export function handoffRowShowsNotSent(phaseLabel: string | null | undefined, assigneeName: string | null | undefined): boolean {
+  if (phaseLabel) return false;
+  if (agentKeyFromAssignee(assigneeName)) return false;
+  return true;
 }
 
 export function handoffPhaseLabel(phase: HandoffPhase | null | undefined): string | null {
@@ -389,7 +423,24 @@ type HandoffRunRef = {
   finished_at?: string | null;
   action_item_id?: string | null;
   summary?: string | null;
+  error?: string | null;
+  stop_reason?: string | null;
 };
+
+/** The current run's summary or error, else the newest pass-along note. */
+function handedRecipient(
+  live: { summary?: string | null; error?: string | null } | null,
+  notes: readonly { note: string | null; at: string }[],
+): string | null {
+  const fromRun = handoffPassedRecipient(live?.summary) || handoffPassedRecipient(live?.error);
+  if (fromRun) return fromRun;
+  const ordered = [...notes].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  for (const row of ordered) {
+    const who = handoffPassedRecipient(row.note);
+    if (who) return who;
+  }
+  return null;
+}
 
 /** Caption, phase, and draft id for one action row. Finished requires a finding id. */
 export function describeActionHandoff<T extends { note: string | null; at: string }>(input: {
@@ -412,13 +463,27 @@ export function describeActionHandoff<T extends { note: string | null; at: strin
   notes: T[];
 } {
   const stored = input.storedRun ?? null;
-  let live: { id: string; agent: AgentKey; status: string; at: string; summary: string } | null = null;
+  let live: {
+    id: string;
+    agent: AgentKey;
+    status: string;
+    at: string;
+    summary: string;
+    error: string;
+  } | null = null;
   for (const run of input.runs) {
     if (run.action_item_id !== input.actionItemId) continue;
     if (stored?.id && run.id !== stored.id) continue;
     const at = run.finished_at || run.at || run.queued_at || "";
     if (!live || at > live.at) {
-      live = { id: run.id, agent: run.agent, status: run.status, at, summary: run.summary ?? "" };
+      live = {
+        id: run.id,
+        agent: run.agent,
+        status: run.status,
+        at,
+        summary: run.summary ?? "",
+        error: run.error ?? "",
+      };
     }
   }
   const run =
@@ -446,8 +511,11 @@ export function describeActionHandoff<T extends { note: string | null; at: strin
     sentAt: input.sentAt,
   });
   const draftId = finding?.id ?? null;
-  const caption =
-    handoffCostStopped(result?.text) && run?.agent
+  const handedTo = draftId ? null : handedRecipient(live, input.notes);
+  const handedLabel = handedTo ? handoffHandedLabel(handedTo) : null;
+  const caption = handedLabel
+    ? handedLabel
+    : handoffCostStopped(result?.text) && run?.agent
       ? handoffCouldNotFinish(run.agent)
       : botPickupCaption({
           assignee: input.assignee,
@@ -466,7 +534,7 @@ export function describeActionHandoff<T extends { note: string | null; at: strin
     run: run ? { status: run.status, at: run.at, agent: run.agent } : null,
     draftId,
     phase,
-    phaseLabel: handoffSettledPill(phase, result?.text ?? live?.summary),
+    phaseLabel: handedLabel ?? handoffSettledPill(phase, result?.text ?? live?.summary),
     notes: assignmentNotesForDraft(input.notes, draftId),
   };
 }

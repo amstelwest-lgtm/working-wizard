@@ -108,6 +108,21 @@ export const HANDOFF_FORBIDDEN_COPY =
 const HANDOFF_FAILED_PLAIN = "Couldn't hand this over";
 
 /**
+ * A queued hand-off and an already-open one are the same success.
+ * `reused` is owner-handoff saying the action was already handed.
+ */
+export function handoffCommitError(result: {
+  ok: boolean;
+  noted?: boolean;
+  reused?: boolean;
+  error?: string;
+}): string | null {
+  if (result.ok && (result.noted === true || result.reused === true)) return null;
+  if (result.ok) return HANDOFF_FAILED_PLAIN;
+  return handoffFailureMessage(result.error);
+}
+
+/**
  * A sentence for the toast and the inline Retry line.
  * `forbidden` is the owner-handoff access check. Trial copy is used only when
  * the server actually returns the trial code or the trial sentence.
