@@ -591,7 +591,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       console.error("setup_partner_turn_failed", err instanceof Error ? err.message : err);
       try {
         if (attempts >= 2) throw err;
-        const parsed = await ask();
+        const parsed = await ask(false);
         if (parsed.question || parsed.done) {
           const nextTurns = modelTurns + 1;
           const done = firmInterviewShouldStop(nextTurns, parsed.done);
