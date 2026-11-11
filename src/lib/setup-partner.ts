@@ -92,19 +92,29 @@ function unescapeJsonString(value: string): string {
     .trim();
 }
 
-/** One question only. Empty when the text is raw, truncated, or unfinished. */
-export function oneInterviewQuestion(value: string): string {
+/** More than one question mark is more than one ask. */
+export function questionHasMultipleAsks(value: string): boolean {
+  return (value.match(/\?/g) ?? []).length > 1;
+}
+
+/**
+ * The question as the model wrote it. Whitespace is collapsed. Nothing else
+ * is cut: a comma stays, and a second sentence stays.
+ */
+export function questionAsWritten(value: string): string {
   const text = value.replace(/\s+/g, " ").trim();
   if (!text || text.includes("{") || text.includes('"question"') || text.includes(FENCE)) return "";
-  const marks = text.match(/\?/g);
-  if (marks && marks.length > 1) return "";
-  const mark = text.search(/[.?](?:\s|$)/);
-  if (mark < 0) return "";
-  const sentence = text.slice(0, mark + 1).trim();
-  if (sentence.length < 8) return "";
-  if (/\bupload\b/i.test(sentence)) return "";
-  if (/^(?:do|does|did|is|are|was|were|have|has|can|will)\b/i.test(sentence)) return "";
-  return sentence;
+  return text;
+}
+
+/**
+ * One ask. A question with more than one '?' is empty so the caller can
+ * regenerate. The text that is kept is not trimmed to a clause.
+ */
+export function oneInterviewQuestion(value: string): string {
+  const text = questionAsWritten(value);
+  if (!text || questionHasMultipleAsks(text)) return "";
+  return text;
 }
 
 /** Advice to the interviewer is not a workflow step. */
@@ -121,7 +131,7 @@ function questionFromJsonSlice(raw: string): { question: string; done: boolean }
   const qMatch = raw.match(/"question"\s*:\s*"((?:\\.|[^"\\])*)/);
   const done = /"done"\s*:\s*true/.test(raw) || /"ready"\s*:\s*true/.test(raw);
   if (!qMatch && !done) return null;
-  const question = oneInterviewQuestion(qMatch ? unescapeJsonString(qMatch[1]) : "");
+  const question = questionAsWritten(qMatch ? unescapeJsonString(qMatch[1]) : "");
   if (done && !question) return { question: "", done: true };
   if (!question) return { question: "", done: false };
   return { question, done };
@@ -147,7 +157,8 @@ export const ASK_QUESTION_TOOL = {
     properties: {
       question: {
         type: "string",
-        description: "Exactly one question. One sentence. Empty when done is true.",
+        description:
+          "Exactly one open question. Exactly one question mark. Do not add a second ask after a comma. Empty when done is true.",
       },
       done: { type: "boolean" },
     },
@@ -157,7 +168,8 @@ export const ASK_QUESTION_TOOL = {
 
 export const EXTRACT_WORKFLOW_TOOL = {
   name: "extract_workflow",
-  description: "Turn the interview into one workflow step per answer, plus checklist lines.",
+  description:
+    "Workflow steps only. One step per answer the firm described. Do not include follow-up notes, advice to the interviewer, or lines that mention the interview or the answer.",
   input_schema: {
     type: "object",
     additionalProperties: false,
@@ -190,9 +202,9 @@ function turnFromToolInput(input: unknown): { question: string; done: boolean } 
   const row = input as Record<string, unknown>;
   if (typeof row.question !== "string" && row.done !== true) return null;
   const done = row.done === true;
-  const question = oneInterviewQuestion(typeof row.question === "string" ? row.question : "");
+  const question = questionAsWritten(typeof row.question === "string" ? row.question : "");
   if (done && !question) return { question: "", done: true };
-  if (!question) return { question: "", done: false };
+  if (!question && !done) return { question: "", done: false };
   return { question, done };
 }
 
@@ -207,14 +219,21 @@ function hideRawQuestion(turn: { question: string; done: boolean }): { question:
  * Prefer the ask_question tool input. Otherwise read prose or fenced or
  * truncated JSON. The question is empty when nothing clean can be kept.
  */
-export function interviewTurnFromModel(input: {
-  text?: string;
-  toolUses?: readonly ModelToolUse[];
-}): { question: string; done: boolean } {
+export function interviewTurnFromModel(
+  input: {
+    text?: string;
+    toolUses?: readonly ModelToolUse[];
+  },
+  opts?: { asIs?: boolean },
+): { question: string; done: boolean; multiple: boolean } {
   const named = input.toolUses?.find((row) => row.name === ASK_QUESTION_TOOL.name);
   const fromTool = named ? turnFromToolInput(named.input) : null;
-  if (fromTool && (fromTool.question || fromTool.done)) return hideRawQuestion(fromTool);
-  return hideRawQuestion(parseFirmInterviewTurn(input.text ?? ""));
+  const turn = hideRawQuestion(
+    fromTool && (fromTool.question || fromTool.done) ? fromTool : parseFirmInterviewTurn(input.text ?? ""),
+  );
+  const multiple = questionHasMultipleAsks(turn.question);
+  if (multiple && !opts?.asIs) return { question: "", done: turn.done, multiple: true };
+  return { ...turn, multiple };
 }
 
 /** One model turn. Never returns raw JSON. `done` means there is enough to map. */
@@ -227,7 +246,7 @@ export function parseFirmInterviewTurn(text: string): { question: string; done: 
     try {
       const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
       const done = parsed.done === true || parsed.ready === true;
-      const question = oneInterviewQuestion(typeof parsed.question === "string" ? parsed.question : "");
+      const question = questionAsWritten(typeof parsed.question === "string" ? parsed.question : "");
       if (done && !question) return { question: "", done: true };
       if (question) return { question, done };
     } catch {
@@ -235,8 +254,7 @@ export function parseFirmInterviewTurn(text: string): { question: string; done: 
     }
   }
   if (sliced) return sliced;
-  const prose = oneInterviewQuestion(raw);
-  return { question: prose, done: false };
+  return { question: questionAsWritten(raw), done: false };
 }
 
 export function answersFromTranscript(transcript: string): string[] {
@@ -305,24 +323,28 @@ function workflowFromToolInput(
   return workflowFromRecord(input as Record<string, unknown>);
 }
 
-/** Tool input first, then model text, then one step per answer. */
+/** Saved plan lines. Only extract_workflow steps. Checklist and transcript answers are not included. */
+export function workflowStepsFromTool(toolUses: readonly ModelToolUse[] | undefined): string[] {
+  const named = toolUses?.find((row) => row.name === EXTRACT_WORKFLOW_TOOL.name);
+  const fromTool = named ? workflowFromToolInput(named.input) : null;
+  return (fromTool?.todaysFlow ?? []).filter((line) => !isInterviewerNote(line));
+}
+
+/** The map that can be confirmed. Steps come only from extract_workflow. */
 export function workflowMapFromModel(input: {
   transcript: string;
   text?: string | null;
   toolUses?: readonly ModelToolUse[];
   country?: SetupPartnerCountry | null;
 }): SetupPartnerWorkflowMap {
-  const named = input.toolUses?.find((row) => row.name === EXTRACT_WORKFLOW_TOOL.name);
-  const fromTool = named ? workflowFromToolInput(named.input) : null;
-  if (fromTool) {
-    return {
-      todaysFlow: fromTool.todaysFlow,
-      milonCoverage: setupPartnerCoverage(input.country),
-      gaps: [],
-      checklist: fromTool.checklist,
-    };
-  }
-  return workflowMapFromInterview(input.transcript, input.text ?? null, input.country);
+  void input.transcript;
+  void input.text;
+  return {
+    todaysFlow: workflowStepsFromTool(input.toolUses),
+    milonCoverage: setupPartnerCoverage(input.country),
+    gaps: [],
+    checklist: [],
+  };
 }
 
 /** Structured steps when the model returns them, otherwise one step per answer. */

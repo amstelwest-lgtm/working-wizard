@@ -2313,7 +2313,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               onOpenTaxAgent={() => {
                 void navigate({ to: "/dashboard", hash: askHashForAgent("tax_specialist") });
               }}
-              extraCard={<PracticeSetupCard embedded firmId={firmId} exampleClientId={clientRows[0]?.id ?? null} />}
+              extraCard={<PracticeSetupCard embedded exampleClientId={clientRows[0]?.id ?? null} />}
             />
             {firmReportsLine && firmReportsClientId ? (
               <Link

@@ -13,7 +13,6 @@ import {
   interviewTurnFromModel,
   setupPartnerMapPromptBlock,
   withMarketCoverage,
-  workflowMapFromInterview,
   type FirmInterviewMessage,
   type SetupPartnerCountry,
   type SetupPartnerWorkflowMap,
@@ -25,11 +24,6 @@ import {
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
 import { ImplementationManagerChip } from "@/components/practice-setup-card";
-import {
-  clearFirmInterviewDraft,
-  readFirmInterviewDraft,
-  writeFirmInterviewDraft,
-} from "@/lib/firm-interview-draft";
 import {
   buildPracticeImplementationPlan,
   dedupePracticeSteps,
@@ -118,13 +112,7 @@ export function PracticeSetupInterview({
         modelTurns: turns,
       });
       setModelTurns(built.modelTurns);
-      const transcript = firmInterviewTranscript(history);
-      const blob = built.map.todaysFlow.join("\n");
-      const collapsed =
-        built.map.todaysFlow.length <= 1 && (blob.includes("A:") || blob.length > 400);
-      const nextMap = collapsed
-        ? workflowMapFromInterview(transcript, null, marketCountry)
-        : built.map;
+      const nextMap = built.map;
       setMap({
         ...nextMap,
         todaysFlow: nextMap.todaysFlow.filter((line) => !line.includes("{") && !line.includes("`")),
@@ -177,18 +165,8 @@ export function PracticeSetupInterview({
       .then((saved) => {
         if (cancel) return;
         if (saved && saved.steps.length > 0) {
-          clearFirmInterviewDraft(firmId);
           setPlan({ steps: dedupePracticeSteps(saved.steps) });
           setPhase("done");
-          return;
-        }
-        const draft = readFirmInterviewDraft(firmId);
-        if (draft && draft.phase !== "done") {
-          setMessages(draft.messages);
-          setModelTurns(draft.modelTurns);
-          setQuestion(draft.question);
-          if (draft.map) setMap(draft.map);
-          setPhase(draft.phase === "map" ? "map" : "interview");
           return;
         }
         return requestTurn([], 0);
@@ -205,27 +183,6 @@ export function PracticeSetupInterview({
     // The first question loads with the firm. Later turns are explicit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firmId, loadSaved]);
-
-  useEffect(() => {
-    if (!firmId || booting) return;
-    if (phase === "done") {
-      clearFirmInterviewDraft(firmId);
-      return;
-    }
-    if (!messages.length && !question) return;
-    writeFirmInterviewDraft(firmId, {
-      messages,
-      modelTurns,
-      phase,
-      question,
-      map,
-    });
-  }, [firmId, booting, phase, messages, modelTurns, question, map]);
-
-  const startOver = () => {
-    if (firmId) clearFirmInterviewDraft(firmId);
-    redo();
-  };
 
   const redo = () => {
     setPhase("interview");
@@ -326,9 +283,6 @@ export function PracticeSetupInterview({
               onClick={() => void mapFrom(messages, modelTurns)}
             >
               That's enough, map it
-            </button>
-            <button type="button" className="setup-partner__ghost" onClick={startOver}>
-              Start over
             </button>
             {turnError ? (
               <button

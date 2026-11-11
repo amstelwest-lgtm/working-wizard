@@ -61,10 +61,10 @@ assert(bespoke.bucket === "bespoke", `bespoke bucket: ${bespoke.bucket}`);
 assert(bespoke.effort === "L", "bespoke effort");
 
 const plan = buildPracticeImplementationPlan({
-  todaysFlow: [covered.step, setup.step],
+  todaysFlow: [covered.step, setup.step, gapA.step, bespoke.step],
   milonCoverage: [],
-  gaps: [gapA.step, bespoke.step],
-  checklist: ["Connect Xero where the firm keeps the books."],
+  gaps: ["Follow up: the answer was about payroll."],
+  checklist: ["Confirm how often the pack goes out."],
 });
 const buckets = new Set(plan.steps.map((step) => step.bucket));
 assert(buckets.has("covered") && buckets.has("client_setup"), "plan keeps covered and setup");

@@ -544,7 +544,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     ].join("\n");
     const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
     let attempts = 0;
-    const ask = async () => {
+    const ask = async (asIs: boolean) => {
       attempts += 1;
       const res = await callClaude(SETUP_PARTNER_MAP_SYSTEM, userPrompt, {
         maxTokens: 1024,
@@ -554,14 +554,19 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         tools: [ASK_QUESTION_TOOL],
         toolChoice: { type: "tool", name: ASK_QUESTION_TOOL.name },
       });
-      return interviewTurnFromModel({
-        text: rehydrateModelOutput(res.text, session),
-        toolUses: res.toolUses,
-      });
+      return interviewTurnFromModel(
+        {
+          text: rehydrateModelOutput(res.text, session),
+          toolUses: res.toolUses,
+        },
+        { asIs },
+      );
     };
     try {
-      let parsed = await ask();
-      if (!parsed.done && !parsed.question && attempts < 2) parsed = await ask();
+      let parsed = await ask(false);
+      if (attempts < 2 && (parsed.multiple || (!parsed.done && !parsed.question))) {
+        parsed = await ask(parsed.multiple);
+      }
       if (!parsed.done && !parsed.question) {
         return respond({ error: FIRM_INTERVIEW_RETRY, retry: true }, 503);
       }

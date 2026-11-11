@@ -353,7 +353,7 @@ export function redundantSetupLine(step: string, others: string): boolean {
 export function buildPracticeImplementationPlan(
   map: SetupPartnerWorkflowMap,
 ): PracticeImplementationPlan {
-  const raw = [...map.todaysFlow, ...map.checklist, ...map.gaps]
+  const raw = [...map.todaysFlow]
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
   const steps: PracticePlanStep[] = [];
