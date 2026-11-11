@@ -157,8 +157,21 @@ jobs:
           PGPASSWORD: postgres
           PGDATABASE: postgres
         run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+          # Runner DNS to azure.archive.ubuntu.com fails closed for a few minutes.
+          # Retry the client install. The migration scripts are unchanged.
+          ok=0
+          for _ in 1 2 3 4; do
+            if sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client; then
+              ok=1
+              break
+            fi
+            echo "postgresql-client install failed, retrying"
+            sleep 20
+          done
+          if [[ "${ok}" -ne 1 ]]; then
+            echo "postgresql-client install failed"
+            exit 1
+          fi
           bash scripts/clients-rls-initplan-check.sh
           bash scripts/apply-source-documents-sql.sh
           bash scripts/apply-client-agent-sends-sql.sh
