@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import "./setup-partner-panel.css";
 import "@/components/owner-door/owner-door.css";
+import { ImRoutineProposals } from "@/components/im-routine-proposals";
 import { HomeBotCard } from "@/components/owner-door/home-bot-card";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { parseMarketSelection } from "@/lib/market/parse";
@@ -25,6 +26,7 @@ import {
   fetchFirmSetupPlan,
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
+import { ImTakeoverProposals } from "@/components/im-takeover-proposals";
 import { ImplementationManagerChip } from "@/components/practice-setup-card";
 import { InterviewExchange } from "@/components/interview-exchange";
 import {
@@ -34,6 +36,7 @@ import {
   practiceBucketLabel,
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
+import { ImProposalDecisions } from "@/components/im-proposal-decisions";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
@@ -384,6 +387,7 @@ export function PracticeSetupInterview({
       {!booting && phase === "done" ? (
         <div>
           <p className="setup-partner__done">Saved for the practice.</p>
+          {firmId ? <ImRoutineProposals firmId={firmId} plan={plan} /> : null}
           {plan && plan.steps.length > 0 ? (
             <ul>
               {plan.steps.map((step) => (
@@ -393,12 +397,14 @@ export function PracticeSetupInterview({
               ))}
             </ul>
           ) : null}
+          {firmId ? <ImTakeoverProposals firmId={firmId} plan={plan} /> : null}
           <div className="setup-partner__actions">
             <button type="button" className="setup-partner__ghost" onClick={redo}>
               Redo interview
             </button>
             <Link to="/practice">Back to practice</Link>
           </div>
+          {firmId ? <ImProposalDecisions firmId={firmId} /> : null}
         </div>
       ) : null}
 
