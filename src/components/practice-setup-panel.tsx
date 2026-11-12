@@ -35,6 +35,7 @@ import {
   practiceBucketLabel,
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
+import { ImProposalDecisions } from "@/components/im-proposal-decisions";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
@@ -401,6 +402,7 @@ export function PracticeSetupInterview({
             </button>
             <Link to="/practice">Back to practice</Link>
           </div>
+          {firmId ? <ImProposalDecisions firmId={firmId} /> : null}
         </div>
       ) : null}
 
