@@ -398,10 +398,46 @@ const expenseMonths = [
 assert(budgetChartSeries(expenseMonths) === "expenses", "an expense budget is not charted as $0 revenue");
 assert(budgetChartAmount(expenseMonths[0]!, "expenses") === 15_750, "the month label uses the expense total");
 const sameSource = budgetStatementDisplayTotals({
-  period: { revenue: 549_000, operatingProfit: 189_000, label: "FY", months: [] } as never,
-  planTotals: { revenue: 0, expenses: 189_000, net: -189_000 },
+  period: {
+    revenue: 412_000,
+    cogs: 171_000,
+    grossProfit: 241_000,
+    operatingExpenses: 189_000,
+    operatingProfit: 52_000,
+    netProfit: 38_200,
+    label: "Jan–Sep 2026",
+    prorated: false,
+    months: 9,
+  },
+  planTotals: { revenue: 412_000, expenses: 189_000, net: 52_020 },
 });
-assert(sameSource.expenses === 189_000, "header expenses match the table");
+assert(sameSource.expenses === 189_000, `US header Expenses match the table, got ${sameSource.expenses}`);
+assert(sameSource.operatingProfit === 52_000, `US header operating profit matches the table, got ${sameSource.operatingProfit}`);
+const chillHeader = budgetStatementDisplayTotals({
+  period: {
+    revenue: 1_215_000,
+    cogs: 56_000,
+    grossProfit: 1_159_000,
+    operatingExpenses: null,
+    operatingProfit: 56_800,
+    netProfit: 27_010,
+    label: "Mar 2026–Feb 2027",
+    prorated: false,
+    months: 12,
+  },
+  planTotals: { revenue: 1_215_000, expenses: 762_000, net: -312_450 },
+});
+assert(chillHeader.revenue === 1_215_000, "ZA header revenue matches the year table");
+assert(chillHeader.expenses === 1_158_200, `ZA header Expenses include cost of sales, got ${chillHeader.expenses}`);
+assert(chillHeader.operatingProfit === 56_800, `ZA header operating profit matches the year table, got ${chillHeader.operatingProfit}`);
+assert(
+  readFileSync(resolve("src/routes/app.tsx"), "utf8").includes("BudgetPanel"),
+  "the owner budget page uses the shared panel",
+);
+assert(
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8").includes("BudgetPanel"),
+  "the accountant budget page uses the shared panel",
+);
 const aqaMonths = [
   { cogs: 85_500, overheads: 94_500 },
   { cogs: 85_500, overheads: 94_500 },

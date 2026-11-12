@@ -422,7 +422,7 @@ function applyReplacements(
           ? options[0]
           : undefined;
     if (!preferred) return match;
-    if (preferred.unit === "days" && /^\s*days\b/i.test(after)) return match;
+    if (preferred.unit === "days" && /^\s*-?\s*days?\b/i.test(after)) return match;
     if (preferred.unit === "percent" && /^\s*%/.test(after)) return match;
     return preferred.formatted;
   });

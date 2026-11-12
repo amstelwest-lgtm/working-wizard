@@ -361,5 +361,38 @@ assert(
     "The opening balance of $0 is on file.",
   "a doubled dollar sign collapses",
 );
+{
+  const daysLine = formatFindingProse(
+    "Debtor days of 26 sit below the 40-day peer median.",
+    [
+      { key: "Debtor Days", value: 26 },
+      { key: "debtorDaysMedian", value: 40 },
+    ],
+    ZA_MARKET,
+  );
+  assert(
+    !daysLine.includes("days-day") && daysLine.includes("40-day"),
+    `a day unit is not appended twice: ${daysLine}`,
+  );
+}
+{
+  const storedDays = formatFindingProse(
+    "Debtor days of 26 days sit below the 40 days-day peer median.",
+    [],
+    ZA_MARKET,
+  );
+  assert(
+    storedDays.includes("40-day") && !storedDays.includes("days-day"),
+    `a stored days-day line is repaired: ${storedDays}`,
+  );
+}
+assert(
+  formatFindingProse(
+    "Recorded one finding: Cash is thin. Recorded one finding: Cash is thin.",
+    [],
+    ZA_MARKET,
+  ) === "Recorded one finding: Cash is thin.",
+  "a repeated finding sentence is kept once",
+);
 
 console.log("agent-draft-decision-client: ok");
