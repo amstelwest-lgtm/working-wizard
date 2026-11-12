@@ -28,7 +28,7 @@ import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { settleWithin } from "@/lib/bounded-load";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { handoffAssigneeName, handoffCommitError } from "@/lib/owner-handoff";
-import { assignedToast, describeActionHandoff, handoffRowChip, handoffRowShowsNotSent } from "@/lib/action-handoff";
+import { assignedToast, describeActionHandoff, handoffDrawerFace, handoffRowChip, handoffRowShowsNotSent } from "@/lib/action-handoff";
 import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
@@ -2210,6 +2210,7 @@ export default function ActionPlanPanel({
       {drawerItem && (
         <ItemDrawer
           item={drawerItem}
+          handoffLabel={handoffByItem.get(drawerItem.id)?.phaseLabel ?? null}
           employees={employees}
           milestones={milestones.filter((m) => m.action_item_id === drawerItem.id)}
           isOwner={isOwner}
@@ -3581,6 +3582,7 @@ function TeamPanel({
 // ═══ Drawer ══════════════════════════════════════════════════════════════════
 function ItemDrawer({
   item,
+  handoffLabel = null,
   employees,
   milestones,
   isOwner = true,
@@ -3594,6 +3596,8 @@ function ItemDrawer({
   onMilestonesChanged,
 }: {
   item: Item & { health?: Health };
+  /** Same phase label as the row. A hand-off reads "Handed to …". */
+  handoffLabel?: string | null;
   employees: Employee[];
   milestones: Milestone[];
   isOwner?: boolean;
@@ -3614,6 +3618,13 @@ function ItemDrawer({
   const [resending, setResending] = useState(false);
   const [chasing, setChasing] = useState(false);
   const h = healthMeta(item.health);
+  const handoffFace = handoffDrawerFace({ phaseLabel: handoffLabel, status: item.status });
+  const panelChip = handoffFace.chipLabel
+    ? handoffFace.chipLabel
+    : handoffFace.statusOverride
+      ? STATUS_LABEL[item.status]
+      : h.label;
+  const panelNeutral = Boolean(handoffFace.headerLine);
   const ownerHasEmail = Boolean(
     item.owner_id && employees.find((e) => e.id === item.owner_id)?.email,
   );
@@ -3679,13 +3690,23 @@ function ItemDrawer({
           <div>
             <span
               className="rounded-md px-2 py-0.5 text-[11px] font-bold"
-              style={{ color: h.color, background: h.bg }}
+              data-handoff-panel-chip={panelNeutral ? "neutral" : undefined}
+              style={
+                panelNeutral
+                  ? { color: "#64748b", background: "rgba(100,116,139,0.14)" }
+                  : { color: h.color, background: h.bg }
+              }
             >
-              {h.label}
+              {panelChip}
             </span>
             <h3 className="mt-2 text-lg font-black leading-tight text-slate-950 dark:text-white">
               {actionDisplayTitle(stripMilonProjection(item.title))}
             </h3>
+            {handoffFace.headerLine ? (
+              <p className="mt-1 text-xs font-semibold text-[#102A43] dark:text-[#0B5FFF]" data-handoff-panel-line>
+                {handoffFace.headerLine}
+              </p>
+            ) : null}
             {item.recommendation_id ? (
               <p
                 className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#102A43] dark:text-[#0B5FFF]"
@@ -3734,7 +3755,7 @@ function ItemDrawer({
                     )
                   }
                   className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-                    item.status === s
+                    !handoffFace.chipLabel && item.status === s
                       ? "bg-[#0B5FFF] text-white dark:bg-[#0B5FFF] dark:text-slate-950"
                       : "border border-amber-900/15 text-slate-600 dark:border-slate-700 dark:text-slate-400"
                   }`}
@@ -3762,8 +3783,15 @@ function ItemDrawer({
         ) : (
           <>
             <div className={LABEL_CLS}>Status</div>
-            <span className="mt-1.5 inline-block rounded-md px-2.5 py-1 text-[11px] font-semibold bg-[#0B5FFF] text-white dark:bg-[#0B5FFF] dark:text-slate-950">
-              {STATUS_LABEL[item.status]}
+            <span
+              className={`mt-1.5 inline-block rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+                handoffFace.chipLabel
+                  ? "bg-slate-500/10 text-slate-600 dark:text-slate-300"
+                  : "bg-[#0B5FFF] text-white dark:bg-[#0B5FFF] dark:text-slate-950"
+              }`}
+              data-handoff-panel-status
+            >
+              {handoffFace.chipLabel ?? STATUS_LABEL[item.status]}
             </span>
             {item.status === "blocked" && item.blocker_note && (
               <p className="mt-2 rounded-md border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 text-xs text-[#ef4444]">

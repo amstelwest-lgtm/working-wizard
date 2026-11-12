@@ -10,6 +10,7 @@ import {
   describeActionHandoff,
   formatAssignmentNote,
   HANDOFF_COST_STOP,
+  handoffDrawerFace,
   handoffRowChip,
   handoffRowShowsNotSent,
   handoffButtonLabel,
@@ -719,4 +720,27 @@ assert(!handoffRowShowsNotSent(null, "Milōn Advisor"), "a bot hand-off does not
 assert(handoffRowChip({ phaseLabel: settled.phaseLabel, assigneeName: "Milōn Advisor", healthLabel: "Off track" }) === settled.phaseLabel, "a settled hand-off replaces Off track");
 assert(plan.includes("handoffCommitError"), "the owner Retry button uses the shared result");
 assert(menu.includes("handoffCommitError"), "accountant Hand to uses the shared result");
+
+const handedPanel = handoffDrawerFace({
+  phaseLabel: "Handed to Financial Manager",
+  status: "not_started",
+});
+assert(handedPanel.headerLine === "Handed to Financial Manager", "the panel header names the hand-off");
+assert(handedPanel.chipLabel === "With Financial Manager", "a handed-off item is with the Financial Manager");
+assert(!handedPanel.statusOverride, "Not started is not an owner override");
+assert(!("assignee" in handedPanel), "the panel does not change the assignee");
+const overriddenPanel = handoffDrawerFace({
+  phaseLabel: "Handed to Financial Manager",
+  status: "in_progress",
+});
+assert(overriddenPanel.headerLine === "Handed to Financial Manager", "an override keeps the hand-off line");
+assert(overriddenPanel.chipLabel === null && overriddenPanel.statusOverride, "an owner status replaces With Financial Manager");
+assert(
+  handoffDrawerFace({ phaseLabel: "Couldn't draft", status: "not_started" }).headerLine === null,
+  "a failed draft does not use the hand-off panel",
+);
+assert(plan.includes("handoffDrawerFace") && plan.includes("data-handoff-panel-line"), "the drawer uses the hand-off face");
+assert(plan.includes("data-handoff-panel-status"), "the accountant status line uses the same face");
+assert(ownerShell.includes('import("@/components/action-plan")'), "the owner plan opens this drawer");
+assert(accountant.includes('import("@/components/action-plan")'), "the accountant plan opens this drawer");
 console.log("action-handoff ok");
