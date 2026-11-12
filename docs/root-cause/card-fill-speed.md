@@ -75,4 +75,4 @@ A new tab stays on the loading state until `clientAccessGate` has a session user
 
 What I noticed collapses `kind=handoff` rows to the latest per agent. Show all passes the full list through `noticedHandoffRows`.
 
-Verification: `pnpm test:owner-boot-9s` (abort starts at send, lock timeout is the scaled 8s and retries once, boot-shell cash line, client switch), `pnpm test:client-agent-cards` (restoring session is loading, not missing), `pnpm test:finding-dedupe` (latest handoff per agent, Show all keeps history). US opening `46300` paints `Cash is $46,300.` with no pillar.
+Verification: `pnpm test:owner-boot-9s` (abort starts at send, lock timeout is the scaled 8s and retries once, boot-shell cash line, client switch), `pnpm test:client-agent-cards` (restoring session is loading, not missing), `pnpm test:finding-dedupe` (latest handoff per agent, Show all keeps history). US opening `46300` paints `Cash is $46,300.` with no pillar. The owner boot shell and the accountant client file are both in the diff. The tax door is not; the client-file edit is the session access select.
