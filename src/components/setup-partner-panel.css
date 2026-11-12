@@ -130,10 +130,86 @@
   line-height: 1.45;
 }
 
+.setup-partner__exchange {
+  margin: 0 0 0.85rem;
+}
+
+.setup-partner__log {
+  margin: 0 0 0.85rem;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.setup-partner__log summary {
+  cursor: pointer;
+  padding: 0.55rem 0.8rem;
+  color: #0b5fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.setup-partner__transcript {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.8rem 0.65rem;
+}
+
+.setup-partner__transcript li {
+  margin: 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid #dbeafe;
+}
+
+.setup-partner__transcript li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.setup-partner__log-q {
+  margin: 0;
+  color: #102a43;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.setup-partner__log-a {
+  margin: 0.3rem 0 0.55rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 8px;
+  background: #dbeafe;
+  color: #102a43;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .setup-partner__question {
-  margin: 0 0 0.5rem;
-  font-size: 0.88rem;
-  font-weight: 600;
+  margin: 0 0 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #dbeafe;
+  border-left: 3px solid #0b5fff;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #102a43;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+}
+
+.setup-partner__thinking {
+  margin: 0 0 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0b5fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .setup-partner__answer {

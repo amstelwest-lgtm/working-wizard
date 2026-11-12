@@ -1119,12 +1119,12 @@ async function runPanel() {
   await waitForPhase("interview");
   assert(resumeAsks === 0, "reload does not ask for a new question");
   assert(
-    document.querySelector(".setup-partner__question")?.textContent === resumeQuestion,
-    "resume shows the same question",
+    document.querySelector("h2.setup-partner__question")?.textContent === resumeQuestion,
+    "resume shows the same question as the heading",
   );
   assert(
-    document.querySelector(".setup-partner__transcript")?.textContent?.includes(resumeAnswer),
-    "resume keeps the transcript",
+    document.querySelector(".setup-partner__log-a")?.textContent?.includes(resumeAnswer),
+    "resume keeps the answer apart from the question",
   );
   const resumeBox = document.querySelector("textarea");
   assert(resumeBox instanceof HTMLTextAreaElement, "the answer box is ready");

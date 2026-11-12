@@ -26,6 +26,7 @@ import {
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
 import { ImplementationManagerChip } from "@/components/practice-setup-card";
+import { InterviewExchange } from "@/components/interview-exchange";
 import {
   buildPracticeImplementationPlan,
   cleanFlowLine,
@@ -268,16 +269,7 @@ export function PracticeSetupInterview({
 
       {!booting && phase === "interview" ? (
         <div>
-          {messages.some((message) => message.content !== question) ? (
-            <ol className="setup-partner__transcript">
-              {messages.map((message, index) =>
-                message.content === question && index === messages.length - 1 ? null : (
-                  <li key={`${message.role}-${index}`}>{message.content}</li>
-                ),
-              )}
-            </ol>
-          ) : null}
-          {question ? <p className="setup-partner__question">{question}</p> : null}
+          <InterviewExchange question={question} thinking={loading} messages={messages} />
           <textarea
             className="setup-partner__answer"
             value={draft}
