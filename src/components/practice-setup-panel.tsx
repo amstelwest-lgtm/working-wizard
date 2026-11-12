@@ -55,7 +55,7 @@ type AskTurn = (input: {
 
 export function PracticeSetupPanel() {
   const { firmId, firmMarket } = useAccountantProfile();
-  return <PracticeSetupInterview firmId={firmId} firmMarket={firmMarket} />;
+  return <PracticeSetupInterview key={firmId ?? "no-firm"} firmId={firmId} firmMarket={firmMarket} />;
 }
 
 export function PracticeSetupInterview({
@@ -165,8 +165,16 @@ export function PracticeSetupInterview({
   };
 
   useEffect(() => {
-    if (!firmId) return;
+    if (!firmId) {
+      setMessages([]);
+      setQuestion("");
+      setDraft("");
+      return;
+    }
     let cancel = false;
+    setMessages([]);
+    setQuestion("");
+    setDraft("");
     setBooting(true);
     void Promise.all([loadSaved(firmId), loadDraft(firmId)])
       .then(([saved, draft]) => {

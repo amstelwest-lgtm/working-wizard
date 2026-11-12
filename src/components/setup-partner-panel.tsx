@@ -23,9 +23,10 @@ type Phase = "summary" | "interview" | "map" | "done";
 
 type Props = {
   clientId: string | null;
+  loadSummary?: (clientId: string) => Promise<SetupPartnerSummary>;
 };
 
-export function SetupPartnerPanel({ clientId }: Props) {
+export function SetupPartnerPanel({ clientId, loadSummary = fetchSetupPartnerSummary }: Props) {
   const [phase, setPhase] = useState<Phase>("summary");
   const [summary, setSummary] = useState<SetupPartnerSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,8 +48,10 @@ export function SetupPartnerPanel({ clientId }: Props) {
     if (!clientId) return;
     setLoading(true);
     setError(null);
+    setHistory([]);
+    setDraftAnswer("");
     try {
-      const next = await fetchSetupPartnerSummary(clientId);
+      const next = await loadSummary(clientId);
       setSummary(next);
       setPhase("summary");
       setQuestionIndex(0);
@@ -64,7 +67,7 @@ export function SetupPartnerPanel({ clientId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, loadSummary]);
 
   useEffect(() => {
     void load();
@@ -89,6 +92,7 @@ export function SetupPartnerPanel({ clientId }: Props) {
     setQuestionIndex(0);
     setInFollowups(false);
     setDraftAnswer("");
+    setHistory([]);
     setCurrentQuestion(SETUP_PARTNER_FIXED_QUESTIONS[0]?.prompt ?? "");
   };
 
