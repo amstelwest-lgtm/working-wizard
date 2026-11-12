@@ -25,6 +25,7 @@ import {
   fetchFirmSetupPlan,
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
+import { ImTakeoverProposals } from "@/components/im-takeover-proposals";
 import { ImplementationManagerChip } from "@/components/practice-setup-card";
 import { InterviewExchange } from "@/components/interview-exchange";
 import {
@@ -393,6 +394,7 @@ export function PracticeSetupInterview({
               ))}
             </ul>
           ) : null}
+          {firmId ? <ImTakeoverProposals firmId={firmId} plan={plan} /> : null}
           <div className="setup-partner__actions">
             <button type="button" className="setup-partner__ghost" onClick={redo}>
               Redo interview

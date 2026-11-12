@@ -233,6 +233,7 @@
     "test:practice-setup-route": "vite-node --config scripts/vite-test.config.ts scripts/practice-setup-route-test.mts",
     "test:interview-exchange": "vite-node --config scripts/vite-test.config.ts scripts/interview-exchange-test.mts",
     "test:interview-history-reset": "vite-node --config scripts/vite-test.config.ts scripts/interview-history-reset-test.mts",
+    "test:im-takeover-proposal": "vite-node --config scripts/vite-test.config.ts scripts/im-takeover-proposal-test.mts",
     "test:agent-draft-decision": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-test.mts",
     "test:agent-draft-decision-client": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-client-test.mts",
     "test:claude-model": "vite-node --config scripts/vite-test.config.ts scripts/claude-model-default-test.mts",
