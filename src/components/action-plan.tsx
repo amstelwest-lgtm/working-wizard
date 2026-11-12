@@ -3624,7 +3624,8 @@ function ItemDrawer({
     : handoffFace.statusOverride
       ? STATUS_LABEL[item.status]
       : h.label;
-  const panelNeutral = Boolean(handoffFace.headerLine);
+  const panelNeutral = handoffFace.chipTone === "neutral";
+  const panelStatus = handoffFace.chipTone === "status";
   const ownerHasEmail = Boolean(
     item.owner_id && employees.find((e) => e.id === item.owner_id)?.email,
   );
@@ -3690,11 +3691,15 @@ function ItemDrawer({
           <div>
             <span
               className="rounded-md px-2 py-0.5 text-[11px] font-bold"
-              data-handoff-panel-chip={panelNeutral ? "neutral" : undefined}
+              data-handoff-panel-chip={
+                panelNeutral ? "neutral" : panelStatus ? "status" : undefined
+              }
               style={
                 panelNeutral
                   ? { color: "#64748b", background: "rgba(100,116,139,0.14)" }
-                  : { color: h.color, background: h.bg }
+                  : panelStatus
+                    ? { color: "#ffffff", background: "#0B5FFF" }
+                    : { color: h.color, background: h.bg }
               }
             >
               {panelChip}

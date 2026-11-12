@@ -727,6 +727,7 @@ const handedPanel = handoffDrawerFace({
 });
 assert(handedPanel.headerLine === "Handed to Financial Manager", "the panel header names the hand-off");
 assert(handedPanel.chipLabel === "With Financial Manager", "a handed-off item is with the Financial Manager");
+assert(handedPanel.chipTone === "neutral", "With Financial Manager stays the neutral chip");
 assert(!handedPanel.statusOverride, "Not started is not an owner override");
 assert(!("assignee" in handedPanel), "the panel does not change the assignee");
 const overriddenPanel = handoffDrawerFace({
@@ -735,11 +736,14 @@ const overriddenPanel = handoffDrawerFace({
 });
 assert(overriddenPanel.headerLine === "Handed to Financial Manager", "an override keeps the hand-off line");
 assert(overriddenPanel.chipLabel === null && overriddenPanel.statusOverride, "an owner status replaces With Financial Manager");
+assert(overriddenPanel.chipTone === "status", "an owner override uses the normal status chip");
 assert(
   handoffDrawerFace({ phaseLabel: "Couldn't draft", status: "not_started" }).headerLine === null,
   "a failed draft does not use the hand-off panel",
 );
 assert(plan.includes("handoffDrawerFace") && plan.includes("data-handoff-panel-line"), "the drawer uses the hand-off face");
+assert(plan.includes('handoffFace.chipTone === "neutral"'), "neutral slate is only the With chip");
+assert(plan.includes('handoffFace.chipTone === "status"'), "an override uses the status chip");
 assert(plan.includes("data-handoff-panel-status"), "the accountant status line uses the same face");
 assert(ownerShell.includes('import("@/components/action-plan")'), "the owner plan opens this drawer");
 assert(accountant.includes('import("@/components/action-plan")'), "the accountant plan opens this drawer");

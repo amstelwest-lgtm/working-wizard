@@ -262,17 +262,26 @@ export function handoffHandedLabel(who: string): string {
 export function handoffDrawerFace(input: {
   phaseLabel: string | null | undefined;
   status: string;
-}): { headerLine: string | null; chipLabel: string | null; statusOverride: boolean } {
+}): {
+  headerLine: string | null;
+  chipLabel: string | null;
+  statusOverride: boolean;
+  /** Neutral slate only for With … . An owner status uses the normal status chip. */
+  chipTone: "neutral" | "status" | "health";
+} {
   const headerLine = (input.phaseLabel ?? "").trim();
   const prefix = "Handed to ";
-  if (!headerLine.startsWith(prefix)) return { headerLine: null, chipLabel: null, statusOverride: false };
+  if (!headerLine.startsWith(prefix)) {
+    return { headerLine: null, chipLabel: null, statusOverride: false, chipTone: "health" };
+  }
   const who = headerLine.slice(prefix.length).trim();
-  if (!who) return { headerLine: null, chipLabel: null, statusOverride: false };
+  if (!who) return { headerLine: null, chipLabel: null, statusOverride: false, chipTone: "health" };
   const statusOverride = input.status !== "not_started";
   return {
     headerLine,
     chipLabel: statusOverride ? null : `With ${who}`,
     statusOverride,
+    chipTone: statusOverride ? "status" : "neutral",
   };
 }
 
