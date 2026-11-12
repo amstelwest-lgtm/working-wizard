@@ -4,7 +4,7 @@
  * recalculate a budget or write actuals.
  */
 import type { BudgetDocument, BudgetMonthResult } from "@/lib/budget.types";
-import { budgetStatementTiles } from "@/lib/budget-period";
+import { budgetHeaderFromSlice, budgetStatementTiles } from "@/lib/budget-period";
 import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { statementMonthActuals } from "@/lib/budget.bridges";
@@ -262,20 +262,26 @@ export function budgetChartSeries(views: readonly BudgetMonthView[]): "revenue" 
   return revenue < 1 && expenses >= 1 ? "expenses" : "revenue";
 }
 
-/** Tiles for Budget vs actual. The visible plan is the same source as the table. */
+/** Tiles for Budget vs actual. A firm-year slice wins. The plan is only the fallback. */
 export function budgetStatementDisplayTotals(input: {
   period?: FiscalStatementSlice | null;
   periodKnown?: boolean;
   outsidePlan?: boolean;
   planTotals: BudgetRangeTotals;
 }): { revenue: number | null; expenses: number | null; operatingProfit: number | null } {
+  if (input.periodKnown === false || input.outsidePlan) {
+    return { revenue: null, expenses: null, operatingProfit: null };
+  }
+  const fromSlice = budgetHeaderFromSlice(input.period);
+  const sliceHas =
+    (fromSlice.revenue != null && Math.abs(fromSlice.revenue) >= 1) ||
+    (fromSlice.expenses != null && Math.abs(fromSlice.expenses) >= 1) ||
+    (fromSlice.operatingProfit != null && Math.abs(fromSlice.operatingProfit) >= 1);
+  if (sliceHas) return fromSlice;
   const planHas =
     Math.abs(input.planTotals.revenue) >= 1 ||
     Math.abs(input.planTotals.expenses) >= 1 ||
     Math.abs(input.planTotals.net) >= 1;
-  if (input.periodKnown === false || input.outsidePlan) {
-    return { revenue: null, expenses: null, operatingProfit: null };
-  }
   if (planHas) {
     return {
       revenue: input.planTotals.revenue,

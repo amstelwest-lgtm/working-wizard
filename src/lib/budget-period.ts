@@ -202,6 +202,22 @@ export function budgetStatementTiles(
   return { revenue, expenses, operatingProfit };
 }
 
+/**
+ * Header tiles from the firm-year slice the year table reads.
+ * Stated operating expenses win. With none, expenses are revenue minus
+ * operating profit, so cost of sales stays inside the tile.
+ */
+export function budgetHeaderFromSlice(
+  period: FiscalStatementSlice | null | undefined,
+): { revenue: number | null; expenses: number | null; operatingProfit: number | null } {
+  if (!period) return { revenue: null, expenses: null, operatingProfit: null };
+  const revenue = finiteAmount(period.revenue);
+  const operatingProfit = finiteAmount(period.operatingProfit);
+  const stated = finiteAmount(period.operatingExpenses);
+  const derived = revenue != null && operatingProfit != null ? revenue - operatingProfit : null;
+  return { revenue, expenses: stated ?? derived, operatingProfit };
+}
+
 function finiteAmount(value: number | null | undefined): number | null {
   return value != null && Number.isFinite(value) ? value : null;
 }

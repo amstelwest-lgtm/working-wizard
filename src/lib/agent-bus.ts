@@ -1215,7 +1215,24 @@ export function repairDraftMetricUnits(text: string): string {
     /\b((?:stored\s+|live\s+)?(?:health|overall)(?:\s+score)?|health\s+score|pillar(?:\s+score)?)\b([^.\n]{0,60}?)(\d+(?:\.\d+)?)(\s+days)\b/gi,
     (_full, label: string, mid: string, num: string) => `${label}${mid}${num}`,
   );
-  return stripped.replace(/\bdays(?:\s+days)+\b/gi, "days");
+  const once = stripped
+    .replace(/\bdays(?:\s+days)+\b/gi, "days")
+    .replace(/(\d)\s+days-day\b/gi, "$1-day");
+  return dedupeRepeatedSentences(once);
+}
+
+/** Drop a sentence that repeats the one before it. */
+export function dedupeRepeatedSentences(text: string): string {
+  const parts = text.split(/(?<=[.!?])\s+/);
+  const out: string[] = [];
+  let prev = "";
+  for (const part of parts) {
+    const key = part.replace(/\s+/g, " ").trim().toLowerCase();
+    if (key && key === prev) continue;
+    out.push(part);
+    prev = key;
+  }
+  return out.join(" ");
 }
 
 /** Latest scorecard ratios in the read pool. Later reads win. */
