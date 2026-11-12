@@ -122,6 +122,32 @@ export function dedupeFindings<
   return dropHandoffTwinActionPoints(kept);
 }
 
+/**
+ * What I noticed shows the latest kind=handoff row per agent.
+ * Show all passes every row through, including the older runs.
+ */
+export function noticedHandoffRows<
+  T extends { id: string; agent: string; kind?: string | null; created_at: string },
+>(rows: readonly T[], showAll: boolean): T[] {
+  if (showAll) return [...rows];
+  const latest = new Map<string, T>();
+  for (const row of rows) {
+    if (findingKindOf(row.kind) !== "handoff") continue;
+    const prev = latest.get(row.agent);
+    if (
+      !prev ||
+      row.created_at > prev.created_at ||
+      (row.created_at === prev.created_at && row.id > prev.id)
+    ) {
+      latest.set(row.agent, row);
+    }
+  }
+  if (latest.size === 0) return [...rows];
+  return rows.filter(
+    (row) => findingKindOf(row.kind) !== "handoff" || latest.get(row.agent)?.id === row.id,
+  );
+}
+
 /** An open action point with the same title as a hand-off is the duplicate. Approved rows stay. */
 export function dropHandoffTwinActionPoints<
   T extends { agent: string; title: string; kind?: string | null; status?: string | null },

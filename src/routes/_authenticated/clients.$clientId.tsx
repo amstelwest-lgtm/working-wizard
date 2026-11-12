@@ -238,7 +238,7 @@ import {
   statementSpanLabel,
   statementYearLine,
 } from "@/lib/statement-period";
-import { clientHomePhase } from "@/lib/client-home-phase";
+import { clientAccessGate } from "@/lib/client-home-phase";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
 import {
   assessClientMetrics,
@@ -756,7 +756,8 @@ const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
 function ClientView() {
   const { clientId } = Route.useParams();
   const search = Route.useSearch();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const sessionUserId = user?.id ?? null;
   const {
     notes: clientNotes,
     loading: notesLoading,
@@ -2305,6 +2306,11 @@ function ClientView() {
   // ── Load client ──────────────────────────────────────────────────────────
 
   useEffect(() => {
+    if (authLoading || !sessionUserId) {
+      setLoading(true);
+      setLoadTimedOut(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setLoadTimedOut(false);
@@ -2441,7 +2447,7 @@ function ClientView() {
       unbind();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, clientLoadAttempt]);
+  }, [clientId, clientLoadAttempt, sessionUserId, authLoading]);
 
   useEffect(() => {
     if (!client?.id) return;
@@ -4062,7 +4068,9 @@ function ClientView() {
 
   // ── Loading / error states ────────────────────────────────────────────────
 
-  const homePhase = clientHomePhase({
+  const homePhase = clientAccessGate({
+    authLoading,
+    sessionUserId,
     loading,
     timedOut: loadTimedOut,
     hasClient: Boolean(client),

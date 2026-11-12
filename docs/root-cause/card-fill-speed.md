@@ -62,3 +62,17 @@ That commit starts the cashflow and financials selects together and can paint `C
 Client-side. No edge function and no SQL.
 
 Do not start the 4s abort until the select has a token and the HTTP request has been sent. A `getSession` that is still on the auth lock must not count as a failed read and must not start the retry. Keep the one retry for a fetch that was actually sent and then aborted or dropped. On the boot shell, which already shows the heading, paint the Financial Manager line from `clientMeta.cashflow` as soon as that select returns, instead of holding every card for `financialsHydrated`. The ZA regenerate line can follow when the live snapshot arrives; it should not be the first text the cash card waits on.
+
+## Fix
+
+Shipped on this branch. Client-side only. No edge function and no SQL.
+
+`noteBootRequestSent` runs from `coordinatedAuthFetch`, which is called only after `fetchWithAuth` has the access token and is handing the request to `fetch`. That is when the 4s abort starts. Until then the attempt is bounded by `BOOT_AUTH_WAIT_MS` (8s), and that timeout fails into the same one-retry path as an aborted fetch. The hedge starts when the request is sent, not while `getSession` is still on the lock.
+
+The boot shell (`data-owner-boot="pending"`) renders `bootShellCashLine(clientMeta.cashflow)` as soon as that row is set. It does not wait for `hydratedClientId` or `ownerBoardReady`. A client switch clears `cashflow` through `cashflowOnClientSwitch` before the next read, and `hasRealFinancials` is no longer a dependency of that effect.
+
+A new tab stays on the loading state until `clientAccessGate` has a session user. The client select in `clients.$clientId.tsx` re-runs when that user id arrives or changes, so an empty anonymous read is not kept as "Client not found".
+
+What I noticed collapses `kind=handoff` rows to the latest per agent. Show all passes the full list through `noticedHandoffRows`.
+
+Verification: `pnpm test:owner-boot-9s` (abort starts at send, lock timeout is the scaled 8s and retries once, boot-shell cash line, client switch), `pnpm test:client-agent-cards` (restoring session is loading, not missing), `pnpm test:finding-dedupe` (latest handoff per agent, Show all keeps history). US opening `46300` paints `Cash is $46,300.` with no pillar.
