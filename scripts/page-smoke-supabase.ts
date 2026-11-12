@@ -7,6 +7,8 @@
  * the owner workspace list (clients by owner, memberships by user).
  */
 
+import { noteBootRequestSent } from "@/lib/boot-read";
+
 export type SmokeMode =
   | "null"
   | "loading"
@@ -435,7 +437,11 @@ function builder(table: string, callerStack: string) {
     ins.push({ column, value });
     return self;
   };
-  const run = (kind: "list" | "single") => settle(table, kind, eqs, ins, signal, callerStack);
+  const run = (kind: "list" | "single") => {
+    // This stub is the request itself. The session read has already happened.
+    noteBootRequestSent(signal);
+    return settle(table, kind, eqs, ins, signal, callerStack);
+  };
   self.maybeSingle = () => run("single");
   self.single = () => run("single");
   self.then = (
