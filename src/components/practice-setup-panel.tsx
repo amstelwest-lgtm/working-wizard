@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import "./setup-partner-panel.css";
 import "@/components/owner-door/owner-door.css";
+import { ImRoutineProposals } from "@/components/im-routine-proposals";
 import { HomeBotCard } from "@/components/owner-door/home-bot-card";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { parseMarketSelection } from "@/lib/market/parse";
@@ -386,6 +387,7 @@ export function PracticeSetupInterview({
       {!booting && phase === "done" ? (
         <div>
           <p className="setup-partner__done">Saved for the practice.</p>
+          {firmId ? <ImRoutineProposals firmId={firmId} plan={plan} /> : null}
           {plan && plan.steps.length > 0 ? (
             <ul>
               {plan.steps.map((step) => (
