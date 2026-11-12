@@ -33,6 +33,7 @@ import {
   headerFromRun,
   isVisibleAgentFinding,
   latestRunByAgent,
+  noticedHandoffRows,
   ratioSentence,
   splitTodayBriefing,
   type AgentActivitySnapshot,
@@ -313,7 +314,13 @@ export function MilonTeamDesk({
   // On the agent page every row is the same agent, so the agent tag and source chip would only repeat.
   const tag = (agent: AgentKey) =>
     agentView ? null : <span className="milon-desk-tag">{agentShortName(agent)}</span>;
-  const findingRows = findings.map(({ row, sentence }) => {
+  const findingRowsIn = findings.map((item) => item.row);
+  const collapsedFindings = noticedHandoffRows(findingRowsIn, false);
+  const shownIds = new Set(
+    (todayOpen ? findingRowsIn : collapsedFindings).map((row) => row.id),
+  );
+  const handoffHistoryHidden = collapsedFindings.length < findingRowsIn.length;
+  const findingRows = findings.filter((item) => shownIds.has(item.row.id)).map(({ row, sentence }) => {
     const draft = draftFindingLabel(row);
     const checked = figuresCheckedLine(
       feed.healthQuote?.periodLabel ?? findingPeriod(row),
@@ -442,7 +449,9 @@ export function MilonTeamDesk({
         ...handoffRows,
         ...leadRows,
       ];
-  const todayMore = agentView ? noticedRows.length > NOTICED_CAP : ratios.length > TODAY_RATIO_CAP;
+  const todayMore = agentView
+    ? noticedRows.length > NOTICED_CAP || handoffHistoryHidden
+    : ratios.length > TODAY_RATIO_CAP || handoffHistoryHidden;
   const reportHref = clientId ? managementReportPath(clientId) : null;
 
   const todayList = (

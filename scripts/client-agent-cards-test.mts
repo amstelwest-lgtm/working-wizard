@@ -20,6 +20,7 @@ import {
   CLIENT_HOME_CHECKING,
   CLIENT_HOME_NOTHING,
   clientAgentCardsVisible,
+  clientAccessGate,
   clientHomePhase,
 } from "../src/lib/client-home-phase.ts";
 import { avatarPoster, fmClipSources, type AvatarFace } from "../src/lib/fm-avatar-state.ts";
@@ -48,6 +49,36 @@ assert(
   "a hung client read is an error, not a spinner",
 );
 assert(clientHomePhase({ loading: false, timedOut: false, hasClient: false }) === "missing", "a finished empty read is missing");
+assert(
+  clientAccessGate({
+    authLoading: true,
+    sessionUserId: null,
+    loading: false,
+    timedOut: false,
+    hasClient: false,
+  }) === "loading",
+  "a restoring session stays on loading, not client-not-found",
+);
+assert(
+  clientAccessGate({
+    authLoading: false,
+    sessionUserId: null,
+    loading: false,
+    timedOut: false,
+    hasClient: false,
+  }) === "loading",
+  "no session user is not a missing client",
+);
+assert(
+  clientAccessGate({
+    authLoading: false,
+    sessionUserId: "user-1",
+    loading: false,
+    timedOut: false,
+    hasClient: false,
+  }) === "missing",
+  "a settled session with no row is not found",
+);
 assert(clientHomePhase({ loading: true, timedOut: true, hasClient: true }) === "ready", "a late row still opens the file");
 assert(clientAgentCardsVisible("loading") && clientAgentCardsVisible("error"), "cards stay up while the row is late");
 assert(!clientAgentCardsVisible("missing"), "a missing client does not invent a team");
@@ -263,7 +294,8 @@ assert(
 );
 
 const page = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
-assert(page.includes("clientHomePhase("), "the client page uses the home phase");
+assert(page.includes("clientAccessGate("), "the client page waits for the session user");
+assert(page.includes("sessionUserId"), "the client select re-runs when the session user changes");
 assert(page.includes("bindShellBackstop("), "the client row read uses the shared shell backstop");
 assert(page.includes("setLoadTimedOut(true)"), "a hung row leaves the skeleton");
 assert(page.includes("<ClientAgentStandby"), "the team renders before the row arrives");

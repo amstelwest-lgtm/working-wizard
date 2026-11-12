@@ -21,6 +21,25 @@ export function clientHomePhase(input: {
   return "missing";
 }
 
+/**
+ * A new tab keeps the loading state until the session user is on the page.
+ * An empty row before that is not "Client not found".
+ */
+export function clientAccessGate(input: {
+  authLoading: boolean;
+  sessionUserId: string | null;
+  loading: boolean;
+  timedOut: boolean;
+  hasClient: boolean;
+}): ClientHomePhase {
+  if (input.authLoading || !input.sessionUserId) return "loading";
+  return clientHomePhase({
+    loading: input.loading,
+    timedOut: input.timedOut,
+    hasClient: input.hasClient,
+  });
+}
+
 /** The team stays on screen for a slow or failed row. A missing client does not. */
 export function clientAgentCardsVisible(phase: ClientHomePhase): boolean {
   return phase === "loading" || phase === "error" || phase === "ready";

@@ -397,7 +397,7 @@ import {
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
-import { beginOwnerClientReads } from "@/lib/owner-boot-reads";
+import { beginOwnerClientReads, bootShellCashLine, cashflowOnClientSwitch } from "@/lib/owner-boot-reads";
 import { resolveFirmBootMarket } from "@/lib/pricing/market-resolution";
 import { markBootContent } from "@/lib/shell-gate";
 import { isOwnerDeliverablesRequest, ownerDeliverablesRedirectTarget } from "@/lib/owner-nav";
@@ -2942,11 +2942,20 @@ function Index() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveClientId]);
+  const hasRealFinancialsRef = useRef(hasRealFinancials);
+  hasRealFinancialsRef.current = hasRealFinancials;
+  const metaClientIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!effectiveClientId) {
+      metaClientIdRef.current = null;
       setClientMeta(null);
       setOnboardingGateReady(false);
       return;
+    }
+    const previousClientId = metaClientIdRef.current;
+    if (previousClientId !== effectiveClientId) {
+      metaClientIdRef.current = effectiveClientId;
+      setClientMeta((current) => cashflowOnClientSwitch(current, previousClientId, effectiveClientId));
     }
     // Cashflow and financials start as soon as the client id is known.
     // Role resolution only decides the profile funnel, after those reads.
@@ -3074,7 +3083,7 @@ function Index() {
             userRole,
             isInvitedOwnerWithFigures: isInvitedOwnerWithFigures({
               isInvitedOwner: invitedOwnerEntry,
-              hasRealFinancials,
+              hasRealFinancials: hasRealFinancialsRef.current,
               financialsUpdatedAt: data?.financials_updated_at,
             }),
           }) &&
@@ -3104,7 +3113,6 @@ function Index() {
     firstRunStep,
     roleResolved,
     invitedOwnerEntry,
-    hasRealFinancials,
     ownerBootAttempt,
   ]);
 
@@ -4498,6 +4506,9 @@ function Index() {
         periodPending={bootPeriod.pending}
         periodLabel={bootPeriod.label}
       >
+        {clientMeta?.cashflow ? (
+          <p data-boot-cash-line="">{bootShellCashLine(clientMeta.cashflow, boardMarket)}</p>
+        ) : null}
         <PanelSkeleton rows={4} />
       </OwnerShell>
       </div>

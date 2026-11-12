@@ -13,13 +13,16 @@ import {
   BOOT_READ_TIMEOUT_MS,
   bootCriticalRetryFailed,
   bootRetryInFlight,
+  BOOT_AUTH_WAIT_MS,
+  bootAuthWaitMs,
   bootSelect,
+  noteBootRequestSent,
   resetBootReadForTests,
   setShellBackstopForTests,
   shellBackstopDue,
 } from "@/lib/boot-read";
 import { SHELL_BOOT_CEILING_MS } from "@/lib/shell-gate";
-import { beginOwnerClientReads } from "@/lib/owner-boot-reads";
+import { beginOwnerClientReads, bootShellCashLine, cashflowOnClientSwitch } from "@/lib/owner-boot-reads";
 import { ownerAnswerTiles, type OwnerBooks } from "@/lib/owner-answers";
 
 function assert(cond: unknown, message: string): asserts cond {
@@ -262,6 +265,7 @@ resetBootReadForTests();
   const result = await bootSelect(
     (signal) => {
       calls += 1;
+      noteBootRequestSent(signal);
       if (calls === 1) {
         return new Promise((resolve) => {
           signal.addEventListener(
@@ -429,5 +433,92 @@ const earlyBooks = {
 } satisfies OwnerBooks;
 const earlyCash = ownerAnswerTiles(earlyBooks).find((tile) => tile.id === "cash")?.sentence ?? "";
 assert(earlyCash === "Cash is $46,300.", earlyCash);
+
+assert(BOOT_AUTH_WAIT_MS === 8_000, "a stuck getSession fails at about 8s");
+assert(bootAuthWaitMs(BOOT_READ_TIMEOUT_MS) === 8_000, "the auth bound stays 8s on a 4s select");
+assert(bootAuthWaitMs(BOOT_READ_RETRY_TIMEOUT_MS) === 8_000, "the retry does not stretch the auth bound");
+
+resetBootReadForTests();
+{
+  const started = Date.now();
+  let firstAbort = 0;
+  let calls = 0;
+  const result = await bootSelect(
+    (signal) => {
+      calls += 1;
+      return new Promise((resolve) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            if (calls === 1) firstAbort = Date.now() - started;
+            resolve({
+              data: null,
+              error: { message: "AbortError: The operation was aborted." },
+            });
+          },
+          { once: true },
+        );
+      });
+    },
+    { critical: true, timeoutMs: 80 },
+  );
+  assert(firstAbort >= 140 && firstAbort < 230, `the lock timeout is the scaled 8s, saw ${firstAbort}ms`);
+  assert(!result.ok && result.retryable, "a stuck getSession fails into the retry path");
+  assert(calls === 2, `the lock timeout retries once, saw ${calls}`);
+}
+
+resetBootReadForTests();
+{
+  const started = Date.now();
+  let firstAbort = 0;
+  const result = await bootSelect(
+    (signal) => {
+      noteBootRequestSent(signal);
+      return new Promise((resolve) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            firstAbort = Date.now() - started;
+            resolve({
+              data: null,
+              error: { message: "AbortError: The operation was aborted." },
+            });
+          },
+          { once: true },
+        );
+      });
+    },
+    { critical: false, timeoutMs: 80 },
+  );
+  assert(!result.ok && result.retryable, "a sent request still aborts");
+  assert(firstAbort >= 60 && firstAbort < 120, `the 4s abort starts at send, saw ${firstAbort}ms`);
+}
+
+const pendingBoot = appSrc.slice(
+  appSrc.indexOf('data-owner-boot={provisional ? "provisional" : "pending"}'),
+  appSrc.indexOf("if (!boardReady)"),
+);
+assert(pendingBoot.includes("data-boot-cash-line"), "the boot shell paints the cash line");
+assert(pendingBoot.includes("bootShellCashLine(clientMeta.cashflow"), "the line uses the cashflow row");
+assert(!pendingBoot.includes("hydratedClientId"), "the cash line does not wait for financials");
+assert(
+  bootShellCashLine({ openingBalance: "46300", revenue: [], expenses: [] }, { currency: "USD", locale: "en-US" }) ===
+    "Cash is $46,300.",
+  "the stored opening paints before the pillar is scored",
+);
+
+const metaEffect = appSrc.slice(appSrc.indexOf("const metaClientIdRef"), appSrc.indexOf("// Returning invite accept:"));
+assert(metaEffect.includes("cashflowOnClientSwitch"), "a client switch clears the cash line");
+assert(!metaEffect.includes("hasRealFinancials,"), "financials hydration does not rerun the meta read");
+const switched = cashflowOnClientSwitch(
+  { cashflow: { openingBalance: "46300" }, business_type: "cafe" },
+  "client-a",
+  "client-b",
+);
+assert(switched?.cashflow == null && switched?.business_type === "cafe", "the switch drops cashflow only");
+assert(
+  cashflowOnClientSwitch({ cashflow: { openingBalance: "1" } }, "client-a", "client-a")?.cashflow != null,
+  "the same client keeps its cash line",
+);
 
 console.log("owner-boot-9s-test: ok");

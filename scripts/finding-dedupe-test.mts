@@ -11,6 +11,7 @@ import type { MilonTeamFeedApi } from "../src/hooks/use-milon-team-feed";
 import { findingTitleKey } from "../src/lib/finding-title-key";
 import {
   dedupeFindings,
+  noticedHandoffRows,
   noticedNarrativeHidden,
   type AgentActivitySnapshot,
   type AgentFindingRow,
@@ -408,5 +409,55 @@ assert(noticed.includes('data-finding="ask"'), "a data request stays");
 assert(noticed.includes('data-finding="hand"'), "the hand-off stays");
 assert(noticed.includes('data-draft-actions="owner"'), "an action point can be approved or dismissed");
 assert(noticed.includes('data-draft-actions="handoff"'), "the hand-off is a yes or no for the accountant");
+
+const recorded = [
+  finding({
+    id: "old-run",
+    kind: "handoff",
+    title: "Recorded one finding: older.",
+    created_at: "2026-10-01T08:00:00.000Z",
+  }),
+  finding({
+    id: "new-run",
+    kind: "handoff",
+    title: "Recorded one finding: newer.",
+    created_at: "2026-10-08T08:00:00.000Z",
+  }),
+  finding({
+    id: "advisor-run",
+    agent: "advisor",
+    kind: "handoff",
+    title: "Recorded one finding: advisor.",
+    created_at: "2026-10-04T08:00:00.000Z",
+  }),
+  finding({
+    id: "pillar",
+    kind: "weakest_pillar",
+    title: "Cash is the weakest pillar at 25.",
+    created_at: "2026-10-03T08:00:00.000Z",
+  }),
+];
+eq(
+  noticedHandoffRows(recorded, false).map((row) => row.id).sort(),
+  ["advisor-run", "new-run", "pillar"],
+  "What I noticed keeps the latest handoff per agent",
+);
+eq(
+  noticedHandoffRows(recorded, true).map((row) => row.id).sort(),
+  ["advisor-run", "new-run", "old-run", "pillar"],
+  "Show all keeps the handoff history",
+);
+const recordedDesk = renderToStaticMarkup(
+  createElement(MilonTeamDesk, {
+    feed: api({ briefing: [] }),
+    now: NOW,
+    presentation: "agent",
+    initialFilter: "all",
+    live: { runs: [], messages: [], market: ZA_MARKET, findings: recorded },
+  }),
+);
+assert(recordedDesk.includes('data-finding="new-run"'), "the latest analyst handoff is on the desk");
+assert(!recordedDesk.includes('data-finding="old-run"'), "an older handoff is collapsed");
+assert(recordedDesk.includes(">Show all<"), "Show all is there for the history");
 
 console.log("finding-dedupe ok");

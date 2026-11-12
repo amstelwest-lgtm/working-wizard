@@ -1,4 +1,5 @@
 import { processLock } from "@supabase/auth-js";
+import { noteBootRequestSent } from "@/lib/boot-read";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { createSharedAuthStorage, shareAuthToken } from "@/lib/stored-auth-session";
 import { sessionRestoreSignal } from "./session-deadline";
@@ -176,6 +177,9 @@ function withSessionRestoreSignal(init?: RequestInit): RequestInit | undefined {
 }
 
 export function coordinatedAuthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  // fetchWithAuth has already resolved the access token. The 4s boot abort
+  // starts now, as the request is handed to fetch, not during getSession.
+  noteBootRequestSent(init?.signal ?? null);
   const token = refreshTokenFromRequest(input, init);
   if (!token || typeof window === "undefined") return fetch(input, init);
   const nextInit = withSessionRestoreSignal(init);

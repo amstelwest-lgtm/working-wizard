@@ -1,14 +1,16 @@
 /**
  * One bounded read for owner and accountant boot.
  *
- * A critical select aborts the first attempt at BOOT_READ_TIMEOUT_MS. If
- * that attempt is still open at BOOT_READ_HEDGE_MS, a second identical
- * select starts and may run until BOOT_READ_RETRY_TIMEOUT_MS. Whichever
- * attempt returns first wins, and the other is aborted. A retryable
- * failure before the hedge starts the second attempt immediately. There
- * is no third try. Neither attempt is allowed to run past the shell
- * ceiling: each timeout is the time left, and the hedge does not start
- * in the last 500ms.
+ * A critical select aborts the first attempt at BOOT_READ_TIMEOUT_MS after
+ * the request is sent. Time spent reading the session does not start that clock.
+ * If the auth lock has not released the request within BOOT_AUTH_WAIT_MS,
+ * the attempt fails and the existing retry path runs. Once the request is
+ * sent, a second select starts at BOOT_READ_HEDGE_MS and may run until
+ * BOOT_READ_RETRY_TIMEOUT_MS. Whichever attempt returns first wins, and
+ * the other is aborted. A retryable failure before the hedge starts the
+ * second attempt immediately. There is no third try. Neither attempt is
+ * allowed to run past the shell ceiling: each timeout is the time left,
+ * and the hedge does not start in the last 500ms.
  *
  * Only an idempotent select belongs here. A write or an RPC with side
  * effects must not be passed in, and this module never issues one.
@@ -21,6 +23,12 @@
 import { SHELL_BOOT_CEILING_MS, SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 
 export const BOOT_READ_TIMEOUT_MS = 4_000;
+/**
+ * Hard stop for the auth-lock wait before the request is sent.
+ * A stuck lock fails the attempt into the existing retry path. It does not
+ * start the 4s abort.
+ */
+export const BOOT_AUTH_WAIT_MS = 8_000;
 /** Start the second select while the first is still in flight. */
 export const BOOT_READ_HEDGE_MS = 2_500;
 /** The second select may outlive the first. It is still capped at the ceiling. */
@@ -42,6 +50,13 @@ export function bootReadTimeoutMs(): number {
 function scaled(partMs: number, firstTimeoutMs: number): number {
   if (firstTimeoutMs === BOOT_READ_TIMEOUT_MS) return partMs;
   return Math.max(1, Math.round((partMs * firstTimeoutMs) / BOOT_READ_TIMEOUT_MS));
+}
+
+/** Auth-lock bound for one attempt. A longer retry timeout does not stretch it. */
+export function bootAuthWaitMs(requestTimeoutMs: number): number {
+  const basis =
+    requestTimeoutMs === BOOT_READ_RETRY_TIMEOUT_MS ? BOOT_READ_TIMEOUT_MS : requestTimeoutMs;
+  return scaled(BOOT_AUTH_WAIT_MS, basis);
 }
 
 export type BootRead<T> =
@@ -258,6 +273,18 @@ export function bindShellBackstop(onDue: (reason: "idle" | "ceiling") => void): 
   };
 }
 
+const liveSends = new Map<AbortSignal, () => void>();
+
+/**
+ * The select has a token and is about to call fetch. The 4s abort starts
+ * here, not while the session read is still waiting on the auth lock.
+ */
+export function noteBootRequestSent(signal: AbortSignal | null | undefined): void {
+  if (!signal) return;
+  const mark = liveSends.get(signal);
+  if (mark) mark();
+}
+
 export function resetBootReadForTests(): void {
   retryCount = 0;
   criticalRetryFailed = false;
@@ -266,6 +293,7 @@ export function resetBootReadForTests(): void {
   ceilingOverride = null;
   bootCeilingAt = null;
   liveAbandons.clear();
+  liveSends.clear();
 }
 
 type Attempt<T> = {
@@ -276,17 +304,21 @@ type Attempt<T> = {
 function startAttempt<T>(
   run: (signal: AbortSignal) => PromiseLike<T>,
   timeoutMs: number,
+  onSent?: () => void,
 ): Attempt<T> {
-  const budget = cappedAttemptMs(timeoutMs);
+  const requestBudget = cappedAttemptMs(timeoutMs);
+  const authBudget = cappedAttemptMs(bootAuthWaitMs(timeoutMs));
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let settled = false;
+  let sent = false;
   let abandon = () => {};
   const promise = new Promise<BootRead<T>>((resolve) => {
     const finish = (result: BootRead<T>) => {
       if (settled) return;
       settled = true;
       liveAbandons.delete(abandon);
+      liveSends.delete(controller.signal);
       if (timer !== undefined) clearTimeout(timer);
       resolve(result);
     };
@@ -296,7 +328,17 @@ function startAttempt<T>(
       err.name = "TimeoutError";
       finish({ ok: false, error: err, retryable: true });
     };
-    timer = setTimeout(abandon, budget);
+    const markSent = () => {
+      if (settled || sent) return;
+      sent = true;
+      if (timer !== undefined) clearTimeout(timer);
+      timer = setTimeout(abandon, requestBudget);
+      onSent?.();
+    };
+    liveSends.set(controller.signal, markSent);
+    // The 4s abort waits until the request is sent. Until then the auth lock
+    // has this shorter of the ceiling and the 8s bound.
+    timer = setTimeout(abandon, authBudget);
     Promise.resolve(run(controller.signal)).then(
       (value) => {
         const error = postgrestError(value);
@@ -314,6 +356,7 @@ function startAttempt<T>(
     promise,
     cancel: () => {
       liveAbandons.delete(abandon);
+      liveSends.delete(controller.signal);
       if (timer !== undefined) clearTimeout(timer);
       controller.abort();
     },
@@ -338,6 +381,7 @@ function criticalSelect<T>(
     let failures = 0;
     let started = 0;
     let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
+    let requestSent = false;
 
     const close = (result: BootRead<T>, failed = false) => {
       if (done) return;
@@ -380,10 +424,18 @@ function criticalSelect<T>(
       return true;
     };
 
-    first = startAttempt(run, timeoutMs);
+    const armHedge = () => {
+      if (done || second || hedgeTimer !== undefined) return;
+      hedgeTimer = setTimeout(startSecond, hedgeMs);
+    };
+
+    first = startAttempt(run, timeoutMs, () => {
+      requestSent = true;
+      armHedge();
+    });
     started = 1;
     void first.promise.then(onAttempt);
-    hedgeTimer = setTimeout(startSecond, hedgeMs);
+    if (requestSent) armHedge();
   });
 }
 
