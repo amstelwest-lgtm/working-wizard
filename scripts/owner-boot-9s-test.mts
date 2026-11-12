@@ -19,6 +19,8 @@ import {
   shellBackstopDue,
 } from "@/lib/boot-read";
 import { SHELL_BOOT_CEILING_MS } from "@/lib/shell-gate";
+import { beginOwnerClientReads } from "@/lib/owner-boot-reads";
+import { ownerAnswerTiles, type OwnerBooks } from "@/lib/owner-answers";
 
 function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
@@ -374,5 +376,58 @@ resetBootReadForTests();
   assert(calls === 1, `no hedge starts with under 500ms left, saw ${calls}`);
   unbind();
 }
+
+{
+  let inFlight = 0;
+  let max = 0;
+  let release = () => {};
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const read = (label: string) => async () => {
+    inFlight += 1;
+    max = Math.max(max, inFlight);
+    await wait;
+    inFlight -= 1;
+    return label;
+  };
+  const pending = beginOwnerClientReads(read("cash"), read("fin"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert(max === 2, `cashflow and financials start together, saw ${max}`);
+  release();
+  const pair = await pending;
+  assert(pair[0] === "cash" && pair[1] === "fin", "both reads resolve");
+}
+
+const readsAt = appSrc.indexOf("beginOwnerClientReads(");
+const roleAt = appSrc.indexOf("if (!roleResolved) return;");
+assert(readsAt > 0 && readsAt < roleAt, "client reads start before role resolution");
+const finEffect = appSrc.slice(
+  appSrc.indexOf("Load financials for whoever"),
+  appSrc.indexOf("Debounced autosave"),
+);
+assert(!finEffect.includes("bootSelect"), "period financials reuse the parallel read");
+
+const earlyBooks = {
+  hasBooks: true,
+  ledger: null,
+  revenue: null,
+  priorRevenue: null,
+  cogs: null,
+  receivables: null,
+  cashflow: null,
+  hasEvidence: true,
+  cashOnFile: true,
+  openingMissing: false,
+  cashOutlook: { opening: 46300, closing: [], floor: Number.NaN, dipsBelowFloorWeek: null },
+  cashPillarStatus: null,
+  openAction: null,
+  actionsReady: true,
+  signedBy: null,
+  signedOn: null,
+  market: { currency: "USD", locale: "en-US" },
+} satisfies OwnerBooks;
+const earlyCash = ownerAnswerTiles(earlyBooks).find((tile) => tile.id === "cash")?.sentence ?? "";
+assert(earlyCash === "Cash is $46,300.", earlyCash);
 
 console.log("owner-boot-9s-test: ok");

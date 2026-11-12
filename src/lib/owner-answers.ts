@@ -710,6 +710,21 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
     };
   }
   const balances = closingBalancesFromCashflow(books.cashflow);
+  if (
+    (!balances || balances.length === 0) &&
+    books.cashPillarStatus == null &&
+    quotedOpening != null &&
+    finite(quotedOpening)
+  ) {
+    return {
+      ...base,
+      sentence: `Cash is ${money(quotedOpening)}.`,
+      source: `${booksSource}, 13-week forecast`,
+      step: "Ask",
+      signed: false,
+      empty: false,
+    };
+  }
   if (!balances || balances.length === 0) {
     return {
       ...base,

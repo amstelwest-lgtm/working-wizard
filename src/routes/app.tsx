@@ -397,6 +397,7 @@ import {
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
+import { beginOwnerClientReads } from "@/lib/owner-boot-reads";
 import { resolveFirmBootMarket } from "@/lib/pricing/market-resolution";
 import { markBootContent } from "@/lib/shell-gate";
 import { isOwnerDeliverablesRequest, ownerDeliverablesRedirectTarget } from "@/lib/owner-nav";
@@ -2827,6 +2828,10 @@ function Index() {
     firm_id?: string | null;
     is_demo?: boolean | null;
   } | null>(null);
+  const [prefetchedFinancials, setPrefetchedFinancials] = useState<{
+    clientId: string;
+    row: { financials?: unknown } | null;
+  } | null>(null);
   const [onboardingGateReady, setOnboardingGateReady] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("today");
   // Declared before the client-meta effect: that effect's dependency array
@@ -2943,25 +2948,51 @@ function Index() {
       setOnboardingGateReady(false);
       return;
     }
-    // Role decides whether the profile funnel opens. Wait so we do not paint
-    // the empty board and then swap to the funnel a moment later.
-    if (!roleResolved) return;
+    // Cashflow and financials start as soon as the client id is known.
+    // Role resolution only decides the profile funnel, after those reads.
     let cancelled = false;
     const loadMeta = async () => {
       const fullSelect =
         "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market, firm_id, is_demo";
       const legacySelect =
         "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, firm_id, is_demo";
-      const full = await bootSelect(
-        (signal) =>
-          supabase
-            .from("clients")
-            .select(fullSelect)
-            .eq("id", effectiveClientId)
-            .abortSignal(signal)
-            .maybeSingle(),
-        { critical: true },
+      const [full, finRead] = await beginOwnerClientReads(
+        () =>
+          bootSelect(
+            (signal) =>
+              supabase
+                .from("clients")
+                .select(fullSelect)
+                .eq("id", effectiveClientId)
+                .abortSignal(signal)
+                .maybeSingle(),
+            { critical: true },
+          ),
+        () =>
+          bootSelect(
+            (signal) =>
+              supabase
+                .from("clients")
+                .select("financials")
+                .eq("id", effectiveClientId)
+                .abortSignal(signal)
+                .maybeSingle(),
+            { critical: true },
+          ),
       );
+      if (!cancelled) {
+        setPrefetchedFinancials(
+          finRead.ok
+            ? {
+                clientId: effectiveClientId,
+                row: finRead.value.error
+                  ? null
+                  : (finRead.value.data as { financials?: unknown } | null),
+              }
+            : null,
+        );
+        if (!finRead.ok) setCriticalBootFailed(true);
+      }
       if (!full.ok) {
         if (!cancelled) {
           setCriticalBootFailed(true);
@@ -3032,6 +3063,7 @@ function Index() {
               }
             : null,
         );
+        if (!roleResolved) return;
         if (profile) {
           setOperatingProfile(profile);
           setBusinessTypeId(profile.businessTypeId);
@@ -3253,30 +3285,16 @@ function Index() {
   useEffect(() => {
     if (!effectiveClientId) return;
     const clientId = effectiveClientId;
-    let cancelled = false;
-    setHasRealFinancials(false); // reset on client switch until confirmed
-    setV(defaults); // reset inputs so no previous client's data bleeds through
-    setWeeklyInputs({ weeks: {} });
-    setProductMix(emptyProductMix());
-    void (async () => {
-      const read = await bootSelect(
-        (signal) =>
-          supabase
-            .from("clients")
-            .select("financials")
-            .eq("id", clientId)
-            .abortSignal(signal)
-            .maybeSingle(),
-        { critical: true },
-      );
-      if (cancelled) return;
-      if (!read.ok) {
-        setCriticalBootFailed(true);
-        return;
-      }
-      const data = read.value.error ? null : read.value.data;
-      try {
-        if (data?.financials) {
+    if (!prefetchedFinancials || prefetchedFinancials.clientId !== clientId) {
+      setHasRealFinancials(false); // reset on client switch until confirmed
+      setV(defaults); // reset inputs so no previous client's data bleeds through
+      setWeeklyInputs({ weeks: {} });
+      setProductMix(emptyProductMix());
+      return;
+    }
+    const data = prefetchedFinancials.row;
+    try {
+      if (data?.financials) {
           const fin = data.financials as Partial<Inputs> & {
             weeklyInputs?: WeeklyInputs;
             productMix?: unknown;
@@ -3313,16 +3331,12 @@ function Index() {
           }
           // else: keep defaults + hasRealFinancials=false (unscored empty state)
         }
-      } catch {
-        /* a settled row still opens the board; a hang does not */
-      }
-      if (!cancelled) setHydratedClientId(clientId);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    } catch {
+      /* a settled row still opens the board; a hang does not */
+    }
+    setHydratedClientId(clientId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveClientId, ownerBootAttempt]);
+  }, [effectiveClientId, ownerBootAttempt, prefetchedFinancials]);
 
   // Debounced autosave — fires for both owners and firm impersonation.
   // Period P&L is gated on hasRealFinancials so demo defaults are never written.

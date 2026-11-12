@@ -15,8 +15,10 @@ Warm reload still does this in order:
 
 The extra 7s after the heading is those two client reads, gated behind the workspace list, plus the pillar. ZA is the same chain and finishes nearer 4s, so the US gap is the size of the cashflow and financials payloads, not a model call.
 
-## What a fix would be
+## Fix
 
-Client-side, and not done in this change: start the cashflow and financials reads in parallel with the workspace list when a stored client id exists, and do not hold the cashflow read for role resolution. Paint `Cash is …` from the stored opening as soon as that row returns, and replace it if the pillar is critical. Do not show the row before the workspace list confirms the id.
+Client-side only. `beginOwnerClientReads` in `src/lib/owner-boot-reads.ts` starts the cashflow select and the `clients.financials` select together, as soon as `effectiveClientId` is set. Neither waits on role resolution. Role resolution still gates the profile funnel, after those reads. Each select stays a critical `bootSelect`: first attempt aborts at 4s, one overlapping retry, no third try.
 
-That edit sits in the owner boot in `src/routes/app.tsx`. It is the access gate, not a display tweak, so it is not in this batch. It does not need a new table or an edge function. An edge or SQL change is not required.
+The stored opening paints as `Cash is …` when that figure is known and the cash pillar is not scored yet. A floor or dip line from the same cashflow still wins when it can be computed. A critical pillar replaces the opening line once financials score it.
+
+The heading still waits on the workspace list (about 3.2s on the US run). The cash line should now appear when the cashflow select returns, in parallel with financials, instead of after the role check and a second serial read. That removes the role gate and the serial gap from the 10–11s. The remaining wait is the slower of the two client reads. ZA stays on the same path and should stay near its 4s. No edge function and no SQL.
