@@ -4341,7 +4341,7 @@ function ClientView() {
                           }
                           setupPartner={
                             <div className="mt-4">
-                              <SetupPartnerPanel clientId={clientId} />
+                              <SetupPartnerPanel key={clientId} clientId={clientId} />
                             </div>
                           }
                         />

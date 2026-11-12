@@ -26,6 +26,7 @@ import {
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
 import { ImplementationManagerChip } from "@/components/practice-setup-card";
+import { InterviewExchange } from "@/components/interview-exchange";
 import {
   buildPracticeImplementationPlan,
   cleanFlowLine,
@@ -54,7 +55,7 @@ type AskTurn = (input: {
 
 export function PracticeSetupPanel() {
   const { firmId, firmMarket } = useAccountantProfile();
-  return <PracticeSetupInterview firmId={firmId} firmMarket={firmMarket} />;
+  return <PracticeSetupInterview key={firmId ?? "no-firm"} firmId={firmId} firmMarket={firmMarket} />;
 }
 
 export function PracticeSetupInterview({
@@ -164,8 +165,16 @@ export function PracticeSetupInterview({
   };
 
   useEffect(() => {
-    if (!firmId) return;
+    if (!firmId) {
+      setMessages([]);
+      setQuestion("");
+      setDraft("");
+      return;
+    }
     let cancel = false;
+    setMessages([]);
+    setQuestion("");
+    setDraft("");
     setBooting(true);
     void Promise.all([loadSaved(firmId), loadDraft(firmId)])
       .then(([saved, draft]) => {
@@ -268,16 +277,7 @@ export function PracticeSetupInterview({
 
       {!booting && phase === "interview" ? (
         <div>
-          {messages.some((message) => message.content !== question) ? (
-            <ol className="setup-partner__transcript">
-              {messages.map((message, index) =>
-                message.content === question && index === messages.length - 1 ? null : (
-                  <li key={`${message.role}-${index}`}>{message.content}</li>
-                ),
-              )}
-            </ol>
-          ) : null}
-          {question ? <p className="setup-partner__question">{question}</p> : null}
+          <InterviewExchange question={question} thinking={loading} messages={messages} />
           <textarea
             className="setup-partner__answer"
             value={draft}

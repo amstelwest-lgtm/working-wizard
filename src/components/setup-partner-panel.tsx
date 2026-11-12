@@ -6,9 +6,11 @@ import {
   SETUP_PARTNER_FOLLOWUP_TEMPLATES,
   setupPartnerFollowups,
   setupPartnerMapPromptBlock,
+  type FirmInterviewMessage,
   type SetupPartnerSummary,
   type SetupPartnerWorkflowMap,
 } from "@/lib/setup-partner";
+import { InterviewExchange } from "@/components/interview-exchange";
 import {
   buildSetupPartnerMap,
   confirmSetupPartnerMap,
@@ -21,9 +23,10 @@ type Phase = "summary" | "interview" | "map" | "done";
 
 type Props = {
   clientId: string | null;
+  loadSummary?: (clientId: string) => Promise<SetupPartnerSummary>;
 };
 
-export function SetupPartnerPanel({ clientId }: Props) {
+export function SetupPartnerPanel({ clientId, loadSummary = fetchSetupPartnerSummary }: Props) {
   const [phase, setPhase] = useState<Phase>("summary");
   const [summary, setSummary] = useState<SetupPartnerSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,6 +37,7 @@ export function SetupPartnerPanel({ clientId }: Props) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [draftAnswer, setDraftAnswer] = useState("");
   const [currentQuestion, setCurrentQuestion] = useState("");
+  const [history, setHistory] = useState<FirmInterviewMessage[]>([]);
   const [modelTurns, setModelTurns] = useState(0);
   const [map, setMap] = useState<SetupPartnerWorkflowMap | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -44,8 +48,10 @@ export function SetupPartnerPanel({ clientId }: Props) {
     if (!clientId) return;
     setLoading(true);
     setError(null);
+    setHistory([]);
+    setDraftAnswer("");
     try {
-      const next = await fetchSetupPartnerSummary(clientId);
+      const next = await loadSummary(clientId);
       setSummary(next);
       setPhase("summary");
       setQuestionIndex(0);
@@ -61,7 +67,7 @@ export function SetupPartnerPanel({ clientId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, loadSummary]);
 
   useEffect(() => {
     void load();
@@ -71,11 +77,22 @@ export function SetupPartnerPanel({ clientId }: Props) {
     setAnswers((prev) => ({ ...prev, [id]: text.trim() }));
   };
 
+  const remember = (asked: string, text: string) => {
+    const answer = text.trim();
+    if (!asked || !answer) return;
+    setHistory((prev) => [
+      ...prev,
+      { role: "assistant", content: asked },
+      { role: "user", content: answer },
+    ]);
+  };
+
   const startInterview = () => {
     setPhase("interview");
     setQuestionIndex(0);
     setInFollowups(false);
     setDraftAnswer("");
+    setHistory([]);
     setCurrentQuestion(SETUP_PARTNER_FIXED_QUESTIONS[0]?.prompt ?? "");
   };
 
@@ -84,6 +101,7 @@ export function SetupPartnerPanel({ clientId }: Props) {
     const fixed = SETUP_PARTNER_FIXED_QUESTIONS[questionIndex];
     if (fixed) {
       saveAnswer(fixed.id, draftAnswer);
+      remember(currentQuestion, draftAnswer);
       const nextIndex = questionIndex + 1;
       if (nextIndex < SETUP_PARTNER_FIXED_QUESTIONS.length) {
         setQuestionIndex(nextIndex);
@@ -115,6 +133,7 @@ export function SetupPartnerPanel({ clientId }: Props) {
       const template = followups[followupIndex];
       const id = SETUP_PARTNER_FOLLOWUP_TEMPLATES[followupIndex]?.id ?? `followup_${followupIndex}`;
       saveAnswer(id, draftAnswer);
+      remember(currentQuestion, draftAnswer);
       const nextFu = followupIndex + 1;
       if (nextFu < followups.length) {
         setFollowupIndex(nextFu);
@@ -232,7 +251,7 @@ export function SetupPartnerPanel({ clientId }: Props) {
 
       {phase === "interview" ? (
         <div>
-          <p className="setup-partner__question">{currentQuestion}</p>
+          <InterviewExchange question={currentQuestion} thinking={loading} messages={history} />
           <textarea
             className="setup-partner__answer"
             value={draftAnswer}
