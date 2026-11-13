@@ -18,15 +18,25 @@ import {
   phraseSetupPartnerFollowup,
 } from "@/lib/setup-partner-client";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
+import {
+  clearClientInterviewDraft,
+  readClientInterviewDraft,
+  writeClientInterviewDraft,
+} from "@/lib/client-interview-draft";
 
 type Phase = "summary" | "interview" | "map" | "done";
 
 type Props = {
   clientId: string | null;
+  firmId?: string | null;
   loadSummary?: (clientId: string) => Promise<SetupPartnerSummary>;
 };
 
-export function SetupPartnerPanel({ clientId, loadSummary = fetchSetupPartnerSummary }: Props) {
+export function SetupPartnerPanel({
+  clientId,
+  firmId = null,
+  loadSummary = fetchSetupPartnerSummary,
+}: Props) {
   const [phase, setPhase] = useState<Phase>("summary");
   const [summary, setSummary] = useState<SetupPartnerSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,21 +63,34 @@ export function SetupPartnerPanel({ clientId, loadSummary = fetchSetupPartnerSum
     try {
       const next = await loadSummary(clientId);
       setSummary(next);
-      setPhase("summary");
-      setQuestionIndex(0);
-      setFollowupIndex(0);
-      setInFollowups(false);
-      setAnswers({});
       setMap(null);
       setConfirmed(false);
-      setModelTurns(0);
-      setCurrentQuestion(SETUP_PARTNER_FIXED_QUESTIONS[0]?.prompt ?? "");
+      const saved = readClientInterviewDraft(firmId, clientId);
+      if (saved) {
+        setPhase("interview");
+        setHistory(saved.history);
+        setCurrentQuestion(saved.question);
+        setQuestionIndex(saved.questionIndex);
+        setFollowupIndex(saved.followupIndex);
+        setInFollowups(saved.inFollowups);
+        setAnswers(saved.answers);
+        setDraftAnswer(saved.draftAnswer);
+        setModelTurns(saved.modelTurns);
+      } else {
+        setPhase("summary");
+        setQuestionIndex(0);
+        setFollowupIndex(0);
+        setInFollowups(false);
+        setAnswers({});
+        setModelTurns(0);
+        setCurrentQuestion(SETUP_PARTNER_FIXED_QUESTIONS[0]?.prompt ?? "");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load summary");
     } finally {
       setLoading(false);
     }
-  }, [clientId, loadSummary]);
+  }, [clientId, firmId, loadSummary]);
 
   useEffect(() => {
     void load();
@@ -77,17 +100,48 @@ export function SetupPartnerPanel({ clientId, loadSummary = fetchSetupPartnerSum
     setAnswers((prev) => ({ ...prev, [id]: text.trim() }));
   };
 
-  const remember = (asked: string, text: string) => {
+  const remember = (asked: string, text: string): FirmInterviewMessage[] => {
     const answer = text.trim();
-    if (!asked || !answer) return;
-    setHistory((prev) => [
-      ...prev,
+    if (!asked || !answer) return history;
+    const next: FirmInterviewMessage[] = [
+      ...history,
       { role: "assistant", content: asked },
       { role: "user", content: answer },
-    ]);
+    ];
+    setHistory(next);
+    return next;
+  };
+
+  const persistDraft = (draft: {
+    question: string;
+    history: FirmInterviewMessage[];
+    questionIndex: number;
+    followupIndex: number;
+    inFollowups: boolean;
+    answers: Record<string, string>;
+    draftAnswer: string;
+    modelTurns: number;
+  }) => {
+    writeClientInterviewDraft(firmId, clientId, draft);
+  };
+
+  const redoInterview = () => {
+    clearClientInterviewDraft(firmId, clientId);
+    setPhase("summary");
+    setQuestionIndex(0);
+    setFollowupIndex(0);
+    setInFollowups(false);
+    setAnswers({});
+    setDraftAnswer("");
+    setHistory([]);
+    setMap(null);
+    setConfirmed(false);
+    setModelTurns(0);
+    setCurrentQuestion(SETUP_PARTNER_FIXED_QUESTIONS[0]?.prompt ?? "");
   };
 
   const startInterview = () => {
+    clearClientInterviewDraft(firmId, clientId);
     setPhase("interview");
     setQuestionIndex(0);
     setInFollowups(false);
@@ -101,14 +155,37 @@ export function SetupPartnerPanel({ clientId, loadSummary = fetchSetupPartnerSum
     const fixed = SETUP_PARTNER_FIXED_QUESTIONS[questionIndex];
     if (fixed) {
       saveAnswer(fixed.id, draftAnswer);
-      remember(currentQuestion, draftAnswer);
+      const nextHistory = remember(currentQuestion, draftAnswer);
+      const nextAnswers = { ...answers, [fixed.id]: draftAnswer.trim() };
       const nextIndex = questionIndex + 1;
       if (nextIndex < SETUP_PARTNER_FIXED_QUESTIONS.length) {
+        const nextQuestion = SETUP_PARTNER_FIXED_QUESTIONS[nextIndex]?.prompt ?? "";
+        const nextDraft = answers[SETUP_PARTNER_FIXED_QUESTIONS[nextIndex]?.id ?? ""] ?? "";
         setQuestionIndex(nextIndex);
-        setDraftAnswer(answers[SETUP_PARTNER_FIXED_QUESTIONS[nextIndex]?.id ?? ""] ?? "");
-        setCurrentQuestion(SETUP_PARTNER_FIXED_QUESTIONS[nextIndex]?.prompt ?? "");
+        setDraftAnswer(nextDraft);
+        setCurrentQuestion(nextQuestion);
+        persistDraft({
+          question: nextQuestion,
+          history: nextHistory,
+          questionIndex: nextIndex,
+          followupIndex,
+          inFollowups: false,
+          answers: nextAnswers,
+          draftAnswer: nextDraft,
+          modelTurns,
+        });
         return;
       }
+      persistDraft({
+        question: currentQuestion,
+        history: nextHistory,
+        questionIndex: nextIndex,
+        followupIndex,
+        inFollowups,
+        answers: nextAnswers,
+        draftAnswer: "",
+        modelTurns,
+      });
     }
     if (!inFollowups && followups.length > 0) {
       setInFollowups(true);
@@ -177,6 +254,7 @@ export function SetupPartnerPanel({ clientId, loadSummary = fetchSetupPartnerSum
     setError(null);
     try {
       await confirmSetupPartnerMap(clientId, map);
+      clearClientInterviewDraft(firmId, clientId);
       setConfirmed(true);
       setPhase("done");
     } catch (err) {
@@ -266,6 +344,9 @@ export function SetupPartnerPanel({ clientId, loadSummary = fetchSetupPartnerSum
               onClick={() => void advanceInterview()}
             >
               {loading ? "Working…" : "Next"}
+            </button>
+            <button type="button" className="setup-partner__ghost" disabled={loading} onClick={redoInterview}>
+              Redo interview
             </button>
           </div>
         </div>

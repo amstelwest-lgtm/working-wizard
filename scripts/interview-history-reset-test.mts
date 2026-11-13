@@ -52,6 +52,11 @@ Object.defineProperty(globalThis, "IntersectionObserver", {
   writable: true,
   value: IntersectionObserverStub,
 });
+Object.defineProperty(globalThis, "sessionStorage", {
+  configurable: true,
+  writable: true,
+  value: window.sessionStorage,
+});
 
 const { createElement, useState } = await import("react");
 const { createRoot } = await import("react-dom/client");
@@ -83,6 +88,7 @@ const secret = "Client A secret answer about payroll";
 function ClientPage({ clientId }: { clientId: string }) {
   return createElement(SetupPartnerPanel, {
     clientId,
+    firmId: "firm-1",
     loadSummary: async () => summary,
   });
 }
@@ -136,6 +142,16 @@ await act(async () => {
   restart.click();
 });
 assert(!document.body.textContent?.includes(secret), "starting again does not restore the previous answers");
+await act(async () => {
+  root.render(createElement(ClientPage, { clientId: "client-a" }));
+});
+await settle();
+assert(document.body.textContent?.includes(secret), "returning to client A restores the answer");
+await act(async () => {
+  root.render(createElement(ClientPage, { clientId: "client-b" }));
+});
+await settle();
+assert(!document.body.textContent?.includes(secret), "client B still does not show client A's answer");
 await act(async () => {
   root.unmount();
 });
@@ -196,7 +212,7 @@ const clientRoute = readFileSync("src/routes/_authenticated/clients.$clientId.ts
 const practicePanel = readFileSync("src/components/practice-setup-panel.tsx", "utf8");
 const clientPanel = readFileSync("src/components/setup-partner-panel.tsx", "utf8");
 assert(
-  clientRoute.includes("<SetupPartnerPanel key={clientId} clientId={clientId} />"),
+  clientRoute.includes("<SetupPartnerPanel key={clientId} clientId={clientId} firmId={firmId} />"),
   "the client route remounts on clientId",
 );
 assert(practicePanel.includes('key={firmId ?? "no-firm"}'), "the practice page remounts on firmId");
