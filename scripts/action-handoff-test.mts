@@ -429,7 +429,10 @@ assert(activityHook.includes("ACTIVE_POLL_MS = 5000"), "home polls every 5 secon
 assert(activityHook.includes("dispatchActionPlanRefresh"), "the poll reloads notes when a run is open");
 assert(activityHook.includes("pollAfterTick"), "each tick decides from the fresh snapshot");
 assert(!activityHook.includes("wasActive"), "a finish does not clear the timer from stale render state");
-assert(clientPage.includes("useAgentActivity(clientId, awaitingRun)"), "accountant Home polls from open hand-offs");
+assert(
+  clientPage.includes('useAgentActivity(homeBootReady ? clientId : "", awaitingRun)'),
+  "accountant Home polls from open hand-offs after the boot select",
+);
 assert(door.includes("useAgentActivity(clientId ?? \"\", awaitingRun)"), "owner Home uses the same poll");
 assert(clientPage.includes("handoffRowStillWorking"), "an old hand-off with no run is not Working");
 assert(door.includes("handoffRowStillWorking"), "owner cards drop Working when the run never appears");

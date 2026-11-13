@@ -236,12 +236,6 @@ export const getQboStatus = createServerFn({ method: "POST" })
     const agedAp = readPayablesSnapshot(
       (cacheRows ?? []).find((row) => row.data_type === "aged_ap")?.raw_data,
     );
-    const { data: snapRows } = await admin
-      .from("client_financial_snapshots")
-      .select("source, created_at")
-      .eq("client_id", data.clientId)
-      .order("created_at", { ascending: false })
-      .limit(8);
     const attribution = ledgerAttribution({
       provider: "qbo",
       lastSyncedAt: conn.last_synced_at ?? null,
@@ -249,7 +243,6 @@ export const getQboStatus = createServerFn({ method: "POST" })
       financials,
       financialsUpdatedAt:
         (client as { financials_updated_at?: string | null }).financials_updated_at ?? null,
-      snapshots: snapRows ?? [],
       ownFromBlob: {
         periodLabel: proof.periodLabel,
         revenue: proof.revenue,

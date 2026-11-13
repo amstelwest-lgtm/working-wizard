@@ -340,12 +340,13 @@ import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { NoFiguresBanner } from "@/components/no-figures-banner";
 import {
+  isOptionalClientColumnError,
   loadAutoPopulateState,
   runAutoPopulate,
   runSyncAutoPopulate,
   type AutoPopulateState,
 } from "@/lib/auto-populate-run";
-import { defaultAutoPopulatePrefs, summariseAutoPopulate } from "@/lib/auto-populate";
+import { defaultAutoPopulatePrefs, isFirstUpload, parseAutoPopulatePrefs, summariseAutoPopulate } from "@/lib/auto-populate";
 import { autosaveKeepsLedgerSync } from "@/lib/ledger-sync-financials";
 import {
   UPLOAD_ACCEPT,
@@ -2800,11 +2801,15 @@ function Index() {
     };
   }, [actingClientId, navigate, user?.id, ownerBootAttempt]);
 
+  /** Set when the cashflow and financials selects for this client have settled. */
+  const [ownerBootReadyId, setOwnerBootReadyId] = useState<string | null>(null);
+
   useEffect(() => {
-    if (!effectiveClientId) {
-      setHistory([]);
+    if (!effectiveClientId || ownerBootReadyId !== effectiveClientId) {
+      if (!effectiveClientId) setHistory([]);
       return;
     }
+    let cancelled = false;
     supabase
       .from("client_financial_snapshots")
       .select("period_label, period_date, ratios, source, financials, created_at")
@@ -2812,9 +2817,12 @@ function Index() {
       .order("period_date", { ascending: true })
       .limit(24)
       .then(({ data }) => {
-        if (data) setHistory(data as never);
+        if (!cancelled && data) setHistory(data as never);
       });
-  }, [effectiveClientId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveClientId, ownerBootReadyId]);
 
   const [clientMeta, setClientMeta] = useState<{
     business_type: string | null;
@@ -2823,6 +2831,7 @@ function Index() {
     financials_updated_at?: string | null;
     last_forecast_at?: string | null;
     budget_updated_at?: string | null;
+    auto_update_prefs?: unknown;
     operating_profile?: ClientOperatingProfile | null;
     /** P1: a firm attached means the accountant seat signs off the advisory pack. */
     firm_id?: string | null;
@@ -2910,9 +2919,11 @@ function Index() {
   const actionPlanSignoff = reviewSignoffs.action_plan ?? null;
   const advisorySignoff = reviewSignoffs.advisory ?? null;
   useEffect(() => {
-    if (!effectiveClientId) {
-      setReviewSignoffs({});
-      setOwnerScoreHistory([]);
+    if (!effectiveClientId || ownerBootReadyId !== effectiveClientId) {
+      if (!effectiveClientId) {
+        setReviewSignoffs({});
+        setOwnerScoreHistory([]);
+      }
       return;
     }
     fetchReviewSignoffs({ data: { clientId: effectiveClientId } })
@@ -2941,13 +2952,14 @@ function Index() {
         );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveClientId]);
+  }, [effectiveClientId, ownerBootReadyId]);
   const hasRealFinancialsRef = useRef(hasRealFinancials);
   hasRealFinancialsRef.current = hasRealFinancials;
   const metaClientIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!effectiveClientId) {
       metaClientIdRef.current = null;
+      setOwnerBootReadyId(null);
       setClientMeta(null);
       setOnboardingGateReady(false);
       return;
@@ -2955,6 +2967,7 @@ function Index() {
     const previousClientId = metaClientIdRef.current;
     if (previousClientId !== effectiveClientId) {
       metaClientIdRef.current = effectiveClientId;
+      setOwnerBootReadyId(null);
       setClientMeta((current) => cashflowOnClientSwitch(current, previousClientId, effectiveClientId));
     }
     // Cashflow and financials start as soon as the client id is known.
@@ -2962,7 +2975,7 @@ function Index() {
     let cancelled = false;
     const loadMeta = async () => {
       const fullSelect =
-        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market, firm_id, is_demo";
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, auto_update_prefs, operating_profile, financial_year_start_month, market, firm_id, is_demo";
       const legacySelect =
         "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, firm_id, is_demo";
       const [full, finRead] = await beginOwnerClientReads(
@@ -3010,6 +3023,28 @@ function Index() {
         return;
       }
       let res = full.value;
+      if (res.error && isOptionalClientColumnError(res.error.message ?? "")) {
+        const withoutPrefs = await bootSelect(
+          (signal) =>
+            supabase
+              .from("clients")
+              .select(
+                "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market, firm_id, is_demo",
+              )
+              .eq("id", effectiveClientId)
+              .abortSignal(signal)
+              .maybeSingle(),
+          { critical: true },
+        );
+        if (!withoutPrefs.ok) {
+          if (!cancelled) {
+            setCriticalBootFailed(true);
+            setOnboardingGateReady(false);
+          }
+          return;
+        }
+        res = withoutPrefs.value;
+      }
       let marketColumnMissing = false;
       if (res.error && isMissingMarketSupport(res.error)) {
         marketColumnMissing = true;
@@ -3041,6 +3076,7 @@ function Index() {
           financials_updated_at: string | null;
           last_forecast_at: string | null;
           budget_updated_at: string | null;
+          auto_update_prefs?: unknown;
           operating_profile?: unknown;
           financial_year_start_month?: number | null;
           market?: unknown;
@@ -3057,6 +3093,7 @@ function Index() {
           setMarketNeedsGate(false);
           setWorkspaceMarket(parsedMarket ?? coerceMarketSelection(data?.market ?? null));
         }
+        if (!cancelled) setOwnerBootReadyId(effectiveClientId);
         setClientMeta(
           data
             ? {
@@ -3066,6 +3103,7 @@ function Index() {
                 financials_updated_at: data.financials_updated_at,
                 last_forecast_at: data.last_forecast_at,
                 budget_updated_at: data.budget_updated_at,
+                auto_update_prefs: data.auto_update_prefs,
                 operating_profile: profile,
                 firm_id: data.firm_id ?? null,
                 is_demo: Boolean(data.is_demo),
@@ -3548,8 +3586,12 @@ function Index() {
     }
   }, [effectiveClientId]);
   useEffect(() => {
-    void refreshAutoPopulateState();
-  }, [refreshAutoPopulateState]);
+    if (!effectiveClientId || ownerBootReadyId !== effectiveClientId) return;
+    setAutoPopulateState({
+      firstUpload: isFirstUpload(clientMeta),
+      prefs: parseAutoPopulatePrefs(clientMeta?.auto_update_prefs),
+    });
+  }, [effectiveClientId, ownerBootReadyId, clientMeta]);
   const applyAutoPopulateResult = useCallback(
     (r: Awaited<ReturnType<typeof runAutoPopulate>>) => {
       const now = new Date().toISOString();

@@ -221,22 +221,27 @@ function presentFindingDraft(
 export function booksSyncCopy(input: {
   quickBooks: BooksLink;
   xero: BooksLink;
+  /** Omitted means this caller does not track Sage. Unknown is not "none". */
+  sage?: BooksLink;
   when: (iso: string) => string;
   /** Statement dates already on the client. Same sentence as the accountant Home. */
   statementSpan?: string | null;
 }): { heading: string; lines: string[] } {
   const statements = homeStatementsLine(input.statementSpan);
   if (statements) return { heading: "Books", lines: [statements] };
+  const sage = input.sage ?? { state: "absent" as const };
   const linked = (
     [
       ["QuickBooks", input.quickBooks],
       ["Xero", input.xero],
+      ["Sage", sage],
     ] as const
-  ).filter((entry): entry is ["QuickBooks" | "Xero", { state: "linked"; at: string | null }] => {
+  ).filter((entry): entry is ["QuickBooks" | "Xero" | "Sage", { state: "linked"; at: string | null }] => {
     return entry[1].state === "linked";
   });
   if (linked.length === 0) {
-    const unknown = input.quickBooks.state === "unknown" || input.xero.state === "unknown";
+    const unknown =
+      input.quickBooks.state === "unknown" || input.xero.state === "unknown" || sage.state === "unknown";
     return unknown
       ? { heading: "Books", lines: ["Sync time isn't available yet."] }
       : { heading: "Books", lines: ["Books are not connected yet."] };
@@ -270,6 +275,7 @@ export function ownerNeedsView(input: {
   advisoryTitles: readonly string[];
   quickBooks: BooksLink;
   xero: BooksLink;
+  sage?: BooksLink;
   when: (iso: string) => string;
   /** One next action when the file has no evidence. Replaces "No open actions." */
   nextAction?: string | null;
@@ -360,6 +366,7 @@ export function ownerNeedsView(input: {
   const sync = booksSyncCopy({
     quickBooks: input.quickBooks,
     xero: input.xero,
+    sage: input.sage,
     when: input.when,
     statementSpan: input.statementSpan,
   });

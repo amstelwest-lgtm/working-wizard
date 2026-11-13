@@ -36,6 +36,7 @@ import {
   shouldReopenFirstDataAfterEmptyTour,
 } from "@/lib/onboarding";
 import {
+  isOptionalClientColumnError,
   loadAutoPopulateState,
   runAutoPopulate,
   runSyncAutoPopulate,
@@ -43,6 +44,8 @@ import {
 } from "@/lib/auto-populate-run";
 import {
   defaultAutoPopulatePrefs,
+  isFirstUpload,
+  parseAutoPopulatePrefs,
   prefsToRemember,
   summariseAutoPopulate,
   type AutoPopulatePrefs,
@@ -219,7 +222,11 @@ import { ConnectBooksHomeCard } from "@/components/connect-books-card";
 import { useSageComingSoon } from "@/lib/use-sage-coming-soon";
 import { SetupPartnerPanel } from "@/components/setup-partner-panel";
 import { useHomeLedgerConnect } from "@/components/use-home-ledger-connect";
-import { XERO_BANK_RECONNECT, connectBooksHomeVisible } from "@/lib/connect-books-copy";
+import {
+  XERO_BANK_RECONNECT,
+  homeLedgerChip,
+  homeLinesWhileLedgerPending,
+} from "@/lib/connect-books-copy";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { StatementArApTiles, statementArApMoney } from "@/components/statement-arap-fallback";
@@ -349,12 +356,12 @@ import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
 import { ownerPresence, steerOpenHandoffs, withCardHandoffRuns } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
+  assignmentsFromNotes,
   clearOptimisticHandoff,
   handoffPaintBlocked,
   HANDOFF_FAILED_COPY,
   loadActionHandoffRuns,
   loadActionNotes,
-  loadLatestAssignments,
   optimisticNoteHidden,
   readHandoffError,
   type ActionPlanRefreshDetail,
@@ -523,6 +530,9 @@ type Client = {
   firm_id?: string | null;
   is_demo?: boolean | null;
   budget?: unknown;
+  owner_user_id?: string | null;
+  auto_update_prefs?: unknown;
+  budget_updated_at?: string | null;
 };
 
 type ActiveTab =
@@ -836,6 +846,8 @@ function ClientView() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadTimedOut, setLoadTimedOut] = useState(false);
+  const homeBootReady =
+    Boolean(client?.id) && client?.id === clientId && !loading && !authLoading && !loadTimedOut;
   const [clientLoadAttempt, setClientLoadAttempt] = useState(0);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     () => resolveAccountantTab(search) ?? "overview",
@@ -1059,8 +1071,16 @@ function ClientView() {
     }
   }, [clientId]);
   useEffect(() => {
-    void refreshAutoPopulateState();
-  }, [refreshAutoPopulateState]);
+    if (!homeBootReady || !client) return;
+    setAutoPopulateState({
+      firstUpload: isFirstUpload({
+        financials_updated_at: client.financials_updated_at ?? null,
+        last_forecast_at: client.last_forecast_at ?? null,
+        budget_updated_at: client.budget_updated_at ?? null,
+      }),
+      prefs: parseAutoPopulatePrefs(client.auto_update_prefs),
+    });
+  }, [homeBootReady, client]);
   const applyAutoPopulateResult = useCallback(
     (r: Awaited<ReturnType<typeof runAutoPopulate>>) => {
       const now = new Date().toISOString();
@@ -1105,6 +1125,7 @@ function ClientView() {
   const [qboRefresh, setQboRefresh] = useState(0);
   const [sageRefresh, setSageRefresh] = useState(0);
   const [sageLink, setSageLink] = useState<SageStatus>(null);
+  const [sageChecked, setSageChecked] = useState(false);
   const fetchQboLink = useServerFn(getQboStatus);
   const fetchSageLink = useServerFn(getSageStatus);
   const [debtSchedule, setDebtSchedule] = useState<DebtSchedule>(emptyDebtSchedule());
@@ -1114,7 +1135,16 @@ function ClientView() {
   financialsRef.current = financials;
 
   useEffect(() => {
-    if (!clientId) return;
+    setXeroLink(null);
+    setQboLink(null);
+    setSageLink(null);
+    setXeroChecked(false);
+    setQboChecked(false);
+    setSageChecked(false);
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!homeBootReady || !clientId) return;
     let cancelled = false;
     void fetchXeroLink({ data: { clientId } })
       .then((status) => {
@@ -1132,12 +1162,12 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-    // fetchXeroLink identity is not stable; clientId + refresh token are the triggers.
+    // fetchXeroLink identity is not stable; the boot gate + refresh token are the triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, xeroRefresh]);
+  }, [homeBootReady, clientId, xeroRefresh]);
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!homeBootReady || !clientId) return;
     let cancelled = false;
     void fetchQboLink({ data: { clientId } })
       .then((status) => {
@@ -1155,26 +1185,32 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-    // fetchQboLink identity is not stable; clientId + refresh token are the triggers.
+    // fetchQboLink identity is not stable; the boot gate + refresh token are the triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, qboRefresh]);
+  }, [homeBootReady, clientId, qboRefresh]);
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!homeBootReady || !clientId) return;
     let cancelled = false;
     void fetchSageLink({ data: { clientId } })
       .then((status) => {
-        if (!cancelled) setSageLink(status);
+        if (!cancelled) {
+          setSageLink(status);
+          setSageChecked(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setSageLink(null);
+        if (!cancelled) {
+          setSageLink(null);
+          setSageChecked(true);
+        }
       });
     return () => {
       cancelled = true;
     };
-    // fetchSageLink identity is not stable; clientId + refresh token are the triggers.
+    // fetchSageLink identity is not stable; the boot gate + refresh token are the triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, sageRefresh]);
+  }, [homeBootReady, clientId, sageRefresh]);
   const debtScheduleRef = useRef(debtSchedule);
   debtScheduleRef.current = debtSchedule;
   const weeklyInputsRef = useRef(weeklyInputs);
@@ -2044,7 +2080,7 @@ function ClientView() {
   }, []);
   const seenPlanClient = useRef<string | null>(null);
   useEffect(() => {
-    if (!clientId) return;
+    if (!homeBootReady || !clientId) return;
     let cancelled = false;
     if (seenPlanClient.current !== clientId) {
       seenPlanClient.current = clientId;
@@ -2103,9 +2139,10 @@ function ClientView() {
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
       const ids = rows.flatMap((row) => (row.id && row.title?.trim() ? [row.id] : []));
-      const [assignments, runs, noteLog] = ids.length
-        ? await Promise.all([loadLatestAssignments(ids), loadActionHandoffRuns(ids), loadActionNotes(ids)])
-        : [new Map(), new Map(), new Map()];
+      const [noteLog, runs] = ids.length
+        ? await Promise.all([loadActionNotes(ids), loadActionHandoffRuns(ids)])
+        : [new Map(), new Map()];
+      const assignments = assignmentsFromNotes(noteLog);
       if (cancelled) return;
       const pendings = [...pendingHandoffs.current.values()].filter(
         (pending) => pending.assigneeName && !handoffPaintBlocked(pending.actionItemId, pending.since),
@@ -2219,7 +2256,7 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [clientId, openPlanTick]);
+  }, [clientId, openPlanTick, homeBootReady]);
   const [generationTrialOpen, setGenerationTrialOpen] = useState(false);
   useEffect(() => {
     const onTrialEnded = () => setGenerationTrialOpen(true);
@@ -2331,7 +2368,7 @@ function ClientView() {
             supabase
               .from("clients")
               .select(
-                "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id, is_demo, budget",
+                "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, budget_updated_at, reports_issued_count, cashflow, market, firm_id, is_demo, budget, owner_user_id, auto_update_prefs",
               )
               .eq("id", clientId)
               .abortSignal(signal)
@@ -2343,7 +2380,28 @@ function ClientView() {
           if (!cancelled) setLoadTimedOut(true);
           return;
         }
-        const { data, error } = first.value;
+        let { data, error } = first.value;
+        if (error && isOptionalClientColumnError(error.message ?? "")) {
+          const again = await bootSelect(
+            (signal) =>
+              supabase
+                .from("clients")
+                .select(
+                  "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, budget_updated_at, reports_issued_count, cashflow, market, firm_id, is_demo, budget, owner_user_id",
+                )
+                .eq("id", clientId)
+                .abortSignal(signal)
+                .maybeSingle(),
+            { critical: true },
+          );
+          if (!again.ok) {
+            gaveUp = true;
+            if (!cancelled) setLoadTimedOut(true);
+            return;
+          }
+          data = again.value.data;
+          error = again.value.error;
+        }
 
         if (error) {
           const msg = error.message ?? "";
@@ -2452,12 +2510,18 @@ function ClientView() {
   }, [clientId, clientLoadAttempt, sessionUserId, authLoading]);
 
   useEffect(() => {
-    if (!client?.id) return;
+    if (!homeBootReady || !client?.id || !xeroChecked || !qboChecked || !sageChecked) return;
     let cancelled = false;
+    const ledgerNames = new Map<string, string[]>();
+    const namesForClient = [xeroLink?.tenantName, qboLink?.companyName, sageLink?.companyName].filter(
+      (name): name is string => Boolean(name && name.trim()),
+    );
+    ledgerNames.set(client.id, namesForClient);
     void loadClientDisplayNames(
       supabase as never,
-      [{ id: client.id, name: client.name, financials: client.financials }],
+      [{ id: client.id, name: client.name, financials: client.financials, owner_user_id: client.owner_user_id }],
       greetingSource,
+      ledgerNames,
     ).then((names) => {
       if (cancelled) return;
       const next = names.get(client.id);
@@ -2469,11 +2533,12 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [client?.id, client?.name, client?.financials, greetingSource]);
+  }, [homeBootReady, client, greetingSource, xeroChecked, qboChecked, sageChecked, xeroLink, qboLink, sageLink]);
 
-  // Load financial snapshots for variance / prior period
+  // One snapshot read, after the card line. Not again when financials_updated_at lands.
   useEffect(() => {
-    if (!clientId) return;
+    if (!homeBootReady || !clientId) return;
+    let cancelled = false;
     supabase
       .from("client_financial_snapshots")
       .select("id, period_label, period_date, financials, ratios, source, created_at")
@@ -2481,6 +2546,7 @@ function ClientView() {
       .order("period_date", { ascending: false })
       .limit(24)
       .then(({ data }) => {
+        if (cancelled) return;
         setSnapshots(
           (data ?? []).map((s) => ({
             id: s.id as string,
@@ -2500,7 +2566,7 @@ function ClientView() {
       .order("period_date", { ascending: false })
       .limit(24)
       .then(({ data, error }) => {
-        if (error) return;
+        if (cancelled || error) return;
         setScoreHistory(
           (data ?? []).map((row) => ({
             period_date: row.period_date,
@@ -2508,11 +2574,14 @@ function ClientView() {
           })),
         );
       });
-  }, [clientId, client?.financials_updated_at]);
+    return () => {
+      cancelled = true;
+    };
+  }, [homeBootReady, clientId]);
 
   useEffect(() => {
-    if (!clientId) {
-      setOpenQueriesCount(0);
+    if (!homeBootReady || !clientId) {
+      if (!clientId) setOpenQueriesCount(0);
       return;
     }
     let cancelled = false;
@@ -2522,10 +2591,10 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [clientId, activeTab, queriesRefresh]);
+  }, [homeBootReady, clientId, activeTab, queriesRefresh]);
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!homeBootReady || !clientId) return;
     let cancelled = false;
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
@@ -2540,11 +2609,11 @@ function ClientView() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, activeTab, cashForecastReloadToken]);
+  }, [homeBootReady, clientId, activeTab, cashForecastReloadToken]);
 
   useEffect(() => {
-    if (!clientId) {
-      setCashSignedSnapshot(null);
+    if (!homeBootReady || !clientId) {
+      if (!clientId) setCashSignedSnapshot(null);
       return;
     }
     let cancelled = false;
@@ -2573,7 +2642,7 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [clientId, cashForecastReloadToken, cashForecastSignoff?.signed_off_at]);
+  }, [homeBootReady, clientId, cashForecastReloadToken, cashForecastSignoff?.signed_off_at]);
 
   // ── Impersonation exit ────────────────────────────────────────────────────
 
@@ -3587,7 +3656,7 @@ function ClientView() {
   );
 
   const awaitingRun = assignmentRows.filter((row) => row.open).map((row) => ({ openedAt: row.openedAt }));
-  const homeActivity = useAgentActivity(clientId, awaitingRun);
+  const homeActivity = useAgentActivity(homeBootReady ? clientId : "", awaitingRun);
   const settledRows = useMemo(
     () =>
       applyLiveRuns(
@@ -3830,6 +3899,13 @@ function ClientView() {
     () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null, openActionAgent, handedTitle),
     [homeBooks, strategicMoves, openActionAgent, handedTitle],
   );
+  const ledgerChip = homeLedgerChip({
+    known: xeroChecked && qboChecked && sageChecked,
+    xero: xeroLink,
+    qbo: qboLink,
+    sage: sageLink,
+  });
+  const shownHomeLines = homeLinesWhileLedgerPending(homeLines, ledgerChip.pending);
   useEffect(() => {
     markClientReload();
   }, []);
@@ -4033,8 +4109,8 @@ function ClientView() {
     () => homeWorkLog({ handoffs: shownHandoffs, findings: homeActivity.findings }),
     [shownHandoffs, homeActivity.findings],
   );
-  const homeBooksMissing = connectBooksHomeVisible({ xero: xeroLink, qbo: qboLink, sage: sageLink });
-  const homeLedger = qboLink ? "QuickBooks" : xeroLink ? "Xero" : sageLink ? "Sage" : null;
+  const homeBooksMissing = ledgerChip.booksMissing;
+  const homeLedger = ledgerChip.ledger;
   const homePlanMore =
     openPlanOverdue > 0 ||
     (openPlanTitles?.length ?? 0) > homeBrief.actions.filter((action) => action.button === "hand").length;
@@ -4087,7 +4163,9 @@ function ClientView() {
   });
   useEffect(() => {
     if (homePhase !== "ready") return;
-    markClientCardText(homeLines.financial_manager.find((row) => row.trim().length > 0) ?? "");
+    const line = homeLines.financial_manager.find((row) => row.trim().length > 0) ?? "";
+    if (line.startsWith("Checking this client's books.")) return;
+    markClientCardText(line);
   }, [homePhase, homeLines]);
   if (homePhase === "loading" || homePhase === "error") {
     return (
@@ -4301,7 +4379,7 @@ function ClientView() {
                     firmId={client.firm_id ?? null}
                     notice={statementSampleImplausible(financials) ? implausibleSampleNote(clientMarket) : null}
                     presence={homePresence}
-                    lines={homeLines}
+                    lines={shownHomeLines}
                     status={homeStatus}
                     onOpen={openHomeAgent}
                     onAsk={openHomeAgent}
@@ -4341,6 +4419,7 @@ function ClientView() {
                       books: (
                         <HomeBooks
                           ledger={homeLedger}
+                          pending={ledgerChip.pending}
                           syncLine={homeNeeds.syncLines[0] ?? null}
                           onManage={() => openHomeSection("portal", "connections")}
                           connect={
@@ -4535,6 +4614,7 @@ function ClientView() {
                         onQboSyncComplete={onQboSyncComplete}
                         onSageSyncComplete={onSageSyncComplete}
                         onUpload={() => setUploadOpen(true)}
+                        ingestSnapshots={snapshots}
                         freshness={dataFreshness}
                         chip={healthChip}
                         openQueries={openQueriesCount}
@@ -4574,7 +4654,7 @@ function ClientView() {
                       canonicalRatios={canonicalRatios}
                       homeFinding={
                         homeAgent && !isTaxAgent(homeAgent)
-                          ? homeLines[homeAgent].filter((line) => line.trim()).join(" ")
+                          ? shownHomeLines[homeAgent].filter((line) => line.trim()).join(" ")
                           : null
                       }
                       onSelectAgent={openHomeAgent}
@@ -6147,6 +6227,7 @@ function ClientView() {
                 clientId={clientId}
                 returnPath={`/clients/${clientId}`}
                 refreshToken={qboRefresh}
+                ingestSnapshots={snapshots}
                 onSyncComplete={(inputs) => {
                   onQboSyncComplete(inputs);
                   setShowQboDialog(false);
@@ -6193,6 +6274,7 @@ function ClientView() {
                 clientId={clientId}
                 returnPath={`/clients/${clientId}`}
                 refreshToken={xeroRefresh}
+                ingestSnapshots={snapshots}
                 onSyncComplete={(inputs) => {
                   onXeroSyncComplete(inputs);
                   setShowXeroDialog(false);

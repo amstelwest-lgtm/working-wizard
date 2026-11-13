@@ -163,6 +163,26 @@ function hasSyncTimestamp(iso: string | null | undefined): iso is string {
   return Boolean(iso) && Number.isFinite(Date.parse(iso as string));
 }
 
+/**
+ * Connections still shows when the overview snapshot was written.
+ * The status handler no longer reads that table. The one browser read
+ * supplies these rows.
+ */
+export function applyIngestStamp(
+  board: BoardFigures | null,
+  snapshots: readonly IngestSnapshotRow[] | null | undefined,
+): BoardFigures | null {
+  if (!board) return board;
+  const ingest = pickIngestSnapshot(snapshots, board.source);
+  const created = ingest?.created_at ?? null;
+  if (!hasSyncTimestamp(created)) return board;
+  const current = hasSyncTimestamp(board.savedAt) ? Date.parse(board.savedAt) : 0;
+  const savedAt = Date.parse(created) > current ? created : board.savedAt;
+  const source = board.source || ingest?.source?.trim() || null;
+  if (savedAt === board.savedAt && source === board.source) return board;
+  return { ...board, savedAt, source };
+}
+
 /** Newest snapshot that matches the live statement source, else the newest row. */
 export function pickIngestSnapshot<T extends { source?: string | null }>(
   rows: readonly T[] | null | undefined,

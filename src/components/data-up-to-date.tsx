@@ -23,6 +23,7 @@ import {
 } from "@/lib/books-answer";
 import { dataSectionStatus, isOpenDataRequest, type DataRequestKind } from "@/lib/data-requests";
 import { listDataRequests } from "@/lib/data-requests.functions";
+import type { IngestSnapshotRow } from "@/lib/ledger-link-copy";
 import type { SyncResult } from "@/lib/qbo.functions";
 import type { XeroSyncResult } from "@/lib/xero.functions";
 
@@ -48,6 +49,8 @@ type Props = {
    * and does not invent a request.
    */
   fixtureOpenKinds?: readonly DataRequestKind[];
+  /** Snapshot rows already read for the client. Stamps the ledger cards. */
+  ingestSnapshots?: readonly IngestSnapshotRow[];
   children?: ReactNode;
 };
 
@@ -67,6 +70,7 @@ export function DataUpToDate({
   openQueries = 0,
   onOpenQueries,
   fixtureOpenKinds,
+  ingestSnapshots,
   children,
 }: Props) {
   const list = useServerFn(listDataRequests);
@@ -116,12 +120,14 @@ export function DataUpToDate({
           returnPath={returnPath}
           refreshToken={xeroRefresh}
           onSyncComplete={onXeroSyncComplete}
+          ingestSnapshots={ingestSnapshots}
         />
         <QboConnectCard
           clientId={clientId}
           returnPath={returnPath}
           refreshToken={qboRefresh}
           onSyncComplete={onQboSyncComplete}
+          ingestSnapshots={ingestSnapshots}
         />
         <SageConnectCard
           clientId={clientId}

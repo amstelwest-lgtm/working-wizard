@@ -884,17 +884,23 @@ export async function loadClientMoveAssignments(clientId: string): Promise<MoveA
   }
 }
 
+/** One notes read, split into the assignment and the log. */
+export function assignmentsFromNotes(
+  notes: ReadonlyMap<string, AssignmentNote[]>,
+): Map<string, StoredAssignment> {
+  const out = new Map<string, StoredAssignment>();
+  for (const [id, list] of notes) {
+    const stored = latestStoredAssignment(list);
+    if (stored) out.set(id, stored);
+  }
+  return out;
+}
+
 /** Newest bot or person assignment per action. Other notes stay in the log and do not hide it. */
 export async function loadLatestAssignments(
   actionIds: string[],
 ): Promise<Map<string, StoredAssignment>> {
-  const out = new Map<string, StoredAssignment>();
-  const grouped = await loadAssignmentNotes(actionIds);
-  for (const [id, notes] of grouped) {
-    const stored = latestStoredAssignment(notes);
-    if (stored) out.set(id, stored);
-  }
-  return out;
+  return assignmentsFromNotes(await loadAssignmentNotes(actionIds));
 }
 
 /** Newest "Handed to …" note per action, when a later person assignment has not replaced it. */

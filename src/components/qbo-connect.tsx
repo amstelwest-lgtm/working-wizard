@@ -14,7 +14,7 @@ import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-re
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { statementSpanLabel, yearToDateTitle } from "@/lib/statement-period";
 import { useMarketFormat } from "@/contexts/market";
-import { describeLedgerLink } from "@/lib/ledger-link-copy";
+import { applyIngestStamp, describeLedgerLink, type IngestSnapshotRow } from "@/lib/ledger-link-copy";
 import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
 import type { MoneyMarket } from "@/lib/market/format";
 import { CONNECTION_NOT_CONNECTED } from "@/lib/connection-status-deadline";
@@ -31,6 +31,8 @@ type Props = {
   /** Statement figures Collections uses. Empty aged pulls must not hide them. */
   financials?: Record<string, unknown> | null;
   market?: MoneyMarket;
+  /** The one post-card snapshot read. Stamps the overview line. */
+  ingestSnapshots?: readonly IngestSnapshotRow[];
 };
 
 function fmtExact(n: number | null) {
@@ -45,6 +47,7 @@ export function QboConnectCard({
   onSyncComplete,
   financials,
   market,
+  ingestSnapshots,
 }: Props) {
   const { dateTime, market: contextMarket } = useMarketFormat();
   const dateMarket = market ?? contextMarket;
@@ -177,7 +180,7 @@ export function QboConnectCard({
           : status.syncFigures
             ? { ...status.syncFigures, periodLabel, ytdPeriodLabel }
             : null,
-        board: status.boardFigures,
+        board: applyIngestStamp(status.boardFigures, ingestSnapshots),
       },
       dateTime,
     );
