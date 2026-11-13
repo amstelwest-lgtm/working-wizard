@@ -45,7 +45,7 @@ export type OwnerTile = {
 
 export type OwnerBooks = {
   hasBooks: boolean;
-  ledger: "QuickBooks" | "Xero" | null;
+  ledger: "QuickBooks" | "Xero" | "Sage" | null;
   revenue: number | null;
   priorRevenue: number | null;
   cogs: number | null;

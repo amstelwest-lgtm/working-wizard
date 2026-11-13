@@ -168,12 +168,32 @@ function hasSyncTimestamp(iso: string | null | undefined): iso is string {
  * The status handler no longer reads that table. The one browser read
  * supplies these rows.
  */
+/** Latest created_at for this source. Array order is period_date and is not the stamp. */
+function newestIngestByCreatedAt(
+  snapshots: readonly IngestSnapshotRow[] | null | undefined,
+  source: string | null,
+): IngestSnapshotRow | null {
+  const list = snapshots ?? [];
+  const pool = source ? list.filter((row) => row.source === source) : list;
+  let best: IngestSnapshotRow | null = null;
+  let bestAt = Number.NEGATIVE_INFINITY;
+  for (const row of pool) {
+    if (!hasSyncTimestamp(row.created_at)) continue;
+    const at = Date.parse(row.created_at);
+    if (at >= bestAt) {
+      best = row;
+      bestAt = at;
+    }
+  }
+  return best;
+}
+
 export function applyIngestStamp(
   board: BoardFigures | null,
   snapshots: readonly IngestSnapshotRow[] | null | undefined,
 ): BoardFigures | null {
   if (!board) return board;
-  const ingest = pickIngestSnapshot(snapshots, board.source);
+  const ingest = newestIngestByCreatedAt(snapshots, board.source);
   const created = ingest?.created_at ?? null;
   if (!hasSyncTimestamp(created)) return board;
   const current = hasSyncTimestamp(board.savedAt) ? Date.parse(board.savedAt) : 0;

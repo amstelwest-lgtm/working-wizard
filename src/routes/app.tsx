@@ -2953,6 +2953,11 @@ function Index() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveClientId, ownerBootReadyId]);
+  useEffect(() => {
+    setHistory([]);
+    setOwnerScoreHistory([]);
+    setReviewSignoffs({});
+  }, [effectiveClientId]);
   const hasRealFinancialsRef = useRef(hasRealFinancials);
   hasRealFinancialsRef.current = hasRealFinancials;
   const metaClientIdRef = useRef<string | null>(null);
@@ -4700,6 +4705,7 @@ function Index() {
                   });
                 }}
                 clientId={effectiveClientId}
+                bootReady={ownerBootReadyId === effectiveClientId}
                 businessName={
                   actingClientName ??
                   ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ??
