@@ -15,6 +15,7 @@ export function FirmBillingGateView({
   notice = false,
   onRetry,
   clientCount = null,
+  introTrialEligible = false,
   children,
 }: {
   surface: "content" | "error" | "wall" | "skeleton";
@@ -22,6 +23,8 @@ export function FirmBillingGateView({
   onRetry?: () => void;
   /** Clients already on the firm. The trial sentence uses the same count as the billing wall. */
   clientCount?: number | null;
+  /** Start trial is offered only when this firm can still begin the intro trial. */
+  introTrialEligible?: boolean;
   children?: ReactNode;
 }) {
   if (surface === "error") {
@@ -61,13 +64,15 @@ export function FirmBillingGateView({
           The last plan check says this firm is unpaid. Billing stays required.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <a
-            href={billingStartPath(firmSignupCheckoutIntent())}
-            className="inline-flex h-10 items-center rounded-full bg-[#0B5FFF] px-4 text-xs font-bold uppercase tracking-wider text-white"
-            data-billing-action="trial"
-          >
-            {FIRM_WALL_START_LABEL}
-          </a>
+          {introTrialEligible ? (
+            <a
+              href={billingStartPath(firmSignupCheckoutIntent())}
+              className="inline-flex h-10 items-center rounded-full bg-[#0B5FFF] px-4 text-xs font-bold uppercase tracking-wider text-white"
+              data-billing-action="trial"
+            >
+              {FIRM_WALL_START_LABEL}
+            </a>
+          ) : null}
           <Link
             to="/billing/required"
             className="inline-flex h-10 items-center px-4 text-sm underline"

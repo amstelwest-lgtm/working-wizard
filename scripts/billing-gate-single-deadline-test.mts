@@ -635,16 +635,44 @@ await check("(setup) a not-entitled fresh firm shows the wall, not the skeleton"
   setFirmBillingGateCheckForTests(async () => ({
     entitled: false,
     reason: "no_active_subscription",
+    introTrialEligible: true,
   }));
   try {
     await router.navigate({ to: "/practice/setup" });
     await mountGate();
     await flush();
-    const surface = settledSurface(html());
+    const body = html();
+    const surface = settledSurface(body);
     assert(surface === "wall", `an unpaid firm on setup shows the plan wall, saw ${surface}`);
-    assert(html().includes("Start trial"), "the wall has the trial call to action");
-    assert(!html().includes("Loading dashboard"), "the wall is not the dashboard skeleton");
+    assert(body.includes("Start trial"), "an eligible firm sees Start trial");
+    assert(body.includes("Continue to billing"), "Continue to billing stays beside Start trial");
+    assert(!body.includes("Loading dashboard"), "the wall is not the dashboard skeleton");
     assert(router.state.location.pathname === "/practice/setup", "setup stays on its route");
+  } finally {
+    await unmountGate();
+    setFirmBillingGateCheckForTests(null);
+    clearCachedFirmEntitlement();
+    await router.navigate({ to: "/clients/$clientId", params: { clientId: "second-file" } });
+  }
+});
+
+await check("(setup) an unpaid firm that cannot start a trial has no Start trial", async () => {
+  clearCachedFirmEntitlement();
+  setBillingDeadlineClientGate({ firmClientCount: 2, firstClientId: "first-client" });
+  setFirmBillingGateCheckForTests(async () => ({
+    entitled: false,
+    reason: "no_active_subscription",
+    introTrialEligible: false,
+  }));
+  try {
+    await router.navigate({ to: "/practice/setup" });
+    await mountGate();
+    await flush();
+    const body = html();
+    assert(settledSurface(body) === "wall", "an ineligible unpaid firm still shows the wall");
+    assert(body.includes("Continue to billing"), "Continue to billing stays on the wall");
+    assert(!body.includes("Start trial"), "Start trial is hidden when the intro trial is not available");
+    assert(!body.includes("Loading dashboard"), "the ineligible wall is not the skeleton");
   } finally {
     await unmountGate();
     setFirmBillingGateCheckForTests(null);

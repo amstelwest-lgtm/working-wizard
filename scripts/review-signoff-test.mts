@@ -4,6 +4,8 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   REVIEW_SCOPES,
   indexReviewSignoffs,
@@ -16,6 +18,7 @@ import {
   computeIsStale,
   SIGNOFF_GOLD_BTN,
   SCOPE_SHORT_LABEL,
+  SignoffReserveButton,
   signatureReady,
 } from "../src/components/review-signoff";
 
@@ -29,6 +32,26 @@ assert(REVIEW_SCOPES.includes("action_plan"), "action plan has its own scope");
 assert(REVIEW_SCOPES.includes("advisory"), "advisory has its own scope");
 assert(new Set(REVIEW_SCOPES).size === REVIEW_SCOPES.length, "scopes are unique");
 assert(SCOPE_SHORT_LABEL.profitability === "profitability", "profit label");
+
+const loadingButton = renderToStaticMarkup(
+  createElement(SignoffReserveButton, { label: "Sign off cash forecast", disabled: true }),
+);
+assert(loadingButton.includes("<button"), "the sign-off button exists while its state is loading");
+assert(loadingButton.includes("disabled"), "the loading sign-off button is disabled");
+assert(loadingButton.includes("Sign off cash forecast"), "the loading button uses the full cash label");
+const enabledButton = renderToStaticMarkup(
+  createElement(SignoffReserveButton, { label: "Sign off cash forecast", disabled: false }),
+);
+assert(!enabledButton.includes("disabled"), "the same button enables after the sign-off state loads");
+const cashPanel = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
+assert(
+  cashPanel.includes("locked={!canSign || readOnly}"),
+  "owner and accountant cash both reserve the sign-off button",
+);
+assert(
+  (cashPanel.match(/locked=\{!canSign \|\| readOnly\}/g) ?? []).length === 2,
+  "the paged row and the owner strip both reserve it",
+);
 
 const rows: ClientReviewSignoff[] = [
   {

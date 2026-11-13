@@ -53,6 +53,7 @@ type EntitlementResult = {
   entitled: boolean;
   reason?: string;
   checkFailed?: BillingCheckFailureKind;
+  introTrialEligible?: boolean;
 };
 
 type GateSnap = {
@@ -185,6 +186,7 @@ export function AuthGate() {
   const [billingDeadlinePassed, setBillingDeadlinePassed] = useState(false);
   const [checkNotice, setCheckNotice] = useState(false);
   const [showWall, setShowWall] = useState(false);
+  const [wallTrialEligible, setWallTrialEligible] = useState(false);
   const [clientGate, setClientGate] = useState<FirmClientGateContext | null>(null);
   const [gateAttempt, setGateAttempt] = useState(0);
   // One 8s clock from the moment this gate mounts. It does not wait for the
@@ -234,6 +236,7 @@ export function AuthGate() {
     clientGateRef.current = null;
     settledRef.current = null;
     setBillingDeadlinePassed(false);
+    setWallTrialEligible(false);
     setFirmEntitled(null);
     setBillingUnknown(false);
     setCheckNotice(false);
@@ -329,7 +332,8 @@ export function AuthGate() {
     const attemptFirmId = startFirmId;
     settledRef.current = null;
     setClientGate(null);
-    setBillingDeadlinePassed(false);
+    // A deadline that already fired stays up until this check settles.
+    // Clearing it here, after the mount timer has run, left no clock to re-arm.
 
     const knownKind = () => {
       const known = lastKnownEntitlementForFirm(userId, latest.current.firmId);
@@ -528,6 +532,7 @@ export function AuthGate() {
         setFirmEntitled(false);
         const setupPath = (latest.current.pathname.split(/[?#]/, 1)[0] ?? "").replace(/\/$/, "") || "/";
         if (setupPath === "/practice/setup") {
+          setWallTrialEligible(result.introTrialEligible === true);
           setShowWall(true);
           return;
         }
@@ -625,6 +630,7 @@ export function AuthGate() {
       <FirmBillingGateView
         surface="wall"
         clientCount={clientGate?.firmClientCount ?? null}
+        introTrialEligible={wallTrialEligible}
       />
     );
   }

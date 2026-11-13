@@ -2666,7 +2666,7 @@ export function CashForecastPanel({
       </div>
       <div className="answer-strip__actions">
         <div data-cash-signoff-slot="" style={{ minHeight: 40 }}>
-          {canSign && clientId ? (
+          {clientId ? (
             <ReviewSignoffButton
               hideStatus
               clientId={clientId}
@@ -2675,6 +2675,7 @@ export function CashForecastPanel({
               signoff={forecastSignoff}
               isStale={forecastStale}
               onChange={patchForecastSignoff}
+              locked={!canSign || readOnly}
             />
           ) : null}
         </div>
@@ -3637,7 +3638,7 @@ export function CashForecastPanel({
               </button>
             ) : null}
             <div data-cash-signoff-slot="" style={{ minHeight: 40 }}>
-              {canSign && clientId ? (
+              {clientId ? (
                 <ReviewSignoffButton
                   hideStatus
                   clientId={clientId}
@@ -3646,6 +3647,7 @@ export function CashForecastPanel({
                   signoff={forecastSignoff}
                   isStale={forecastStale}
                   onChange={patchForecastSignoff}
+                  locked={!canSign || readOnly}
                 />
               ) : null}
             </div>

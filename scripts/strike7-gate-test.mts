@@ -118,7 +118,7 @@ const { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterP
   await import("@tanstack/react-router");
 const { AuthGate, setFirmBillingGateCheckForTests } = await import("../src/routes/_authenticated.gate.tsx");
 const { clearCachedFirmEntitlement } = await import("../src/lib/firm-entitlement-client.ts");
-const { setStrike7FirmPick } = await import("@/contexts/accountant-profile");
+const { setStrike7FirmDelay, setStrike7FirmPick } = await import("@/contexts/accountant-profile");
 
 async function fire(fn: () => void) {
   await act(async () => {
@@ -258,5 +258,27 @@ assert(
 
 setFirmBillingGateCheckForTests(null);
 clearCachedFirmEntitlement();
+
+setStrike7FirmDelay(9_000);
+setStrike7FirmPick("my-practice");
+setFirmBillingGateCheckForTests(() => new Promise(() => {}));
+warns.length = 0;
+await mountGate();
+await advance(8_000);
+assert(
+  html().includes("Couldn't check billing"),
+  "the mount timer shows Retry before the firm row arrives",
+);
+await advance(1_000);
+await advance(50);
+assert(
+  html().includes("Couldn't check billing") && !html().includes("Loading dashboard"),
+  "a firm row that arrives after the deadline must not drop Retry for the skeleton",
+);
+await unmountGate();
+setStrike7FirmDelay(50);
+setFirmBillingGateCheckForTests(null);
+clearCachedFirmEntitlement();
+
 console.warn = originalWarn;
 console.log("strike7 gate ok");
