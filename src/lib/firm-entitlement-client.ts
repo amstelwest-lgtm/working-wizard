@@ -12,6 +12,11 @@ export type CachedFirmEntitlement = {
   entitled: boolean;
   reason?: string;
   checkFailed?: "timeout" | "network" | "http_5xx";
+  /**
+   * Whether this firm can still start the intro trial. Kept on a cache hit
+   * so the wall does not drop Start trial after the first read.
+   */
+  introTrialEligible?: boolean;
   /** Present when this read also carried the plan line. A later open reuses it. */
   plan?: {
     configured?: boolean;
@@ -202,6 +207,9 @@ export function noteFirmEntitlement(
     value: {
       entitled: value.entitled === true,
       reason: value.reason,
+      ...(typeof value.introTrialEligible === "boolean"
+        ? { introTrialEligible: value.introTrialEligible }
+        : {}),
       plan: value.plan,
       allowance: value.allowance,
     },

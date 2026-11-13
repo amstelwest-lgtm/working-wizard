@@ -58,6 +58,22 @@ export function signoffActionLabel(scope: ReviewScope, verbOnly = false, stale =
   return verbOnly ? verb : `${verb} ${SCOPE_SHORT_LABEL[scope]}`;
 }
 
+/** The live control. Enabled, and the same label the reserve holds while loading. */
+export function SignoffActionButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} className={SIGNOFF_GOLD_BTN} data-signoff-action="">
+      <PenLine className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+}
+
 /** Same button, disabled, so the row width is taken before the sign-off read returns. */
 export function SignoffReserveButton({
   label,
@@ -552,7 +568,7 @@ export function ReviewSignoffButton({
   if (!workflowLoaded || locked) {
     return (
       <div className={frame}>
-        <SignoffReserveButton label={signoffActionLabel(scope, verbOnly, false)} disabled />
+        <SignoffReserveButton label={actionLabel} disabled />
       </div>
     );
   }
@@ -625,10 +641,7 @@ export function ReviewSignoffButton({
           <div className="flex flex-wrap justify-end gap-2">
             {workflow == null ||
             (canSignOff && (cycleStatus === "draft" || cycleStatus === "ready_for_review")) ? (
-              <button type="button" onClick={() => setOpen(true)} className={SIGNOFF_GOLD_BTN}>
-                <PenLine className="h-3.5 w-3.5" />
-                {actionLabel}
-              </button>
+              <SignoffActionButton label={actionLabel} onClick={() => setOpen(true)} />
             ) : null}
             {workflow && canSubmit && !canSignOff && cycleStatus === "draft" ? (
               <Button

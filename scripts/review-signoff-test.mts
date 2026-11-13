@@ -18,7 +18,9 @@ import {
   computeIsStale,
   SIGNOFF_GOLD_BTN,
   SCOPE_SHORT_LABEL,
+  SignoffActionButton,
   SignoffReserveButton,
+  signoffActionLabel,
   signatureReady,
 } from "../src/components/review-signoff";
 
@@ -39,10 +41,23 @@ const loadingButton = renderToStaticMarkup(
 assert(loadingButton.includes("<button"), "the sign-off button exists while its state is loading");
 assert(loadingButton.includes("disabled"), "the loading sign-off button is disabled");
 assert(loadingButton.includes("Sign off cash forecast"), "the loading button uses the full cash label");
-const enabledButton = renderToStaticMarkup(
-  createElement(SignoffReserveButton, { label: "Sign off cash forecast", disabled: false }),
+const liveButton = renderToStaticMarkup(
+  createElement(SignoffActionButton, { label: "Sign off cash forecast", onClick: () => undefined }),
 );
-assert(!enabledButton.includes("disabled"), "the same button enables after the sign-off state loads");
+assert(liveButton.includes("<button"), "the live sign-off control is a button");
+assert(liveButton.includes('data-signoff-action=""') || liveButton.includes("data-signoff-action"), "the live control is the action, not the reserve");
+assert(!liveButton.includes("disabled"), "the live sign-off control is enabled");
+assert(liveButton.includes("Sign off cash forecast"), "the live control uses the cash label");
+const staleLabel = signoffActionLabel("cash_forecast", false, true);
+assert(staleLabel === "Re-sign off cash forecast", staleLabel);
+const staleReserve = renderToStaticMarkup(
+  createElement(SignoffReserveButton, { label: staleLabel, disabled: true }),
+);
+assert(staleReserve.includes("Re-sign off cash forecast"), "a stale forecast reserves the re-sign label");
+assert(staleReserve.includes("disabled"), "the stale reserve stays disabled until the read returns");
+const signoffUi = readFileSync(resolve("src/components/review-signoff.tsx"), "utf8");
+assert(signoffUi.includes("<SignoffReserveButton label={actionLabel} disabled />"), "the reserve uses the live label, including re-sign");
+assert(signoffUi.includes("<SignoffActionButton"), "the loaded control is the live button");
 const cashPanel = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
 assert(
   cashPanel.includes("locked={!canSign || readOnly}"),
