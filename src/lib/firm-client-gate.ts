@@ -21,13 +21,15 @@ export type FirstFirmClient = {
  * Oldest firm client. That file stays open before a card, so the billing
  * wall can offer a way back to it. A failed read returns null.
  */
-export async function loadFirstFirmClient(): Promise<FirstFirmClient | null> {
+export async function loadFirstFirmClient(firmId: string | null | undefined): Promise<FirstFirmClient | null> {
+  const id = firmId?.trim() ?? "";
+  if (!id) return null;
   try {
     const { data, error } = await onlyActiveClients(
       supabase
         .from("clients")
         .select("id, name")
-        .not("firm_id", "is", null)
+        .eq("firm_id", id)
         .order("created_at", { ascending: true })
         .limit(1),
     );
@@ -41,13 +43,17 @@ export async function loadFirstFirmClient(): Promise<FirstFirmClient | null> {
   }
 }
 
-export async function loadFirmClientGateContext(): Promise<FirmClientGateContext> {
+export async function loadFirmClientGateContext(
+  firmId: string | null | undefined,
+): Promise<FirmClientGateContext> {
+  const id = firmId?.trim() ?? "";
+  if (!id) return { firmClientCount: null, firstClientId: null };
   try {
     const { data, error } = await onlyActiveClients(
       supabase
         .from("clients")
         .select("id")
-        .not("firm_id", "is", null)
+        .eq("firm_id", id)
         .order("created_at", { ascending: true })
         .limit(2),
     );

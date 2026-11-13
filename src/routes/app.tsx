@@ -57,7 +57,7 @@ import {
   type MarketSelection,
 } from "@/lib/market";
 import { accountantWithoutFirm } from "@/lib/google-practice-market";
-import { listUserFirms } from "@/lib/firm-brand";
+import { listUserFirms, readActiveFirmId } from "@/lib/firm-brand";
 import { openOwnerSettings } from "@/lib/user-roles";
 import { HeaderShareButton } from "@/components/share";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
@@ -2520,19 +2520,20 @@ function Index() {
           return { ok: true, id: existingMem.value.data?.client_id ?? null };
         };
 
-        const storedClientId = readStoredOwnerClientId(u.user.id);
+        const ownerFirmId = readActiveFirmId(u.user.id) ?? "";
+        const storedClientId = readStoredOwnerClientId(u.user.id, ownerFirmId);
         const applyWorkspaces = (workspaces: OwnerWorkspace[], preferInvite?: string | null) => {
           const access = decideStoredClientAccess({
             storedClientId,
             workspaces,
           });
-          if (access.phase === "revoked") clearStoredOwnerClientId(u.user.id);
+          if (access.phase === "revoked") clearStoredOwnerClientId(u.user.id, ownerFirmId);
           const active = pickActiveOwnerWorkspace({
             workspaces,
             inviteClientId: preferInvite ?? inviteClientId,
             storedClientId: access.phase === "revoked" ? null : storedClientId,
           });
-          if (active) writeStoredOwnerClientId(u.user.id, active);
+          if (active) writeStoredOwnerClientId(u.user.id, ownerFirmId, active);
           if (!cancelled) {
             setOwnerWorkspaces(workspaces);
             setEffectiveClientId(active);
@@ -2643,7 +2644,7 @@ function Index() {
             storedClientId,
             workspaces: listed.workspaces,
           });
-          if (access.phase === "revoked") clearStoredOwnerClientId(u.user.id);
+          if (access.phase === "revoked") clearStoredOwnerClientId(u.user.id, ownerFirmId);
         }
 
         // 3. Process a pending invite stored after accept (UUID only — never the opaque token).
@@ -2778,7 +2779,7 @@ function Index() {
               );
             }
             if (clientId) {
-              writeStoredOwnerClientId(u.user.id, clientId);
+              writeStoredOwnerClientId(u.user.id, readActiveFirmId(u.user.id) ?? "", clientId);
               setOwnerWorkspaces([{ clientId, name: clientName, role: "owner" }]);
             } else {
               setOwnerWorkspaces([]);
@@ -2953,6 +2954,11 @@ function Index() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveClientId, ownerBootReadyId]);
+  useEffect(() => {
+    setHistory([]);
+    setOwnerScoreHistory([]);
+    setReviewSignoffs({});
+  }, [effectiveClientId]);
   const hasRealFinancialsRef = useRef(hasRealFinancials);
   hasRealFinancialsRef.current = hasRealFinancials;
   const metaClientIdRef = useRef<string | null>(null);
@@ -3175,7 +3181,7 @@ function Index() {
     (clientId: string) => {
       if (!user?.id || clientId === effectiveClientId) return;
       if (!canOpenOwnerWorkspace(ownerWorkspaces, clientId)) return;
-      writeStoredOwnerClientId(user.id, clientId);
+      writeStoredOwnerClientId(user.id, readActiveFirmId(user.id) ?? "", clientId);
       setReviewOpen(false);
       setExtractionForReview(null);
       setShowFinData(false);
@@ -4465,7 +4471,7 @@ function Index() {
       </div>
     );
   }
-  const storedForShell = user?.id ? readStoredOwnerClientId(user.id) : null;
+  const storedForShell = user?.id ? readStoredOwnerClientId(user.id, readActiveFirmId(user.id) ?? "") : null;
   const provisionalWhileAuth =
     Boolean(storedForShell && !clientLinkResolved && !workspaceLoadFailed) &&
     !sampleMode &&
@@ -4479,7 +4485,7 @@ function Index() {
   if (!boardReady && !sampleMode && !isLegacyOwnerBoardTab(oauthReturn.tab)) {
     const bootScreen = ownerDoorScreen(oauthReturn);
     const shellScreen = bootScreen === "chat" ? "home" : bootScreen;
-    const rememberedId = readStoredOwnerClientId(user.id);
+    const rememberedId = readStoredOwnerClientId(user.id, readActiveFirmId(user.id) ?? "");
     const access = decideStoredClientAccess({
       storedClientId: rememberedId,
       workspaces: clientLinkResolved ? ownerWorkspaces : null,
@@ -4700,6 +4706,7 @@ function Index() {
                   });
                 }}
                 clientId={effectiveClientId}
+                bootReady={ownerBootReadyId === effectiveClientId}
                 businessName={
                   actingClientName ??
                   ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ??

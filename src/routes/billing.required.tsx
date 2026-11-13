@@ -193,7 +193,7 @@ function BillingRequiredPage() {
     const plan = pending.plan;
     const interval = pending.interval;
     void resolveBillingWall({
-      client: loadFirstFirmClient(),
+      client: loadFirstFirmClient(firmId),
       clientCount: fetchClientCount({ data: { firmId } }),
       entitlement: checkEntitlement({ data: { refresh: true } }).then((result) => {
         if (user?.id) noteFirmEntitlement(user.id, result);

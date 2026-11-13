@@ -1317,6 +1317,13 @@ function ClientView() {
   const budgetSignoff = reviewSignoffs.budget ?? null;
   const actionPlanSignoff = reviewSignoffs.action_plan ?? null;
   const advisorySignoff = reviewSignoffs.advisory ?? null;
+  useEffect(() => {
+    setSnapshots([]);
+    setScoreHistory([]);
+    setReviewSignoffs({});
+    setSignoffsKnown(false);
+    setCashSignedSnapshot(null);
+  }, [clientId]);
   const patchSignoff = (scope: ReviewScope) => (next: ClientReviewSignoff | null) => {
     setReviewSignoffs((m) => {
       const copy = { ...m };
@@ -3830,8 +3837,17 @@ function ClientView() {
       return Number.isFinite(parsed) ? parsed : null;
     };
     return {
-      hasBooks: hasFigures || Boolean(qboLink || xeroLink),
-      ledger: qboLink ? "QuickBooks" : xeroLink ? "Xero" : null,
+      hasBooks: hasFigures || Boolean(qboLink || xeroLink || sageLink),
+      ledger:
+        qboLink && xeroLink
+          ? "Xero and QuickBooks"
+          : qboLink
+            ? "QuickBooks"
+            : xeroLink
+              ? "Xero"
+              : sageLink
+                ? "Sage"
+                : null,
       revenue: amount(financials.revenue),
       priorRevenue: amount(priorFin?.revenue),
       cogs: amount(financials.cogs),

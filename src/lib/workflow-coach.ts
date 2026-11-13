@@ -437,7 +437,9 @@ export function dataFreshnessLine(input: {
   const best = rows[0];
   if (best) {
     const period = best.period ? ` · ${best.period}` : "";
-    return `Last sync ${formatSyncStamp(best.at, input.market)} · ${best.label}${period}`;
+    const both = rows.some((row) => row.label === "Xero") && rows.some((row) => row.label === "QuickBooks");
+    const label = both ? "Xero and QuickBooks" : best.label;
+    return `Last sync ${formatSyncStamp(best.at, input.market)} · ${label}${period}`;
   }
   const snapshot = input.snapshotPeriod?.trim();
   if (snapshot) return `Snapshot on file · ${snapshot}`;

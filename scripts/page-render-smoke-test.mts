@@ -349,7 +349,7 @@ const owner = (mode: SmokeMode): PageCase => ({
   url: "/app",
   prepare: () => {
     resetSmokeRpcLog();
-    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID, "");
     if (mode === "revoked" || mode === "error") {
       localStorage.setItem(key, STALE_CLIENT_ID);
       localStorage.setItem(`${key}:name`, STALE_CLIENT_NAME);
@@ -395,7 +395,7 @@ const owner = (mode: SmokeMode): PageCase => ({
     }
     if (mode === "revoked") {
       assert(!htmlHasStaleClient(html), "a revoked stored id is not the business on screen");
-      const stored = localStorage.getItem(ownerActiveClientStorageKey(SMOKE_USER_ID));
+      const stored = localStorage.getItem(ownerActiveClientStorageKey(SMOKE_USER_ID, ""));
       assert(
         stored === SMOKE_CLIENT_ID,
         "a revoked stored id is replaced by a workspace this login still has",
@@ -575,7 +575,7 @@ function bootCase(mode: "hang-once" | "critical-down" | "section-down"): PageCas
     prepare: () => {
       resetSmokeRpcLog();
       setBootReadTimeoutMsForTests(mode === "hang-once" ? 40 : null);
-      const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+      const key = ownerActiveClientStorageKey(SMOKE_USER_ID, "");
       localStorage.removeItem(key);
       localStorage.removeItem(`${key}:name`);
     },
@@ -655,7 +655,7 @@ cases.push({
   prepare: () => {
     resetSmokeRpcLog();
     setBootReadTimeoutMsForTests(40);
-    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID, "");
     localStorage.removeItem(key);
     localStorage.removeItem(`${key}:name`);
   },
@@ -731,7 +731,7 @@ cases.push({
   url: "/app",
   prepare: () => {
     resetSmokeRpcLog();
-    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID, "");
     localStorage.removeItem(key);
     localStorage.removeItem(`${key}:name`);
     roleWarns.length = 0;
@@ -777,7 +777,7 @@ cases.push({
   waitMs: 12_000,
   prepare: () => {
     resetSmokeRpcLog();
-    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID, "");
     localStorage.removeItem(key);
     localStorage.removeItem(`${key}:name`);
   },
@@ -805,7 +805,7 @@ cases.push({
   url: "/app",
   prepare: () => {
     resetSmokeRpcLog();
-    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID, "");
     localStorage.removeItem(key);
     localStorage.removeItem(`${key}:name`);
   },
@@ -828,7 +828,7 @@ cases.push({
     resetSmokeRpcLog();
     setBootReadTimeoutMsForTests(2_000);
     setShellBackstopForTests({ idleMs: 30_000, ceilingMs: 350 });
-    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID, "");
     localStorage.removeItem(key);
     localStorage.removeItem(`${key}:name`);
   },
@@ -848,7 +848,7 @@ cases.push({
   url: "/app",
   prepare: () => {
     resetSmokeRpcLog();
-    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID, "");
     localStorage.removeItem(key);
     localStorage.removeItem(`${key}:name`);
   },
@@ -869,7 +869,7 @@ cases.push({
   waitMs: 9_000,
   prepare: () => {
     resetSmokeRpcLog();
-    const key = ownerActiveClientStorageKey(SMOKE_USER_ID);
+    const key = ownerActiveClientStorageKey(SMOKE_USER_ID, "");
     localStorage.removeItem(key);
     localStorage.removeItem(`${key}:name`);
   },

@@ -45,7 +45,7 @@ export type OwnerTile = {
 
 export type OwnerBooks = {
   hasBooks: boolean;
-  ledger: "QuickBooks" | "Xero" | null;
+  ledger: "QuickBooks" | "Xero" | "Sage" | "Xero and QuickBooks" | null;
   revenue: number | null;
   priorRevenue: number | null;
   cogs: number | null;
@@ -420,7 +420,7 @@ export function ownerHomeLines(
   ].filter((line) => line.length > 0);
   if (handed && routed === "analyst" && !analyst.includes(handed)) analyst.push(handed);
   else if (handed && routed === "advisor" && !advisor.includes(handed)) advisor.push(handed);
-  if (answer && answer !== handed) {
+  if (answer && answer !== handed && answer !== "Checking action points.") {
     if (!handed && routed === "analyst") analyst.push(answer);
     else if (!handed && routed === "advisor") {
       if (!advisor.includes(answer)) advisor.push(answer);

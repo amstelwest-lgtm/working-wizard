@@ -173,6 +173,7 @@ export function OwnerDoor({
   planTick = 0,
   financials = null,
   homeLede = MILON_HOME_LEDE,
+  bootReady = true,
 }: {
   clientId: string | null;
   businessName: string;
@@ -260,6 +261,8 @@ export function OwnerDoor({
   financials?: Record<string, unknown> | null;
   /** Mission-aligned home subtitle. Same constant as accountant practice home. */
   homeLede?: string;
+  /** Connection and open-action reads wait until the boot selects have settled. */
+  bootReady?: boolean;
 }) {
   const openedBot = ownerBotKey(bot);
   const [screen, setScreen] = useState<OwnerScreen>(
@@ -285,7 +288,7 @@ export function OwnerDoor({
   const [errors, setErrors] = useState<Partial<Record<AgentKey, string>>>({});
   const [errorCodes, setErrorCodes] = useState<Partial<Record<AgentKey, string>>>({});
   const [listening, setListening] = useState(false);
-  const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | null>(null);
+  const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | "Sage" | "Xero and QuickBooks" | null>(null);
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
   const [actionRows, setActionRows] = useState<OwnerActionRow[]>([]);
   const [actionsUnavailable, setActionsUnavailable] = useState(false);
@@ -558,6 +561,7 @@ export function OwnerDoor({
     setQuickBooks({ state: "unknown" });
     setXeroLink({ state: "unknown" });
     setSageLink({ state: "unknown" });
+    if (!bootReady) return;
     if (!clientId) {
       setActionsReady(true);
       setDeliverableCount(0);
@@ -595,8 +599,10 @@ export function OwnerDoor({
       const qboRow = qbo.error ? null : (qbo.data?.[0] ?? null);
       const xeroRow = xero.error ? null : (xero.data?.[0] ?? null);
       const sageRow = sage.error ? null : (sage.data?.[0] ?? null);
-      if (qboRow) setLedger("QuickBooks");
+      if (qboRow && xeroRow) setLedger("Xero and QuickBooks");
+      else if (qboRow) setLedger("QuickBooks");
       else if (xeroRow) setLedger("Xero");
+      else if (sageRow) setLedger("Sage");
       else setLedger(null);
       setQuickBooks(
         qbo.error
@@ -706,7 +712,7 @@ export function OwnerDoor({
     return () => {
       cancelled = true;
     };
-  }, [clientId, market, planTick]);
+  }, [bootReady, clientId, market, planTick]);
 
   const storedDeliverablesOpen = canonicalOwnerScreen(screen) === "accountant";
   useEffect(() => {

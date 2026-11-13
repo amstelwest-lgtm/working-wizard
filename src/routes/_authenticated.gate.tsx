@@ -247,7 +247,7 @@ export function AuthGate() {
     if (loading || !userId) return;
     if (!clientIdFromFirmPath(pathname)) return;
     let cancelled = false;
-    void loadFirmClientGateContext()
+    void loadFirmClientGateContext(firmId)
       .then((clients) => {
         if (cancelled) return;
         clientGateRef.current = clients;
@@ -263,7 +263,7 @@ export function AuthGate() {
     return () => {
       cancelled = true;
     };
-  }, [loading, userId, pathname]);
+  }, [loading, userId, pathname, firmId]);
 
   useEffect(() => {
     const settled = settledRef.current;
@@ -416,7 +416,7 @@ export function AuthGate() {
         // Stay, the client count, and Stripe start together. The count is
         // what lets the first client file mount before Stripe answers.
         const stayPromise = shouldStayOnAccountantPortal(userId);
-        const clientsPromise = loadFirmClientGateContext();
+        const clientsPromise = loadFirmClientGateContext(latest.current.firmId);
         void clientsPromise
           .then((clients) => {
             if (cancelled) return;

@@ -239,6 +239,12 @@ export function booksSyncCopy(input: {
   ).filter((entry): entry is ["QuickBooks" | "Xero" | "Sage", { state: "linked"; at: string | null }] => {
     return entry[1].state === "linked";
   });
+  if (
+    input.quickBooks.state === "linked" &&
+    input.xero.state === "linked"
+  ) {
+    return { heading: "Xero and QuickBooks", lines: ["Connected."] };
+  }
   if (linked.length === 0) {
     const unknown =
       input.quickBooks.state === "unknown" || input.xero.state === "unknown" || sage.state === "unknown";
