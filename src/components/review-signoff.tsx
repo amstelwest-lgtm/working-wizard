@@ -52,6 +52,34 @@ export const SCOPE_SHORT_LABEL: Record<ReviewScope, string> = {
  * Paint is cobalt because the confirm button is portaled outside `.accountant-portal`,
  * so a portal stylesheet cannot recolor it.
  */
+/** Label width shared by the loading button and the live one. */
+export function signoffActionLabel(scope: ReviewScope, verbOnly = false, stale = false): string {
+  const verb = stale ? "Re-sign off" : "Sign off";
+  return verbOnly ? verb : `${verb} ${SCOPE_SHORT_LABEL[scope]}`;
+}
+
+/** Same button, disabled, so the row width is taken before the sign-off read returns. */
+export function SignoffReserveButton({
+  label,
+  disabled,
+}: {
+  label: string;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={SIGNOFF_GOLD_BTN}
+      disabled={disabled}
+      data-signoff-reserve=""
+      aria-busy={disabled || undefined}
+    >
+      <PenLine className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+}
+
 export const SIGNOFF_GOLD_BTN =
   "signoff-primary inline-flex items-center gap-2 bg-[#0B5FFF] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-none transition hover:bg-[#2563EB]";
 
@@ -407,6 +435,7 @@ export function ReviewSignoffButton({
   compact = false,
   hideStatus = false,
   verbOnly = false,
+  locked = false,
 }: {
   clientId: string;
   clientName?: string;
@@ -420,6 +449,8 @@ export function ReviewSignoffButton({
   hideStatus?: boolean;
   /** Strip label is "Sign off", without the scope name. */
   verbOnly?: boolean;
+  /** Owner cash cannot sign. The same disabled button still holds the row width. */
+  locked?: boolean;
 }) {
   const { profile, updateProfile } = useAccountantProfile();
   const doSignoff = useServerFn(signoffReview);
@@ -516,6 +547,15 @@ export function ReviewSignoffButton({
     : compact
       ? "flex w-full min-w-0 max-w-full flex-col items-stretch gap-2 sm:items-end"
       : "mt-2 flex w-full max-w-md flex-col items-stretch gap-2 sm:items-end";
+  const actionLabel = signoffActionLabel(scope, verbOnly, Boolean(shownSignoff && isStale));
+
+  if (!workflowLoaded || locked) {
+    return (
+      <div className={frame}>
+        <SignoffReserveButton label={signoffActionLabel(scope, verbOnly, false)} disabled />
+      </div>
+    );
+  }
 
   if (shownSignoff && !isStale) {
     return (
@@ -587,8 +627,7 @@ export function ReviewSignoffButton({
             (canSignOff && (cycleStatus === "draft" || cycleStatus === "ready_for_review")) ? (
               <button type="button" onClick={() => setOpen(true)} className={SIGNOFF_GOLD_BTN}>
                 <PenLine className="h-3.5 w-3.5" />
-                {shownSignoff && isStale ? "Re-sign off" : "Sign off"}
-                {verbOnly ? "" : ` ${SCOPE_SHORT_LABEL[scope]}`}
+                {actionLabel}
               </button>
             ) : null}
             {workflow && canSubmit && !canSignOff && cycleStatus === "draft" ? (
