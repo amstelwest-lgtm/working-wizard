@@ -204,14 +204,24 @@ assert(readPendingInviteClientId(userB) === null, "user B does not read user A's
 assert(readPendingInviteClientId(userA) === clientA, "user A still reads their own invite client");
 assert(readActingAsClientId(userB) === null, "user B does not read user A's acting-as client");
 assert(readActingAsClientId(userA) === clientA, "user A still reads their own acting-as client");
+const leftoverCookie = emailReturnCookieString(
+  "accountant",
+  `/clients/${clientA}`,
+  "www.milonfinance.com",
+  true,
+);
+const leftover = readEmailReturnCookie(leftoverCookie);
+assert(leftover.door === "accountant", "user A's leftover cookie keeps the accountant door");
+assert(leftover.next === `/clients/${clientA}`, "user A's leftover cookie is the client path");
 assert(
   pathAfterAuthReturn({
     type: "magiclink",
-    door: null,
-    next: `/clients/${clientA}`,
+    door: leftover.door,
+    next: leftover.next,
     roleDestination: "/app",
+    clientInActiveFirm: false,
   }) === "/open",
-  "user B's leftover client cookie is not followed",
+  "user B does not follow user A's leftover client cookie",
 );
 clearPendingInviteClientIds();
 clearActingAsClientIds();
@@ -224,6 +234,13 @@ const authHook = readFileSync(resolve("src/hooks/use-auth.tsx"), "utf8");
 assert(authHook.includes("clearPendingInviteClientIds()"), "sign-out clears invite client ids");
 assert(authHook.includes("clearActingAsClientIds()"), "sign-out clears acting-as ids");
 assert(authHook.includes("clearEmailReturnCookie()"), "sign-out clears the email-return cookie");
+const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
+const join = readFileSync(resolve("src/routes/join.$token.tsx"), "utf8");
+assert(landing.includes("clearEmailReturnCookie()"), "an invite account switch clears the next cookie");
+assert(join.includes("clearEmailReturnCookie()"), "a join account switch clears the next cookie");
+const shell = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
+assert(shell.includes("SHELL_GATE_TIMEOUT_MS"), "the shell arms the 8s retry before the gate chunk");
+assert(shell.includes("data-shell-retry"), "a shell that is still loading shows Retry");
 const pickupLater = readFileSync(resolve("src/components/auth-url-return.tsx"), "utf8");
 assert(pickupLater.includes("clientInActiveFirm"), "the return path checks the client firm");
 assert(pickupLater.includes('.eq("id", nextClientId)'), "the client row is read by id");

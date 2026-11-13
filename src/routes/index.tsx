@@ -1212,6 +1212,8 @@ function LandingPage() {
         // A leftover accountant session on this browser must not keep the
         // invitee in the wrong portal after they accept as the owner.
         if (user && user.email?.toLowerCase() !== regEmail.trim().toLowerCase()) {
+          const { clearEmailReturnCookie } = await import("@/lib/auth-url-return");
+          clearEmailReturnCookie();
           await (await landingSupabase()).auth.signOut({ scope: "local" });
         }
 

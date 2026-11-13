@@ -187,6 +187,16 @@ export function AuthGate() {
   const [showWall, setShowWall] = useState(false);
   const [clientGate, setClientGate] = useState<FirmClientGateContext | null>(null);
   const [gateAttempt, setGateAttempt] = useState(0);
+  // One 8s clock from the moment this gate mounts. It does not wait for the
+  // firm row, and it does not wait for the auth client import to finish.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (settledRef.current) return;
+      setBillingDeadlinePassed(true);
+      setBillingUnknown(true);
+    }, SHELL_GATE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [gateAttempt]);
   const failuresRef = useRef(0);
   const clientGateRef = useRef<FirmClientGateContext | null>(null);
   const pendingWallRef = useRef(false);
@@ -390,14 +400,6 @@ export function AuthGate() {
       setCheckNotice(false);
     };
 
-    const timer = window.setTimeout(() => noteFailure("timeout"), SHELL_GATE_TIMEOUT_MS);
-    let timerCleared = false;
-    const clearTimer = () => {
-      if (timerCleared) return;
-      timerCleared = true;
-      window.clearTimeout(timer);
-    };
-
     void (async () => {
       try {
         const practiceMeta = latest.current.practiceMeta as
@@ -481,7 +483,6 @@ export function AuthGate() {
           return;
         }
         if (cancelled) return;
-        window.clearTimeout(timer);
         clientGateRef.current = clients;
         const reason =
           result && typeof result === "object" && "reason" in result && typeof result.reason === "string"
@@ -525,18 +526,20 @@ export function AuthGate() {
         }
         warnBillingWall(attemptFirmId, reason, latest.current.firmMarket);
         setFirmEntitled(false);
+        const setupPath = (latest.current.pathname.split(/[?#]/, 1)[0] ?? "").replace(/\/$/, "") || "/";
+        if (setupPath === "/practice/setup") {
+          setShowWall(true);
+          return;
+        }
         resumeUnpaidFirm(latest.current, clients);
       } catch (err) {
         if (cancelled) return;
         noteFailure(classifyBillingCheckFailure(err));
-      } finally {
-        clearTimer();
       }
     })();
 
     return () => {
       cancelled = true;
-      clearTimer();
     };
   }, [userId, loading, gateAttempt, firmId, firmsLoaded]);
 
@@ -594,11 +597,9 @@ export function AuthGate() {
     expiresAt: session?.expires_at,
     now: Date.now(),
   });
-  if (loading && !earlyClientFile) {
-    return <FirmShellLoading />;
-  }
-  if (!user) return null;
-  if (failureSurface === "error" || deadlineHoldsRetry || firmLoadHoldsRetry) {
+  const shellGaveUp =
+    billingDeadlinePassed && firmEntitled !== true && !showWall && (loading || holdGatedPage);
+  if (shellGaveUp || failureSurface === "error" || deadlineHoldsRetry || firmLoadHoldsRetry) {
     return (
       <FirmBillingGateView
         surface="error"
@@ -615,8 +616,17 @@ export function AuthGate() {
       />
     );
   }
+  if (loading && !earlyClientFile) {
+    return <FirmShellLoading />;
+  }
+  if (!user) return null;
   if (failureSurface === "wall" || showWall) {
-    return <FirmBillingGateView surface="wall" />;
+    return (
+      <FirmBillingGateView
+        surface="wall"
+        clientCount={clientGate?.firmClientCount ?? null}
+      />
+    );
   }
   if (holdGatedPage && !earlyClientFile) {
     return <FirmShellLoading />;

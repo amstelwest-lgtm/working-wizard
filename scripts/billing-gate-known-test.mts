@@ -325,7 +325,9 @@ assert(
   gate.includes("surfaceAfterBillingCheckFailure"),
   "a deadline or Stripe error uses the known plan and not the wall",
 );
-assert(!gate.includes("setShowWall(true)"), "a failed check does not open the billing wall");
+assert(gate.includes("setShowWall(true)"), "a confirmed unpaid setup page renders the plan wall");
+const noteFailure = gate.slice(gate.indexOf("const noteFailure"), gate.indexOf("void (async () =>"));
+assert(!noteFailure.includes("setShowWall(true)"), "a failed check does not open the billing wall");
 assert(!gate.includes("setQuietAttempt"), "a failed check does not arm a second quiet deadline");
 assert(gate.includes("SHELL_GATE_TIMEOUT_MS"), "the gate keeps one shell deadline");
 assert(gate.includes("firmFileOnBillingResult"), "a stored plan opens the file when the check fails");

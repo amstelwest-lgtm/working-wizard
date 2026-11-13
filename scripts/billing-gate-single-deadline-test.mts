@@ -181,8 +181,13 @@ const billingRequiredRoute = createRoute({
   path: "/billing/required",
   component: () => createElement("p", null, "Billing required"),
 });
+const setupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/practice/setup",
+  component: () => createElement("p", null, "Practice setup"),
+});
 const router = createRouter({
-  routeTree: rootRoute.addChildren([clientRoute, billingRequiredRoute]),
+  routeTree: rootRoute.addChildren([clientRoute, billingRequiredRoute, setupRoute]),
   history: createMemoryHistory({ initialEntries: ["/clients/second-file"] }),
   isServer: false,
 } as never);
@@ -621,6 +626,51 @@ await check("(C) unknown + failed check is the Retry card, not the wall", async 
     await unmountGate();
     setFirmBillingGateCheckForTests(null);
     clearCachedFirmEntitlement();
+  }
+});
+
+await check("(setup) a not-entitled fresh firm shows the wall, not the skeleton", async () => {
+  clearCachedFirmEntitlement();
+  setBillingDeadlineClientGate({ firmClientCount: 2, firstClientId: "first-client" });
+  setFirmBillingGateCheckForTests(async () => ({
+    entitled: false,
+    reason: "no_active_subscription",
+  }));
+  try {
+    await router.navigate({ to: "/practice/setup" });
+    await mountGate();
+    await flush();
+    const surface = settledSurface(html());
+    assert(surface === "wall", `an unpaid firm on setup shows the plan wall, saw ${surface}`);
+    assert(html().includes("Start trial"), "the wall has the trial call to action");
+    assert(!html().includes("Loading dashboard"), "the wall is not the dashboard skeleton");
+    assert(router.state.location.pathname === "/practice/setup", "setup stays on its route");
+  } finally {
+    await unmountGate();
+    setFirmBillingGateCheckForTests(null);
+    clearCachedFirmEntitlement();
+    await router.navigate({ to: "/clients/$clientId", params: { clientId: "second-file" } });
+  }
+});
+
+await check("(setup) a hung entitlement shows Retry by about 8s", async () => {
+  clearCachedFirmEntitlement();
+  setBillingDeadlineClientGate({ firmClientCount: 2, firstClientId: "first-client" });
+  setFirmBillingGateCheckForTests(async () => hangCheck() as never);
+  try {
+    await router.navigate({ to: "/practice/setup" });
+    await mountGate();
+    assert(settledSurface(html()) === "skeleton", "a hung setup check starts on the skeleton");
+    await windowClock.advance(8_500, fire);
+    const surface = settledSurface(html());
+    assert(surface === "card", `a hung setup check shows Retry by 8.5s, saw ${surface}`);
+    assert(html().includes("Retry"), "the card has Retry");
+    assert(!html().includes("Loading dashboard"), "the skeleton does not stay up");
+  } finally {
+    await unmountGate();
+    setFirmBillingGateCheckForTests(null);
+    clearCachedFirmEntitlement();
+    await router.navigate({ to: "/clients/$clientId", params: { clientId: "second-file" } });
   }
 });
 

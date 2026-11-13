@@ -114,7 +114,7 @@ export function DataUpToDate({
       <ArapAnswerStrip
         heading="Books"
         sentence={booksHeaderSentence({ ledger, freshness, openKinds })}
-        chip={chip}
+        chip={ledger?.trim() ? ledger : chip}
         primary={primary}
       />
       <div id="accounting-connect" className="data-fresh__ledgers">

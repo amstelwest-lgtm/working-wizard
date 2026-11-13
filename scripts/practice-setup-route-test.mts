@@ -89,6 +89,8 @@ assert(panel.includes("PRACTICE_SETUP_INTERVIEW_MS = 10_000"), "the interview ca
 assert(panel.includes("data-practice-setup-retry"), "a timed-out interview can be retried");
 assert(panel.includes("data-practice-setup-phase=\"no-firm\""), "no firm is its own state");
 assert(panel.includes("PRACTICE_SETUP_NO_FIRM"), "no firm says to open setup");
+assert(panel.includes('to="/auth/callback"'), "no firm opens the practice picker, not this page");
+assert(!panel.includes('to="/practice/setup"'), "the no-firm link is not the current route");
 assert(!panel.includes('data-practice-setup-panel="waiting"'), "no firm does not wait forever");
 assert(!panel.includes("Connect Xero") && !panel.includes("ConnectBooks"), "no connect block");
 assert(!panel.includes("QuickBooks") && !panel.includes("ledger snapshot"), "no client books");
