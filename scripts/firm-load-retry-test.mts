@@ -238,7 +238,7 @@ setFirmBillingGateCheckForTests(async () => {
   return { entitled: true, reason: "active_subscription" };
 });
 
-await check(`hung firm list on ${CLIENT_PATH} shows Retry by 17s`, async () => {
+await check(`hung firm list on ${CLIENT_PATH} shows Retry by 8s`, async () => {
   setFirmReadMode("hang");
   resetFirmReads();
   warns.length = 0;
@@ -254,22 +254,18 @@ await check(`hung firm list on ${CLIENT_PATH} shows Retry by 17s`, async () => {
   });
   assert(
     !html().includes("Couldn't check billing"),
-    "Retry must not show before the firm read has failed",
+    "Retry must not show before the 8s shell deadline",
   );
-  await advance(FIRM_LOAD_DEADLINE_MS - 1_000);
+  await advance(SHELL_GATE_TIMEOUT_MS);
+  const atDeadline = html();
   assert(
-    !html().includes("Couldn't check billing"),
-    "Retry must wait for the 8s read plus one retry",
+    atDeadline.includes("Couldn't check billing") && atDeadline.includes("Retry"),
+    `a gated route still loading shows Retry at 8s, saw ${atDeadline.slice(0, 280)}`,
   );
-  assert(html().includes("Loading"), "the page stays on the skeleton until the retry settles");
-  await advance(1_000);
-  const body = html();
-  assert(
-    body.includes("Couldn't check billing") && body.includes("Retry"),
-    `a hung firm list must show Retry by ${FIRM_LOAD_DEADLINE_MS}ms, saw ${body.slice(0, 280)}`,
-  );
-  assert(!body.includes("Client file"), "the client file must not render before the firm row loads");
+  assert(!atDeadline.includes("Client file"), "the client file must not render before the firm row loads");
   assert(billingChecks === 0, `billing ran before the firm row loaded (${billingChecks})`);
+  await advance(FIRM_LOAD_DEADLINE_MS - SHELL_GATE_TIMEOUT_MS);
+  assert(firmReadCount() === 2, `the hung list still retries once, saw ${firmReadCount()} reads`);
 });
 
 await check("exactly one automatic retry, then Retry", async () => {
