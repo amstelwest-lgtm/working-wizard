@@ -253,6 +253,7 @@ import { clientAccessGate } from "@/lib/client-home-phase";
 import { markClientCardText, markClientReload } from "@/lib/card-timing";
 import { rememberWarmBootCard } from "@/lib/warm-boot-cards";
 import { readActiveFirmId } from "@/lib/firm-brand";
+import { readStoredAuthSession } from "@/lib/stored-auth-session";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
 import {
   assessClientMetrics,
@@ -4178,12 +4179,19 @@ function ClientView() {
     markClientCardText(line);
   }, [homePhase, homeLines]);
   if (homePhase === "loading" || homePhase === "error") {
+    const storedSession =
+      typeof window === "undefined"
+        ? null
+        : readStoredAuthSession(window.localStorage, window.sessionStorage);
+    const storedUserId = storedSession?.user?.id ?? null;
     return (
       <ClientAgentStandby
         clientId={clientId}
-        userId={sessionUserId}
-        firmId={sessionUserId ? readActiveFirmId(sessionUserId) : null}
-        expiresAt={session?.expires_at ?? null}
+        cardUserId={sessionUserId}
+        cardFirmId={sessionUserId ? readActiveFirmId(sessionUserId) : null}
+        sessionUserId={storedUserId}
+        expiresAt={typeof storedSession?.expires_at === "number" ? storedSession.expires_at : null}
+        activeFirmId={storedUserId ? readActiveFirmId(storedUserId) : null}
         timedOut={homePhase === "error"}
         onRetry={
           homePhase === "error"

@@ -56,15 +56,16 @@ const paint = {
 
 clearWarmBootCardsForTests();
 assert(readWarmBootCard(paint) === null, "a cold client has no cached line");
-const cold = renderToStaticMarkup(
-  createElement(ClientAgentStandby, {
-    timedOut: false,
-    clientId: CLIENT,
-    userId: USER,
-    firmId: FIRM,
-    expiresAt: FUTURE,
-  }),
-);
+const standbyProps = {
+  timedOut: false as const,
+  clientId: CLIENT,
+  cardUserId: USER,
+  cardFirmId: FIRM,
+  sessionUserId: USER,
+  expiresAt: FUTURE,
+  activeFirmId: FIRM,
+};
+const cold = renderToStaticMarkup(createElement(ClientAgentStandby, standbyProps));
 assert(cold.includes("Checking…"), "a cold card stays on checking");
 assert(!cold.includes(CLIENT_HOME_NOTHING), "a cold card does not say nothing is on file");
 assert(!cold.includes("$46,300."), "a cold card does not invent the last client's cash");
@@ -87,6 +88,15 @@ assert(mayPaintWarmCard({ ...paint, now: Date.now() }), "a matching unexpired se
 store.set(`milon-warm-boot-card:${CLIENT}`, CASH);
 assert(readWarmBootCard(paint) === CASH, "the scoped key still paints");
 assert(!store.has(`milon-warm-boot-card:${USER}:${FIRM}:other-client`), "the old client-only key is not the lookup");
+
+function standbyShowsCash(extra: Record<string, unknown>): boolean {
+  const html = renderToStaticMarkup(createElement(ClientAgentStandby, { ...standbyProps, ...extra }));
+  return html.includes('data-warm-cash="1"') && html.includes("$46,300");
+}
+assert(standbyShowsCash({}), "a matching stored session paints the card");
+assert(!standbyShowsCash({ sessionUserId: "user-2" }), "a mismatched stored user does not paint");
+assert(!standbyShowsCash({ expiresAt: PAST }), "an expired stored session does not paint");
+assert(!standbyShowsCash({ activeFirmId: "firm-b" }), "another firm's stored session does not paint");
 
 type Queued = { id: number; at: number; fn: () => void };
 const queued: Queued[] = [];
@@ -155,15 +165,7 @@ try {
   );
 
   advance(2_999);
-  const warm = renderToStaticMarkup(
-    createElement(ClientAgentStandby, {
-      timedOut: false,
-      clientId: CLIENT,
-      userId: USER,
-      firmId: FIRM,
-      expiresAt: FUTURE,
-    }),
-  );
+  const warm = renderToStaticMarkup(createElement(ClientAgentStandby, standbyProps));
   assert(
     warm.includes('data-warm-cash="1"') && warm.includes("Cash is") && warm.includes("$46,300"),
     "warm cards show the cached cash line before 3s",
@@ -174,15 +176,7 @@ try {
 
   noteBootRequestSent(signal);
   advance(2_999);
-  const still = renderToStaticMarkup(
-    createElement(ClientAgentStandby, {
-      timedOut: false,
-      clientId: CLIENT,
-      userId: USER,
-      firmId: FIRM,
-      expiresAt: FUTURE,
-    }),
-  );
+  const still = renderToStaticMarkup(createElement(ClientAgentStandby, standbyProps));
   assert(
     still.includes('data-warm-cash="1"') && still.includes("Cash is") && still.includes("$46,300"),
     "the cached line stays up after the request is sent",
@@ -234,6 +228,12 @@ const authSrc = readFileSync("src/hooks/use-auth.tsx", "utf8");
 assert(authSrc.includes("clearAllWarmBootCards()"), "sign-out clears warm cards");
 const root = readFileSync("src/routes/__root.tsx", "utf8");
 assert(root.includes('f.media="print"'), "Google Fonts load non-blocking");
+assert(root.includes("f.onerror=function(){showFonts();}"), "a failed font sheet still applies");
+assert(root.includes("setTimeout(showFonts,3000)"), "the font sheet applies if onload never fires");
+const standbySrc = readFileSync("src/components/client-agent-standby.tsx", "utf8");
+assert(!standbySrc.includes("sessionUserId: userId"), "the standby does not compare a prop to itself");
+assert(standbySrc.includes("activeFirmId"), "the standby checks the active firm");
+assert(clientSrc.includes("readStoredAuthSession"), "the client file reads the stored session for the paint check");
 assert(!root.includes('rel: "stylesheet" as const,\n                href: "https://fonts.googleapis.com'), "the font sheet is not a blocking head link");
 
 console.log("warm-boot-cards ok");

@@ -137,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       setRestoreFailed(false);
       clearAllWarmBootCards();
-          setSession(null);
+      setSession(null);
       return;
     }
 
@@ -198,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return;
             }
             clearAllWarmBootCards();
-          setSession(null);
+            setSession(null);
             setMonitoringUser(null);
             setRestoreFailed(outcome === "panel");
             setLoading(false);
@@ -272,7 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setRestoreFailed(false);
         clearAllWarmBootCards();
-          setSession(null);
+        setSession(null);
         setMonitoringUser(null);
         setLoading(false);
       });
