@@ -294,6 +294,10 @@ assert(
 
 const attacher = src("src/integrations/supabase/auth-attacher.ts");
 assert(attacher.includes("accessTokenWithin"), "server function auth reads are bounded");
+assert(
+  attacher.split("supabase.auth.getSession()").length === 2,
+  "the acting-as user id comes from the same bounded session read",
+);
 
 const stripe = src("src/lib/stripe.server.ts");
 assert(stripe.includes("timeout: 8000") && stripe.includes("maxNetworkRetries: 1"), "Stripe calls time out");
