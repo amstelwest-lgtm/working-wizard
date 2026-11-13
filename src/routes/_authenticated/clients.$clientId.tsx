@@ -239,6 +239,7 @@ import {
   statementYearLine,
 } from "@/lib/statement-period";
 import { clientAccessGate } from "@/lib/client-home-phase";
+import { rememberWarmBootCard } from "@/lib/warm-boot-cards";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
 import {
   assessClientMetrics,
@@ -3828,6 +3829,11 @@ function ClientView() {
     () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null, openActionAgent, handedTitle),
     [homeBooks, strategicMoves, openActionAgent, handedTitle],
   );
+  useEffect(() => {
+    const line = homeLines.financial_manager.find((row) => row.trim().length > 0);
+    if (!client?.id || !line) return;
+    rememberWarmBootCard(client.id, line);
+  }, [client?.id, homeLines]);
   const homeStatus = useMemo(() => ownerCardStatuses(homeBooks), [homeBooks]);
   // Declared before the memo. A const after the loading return is still in
   // the temporal dead zone here, and the minified chunk throws
@@ -4078,6 +4084,7 @@ function ClientView() {
   if (homePhase === "loading" || homePhase === "error") {
     return (
       <ClientAgentStandby
+        clientId={clientId}
         timedOut={homePhase === "error"}
         onRetry={
           homePhase === "error"
@@ -4341,7 +4348,7 @@ function ClientView() {
                           }
                           setupPartner={
                             <div className="mt-4">
-                              <SetupPartnerPanel key={clientId} clientId={clientId} />
+                              <SetupPartnerPanel key={clientId} clientId={clientId} firmId={firmId} />
                             </div>
                           }
                         />

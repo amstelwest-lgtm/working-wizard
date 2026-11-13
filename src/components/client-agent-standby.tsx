@@ -3,25 +3,30 @@
  * and a line that says whether the read is still going or has given up.
  */
 import { OwnerHome } from "@/components/owner-door/owner-home";
-import { agentCardPhase } from "@/lib/agent-card-phase";
+import { AGENT_CARD_CHECKING, agentCardPhase } from "@/lib/agent-card-phase";
 import { CLIENT_HOME_CHECKING, CLIENT_HOME_LOAD_ERROR } from "@/lib/client-home-phase";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { ownerPresence } from "@/lib/owner-presence";
+import { readWarmBootCard } from "@/lib/warm-boot-cards";
 
 export function ClientAgentStandby({
   timedOut,
   onRetry,
+  clientId,
 }: {
   timedOut: boolean;
   onRetry?: () => void;
+  clientId?: string | null;
 }) {
   const phase = agentCardPhase({ pending: true, timedOut });
+  const cached = timedOut ? null : readWarmBootCard(clientId);
   const lede = timedOut ? CLIENT_HOME_LOAD_ERROR : CLIENT_HOME_CHECKING;
   return (
     <div
       className="accountant-portal premium-shell"
       data-client-agents={phase}
       data-client-boot={timedOut ? "load-error" : "pending"}
+      data-warm-cash={cached ? "1" : "0"}
     >
       <div className="shell">
         <p className="owner-lede" role="status">
@@ -39,12 +44,12 @@ export function ClientAgentStandby({
           audience="accountant"
           marketCountry={null}
           sampleClient={false}
-          cardPhase={phase}
+          cardPhase={cached ? undefined : phase}
           presence={ownerPresence(emptyAgentActivity())}
           lines={{
-            financial_manager: [],
-            analyst: [],
-            advisor: [],
+            financial_manager: cached ? [cached] : [],
+            analyst: cached ? [AGENT_CARD_CHECKING] : [],
+            advisor: cached ? [AGENT_CARD_CHECKING] : [],
           }}
           onOpen={() => undefined}
           onAsk={() => undefined}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { Button } from "@/components/ui/button";
 import { decideImProposal, listImProposals, type ImProposalRow } from "@/lib/im-proposal-decision.functions";
 import { ROUTINE_RUNS_PER_FIRM_MONTH, capEstimateUsd } from "@/lib/im-proposal-decision";
 
@@ -62,12 +63,24 @@ export function ImProposalDecisions({ firmId }: { firmId: string }) {
                 <span> {row.decision === "approved" ? "Approved." : "Dismissed."}</span>
               ) : (
                 <span className="setup-partner__actions">
-                  <button type="button" disabled={busy} onClick={() => choose(row.id, "approve")}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy}
+                    className="bg-[#0B5FFF] text-white shadow-none hover:bg-[#0B5FFF]/90"
+                    onClick={() => choose(row.id, "approve")}
+                  >
                     Approve
-                  </button>
-                  <button type="button" disabled={busy} onClick={() => choose(row.id, "dismiss")}>
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => choose(row.id, "dismiss")}
+                  >
                     Dismiss
-                  </button>
+                  </Button>
                 </span>
               )}
             </li>

@@ -1,4 +1,5 @@
 import { createElement, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import "./setup-partner-panel.css";
@@ -29,6 +30,7 @@ import {
 import { ImTakeoverProposals } from "@/components/im-takeover-proposals";
 import { ImplementationManagerChip } from "@/components/practice-setup-card";
 import { InterviewExchange } from "@/components/interview-exchange";
+import { discardPracticeRedo } from "@/lib/discard-practice-redo.functions";
 import {
   buildPracticeImplementationPlan,
   cleanFlowLine,
@@ -55,6 +57,7 @@ type AskTurn = (input: {
   messages: FirmInterviewMessage[];
   modelTurns: number;
 }) => Promise<{ question: string; done: boolean; modelTurns: number }>;
+type DiscardRedo = (firmId: string) => Promise<void>;
 
 export function PracticeSetupPanel() {
   const { firmId, firmMarket } = useAccountantProfile();
@@ -69,6 +72,7 @@ export function PracticeSetupInterview({
   loadSaved = fetchFirmSetupPlan,
   loadDraft = fetchFirmInterviewDraft,
   askTurn = firmInterviewTurn,
+  discardRedo,
 }: {
   firmId: string | null;
   firmMarket: unknown;
@@ -77,6 +81,7 @@ export function PracticeSetupInterview({
   loadSaved?: LoadSaved;
   loadDraft?: LoadDraft;
   askTurn?: AskTurn;
+  discardRedo?: DiscardRedo;
 }) {
   const [phase, setPhase] = useState<Phase>("interview");
   const [messages, setMessages] = useState<FirmInterviewMessage[]>([]);
@@ -90,6 +95,9 @@ export function PracticeSetupInterview({
   const [modelTurns, setModelTurns] = useState(0);
   const [map, setMap] = useState<SetupPartnerWorkflowMap | null>(null);
   const [plan, setPlan] = useState<PracticeImplementationPlan | null>(null);
+  const [redoOpen, setRedoOpen] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const discardSavedRedo = useServerFn(discardPracticeRedo);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
   const marketCountry: SetupPartnerCountry | null =
     country === "US" || country === "ZA" ? country : null;
@@ -128,7 +136,7 @@ export function PracticeSetupInterview({
         todaysFlow: nextMap.todaysFlow.filter((line) => !line.includes("{") && !line.includes("`")),
         checklist: nextMap.checklist.filter((line) => !line.includes("{") && !line.includes("`")),
       });
-      setPhase("map");
+      if (!redoOpen) setPhase("map");
     } catch (err) {
       setError(
         firmInterviewUserError(
@@ -182,18 +190,20 @@ export function PracticeSetupInterview({
     void Promise.all([loadSaved(firmId), loadDraft(firmId)])
       .then(([saved, draft]) => {
         if (cancel) return;
+        const hasPlan = Boolean(saved && saved.steps.length > 0);
+        if (hasPlan && saved) {
+          setPlan({ steps: dedupePracticeSteps(saved.steps) });
+          setPhase("done");
+        }
         if (draft?.question) {
           setMessages(draft.messages);
           setQuestion(draft.question);
           setModelTurns(draft.modelTurns);
-          setPhase("interview");
+          if (hasPlan) setRedoOpen(true);
+          else setPhase("interview");
           return;
         }
-        if (saved && saved.steps.length > 0) {
-          setPlan({ steps: dedupePracticeSteps(saved.steps) });
-          setPhase("done");
-          return;
-        }
+        if (hasPlan) return;
         return requestTurn([], 0);
       })
       .catch(() => {
@@ -210,16 +220,37 @@ export function PracticeSetupInterview({
   }, [firmId, loadSaved, loadDraft]);
 
   const redo = () => {
-    setPhase("interview");
     setMessages([]);
     setQuestion("");
     setDraft("");
     setMap(null);
-    setPlan(null);
     setError(null);
     setTurnError(null);
     setModelTurns(0);
+    if (plan && plan.steps.length > 0) setRedoOpen(true);
+    else setPhase("interview");
     void requestTurn([], 0);
+  };
+
+  const discardRedoDraft = async () => {
+    if (!firmId || discarding) return;
+    setDiscarding(true);
+    setError(null);
+    try {
+      if (discardRedo) await discardRedo(firmId);
+      else await discardSavedRedo({ data: { firmId } });
+      setRedoOpen(false);
+      setMessages([]);
+      setQuestion("");
+      setDraft("");
+      setMap(null);
+      setTurnError(null);
+      setModelTurns(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not discard the redo");
+    } finally {
+      setDiscarding(false);
+    }
   };
 
   if (!firmId) {
@@ -251,6 +282,7 @@ export function PracticeSetupInterview({
     try {
       const saved = await confirmMap(firmId, visibleMap);
       setPlan(saved.plan ? { steps: dedupePracticeSteps(saved.plan.steps) } : null);
+      setRedoOpen(false);
       setPhase("done");
       toast.success(setupToast("Saved for the practice.", "status"), {
         toasterId: PRACTICE_SETUP_TOASTER_ID,
@@ -278,7 +310,18 @@ export function PracticeSetupInterview({
 
       {booting ? <p className="setup-partner__lede">Loading your practice.</p> : null}
 
-      {!booting && phase === "interview" ? (
+      {!booting && redoOpen ? (
+        <div data-practice-redo="open">
+          <h3>Redo in progress</h3>
+          <div className="setup-partner__actions">
+            <button type="button" disabled={discarding} onClick={() => void discardRedoDraft()}>
+              {discarding ? "Discarding…" : "Discard redo, keep saved plan"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {!booting && !visibleMap && (phase === "interview" || redoOpen) ? (
         <div>
           <InterviewExchange question={question} thinking={loading} messages={messages} />
           <textarea
@@ -322,7 +365,7 @@ export function PracticeSetupInterview({
         </div>
       ) : null}
 
-      {!booting && phase === "map" && visibleMap ? (
+      {!booting && visibleMap && (phase === "map" || redoOpen) ? (
         <div className="setup-partner__map">
           <pre className="sr-only">{setupPartnerMapPromptBlock(filledMap ?? visibleMap)}</pre>
           <h3>Today&apos;s flow</h3>

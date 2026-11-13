@@ -177,11 +177,14 @@ function withSessionRestoreSignal(init?: RequestInit): RequestInit | undefined {
 }
 
 export function coordinatedAuthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  // fetchWithAuth has already resolved the access token. The 4s boot abort
-  // starts now, as the request is handed to fetch, not during getSession.
-  noteBootRequestSent(init?.signal ?? null);
+  // The 4s boot abort starts when fetch is called, not while a refresh
+  // lock still holds the grant and not during getSession.
+  const send = (request: RequestInit | undefined) => {
+    noteBootRequestSent(init?.signal ?? null);
+    return fetch(input, request);
+  };
   const token = refreshTokenFromRequest(input, init);
-  if (!token || typeof window === "undefined") return fetch(input, init);
+  if (!token || typeof window === "undefined") return send(init);
   const nextInit = withSessionRestoreSignal(init);
   if (!refreshFlight) {
     refreshFlight = createRefreshCoordinator({
@@ -191,7 +194,7 @@ export function coordinatedAuthFetch(input: RequestInfo | URL, init?: RequestIni
       lock: (name, fn) => tabAuthLock(name, -1, fn),
     });
   }
-  return refreshFlight.refresh(token, () => fetch(input, nextInit));
+  return refreshFlight.refresh(token, () => send(nextInit));
 }
 
 /**
