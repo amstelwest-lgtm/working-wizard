@@ -239,6 +239,7 @@ import {
   statementYearLine,
 } from "@/lib/statement-period";
 import { clientAccessGate } from "@/lib/client-home-phase";
+import { markClientCardText, markClientReload } from "@/lib/card-timing";
 import { rememberWarmBootCard } from "@/lib/warm-boot-cards";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
 import {
@@ -3830,6 +3831,9 @@ function ClientView() {
     [homeBooks, strategicMoves, openActionAgent, handedTitle],
   );
   useEffect(() => {
+    markClientReload();
+  }, []);
+  useEffect(() => {
     const line = homeLines.financial_manager.find((row) => row.trim().length > 0);
     if (!client?.id || !line) return;
     rememberWarmBootCard(client.id, line);
@@ -4081,6 +4085,10 @@ function ClientView() {
     timedOut: loadTimedOut,
     hasClient: Boolean(client),
   });
+  useEffect(() => {
+    if (homePhase !== "ready") return;
+    markClientCardText(homeLines.financial_manager.find((row) => row.trim().length > 0) ?? "");
+  }, [homePhase, homeLines]);
   if (homePhase === "loading" || homePhase === "error") {
     return (
       <ClientAgentStandby

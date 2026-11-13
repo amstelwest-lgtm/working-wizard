@@ -2,11 +2,13 @@
  * Agent cards before the client row arrives. Idle faces, no tax card,
  * and a line that says whether the read is still going or has given up.
  */
+import { useEffect } from "react";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { AGENT_CARD_CHECKING, agentCardPhase } from "@/lib/agent-card-phase";
 import { CLIENT_HOME_CHECKING, CLIENT_HOME_LOAD_ERROR } from "@/lib/client-home-phase";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { ownerPresence } from "@/lib/owner-presence";
+import { markWarmCardLine } from "@/lib/card-timing";
 import { readWarmBootCard } from "@/lib/warm-boot-cards";
 
 export function ClientAgentStandby({
@@ -20,6 +22,9 @@ export function ClientAgentStandby({
 }) {
   const phase = agentCardPhase({ pending: true, timedOut });
   const cached = timedOut ? null : readWarmBootCard(clientId);
+  useEffect(() => {
+    if (cached) markWarmCardLine();
+  }, [cached]);
   const lede = timedOut ? CLIENT_HOME_LOAD_ERROR : CLIENT_HOME_CHECKING;
   return (
     <div
