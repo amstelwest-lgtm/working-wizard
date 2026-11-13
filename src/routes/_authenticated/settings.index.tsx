@@ -191,7 +191,7 @@ function SettingsPage() {
     }
     void supabase
       .from("clients")
-      .select("id, market, firm_id")
+      .select("id, market, firm_id, created_at")
       .eq("owner_user_id", user.id)
       .order("created_at", { ascending: true })
       .limit(10)
@@ -201,8 +201,13 @@ function SettingsPage() {
           id?: string;
           market?: unknown;
           firm_id?: string | null;
+          created_at?: string | null;
         }>;
-        const preferred = pickOwnedSettingsClient(rows, readStoredOwnerClientId(user.id));
+        const preferred = pickOwnedSettingsClient(
+          rows,
+          readStoredOwnerClientId(user.id, firmId),
+          firmId,
+        );
         setOwnerClientId(preferred?.id ?? null);
         setRegionSnapshot({
           view: "owner",

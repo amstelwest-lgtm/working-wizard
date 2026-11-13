@@ -5,7 +5,11 @@
  */
 import { readFileSync } from "node:fs";
 import { applyIngestStamp, boardFiguresFrom } from "../src/lib/ledger-link-copy.ts";
+import { booksAnswerSentence } from "../src/lib/books-answer.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
+import { ownerAnswerTiles, ownerHomeLines, type OwnerBooks } from "../src/lib/owner-answers.ts";
+import { dataFreshnessLine } from "../src/lib/workflow-coach.ts";
+import { clearWarmBootCardsForTests, readWarmBootCard, rememberWarmBootCard } from "../src/lib/warm-boot-cards.ts";
 import {
   HOME_BOOKS_CHECKING,
   homeLedgerChip,
@@ -32,6 +36,8 @@ assert(sage.ledger === "Sage" && !sage.booksMissing, "Sage chip");
 
 const none = homeLedgerChip({ known: true, xero: null, qbo: null, sage: null });
 assert(none.ledger === null && none.booksMissing && !none.pending, "no ledger shows the connect card");
+const both = homeLedgerChip({ known: true, xero: { tenantId: "t" }, qbo: { realmId: "r" }, sage: null });
+assert(both.ledger === "Xero and QuickBooks" && !both.booksMissing, "both ledgers are named");
 
 const cash = {
   financial_manager: ["Cash is $46,300."],
@@ -126,6 +132,64 @@ assert(ownerSrc.includes("bootReady={ownerBootReadyId === effectiveClientId}"), 
 const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
 assert(door.includes("if (!bootReady) return;"), "connection and action reads stay behind boot");
 assert(door.includes('setLedger("Sage")'), "a Sage-only owner shows Sage");
-assert(clientSrc.includes('sageLink ? "Sage"'), "a Sage-only accountant card shows Sage");
+assert(clientSrc.includes('? "Sage"'), "a Sage-only accountant card shows Sage");
+
+const cashBooks = {
+  hasBooks: true,
+  ledger: null,
+  revenue: null,
+  priorRevenue: null,
+  cogs: null,
+  receivables: null,
+  cashflow: null,
+  hasEvidence: true,
+  cashOnFile: true,
+  openingMissing: false,
+  cashOutlook: { opening: 46300, closing: [], floor: Number.NaN, dipsBelowFloorWeek: null },
+  cashPillarStatus: null,
+  openAction: null,
+  actionsReady: false,
+  signedBy: null,
+  signedOn: null,
+  market: { currency: "USD", locale: "en-US" },
+} satisfies OwnerBooks;
+const waiting = ownerHomeLines(ownerAnswerTiles(cashBooks), null);
+assert(waiting.financial_manager[0] === "Cash is $46,300.", waiting.financial_manager.join(" | "));
+assert(
+  !waiting.financial_manager.includes("Checking action points."),
+  "the cash line paints before action points return",
+);
+const settled = ownerHomeLines(
+  ownerAnswerTiles({ ...cashBooks, actionsReady: true, openAction: "Chase the March invoices." }),
+  null,
+);
+assert(settled.financial_manager[0] === "Cash is $46,300.", "cash stays line 0");
+assert(settled.financial_manager[1] === "Chase the March invoices.", "the action sentence is appended later");
+
+clearWarmBootCardsForTests();
+rememberWarmBootCard("client-1", "Checking action points.");
+assert(readWarmBootCard("client-1") === null, "the checking sentence is not stored");
+rememberWarmBootCard("client-1", "Cash is $46,300.");
+assert(readWarmBootCard("client-1") === "Cash is $46,300.", "a cash line is stored");
+
+const dualFresh = dataFreshnessLine({
+  xero: { lastSyncedAt: "2026-01-01T00:00:00.000Z", syncStatus: "ok", periodLabel: "Jan 2026" },
+  qbo: { lastSyncedAt: "2026-02-01T00:00:00.000Z", syncStatus: "ok", periodLabel: "Feb 2026" },
+  market: { locale: "en-US", timezone: "America/New_York" },
+});
+assert(dualFresh.includes("Xero and QuickBooks"), dualFresh);
+assert(
+  booksAnswerSentence({ freshness: dualFresh }) === "Connected to Xero and QuickBooks, up to Feb 2026.",
+  booksAnswerSentence({ freshness: dualFresh }),
+);
+const onlyQbo = dataFreshnessLine({
+  xero: null,
+  qbo: { lastSyncedAt: "2026-02-01T00:00:00.000Z", syncStatus: "ok", periodLabel: "Feb 2026" },
+  market: { locale: "en-US", timezone: "America/New_York" },
+});
+assert(onlyQbo.includes("QuickBooks") && !onlyQbo.includes("Xero and"), onlyQbo);
+
+const gateSrc = readFileSync("src/lib/firm-client-gate.ts", "utf8");
+assert(gateSrc.includes('.eq("firm_id", id)'), "the first firm client is filtered to the active firm");
 
 console.log("fan-in boot ok");

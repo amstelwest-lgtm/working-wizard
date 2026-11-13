@@ -29,8 +29,22 @@ export type MembershipClientRow = {
   name?: string | null;
 };
 
-export function ownerActiveClientStorageKey(userId: string): string {
-  return `${OWNER_ACTIVE_CLIENT_KEY_PREFIX}${userId.trim()}`;
+export function ownerActiveClientStorageKey(userId: string, firmId: string | null | undefined): string {
+  return `${OWNER_ACTIVE_CLIENT_KEY_PREFIX}${userId.trim()}:${(firmId ?? "").trim()}`;
+}
+
+/**
+ * Stored id when it belongs to this firm. Otherwise the firm's oldest client.
+ * Another firm's stored id is not used.
+ */
+export function pickFirmClientId(input: {
+  storedClientId?: string | null;
+  clients: readonly { id: string; createdAt?: string | null }[];
+}): string | null {
+  const stored = input.storedClientId?.trim() ?? "";
+  if (stored && input.clients.some((row) => row.id === stored)) return stored;
+  const oldest = [...input.clients].sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""))[0];
+  return oldest?.id ?? null;
 }
 
 export function workspaceDisplayName(name: string | null | undefined): string {
@@ -133,33 +147,37 @@ function browserLocalStorage(): Storage | null {
   }
 }
 
-export function readStoredOwnerClientId(userId: string): string | null {
+export function readStoredOwnerClientId(userId: string, firmId: string | null | undefined): string | null {
   const storage = browserLocalStorage();
   if (!storage || !userId.trim()) return null;
   try {
-    const raw = storage.getItem(ownerActiveClientStorageKey(userId));
+    const raw = storage.getItem(ownerActiveClientStorageKey(userId, firmId));
     return raw?.trim() || null;
   } catch {
     return null;
   }
 }
 
-export function writeStoredOwnerClientId(userId: string, clientId: string): void {
+export function writeStoredOwnerClientId(
+  userId: string,
+  firmId: string | null | undefined,
+  clientId: string,
+): void {
   const storage = browserLocalStorage();
   if (!storage || !userId.trim() || !clientId.trim()) return;
   try {
-    storage.setItem(ownerActiveClientStorageKey(userId), clientId.trim());
+    storage.setItem(ownerActiveClientStorageKey(userId, firmId), clientId.trim());
   } catch {
     /* private browsing / quota */
   }
 }
 
 /** Drop a stored client the latest workspace list no longer includes. */
-export function clearStoredOwnerClientId(userId: string): void {
+export function clearStoredOwnerClientId(userId: string, firmId: string | null | undefined): void {
   const storage = browserLocalStorage();
   if (!storage || !userId.trim()) return;
   try {
-    storage.removeItem(ownerActiveClientStorageKey(userId));
+    storage.removeItem(ownerActiveClientStorageKey(userId, firmId));
   } catch {
     /* private browsing / quota */
   }
@@ -265,14 +283,22 @@ export function canOpenOwnerWorkspace(
  * Settings tools (invite accountant, market) stay on a business this login
  * owns. Prefer the board’s last pick when it is still in that owned set.
  */
-export function pickOwnedSettingsClient<T extends { id?: string | null; firm_id?: string | null }>(
+export function pickOwnedSettingsClient<T extends { id?: string | null; firm_id?: string | null; created_at?: string | null }>(
   rows: T[],
   storedClientId?: string | null,
+  firmId?: string | null,
 ): T | null {
+  const firm = firmId?.trim() ?? "";
+  const scoped = firm ? rows.filter((row) => (row.firm_id ?? "") === firm) : rows;
   const stored = storedClientId?.trim() ?? "";
   if (stored) {
-    const match = rows.find((r) => (r.id ?? "").trim() === stored);
+    const match = scoped.find((row) => (row.id ?? "").trim() === stored);
     if (match) return match;
   }
-  return rows.find((r) => !r.firm_id) ?? rows[0] ?? null;
+  if (firm) {
+    return (
+      [...scoped].sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""))[0] ?? null
+    );
+  }
+  return scoped.find((row) => !row.firm_id) ?? scoped[0] ?? null;
 }

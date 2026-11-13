@@ -6,6 +6,7 @@
  * The cash floor line is the same sentence as the owner home card: balance and
  * gap, worded as a floor alert so it does not fight the health Watch band.
  * QuickBooks, Xero, and Sage are the same ledger labels as the owner cards.
+ * Both Xero and QuickBooks are named when both are connected.
  */
 import type { ChaseDraftInput } from "./chase-draft.ts";
 import { actionDisplayTitle } from "./strategic-moves.ts";

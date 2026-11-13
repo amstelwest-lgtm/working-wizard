@@ -12,7 +12,7 @@ function storageKey(clientId: string): string {
 export function rememberWarmBootCard(clientId: string, line: string): void {
   const text = line.replace(/\s+/g, " ").trim();
   if (!clientId || !text) return;
-  if (text === "Checking…" || text.startsWith("Couldn't load")) return;
+  if (text === "Checking…" || text === "Checking action points." || text.startsWith("Couldn't load")) return;
   memory.set(clientId, text);
   try {
     sessionStorage.setItem(storageKey(clientId), text);

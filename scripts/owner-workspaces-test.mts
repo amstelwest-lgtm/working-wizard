@@ -16,6 +16,7 @@ import {
   ownerActiveClientStorageKey,
   ownerBootShellName,
   pickActiveOwnerWorkspace,
+  pickFirmClientId,
   pickOwnedSettingsClient,
   readStoredOwnerClientId,
   workspaceDisplayName,
@@ -87,8 +88,8 @@ assert(
 assert(boardRoleForWorkspace("owner") === "client_owner", "owner workspace → owner board");
 assert(boardRoleForWorkspace("member") === "client_member", "member workspace → member board");
 assert(
-  ownerActiveClientStorageKey("user-1") === "milon_owner_active_client:user-1",
-  "per-user last-business key",
+  ownerActiveClientStorageKey("user-1", "firm-a") === "milon_owner_active_client:user-1:firm-a",
+  "last-business key is scoped to the user and the firm",
 );
 
 assert(canOpenOwnerWorkspace(merged, first), "owned workspace is openable");
@@ -233,10 +234,21 @@ const host = globalThis as { localStorage?: Storage };
 const priorStorage = host.localStorage;
 host.localStorage = storage;
 try {
-  writeStoredOwnerClientId("user-1", stale);
-  assert(readStoredOwnerClientId("user-1") === stale, "the stored id round-trips");
-  clearStoredOwnerClientId("user-1");
-  assert(readStoredOwnerClientId("user-1") === null, "clearing a revoked id drops the stored client");
+  writeStoredOwnerClientId("user-1", "firm-a", stale);
+  assert(readStoredOwnerClientId("user-1", "firm-a") === stale, "the stored id round-trips");
+  assert(readStoredOwnerClientId("user-1", "firm-b") === null, "firm A's id is not used for firm B");
+  clearStoredOwnerClientId("user-1", "firm-a");
+  assert(readStoredOwnerClientId("user-1", "firm-a") === null, "clearing a revoked id drops the stored client");
+  assert(
+    pickFirmClientId({
+      storedClientId: "firm-a-client",
+      clients: [
+        { id: "firm-b-new", createdAt: "2026-02-01" },
+        { id: "firm-b-old", createdAt: "2026-01-01" },
+      ],
+    }) === "firm-b-old",
+    "a missing firm id falls back to that firm's oldest client",
+  );
 } finally {
   if (priorStorage === undefined) delete host.localStorage;
   else host.localStorage = priorStorage;

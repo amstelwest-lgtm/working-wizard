@@ -35,7 +35,7 @@ export const HOME_BOOKS_CHECKING = "Checking this client's books.";
 export type HomeLedgerChip = {
   /** Status calls have not settled. Not "no ledger". */
   pending: boolean;
-  ledger: "QuickBooks" | "Xero" | "Sage" | null;
+  ledger: "QuickBooks" | "Xero" | "Sage" | "Xero and QuickBooks" | null;
   /** The connect card. False while pending, so Home does not say none early. */
   booksMissing: boolean;
 };
@@ -51,7 +51,16 @@ export function homeLedgerChip(input: {
   sage: unknown;
 }): HomeLedgerChip {
   if (!input.known) return { pending: true, ledger: null, booksMissing: false };
-  const ledger = input.qbo ? "QuickBooks" : input.xero ? "Xero" : input.sage ? "Sage" : null;
+  const ledger =
+    input.qbo && input.xero
+      ? "Xero and QuickBooks"
+      : input.qbo
+        ? "QuickBooks"
+        : input.xero
+          ? "Xero"
+          : input.sage
+            ? "Sage"
+            : null;
   return {
     pending: false,
     ledger,

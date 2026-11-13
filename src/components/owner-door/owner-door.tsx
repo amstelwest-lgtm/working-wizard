@@ -288,7 +288,7 @@ export function OwnerDoor({
   const [errors, setErrors] = useState<Partial<Record<AgentKey, string>>>({});
   const [errorCodes, setErrorCodes] = useState<Partial<Record<AgentKey, string>>>({});
   const [listening, setListening] = useState(false);
-  const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | "Sage" | null>(null);
+  const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | "Sage" | "Xero and QuickBooks" | null>(null);
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
   const [actionRows, setActionRows] = useState<OwnerActionRow[]>([]);
   const [actionsUnavailable, setActionsUnavailable] = useState(false);
@@ -599,7 +599,8 @@ export function OwnerDoor({
       const qboRow = qbo.error ? null : (qbo.data?.[0] ?? null);
       const xeroRow = xero.error ? null : (xero.data?.[0] ?? null);
       const sageRow = sage.error ? null : (sage.data?.[0] ?? null);
-      if (qboRow) setLedger("QuickBooks");
+      if (qboRow && xeroRow) setLedger("Xero and QuickBooks");
+      else if (qboRow) setLedger("QuickBooks");
       else if (xeroRow) setLedger("Xero");
       else if (sageRow) setLedger("Sage");
       else setLedger(null);

@@ -3838,7 +3838,16 @@ function ClientView() {
     };
     return {
       hasBooks: hasFigures || Boolean(qboLink || xeroLink || sageLink),
-      ledger: qboLink ? "QuickBooks" : xeroLink ? "Xero" : sageLink ? "Sage" : null,
+      ledger:
+        qboLink && xeroLink
+          ? "Xero and QuickBooks"
+          : qboLink
+            ? "QuickBooks"
+            : xeroLink
+              ? "Xero"
+              : sageLink
+                ? "Sage"
+                : null,
       revenue: amount(financials.revenue),
       priorRevenue: amount(priorFin?.revenue),
       cogs: amount(financials.cogs),
