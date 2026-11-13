@@ -149,7 +149,9 @@ function browserLocalStorage(): Storage | null {
 
 export function readStoredOwnerClientId(userId: string, firmId: string | null | undefined): string | null {
   const storage = browserLocalStorage();
-  if (!storage || !userId.trim()) return null;
+  const firm = firmId?.trim() ?? "";
+  // An empty firm must not read `:${userId}:` or the old unscoped key.
+  if (!storage || !userId.trim() || !firm) return null;
   try {
     const raw = storage.getItem(ownerActiveClientStorageKey(userId, firmId));
     return raw?.trim() || null;
@@ -164,7 +166,8 @@ export function writeStoredOwnerClientId(
   clientId: string,
 ): void {
   const storage = browserLocalStorage();
-  if (!storage || !userId.trim() || !clientId.trim()) return;
+  const firm = firmId?.trim() ?? "";
+  if (!storage || !userId.trim() || !firm || !clientId.trim()) return;
   try {
     storage.setItem(ownerActiveClientStorageKey(userId, firmId), clientId.trim());
   } catch {
@@ -175,7 +178,8 @@ export function writeStoredOwnerClientId(
 /** Drop a stored client the latest workspace list no longer includes. */
 export function clearStoredOwnerClientId(userId: string, firmId: string | null | undefined): void {
   const storage = browserLocalStorage();
-  if (!storage || !userId.trim()) return;
+  const firm = firmId?.trim() ?? "";
+  if (!storage || !userId.trim() || !firm) return;
   try {
     storage.removeItem(ownerActiveClientStorageKey(userId, firmId));
   } catch {

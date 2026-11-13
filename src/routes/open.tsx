@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
+import { readActiveFirmId } from "@/lib/firm-brand";
 import { resolveSmartLanding } from "@/lib/smart-landing.functions";
 import {
   isSafeSmartLandingHref,
@@ -33,7 +34,8 @@ function OpenLanding() {
       go(decideSmartLanding({ signedIn: false, entitled: false }).href);
       return;
     }
-    void resolve()
+    const firmId = readActiveFirmId(user.id);
+    void resolve({ data: { firmId } })
       .then((decision) => {
         go(decision.href);
       })

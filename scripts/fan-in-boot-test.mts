@@ -167,10 +167,17 @@ assert(settled.financial_manager[0] === "Cash is $46,300.", "cash stays line 0")
 assert(settled.financial_manager[1] === "Chase the March invoices.", "the action sentence is appended later");
 
 clearWarmBootCardsForTests();
-rememberWarmBootCard("client-1", "Checking action points.");
-assert(readWarmBootCard("client-1") === null, "the checking sentence is not stored");
-rememberWarmBootCard("client-1", "Cash is $46,300.");
-assert(readWarmBootCard("client-1") === "Cash is $46,300.", "a cash line is stored");
+const warmScope = { userId: "user-1", firmId: "firm-a", clientId: "client-1" };
+const warmRead = {
+  ...warmScope,
+  sessionUserId: "user-1",
+  expiresAt: Math.floor(Date.now() / 1000) + 3600,
+  activeFirmId: "firm-a",
+};
+rememberWarmBootCard(warmScope, "Checking action points.");
+assert(readWarmBootCard(warmRead) === null, "the checking sentence is not stored");
+rememberWarmBootCard(warmScope, "Cash is $46,300.");
+assert(readWarmBootCard(warmRead) === "Cash is $46,300.", "a cash line is stored");
 
 const dualFresh = dataFreshnessLine({
   xero: { lastSyncedAt: "2026-01-01T00:00:00.000Z", syncStatus: "ok", periodLabel: "Jan 2026" },

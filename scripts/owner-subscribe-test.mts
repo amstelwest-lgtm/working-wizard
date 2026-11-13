@@ -126,9 +126,11 @@ assert(planCss.includes("width: auto") && planCss.includes("min-height: 44px"), 
 
 const door = read("src/components/owner-door/owner-door.tsx");
 assert(door.includes('onInvite={() => go("accountant")}'), "invite opens the accountant portal");
-assert(door.includes("startOwnerCheckout"), "Subscribe calls owner checkout");
-assert(door.includes("getOwnerEntitlement"), "the door reads owner entitlement");
-assert(door.includes('interval: "month"'), "checkout asks for the monthly plan");
+assert(door.includes("LazyOwnerBillingBridge"), "billing loads after the owner home paints");
+const billing = read("src/components/owner-door/owner-billing-bridge.tsx");
+assert(billing.includes("startOwnerCheckout"), "Subscribe calls owner checkout");
+assert(billing.includes("getOwnerEntitlement"), "the door reads owner entitlement");
+assert(billing.includes('interval: "month"'), "checkout asks for the monthly plan");
 
 const core = read("src/lib/stripe-checkout.core.ts");
 assert(

@@ -165,10 +165,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
                 href: "https://fonts.gstatic.com",
                 crossOrigin: "anonymous" as const,
               },
-              {
-                rel: "stylesheet" as const,
-                href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap",
-              },
               { rel: "stylesheet" as const, href: "/ask-ai.css" },
             ]),
         // Public pages inline their own CSS. The app sheet is render-blocking
@@ -290,7 +286,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname||"/";if(p.length>1&&p.charAt(p.length-1)==="/")p=p.slice(0,-1);var ok=${JSON.stringify(PUBLIC_MARKETING_PATHS)};if(ok.indexOf(p)<0)return;var h=${JSON.stringify(appCss)};if(document.querySelector('link[rel="stylesheet"][href="'+h+'"]'))return;var l=document.createElement("link");l.rel="stylesheet";l.href=h;l.media="print";l.onload=function(){this.media="all";this.onload=null;};document.head.appendChild(l);}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname||"/";if(p.length>1&&p.charAt(p.length-1)==="/")p=p.slice(0,-1);var ok=${JSON.stringify(PUBLIC_MARKETING_PATHS)};var fonts="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap";if(ok.indexOf(p)<0&&!document.querySelector('link[href="'+fonts+'"]')){var f=document.createElement("link");f.rel="stylesheet";f.href=fonts;f.media="print";f.onload=function(){this.media="all";this.onload=null;};document.head.appendChild(f);}if(ok.indexOf(p)<0)return;var h=${JSON.stringify(appCss)};if(document.querySelector('link[rel="stylesheet"][href="'+h+'"]'))return;var l=document.createElement("link");l.rel="stylesheet";l.href=h;l.media="print";l.onload=function(){this.media="all";this.onload=null;};document.head.appendChild(l);}catch(e){}})();`,
           }}
         />
         <style

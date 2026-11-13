@@ -8,6 +8,7 @@ import { restoreSession } from "@/integrations/supabase/session-deadline";
 import { markAuthReady, SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { decideAuthStateChange, resolveConfirmedSignOut } from "@/lib/auth-session-guard";
 import { readStoredAuthSession, type StoredAuthSession } from "@/lib/stored-auth-session";
+import { clearAllWarmBootCards } from "@/lib/warm-boot-cards";
 
 type AuthCtx = {
   user: User | null;
@@ -135,7 +136,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!shouldLoad) {
       setLoading(false);
       setRestoreFailed(false);
-      setSession(null);
+      clearAllWarmBootCards();
+          setSession(null);
       return;
     }
 
@@ -161,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const had =
           hadSessionRef.current || hadTokenAtStartRef.current || Boolean(storedNow?.user?.id);
         if (intentionalSignOutRef.current || !had) {
+          clearAllWarmBootCards();
           setSession(null);
           setMonitoringUser(null);
           setRestoreFailed(false);
@@ -194,7 +197,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setLoading(false);
               return;
             }
-            setSession(null);
+            clearAllWarmBootCards();
+          setSession(null);
             setMonitoringUser(null);
             setRestoreFailed(outcome === "panel");
             setLoading(false);
@@ -217,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setLoading(false);
             return;
           }
+          clearAllWarmBootCards();
           setSession(null);
           setMonitoringUser(null);
           setRestoreFailed(true);
@@ -258,6 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             intentional: intentionalSignOutRef.current,
             retryHasUser: false,
           });
+          clearAllWarmBootCards();
           setSession(null);
           setMonitoringUser(null);
           setRestoreFailed(outcome === "panel");
@@ -265,7 +271,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         setRestoreFailed(false);
-        setSession(null);
+        clearAllWarmBootCards();
+          setSession(null);
         setMonitoringUser(null);
         setLoading(false);
       });
@@ -299,6 +306,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         restoreFailed,
         signOut: async () => {
           intentionalSignOutRef.current = true;
+          clearAllWarmBootCards();
           const { clearPortalRouting } = await import("@/lib/user-roles");
           const { clearCachedFirmEntitlement } = await import("@/lib/firm-entitlement-client");
           clearPortalRouting();

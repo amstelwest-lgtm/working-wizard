@@ -168,7 +168,11 @@ const clientStudio = readFileSync(resolve("src/routes/_authenticated/clients.$cl
 assert(!clientStudio.includes("rememberDeskClient"), "opening a client does not remember a desk");
 assert(!clientStudio.includes("desk-client"), "the client file does not keep desk memory");
 
+const landingServer = readFileSync(resolve("src/lib/smart-landing.server.ts"), "utf8");
+assert(landingServer.includes('.eq("firm_id", id)'), "the first client is the active firm's oldest");
+assert(!landingServer.includes('.not("firm_id"'), "the first client is not the oldest of any firm");
 const openRoute = readFileSync(resolve("src/routes/open.tsx"), "utf8");
+assert(openRoute.includes("readActiveFirmId"), "landing sends the active firm");
 assert(openRoute.includes("resolveSmartLanding"), "landing asks the server where to go");
 assert(openRoute.includes("isSafeSmartLandingHref"), "landing refuses an unexpected href");
 

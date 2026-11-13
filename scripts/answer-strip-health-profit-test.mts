@@ -119,7 +119,9 @@ const ratiosPane = sliceBetween(route, 'id="pane-ratios"', 'id="pane-profit"');
 const profitPane = sliceBetween(route, 'id="pane-profit"', 'id="pane-cash"');
 
 assert(count(strip, "<SignoffStatusChip") === 1, "the shared strip renders one status");
-assert(count(ratiosPane, "<DeliverableAnswerStrip") === 1, "health and pillars share one strip");
+const healthAnswer = readFileSync(resolve("src/components/health-score-answer.tsx"), "utf8");
+assert(count(ratiosPane, "<HealthScoreAnswer") === 1, "health and pillars share one strip");
+assert(count(healthAnswer, "<DeliverableAnswerStrip") === 1, "the health strip is the shared answer strip");
 assert(count(profitPane, "<DeliverableAnswerStrip") === 1, "profit has one strip");
 assert(ratiosPane.includes('scope="financials"'), "health status is the financials scope");
 assert(profitPane.includes('scope="profitability"'), "profit status is the profitability scope");

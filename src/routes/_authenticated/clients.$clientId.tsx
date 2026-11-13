@@ -9,23 +9,27 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { completeDeliverablePdfItems, downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
-import { CashForecastPanel } from "@/components/cash-forecast";
+import { LazyCashForecastPanel as CashForecastPanel } from "@/components/lazy-route-panels";
 import { cashPagedSearch, cashPagedViewFromSearch } from "@/lib/cash-paged-view";
 import { BUDGET_PAGED_LABEL, budgetPagedSearch, budgetPagedViewFromSearch } from "@/lib/budget-paged-view";
 import { profitPagedSearch, profitPagedSentence, profitPagedViewFromSearch } from "@/lib/profit-paged-view";
 import { ProfitPnlTable } from "@/components/profit/profit-pnl-table";
 import { ProfitSetupFigures } from "@/components/profit/profit-setup-figures";
-import { ProfitWorkspace } from "@/components/profit/profit-workspace";
-import { CollectionsPanel } from "@/components/collections-panel";
-import { PayablesPanel } from "@/components/payables-panel";
-import { BudgetPanel } from "@/components/budget/budget-panel";
+import { LazyProfitWorkspace as ProfitWorkspace } from "@/components/lazy-route-panels";
+import {
+  LazyCollectionsPanel as CollectionsPanel,
+  LazyPayablesPanel as PayablesPanel,
+} from "@/components/lazy-route-panels";
+import { LazyBudgetPanel as BudgetPanel } from "@/components/lazy-route-panels";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { UploadFinancials } from "@/components/upload-financials";
 import { BalanceSheetPrompt } from "@/components/balance-sheet-prompt";
 import { needsBalanceSheetPrompt } from "@/lib/balance-sheet-prompt";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
-import { WalkthroughWizard } from "@/components/walkthrough-wizard";
-import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
+import {
+  LazyCheckoutAfterInsight as CheckoutAfterInsight,
+  LazyWalkthroughWizard as WalkthroughWizard,
+} from "@/components/lazy-route-panels";
 import { loadStarterMonthlyLabel } from "@/lib/trial-card-price";
 import { FirmDashboardCrumb, firmDashboardCrumbIsLink } from "@/components/firm-dashboard-crumb";
 import { useFirmBillingEntitled } from "@/contexts/firm-billing-access";
@@ -70,7 +74,7 @@ import {
 } from "@/lib/market";
 import { formatMoney } from "@/lib/market/format";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
-import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
+import { LazyHealthScoreAnswer as HealthScoreAnswer } from "@/components/lazy-route-panels";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
 import {
@@ -152,7 +156,7 @@ import {
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
 import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
-import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
+import { LazyReviewInputsDrawer as ReviewInputsDrawer } from "@/components/lazy-route-panels";
 import { figureSourceChipLabel, resolveFigureSource } from "@/lib/ledger-link-copy";
 import { booksAnswerSentence, booksCoverPeriod, booksTileLines, homeStatementsLine } from "@/lib/books-answer";
 import { computeBudgetMonths } from "@/lib/budget.compute";
@@ -248,6 +252,7 @@ import {
 import { clientAccessGate } from "@/lib/client-home-phase";
 import { markClientCardText, markClientReload } from "@/lib/card-timing";
 import { rememberWarmBootCard } from "@/lib/warm-boot-cards";
+import { readActiveFirmId } from "@/lib/firm-brand";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
 import {
   assessClientMetrics,
@@ -284,7 +289,7 @@ import {
   type DebtSchedule,
 } from "@/lib/debt-schedule";
 import { NextStepCard } from "@/components/next-step-card";
-import { DataUpToDate } from "@/components/data-up-to-date";
+import { LazyDataUpToDate as DataUpToDate } from "@/components/lazy-route-panels";
 import {
   dataFreshnessLine,
   evidenceForBriefingTab,
@@ -293,12 +298,12 @@ import {
 } from "@/lib/workflow-coach";
 import { relatedTabForRatio } from "@/lib/ratio-briefing";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
-import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
+import { LazyTrialEndedPlanBlock as TrialEndedPlanBlock } from "@/components/lazy-route-panels";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { CompliancePane } from "@/components/compliance-pane";
 import { SendAgentPanel } from "@/components/send-agent-panel";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
-import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
+import { LazyAdvisoryPackPanel as AdvisoryPackPanel } from "@/components/lazy-route-panels";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
 import { portalButtonClass } from "@/lib/client-chrome";
@@ -314,7 +319,7 @@ import {
 import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientLibrary } from "@/components/client-library";
-import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
+import { LazyStrategicMovesPanel as StrategicMovesPanel } from "@/components/lazy-route-panels";
 import { attachPillarScore, rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
 import { implausibleSampleNote, statementSampleImplausible } from "@/lib/operating-profit-display";
@@ -331,7 +336,7 @@ import {
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { needsPastPeriodPrompt } from "@/lib/history-coverage";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
-import { PastPeriodUploadDialog } from "@/components/past-period-upload";
+import { LazyPastPeriodUploadDialog as PastPeriodUploadDialog } from "@/components/lazy-route-panels";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { cashSignoffIsStale, healthSignoffIsStale, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { financialsHomeSignoffLine } from "@/components/owner-signoff-mark";
@@ -392,7 +397,7 @@ import {
 } from "@/lib/tax-specialist/agents";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState } from "@/components/primitives";
-import { DeliverableInputConfig } from "@/components/deliverable-input-config";
+import { LazyDeliverableInputConfig as DeliverableInputConfig } from "@/components/lazy-route-panels";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
 import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 
@@ -768,7 +773,7 @@ const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
 function ClientView() {
   const { clientId } = Route.useParams();
   const search = Route.useSearch();
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const sessionUserId = user?.id ?? null;
   const {
     notes: clientNotes,
@@ -1576,24 +1581,11 @@ function ClientView() {
   };
 
   const avgHealth = overallHealth.overall ?? NaN;
-  const healthCaption = computeOverviewCaption({
-    hasRealFinancials: hasFigures,
-    avgHealth,
-    cashHealth: pillarHealths.cash ?? NaN,
-    displayStatus: overallHealth.displayStatus,
-  });
   const healthPillarLines = (["profit", "assets", "financing", "cash"] as const).map((id) => ({
     label: PILLAR_SHORT_LABELS[id],
     score: pillarHealths[id],
     status: pillarStatus[id],
   }));
-  const healthSentence = healthAnswerSentence({
-    caption: healthCaption,
-    score: Number.isFinite(avgHealth) ? avgHealth : null,
-    bandLabel: bookStatusWord,
-    pillars: healthPillarLines,
-    includeScore: search.focus === "pillars",
-  });
   const connectedLedger = qboLink?.figuresFromThisSync
     ? "qbo"
     : xeroLink?.figuresFromThisSync
@@ -3927,9 +3919,11 @@ function ClientView() {
   }, []);
   useEffect(() => {
     const line = homeLines.financial_manager.find((row) => row.trim().length > 0);
-    if (!client?.id || !line) return;
-    rememberWarmBootCard(client.id, line);
-  }, [client?.id, homeLines]);
+    if (!client?.id || !line || !sessionUserId) return;
+    const firmId = readActiveFirmId(sessionUserId);
+    if (!firmId) return;
+    rememberWarmBootCard({ userId: sessionUserId, firmId, clientId: client.id }, line);
+  }, [client?.id, homeLines, sessionUserId]);
   const homeStatus = useMemo(() => ownerCardStatuses(homeBooks), [homeBooks]);
   // Declared before the memo. A const after the loading return is still in
   // the temporal dead zone here, and the minified chunk throws
@@ -4187,6 +4181,9 @@ function ClientView() {
     return (
       <ClientAgentStandby
         clientId={clientId}
+        userId={sessionUserId}
+        firmId={sessionUserId ? readActiveFirmId(sessionUserId) : null}
+        expiresAt={session?.expires_at ?? null}
         timedOut={homePhase === "error"}
         onRetry={
           homePhase === "error"
@@ -4729,9 +4726,14 @@ function ClientView() {
                     title="Score"
                     subtitle="The health score for this client. Sign off and export the PDF from this page."
                   >
-                  <DeliverableAnswerStrip
-                    heading="Health score"
-                    sentence={healthSentence}
+                  <HealthScoreAnswer
+                    hasFigures={hasFigures}
+                    avgHealth={avgHealth}
+                    cashHealth={pillarHealths.cash ?? NaN}
+                    displayStatus={overallHealth.displayStatus}
+                    bandLabel={bookStatusWord}
+                    pillars={healthPillarLines}
+                    includeScore={search.focus === "pillars"}
                     chip={healthChip}
                     scope="financials"
                     clientId={clientId}
@@ -4742,8 +4744,7 @@ function ClientView() {
                       client?.financials_updated_at ?? null,
                     )}
                     onSignoffChange={patchSignoff("financials")}
-                  signoffKnown={signoffsKnown}
-                    canSign
+                    signoffKnown={signoffsKnown}
                     extraActions={
                       <button
                         type="button"
