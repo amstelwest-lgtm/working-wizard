@@ -299,6 +299,7 @@
     "test:strike7-entitlement": "vite-node --config scripts/vite-test.config.ts scripts/strike7-entitlement-test.mts",
     "test:strike7-cap": "vite-node --config scripts/vite-test.config.ts scripts/strike7-cap-test.mts",
     "test:shell-hang-deadline": "vite-node --config scripts/vite-test.config.ts scripts/shell-hang-deadline-test.mts",
+    "test:shell-retry-clear": "vite-node --config scripts/vite-test.config.ts scripts/shell-retry-clear-test.mts",
     "test:billing-wall-copy": "vite-node --config scripts/vite-test.config.ts scripts/billing-wall-copy-test.mts",
     "test:join-invite-brand": "vite-node --config scripts/vite-test.config.ts scripts/join-invite-brand-test.mts",
     "test:smart-landing": "vite-node --config scripts/vite-test.config.ts scripts/smart-landing-test.mts",

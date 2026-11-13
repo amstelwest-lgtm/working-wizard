@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { useAppChromeReady } from "@/contexts/app-chrome-ready";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
@@ -7,6 +7,14 @@ import { authenticatedLayoutLinks } from "@/styles/app-route-styles";
 
 function FirmShellLoading() {
   return <BootSkeleton />;
+}
+
+type GateModule = { AuthGate: ComponentType };
+let gateLoaderForTests: (() => Promise<GateModule>) | null = null;
+
+/** Tests substitute the gate chunk so the shell timer can be observed. */
+export function setAuthenticatedGateLoaderForTests(loader: (() => Promise<GateModule>) | null): void {
+  gateLoaderForTests = loader;
 }
 
 function ShellLoadRetry({ onRetry }: { onRetry: () => void }) {
@@ -40,23 +48,34 @@ export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedShell,
 });
 
-function AuthenticatedShell() {
+export function AuthenticatedShell() {
   const chromeReady = useAppChromeReady();
   const [Gate, setGate] = useState<ComponentType | null>(null);
   const [shellRetry, setShellRetry] = useState(false);
   const [gateAttempt, setGateAttempt] = useState(0);
+  const shellTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Starts with the shell, before the chrome chunk or the gate chunk settles.
   useEffect(() => {
-    const timer = window.setTimeout(() => setShellRetry(true), SHELL_GATE_TIMEOUT_MS);
-    return () => window.clearTimeout(timer);
+    shellTimer.current = window.setTimeout(() => setShellRetry(true), SHELL_GATE_TIMEOUT_MS);
+    return () => {
+      if (shellTimer.current) window.clearTimeout(shellTimer.current);
+      shellTimer.current = null;
+    };
   }, [gateAttempt]);
 
   useEffect(() => {
     if (!chromeReady) return;
     let cancelled = false;
-    void import("./_authenticated.gate").then((mod) => {
-      if (!cancelled) setGate(() => mod.AuthGate);
+    const load = gateLoaderForTests ?? (() => import("./_authenticated.gate"));
+    void load().then((mod) => {
+      if (cancelled) return;
+      if (shellTimer.current) {
+        window.clearTimeout(shellTimer.current);
+        shellTimer.current = null;
+      }
+      setShellRetry(false);
+      setGate(() => mod.AuthGate);
     });
     return () => {
       cancelled = true;

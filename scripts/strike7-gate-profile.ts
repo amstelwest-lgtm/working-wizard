@@ -8,15 +8,20 @@ import { STRIKE7_BEN_ID, STRIKE7_MY_PRACTICE_ID } from "./strike7-firms";
 export type Strike7FirmPick = "my-practice" | "ben";
 
 let pick: Strike7FirmPick = "my-practice";
+let firmDelayMs = 50;
 
 export function setStrike7FirmPick(next: Strike7FirmPick): void {
   pick = next;
 }
 
+export function setStrike7FirmDelay(ms: number): void {
+  firmDelayMs = ms;
+}
+
 export function useAccountantProfile() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    const timer = window.setTimeout(() => setReady(true), 50);
+    const timer = window.setTimeout(() => setReady(true), firmDelayMs);
     return () => window.clearTimeout(timer);
   }, []);
   if (!ready) {
