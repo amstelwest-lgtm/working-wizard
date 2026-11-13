@@ -30,6 +30,69 @@ export function connectBooksHomeVisible(ledgers: ConnectBooksLedger): boolean {
   return !ledgers.xero && !ledgers.qbo && !ledgers.sage;
 }
 
+export const HOME_BOOKS_CHECKING = "Checking this client's books.";
+
+export type HomeLedgerChip = {
+  /** Status calls have not settled. Not "no ledger". */
+  pending: boolean;
+  ledger: "QuickBooks" | "Xero" | "Sage" | null;
+  /** The connect card. False while pending, so Home does not say none early. */
+  booksMissing: boolean;
+};
+
+/**
+ * Home connect chip. Unknown stays pending. A settled miss is the connect
+ * card. QuickBooks wins, then Xero, then Sage, matching the home title.
+ */
+export function homeLedgerChip(input: {
+  known: boolean;
+  xero: unknown;
+  qbo: unknown;
+  sage: unknown;
+}): HomeLedgerChip {
+  if (!input.known) return { pending: true, ledger: null, booksMissing: false };
+  const ledger = input.qbo ? "QuickBooks" : input.xero ? "Xero" : input.sage ? "Sage" : null;
+  return {
+    pending: false,
+    ledger,
+    booksMissing: connectBooksHomeVisible(input),
+  };
+}
+
+type HomeCardLines = {
+  financial_manager: readonly string[];
+  analyst: readonly string[];
+  advisor: readonly string[];
+};
+
+function isConnectHeadline(line: string): boolean {
+  return line.startsWith("Connect QuickBooks");
+}
+
+/**
+ * While ledger status is still out, a connect headline is not "no books".
+ * A real cash line is left alone. A connect headline does not blank the
+ * other two cards.
+ */
+export function homeLinesWhileLedgerPending<T extends HomeCardLines>(lines: T, pending: boolean): T {
+  if (!pending) return lines;
+  const swap = (line: string) => (isConnectHeadline(line) ? HOME_BOOKS_CHECKING : line);
+  if (!lines.financial_manager.some(isConnectHeadline)) {
+    return {
+      ...lines,
+      financial_manager: lines.financial_manager.map(swap),
+      analyst: lines.analyst.map(swap),
+      advisor: lines.advisor.map(swap),
+    };
+  }
+  return {
+    ...lines,
+    financial_manager: [HOME_BOOKS_CHECKING],
+    analyst: [HOME_BOOKS_CHECKING],
+    advisor: [HOME_BOOKS_CHECKING],
+  };
+}
+
 /** Sage sync is a stub (docs/SAGE_SA.md). Say so wherever Sage sits next to Xero and QuickBooks. */
 export const SAGE_NOT_SYNCED_HINT =
   "Sage figures are not synced yet. Connecting checks the login only.";

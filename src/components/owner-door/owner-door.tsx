@@ -294,6 +294,7 @@ export function OwnerDoor({
   const [deliverableAttempt, setDeliverableAttempt] = useState(0);
   const [quickBooks, setQuickBooks] = useState<BooksLink>({ state: "unknown" });
   const [xeroLink, setXeroLink] = useState<BooksLink>({ state: "unknown" });
+  const [sageLink, setSageLink] = useState<BooksLink>({ state: "unknown" });
   const [openAction, setOpenAction] = useState<string | null>(null);
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
@@ -556,11 +557,13 @@ export function OwnerDoor({
     setDeliverableCount(null);
     setQuickBooks({ state: "unknown" });
     setXeroLink({ state: "unknown" });
+    setSageLink({ state: "unknown" });
     if (!clientId) {
       setActionsReady(true);
       setDeliverableCount(0);
       setQuickBooks({ state: "absent" });
       setXeroLink({ state: "absent" });
+      setSageLink({ state: "absent" });
       return;
     }
     let cancelled = false;
@@ -576,16 +579,22 @@ export function OwnerDoor({
         .eq("client_id", clientId)
         .limit(1),
       supabase
+        .from("sage_connections")
+        .select("id, last_synced_at")
+        .eq("client_id", clientId)
+        .limit(1),
+      supabase
         .from("action_items_v")
         .select("id, title, status, owner_email, owner_name, seq")
         .eq("client_id", clientId)
         .neq("status", "done")
         .order("seq", { ascending: true })
         .limit(20),
-    ]).then(async ([qbo, xero, actions]) => {
+    ]).then(async ([qbo, xero, sage, actions]) => {
       if (cancelled) return;
       const qboRow = qbo.error ? null : (qbo.data?.[0] ?? null);
       const xeroRow = xero.error ? null : (xero.data?.[0] ?? null);
+      const sageRow = sage.error ? null : (sage.data?.[0] ?? null);
       if (qboRow) setLedger("QuickBooks");
       else if (xeroRow) setLedger("Xero");
       else setLedger(null);
@@ -601,6 +610,13 @@ export function OwnerDoor({
           ? { state: "unknown" }
           : xeroRow
             ? { state: "linked", at: xeroRow.last_synced_at }
+            : { state: "absent" },
+      );
+      setSageLink(
+        sage.error
+          ? { state: "unknown" }
+          : sageRow
+            ? { state: "linked", at: sageRow.last_synced_at }
             : { state: "absent" },
       );
       if (actions.error) {
@@ -844,6 +860,7 @@ export function OwnerDoor({
         }),
         quickBooks,
         xero: xeroLink,
+        sage: sageLink,
         when: (iso) => formatDate(iso, market),
         statementSpan,
         signedLine: homeSignoffLine,
@@ -863,6 +880,7 @@ export function OwnerDoor({
       deliverableCount,
       quickBooks,
       xeroLink,
+      sageLink,
       market,
       statementSpan,
       homeSignoffLine,

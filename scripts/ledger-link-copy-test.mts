@@ -350,8 +350,8 @@ assert(
 const briefing = read("src/components/client-briefing.tsx");
 const xeroCard = read("src/components/xero-connect.tsx");
 const qboCard = read("src/components/qbo-connect.tsx");
-assert(xeroCard.includes("board: status.boardFigures"), "Xero proof receives the board source");
-assert(qboCard.includes("board: status.boardFigures"), "QuickBooks proof receives the board source");
+assert(xeroCard.includes("applyIngestStamp(status.boardFigures"), "Xero proof receives the board source");
+assert(qboCard.includes("applyIngestStamp(status.boardFigures"), "QuickBooks proof receives the board source");
 for (const [name, src] of [
   ["briefing", briefing],
   ["xero card", xeroCard],

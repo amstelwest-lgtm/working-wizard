@@ -3,18 +3,24 @@ import type { ReactNode } from "react";
 /** Books connection on accountant client Home. No ledger shows the connect card. */
 export function HomeBooks({
   ledger,
+  pending = false,
   syncLine,
   connect,
   setupPartner,
   onManage,
 }: {
   ledger: string | null;
+  /** Status is still out. Do not show the connect card or a ledger name. */
+  pending?: boolean;
   syncLine: string | null;
   connect: ReactNode;
   /** Shown with Books whether or not a ledger is connected (e.g. Implementation Manager). */
   setupPartner?: ReactNode;
   onManage: () => void;
 }) {
+  if (pending) {
+    return <>{setupPartner}</>;
+  }
   if (!ledger) {
     return (
       <>

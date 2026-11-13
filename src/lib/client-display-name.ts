@@ -161,6 +161,11 @@ export async function loadClientDisplayNames(
   db: NameDb,
   clients: readonly DisplayNameClient[],
   viewerFullName?: string | null,
+  /**
+   * Ledger names already read by the status calls. When this map is passed,
+   * even empty, the connection tables are not read again.
+   */
+  ledgerNames?: ReadonlyMap<string, readonly string[]>,
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (clients.length === 0) return out;
@@ -202,12 +207,6 @@ export async function loadClientDisplayNames(
     }
   }
 
-  const ids = clients.map((client) => client.id);
-  const [xero, qbo, sage] = await Promise.all([
-    readIn(db, "xero_connections", "client_id, tenant_name", ids),
-    readIn(db, "qbo_connections", "client_id, company_name", ids),
-    readIn(db, "sage_connections", "client_id, company_name", ids),
-  ]);
   const ledger = new Map<string, string[]>();
   const add = (clientId: unknown, name: unknown) => {
     if (typeof clientId !== "string" || typeof name !== "string") return;
@@ -215,9 +214,21 @@ export async function loadClientDisplayNames(
     list.push(name);
     ledger.set(clientId, list);
   };
-  for (const row of xero) add(row.client_id, row.tenant_name);
-  for (const row of qbo) add(row.client_id, row.company_name);
-  for (const row of sage) add(row.client_id, row.company_name);
+  if (ledgerNames) {
+    for (const [clientId, names] of ledgerNames) {
+      for (const name of names) add(clientId, name);
+    }
+  } else {
+    const ids = clients.map((client) => client.id);
+    const [xero, qbo, sage] = await Promise.all([
+      readIn(db, "xero_connections", "client_id, tenant_name", ids),
+      readIn(db, "qbo_connections", "client_id, company_name", ids),
+      readIn(db, "sage_connections", "client_id, company_name", ids),
+    ]);
+    for (const row of xero) add(row.client_id, row.tenant_name);
+    for (const row of qbo) add(row.client_id, row.company_name);
+    for (const row of sage) add(row.client_id, row.company_name);
+  }
 
   for (const client of clients) {
     const fromBooks = ledger.get(client.id) ?? [];
