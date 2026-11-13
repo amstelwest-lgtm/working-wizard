@@ -236,11 +236,11 @@ export function AuthGate() {
     clientGateRef.current = null;
     settledRef.current = null;
     setBillingDeadlinePassed(false);
+    setWallTrialEligible(false);
     setFirmEntitled(null);
     setBillingUnknown(false);
     setCheckNotice(false);
     setShowWall(false);
-    setWallTrialEligible(false);
     setClientGate(null);
     failuresRef.current = 0;
   }, [userId]);
