@@ -194,6 +194,45 @@ assert(
   "an unpaid tab result survives the failed recheck",
 );
 
+clearCachedFirmEntitlement();
+let trialLoads = 0;
+noteFirmEntitlement(
+  "user-1",
+  { entitled: false, reason: "no_active_subscription", introTrialEligible: true },
+  "firm-ben",
+);
+const trialHit = await readCachedFirmEntitlement(
+  "user-1",
+  async () => {
+    trialLoads += 1;
+    return { entitled: false, reason: "no_active_subscription", introTrialEligible: false };
+  },
+  false,
+  "firm-ben",
+);
+assert(trialLoads === 0, "a cache hit does not read entitlement again");
+assert(trialHit.introTrialEligible === true, "a cache hit keeps Start trial eligibility");
+assert(
+  lastKnownEntitlementForFirm("user-1", "firm-ben")?.introTrialEligible === true,
+  "the tab's last result keeps Start trial eligibility",
+);
+noteFirmEntitlement(
+  "user-1",
+  { entitled: false, reason: "no_active_subscription", introTrialEligible: false },
+  "firm-ben",
+);
+const ineligibleHit = await readCachedFirmEntitlement(
+  "user-1",
+  async () => {
+    trialLoads += 1;
+    return { entitled: false, reason: "no_active_subscription", introTrialEligible: true };
+  },
+  false,
+  "firm-ben",
+);
+assert(trialLoads === 0, "an ineligible cache hit does not read entitlement again");
+assert(ineligibleHit.introTrialEligible === false, "a cache hit can also keep Start trial off");
+
 const echoed = entitlementAfterLiveFailure(
   { entitled: true, reason: "active_subscription" },
   "timeout",
