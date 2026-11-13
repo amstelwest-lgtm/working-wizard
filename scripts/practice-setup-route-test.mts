@@ -855,6 +855,7 @@ async function runPanel() {
     loadDraft?: (
       firmId: string,
     ) => Promise<ReturnType<typeof interviewDraftFromRuleText>>;
+    discardRedo?: (firmId: string) => Promise<void>;
     askTurn?: (input: {
       firmId: string;
       messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -873,6 +874,7 @@ async function runPanel() {
           firmMarket: usMarket,
           loadSaved: props.loadSaved,
           loadDraft: props.loadDraft ?? (async () => null),
+          discardRedo: props.discardRedo,
           buildMap: props.buildMap,
           confirmMap: props.confirmMap,
           askTurn:
@@ -985,12 +987,89 @@ async function runPanel() {
   await act(async () => {
     redo.click();
   });
-  await waitForPhase("interview");
+  for (let i = 0; i < 20; i += 1) {
+    await settle();
+    if (document.body.textContent?.includes("Walk me through how a typical client month ends.")) break;
+  }
+  await waitForPhase("done");
   assert(
     document.body.textContent?.includes("Walk me through how a typical client month ends."),
-    "redo opens the interview",
+    "redo opens beside the saved plan",
+  );
+  assert(
+    document.body.textContent?.includes("Saved for the practice."),
+    "redo keeps the saved plan",
+  );
+  assert(
+    document.body.textContent?.includes("Redo in progress"),
+    "the redo is its own section",
+  );
+  assert(
+    document.body.textContent?.includes("Save takeover proposals"),
+    "takeover controls stay up during redo",
+  );
+  assert(
+    document.body.textContent?.includes("Review proposals"),
+    "review stays up during redo",
   );
   await unmountSaved();
+
+  let discarded = false;
+  const unmountRedo = await mount({
+    loadSaved: async () => ({ steps: [savedStep] }),
+    loadDraft: async () => ({
+      messages: [
+        { role: "assistant", content: "How does the firm close?" },
+        { role: "user", content: "Redo draft answer" },
+      ],
+      question: "What should the redo ask next?",
+      modelTurns: 1,
+    }),
+    buildMap: async () => ({ map: zaMap, modelTurns: 1 }),
+    confirmMap: async () => ({ ok: true, inserted: 1, plan: { steps: [savedStep] } }),
+    discardRedo: async () => {
+      discarded = true;
+    },
+  });
+  await waitForPhase("done");
+  assert(
+    document.body.textContent?.includes("What should the redo ask next?"),
+    "a saved redo draft is on screen",
+  );
+  assert(
+    document.body.textContent?.includes("Who signs the pack — Client setup"),
+    "the confirmed plan stays beside the redo draft",
+  );
+  assert(
+    document.body.textContent?.includes("Save takeover proposals") &&
+      document.body.textContent?.includes("Review proposals"),
+    "proposal controls stay visible while the redo draft exists",
+  );
+  const discard = [...document.querySelectorAll("button")].find(
+    (button) => button.textContent === "Discard redo, keep saved plan",
+  );
+  assert(discard instanceof HTMLButtonElement, "the redo can be discarded");
+  await act(async () => {
+    discard.click();
+  });
+  await settle();
+  assert(discarded, "discard retires the redo draft");
+  assert(
+    !document.body.textContent?.includes("What should the redo ask next?"),
+    "the discarded redo leaves the screen",
+  );
+  assert(
+    document.body.textContent?.includes("Who signs the pack — Client setup") &&
+      document.body.textContent?.includes("Saved for the practice."),
+    "discard keeps the saved plan",
+  );
+  await unmountRedo();
+
+  const retireSource = read("src/lib/discard-practice-redo.functions.ts");
+  assert(retireSource.includes('status: "retired"'), "discard sets the draft status to retired");
+  assert(retireSource.includes("SETUP_PARTNER_INTERVIEW_TASK"), "discard is limited to the interview row");
+  assert(retireSource.includes('eq("firm_id", data.firmId)'), "discard is firm-scoped");
+  assert(!retireSource.includes("onboarding_workflow"), "discard does not retire the confirmed plan");
 
   successes.length = 0;
   errors.length = 0;
@@ -1167,19 +1246,24 @@ async function runPanel() {
       return { question: "Who reviews the pack?", done: false, modelTurns: 3 };
     },
   });
-  await waitForPhase("interview");
+  await waitForPhase("done");
   assert(savedPlanAsks === 0, "a draft over a saved plan does not ask again");
   assert(
     document.querySelector(".setup-partner__question")?.textContent === resumeQuestion,
-    "a draft wins over the saved plan",
+    "the redo draft keeps its question",
   );
   assert(
-    !document.body.textContent?.includes("Saved for the practice."),
-    "the old plan is not shown while a draft is active",
+    document.body.textContent?.includes("Saved for the practice."),
+    "the confirmed plan stays visible while the redo draft exists",
   );
-  const redoOverPlan = [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "Redo interview",
+  assert(
+    document.body.textContent?.includes("Redo in progress"),
+    "the redo draft is a separate section",
   );
-  assert(!(redoOverPlan instanceof HTMLButtonElement), "the saved plan's redo is not the current screen");
+  assert(
+    document.body.textContent?.includes("Save takeover proposals") &&
+      document.body.textContent?.includes("Review proposals"),
+    "proposal controls stay visible while the redo draft exists",
+  );
   await unmountOverPlan();
 }
