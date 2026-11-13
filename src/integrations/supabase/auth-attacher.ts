@@ -7,10 +7,14 @@ import { accessTokenWithin } from './session-deadline'
 // the browser never attaches the bearer token to serverFn RPCs.
 export const attachSupabaseAuth = createMiddleware({ type: 'function' }).client(
   async ({ next }) => {
-    const token = await accessTokenWithin(() => supabase.auth.getSession())
-    const actingAsClientId = typeof sessionStorage !== 'undefined'
-      ? sessionStorage.getItem('acting_as_client_id')
-      : null
+    let sessionUserId: string | undefined
+    const token = await accessTokenWithin(async () => {
+      const result = await supabase.auth.getSession()
+      sessionUserId = result.data.session?.user?.id
+      return result
+    })
+    const { readActingAsClientId } = await import('@/lib/acting-as-client')
+    const actingAsClientId = readActingAsClientId(sessionUserId)
     const headers: Record<string, string> = {}
     if (token) headers['Authorization'] = `Bearer ${token}`
     if (actingAsClientId) headers['x-acting-as-client-id'] = actingAsClientId

@@ -288,7 +288,7 @@ function AuthCallbackPage() {
             },
           })) as { clientId?: string } | undefined;
           consumePendingOwnerInvite();
-          stashInviteHandoff(accepted?.clientId ?? null);
+          stashInviteHandoff(user.id, accepted?.clientId ?? null);
           if (!cancelled) void navigate({ to: "/app", replace: true });
         } catch (err) {
           stashPendingOwnerInvite(pendingInvite.token, pendingInvite.clientCode);

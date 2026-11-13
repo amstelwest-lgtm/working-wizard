@@ -1022,7 +1022,7 @@ function LandingPage() {
               inviteClientCode: regClientCode.trim() || null,
             },
           })) as { clientId?: string } | undefined;
-          stashInviteHandoff(accepted?.clientId ?? null);
+          stashInviteHandoff(granted.data.user?.id ?? null, accepted?.clientId ?? null);
           clearInviteQueryFromUrl();
           setInviteClientId(null);
           toast.success("Welcome — opening your workspace.");
@@ -1264,7 +1264,9 @@ function LandingPage() {
           clientId = accepted?.clientId ?? clientId;
         }
 
-        stashInviteHandoff(clientId);
+        const sessionUserId =
+          (await (await landingSupabase()).auth.getSession()).data.session?.user.id ?? null;
+        stashInviteHandoff(sessionUserId, clientId);
         clearInviteQueryFromUrl();
         setInviteClientId(null);
         toast.success("Welcome — opening your workspace.");

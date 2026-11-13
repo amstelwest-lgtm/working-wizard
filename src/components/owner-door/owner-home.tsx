@@ -404,11 +404,9 @@ export function OwnerHome({
           onBooks={onBooks}
         />
       ) : null}
-      {signoffLine ? (
-        <p className="owner-signoff" data-signoff-line>
-          {signoffLine}
-        </p>
-      ) : null}
+      <p className="owner-signoff" data-signoff-line style={{ minHeight: 32 }}>
+        {signoffLine ?? ""}
+      </p>
       {showInvite ? <OwnerInviteNudge variant="app" clientId={inviteClientId} /> : null}
     </div>
   );

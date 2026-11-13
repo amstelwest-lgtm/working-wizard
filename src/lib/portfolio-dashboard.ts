@@ -539,7 +539,7 @@ export function buildPortfolioInsights(
     insights.push({
       id: "improved",
       kind: "trend",
-      text: `${improved} of ${trended.length} client${trended.length === 1 ? "" : "s"} with a stored trend improved their health this month.`,
+      text: `${improved} of ${trended.length} client${trended.length === 1 ? "" : "s"} with a stored trend improved their health this month. The count is clients with a stored trend, not every client on the book.`,
     });
   }
 

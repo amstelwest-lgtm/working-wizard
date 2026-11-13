@@ -220,7 +220,12 @@ import { hashIsCashDetailAnchor } from "@/lib/cash-forecast-view";
 import { shouldNavigateForHashChange } from "@/lib/content-scroll-navigation";
 import { agentDisplayName } from "@/lib/milon-team";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
-import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
+import {
+  clearActingAsClientId,
+  firmClientCrumbLabel,
+  isActingAsThisClient,
+  readActingAsClientId,
+} from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { ConnectBooksHomeCard } from "@/components/connect-books-card";
 import { useSageComingSoon } from "@/lib/use-sage-coming-soon";
@@ -253,6 +258,7 @@ import { clientAccessGate } from "@/lib/client-home-phase";
 import { markClientCardText, markClientReload } from "@/lib/card-timing";
 import { rememberWarmBootCard } from "@/lib/warm-boot-cards";
 import { readActiveFirmId } from "@/lib/firm-brand";
+import { readStoredAuthSession } from "@/lib/stored-auth-session";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
 import {
   assessClientMetrics,
@@ -845,9 +851,9 @@ function ClientView() {
   const [actingAsThisClient, setActingAsThisClient] = useState(false);
   useEffect(() => {
     const stored =
-      typeof sessionStorage !== "undefined" ? sessionStorage.getItem("acting_as_client_id") : null;
+      readActingAsClientId(sessionUserId);
     setActingAsThisClient(isActingAsThisClient(stored, clientId));
-  }, [clientId]);
+  }, [clientId, sessionUserId]);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadTimedOut, setLoadTimedOut] = useState(false);
@@ -2661,8 +2667,7 @@ function ClientView() {
         .update({ ended_at: new Date().toISOString() })
         .eq("id", rows[0].id);
     }
-    sessionStorage.removeItem("acting_as_client_id");
-    sessionStorage.removeItem("acting_as_client_name");
+    clearActingAsClientId(sessionUserId);
     navigate({ to: "/dashboard" });
   }, [user, clientId, navigate]);
 
@@ -4178,12 +4183,19 @@ function ClientView() {
     markClientCardText(line);
   }, [homePhase, homeLines]);
   if (homePhase === "loading" || homePhase === "error") {
+    const storedSession =
+      typeof window === "undefined"
+        ? null
+        : readStoredAuthSession(window.localStorage, window.sessionStorage);
+    const storedUserId = storedSession?.user?.id ?? null;
     return (
       <ClientAgentStandby
         clientId={clientId}
-        userId={sessionUserId}
-        firmId={sessionUserId ? readActiveFirmId(sessionUserId) : null}
-        expiresAt={session?.expires_at ?? null}
+        cardUserId={sessionUserId}
+        cardFirmId={sessionUserId ? readActiveFirmId(sessionUserId) : null}
+        sessionUserId={storedUserId}
+        expiresAt={typeof storedSession?.expires_at === "number" ? storedSession.expires_at : null}
+        activeFirmId={storedUserId ? readActiveFirmId(storedUserId) : null}
         timedOut={homePhase === "error"}
         onRetry={
           homePhase === "error"
@@ -4629,6 +4641,7 @@ function ClientView() {
                         onUpload={() => setUploadOpen(true)}
                         ingestSnapshots={snapshots}
                         freshness={dataFreshness}
+                        ledger={homeLedger}
                         chip={healthChip}
                         openQueries={openQueriesCount}
                         onOpenQueries={() =>

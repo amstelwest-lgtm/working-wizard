@@ -15,29 +15,35 @@ export function ClientAgentStandby({
   timedOut,
   onRetry,
   clientId,
-  userId,
-  firmId,
+  cardUserId,
+  cardFirmId,
+  sessionUserId,
   expiresAt,
+  activeFirmId,
   now,
 }: {
   timedOut: boolean;
   onRetry?: () => void;
   clientId?: string | null;
-  userId?: string | null;
-  firmId?: string | null;
+  /** User and firm the warm card was stored under. */
+  cardUserId?: string | null;
+  cardFirmId?: string | null;
+  /** Stored session, read separately from the card scope. */
+  sessionUserId?: string | null;
   expiresAt?: number | null;
+  activeFirmId?: string | null;
   now?: number;
 }) {
   const phase = agentCardPhase({ pending: true, timedOut });
   const cached = timedOut
     ? null
     : readWarmBootCard({
-        userId,
-        firmId,
+        userId: cardUserId,
+        firmId: cardFirmId,
         clientId,
-        sessionUserId: userId,
+        sessionUserId,
         expiresAt,
-        activeFirmId: firmId,
+        activeFirmId,
         now,
       });
   useEffect(() => {

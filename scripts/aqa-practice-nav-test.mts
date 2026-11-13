@@ -115,6 +115,15 @@ assert(board.includes('view="queries"') || board.includes('view === "queries"'),
 assert(board.includes('title="Open queries"'), "open queries has its own page title");
 assert(board.includes('title={PRACTICE_SECTION_TITLES[view]}'), "each practice section has its own page title");
 assert(!board.includes("trendDelta ?? 0"), "the insights chart does not invent a flat trend");
+const insights = read("src/lib/portfolio-dashboard.ts");
+assert(
+  insights.includes("The count is clients with a stored trend, not every client on the book."),
+  "the trend sentence says the denominator is clients with a stored trend",
+);
+assert(
+  insights.includes("r.trendDelta != null && Number.isFinite(r.trendDelta)"),
+  "the denominator is still clients with a stored trend",
+);
 assert(board.includes("listOpenQueries"), "open queries lists notes from the book");
 assert(board.includes("actionIsOverdue"), "the practice board keeps the shared overdue predicate");
 

@@ -104,6 +104,21 @@ assert(
   panel.includes("The 13-week chart appears once a forecast line is entered."),
   "the visible reason matches the chart placeholder",
 );
+assert(panel.includes("data-cash-read-skeleton"), "the chart waits on a skeleton");
+assert(panel.includes("data-cash-chart-slot"), "the chart slot keeps its height");
+assert(panel.includes("minHeight: 360"), "the cash chart reserves a fixed height");
+assert(
+  panel.includes("loaded && canSign && clientId && auditWarning"),
+  "the unapproved-input line waits until the lines read settles",
+);
+const groupChrome = readFileSync(resolve("src/components/client-group-chrome.tsx"), "utf8");
+assert(groupChrome.includes('data-group-status="pending"'), "group status reserves a row while it loads");
+assert(groupChrome.includes("minHeight: 32"), "the group row keeps 32px");
+const ownerHome = readFileSync(resolve("src/components/owner-door/owner-home.tsx"), "utf8");
+assert(
+  ownerHome.includes('data-signoff-line style={{ minHeight: 32 }}'),
+  "the home sign-off line reserves 32px even when the text is empty",
+);
 
 const narrative = readFileSync(resolve("src/reports/narrative.ts"), "utf8");
 const cashNarrative = narrative.slice(narrative.indexOf("export function cashForecastNarrative"));

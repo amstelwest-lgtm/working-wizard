@@ -46,6 +46,29 @@ export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
 /** This route's Toaster. App chrome also mounts one; this id keeps a single toast. */
 export const PRACTICE_SETUP_TOASTER_ID = "practice-setup";
 
+/** The interview call gives up after this and shows Retry. */
+export const PRACTICE_SETUP_INTERVIEW_MS = 10_000;
+
+/** Shown when the signed-in account has no firm. Never the loading sentence. */
+export const PRACTICE_SETUP_NO_FIRM =
+  "This account doesn't have a practice yet. Open setup once a practice is on the account.";
+
+function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("interview-timeout")), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 type Phase = "interview" | "map" | "done";
 
 type BuildMap = typeof buildSetupPartnerFirmMap;
@@ -60,13 +83,23 @@ type AskTurn = (input: {
 type DiscardRedo = (firmId: string) => Promise<void>;
 
 export function PracticeSetupPanel() {
-  const { firmId, firmMarket } = useAccountantProfile();
-  return <PracticeSetupInterview key={firmId ?? "no-firm"} firmId={firmId} firmMarket={firmMarket} />;
+  const { firmId, firmMarket, refreshFirms, firmsLoaded, firmsLoadFailed } = useAccountantProfile();
+  return (
+    <PracticeSetupInterview
+      key={firmId ?? "no-firm"}
+      firmId={firmId}
+      firmMarket={firmMarket}
+      firmsReady={firmsLoaded || firmsLoadFailed}
+      onRefreshFirms={() => void refreshFirms()}
+    />
+  );
 }
 
 export function PracticeSetupInterview({
   firmId,
   firmMarket,
+  firmsReady = false,
+  onRefreshFirms,
   buildMap = buildSetupPartnerFirmMap,
   confirmMap = confirmSetupPartnerFirmMap,
   loadSaved = fetchFirmSetupPlan,
@@ -76,6 +109,9 @@ export function PracticeSetupInterview({
 }: {
   firmId: string | null;
   firmMarket: unknown;
+  /** True once the firm read has settled, including a confirmed empty list. */
+  firmsReady?: boolean;
+  onRefreshFirms?: () => void;
   buildMap?: BuildMap;
   confirmMap?: ConfirmMap;
   loadSaved?: LoadSaved;
@@ -97,6 +133,7 @@ export function PracticeSetupInterview({
   const [plan, setPlan] = useState<PracticeImplementationPlan | null>(null);
   const [redoOpen, setRedoOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const [noFirmWaited, setNoFirmWaited] = useState(false);
   const discardSavedRedo = useServerFn(discardPracticeRedo);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
   const marketCountry: SetupPartnerCountry | null =
@@ -153,7 +190,10 @@ export function PracticeSetupInterview({
     setLoading(true);
     setTurnError(null);
     try {
-      const next = await askTurn({ firmId, messages: history, modelTurns: turns });
+      const next = await withDeadline(
+        askTurn({ firmId, messages: history, modelTurns: turns }),
+        PRACTICE_SETUP_INTERVIEW_MS,
+      );
       setModelTurns(next.modelTurns);
       if (next.done) {
         await mapFrom(history, next.modelTurns);
@@ -167,13 +207,22 @@ export function PracticeSetupInterview({
       setMessages([...history, { role: "assistant", content: asked }]);
       setQuestion(asked);
     } catch (err) {
+      const message = err instanceof Error ? err.message : "The interview failed. Retry.";
       setTurnError(
-        firmInterviewUserError(err instanceof Error ? err.message : "The interview failed. Retry."),
+        message === "interview-timeout"
+          ? "The interview didn't answer in time."
+          : firmInterviewUserError(message),
       );
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (firmId || firmsReady) return;
+    const timer = window.setTimeout(() => setNoFirmWaited(true), PRACTICE_SETUP_INTERVIEW_MS);
+    return () => window.clearTimeout(timer);
+  }, [firmId, firmsReady]);
 
   useEffect(() => {
     if (!firmId) {
@@ -187,6 +236,12 @@ export function PracticeSetupInterview({
     setQuestion("");
     setDraft("");
     setBooting(true);
+    const bootTimer = window.setTimeout(() => {
+      if (cancel) return;
+      cancel = true;
+      setTurnError("The interview didn't answer in time.");
+      setBooting(false);
+    }, PRACTICE_SETUP_INTERVIEW_MS);
     void Promise.all([loadSaved(firmId), loadDraft(firmId)])
       .then(([saved, draft]) => {
         if (cancel) return;
@@ -210,10 +265,12 @@ export function PracticeSetupInterview({
         if (!cancel) setTurnError("The interview failed. Retry.");
       })
       .finally(() => {
+        window.clearTimeout(bootTimer);
         if (!cancel) setBooting(false);
       });
     return () => {
       cancel = true;
+      window.clearTimeout(bootTimer);
     };
     // The first question loads with the firm. Later turns are explicit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -253,15 +310,37 @@ export function PracticeSetupInterview({
     }
   };
 
+  if (!firmId && !firmsReady && !noFirmWaited) {
+    return (
+      <section
+        className="setup-partner"
+        data-practice-setup-panel="firm-pending"
+        aria-busy="true"
+        aria-label={IMPLEMENTATION_MANAGER_LABEL}
+        style={{ minHeight: 160 }}
+      />
+    );
+  }
+
   if (!firmId) {
     return (
       <section
         className="setup-partner"
-        data-practice-setup-panel="waiting"
+        data-practice-setup-panel="no-firm"
         aria-label={IMPLEMENTATION_MANAGER_LABEL}
       >
         <PracticeSetupHero status="Not started" metric="Takes ~10 min" />
-        <p className="setup-partner__lede">Loading your practice.</p>
+        <p className="setup-partner__lede" data-practice-setup-phase="no-firm">
+          {PRACTICE_SETUP_NO_FIRM}
+        </p>
+        <div className="setup-partner__actions">
+          <Link to="/practice/setup" className="setup-partner__primary">
+            Open setup
+          </Link>
+          <button type="button" className="setup-partner__ghost" data-practice-setup-retry="" onClick={() => onRefreshFirms?.()}>
+            Retry
+          </button>
+        </div>
       </section>
     );
   }
@@ -356,6 +435,7 @@ export function PracticeSetupInterview({
               <button
                 type="button"
                 className="setup-partner__ghost"
+                data-practice-setup-retry=""
                 onClick={() => void requestTurn(messages, modelTurns)}
               >
                 Retry

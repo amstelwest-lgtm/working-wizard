@@ -278,11 +278,17 @@ import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import { LazyTrialEndedPlanBlock as TrialEndedPlanBlock } from "@/components/lazy-route-panels";
 import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import {
+  clearPendingInviteClientIds,
   consumeInviteHandoffFlag,
   hasInviteHandoffFlag,
   isClientUuid,
-  PENDING_INVITE_CLIENT_KEY,
+  readPendingInviteClientId,
 } from "@/lib/invite-handoff";
+import {
+  clearActingAsClientId,
+  readActingAsClientId,
+  readActingAsClientName,
+} from "@/lib/acting-as-client";
 
 type Benchmark = { p25: number; p50: number; p75: number; unit: string; higher_is_better: boolean };
 
@@ -2410,10 +2416,7 @@ function Index() {
         // Session user is routing and UI only. Server functions and RLS still verify the JWT.
         const u = { user: account };
 
-        const pendingInvite =
-          typeof localStorage !== "undefined"
-            ? localStorage.getItem(PENDING_INVITE_CLIENT_KEY)
-            : null;
+        const pendingInvite = readPendingInviteClientId(u.user.id);
         const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
         const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
 
@@ -2579,7 +2582,7 @@ function Index() {
           }
           if (inviteWorkspaceAlreadyKnown(known.workspaces, inviteClientId)) {
             try {
-              localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+              clearPendingInviteClientIds();
             } catch {
               /* ignore */
             }
@@ -2622,7 +2625,7 @@ function Index() {
               continue;
             }
             try {
-              localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+              clearPendingInviteClientIds();
             } catch {
               /* ignore */
             }
@@ -2651,7 +2654,7 @@ function Index() {
           }
           if (step === "apply") {
             try {
-              localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+              clearPendingInviteClientIds();
             } catch {
               /* ignore */
             }
@@ -2697,7 +2700,7 @@ function Index() {
                 { onConflict: "client_id,user_id" },
               );
           }
-          localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+          clearPendingInviteClientIds();
           const listed = await listWorkspaces();
           if (!listed.ok) {
             giveUp(listed.retryable);
@@ -3340,9 +3343,9 @@ function Index() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setActingClientId(sessionStorage.getItem("acting_as_client_id"));
-    setActingClientName(sessionStorage.getItem("acting_as_client_name"));
-  }, []);
+    setActingClientId(readActingAsClientId(user?.id));
+    setActingClientName(readActingAsClientName(user?.id));
+  }, [user?.id]);
 
   // Keys that indicate real user-entered financials (excludes weeklyInputs, productMix, and other metadata)
   const FINANCIAL_INPUT_KEYS = Object.keys(defaults) as (keyof Inputs)[];
@@ -3534,8 +3537,7 @@ function Index() {
           .eq("id", rows[0].id);
       }
     }
-    sessionStorage.removeItem("acting_as_client_id");
-    sessionStorage.removeItem("acting_as_client_name");
+    clearActingAsClientId(user?.id);
     navigate({ to: "/dashboard" });
   };
 
@@ -4368,7 +4370,7 @@ function Index() {
     const acting =
       actingClientId ||
       (typeof sessionStorage !== "undefined"
-        ? sessionStorage.getItem("acting_as_client_id")
+        ? readActingAsClientId(user?.id)
         : null);
     if (acting) return;
     if (hasInviteHandoffFlag()) return;

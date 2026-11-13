@@ -16,7 +16,7 @@ import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { SageConnectCard } from "@/components/sage-connect";
 import {
-  booksAnswerSentence,
+  booksHeaderSentence,
   booksDrawerHint,
   booksPrimaryKind,
   booksQueriesLabel,
@@ -40,6 +40,8 @@ type Props = {
   onSageConnectionChange?: () => void;
   /** Last sync or snapshot period. Computed by the shell from live status. */
   freshness: string;
+  /** Home chip name. Both connection rows stay "Xero and QuickBooks". */
+  ledger?: string | null;
   /** `figureSourceChipLabel` of the statement already on the file. Blank omits the chip. */
   chip?: string | null;
   openQueries?: number;
@@ -66,6 +68,7 @@ export function DataUpToDate({
   onUpload,
   onSageConnectionChange,
   freshness,
+  ledger,
   chip,
   openQueries = 0,
   onOpenQueries,
@@ -110,7 +113,7 @@ export function DataUpToDate({
     <section id="data-up-to-date" aria-label={status.title} data-data-fresh="">
       <ArapAnswerStrip
         heading="Books"
-        sentence={booksAnswerSentence({ freshness, openKinds })}
+        sentence={booksHeaderSentence({ ledger, freshness, openKinds })}
         chip={chip}
         primary={primary}
       />
