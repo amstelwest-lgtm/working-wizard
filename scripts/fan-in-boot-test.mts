@@ -69,6 +69,15 @@ const stamped = applyIngestStamp(board, [
 assert(stamped?.savedAt === "2026-11-01T00:00:00.000Z", "Connections keeps the later snapshot stamp");
 assert(stamped?.source === "xero", "snapshot attribution keeps the source");
 assert(applyIngestStamp(board, [])?.savedAt === board?.savedAt, "no snapshot leaves the financials stamp");
+const byCreatedAt = applyIngestStamp(board, [
+  { source: "xero", created_at: "2026-01-01T00:00:00.000Z" },
+  { source: "qbo", created_at: "2026-12-01T00:00:00.000Z" },
+  { source: "xero", created_at: "2026-11-02T00:00:00.000Z" },
+]);
+assert(
+  byCreatedAt?.savedAt === "2026-11-02T00:00:00.000Z",
+  "the stamp uses the latest created_at for the source, not array order",
+);
 
 const notes = new Map([
   [
@@ -111,5 +120,12 @@ assert(ownerSrc.includes("ownerBootReadyId !== effectiveClientId"), "owner side 
 const ownerSnap = ownerSrc.indexOf('.from("client_financial_snapshots")');
 const ownerGate = ownerSrc.indexOf("ownerBootReadyId !== effectiveClientId");
 assert(ownerGate > 0 && ownerGate < ownerSnap, "the owner snapshot read is behind the boot gate");
+assert(clientSrc.includes("setSnapshots([]);\n    setScoreHistory([]);\n    setReviewSignoffs({});"), "a client switch drops the previous snapshots and sign-offs");
+assert(ownerSrc.includes("setHistory([]);\n    setOwnerScoreHistory([]);\n    setReviewSignoffs({});"), "an owner switch drops the previous history and sign-offs");
+assert(ownerSrc.includes("bootReady={ownerBootReadyId === effectiveClientId}"), "the owner door waits for the boot selects");
+const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
+assert(door.includes("if (!bootReady) return;"), "connection and action reads stay behind boot");
+assert(door.includes('setLedger("Sage")'), "a Sage-only owner shows Sage");
+assert(clientSrc.includes('sageLink ? "Sage"'), "a Sage-only accountant card shows Sage");
 
 console.log("fan-in boot ok");
