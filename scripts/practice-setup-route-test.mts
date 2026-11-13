@@ -1070,6 +1070,14 @@ async function runPanel() {
   assert(retireSource.includes("SETUP_PARTNER_INTERVIEW_TASK"), "discard is limited to the interview row");
   assert(retireSource.includes('eq("firm_id", data.firmId)'), "discard is firm-scoped");
   assert(!retireSource.includes("onboarding_workflow"), "discard does not retire the confirmed plan");
+  const decisions = read("src/components/im-proposal-decisions.tsx");
+  assert(decisions.includes('from "@/components/ui/button"'), "approve and dismiss use the button component");
+  assert(decisions.includes("bg-[#0B5FFF]"), "approve is the cobalt primary");
+  assert(decisions.includes('variant="outline"'), "dismiss is an outline button");
+  assert(
+    !read("src/components/setup-partner-panel.tsx").includes("ImProposalDecisions"),
+    "the client interview does not reuse the review queue",
+  );
 
   successes.length = 0;
   errors.length = 0;
