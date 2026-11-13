@@ -32,6 +32,24 @@ const clientA = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 const clientB = "dddddddd-dddd-dddd-dddd-dddddddddddd";
 const seenAt = "2026-11-10T09:00:00.000Z";
 
+const cashForecast = classifyPracticeStep("Cash forecasting each Monday");
+const cashForecasts = classifyPracticeStep("Cash forecasts each Monday");
+const cashflowForecast = classifyPracticeStep("Cashflow forecasting for the clients");
+assert(cashForecast.bucket === "covered", `cash forecast bucket: ${cashForecast.bucket}`);
+assert(cashForecasts.bucket === "covered", `cash forecasts bucket: ${cashForecasts.bucket}`);
+assert(cashflowForecast.bucket === "covered", `cashflow forecast bucket: ${cashflowForecast.bucket}`);
+assert(
+  cashForecast.covers.includes("13-week cash forecast") &&
+    cashForecasts.covers.includes("13-week cash forecast") &&
+    cashflowForecast.covers.includes("13-week cash forecast"),
+  "cash forecasting is the 13-week forecast",
+);
+assert(
+  !cashForecast.fit_note.includes("Not in Milōn yet") &&
+    !cashflowForecast.fit_note.includes("Not in Milōn yet"),
+  "cash forecasting is not filed as a gap",
+);
+
 const covered = classifyPracticeStep("Month-end close across the book");
 assert(covered.bucket === "covered", `covered bucket: ${covered.bucket}`);
 assert(covered.covers.includes("Financial Manager"), "covered names the agent");

@@ -588,7 +588,7 @@ export function setupPartnerCoverage(
   country?: SetupPartnerCountry | null,
 ): Array<{ agent: string; owns: string }> {
   return [
-    { agent: "Financial Manager", owns: "Month-end pack, drafts, and books-quality checks." },
+    { agent: "Financial Manager", owns: "Month-end pack, drafts, books-quality checks, and the 13-week cash forecast." },
     { agent: "Analyst", owns: "Ratios, variance, and client reporting." },
     { agent: "Advisor", owns: "Deadlines, narrative moves, and owner questions." },
     { agent: "Tax Specialist", owns: setupPartnerTaxOwns(country) },

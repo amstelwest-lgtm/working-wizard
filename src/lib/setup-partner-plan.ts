@@ -101,6 +101,12 @@ const COVERED: readonly {
   covers: string;
 }[] = [
   {
+    re: /\b(?:cash(?:\s*flow)?|cashflow)\s+forecast(?:s|ing)?\b|\bforecasting\s+cash(?:\s*flow)?\b/i,
+    capability: "financial-manager",
+    stepType: "cash_forecast",
+    covers: "Financial Manager — 13-week cash forecast",
+  },
+  {
     re: /\b(month-?end|close pack|books close)\b/i,
     capability: "financial-manager",
     stepType: "month_end_close",
