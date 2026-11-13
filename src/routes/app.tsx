@@ -74,6 +74,7 @@ import {
   nextWorkspaceListStep,
   ownerBootShellName,
   pickActiveOwnerWorkspace,
+  pickFirmClientId,
   readStoredOwnerClientId,
   writeStoredOwnerClientId,
   type OwnerWorkspace,
@@ -223,7 +224,7 @@ import { needsBalanceSheetPrompt } from "@/lib/balance-sheet-prompt";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
-import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
+import { LazyAdvisoryPackPanel as AdvisoryPackPanel } from "@/components/lazy-route-panels";
 import { healthSnapshotFromBooks } from "@/lib/health-snapshot";
 import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
 import { latestFiguresStamp } from "@/lib/draft-figures";
@@ -274,7 +275,7 @@ import {
 import { markOnboardingDone, OWNER_TOUR_KEY } from "@/lib/onboarding";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
-import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
+import { LazyTrialEndedPlanBlock as TrialEndedPlanBlock } from "@/components/lazy-route-panels";
 import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import {
   consumeInviteHandoffFlag,
@@ -337,7 +338,13 @@ const ProfitPnlTable = lazyPanel(
 import { ProfitSetupFigures } from "@/components/profit/profit-setup-figures";
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 import { SplashScreen } from "@/components/splash-screen";
-import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import {
+  LazyOwnerBillingBridge,
+  LazyOwnerInsightFigures,
+  LazyWalkthroughWizard as WalkthroughWizard,
+} from "@/components/lazy-route-panels";
+import { ReservedFallback } from "@/components/reserved-fallback";
+import type { OwnerInsightCopy } from "@/components/owner-insight-figures";
 import { NoFiguresBanner } from "@/components/no-figures-banner";
 import {
   isOptionalClientColumnError,
@@ -385,17 +392,9 @@ import {
 } from "@/lib/financial-snapshots";
 import { buildRatioSeries, needsPastPeriodPrompt } from "@/lib/history-coverage";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
-import { PastPeriodUploadDialog } from "@/components/past-period-upload";
+import { LazyPastPeriodUploadDialog as PastPeriodUploadDialog } from "@/components/lazy-route-panels";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { useAskAiMount } from "@/hooks/use-ask-ai-mount";
-import {
-  computeCashTrajectory,
-  computeHealthBand,
-  computeNextMoveImpactLabel,
-  computeOverviewCaption,
-  computePositionPercentile,
-  computeWeekChanges,
-} from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { bindShellBackstop, bootSelect } from "@/lib/boot-read";
 import { beginOwnerClientReads, bootShellCashLine, cashflowOnClientSwitch } from "@/lib/owner-boot-reads";
@@ -2371,6 +2370,12 @@ function Index() {
   >([]);
 
   const [effectiveClientId, setEffectiveClientId] = useState<string | null>(null);
+  const [insightCopy, setInsightCopy] = useState<OwnerInsightCopy>({});
+  const onInsightCopy = useCallback((copy: OwnerInsightCopy) => {
+    setInsightCopy((prev) =>
+      prev.caption === copy.caption && prev.impact === copy.impact ? prev : copy,
+    );
+  }, []);
   const [ownerWorkspaces, setOwnerWorkspaces] = useState<OwnerWorkspace[]>([]);
   archiveTargetRef.current = { clientId: effectiveClientId, visibility: uploadVisibility };
   const [clientLinkResolved, setClientLinkResolved] = useState(false);
@@ -2426,7 +2431,7 @@ function Index() {
               (signal) =>
                 supabase
                   .from("clients")
-                  .select("id, name, firm_id")
+                  .select("id, name, firm_id, created_at")
                   .eq("owner_user_id", u.user.id)
                   .abortSignal(signal),
               { critical: true },
@@ -2450,7 +2455,12 @@ function Index() {
             id: c.id as string,
             name: c.name as string | null,
             firmId: (c.firm_id as string | null) ?? null,
+            createdAt: (c.created_at as string | null) ?? null,
           }));
+          firmPool = (ownerFirmId
+            ? ownedRows.filter((row) => row.firmId === ownerFirmId)
+            : ownedRows.filter((row) => !row.firmId)
+          ).map((row) => ({ id: row.id, createdAt: row.createdAt }));
           const ownedIds = new Set(ownedRows.map((c) => c.id));
           const extraIds = [
             ...new Set(
@@ -2520,20 +2530,28 @@ function Index() {
           return { ok: true, id: existingMem.value.data?.client_id ?? null };
         };
 
-        const ownerFirmId = readActiveFirmId(u.user.id) ?? "";
-        const storedClientId = readStoredOwnerClientId(u.user.id, ownerFirmId);
+        const ownerFirmId = readActiveFirmId(u.user.id);
+        const storedClientId = ownerFirmId ? readStoredOwnerClientId(u.user.id, ownerFirmId) : null;
+        let firmPool: { id: string; createdAt: string | null }[] = [];
         const applyWorkspaces = (workspaces: OwnerWorkspace[], preferInvite?: string | null) => {
           const access = decideStoredClientAccess({
             storedClientId,
             workspaces,
           });
-          if (access.phase === "revoked") clearStoredOwnerClientId(u.user.id, ownerFirmId);
-          const active = pickActiveOwnerWorkspace({
-            workspaces,
-            inviteClientId: preferInvite ?? inviteClientId,
-            storedClientId: access.phase === "revoked" ? null : storedClientId,
+          if (access.phase === "revoked" && ownerFirmId) clearStoredOwnerClientId(u.user.id, ownerFirmId);
+          const invite = (preferInvite ?? inviteClientId)?.trim() ?? "";
+          const inviteHit = invite && workspaces.some((row) => row.clientId === invite) ? invite : "";
+          const picked = pickFirmClientId({
+            storedClientId: !ownerFirmId || access.phase === "revoked" ? null : storedClientId,
+            clients: firmPool,
           });
-          if (active) writeStoredOwnerClientId(u.user.id, ownerFirmId, active);
+          const active =
+            inviteHit ||
+            picked ||
+            (!ownerFirmId
+              ? pickActiveOwnerWorkspace({ workspaces, storedClientId: null })
+              : null);
+          if (ownerFirmId && active) writeStoredOwnerClientId(u.user.id, ownerFirmId, active);
           if (!cancelled) {
             setOwnerWorkspaces(workspaces);
             setEffectiveClientId(active);
@@ -2779,7 +2797,8 @@ function Index() {
               );
             }
             if (clientId) {
-              writeStoredOwnerClientId(u.user.id, readActiveFirmId(u.user.id) ?? "", clientId);
+              const firmId = readActiveFirmId(u.user.id);
+              if (firmId) writeStoredOwnerClientId(u.user.id, firmId, clientId);
               setOwnerWorkspaces([{ clientId, name: clientName, role: "owner" }]);
             } else {
               setOwnerWorkspaces([]);
@@ -3181,7 +3200,8 @@ function Index() {
     (clientId: string) => {
       if (!user?.id || clientId === effectiveClientId) return;
       if (!canOpenOwnerWorkspace(ownerWorkspaces, clientId)) return;
-      writeStoredOwnerClientId(user.id, readActiveFirmId(user.id) ?? "", clientId);
+      const firmId = readActiveFirmId(user.id);
+      if (firmId) writeStoredOwnerClientId(user.id, firmId, clientId);
       setReviewOpen(false);
       setExtractionForReview(null);
       setShowFinData(false);
@@ -4242,34 +4262,8 @@ function Index() {
     market: boardMarket,
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
-  const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
-  const healthBand =
-    showScoredBoard && Number.isFinite(avgHealth) ? computeHealthBand(avgHealth) : null;
-  const weekChanges = computeWeekChanges({
-    revenueGrowth,
-    cashHealth: pillarHealths.cash,
-    profitHealth: pillarHealths.profit,
-    grossMarginRatio,
-  });
-  const cashTrajectory = computeCashTrajectory({
-    hasRealFinancials: showScoredBoard,
-    revenue: n.revenue,
-    operatingCashflow: n.operatingCashflow,
-    currentAssets: n.currentAssets,
-    currentLiabilities: n.currentLiabilities,
-  });
-  const overviewCaption = computeOverviewCaption({
-    hasRealFinancials: showScoredBoard,
-    avgHealth,
-    cashHealth: pillarHealths.cash,
-    displayStatus: ownerStatusCritical ? "critical" : overallHealth.displayStatus,
-  });
-  const nextMoveImpactLabel = computeNextMoveImpactLabel({
-    topKey: nextSteps[0]?.key,
-    revenue: n.revenue,
-    receivables: n.receivables,
-    currency: currencySymbol(boardMarket),
-  });
+  const overviewCaption = insightCopy.caption;
+  const nextMoveImpactLabel = insightCopy.impact;
 
   // Auto-clear the globe highlight after 2s and scroll the row into view.
   // Small delay lets the tab re-render before we query the DOM.
@@ -4471,7 +4465,8 @@ function Index() {
       </div>
     );
   }
-  const storedForShell = user?.id ? readStoredOwnerClientId(user.id, readActiveFirmId(user.id) ?? "") : null;
+  const shellFirmId = user?.id ? readActiveFirmId(user.id) : null;
+  const storedForShell = user?.id && shellFirmId ? readStoredOwnerClientId(user.id, shellFirmId) : null;
   const provisionalWhileAuth =
     Boolean(storedForShell && !clientLinkResolved && !workspaceLoadFailed) &&
     !sampleMode &&
@@ -4485,7 +4480,7 @@ function Index() {
   if (!boardReady && !sampleMode && !isLegacyOwnerBoardTab(oauthReturn.tab)) {
     const bootScreen = ownerDoorScreen(oauthReturn);
     const shellScreen = bootScreen === "chat" ? "home" : bootScreen;
-    const rememberedId = readStoredOwnerClientId(user.id, readActiveFirmId(user.id) ?? "");
+    const rememberedId = shellFirmId ? readStoredOwnerClientId(user.id, shellFirmId) : null;
     const access = decideStoredClientAccess({
       storedClientId: rememberedId,
       workspaces: clientLinkResolved ? ownerWorkspaces : null,
@@ -4867,7 +4862,7 @@ function Index() {
                   ),
                   cash: (
                     <section className="owner-pane" data-owner-page="cash">
-                      <Suspense fallback={<p className="owner-lede">Loading cash forecast…</p>}>
+                      <Suspense fallback={<ReservedFallback label="Cash forecast" height={560} />}>
                         <CashForecastPanel
                           clientId={effectiveClientId ?? undefined}
                           clientName={ownerReportClientName}
@@ -4888,7 +4883,7 @@ function Index() {
                         title="Budget vs actual"
                         lede="The plan for the year, next to what actually happened."
                       />
-                      <Suspense fallback={<p className="owner-lede">Loading budget…</p>}>
+                      <Suspense fallback={<ReservedFallback label="Budget" height={560} />}>
                         <BudgetPanel
                           clientId={effectiveClientId ?? undefined}
                           clientName={actingClientName ?? undefined}
@@ -6178,11 +6173,22 @@ function Index() {
                               </section>
 
                               {/* Insight rail — pulse metrics + compact cards only */}
-                              <OverviewRail
-                                healthBand={healthBand}
-                                positionPercentile={positionPercentile}
-                                weekChanges={weekChanges}
-                                cashTrajectory={cashTrajectory}
+                              <LazyOwnerInsightFigures
+                                showScoredBoard={showScoredBoard}
+                                avgHealth={avgHealth}
+                                cashHealth={pillarHealths.cash}
+                                profitHealth={pillarHealths.profit}
+                                revenueGrowth={revenueGrowth}
+                                grossMarginRatio={grossMarginRatio}
+                                displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
+                                revenue={n.revenue}
+                                operatingCashflow={n.operatingCashflow}
+                                currentAssets={n.currentAssets}
+                                currentLiabilities={n.currentLiabilities}
+                                topKey={nextSteps[0]?.key}
+                                receivables={n.receivables}
+                                currency={currencySymbol(boardMarket)}
+                                onCopy={onInsightCopy}
                                 onOpenCash={() => setActiveTab("cash")}
                                 onOpenMoves={() => setActiveTab("next")}
                                 onOpenBenchmarks={() => {
@@ -6811,7 +6817,7 @@ function Index() {
                     <TabErrorBoundary label="Cash Forecast">
                       <Suspense
                         fallback={
-                          <div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>
+                          <ReservedFallback label="Cash forecast" height={560} />
                         }
                       >
                         <CashForecastPanel
@@ -6834,7 +6840,7 @@ function Index() {
                   <div id="wizard-budget-panel">
                     <TabErrorBoundary label="Budget">
                       <Suspense
-                        fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}
+                        fallback={<ReservedFallback label="Budget" height={560} />}
                       >
                         <BudgetPanel
                           clientId={effectiveClientId ?? undefined}

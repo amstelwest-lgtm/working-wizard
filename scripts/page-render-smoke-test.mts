@@ -395,10 +395,11 @@ const owner = (mode: SmokeMode): PageCase => ({
     }
     if (mode === "revoked") {
       assert(!htmlHasStaleClient(html), "a revoked stored id is not the business on screen");
+      assert(html.includes("Harbour Books"), "the board opens a workspace this login still has");
       const stored = localStorage.getItem(ownerActiveClientStorageKey(SMOKE_USER_ID, ""));
       assert(
-        stored === SMOKE_CLIENT_ID,
-        "a revoked stored id is replaced by a workspace this login still has",
+        stored === STALE_CLIENT_ID,
+        "an empty firm does not read or rewrite the unscoped client key",
       );
     }
   },

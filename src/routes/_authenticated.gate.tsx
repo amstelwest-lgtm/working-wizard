@@ -2,6 +2,7 @@ import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
+import { earlyClientFileOpen } from "@/lib/early-client-file";
 import { shouldRedirectToAuth } from "@/lib/auth-session-guard";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { firmBillingResumeIntent } from "@/lib/billing-market";
@@ -139,7 +140,7 @@ function warnBillingWall(firmId: string, reason: string, firmMarket: unknown): v
 }
 
 export function AuthGate() {
-  const { user, loading, restoreFailed } = useAuth();
+  const { user, session, loading, restoreFailed } = useAuth();
   const { firmId, firmMarket, hasFirm, firms, firmsLoaded, firmsLoadFailed, refreshFirms } =
     useAccountantProfile();
   const { track } = useAnalytics();
@@ -583,7 +584,17 @@ export function AuthGate() {
     const marketReady = firmsLoaded || firmsLoadFailed || market !== "unknown";
     markBootContent(pathname, market, marketReady);
   }, [loading, user, gateShowsSkeleton, pathname, firmMarket, firmsLoaded, firmsLoadFailed]);
-  if (loading) {
+  // A client file with this user's unexpired stored session paints the standby
+  // before getSession and before the entitlement function. Every other page
+  // still waits. A failed check replaces that paint with the wall or the
+  // restore panel, the same as a settled session.
+  const earlyClientFile = earlyClientFileOpen({
+    isClientFile: Boolean(clientIdFromFirmPath(pathname)),
+    userId,
+    expiresAt: session?.expires_at,
+    now: Date.now(),
+  });
+  if (loading && !earlyClientFile) {
     return <FirmShellLoading />;
   }
   if (!user) return null;
@@ -607,7 +618,7 @@ export function AuthGate() {
   if (failureSurface === "wall" || showWall) {
     return <FirmBillingGateView surface="wall" />;
   }
-  if (holdGatedPage) {
+  if (holdGatedPage && !earlyClientFile) {
     return <FirmShellLoading />;
   }
   return (

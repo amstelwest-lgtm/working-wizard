@@ -15,13 +15,31 @@ export function ClientAgentStandby({
   timedOut,
   onRetry,
   clientId,
+  userId,
+  firmId,
+  expiresAt,
+  now,
 }: {
   timedOut: boolean;
   onRetry?: () => void;
   clientId?: string | null;
+  userId?: string | null;
+  firmId?: string | null;
+  expiresAt?: number | null;
+  now?: number;
 }) {
   const phase = agentCardPhase({ pending: true, timedOut });
-  const cached = timedOut ? null : readWarmBootCard(clientId);
+  const cached = timedOut
+    ? null
+    : readWarmBootCard({
+        userId,
+        firmId,
+        clientId,
+        sessionUserId: userId,
+        expiresAt,
+        activeFirmId: firmId,
+        now,
+      });
   useEffect(() => {
     if (cached) markWarmCardLine();
   }, [cached]);

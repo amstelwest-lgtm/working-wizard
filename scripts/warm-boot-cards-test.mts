@@ -14,6 +14,10 @@ const store = new Map<string, string>();
 Object.defineProperty(globalThis, "sessionStorage", {
   configurable: true,
   value: {
+    get length() {
+      return store.size;
+    },
+    key: (index: number) => [...store.keys()][index] ?? null,
     getItem: (key: string) => store.get(key) ?? null,
     setItem: (key: string, value: string) => {
       store.set(key, value);
@@ -27,22 +31,62 @@ Object.defineProperty(globalThis, "sessionStorage", {
 const { ClientAgentStandby } = await import("../src/components/client-agent-standby.tsx");
 const { CLIENT_HOME_NOTHING } = await import("../src/lib/client-home-phase.ts");
 const { bootSelect, noteBootRequestSent, resetBootReadForTests } = await import("../src/lib/boot-read.ts");
-const { clearWarmBootCardsForTests, rememberWarmBootCard, readWarmBootCard } = await import(
-  "../src/lib/warm-boot-cards.ts"
-);
+const {
+  clearAllWarmBootCards,
+  clearWarmBootCardsForTests,
+  mayPaintWarmCard,
+  rememberWarmBootCard,
+  readWarmBootCard,
+} = await import("../src/lib/warm-boot-cards.ts");
+const { earlyClientFileOpen } = await import("../src/lib/early-client-file.ts");
 
 const CASH = "Cash is $46,300.";
 const CLIENT = "353f1dbf-a7ba-4092-878d-792223ba3536";
+const USER = "user-1";
+const FIRM = "firm-a";
+const FUTURE = Math.floor(Date.now() / 1000) + 3_600;
+const PAST = Math.floor(Date.now() / 1000) - 60;
+const scope = { userId: USER, firmId: FIRM, clientId: CLIENT };
+const paint = {
+  ...scope,
+  sessionUserId: USER,
+  expiresAt: FUTURE,
+  activeFirmId: FIRM,
+};
 
 clearWarmBootCardsForTests();
-assert(readWarmBootCard(CLIENT) === null, "a cold client has no cached line");
-const cold = renderToStaticMarkup(createElement(ClientAgentStandby, { timedOut: false, clientId: CLIENT }));
+assert(readWarmBootCard(paint) === null, "a cold client has no cached line");
+const cold = renderToStaticMarkup(
+  createElement(ClientAgentStandby, {
+    timedOut: false,
+    clientId: CLIENT,
+    userId: USER,
+    firmId: FIRM,
+    expiresAt: FUTURE,
+  }),
+);
 assert(cold.includes("Checking…"), "a cold card stays on checking");
 assert(!cold.includes(CLIENT_HOME_NOTHING), "a cold card does not say nothing is on file");
 assert(!cold.includes("$46,300."), "a cold card does not invent the last client's cash");
 
-rememberWarmBootCard(CLIENT, CASH);
-assert(readWarmBootCard("other-client") === null, "another client does not reuse the line");
+rememberWarmBootCard(scope, CASH);
+assert(
+  readWarmBootCard({ ...paint, clientId: "other-client" }) === null,
+  "another client does not reuse the line",
+);
+assert(
+  readWarmBootCard({ ...paint, sessionUserId: "user-2" }) === null,
+  "another user's session does not paint this card",
+);
+assert(readWarmBootCard({ ...paint, expiresAt: PAST }) === null, "an expired session does not paint");
+assert(
+  readWarmBootCard({ ...paint, activeFirmId: "firm-b" }) === null,
+  "a card for another firm does not paint",
+);
+assert(mayPaintWarmCard({ ...paint, now: Date.now() }), "a matching unexpired session may paint");
+store.set(`milon-warm-boot-card:${CLIENT}`, CASH);
+assert(readWarmBootCard(paint) === CASH, "the scoped key still paints");
+assert(!store.has(`milon-warm-boot-card:${USER}:${FIRM}:other-client`), "the old client-only key is not the lookup");
 
 type Queued = { id: number; at: number; fn: () => void };
 const queued: Queued[] = [];
@@ -112,7 +156,13 @@ try {
 
   advance(2_999);
   const warm = renderToStaticMarkup(
-    createElement(ClientAgentStandby, { timedOut: false, clientId: CLIENT }),
+    createElement(ClientAgentStandby, {
+      timedOut: false,
+      clientId: CLIENT,
+      userId: USER,
+      firmId: FIRM,
+      expiresAt: FUTURE,
+    }),
   );
   assert(
     warm.includes('data-warm-cash="1"') && warm.includes("Cash is") && warm.includes("$46,300"),
@@ -125,7 +175,13 @@ try {
   noteBootRequestSent(signal);
   advance(2_999);
   const still = renderToStaticMarkup(
-    createElement(ClientAgentStandby, { timedOut: false, clientId: CLIENT }),
+    createElement(ClientAgentStandby, {
+      timedOut: false,
+      clientId: CLIENT,
+      userId: USER,
+      firmId: FIRM,
+      expiresAt: FUTURE,
+    }),
   );
   assert(
     still.includes('data-warm-cash="1"') && still.includes("Cash is") && still.includes("$46,300"),
@@ -149,5 +205,35 @@ const sendAt = fn.indexOf("const send");
 assert(sendAt > 0, "the fetch wrapper has one send path");
 assert(fn.indexOf("noteBootRequestSent") > sendAt, "sent is marked inside send");
 assert(!fn.slice(0, sendAt).includes("noteBootRequestSent"), "sent is not marked before the request goes out");
+
+store.set("milon-warm-boot-card:other-user:firm-b:client-9", "Cash is $1.");
+clearAllWarmBootCards();
+assert(readWarmBootCard(paint) === null, "sign-out drops the painted card");
+assert(store.get("milon-warm-boot-card:other-user:firm-b:client-9") == null, "sign-out drops every warm-card entry");
+
+assert(
+  earlyClientFileOpen({ isClientFile: true, userId: USER, expiresAt: FUTURE, now: Date.now() }),
+  "a client file opens before getSession when the stored session is current",
+);
+assert(
+  !earlyClientFileOpen({ isClientFile: true, userId: USER, expiresAt: PAST, now: Date.now() }),
+  "an expired session does not open the client file early",
+);
+assert(
+  !earlyClientFileOpen({ isClientFile: false, userId: USER, expiresAt: FUTURE, now: Date.now() }),
+  "a non-client route still waits",
+);
+
+const gate = readFileSync("src/routes/_authenticated.gate.tsx", "utf8");
+assert(gate.includes("earlyClientFileOpen"), "the gate can open a client file early");
+assert(gate.includes("loading && !earlyClientFile"), "getSession still holds every other page");
+assert(gate.includes("holdGatedPage && !earlyClientFile"), "entitlement still holds every other page");
+const clientSrc = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
+assert(clientSrc.includes("if (authLoading || !sessionUserId)"), "live client data waits for auth");
+const authSrc = readFileSync("src/hooks/use-auth.tsx", "utf8");
+assert(authSrc.includes("clearAllWarmBootCards()"), "sign-out clears warm cards");
+const root = readFileSync("src/routes/__root.tsx", "utf8");
+assert(root.includes('f.media="print"'), "Google Fonts load non-blocking");
+assert(!root.includes('rel: "stylesheet" as const,\n                href: "https://fonts.googleapis.com'), "the font sheet is not a blocking head link");
 
 console.log("warm-boot-cards ok");

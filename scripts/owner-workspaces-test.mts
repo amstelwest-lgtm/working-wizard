@@ -125,7 +125,8 @@ assert(
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(appSrc.includes("mergeOwnerWorkspaces"), "founder board lists every owned + membership workspace");
 assert(appSrc.includes("OwnerBusinessSwitcher"), "founder header has the business switcher");
-assert(appSrc.includes("pickActiveOwnerWorkspace"), "founder board picks among all workspaces");
+assert(appSrc.includes("pickFirmClientId"), "the owner home falls back to the firm's oldest client");
+assert(appSrc.includes("pickActiveOwnerWorkspace"), "a firm-less membership still has a workspace pick");
 assert(appSrc.includes("canOpenOwnerWorkspace"), "switch refuses ids that are not on this login’s list");
 assert(appSrc.includes("setExtractionForReview(null)"), "switch clears the previous business’s upload review");
 
@@ -237,6 +238,13 @@ try {
   writeStoredOwnerClientId("user-1", "firm-a", stale);
   assert(readStoredOwnerClientId("user-1", "firm-a") === stale, "the stored id round-trips");
   assert(readStoredOwnerClientId("user-1", "firm-b") === null, "firm A's id is not used for firm B");
+  memory.set("milon_owner_active_client:user-1", "old-unscoped");
+  memory.set("milon_owner_active_client:user-1:", "empty-firm");
+  assert(readStoredOwnerClientId("user-1", "firm-a") === stale, "the old unscoped key is ignored");
+  assert(readStoredOwnerClientId("user-1", "") === null, "an empty firm does not read the colon key");
+  assert(readStoredOwnerClientId("user-1", null) === null, "a missing firm waits instead of reading storage");
+  writeStoredOwnerClientId("user-1", "", "should-not-write");
+  assert(memory.get("milon_owner_active_client:user-1:") === "empty-firm", "an empty firm does not write the colon key");
   clearStoredOwnerClientId("user-1", "firm-a");
   assert(readStoredOwnerClientId("user-1", "firm-a") === null, "clearing a revoked id drops the stored client");
   assert(

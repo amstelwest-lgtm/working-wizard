@@ -63,28 +63,31 @@ async function sessionEntitled(db: UserDb, userId: string, claims: unknown): Pro
   }
 }
 
-async function firstFirmClientId(db: UserDb): Promise<string | null> {
+async function firstFirmClientId(db: UserDb, firmId: string | null | undefined): Promise<string | null> {
+  const id = firmId?.trim() ?? "";
+  if (!id) return null;
   const { data, error } = await onlyActiveClients(
     db
       .from("clients")
       .select("id")
-      .not("firm_id", "is", null)
+      .eq("firm_id", id)
       .order("created_at", { ascending: true })
       .limit(1),
   );
   if (error) return null;
-  const id = data?.[0]?.id;
-  return typeof id === "string" && id ? id : null;
+  const rowId = data?.[0]?.id;
+  return typeof rowId === "string" && rowId ? rowId : null;
 }
 
 export async function resolveSmartLandingDecision(context: {
   supabase: UserDb;
   userId: string;
   claims?: unknown;
+  firmId?: string | null;
 }): Promise<SmartLanding> {
   const [entitled, firstClientId] = await Promise.all([
     sessionEntitled(context.supabase, context.userId, context.claims),
-    firstFirmClientId(context.supabase),
+    firstFirmClientId(context.supabase, context.firmId),
   ]);
   return decideSmartLanding({ signedIn: true, entitled, firstClientId });
 }

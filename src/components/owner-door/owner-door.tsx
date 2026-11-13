@@ -3,7 +3,7 @@
  * and accountant sign-offs. Empty reads stay empty.
  */
 import { HEALTH_PANEL_MENU_LABEL } from "@/lib/health-panel-menu-label";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ClientGroupChrome } from "@/components/client-group-chrome";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
@@ -94,13 +94,9 @@ import { financialsHomeSignoffLine } from "@/components/owner-signoff-mark";
 import { OwnerHome } from "./owner-home";
 import { MILON_HOME_LEDE } from "@/lib/milon-mission";
 import { canonicalOwnerScreen, OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
-import {
-  ownerCheckoutHref,
-  ownerSubscribeView,
-  type OwnerSubscribeView,
-} from "@/lib/owner-subscribe";
+import { type OwnerSubscribeView } from "@/lib/owner-subscribe";
 import { readPriceQuote } from "@/lib/pricing/price-quote.functions";
-import { getOwnerEntitlement, startOwnerCheckout } from "@/lib/stripe-checkout.functions";
+import { LazyOwnerBillingBridge } from "@/components/lazy-route-panels";
 import { OwnerAccountant, OwnerFirst, OwnerPlan, OwnerSettings } from "./owner-pages";
 import { OwnerShell, type OwnerScreen } from "./owner-shell";
 
@@ -319,10 +315,17 @@ export function OwnerDoor({
   const [zaMonthly, setZaMonthly] = useState<string | null>(null);
   const [billing, setBilling] = useState<OwnerSubscribeView>({ kind: "pending" });
   const [subscribeBusy, setSubscribeBusy] = useState(false);
-  const loadEntitlement = useServerFn(getOwnerEntitlement);
   const readQuote = useServerFn(readPriceQuote);
   const readGeo = useServerFn(readRequestGeoCountry);
-  const beginCheckout = useServerFn(startOwnerCheckout);
+  const checkoutRef = useRef<(() => Promise<{ href: string | null; view: OwnerSubscribeView }>) | null>(
+    null,
+  );
+  const rememberCheckout = useCallback(
+    (run: () => Promise<{ href: string | null; view: OwnerSubscribeView }>) => {
+      checkoutRef.current = run;
+    },
+    [],
+  );
   const recRef = useRef<BrowserSpeechSession | null>(null);
   const listenGen = useRef(0);
   const threadsRef = useRef(threads);
@@ -408,31 +411,17 @@ export function OwnerDoor({
     };
   }, [marketCountry, readGeo, readQuote]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void loadEntitlement({ data: {} })
-      .then((entitlement) => {
-        if (!cancelled) setBilling(ownerSubscribeView({ entitlement, checkout: null }));
-      })
-      .catch(() => {
-        if (!cancelled) setBilling({ kind: "subscribe" });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [loadEntitlement]);
-
   async function subscribe() {
-    if (subscribeBusy) return;
+    const run = checkoutRef.current;
+    if (subscribeBusy || !run) return;
     setSubscribeBusy(true);
     try {
-      const result = await beginCheckout({ data: { interval: "month" } });
-      const href = ownerCheckoutHref(result);
-      if (href) {
-        window.location.assign(href);
+      const outcome = await run();
+      if (outcome.href) {
+        window.location.assign(outcome.href);
         return;
       }
-      setBilling(ownerSubscribeView({ entitlement: null, checkout: result }));
+      setBilling(outcome.view);
     } catch {
       setBilling({ kind: "unavailable" });
     } finally {
@@ -1135,6 +1124,7 @@ export function OwnerDoor({
       onProfile={onProfile}
       periodLabel={booksPeriodPillLabel(periodEnd, statementSpan)}
     >
+      <LazyOwnerBillingBridge onView={setBilling} onSubscribe={rememberCheckout} />
       <ClientGroupChrome clientId={clientId} linkCompanies={false} onOpenCompany={onSwitch} />
       {railScreen === "home" ? (
         <OwnerHome
