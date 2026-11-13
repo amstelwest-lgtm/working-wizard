@@ -106,7 +106,7 @@ export function booksHeaderSentence(input: {
   if (base.startsWith("Connected to ")) {
     return base.replace(/^Connected to [^,.]+/, `Connected to ${ledger}`);
   }
-  return `Connected to ${ledger}.`;
+  return base;
 }
 
 export function booksAnswerSentence(input: {

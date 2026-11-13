@@ -104,6 +104,7 @@ assert(
   panel.includes("The 13-week chart appears once a forecast line is entered."),
   "the visible reason matches the chart placeholder",
 );
+assert(panel.includes("data-cash-signoff-slot"), "the cash sign-off button keeps a reserved slot");
 assert(panel.includes("data-cash-read-skeleton"), "the chart waits on a skeleton");
 assert(panel.includes("data-cash-chart-slot"), "the chart slot keeps its height");
 assert(panel.includes("minHeight: 360"), "the cash chart reserves a fixed height");

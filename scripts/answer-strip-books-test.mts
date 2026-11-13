@@ -157,6 +157,7 @@ assert.ok(
   "books chips the statement source already on the file",
 );
 assert.ok(data.includes("booksHeaderSentence({ ledger, freshness, openKinds })"), "the sentence uses the chip's ledger and the same current flag as the button");
+assert.ok(data.includes("ledger?.trim() ? ledger : chip"), "the tag row uses the same ledger as the header");
 assert.ok(data.includes("booksDrawerHint(freshness)"), "the freshness line is the drawer hint");
 assert.ok(data.includes("<ReviewInputsDrawer"), "connections and questions sit in the drawer");
 assert.ok(!data.includes("Then continue to Health."), "the lede no longer points at Health");

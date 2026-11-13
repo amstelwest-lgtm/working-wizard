@@ -213,7 +213,16 @@ export function ClientGroupChrome({
       />
     );
   }
-  if (!group) return null;
+  if (!group) {
+    return (
+      <div
+        className="mb-3"
+        data-company-switcher=""
+        data-group-status="none"
+        style={{ minHeight: 32, height: 32 }}
+      />
+    );
+  }
   const multi = groupChromeVisible(group.companies.length);
   const banner = companyCountBanner(group.billable);
 

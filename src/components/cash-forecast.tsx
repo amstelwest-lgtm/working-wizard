@@ -2665,17 +2665,19 @@ export function CashForecastPanel({
         ) : null}
       </div>
       <div className="answer-strip__actions">
-        {canSign && clientId ? (
-          <ReviewSignoffButton
-            hideStatus
-            clientId={clientId}
-            clientName={clientName}
-            scope="cash_forecast"
-            signoff={forecastSignoff}
-            isStale={forecastStale}
-            onChange={patchForecastSignoff}
-          />
-        ) : null}
+        <div data-cash-signoff-slot="" style={{ minHeight: 40 }}>
+          {canSign && clientId ? (
+            <ReviewSignoffButton
+              hideStatus
+              clientId={clientId}
+              clientName={clientName}
+              scope="cash_forecast"
+              signoff={forecastSignoff}
+              isStale={forecastStale}
+              onChange={patchForecastSignoff}
+            />
+          ) : null}
+        </div>
         {readOnly && !preview ? (
           <OwnerSignoffMark signoff={forecastSignoff} isStale={forecastStale} />
         ) : null}
@@ -3634,17 +3636,19 @@ export function CashForecastPanel({
                 {auditWarning}
               </button>
             ) : null}
-            {canSign && clientId ? (
-              <ReviewSignoffButton
-                hideStatus
-                clientId={clientId}
-                clientName={clientName}
-                scope="cash_forecast"
-                signoff={forecastSignoff}
-                isStale={forecastStale}
-                onChange={patchForecastSignoff}
-              />
-            ) : null}
+            <div data-cash-signoff-slot="" style={{ minHeight: 40 }}>
+              {canSign && clientId ? (
+                <ReviewSignoffButton
+                  hideStatus
+                  clientId={clientId}
+                  clientName={clientName}
+                  scope="cash_forecast"
+                  signoff={forecastSignoff}
+                  isStale={forecastStale}
+                  onChange={patchForecastSignoff}
+                />
+              ) : null}
+            </div>
             {readOnly ? null : (
               <Button
                 type="button"

@@ -153,6 +153,8 @@ function AccountantJoinPage() {
       }
 
       if (user && user.email?.toLowerCase() !== email.trim().toLowerCase()) {
+        const { clearEmailReturnCookie } = await import("@/lib/auth-url-return");
+        clearEmailReturnCookie();
         await supabase.auth.signOut();
       }
 

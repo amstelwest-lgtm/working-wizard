@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { cardFreeTrialLine } from "@/lib/starter-trial-constants";
+import { billingStartPath } from "@/lib/pending-checkout";
+import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { FIRM_WALL_START_LABEL } from "@/lib/billing-wall";
 
 /**
  * What the accountant shell shows after an entitlement read.
@@ -10,11 +14,14 @@ export function FirmBillingGateView({
   surface,
   notice = false,
   onRetry,
+  clientCount = null,
   children,
 }: {
   surface: "content" | "error" | "wall" | "skeleton";
   notice?: boolean;
   onRetry?: () => void;
+  /** Clients already on the firm. The trial sentence uses the same count as the billing wall. */
+  clientCount?: number | null;
   children?: ReactNode;
 }) {
   if (surface === "error") {
@@ -47,15 +54,27 @@ export function FirmBillingGateView({
       <div className="bg-background px-6 py-8 text-foreground" data-billing-gate="wall">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#0B5FFF]">Billing</p>
         <h1 className="mt-2 text-xl font-semibold text-[#102A43]">This firm needs a plan</h1>
+        <p className="mt-2 max-w-md text-sm text-[#102A43]" data-billing-trial>
+          {cardFreeTrialLine(clientCount)}
+        </p>
         <p className="mt-2 max-w-md text-sm text-[#102A43]">
           The last plan check says this firm is unpaid. Billing stays required.
         </p>
-        <Link
-          to="/billing/required"
-          className="mt-5 inline-flex h-10 items-center rounded-full bg-[#0B5FFF] px-4 text-xs font-bold uppercase tracking-wider text-white"
-        >
-          Continue to billing
-        </Link>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <a
+            href={billingStartPath(firmSignupCheckoutIntent())}
+            className="inline-flex h-10 items-center rounded-full bg-[#0B5FFF] px-4 text-xs font-bold uppercase tracking-wider text-white"
+            data-billing-action="trial"
+          >
+            {FIRM_WALL_START_LABEL}
+          </a>
+          <Link
+            to="/billing/required"
+            className="inline-flex h-10 items-center px-4 text-sm underline"
+          >
+            Continue to billing
+          </Link>
+        </div>
       </div>
     );
   }

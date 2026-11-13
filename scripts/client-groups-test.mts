@@ -172,6 +172,8 @@ test("client chrome exposes group status for a group of one", () => {
   );
   assert.match(source, /loadClientGroupNav/);
   assert.match(source, /Group status/);
+  assert.match(source, /data-group-status="none"/);
+  assert.match(source, /minHeight: 32/);
   assert.doesNotMatch(source, /!groupChromeVisible\(group\.companies\.length\)\) return null/);
 });
 

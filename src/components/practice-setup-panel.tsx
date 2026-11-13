@@ -334,7 +334,7 @@ export function PracticeSetupInterview({
           {PRACTICE_SETUP_NO_FIRM}
         </p>
         <div className="setup-partner__actions">
-          <Link to="/practice/setup" className="setup-partner__primary">
+          <Link to="/auth/callback" className="setup-partner__primary">
             Open setup
           </Link>
           <button type="button" className="setup-partner__ghost" data-practice-setup-retry="" onClick={() => onRefreshFirms?.()}>

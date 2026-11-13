@@ -2,10 +2,29 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type ComponentType } from "react";
 import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { useAppChromeReady } from "@/contexts/app-chrome-ready";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { authenticatedLayoutLinks } from "@/styles/app-route-styles";
 
 function FirmShellLoading() {
   return <BootSkeleton />;
+}
+
+function ShellLoadRetry({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="bg-background px-6 py-8 text-foreground" data-shell-retry="" role="alert">
+      <h1 className="text-xl font-semibold">This page is still loading</h1>
+      <p className="mt-2 max-w-md text-sm text-muted-foreground">
+        The practice shell did not finish opening. Retry, or refresh the page.
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-5 inline-flex h-10 items-center rounded-full bg-foreground px-4 text-xs font-bold uppercase tracking-wider text-background"
+      >
+        Retry
+      </button>
+    </div>
+  );
 }
 
 export const Route = createFileRoute("/_authenticated")({
@@ -24,6 +43,14 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedShell() {
   const chromeReady = useAppChromeReady();
   const [Gate, setGate] = useState<ComponentType | null>(null);
+  const [shellRetry, setShellRetry] = useState(false);
+  const [gateAttempt, setGateAttempt] = useState(0);
+
+  // Starts with the shell, before the chrome chunk or the gate chunk settles.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShellRetry(true), SHELL_GATE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [gateAttempt]);
 
   useEffect(() => {
     if (!chromeReady) return;
@@ -34,8 +61,25 @@ function AuthenticatedShell() {
     return () => {
       cancelled = true;
     };
-  }, [chromeReady]);
+  }, [chromeReady, gateAttempt]);
 
-  if (!Gate) return <FirmShellLoading />;
+  if (!Gate) {
+    if (shellRetry) {
+      return (
+        <ShellLoadRetry
+          onRetry={() => {
+            setShellRetry(false);
+            setGate(null);
+            if (!chromeReady) {
+              window.location.reload();
+              return;
+            }
+            setGateAttempt((n) => n + 1);
+          }}
+        />
+      );
+    }
+    return <FirmShellLoading />;
+  }
   return <Gate />;
 }

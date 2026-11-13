@@ -203,6 +203,13 @@ assert(
 const oneLedger = booksHeaderSentence({ ledger: "Xero", freshness: onlyQbo });
 assert(oneLedger === "Connected to Xero, up to Feb 2026.", oneLedger);
 assert(!oneLedger.includes("and"), "one ledger stays one name");
+const stale = booksHeaderSentence({
+  ledger: "Xero",
+  freshness: onlyQbo,
+  openKinds: ["bank_statement"],
+});
+assert(stale.startsWith("Books stop at "), stale);
+assert(!stale.startsWith("Connected to "), "a catch-up sentence is not renamed as connected");
 
 const gateSrc = readFileSync("src/lib/firm-client-gate.ts", "utf8");
 assert(gateSrc.includes('.eq("firm_id", id)'), "the first firm client is filtered to the active firm");
