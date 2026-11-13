@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { applyIngestStamp, boardFiguresFrom } from "../src/lib/ledger-link-copy.ts";
-import { booksAnswerSentence } from "../src/lib/books-answer.ts";
+import { booksAnswerSentence, booksHeaderSentence } from "../src/lib/books-answer.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
 import { ownerAnswerTiles, ownerHomeLines, type OwnerBooks } from "../src/lib/owner-answers.ts";
 import { dataFreshnessLine } from "../src/lib/workflow-coach.ts";
@@ -195,6 +195,14 @@ const onlyQbo = dataFreshnessLine({
   market: { locale: "en-US", timezone: "America/New_York" },
 });
 assert(onlyQbo.includes("QuickBooks") && !onlyQbo.includes("Xero and"), onlyQbo);
+assert(
+  booksHeaderSentence({ ledger: "Xero and QuickBooks", freshness: onlyQbo }) ===
+    "Connected to Xero and QuickBooks, up to Feb 2026.",
+  booksHeaderSentence({ ledger: "Xero and QuickBooks", freshness: onlyQbo }),
+);
+const oneLedger = booksHeaderSentence({ ledger: "Xero", freshness: onlyQbo });
+assert(oneLedger === "Connected to Xero, up to Feb 2026.", oneLedger);
+assert(!oneLedger.includes("and"), "one ledger stays one name");
 
 const gateSrc = readFileSync("src/lib/firm-client-gate.ts", "utf8");
 assert(gateSrc.includes('.eq("firm_id", id)'), "the first firm client is filtered to the active firm");

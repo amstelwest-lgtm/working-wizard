@@ -2649,7 +2649,11 @@ export function CashForecastPanel({
             {answerSentence}
           </p>
         ) : null}
-        {loaded && (linesBlank || forecastEmpty) ? (
+        {!loaded ? (
+          <p className="answer-strip__sentence" data-cash-read-skeleton="" aria-busy="true">
+            <span className="inline-block h-4 w-72 max-w-full animate-pulse rounded bg-slate-200/80 dark:bg-slate-800" />
+          </p>
+        ) : linesBlank || forecastEmpty ? (
           <p className="answer-strip__sentence" data-cash-export-reason>
             The 13-week chart appears once a forecast line is entered.
           </p>
@@ -3105,7 +3109,8 @@ export function CashForecastPanel({
     </div>
   );
   const chartBody = (
-    <>
+    <div data-cash-chart-slot="" style={{ minHeight: 360 }}>
+      <>
       {openingTilesMissing && seededFromActuals ? (
         <p
           className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300"
@@ -3145,12 +3150,20 @@ export function CashForecastPanel({
           ) : null}
           {heroChart(simplified ? 200 : 240, inlineChart.chartWidth, inlineChart.onChartFrame)}
         </>
+      ) : !loaded ? (
+        <div
+          data-cash-read-skeleton=""
+          aria-busy="true"
+          className="rounded-xl bg-slate-200/70 dark:bg-slate-800"
+          style={{ height: 360, minHeight: 360 }}
+        />
       ) : (
         <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
           The 13-week chart appears once a forecast line is entered.
         </p>
       )}
     </>
+    </div>
   );
   const graphPane = (
     <>
@@ -3597,7 +3610,7 @@ export function CashForecastPanel({
       empty: !loaded || forecastEmpty,
       readOnly,
     });
-    const exportBlocked = linesBlank || forecastEmpty;
+    const exportBlocked = loaded && (linesBlank || forecastEmpty);
     return (
       <div
         id="wizard-cash-outlook"
@@ -3611,7 +3624,7 @@ export function CashForecastPanel({
             {statusChip}
           </div>
           <div className="cash-paged__actions">
-            {canSign && clientId && auditWarning ? (
+            {loaded && canSign && clientId && auditWarning ? (
               <button
                 type="button"
                 className="cash-paged__audit-warn"

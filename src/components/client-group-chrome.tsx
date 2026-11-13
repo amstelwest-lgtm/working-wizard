@@ -179,16 +179,21 @@ export function ClientGroupChrome({
   onOpenCompany?: (clientId: string) => void;
 }) {
   const [group, setGroup] = useState<GroupNav | null>(null);
+  const [groupReady, setGroupReady] = useState(false);
   const [statusId, setStatusId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!clientId) {
       setGroup(null);
+      setGroupReady(true);
       return;
     }
+    setGroupReady(false);
     let cancel = false;
     void loadClientGroupNav(clientId).then((next) => {
-      if (!cancel) setGroup(next);
+      if (cancel) return;
+      setGroup(next);
+      setGroupReady(true);
     });
     return () => {
       cancel = true;
@@ -196,6 +201,18 @@ export function ClientGroupChrome({
   }, [clientId]);
 
   const navigate = useNavigate();
+  if (!clientId) return null;
+  if (!groupReady) {
+    return (
+      <div
+        className="mb-3"
+        data-company-switcher=""
+        data-group-status="pending"
+        aria-busy="true"
+        style={{ minHeight: 32, height: 32 }}
+      />
+    );
+  }
   if (!group) return null;
   const multi = groupChromeVisible(group.companies.length);
   const banner = companyCountBanner(group.billable);

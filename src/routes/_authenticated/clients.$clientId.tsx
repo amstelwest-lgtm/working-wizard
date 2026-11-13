@@ -220,7 +220,12 @@ import { hashIsCashDetailAnchor } from "@/lib/cash-forecast-view";
 import { shouldNavigateForHashChange } from "@/lib/content-scroll-navigation";
 import { agentDisplayName } from "@/lib/milon-team";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
-import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
+import {
+  clearActingAsClientId,
+  firmClientCrumbLabel,
+  isActingAsThisClient,
+  readActingAsClientId,
+} from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { ConnectBooksHomeCard } from "@/components/connect-books-card";
 import { useSageComingSoon } from "@/lib/use-sage-coming-soon";
@@ -846,9 +851,9 @@ function ClientView() {
   const [actingAsThisClient, setActingAsThisClient] = useState(false);
   useEffect(() => {
     const stored =
-      typeof sessionStorage !== "undefined" ? sessionStorage.getItem("acting_as_client_id") : null;
+      readActingAsClientId(sessionUserId);
     setActingAsThisClient(isActingAsThisClient(stored, clientId));
-  }, [clientId]);
+  }, [clientId, sessionUserId]);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadTimedOut, setLoadTimedOut] = useState(false);
@@ -2662,8 +2667,7 @@ function ClientView() {
         .update({ ended_at: new Date().toISOString() })
         .eq("id", rows[0].id);
     }
-    sessionStorage.removeItem("acting_as_client_id");
-    sessionStorage.removeItem("acting_as_client_name");
+    clearActingAsClientId(sessionUserId);
     navigate({ to: "/dashboard" });
   }, [user, clientId, navigate]);
 
@@ -4637,6 +4641,7 @@ function ClientView() {
                         onUpload={() => setUploadOpen(true)}
                         ingestSnapshots={snapshots}
                         freshness={dataFreshness}
+                        ledger={homeLedger}
                         chip={healthChip}
                         openQueries={openQueriesCount}
                         onOpenQueries={() =>

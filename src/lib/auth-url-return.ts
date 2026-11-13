@@ -167,15 +167,32 @@ export function hrefWithoutAuthReturn(href: string): string {
  * Owner door or an owner role opens /app.
  * A stored next path wins, except a recovery link which always sets a password.
  */
+/** `/clients/:id` from a relative next path. Query and hash are ignored. */
+export function clientIdFromAuthNext(next: string | null | undefined): string | null {
+  const safe = safeAuthNext(next);
+  if (!safe) return null;
+  const path = (safe.split(/[?#]/, 1)[0] ?? "").replace(/\/$/, "") || "/";
+  const match = path.match(/^\/clients\/([^/]+)$/);
+  return match?.[1] ?? null;
+}
+
 export function pathAfterAuthReturn(input: {
   type: AuthReturnType | null;
   door: AuthReturnDoor | null;
   next: string | null;
   roleDestination: "/practice" | "/app" | "/clients";
-}): "/reset-password" | "/clients" | "/app" | string {
+  /**
+   * For a `/clients/:id` next path, true only when that client is in the
+   * signed-in user's active firm. Anything else falls back to smart landing.
+   */
+  clientInActiveFirm?: boolean;
+}): "/reset-password" | "/clients" | "/app" | "/open" | string {
   if (input.type === "recovery") return "/reset-password";
   const next = safeAuthNext(input.next);
-  if (next) return next;
+  if (next) {
+    if (clientIdFromAuthNext(next) && input.clientInActiveFirm !== true) return "/open";
+    return next;
+  }
   if (input.door === "owner") return "/app";
   if (input.door === "accountant") return "/clients";
   return input.roleDestination === "/app" ? "/app" : "/clients";

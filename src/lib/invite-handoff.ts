@@ -4,7 +4,52 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 
+export const PENDING_INVITE_CLIENT_KEY_PREFIX = "pending_invite_client_id:";
+/** Unscoped key from before the user id was part of the name. Sign-out removes it. Never read it. */
 export const PENDING_INVITE_CLIENT_KEY = "pending_invite_client_id";
+
+export function pendingInviteClientKey(userId: string): string {
+  return `${PENDING_INVITE_CLIENT_KEY_PREFIX}${userId.trim()}`;
+}
+
+export function readPendingInviteClientId(userId: string | null | undefined): string | null {
+  const id = userId?.trim() ?? "";
+  if (!id || typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(pendingInviteClientKey(id));
+    return isClientUuid(raw) ? raw!.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writePendingInviteClientId(userId: string, clientId: string): void {
+  const id = userId.trim();
+  if (!id || !isClientUuid(clientId) || typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(pendingInviteClientKey(id), clientId.trim());
+  } catch {
+    /* private browsing / quota */
+  }
+}
+
+/** Drop every invite client id in this browser, including the old unscoped key. */
+export function clearPendingInviteClientIds(): void {
+  if (typeof localStorage === "undefined") return;
+  const drop: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key === PENDING_INVITE_CLIENT_KEY || key.startsWith(PENDING_INVITE_CLIENT_KEY_PREFIX)) {
+        drop.push(key);
+      }
+    }
+    for (const key of drop) localStorage.removeItem(key);
+  } catch {
+    /* private browsing */
+  }
+}
 export const INVITE_ACCEPT_HANDOFF_KEY = "milon_invite_accept_handoff";
 /** Survives the Google OAuth round trip (sessionStorage + apex cookie). */
 export const PENDING_OWNER_INVITE_KEY = "milon_pending_owner_invite";
@@ -218,12 +263,15 @@ export function signupLooksAlreadyRegistered(input: {
   return signupUserLooksAlreadyRegistered(input.user);
 }
 
-export function stashInviteHandoff(clientId: string | null | undefined): void {
+export function stashInviteHandoff(
+  userId: string | null | undefined,
+  clientId: string | null | undefined,
+): void {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem(INVITE_ACCEPT_HANDOFF_KEY, "1");
-    if (clientId && isClientUuid(clientId)) {
-      localStorage.setItem(PENDING_INVITE_CLIENT_KEY, clientId.trim());
+    if (userId && clientId && isClientUuid(clientId)) {
+      writePendingInviteClientId(userId, clientId);
     }
   } catch {
     /* private browsing / quota */

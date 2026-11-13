@@ -139,6 +139,95 @@ assert(
   "an off-site next is dropped",
 );
 
+const clientA = "660f2396-c09f-437c-9659-59a3642042aa";
+const userA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
+const userB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2";
+assert(
+  pathAfterAuthReturn({
+    type: "magiclink",
+    door: "accountant",
+    next: `/clients/${clientA}`,
+    roleDestination: "/clients",
+    clientInActiveFirm: false,
+  }) === "/open",
+  "a client next outside the active firm falls back to smart landing",
+);
+assert(
+  pathAfterAuthReturn({
+    type: "magiclink",
+    door: "accountant",
+    next: `/clients/${clientA}?tab=home`,
+    roleDestination: "/clients",
+    clientInActiveFirm: true,
+  }) === `/clients/${clientA}?tab=home`,
+  "a client next in the active firm is followed",
+);
+
+class MemoryStorage {
+  private map = new Map<string, string>();
+  get length() {
+    return this.map.size;
+  }
+  key(index: number) {
+    return [...this.map.keys()][index] ?? null;
+  }
+  getItem(key: string) {
+    return this.map.has(key) ? this.map.get(key)! : null;
+  }
+  setItem(key: string, value: string) {
+    this.map.set(key, value);
+  }
+  removeItem(key: string) {
+    this.map.delete(key);
+  }
+  clear() {
+    this.map.clear();
+  }
+}
+
+const memoryLocal = new MemoryStorage();
+const memorySession = new MemoryStorage();
+Object.defineProperty(globalThis, "localStorage", { value: memoryLocal, configurable: true });
+Object.defineProperty(globalThis, "sessionStorage", { value: memorySession, configurable: true });
+Object.defineProperty(globalThis, "window", { value: globalThis, configurable: true });
+
+const { readPendingInviteClientId, writePendingInviteClientId, clearPendingInviteClientIds } =
+  await import("../src/lib/invite-handoff.ts");
+const { readActingAsClientId, clearActingAsClientIds, actingAsClientKey } = await import(
+  "../src/lib/acting-as-client.ts"
+);
+writePendingInviteClientId(userA, clientA);
+memoryLocal.setItem("pending_invite_client_id", clientA);
+memorySession.setItem(actingAsClientKey(userA), clientA);
+memorySession.setItem("acting_as_client_id", clientA);
+assert(readPendingInviteClientId(userB) === null, "user B does not read user A's invite client");
+assert(readPendingInviteClientId(userA) === clientA, "user A still reads their own invite client");
+assert(readActingAsClientId(userB) === null, "user B does not read user A's acting-as client");
+assert(readActingAsClientId(userA) === clientA, "user A still reads their own acting-as client");
+assert(
+  pathAfterAuthReturn({
+    type: "magiclink",
+    door: null,
+    next: `/clients/${clientA}`,
+    roleDestination: "/app",
+  }) === "/open",
+  "user B's leftover client cookie is not followed",
+);
+clearPendingInviteClientIds();
+clearActingAsClientIds();
+assert(readPendingInviteClientId(userA) === null, "sign-out drops the scoped invite key");
+assert(memoryLocal.getItem("pending_invite_client_id") === null, "sign-out drops the old invite key");
+assert(readActingAsClientId(userA) === null, "sign-out drops the scoped acting-as key");
+assert(memorySession.getItem("acting_as_client_id") === null, "sign-out drops the old acting-as key");
+
+const authHook = readFileSync(resolve("src/hooks/use-auth.tsx"), "utf8");
+assert(authHook.includes("clearPendingInviteClientIds()"), "sign-out clears invite client ids");
+assert(authHook.includes("clearActingAsClientIds()"), "sign-out clears acting-as ids");
+assert(authHook.includes("clearEmailReturnCookie()"), "sign-out clears the email-return cookie");
+const pickupLater = readFileSync(resolve("src/components/auth-url-return.tsx"), "utf8");
+assert(pickupLater.includes("clientInActiveFirm"), "the return path checks the client firm");
+assert(pickupLater.includes('.eq("id", nextClientId)'), "the client row is read by id");
+
 const read = (path: string) => readFileSync(resolve(path), "utf8");
 const root = read("src/routes/__root.tsx");
 const pickup = read("src/components/auth-url-return.tsx");

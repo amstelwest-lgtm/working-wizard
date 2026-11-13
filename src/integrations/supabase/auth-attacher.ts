@@ -8,9 +8,9 @@ import { accessTokenWithin } from './session-deadline'
 export const attachSupabaseAuth = createMiddleware({ type: 'function' }).client(
   async ({ next }) => {
     const token = await accessTokenWithin(() => supabase.auth.getSession())
-    const actingAsClientId = typeof sessionStorage !== 'undefined'
-      ? sessionStorage.getItem('acting_as_client_id')
-      : null
+    const { data: sessionData } = await supabase.auth.getSession()
+    const { readActingAsClientId } = await import('@/lib/acting-as-client')
+    const actingAsClientId = readActingAsClientId(sessionData.session?.user?.id)
     const headers: Record<string, string> = {}
     if (token) headers['Authorization'] = `Bearer ${token}`
     if (actingAsClientId) headers['x-acting-as-client-id'] = actingAsClientId

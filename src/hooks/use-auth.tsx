@@ -307,6 +307,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut: async () => {
           intentionalSignOutRef.current = true;
           clearAllWarmBootCards();
+          const { clearPendingInviteClientIds } = await import("@/lib/invite-handoff");
+          const { clearActingAsClientIds } = await import("@/lib/acting-as-client");
+          const { clearEmailReturnCookie } = await import("@/lib/auth-url-return");
+          clearPendingInviteClientIds();
+          clearActingAsClientIds();
+          clearEmailReturnCookie();
           const { clearPortalRouting } = await import("@/lib/user-roles");
           const { clearCachedFirmEntitlement } = await import("@/lib/firm-entitlement-client");
           clearPortalRouting();

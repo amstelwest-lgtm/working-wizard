@@ -6,6 +6,7 @@ import {
   clearEmailReturnCookie,
   hrefWithoutAuthReturn,
   parseAuthUrlReturn,
+  clientIdFromAuthNext,
   pathAfterAuthReturn,
   readEmailReturnCookie,
   shouldConsumeAuthReturn,
@@ -86,6 +87,16 @@ async function establishAndRoute(parsed: Extract<AuthUrlSession, { kind: "sessio
   }
 
   const user = established.data.session.user;
+  const nextClientId = clientIdFromAuthNext(parsed.next);
+  let clientInActiveFirm = false;
+  if (nextClientId) {
+    const { readActiveFirmId } = await import("@/lib/firm-brand");
+    const firmId = readActiveFirmId(user.id);
+    if (firmId) {
+      const { data } = await supabase.from("clients").select("firm_id").eq("id", nextClientId).maybeSingle();
+      clientInActiveFirm = data?.firm_id === firmId;
+    }
+  }
   let roleDestination: "/practice" | "/app" = "/app";
   if (!parsed.next && parsed.type !== "recovery" && !parsed.door) {
     const { resolveSignedInDestination } = await import("@/lib/landing-sign-in-destination");
@@ -100,8 +111,9 @@ async function establishAndRoute(parsed: Extract<AuthUrlSession, { kind: "sessio
     door: parsed.door,
     next: parsed.next,
     roleDestination,
+    clientInActiveFirm,
   });
-  if (parsed.type !== "recovery") {
+  if (parsed.type !== "recovery" && path !== "/open") {
     const { forcePortal } = await import("@/lib/user-roles");
     forcePortal(path === "/app" ? "owner" : "accountant");
   }

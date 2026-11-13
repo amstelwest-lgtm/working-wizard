@@ -90,6 +90,25 @@ export function homeStatementsLine(statementSpan: string | null | undefined): st
   return `Statements on file: ${span}.`;
 }
 
+/**
+ * Connections header. The name follows the home chip: both connection rows
+ * are "Xero and QuickBooks", and one row stays one name. The period still
+ * comes from the freshness line when the books are current.
+ */
+export function booksHeaderSentence(input: {
+  ledger?: string | null;
+  freshness: string | null | undefined;
+  openKinds?: readonly string[];
+}): string {
+  const ledger = input.ledger?.trim() ?? "";
+  const base = booksAnswerSentence({ freshness: input.freshness, openKinds: input.openKinds });
+  if (!ledger) return base;
+  if (base.startsWith("Connected to ")) {
+    return base.replace(/^Connected to [^,.]+/, `Connected to ${ledger}`);
+  }
+  return `Connected to ${ledger}.`;
+}
+
 export function booksAnswerSentence(input: {
   freshness: string | null | undefined;
   openKinds?: readonly string[];
