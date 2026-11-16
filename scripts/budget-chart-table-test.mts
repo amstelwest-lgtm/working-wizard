@@ -20,8 +20,8 @@ import {
   budgetChartSeries,
   budgetChartPeriodCaption,
   chartRevenueActuals,
-  CHART_ACTUALS_BOOKS_SPLIT,
   CHART_ACTUALS_EVEN_SPLIT,
+  CHART_ACTUALS_SCALED,
   budgetLensFromSearch,
   budgetMonthViews,
   budgetPeriodTotalCell,
@@ -138,13 +138,53 @@ const storedSum = storedChart.actuals.reduce((total, value) => total + (value ??
 assert(Math.abs(storedSum - chillYear) < 0.01, `stored chart actuals sum ${storedSum}`);
 assert(storedChart.actuals[0] === 700_000, "stored months that already sum to the year stay put");
 assert(storedChart.caption == null, "stored months that already sum to the year have no note");
-const differChart = chartRevenueActuals({
-  views: [{ actual: { revenue: 400_000 } }, { actual: { revenue: 400_000 } }],
-  yearRevenue: chillYear,
-  storedMonths: true,
+const bookMonthRevenue = 2_880_836 / chillMonths.length;
+const bookMonths = chillMonths.map((month) => ({
+  month,
+  totals: { revenue: bookMonthRevenue, cogs: 0, overheadsTotal: 0, ebit: bookMonthRevenue },
+}));
+const bookViews = budgetMonthViews(doc, bookMonths);
+const header = budgetStatementDisplayTotals({
+  period: {
+    revenue: chillYear,
+    cogs: 56_000,
+    grossProfit: 1_159_000,
+    operatingExpenses: null,
+    operatingProfit: 56_800,
+    netProfit: 27_010,
+    label: "Mar 2026–Feb 2027",
+    prorated: false,
+    months: 12,
+  },
+  planTotals: budgetRangeTotals(bookViews),
 });
-assert(differChart.actuals[0] === 400_000 && differChart.actuals[1] === 400_000, "a mismatch is not rescaled");
-assert(differChart.caption === CHART_ACTUALS_BOOKS_SPLIT, differChart.caption ?? "missing books-split note");
+const chartSource = readFileSync(resolve("src/components/budget/budget-chart-table.tsx"), "utf8");
+assert(chartSource.includes("yearRevenue={totals.revenue}"), "the chart uses the header year");
+assert(chartSource.includes("storedMonths={loaded.length > 0}"), "stored months are the chart's own flag");
+assert(
+  chartSource.includes("chartRevenueActuals({ views, yearRevenue, storedMonths })"),
+  "the bars are chartRevenueActuals of those props",
+);
+const renderedBars = chartRevenueActuals({
+  views: bookViews,
+  yearRevenue: header.revenue,
+  storedMonths: bookMonths.length > 0,
+});
+const renderedSum = renderedBars.actuals.reduce((total, value) => total + (value ?? 0), 0);
+assert(header.revenue === chillYear, "the header year is the statement revenue");
+assert(
+  Math.abs(renderedSum - (header.revenue ?? 0)) < 0.02,
+  `chart bars sum ${renderedSum} against header ${header.revenue}`,
+);
+assert(renderedBars.caption === CHART_ACTUALS_SCALED, renderedBars.caption ?? "missing scaled note");
+assert(
+  !String(renderedBars.caption).includes("Monthly split from your books"),
+  "scaled bars do not keep the books-split note",
+);
+assert(
+  budgetChartPeriodCaption(bookViews) === "YTD Mar\u2013Oct 2026",
+  budgetChartPeriodCaption(bookViews) ?? "caption ignored months with actuals",
+);
 assert(
   budgetChartPeriodCaption(["2026-10", "2026-03", "2026-07"]) === "YTD Mar\u2013Oct 2026",
   budgetChartPeriodCaption(["2026-10", "2026-03", "2026-07"]) ?? "missing year caption",
