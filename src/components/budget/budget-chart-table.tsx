@@ -31,6 +31,7 @@ import { ownerMinus } from "@/lib/owner-money";
 import {
   budgetChartAmount,
   budgetChartSeries,
+  chartRevenueActuals,
   budgetMonthViews,
   budgetPeriodTotalCell,
   budgetPlanIsSet,
@@ -303,7 +304,15 @@ export function BudgetChartTable({
           displayTemplateId={displayTemplateId}
         />
       ) : (
-        <BudgetMonthChart views={scopedViews} market={market} money={money} signed={signed} shape={shape} />
+        <BudgetMonthChart
+          views={scopedViews}
+          yearRevenue={totals.revenue}
+          storedMonths={loaded.length > 0}
+          market={market}
+          money={money}
+          signed={signed}
+          shape={shape}
+        />
       )}
       {showEnlarge ? (
         <EnlargeSheet
@@ -324,6 +333,8 @@ export function BudgetChartTable({
           ) : (
             <BudgetMonthChart
               views={scopedViews}
+              yearRevenue={totals.revenue}
+              storedMonths={loaded.length > 0}
               market={market}
               money={money}
               signed={signed}
@@ -391,6 +402,8 @@ function BudgetMonthTick({
 
 function BudgetMonthChart({
   views,
+  yearRevenue,
+  storedMonths,
   market,
   money,
   signed = false,
@@ -398,6 +411,8 @@ function BudgetMonthChart({
   shape = "bar",
 }: {
   views: BudgetMonthView[];
+  yearRevenue: number | null;
+  storedMonths: boolean;
   market: Parameters<typeof formatMoneyChartTick>[1];
   money: (n: number) => string;
   signed?: boolean;
@@ -418,17 +433,21 @@ function BudgetMonthChart({
     return signed ? ownerMinus(text) : text;
   };
   const series = budgetChartSeries(views);
-  const data = views.map((row) => {
+  const aligned = chartRevenueActuals({ views, yearRevenue, storedMonths });
+  const data = views.map((row, index) => {
     const amount = budgetChartAmount(row, series);
+    const budget = series === "expenses" ? amount : row.budget.revenue;
+    const actual = series === "expenses" ? null : (aligned.actuals[index] ?? null);
+    const delta = actual == null ? null : actual - budget;
     return {
       month: row.month,
       label: shortMonth(row.month),
       amountLabel: money(amount),
-      budget: series === "expenses" ? amount : row.budget.revenue,
-      actual: series === "expenses" ? null : row.actual ? row.actual.revenue : null,
-      hasActual: series === "expenses" ? amount !== 0 : Boolean(row.actual),
-      signal: series === "expenses" ? null : (row.revenue?.signal ?? null),
-      delta: series === "expenses" ? null : (row.revenue?.delta ?? null),
+      budget,
+      actual,
+      hasActual: series === "expenses" ? amount !== 0 : actual != null,
+      signal: delta == null ? null : delta >= 0 ? "favourable" : "adverse",
+      delta,
     };
   });
   const axis = niceBudgetAxis(data.flatMap((row) => [row.budget, row.actual]));
@@ -552,6 +571,11 @@ function BudgetMonthChart({
         <span className="text-emerald-700 dark:text-emerald-400">Green is favourable</span>
         <span className="text-red-600 dark:text-red-400">Red is adverse</span>
       </div>
+      {series === "revenue" && aligned.caption ? (
+        <p className="mt-2 text-[13px] text-[#3D5270] dark:text-slate-400" data-budget-chart-note="">
+          {aligned.caption}
+        </p>
+      ) : null}
     </div>
   );
 }
