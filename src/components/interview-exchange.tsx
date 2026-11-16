@@ -1,3 +1,4 @@
+import { useMarketFormat } from "@/contexts/market";
 import type { FirmInterviewMessage } from "@/lib/setup-partner";
 
 export const IMPLEMENTATION_MANAGER_THINKING = "Implementation Manager is thinking…";
@@ -28,17 +29,6 @@ export function interviewPairs(
     else pairs.push({ question: "", answer: message.content });
   }
   return pairs.filter((pair) => pair.question || pair.answer);
-}
-
-export function interviewDateLabel(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
 }
 
 /** The question on screen now. Earlier turns stay in PastInterviews. */
@@ -75,9 +65,11 @@ export function PastInterviews({
   thinking: boolean;
   recordedAt?: string | null;
 }) {
+  const { date: formatWhen } = useMarketFormat();
   const pairs = interviewPairs(messages, question, thinking);
   if (pairs.length === 0) return null;
-  const date = interviewDateLabel(recordedAt);
+  const when = recordedAt ? new Date(recordedAt) : null;
+  const date = when && !Number.isNaN(when.getTime()) ? formatWhen(when) : null;
   return (
     <details className="setup-partner__log" data-past-interviews="">
       <summary>Past interviews</summary>
