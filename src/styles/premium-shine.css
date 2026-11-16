@@ -321,6 +321,14 @@ html:not(.dark) .accountant-nav .nav-heading.is-current > .nav-row .nav-label {
   box-shadow: inset 2px 0 0 #0b5fff;
   color: var(--pp-frame-ink);
 }
+/* Implementation Manager uses the same cobalt bar as the Practice group, not the gold pill. */
+html:not(.dark) .accountant-nav .nav-sub-link[data-sub-id="implementation"][data-nav-current="page"] {
+  color: var(--pp-frame-ink, #e8ebf1);
+  background: transparent;
+  background-image: none;
+  box-shadow: inset 3px 0 0 #0b5fff;
+  border-radius: 0;
+}
 /* Gold marks: the bot-primary dot and the star. */
 html:not(.dark) .accountant-portal .deliverable-rail .tab.bot-primary:not(.on)::before {
   background: var(--gold);

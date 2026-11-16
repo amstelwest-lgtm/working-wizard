@@ -49,7 +49,7 @@ const log = renderToStaticMarkup(
     recordedAt: "2026-11-16T12:00:00.000Z",
   }),
 );
-assert(log.includes("Past interviews"), "the log is one collapsed section");
+assert(log.includes("Past interviews (1)"), "the log shows how many interviews are stored");
 assert(log.includes("<strong>Walk me through month end.</strong>"), "the question is bold");
 assert(log.includes("setup-partner__log-a"), "the answer sits under the question");
 assert(log.includes("2026-11-16T12:00:00.000Z"), "the pair keeps its date");

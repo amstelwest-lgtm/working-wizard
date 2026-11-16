@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { decideImProposal, listImProposals, type ImProposalRow } from "@/lib/im-proposal-decision.functions";
@@ -11,7 +11,16 @@ function costLine(row: ImProposalRow): string {
 }
 
 /** Approve or dismiss stored proposals. The cap is fixed. Nothing is scheduled here. */
-export function ImProposalDecisions({ firmId }: { firmId: string }) {
+export function ImProposalDecisions({
+  firmId,
+  quiet = false,
+  startOpen = false,
+}: {
+  firmId: string;
+  /** Hide the cap and the cost line. The page already has its own review button. */
+  quiet?: boolean;
+  startOpen?: boolean;
+}) {
   const list = useServerFn(listImProposals);
   const decide = useServerFn(decideImProposal);
   const [rows, setRows] = useState<ImProposalRow[] | null>(null);
@@ -29,6 +38,12 @@ export function ImProposalDecisions({ firmId }: { firmId: string }) {
       .finally(() => setBusy(false));
   };
 
+  useEffect(() => {
+    if (startOpen) load();
+    // The list opens once. load closes over the current firm.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startOpen, firmId]);
+
   const choose = (findingId: string, decision: "approve" | "dismiss") => {
     setBusy(true);
     setNote(null);
@@ -43,22 +58,28 @@ export function ImProposalDecisions({ firmId }: { firmId: string }) {
   return (
     <div data-im-proposal-decisions="">
       <h3>Approve proposals</h3>
-      <p>
-        Locked cap: {ROUTINE_RUNS_PER_FIRM_MONTH} routine runs a month. Estimated cost is on each proposal.
-      </p>
+      {quiet ? null : (
+        <p>
+          Locked cap: {ROUTINE_RUNS_PER_FIRM_MONTH} routine runs a month. Estimated cost is on each proposal.
+        </p>
+      )}
       {rows === null ? (
-        <div className="setup-partner__actions">
-          <button type="button" className="setup-partner__ghost" disabled={busy} onClick={load}>
-            {busy ? "Loading proposals…" : "Review proposals"}
-          </button>
-        </div>
+        startOpen ? (
+          <p>{busy ? "Loading proposals…" : "Loading proposals…"}</p>
+        ) : (
+          <div className="setup-partner__actions">
+            <button type="button" className="setup-partner__ghost" disabled={busy} onClick={load}>
+              {busy ? "Loading proposals…" : "Review proposals"}
+            </button>
+          </div>
+        )
       ) : rows.length === 0 ? (
         <p>No proposals waiting.</p>
       ) : (
         <ul>
           {rows.map((row) => (
             <li key={row.id}>
-              {row.title}. {costLine(row)}
+              {quiet ? row.title : <>{row.title}. {costLine(row)}</>}
               {row.decision ? (
                 <span> {row.decision === "approved" ? "Approved." : "Dismissed."}</span>
               ) : (

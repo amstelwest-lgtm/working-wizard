@@ -1132,6 +1132,13 @@ html:not(.dark) .premium-shell .accountant-nav .nav-settings[aria-current="page"
   background: transparent;
   box-shadow: none;
 }
+html:not(.dark) .premium-shell .accountant-nav .nav-sub-link[data-sub-id="implementation"][data-nav-current="page"] {
+  color: var(--pp-frame-ink, #f2f6fc);
+  background: transparent;
+  background-image: none;
+  box-shadow: inset 3px 0 0 #0b5fff;
+  border-radius: 0;
+}
 html:not(.dark) .premium-shell .btn.gold {
   background-color: #0b5fff;
   background-image: linear-gradient(180deg, #2e6bf0, #2056d6);

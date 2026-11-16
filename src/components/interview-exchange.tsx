@@ -35,19 +35,38 @@ export function interviewPairs(
 export function InterviewExchange({
   question,
   thinking,
+  questionIndex,
+  questionTotal,
 }: {
   question: string;
   thinking: boolean;
   messages?: readonly FirmInterviewMessage[];
+  /** Shown only when the interview knows which question this is. */
+  questionIndex?: number;
+  questionTotal?: number;
 }) {
+  const count =
+    questionIndex && questionIndex > 0
+      ? questionTotal && questionTotal > 0
+        ? `Question ${questionIndex} of ~${questionTotal}`
+        : `Question ${questionIndex}`
+      : null;
   return (
     <div className="setup-partner__exchange" data-interview-exchange="">
+      {count ? <p className="im-qcount">{count}</p> : null}
       {thinking ? (
         <p className="setup-partner__thinking" role="status" data-interview-thinking="">
+          <span className="im-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
           {IMPLEMENTATION_MANAGER_THINKING}
         </p>
       ) : question ? (
-        <h2 className="setup-partner__question">{question}</h2>
+        <div className="im-ask">
+          <h2 className="setup-partner__question">{question}</h2>
+        </div>
       ) : null}
     </div>
   );
@@ -71,25 +90,29 @@ export function PastInterviews({
   const when = recordedAt ? new Date(recordedAt) : null;
   const date = when && !Number.isNaN(when.getTime()) ? formatWhen(when) : null;
   return (
-    <details className="setup-partner__log" data-past-interviews="">
-      <summary>Past interviews</summary>
-      <ol className="setup-partner__transcript">
-        {pairs.map((pair, index) => (
-          <li key={`${index}-${pair.question}`}>
-            {pair.question ? (
-              <p className="setup-partner__log-q">
-                <strong>{pair.question}</strong>
-              </p>
-            ) : null}
-            {pair.answer ? <p className="setup-partner__log-a">{pair.answer}</p> : null}
-            {date ? (
-              <p className="setup-partner__log-date">
-                <time dateTime={recordedAt ?? undefined}>{date}</time>
-              </p>
-            ) : null}
-          </li>
-        ))}
-      </ol>
+    <details className="setup-partner__log im-card" data-past-interviews="">
+      <summary>Past interviews ({pairs.length})</summary>
+      <div className="im-log-groups">
+        <section>
+          {date ? (
+            <h3 className="setup-partner__log-date">
+              <time dateTime={recordedAt ?? undefined}>{date}</time>
+            </h3>
+          ) : null}
+          <ol className="setup-partner__transcript">
+            {pairs.map((pair, index) => (
+              <li key={`${index}-${pair.question}`} className="im-thread">
+                {pair.question ? (
+                  <p className="setup-partner__log-q im-bubble im-bubble--ask">
+                    <strong>{pair.question}</strong>
+                  </p>
+                ) : null}
+                {pair.answer ? <p className="setup-partner__log-a im-bubble">{pair.answer}</p> : null}
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
     </details>
   );
 }

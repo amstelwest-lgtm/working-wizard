@@ -178,7 +178,9 @@ assert(
 assert(panel.includes('role="alert"'), "the error paragraph stays");
 assert(route.includes("<Toaster"), "this route mounts the toast helper's Toaster");
 assert(route.includes("PRACTICE_SETUP_TOASTER_ID"), "confirm and the route share one toaster");
-assert(panel.includes("HomeBotCard"), "firm page reuses the home bot card");
+assert(panel.includes("OwnerAvatar"), "firm page reuses the Implementation Manager avatar");
+assert(panel.includes("PageHeader"), "firm page uses the shared page header");
+assert(panel.includes("implementationManagerStatus"), "status follows the live state");
 assert(
   read("src/components/practice-setup-card.tsx").includes("HomeBotCard"),
   "home entry reuses the home bot card",
@@ -196,7 +198,9 @@ assert(!panel.includes("Buckets"), "the client page does not list triage buckets
 assert(!panel.includes("practiceBucketLabel"), "the client page does not print bucket labels");
 assert(!panel.includes("ImRoutineProposals"), "routine internals stay off the client page");
 assert(!panel.includes("ImTakeoverProposals"), "takeover internals stay off the client page");
-assert(!panel.includes("ImProposalDecisions"), "cost review stays off the client page");
+assert(panel.includes("ImProposalDecisions"), "review proposals opens the existing queue");
+assert(panel.includes("quiet"), "the page review hides the cap and the cost line");
+assert(!panel.includes("Locked cap"), "the page does not print the locked cap");
 assert(!panel.includes("setupPartnerMapPromptBlock"), "the client page does not render the map JSON");
 assert(
   read("src/components/practice-board.tsx").includes("extraCard={<PracticeSetupCard embedded"),
@@ -804,7 +808,45 @@ async function runPanel() {
     createRouter,
   } = await import("@tanstack/react-router");
   const { toast } = await import("sonner");
-  const { PracticeSetupInterview } = await import("../src/components/practice-setup-panel.tsx");
+  const { PracticeSetupInterview, implementationManagerStatus } = await import(
+    "../src/components/practice-setup-panel.tsx"
+  );
+  assert(
+    implementationManagerStatus({
+      booting: false,
+      phase: "interview",
+      interviewing: true,
+      redo: false,
+    }) === "Interviewing",
+    "a live question is Interviewing",
+  );
+  assert(
+    implementationManagerStatus({
+      booting: false,
+      phase: "done",
+      interviewing: true,
+      redo: true,
+    }) === "Redo in progress",
+    "a redo is Redo in progress",
+  );
+  assert(
+    implementationManagerStatus({
+      booting: false,
+      phase: "done",
+      interviewing: false,
+      redo: false,
+    }) === "Saved",
+    "an idle saved plan is Saved",
+  );
+  assert(
+    implementationManagerStatus({
+      booting: false,
+      phase: "done",
+      interviewing: true,
+      redo: false,
+    }) === "Interviewing",
+    "a live question is never Saved",
+  );
 
   const successes: string[] = [];
   const errors: string[] = [];
@@ -938,7 +980,7 @@ async function runPanel() {
       "the mocked model asked one open question",
     );
     const enough = [...document.querySelectorAll("button")].find(
-      (button) => button.textContent === "That's enough, map it",
+      (button) => (button.textContent ?? "").replace(/\s+/g, " ").trim() === "That's enough, map it",
     );
     assert(enough instanceof HTMLButtonElement, "the firm can end early");
     await act(async () => {
@@ -976,7 +1018,7 @@ async function runPanel() {
   });
   await waitForPhase("done");
   assert(
-    document.body.textContent?.includes("Saved for the practice."),
+    document.querySelector("[data-im-status]")?.textContent?.trim() === "Saved",
     "existing rules open on the saved plan",
   );
   assert(
@@ -996,7 +1038,7 @@ async function runPanel() {
     "saved plan still shows the Implementation Manager",
   );
   const redo = [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "Redo interview",
+    (button) => (button.textContent ?? "").replace(/\s+/g, " ").trim() === "Redo interview",
   );
   assert(redo instanceof HTMLButtonElement, "redo is available");
   await act(async () => {
@@ -1012,8 +1054,8 @@ async function runPanel() {
     "redo opens beside the saved plan",
   );
   assert(
-    document.body.textContent?.includes("Saved for the practice."),
-    "redo keeps the saved plan",
+    document.querySelector("[data-im-status]")?.textContent?.trim() === "Redo in progress",
+    "a redo does not say Saved while a question is live",
   );
   assert(
     document.body.textContent?.includes("Discard redo, keep saved plan"),
@@ -1021,8 +1063,8 @@ async function runPanel() {
   );
   assert(
     !document.body.textContent?.includes("Save takeover proposals") &&
-      !document.body.textContent?.includes("Review proposals"),
-    "proposal controls stay off the client page during redo",
+      !document.body.textContent?.includes("Locked cap"),
+    "cost internals stay off the page during redo",
   );
   await unmountSaved();
 
@@ -1054,11 +1096,11 @@ async function runPanel() {
   );
   assert(
     !document.body.textContent?.includes("Save takeover proposals") &&
-      !document.body.textContent?.includes("Review proposals"),
+      !document.body.textContent?.includes("Locked cap"),
     "proposal controls stay off the page while the redo draft exists",
   );
   const discard = [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "Discard redo, keep saved plan",
+    (button) => (button.textContent ?? "").replace(/\s+/g, " ").trim() === "Discard redo, keep saved plan",
   );
   assert(discard instanceof HTMLButtonElement, "the redo can be discarded");
   await act(async () => {
@@ -1072,7 +1114,7 @@ async function runPanel() {
   );
   assert(
     document.body.textContent?.includes("Who signs the pack") &&
-      document.body.textContent?.includes("Saved for the practice.") &&
+      document.querySelector("[data-im-status]")?.textContent?.trim() === "Saved" &&
       !document.body.textContent?.includes("Client setup"),
     "discard keeps the saved plan",
   );
@@ -1107,7 +1149,7 @@ async function runPanel() {
   );
   await answerAll();
   const working = [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "Working…",
+    (button) => (button.textContent ?? "").replace(/\s+/g, " ").trim() === "Working…",
   );
   assert(working instanceof HTMLButtonElement && working.disabled, "the last Next shows Working…");
   await act(async () => {
@@ -1117,14 +1159,14 @@ async function runPanel() {
   assert(!marketLeak(coverageText()), "a US firm coverage list has no ZA or SARS");
   assert(coverageText().includes("Sales-tax prep"), "US coverage names sales-tax prep");
   const confirm = [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "Confirm workflow map",
+    (button) => (button.textContent ?? "").replace(/\s+/g, " ").trim() === "Confirm workflow map",
   );
   assert(confirm instanceof HTMLButtonElement, "confirm is ready");
   await act(async () => {
     confirm.click();
   });
   const saving = [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "Saving…",
+    (button) => (button.textContent ?? "").replace(/\s+/g, " ").trim() === "Saving…",
   );
   assert(
     saving instanceof HTMLButtonElement && saving.disabled,
@@ -1135,8 +1177,8 @@ async function runPanel() {
   });
   await waitForPhase("done");
   assert(
-    document.body.textContent?.includes("Saved for the practice."),
-    "success keeps the saved line",
+    document.querySelector("[data-im-status]")?.textContent?.trim() === "Saved",
+    "success keeps the saved plan",
   );
   assert(
     document.body.textContent?.includes("Who signs the pack") &&
@@ -1160,7 +1202,7 @@ async function runPanel() {
   await answerAll();
   await waitForPhase("map");
   const confirmAgain = [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "Confirm workflow map",
+    (button) => (button.textContent ?? "").replace(/\s+/g, " ").trim() === "Confirm workflow map",
   );
   assert(confirmAgain instanceof HTMLButtonElement, "confirm is ready after a fast map");
   await act(async () => {
@@ -1172,7 +1214,7 @@ async function runPanel() {
   assert(errors.includes("Could not save the practice map"), "the error toasts");
   assert(
     [...document.querySelectorAll("button")].some(
-      (button) => button.textContent === "Confirm workflow map",
+      (button) => (button.textContent ?? "").replace(/\s+/g, " ").trim() === "Confirm workflow map",
     ),
     "a failed confirm stays on the map",
   );
@@ -1235,7 +1277,7 @@ async function runPanel() {
     resumeBox.dispatchEvent(new Event("input", { bubbles: true }));
   });
   const resumeNext = [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "Next",
+    (button) => (button.textContent ?? "").replace(/\s+/g, " ").trim() === "Next",
   );
   assert(resumeNext instanceof HTMLButtonElement && !resumeNext.disabled, "resume can continue");
   await act(async () => {
@@ -1275,8 +1317,8 @@ async function runPanel() {
     "the redo draft keeps its question",
   );
   assert(
-    document.body.textContent?.includes("Saved for the practice."),
-    "the confirmed plan stays visible while the redo draft exists",
+    document.querySelector("[data-im-status]")?.textContent?.trim() === "Redo in progress",
+    "the redo draft is not marked Saved",
   );
   assert(
     document.body.textContent?.includes("Discard redo, keep saved plan"),
@@ -1284,7 +1326,7 @@ async function runPanel() {
   );
   assert(
     !document.body.textContent?.includes("Save takeover proposals") &&
-      !document.body.textContent?.includes("Review proposals"),
+      !document.body.textContent?.includes("Locked cap"),
     "proposal controls stay off the page while the redo draft exists",
   );
   await unmountOverPlan();
