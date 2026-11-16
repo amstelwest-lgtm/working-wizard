@@ -269,9 +269,8 @@ export const CHART_ACTUALS_EVEN_SPLIT =
 
 export const CHART_ACTUALS_NONE = "No monthly actuals on file.";
 
-/** Stored months that do not add up to the statement year. The bars stay as stored. */
-export const CHART_ACTUALS_BOOKS_SPLIT =
-  "Monthly split from your books; year total from your statements.";
+/** Shown when uploaded months are scaled so they add up to the year header. */
+export const CHART_ACTUALS_SCALED = "Actual bars are scaled to the period revenue.";
 
 type CaptionMonth = string | { month: string; actual?: unknown };
 
@@ -296,9 +295,10 @@ export function budgetChartPeriodCaption(months: readonly CaptionMonth[]): strin
 }
 
 /**
- * Actual bars for the revenue chart. Stored months are never scaled.
- * When they already add up to the year, there is no note. When they do not,
- * the bars stay as stored and the note says the year total is the statement.
+ * Actual bars for the revenue chart. They use the same year revenue as the
+ * header (`budgetStatementDisplayTotals`). Uploaded months that already sum
+ * to that year stay as stored, with no note. A series that does not is scaled
+ * to the header, so the bars add up to the year instead of the raw book months.
  * With no stored months, a statement pace is an even split of the year.
  */
 export function chartRevenueActuals(input: {
@@ -318,11 +318,13 @@ export function chartRevenueActuals(input: {
   }
   const present = raw.filter((value): value is number => value != null);
   const sum = present.reduce((total, value) => total + value, 0);
-  if (input.storedMonths && present.length > 0) {
-    const matches = Math.abs(sum - year) < 1;
-    return { actuals: raw, caption: matches ? null : CHART_ACTUALS_BOOKS_SPLIT };
+  if (input.storedMonths && present.length > 0 && Math.abs(sum - year) < 1) {
+    return { actuals: raw, caption: null };
   }
-  return { actuals: splitMoney(input.views.length, year), caption: CHART_ACTUALS_EVEN_SPLIT };
+  if (!input.storedMonths || present.length === 0 || Math.abs(sum) < 1) {
+    return { actuals: splitMoney(input.views.length, year), caption: CHART_ACTUALS_EVEN_SPLIT };
+  }
+  return { actuals: scaleMoney(raw, year, sum), caption: CHART_ACTUALS_SCALED };
 }
 
 function splitMoney(count: number, year: number): number[] {
@@ -331,6 +333,22 @@ function splitMoney(count: number, year: number): number[] {
   const base = Math.trunc(cents / count);
   const extra = cents - base * count;
   return Array.from({ length: count }, (_, index) => (base + (index === count - 1 ? extra : 0)) / 100);
+}
+
+function scaleMoney(raw: readonly (number | null)[], year: number, sum: number): (number | null)[] {
+  const scale = year / sum;
+  let running = 0;
+  let last = -1;
+  raw.forEach((value, index) => {
+    if (value != null) last = index;
+  });
+  return raw.map((value, index) => {
+    if (value == null) return null;
+    if (index === last) return Math.round((year - running) * 100) / 100;
+    const next = Math.round(value * scale * 100) / 100;
+    running += next;
+    return next;
+  });
 }
 
 /** Tiles for Budget vs actual. A firm-year slice wins. The plan is only the fallback. */
