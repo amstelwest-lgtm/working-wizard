@@ -25,6 +25,7 @@ import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { DEFAULT_PROFILE, useOptionalAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
+import { presentActionWhy } from "@/lib/milon-team-activity";
 import { settleWithin } from "@/lib/bounded-load";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { handoffAssigneeName, handoffCommitError } from "@/lib/owner-handoff";
@@ -2088,6 +2089,8 @@ export default function ActionPlanPanel({
                 noteStillDue={Boolean(noteStillDue[it.id])}
                 phasePending={!notesReady || draftActivity.loading}
                 phaseLabel={handoffByItem.get(it.id)?.phaseLabel ?? null}
+                canonicalRatios={canonicalRatios}
+                healthSnapshot={healthSnapshot}
                 draftId={handoffByItem.get(it.id)?.draftId ?? null}
                 onOpenDraft={onOpenDraft}
                 pickupLabel={handoffByItem.get(it.id)?.caption ?? null}
@@ -2323,6 +2326,8 @@ export default function ActionPlanPanel({
             }
           }}
           onMilestonesChanged={refresh}
+          canonicalRatios={canonicalRatios}
+          healthSnapshot={healthSnapshot}
         />
       )}
     </div>
@@ -2677,12 +2682,17 @@ function ItemRow({
   onOpenDraft,
   focused,
   suggestion,
+  canonicalRatios = null,
+  healthSnapshot = null,
 }: {
   displayNumber: number;
   item: Item & { health?: Health };
   focused?: boolean;
   /** Display-only. Confirming still writes through the existing owner and date controls. */
   suggestion?: ActionAutomationRow | null;
+  /** Live scorecard. A stored why that cites old scores is replaced. */
+  canonicalRatios?: Record<string, number> | null;
+  healthSnapshot?: HealthScoreSnapshot | null;
   employees: Employee[];
   milestones: Milestone[];
   lastNudge: EmailRecord | null;
@@ -2733,6 +2743,7 @@ function ItemRow({
   const h = healthMeta(shown.health as Health);
   const overdue = shown.overdue;
   const progressPct = shown.progressPct;
+  const outcomeWhy = presentActionWhy(item.outcome_why, canonicalRatios, healthSnapshot);
   const [editTitle, setEditTitle] = useState(false);
   const [title, setTitle] = useState(() => stripMilonProjection(item.title));
   const [pickOwner, setPickOwner] = useState(false);
@@ -2839,9 +2850,7 @@ function ItemRow({
               <Sparkles className="h-2.5 w-2.5" /> From strategic moves
             </span>
           ) : null}
-          {stripMilonProjection(item.outcome_why) ? (
-            <span className="truncate">{stripMilonProjection(item.outcome_why)}</span>
-          ) : null}
+          {outcomeWhy ? <span className="truncate">{outcomeWhy}</span> : null}
         </div>
       </div>
 
@@ -3652,6 +3661,8 @@ function ItemDrawer({
   onCopyLink,
   onReassign,
   onMilestonesChanged,
+  canonicalRatios = null,
+  healthSnapshot = null,
 }: {
   item: Item & { health?: Health };
   /** Same phase label as the row. A hand-off reads "Handed to …". */
@@ -3667,6 +3678,8 @@ function ItemDrawer({
   onCopyLink: () => Promise<void>;
   onReassign: (employeeId: string) => Promise<void>;
   onMilestonesChanged: () => void;
+  canonicalRatios?: Record<string, number> | null;
+  healthSnapshot?: HealthScoreSnapshot | null;
 }) {
   const { dateTime } = useMarketFormat();
   const [updates, setUpdates] = useState<Update[]>([]);
@@ -3676,6 +3689,7 @@ function ItemDrawer({
   const [resending, setResending] = useState(false);
   const [chasing, setChasing] = useState(false);
   const h = healthMeta(item.health);
+  const outcomeWhy = presentActionWhy(item.outcome_why, canonicalRatios, healthSnapshot);
   const handoffFace = handoffDrawerFace({ phaseLabel: handoffLabel, status: item.status });
   const panelChip = handoffFace.chipLabel
     ? handoffFace.chipLabel
@@ -3787,10 +3801,8 @@ function ItemDrawer({
                   : ""}
               </p>
             ) : null}
-            {stripMilonProjection(item.outcome_why) ? (
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {stripMilonProjection(item.outcome_why)}
-              </p>
+            {outcomeWhy ? (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{outcomeWhy}</p>
             ) : null}
           </div>
           <button onClick={onClose} aria-label="Close">

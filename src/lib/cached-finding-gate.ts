@@ -13,6 +13,52 @@ function liveParagraph(live?: HealthScoreSnapshot | null): string {
   return paragraph ? `${paragraph} ${REFRESHED_FROM_FIGURES}` : REFRESHED_FROM_FIGURES;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Drop a second copy of a phrase. Whitespace between its words may differ. */
+function dropExtraCopies(text: string, phrase: string): string {
+  const words = phrase.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  if (words.length === 0) return text;
+  const pattern = new RegExp(words.map(escapeRegExp).join("\\s+"), "g");
+  let seen = false;
+  return text.replace(pattern, (match) => {
+    if (!seen) {
+      seen = true;
+      return match;
+    }
+    return "";
+  });
+}
+
+function dropRepeatedSentences(text: string): string {
+  const spans = sentenceSpans(text);
+  let out = "";
+  let cursor = 0;
+  let prev = "";
+  for (const span of spans) {
+    const gap = text.slice(cursor, span.start);
+    const raw = text.slice(span.start, span.end);
+    cursor = span.end;
+    const norm = raw.replace(/\s+/g, " ").trim();
+    if (norm && norm === prev) continue;
+    prev = norm;
+    out += gap + raw;
+  }
+  out += text.slice(cursor);
+  return out;
+}
+
+function tidyGaps(text: string): string {
+  return text
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 type SentenceSpan = { start: number; end: number };
 
 /** Sentence ends, keeping a decimal point and the original gaps. */
@@ -75,7 +121,11 @@ export function presentCachedFinding(input: {
     }
   }
   if (!swapped) out += text.slice(cursor);
-  return { text: out, stale };
+  const narrative = input.live ? renderHealthNarrative(input.live).trim() : "";
+  const once = tidyGaps(
+    dropRepeatedSentences(dropExtraCopies(dropExtraCopies(out, narrative), REFRESHED_FROM_FIGURES)),
+  );
+  return { text: once, stale };
 }
 
 export { cachedFindingRejected };

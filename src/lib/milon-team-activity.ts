@@ -800,6 +800,17 @@ export function findingSentence(input: {
   return text;
 }
 
+/** Action-plan secondary line. Same live snapshot path as a Home finding. */
+export function presentActionWhy(
+  text: string | null | undefined,
+  canonicalRatios?: Record<string, number> | null,
+  liveHealth?: HealthScoreSnapshot | null,
+): string {
+  const raw = (text ?? "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  return findingSentence({ title: raw, canonicalRatios, liveHealth });
+}
+
 export function ratioSentence(name: string, detail?: string): string {
   const raw = (detail ?? "").trim();
   const source = quoteUnusableDayCounts(raw);
