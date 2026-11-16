@@ -432,13 +432,18 @@ export function PracticeSetupInterview({
         <>
           <button
             type="button"
-            className="setup-partner__primary"
+            className={
+              !loading && !draft.trim()
+                ? "setup-partner__primary is-needs-answer"
+                : "setup-partner__primary"
+            }
             disabled={loading || !draft.trim() || !question}
             onClick={() => void advance()}
           >
             <ArrowRight size={15} aria-hidden />
             {loading ? "Working…" : "Next"}
           </button>
+          {!loading && !draft.trim() ? <span className="im-next-hint">Type an answer</span> : null}
           <button
             type="button"
             className="setup-partner__ghost"
@@ -526,6 +531,7 @@ export function PracticeSetupInterview({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Walk through it"
+            style={{ fontFamily: "var(--font-sans), sans-serif" }}
           />
           {turnError ? (
             <p className="setup-partner__error" role="alert">

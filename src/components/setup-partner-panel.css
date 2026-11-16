@@ -253,9 +253,13 @@
   border: 1px solid #dbeafe;
   border-radius: 8px;
   padding: 0.55rem 0.65rem;
-  font-size: 0.82rem;
+  font: 0.92rem/1.45 var(--font-sans, "Plus Jakarta Sans Variable", "Segoe UI", sans-serif);
   color: #102a43;
   resize: vertical;
+}
+
+.setup-partner__answer::placeholder {
+  font-family: var(--font-sans, "Plus Jakarta Sans Variable", "Segoe UI", sans-serif);
 }
 
 .setup-partner__actions {
@@ -556,6 +560,30 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-family: var(--font-sans, "Noto Sans", sans-serif);
+}
+
+.im-page .setup-partner__primary {
+  background: #0b5fff;
+  color: #ffffff;
+  opacity: 1;
+}
+
+.im-page .setup-partner__primary:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.im-page .setup-partner__primary.is-needs-answer {
+  background: color-mix(in srgb, #0b5fff 50%, #ffffff);
+  color: #08337a;
+}
+
+.im-next-hint {
+  color: #334e68;
+  font-family: var(--font-sans, "Noto Sans", sans-serif);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .im-page .setup-partner__primary svg,
