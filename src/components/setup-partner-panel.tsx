@@ -5,19 +5,19 @@ import {
   SETUP_PARTNER_FIXED_QUESTIONS,
   SETUP_PARTNER_FOLLOWUP_TEMPLATES,
   setupPartnerFollowups,
-  setupPartnerMapPromptBlock,
   type FirmInterviewMessage,
   type SetupPartnerSummary,
   type SetupPartnerWorkflowMap,
 } from "@/lib/setup-partner";
-import { InterviewExchange } from "@/components/interview-exchange";
+import { InterviewExchange, PastInterviews } from "@/components/interview-exchange";
 import {
   buildSetupPartnerMap,
   confirmSetupPartnerMap,
   fetchSetupPartnerSummary,
   phraseSetupPartnerFollowup,
 } from "@/lib/setup-partner-client";
-import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
+import { HomeBotCard } from "@/components/owner-door/home-bot-card";
+import { ImplementationManagerChip } from "@/components/practice-setup-card";
 import {
   clearClientInterviewDraft,
   readClientInterviewDraft,
@@ -272,71 +272,75 @@ export function SetupPartnerPanel({
     );
   }
 
-  const phases: { id: Phase; label: string }[] = [
-    { id: "summary", label: "Data summary" },
-    { id: "interview", label: "Interview" },
-    { id: "map", label: "Workflow map" },
-    { id: "done", label: "Confirmed" },
-  ];
+  const cardStatus = phase === "done" ? "Done" : phase === "summary" ? "Not started" : "In progress";
+  const nextLines = map
+    ? [...map.todaysFlow, ...map.checklist, ...map.gaps].map((line) => line.trim()).filter(Boolean)
+    : [];
 
   return (
-    <section className="setup-partner" data-setup-partner="" aria-label={SETUP_PARTNER_DISPLAY_NAME}>
-      <div className="setup-partner__head">
-        <OwnerAvatar
-          agent="setup_partner"
-          variant="character"
-          size="sm"
-          motion="idle"
-          label={SETUP_PARTNER_DISPLAY_NAME}
-        />
-        <div className="setup-partner__head-text">
-          <p className="setup-partner__eyebrow">Onboarding</p>
-          <h2 className="setup-partner__title">{SETUP_PARTNER_DISPLAY_NAME}</h2>
+    <section className="setup-partner im-flow" data-setup-partner="" data-im-page="" aria-label={SETUP_PARTNER_DISPLAY_NAME}>
+      <div className="owner-door" data-im-card="solo">
+        <div className="owner-pane" data-owner-home="true">
+          <div className="owner-agents">
+            <HomeBotCard
+              agent="setup_partner"
+              name={SETUP_PARTNER_DISPLAY_NAME}
+              label={SETUP_PARTNER_DISPLAY_NAME}
+              chip={<ImplementationManagerChip />}
+              status={
+                <span className={cardStatus === "Done" ? "owner-status" : "owner-status is-attention"}>
+                  {cardStatus}
+                </span>
+              }
+              lines={
+                <span className="owner-lines" data-status-update="">
+                  <span className="owner-voice">Map how the firm closes, reviews, signs off, and reports.</span>
+                  <span className="owner-voice">Takes ~10 min</span>
+                </span>
+              }
+            />
+          </div>
         </div>
       </div>
-      <p className="setup-partner__lede">
-        Learn how finance runs today, map Milōn agents to each step, and save confirmed workflow rules. No ledger
-        writes.
-      </p>
-      <ul className="setup-partner__nav" aria-label="Setup steps">
-        {phases.map((row) => (
-          <li key={row.id}>
-            <button type="button" data-active={phase === row.id} disabled>
-              {row.label}
-            </button>
-          </li>
-        ))}
-      </ul>
 
       {phase === "summary" && summary ? (
-        <div className="setup-partner__summary">
-          <p className="setup-partner__question">{summary.headline}</p>
-          <ul>
-            {summary.bullets.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <div className="setup-partner__actions">
-            <button type="button" className="setup-partner__primary" disabled={loading} onClick={startInterview}>
-              Start interview
-            </button>
-            <button type="button" className="setup-partner__ghost" disabled={loading} onClick={() => void load()}>
-              Refresh summary
-            </button>
-          </div>
+        <div className="setup-partner__summary" data-im-interview="">
+          <h2 className="setup-partner__question">{summary.headline}</h2>
+          {summary.bullets.length > 0 ? (
+            <ul>
+              {summary.bullets.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
       {phase === "interview" ? (
-        <div>
-          <InterviewExchange question={currentQuestion} thinking={loading} messages={history} />
+        <div data-im-interview="">
+          <InterviewExchange question={currentQuestion} thinking={loading} />
           <textarea
             className="setup-partner__answer"
             value={draftAnswer}
             onChange={(e) => setDraftAnswer(e.target.value)}
             placeholder="Short answer"
           />
-          <div className="setup-partner__actions">
+        </div>
+      ) : null}
+
+      <div className="setup-partner__actions" data-im-actions="">
+        {phase === "summary" && summary ? (
+          <>
+            <button type="button" className="setup-partner__primary" disabled={loading} onClick={startInterview}>
+              Start interview
+            </button>
+            <button type="button" className="setup-partner__ghost" disabled={loading} onClick={() => void load()}>
+              Refresh summary
+            </button>
+          </>
+        ) : null}
+        {phase === "interview" ? (
+          <>
             <button
               type="button"
               className="setup-partner__primary"
@@ -348,44 +352,39 @@ export function SetupPartnerPanel({
             <button type="button" className="setup-partner__ghost" disabled={loading} onClick={redoInterview}>
               Redo interview
             </button>
-          </div>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+        {phase === "map" && map ? (
+          <button type="button" className="setup-partner__primary" disabled={loading} onClick={() => void confirmMap()}>
+            {loading ? "Saving…" : "Confirm workflow map"}
+          </button>
+        ) : null}
+      </div>
 
-      {phase === "map" && map ? (
-        <div className="setup-partner__map">
-          <pre className="sr-only">{setupPartnerMapPromptBlock(map)}</pre>
-          <h3>Today&apos;s flow</h3>
-          <ul>
-            {map.todaysFlow.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <h3>Milōn coverage</h3>
-          <ul>
-            {map.milonCoverage.map((row) => (
-              <li key={`${row.agent}-${row.owns}`}>
-                {row.agent}: {row.owns}
-              </li>
-            ))}
-          </ul>
-          <h3>Gaps</h3>
-          <ul>
-            {map.gaps.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <h3>Setup checklist</h3>
-          <ul>
-            {map.checklist.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <div className="setup-partner__actions">
-            <button type="button" className="setup-partner__primary" disabled={loading} onClick={() => void confirmMap()}>
-              Confirm workflow map
-            </button>
-          </div>
+      {phase === "map" && map && (nextLines.length > 0 || map.milonCoverage.length > 0) ? (
+        <div className="setup-partner__next" data-im-next="">
+          {nextLines.length > 0 ? (
+            <>
+              <h2>Recommended next steps</h2>
+              <ul>
+                {nextLines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {map.milonCoverage.length > 0 ? (
+            <div data-im-coverage="">
+              <h3>Milōn coverage</h3>
+              <ul>
+                {map.milonCoverage.map((row) => (
+                  <li key={`${row.agent}-${row.owns}`}>
+                    {row.agent}: {row.owns}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -396,6 +395,8 @@ export function SetupPartnerPanel({
             : "Done."}
         </p>
       ) : null}
+
+      <PastInterviews messages={history} question={currentQuestion} thinking={loading} />
 
       {error ? (
         <p className="setup-partner__error" role="alert">

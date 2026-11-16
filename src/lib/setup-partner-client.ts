@@ -173,7 +173,7 @@ export async function fetchFirmSetupPlan(
 }
 
 type DraftQuery = Promise<{
-  data: Array<{ rule_text: string | null }> | null;
+  data: Array<{ rule_text: string | null; created_at?: string | null }> | null;
   error: { message: string } | null;
 }> & {
   eq: (column: string, value: string) => DraftQuery;
@@ -190,7 +190,7 @@ export async function fetchFirmInterviewDraft(firmId: string): Promise<FirmInter
     }
   ).from("milon_brain_rules");
   const { data, error } = await builder
-    .select("rule_text")
+    .select("rule_text, created_at")
     .eq("firm_id", firmId)
     .is("client_id", null)
     .eq("source_event", SETUP_PARTNER_INTERVIEW_EVENT)
@@ -199,7 +199,10 @@ export async function fetchFirmInterviewDraft(firmId: string): Promise<FirmInter
     .order("created_at", { ascending: false })
     .limit(1);
   if (error) throw new Error(error.message);
-  return interviewDraftFromRuleText(data?.[0]?.rule_text);
+  const row = data?.[0];
+  const draft = interviewDraftFromRuleText(row?.rule_text);
+  if (!draft) return null;
+  return { ...draft, recordedAt: row?.created_at ?? null };
 }
 
 export async function confirmSetupPartnerFirmMap(

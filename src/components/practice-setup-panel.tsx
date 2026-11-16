@@ -4,7 +4,6 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import "./setup-partner-panel.css";
 import "@/components/owner-door/owner-door.css";
-import { ImRoutineProposals } from "@/components/im-routine-proposals";
 import { HomeBotCard } from "@/components/owner-door/home-bot-card";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { parseMarketSelection } from "@/lib/market/parse";
@@ -13,7 +12,6 @@ import {
   firmSetupPartnerSummary,
   firmInterviewUserError,
   questionAsWritten,
-  setupPartnerMapPromptBlock,
   withMarketCoverage,
   type FirmInterviewMessage,
   type SetupPartnerCountry,
@@ -27,18 +25,15 @@ import {
   fetchFirmSetupPlan,
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
-import { ImTakeoverProposals } from "@/components/im-takeover-proposals";
 import { ImplementationManagerChip } from "@/components/practice-setup-card";
-import { InterviewExchange } from "@/components/interview-exchange";
+import { InterviewExchange, PastInterviews } from "@/components/interview-exchange";
 import { discardPracticeRedo } from "@/lib/discard-practice-redo.functions";
 import {
   buildPracticeImplementationPlan,
   cleanFlowLine,
   dedupePracticeSteps,
-  practiceBucketLabel,
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
-import { ImProposalDecisions } from "@/components/im-proposal-decisions";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
@@ -134,25 +129,13 @@ export function PracticeSetupInterview({
   const [redoOpen, setRedoOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [noFirmWaited, setNoFirmWaited] = useState(false);
+  const [recordedAt, setRecordedAt] = useState<string | null>(null);
   const discardSavedRedo = useServerFn(discardPracticeRedo);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
   const marketCountry: SetupPartnerCountry | null =
     country === "US" || country === "ZA" ? country : null;
   const visibleMap = map ? withMarketCoverage(map, marketCountry) : null;
   const preview = visibleMap ? buildPracticeImplementationPlan(visibleMap) : null;
-  const filledMap = visibleMap
-    ? {
-        ...visibleMap,
-        checklist: visibleMap.checklist.length
-          ? visibleMap.checklist
-          : (preview?.steps.filter((step) => step.bucket === "client_setup").map((step) => step.step) ??
-            []),
-        gaps: visibleMap.gaps.length
-          ? visibleMap.gaps
-          : (preview?.steps.filter((step) => step.bucket === "product_gap").map((step) => step.step) ??
-            []),
-      }
-    : null;
 
   const mapFrom = async (history: FirmInterviewMessage[], turns: number) => {
     if (!firmId) return;
@@ -254,6 +237,8 @@ export function PracticeSetupInterview({
           setMessages(draft.messages);
           setQuestion(draft.question);
           setModelTurns(draft.modelTurns);
+          const stamped = draft as FirmInterviewDraft & { recordedAt?: string | null };
+          if (stamped.recordedAt) setRecordedAt(stamped.recordedAt);
           if (hasPlan) setRedoOpen(true);
           else setPhase("interview");
           return;
@@ -303,6 +288,7 @@ export function PracticeSetupInterview({
       setMap(null);
       setTurnError(null);
       setModelTurns(0);
+      setRecordedAt(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not discard the redo");
     } finally {
@@ -329,7 +315,7 @@ export function PracticeSetupInterview({
         data-practice-setup-panel="no-firm"
         aria-label={IMPLEMENTATION_MANAGER_LABEL}
       >
-        <PracticeSetupHero status="Not started" metric="Takes ~10 min" />
+        <PracticeSetupHero status="Not started" />
         <p className="setup-partner__lede" data-practice-setup-phase="no-firm">
           {PRACTICE_SETUP_NO_FIRM}
         </p>
@@ -375,34 +361,29 @@ export function PracticeSetupInterview({
     }
   };
 
+  const showInterview = !booting && !visibleMap && (phase === "interview" || redoOpen);
+  const flowLines = visibleMap ? visibleMap.todaysFlow.map(cleanFlowLine).filter(Boolean) : [];
+  const checklist = visibleMap ? visibleMap.checklist.map(cleanFlowLine).filter(Boolean) : [];
+  const stepLines = [...(preview?.steps ?? []), ...(plan?.steps ?? [])]
+    .filter((step) => step.bucket === "client_setup" || step.bucket === "covered")
+    .map((step) => step.step);
+  const nextLines = [...new Set([...flowLines, ...checklist, ...stepLines])];
+
   return (
     <section
-      className="setup-partner"
+      className="setup-partner im-flow"
       data-practice-setup-panel=""
       data-practice-setup-phase={booting ? "loading" : phase}
-        aria-label={IMPLEMENTATION_MANAGER_LABEL}
-      >
-        <PracticeSetupHero
-          status={heroStatus(phase, booting)}
-          metric={heroMetric(phase, preview?.steps.length ?? plan?.steps.length ?? 0)}
-        />
+      data-im-page=""
+      aria-label={IMPLEMENTATION_MANAGER_LABEL}
+    >
+      <PracticeSetupHero status={heroStatus(phase, booting)} />
 
       {booting ? <p className="setup-partner__lede">Loading your practice.</p> : null}
 
-      {!booting && redoOpen ? (
-        <div data-practice-redo="open">
-          <h3>Redo in progress</h3>
-          <div className="setup-partner__actions">
-            <button type="button" disabled={discarding} onClick={() => void discardRedoDraft()}>
-              {discarding ? "Discarding…" : "Discard redo, keep saved plan"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {!booting && !visibleMap && (phase === "interview" || redoOpen) ? (
-        <div>
-          <InterviewExchange question={question} thinking={loading} messages={messages} />
+      {showInterview ? (
+        <div data-im-interview="">
+          <InterviewExchange question={question} thinking={loading} />
           <textarea
             className="setup-partner__answer"
             value={draft}
@@ -414,87 +395,42 @@ export function PracticeSetupInterview({
               {turnError}
             </p>
           ) : null}
-          <div className="setup-partner__actions">
-            <button
-              type="button"
-              className="setup-partner__primary"
-              disabled={loading || !draft.trim() || !question}
-              onClick={() => void advance()}
-            >
-              {loading ? "Working…" : "Next"}
-            </button>
-            <button
-              type="button"
-              className="setup-partner__ghost"
-              disabled={loading}
-              onClick={() => void mapFrom(messages, modelTurns)}
-            >
-              That's enough, map it
-            </button>
-            {turnError ? (
-              <button
-                type="button"
-                className="setup-partner__ghost"
-                data-practice-setup-retry=""
-                onClick={() => void requestTurn(messages, modelTurns)}
-              >
-                Retry
-              </button>
-            ) : null}
-          </div>
         </div>
       ) : null}
 
-      {!booting && visibleMap && (phase === "map" || redoOpen) ? (
-        <div className="setup-partner__map">
-          <pre className="sr-only">{setupPartnerMapPromptBlock(filledMap ?? visibleMap)}</pre>
-          <h3>Today&apos;s flow</h3>
-          <ul>
-            {visibleMap.todaysFlow.map(cleanFlowLine).filter(Boolean).map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <h3>Milōn coverage</h3>
-          <ul>
-            {visibleMap.milonCoverage.map((row) => (
-              <li key={`${row.agent}-${row.owns}`}>
-                {row.agent}: {row.owns}
-              </li>
-            ))}
-          </ul>
-          {filledMap && filledMap.gaps.length > 0 ? (
+      {!booting ? (
+        <div className="setup-partner__actions" data-im-actions="">
+          {showInterview ? (
             <>
-              <h3>Gaps</h3>
-              <ul>
-                {filledMap.gaps.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
+              <button
+                type="button"
+                className="setup-partner__primary"
+                disabled={loading || !draft.trim() || !question}
+                onClick={() => void advance()}
+              >
+                {loading ? "Working…" : "Next"}
+              </button>
+              <button
+                type="button"
+                className="setup-partner__ghost"
+                disabled={loading}
+                onClick={() => void mapFrom(messages, modelTurns)}
+              >
+                That's enough, map it
+              </button>
             </>
           ) : null}
-          {filledMap && filledMap.checklist.length > 0 ? (
-            <>
-              <h3>Setup checklist</h3>
-              <ul>
-                {filledMap.checklist.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            </>
+          {turnError ? (
+            <button
+              type="button"
+              className="setup-partner__ghost"
+              data-practice-setup-retry=""
+              onClick={() => void requestTurn(messages, modelTurns)}
+            >
+              Retry
+            </button>
           ) : null}
-          {preview && preview.steps.length > 0 ? (
-            <>
-              <h3>Buckets</h3>
-              <ul>
-                {preview.steps.map((step) => (
-                  <li key={`${step.dedupe_key}-${step.step}`}>
-                    {step.step} — {practiceBucketLabel(step.bucket)}
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          <div className="setup-partner__actions">
+          {visibleMap && (phase === "map" || redoOpen) ? (
             <button
               type="button"
               className="setup-partner__primary"
@@ -503,32 +439,60 @@ export function PracticeSetupInterview({
             >
               {saving ? "Saving…" : "Confirm workflow map"}
             </button>
-          </div>
-        </div>
-      ) : null}
-
-      {!booting && phase === "done" ? (
-        <div>
-          <p className="setup-partner__done">Saved for the practice.</p>
-          {firmId ? <ImRoutineProposals firmId={firmId} plan={plan} /> : null}
-          {plan && plan.steps.length > 0 ? (
-            <ul>
-              {plan.steps.map((step) => (
-                <li key={`${step.dedupe_key}-${step.step}`}>
-                  {step.step} — {practiceBucketLabel(step.bucket)}
-                </li>
-              ))}
-            </ul>
           ) : null}
-          {firmId ? <ImTakeoverProposals firmId={firmId} plan={plan} /> : null}
-          <div className="setup-partner__actions">
+          {redoOpen ? (
+            <button type="button" className="setup-partner__ghost" disabled={discarding} onClick={() => void discardRedoDraft()}>
+              {discarding ? "Discarding…" : "Discard redo, keep saved plan"}
+            </button>
+          ) : null}
+          {phase === "done" && !showInterview ? (
             <button type="button" className="setup-partner__ghost" onClick={redo}>
               Redo interview
             </button>
-            <Link to="/practice">Back to practice</Link>
-          </div>
-          {firmId ? <ImProposalDecisions firmId={firmId} /> : null}
+          ) : null}
+          {phase === "done" ? (
+            <Link to="/practice" className="setup-partner__ghost">
+              Back to practice
+            </Link>
+          ) : null}
         </div>
+      ) : null}
+
+      {!booting && (phase === "done" || nextLines.length > 0 || visibleMap) ? (
+        <div className="setup-partner__next" data-im-next="">
+          {phase === "done" ? <p className="setup-partner__done">Saved for the practice.</p> : null}
+          {nextLines.length > 0 ? (
+            <>
+              <h2>Recommended next steps</h2>
+              <ul>
+                {nextLines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {visibleMap && visibleMap.milonCoverage.length > 0 ? (
+            <div data-im-coverage="">
+              <h3>Milōn coverage</h3>
+              <ul>
+                {visibleMap.milonCoverage.map((row) => (
+                  <li key={`${row.agent}-${row.owns}`}>
+                    {row.agent}: {row.owns}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!booting ? (
+        <PastInterviews
+          messages={messages}
+          question={question}
+          thinking={loading}
+          recordedAt={recordedAt}
+        />
       ) : null}
 
       {error ? (
@@ -544,21 +508,13 @@ function setupToast(message: string, role: "status" | "alert") {
   return createElement("span", { role }, message);
 }
 
-function heroStatus(phase: Phase, booting: boolean): string {
-  if (phase === "done") return "Saved";
-  if (phase === "map") return "Map ready";
+function heroStatus(phase: Phase, booting: boolean): "Not started" | "In progress" | "Done" {
   if (booting) return "Not started";
+  if (phase === "done") return "Done";
   return "In progress";
 }
 
-function heroMetric(phase: Phase, steps: number): string {
-  if ((phase === "map" || phase === "done") && steps > 0) {
-    return `${steps} step${steps === 1 ? "" : "s"} mapped`;
-  }
-  return "Takes ~10 min";
-}
-
-function PracticeSetupHero({ status, metric }: { status: string; metric: string }) {
+function PracticeSetupHero({ status }: { status: "Not started" | "In progress" | "Done" }) {
   return (
     <div className="owner-door" data-im-card="solo">
       <div className="owner-pane" data-owner-home="true">
@@ -569,14 +525,12 @@ function PracticeSetupHero({ status, metric }: { status: string; metric: string 
             label={IMPLEMENTATION_MANAGER_LABEL}
             chip={<ImplementationManagerChip />}
             status={
-              <span className={status === "Saved" ? "owner-status" : "owner-status is-attention"}>{status}</span>
+              <span className={status === "Done" ? "owner-status" : "owner-status is-attention"}>{status}</span>
             }
             lines={
               <span className="owner-lines" data-status-update="">
-                <span className="owner-voice">
-                  Map how the firm closes, reviews, signs off, and reports.{" "}
-                  <strong className="owner-money">{metric}</strong>
-                </span>
+                <span className="owner-voice">Map how the firm closes, reviews, signs off, and reports.</span>
+                <span className="owner-voice">Takes ~10 min</span>
               </span>
             }
           />

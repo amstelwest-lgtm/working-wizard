@@ -192,7 +192,12 @@ assert(panel.includes("That's enough, map it"), "the firm can end the interview"
 assert(panel.includes("Retry"), "a failed turn can be retried");
 assert(!panel.includes("askLabel"), "the setup page has no second CTA");
 assert(panel.includes('data-im-card="solo"'), "the setup card aligns to the content edge");
-assert(panel.includes("Buckets"), "buckets show before confirm");
+assert(!panel.includes("Buckets"), "the client page does not list triage buckets");
+assert(!panel.includes("practiceBucketLabel"), "the client page does not print bucket labels");
+assert(!panel.includes("ImRoutineProposals"), "routine internals stay off the client page");
+assert(!panel.includes("ImTakeoverProposals"), "takeover internals stay off the client page");
+assert(!panel.includes("ImProposalDecisions"), "cost review stays off the client page");
+assert(!panel.includes("setupPartnerMapPromptBlock"), "the client page does not render the map JSON");
 assert(
   read("src/components/practice-board.tsx").includes("extraCard={<PracticeSetupCard embedded"),
   "firm home puts the card in the agent grid",
@@ -942,11 +947,9 @@ async function runPanel() {
   }
 
   function coverageText(): string {
-    const text = document.body.textContent ?? "";
-    const start = text.indexOf("Milōn coverage");
-    const end = text.indexOf("Confirm workflow map");
-    assert(start >= 0 && end > start, "coverage list is on the map");
-    return text.slice(start, end);
+    const node = document.querySelector("[data-im-coverage]");
+    assert(node, "coverage list is on the map");
+    return node.textContent ?? "";
   }
 
   let releaseBuild: (value: { map: typeof zaMap; modelTurns: number }) => void = () => undefined;
@@ -977,8 +980,13 @@ async function runPanel() {
     "existing rules open on the saved plan",
   );
   assert(
-    document.body.textContent?.includes("Who signs the pack — Client setup"),
-    "saved step and bucket are shown",
+    document.body.textContent?.includes("Who signs the pack"),
+    "saved step is shown without a triage label",
+  );
+  assert(
+    !document.body.textContent?.includes("Client setup") &&
+      !document.body.textContent?.includes("Product gap"),
+    "saved step does not show a triage label",
   );
   assert(
     document
@@ -1008,16 +1016,13 @@ async function runPanel() {
     "redo keeps the saved plan",
   );
   assert(
-    document.body.textContent?.includes("Redo in progress"),
-    "the redo is its own section",
+    document.body.textContent?.includes("Discard redo, keep saved plan"),
+    "the redo can be discarded from the actions under the interview",
   );
   assert(
-    document.body.textContent?.includes("Save takeover proposals"),
-    "takeover controls stay up during redo",
-  );
-  assert(
-    document.body.textContent?.includes("Review proposals"),
-    "review stays up during redo",
+    !document.body.textContent?.includes("Save takeover proposals") &&
+      !document.body.textContent?.includes("Review proposals"),
+    "proposal controls stay off the client page during redo",
   );
   await unmountSaved();
 
@@ -1044,13 +1049,13 @@ async function runPanel() {
     "a saved redo draft is on screen",
   );
   assert(
-    document.body.textContent?.includes("Who signs the pack — Client setup"),
+    document.body.textContent?.includes("Who signs the pack"),
     "the confirmed plan stays beside the redo draft",
   );
   assert(
-    document.body.textContent?.includes("Save takeover proposals") &&
-      document.body.textContent?.includes("Review proposals"),
-    "proposal controls stay visible while the redo draft exists",
+    !document.body.textContent?.includes("Save takeover proposals") &&
+      !document.body.textContent?.includes("Review proposals"),
+    "proposal controls stay off the page while the redo draft exists",
   );
   const discard = [...document.querySelectorAll("button")].find(
     (button) => button.textContent === "Discard redo, keep saved plan",
@@ -1066,8 +1071,9 @@ async function runPanel() {
     "the discarded redo leaves the screen",
   );
   assert(
-    document.body.textContent?.includes("Who signs the pack — Client setup") &&
-      document.body.textContent?.includes("Saved for the practice."),
+    document.body.textContent?.includes("Who signs the pack") &&
+      document.body.textContent?.includes("Saved for the practice.") &&
+      !document.body.textContent?.includes("Client setup"),
     "discard keeps the saved plan",
   );
   await unmountRedo();
@@ -1133,8 +1139,9 @@ async function runPanel() {
     "success keeps the saved line",
   );
   assert(
-    document.body.textContent?.includes("Who signs the pack — Client setup"),
-    "success keeps the step and bucket",
+    document.body.textContent?.includes("Who signs the pack") &&
+      !document.body.textContent?.includes("Client setup"),
+    "success keeps the step without a triage label",
   );
   assert(successes.includes("Saved for the practice."), "success toasts");
   assert(!document.querySelector("[role=alert]"), "success clears the alert");
@@ -1272,13 +1279,13 @@ async function runPanel() {
     "the confirmed plan stays visible while the redo draft exists",
   );
   assert(
-    document.body.textContent?.includes("Redo in progress"),
-    "the redo draft is a separate section",
+    document.body.textContent?.includes("Discard redo, keep saved plan"),
+    "the redo draft can be discarded",
   );
   assert(
-    document.body.textContent?.includes("Save takeover proposals") &&
-      document.body.textContent?.includes("Review proposals"),
-    "proposal controls stay visible while the redo draft exists",
+    !document.body.textContent?.includes("Save takeover proposals") &&
+      !document.body.textContent?.includes("Review proposals"),
+    "proposal controls stay off the page while the redo draft exists",
   );
   await unmountOverPlan();
 }

@@ -65,6 +65,6 @@ assert(ui.includes("costLine"), "the approve screen shows the estimated cost");
 assert(!ui.includes("enqueue"), "the approve screen does not enqueue");
 
 const panel = readFileSync("src/components/practice-setup-panel.tsx", "utf8");
-assert(panel.includes("ImProposalDecisions"), "the practice page has the approve screen");
+assert(!panel.includes("ImProposalDecisions"), "the client page does not show the cost review");
 
 console.log("im-proposal-decision ok");

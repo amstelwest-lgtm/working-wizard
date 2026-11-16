@@ -131,6 +131,6 @@ assert(ui.includes("Save routine proposals"), "the button stores the proposal");
 assert(!ui.includes("Schedule"), "there is no schedule button");
 
 const panel = readFileSync("src/components/practice-setup-panel.tsx", "utf8");
-assert(panel.includes("ImRoutineProposals"), "the practice page lists routine proposals");
+assert(!panel.includes("ImRoutineProposals"), "the client page does not list routine proposals");
 
 console.log("im-routine-proposal ok");

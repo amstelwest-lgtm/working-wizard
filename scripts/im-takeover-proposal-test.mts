@@ -121,6 +121,6 @@ assert(!source.includes("rule_text"), "proposal text is not rule_text");
 assert(!source.includes("irp6"), "the save path does not fill a form");
 
 const panel = readFileSync("src/components/practice-setup-panel.tsx", "utf8");
-assert(panel.includes("ImTakeoverProposals"), "the practice page lists the proposals");
+assert(!panel.includes("ImTakeoverProposals"), "the client page does not list takeover proposals");
 
 console.log("im-takeover-proposal ok");

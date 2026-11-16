@@ -30,33 +30,28 @@ export function interviewPairs(
   return pairs.filter((pair) => pair.question || pair.answer);
 }
 
+export function interviewDateLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+/** The question on screen now. Earlier turns stay in PastInterviews. */
 export function InterviewExchange({
   question,
   thinking,
-  messages,
 }: {
   question: string;
   thinking: boolean;
-  messages: readonly FirmInterviewMessage[];
+  messages?: readonly FirmInterviewMessage[];
 }) {
-  const pairs = interviewPairs(messages, question, thinking);
   return (
     <div className="setup-partner__exchange" data-interview-exchange="">
-      {pairs.length > 0 ? (
-        <details className="setup-partner__log">
-          <summary>
-            Earlier answers ({pairs.length})
-          </summary>
-          <ol className="setup-partner__transcript">
-            {pairs.map((pair, index) => (
-              <li key={`${index}-${pair.question}`}>
-                {pair.question ? <p className="setup-partner__log-q">{pair.question}</p> : null}
-                {pair.answer ? <p className="setup-partner__log-a">{pair.answer}</p> : null}
-              </li>
-            ))}
-          </ol>
-        </details>
-      ) : null}
       {thinking ? (
         <p className="setup-partner__thinking" role="status" data-interview-thinking="">
           {IMPLEMENTATION_MANAGER_THINKING}
@@ -65,5 +60,44 @@ export function InterviewExchange({
         <h2 className="setup-partner__question">{question}</h2>
       ) : null}
     </div>
+  );
+}
+
+/** Collapsed Q/A log. Render only when a prior answer exists. */
+export function PastInterviews({
+  messages,
+  question,
+  thinking,
+  recordedAt,
+}: {
+  messages: readonly FirmInterviewMessage[];
+  question: string;
+  thinking: boolean;
+  recordedAt?: string | null;
+}) {
+  const pairs = interviewPairs(messages, question, thinking);
+  if (pairs.length === 0) return null;
+  const date = interviewDateLabel(recordedAt);
+  return (
+    <details className="setup-partner__log" data-past-interviews="">
+      <summary>Past interviews</summary>
+      <ol className="setup-partner__transcript">
+        {pairs.map((pair, index) => (
+          <li key={`${index}-${pair.question}`}>
+            {pair.question ? (
+              <p className="setup-partner__log-q">
+                <strong>{pair.question}</strong>
+              </p>
+            ) : null}
+            {pair.answer ? <p className="setup-partner__log-a">{pair.answer}</p> : null}
+            {date ? (
+              <p className="setup-partner__log-date">
+                <time dateTime={recordedAt ?? undefined}>{date}</time>
+              </p>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
