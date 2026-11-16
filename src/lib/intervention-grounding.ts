@@ -1,3 +1,5 @@
+import { actionDisplayTitle } from "@/lib/action-title";
+
 /**
  * Intervention steps quote the ratio on file.
  * A positive net margin is a profit. It is not a loss and not a critical rescue.
@@ -129,7 +131,7 @@ export function interventionStepsFromActions(titles: readonly string[], limit = 
   const out: string[] = [];
   const seen = new Set<string>();
   for (const title of titles) {
-    const text = title.trim();
+    const text = actionDisplayTitle(title);
     const key = text.toLowerCase();
     if (!text || seen.has(key)) continue;
     seen.add(key);

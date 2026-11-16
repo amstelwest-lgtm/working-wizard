@@ -2,13 +2,15 @@
  * Confirm suggested owners and dates, and drop a duplicate or a contradiction.
  * Confirm is the only write. The panel does not email anyone.
  */
-import type {
-  ActionAutomationRow,
-  Contradiction,
-  DuplicateGroup,
+import {
+  actionTitleKey,
+  type ActionAutomationRow,
+  type Contradiction,
+  type DuplicateGroup,
 } from "@/lib/action-plan-automation";
 import { useMarketFormat } from "@/contexts/market";
 import { formatCalendarDay } from "@/lib/market/format";
+import { keptOpenPlanRows } from "@/lib/action-plan-counts";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 
 const FOLLOW_UP: Record<ActionAutomationRow["followUp"], string> = {
@@ -67,7 +69,12 @@ export function ActionPlanAutomation({
   const { market } = useMarketFormat();
   const open = rows.filter((row) => row.followUp !== "done");
   const hidden = new Set(duplicates.flatMap((group) => group.dropIds));
-  const shown = open.filter((row) => !hidden.has(row.id));
+  const shown = keptOpenPlanRows(open.filter((row) => !hidden.has(row.id)));
+  const liveDuplicates = duplicates.filter((group) => {
+    const key = actionTitleKey(group.title);
+    if (!key) return false;
+    return rows.filter((row) => actionTitleKey(row.title) === key).length > 1;
+  });
   const needsConfirm = shown.filter((row) => row.ownerSuggested || row.dueSuggested);
   const waitingOnly = onInviteOwner
     ? shown.filter(
@@ -77,7 +84,7 @@ export function ActionPlanAutomation({
     : [];
   if (
     !needsConfirm.length &&
-    !duplicates.length &&
+    !liveDuplicates.length &&
     !contradictions.length &&
     !shown.some((row) => row.overdue) &&
     !waitingOnly.length
@@ -134,7 +141,7 @@ export function ActionPlanAutomation({
           ))}
         </ul>
       ) : null}
-      {duplicates.map((group) => (
+      {liveDuplicates.map((group) => (
         <div key={group.keepId} className="mt-3 text-sm">
           <p>Same action more than once: {actionDisplayTitle(group.title)}</p>
           {canEdit

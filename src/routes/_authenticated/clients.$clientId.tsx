@@ -2148,7 +2148,7 @@ function ClientView() {
       const titles = visible.map((row) => row.title);
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
-      const ids = rows.flatMap((row) => (row.id && row.title?.trim() ? [row.id] : []));
+      const ids = visible.map((row) => row.id);
       const [noteLog, runs] = ids.length
         ? await Promise.all([loadActionNotes(ids), loadActionHandoffRuns(ids)])
         : [new Map(), new Map()];

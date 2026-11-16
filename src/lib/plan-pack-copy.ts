@@ -109,11 +109,20 @@ function planActionIsOpen(status: string | null | undefined): boolean {
 export function planAnswerSentence(
   actions: readonly { title: string; status?: string | null }[],
 ): string {
-  if (actions.length === 0) return PLAN_EMPTY_SENTENCE;
-  const open = actions.filter((action) => planActionIsOpen(action.status));
+  const seen = new Set<string>();
+  const kept: { title: string; status?: string | null }[] = [];
+  for (const action of actions) {
+    const title = actionDisplayTitle(action.title);
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) continue;
+    seen.add(key);
+    kept.push({ title, status: action.status });
+  }
+  if (kept.length === 0) return PLAN_EMPTY_SENTENCE;
+  const open = kept.filter((action) => planActionIsOpen(action.status));
   if (open.length === 0) return "Nothing left open.";
-  const title = actionDisplayTitle(open[0]?.title);
-  const lead = actions.length === 1 ? "1 action in the plan" : `${actions.length} actions in the plan`;
+  const title = open[0]?.title ?? "";
+  const lead = kept.length === 1 ? "1 action in the plan" : `${kept.length} actions in the plan`;
   if (!title) return `${lead}.`;
   const shown = /^[A-Z][a-z]/.test(title)
     ? `${title.charAt(0).toLowerCase()}${title.slice(1)}`

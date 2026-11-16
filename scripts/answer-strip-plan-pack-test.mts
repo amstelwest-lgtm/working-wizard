@@ -125,6 +125,16 @@ assert.equal(
   planAnswerSentence([{ title: "File the return", status: "done" }]),
   "Nothing left open.",
 );
+assert.equal(
+  planAnswerSentence([
+    { title: "Collect the deposit" },
+    { title: "File the VAT return" },
+    { title: "Pay the suppliers" },
+    { title: "Bring debt-to-equity under the target" },
+    { title: "Target a D/E below 1× for conservative businesses, below 2× for growth" },
+  ]).startsWith("4 actions in the plan"),
+  true,
+);
 assert.equal(planConfidencePercent(100, -67), 33);
 assert.equal(planConfidencePercent(80, 4), 80);
 assert.equal(planConfidencePercent(null, -67), null);
