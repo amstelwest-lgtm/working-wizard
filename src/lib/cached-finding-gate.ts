@@ -3,8 +3,8 @@
  * The screen shows the live health paragraph instead, and the row stays stale
  * for the next Analyst run. The stored title and detail are not edited here.
  */
-import { renderHealthNarrative, type HealthScoreSnapshot } from "@/lib/health-snapshot";
-import { cachedFindingRejected } from "@/lib/ratios";
+import { renderHealthNarrative, type HealthScoreSnapshot } from "./health-snapshot.ts";
+import { cachedFindingRejected } from "./ratios.ts";
 
 export const REFRESHED_FROM_FIGURES = "Refreshed from current figures.";
 
