@@ -969,6 +969,10 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(higherFindingSeverity("watch", "watch") === null, "the same severity stays");
   const executeSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
   assert(executeSrc.includes("deduped: true"), "a duplicate is reported as already recorded");
+  assert(
+    /cachedFindingRejected\(\s*[^,]+,\s*[^,]+,\s*liveRatios\s*,?\s*\)/.test(executeSrc),
+    "a duplicate finding is checked against the live ratios",
+  );
   assert(executeSrc.includes("refreshedFindingUpdate"), "a duplicate refreshes the kept copy");
   assert(executeSrc.includes('.is("superseded_by", null)'), "a duplicate does not rewrite a superseded row");
   assert(executeSrc.includes("findingKindAllowed"), "kind is checked against the enum");

@@ -9,7 +9,7 @@ import { presentCachedFinding, REFRESHED_FROM_FIGURES } from "../src/lib/cached-
 import type { HealthScoreSnapshot } from "../src/lib/health-snapshot.ts";
 import { findingSentence } from "../src/lib/milon-team-activity.ts";
 import { AGENT_DISPLAY_NAME } from "../src/lib/milon-team-names.ts";
-import { computeRatios, validateRatioInputs } from "../src/lib/ratios.ts";
+import { cachedFindingRejected, computeRatios, validateRatioInputs } from "../src/lib/ratios.ts";
 import { advisoryOutboundBody } from "../src/components/advisory-drafter.tsx";
 
 const chillText = [
@@ -148,5 +148,36 @@ const validHandoff = describeActionHandoff({
 });
 assert.equal(validHandoff.caption?.includes("Debtor days are 33"), true, validHandoff.caption ?? "");
 assert.equal(validHandoff.caption?.includes("Refreshed from current figures"), false, validHandoff.caption ?? "");
+
+const paragraphs = [
+  "Please review the cash position.",
+  "",
+  "Working Capital Days of 162.",
+  "",
+  "We meet on Tuesday.",
+].join("\n");
+const keptBreaks = presentCachedFinding({ text: paragraphs, ratios: chillRatios, live }).text;
+assert.equal(keptBreaks.startsWith("Please review the cash position.\n\n"), true, keptBreaks);
+assert.equal(keptBreaks.endsWith("\n\nWe meet on Tuesday."), true, keptBreaks);
+assert.equal(keptBreaks.includes("Working Capital Days of 162"), false, keptBreaks);
+const untouched = "Please review the cash position.\n\nDebtor days are 33.\n\nWe meet on Tuesday.";
+assert.equal(
+  presentCachedFinding({ text: untouched, ratios: validRatios, live }).text,
+  untouched,
+);
+
+assert.equal(
+  cachedFindingRejected(
+    "Creditors improved. The close took two days.",
+    undefined,
+    chillRatios,
+  ),
+  false,
+);
+assert.equal(cachedFindingRejected("WC days 162.", undefined, undefined), false);
+assert.equal(
+  cachedFindingRejected("WC days 162.", undefined, { "Working Capital Days": Number.NaN }),
+  true,
+);
 
 console.log("cached-finding-gate-test: ok");

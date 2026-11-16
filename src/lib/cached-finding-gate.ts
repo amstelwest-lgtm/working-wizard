@@ -4,7 +4,7 @@
  * The stored title and detail are not edited here.
  */
 import { renderHealthNarrative, type HealthScoreSnapshot } from "./health-snapshot.ts";
-import { cachedFindingRejected, findingSentences, sentenceCitesRejectedRatio } from "./ratios.ts";
+import { cachedFindingRejected, sentenceCitesRejectedRatio } from "./ratios.ts";
 
 export const REFRESHED_FROM_FIGURES = "Refreshed from current figures.";
 
@@ -13,9 +13,34 @@ function liveParagraph(live?: HealthScoreSnapshot | null): string {
   return paragraph ? `${paragraph} ${REFRESHED_FROM_FIGURES}` : REFRESHED_FROM_FIGURES;
 }
 
+type SentenceSpan = { start: number; end: number };
+
+/** Sentence ends, keeping a decimal point and the original gaps. */
+function sentenceSpans(text: string): SentenceSpan[] {
+  const spans: SentenceSpan[] = [];
+  let i = 0;
+  while (i < text.length) {
+    while (i < text.length && /\s/.test(text[i] ?? "")) i += 1;
+    const start = i;
+    if (start >= text.length) break;
+    let end = text.length;
+    for (let j = start; j < text.length; j += 1) {
+      const ch = text[j] ?? "";
+      const decimal = ch === "." && /\d/.test(text[j - 1] ?? "") && /\d/.test(text[j + 1] ?? "");
+      const boundary = ch === "!" || ch === "?" || (ch === "." && !decimal);
+      if (!boundary) continue;
+      end = j + 1;
+      break;
+    }
+    if (text.slice(start, end).trim()) spans.push({ start, end });
+    i = end;
+  }
+  return spans;
+}
+
 /**
  * Replace only the sentences that cite a ratio the tiles will not quote.
- * The rest of a document stays, including after rewriteDraftMonthStamp.
+ * Kept sentences stay where they were, including paragraph and line breaks.
  */
 export function presentCachedFinding(input: {
   text: string;
@@ -25,20 +50,32 @@ export function presentCachedFinding(input: {
   /** Applied to a sentence that stays. The swapped sentence is not passed through it. */
   keep?: (sentence: string) => string;
 }): { text: string; stale: boolean } {
-  const stored = input.text.replace(/\s+/g, " ").trim();
-  if (!stored) return { text: "", stale: false };
+  const text = input.text;
+  if (!text.trim()) return { text, stale: false };
+  const spans = sentenceSpans(text);
+  if (!spans.length) return { text, stale: false };
   const swap = liveParagraph(input.live);
   let stale = false;
-  const out: string[] = [];
-  for (const sentence of findingSentences(stored)) {
-    if (!sentenceCitesRejectedRatio(sentence, input.figures, input.ratios)) {
-      out.push(input.keep ? input.keep(sentence) : sentence);
+  let out = "";
+  let cursor = 0;
+  let swapped = false;
+  for (const span of spans) {
+    const gap = text.slice(cursor, span.start);
+    const raw = text.slice(span.start, span.end);
+    cursor = span.end;
+    if (!sentenceCitesRejectedRatio(raw.trim(), input.figures, input.ratios)) {
+      out += gap + (input.keep ? input.keep(raw.trim()) : raw);
+      swapped = false;
       continue;
     }
     stale = true;
-    if (out[out.length - 1] !== swap) out.push(swap);
+    if (!swapped) {
+      out += gap + swap;
+      swapped = true;
+    }
   }
-  return { text: out.join(" "), stale };
+  if (!swapped) out += text.slice(cursor);
+  return { text: out, stale };
 }
 
 export { cachedFindingRejected };
