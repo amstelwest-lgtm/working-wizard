@@ -20,8 +20,8 @@ import {
   budgetChartSeries,
   budgetChartPeriodCaption,
   chartRevenueActuals,
+  CHART_ACTUALS_BOOKS_SPLIT,
   CHART_ACTUALS_EVEN_SPLIT,
-  CHART_ACTUALS_SCALED,
   budgetLensFromSearch,
   budgetMonthViews,
   budgetPeriodTotalCell,
@@ -137,15 +137,14 @@ const storedChart = chartRevenueActuals({
 const storedSum = storedChart.actuals.reduce((total, value) => total + (value ?? 0), 0);
 assert(Math.abs(storedSum - chillYear) < 0.01, `stored chart actuals sum ${storedSum}`);
 assert(storedChart.actuals[0] === 700_000, "stored months that already sum to the year stay put");
-assert(storedChart.caption == null, "stored months that already sum need no rescale note");
-const scaledChart = chartRevenueActuals({
+assert(storedChart.caption == null, "stored months that already sum to the year have no note");
+const differChart = chartRevenueActuals({
   views: [{ actual: { revenue: 400_000 } }, { actual: { revenue: 400_000 } }],
   yearRevenue: chillYear,
   storedMonths: true,
 });
-const scaledSum = scaledChart.actuals.reduce((total, value) => total + (value ?? 0), 0);
-assert(Math.abs(scaledSum - chillYear) < 0.01, `rescaled chart actuals sum ${scaledSum}`);
-assert(scaledChart.caption === CHART_ACTUALS_SCALED, scaledChart.caption ?? "missing rescale note");
+assert(differChart.actuals[0] === 400_000 && differChart.actuals[1] === 400_000, "a mismatch is not rescaled");
+assert(differChart.caption === CHART_ACTUALS_BOOKS_SPLIT, differChart.caption ?? "missing books-split note");
 assert(
   budgetChartPeriodCaption(["2026-10", "2026-03", "2026-07"]) === "YTD Mar\u2013Oct 2026",
   budgetChartPeriodCaption(["2026-10", "2026-03", "2026-07"]) ?? "missing year caption",
